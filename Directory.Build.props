@@ -1,9 +1,24 @@
 <Project>
   <PropertyGroup>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+      NuGet 취약점 감사 정책:
+      low(NU1901)·moderate(NU1902)는 경고로만 두고(빌드 유지), high(NU1903)·critical(NU1904)은 에러로 빌드를 깬다.
+    -->
+    <WarningsNotAsErrors>NU1901;NU1902</WarningsNotAsErrors>
   </PropertyGroup>
+  <ItemGroup>
+    <!--
+      GHSA-6c8g-7p36-r338 (SharpCompress zip slip, moderate, 전 버전 영향·패치 없음) 억제.
+      WinUtil은 비노출: 취약점은 archive 수준 WriteToDirectory()의 "디렉터리 항목" 분기와
+      TAR SymbolicLinkHandler 경유 심링크 체인인데, Cp949ZipReader는 ZIP 한정으로
+      파일 항목만(!IsDirectory) entry 수준 API로 추출하며(경로 이탈 가드 있는 경로),
+      심링크 핸들러를 쓰지 않는다. 패치 버전이 나오면 업그레이드 후 이 억제를 제거할 것.
+    -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-6c8g-7p36-r338" />
+  </ItemGroup>
 </Project>
