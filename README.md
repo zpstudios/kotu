@@ -12,3 +12,4 @@ dotnet build src/WinUtil.App -p:Platform=x64   # WinUI 3 앱 (Visual Studio 2022
 ## 상태
 
 - v0.2.0 — Phase 0: 셸 + Core 계약 (IModule, 파일 라우터, 설정, 단일 인스턴스)
+- v0.3.0 — Phase 1: 이미지 뷰어 모듈 (방향키 탐색·줌·회전·전체화면·휴지통 삭제)

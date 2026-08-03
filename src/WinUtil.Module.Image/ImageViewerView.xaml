@@ -1,0 +1,78 @@
+<UserControl
+    x:Class="WinUtil.Module.Image.ImageViewerView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="True"
+    DoubleTapped="OnDoubleTapped">
+
+    <!-- 단축키: ←/→ 탐색, R 회전, Delete 휴지통 삭제, F11 전체화면 -->
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="Left" Invoked="OnPreviousInvoked" />
+        <KeyboardAccelerator Key="Right" Invoked="OnNextInvoked" />
+        <KeyboardAccelerator Key="R" Invoked="OnRotateInvoked" />
+        <KeyboardAccelerator Key="Delete" Invoked="OnDeleteInvoked" />
+        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <Grid>
+        <!-- 줌(Ctrl+휠 10%~800%)/팬. 기본은 창맞춤(코드에서 MaxWidth/MaxHeight로 제한) -->
+        <ScrollViewer
+            x:Name="Scroller"
+            ZoomMode="Enabled"
+            MinZoomFactor="0.1"
+            MaxZoomFactor="8"
+            HorizontalScrollBarVisibility="Auto"
+            VerticalScrollBarVisibility="Auto"
+            HorizontalScrollMode="Enabled"
+            VerticalScrollMode="Enabled"
+            SizeChanged="OnScrollerSizeChanged">
+            <Image
+                x:Name="ImageControl"
+                Stretch="Uniform"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                RenderTransformOrigin="0.5,0.5">
+                <Image.RenderTransform>
+                    <!-- EXIF 회전 + 사용자 회전(R 키) 합산 각도 -->
+                    <RotateTransform x:Name="Rotation" />
+                </Image.RenderTransform>
+            </Image>
+        </ScrollViewer>
+
+        <TextBlock
+            x:Name="PlaceholderText"
+            Text="이미지 파일을 열어주세요"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Visibility="Collapsed" />
+
+        <!-- 하단 오버레이 상태바: 파일명 · 해상도 · 몇 번째/전체 -->
+        <Border
+            VerticalAlignment="Bottom"
+            Padding="12,6"
+            Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    x:Name="FileNameText"
+                    Grid.Column="0"
+                    VerticalAlignment="Center"
+                    TextTrimming="CharacterEllipsis" />
+                <TextBlock
+                    x:Name="InfoText"
+                    Grid.Column="1"
+                    Margin="12,0"
+                    VerticalAlignment="Center" />
+                <Button
+                    Grid.Column="2"
+                    Content="회전"
+                    Click="OnRotateButtonClick"
+                    ToolTipService.ToolTip="시계방향 90° 회전 (R)" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

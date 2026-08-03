@@ -6,6 +6,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.App", "src\WinUtil.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Core.Tests", "tests\WinUtil.Core.Tests\WinUtil.Core.Tests.csproj", "{A1000000-0000-0000-0000-000000000003}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Image", "src\WinUtil.Module.Image\WinUtil.Module.Image.csproj", "{A1000000-0000-0000-0000-000000000004}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Image.Tests", "tests\WinUtil.Module.Image.Tests\WinUtil.Module.Image.Tests.csproj", "{A1000000-0000-0000-0000-000000000005}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -24,5 +28,13 @@ Global
 		{A1000000-0000-0000-0000-000000000003}.Debug|x64.Build.0 = Debug|Any CPU
 		{A1000000-0000-0000-0000-000000000003}.Release|x64.ActiveCfg = Release|Any CPU
 		{A1000000-0000-0000-0000-000000000003}.Release|x64.Build.0 = Release|Any CPU
+		{A1000000-0000-0000-0000-000000000004}.Debug|x64.ActiveCfg = Debug|x64
+		{A1000000-0000-0000-0000-000000000004}.Debug|x64.Build.0 = Debug|x64
+		{A1000000-0000-0000-0000-000000000004}.Release|x64.ActiveCfg = Release|x64
+		{A1000000-0000-0000-0000-000000000004}.Release|x64.Build.0 = Release|x64
+		{A1000000-0000-0000-0000-000000000005}.Debug|x64.ActiveCfg = Debug|x64
+		{A1000000-0000-0000-0000-000000000005}.Debug|x64.Build.0 = Debug|x64
+		{A1000000-0000-0000-0000-000000000005}.Release|x64.ActiveCfg = Release|x64
+		{A1000000-0000-0000-0000-000000000005}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 EndGlobal
