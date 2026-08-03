@@ -2,7 +2,7 @@
 
 > 윈도우 새로 깔면 제일 먼저 설치하던 필수 유틸들 — 압축, 이미지 뷰어, 동영상 플레이어 — 를 하나의 앱으로.
 
-![build](https://github.com/<owner>/winutil/actions/workflows/build.yml/badge.svg)
+![build](https://github.com/tsusaikang/winutil/actions/workflows/build.yml/badge.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B%20(x64)-0078d4)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)
 ![UI](https://img.shields.io/badge/UI-WinUI%203-41b883)
@@ -26,7 +26,7 @@
 요약 (자세한 안내는 **[docs/BUILD.md](docs/BUILD.md)**):
 
 ```powershell
-git clone https://github.com/<owner>/winutil.git
+git clone https://github.com/tsusaikang/winutil.git
 cd winutil
 dotnet test                                     # Core·모듈 로직 단위 테스트
 dotnet build src/WinUtil.App -p:Platform=x64    # 앱 빌드

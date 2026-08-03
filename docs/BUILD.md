@@ -16,7 +16,7 @@ Visual Studio 없이 CLI만으로도 빌드됩니다 (.NET 8 SDK + Windows SDK �
 ## 2. 빌드
 
 ```powershell
-git clone https://github.com/<owner>/winutil.git
+git clone https://github.com/tsusaikang/winutil.git
 cd winutil
 
 # 단위 테스트 (Core 라우터·설정, 모듈 순수 로직)
