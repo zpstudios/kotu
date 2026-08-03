@@ -8,7 +8,7 @@
     <Description>압축 모듈: 해제(zip·7z·rar·tar·gz 등)/생성(zip·7z)/내부 탐색/암호/CP949 자동 대응.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.*" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
     <!-- 7z.dll 래퍼(LGPL 준수: dll 동적 로드만, 코드 복사 금지) -->
     <PackageReference Include="Squid-Box.SevenZipSharp" Version="1.6.*" />

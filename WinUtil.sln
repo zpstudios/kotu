@@ -14,6 +14,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Archive", "s
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Archive.Tests", "tests\WinUtil.Module.Archive.Tests\WinUtil.Module.Archive.Tests.csproj", "{A1000000-0000-0000-0000-000000000007}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Video", "src\WinUtil.Module.Video\WinUtil.Module.Video.csproj", "{A1000000-0000-0000-0000-000000000008}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Video.Tests", "tests\WinUtil.Module.Video.Tests\WinUtil.Module.Video.Tests.csproj", "{A1000000-0000-0000-0000-000000000009}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -48,5 +52,13 @@ Global
 		{A1000000-0000-0000-0000-000000000007}.Debug|x64.Build.0 = Debug|x64
 		{A1000000-0000-0000-0000-000000000007}.Release|x64.ActiveCfg = Release|x64
 		{A1000000-0000-0000-0000-000000000007}.Release|x64.Build.0 = Release|x64
+		{A1000000-0000-0000-0000-000000000008}.Debug|x64.ActiveCfg = Debug|x64
+		{A1000000-0000-0000-0000-000000000008}.Debug|x64.Build.0 = Debug|x64
+		{A1000000-0000-0000-0000-000000000008}.Release|x64.ActiveCfg = Release|x64
+		{A1000000-0000-0000-0000-000000000008}.Release|x64.Build.0 = Release|x64
+		{A1000000-0000-0000-0000-000000000009}.Debug|x64.ActiveCfg = Debug|x64
+		{A1000000-0000-0000-0000-000000000009}.Debug|x64.Build.0 = Debug|x64
+		{A1000000-0000-0000-0000-000000000009}.Release|x64.ActiveCfg = Release|x64
+		{A1000000-0000-0000-0000-000000000009}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 EndGlobal

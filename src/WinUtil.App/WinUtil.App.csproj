@@ -14,13 +14,17 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.*" />
+    <!-- 1.8: LibVLCSharp.WinUI(동영상 모듈)의 최소 요구 버전에 맞춰 전 프로젝트 통일 -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <!-- libvlc 네이티브 엔진(LGPL, dll 동적 링크) — 빌드 출력에 자동 복사됨 -->
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinUtil.Core\WinUtil.Core.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Image\WinUtil.Module.Image.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Archive\WinUtil.Module.Archive.csproj" />
+    <ProjectReference Include="..\WinUtil.Module.Video\WinUtil.Module.Video.csproj" />
   </ItemGroup>
 </Project>

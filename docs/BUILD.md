@@ -42,6 +42,8 @@ Visual Studio에서는 `WinUtil.sln`을 열고 시작 프로젝트를 `WinUtil.A
 
 7-Zip이 설치돼 있지 않다면 [7-zip.org](https://www.7-zip.org/)에서 받으세요. `7z.dll` 없이도 앱은 실행되며, 압축 파일을 열 때 안내 메시지가 표시됩니다.
 
+> **동영상 모듈(libvlc)은 준비가 필요 없습니다.** libvlc 네이티브 바이너리는 NuGet 패키지 `VideoLAN.LibVLC.Windows`로 자동 복원·복사됩니다 (배포 용량 약 +80MB, LGPL·동적 링크).
+
 ## 4. 릴리스 빌드
 
 ```powershell
@@ -57,6 +59,7 @@ dotnet publish src/WinUtil.App -c Release -p:Platform=x64 -r win-x64 --self-cont
 - **XAML 컴파일 오류 (WMC/XLS 계열)** — Visual Studio의 "Windows App SDK" 구성요소 미설치가 흔한 원인. CLI 빌드라면 `dotnet workload restore` 시도.
 - **앱 실행 직후 종료** — unpackaged 실행에는 x64 빌드가 필수입니다. `-p:Platform=x64` 누락 여부 확인.
 - **압축 파일 열기 실패: "7z.dll을 찾을 수 없습니다"** — 3장 참고. 반드시 **x64** dll이어야 합니다(32비트 7-Zip의 dll 불가).
+- **동영상 재생 실패 / 검은 화면** — 출력 폴더에 `libvlc.dll`·`libvlccore.dll`과 `plugins\` 폴더가 있는지 확인(NuGet 복원이 정상이면 자동 포함). LibVLCSharp.WinUI는 WindowsAppSDK 1.8+ 필요.
 - **테스트 프로젝트 빌드 실패** — 모듈 테스트는 `net8.0-windows` TFM이라 Windows에서만 빌드·실행됩니다.
 
 ## 6. 알려진 미검증 지점
