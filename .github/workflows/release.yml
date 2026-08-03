@@ -1,0 +1,38 @@
+# "v0.5.0" 같은 태그를 push하면 Release 빌드를 만들어
+# zip으로 묶어 GitHub Releases에 자동 업로드한다.
+#   git tag v0.5.0 && git push origin v0.5.0
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # Release 생성 권한
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .NET 8 SDK 설치
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish (self-contained, x64)
+        run: dotnet publish src/WinUtil.App -c Release -p:Platform=x64 -r win-x64 --self-contained
+
+      - name: zip 패키징
+        shell: pwsh
+        run: |
+          $publishDir = Get-ChildItem -Path src/WinUtil.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1
+          Compress-Archive -Path "$($publishDir.FullName)\*" -DestinationPath "WinUtil-${{ github.ref_name }}-win-x64.zip"
+
+      - name: GitHub Release 생성 및 업로드
+        uses: softprops/action-gh-release@v2
+        with:
+          files: WinUtil-${{ github.ref_name }}-win-x64.zip
+          body: |
+            자동 빌드된 포터블 배포본입니다. 압축 기능을 쓰려면 x64 7z.dll을 실행 폴더에 넣어주세요 (docs/BUILD.md 참고).

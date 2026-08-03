@@ -1,0 +1,28 @@
+# push·PR마다 GitHub의 Windows 러너에서 전체 빌드 + 단위 테스트를 실행한다.
+# 맥에서 개발해도 매 커밋이 Windows에서 실제로 컴파일되는지 자동 검증된다.
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .NET 8 SDK 설치
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: NuGet 복원
+        run: dotnet restore WinUtil.sln -p:Platform=x64
+
+      - name: 빌드 (Release, x64)
+        run: dotnet build WinUtil.sln -c Release -p:Platform=x64 --no-restore
+
+      - name: 단위 테스트
+        run: dotnet test WinUtil.sln -c Release -p:Platform=x64 --no-build --verbosity normal
