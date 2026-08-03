@@ -21,5 +21,6 @@
   <ItemGroup>
     <ProjectReference Include="..\WinUtil.Core\WinUtil.Core.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Image\WinUtil.Module.Image.csproj" />
+    <ProjectReference Include="..\WinUtil.Module.Archive\WinUtil.Module.Archive.csproj" />
   </ItemGroup>
 </Project>

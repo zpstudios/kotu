@@ -1,0 +1,116 @@
+<UserControl
+    x:Class="WinUtil.Module.Archive.ArchiveView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WinUtil.Module.Archive"
+    AllowDrop="True"
+    DragOver="OnDragOver"
+    Drop="OnDrop">
+
+    <Grid Padding="12" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <!-- 툴바 -->
+            <RowDefinition Height="Auto" />
+            <!-- 브레드크럼 -->
+            <RowDefinition Height="Auto" />
+            <!-- 열 머리글 -->
+            <RowDefinition Height="*" />
+            <!-- 항목 목록 -->
+            <RowDefinition Height="Auto" />
+            <!-- 진행/상태 -->
+        </Grid.RowDefinitions>
+
+        <!-- 상단 툴바 -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button x:Name="OpenButton" Content="열기..." Click="OnOpenClick" />
+            <Button x:Name="ExtractToButton" Content="풀기..." Click="OnExtractToClick" IsEnabled="False"
+                    ToolTipService.ToolTip="폴더를 골라 풀기 (항목을 선택했으면 선택한 것만)" />
+            <Button x:Name="ExtractHereButton" Content="여기에 풀기" Click="OnExtractHereClick" IsEnabled="False"
+                    ToolTipService.ToolTip="압축 파일 옆에 같은 이름의 폴더를 만들어 풀기" />
+            <Button x:Name="CreateButton" Content="새 압축">
+                <Button.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="ZIP으로..." Click="OnCreateZipClick" />
+                        <MenuFlyoutItem Text="7z로..." Click="OnCreate7zClick" />
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
+        </StackPanel>
+
+        <!-- 브레드크럼 + 뒤로가기 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+            <Button x:Name="BackButton" Click="OnBackClick" IsEnabled="False"
+                    ToolTipService.ToolTip="상위 폴더로">
+                <FontIcon Glyph="&#xE72B;" FontSize="14" />
+            </Button>
+            <TextBlock x:Name="BreadcrumbText" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <!-- 열 머리글 -->
+        <Grid Grid.Row="2" Padding="16,0,16,0" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="24" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="90" />
+                <ColumnDefinition Width="130" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="1" Text="이름" FontSize="12" Opacity="0.6" />
+            <TextBlock Grid.Column="2" Text="크기" FontSize="12" Opacity="0.6" HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="3" Text="수정일" FontSize="12" Opacity="0.6" />
+        </Grid>
+
+        <!-- 항목 목록 -->
+        <Grid Grid.Row="3">
+            <ListView
+                x:Name="EntryList"
+                ItemsSource="{x:Bind Rows}"
+                SelectionMode="Extended"
+                IsDoubleTapEnabled="True"
+                DoubleTapped="OnEntryDoubleTapped">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="local:ArchiveRow">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="24" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="130" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="{x:Bind Glyph}" FontSize="14" />
+                            <TextBlock Grid.Column="1" Text="{x:Bind Name}"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2" Text="{x:Bind SizeText}"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Column="3" Text="{x:Bind ModifiedText}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <TextBlock
+                x:Name="PlaceholderText"
+                Text="압축 파일을 열거나, 파일을 끌어다 놓아 새 압축을 만드세요"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Opacity="0.6" />
+        </Grid>
+
+        <!-- 진행률 + 취소 + 상태 -->
+        <Grid Grid.Row="4" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="StatusText" TextTrimming="CharacterEllipsis" />
+                <ProgressBar x:Name="OperationProgress" Minimum="0" Maximum="100"
+                             Visibility="Collapsed" />
+            </StackPanel>
+            <Button x:Name="CancelButton" Grid.Column="1" Content="취소"
+                    Click="OnCancelClick" Visibility="Collapsed" VerticalAlignment="Bottom" />
+        </Grid>
+    </Grid>
+</UserControl>

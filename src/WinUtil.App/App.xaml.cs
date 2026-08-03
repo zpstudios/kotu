@@ -30,7 +30,7 @@ public partial class App : Application
             var router = new FileTypeRouter();
             // Phase 1+에서 모듈 등록. 등록 순서 = 우선순위.
             router.Register(new WinUtil.Module.Image.ImageModule());
-            // router.Register(new ArchiveModule(...));
+            router.Register(new WinUtil.Module.Archive.ArchiveModule());
             // router.Register(new VideoModule(...));
             return router;
         });
