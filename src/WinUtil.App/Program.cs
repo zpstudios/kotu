@@ -27,7 +27,9 @@ public static class Program
             return 0;
         }
 
-        Microsoft.UI.Xaml.Application.Start(_ =>
+        // 주의: 람다 매개변수를 "_"로 지으면 discard가 아닌 변수가 되어
+        // 본문의 "_ = new App()"이 매개변수 대입으로 해석된다(CS0029).
+        Microsoft.UI.Xaml.Application.Start(callbackParams =>
         {
             var ctx = new DispatcherQueueSynchronizationContext(
                 DispatcherQueue.GetForCurrentThread());
