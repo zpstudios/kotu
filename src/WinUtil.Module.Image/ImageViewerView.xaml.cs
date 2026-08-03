@@ -124,7 +124,7 @@ public sealed partial class ImageViewerView : UserControl
 
     private void ApplyRotation()
     {
-        Rotation.Angle = (_exifRotation + _userRotation) % 360;
+        RotationTransform.Angle = (_exifRotation + _userRotation) % 360;
         UpdateFit();
     }
 

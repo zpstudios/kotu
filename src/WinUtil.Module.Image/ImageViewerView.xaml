@@ -34,7 +34,8 @@
                 RenderTransformOrigin="0.5,0.5">
                 <Image.RenderTransform>
                     <!-- EXIF 회전 + 사용자 회전(R 키) 합산 각도 -->
-                    <RotateTransform x:Name="Rotation" />
+                    <!-- 이름 주의: "Rotation"은 UIElement.Rotation을 가려 CS0108 발생 -->
+                    <RotateTransform x:Name="RotationTransform" />
                 </Image.RenderTransform>
             </Image>
         </ScrollViewer>
