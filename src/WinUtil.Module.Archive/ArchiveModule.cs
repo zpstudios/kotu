@@ -13,6 +13,8 @@ public sealed class ArchiveModule : IModule
 
     public string DisplayName => "압축";
 
+    public string IconGlyph => "\uF012"; // ZipFolder
+
     public IReadOnlyList<string> SupportedExtensions => Extensions;
 
     public object CreateView(OpenContext context) => new ArchiveView(context);

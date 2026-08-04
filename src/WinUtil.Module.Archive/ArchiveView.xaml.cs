@@ -288,33 +288,30 @@ public sealed partial class ArchiveView : UserControl
         await StartCreateFlowAsync(files.Select(f => f.Path).ToList(), use7z);
     }
 
-    /// <summary>새 압축 공통 흐름: 형식/암호 선택 → 저장 위치 선택 → 생성.</summary>
+    /// <summary>
+    /// 새 압축 공통 흐름: 대화상자 하나에서 대상 목록 확인 + 형식/암호 + 저장 위치까지 정하고 생성한다.
+    /// 저장 위치 기본값은 원본과 같은 폴더이며, 같은 이름이 있으면 "(2)"를 붙인다.
+    /// </summary>
     private async Task StartCreateFlowAsync(IReadOnlyList<string> sourcePaths, bool? use7z)
     {
         if (_busy || sourcePaths.Count == 0) return;
 
-        var options = await PromptCreateOptionsAsync(use7z);
+        var options = await PromptCreateOptionsAsync(use7z, sourcePaths);
         if (options is null) return;
-        var (sevenZ, password) = options.Value;
-
-        var extension = sevenZ ? ".7z" : ".zip";
-        var savePicker = new FileSavePicker
-        {
-            SuggestedFileName = Path.GetFileNameWithoutExtension(sourcePaths[0]),
-        };
-        savePicker.FileTypeChoices.Add(sevenZ ? "7z 압축 파일" : "ZIP 압축 파일", new List<string> { extension });
-        WinRT.Interop.InitializeWithWindow.Initialize(savePicker, GetHwnd());
-        var target = await savePicker.PickSaveFileAsync();
-        if (target is null) return;
+        var (sevenZ, password, targetPath) = options.Value;
 
         try
         {
             var ok = await RunOperationAsync("압축 중...", (progress, ct) =>
             {
-                if (sevenZ) _backend.Create7z(sourcePaths, target.Path, password, progress, ct);
-                else _backend.CreateZip(sourcePaths, target.Path, password, progress, ct);
+                if (sevenZ) _backend.Create7z(sourcePaths, targetPath, password, progress, ct);
+                else _backend.CreateZip(sourcePaths, targetPath, password, progress, ct);
             });
-            if (ok) StatusText.Text = "압축 완료: " + target.Path;
+            if (ok)
+            {
+                StatusText.Text = "압축 완료: " + targetPath;
+                OpenInExplorer(targetPath); // 결과 파일을 탐색기에서 선택해 보여준다
+            }
         }
         catch (Exception ex)
         {
@@ -363,9 +360,35 @@ public sealed partial class ArchiveView : UserControl
         return result == ContentDialogResult.Primary && box.Password.Length > 0 ? box.Password : null;
     }
 
-    /// <summary>새 압축 옵션(형식/암호) 대화상자. 취소하면 null.</summary>
-    private async Task<(bool Use7z, string? Password)?> PromptCreateOptionsAsync(bool? use7z)
+    /// <summary>
+    /// 새 압축 옵션 대화상자: 무엇을(대상 목록), 어떤 형식/암호로, 어디에(저장 위치) 만드는지
+    /// 전부 이 자리에서 보여주고 정한다. 취소하면 null.
+    /// </summary>
+    private async Task<(bool Use7z, string? Password, string TargetPath)?> PromptCreateOptionsAsync(
+        bool? use7z, IReadOnlyList<string> sourcePaths)
     {
+        var saveDir = Path.GetDirectoryName(sourcePaths[0]);
+        if (string.IsNullOrEmpty(saveDir)) saveDir = ".";
+        var baseName = Path.GetFileNameWithoutExtension(sourcePaths[0]);
+        var existsCheck = (Func<string, bool>)(p => File.Exists(p) || Directory.Exists(p));
+
+        var sourceList = new ItemsControl
+        {
+            ItemsSource = sourcePaths.Select(Path.GetFileName).ToList(),
+        };
+        var sourcePanel = new StackPanel { Spacing = 4 };
+        sourcePanel.Children.Add(new TextBlock
+        {
+            Text = $"대상 {sourcePaths.Count}개",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        });
+        sourcePanel.Children.Add(new ScrollViewer
+        {
+            Content = sourceList,
+            MaxHeight = 140,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        });
+
         var formatBox = new ComboBox
         {
             Header = "형식",
@@ -373,9 +396,40 @@ public sealed partial class ArchiveView : UserControl
             SelectedIndex = use7z == true ? 1 : 0,
         };
         var passwordBox = new PasswordBox { Header = "암호 (선택, 비워두면 없음)" };
-        var panel = new StackPanel { Spacing = 12 };
+
+        var locationText = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.8,
+        };
+        string CurrentTarget()
+        {
+            var ext = formatBox.SelectedIndex == 1 ? ".7z" : ".zip";
+            return ExtractHerePlanner.UniquePath(Path.Combine(saveDir!, baseName + ext), existsCheck);
+        }
+        void UpdateLocationText() => locationText.Text = "저장 위치: " + CurrentTarget();
+        UpdateLocationText();
+        formatBox.SelectionChanged += (_, _) => UpdateLocationText();
+
+        var changeLocation = new Button { Content = "저장 위치 변경..." };
+        changeLocation.Click += async (_, _) =>
+        {
+            var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.Downloads };
+            picker.FileTypeFilter.Add("*");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
+            if (await picker.PickSingleFolderAsync() is { } folder)
+            {
+                saveDir = folder.Path;
+                UpdateLocationText();
+            }
+        };
+
+        var panel = new StackPanel { Spacing = 12, MinWidth = 380 };
+        panel.Children.Add(sourcePanel);
         panel.Children.Add(formatBox);
         panel.Children.Add(passwordBox);
+        panel.Children.Add(locationText);
+        panel.Children.Add(changeLocation);
 
         var dialog = new ContentDialog
         {
@@ -389,7 +443,7 @@ public sealed partial class ArchiveView : UserControl
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
 
         var password = passwordBox.Password.Length > 0 ? passwordBox.Password : null;
-        return (formatBox.SelectedIndex == 1, password);
+        return (formatBox.SelectedIndex == 1, password, CurrentTarget());
     }
 
     // ---------- 공통: 백그라운드 실행 / 진행률 / 취소 ----------

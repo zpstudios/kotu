@@ -25,11 +25,15 @@ public sealed partial class MainWindow : Window
     {
         foreach (var module in _router.Modules)
         {
-            Nav.MenuItems.Add(new NavigationViewItem
+            var item = new NavigationViewItem
             {
                 Content = module.DisplayName,
                 Tag = module.Id,
-            });
+                // 접힌 네비게이션에서는 아이콘만 보이므로 아이콘이 없으면 텍스트가 잘려 보인다.
+                Icon = new FontIcon { Glyph = module.IconGlyph },
+            };
+            ToolTipService.SetToolTip(item, module.DisplayName);
+            Nav.MenuItems.Add(item);
         }
     }
 

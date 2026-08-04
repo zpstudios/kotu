@@ -9,6 +9,8 @@ public sealed class ImageModule : IModule
 
     public string DisplayName => "이미지";
 
+    public string IconGlyph => "\uE8B9"; // Picture
+
     public IReadOnlyList<string> SupportedExtensions => ImageFolderNavigator.SupportedExtensions;
 
     public object CreateView(OpenContext context) => new ImageViewerView(context);

@@ -12,6 +12,12 @@ public interface IModule
     /// <summary>네비게이션에 표시할 이름.</summary>
     string DisplayName { get; }
 
+    /// <summary>
+    /// 네비게이션 아이콘(Segoe Fluent/MDL2 글리프 코드).
+    /// 접힌(compact) 네비게이션에서 텍스트 대신 표시된다. 기본값: 문서 아이콘.
+    /// </summary>
+    string IconGlyph => "\uE7C3";
+
     /// <summary>담당 확장자 목록(소문자, 점 포함). 예: ".jpg". 파일 라우팅에 사용.</summary>
     IReadOnlyList<string> SupportedExtensions { get; }
 

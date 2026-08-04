@@ -21,6 +21,8 @@ public sealed class VideoModule : IModule
 
     public string DisplayName => "동영상";
 
+    public string IconGlyph => "\uE714"; // Video
+
     public IReadOnlyList<string> SupportedExtensions => Extensions;
 
     public object CreateView(OpenContext context) => new VideoPlayerView(context, _settings);
