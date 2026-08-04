@@ -4,7 +4,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -31,6 +30,10 @@ public sealed partial class ImageViewerView : UserControl
 
         // 키 입력을 받기 위해 로드 시 포커스 확보 (IsTabStop은 XAML에서 설정)
         Loaded += (_, _) => Focus(FocusState.Programmatic);
+
+        // 휠 = 이전/다음 (일반 뷰어 관례). ScrollViewer가 휠을 먼저 소비하므로 handledEventsToo로 받는다.
+        Scroller.AddHandler(PointerWheelChangedEvent,
+            new PointerEventHandler(OnScrollerWheel), handledEventsToo: true);
 
         if (context.FilePath is { } path && File.Exists(path))
         {
@@ -69,22 +72,18 @@ public sealed partial class ImageViewerView : UserControl
     }
 
     private void OnOpenButtonClick(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
+    // 드래그&드롭은 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
-    private void OnDragOver(object sender, DragEventArgs e)
+    /// <summary>휠: 기본은 이전/다음 탐색. Ctrl+휠(줌)과 확대 상태(팬 스크롤)에서는 개입하지 않는다.</summary>
+    private async void OnScrollerWheel(object sender, PointerRoutedEventArgs e)
     {
-        if (e.DataView.Contains(StandardDataFormats.StorageItems))
-            e.AcceptedOperation = DataPackageOperation.Copy;
-    }
+        if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;
+        if (Scroller.ZoomFactor > 1.001f) return;
 
-    private async void OnDrop(object sender, DragEventArgs e)
-    {
-        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
-        var items = await e.DataView.GetStorageItemsAsync();
-        var path = items.OfType<StorageFile>()
-            .Select(f => f.Path)
-            .FirstOrDefault(p => ImageFolderNavigator.SupportedExtensions
-                .Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase));
-        if (path is not null) OpenPath(path);
+        var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
+        if (delta == 0) return;
+        e.Handled = true;
+        await MoveAsync(forward: delta < 0);
     }
 
     // ---------- 이미지 로드 ----------
@@ -291,6 +290,21 @@ public sealed partial class ImageViewerView : UserControl
     {
         e.Handled = true;
         ToggleFullScreen();
+    }
+
+    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (!IsFullScreen()) return; // 전체화면이 아닐 땐 Esc에 개입하지 않는다
+        args.Handled = true;
+        ToggleFullScreen();
+    }
+
+    private bool IsFullScreen()
+    {
+        var environment = XamlRoot?.ContentIslandEnvironment;
+        if (environment is null) return false;
+        return AppWindow.GetFromWindowId(environment.AppWindowId).Presenter.Kind
+            == AppWindowPresenterKind.FullScreen;
     }
 
     private void OnRotateButtonClick(object sender, RoutedEventArgs e) => RotateClockwise();

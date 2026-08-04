@@ -3,9 +3,6 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     IsTabStop="True"
-    AllowDrop="True"
-    DragOver="OnDragOver"
-    Drop="OnDrop"
     DoubleTapped="OnDoubleTapped">
 
     <!-- 단축키: ←/→ 탐색, R 회전, Delete 휴지통 삭제, F11 전체화면 -->
@@ -15,6 +12,7 @@
         <KeyboardAccelerator Key="R" Invoked="OnRotateInvoked" />
         <KeyboardAccelerator Key="Delete" Invoked="OnDeleteInvoked" />
         <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
+        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
     </UserControl.KeyboardAccelerators>
 
     <Grid>

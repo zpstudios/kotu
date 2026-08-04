@@ -3,10 +3,14 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!-- 창 전체 드롭: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅 -->
     <NavigationView x:Name="Nav"
                     PaneDisplayMode="LeftCompact"
                     IsBackButtonVisible="Collapsed"
                     IsSettingsVisible="True"
+                    AllowDrop="True"
+                    DragOver="OnWindowDragOver"
+                    Drop="OnWindowDrop"
                     SelectionChanged="OnNavSelectionChanged">
         <!-- 메뉴 항목은 등록된 모듈로부터 코드에서 채운다 -->
         <ContentControl x:Name="ModuleHost"

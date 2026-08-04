@@ -6,7 +6,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
-using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 using WinUtil.Core.Contracts;
@@ -68,6 +67,10 @@ public sealed partial class VideoPlayerView : UserControl
         Vlc.Initialized += OnVlcInitialized;
         Loaded += (_, _) => Focus(FocusState.Programmatic);
         Unloaded += OnUnloaded;
+
+        // 휠 = 볼륨 (플레이어 관례). 자식 요소가 소비해도 받도록 handledEventsToo.
+        VideoSurface.AddHandler(PointerWheelChangedEvent,
+            new PointerEventHandler(OnSurfaceWheel), handledEventsToo: true);
     }
 
     // ---------- libvlc 초기화 / 해제 ----------
@@ -150,23 +153,7 @@ public sealed partial class VideoPlayerView : UserControl
     }
 
     private void OnOpenClicked(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
-
-    private void OnDragOver(object sender, Microsoft.UI.Xaml.DragEventArgs e)
-    {
-        if (e.DataView.Contains(StandardDataFormats.StorageItems))
-            e.AcceptedOperation = DataPackageOperation.Copy;
-    }
-
-    private async void OnDrop(object sender, Microsoft.UI.Xaml.DragEventArgs e)
-    {
-        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
-        var items = await e.DataView.GetStorageItemsAsync();
-        var path = items.OfType<Windows.Storage.StorageFile>()
-            .Select(f => f.Path)
-            .FirstOrDefault(p => VideoModule.Extensions
-                .Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase));
-        if (path is not null) OpenPath(path);
-    }
+    // 드래그&드롭은 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
@@ -401,6 +388,33 @@ public sealed partial class VideoPlayerView : UserControl
     private void OnFullScreenClicked(object sender, RoutedEventArgs e) => ToggleFullScreen();
 
     private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => ToggleFullScreen();
+
+    /// <summary>영상 클릭 = 재생/일시정지 (플레이어 관례).</summary>
+    private void OnSurfaceTapped(object sender, TappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        TogglePlayPause();
+    }
+
+    /// <summary>영상 위 휠 = 볼륨 조절.</summary>
+    private void OnSurfaceWheel(object sender, PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
+        if (delta == 0) return;
+        e.Handled = true;
+        ChangeVolume(delta > 0 ? VolumeStep : -VolumeStep);
+    }
+
+    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        var environment = XamlRoot?.ContentIslandEnvironment;
+        if (environment is null) return;
+        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
+        if (appWindow.Presenter.Kind != AppWindowPresenterKind.FullScreen) return;
+
+        args.Handled = true;
+        appWindow.SetPresenter(AppWindowPresenterKind.Default);
+    }
 
     private void OnSeekSliderChanged(object sender, RangeBaseValueChangedEventArgs e)
     {

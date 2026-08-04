@@ -4,9 +4,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vlc="using:LibVLCSharp.Platforms.Windows"
     IsTabStop="True"
-    AllowDrop="True"
-    DragOver="OnDragOver"
-    Drop="OnDrop"
     DoubleTapped="OnDoubleTapped">
 
     <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨, M 음소거, F11 전체화면 -->
@@ -18,6 +15,7 @@
         <KeyboardAccelerator Key="Down" Invoked="OnVolumeDownInvoked" />
         <KeyboardAccelerator Key="M" Invoked="OnMuteInvoked" />
         <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
+        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
     </UserControl.KeyboardAccelerators>
 
     <Grid>
@@ -26,8 +24,8 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 영상 표면 -->
-        <Grid Grid.Row="0" Background="Black">
+        <!-- 영상 표면: 클릭 = 재생/일시정지, 휠 = 볼륨 (핸들러는 코드에서 연결) -->
+        <Grid x:Name="VideoSurface" Grid.Row="0" Background="Black" Tapped="OnSurfaceTapped">
             <vlc:VideoView x:Name="Vlc" />
             <TextBlock
                 x:Name="PlaceholderText"

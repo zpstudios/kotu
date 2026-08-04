@@ -194,20 +194,42 @@ public sealed partial class ArchiveView : UserControl
         if (folder is null) return;
 
         if (await ExtractWithRetryAsync(folder.Path, SelectedEntryPaths(), "푸는 중..."))
+        {
             StatusText.Text = "풀기 완료: " + folder.Path;
+            OpenInExplorer(folder.Path);
+        }
     }
 
     private async void OnExtractHereClick(object sender, RoutedEventArgs e)
     {
-        if (_busy || _archivePath is null) return;
+        if (_busy || _archivePath is null || _root is null) return;
 
-        // 압축 파일 옆에 같은 이름의 폴더를 만들어 푼다.
-        var parent = Path.GetDirectoryName(_archivePath);
-        if (parent is null) return;
-        var target = Path.Combine(parent, Path.GetFileNameWithoutExtension(_archivePath));
+        // 대상 폴더 결정: 단일 루트면 이중 폴더 방지, 이름이 겹치면 "(2)" 등 빈 이름 사용.
+        var plan = ExtractHerePlanner.Plan(
+            _archivePath,
+            _root.Children.Select(c => c.Name).ToList(),
+            p => Directory.Exists(p) || File.Exists(p));
 
-        if (await ExtractWithRetryAsync(target, entryPaths: null, "푸는 중..."))
-            StatusText.Text = "풀기 완료: " + target;
+        if (await ExtractWithRetryAsync(plan.TargetDirectory, entryPaths: null, "푸는 중..."))
+        {
+            StatusText.Text = "풀기 완료: " + plan.ResultPath;
+            OpenInExplorer(plan.ResultPath);
+        }
+    }
+
+    /// <summary>풀기 결과를 탐색기로 보여준다. 실패해도 조용히 무시.</summary>
+    private static void OpenInExplorer(string path)
+    {
+        try
+        {
+            // 결과가 파일이면 부모 폴더에서 해당 파일을 선택해 보여준다.
+            var args = Directory.Exists(path) ? $"\"{path}\"" : $"/select,\"{path}\"";
+            Process.Start(new ProcessStartInfo("explorer.exe", args) { UseShellExecute = true });
+        }
+        catch
+        {
+            // 탐색기 열기는 부가 기능 — 실패가 흐름을 막으면 안 된다.
+        }
     }
 
     /// <summary>선택된 항목 경로 목록. 선택이 없으면 null(=전체).</summary>
@@ -305,12 +327,16 @@ public sealed partial class ArchiveView : UserControl
     private void OnDragOver(object sender, DragEventArgs e)
     {
         if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
             e.AcceptedOperation = DataPackageOperation.Copy;
+            e.Handled = true; // 압축 뷰의 드롭은 '새 압축' — 창 수준 파일 라우팅으로 넘기지 않는다.
+        }
     }
 
     private async void OnDrop(object sender, DragEventArgs e)
     {
         if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        e.Handled = true; // 창 수준 라우팅과의 이중 처리 방지 (await 전에 동기로 지정해야 유효)
         var items = await e.DataView.GetStorageItemsAsync();
         var paths = items.Select(i => i.Path).Where(p => !string.IsNullOrEmpty(p)).ToList();
         if (paths.Count == 0) return;

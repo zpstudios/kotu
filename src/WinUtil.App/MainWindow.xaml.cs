@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.ApplicationModel.DataTransfer;
 using WinUtil.Core.Contracts;
 using WinUtil.Core.Routing;
 
@@ -46,7 +47,28 @@ public sealed partial class MainWindow : Window
             };
             return;
         }
+        Title = Path.GetFileName(path) + " — WinUtil";
         ShowModule(module, OpenContext.ForFile(path));
+    }
+
+    // ---------- 창 전체 드래그&드롭 → 파일 라우팅 ----------
+
+    private void OnWindowDragOver(object sender, DragEventArgs e)
+    {
+        if (e.Handled) return; // 압축 뷰 등 모듈이 이미 소비한 드래그
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            e.AcceptedOperation = DataPackageOperation.Copy;
+    }
+
+    private async void OnWindowDrop(object sender, DragEventArgs e)
+    {
+        if (e.Handled) return;
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        var items = await e.DataView.GetStorageItemsAsync();
+        var path = items.OfType<Windows.Storage.StorageFile>()
+            .Select(f => f.Path)
+            .FirstOrDefault(p => !string.IsNullOrEmpty(p));
+        if (path is not null) OpenFile(path);
     }
 
     private void ShowModule(IModule module, OpenContext context)
@@ -69,7 +91,11 @@ public sealed partial class MainWindow : Window
         if (args.SelectedItem is NavigationViewItem { Tag: string id })
         {
             var module = _router.Modules.FirstOrDefault(m => m.Id == id);
-            if (module is not null) ShowModule(module, OpenContext.Empty);
+            if (module is not null)
+            {
+                Title = "WinUtil";
+                ShowModule(module, OpenContext.Empty);
+            }
         }
         // TODO Phase 4: args.IsSettingsSelected → 설정 페이지
     }
