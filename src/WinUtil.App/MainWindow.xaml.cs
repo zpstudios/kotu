@@ -9,6 +9,7 @@ namespace WinUtil.App;
 public sealed partial class MainWindow : Window
 {
     private readonly FileTypeRouter _router;
+    private bool _suppressNavSelection;
 
     public MainWindow()
     {
@@ -50,14 +51,21 @@ public sealed partial class MainWindow : Window
 
     private void ShowModule(IModule module, OpenContext context)
     {
-        ModuleHost.Content = (UIElement)module.CreateView(context);
+        // 중요: SelectedItem 대입이 SelectionChanged를 동기 재진입시키므로,
+        // 억제 플래그 없이는 방금 만든 파일 컨텍스트 뷰가 빈 뷰로 즉시 덮여버린다(v0.5.8 실기기 버그).
+        _suppressNavSelection = true;
         Nav.SelectedItem = Nav.MenuItems
             .OfType<NavigationViewItem>()
             .FirstOrDefault(i => (string?)i.Tag == module.Id);
+        _suppressNavSelection = false;
+
+        ModuleHost.Content = (UIElement)module.CreateView(context);
     }
 
     private void OnNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
+        if (_suppressNavSelection) return;
+
         if (args.SelectedItem is NavigationViewItem { Tag: string id })
         {
             var module = _router.Modules.FirstOrDefault(m => m.Id == id);

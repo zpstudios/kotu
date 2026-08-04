@@ -1,10 +1,14 @@
 using LibVLCSharp.Platforms.Windows;
 using LibVLCSharp.Shared;
+using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 using WinUtil.Core.Contracts;
 using WinUtil.Core.Settings;
 
@@ -24,7 +28,7 @@ public sealed partial class VideoPlayerView : UserControl
 
     private readonly ISettingsService _settings;
     private readonly PlaybackResumeStore _resumeStore;
-    private readonly string? _filePath;
+    private string? _filePath;
 
     private LibVLC? _libVlc;
     private MediaPlayer? _player;
@@ -68,13 +72,19 @@ public sealed partial class VideoPlayerView : UserControl
 
     // ---------- libvlc 초기화 / 해제 ----------
 
-    /// <summary>VideoView의 D3D 스왑체인이 준비되면 호출된다. 여기서만 LibVLC를 만들 수 있다.</summary>
+    /// <summary>
+    /// VideoView의 D3D 스왑체인이 준비되면 호출된다. 여기서만 LibVLC를 만들 수 있다.
+    /// 파일 없이 열렸어도 플레이어는 만들어 둔다 — 이후 열기 버튼/드롭으로 파일이 올 수 있다.
+    /// </summary>
     private void OnVlcInitialized(object? sender, InitializedEventArgs e)
     {
-        if (_filePath is null || _tornDown) return;
+        if (_tornDown) return;
 
         try
         {
+            // libvlc 네이티브 dll은 libvlc\win-x64\ 하위에 배포되므로 검색 경로 등록이 선행돼야 한다.
+            Core.Initialize();
+
             _libVlc = new LibVLC(e.SwapChainOptions);
             _player = new MediaPlayer(_libVlc);
             Vlc.MediaPlayer = _player;
@@ -82,16 +92,79 @@ public sealed partial class VideoPlayerView : UserControl
             _player.Volume = (int)VolumeSlider.Value;
             HookPlayerEvents(_player);
 
-            _pendingResumeMs = _resumeStore.GetResumePositionMs(_filePath) ?? -1;
-            LoadSubtitleList();
-
-            using var media = new Media(_libVlc, new Uri(_filePath));
-            _player.Play(media);
+            if (_filePath is not null) PlayCurrent();
         }
         catch (Exception ex)
         {
             ShowMessage($"재생 초기화 실패: {ex.Message}");
         }
+    }
+
+    /// <summary>현재 _filePath를 처음부터(또는 이어보기 지점부터) 재생한다. 플레이어 준비 후에만 호출.</summary>
+    private void PlayCurrent()
+    {
+        if (_player is not { } p || _libVlc is not { } lib || _filePath is null) return;
+
+        _durationMs = 0;
+        _lastReportedMs = 0;
+        _pendingResumeMs = _resumeStore.GetResumePositionMs(_filePath) ?? -1;
+        LoadSubtitleList();
+
+        using var media = new Media(lib, new Uri(_filePath));
+        p.Play(media);
+        PlaceholderText.Visibility = Visibility.Collapsed;
+    }
+
+    // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
+
+    private void OpenPath(string path)
+    {
+        if (!File.Exists(path)) return;
+
+        // 보던 파일이 있으면 위치를 저장하고 전환한다.
+        if (_player is { } p && _filePath is not null && _durationMs > 0)
+        {
+            try { _resumeStore.Report(_filePath, p.Time, _durationMs); }
+            catch { /* 저장 실패가 전환을 막으면 안 된다 */ }
+        }
+
+        _filePath = path;
+        if (_player is not null) PlayCurrent();
+        // 플레이어가 아직 없으면 OnVlcInitialized에서 PlayCurrent()가 이어받는다.
+    }
+
+    private async Task PickAndOpenAsync()
+    {
+        var environment = XamlRoot?.ContentIslandEnvironment;
+        if (environment is null) return;
+        var hwnd = Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
+
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.VideosLibrary };
+        foreach (var ext in VideoModule.Extensions)
+            picker.FileTypeFilter.Add(ext);
+        InitializeWithWindow.Initialize(picker, hwnd);
+
+        if (await picker.PickSingleFileAsync() is { } file)
+            OpenPath(file.Path);
+    }
+
+    private void OnOpenClicked(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
+
+    private void OnDragOver(object sender, Microsoft.UI.Xaml.DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            e.AcceptedOperation = DataPackageOperation.Copy;
+    }
+
+    private async void OnDrop(object sender, Microsoft.UI.Xaml.DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        var items = await e.DataView.GetStorageItemsAsync();
+        var path = items.OfType<Windows.Storage.StorageFile>()
+            .Select(f => f.Path)
+            .FirstOrDefault(p => VideoModule.Extensions
+                .Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase));
+        if (path is not null) OpenPath(path);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)

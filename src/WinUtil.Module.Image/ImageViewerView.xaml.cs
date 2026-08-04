@@ -1,10 +1,14 @@
+using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 using WinUtil.Core.Contracts;
 
 namespace WinUtil.Module.Image;
@@ -30,14 +34,57 @@ public sealed partial class ImageViewerView : UserControl
 
         if (context.FilePath is { } path && File.Exists(path))
         {
-            _navigator = ImageFolderNavigator.Create(path);
-            _ = LoadCurrentAsync();
+            OpenPath(path);
         }
         else
         {
             PlaceholderText.Visibility = Visibility.Visible;
             UpdateStatusBar();
         }
+    }
+
+    // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
+
+    private void OpenPath(string path)
+    {
+        _navigator = ImageFolderNavigator.Create(path);
+        PlaceholderText.Visibility = Visibility.Collapsed;
+        _ = LoadCurrentAsync();
+    }
+
+    private async Task PickAndOpenAsync()
+    {
+        // Window 객체 없이 파일 선택기를 띄우려면 XamlRoot 경유로 HWND를 얻어야 한다.
+        var environment = XamlRoot?.ContentIslandEnvironment;
+        if (environment is null) return;
+        var hwnd = Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
+
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
+        foreach (var ext in ImageFolderNavigator.SupportedExtensions)
+            picker.FileTypeFilter.Add(ext);
+        InitializeWithWindow.Initialize(picker, hwnd);
+
+        if (await picker.PickSingleFileAsync() is { } file)
+            OpenPath(file.Path);
+    }
+
+    private void OnOpenButtonClick(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
+
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            e.AcceptedOperation = DataPackageOperation.Copy;
+    }
+
+    private async void OnDrop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        var items = await e.DataView.GetStorageItemsAsync();
+        var path = items.OfType<StorageFile>()
+            .Select(f => f.Path)
+            .FirstOrDefault(p => ImageFolderNavigator.SupportedExtensions
+                .Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase));
+        if (path is not null) OpenPath(path);
     }
 
     // ---------- 이미지 로드 ----------
