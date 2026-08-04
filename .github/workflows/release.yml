@@ -43,6 +43,10 @@ jobs:
                       Where-Object { $_.FullName -notlike "*publish*" } | Select-Object -First 1
             if ($outPri) { Copy-Item $outPri.FullName $publishDir }
           }
+          # 기본 이름(WinUtil.App.pri)으로 생성된 경우: 로더가 찾는 고정 이름으로 복사
+          if (!(Test-Path "$publishDir\resources.pri") -and (Test-Path "$publishDir\WinUtil.App.pri")) {
+            Copy-Item "$publishDir\WinUtil.App.pri" "$publishDir\resources.pri"
+          }
           if (!(Test-Path "$publishDir\resources.pri")) {
             Write-Host "### resources.pri가 어디에도 없음 — bin 전체의 pri 목록:"
             Get-ChildItem src/WinUtil.App/bin -Recurse -Filter *.pri | ForEach-Object { Write-Host $_.FullName }

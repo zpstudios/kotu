@@ -18,6 +18,12 @@
       실행 시 XamlParseException으로 즉사했다(v0.5.5~0.5.6 실기기 진단).
     -->
     <EnableMsixTooling>true</EnableMsixTooling>
+    <!--
+      unpackaged 앱의 리소스 로더는 exe 옆의 "resources.pri" 고정 이름만 찾는다.
+      기본 생성 이름이 WinUtil.App.pri라 시작 시 XamlParseException으로 죽었음(v0.5.7 CI 로그로 확정).
+      생성 단계에서부터 이름을 맞춘다.
+    -->
+    <ProjectPriFileName>resources.pri</ProjectPriFileName>
   </PropertyGroup>
   <ItemGroup>
     <!-- 1.8: LibVLCSharp.WinUI(동영상 모듈)의 최소 요구 버전에 맞춰 전 프로젝트 통일 -->
@@ -39,7 +45,12 @@
     publish 폴더로 복사하지 않는 문제 대응. 없으면 실행 시 MainWindow.InitializeComponent에서
     XamlParseException("XAML parsing failed")으로 조용히 죽는다. (v0.5.5 배포에서 실증)
   -->
-  <Target Name="CopyPriToPublish" AfterTargets="Publish" Condition="Exists('$(OutDir)resources.pri')">
-    <Copy SourceFiles="$(OutDir)resources.pri" DestinationFolder="$(PublishDir)" />
+  <Target Name="CopyPriToPublish" AfterTargets="Publish">
+    <!-- 1) OutDir에 resources.pri가 있으면 publish로 복사 -->
+    <Copy SourceFiles="$(OutDir)resources.pri" DestinationFolder="$(PublishDir)"
+          Condition="Exists('$(OutDir)resources.pri')" />
+    <!-- 2) ProjectPriFileName이 무시되어 기본 이름으로 생성된 경우: publish 안에서 이름을 맞춰 복사 -->
+    <Copy SourceFiles="$(PublishDir)$(TargetName).pri" DestinationFiles="$(PublishDir)resources.pri"
+          Condition="!Exists('$(PublishDir)resources.pri') And Exists('$(PublishDir)$(TargetName).pri')" />
   </Target>
 </Project>
