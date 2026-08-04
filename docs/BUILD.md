@@ -57,11 +57,12 @@ dotnet publish src/WinUtil.App -c Release -p:Platform=x64 -r win-x64 --self-cont
 
 - **`Microsoft.WindowsAppSDK` 복원 실패** — nuget.org 소스가 활성화돼 있는지 확인: `dotnet nuget list source`
 - **XAML 컴파일 오류 (WMC/XLS 계열)** — Visual Studio의 "Windows App SDK" 구성요소 미설치가 흔한 원인. CLI 빌드라면 `dotnet workload restore` 시도.
-- **앱 실행 직후 종료** — unpackaged 실행에는 x64 빌드가 필수입니다. `-p:Platform=x64` 누락 여부 확인.
+- **앱 실행 직후 종료** — unpackaged 실행에는 x64 빌드가 필수입니다. `-p:Platform=x64` 누락 여부 확인. 오류 상세는 `%TEMP%\WinUtil\startup-error.log`에 남습니다.
+- **XamlParseException("XAML parsing failed")으로 시작 실패** — 실행 폴더에 `resources.pri`가 있는지 확인. `dotnet publish`가 이 파일을 빠뜨리는 문제가 있어 csproj의 `CopyPriToPublish` 타깃이 보정합니다(v0.5.6). 수동 복구: 빌드 출력 폴더의 `resources.pri`를 exe 옆에 복사.
 - **압축 파일 열기 실패: "7z.dll을 찾을 수 없습니다"** — 3장 참고. 반드시 **x64** dll이어야 합니다(32비트 7-Zip의 dll 불가).
 - **동영상 재생 실패 / 검은 화면** — 출력 폴더에 `libvlc.dll`·`libvlccore.dll`과 `plugins\` 폴더가 있는지 확인(NuGet 복원이 정상이면 자동 포함). LibVLCSharp.WinUI는 WindowsAppSDK 1.8+ 필요.
 - **테스트 프로젝트 빌드 실패** — 모듈 테스트는 `net8.0-windows` TFM이라 Windows에서만 빌드·실행됩니다.
 
-## 6. 알려진 미검증 지점
+## 6. 검증 현황
 
-현재 코드는 Linux 환경에서 작성되어 Windows 실빌드 검증 전입니다. 첫 빌드에서 보고된 확인 필요 지점은 커밋 메시지와 [ARCHITECTURE.md](../ARCHITECTURE.md) 6장(리스크)을 참고하세요. 빌드 오류를 발견하면 이슈로 남겨주시면 감사하겠습니다.
+CI(GitHub Actions, windows-latest)에서 빌드·단위 테스트가 통과하며, v0.5.x 포터블 배포본으로 Windows 실기기 실행이 확인되었습니다. 남은 리스크는 [ARCHITECTURE.md](../ARCHITECTURE.md) 6장 참고. 문제를 발견하면 이슈로 남겨주세요.

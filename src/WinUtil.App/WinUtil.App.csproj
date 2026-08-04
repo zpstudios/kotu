@@ -27,4 +27,13 @@
     <ProjectReference Include="..\WinUtil.Module.Archive\WinUtil.Module.Archive.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Video\WinUtil.Module.Video.csproj" />
   </ItemGroup>
+
+  <!--
+    dotnet publish가 unpackaged WinUI 앱의 resources.pri(컴파일된 XAML/XBF 병합 리소스)를
+    publish 폴더로 복사하지 않는 문제 대응. 없으면 실행 시 MainWindow.InitializeComponent에서
+    XamlParseException("XAML parsing failed")으로 조용히 죽는다. (v0.5.5 배포에서 실증)
+  -->
+  <Target Name="CopyPriToPublish" AfterTargets="Publish" Condition="Exists('$(OutDir)resources.pri')">
+    <Copy SourceFiles="$(OutDir)resources.pri" DestinationFolder="$(PublishDir)" />
+  </Target>
 </Project>
