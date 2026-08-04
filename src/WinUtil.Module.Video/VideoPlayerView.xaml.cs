@@ -83,7 +83,8 @@ public sealed partial class VideoPlayerView : UserControl
         try
         {
             // libvlc 네이티브 dll은 libvlc\win-x64\ 하위에 배포되므로 검색 경로 등록이 선행돼야 한다.
-            Core.Initialize();
+            // 주의: 그냥 Core라고 쓰면 WinUtil.Core 네임스페이스로 해석된다(상위 네임스페이스 우선).
+            LibVLCSharp.Shared.Core.Initialize();
 
             _libVlc = new LibVLC(e.SwapChainOptions);
             _player = new MediaPlayer(_libVlc);
