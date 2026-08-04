@@ -77,12 +77,24 @@ jobs:
           }
           Write-Host "resources.pri OK: $publishDir\resources.pri"
 
-      - name: zip 패키징
+      - name: zip 패키징 (수동 포터블 — 호환 유지)
         if: steps.ver.outputs.skip != 'true'
         shell: pwsh
         run: |
           $publishDir = Get-ChildItem -Path src/WinUtil.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1
           Compress-Archive -Path "$($publishDir.FullName)\*" -DestinationPath "WinUtil-${{ steps.ver.outputs.tag }}-win-x64.zip"
+
+      - name: Velopack 패키징 (Setup.exe + 자동 업데이트 피드)
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          dotnet tool install --global vpk --version 1.2.0
+          $publishDir = (Get-ChildItem -Path src/WinUtil.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1).FullName
+          vpk pack --packId WinUtil --packVersion ${{ steps.ver.outputs.version }} `
+                   --packDir $publishDir --mainExe WinUtil.App.exe `
+                   --packTitle WinUtil --packAuthors tsusaikang --outputDir vpk_out
+          if ($LASTEXITCODE -ne 0) { Write-Error "vpk pack 실패"; exit 1 }
+          Get-ChildItem vpk_out | ForEach-Object { Write-Host ("생성됨: " + $_.Name) }
 
       - name: 태그 생성 + GitHub Release 업로드
         if: steps.ver.outputs.skip != 'true'
@@ -90,7 +102,10 @@ jobs:
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          files: WinUtil-${{ steps.ver.outputs.tag }}-win-x64.zip
+          files: |
+            WinUtil-${{ steps.ver.outputs.tag }}-win-x64.zip
+            vpk_out/*
           body: |
-            포터블 배포본 — 압축 풀고 `WinUtil.App.exe`를 실행하면 압축·이미지·동영상 기능이 바로 동작합니다 (별도 설치 불필요).
-            7z.dll(LGPL)과 libvlc(LGPL)가 동봉되어 있으며 고지는 THIRD-PARTY-NOTICES.md 참고.
+            **권장: `WinUtil-win-Setup.exe`** — 설치 한 번이면 이후 새 버전이 나올 때 앱이 알아서 업데이트합니다.
+            `WinUtil-*-win-x64.zip`은 수동 포터블(자동 업데이트 없음)입니다. 어느 쪽이든 압축·이미지·동영상 기능이 바로 동작합니다.
+            7z.dll(LGPL)과 libvlc(LGPL) 동봉 — 고지는 THIRD-PARTY-NOTICES.md 참고.

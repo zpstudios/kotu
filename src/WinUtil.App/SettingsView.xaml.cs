@@ -77,6 +77,42 @@ public sealed partial class SettingsView : UserControl
 
         Root.Children.Add(_status);
 
+        AddHeader("업데이트");
+        var updateStatus = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
+        var checkButton = new Button { Content = "업데이트 확인" };
+        checkButton.Click += async (_, _) =>
+        {
+            checkButton.IsEnabled = false;
+            updateStatus.Text = "확인 중...";
+            try
+            {
+                if (!UpdateService.IsUpdatableBuild)
+                {
+                    updateStatus.Text = "수동 zip 실행에서는 자동 업데이트를 쓸 수 없습니다. "
+                                      + "Releases의 Setup.exe 설치판을 사용하면 자동 업데이트가 활성화됩니다.";
+                    return;
+                }
+                var info = await UpdateService.CheckAsync();
+                if (info is null)
+                {
+                    updateStatus.Text = "최신 버전입니다.";
+                    return;
+                }
+                updateStatus.Text = $"새 버전 v{info.TargetFullRelease.Version} — 다운로드 후 재시작합니다...";
+                await UpdateService.DownloadAndRestartAsync(info);
+            }
+            catch (Exception ex)
+            {
+                updateStatus.Text = "업데이트 확인 실패: " + ex.Message;
+            }
+            finally
+            {
+                checkButton.IsEnabled = true;
+            }
+        };
+        Root.Children.Add(checkButton);
+        Root.Children.Add(updateStatus);
+
         AddHeader("정보");
         var version = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
         Root.Children.Add(new TextBlock { Text = $"WinUtil v{version} · github.com/tsusaikang/winutil", Opacity = 0.7 });

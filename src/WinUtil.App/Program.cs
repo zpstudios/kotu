@@ -27,6 +27,10 @@ public static class Program
 
         try
         {
+            // Velopack 훅: 설치/업데이트/제거 시 넘어오는 특수 인자를 처리한다.
+            // (해당 인자면 여기서 프로세스가 종료되므로 반드시 가장 먼저 호출)
+            Velopack.VelopackApp.Build().Run();
+
             WinRT.ComWrappersSupport.InitializeComWrappers();
 
             var mainInstance = AppInstance.FindOrRegisterForKey(InstanceKey);

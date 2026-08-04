@@ -32,6 +32,8 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <!-- libvlc 네이티브 엔진(LGPL, dll 동적 링크) — 빌드 출력에 자동 복사됨 -->
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.*" />
+    <!-- 설치본(Setup.exe)·자동 업데이트 (설계 2장: unpackaged + Velopack) -->
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinUtil.Core\WinUtil.Core.csproj" />
