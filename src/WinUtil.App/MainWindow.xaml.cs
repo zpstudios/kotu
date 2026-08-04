@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
+using WinUtil.Core.Cli;
 using WinUtil.Core.Contracts;
 using WinUtil.Core.Routing;
 
@@ -55,6 +56,22 @@ public sealed partial class MainWindow : Window
         ShowModule(module, OpenContext.ForFile(path));
     }
 
+    /// <summary>탐색기 우클릭 동사(여기에 풀기/압축) 진입점. 동사는 압축 모듈이 처리한다.</summary>
+    public void OpenVerb(LaunchRequest request)
+    {
+        if (request.FilePath is not { } file) return;
+
+        var module = _router.Modules.FirstOrDefault(m => m.Id == "archive");
+        if (module is null || request.VerbToken is not { } token)
+        {
+            OpenFile(file);
+            return;
+        }
+
+        Title = Path.GetFileName(file) + " — WinUtil";
+        ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] });
+    }
+
     // ---------- 창 전체 드래그&드롭 → 파일 라우팅 ----------
 
     private void OnWindowDragOver(object sender, DragEventArgs e)
@@ -92,6 +109,13 @@ public sealed partial class MainWindow : Window
     {
         if (_suppressNavSelection) return;
 
+        if (args.IsSettingsSelected)
+        {
+            Title = "설정 — WinUtil";
+            ModuleHost.Content = new SettingsView(_router);
+            return;
+        }
+
         if (args.SelectedItem is NavigationViewItem { Tag: string id })
         {
             var module = _router.Modules.FirstOrDefault(m => m.Id == id);
@@ -101,7 +125,6 @@ public sealed partial class MainWindow : Window
                 ShowModule(module, OpenContext.Empty);
             }
         }
-        // TODO Phase 4: args.IsSettingsSelected → 설정 페이지
     }
 
     public void BringToFront()

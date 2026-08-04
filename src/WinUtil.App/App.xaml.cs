@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
+using WinUtil.Core.Cli;
 using WinUtil.Core.Routing;
 using WinUtil.Core.Settings;
 
@@ -47,10 +48,18 @@ public partial class App : Application
         _window = new MainWindow();
         _window.Activate();
 
-        // 커맨드라인 인자로 파일이 넘어온 경우(파일 연결/드래그 실행)
-        var cmdArgs = Environment.GetCommandLineArgs();
-        if (cmdArgs.Length > 1 && File.Exists(cmdArgs[1]))
-            _window.OpenFile(cmdArgs[1]);
+        // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
+        var request = LaunchRequest.Parse(Environment.GetCommandLineArgs().Skip(1).ToList());
+        DispatchRequest(request);
+    }
+
+    /// <summary>해석된 실행 요청을 창으로 보낸다. 파일이 없거나 사라졌으면 무시.</summary>
+    private void DispatchRequest(LaunchRequest request)
+    {
+        if (_window is null || request.FilePath is not { } file || !File.Exists(file)) return;
+
+        if (request.Verb == LaunchVerb.Open) _window.OpenFile(file);
+        else _window.OpenVerb(request);
     }
 
     private void OnRedirectedActivation(object? sender, AppActivationArguments e)
@@ -59,11 +68,19 @@ public partial class App : Application
         window?.DispatcherQueue.TryEnqueue(() =>
         {
             window.BringToFront();
+
             if (e.Kind == ExtendedActivationKind.File &&
                 e.Data is Windows.ApplicationModel.Activation.IFileActivatedEventArgs fileArgs &&
                 fileArgs.Files.FirstOrDefault() is Windows.Storage.IStorageFile file)
             {
                 window.OpenFile(file.Path);
+            }
+            else if (e.Kind == ExtendedActivationKind.Launch &&
+                     e.Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs launch &&
+                     !string.IsNullOrWhiteSpace(launch.Arguments))
+            {
+                // 두 번째 인스턴스의 커맨드라인이 그대로 넘어온다(선행 exe 토큰 포함 가능).
+                DispatchRequest(LaunchRequest.ParseCommandLine(launch.Arguments));
             }
         });
     }

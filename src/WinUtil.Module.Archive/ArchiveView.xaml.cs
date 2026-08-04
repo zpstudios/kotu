@@ -36,6 +36,7 @@ public sealed partial class ArchiveView : UserControl
 {
     private readonly IArchiveBackend _backend = new SevenZipBackend();
     private readonly string? _initialFile;
+    private readonly IReadOnlyList<string> _initialArgs;
     private readonly Stack<ArchiveEntryNode> _navStack = new();
 
     private string? _archivePath;
@@ -52,6 +53,7 @@ public sealed partial class ArchiveView : UserControl
     {
         InitializeComponent();
         _initialFile = context.FilePath;
+        _initialArgs = context.Arguments;
         Loaded += OnLoaded;
     }
 
@@ -59,10 +61,26 @@ public sealed partial class ArchiveView : UserControl
     {
         if (_initialized) return;
         _initialized = true;
-        if (_initialFile is { } path && File.Exists(path))
-            await LoadArchiveAsync(path);
-        else
+
+        if (_initialFile is not { } path || !File.Exists(path))
+        {
             UpdateToolbarState();
+            return;
+        }
+
+        // 탐색기 우클릭 동사 처리
+        if (_initialArgs.Contains(WinUtil.Core.Cli.LaunchRequest.CompressToken))
+        {
+            // 대상은 압축 파일이 아니라 압축할 원본 — 목록을 읽지 말고 바로 새 압축 흐름으로.
+            UpdateToolbarState();
+            await StartCreateFlowAsync([path], use7z: null);
+            return;
+        }
+
+        await LoadArchiveAsync(path);
+
+        if (_initialArgs.Contains(WinUtil.Core.Cli.LaunchRequest.ExtractHereToken) && _root is not null)
+            await ExtractHereAsync();
     }
 
     // ---------- 아카이브 열기 / 목록 ----------
@@ -200,7 +218,10 @@ public sealed partial class ArchiveView : UserControl
         }
     }
 
-    private async void OnExtractHereClick(object sender, RoutedEventArgs e)
+    private async void OnExtractHereClick(object sender, RoutedEventArgs e) => await ExtractHereAsync();
+
+    /// <summary>"여기에 풀기" 실행. 버튼과 탐색기 우클릭 동사가 공유한다.</summary>
+    private async Task ExtractHereAsync()
     {
         if (_busy || _archivePath is null || _root is null) return;
 
