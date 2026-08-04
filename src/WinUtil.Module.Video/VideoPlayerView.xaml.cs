@@ -262,6 +262,13 @@ public sealed partial class VideoPlayerView : UserControl
             _pendingAutoSubtitle = false;
             ApplySubtitle(SubtitleBox.SelectedIndex);
         }
+
+        // 배속은 미디어가 바뀌면 초기화되므로 콤보의 현재 선택을 다시 적용한다(같은 값 재적용은 무해).
+        if (_player is { } player &&
+            SpeedBox.SelectedIndex is >= 0 and var i && i < Speeds.Length)
+        {
+            player.SetRate(Speeds[i]);
+        }
     });
 
     private void OnPlayerPaused(object? sender, EventArgs e) =>
@@ -347,6 +354,14 @@ public sealed partial class VideoPlayerView : UserControl
     private void TogglePlayPause()
     {
         if (_player is not { } p) return;
+
+        // 끝까지 재생된(Ended) 상태에서는 Play()만으로 재시작이 안 되므로 미디어를 다시 건다.
+        if (p.State == VLCState.Ended)
+        {
+            PlayCurrent();
+            return;
+        }
+
         if (p.CanPause && p.IsPlaying) p.Pause();
         else p.Play();
     }
