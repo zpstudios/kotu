@@ -54,45 +54,71 @@ public partial class App : Application
         var request = LaunchRequest.Parse(Environment.GetCommandLineArgs().Skip(1).ToList());
         DispatchRequest(request);
 
-        // 백그라운드 업데이트 확인 (Velopack 관리 빌드에서만 동작)
-        _ = PromptUpdateIfAvailableAsync(_window);
+        // 백그라운드 주기 업데이트 확인 (Velopack 관리 빌드에서만 동작)
+        _ = PeriodicUpdateCheckAsync(_window);
     }
 
-    /// <summary>시작 몇 초 뒤 업데이트를 확인하고, 있으면 사용자에게 적용을 물어본다. 실패는 조용히 무시.</summary>
-    private static async Task PromptUpdateIfAvailableAsync(MainWindow window)
+    /// <summary>
+    /// 시작 3초 뒤 첫 확인, 이후 60초 간격으로 업데이트를 확인한다.
+    /// 같은 버전을 "나중에"로 거절하면 이 세션에서는 다시 묻지 않는다.
+    /// 실패(오프라인·GitHub API 시간당 한도 등)는 조용히 넘기고 다음 주기에 재시도.
+    /// </summary>
+    private static async Task PeriodicUpdateCheckAsync(MainWindow window)
     {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(3)); // 시작 직후에는 UI에 양보
-            var info = await UpdateService.CheckAsync();
-            if (info is null) return;
+        string? declinedVersion = null;
+        var prompting = false;
 
-            window.DispatcherQueue.TryEnqueue(async () =>
-            {
-                try
-                {
-                    var dialog = new ContentDialog
-                    {
-                        Title = "업데이트 가능",
-                        Content = $"새 버전 v{info.TargetFullRelease.Version}이(가) 있습니다.\n"
-                                + "다운로드 후 자동으로 재시작해 적용합니다.",
-                        PrimaryButtonText = "지금 업데이트",
-                        CloseButtonText = "나중에",
-                        DefaultButton = ContentDialogButton.Primary,
-                        XamlRoot = window.Content.XamlRoot,
-                    };
-                    if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                        await DownloadWithProgressAsync(window, info);
-                }
-                catch
-                {
-                    // 업데이트 실패는 다음 실행 때 다시 시도된다.
-                }
-            });
-        }
-        catch
+        await Task.Delay(TimeSpan.FromSeconds(3)); // 시작 직후에는 UI에 양보
+
+        while (true)
         {
-            // 오프라인·API 제한 등 — 시작을 방해하지 않는다.
+            try
+            {
+                if (!prompting)
+                {
+                    var info = await UpdateService.CheckAsync();
+                    var version = info?.TargetFullRelease.Version.ToString();
+
+                    if (info is not null && version is not null && version != declinedVersion)
+                    {
+                        prompting = true;
+                        window.DispatcherQueue.TryEnqueue(async () =>
+                        {
+                            try
+                            {
+                                var dialog = new ContentDialog
+                                {
+                                    Title = "업데이트 가능",
+                                    Content = $"새 버전 v{version}이(가) 있습니다.\n"
+                                            + "다운로드 후 자동으로 재시작해 적용합니다.",
+                                    PrimaryButtonText = "지금 업데이트",
+                                    CloseButtonText = "나중에",
+                                    DefaultButton = ContentDialogButton.Primary,
+                                    XamlRoot = window.Content.XamlRoot,
+                                };
+                                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                                    await DownloadWithProgressAsync(window, info);
+                                else
+                                    declinedVersion = version;
+                            }
+                            catch
+                            {
+                                // 다른 다이얼로그가 열려 있는 등 — 다음 주기에 다시 시도.
+                            }
+                            finally
+                            {
+                                prompting = false;
+                            }
+                        });
+                    }
+                }
+            }
+            catch
+            {
+                // 확인 실패는 다음 주기에 재시도.
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(60));
         }
     }
 
