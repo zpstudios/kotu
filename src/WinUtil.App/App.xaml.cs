@@ -15,6 +15,10 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+
+        // XAML 스레드에서 잡히지 않은 예외도 로그·안내 (unpackaged 앱은 그냥 조용히 죽는다)
+        UnhandledException += (_, e) => Program.LogFatal(e.Exception, "Xaml UnhandledException");
+
         Services = ConfigureServices();
 
         // 실행 중 다른 인스턴스에서 파일이 넘어올 때
