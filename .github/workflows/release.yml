@@ -1,30 +1,51 @@
-# "v0.5.0" 같은 태그를 push하면 Release 빌드를 만들어
-# zip으로 묶어 GitHub Releases에 자동 업로드한다.
-#   git tag v0.5.0 && git push origin v0.5.0
+# 완전 자동 릴리스: master에 push되면 Directory.Build.props의 <Version>을 읽어
+# 해당 버전 태그(v0.6.1 등)가 아직 없으면 빌드→zip→태그 생성→Release 업로드까지 수행한다.
+# 커밋마다 버전을 올리는 저장소 규칙과 결합되어, push만 하면 릴리스가 나온다.
+# 같은 버전을 다시 push하면(태그 이미 존재) 조용히 건너뛴다(멱등).
 name: release
 
 on:
   push:
-    tags: ["v*"]
+    branches: ["master"]
+  workflow_dispatch:
 
 permissions:
-  contents: write   # Release 생성 권한
+  contents: write   # 태그·Release 생성 권한
 
 jobs:
   publish:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 태그 존재 확인용
+
+      - name: 버전 읽기 + 릴리스 필요 여부 판단
+        id: ver
+        shell: pwsh
+        run: |
+          $ver = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version |
+                 Where-Object { $_ } | Select-Object -First 1
+          if (-not $ver) { Write-Error "Directory.Build.props에서 Version을 못 읽음"; exit 1 }
+          $tag = "v$ver"
+          $exists = (git tag -l $tag)
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "skip=$(if ($exists) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+          Write-Host "version=$ver, tag=$tag, 이미 릴리스됨=$([bool]$exists)"
 
       - name: .NET 8 SDK 설치
+        if: steps.ver.outputs.skip != 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
       - name: Publish (self-contained, x64)
+        if: steps.ver.outputs.skip != 'true'
         run: dotnet publish src/WinUtil.App -c Release -p:Platform=x64 -r win-x64 --self-contained
 
       - name: 7z.dll 동봉 (LGPL — 원본 그대로, 고지 파일 포함, 동적 로드만)
+        if: steps.ver.outputs.skip != 'true'
         shell: pwsh
         run: |
           # windows 러너에는 7-Zip이 기본 설치되어 있다. 없으면 choco로 설치.
@@ -34,6 +55,7 @@ jobs:
           Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $publishDir.FullName
 
       - name: resources.pri 검증 (없으면 실행 불가 zip이므로 릴리스 중단)
+        if: steps.ver.outputs.skip != 'true'
         shell: pwsh
         run: |
           $publishDir = (Get-ChildItem -Path src/WinUtil.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1).FullName
@@ -56,15 +78,19 @@ jobs:
           Write-Host "resources.pri OK: $publishDir\resources.pri"
 
       - name: zip 패키징
+        if: steps.ver.outputs.skip != 'true'
         shell: pwsh
         run: |
           $publishDir = Get-ChildItem -Path src/WinUtil.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1
-          Compress-Archive -Path "$($publishDir.FullName)\*" -DestinationPath "WinUtil-${{ github.ref_name }}-win-x64.zip"
+          Compress-Archive -Path "$($publishDir.FullName)\*" -DestinationPath "WinUtil-${{ steps.ver.outputs.tag }}-win-x64.zip"
 
-      - name: GitHub Release 생성 및 업로드
+      - name: 태그 생성 + GitHub Release 업로드
+        if: steps.ver.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: WinUtil-${{ github.ref_name }}-win-x64.zip
+          tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: WinUtil-${{ steps.ver.outputs.tag }}-win-x64.zip
           body: |
             포터블 배포본 — 압축 풀고 `WinUtil.App.exe`를 실행하면 압축·이미지·동영상 기능이 바로 동작합니다 (별도 설치 불필요).
             7z.dll(LGPL)과 libvlc(LGPL)가 동봉되어 있으며 고지는 THIRD-PARTY-NOTICES.md 참고.
