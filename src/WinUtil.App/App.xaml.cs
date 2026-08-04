@@ -40,6 +40,7 @@ public partial class App : Application
             router.Register(new WinUtil.Module.Archive.ArchiveModule());
             router.Register(new WinUtil.Module.Video.VideoModule(
                 sp.GetRequiredService<ISettingsService>()));
+            router.Register(new WinUtil.Module.Hardware.HardwareModule());
             return router;
         });
         return services.BuildServiceProvider();

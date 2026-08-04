@@ -40,6 +40,7 @@
     <ProjectReference Include="..\WinUtil.Module.Image\WinUtil.Module.Image.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Archive\WinUtil.Module.Archive.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Video\WinUtil.Module.Video.csproj" />
+    <ProjectReference Include="..\WinUtil.Module.Hardware\WinUtil.Module.Hardware.csproj" />
   </ItemGroup>
 
   <!--

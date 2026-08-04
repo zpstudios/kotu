@@ -1,0 +1,28 @@
+<UserControl
+    x:Class="WinUtil.Module.Hardware.HardwareView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Padding="16,12">
+            <Button x:Name="RefreshButton" Content="새로 고침" Click="OnRefreshClick" />
+            <Button x:Name="CopyButton" Content="전체 복사" Click="OnCopyClick" />
+            <ProgressRing x:Name="Busy" IsActive="False" Width="20" Height="20" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <!-- 섹션·항목은 코드에서 채운다 -->
+            <StackPanel
+                x:Name="Root"
+                Spacing="2"
+                Padding="16,0,16,16"
+                MaxWidth="760"
+                HorizontalAlignment="Left" />
+        </ScrollViewer>
+    </Grid>
+</UserControl>

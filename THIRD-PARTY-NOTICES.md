@@ -14,6 +14,8 @@ WinUtil은 아래 외부 구성요소를 사용합니다. 각 구성요소는 �
 | Microsoft Windows App SDK / WinUI 3 | UI 프레임워크 | MIT | NuGet |
 | Microsoft.Extensions.* (DI, Logging) | 공통 인프라 | MIT | NuGet |
 | System.Text.Encoding.CodePages | CP949 인코딩(압축 항목명·자막) | MIT | NuGet |
+| System.Management | WMI 조회(하드웨어 정보) | MIT | NuGet |
+| [Velopack](https://github.com/velopack/velopack) | 설치본·자동 업데이트 | MIT | NuGet |
 | [xunit](https://xunit.net/) | 테스트 | Apache-2.0 | 개발 시에만 |
 
 ## 도입 예정 (로드맵)
