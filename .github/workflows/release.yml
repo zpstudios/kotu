@@ -33,6 +33,24 @@ jobs:
           Copy-Item "C:\Program Files\7-Zip\7z.dll" $publishDir.FullName
           Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $publishDir.FullName
 
+      - name: resources.pri 검증 (없으면 실행 불가 zip이므로 릴리스 중단)
+        shell: pwsh
+        run: |
+          $publishDir = (Get-ChildItem -Path src/WinUtil.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1).FullName
+          # 혹시 publish 복사가 또 빠지면 빌드 출력(OutDir)에서 가져온다.
+          if (!(Test-Path "$publishDir\resources.pri")) {
+            $outPri = Get-ChildItem src/WinUtil.App/bin -Recurse -Filter resources.pri |
+                      Where-Object { $_.FullName -notlike "*publish*" } | Select-Object -First 1
+            if ($outPri) { Copy-Item $outPri.FullName $publishDir }
+          }
+          if (!(Test-Path "$publishDir\resources.pri")) {
+            Write-Host "### resources.pri가 어디에도 없음 — bin 전체의 pri 목록:"
+            Get-ChildItem src/WinUtil.App/bin -Recurse -Filter *.pri | ForEach-Object { Write-Host $_.FullName }
+            Write-Error "resources.pri 미생성 — EnableMsixTooling/PRI 설정을 확인할 것. 실행 불가 zip이므로 릴리스를 중단한다."
+            exit 1
+          }
+          Write-Host "resources.pri OK: $publishDir\resources.pri"
+
       - name: zip 패키징
         shell: pwsh
         run: |

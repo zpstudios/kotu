@@ -12,6 +12,12 @@
     <!-- 단일 인스턴스 처리를 위해 Program.Main 직접 정의 -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!--
+      이름과 달리 MSIX 패키징이 아니라 단일 프로젝트 도구(특히 resources.pri 생성·병합)를 켜는 속성.
+      WinUI 템플릿 기본값인데 누락돼 있었고, 그 결과 publish에 resources.pri가 없어
+      실행 시 XamlParseException으로 즉사했다(v0.5.5~0.5.6 실기기 진단).
+    -->
+    <EnableMsixTooling>true</EnableMsixTooling>
   </PropertyGroup>
   <ItemGroup>
     <!-- 1.8: LibVLCSharp.WinUI(동영상 모듈)의 최소 요구 버전에 맞춰 전 프로젝트 통일 -->
