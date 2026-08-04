@@ -98,8 +98,11 @@ public sealed partial class SettingsView : UserControl
                     updateStatus.Text = "최신 버전입니다.";
                     return;
                 }
-                updateStatus.Text = $"새 버전 v{info.TargetFullRelease.Version} — 다운로드 후 재시작합니다...";
-                await UpdateService.DownloadAndRestartAsync(info);
+                await UpdateService.DownloadAsync(info, percent =>
+                    DispatcherQueue.TryEnqueue(() =>
+                        updateStatus.Text = $"새 버전 v{info.TargetFullRelease.Version} 다운로드 중... {percent}%"));
+                updateStatus.Text = "적용하고 재시작합니다...";
+                UpdateService.ApplyAndRestart(info);
             }
             catch (Exception ex)
             {

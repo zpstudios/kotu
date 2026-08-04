@@ -82,7 +82,7 @@ public partial class App : Application
                         XamlRoot = window.Content.XamlRoot,
                     };
                     if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                        await UpdateService.DownloadAndRestartAsync(info);
+                        await DownloadWithProgressAsync(window, info);
                 }
                 catch
                 {
@@ -93,6 +93,51 @@ public partial class App : Application
         catch
         {
             // 오프라인·API 제한 등 — 시작을 방해하지 않는다.
+        }
+    }
+
+    /// <summary>진행률 다이얼로그를 띄우고 다운로드 → 적용·재시작. (패키지가 커서 무표시면 멈춘 것처럼 보인다)</summary>
+    private static async Task DownloadWithProgressAsync(MainWindow window, Velopack.UpdateInfo info)
+    {
+        var label = new TextBlock { Text = "다운로드 준비 중..." };
+        var bar = new ProgressBar { Minimum = 0, Maximum = 100, Value = 0 };
+        var panel = new StackPanel { Spacing = 10, MinWidth = 320 };
+        panel.Children.Add(label);
+        panel.Children.Add(bar);
+
+        var progressDialog = new ContentDialog
+        {
+            Title = $"v{info.TargetFullRelease.Version} 업데이트",
+            Content = panel,
+            XamlRoot = window.Content.XamlRoot,
+        };
+        _ = progressDialog.ShowAsync(); // 버튼 없음 — 완료/실패 시 코드로 닫는다
+
+        try
+        {
+            await UpdateService.DownloadAsync(info, percent =>
+                window.DispatcherQueue.TryEnqueue(() =>
+                {
+                    bar.Value = percent;
+                    label.Text = $"다운로드 중... {percent}%";
+                }));
+
+            label.Text = "적용하고 재시작합니다...";
+            bar.Value = 100;
+            await Task.Delay(400); // 사용자에게 상태 전환을 보여줄 짧은 틈
+            UpdateService.ApplyAndRestart(info);
+        }
+        catch (Exception ex)
+        {
+            progressDialog.Hide();
+            var error = new ContentDialog
+            {
+                Title = "업데이트 실패",
+                Content = ex.Message + "\n다음 실행 때 다시 시도됩니다.",
+                CloseButtonText = "닫기",
+                XamlRoot = window.Content.XamlRoot,
+            };
+            _ = error.ShowAsync();
         }
     }
 

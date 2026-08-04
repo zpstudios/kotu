@@ -33,11 +33,14 @@ public static class UpdateService
         return await manager.CheckForUpdatesAsync();
     }
 
-    /// <summary>업데이트 다운로드 후 앱을 재시작해 적용한다.</summary>
-    public static async Task DownloadAndRestartAsync(UpdateInfo info)
+    /// <summary>업데이트 다운로드. 진행률(0~100)을 콜백으로 알린다(백그라운드 스레드에서 호출됨).</summary>
+    public static async Task DownloadAsync(UpdateInfo info, Action<int>? progress = null)
     {
         var manager = CreateManager();
-        await manager.DownloadUpdatesAsync(info);
-        manager.ApplyUpdatesAndRestart(info);
+        await manager.DownloadUpdatesAsync(info, progress);
     }
+
+    /// <summary>다운로드된 업데이트를 적용하고 앱을 재시작한다.</summary>
+    public static void ApplyAndRestart(UpdateInfo info) =>
+        CreateManager().ApplyUpdatesAndRestart(info);
 }
