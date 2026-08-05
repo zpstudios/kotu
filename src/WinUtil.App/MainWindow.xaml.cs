@@ -10,15 +10,44 @@ namespace WinUtil.App;
 
 public sealed partial class MainWindow : Window
 {
+    private static readonly string IconPath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+
     private readonly FileTypeRouter _router;
+    private readonly WindowManager _manager;
+    private readonly TrayIcon _tray;
     private bool _suppressNavSelection;
 
-    public MainWindow()
+    /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
+    public string? CurrentModuleId { get; private set; }
+
+    /// <summary>아직 아무 콘텐츠도 안 연 빈 셸인지. 창 재사용 판단에 쓴다.</summary>
+    public bool IsUntouched { get; private set; } = true;
+
+    public MainWindow(WindowManager manager)
     {
         InitializeComponent();
         Title = "WinUtil";
+        _manager = manager;
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         BuildNavigation();
+
+        // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
+        if (File.Exists(IconPath)) AppWindow.SetIcon(IconPath);
+
+        // 창별 트레이 미니 아이콘: 좌클릭=활성화, 우클릭=메뉴, 툴팁=창 제목
+        _tray = new TrayIcon(File.Exists(IconPath) ? IconPath : null);
+        _tray.ActivateRequested += BringToFront;
+        _tray.CloseRequested += Close;
+        _tray.ExitAllRequested += _manager.CloseAll;
+        Closed += (_, _) => _tray.Dispose();
+    }
+
+    /// <summary>창 제목과 트레이 툴팁을 함께 갱신한다.</summary>
+    private void SetTitle(string title)
+    {
+        Title = title;
+        _tray.SetTooltip(title);
     }
 
     /// <summary>등록된 모듈들로 네비게이션 메뉴를 구성한다.</summary>
@@ -50,9 +79,11 @@ public sealed partial class MainWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            CurrentModuleId = null;
+            IsUntouched = false;
             return;
         }
-        Title = Path.GetFileName(path) + " — WinUtil";
+        SetTitle(Path.GetFileName(path) + " — WinUtil");
         ShowModule(module, OpenContext.ForFile(path));
     }
 
@@ -68,7 +99,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        Title = Path.GetFileName(file) + " — WinUtil";
+        SetTitle(Path.GetFileName(file) + " — WinUtil");
         ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] });
     }
 
@@ -103,6 +134,8 @@ public sealed partial class MainWindow : Window
         _suppressNavSelection = false;
 
         ModuleHost.Content = (UIElement)module.CreateView(context);
+        CurrentModuleId = module.Id;
+        IsUntouched = false;
     }
 
     private void OnNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -111,8 +144,10 @@ public sealed partial class MainWindow : Window
 
         if (args.IsSettingsSelected)
         {
-            Title = "설정 — WinUtil";
+            SetTitle("설정 — WinUtil");
             ModuleHost.Content = new SettingsView(_router);
+            CurrentModuleId = null;
+            IsUntouched = false;
             return;
         }
 
@@ -121,7 +156,7 @@ public sealed partial class MainWindow : Window
             var module = _router.Modules.FirstOrDefault(m => m.Id == id);
             if (module is not null)
             {
-                Title = "WinUtil";
+                SetTitle($"{module.DisplayName} — WinUtil");
                 ShowModule(module, OpenContext.Empty);
             }
         }

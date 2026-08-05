@@ -12,6 +12,8 @@
     <!-- 단일 인스턴스 처리를 위해 Program.Main 직접 정의 -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- exe 아이콘(작업표시줄·탐색기 표시). 모양은 추후 확정 — 일단 W 플레이스홀더 -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!--
       이름과 달리 MSIX 패키징이 아니라 단일 프로젝트 도구(특히 resources.pri 생성·병합)를 켜는 속성.
       WinUI 템플릿 기본값인데 누락돼 있었고, 그 결과 publish에 resources.pri가 없어
@@ -34,6 +36,10 @@
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.*" />
     <!-- 설치본(Setup.exe)·자동 업데이트 (설계 2장: unpackaged + Velopack) -->
     <PackageReference Include="Velopack" Version="1.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 런타임 로드용 .ico 원본: 타이틀바(AppWindow.SetIcon)·트레이 아이콘(TrayIcon)이 exe 옆에서 읽는다 -->
+    <Content Include="Assets\app.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinUtil.Core\WinUtil.Core.csproj" />

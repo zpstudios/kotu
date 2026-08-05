@@ -11,7 +11,8 @@ namespace WinUtil.App;
 
 public partial class App : Application
 {
-    private MainWindow? _window;
+    private WindowManager? _windowManager;
+    private Microsoft.UI.Dispatching.DispatcherQueue? _uiDispatcher;
 
     public static IServiceProvider Services { get; private set; } = null!;
 
@@ -43,20 +44,23 @@ public partial class App : Application
             router.Register(new WinUtil.Module.Hardware.HardwareModule());
             return router;
         });
+        services.AddSingleton(sp => new WindowManager(sp.GetRequiredService<FileTypeRouter>()));
         return services.BuildServiceProvider();
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
-        _window.Activate();
+        // 재전달 활성화가 창이 다 닫히는 순간과 겹쳐도 큐잉할 수 있게 UI 디스패처를 잡아둔다
+        _uiDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        _windowManager = Services.GetRequiredService<WindowManager>();
 
         // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
+        // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당
         var request = LaunchRequest.Parse(Environment.GetCommandLineArgs().Skip(1).ToList());
-        DispatchRequest(request);
+        _windowManager.Dispatch(request);
 
         // 백그라운드 주기 업데이트 확인 (Velopack 관리 빌드에서만 동작)
-        _ = PeriodicUpdateCheckAsync(_window);
+        _ = PeriodicUpdateCheckAsync(_windowManager);
     }
 
     /// <summary>
@@ -64,7 +68,7 @@ public partial class App : Application
     /// 같은 버전을 "나중에"로 거절하면 이 세션에서는 다시 묻지 않는다.
     /// 실패(오프라인·GitHub API 시간당 한도 등)는 조용히 넘기고 다음 주기에 재시도.
     /// </summary>
-    private static async Task PeriodicUpdateCheckAsync(MainWindow window)
+    private static async Task PeriodicUpdateCheckAsync(WindowManager manager)
     {
         string? declinedVersion = null;
         var prompting = false;
@@ -80,7 +84,11 @@ public partial class App : Application
                     var info = await UpdateService.CheckAsync();
                     var version = info?.TargetFullRelease.Version.ToString();
 
-                    if (info is not null && version is not null && version != declinedVersion)
+                    // 멀티 윈도우: 다이얼로그는 가장 최근 활성화된 창에 띄운다
+                    var window = manager.ActiveWindow;
+
+                    if (info is not null && version is not null && version != declinedVersion
+                        && window is not null)
                     {
                         prompting = true;
                         window.DispatcherQueue.TryEnqueue(async () =>
@@ -168,34 +176,30 @@ public partial class App : Application
         }
     }
 
-    /// <summary>해석된 실행 요청을 창으로 보낸다. 파일이 없거나 사라졌으면 무시.</summary>
-    private void DispatchRequest(LaunchRequest request)
-    {
-        if (_window is null || request.FilePath is not { } file || !File.Exists(file)) return;
-
-        if (request.Verb == LaunchVerb.Open) _window.OpenFile(file);
-        else _window.OpenVerb(request);
-    }
-
     private void OnRedirectedActivation(object? sender, AppActivationArguments e)
     {
-        var window = _window;
-        window?.DispatcherQueue.TryEnqueue(() =>
-        {
-            window.BringToFront();
+        var manager = _windowManager;
+        if (manager is null) return;
 
+        _uiDispatcher?.TryEnqueue(() =>
+        {
             if (e.Kind == ExtendedActivationKind.File &&
                 e.Data is Windows.ApplicationModel.Activation.IFileActivatedEventArgs fileArgs &&
                 fileArgs.Files.FirstOrDefault() is Windows.Storage.IStorageFile file)
             {
-                window.OpenFile(file.Path);
+                manager.OpenFile(file.Path);
             }
             else if (e.Kind == ExtendedActivationKind.Launch &&
                      e.Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs launch &&
                      !string.IsNullOrWhiteSpace(launch.Arguments))
             {
                 // 두 번째 인스턴스의 커맨드라인이 그대로 넘어온다(선행 exe 토큰 포함 가능).
-                DispatchRequest(LaunchRequest.ParseCommandLine(launch.Arguments));
+                manager.Dispatch(LaunchRequest.ParseCommandLine(launch.Arguments));
+            }
+            else
+            {
+                // 인자 없는 재실행: 최근 창만 앞으로
+                manager.ActiveWindow?.BringToFront();
             }
         });
     }
