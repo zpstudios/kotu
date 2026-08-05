@@ -19,6 +19,7 @@ namespace WinUtil.Module.Image;
 public sealed partial class ImageViewerView : UserControl
 {
     private ImageFolderNavigator? _navigator;
+    private int _openSeq;        // OpenPath 경쟁 방지: 느린 폴더 스캔이 최신 열기를 덮지 않게
     private int _userRotation;   // R 키 누적 회전 (0/90/180/270)
     private int _exifRotation;   // EXIF orientation에서 읽은 회전
     private uint _pixelWidth;
@@ -48,9 +49,24 @@ public sealed partial class ImageViewerView : UserControl
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
 
-    private void OpenPath(string path)
+    private async void OpenPath(string path)
     {
-        _navigator = ImageFolderNavigator.Create(path);
+        // 폴더 스캔 + 자연 정렬은 대형 폴더·네트워크 드라이브에서 느릴 수 있다 — UI 스레드 밖에서.
+        var seq = ++_openSeq;
+        ImageFolderNavigator navigator;
+        try
+        {
+            navigator = await Task.Run(() => ImageFolderNavigator.Create(path));
+        }
+        catch (Exception ex)
+        {
+            PlaceholderText.Text = "폴더를 읽을 수 없습니다: " + ex.Message;
+            PlaceholderText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        if (seq != _openSeq) return; // 그새 다른 파일이 열렸다 — 이 결과는 버린다.
+        _navigator = navigator;
         PlaceholderText.Visibility = Visibility.Collapsed;
         _ = LoadCurrentAsync();
     }

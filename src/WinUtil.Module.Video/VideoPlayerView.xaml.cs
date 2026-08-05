@@ -347,11 +347,44 @@ public sealed partial class VideoPlayerView : UserControl
 
     // ---------- 자막 ----------
 
-    /// <summary>같은 폴더의 자막 후보를 콤보에 채우고, 있으면 첫 후보를 자동 선택 예약한다.</summary>
-    private void LoadSubtitleList()
+    /// <summary>
+    /// 같은 폴더의 자막 후보를 찾아 콤보에 채우고, 있으면 자동 선택한다.
+    /// 폴더 스캔은 네트워크 드라이브에서 느릴 수 있어 백그라운드에서 수행하고,
+    /// 결과가 오기 전에 파일이 바뀌었으면 버린다.
+    /// </summary>
+    private async void LoadSubtitleList()
     {
-        _subtitleFiles = SubtitleFileLocator.Find(_filePath!).ToList();
+        var file = _filePath!;
+        _subtitleFiles = [];
+        _pendingAutoSubtitle = false;
+        FillSubtitleBox();
 
+        List<string> found;
+        try
+        {
+            found = await Task.Run(() => SubtitleFileLocator.Find(file).ToList());
+        }
+        catch
+        {
+            return; // 자막 탐지 실패가 재생을 방해하면 안 된다.
+        }
+
+        if (_tornDown || file != _filePath) return; // 그새 다른 파일로 전환됨
+
+        _subtitleFiles = found;
+        FillSubtitleBox();
+
+        if (found.Count > 0)
+        {
+            // 이미 재생 중이면 바로 적용, 아니면 Playing 이벤트에서 적용하도록 예약.
+            if (_player is { IsPlaying: true }) ApplySubtitle(SubtitleBox.SelectedIndex);
+            else _pendingAutoSubtitle = true;
+        }
+    }
+
+    /// <summary>현재 _subtitleFiles로 자막 콤보를 다시 채운다(첫 후보 자동 선택).</summary>
+    private void FillSubtitleBox()
+    {
         _suppressSubtitleEvent = true;
         SubtitleBox.Items.Clear();
         SubtitleBox.Items.Add("자막 없음");
@@ -360,12 +393,13 @@ public sealed partial class VideoPlayerView : UserControl
         SubtitleBox.IsEnabled = _subtitleFiles.Count > 0;
         SubtitleBox.SelectedIndex = _subtitleFiles.Count > 0 ? 1 : 0;
         _suppressSubtitleEvent = false;
-
-        _pendingAutoSubtitle = _subtitleFiles.Count > 0;
     }
 
-    /// <summary>콤보 인덱스(0=끔, 1부터 파일)를 플레이어에 적용. CP949 자막은 UTF-8 사본으로 변환.</summary>
-    private void ApplySubtitle(int index)
+    /// <summary>
+    /// 콤보 인덱스(0=끔, 1부터 파일)를 플레이어에 적용. CP949 자막은 UTF-8 사본으로 변환.
+    /// 변환은 파일 읽기+쓰기이므로 백그라운드에서 하고 적용만 이어서 한다.
+    /// </summary>
+    private async void ApplySubtitle(int index)
     {
         if (_player is not { } p) return;
 
@@ -375,10 +409,12 @@ public sealed partial class VideoPlayerView : UserControl
             return;
         }
 
+        var source = _subtitleFiles[index - 1];
         try
         {
-            var utf8Path = SubtitleCharset.EnsureUtf8File(_subtitleFiles[index - 1]);
-            p.AddSlave(MediaSlaveType.Subtitle, new Uri(utf8Path).AbsoluteUri, true);
+            var utf8Path = await Task.Run(() => SubtitleCharset.EnsureUtf8File(source));
+            if (_tornDown || _player is not { } player) return;
+            player.AddSlave(MediaSlaveType.Subtitle, new Uri(utf8Path).AbsoluteUri, true);
         }
         catch (Exception ex)
         {
