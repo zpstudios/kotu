@@ -27,9 +27,25 @@
         <!-- 영상 표면: 클릭 = 재생/일시정지, 휠 = 볼륨 (핸들러는 코드에서 연결) -->
         <Grid x:Name="VideoSurface" Grid.Row="0" Background="Black" Tapped="OnSurfaceTapped">
             <vlc:VideoView x:Name="Vlc" />
+            <!-- 음악 파일 재생 시 검은 화면 대신 표시 (탭/휠 입력은 그대로 VideoSurface로 버블링) -->
+            <StackPanel
+                x:Name="AudioOverlay"
+                Visibility="Collapsed"
+                Spacing="10"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE8D6;" FontSize="52" Foreground="Gray" />
+                <TextBlock
+                    x:Name="AudioTitleText"
+                    Foreground="Gray"
+                    FontSize="16"
+                    MaxWidth="520"
+                    TextTrimming="CharacterEllipsis"
+                    HorizontalAlignment="Center" />
+            </StackPanel>
             <TextBlock
                 x:Name="PlaceholderText"
-                Text="동영상 파일을 열거나 창으로 끌어다 놓으세요"
+                Text="동영상·음악 파일을 열거나 창으로 끌어다 놓으세요"
                 Visibility="Collapsed"
                 Foreground="Gray"
                 HorizontalAlignment="Center"
@@ -52,7 +68,7 @@
             </Grid.ColumnDefinitions>
 
             <Button Grid.Column="0" Content="열기..."
-                    ToolTipService.ToolTip="동영상 파일 열기" Click="OnOpenClicked" />
+                    ToolTipService.ToolTip="동영상·음악 파일 열기" Click="OnOpenClicked" />
             <Button x:Name="PlayButton" Grid.Column="1" MinWidth="44" Content="▶"
                     ToolTipService.ToolTip="재생/일시정지 (Space)" Click="OnPlayClicked" />
             <TextBlock x:Name="PositionText" Grid.Column="2" Text="0:00"

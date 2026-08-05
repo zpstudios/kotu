@@ -14,8 +14,9 @@ using WinUtil.Core.Settings;
 namespace WinUtil.Module.Video;
 
 /// <summary>
-/// 동영상 플레이어 화면. 재생/일시정지, 시킹(슬라이더·←/→ 5초), 볼륨(↑/↓)·음소거(M),
+/// 동영상·음악 플레이어 화면. 재생/일시정지, 시킹(슬라이더·←/→ 5초), 볼륨(↑/↓)·음소거(M),
 /// 배속, 자막(자동 탐지 + CP949 자동 변환), 이어보기, 전체화면(F11/더블클릭)을 제공한다.
+/// 음악 파일은 같은 파이프라인으로 재생하되 영상 표면에 ♪ 오버레이를 띄운다.
 /// libvlc 이벤트는 백그라운드 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다.
 /// </summary>
 public sealed partial class VideoPlayerView : UserControl
@@ -143,6 +144,16 @@ public sealed partial class VideoPlayerView : UserControl
         using var media = new Media(lib, new Uri(_filePath));
         p.Play(media);
         PlaceholderText.Visibility = Visibility.Collapsed;
+        UpdateAudioOverlay();
+    }
+
+    /// <summary>음악 파일이면 검은 영상 표면 대신 ♪ 아이콘 + 파일명을 보여준다.</summary>
+    private void UpdateAudioOverlay()
+    {
+        var isAudio = _filePath is not null && VideoModule.IsAudioFile(_filePath);
+        AudioOverlay.Visibility = isAudio ? Visibility.Visible : Visibility.Collapsed;
+        if (isAudio)
+            AudioTitleText.Text = Path.GetFileNameWithoutExtension(_filePath);
     }
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
