@@ -26,6 +26,14 @@ public sealed partial class VideoPlayerView : UserControl
     private const long ResumeReportIntervalMs = 10_000;
     private static readonly float[] Speeds = [0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f];
 
+    /// <summary>내장 테스트 클립(화면 색감 + 스피커 테스트 음악) — 배포본 Assets에 동봉.</summary>
+    private static readonly string TestClipPath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "test-clip.mp4");
+
+    /// <summary>테스트 클립은 이어보기 대상에서 뺀다 (32초 점검용 클립에 이어보기는 무의미).</summary>
+    private static bool IsTestClip(string? path) =>
+        string.Equals(path, TestClipPath, StringComparison.OrdinalIgnoreCase);
+
     private readonly ISettingsService _settings;
     private readonly PlaybackResumeStore _resumeStore;
     private string? _filePath;
@@ -185,7 +193,9 @@ public sealed partial class VideoPlayerView : UserControl
 
         _durationMs = 0;
         _lastReportedMs = 0;
-        _pendingResumeMs = _resumeStore.GetResumePositionMs(_filePath) ?? -1;
+        _pendingResumeMs = IsTestClip(_filePath)
+            ? -1
+            : _resumeStore.GetResumePositionMs(_filePath) ?? -1;
         LoadSubtitleList();
 
         // 파형 시각화는 인스턴스 옵션으로 이미 결정돼 있다(EnsurePlayerAsync).
@@ -211,7 +221,7 @@ public sealed partial class VideoPlayerView : UserControl
         if (!File.Exists(path)) return;
 
         // 보던 파일이 있으면 위치를 저장하고 전환한다.
-        if (_player is { } p && _filePath is not null && _durationMs > 0)
+        if (_player is { } p && _filePath is not null && !IsTestClip(_filePath) && _durationMs > 0)
         {
             try { _resumeStore.Report(_filePath, p.Time, _durationMs); }
             catch { /* 저장 실패가 전환을 막으면 안 된다 */ }
@@ -259,7 +269,7 @@ public sealed partial class VideoPlayerView : UserControl
             // libvlc 콜백과 교착할 수 있어 백그라운드로 넘긴다.
             try
             {
-                if (_filePath is not null && _durationMs > 0)
+                if (_filePath is not null && !IsTestClip(_filePath) && _durationMs > 0)
                     _resumeStore.Report(_filePath, player.Time, _durationMs);
             }
             catch
@@ -312,7 +322,7 @@ public sealed partial class VideoPlayerView : UserControl
     private void OnPlayerTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
     {
         // 이어보기 위치 보고는 UI와 무관하므로 이벤트 스레드에서 바로 처리(스토어는 스레드 안전).
-        if (_filePath is not null && _durationMs > 0 &&
+        if (_filePath is not null && !IsTestClip(_filePath) && _durationMs > 0 &&
             Math.Abs(e.Time - _lastReportedMs) >= ResumeReportIntervalMs)
         {
             _lastReportedMs = e.Time;
@@ -367,7 +377,7 @@ public sealed partial class VideoPlayerView : UserControl
     private void OnPlayerEndReached(object? sender, EventArgs e)
     {
         // 끝까지 봤으면 이어보기 기록을 지운다. (이 콜백 안에서 Stop()을 부르면 교착 — 금지)
-        if (_filePath is not null && _durationMs > 0)
+        if (_filePath is not null && !IsTestClip(_filePath) && _durationMs > 0)
             _resumeStore.Report(_filePath, _durationMs, _durationMs);
 
         Dispatch(() =>
@@ -480,6 +490,14 @@ public sealed partial class VideoPlayerView : UserControl
     private void TogglePlayPause()
     {
         if (_player is not { } p) return;
+
+        // 아무것도 열지 않은 상태의 ▶ = 내장 테스트 클립 재생 (화면 색감 + 스피커 점검).
+        if (_filePath is null)
+        {
+            if (File.Exists(TestClipPath)) OpenPath(TestClipPath);
+            else ShowMessage(@"테스트 클립이 없습니다 (Assets\test-clip.mp4)");
+            return;
+        }
 
         // 끝까지 재생된(Ended) 상태에서는 Play()만으로 재시작이 안 되므로 미디어를 다시 건다.
         if (p.State == VLCState.Ended)

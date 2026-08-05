@@ -49,9 +49,10 @@
             </StackPanel>
             <TextBlock
                 x:Name="PlaceholderText"
-                Text="동영상·음악 파일을 열거나 창으로 끌어다 놓으세요"
+                Text="동영상·음악 파일을 열거나 창으로 끌어다 놓으세요&#x0A;▶ = 내장 화면·스피커 테스트 재생"
                 Visibility="Collapsed"
                 Foreground="Gray"
+                TextAlignment="Center"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center" />
         </Grid>

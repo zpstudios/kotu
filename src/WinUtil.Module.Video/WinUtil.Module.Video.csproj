@@ -18,4 +18,12 @@
   <ItemGroup>
     <ProjectReference Include="..\WinUtil.Core\WinUtil.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!--
+      내장 테스트 클립(화면 색감 + 스피커 테스트 음악, 32초 1.3MB).
+      ffmpeg(lavfi)+numpy로 생성 — 생성 스크립트: docs/gen_test_audio.py 참고.
+      Content라 참조하는 App의 출력·publish에 Assets\ 경로 그대로 복사된다.
+    -->
+    <Content Include="Assets\test-clip.mp4" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
