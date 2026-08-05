@@ -78,23 +78,49 @@ public sealed partial class VideoPlayerView : UserControl
     /// <summary>
     /// VideoView의 D3D 스왑체인이 준비되면 호출된다. 여기서만 LibVLC를 만들 수 있다.
     /// 파일 없이 열렸어도 플레이어는 만들어 둔다 — 이후 열기 버튼/드롭으로 파일이 올 수 있다.
+    /// 중요: libvlc 초기화는 첫 실행 시 플러그인 캐시 생성으로 수 초가 걸린다.
+    /// UI 스레드에서 하면 앱 시작이 그대로 멎으므로(v0.10.1 실기기 버그) 생성은
+    /// 백그라운드에서 하고, 뷰 연결만 UI 스레드에서 한다.
     /// </summary>
-    private void OnVlcInitialized(object? sender, InitializedEventArgs e)
+    private async void OnVlcInitialized(object? sender, InitializedEventArgs e)
     {
         if (_tornDown) return;
 
+        if (_filePath is not null)
+        {
+            PlaceholderText.Text = "재생 준비 중...";
+            PlaceholderText.Visibility = Visibility.Visible;
+        }
+
         try
         {
-            // libvlc 네이티브 dll은 libvlc\win-x64\ 하위에 배포되므로 검색 경로 등록이 선행돼야 한다.
-            // 주의: 그냥 Core라고 쓰면 WinUtil.Core 네임스페이스로 해석된다(상위 네임스페이스 우선).
-            LibVLCSharp.Shared.Core.Initialize();
+            var options = e.SwapChainOptions;
+            var (libVlc, player) = await Task.Run(() =>
+            {
+                // libvlc 네이티브 dll은 libvlc\win-x64\ 하위에 배포되므로 검색 경로 등록이 선행돼야 한다.
+                // 주의: 그냥 Core라고 쓰면 WinUtil.Core 네임스페이스로 해석된다(상위 네임스페이스 우선).
+                LibVLCSharp.Shared.Core.Initialize();
+                var lib = new LibVLC(options);
+                return (lib, new MediaPlayer(lib));
+            });
 
-            _libVlc = new LibVLC(e.SwapChainOptions);
-            _player = new MediaPlayer(_libVlc);
-            Vlc.MediaPlayer = _player;
+            if (_tornDown)
+            {
+                // 초기화가 끝나기 전에 뷰가 내려갔다 — 연결하지 않고 백그라운드에서 해제만.
+                _ = Task.Run(() =>
+                {
+                    try { player.Dispose(); libVlc.Dispose(); }
+                    catch { /* 해제 중 예외는 무시 */ }
+                });
+                return;
+            }
 
-            _player.Volume = (int)VolumeSlider.Value;
-            HookPlayerEvents(_player);
+            _libVlc = libVlc;
+            _player = player;
+            Vlc.MediaPlayer = player;
+
+            player.Volume = (int)VolumeSlider.Value;
+            HookPlayerEvents(player);
 
             if (_filePath is not null) PlayCurrent();
         }
