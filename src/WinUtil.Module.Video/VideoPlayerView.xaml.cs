@@ -141,7 +141,12 @@ public sealed partial class VideoPlayerView : UserControl
         _pendingResumeMs = _resumeStore.GetResumePositionMs(_filePath) ?? -1;
         LoadSubtitleList();
 
-        using var media = new Media(lib, new Uri(_filePath));
+        // 음악 파일은 libvlc 내장 시각화(visual 필터, scope=파형)를 미디어 옵션으로 켠다.
+        // 미디어 단위 옵션이라 동영상 재생에는 영향이 없다. 오디오는 그대로 나온다.
+        using var media = VideoModule.IsAudioFile(_filePath)
+            ? new Media(lib, new Uri(_filePath),
+                ":audio-visual=visual", ":effect-list=scope")
+            : new Media(lib, new Uri(_filePath));
         p.Play(media);
         PlaceholderText.Visibility = Visibility.Collapsed;
         UpdateAudioOverlay();

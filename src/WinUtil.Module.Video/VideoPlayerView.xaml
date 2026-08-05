@@ -27,21 +27,25 @@
         <!-- 영상 표면: 클릭 = 재생/일시정지, 휠 = 볼륨 (핸들러는 코드에서 연결) -->
         <Grid x:Name="VideoSurface" Grid.Row="0" Background="Black" Tapped="OnSurfaceTapped">
             <vlc:VideoView x:Name="Vlc" />
-            <!-- 음악 파일 재생 시 검은 화면 대신 표시 (탭/휠 입력은 그대로 VideoSurface로 버블링) -->
+            <!-- 음악 재생 시 상단에 ♪ + 파일명 (파형이 표면을 채우므로 가리지 않게 작게, 입력 통과) -->
             <StackPanel
                 x:Name="AudioOverlay"
                 Visibility="Collapsed"
-                Spacing="10"
+                Orientation="Horizontal"
+                Spacing="8"
+                IsHitTestVisible="False"
                 HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE8D6;" FontSize="52" Foreground="Gray" />
+                VerticalAlignment="Top"
+                Margin="0,12,0,0">
+                <FontIcon Glyph="&#xE8D6;" FontSize="16" Foreground="Gray"
+                          VerticalAlignment="Center" />
                 <TextBlock
                     x:Name="AudioTitleText"
                     Foreground="Gray"
-                    FontSize="16"
+                    FontSize="14"
                     MaxWidth="520"
                     TextTrimming="CharacterEllipsis"
-                    HorizontalAlignment="Center" />
+                    VerticalAlignment="Center" />
             </StackPanel>
             <TextBlock
                 x:Name="PlaceholderText"
