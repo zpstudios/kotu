@@ -32,6 +32,9 @@ public sealed partial class VideoPlayerView : UserControl
 
     private LibVLC? _libVlc;
     private MediaPlayer? _player;
+    private string[]? _swapChainOptions;   // 플레이어 재생성용 (Vlc.Initialized에서 1회 저장)
+    private bool _playerHasVisualizer;     // 현재 인스턴스가 파형 시각화 켜진 상태인지 (_player != null일 때만 유효)
+    private readonly SemaphoreSlim _playerGate = new(1, 1); // 플레이어 교체 직렬화
     private List<string> _subtitleFiles = [];
     private long _durationMs;
     private long _lastReportedMs;
@@ -77,15 +80,13 @@ public sealed partial class VideoPlayerView : UserControl
     // ---------- libvlc 초기화 / 해제 ----------
 
     /// <summary>
-    /// VideoView의 D3D 스왑체인이 준비되면 호출된다. 여기서만 LibVLC를 만들 수 있다.
+    /// VideoView의 D3D 스왑체인이 준비되면 호출된다. 여기서만 스왑체인 옵션을 얻을 수 있다.
     /// 파일 없이 열렸어도 플레이어는 만들어 둔다 — 이후 열기 버튼/드롭으로 파일이 올 수 있다.
-    /// 중요: libvlc 초기화는 첫 실행 시 플러그인 캐시 생성으로 수 초가 걸린다.
-    /// UI 스레드에서 하면 앱 시작이 그대로 멎으므로(v0.10.1 실기기 버그) 생성은
-    /// 백그라운드에서 하고, 뷰 연결만 UI 스레드에서 한다.
     /// </summary>
     private async void OnVlcInitialized(object? sender, InitializedEventArgs e)
     {
         if (_tornDown) return;
+        _swapChainOptions = e.SwapChainOptions;
 
         if (_filePath is not null)
         {
@@ -93,11 +94,53 @@ public sealed partial class VideoPlayerView : UserControl
             PlaceholderText.Visibility = Visibility.Visible;
         }
 
+        await EnsurePlayerAsync(_filePath is not null && VideoModule.IsAudioFile(_filePath));
+        if (!_tornDown && _filePath is not null && _player is not null) PlayCurrent();
+    }
+
+    /// <summary>
+    /// 파일 유형에 맞는 플레이어를 준비한다.
+    /// libvlc 파형 시각화(audio-visual)는 인스턴스 옵션으로만 동작하고 미디어 옵션은
+    /// 무시된다(v0.12.0 실기기 확인). 그렇다고 항상 켜 두면 동영상 재생 시 시각화 vout이
+    /// 스왑체인을 두고 경합하므로, 음악용(켬)/동영상용(끔) 인스턴스를 필요할 때 교체 생성한다.
+    /// 중요: libvlc 생성은 첫 실행 시 플러그인 캐시 생성으로 수 초가 걸린다(v0.10.1 실기기 버그).
+    /// 생성·해제는 전부 백그라운드에서 하고, 뷰 연결만 UI 스레드에서 한다.
+    /// </summary>
+    private async Task EnsurePlayerAsync(bool withVisualizer)
+    {
+        if (_swapChainOptions is not { } swapOptions) return; // 스왑체인 준비 전 — OnVlcInitialized가 다시 부른다
+
+        await _playerGate.WaitAsync();
         try
         {
-            var options = e.SwapChainOptions;
+            if (_tornDown) return;
+            if (_player is not null && _playerHasVisualizer == withVisualizer) return;
+
+            var oldPlayer = _player;
+            var oldLib = _libVlc;
+            _player = null;
+            _libVlc = null;
+            if (oldPlayer is not null) UnhookPlayerEvents(oldPlayer);
+
+            string[] options = withVisualizer
+                ? [.. swapOptions, "--audio-visual=visual", "--effect-list=scope"]
+                : swapOptions;
+
             var (libVlc, player) = await Task.Run(() =>
             {
+                // 이전 인스턴스 정리 후 생성 — 두 vout이 스왑체인을 동시에 잡지 않게 순차로.
+                // (Stop/Dispose를 UI 스레드에서 부르면 libvlc 콜백과 교착할 수 있다)
+                try
+                {
+                    oldPlayer?.Stop();
+                    oldPlayer?.Dispose();
+                    oldLib?.Dispose();
+                }
+                catch
+                {
+                    // 해제 실패가 생성을 막으면 안 된다.
+                }
+
                 // libvlc 네이티브 dll은 libvlc\win-x64\ 하위에 배포되므로 검색 경로 등록이 선행돼야 한다.
                 // 주의: 그냥 Core라고 쓰면 WinUtil.Core 네임스페이스로 해석된다(상위 네임스페이스 우선).
                 LibVLCSharp.Shared.Core.Initialize();
@@ -107,7 +150,7 @@ public sealed partial class VideoPlayerView : UserControl
 
             if (_tornDown)
             {
-                // 초기화가 끝나기 전에 뷰가 내려갔다 — 연결하지 않고 백그라운드에서 해제만.
+                // 생성이 끝나기 전에 뷰가 내려갔다 — 연결하지 않고 백그라운드에서 해제만.
                 _ = Task.Run(() =>
                 {
                     try { player.Dispose(); libVlc.Dispose(); }
@@ -118,16 +161,20 @@ public sealed partial class VideoPlayerView : UserControl
 
             _libVlc = libVlc;
             _player = player;
+            _playerHasVisualizer = withVisualizer;
             Vlc.MediaPlayer = player;
 
             player.Volume = (int)VolumeSlider.Value;
+            MuteButton.Content = "🔊"; // 새 인스턴스는 음소거 해제 상태
             HookPlayerEvents(player);
-
-            if (_filePath is not null) PlayCurrent();
         }
         catch (Exception ex)
         {
             ShowMessage($"재생 초기화 실패: {ex.Message}");
+        }
+        finally
+        {
+            _playerGate.Release();
         }
     }
 
@@ -141,12 +188,8 @@ public sealed partial class VideoPlayerView : UserControl
         _pendingResumeMs = _resumeStore.GetResumePositionMs(_filePath) ?? -1;
         LoadSubtitleList();
 
-        // 음악 파일은 libvlc 내장 시각화(visual 필터, scope=파형)를 미디어 옵션으로 켠다.
-        // 미디어 단위 옵션이라 동영상 재생에는 영향이 없다. 오디오는 그대로 나온다.
-        using var media = VideoModule.IsAudioFile(_filePath)
-            ? new Media(lib, new Uri(_filePath),
-                ":audio-visual=visual", ":effect-list=scope")
-            : new Media(lib, new Uri(_filePath));
+        // 파형 시각화는 인스턴스 옵션으로 이미 결정돼 있다(EnsurePlayerAsync).
+        using var media = new Media(lib, new Uri(_filePath));
         p.Play(media);
         PlaceholderText.Visibility = Visibility.Collapsed;
         UpdateAudioOverlay();
@@ -163,7 +206,7 @@ public sealed partial class VideoPlayerView : UserControl
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
 
-    private void OpenPath(string path)
+    private async void OpenPath(string path)
     {
         if (!File.Exists(path)) return;
 
@@ -175,8 +218,13 @@ public sealed partial class VideoPlayerView : UserControl
         }
 
         _filePath = path;
+
+        // 음악↔동영상 전환이면 파형 시각화 유무에 맞는 인스턴스로 교체된다.
+        await EnsurePlayerAsync(VideoModule.IsAudioFile(path));
+        if (_tornDown || _filePath != path) return; // 그새 또 다른 파일로 전환됨
+
         if (_player is not null) PlayCurrent();
-        // 플레이어가 아직 없으면 OnVlcInitialized에서 PlayCurrent()가 이어받는다.
+        // 플레이어가 아직 없으면(스왑체인 준비 전) OnVlcInitialized에서 PlayCurrent()가 이어받는다.
     }
 
     private async Task PickAndOpenAsync()
