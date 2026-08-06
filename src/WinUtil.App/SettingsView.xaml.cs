@@ -11,18 +11,73 @@ namespace WinUtil.App;
 /// <summary>
 /// 설정 페이지. UI 스케일(v0.24.0), 탐색기 통합(파일 연결·우클릭 메뉴)을 관리한다.
 /// 탐색기 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
+/// 하단 바(광고 + ⛶ 전체화면)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
 /// </summary>
-public sealed partial class SettingsView : UserControl
+public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
     private readonly TextBlock _status = new() { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
     private readonly ISettingsService _settings;
     private bool _suppressToggle;
+    private DispatcherTimer? _adTimer;
 
     public SettingsView(FileTypeRouter router)
     {
         InitializeComponent();
         _settings = App.Services.GetRequiredService<ISettingsService>();
         Build(router);
+
+        // 하단 바 광고: 진입 시 적용 + 15초마다 분 경계 로테이션 반영 (v0.50.0)
+        SponsorAds.Apply(SponsorImage);
+        _adTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        _adTimer.Tick += (_, _) => SponsorAds.Apply(SponsorImage);
+        Loaded += (_, _) =>
+        {
+            Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
+            _adTimer?.Start();
+        };
+        Unloaded += (_, _) => _adTimer?.Stop();
+    }
+
+    /// <summary>하단 바(광고·⛶)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.50.0).</summary>
+    public object? TakeBottomBar()
+    {
+        RootGrid.Children.Remove(ControlBar);
+        return ControlBar;
+    }
+
+    // ---------- 전체화면 (전 모듈 공통 패턴, v0.50.0) ----------
+
+    private void ToggleFullScreen()
+    {
+        var environment = XamlRoot?.ContentIslandEnvironment;
+        if (environment is null) return;
+
+        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(environment.AppWindowId);
+        appWindow.SetPresenter(
+            appWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen
+                ? Microsoft.UI.Windowing.AppWindowPresenterKind.Default
+                : Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
+    }
+
+    private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
+
+    private void OnFullScreenInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        ToggleFullScreen();
+    }
+
+    private void OnEscapeInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        var environment = XamlRoot?.ContentIslandEnvironment;
+        if (environment is null) return;
+        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(environment.AppWindowId);
+        if (appWindow.Presenter.Kind != Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) return;
+
+        args.Handled = true;
+        appWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
     }
 
     private void Build(FileTypeRouter router)

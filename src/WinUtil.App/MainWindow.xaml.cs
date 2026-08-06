@@ -17,26 +17,6 @@ public sealed partial class MainWindow : Window
     private static readonly string IconPath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
 
-    /// <summary>
-    /// 광고 이미지 후보(Assets\sponsor-*.png, v0.38.0). 1분 단위 시간 시드로 하나를 고르므로
-    /// 메뉴를 다시 열어도 같은 분 안에서는 같은 이미지가 유지된다(사용자 요구).
-    /// </summary>
-    private static readonly string[] SponsorImages = LoadSponsorImages();
-
-    private static string[] LoadSponsorImages()
-    {
-        try
-        {
-            return [.. Directory.GetFiles(
-                    Path.Combine(AppContext.BaseDirectory, "Assets"), "sponsor-*.png")
-                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)];
-        }
-        catch
-        {
-            return []; // 광고가 없다고 앱이 죽으면 안 된다
-        }
-    }
-
     private readonly FileTypeRouter _router;
     private readonly WindowManager _manager;
     private readonly TrayIcon _tray;
@@ -361,7 +341,7 @@ public sealed partial class MainWindow : Window
             MinHeight = 50,
         };
 
-        if (SponsorImages.Length > 0)
+        if (SponsorAds.Any)
         {
             // 광고 규격은 2:1(100×50) 유지 — 카드 폭(메뉴 124)에 맞춰 비율대로 커진다.
             _sponsorImage = new Image
@@ -370,7 +350,7 @@ public sealed partial class MainWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            UpdateSponsorImage();
+            SponsorAds.Apply(_sponsorImage);
             host.Children.Add(_sponsorImage);
         }
 
@@ -394,21 +374,10 @@ public sealed partial class MainWindow : Window
         return host;
     }
 
-    /// <summary>
-    /// 현재 분(minute) 시드의 의사 랜덤으로 광고를 고른다(v0.38.0 사용자 요구:
-    /// 랜덤하되 1분마다만 바뀌고, 메뉴를 열 때마다 바뀌면 안 됨). 같은 이미지면 다시 로드하지 않는다.
-    /// </summary>
+    /// <summary>메뉴가 열릴 때 현재 분 기준 광고로 갱신한다(로직은 SponsorAds 공용, v0.50.0).</summary>
     private void UpdateSponsorImage()
     {
-        if (_sponsorImage is null || SponsorImages.Length == 0) return;
-
-        var minute = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalMinutes;
-        var index = new Random((int)(minute % int.MaxValue)).Next(SponsorImages.Length);
-        var path = SponsorImages[index];
-        if (Equals(_sponsorImage.Tag, path)) return;
-
-        _sponsorImage.Tag = path;
-        _sponsorImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
+        if (_sponsorImage is not null) SponsorAds.Apply(_sponsorImage);
     }
 
     /// <summary>시작 메뉴 그룹 구분선: 여백 + 1px 라인 (v0.26.0, 공백만으로는 정리가 안 보인다는 피드백).</summary>
@@ -440,8 +409,10 @@ public sealed partial class MainWindow : Window
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
         SetTitle("ZP Settings");
-        ModuleHost.Content = new SettingsView(_router);
-        ModuleBarHost.Content = null;
+        var settings = new SettingsView(_router);
+        ModuleHost.Content = settings;
+        // 설정도 하단 바 제공(광고 + ⛶, v0.50.0) — 모듈들과 같은 통합 방식
+        ModuleBarHost.Content = settings.TakeBottomBar() as UIElement;
         CurrentModuleId = null;
         IsUntouched = false;
         UpdateModeIndicator(null, isSettings: true);
