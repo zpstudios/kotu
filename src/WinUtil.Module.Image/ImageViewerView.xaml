@@ -43,7 +43,7 @@
 
         <TextBlock
             x:Name="PlaceholderText"
-            Text="이미지 파일을 열거나 창으로 끌어다 놓으세요"
+            Text="Open an image file or drop one onto the window"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Visibility="Collapsed" />
@@ -63,9 +63,10 @@
                 <Button
                     Grid.Column="0"
                     Margin="0,0,12,0"
-                    Content="열기..."
                     Click="OnOpenButtonClick"
-                    ToolTipService.ToolTip="이미지 파일 열기" />
+                    ToolTipService.ToolTip="Open image file">
+                    <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                </Button>
                 <TextBlock
                     x:Name="FileNameText"
                     Grid.Column="1"
@@ -78,9 +79,9 @@
                     VerticalAlignment="Center" />
                 <Button
                     Grid.Column="3"
-                    Content="회전"
+                    Content="Rotate"
                     Click="OnRotateButtonClick"
-                    ToolTipService.ToolTip="시계방향 90° 회전 (R)" />
+                    ToolTipService.ToolTip="Rotate 90° clockwise (R)" />
             </Grid>
         </Border>
     </Grid>

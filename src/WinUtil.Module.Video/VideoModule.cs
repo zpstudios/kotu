@@ -33,7 +33,7 @@ public sealed class VideoModule : IModule
 
     public string Id => "video";
 
-    public string DisplayName => "동영상";
+    public string DisplayName => "Video";
 
     public string IconGlyph => "\uE714"; // Video
 

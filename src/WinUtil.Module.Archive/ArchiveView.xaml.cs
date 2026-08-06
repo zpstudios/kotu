@@ -97,7 +97,7 @@ public sealed partial class ArchiveView : UserControl
             {
                 var password = _password;
                 IReadOnlyList<ArchiveEntry> entries = [];
-                var ok = await RunOperationAsync("목록 읽는 중...", (progress, _) =>
+                var ok = await RunOperationAsync("Reading archive...", (progress, _) =>
                 {
                     entries = _backend.List(path, password);
                     progress.Report(1);
@@ -108,7 +108,7 @@ public sealed partial class ArchiveView : UserControl
                 _navStack.Clear();
                 _currentFolder = _root;
                 RefreshRows();
-                StatusText.Text = $"{Path.GetFileName(path)} · 전체 {ArchiveEntryTree.FormatSize(_root.Size)}";
+                StatusText.Text = $"{Path.GetFileName(path)} · {ArchiveEntryTree.FormatSize(_root.Size)} total";
                 return;
             }
             catch (ArchivePasswordException)
@@ -119,7 +119,7 @@ public sealed partial class ArchiveView : UserControl
             }
             catch (Exception ex)
             {
-                StatusText.Text = "열기 실패: " + ex.Message;
+                StatusText.Text = "Failed to open: " + ex.Message;
                 return;
             }
         }
@@ -185,17 +185,17 @@ public sealed partial class ArchiveView : UserControl
         if (_busy || _archivePath is null) return;
 
         var tempDir = Path.Combine(Path.GetTempPath(), "WinUtil", "Archive", Guid.NewGuid().ToString("N"));
-        if (!await ExtractWithRetryAsync(tempDir, [node.FullPath], "여는 중...")) return;
+        if (!await ExtractWithRetryAsync(tempDir, [node.FullPath], "Opening...")) return;
 
         var extracted = Path.Combine(tempDir, node.FullPath.Replace('/', Path.DirectorySeparatorChar));
         if (File.Exists(extracted))
         {
             Process.Start(new ProcessStartInfo(extracted) { UseShellExecute = true });
-            StatusText.Text = "기본 앱으로 열었습니다: " + node.Name;
+            StatusText.Text = "Opened with the default app: " + node.Name;
         }
         else
         {
-            StatusText.Text = "임시 해제 결과를 찾지 못했습니다: " + node.Name;
+            StatusText.Text = "Extracted file not found: " + node.Name;
         }
     }
 
@@ -211,9 +211,9 @@ public sealed partial class ArchiveView : UserControl
         var folder = await picker.PickSingleFolderAsync();
         if (folder is null) return;
 
-        if (await ExtractWithRetryAsync(folder.Path, SelectedEntryPaths(), "푸는 중..."))
+        if (await ExtractWithRetryAsync(folder.Path, SelectedEntryPaths(), "Extracting..."))
         {
-            StatusText.Text = "풀기 완료: " + folder.Path;
+            StatusText.Text = "Extracted: " + folder.Path;
             OpenInExplorer(folder.Path);
         }
     }
@@ -231,9 +231,9 @@ public sealed partial class ArchiveView : UserControl
             _root.Children.Select(c => c.Name).ToList(),
             p => Directory.Exists(p) || File.Exists(p));
 
-        if (await ExtractWithRetryAsync(plan.TargetDirectory, entryPaths: null, "푸는 중..."))
+        if (await ExtractWithRetryAsync(plan.TargetDirectory, entryPaths: null, "Extracting..."))
         {
-            StatusText.Text = "풀기 완료: " + plan.ResultPath;
+            StatusText.Text = "Extracted: " + plan.ResultPath;
             OpenInExplorer(plan.ResultPath);
         }
     }
@@ -282,7 +282,7 @@ public sealed partial class ArchiveView : UserControl
             }
             catch (Exception ex)
             {
-                StatusText.Text = "풀기 실패: " + ex.Message;
+                StatusText.Text = "Extract failed: " + ex.Message;
                 return false;
             }
         }
@@ -323,20 +323,20 @@ public sealed partial class ArchiveView : UserControl
 
         try
         {
-            var ok = await RunOperationAsync("압축 중...", (progress, ct) =>
+            var ok = await RunOperationAsync("Compressing...", (progress, ct) =>
             {
                 if (sevenZ) _backend.Create7z(sourcePaths, targetPath, password, progress, ct);
                 else _backend.CreateZip(sourcePaths, targetPath, password, progress, ct);
             });
             if (ok)
             {
-                StatusText.Text = "압축 완료: " + targetPath;
+                StatusText.Text = "Archive created: " + targetPath;
                 OpenInExplorer(targetPath); // 결과 파일을 탐색기에서 선택해 보여준다
             }
         }
         catch (Exception ex)
         {
-            StatusText.Text = "압축 실패: " + ex.Message;
+            StatusText.Text = "Compress failed: " + ex.Message;
         }
     }
 
@@ -370,10 +370,10 @@ public sealed partial class ArchiveView : UserControl
         var box = new PasswordBox();
         var dialog = new ContentDialog
         {
-            Title = "암호가 필요합니다",
+            Title = "Password required",
             Content = box,
-            PrimaryButtonText = "확인",
-            CloseButtonText = "취소",
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
@@ -400,7 +400,7 @@ public sealed partial class ArchiveView : UserControl
         var sourcePanel = new StackPanel { Spacing = 4 };
         sourcePanel.Children.Add(new TextBlock
         {
-            Text = $"대상 {sourcePaths.Count}개",
+            Text = $"{sourcePaths.Count} item(s)",
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
         });
         sourcePanel.Children.Add(new ScrollViewer
@@ -412,11 +412,11 @@ public sealed partial class ArchiveView : UserControl
 
         var formatBox = new ComboBox
         {
-            Header = "형식",
+            Header = "Format",
             ItemsSource = new[] { "zip", "7z" },
             SelectedIndex = use7z == true ? 1 : 0,
         };
-        var passwordBox = new PasswordBox { Header = "암호 (선택, 비워두면 없음)" };
+        var passwordBox = new PasswordBox { Header = "Password (optional)" };
 
         var locationText = new TextBlock
         {
@@ -428,11 +428,11 @@ public sealed partial class ArchiveView : UserControl
             var ext = formatBox.SelectedIndex == 1 ? ".7z" : ".zip";
             return ExtractHerePlanner.UniquePath(Path.Combine(saveDir!, baseName + ext), existsCheck);
         }
-        void UpdateLocationText() => locationText.Text = "저장 위치: " + CurrentTarget();
+        void UpdateLocationText() => locationText.Text = "Save to: " + CurrentTarget();
         UpdateLocationText();
         formatBox.SelectionChanged += (_, _) => UpdateLocationText();
 
-        var changeLocation = new Button { Content = "저장 위치 변경..." };
+        var changeLocation = new Button { Content = "Change location..." };
         changeLocation.Click += async (_, _) =>
         {
             var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.Downloads };
@@ -454,10 +454,10 @@ public sealed partial class ArchiveView : UserControl
 
         var dialog = new ContentDialog
         {
-            Title = "새 압축",
+            Title = "New archive",
             Content = panel,
-            PrimaryButtonText = "만들기",
-            CloseButtonText = "취소",
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
@@ -491,7 +491,7 @@ public sealed partial class ArchiveView : UserControl
         }
         catch (OperationCanceledException)
         {
-            StatusText.Text = "취소됨";
+            StatusText.Text = "Canceled";
             return false;
         }
         finally
@@ -542,7 +542,7 @@ public sealed partial class ArchiveView : UserControl
     private nint GetHwnd()
     {
         var environment = XamlRoot?.ContentIslandEnvironment
-            ?? throw new InvalidOperationException("창 핸들을 확인할 수 없습니다.");
+            ?? throw new InvalidOperationException("Cannot determine the window handle.");
         return Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
     }
 

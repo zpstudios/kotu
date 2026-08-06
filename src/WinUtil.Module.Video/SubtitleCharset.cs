@@ -46,7 +46,7 @@ public static class SubtitleCharset
 
         // UTF-8이 아니면 국내 자막의 사실상 표준인 CP949로 해석한다.
         var cp949 = CodePagesEncodingProvider.Instance.GetEncoding(949)
-            ?? throw new NotSupportedException("CP949 인코딩을 로드할 수 없습니다.");
+            ?? throw new NotSupportedException("Cannot load the CP949 encoding.");
         return cp949.GetString(bytes);
     }
 

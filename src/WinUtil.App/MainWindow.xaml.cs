@@ -85,7 +85,7 @@ public sealed partial class MainWindow : Window
         {
             ModuleHost.Content = new TextBlock
             {
-                Text = $"지원하지 않는 파일 형식입니다: {Path.GetFileName(path)}",
+                Text = $"Unsupported file type: {Path.GetFileName(path)}",
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -154,7 +154,7 @@ public sealed partial class MainWindow : Window
 
         if (args.IsSettingsSelected)
         {
-            SetTitle("설정 — WinUtil");
+            SetTitle("Settings — WinUtil");
             ModuleHost.Content = new SettingsView(_router);
             CurrentModuleId = null;
             IsUntouched = false;

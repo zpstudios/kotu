@@ -23,16 +23,18 @@
 
         <!-- 상단 툴바 -->
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button x:Name="OpenButton" Content="열기..." Click="OnOpenClick" />
-            <Button x:Name="ExtractToButton" Content="풀기..." Click="OnExtractToClick" IsEnabled="False"
-                    ToolTipService.ToolTip="폴더를 골라 풀기 (항목을 선택했으면 선택한 것만)" />
-            <Button x:Name="ExtractHereButton" Content="여기에 풀기" Click="OnExtractHereClick" IsEnabled="False"
-                    ToolTipService.ToolTip="압축 파일 옆에 같은 이름의 폴더를 만들어 풀기" />
-            <Button x:Name="CreateButton" Content="새 압축">
+            <Button x:Name="OpenButton" Click="OnOpenClick" ToolTipService.ToolTip="Open archive">
+                <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+            </Button>
+            <Button x:Name="ExtractToButton" Content="Extract..." Click="OnExtractToClick" IsEnabled="False"
+                    ToolTipService.ToolTip="Choose a folder to extract into (only selected items, if any)" />
+            <Button x:Name="ExtractHereButton" Content="Extract here" Click="OnExtractHereClick" IsEnabled="False"
+                    ToolTipService.ToolTip="Extract into a folder named after the archive, next to it" />
+            <Button x:Name="CreateButton" Content="New archive">
                 <Button.Flyout>
                     <MenuFlyout>
-                        <MenuFlyoutItem Text="ZIP으로..." Click="OnCreateZipClick" />
-                        <MenuFlyoutItem Text="7z로..." Click="OnCreate7zClick" />
+                        <MenuFlyoutItem Text="As ZIP..." Click="OnCreateZipClick" />
+                        <MenuFlyoutItem Text="As 7z..." Click="OnCreate7zClick" />
                     </MenuFlyout>
                 </Button.Flyout>
             </Button>
@@ -41,7 +43,7 @@
         <!-- 브레드크럼 + 뒤로가기 -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
             <Button x:Name="BackButton" Click="OnBackClick" IsEnabled="False"
-                    ToolTipService.ToolTip="상위 폴더로">
+                    ToolTipService.ToolTip="Up one level">
                 <FontIcon Glyph="&#xE72B;" FontSize="14" />
             </Button>
             <TextBlock x:Name="BreadcrumbText" VerticalAlignment="Center"
@@ -56,9 +58,9 @@
                 <ColumnDefinition Width="90" />
                 <ColumnDefinition Width="130" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="1" Text="이름" FontSize="12" Opacity="0.6" />
-            <TextBlock Grid.Column="2" Text="크기" FontSize="12" Opacity="0.6" HorizontalAlignment="Right" />
-            <TextBlock Grid.Column="3" Text="수정일" FontSize="12" Opacity="0.6" />
+            <TextBlock Grid.Column="1" Text="Name" FontSize="12" Opacity="0.6" />
+            <TextBlock Grid.Column="2" Text="Size" FontSize="12" Opacity="0.6" HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="3" Text="Modified" FontSize="12" Opacity="0.6" />
         </Grid>
 
         <!-- 항목 목록 -->
@@ -92,7 +94,7 @@
 
             <TextBlock
                 x:Name="PlaceholderText"
-                Text="압축 파일을 열거나, 파일을 끌어다 놓아 새 압축을 만드세요"
+                Text="Open an archive, or drop files here to create one"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Opacity="0.6" />
@@ -109,7 +111,7 @@
                 <ProgressBar x:Name="OperationProgress" Minimum="0" Maximum="100"
                              Visibility="Collapsed" />
             </StackPanel>
-            <Button x:Name="CancelButton" Grid.Column="1" Content="취소"
+            <Button x:Name="CancelButton" Grid.Column="1" Content="Cancel"
                     Click="OnCancelClick" Visibility="Collapsed" VerticalAlignment="Bottom" />
         </Grid>
     </Grid>

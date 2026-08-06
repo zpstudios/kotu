@@ -11,7 +11,7 @@ public sealed class ArchiveModule : IModule
 
     public string Id => "archive";
 
-    public string DisplayName => "압축";
+    public string DisplayName => "Archive";
 
     public string IconGlyph => "\uF012"; // ZipFolder
 

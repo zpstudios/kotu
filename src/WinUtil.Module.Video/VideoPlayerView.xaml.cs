@@ -64,7 +64,7 @@ public sealed partial class VideoPlayerView : UserControl
             SpeedBox.Items.Add($"{s:0.##}×");
         _suppressSubtitleEvent = true;
         SpeedBox.SelectedIndex = Array.IndexOf(Speeds, 1.0f);
-        SubtitleBox.Items.Add("자막 없음");
+        SubtitleBox.Items.Add("No subtitles");
         SubtitleBox.SelectedIndex = 0;
         SubtitleBox.IsEnabled = false;
         _suppressSubtitleEvent = false;
@@ -98,7 +98,7 @@ public sealed partial class VideoPlayerView : UserControl
 
         if (_filePath is not null)
         {
-            PlaceholderText.Text = "재생 준비 중...";
+            PlaceholderText.Text = "Preparing playback...";
             PlaceholderText.Visibility = Visibility.Visible;
         }
 
@@ -178,7 +178,7 @@ public sealed partial class VideoPlayerView : UserControl
         }
         catch (Exception ex)
         {
-            ShowMessage($"재생 초기화 실패: {ex.Message}");
+            ShowMessage($"Playback initialization failed: {ex.Message}");
         }
         finally
         {
@@ -391,7 +391,7 @@ public sealed partial class VideoPlayerView : UserControl
     }
 
     private void OnPlayerError(object? sender, EventArgs e) =>
-        ShowMessage($"재생 실패: {Path.GetFileName(_filePath ?? string.Empty)}");
+        ShowMessage($"Playback failed: {Path.GetFileName(_filePath ?? string.Empty)}");
 
     private void Dispatch(Action action)
     {
@@ -450,7 +450,7 @@ public sealed partial class VideoPlayerView : UserControl
     {
         _suppressSubtitleEvent = true;
         SubtitleBox.Items.Clear();
-        SubtitleBox.Items.Add("자막 없음");
+        SubtitleBox.Items.Add("No subtitles");
         foreach (var s in _subtitleFiles)
             SubtitleBox.Items.Add(Path.GetFileName(s));
         SubtitleBox.IsEnabled = _subtitleFiles.Count > 0;
@@ -481,7 +481,7 @@ public sealed partial class VideoPlayerView : UserControl
         }
         catch (Exception ex)
         {
-            ShowMessage($"자막 로드 실패: {ex.Message}");
+            ShowMessage($"Failed to load subtitles: {ex.Message}");
         }
     }
 
@@ -495,7 +495,7 @@ public sealed partial class VideoPlayerView : UserControl
         if (_filePath is null)
         {
             if (File.Exists(TestClipPath)) OpenPath(TestClipPath);
-            else ShowMessage(@"테스트 클립이 없습니다 (Assets\test-clip.mp4)");
+            else ShowMessage(@"Test clip not found (Assets\test-clip.mp4)");
             return;
         }
 

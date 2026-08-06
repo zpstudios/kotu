@@ -7,7 +7,7 @@ public sealed class HardwareModule : IModule
 {
     public string Id => "hardware";
 
-    public string DisplayName => "하드웨어";
+    public string DisplayName => "Hardware";
 
     public string IconGlyph => "\uE950"; // Component (칩 모양)
 

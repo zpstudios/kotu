@@ -16,7 +16,7 @@ internal static class Cp949ZipReader
     {
         // System.Text.Encoding.CodePages 없이는 949를 얻을 수 없다.
         var cp949 = CodePagesEncodingProvider.Instance.GetEncoding(949)
-            ?? throw new NotSupportedException("CP949 인코딩을 로드할 수 없습니다.");
+            ?? throw new NotSupportedException("Cannot load the CP949 encoding.");
         return new ReaderOptions
         {
             Password = password,

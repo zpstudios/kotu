@@ -17,7 +17,7 @@ public static class ExplorerIntegration
 
     private static string ExePath =>
         Environment.ProcessPath
-        ?? throw new InvalidOperationException("실행 파일 경로를 확인할 수 없습니다.");
+        ?? throw new InvalidOperationException("Cannot determine the executable path.");
 
     private static string ProgId(IModule module) => "WinUtil." + module.Id;
 
@@ -70,7 +70,7 @@ public static class ExplorerIntegration
         NotifyShell();
     }
 
-    // ---------- 우클릭 메뉴: 압축 파일 → "WinUtil로 여기에 풀기" ----------
+    // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with WinUtil" ----------
 
     public static bool IsExtractHereMenuRegistered(IReadOnlyList<string> archiveExtensions)
     {
@@ -86,7 +86,7 @@ public static class ExplorerIntegration
         {
             using var verb = Registry.CurrentUser.CreateSubKey(
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractHereVerbName}");
-            verb.SetValue(null, "WinUtil로 여기에 풀기");
+            verb.SetValue(null, "Extract here with WinUtil");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.ExtractHereToken} \"%1\"");
@@ -105,7 +105,7 @@ public static class ExplorerIntegration
         NotifyShell();
     }
 
-    // ---------- 우클릭 메뉴: 모든 파일 → "WinUtil로 압축" ----------
+    // ---------- 우클릭 메뉴: 모든 파일 → "Compress with WinUtil" ----------
 
     private const string CompressVerbKeyPath = @"Software\Classes\*\shell\" + CompressVerbName;
 
@@ -119,7 +119,7 @@ public static class ExplorerIntegration
     {
         using (var verb = Registry.CurrentUser.CreateSubKey(CompressVerbKeyPath))
         {
-            verb.SetValue(null, "WinUtil로 압축");
+            verb.SetValue(null, "Compress with WinUtil");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.CompressToken} \"%1\"");

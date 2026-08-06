@@ -10,8 +10,8 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Padding="16,12">
-            <Button x:Name="RefreshButton" Content="새로 고침" Click="OnRefreshClick" />
-            <Button x:Name="CopyButton" Content="전체 복사" Click="OnCopyClick" />
+            <Button x:Name="RefreshButton" Content="Refresh" Click="OnRefreshClick" />
+            <Button x:Name="CopyButton" Content="Copy all" Click="OnCopyClick" />
             <ProgressRing x:Name="Busy" IsActive="False" Width="20" Height="20" />
         </StackPanel>
 

@@ -7,7 +7,7 @@ public sealed class ImageModule : IModule
 {
     public string Id => "image";
 
-    public string DisplayName => "이미지";
+    public string DisplayName => "Image";
 
     public string IconGlyph => "\uE8B9"; // Picture
 

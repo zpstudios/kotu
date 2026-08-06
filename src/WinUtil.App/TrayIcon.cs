@@ -156,10 +156,10 @@ internal sealed class TrayIcon : IDisposable
         var menu = CreatePopupMenu();
         try
         {
-            _ = AppendMenuW(menu, MfString, CmdActivate, "창 활성화");
-            _ = AppendMenuW(menu, MfString, CmdClose, "이 창 닫기");
+            _ = AppendMenuW(menu, MfString, CmdActivate, "Activate window");
+            _ = AppendMenuW(menu, MfString, CmdClose, "Close this window");
             _ = AppendMenuW(menu, MfSeparator, 0, null);
-            _ = AppendMenuW(menu, MfString, CmdExitAll, "WinUtil 모두 종료");
+            _ = AppendMenuW(menu, MfString, CmdExitAll, "Exit WinUtil");
             _ = SetMenuDefaultItem(menu, CmdActivate, 0);
 
             // 메뉴 밖 클릭으로 닫히게 하려면 먼저 포그라운드가 되어야 한다(Win32 관례)

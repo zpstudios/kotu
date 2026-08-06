@@ -60,7 +60,7 @@ public sealed partial class ImageViewerView : UserControl
         }
         catch (Exception ex)
         {
-            PlaceholderText.Text = "폴더를 읽을 수 없습니다: " + ex.Message;
+            PlaceholderText.Text = "Cannot read the folder: " + ex.Message;
             PlaceholderText.Visibility = Visibility.Visible;
             return;
         }
@@ -151,7 +151,7 @@ public sealed partial class ImageViewerView : UserControl
         catch (Exception ex)
         {
             ImageControl.Source = null;
-            FileNameText.Text = $"로드 실패: {Path.GetFileName(path)} ({ex.Message})";
+            FileNameText.Text = $"Failed to load: {Path.GetFileName(path)} ({ex.Message})";
             InfoText.Text = PositionText();
         }
     }
@@ -232,7 +232,7 @@ public sealed partial class ImageViewerView : UserControl
         }
         catch (Exception ex)
         {
-            FileNameText.Text = $"삭제 실패: {Path.GetFileName(path)} ({ex.Message})";
+            FileNameText.Text = $"Failed to delete: {Path.GetFileName(path)} ({ex.Message})";
         }
     }
 
@@ -257,7 +257,7 @@ public sealed partial class ImageViewerView : UserControl
         var path = _navigator?.Current;
         if (path is null)
         {
-            FileNameText.Text = "열린 파일 없음";
+            FileNameText.Text = "No file open";
             InfoText.Text = string.Empty;
             return;
         }

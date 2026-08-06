@@ -97,11 +97,11 @@ public partial class App : Application
                             {
                                 var dialog = new ContentDialog
                                 {
-                                    Title = "업데이트 가능",
-                                    Content = $"새 버전 v{version}이(가) 있습니다.\n"
-                                            + "다운로드 후 자동으로 재시작해 적용합니다.",
-                                    PrimaryButtonText = "지금 업데이트",
-                                    CloseButtonText = "나중에",
+                                    Title = "Update available",
+                                    Content = $"Version v{version} is available.\n"
+                                            + "It will be downloaded and applied with an automatic restart.",
+                                    PrimaryButtonText = "Update now",
+                                    CloseButtonText = "Later",
                                     DefaultButton = ContentDialogButton.Primary,
                                     XamlRoot = window.Content.XamlRoot,
                                 };
@@ -134,7 +134,7 @@ public partial class App : Application
     /// <summary>진행률 다이얼로그를 띄우고 다운로드 → 적용·재시작. (패키지가 커서 무표시면 멈춘 것처럼 보인다)</summary>
     private static async Task DownloadWithProgressAsync(MainWindow window, Velopack.UpdateInfo info)
     {
-        var label = new TextBlock { Text = "다운로드 준비 중..." };
+        var label = new TextBlock { Text = "Preparing download..." };
         var bar = new ProgressBar { Minimum = 0, Maximum = 100, Value = 0 };
         var panel = new StackPanel { Spacing = 10, MinWidth = 320 };
         panel.Children.Add(label);
@@ -142,7 +142,7 @@ public partial class App : Application
 
         var progressDialog = new ContentDialog
         {
-            Title = $"v{info.TargetFullRelease.Version} 업데이트",
+            Title = $"Updating to v{info.TargetFullRelease.Version}",
             Content = panel,
             XamlRoot = window.Content.XamlRoot,
         };
@@ -154,10 +154,10 @@ public partial class App : Application
                 window.DispatcherQueue.TryEnqueue(() =>
                 {
                     bar.Value = percent;
-                    label.Text = $"다운로드 중... {percent}%";
+                    label.Text = $"Downloading... {percent}%";
                 }));
 
-            label.Text = "적용하고 재시작합니다...";
+            label.Text = "Applying and restarting...";
             bar.Value = 100;
             await Task.Delay(400); // 사용자에게 상태 전환을 보여줄 짧은 틈
             UpdateService.ApplyAndRestart(info);
@@ -167,9 +167,9 @@ public partial class App : Application
             progressDialog.Hide();
             var error = new ContentDialog
             {
-                Title = "업데이트 실패",
-                Content = ex.Message + "\n다음 실행 때 다시 시도됩니다.",
-                CloseButtonText = "닫기",
+                Title = "Update failed",
+                Content = ex.Message + "\nIt will be retried on the next run.",
+                CloseButtonText = "Close",
                 XamlRoot = window.Content.XamlRoot,
             };
             _ = error.ShowAsync();

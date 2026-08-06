@@ -57,7 +57,7 @@ public static class Program
                 }
                 catch (Exception ex)
                 {
-                    LogFatal(ex, "Application.Start 콜백");
+                    LogFatal(ex, "Application.Start callback");
                     throw;
                 }
             });
@@ -89,8 +89,8 @@ public static class Program
         {
             _ = MessageBoxW(
                 IntPtr.Zero,
-                $"WinUtil 시작 중 오류가 발생했습니다.\n\n{ex?.GetType().Name}: {ex?.Message}\n\n자세한 내용: {LogPath}",
-                "WinUtil 시작 오류",
+                $"WinUtil failed to start.\n\n{ex?.GetType().Name}: {ex?.Message}\n\nDetails: {LogPath}",
+                "WinUtil startup error",
                 0x00000010 /* MB_ICONERROR */);
         }
         catch

@@ -16,7 +16,7 @@
         <ContentControl x:Name="ModuleHost"
                         HorizontalContentAlignment="Stretch"
                         VerticalContentAlignment="Stretch">
-            <TextBlock Text="파일을 열거나 왼쪽에서 기능을 선택하세요"
+            <TextBlock Text="Open a file or pick a feature on the left"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Opacity="0.6"/>
         </ContentControl>

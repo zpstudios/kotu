@@ -49,7 +49,7 @@
             </StackPanel>
             <TextBlock
                 x:Name="PlaceholderText"
-                Text="동영상·음악 파일을 열거나 창으로 끌어다 놓으세요&#x0A;▶ = 내장 화면·스피커 테스트 재생"
+                Text="Open a video or music file, or drop one onto the window&#x0A;▶ = built-in display and speaker test clip"
                 Visibility="Collapsed"
                 Foreground="Gray"
                 TextAlignment="Center"
@@ -72,10 +72,12 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <Button Grid.Column="0" Content="열기..."
-                    ToolTipService.ToolTip="동영상·음악 파일 열기" Click="OnOpenClicked" />
+            <Button Grid.Column="0"
+                    ToolTipService.ToolTip="Open video or music file" Click="OnOpenClicked">
+                <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+            </Button>
             <Button x:Name="PlayButton" Grid.Column="1" MinWidth="44" Content="▶"
-                    ToolTipService.ToolTip="재생/일시정지 (Space)" Click="OnPlayClicked" />
+                    ToolTipService.ToolTip="Play/Pause (Space)" Click="OnPlayClicked" />
             <TextBlock x:Name="PositionText" Grid.Column="2" Text="0:00"
                        VerticalAlignment="Center" />
             <Slider x:Name="SeekSlider" Grid.Column="3" Minimum="0" Maximum="1000"
@@ -84,16 +86,16 @@
             <TextBlock x:Name="DurationText" Grid.Column="4" Text="0:00"
                        VerticalAlignment="Center" />
             <Button x:Name="MuteButton" Grid.Column="5" Content="🔊"
-                    ToolTipService.ToolTip="음소거 (M)" Click="OnMuteClicked" />
+                    ToolTipService.ToolTip="Mute (M)" Click="OnMuteClicked" />
             <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
-                    VerticalAlignment="Center" ToolTipService.ToolTip="볼륨 (↑/↓)"
+                    VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <ComboBox x:Name="SpeedBox" Grid.Column="7" MinWidth="84"
-                      ToolTipService.ToolTip="배속" SelectionChanged="OnSpeedChanged" />
+                      ToolTipService.ToolTip="Playback speed" SelectionChanged="OnSpeedChanged" />
             <ComboBox x:Name="SubtitleBox" Grid.Column="8" MinWidth="120"
-                      ToolTipService.ToolTip="자막" SelectionChanged="OnSubtitleChanged" />
+                      ToolTipService.ToolTip="Subtitles" SelectionChanged="OnSubtitleChanged" />
             <Button Grid.Column="9" Content="⛶"
-                    ToolTipService.ToolTip="전체화면 (F11)" Click="OnFullScreenClicked" />
+                    ToolTipService.ToolTip="Full screen (F11)" Click="OnFullScreenClicked" />
         </Grid>
     </Grid>
 </UserControl>

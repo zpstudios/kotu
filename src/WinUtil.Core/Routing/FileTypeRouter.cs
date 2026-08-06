@@ -16,7 +16,7 @@ public sealed class FileTypeRouter
     public void Register(IModule module)
     {
         if (_modules.Any(m => m.Id == module.Id))
-            throw new InvalidOperationException($"중복 모듈 ID: {module.Id}");
+            throw new InvalidOperationException($"Duplicate module ID: {module.Id}");
         _modules.Add(module);
     }
 

@@ -23,11 +23,11 @@ public sealed partial class SettingsView : UserControl
 
     private void Build(FileTypeRouter router)
     {
-        AddHeader("탐색기 통합");
+        AddHeader("Explorer integration");
         Root.Children.Add(new TextBlock
         {
-            Text = "현재 사용자 계정에만 적용되며(관리자 권한 불필요), 끄면 등록이 완전히 제거됩니다. "
-                 + "파일 연결은 \"연결 프로그램\" 목록에 후보로 추가하는 것이고, 기본 앱 지정은 Windows 설정에서 합니다.",
+            Text = "Applies to the current user account only (no admin rights needed); turning a switch off removes the registration completely. "
+                 + "File association adds WinUtil to the \"Open with\" candidates; picking the default app is done in Windows Settings.",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -36,7 +36,7 @@ public sealed partial class SettingsView : UserControl
         {
             var toggle = new ToggleSwitch
             {
-                Header = $"{module.DisplayName} 파일 연결 등록  ({string.Join(" ", module.SupportedExtensions)})",
+                Header = $"Register {module.DisplayName} file associations  ({string.Join(" ", module.SupportedExtensions)})",
                 IsOn = Safe(() => ExplorerIntegration.IsAssociationRegistered(module)),
             };
             toggle.Toggled += (_, _) => Apply(toggle,
@@ -50,7 +50,7 @@ public sealed partial class SettingsView : UserControl
 
         var extractToggle = new ToggleSwitch
         {
-            Header = "압축 파일 우클릭 메뉴: \"WinUtil로 여기에 풀기\"",
+            Header = "Archive right-click menu: \"Extract here with WinUtil\"",
             IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)),
         };
         extractToggle.Toggled += (_, _) => Apply(extractToggle,
@@ -60,7 +60,7 @@ public sealed partial class SettingsView : UserControl
 
         var compressToggle = new ToggleSwitch
         {
-            Header = "모든 파일 우클릭 메뉴: \"WinUtil로 압축\"",
+            Header = "All-files right-click menu: \"Compress with WinUtil\"",
             IsOn = Safe(ExplorerIntegration.IsCompressMenuRegistered),
         };
         compressToggle.Toggled += (_, _) => Apply(compressToggle,
@@ -70,43 +70,43 @@ public sealed partial class SettingsView : UserControl
 
         Root.Children.Add(new TextBlock
         {
-            Text = "Windows 11에서는 우클릭 후 \"추가 옵션 표시\"(Shift+F10) 안에 나타납니다.",
+            Text = "On Windows 11 these appear under \"Show more options\" (Shift+F10).",
             Opacity = 0.6,
             TextWrapping = TextWrapping.Wrap,
         });
 
         Root.Children.Add(_status);
 
-        AddHeader("업데이트");
+        AddHeader("Updates");
         var updateStatus = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
-        var checkButton = new Button { Content = "업데이트 확인" };
+        var checkButton = new Button { Content = "Check for updates" };
         checkButton.Click += async (_, _) =>
         {
             checkButton.IsEnabled = false;
-            updateStatus.Text = "확인 중...";
+            updateStatus.Text = "Checking...";
             try
             {
                 if (!UpdateService.IsUpdatableBuild)
                 {
-                    updateStatus.Text = "수동 zip 실행에서는 자동 업데이트를 쓸 수 없습니다. "
-                                      + "Releases의 Setup.exe 설치판을 사용하면 자동 업데이트가 활성화됩니다.";
+                    updateStatus.Text = "Automatic updates are unavailable in the portable zip. "
+                                      + "Install with Setup.exe from Releases to enable them.";
                     return;
                 }
                 var info = await UpdateService.CheckAsync();
                 if (info is null)
                 {
-                    updateStatus.Text = "최신 버전입니다.";
+                    updateStatus.Text = "You are on the latest version.";
                     return;
                 }
                 await UpdateService.DownloadAsync(info, percent =>
                     DispatcherQueue.TryEnqueue(() =>
-                        updateStatus.Text = $"새 버전 v{info.TargetFullRelease.Version} 다운로드 중... {percent}%"));
-                updateStatus.Text = "적용하고 재시작합니다...";
+                        updateStatus.Text = $"Downloading v{info.TargetFullRelease.Version}... {percent}%"));
+                updateStatus.Text = "Applying and restarting...";
                 UpdateService.ApplyAndRestart(info);
             }
             catch (Exception ex)
             {
-                updateStatus.Text = "업데이트 확인 실패: " + ex.Message;
+                updateStatus.Text = "Update check failed: " + ex.Message;
             }
             finally
             {
@@ -116,7 +116,7 @@ public sealed partial class SettingsView : UserControl
         Root.Children.Add(checkButton);
         Root.Children.Add(updateStatus);
 
-        AddHeader("정보");
+        AddHeader("About");
         var version = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
         Root.Children.Add(new TextBlock { Text = $"WinUtil v{version} · github.com/tsusaikang/winutil", Opacity = 0.7 });
     }
@@ -144,7 +144,7 @@ public sealed partial class SettingsView : UserControl
             _suppressToggle = true;
             toggle.IsOn = !toggle.IsOn;
             _suppressToggle = false;
-            _status.Text = "적용 실패: " + ex.Message;
+            _status.Text = "Failed to apply: " + ex.Message;
         }
     }
 

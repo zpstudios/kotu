@@ -19,11 +19,11 @@ public static class HardwareInfoService
     public static IReadOnlyList<HardwareSection> Collect() =>
     [
         Safe("CPU", CollectCpu),
-        Safe("메인보드", CollectBoard),
-        Safe("메모리", CollectMemory),
-        Safe("그래픽", CollectGpu),
-        Safe("저장장치", CollectStorage),
-        Safe("시스템", CollectSystem),
+        Safe("Motherboard", CollectBoard),
+        Safe("Memory", CollectMemory),
+        Safe("Graphics", CollectGpu),
+        Safe("Storage", CollectStorage),
+        Safe("System", CollectSystem),
     ];
 
     private static HardwareSection Safe(string title, Func<List<HardwareItem>> collect)
@@ -32,11 +32,11 @@ public static class HardwareInfoService
         {
             var items = collect();
             return new HardwareSection(title,
-                items.Count > 0 ? items : [new HardwareItem("정보 없음", "-")]);
+                items.Count > 0 ? items : [new HardwareItem("No data", "-")]);
         }
         catch (Exception ex)
         {
-            return new HardwareSection(title, [new HardwareItem("읽기 실패", ex.Message)]);
+            return new HardwareSection(title, [new HardwareItem("Read failed", ex.Message)]);
         }
     }
 
@@ -48,13 +48,13 @@ public static class HardwareInfoService
         foreach (var row in Query(
             "SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L2CacheSize, L3CacheSize, SocketDesignation FROM Win32_Processor"))
         {
-            items.Add(new HardwareItem("모델", S(row["Name"])));
-            items.Add(new HardwareItem("코어 / 스레드",
+            items.Add(new HardwareItem("Model", S(row["Name"])));
+            items.Add(new HardwareItem("Cores / Threads",
                 $"{U32(row["NumberOfCores"])} / {U32(row["NumberOfLogicalProcessors"])}"));
-            items.Add(new HardwareItem("최대 클럭", HardwareFormat.MegaHertz(U32(row["MaxClockSpeed"]))));
-            items.Add(new HardwareItem("L2 / L3 캐시",
+            items.Add(new HardwareItem("Max clock", HardwareFormat.MegaHertz(U32(row["MaxClockSpeed"]))));
+            items.Add(new HardwareItem("L2 / L3 cache",
                 $"{HardwareFormat.KiloBytes(U32(row["L2CacheSize"]))} / {HardwareFormat.KiloBytes(U32(row["L3CacheSize"]))}"));
-            items.Add(new HardwareItem("소켓", S(row["SocketDesignation"])));
+            items.Add(new HardwareItem("Socket", S(row["SocketDesignation"])));
         }
         return items;
     }
@@ -64,8 +64,8 @@ public static class HardwareInfoService
         var items = new List<HardwareItem>();
         foreach (var row in Query("SELECT Manufacturer, Product FROM Win32_BaseBoard"))
         {
-            items.Add(new HardwareItem("제조사", S(row["Manufacturer"])));
-            items.Add(new HardwareItem("모델", S(row["Product"])));
+            items.Add(new HardwareItem("Manufacturer", S(row["Manufacturer"])));
+            items.Add(new HardwareItem("Model", S(row["Product"])));
         }
         foreach (var row in Query("SELECT SMBIOSBIOSVersion, ReleaseDate FROM Win32_BIOS"))
         {
@@ -99,7 +99,7 @@ public static class HardwareInfoService
             items.Add(new HardwareItem(S(row["DeviceLocator"]), detail));
         }
         if (total > 0)
-            items.Insert(0, new HardwareItem("총 용량", HardwareFormat.Bytes(total)));
+            items.Insert(0, new HardwareItem("Total capacity", HardwareFormat.Bytes(total)));
         return items;
     }
 
@@ -113,8 +113,8 @@ public static class HardwareInfoService
             var vram = U64(row["AdapterRAM"]);
             var value = S(row["Name"]);
             if (vram > 0)
-                value += $" · VRAM {HardwareFormat.Bytes(vram)}(표기 한계상 최대 4 GB)";
-            value += $" · 드라이버 {S(row["DriverVersion"])}";
+                value += $" · VRAM {HardwareFormat.Bytes(vram)} (WMI caps this at 4 GB)";
+            value += $" · driver {S(row["DriverVersion"])}";
             items.Add(new HardwareItem($"GPU {index++}", value));
         }
         return items;
@@ -137,7 +137,7 @@ public static class HardwareInfoService
         {
             items.Add(new HardwareItem(
                 drive.Name.TrimEnd('\\'),
-                $"{HardwareFormat.Bytes((ulong)drive.TotalSize)} 중 {HardwareFormat.Bytes((ulong)drive.AvailableFreeSpace)} 남음"
+                $"{HardwareFormat.Bytes((ulong)drive.AvailableFreeSpace)} free of {HardwareFormat.Bytes((ulong)drive.TotalSize)}"
                 + (string.IsNullOrEmpty(drive.VolumeLabel) ? "" : $" · {drive.VolumeLabel}")));
         }
         return items;
@@ -151,7 +151,7 @@ public static class HardwareInfoService
             items.Add(new HardwareItem("PC", $"{S(row["Manufacturer"])} {S(row["Model"])}".Trim()));
         }
         items.Add(new HardwareItem("OS", RuntimeInformation.OSDescription));
-        items.Add(new HardwareItem("컴퓨터 이름", Environment.MachineName));
+        items.Add(new HardwareItem("Computer name", Environment.MachineName));
         return items;
     }
 

@@ -22,7 +22,7 @@ public sealed class SevenZipBackend : IArchiveBackend
             if (!File.Exists(dll))
             {
                 throw new FileNotFoundException(
-                    "7z.dll이 없습니다. 7-Zip 설치본 또는 '7z extra'의 x64 7z.dll을 실행 폴더에 복사하세요. (README 참고)",
+                    "7z.dll not found. Copy the x64 7z.dll from a 7-Zip installation or '7z extra' next to the app. (See README)",
                     dll);
             }
             SevenZipBase.SetLibraryPath(dll);
@@ -172,7 +172,7 @@ public sealed class SevenZipBackend : IArchiveBackend
                 AddUnique(dict, Path.GetFileName(source), source);
             }
         }
-        if (dict.Count == 0) throw new FileNotFoundException("압축할 파일이 없습니다.");
+        if (dict.Count == 0) throw new FileNotFoundException("Nothing to compress.");
         return dict;
     }
 

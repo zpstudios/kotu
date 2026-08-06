@@ -7,7 +7,7 @@ public sealed record ArchiveEntry(string Path, bool IsDirectory, long Size, Date
 public sealed class ArchivePasswordException : Exception
 {
     public ArchivePasswordException(Exception? inner = null)
-        : base("암호가 필요하거나 올바르지 않습니다.", inner)
+        : base("A password is required or the password is incorrect.", inner)
     {
     }
 }
