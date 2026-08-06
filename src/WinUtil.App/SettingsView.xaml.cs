@@ -18,24 +18,13 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     private readonly TextBlock _status = new() { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
     private readonly ISettingsService _settings;
     private bool _suppressToggle;
-    private DispatcherTimer? _adTimer;
 
     public SettingsView(FileTypeRouter router)
     {
         InitializeComponent();
         _settings = App.Services.GetRequiredService<ISettingsService>();
         Build(router);
-
-        // 하단 바 광고: 진입 시 적용 + 15초마다 분 경계 로테이션 반영 (v0.50.0)
-        SponsorAds.Apply(SponsorImage);
-        _adTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
-        _adTimer.Tick += (_, _) => SponsorAds.Apply(SponsorImage);
-        Loaded += (_, _) =>
-        {
-            Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
-            _adTimer?.Start();
-        };
-        Unloaded += (_, _) => _adTimer?.Stop();
+        Loaded += (_, _) => Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
     }
 
     /// <summary>하단 바(광고·⛶)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.50.0).</summary>
@@ -166,7 +155,21 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         StartUpdateLoop(currentVersion, updateStatus, updateCountdown, updateButton);
 
         AddHeader("About");
-        Root.Children.Add(new TextBlock { Text = $"ZP v{currentVersion} · github.com/zpstudios/zpro", Opacity = 0.7 });
+        // 저장소 주소는 클릭해서 이동 가능 (v0.52.0 사용자 요청)
+        var aboutLine = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        aboutLine.Children.Add(new TextBlock
+        {
+            Text = $"ZP v{currentVersion} ·",
+            Opacity = 0.7,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        aboutLine.Children.Add(new HyperlinkButton
+        {
+            Content = "github.com/zpstudios/zpro",
+            NavigateUri = new Uri("https://github.com/zpstudios/zpro"),
+            Padding = new Thickness(0),
+        });
+        Root.Children.Add(aboutLine);
         Root.Children.Add(new TextBlock
         {
             Text = "Mission Statement",
@@ -179,20 +182,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             Opacity = 0.8,
             TextWrapping = TextWrapping.Wrap,
         });
-
-        // Patreon 후원 안내 (v0.46.0 문구, v0.48.0 링크 zpstudios로 확정 — 사용자 확인)
-        Root.Children.Add(new TextBlock
-        {
-            Text = "Kindly support us on Patreon !",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 8, 0, 0),
-        });
-        Root.Children.Add(new HyperlinkButton
-        {
-            Content = "www.patreon.com/zpstudios/",
-            NavigateUri = new Uri("https://www.patreon.com/zpstudios/"),
-            Padding = new Thickness(0),
-        });
+        // Patreon 후원 문구는 About 본문이 아니라 하단 바에 표시한다 (v0.52.0 사용자 정정).
     }
 
     /// <summary>

@@ -27,7 +27,7 @@
                 HorizontalAlignment="Left" />
         </ScrollViewer>
 
-        <!-- 하단 바: 좌측 광고(놀던 공간 활용, v0.50.0 사용자 요청) + 우측 ⛶.
+        <!-- 하단 바: 좌측 Patreon 후원 문구(v0.52.0 — 광고 배너는 사용자 정정으로 철회) + 우측 ⛶.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다. -->
         <Border x:Name="ControlBar" Grid.Row="1" Padding="0,2,0,2">
             <Grid ColumnSpacing="10">
@@ -36,17 +36,16 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <!-- 2:1 광고를 바 높이(40)에 맞춰 표시. SPONSOR 미니 배지 오버레이 -->
-                <Grid Grid.Column="0" CornerRadius="4" ToolTipService.ToolTip="Sponsor">
-                    <Image x:Name="SponsorImage" Height="40" Stretch="Uniform" />
-                    <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="2"
-                            Background="#59000000" CornerRadius="2" Padding="3,0,3,1">
-                        <TextBlock Text="SPONSOR" FontSize="6" Foreground="White" Opacity="0.9" />
-                    </Border>
-                </Grid>
-                <!-- 폭 48 = 다른 모듈 ⛶와 통일 (v0.49.0 기준) -->
-                <Button Grid.Column="2" Width="48" Content="⛶" Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen (F11)" />
+                <HyperlinkButton Grid.Column="0" Content="Kindly support us on Patreon !"
+                                 NavigateUri="https://www.patreon.com/zpstudios/"
+                                 VerticalAlignment="Center" Padding="4,2"
+                                 ToolTipService.ToolTip="www.patreon.com/zpstudios/" />
+                <!-- 폭 40 정사각 = 다른 모듈 ⛶와 통일 (v0.53.0 기준) -->
+                <Button Grid.Column="2" Width="40" Height="40" Padding="4"
+                        Click="OnFullScreenButtonClick"
+                        ToolTipService.ToolTip="Full screen (F11)">
+                    <FontIcon Glyph="&#xE740;" FontSize="18" />
+                </Button>
             </Grid>
         </Border>
     </Grid>
