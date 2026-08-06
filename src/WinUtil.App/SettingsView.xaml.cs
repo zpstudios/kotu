@@ -65,25 +65,26 @@ public sealed partial class SettingsView : UserControl
         var archiveExts = router.Modules.FirstOrDefault(m => m.Id == "archive")?.SupportedExtensions
             ?? (IReadOnlyList<string>)[];
 
-        var extractToggle = new ToggleSwitch
+        // 우클릭 메뉴 토글 통합(v0.30.0 사용자 요청): "여기에 풀기"(압축 파일)와
+        // "압축하기"(모든 파일)를 하나의 스위치로 함께 등록/해제한다.
+        var menuToggle = new ToggleSwitch
         {
-            Header = "Archive right-click menu: \"Extract here with ZP-zip\"",
-            IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)),
+            Header = "Explorer right-click menu: \"Extract here with ZP-zip\" (archives) · \"Compress with ZP-zip\" (all files)",
+            IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)
+                           || ExplorerIntegration.IsCompressMenuRegistered()),
         };
-        extractToggle.Toggled += (_, _) => Apply(extractToggle,
-            () => ExplorerIntegration.RegisterExtractHereMenu(archiveExts),
-            () => ExplorerIntegration.UnregisterExtractHereMenu(archiveExts));
-        Root.Children.Add(extractToggle);
-
-        var compressToggle = new ToggleSwitch
-        {
-            Header = "All-files right-click menu: \"Compress with ZP-zip\"",
-            IsOn = Safe(ExplorerIntegration.IsCompressMenuRegistered),
-        };
-        compressToggle.Toggled += (_, _) => Apply(compressToggle,
-            ExplorerIntegration.RegisterCompressMenu,
-            ExplorerIntegration.UnregisterCompressMenu);
-        Root.Children.Add(compressToggle);
+        menuToggle.Toggled += (_, _) => Apply(menuToggle,
+            () =>
+            {
+                ExplorerIntegration.RegisterExtractHereMenu(archiveExts);
+                ExplorerIntegration.RegisterCompressMenu();
+            },
+            () =>
+            {
+                ExplorerIntegration.UnregisterExtractHereMenu(archiveExts);
+                ExplorerIntegration.UnregisterCompressMenu();
+            });
+        Root.Children.Add(menuToggle);
 
         Root.Children.Add(new TextBlock
         {
