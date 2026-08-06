@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""스피커 테스트 음악 합성 v3 — 칩튠(레트로 게임)풍 120 BPM (32초, 44.1kHz 스테레오 WAV).
+"""스피커 테스트 음악 합성 v4 — 칩튠(레트로 게임)풍 120 BPM (32초, 44.1kHz 스테레오 WAV).
 
-사용자 요구(v0.22.0): v2(레이브풍)보다 키를 낮추고 + 게임기(NES) 칩튠 느낌으로.
-  - 리드: 펄스파(듀티 25%) + 살짝 비브라토, v2보다 한 옥타브 낮은 A3~E4 대역
-  - 베이스: NES 삼각파(16단계 양자화) — 낮고 둥근 저음
-  - 드럼: 노이즈 킥/햇/스네어 (패미컴 노이즈 채널 느낌)
-  - 풀 믹스 구간: 칩튠 상징인 고속 아르페지오(듀티 12.5%)를 깔았다
+사용자 요구(v0.37.0): v3보다 음을 더 낮추고 덜 거슬리게.
+  - 리드: v3에서 한 옥타브 더 내림(A2~E3/G3), 듀티 25%→50%(둥근 음색), 3.5kHz 로우패스
+  - 아르페지오: 옥타브 상향 제거 + 듀티 50% + 3kHz 로우패스 — 은은한 배경으로
+  - 햇/스네어: 음량 축소 + 로우패스로 쏘는 고역 제거
+  - 베이스: NES 삼각파(16단계 양자화) 유지 — 낮고 둥근 저음
+  - 트위터 핑(8/10/12kHz)은 스피커 점검 기능이라 유지하되 음량만 낮춤
 
 구성(섹션 경계는 v2와 동일 — 영상과 동기):
   1) 0–8s    왼쪽 채널만  — 전부 하드 L (좌 스피커 확인)
@@ -47,6 +48,14 @@ def env_ad(n, attack, decay):
     return np.minimum(1, t / max(attack, 1e-4)) * np.exp(-t / decay)
 
 
+def lowpass(sig, cutoff, taps=101):
+    """윈도우드 싱크 FIR 로우패스 — 펄스파·노이즈의 쏘는 고역을 깎는다 (v4)."""
+    m = np.arange(taps) - (taps - 1) / 2
+    h = np.sinc(2 * cutoff / SR * m) * np.hanning(taps)
+    h /= h.sum()
+    return np.convolve(sig, h, mode="same")
+
+
 # ---------- 칩튠 음원 ----------
 
 def square(freq, n, duty=0.5, vib=0.0):
@@ -76,18 +85,18 @@ def kick(amp=0.85):
 RNG = np.random.default_rng(20260806)  # 재현 가능한 노이즈
 
 
-def hat(amp=0.13, dur=0.04):
-    """햇: 고역 노이즈 (1차 차분으로 저역 제거) — 패미컴 노이즈 채널 짧은 틱."""
+def hat(amp=0.07, dur=0.04):
+    """햇: 고역 노이즈 틱 — v4: 음량 축소 + 8kHz 로우패스로 쏘는 느낌 제거."""
     n = int(SR * dur)
     noise = np.diff(RNG.standard_normal(n + 1))
-    return amp * env_ad(n, 0.001, 0.015) * noise
+    return lowpass(amp * env_ad(n, 0.001, 0.015) * noise, 8000)
 
 
-def snare(amp=0.26):
-    """스네어: 노이즈 버스트, 킥보다 밝고 햇보다 길게."""
+def snare(amp=0.18):
+    """스네어: 노이즈 버스트 — v4: 음량 축소 + 4.5kHz 로우패스."""
     n = int(SR * 0.14)
     noise = np.diff(RNG.standard_normal(n + 1))
-    return amp * env_ad(n, 0.001, 0.045) * noise
+    return lowpass(amp * env_ad(n, 0.001, 0.045) * noise, 4500)
 
 
 def bassnote(freq, dur, amp=0.55):
@@ -96,15 +105,15 @@ def bassnote(freq, dur, amp=0.55):
 
 
 def lead(freq, dur, amp=0.4):
-    """리드: 듀티 25% 펄스 + 얕은 비브라토 — 전형적인 칩튠 멜로디 음색."""
+    """리드: 듀티 50% 펄스(둥근 음색) + 얕은 비브라토 + 3.5kHz 로우패스 (v4)."""
     n = int(SR * dur)
-    return amp * env_ad(n, 0.003, 0.15) * square(freq, n, duty=0.25, vib=0.004)
+    return lowpass(amp * env_ad(n, 0.003, 0.15) * square(freq, n, duty=0.5, vib=0.004), 3500)
 
 
-def arp_note(freq, dur, amp=0.11):
-    """아르페지오용: 듀티 12.5% 펄스, 짧은 감쇠."""
+def arp_note(freq, dur, amp=0.08):
+    """아르페지오용: 듀티 50% 펄스 + 3kHz 로우패스, 짧은 감쇠 — 은은한 배경 (v4)."""
     n = int(SR * dur)
-    return amp * env_ad(n, 0.002, 0.05) * square(freq, n, duty=0.125)
+    return lowpass(amp * env_ad(n, 0.002, 0.05) * square(freq, n, duty=0.5), 3000)
 
 
 N = {  # 음이름 → 주파수
@@ -133,9 +142,9 @@ def groove(t0, dur, ch, riff, bass_line):
             add(lead(N[note], sixteenth * 1.6, 0.32), t0 + k * sixteenth, ch)
 
 
-# A마이너 펜타토닉 리프 — v2에서 한 옥타브 내림(A3~E4/G4). ""는 쉼표
-RIFF_L = ["A3", "", "C4", "A3", "E4", "", "D4", "C4", "A3", "", "C4", "D4", "E4", "D4", "C4", "A3"]
-RIFF_R = ["C4", "", "E4", "C4", "G4", "", "E4", "D4", "C4", "", "D4", "E4", "G4", "E4", "D4", "C4"]
+# A마이너 펜타토닉 리프 — v4: v3에서 한 옥타브 더 내림(A2~E3/G3). ""는 쉼표
+RIFF_L = ["A2", "", "C3", "A2", "E3", "", "D3", "C3", "A2", "", "C3", "D3", "E3", "D3", "C3", "A2"]
+RIFF_R = ["C3", "", "E3", "C3", "G3", "", "E3", "D3", "C3", "", "D3", "E3", "G3", "E3", "D3", "C3"]
 BASS = ["A1", "A1", "C2", "D2"]
 
 # 1) 0–8s 왼쪽만 / 2) 8–16s 오른쪽만
@@ -167,7 +176,7 @@ for bar, chord in enumerate(CHORDS):
         tt = bar_t + k * sixteenth
         if tt >= 25.9:
             break
-        add(arp_note(N[chord[ARP_PATTERN[k % 4]]] * 2, sixteenth * 1.2), tt, ch=2)
+        add(arp_note(N[chord[ARP_PATTERN[k % 4]]], sixteenth * 1.2), tt, ch=2)  # v4: 옥타브 상향 제거
 
 # 4a) 26–28.2s 저음 스윕 35→90Hz (우퍼)
 n = int(SR * 2.2)
@@ -180,20 +189,21 @@ add(0.55 * np.minimum(1, t * 8) * np.minimum(1, (2.2 - t) * 2) * np.sin(phase), 
 for k, (f, ch) in enumerate([(8000, 0), (10000, 1), (12000, 2)]):
     tt = np.arange(int(SR * 0.35)) / SR
     e = np.minimum(1, tt * 300) * np.exp(-7 * tt)
-    add(0.16 * e * np.sin(2 * np.pi * f * tt), 28.2 + k * 0.45, ch=ch)
+    add(0.11 * e * np.sin(2 * np.pi * f * tt), 28.2 + k * 0.45, ch=ch)  # v4: 음량 축소
 
 # 5) 29.6–32s 마무리: 킥 + A 마이너 칩 코드(삼각파 베이스 + 펄스 화음) 페이드
+# v4: 화음도 한 옥타브 내리고(A2~A3) 듀티 50% + 로우패스로 부드럽게
 add(kick(0.9), 29.6, 2)
 n = int(SR * 2.3)
 t = np.arange(n) / SR
 fade = np.minimum(1, t * 6) * np.exp(-1.4 * t)
 w = 0.5 * nes_triangle(N["A1"], n)
-for x in ["A2", "C4", "E4", "A4"]:
-    w += 0.22 * square(N[x], n, duty=0.25)
-add(0.16 * fade * w, 29.65, ch=2)
+for x in ["A2", "C3", "E3", "A3"]:
+    w += 0.22 * square(N[x], n, duty=0.5)
+add(0.16 * fade * lowpass(w, 3500), 29.65, ch=2)
 
-# 소프트 클립(펀치 유지) → 정규화 → 16bit WAV
-buf = np.tanh(buf * 1.15)
+# 소프트 클립(v4: 1.15→1.0 — 클리핑 배음 최소화) → 정규화 → 16bit WAV
+buf = np.tanh(buf * 1.0)
 buf *= 0.95 / max(1e-9, np.abs(buf).max())
 pcm = (buf * 32767).astype("<i2")
 with wave.open("/tmp/zp-test-audio.wav", "wb") as f:
