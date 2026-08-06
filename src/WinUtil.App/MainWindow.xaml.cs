@@ -45,7 +45,7 @@ public sealed partial class MainWindow : Window
         // 창 헤더만 브랜드 색(#15072E) — 본문은 시스템 테마 기본값
         TitleBarTheming.Apply(AppWindow.TitleBar);
 
-        // 전체화면(동영상 F11/더블클릭)에서는 하단 바를 통째로 숨긴다 —
+        // 전체화면(동영상 Enter/F11)에서는 하단 바를 통째로 숨긴다 —
         // 재생줄이 하단 바로 통합되면서(v0.21.0) 전체화면 겹침도 여기서 함께 해결
         AppWindow.Changed += (sender, args) =>
         {

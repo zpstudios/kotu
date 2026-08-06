@@ -4,13 +4,14 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vlc="using:LibVLCSharp.Platforms.Windows"
     IsTabStop="True"
-    KeyboardAcceleratorPlacementMode="Hidden"
-    DoubleTapped="OnDoubleTapped">
+    KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨, M 음소거, F11 전체화면.
+    <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨, M 음소거, Enter/F11 전체화면.
+         더블클릭 전체화면은 제거(v0.23.0 사용자 요청) — 클릭 재생/일시정지와 오동작 겹침.
          PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Space" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Space" Invoked="OnTogglePlayInvoked" />
+        <KeyboardAccelerator Key="Enter" Invoked="OnFullScreenInvoked" />
         <KeyboardAccelerator Key="Left" Invoked="OnSeekBackInvoked" />
         <KeyboardAccelerator Key="Right" Invoked="OnSeekForwardInvoked" />
         <KeyboardAccelerator Key="Up" Invoked="OnVolumeUpInvoked" />
@@ -97,7 +98,7 @@
             <ComboBox x:Name="SubtitleBox" Grid.Column="8" MinWidth="120"
                       ToolTipService.ToolTip="Subtitles" SelectionChanged="OnSubtitleChanged" />
             <Button Grid.Column="9" Content="⛶"
-                    ToolTipService.ToolTip="Full screen (F11)" Click="OnFullScreenClicked" />
+                    ToolTipService.ToolTip="Full screen (Enter)" Click="OnFullScreenClicked" />
         </Grid>
     </Grid>
 </UserControl>

@@ -15,7 +15,8 @@ namespace WinUtil.Module.Video;
 
 /// <summary>
 /// 동영상·음악 플레이어 화면. 재생/일시정지, 시킹(슬라이더·←/→ 5초), 볼륨(↑/↓)·음소거(M),
-/// 배속, 자막(자동 탐지 + CP949 자동 변환), 이어보기, 전체화면(F11/더블클릭)을 제공한다.
+/// 배속, 자막(자동 탐지 + CP949 자동 변환), 이어보기, 전체화면(Enter/F11)을 제공한다.
+/// 더블클릭 전체화면은 제거(v0.23.0) — 클릭(재생/일시정지)과 겹쳐 의도치 않은 전환이 잦았다.
 /// 음악 파일은 같은 파이프라인으로 재생하되 영상 표면에 ♪ 오버레이를 띄운다.
 /// libvlc 이벤트는 백그라운드 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다.
 /// </summary>
@@ -568,8 +569,6 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider
     private void OnMuteClicked(object sender, RoutedEventArgs e) => ToggleMute();
 
     private void OnFullScreenClicked(object sender, RoutedEventArgs e) => ToggleFullScreen();
-
-    private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => ToggleFullScreen();
 
     /// <summary>영상 클릭 = 재생/일시정지 (플레이어 관례).</summary>
     private void OnSurfaceTapped(object sender, TappedRoutedEventArgs e)
