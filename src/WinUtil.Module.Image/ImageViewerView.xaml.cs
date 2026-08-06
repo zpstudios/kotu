@@ -134,6 +134,12 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
         try
         {
+            if (NeedsMagickDecode(path))
+            {
+                await LoadViaMagickAsync(path);
+                return;
+            }
+
             var file = await StorageFile.GetFileFromPathAsync(path);
             using var stream = await file.OpenAsync(FileAccessMode.Read);
 
@@ -172,6 +178,42 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             FileNameText.Text = $"Failed to load: {Path.GetFileName(path)} ({ex.Message})";
             InfoText.Text = PositionText();
         }
+    }
+
+    // ---------- Magick.NET 디코드 경로 (v0.34.0) ----------
+
+    /// <summary>WIC(BitmapImage)가 못 읽어 Magick.NET으로 디코드해야 하는 포맷.</summary>
+    private static bool NeedsMagickDecode(string path) =>
+        Path.GetExtension(path).Equals(".psd", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// psd 등을 Magick.NET으로 PNG 바이트로 변환해 표시한다. psd는 첫 이미지가
+    /// 병합(composite) 미리보기라 레이어 펼침 없이 그대로 쓴다. 디코드는 백그라운드에서.
+    /// </summary>
+    private async Task LoadViaMagickAsync(string path)
+    {
+        var (png, width, height) = await Task.Run(() =>
+        {
+            using var magick = new ImageMagick.MagickImage(path);
+            return (magick.ToByteArray(ImageMagick.MagickFormat.Png), magick.Width, magick.Height);
+        });
+
+        if (_navigator?.Current != path) return; // 그새 다른 파일로 이동함
+
+        _pixelWidth = width;
+        _pixelHeight = height;
+        _exifRotation = 0; // Magick 디코드 경로에서는 EXIF 회전을 별도 적용하지 않는다
+        using var stream = new MemoryStream(png);
+        var bitmap = new BitmapImage();
+        await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+
+        ImageControl.Source = bitmap;
+        PlaceholderText.Visibility = Visibility.Collapsed;
+        _userRotation = 0;
+        ApplyRotation();
+        Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true);
+        UpdateStatusBar();
+        ContentOpened?.Invoke(path);
     }
 
     /// <summary>EXIF orientation → 시계방향 회전 각도. 미러링 값은 회전만 근사 적용(TODO: 반전 처리).</summary>

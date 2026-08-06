@@ -7,9 +7,9 @@ namespace WinUtil.Module.Image;
 /// </summary>
 public sealed class ImageFolderNavigator
 {
-    /// <summary>이 모듈이 지원하는 확장자(소문자, 점 포함).</summary>
+    /// <summary>이 모듈이 지원하는 확장자(소문자, 점 포함). psd는 Magick.NET으로 디코드(v0.34.0).</summary>
     public static readonly IReadOnlyList<string> SupportedExtensions =
-        [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico"];
+        [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico", ".psd"];
 
     private static readonly NaturalStringComparer NameComparer = new();
 
