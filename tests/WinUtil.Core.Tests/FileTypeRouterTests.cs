@@ -10,6 +10,7 @@ public class FileTypeRouterTests
     {
         public string Id => id;
         public string DisplayName => id;
+        public string BrandName => "ZP-" + id;
         public IReadOnlyList<string> SupportedExtensions => exts;
         public object CreateView(OpenContext context) => new();
     }
