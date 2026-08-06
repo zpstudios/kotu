@@ -44,16 +44,17 @@ public sealed partial class MainWindow : Window
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
 
-    // ---- 내장 탐색기 + Alt/Ctrl 오버레이 상태 (v0.25.0, docs/explorer-plan.md) ----
+    // ---- 내장 탐색기 + Alt/Shift 오버레이 상태 (v0.25.0; 정보 오버레이 키는
+    //      v0.45.0에 Ctrl → Shift로 이동 — Ctrl은 모듈 전환 단축키가 가져갔다) ----
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·Alt 목록에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ExplorerPane? _emptyExplorer; // 빈 상태 중앙 탐색기 (지연 생성)
     private ExplorerPane? _altList;       // Alt 홀드 우측 리스트 (지연 생성)
     private bool _altHeld;
-    private bool _ctrlHeld;
-    private bool _infoPinned;             // Ctrl 2연타로 고정된 정보 오버레이
+    private bool _shiftHeld;
+    private bool _infoPinned;             // Shift 2연타로 고정된 정보 오버레이
     private bool _altPinned;              // Alt 2연타로 고정된 우측 리스트 (v0.32.0)
-    private DateTime _lastCtrlDown = DateTime.MinValue;
+    private DateTime _lastShiftDown = DateTime.MinValue;
     private DateTime _lastAltDown = DateTime.MinValue;
     private int _infoSeq;                 // 정보 로드 경쟁 방지
     private string? _infoPath;            // 정보 캐시 (파일별 1회 로드)
@@ -73,6 +74,7 @@ public sealed partial class MainWindow : Window
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
         BuildStartMenu();
+        RegisterShortcuts(); // Ctrl+` 시작 메뉴, Ctrl+숫자 모듈 전환 (v0.45.0)
         // 광고 로테이션: 메뉴가 열릴 때 현재 분 기준 이미지로 갱신 (같은 분 = 같은 이미지)
         StartFlyout.Opening += (_, _) => UpdateSponsorImage();
 
@@ -91,7 +93,7 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
-        // Alt/Ctrl 홀드 감지(v0.25.0): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서
+        // Alt/Shift 홀드 감지(v0.25.0): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서
         // handledEventsToo로 구독한다. 창 비활성화로 KeyUp을 놓치면 홀드 상태를 초기화.
         RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
@@ -183,6 +185,59 @@ public sealed partial class MainWindow : Window
         _tray.SetTooltip(title);
     }
 
+    // ---------- 단축키 (v0.45.0 사용자 지정) ----------
+
+    /// <summary>
+    /// 모듈 번호(메뉴 아래→위 순서): Ctrl+1=이미지, 2=영상, 3=문서, 4=압축, 5=하드웨어.
+    /// 힌트 문자열은 시작 메뉴 항목 마우스 오버 시 우측에 보조 표시된다.
+    /// </summary>
+    private static readonly (string Id, VirtualKey Key, string Hint)[] ModuleShortcuts =
+    [
+        ("image", VirtualKey.Number1, "Ctrl+1"),
+        ("video", VirtualKey.Number2, "Ctrl+2"),
+        ("document", VirtualKey.Number3, "Ctrl+3"),
+        ("archive", VirtualKey.Number4, "Ctrl+4"),
+        ("hardware", VirtualKey.Number5, "Ctrl+5"),
+    ];
+
+    private const string SettingsShortcutHint = "Ctrl+0";
+
+    /// <summary>Ctrl+`(1 왼쪽 키) = 시작 메뉴, Ctrl+숫자 = 모듈 전환, Ctrl+0 = Settings.</summary>
+    private void RegisterShortcuts()
+    {
+        // 액셀러레이터 키 이름 툴팁이 화면 중앙에 뜨는 WinUI 기본 동작 방지 (모듈 뷰들과 동일)
+        RootLayout.KeyboardAcceleratorPlacementMode =
+            Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
+
+        AddShortcut((VirtualKey)192, () => StartFlyout.ShowAt(StartButton)); // VK_OEM_3 = `(~)
+        foreach (var (id, key, _) in ModuleShortcuts)
+            AddShortcut(key, () => OpenModuleById(id));
+        AddShortcut(VirtualKey.Number0, () => OnSettingsClick(StartButton, new RoutedEventArgs()));
+    }
+
+    private void AddShortcut(VirtualKey key, Action action)
+    {
+        var accelerator = new KeyboardAccelerator
+        {
+            Key = key,
+            Modifiers = Windows.System.VirtualKeyModifiers.Control,
+        };
+        accelerator.Invoked += (_, e) =>
+        {
+            e.Handled = true;
+            action();
+        };
+        RootLayout.KeyboardAccelerators.Add(accelerator);
+    }
+
+    /// <summary>단축키로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호).</summary>
+    private void OpenModuleById(string id)
+    {
+        if (CurrentModuleId == id) return;
+        var module = _router.Modules.FirstOrDefault(m => m.Id == id);
+        if (module is not null) OpenModule(module);
+    }
+
     // ---------- 시작 메뉴 (하단 바에서 위로 떠오르는 플라이아웃) ----------
 
     /// <summary>
@@ -217,7 +272,8 @@ public sealed partial class MainWindow : Window
         var module = _router.Modules.FirstOrDefault(m => m.Id == moduleId);
         if (module is null) return;
 
-        var item = MakeMenuItem(module.IconGlyph, module.DisplayName);
+        var hint = ModuleShortcuts.FirstOrDefault(s => s.Id == moduleId).Hint;
+        var item = MakeMenuItem(module.IconGlyph, module.DisplayName, hint);
         item.Click += (_, _) =>
         {
             StartFlyout.Hide();
@@ -229,7 +285,7 @@ public sealed partial class MainWindow : Window
     /// <summary>시작 메뉴의 Settings 항목 — 하단 바 우측 아이콘과 같은 동작.</summary>
     private void AddSettingsItem()
     {
-        var item = MakeMenuItem("\uE713", "Settings");
+        var item = MakeMenuItem("\uE713", "Settings", SettingsShortcutHint);
         item.Click += (_, _) =>
         {
             StartFlyout.Hide();
@@ -238,21 +294,58 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(item);
     }
 
-    private static Button MakeMenuItem(string glyph, string label)
+    /// <summary>
+    /// 시작 메뉴 항목. shortcutHint("Ctrl+1" 등)가 있으면 마우스 오버 동안만
+    /// 우측 끝에 보조 표시한다(v0.45.0 — 평소엔 좁은 메뉴 폭을 라벨이 전부 쓰게).
+    /// </summary>
+    private static Button MakeMenuItem(string glyph, string label, string? shortcutHint = null)
     {
-        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        content.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16 });
-        content.Children.Add(new TextBlock { Text = label });
+        var content = new Grid { ColumnSpacing = 12 };
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        return new Button
+        content.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16 });
+        var labelText = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        Grid.SetColumn(labelText, 1);
+        content.Children.Add(labelText);
+
+        TextBlock? hintText = null;
+        if (shortcutHint is not null)
+        {
+            hintText = new TextBlock
+            {
+                Text = shortcutHint,
+                FontSize = 10,
+                Opacity = 0.55,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed,
+            };
+            Grid.SetColumn(hintText, 2);
+            content.Children.Add(hintText);
+        }
+
+        var button = new Button
         {
             Content = content,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Left,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
             Padding = new Thickness(10, 8, 10, 8),
         };
+
+        if (hintText is not null)
+        {
+            button.PointerEntered += (_, _) => hintText.Visibility = Visibility.Visible;
+            button.PointerExited += (_, _) => hintText.Visibility = Visibility.Collapsed;
+        }
+        return button;
     }
 
     private Image? _sponsorImage;
@@ -507,22 +600,22 @@ public sealed partial class MainWindow : Window
             // Alt 기본 동작(메뉴 모드 진입)과의 충돌 방지 — 오버레이가 떠 있을 때만 소비한다.
             if (AltOverlayRoot.Visibility == Visibility.Visible) e.Handled = true;
         }
-        else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
+        else if (e.Key is VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift)
         {
-            if (_ctrlHeld || e.KeyStatus.WasKeyDown) return;
-            _ctrlHeld = true;
+            if (_shiftHeld || e.KeyStatus.WasKeyDown) return;
+            _shiftHeld = true;
             if (_currentFilePath is null) return; // 콘텐츠 없으면 정보도 핀 토글도 없다
 
-            // Ctrl 2연타 = 고정 토글, 다시 2연타로 해제 (사용자 확정)
+            // Shift 2연타 = 고정 토글, 다시 2연타로 해제 (v0.45.0 — Ctrl에서 이동, UX 동일)
             var now = DateTime.UtcNow;
-            if ((now - _lastCtrlDown).TotalMilliseconds < 450)
+            if ((now - _lastShiftDown).TotalMilliseconds < 450)
             {
                 _infoPinned = !_infoPinned;
-                _lastCtrlDown = DateTime.MinValue;
+                _lastShiftDown = DateTime.MinValue;
             }
             else
             {
-                _lastCtrlDown = now;
+                _lastShiftDown = now;
             }
             UpdateInfoOverlay();
         }
@@ -536,9 +629,9 @@ public sealed partial class MainWindow : Window
             _altHeld = false;
             UpdateAltOverlay(); // 고정(_altPinned) 상태면 유지된다 (v0.32.0)
         }
-        else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
+        else if (e.Key is VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift)
         {
-            _ctrlHeld = false;
+            _shiftHeld = false;
             UpdateInfoOverlay();
         }
     }
@@ -547,7 +640,7 @@ public sealed partial class MainWindow : Window
     private void ResetKeyOverlays()
     {
         _altHeld = false;
-        _ctrlHeld = false;
+        _shiftHeld = false;
         UpdateAltOverlay();
         UpdateInfoOverlay();
     }
@@ -579,10 +672,10 @@ public sealed partial class MainWindow : Window
         AltOverlayRoot.Visibility = Visibility.Visible;
     }
 
-    /// <summary>Ctrl 홀드(또는 고정) 정보 오버레이의 표시 상태를 갱신한다.</summary>
+    /// <summary>Shift 홀드(또는 고정) 정보 오버레이의 표시 상태를 갱신한다.</summary>
     private void UpdateInfoOverlay()
     {
-        var show = (_ctrlHeld || _infoPinned) && _currentFilePath is not null;
+        var show = (_shiftHeld || _infoPinned) && _currentFilePath is not null;
         InfoOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         InfoOverlay.IsHitTestVisible = show && _infoPinned; // 고정했을 때만 스크롤 등 상호작용 허용
         InfoPinnedText.Visibility = show && _infoPinned ? Visibility.Visible : Visibility.Collapsed;
