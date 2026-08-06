@@ -22,7 +22,6 @@ public sealed partial class DocumentView : UserControl, IContentStateSource, IBo
     /// <summary>4MB 초과 텍스트는 앞부분만 표시(TextBlock 성능 보호).</summary>
     private const int MaxBytes = 4 * 1024 * 1024;
 
-    private string? _filePath;
     private int _openSeq; // 느린 읽기가 최신 열기를 덮지 않게
 
     static DocumentView() =>
@@ -64,7 +63,6 @@ public sealed partial class DocumentView : UserControl, IContentStateSource, IBo
         }
 
         if (seq != _openSeq) return; // 그새 다른 파일이 열렸다
-        _filePath = path;
         ContentText.Text = text;
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);

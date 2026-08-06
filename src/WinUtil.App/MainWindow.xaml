@@ -107,8 +107,8 @@
                 <Button.Flyout>
                     <Flyout x:Name="StartFlyout" Placement="TopEdgeAlignedLeft">
                         <!-- 항목은 코드(BuildStartMenu)에서 채운다.
-                             폭 축소(v0.35.0 사용자 요청): 광고(100×50 논리픽셀 = DPI 100% 기준
-                             100×50px) + 카드 패딩 12×2 = 124가 기준. -->
+                             폭 124(v0.35.0 사용자 요청 축소): 광고 카드(2:1 이미지가 폭을
+                             꽉 채움, v0.43.0)가 이 폭의 기준. -->
                         <StackPanel x:Name="StartMenuPanel" Width="124" />
                     </Flyout>
                 </Button.Flyout>
