@@ -33,27 +33,40 @@
         <Grid x:Name="ExplorerHost" Grid.Row="0" Visibility="Collapsed"
               Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
 
-        <!-- Alt 홀드 오버레이 (v0.25.0): 우측 30%에 현재 파일 폴더의 리스트 뷰 -->
+        <!-- Alt 홀드 오버레이 (v0.25.0): 우측 30%에 현재 파일 폴더의 리스트 뷰.
+             배경은 반투명 인앱 아크릴(v0.31.0) — 오버레이답게 아래 콘텐츠가 비쳐 보인다.
+             Alt 2연타로 고정/해제(v0.32.0, Ctrl 정보 오버레이와 동일 패턴). -->
         <Grid x:Name="AltOverlayRoot" Grid.Row="0" Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="7*" />
                 <ColumnDefinition Width="3*" />
             </Grid.ColumnDefinitions>
             <Border Grid.Column="1"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    Background="{ThemeResource AcrylicInAppFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                     BorderThickness="1,0,0,0">
-                <ContentControl x:Name="AltListHost" IsTabStop="False"
-                                HorizontalContentAlignment="Stretch"
-                                VerticalContentAlignment="Stretch" />
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <ContentControl x:Name="AltListHost" IsTabStop="False"
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Stretch" />
+                    <TextBlock x:Name="AltPinnedText" Grid.Row="1"
+                               Text="Pinned — press Alt twice to unpin"
+                               Visibility="Collapsed" FontSize="11" Opacity="0.6"
+                               Margin="12,4,12,8" />
+                </Grid>
             </Border>
         </Grid>
 
-        <!-- Ctrl 홀드 정보 오버레이 (v0.25.0): 좌측에 현재 콘텐츠 정보. Ctrl 2연타로 고정/해제 -->
+        <!-- Ctrl 홀드 정보 오버레이 (v0.25.0): 좌측에 현재 콘텐츠 정보. Ctrl 2연타로 고정/해제.
+             배경은 반투명 인앱 아크릴(v0.31.0). -->
         <Border x:Name="InfoOverlay" Grid.Row="0" Visibility="Collapsed"
                 HorizontalAlignment="Left" VerticalAlignment="Stretch"
                 MinWidth="300" MaxWidth="440"
-                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                Background="{ThemeResource AcrylicInAppFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0,0,1,0"
                 Padding="16" IsHitTestVisible="False">
