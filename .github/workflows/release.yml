@@ -88,7 +88,7 @@ jobs:
           # 스플래시(미션 스테이트먼트) + Setup/Update 다이얼로그 아이콘
           vpk pack --packId ZP --packVersion ${{ steps.ver.outputs.version }} `
                    --packDir $publishDir --mainExe WinUtil.App.exe `
-                   --packTitle ZP --packAuthors "ZP Labs" --outputDir vpk_out `
+                   --packTitle ZP --packAuthors "ZP Studios" --outputDir vpk_out `
                    --splashImage packaging/splash.png --icon src/WinUtil.App/Assets/app.ico
           if ($LASTEXITCODE -ne 0) { Write-Error "vpk pack 실패"; exit 1 }
           Get-ChildItem vpk_out | ForEach-Object { Write-Host ("생성됨: " + $_.Name) }
