@@ -10,6 +10,19 @@ internal static class Branding
 {
     public const string AppName = "ZP";
 
+    /// <summary>
+    /// 모듈별 액센트 색(현재 모드 시각 표시, v0.20.0). 하단 바 스트립·모드 칩에서 사용.
+    /// 라이트/다크 어느 배경에서도 읽히는 중간 톤으로 고른다. 미등록 ID는 null(중립).
+    /// </summary>
+    public static Windows.UI.Color? ModuleAccent(string? moduleId) => moduleId switch
+    {
+        "archive" => Windows.UI.Color.FromArgb(0xFF, 0xC7, 0x7E, 0x1F), // amber  — ZP-zip
+        "image" => Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x9E, 0x5B), // green  — ZP-image
+        "video" => Windows.UI.Color.FromArgb(0xFF, 0xD6, 0x49, 0x4F), // red    — ZP-video
+        "hardware" => Windows.UI.Color.FromArgb(0xFF, 0x38, 0x74, 0xD8), // blue   — ZP-info
+        _ => null,
+    };
+
     public const string MissionStatement =
         "• No bloat. Ever.\n" +
         "• Crucial features only — easy to use.\n" +

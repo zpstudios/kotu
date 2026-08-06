@@ -188,6 +188,7 @@ public sealed partial class MainWindow : Window
         ModuleHost.Content = new SettingsView(_router);
         CurrentModuleId = null;
         IsUntouched = false;
+        UpdateModeIndicator(null, isSettings: true);
     }
 
     // ---------- 파일 열기 ----------
@@ -206,6 +207,7 @@ public sealed partial class MainWindow : Window
             };
             CurrentModuleId = null;
             IsUntouched = false;
+            UpdateModeIndicator(null);
             return;
         }
         SetTitle(Path.GetFileName(path) + " — ZP");
@@ -253,6 +255,54 @@ public sealed partial class MainWindow : Window
         ModuleHost.Content = (UIElement)module.CreateView(context);
         CurrentModuleId = module.Id;
         IsUntouched = false;
+        UpdateModeIndicator(module);
+    }
+
+    // ---------- 현재 모드 시각 표시 (v0.20.0) ----------
+
+    /// <summary>
+    /// 하단 바의 모드 표시 갱신: 모듈이면 액센트 스트립(3px) + 칩(글리프·브랜드명)을
+    /// 모듈 색으로, 설정이면 중립(테마 전경색) 칩만, 그 외(빈 셸·미지원 파일)는 모두 숨긴다.
+    /// 창이 여러 개일 때 어느 창이 무슨 모드인지 색만으로 구분되게 하는 것이 목적.
+    /// </summary>
+    private void UpdateModeIndicator(IModule? module, bool isSettings = false)
+    {
+        if (module is null && !isSettings)
+        {
+            ModeStrip.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            ModeChip.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ModeChip.Visibility = Visibility.Visible;
+
+        if (isSettings || module is null)
+        {
+            ModeStrip.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            ModeChipIcon.Glyph = "\uE713"; // Settings gear
+            ModeChipIcon.ClearValue(IconElement.ForegroundProperty);
+            ModeChipText.Text = "Settings";
+            ModeChipText.ClearValue(TextBlock.ForegroundProperty);
+            return;
+        }
+
+        var accent = Branding.ModuleAccent(module.Id);
+        var brush = accent is { } c
+            ? new SolidColorBrush(c)
+            : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        ModeStrip.Background = brush;
+        ModeChipIcon.Glyph = module.IconGlyph;
+        ModeChipText.Text = module.BrandName;
+        if (accent is { } color)
+        {
+            ModeChipIcon.Foreground = new SolidColorBrush(color);
+            ModeChipText.Foreground = new SolidColorBrush(color);
+        }
+        else
+        {
+            ModeChipIcon.ClearValue(IconElement.ForegroundProperty);
+            ModeChipText.ClearValue(TextBlock.ForegroundProperty);
+        }
     }
 
     public void BringToFront()
