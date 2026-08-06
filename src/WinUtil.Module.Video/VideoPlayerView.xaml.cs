@@ -119,13 +119,13 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private bool _playerHasVisualizer;     // 현재 인스턴스가 파형 시각화 켜진 상태인지 (_player != null일 때만 유효)
     private readonly SemaphoreSlim _playerGate = new(1, 1); // 플레이어 교체 직렬화
     private List<string> _subtitleFiles = [];
+    private int _subtitleIndex; // 0 = 끔, 1부터 _subtitleFiles[i-1] (v0.53.0 콤보 → 플라이아웃)
     private long _durationMs;
     private long _lastReportedMs;
     private long _pendingResumeMs = -1;
     private bool _pendingAutoSubtitle;
     private bool _suppressSeekEvent;
     private bool _suppressVolumeEvent;
-    private bool _suppressSubtitleEvent;
     private bool _tornDown;
 
     public VideoPlayerView(OpenContext context, ISettingsService settings)
@@ -137,12 +137,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         foreach (var s in Speeds)
             SpeedBox.Items.Add($"{s:0.##}×");
-        _suppressSubtitleEvent = true;
         SpeedBox.SelectedIndex = Array.IndexOf(Speeds, 1.0f);
-        SubtitleBox.Items.Add("No subtitles");
-        SubtitleBox.SelectedIndex = 0;
-        SubtitleBox.IsEnabled = false;
-        _suppressSubtitleEvent = false;
+        FillSubtitleFlyout(); // "No subtitles"만 있는 초기 상태
 
         _suppressVolumeEvent = true;
         VolumeSlider.Value = Math.Clamp(_settings.Get("video.volume", 80), 0, 100);
@@ -455,7 +451,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (_pendingAutoSubtitle)
         {
             _pendingAutoSubtitle = false;
-            ApplySubtitle(SubtitleBox.SelectedIndex);
+            ApplySubtitle(_subtitleIndex);
         }
 
         // 배속은 미디어가 바뀌면 초기화되므로 콤보의 현재 선택을 다시 적용한다(같은 값 재적용은 무해).
@@ -518,7 +514,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         var file = _filePath!;
         _subtitleFiles = [];
         _pendingAutoSubtitle = false;
-        FillSubtitleBox();
+        FillSubtitleFlyout();
 
         List<string> found;
         try
@@ -533,27 +529,44 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (_tornDown || file != _filePath) return; // 그새 다른 파일로 전환됨
 
         _subtitleFiles = found;
-        FillSubtitleBox();
+        FillSubtitleFlyout();
 
         if (found.Count > 0)
         {
             // 이미 재생 중이면 바로 적용, 아니면 Playing 이벤트에서 적용하도록 예약.
-            if (_player is { IsPlaying: true }) ApplySubtitle(SubtitleBox.SelectedIndex);
+            if (_player is { IsPlaying: true }) ApplySubtitle(_subtitleIndex);
             else _pendingAutoSubtitle = true;
         }
     }
 
-    /// <summary>현재 _subtitleFiles로 자막 콤보를 다시 채운다(첫 후보 자동 선택).</summary>
-    private void FillSubtitleBox()
+    /// <summary>
+    /// 현재 _subtitleFiles로 자막 플라이아웃을 다시 채운다(첫 후보 자동 선택).
+    /// v0.53.0: 넓은 콤보 대신 아이콘 버튼 + 라디오 플라이아웃으로 공간 절약.
+    /// </summary>
+    private void FillSubtitleFlyout()
     {
-        _suppressSubtitleEvent = true;
-        SubtitleBox.Items.Clear();
-        SubtitleBox.Items.Add("No subtitles");
-        foreach (var s in _subtitleFiles)
-            SubtitleBox.Items.Add(Path.GetFileName(s));
-        SubtitleBox.IsEnabled = _subtitleFiles.Count > 0;
-        SubtitleBox.SelectedIndex = _subtitleFiles.Count > 0 ? 1 : 0;
-        _suppressSubtitleEvent = false;
+        _subtitleIndex = _subtitleFiles.Count > 0 ? 1 : 0;
+        SubtitleFlyout.Items.Clear();
+        AddSubtitleChoice("No subtitles", 0);
+        for (var i = 0; i < _subtitleFiles.Count; i++)
+            AddSubtitleChoice(Path.GetFileName(_subtitleFiles[i]), i + 1);
+        SubtitleButton.IsEnabled = _subtitleFiles.Count > 0;
+    }
+
+    private void AddSubtitleChoice(string label, int index)
+    {
+        var item = new RadioMenuFlyoutItem
+        {
+            Text = label,
+            GroupName = "subtitles",
+            IsChecked = index == _subtitleIndex,
+        };
+        item.Click += (_, _) =>
+        {
+            _subtitleIndex = index;
+            ApplySubtitle(index);
+        };
+        SubtitleFlyout.Items.Add(item);
     }
 
     /// <summary>
@@ -806,12 +819,6 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     {
         if (_player is { } p && SpeedBox.SelectedIndex is >= 0 and var i && i < Speeds.Length)
             p.SetRate(Speeds[i]);
-    }
-
-    private void OnSubtitleChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppressSubtitleEvent) return;
-        ApplySubtitle(SubtitleBox.SelectedIndex);
     }
 
     private void OnTogglePlayInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)

@@ -56,9 +56,12 @@
                 <TextBlock Grid.Column="4" Text="200 ms" FontSize="12" Opacity="0.6"
                            VerticalAlignment="Center"
                            ToolTipService.ToolTip="Auto-refresh interval" />
-                <!-- 폭 48 = 다른 모듈 ⛶와 통일 (v0.49.0 기준) -->
-                <Button Grid.Column="5" Width="48" Content="⛶" Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen dashboard (F11)" />
+                <!-- 40×40 정사각 아이콘 = 다른 모듈 ⛶와 통일 (v0.53.0) -->
+                <Button Grid.Column="5" Width="40" Height="40" Padding="4"
+                        Click="OnFullScreenButtonClick"
+                        ToolTipService.ToolTip="Full screen dashboard (F11)">
+                    <FontIcon Glyph="&#xE740;" FontSize="18" />
+                </Button>
             </Grid>
         </Border>
     </Grid>

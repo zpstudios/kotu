@@ -98,25 +98,41 @@
             <!-- 배속 콤보는 압축 표시(v0.49.0 사용자 요청 — 공간 절약) -->
             <ComboBox x:Name="SpeedBox" Grid.Column="7" MinWidth="60"
                       ToolTipService.ToolTip="Playback speed" SelectionChanged="OnSpeedChanged" />
-            <ComboBox x:Name="SubtitleBox" Grid.Column="8" MinWidth="120"
-                      ToolTipService.ToolTip="Subtitles" SelectionChanged="OnSubtitleChanged" />
-            <!-- 우측 기능 순서(v0.41.0 사용자 지정): 1:1 → Auto-fit(방향 선택) → 전체화면.
-                 폭·간격은 이미지/문서 모듈과 고정 통일(v0.49.0) — 모듈 전환 시 위치가 안 흔들리게.
-                 이 바는 ColumnSpacing=10이라 이미지 모듈의 Margin 10과 같은 간격이 된다. -->
-            <Button Grid.Column="9" Width="48" Content="1:1"
+            <!-- 자막: 콤보 → 아이콘 버튼 + 라디오 플라이아웃 (v0.53.0 사용자 요청 — 공간 절약) -->
+            <Button x:Name="SubtitleButton" Grid.Column="8" Width="40" Height="40" Padding="4"
+                    IsEnabled="False" ToolTipService.ToolTip="Subtitles">
+                <FontIcon Glyph="&#xE190;" FontSize="18" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="SubtitleFlyout" Placement="Top" />
+                </Button.Flyout>
+            </Button>
+            <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): 1:1·전체화면 = 40×40 정사각 1칸,
+                 Auto-fit = 2칸 폭(90) + 핏 옵션 전부 아이콘. 이미지/문서 모듈과 동일 규격. -->
+            <Button Grid.Column="9" Width="40" Height="40" Padding="0" Content="1:1" FontSize="13"
                     ToolTipService.ToolTip="Actual size (100%)" Click="OnActualSizeClicked" />
             <!-- 기본 클릭 = 자동 맞춤(긴 변이 잘리지 않는 레터박스). 화살표로 좌우/상하 채움 선택 -->
-            <SplitButton Grid.Column="10" Width="120" Content="Auto-fit" Click="OnFitClicked"
+            <SplitButton Grid.Column="10" Width="90" Height="40" Click="OnFitClicked"
                          ToolTipService.ToolTip="Auto-fit to window — long edge fits, nothing cropped">
+                <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                 <SplitButton.Flyout>
                     <MenuFlyout Placement="Top">
-                        <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClicked" />
-                        <MenuFlyoutItem Text="Fit height" Click="OnFitHeightClicked" />
+                        <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClicked">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8AB;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Fit height" Click="OnFitHeightClicked">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8CB;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
                     </MenuFlyout>
                 </SplitButton.Flyout>
             </SplitButton>
-            <Button Grid.Column="11" Width="48" Content="⛶"
-                    ToolTipService.ToolTip="Full screen (Enter)" Click="OnFullScreenClicked" />
+            <Button Grid.Column="11" Width="40" Height="40" Padding="4"
+                    ToolTipService.ToolTip="Full screen (Enter)" Click="OnFullScreenClicked">
+                <FontIcon Glyph="&#xE740;" FontSize="18" />
+            </Button>
         </Grid>
     </Grid>
 </UserControl>

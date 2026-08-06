@@ -93,43 +93,54 @@
                     Grid.Column="3"
                     Margin="12,0"
                     VerticalAlignment="Center" />
+                <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·1:1·전체화면 = 40×40 정사각 1칸
+                     (패딩 4로 아이콘 꽉 차게), Auto-fit = 2칸 폭(90) + 핏 옵션 전부 아이콘. -->
                 <Button
                     Grid.Column="4"
-                    Content="Rotate"
+                    Width="40" Height="40" Padding="4"
                     Click="OnRotateButtonClick"
-                    ToolTipService.ToolTip="Rotate 90° clockwise (R)" />
-                <!-- 우측 기능 순서(v0.41.0 사용자 지정): 1:1 → Auto-fit(방향 선택) → 전체화면.
-                     폭·간격은 영상/문서 모듈과 고정 통일(v0.49.0) — 모듈 전환 시 위치가 안 흔들리게. -->
+                    ToolTipService.ToolTip="Rotate 90° clockwise (R)">
+                    <FontIcon Glyph="&#xE7AD;" FontSize="18" />
+                </Button>
                 <Button
                     Grid.Column="5"
                     Margin="10,0,0,0"
-                    Width="48"
+                    Width="40" Height="40" Padding="0"
                     Content="1:1"
+                    FontSize="13"
                     Click="OnActualSizeClick"
                     ToolTipService.ToolTip="Actual size (100%)" />
                 <!-- 기본 클릭 = 자동 맞춤(긴 변이 잘리지 않게). 화살표로 좌우/상하 채움 선택 -->
                 <SplitButton
                     Grid.Column="6"
                     Margin="10,0,0,0"
-                    Width="120"
-                    Content="Auto-fit"
+                    Width="90" Height="40"
                     Click="OnFitClick"
                     ToolTipService.ToolTip="Auto-fit to window — long edge fits, nothing cropped">
+                    <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     <SplitButton.Flyout>
                         <MenuFlyout Placement="Top">
-                            <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClick" />
-                            <MenuFlyoutItem Text="Fit height" Click="OnFitHeightClick" />
+                            <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClick">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8AB;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Fit height" Click="OnFitHeightClick">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8CB;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                         </MenuFlyout>
                     </SplitButton.Flyout>
                 </SplitButton>
-                <!-- 전체화면 전환 아이콘 (v0.29.0 사용자 요청) — 동영상 트랜스포트 바와 동일한 ⛶ -->
                 <Button
                     Grid.Column="7"
                     Margin="10,0,0,0"
-                    Width="48"
-                    Content="⛶"
+                    Width="40" Height="40" Padding="4"
                     Click="OnFullScreenButtonClick"
-                    ToolTipService.ToolTip="Full screen (Enter)" />
+                    ToolTipService.ToolTip="Full screen (Enter)">
+                    <FontIcon Glyph="&#xE740;" FontSize="18" />
+                </Button>
             </Grid>
         </Border>
     </Grid>

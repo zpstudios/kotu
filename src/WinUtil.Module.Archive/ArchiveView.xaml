@@ -131,8 +131,12 @@
                              Visibility="Collapsed" />
                 <Button x:Name="CancelButton" Grid.Column="4" Content="Cancel"
                         Click="OnCancelClick" Visibility="Collapsed" VerticalAlignment="Center" />
-                <Button Grid.Column="5" Content="⛶" Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen (F11)" />
+                <!-- 40×40 정사각 아이콘 = 이미지/영상 ⛶와 통일 (v0.53.0) -->
+                <Button Grid.Column="5" Width="40" Height="40" Padding="4"
+                        Click="OnFullScreenButtonClick"
+                        ToolTipService.ToolTip="Full screen (F11)">
+                    <FontIcon Glyph="&#xE740;" FontSize="18" />
+                </Button>
             </Grid>
         </Border>
     </Grid>

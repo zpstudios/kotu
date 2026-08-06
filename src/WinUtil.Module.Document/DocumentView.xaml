@@ -51,9 +51,12 @@
                 <!-- 현재 문서가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
                 <TextBlock x:Name="DriveInfoText" Grid.Column="2" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.6" />
-                <!-- 폭 48 = 이미지/영상 ⛶와 통일 (v0.49.0) -->
-                <Button Grid.Column="3" Width="48" Content="⛶" Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen (F11)" />
+                <!-- 40×40 정사각 아이콘 = 이미지/영상 ⛶와 통일 (v0.53.0) -->
+                <Button Grid.Column="3" Width="40" Height="40" Padding="4"
+                        Click="OnFullScreenButtonClick"
+                        ToolTipService.ToolTip="Full screen (F11)">
+                    <FontIcon Glyph="&#xE740;" FontSize="18" />
+                </Button>
             </Grid>
         </Border>
     </Grid>
