@@ -35,7 +35,9 @@ public sealed partial class MainWindow : Window
     private bool _altHeld;
     private bool _ctrlHeld;
     private bool _infoPinned;             // Ctrl 2연타로 고정된 정보 오버레이
+    private bool _altPinned;              // Alt 2연타로 고정된 우측 리스트 (v0.32.0)
     private DateTime _lastCtrlDown = DateTime.MinValue;
+    private DateTime _lastAltDown = DateTime.MinValue;
     private int _infoSeq;                 // 정보 로드 경쟁 방지
     private string? _infoPath;            // 정보 캐시 (파일별 1회 로드)
     private string? _infoText;
@@ -439,7 +441,20 @@ public sealed partial class MainWindow : Window
             if (!_altHeld && !e.KeyStatus.WasKeyDown)
             {
                 _altHeld = true;
-                ShowAltOverlay();
+
+                // Alt 2연타 = 고정 토글, 다시 2연타로 해제 (v0.32.0 — Ctrl 정보 오버레이와 동일 UX).
+                // 고정하면 키를 놓거나 창 활성화를 뺏겨도(화면 공유 컨트롤 등) 리스트가 유지된다.
+                var now = DateTime.UtcNow;
+                if ((now - _lastAltDown).TotalMilliseconds < 450)
+                {
+                    _altPinned = !_altPinned;
+                    _lastAltDown = DateTime.MinValue;
+                }
+                else
+                {
+                    _lastAltDown = now;
+                }
+                UpdateAltOverlay();
             }
             // Alt 기본 동작(메뉴 모드 진입)과의 충돌 방지 — 오버레이가 떠 있을 때만 소비한다.
             if (AltOverlayRoot.Visibility == Visibility.Visible) e.Handled = true;
@@ -471,7 +486,7 @@ public sealed partial class MainWindow : Window
         {
             if (_altHeld) e.Handled = true;
             _altHeld = false;
-            AltOverlayRoot.Visibility = Visibility.Collapsed;
+            UpdateAltOverlay(); // 고정(_altPinned) 상태면 유지된다 (v0.32.0)
         }
         else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
         {
@@ -485,8 +500,18 @@ public sealed partial class MainWindow : Window
     {
         _altHeld = false;
         _ctrlHeld = false;
-        AltOverlayRoot.Visibility = Visibility.Collapsed;
+        UpdateAltOverlay();
         UpdateInfoOverlay();
+    }
+
+    /// <summary>Alt 홀드(또는 2연타 고정) 리스트 오버레이의 표시 상태를 갱신한다 (v0.32.0).</summary>
+    private void UpdateAltOverlay()
+    {
+        var show = (_altHeld || _altPinned) && _currentFilePath is not null;
+        if (show) ShowAltOverlay();
+        else AltOverlayRoot.Visibility = Visibility.Collapsed;
+        AltPinnedText.Visibility = AltOverlayRoot.Visibility == Visibility.Visible && _altPinned
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Alt 홀드: 현재 파일이 있는 폴더의 리스트 뷰를 우측 30%에 띄운다(콘텐츠 로딩 후에만).</summary>
