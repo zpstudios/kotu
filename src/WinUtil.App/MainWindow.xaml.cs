@@ -338,16 +338,19 @@ public sealed partial class MainWindow : Window
         {
             CornerRadius = new CornerRadius(8),
             Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
-            MinHeight = 50,
+            Padding = new Thickness(2),
+            MinHeight = 60,
         };
 
         if (SponsorAds.Any)
         {
-            // 광고 규격은 2:1(100×50) 유지 — 카드 폭(메뉴 124)에 맞춰 비율대로 커진다.
+            // 광고 표시 규격 120×60 (v0.54.0 사용자 확대 지시 — 원본 2:1 비율 유지 확대)
             _sponsorImage = new Image
             {
+                Width = 120,
+                Height = 60,
                 Stretch = Stretch.Uniform,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
             SponsorAds.Apply(_sponsorImage);
