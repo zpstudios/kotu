@@ -21,6 +21,7 @@ internal static class Branding
         "image" => Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x9E, 0x5B), // green  — ZP-image
         "video" => Windows.UI.Color.FromArgb(0xFF, 0xD6, 0x49, 0x4F), // red    — ZP-video
         "hardware" => Windows.UI.Color.FromArgb(0xFF, 0x38, 0x74, 0xD8), // blue   — ZP-info
+        "document" => Windows.UI.Color.FromArgb(0xFF, 0x7A, 0x5A, 0xC8), // purple — ZP-doc (아이콘 생성 시 이 색 사용)
         _ => null,
     };
 

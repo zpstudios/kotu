@@ -206,7 +206,7 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(Divider());
 
         // 사진-영상-문서 그룹 (아래부터 사진 → 위로 갈수록 문서)
-        AddDocumentPlaceholder();
+        AddModuleItem("document"); // v0.44.0 실제 모듈로 교체 (텍스트·마크다운 1단계)
         AddModuleItem("video");
         AddModuleItem("image");
         // 하단 바 우측 Info·Settings 아이콘은 제거(v0.28.2) — 시작 메뉴 항목으로 일원화.
@@ -235,15 +235,6 @@ public sealed partial class MainWindow : Window
             StartFlyout.Hide();
             OnSettingsClick(item, new RoutedEventArgs());
         };
-        StartMenuPanel.Children.Add(item);
-    }
-
-    /// <summary>문서 모듈 자리(마크다운·PDF·HWP 등 예정) — 메뉴 배치를 먼저 확정해 둔다.</summary>
-    private void AddDocumentPlaceholder()
-    {
-        var item = MakeMenuItem("", "Documents");
-        item.IsEnabled = false;
-        ToolTipService.SetToolTip(item, "Coming soon — Markdown, PDF, HWP, and more");
         StartMenuPanel.Children.Add(item);
     }
 
@@ -472,7 +463,7 @@ public sealed partial class MainWindow : Window
     private void UpdateEmptyExplorer()
     {
         if (_currentFilePath is null &&
-            _currentModule is { Id: "archive" or "image" or "video" } module)
+            _currentModule is { Id: "archive" or "image" or "video" or "document" } module)
         {
             if (_emptyExplorer is null)
             {
@@ -686,6 +677,8 @@ public sealed partial class MainWindow : Window
             "image" => "app-image.ico",
             "video" => "app-video.ico",
             "hardware" => "app-hardware.ico",
+            "document" => "app-document.ico", // 아직 미생성 — 아래 File.Exists로 중립 아이콘 대체
+
             _ => "app.ico", // 빈 셸·설정·미지원 파일 = 중립(브랜드 색)
         };
         var path = Path.Combine(AppContext.BaseDirectory, "Assets", name);

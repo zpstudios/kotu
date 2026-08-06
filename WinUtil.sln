@@ -22,6 +22,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Hardware", "
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Hardware.Tests", "tests\WinUtil.Module.Hardware.Tests\WinUtil.Module.Hardware.Tests.csproj", "{A1000000-0000-0000-0000-00000000000B}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinUtil.Module.Document", "src\WinUtil.Module.Document\WinUtil.Module.Document.csproj", "{A1000000-0000-0000-0000-00000000000C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -72,5 +74,9 @@ Global
 		{A1000000-0000-0000-0000-00000000000B}.Debug|x64.Build.0 = Debug|x64
 		{A1000000-0000-0000-0000-00000000000B}.Release|x64.ActiveCfg = Release|x64
 		{A1000000-0000-0000-0000-00000000000B}.Release|x64.Build.0 = Release|x64
+		{A1000000-0000-0000-0000-00000000000C}.Debug|x64.ActiveCfg = Debug|x64
+		{A1000000-0000-0000-0000-00000000000C}.Debug|x64.Build.0 = Debug|x64
+		{A1000000-0000-0000-0000-00000000000C}.Release|x64.ActiveCfg = Release|x64
+		{A1000000-0000-0000-0000-00000000000C}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 EndGlobal

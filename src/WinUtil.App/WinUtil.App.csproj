@@ -55,6 +55,7 @@
     <ProjectReference Include="..\WinUtil.Module.Archive\WinUtil.Module.Archive.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Video\WinUtil.Module.Video.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Hardware\WinUtil.Module.Hardware.csproj" />
+    <ProjectReference Include="..\WinUtil.Module.Document\WinUtil.Module.Document.csproj" />
   </ItemGroup>
 
   <!--
