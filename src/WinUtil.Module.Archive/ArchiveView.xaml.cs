@@ -50,6 +50,7 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
     }
 
     private readonly IArchiveBackend _backend = new SevenZipBackend();
+    private readonly WinUtil.Core.Settings.ISettingsService _settings;
     private readonly string? _initialFile;
     private readonly IReadOnlyList<string> _initialArgs;
     private readonly Stack<ArchiveEntryNode> _navStack = new();
@@ -64,9 +65,10 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
 
     public ObservableCollection<ArchiveRow> Rows { get; } = [];
 
-    public ArchiveView(OpenContext context)
+    public ArchiveView(OpenContext context, WinUtil.Core.Settings.ISettingsService settings)
     {
         InitializeComponent();
+        _settings = settings;
         _initialFile = context.FilePath;
         _initialArgs = context.Arguments;
         Loaded += OnLoaded;
@@ -227,6 +229,10 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
         WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
         var folder = await picker.PickSingleFolderAsync();
         if (folder is null) return;
+
+        // 마지막 풀기(저장) 위치를 설정에 기억 (v0.55.0 사용자 요청)
+        _settings.Set("archive.lastExtractDir", folder.Path);
+        _settings.Save();
 
         if (await ExtractWithRetryAsync(folder.Path, SelectedEntryPaths(), "Extracting..."))
         {

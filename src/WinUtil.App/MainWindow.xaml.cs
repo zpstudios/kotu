@@ -55,6 +55,7 @@ public sealed partial class MainWindow : Window
         _settings = App.Services.GetRequiredService<ISettingsService>();
         BuildStartMenu();
         RegisterShortcuts(); // Ctrl+` 시작 메뉴, Ctrl+숫자 모듈 전환 (v0.45.0)
+        RestoreWindowSize(); // 마지막 창 크기 복원 + 닫을 때 저장 (v0.55.0)
         // 광고 로테이션: 메뉴가 열릴 때 현재 분 기준 이미지로 갱신 (같은 분 = 같은 이미지)
         StartFlyout.Opening += (_, _) => UpdateSponsorImage();
 
@@ -163,6 +164,40 @@ public sealed partial class MainWindow : Window
     {
         Title = title;
         _tray.SetTooltip(title);
+    }
+
+    // ---------- 창 크기 저장/복원 (v0.55.0 사용자 요청) ----------
+
+    /// <summary>마지막으로 닫힌 창의 크기(물리 픽셀)를 복원한다. 저장값이 없으면 기본 크기.</summary>
+    private void RestoreWindowSize()
+    {
+        var w = _settings.Get("window.width", 0);
+        var h = _settings.Get("window.height", 0);
+        if (w >= 320 && h >= 240)
+        {
+            try { AppWindow.Resize(new Windows.Graphics.SizeInt32(w, h)); }
+            catch { /* 모니터 구성이 바뀌었어도 열리기는 해야 한다 */ }
+        }
+        Closed += (_, _) => SaveWindowSize();
+    }
+
+    /// <summary>전체화면·최대화 상태는 저장하지 않는다 — 다음 실행이 이상한 크기로 열리지 않게.</summary>
+    private void SaveWindowSize()
+    {
+        try
+        {
+            if (AppWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) return;
+            if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter { State: Microsoft.UI.Windowing.OverlappedPresenterState.Maximized }) return;
+            var size = AppWindow.Size;
+            if (size.Width < 320 || size.Height < 240) return;
+            _settings.Set("window.width", size.Width);
+            _settings.Set("window.height", size.Height);
+            _settings.Save();
+        }
+        catch
+        {
+            // 저장 실패가 종료를 막으면 안 된다.
+        }
     }
 
     // ---------- 단축키 (v0.45.0 사용자 지정) ----------
@@ -508,8 +543,19 @@ public sealed partial class MainWindow : Window
         _currentFilePath = filePath;
         _infoPath = null;
         _infoText = null;
+        RememberLastFolder(); // 모듈별 마지막 폴더 저장 (v0.55.0)
         UpdateEmptyExplorer();
         ResetKeyOverlays();
+    }
+
+    /// <summary>현재 파일의 폴더를 모듈별 설정("lastFolder.{id}")에 기억한다 (v0.55.0).</summary>
+    private void RememberLastFolder()
+    {
+        if (_currentModule is null || _currentFilePath is null) return;
+        if (Path.GetDirectoryName(_currentFilePath) is not { Length: > 0 } folder) return;
+        if (_settings.Get($"lastFolder.{_currentModule.Id}", string.Empty) == folder) return;
+        _settings.Set($"lastFolder.{_currentModule.Id}", folder);
+        _settings.Save();
     }
 
     /// <summary>모듈 뷰가 파일을 열었다는 알림(IContentStateSource) — 탐색기를 내리고 기준 경로 갱신.</summary>
@@ -518,14 +564,16 @@ public sealed partial class MainWindow : Window
         _currentFilePath = path;
         _infoPath = null;
         _infoText = null;
+        RememberLastFolder(); // v0.55.0
         UpdateEmptyExplorer();
         if (AltOverlayRoot.Visibility == Visibility.Visible) ShowAltOverlay(); // 폴더가 바뀌었을 수 있다
         if (InfoOverlay.Visibility == Visibility.Visible) UpdateInfoOverlay();
     }
 
     /// <summary>
-    /// 빈 상태(파일 없이 연 압축/이미지/동영상 모듈)면 중앙에 탐색기를 띄운다.
-    /// 시작 위치는 바탕화면, 파일은 담당 확장자만(사용자 확정). Hardware/Settings에는 띄우지 않는다.
+    /// 빈 상태(파일 없이 연 압축/이미지/동영상/문서 모듈)면 중앙에 탐색기를 띄운다.
+    /// 시작 위치는 그 모듈의 마지막 폴더(v0.55.0, 없으면 바탕화면), 파일은 담당 확장자만.
+    /// Hardware/Settings에는 띄우지 않는다.
     /// </summary>
     private void UpdateEmptyExplorer()
     {
@@ -538,9 +586,10 @@ public sealed partial class MainWindow : Window
                 _emptyExplorer.FileActivated += OpenFile;
                 ExplorerHost.Children.Add(_emptyExplorer);
             }
-            _emptyExplorer.NavigateTo(
-                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                module.SupportedExtensions);
+            var start = _settings.Get($"lastFolder.{module.Id}", string.Empty);
+            if (string.IsNullOrEmpty(start) || !Directory.Exists(start))
+                start = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            _emptyExplorer.NavigateTo(start, module.SupportedExtensions);
             ExplorerHost.Visibility = Visibility.Visible;
         }
         else
