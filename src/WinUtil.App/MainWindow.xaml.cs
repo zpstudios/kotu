@@ -252,9 +252,12 @@ public sealed partial class MainWindow : Window
 
         if (File.Exists(SponsorLogoPath))
         {
+            // 광고 규격(v0.35.0 사용자 확정): 논리 100×50 = DPI 100%에서 100×50px.
+            // 고DPI에서는 시스템 배율만큼 자동 확대된다. 로고는 박스 안에 Uniform으로 맞춘다.
             panel.Children.Add(new Image
             {
-                Height = 44,
+                Width = 100,
+                Height = 50,
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(SponsorLogoPath)),
