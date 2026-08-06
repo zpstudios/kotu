@@ -3,9 +3,11 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     IsTabStop="True"
+    KeyboardAcceleratorPlacementMode="Hidden"
     DoubleTapped="OnDoubleTapped">
 
-    <!-- 단축키: ←/→ 탐색, R 회전, Delete 휴지통 삭제, F11 전체화면 -->
+    <!-- 단축키: ←/→ 탐색, R 회전, Delete 휴지통 삭제, F11 전체화면.
+         PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Left" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Left" Invoked="OnPreviousInvoked" />
         <KeyboardAccelerator Key="Right" Invoked="OnNextInvoked" />
