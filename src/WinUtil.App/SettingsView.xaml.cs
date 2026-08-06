@@ -1,28 +1,34 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WinUtil.App.Integration;
 using WinUtil.Core.Contracts;
 using WinUtil.Core.Routing;
+using WinUtil.Core.Settings;
 
 namespace WinUtil.App;
 
 /// <summary>
-/// 설정 페이지. 탐색기 통합(파일 연결·우클릭 메뉴)을 모듈별로 켜고 끈다.
-/// 모든 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
+/// 설정 페이지. UI 스케일(v0.24.0), 탐색기 통합(파일 연결·우클릭 메뉴)을 관리한다.
+/// 탐색기 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
 /// </summary>
 public sealed partial class SettingsView : UserControl
 {
     private readonly TextBlock _status = new() { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
+    private readonly ISettingsService _settings;
     private bool _suppressToggle;
 
     public SettingsView(FileTypeRouter router)
     {
         InitializeComponent();
+        _settings = App.Services.GetRequiredService<ISettingsService>();
         Build(router);
     }
 
     private void Build(FileTypeRouter router)
     {
+        BuildDisplaySection();
+
         AddHeader("Explorer integration");
         Root.Children.Add(new TextBlock
         {
@@ -103,6 +109,41 @@ public sealed partial class SettingsView : UserControl
             Opacity = 0.8,
             TextWrapping = TextWrapping.Wrap,
         });
+    }
+
+    /// <summary>
+    /// Display 섹션: 앱 UI 스케일. 옵션은 윈도우 디스플레이 설정과 같은 배율 목록(UiScale.Percents),
+    /// 바꾸면 저장 후 열린 모든 창에 즉시 적용된다(UiScale.Changed → MainWindow.ApplyUiScale).
+    /// </summary>
+    private void BuildDisplaySection()
+    {
+        AddHeader("Display");
+        Root.Children.Add(new TextBlock
+        {
+            Text = "Scale of the ZP interface. \"System default\" follows the Windows display scaling; "
+                 + "picking a value overrides it for this app only, applied to all open windows immediately.",
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var scaleBox = new ComboBox { Header = "UI scale", MinWidth = 200 };
+        scaleBox.Items.Add("System default");
+        foreach (var p in UiScale.Percents)
+            scaleBox.Items.Add($"{p}%");
+
+        var current = _settings.Get(UiScale.SettingKey, 0);
+        var index = Array.IndexOf(UiScale.Percents, current);
+        scaleBox.SelectedIndex = current <= 0 || index < 0 ? 0 : index + 1;
+
+        scaleBox.SelectionChanged += (_, _) =>
+        {
+            var value = scaleBox.SelectedIndex <= 0 ? 0 : UiScale.Percents[scaleBox.SelectedIndex - 1];
+            if (value == _settings.Get(UiScale.SettingKey, 0)) return;
+            _settings.Set(UiScale.SettingKey, value);
+            _settings.Save();
+            UiScale.NotifyChanged();
+        };
+        Root.Children.Add(scaleBox);
     }
 
     /// <summary>설정 진입 시 1회 업데이트 확인: 새 버전이 있을 때만 Update 버튼을 보여준다.</summary>

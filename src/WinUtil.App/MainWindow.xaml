@@ -10,7 +10,10 @@
       하단 바 우측은 Windows 트레이 위치처럼 Info·Settings 아이콘.
       창 전체 드롭은 유지: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅.
     -->
-    <Grid AllowDrop="True" DragOver="OnWindowDragOver" Drop="OnWindowDrop">
+    <!-- ScaleHost: UI 스케일 오버라이드(v0.24.0)의 기준 크기. RootLayout에 ScaleTransform을
+         걸고 역수 크기를 줘서 창 전체가 선택 배율로 그려지게 한다(ApplyUiScale). -->
+    <Grid x:Name="ScaleHost">
+    <Grid x:Name="RootLayout" AllowDrop="True" DragOver="OnWindowDragOver" Drop="OnWindowDrop">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition x:Name="BottomBarRow" Height="44" />
@@ -78,5 +81,6 @@
                 </Button>
             </StackPanel>
         </Grid>
+    </Grid>
     </Grid>
 </Window>

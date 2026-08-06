@@ -6,6 +6,7 @@ using Windows.ApplicationModel.DataTransfer;
 using WinUtil.Core.Cli;
 using WinUtil.Core.Contracts;
 using WinUtil.Core.Routing;
+using WinUtil.Core.Settings;
 
 namespace WinUtil.App;
 
@@ -20,6 +21,9 @@ public sealed partial class MainWindow : Window
     private readonly FileTypeRouter _router;
     private readonly WindowManager _manager;
     private readonly TrayIcon _tray;
+    private readonly ISettingsService _settings;
+    private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
+    private bool _xamlRootHooked;
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
@@ -33,7 +37,23 @@ public sealed partial class MainWindow : Window
         Title = "ZP";
         _manager = manager;
         _router = App.Services.GetRequiredService<FileTypeRouter>();
+        _settings = App.Services.GetRequiredService<ISettingsService>();
         BuildStartMenu();
+
+        // UI 스케일 오버라이드(v0.24.0): 설정값 적용 + 설정 변경·창 크기·모니터 DPI 변화에 추종.
+        // RasterizationScale은 XamlRoot 준비 후에만 유효하므로 Loaded에서 시작한다.
+        RootLayout.Loaded += (_, _) =>
+        {
+            if (!_xamlRootHooked && RootLayout.XamlRoot is { } xr)
+            {
+                _xamlRootHooked = true;
+                xr.Changed += (_, _) => ApplyUiScale(); // 모니터 간 이동 등으로 시스템 DPI가 바뀔 때
+            }
+            ApplyUiScale();
+        };
+        ScaleHost.SizeChanged += (_, _) => LayoutUiScale();
+        UiScale.Changed += ApplyUiScale;
+        Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
         if (File.Exists(IconPath))
@@ -61,6 +81,54 @@ public sealed partial class MainWindow : Window
         _tray.CloseRequested += Close;
         _tray.ExitAllRequested += _manager.CloseAll;
         Closed += (_, _) => _tray.Dispose();
+    }
+
+    // ---------- UI 스케일 오버라이드 (v0.24.0) ----------
+
+    /// <summary>
+    /// 설정의 배율(%)을 시스템 DPI 대비 상대 배율로 환산한다.
+    /// 예: 설정 100% + 시스템 150% 모니터 → 2/3배. 설정 0(시스템 기본)이면 1.0.
+    /// </summary>
+    private void ApplyUiScale()
+    {
+        // 설정 화면(다른 창)에서 바꿔도 이 창에 적용되도록 이벤트로 불린다 — UI 스레드 보장.
+        if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+        {
+            dq.TryEnqueue(ApplyUiScale);
+            return;
+        }
+
+        var percent = _settings.Get(UiScale.SettingKey, 0);
+        var system = RootLayout.XamlRoot?.RasterizationScale ?? 1.0;
+        _uiScaleFactor = percent <= 0 ? 1.0 : Math.Clamp(percent / 100.0 / system, 0.25, 4.0);
+        LayoutUiScale();
+    }
+
+    /// <summary>
+    /// RootLayout에 ScaleTransform(배율)과 역수 크기를 적용한다.
+    /// 레이아웃은 1/배율 크기로 계산되고 렌더링에서 배율만큼 확대되므로 창을 꽉 채운다.
+    /// </summary>
+    private void LayoutUiScale()
+    {
+        if (Math.Abs(_uiScaleFactor - 1.0) < 0.001)
+        {
+            RootLayout.RenderTransform = null;
+            RootLayout.ClearValue(FrameworkElement.WidthProperty);
+            RootLayout.ClearValue(FrameworkElement.HeightProperty);
+            RootLayout.HorizontalAlignment = HorizontalAlignment.Stretch;
+            RootLayout.VerticalAlignment = VerticalAlignment.Stretch;
+            return;
+        }
+
+        RootLayout.HorizontalAlignment = HorizontalAlignment.Left;
+        RootLayout.VerticalAlignment = VerticalAlignment.Top;
+        RootLayout.RenderTransformOrigin = new Windows.Foundation.Point(0, 0);
+        RootLayout.RenderTransform = new ScaleTransform { ScaleX = _uiScaleFactor, ScaleY = _uiScaleFactor };
+        if (ScaleHost.ActualWidth > 0)
+        {
+            RootLayout.Width = ScaleHost.ActualWidth / _uiScaleFactor;
+            RootLayout.Height = ScaleHost.ActualHeight / _uiScaleFactor;
+        }
     }
 
     /// <summary>창 제목과 트레이 툴팁을 함께 갱신한다.</summary>
