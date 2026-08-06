@@ -16,7 +16,6 @@ public sealed partial class MainWindow : Window
     private readonly FileTypeRouter _router;
     private readonly WindowManager _manager;
     private readonly TrayIcon _tray;
-    private readonly Windows.UI.ViewManagement.UISettings _uiSettings;
     private bool _suppressNavSelection;
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
@@ -36,11 +35,8 @@ public sealed partial class MainWindow : Window
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
         if (File.Exists(IconPath)) AppWindow.SetIcon(IconPath);
 
-        // 창 헤더를 시스템 강조색으로. 실행 중 사용자가 테마 컬러를 바꾸면 따라간다
-        TitleBarTheming.ApplyAccent(AppWindow.TitleBar);
-        _uiSettings = new Windows.UI.ViewManagement.UISettings();
-        _uiSettings.ColorValuesChanged += OnSystemColorsChanged; // 백그라운드 스레드로 옴
-        Closed += (_, _) => _uiSettings.ColorValuesChanged -= OnSystemColorsChanged;
+        // 창 헤더를 브랜드 색(#15072E)으로 — 본문 배경(MainWindow.xaml)과 같은 색
+        TitleBarTheming.Apply(AppWindow.TitleBar);
 
         // 창별 트레이 미니 아이콘: 좌클릭=활성화, 우클릭=메뉴, 툴팁=창 제목
         _tray = new TrayIcon(File.Exists(IconPath) ? IconPath : null);
@@ -49,9 +45,6 @@ public sealed partial class MainWindow : Window
         _tray.ExitAllRequested += _manager.CloseAll;
         Closed += (_, _) => _tray.Dispose();
     }
-
-    private void OnSystemColorsChanged(Windows.UI.ViewManagement.UISettings sender, object args)
-        => DispatcherQueue.TryEnqueue(() => TitleBarTheming.ApplyAccent(AppWindow.TitleBar));
 
     /// <summary>창 제목과 트레이 툴팁을 함께 갱신한다.</summary>
     private void SetTitle(string title)

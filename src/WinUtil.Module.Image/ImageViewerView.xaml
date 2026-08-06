@@ -52,7 +52,7 @@
         <Border
             VerticalAlignment="Bottom"
             Padding="12,6"
-            Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}">
+            Background="{ThemeResource LayerFillColorDefaultBrush}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

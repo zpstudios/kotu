@@ -3,22 +3,38 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- 창 전체 드롭: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅 -->
-    <NavigationView x:Name="Nav"
-                    PaneDisplayMode="LeftCompact"
-                    IsBackButtonVisible="Collapsed"
-                    IsSettingsVisible="True"
-                    AllowDrop="True"
-                    DragOver="OnWindowDragOver"
-                    Drop="OnWindowDrop"
-                    SelectionChanged="OnNavSelectionChanged">
-        <!-- 메뉴 항목은 등록된 모듈로부터 코드에서 채운다 -->
-        <ContentControl x:Name="ModuleHost"
-                        HorizontalContentAlignment="Stretch"
-                        VerticalContentAlignment="Stretch">
-            <TextBlock Text="Open a file or pick a feature on the left"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Opacity="0.6"/>
-        </ContentControl>
-    </NavigationView>
+    <!--
+      브랜드 배경 #15072E: 루트에서 다크 테마를 강제해 흰 글자를 보장하고,
+      NavigationView의 자체 배경(팬·콘텐츠)을 같은 색으로 덮어 창 내부가 한 색으로 보이게 한다.
+      타이틀바 색은 TitleBarTheming(코드)에서 같은 값으로 맞춘다.
+    -->
+    <Grid RequestedTheme="Dark" Background="#15072E">
+        <Grid.Resources>
+            <!-- 접힌 레일·열린 팬 배경 (열린 팬은 오버레이라 불투명해야 글자가 겹쳐 보이지 않는다) -->
+            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="#15072E" />
+            <Color x:Key="NavigationViewExpandedPaneBackgroundColor">#15072E</Color>
+            <!-- 콘텐츠 영역 배경과 경계선: 루트와 같은 색으로 평평하게 -->
+            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="#15072E" />
+            <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
+        </Grid.Resources>
+
+        <!-- 창 전체 드롭: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅 -->
+        <NavigationView x:Name="Nav"
+                        PaneDisplayMode="LeftCompact"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="True"
+                        AllowDrop="True"
+                        DragOver="OnWindowDragOver"
+                        Drop="OnWindowDrop"
+                        SelectionChanged="OnNavSelectionChanged">
+            <!-- 메뉴 항목은 등록된 모듈로부터 코드에서 채운다 -->
+            <ContentControl x:Name="ModuleHost"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch">
+                <TextBlock Text="Open a file or pick a feature on the left"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Opacity="0.6"/>
+            </ContentControl>
+        </NavigationView>
+    </Grid>
 </Window>
