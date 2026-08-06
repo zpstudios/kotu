@@ -36,7 +36,11 @@ public sealed partial class MainWindow : Window
         BuildStartMenu();
 
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
-        if (File.Exists(IconPath)) AppWindow.SetIcon(IconPath);
+        if (File.Exists(IconPath))
+        {
+            AppWindow.SetIcon(IconPath);
+            WindowIcon.Apply(this, IconPath); // 작업표시줄 기본 문서 아이콘 문제 보정 (실기기)
+        }
 
         // 창 헤더만 브랜드 색(#15072E) — 본문은 시스템 테마 기본값
         TitleBarTheming.Apply(AppWindow.TitleBar);
@@ -70,6 +74,11 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(BuildSponsorCard());
         StartMenuPanel.Children.Add(Spacer(16)); // 여백 x2
 
+        // Settings·Hardware 묶음 (사용자 지정: Archive 위에 약간 공백 두고 Hardware, 그 위 Settings)
+        AddSettingsItem();
+        AddModuleItem("hardware");
+        StartMenuPanel.Children.Add(Spacer(8)); // 여백
+
         AddModuleItem("archive");
         StartMenuPanel.Children.Add(Spacer(8)); // 여백
 
@@ -101,6 +110,18 @@ public sealed partial class MainWindow : Window
         {
             StartFlyout.Hide();
             OpenModule(module);
+        };
+        StartMenuPanel.Children.Add(item);
+    }
+
+    /// <summary>시작 메뉴의 Settings 항목 — 하단 바 우측 아이콘과 같은 동작.</summary>
+    private void AddSettingsItem()
+    {
+        var item = MakeMenuItem("\uE713", "Settings");
+        item.Click += (_, _) =>
+        {
+            StartFlyout.Hide();
+            OnSettingsClick(item, new RoutedEventArgs());
         };
         StartMenuPanel.Children.Add(item);
     }
@@ -160,7 +181,7 @@ public sealed partial class MainWindow : Window
 
     private void OpenModule(IModule module)
     {
-        SetTitle($"{module.DisplayName} — ZP");
+        SetTitle($"ZP {module.DisplayName}");
         ShowModule(module, OpenContext.Empty);
     }
 
@@ -184,7 +205,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
-        SetTitle("Settings — ZP");
+        SetTitle("ZP Settings");
         ModuleHost.Content = new SettingsView(_router);
         CurrentModuleId = null;
         IsUntouched = false;
@@ -210,7 +231,7 @@ public sealed partial class MainWindow : Window
             UpdateModeIndicator(null);
             return;
         }
-        SetTitle(Path.GetFileName(path) + " — ZP");
+        SetTitle($"ZP {module.DisplayName} — {Path.GetFileName(path)}");
         ShowModule(module, OpenContext.ForFile(path));
     }
 
@@ -226,7 +247,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        SetTitle(Path.GetFileName(file) + " — ZP");
+        SetTitle($"ZP {module.DisplayName} — {Path.GetFileName(file)}");
         ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] });
     }
 
