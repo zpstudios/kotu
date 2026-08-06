@@ -125,7 +125,7 @@ public sealed partial class SettingsView : UserControl
             TextWrapping = TextWrapping.Wrap,
         });
 
-        // Patreon 후원 안내 (v0.46.0 사용자 지정 문구·표시 URL)
+        // Patreon 후원 안내 (v0.46.0 문구, v0.48.0 링크 zpstudios로 확정 — 사용자 확인)
         Root.Children.Add(new TextBlock
         {
             Text = "Kindly support us on Patreon !",
@@ -135,7 +135,7 @@ public sealed partial class SettingsView : UserControl
         Root.Children.Add(new HyperlinkButton
         {
             Content = "www.patreon.com/zpstudios/",
-            NavigateUri = new Uri("https://www.patreon.com/zpdevelop/"),
+            NavigateUri = new Uri("https://www.patreon.com/zpstudios/"),
             Padding = new Thickness(0),
         });
     }
