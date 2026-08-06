@@ -68,6 +68,7 @@ public sealed partial class DocumentView : UserControl, IContentStateSource, IBo
         ContentText.Text = text;
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
+        DriveInfoText.Text = WinUtil.Core.Routing.DriveStatus.Describe(path); // v0.47.0
         ContentOpened?.Invoke(path); // 셸 동기화
     }
 

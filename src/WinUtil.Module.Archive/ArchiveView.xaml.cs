@@ -124,6 +124,7 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
                 _currentFolder = _root;
                 RefreshRows();
                 StatusText.Text = $"{Path.GetFileName(path)} · {ArchiveEntryTree.FormatSize(_root.Size)} total";
+                DriveInfoText.Text = WinUtil.Core.Routing.DriveStatus.Describe(path); // v0.47.0
                 ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
                 return;
             }

@@ -40,6 +40,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button Grid.Column="0" Click="OnOpenButtonClick"
                         ToolTipService.ToolTip="Open document file">
@@ -47,7 +48,10 @@
                 </Button>
                 <TextBlock x:Name="FileNameText" Grid.Column="1" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Text="No file open" />
-                <Button Grid.Column="2" Content="⛶" Click="OnFullScreenButtonClick"
+                <!-- 현재 문서가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
+                <TextBlock x:Name="DriveInfoText" Grid.Column="2" VerticalAlignment="Center"
+                           FontSize="12" Opacity="0.6" />
+                <Button Grid.Column="3" Content="⛶" Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)" />
             </Grid>
         </Border>

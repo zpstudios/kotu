@@ -378,12 +378,14 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         {
             FileNameText.Text = "No file open";
             InfoText.Text = string.Empty;
+            DriveInfoText.Text = string.Empty;
             return;
         }
 
         FileNameText.Text = Path.GetFileName(path);
         var resolution = _pixelWidth > 0 ? $"{_pixelWidth}×{_pixelHeight}  ·  " : string.Empty;
         InfoText.Text = resolution + PositionText();
+        DriveInfoText.Text = WinUtil.Core.Routing.DriveStatus.Describe(path); // v0.47.0
     }
 
     private string PositionText() =>

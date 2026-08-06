@@ -67,6 +67,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button
                     Grid.Column="0"
@@ -80,26 +81,33 @@
                     Grid.Column="1"
                     VerticalAlignment="Center"
                     TextTrimming="CharacterEllipsis" />
+                <!-- 현재 이미지가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
+                <TextBlock
+                    x:Name="DriveInfoText"
+                    Grid.Column="2"
+                    FontSize="12"
+                    Opacity="0.6"
+                    VerticalAlignment="Center" />
                 <TextBlock
                     x:Name="InfoText"
-                    Grid.Column="2"
+                    Grid.Column="3"
                     Margin="12,0"
                     VerticalAlignment="Center" />
                 <Button
-                    Grid.Column="3"
+                    Grid.Column="4"
                     Content="Rotate"
                     Click="OnRotateButtonClick"
                     ToolTipService.ToolTip="Rotate 90° clockwise (R)" />
                 <!-- 우측 기능 순서(v0.41.0 사용자 지정): 1:1 → Fit(방향 선택) → 전체화면 -->
                 <Button
-                    Grid.Column="4"
+                    Grid.Column="5"
                     Margin="8,0,0,0"
                     Content="1:1"
                     Click="OnActualSizeClick"
                     ToolTipService.ToolTip="Actual size (100%)" />
                 <!-- 기본 클릭 = 긴 변이 잘리지 않게 창에 맞춤. 화살표로 좌우/상하 채움 선택 -->
                 <SplitButton
-                    Grid.Column="5"
+                    Grid.Column="6"
                     Margin="8,0,0,0"
                     Content="Fit"
                     Click="OnFitClick"
@@ -113,7 +121,7 @@
                 </SplitButton>
                 <!-- 전체화면 전환 아이콘 (v0.29.0 사용자 요청) — 동영상 트랜스포트 바와 동일한 ⛶ -->
                 <Button
-                    Grid.Column="6"
+                    Grid.Column="7"
                     Margin="8,0,0,0"
                     Content="⛶"
                     Click="OnFullScreenButtonClick"

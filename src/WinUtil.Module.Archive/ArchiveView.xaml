@@ -115,6 +115,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button x:Name="OpenButton" Grid.Column="0" Click="OnOpenClick"
                         ToolTipService.ToolTip="Open archive">
@@ -122,12 +123,15 @@
                 </Button>
                 <TextBlock x:Name="StatusText" Grid.Column="1" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
-                <ProgressBar x:Name="OperationProgress" Grid.Column="2" Width="160"
+                <!-- 현재 아카이브가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
+                <TextBlock x:Name="DriveInfoText" Grid.Column="2" VerticalAlignment="Center"
+                           FontSize="12" Opacity="0.6" />
+                <ProgressBar x:Name="OperationProgress" Grid.Column="3" Width="160"
                              Minimum="0" Maximum="100" VerticalAlignment="Center"
                              Visibility="Collapsed" />
-                <Button x:Name="CancelButton" Grid.Column="3" Content="Cancel"
+                <Button x:Name="CancelButton" Grid.Column="4" Content="Cancel"
                         Click="OnCancelClick" Visibility="Collapsed" VerticalAlignment="Center" />
-                <Button Grid.Column="4" Content="⛶" Click="OnFullScreenButtonClick"
+                <Button Grid.Column="5" Content="⛶" Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)" />
             </Grid>
         </Border>
