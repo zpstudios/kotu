@@ -44,6 +44,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button x:Name="RefreshButton" Grid.Column="0" Content="Refresh"
                         Click="OnRefreshClick" />
@@ -51,7 +52,12 @@
                         Click="OnCopyClick" />
                 <ProgressRing x:Name="Busy" Grid.Column="2" IsActive="False"
                               Width="20" Height="20" VerticalAlignment="Center" />
-                <Button Grid.Column="4" Content="⛶" Click="OnFullScreenButtonClick"
+                <!-- 자동 갱신 주기 표기 (v0.51.0 사용자 요청 — 실제 갱신도 이 주기) -->
+                <TextBlock Grid.Column="4" Text="200 ms" FontSize="12" Opacity="0.6"
+                           VerticalAlignment="Center"
+                           ToolTipService.ToolTip="Auto-refresh interval" />
+                <!-- 폭 48 = 다른 모듈 ⛶와 통일 (v0.49.0 기준) -->
+                <Button Grid.Column="5" Width="48" Content="⛶" Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen dashboard (F11)" />
             </Grid>
         </Border>

@@ -17,10 +17,16 @@ namespace WinUtil.Module.Hardware;
 /// </summary>
 public sealed partial class HardwareView : UserControl, IBottomBarProvider
 {
+    /// <summary>자동 갱신 주기(v0.51.0 사용자 지정) — 하단 바 "200 ms" 표기와 일치해야 한다.</summary>
+    private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromMilliseconds(200);
+
     private IReadOnlyList<HardwareSection> _sections = [];
     private bool _loadedOnce;
     private AppWindow? _appWindow;
     private bool _dashboardRendered; // 같은 데이터로 대시보드를 다시 만들지 않기 위한 플래그
+    private DispatcherTimer? _autoTimer;
+    private bool _refreshing;            // WMI 수집이 주기보다 길면 다음 틱을 건너뛴다
+    private string _dataSignature = ""; // 값이 안 바뀌면 UI 재구성 생략
 
     public HardwareView(OpenContext context)
     {
@@ -30,12 +36,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         {
             HookPresenterChanged();
             Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
+            StartAutoRefresh();
             if (_loadedOnce) return;
             _loadedOnce = true;
             await RefreshAsync();
         };
         Unloaded += (_, _) =>
         {
+            _autoTimer?.Stop();
             if (_appWindow is { } w) w.Changed -= OnAppWindowChanged;
             _appWindow = null;
         };
@@ -52,18 +60,82 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     {
         Busy.IsActive = true;
         RefreshButton.IsEnabled = false;
+        _refreshing = true; // 자동 갱신 틱과 겹치지 않게
         try
         {
             _sections = await Task.Run(HardwareInfoService.Collect);
-            _dashboardRendered = false;
-            Render();
-            if (DashboardScroller.Visibility == Visibility.Visible) RenderDashboard();
+            _dataSignature = Signature(_sections);
+            ApplySections();
         }
         finally
         {
+            _refreshing = false;
             Busy.IsActive = false;
             RefreshButton.IsEnabled = true;
         }
+    }
+
+    // ---------- 자동 갱신 (v0.51.0: 200ms 주기, 하단 바 표기와 일치) ----------
+
+    private void StartAutoRefresh()
+    {
+        if (_autoTimer is not null)
+        {
+            _autoTimer.Start();
+            return;
+        }
+        _autoTimer = new DispatcherTimer { Interval = AutoRefreshInterval };
+        _autoTimer.Tick += async (_, _) => await AutoRefreshTickAsync();
+        _autoTimer.Start();
+    }
+
+    /// <summary>
+    /// 자동 갱신 1틱: WMI 수집이 주기보다 오래 걸리면 그 틱은 건너뛰고(겹침 방지),
+    /// 값이 지난번과 같으면 UI 재구성을 생략한다(200ms마다 트리 재생성 방지).
+    /// Busy 링은 수동 Refresh에서만 돌린다 — 200ms마다 깜빡이면 안 된다.
+    /// </summary>
+    private async Task AutoRefreshTickAsync()
+    {
+        if (_refreshing) return;
+        _refreshing = true;
+        try
+        {
+            var sections = await Task.Run(HardwareInfoService.Collect);
+            var signature = Signature(sections);
+            if (signature == _dataSignature) return;
+            _dataSignature = signature;
+            _sections = sections;
+            ApplySections();
+        }
+        catch
+        {
+            // 일시적 WMI 실패는 다음 틱에서 재시도
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    /// <summary>새 수집 결과를 현재 보이는 뷰(리스트/대시보드)에 반영한다.</summary>
+    private void ApplySections()
+    {
+        _dashboardRendered = false;
+        Render();
+        if (DashboardScroller.Visibility == Visibility.Visible) RenderDashboard();
+    }
+
+    /// <summary>변경 감지용 서명 — 전 섹션의 라벨=값을 이어붙인다.</summary>
+    private static string Signature(IReadOnlyList<HardwareSection> sections)
+    {
+        var sb = new StringBuilder();
+        foreach (var section in sections)
+        {
+            sb.Append(section.Title).Append('\x1F');
+            foreach (var item in section.Items)
+                sb.Append(item.Label).Append('=').Append(item.Value).Append('\x1E');
+        }
+        return sb.ToString();
     }
 
     // ---------- 일반 모드: 라벨-값 리스트 ----------
