@@ -5,9 +5,16 @@
     xmlns:local="using:WinUtil.Module.Archive"
     AllowDrop="True"
     DragOver="OnDragOver"
-    Drop="OnDrop">
+    Drop="OnDrop"
+    KeyboardAcceleratorPlacementMode="Hidden">
 
-    <Grid Padding="12" RowSpacing="8">
+    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (v0.40.0 — 전 모듈 전체화면 지원) -->
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
+        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <Grid x:Name="RootGrid" Padding="12" RowSpacing="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <!-- 툴바 -->
@@ -21,11 +28,8 @@
             <!-- 진행/상태 -->
         </Grid.RowDefinitions>
 
-        <!-- 상단 툴바 -->
+        <!-- 상단 툴바 (열기 버튼은 셸 하단 바 좌측으로 이동 — v0.40.0 사용자 요청) -->
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button x:Name="OpenButton" Click="OnOpenClick" ToolTipService.ToolTip="Open archive">
-                <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-            </Button>
             <Button x:Name="ExtractToButton" Content="Extract..." Click="OnExtractToClick" IsEnabled="False"
                     ToolTipService.ToolTip="Choose a folder to extract into (only selected items, if any)" />
             <Button x:Name="ExtractHereButton" Content="Extract here" Click="OnExtractHereClick" IsEnabled="False"
@@ -100,19 +104,32 @@
                 Opacity="0.6" />
         </Grid>
 
-        <!-- 진행률 + 취소 + 상태 -->
-        <Grid Grid.Row="4" ColumnSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Spacing="4">
-                <TextBlock x:Name="StatusText" TextTrimming="CharacterEllipsis" />
-                <ProgressBar x:Name="OperationProgress" Minimum="0" Maximum="100"
+        <!-- 하단 상태바: 열기 · 상태 · 진행/취소 · 전체화면.
+             셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(v0.40.0 —
+             열기 버튼이 메뉴 버튼 바로 우측에 오도록, 이미지 v0.27.0과 동일 통합). -->
+        <Border x:Name="StatusBar" Grid.Row="4" Padding="0,2,0,2">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="OpenButton" Grid.Column="0" Click="OnOpenClick"
+                        ToolTipService.ToolTip="Open archive">
+                    <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                </Button>
+                <TextBlock x:Name="StatusText" Grid.Column="1" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+                <ProgressBar x:Name="OperationProgress" Grid.Column="2" Width="160"
+                             Minimum="0" Maximum="100" VerticalAlignment="Center"
                              Visibility="Collapsed" />
-            </StackPanel>
-            <Button x:Name="CancelButton" Grid.Column="1" Content="Cancel"
-                    Click="OnCancelClick" Visibility="Collapsed" VerticalAlignment="Bottom" />
-        </Grid>
+                <Button x:Name="CancelButton" Grid.Column="3" Content="Cancel"
+                        Click="OnCancelClick" Visibility="Collapsed" VerticalAlignment="Center" />
+                <Button Grid.Column="4" Content="⛶" Click="OnFullScreenButtonClick"
+                        ToolTipService.ToolTip="Full screen (F11)" />
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

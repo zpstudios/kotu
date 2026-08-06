@@ -32,10 +32,22 @@ public sealed class ArchiveRow
 /// 새 압축(zip/7z, 드래그&amp;드롭 포함), 암호 재시도, 진행률/취소를 제공한다.
 /// 모든 파일 I/O는 Task.Run으로 UI 스레드 밖에서 수행한다.
 /// </summary>
-public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IContentStateSource
+public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IContentStateSource,
+    IBottomBarProvider
 {
     /// <summary>아카이브를 열면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>
+    /// 하단 상태바(열기·상태·진행·전체화면)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다
+    /// (v0.40.0 — 열기 버튼이 메뉴 버튼 바로 우측에 오게. 이미지 v0.27.0과 동일 패턴).
+    /// 컨트롤 필드 참조는 그대로 유효하다.
+    /// </summary>
+    public object? TakeBottomBar()
+    {
+        RootGrid.Children.Remove(StatusBar);
+        return StatusBar;
+    }
 
     private readonly IArchiveBackend _backend = new SevenZipBackend();
     private readonly string? _initialFile;
@@ -548,6 +560,38 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
         var environment = XamlRoot?.ContentIslandEnvironment
             ?? throw new InvalidOperationException("Cannot determine the window handle.");
         return Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
+    }
+
+    // ---------- 전체화면 (v0.40.0 — 이미지·동영상과 동일 패턴) ----------
+
+    private void ToggleFullScreen()
+    {
+        var environment = XamlRoot?.ContentIslandEnvironment;
+        if (environment is null) return;
+
+        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(environment.AppWindowId);
+        appWindow.SetPresenter(appWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen
+            ? Microsoft.UI.Windowing.AppWindowPresenterKind.Default
+            : Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
+    }
+
+    private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
+
+    private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        ToggleFullScreen();
+    }
+
+    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        var environment = XamlRoot?.ContentIslandEnvironment;
+        if (environment is null) return;
+        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(environment.AppWindowId);
+        if (appWindow.Presenter.Kind != Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) return;
+
+        args.Handled = true;
+        appWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
     }
 
     /// <summary>SynchronizationContext에 의존하지 않는 IProgress 구현(명시적 디스패처 마샬링용).</summary>
