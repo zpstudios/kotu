@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""내장 테스트 클립(영상) 생성기 v2 → src/WinUtil.Module.Video/Assets/test-clip.mp4
+"""내장 테스트 클립(영상) 생성기 v3 → src/WinUtil.Module.Video/Assets/test-clip.mp4
 
-방송 테스트 패턴 스타일, 오디오(gen_test_audio.py) 섹션과 동기화된 32초 1080p:
-  1) 0–8s    SMPTE 컬러바 + "LEFT" 표시   (좌 스피커 구간)
-  2) 8–16s   RGB/그레이 램프 + "RIGHT" 표시 (우 스피커 구간)
+방송 테스트 패턴 스타일, 오디오(gen_test_audio.py) 섹션과 동기화된 32초 1080p.
+v3(v0.22.0): LEFT/RIGHT 텍스트를 스피커 아이콘으로 교체 (사용자 요청 — 언어 없이 직관적으로).
+  1) 0–8s    SMPTE 컬러바 + 좌측 스피커 아이콘   (좌 스피커 구간)
+  2) 8–16s   RGB/그레이 램프 + 우측 스피커 아이콘 (우 스피커 구간)
   3) 16–26s  해상력 차트 — 존 플레이트 + 수평/수직 라인 웨지 + 미세 체커보드
   4) 26–29.6s 그레이스케일 11스텝 + 균일도 (저음 스윕 구간)
   5) 29.6–32s ZP 브랜드 아웃트로 (#15072E)
@@ -18,7 +19,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1920, 1080
-TMP = "/tmp/zp-testclip"
+TMP = "/tmp/zp-testclip-v3"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(REPO, "src", "WinUtil.Module.Video", "Assets", "test-clip.mp4")
 FONT_B = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -38,8 +39,35 @@ def label(img, text, anchor_xy, size=110, fill=(255, 255, 255)):
     d.text((x, y), text, font=font(size), fill=fill, anchor="mm")
 
 
+def speaker_icon(height=320, color=(255, 255, 255)):
+    """스피커 아이콘(드라이버+콘+음파 아크 3개) RGBA. 기본은 소리가 오른쪽으로 퍼지는 방향."""
+    u = height / 320.0
+    w = int(380 * u)
+    im = Image.new("RGBA", (w, height), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rectangle([40 * u, 115 * u, 116 * u, 205 * u], fill=color)          # 드라이버 몸통
+    d.polygon([(116 * u, 115 * u), (205 * u, 45 * u),
+               (205 * u, 275 * u), (116 * u, 205 * u)], fill=color)       # 콘
+    for r in (65, 110, 155):                                              # 음파 아크
+        bbox = [(205 - r) * u, (160 - r) * u, (205 + r) * u, (160 + r) * u]
+        d.arc(bbox, -52, 52, fill=color, width=int(14 * u))
+    return im
+
+
+def stamp_speaker(img, cx, cy, mirror=False):
+    """검정 배경 패널 위에 스피커 아이콘을 찍는다. mirror=True면 소리가 왼쪽으로 퍼지는 방향."""
+    icon = speaker_icon()
+    if mirror:
+        icon = icon.transpose(Image.FLIP_LEFT_RIGHT)
+    pad = 40
+    x0, y0 = int(cx - icon.width / 2), int(cy - icon.height / 2)
+    ImageDraw.Draw(img).rectangle(
+        [x0 - pad, y0 - pad, x0 + icon.width + pad, y0 + icon.height + pad], fill=(0, 0, 0))
+    img.paste(icon, (x0, y0), icon)
+
+
 def smpte_bars():
-    """1) SMPTE풍 컬러바 + LEFT 라벨."""
+    """1) SMPTE풍 컬러바 + 좌측 스피커 아이콘."""
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img)
     top = [(192, 192, 192), (192, 192, 0), (0, 192, 192), (0, 192, 0),
@@ -55,12 +83,12 @@ def smpte_bars():
               (9, 9, 9), (19, 19, 19), (29, 29, 29)]
     for i, c in enumerate(bottom):
         d.rectangle([i * bw, H * 0.78, (i + 1) * bw, H], fill=c)
-    label(img, "◀ LEFT", (W * 0.25, H * 0.5))
+    stamp_speaker(img, W * 0.25, H * 0.5, mirror=True)  # 좌 스피커: 소리가 왼쪽으로
     return img
 
 
 def ramps():
-    """2) R/G/B/그레이 램프 + RIGHT 라벨."""
+    """2) R/G/B/그레이 램프 + 우측 스피커 아이콘."""
     img = Image.new("RGB", (W, H))
     arr = np.zeros((H, W, 3), dtype=np.uint8)
     x = np.linspace(0, 255, W).astype(np.uint8)
@@ -70,7 +98,7 @@ def ramps():
     arr[2 * qh:3 * qh] = np.stack([np.zeros_like(x), np.zeros_like(x), x], 1)[None, :, :]
     arr[3 * qh:] = np.stack([x, x, x], 1)[None, :, :]
     img = Image.fromarray(arr)
-    label(img, "RIGHT ▶", (W * 0.75, H * 0.5))
+    stamp_speaker(img, W * 0.75, H * 0.5, mirror=False)  # 우 스피커: 소리가 오른쪽으로
     return img
 
 
@@ -151,7 +179,7 @@ def outro():
 def main():
     os.makedirs(TMP, exist_ok=True)
 
-    wav = "/tmp/test-audio.wav"
+    wav = "/tmp/zp-test-audio.wav"
     if not os.path.exists(wav):
         subprocess.run([sys.executable, os.path.join(REPO, "docs", "gen_test_audio.py")], check=True)
 
