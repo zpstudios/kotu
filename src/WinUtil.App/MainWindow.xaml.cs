@@ -268,39 +268,46 @@ public sealed partial class MainWindow : Window
 
     private UIElement BuildSponsorCard()
     {
-        var panel = new StackPanel { Spacing = 4 };
-        // 라벨은 카드 좌상단 구석으로 바짝(패딩을 음수 마진으로 상쇄) + 더 작게 (v0.39.0 사용자 요청)
-        panel.Children.Add(new TextBlock
+        // v0.43.0(사용자 스샷 피드백): 광고가 카드 전 영역을 차지하고(패딩 제거, 메뉴 폭에 맞춰 확대),
+        // SPONSOR 라벨은 이미지 위 좌상단에 반투명 배지로 겹쳐서 아주 작게 표시한다.
+        var host = new Grid
         {
-            Text = "SPONSOR",
-            FontSize = 8,
-            Opacity = 0.45,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(-8, -9, 0, 0),
-        });
+            CornerRadius = new CornerRadius(8),
+            Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
+            MinHeight = 50,
+        };
 
         if (SponsorImages.Length > 0)
         {
-            // 광고 규격(v0.35.0 사용자 확정): 논리 100×50 = DPI 100%에서 100×50px.
-            // 고DPI에서는 시스템 배율만큼 자동 확대된다. 이미지는 박스 안에 Uniform으로 맞춘다.
+            // 광고 규격은 2:1(100×50) 유지 — 카드 폭(메뉴 124)에 맞춰 비율대로 커진다.
             _sponsorImage = new Image
             {
-                Width = 100,
-                Height = 50,
                 Stretch = Stretch.Uniform,
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
             };
             UpdateSponsorImage();
-            panel.Children.Add(_sponsorImage);
+            host.Children.Add(_sponsorImage);
         }
 
-        return new Border
+        host.Children.Add(new Border
         {
-            Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(12),
-            Child = panel,
-        };
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(4),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x59, 0x00, 0x00, 0x00)),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(4, 1, 4, 1),
+            Child = new TextBlock
+            {
+                Text = "SPONSOR",
+                FontSize = 7,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                Opacity = 0.9,
+            },
+        });
+
+        return host;
     }
 
     /// <summary>
