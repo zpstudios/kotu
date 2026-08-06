@@ -9,7 +9,7 @@ public sealed class ImageModule : IModule
 
     public string DisplayName => "Image";
 
-    public string BrandName => "zp-image";
+    public string BrandName => "ZP-image";
 
     public string IconGlyph => "\uE8B9"; // Picture
 

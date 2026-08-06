@@ -27,7 +27,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(WindowManager manager)
     {
         InitializeComponent();
-        Title = "zp";
+        Title = "ZP";
         _manager = manager;
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         BuildNavigation();
@@ -86,7 +86,7 @@ public sealed partial class MainWindow : Window
             IsUntouched = false;
             return;
         }
-        SetTitle(Path.GetFileName(path) + " — zp");
+        SetTitle(Path.GetFileName(path) + " — ZP");
         ShowModule(module, OpenContext.ForFile(path));
     }
 
@@ -102,7 +102,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        SetTitle(Path.GetFileName(file) + " — zp");
+        SetTitle(Path.GetFileName(file) + " — ZP");
         ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] });
     }
 
@@ -147,7 +147,7 @@ public sealed partial class MainWindow : Window
 
         if (args.IsSettingsSelected)
         {
-            SetTitle("Settings — zp");
+            SetTitle("Settings — ZP");
             ModuleHost.Content = new SettingsView(_router);
             CurrentModuleId = null;
             IsUntouched = false;
@@ -159,7 +159,7 @@ public sealed partial class MainWindow : Window
             var module = _router.Modules.FirstOrDefault(m => m.Id == id);
             if (module is not null)
             {
-                SetTitle($"{module.DisplayName} — zp");
+                SetTitle($"{module.DisplayName} — ZP");
                 ShowModule(module, OpenContext.Empty);
             }
         }

@@ -27,7 +27,7 @@ public sealed partial class SettingsView : UserControl
         Root.Children.Add(new TextBlock
         {
             Text = "Applies to the current user account only (no admin rights needed); turning a switch off removes the registration completely. "
-                 + "File association adds zp to the \"Open with\" candidates; picking the default app is done in Windows Settings.",
+                 + "File association adds ZP to the \"Open with\" candidates; picking the default app is done in Windows Settings.",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -50,7 +50,7 @@ public sealed partial class SettingsView : UserControl
 
         var extractToggle = new ToggleSwitch
         {
-            Header = "Archive right-click menu: \"Extract here with zp-zip\"",
+            Header = "Archive right-click menu: \"Extract here with ZP-zip\"",
             IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)),
         };
         extractToggle.Toggled += (_, _) => Apply(extractToggle,
@@ -60,7 +60,7 @@ public sealed partial class SettingsView : UserControl
 
         var compressToggle = new ToggleSwitch
         {
-            Header = "All-files right-click menu: \"Compress with zp-zip\"",
+            Header = "All-files right-click menu: \"Compress with ZP-zip\"",
             IsOn = Safe(ExplorerIntegration.IsCompressMenuRegistered),
         };
         compressToggle.Toggled += (_, _) => Apply(compressToggle,
@@ -78,47 +78,101 @@ public sealed partial class SettingsView : UserControl
         Root.Children.Add(_status);
 
         AddHeader("Updates");
+        var currentVersion = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
+        Root.Children.Add(new TextBlock { Text = $"Current version: v{currentVersion}", Opacity = 0.8 });
+
         var updateStatus = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
-        var checkButton = new Button { Content = "Check for updates" };
-        checkButton.Click += async (_, _) =>
-        {
-            checkButton.IsEnabled = false;
-            updateStatus.Text = "Checking...";
-            try
-            {
-                if (!UpdateService.IsUpdatableBuild)
-                {
-                    updateStatus.Text = "Automatic updates are unavailable in the portable zip. "
-                                      + "Install with Setup.exe from Releases to enable them.";
-                    return;
-                }
-                var info = await UpdateService.CheckAsync();
-                if (info is null)
-                {
-                    updateStatus.Text = "You are on the latest version.";
-                    return;
-                }
-                await UpdateService.DownloadAsync(info, percent =>
-                    DispatcherQueue.TryEnqueue(() =>
-                        updateStatus.Text = $"Downloading v{info.TargetFullRelease.Version}... {percent}%"));
-                updateStatus.Text = "Applying and restarting...";
-                UpdateService.ApplyAndRestart(info);
-            }
-            catch (Exception ex)
-            {
-                updateStatus.Text = "Update check failed: " + ex.Message;
-            }
-            finally
-            {
-                checkButton.IsEnabled = true;
-            }
-        };
-        Root.Children.Add(checkButton);
+        var updateButton = new Button { Content = "Update", Visibility = Visibility.Collapsed };
         Root.Children.Add(updateStatus);
+        Root.Children.Add(updateButton);
+
+        // 주기 체크 금지(사용자 결정) — 설정 화면에 들어올 때만 한 번 확인한다
+        _ = CheckForUpdatesAsync(updateStatus, updateButton);
 
         AddHeader("About");
-        var version = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
-        Root.Children.Add(new TextBlock { Text = $"zp v{version} · github.com/tsusaikang/winutil", Opacity = 0.7 });
+        Root.Children.Add(new TextBlock { Text = $"ZP v{currentVersion} · github.com/tsusaikang/winutil", Opacity = 0.7 });
+        Root.Children.Add(new TextBlock
+        {
+            Text = "Mission Statement",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 4, 0, 0),
+        });
+        Root.Children.Add(new TextBlock
+        {
+            Text = Branding.MissionStatement,
+            Opacity = 0.8,
+            TextWrapping = TextWrapping.Wrap,
+        });
+    }
+
+    /// <summary>설정 진입 시 1회 업데이트 확인: 새 버전이 있을 때만 Update 버튼을 보여준다.</summary>
+    private async Task CheckForUpdatesAsync(TextBlock status, Button updateButton)
+    {
+        if (!UpdateService.IsUpdatableBuild)
+        {
+            status.Text = "Automatic updates are unavailable in this build. "
+                        + "Install with Setup.exe from Releases to enable them.";
+            return;
+        }
+
+        status.Text = "Checking for updates...";
+        try
+        {
+            var info = await UpdateService.CheckAsync();
+            if (info is null)
+            {
+                status.Text = "You are on the latest version.";
+                return;
+            }
+
+            var newVersion = info.TargetFullRelease.Version;
+            status.Text = $"New version v{newVersion} is available.";
+            updateButton.Content = $"Update to v{newVersion}";
+            updateButton.Visibility = Visibility.Visible;
+            updateButton.Click += async (_, _) => await DownloadAndInstallAsync(status, updateButton, info);
+        }
+        catch (Exception ex)
+        {
+            status.Text = "Update check failed: " + ex.Message;
+        }
+    }
+
+    /// <summary>다운로드 → 사람 확인(Install and restart / Later) 대기 → 적용. 자동 재시작 없음.</summary>
+    private async Task DownloadAndInstallAsync(TextBlock status, Button updateButton, Velopack.UpdateInfo info)
+    {
+        var version = info.TargetFullRelease.Version;
+        updateButton.IsEnabled = false;
+        try
+        {
+            await UpdateService.DownloadAsync(info, percent =>
+                DispatcherQueue.TryEnqueue(() => status.Text = $"Downloading v{version}... {percent}%"));
+            status.Text = $"v{version} downloaded.";
+
+            var confirm = new ContentDialog
+            {
+                Title = "Ready to install",
+                Content = $"ZP will close and restart to finish installing v{version}. Install now?",
+                PrimaryButtonText = "Install and restart",
+                CloseButtonText = "Later",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = XamlRoot,
+            };
+            if (await confirm.ShowAsync() == ContentDialogResult.Primary)
+            {
+                status.Text = "Applying and restarting...";
+                UpdateService.ApplyAndRestart(info);
+            }
+            else
+            {
+                status.Text = $"v{version} downloaded — click the button again to install when ready.";
+                updateButton.IsEnabled = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            status.Text = "Update failed: " + ex.Message;
+            updateButton.IsEnabled = true;
+        }
     }
 
     private void AddHeader(string text) => Root.Children.Add(new TextBlock

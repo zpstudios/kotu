@@ -13,7 +13,7 @@ public sealed class ArchiveModule : IModule
 
     public string DisplayName => "Archive";
 
-    public string BrandName => "zp-zip";
+    public string BrandName => "ZP-zip";
 
     public string IconGlyph => "\uF012"; // ZipFolder
 

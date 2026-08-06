@@ -2,7 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Windows.AppLifecycle;
-using WinUtil.App.Integration;
 using WinUtil.Core.Cli;
 using WinUtil.Core.Routing;
 using WinUtil.Core.Settings;
@@ -59,121 +58,43 @@ public partial class App : Application
         var request = LaunchRequest.Parse(Environment.GetCommandLineArgs().Skip(1).ToList());
         _windowManager.Dispatch(request);
 
-        // 백그라운드 주기 업데이트 확인 (Velopack 관리 빌드에서만 동작)
-        _ = PeriodicUpdateCheckAsync(_windowManager);
+        // 업데이트 주기 체크 금지(사용자 결정) — 설정 화면 진입 시 SettingsView가 1회 확인한다.
+        // 설치 직후 첫 실행이면 미션 스테이트먼트 웰컴을 띄운다.
+        if (Program.IsFirstRun) ShowFirstRunWelcome();
     }
 
     /// <summary>
-    /// 시작 3초 뒤 첫 확인, 이후 60초 간격으로 업데이트를 확인한다.
-    /// 같은 버전을 "나중에"로 거절하면 이 세션에서는 다시 묻지 않는다.
-    /// 실패(오프라인·GitHub API 시간당 한도 등)는 조용히 넘기고 다음 주기에 재시도.
+    /// 설치 직후 첫 실행: 미션 스테이트먼트 웰컴 다이얼로그.
+    /// Setup.exe는 원클릭(질문 없음)이라, 설치 흐름에서 사람 입력을 받는 첫 접점은 여기다.
     /// </summary>
-    private static async Task PeriodicUpdateCheckAsync(WindowManager manager)
+    private void ShowFirstRunWelcome()
     {
-        string? declinedVersion = null;
-        var prompting = false;
-
-        await Task.Delay(TimeSpan.FromSeconds(3)); // 시작 직후에는 UI에 양보
-
-        while (true)
+        var window = _windowManager?.ActiveWindow;
+        window?.DispatcherQueue.TryEnqueue(async () =>
         {
             try
             {
-                if (!prompting)
+                await Task.Delay(600); // 창 콘텐츠·XamlRoot 준비 대기
+
+                var dialog = new ContentDialog
                 {
-                    var info = await UpdateService.CheckAsync();
-                    var version = info?.TargetFullRelease.Version.ToString();
-
-                    // 멀티 윈도우: 다이얼로그는 가장 최근 활성화된 창에 띄운다
-                    var window = manager.ActiveWindow;
-
-                    if (info is not null && version is not null && version != declinedVersion
-                        && window is not null)
+                    Title = "Welcome to ZP",
+                    Content = new TextBlock
                     {
-                        prompting = true;
-                        window.DispatcherQueue.TryEnqueue(async () =>
-                        {
-                            try
-                            {
-                                var dialog = new ContentDialog
-                                {
-                                    Title = "Update available",
-                                    Content = $"Version v{version} is available.\n"
-                                            + "It will be downloaded and applied with an automatic restart.",
-                                    PrimaryButtonText = "Update now",
-                                    CloseButtonText = "Later",
-                                    DefaultButton = ContentDialogButton.Primary,
-                                    XamlRoot = window.Content.XamlRoot,
-                                };
-                                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                                    await DownloadWithProgressAsync(window, info);
-                                else
-                                    declinedVersion = version;
-                            }
-                            catch
-                            {
-                                // 다른 다이얼로그가 열려 있는 등 — 다음 주기에 다시 시도.
-                            }
-                            finally
-                            {
-                                prompting = false;
-                            }
-                        });
-                    }
-                }
+                        Text = Branding.MissionStatement,
+                        TextWrapping = TextWrapping.Wrap,
+                        MaxWidth = 480,
+                    },
+                    CloseButtonText = "Get started",
+                    XamlRoot = window.Content.XamlRoot,
+                };
+                await dialog.ShowAsync();
             }
             catch
             {
-                // 확인 실패는 다음 주기에 재시도.
+                // 웰컴 실패는 치명적이지 않다 — 조용히 넘어간다.
             }
-
-            await Task.Delay(TimeSpan.FromSeconds(60));
-        }
-    }
-
-    /// <summary>진행률 다이얼로그를 띄우고 다운로드 → 적용·재시작. (패키지가 커서 무표시면 멈춘 것처럼 보인다)</summary>
-    private static async Task DownloadWithProgressAsync(MainWindow window, Velopack.UpdateInfo info)
-    {
-        var label = new TextBlock { Text = "Preparing download..." };
-        var bar = new ProgressBar { Minimum = 0, Maximum = 100, Value = 0 };
-        var panel = new StackPanel { Spacing = 10, MinWidth = 320 };
-        panel.Children.Add(label);
-        panel.Children.Add(bar);
-
-        var progressDialog = new ContentDialog
-        {
-            Title = $"Updating to v{info.TargetFullRelease.Version}",
-            Content = panel,
-            XamlRoot = window.Content.XamlRoot,
-        };
-        _ = progressDialog.ShowAsync(); // 버튼 없음 — 완료/실패 시 코드로 닫는다
-
-        try
-        {
-            await UpdateService.DownloadAsync(info, percent =>
-                window.DispatcherQueue.TryEnqueue(() =>
-                {
-                    bar.Value = percent;
-                    label.Text = $"Downloading... {percent}%";
-                }));
-
-            label.Text = "Applying and restarting...";
-            bar.Value = 100;
-            await Task.Delay(400); // 사용자에게 상태 전환을 보여줄 짧은 틈
-            UpdateService.ApplyAndRestart(info);
-        }
-        catch (Exception ex)
-        {
-            progressDialog.Hide();
-            var error = new ContentDialog
-            {
-                Title = "Update failed",
-                Content = ex.Message + "\nIt will be retried on the next run.",
-                CloseButtonText = "Close",
-                XamlRoot = window.Content.XamlRoot,
-            };
-            _ = error.ShowAsync();
-        }
+        });
     }
 
     private void OnRedirectedActivation(object? sender, AppActivationArguments e)

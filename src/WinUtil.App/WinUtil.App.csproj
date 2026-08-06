@@ -14,9 +14,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- exe 아이콘(작업표시줄·탐색기 표시). 모양은 추후 확정 — 일단 W 플레이스홀더 -->
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <!-- 표시 이름 "zp": 탐색기 '연결 프로그램' 목록·작업 관리자 등에 노출 (어셈블리/exe 이름은 호환성 위해 유지) -->
-    <Product>zp</Product>
-    <AssemblyTitle>zp</AssemblyTitle>
+    <!-- 표시 이름 "ZP": 탐색기 '연결 프로그램' 목록·작업 관리자 등에 노출 (어셈블리/exe 이름은 호환성 위해 유지) -->
+    <Product>ZP</Product>
+    <AssemblyTitle>ZP</AssemblyTitle>
     <!--
       이름과 달리 MSIX 패키징이 아니라 단일 프로젝트 도구(특히 resources.pri 생성·병합)를 켜는 속성.
       WinUI 템플릿 기본값인데 누락돼 있었고, 그 결과 publish에 resources.pri가 없어

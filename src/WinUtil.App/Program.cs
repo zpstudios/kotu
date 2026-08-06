@@ -16,6 +16,9 @@ public static class Program
 {
     private const string InstanceKey = "WinUtil-Main";
 
+    /// <summary>설치 후 첫 실행 여부(Velopack 훅). 미션 웰컴 다이얼로그 표시에 쓴다.</summary>
+    internal static bool IsFirstRun { get; private set; }
+
     /// <summary>시작 실패 로그 경로: %TEMP%\WinUtil\startup-error.log</summary>
     private static string LogPath =>
         Path.Combine(Path.GetTempPath(), "WinUtil", "startup-error.log");
@@ -30,7 +33,10 @@ public static class Program
         {
             // Velopack 훅: 설치/업데이트/제거 시 넘어오는 특수 인자를 처리한다.
             // (해당 인자면 여기서 프로세스가 종료되므로 반드시 가장 먼저 호출)
-            Velopack.VelopackApp.Build().Run();
+            // WithFirstRun: 설치 후 첫 실행 감지 → 웰컴 다이얼로그(App에서 표시)
+            Velopack.VelopackApp.Build()
+                .WithFirstRun(_ => IsFirstRun = true)
+                .Run();
 
             WinRT.ComWrappersSupport.InitializeComWrappers();
 
@@ -89,8 +95,8 @@ public static class Program
         {
             _ = MessageBoxW(
                 IntPtr.Zero,
-                $"zp failed to start.\n\n{ex?.GetType().Name}: {ex?.Message}\n\nDetails: {LogPath}",
-                "zp startup error",
+                $"ZP failed to start.\n\n{ex?.GetType().Name}: {ex?.Message}\n\nDetails: {LogPath}",
+                "ZP startup error",
                 0x00000010 /* MB_ICONERROR */);
         }
         catch

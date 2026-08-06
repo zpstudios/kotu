@@ -30,7 +30,7 @@ internal sealed class TrayIcon : IDisposable
     private readonly IntPtr _hwnd;
     private readonly IntPtr _hIcon;
     private readonly bool _ownsIcon;
-    private string _tip = "zp";
+    private string _tip = "ZP";
     private bool _added;
     private bool _disposed;
 
@@ -159,7 +159,7 @@ internal sealed class TrayIcon : IDisposable
             _ = AppendMenuW(menu, MfString, CmdActivate, "Activate window");
             _ = AppendMenuW(menu, MfString, CmdClose, "Close this window");
             _ = AppendMenuW(menu, MfSeparator, 0, null);
-            _ = AppendMenuW(menu, MfString, CmdExitAll, "Exit zp");
+            _ = AppendMenuW(menu, MfString, CmdExitAll, "Exit ZP");
             _ = SetMenuDefaultItem(menu, CmdActivate, 0);
 
             // 메뉴 밖 클릭으로 닫히게 하려면 먼저 포그라운드가 되어야 한다(Win32 관례)
