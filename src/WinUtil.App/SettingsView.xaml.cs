@@ -38,7 +38,18 @@ public sealed partial class SettingsView : UserControl
             TextWrapping = TextWrapping.Wrap,
         });
 
-        foreach (var module in router.Modules)
+        // 토글 순서: 압축 → (문서: 모듈이 생기면 여기) → 영상 → 이미지 (사용자 지정, v0.28.0).
+        // 파일을 다루지 않는 모듈(hardware)은 연결할 확장자가 없으므로 토글을 만들지 않는다.
+        string[] associationOrder = ["archive", "video", "image"];
+        var associationModules = router.Modules
+            .Where(m => m.SupportedExtensions.Count > 0)
+            .OrderBy(m =>
+            {
+                var i = Array.IndexOf(associationOrder, m.Id);
+                return i < 0 ? int.MaxValue : i;
+            });
+
+        foreach (var module in associationModules)
         {
             var toggle = new ToggleSwitch
             {
