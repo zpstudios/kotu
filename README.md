@@ -53,6 +53,9 @@ src/WinUtil.Module.*    # 기능 모듈 (압축, 이미지, ...)
 tests/                  # 단위 테스트 (xunit)
 ```
 
+> 폴더·프로젝트 이름의 `WinUtil`은 초기 코드명입니다 — 제품명은 **ZP**로 리브랜딩되었고,
+> 내부 이름은 빌드·자동 업데이트 호환을 위해 유지합니다.
+
 설계 배경과 로드맵은 [ARCHITECTURE.md](ARCHITECTURE.md) 참고.
 
 ## 버전 이력

@@ -1,4 +1,4 @@
-# ZP (구 WinUtil) — 올인원 Windows 유틸리티 아키텍처 설계
+# ZP — 올인원 Windows 유틸리티 아키텍처 설계
 
 버전: v0.1.0 (설계 초안) · 2026-08-03
 
@@ -62,7 +62,7 @@ public interface IModule
 ### 솔루션 구성(예정)
 
 ```
-WinUtil.sln
+WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 WinUtil 유지 (제품명은 ZP)
 ├─ src/WinUtil.App          # 셸 (실행 파일)
 ├─ src/WinUtil.Core         # 계약(인터페이스) + 공통 서비스
 ├─ src/WinUtil.Module.Archive
