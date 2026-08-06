@@ -7,7 +7,7 @@ public sealed class ImageModule : IModule
 {
     public string Id => "image";
 
-    public string DisplayName => "Image";
+    public string DisplayName => "Images"; // v0.38.0 복수형 (사용자 요청)
 
     public string BrandName => "ZP-image";
 

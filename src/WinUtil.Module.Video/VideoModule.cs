@@ -33,7 +33,7 @@ public sealed class VideoModule : IModule
 
     public string Id => "video";
 
-    public string DisplayName => "Video";
+    public string DisplayName => "Videos"; // v0.38.0 복수형 (사용자 요청)
 
     public string BrandName => "ZP-video";
 

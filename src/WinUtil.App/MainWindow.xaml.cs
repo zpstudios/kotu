@@ -17,8 +17,25 @@ public sealed partial class MainWindow : Window
     private static readonly string IconPath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
 
-    private static readonly string SponsorLogoPath =
-        Path.Combine(AppContext.BaseDirectory, "Assets", "sponsor-msi.png");
+    /// <summary>
+    /// 광고 이미지 후보(Assets\sponsor-*.png, v0.38.0). 1분 단위 시간 시드로 하나를 고르므로
+    /// 메뉴를 다시 열어도 같은 분 안에서는 같은 이미지가 유지된다(사용자 요구).
+    /// </summary>
+    private static readonly string[] SponsorImages = LoadSponsorImages();
+
+    private static string[] LoadSponsorImages()
+    {
+        try
+        {
+            return [.. Directory.GetFiles(
+                    Path.Combine(AppContext.BaseDirectory, "Assets"), "sponsor-*.png")
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)];
+        }
+        catch
+        {
+            return []; // 광고가 없다고 앱이 죽으면 안 된다
+        }
+    }
 
     private readonly FileTypeRouter _router;
     private readonly WindowManager _manager;
@@ -56,6 +73,8 @@ public sealed partial class MainWindow : Window
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
         BuildStartMenu();
+        // 광고 로테이션: 메뉴가 열릴 때 현재 분 기준 이미지로 갱신 (같은 분 = 같은 이미지)
+        StartFlyout.Opening += (_, _) => UpdateSponsorImage();
 
         // UI 스케일 오버라이드(v0.24.0): 설정값 적용 + 설정 변경·창 크기·모니터 DPI 변화에 추종.
         // RasterizationScale은 XamlRoot 준비 후에만 유효하므로 Loaded에서 시작한다.
@@ -245,23 +264,26 @@ public sealed partial class MainWindow : Window
         };
     }
 
+    private Image? _sponsorImage;
+
     private UIElement BuildSponsorCard()
     {
         var panel = new StackPanel { Spacing = 6 };
         panel.Children.Add(new TextBlock { Text = "SPONSOR", FontSize = 10, Opacity = 0.5 });
 
-        if (File.Exists(SponsorLogoPath))
+        if (SponsorImages.Length > 0)
         {
             // 광고 규격(v0.35.0 사용자 확정): 논리 100×50 = DPI 100%에서 100×50px.
-            // 고DPI에서는 시스템 배율만큼 자동 확대된다. 로고는 박스 안에 Uniform으로 맞춘다.
-            panel.Children.Add(new Image
+            // 고DPI에서는 시스템 배율만큼 자동 확대된다. 이미지는 박스 안에 Uniform으로 맞춘다.
+            _sponsorImage = new Image
             {
                 Width = 100,
                 Height = 50,
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(SponsorLogoPath)),
-            });
+            };
+            UpdateSponsorImage();
+            panel.Children.Add(_sponsorImage);
         }
 
         return new Border
@@ -271,6 +293,23 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(12),
             Child = panel,
         };
+    }
+
+    /// <summary>
+    /// 현재 분(minute) 시드의 의사 랜덤으로 광고를 고른다(v0.38.0 사용자 요구:
+    /// 랜덤하되 1분마다만 바뀌고, 메뉴를 열 때마다 바뀌면 안 됨). 같은 이미지면 다시 로드하지 않는다.
+    /// </summary>
+    private void UpdateSponsorImage()
+    {
+        if (_sponsorImage is null || SponsorImages.Length == 0) return;
+
+        var minute = (long)(DateTime.UtcNow - DateTime.UnixEpoch).TotalMinutes;
+        var index = new Random((int)(minute % int.MaxValue)).Next(SponsorImages.Length);
+        var path = SponsorImages[index];
+        if (Equals(_sponsorImage.Tag, path)) return;
+
+        _sponsorImage.Tag = path;
+        _sponsorImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
     }
 
     /// <summary>시작 메뉴 그룹 구분선: 여백 + 1px 라인 (v0.26.0, 공백만으로는 정리가 안 보인다는 피드백).</summary>

@@ -46,7 +46,8 @@
     <Content Include="Assets\app.ico;Assets\app-archive.ico;Assets\app-image.ico;Assets\app-video.ico;Assets\app-hardware.ico"
              CopyToOutputDirectory="PreserveNewest" />
     <!-- 시작 메뉴 스폰서 자리 로고 (packaging/gen_sponsor_placeholder.py로 생성, 실제 로고로 교체 가능) -->
-    <Content Include="Assets\sponsor-msi.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 광고 이미지 로테이션(v0.38.0): sponsor-*.png 전부 동봉, 파일 추가/교체만으로 갱신 -->
+    <Content Include="Assets\sponsor-*.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinUtil.Core\WinUtil.Core.csproj" />
