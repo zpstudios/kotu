@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""스피커 테스트 음악 합성 v4 — 칩튠(레트로 게임)풍 120 BPM (32초, 44.1kHz 스테레오 WAV).
+"""스피커 테스트 음악 합성 v5 — 소프트 레트로(슈퍼마리오 월드풍) 120 BPM (32초, 44.1kHz 스테레오 WAV).
 
-사용자 요구(v0.37.0): v3보다 음을 더 낮추고 덜 거슬리게.
-  - 리드: v3에서 한 옥타브 더 내림(A2~E3/G3), 듀티 25%→50%(둥근 음색), 3.5kHz 로우패스
-  - 아르페지오: 옥타브 상향 제거 + 듀티 50% + 3kHz 로우패스 — 은은한 배경으로
-  - 햇/스네어: 음량 축소 + 로우패스로 쏘는 고역 제거
-  - 베이스: NES 삼각파(16단계 양자화) 유지 — 낮고 둥근 저음
-  - 트위터 핑(8/10/12kHz)은 스피커 점검 기능이라 유지하되 음량만 낮춤
+사용자 요구(v0.56.0): v4보다 더 소프트하고 덜 거슬리게 — 슈퍼마리오 월드 음악 참고.
+  - 리드: 펄스파 → 마림바풍 타악 멜로디 톤(사인 + 짧은 고배음, 퍼커시브 감쇠) — SMW 특유의 통통 튀는 음색
+  - 조성: A 마이너 펜타토닉 → C 메이저 펜타토닉(밝고 순한 느낌)
+  - 스윙: 16분음표 뒤박을 1/3만큼 밀어 가벼운 셔플 그루브(SMW 리듬감)
+  - 아르페지오 → 은은한 벨(사인 감쇠), 햇/스네어 추가 축소 + 로우패스
+  - 베이스: NES 삼각파 유지하되 음량 축소 — 낮고 둥근 저음
+  - 트위터 핑(8/10/12kHz)은 스피커 점검 기능이라 유지, 음량만 소폭 축소
 
 구성(섹션 경계는 v2와 동일 — 영상과 동기):
   1) 0–8s    왼쪽 채널만  — 전부 하드 L (좌 스피커 확인)
   2) 8–16s   오른쪽 채널만 — 응답 리프 전부 하드 R (우 스피커 확인)
-  3) 16–26s  풀 믹스     — 리듬 센터, 리드는 반마디마다 L↔R 핑퐁 + 아르페지오
+  3) 16–26s  풀 믹스     — 리듬 센터, 리드는 반마디마다 L↔R 핑퐁 + 벨 아르페지오
   4) 26–29.6s 저음 스윕(35→90Hz, 우퍼) → 고음 핑(8/10/12kHz, L→R→양쪽, 트위터)
-  5) 29.6–32s 마무리 킥 + 칩 코드 페이드
+  5) 29.6–32s 마무리 킥 + C 메이저 마림바 롤 페이드
 
 재생성:
   python3 docs/gen_test_audio.py           # /tmp/zp-test-audio.wav 생성
@@ -21,10 +22,12 @@
          -map 0:v -map 1:a -c:v copy -c:a aac -b:a 160k -movflags +faststart /tmp/test-clip-new.mp4
   mv /tmp/test-clip-new.mp4 src/WinUtil.Module.Video/Assets/test-clip.mp4
 """
+import os
 import wave
 
 import numpy as np
 
+OUT = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"zp-test-audio-{os.getpid()}.wav")
 SR = 44100
 DUR = 32.0
 BPM = 120.0
@@ -49,21 +52,31 @@ def env_ad(n, attack, decay):
 
 
 def lowpass(sig, cutoff, taps=101):
-    """윈도우드 싱크 FIR 로우패스 — 펄스파·노이즈의 쏘는 고역을 깎는다 (v4)."""
+    """윈도우드 싱크 FIR 로우패스 — 노이즈의 쏘는 고역을 깎는다."""
     m = np.arange(taps) - (taps - 1) / 2
     h = np.sinc(2 * cutoff / SR * m) * np.hanning(taps)
     h /= h.sum()
     return np.convolve(sig, h, mode="same")
 
 
-# ---------- 칩튠 음원 ----------
+# ---------- 음원 (v5: 마림바/벨 중심 — SMW풍) ----------
 
-def square(freq, n, duty=0.5, vib=0.0):
-    """펄스파. duty로 음색(50%=클라리넷, 25%=NES 리드, 12.5%=얇은 아르페지오), vib=비브라토 깊이."""
+def marimba(freq, dur, amp=0.3):
+    """마림바풍 타악 멜로디: 기음 + 빨리 죽는 4·10배음 — 통통 튀지만 부드럽다 (SMW 리드)."""
+    n = int(SR * dur)
     t = np.arange(n) / SR
-    f = freq * (1 + vib * np.sin(2 * np.pi * 5.5 * t))
-    ph = np.cumsum(f) / SR
-    return ((ph % 1.0) < duty) * 2.0 - 1.0
+    env = np.minimum(1, t / 0.002) * np.exp(-t / 0.18)
+    w = (np.sin(2 * np.pi * freq * t)
+         + 0.35 * np.sin(2 * np.pi * freq * 4 * t) * np.exp(-t / 0.045)
+         + 0.12 * np.sin(2 * np.pi * freq * 10.08 * t) * np.exp(-t / 0.02))
+    return amp * env * w
+
+
+def bell(freq, dur, amp=0.05):
+    """은은한 벨(아르페지오 배경): 순수 사인 감쇠 — v4 펄스 아르페지오 대체."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    return amp * np.minimum(1, t / 0.002) * np.exp(-t / 0.10) * np.sin(2 * np.pi * freq * t)
 
 
 def nes_triangle(freq, n):
@@ -73,11 +86,11 @@ def nes_triangle(freq, n):
     return np.round(w * 7.5) / 7.5
 
 
-def kick(amp=0.85):
-    """칩 킥: 90→38Hz 피치 드롭 사인 — v2보다 낮게."""
+def kick(amp=0.7):
+    """칩 킥: 85→38Hz 피치 드롭 사인 — v5: 음량 축소."""
     n = int(SR * 0.26)
     t = np.arange(n) / SR
-    freq = 38 + (90 - 38) * np.exp(-t * 30)
+    freq = 38 + (85 - 38) * np.exp(-t * 30)
     phase = 2 * np.pi * np.cumsum(freq) / SR
     return amp * env_ad(n, 0.001, 0.10) * np.sin(phase)
 
@@ -85,67 +98,61 @@ def kick(amp=0.85):
 RNG = np.random.default_rng(20260806)  # 재현 가능한 노이즈
 
 
-def hat(amp=0.07, dur=0.04):
-    """햇: 고역 노이즈 틱 — v4: 음량 축소 + 8kHz 로우패스로 쏘는 느낌 제거."""
+def hat(amp=0.045, dur=0.035):
+    """햇: 고역 노이즈 틱 — v5: 추가 축소 + 7kHz 로우패스."""
     n = int(SR * dur)
     noise = np.diff(RNG.standard_normal(n + 1))
-    return lowpass(amp * env_ad(n, 0.001, 0.015) * noise, 8000)
+    return lowpass(amp * env_ad(n, 0.001, 0.013) * noise, 7000)
 
 
-def snare(amp=0.18):
-    """스네어: 노이즈 버스트 — v4: 음량 축소 + 4.5kHz 로우패스."""
-    n = int(SR * 0.14)
+def snare(amp=0.11):
+    """스네어: 짧은 노이즈 브러시 — v5: 추가 축소 + 3.5kHz 로우패스."""
+    n = int(SR * 0.12)
     noise = np.diff(RNG.standard_normal(n + 1))
-    return lowpass(amp * env_ad(n, 0.001, 0.045) * noise, 4500)
+    return lowpass(amp * env_ad(n, 0.001, 0.04) * noise, 3500)
 
 
-def bassnote(freq, dur, amp=0.55):
+def bassnote(freq, dur, amp=0.45):
     n = int(SR * dur)
     return amp * env_ad(n, 0.003, 0.13) * nes_triangle(freq, n)
 
 
-def lead(freq, dur, amp=0.4):
-    """리드: 듀티 50% 펄스(둥근 음색) + 얕은 비브라토 + 3.5kHz 로우패스 (v4)."""
-    n = int(SR * dur)
-    return lowpass(amp * env_ad(n, 0.003, 0.15) * square(freq, n, duty=0.5, vib=0.004), 3500)
-
-
-def arp_note(freq, dur, amp=0.08):
-    """아르페지오용: 듀티 50% 펄스 + 3kHz 로우패스, 짧은 감쇠 — 은은한 배경 (v4)."""
-    n = int(SR * dur)
-    return lowpass(amp * env_ad(n, 0.002, 0.05) * square(freq, n, duty=0.5), 3000)
-
-
 N = {  # 음이름 → 주파수
-    "A1": 55.00, "C2": 65.41, "D2": 73.42, "E2": 82.41, "G2": 98.00, "A2": 110.00,
-    "C3": 130.81, "D3": 146.83, "E3": 164.81, "G3": 196.00, "A3": 220.00,
+    "C2": 65.41, "D2": 73.42, "E2": 82.41, "F2": 87.31, "G2": 98.00, "A2": 110.00,
+    "C3": 130.81, "D3": 146.83, "E3": 164.81, "F3": 174.61, "G3": 196.00, "A3": 220.00, "B3": 246.94,
     "C4": 261.63, "D4": 293.66, "E4": 329.63, "G4": 392.00, "A4": 440.00,
-    "C5": 523.25, "D5": 587.33, "E5": 659.26, "G5": 783.99, "A5": 880.00,
 }
 
+sixteenth = BEAT / 4
+SWING = sixteenth / 3   # 16분 뒤박을 1/3 밀기 — 가벼운 셔플 (SMW 그루브)
 
-def groove(t0, dur, ch, riff, bass_line):
-    """킥(4분)+햇(8분 오프비트)+스네어(백비트)+삼각파 베이스(8분)+리프(16분)를 ch 채널에 깐다."""
+
+def swung(k):
+    """k번째 16분음표의 스윙 적용 시각 오프셋(박 시작 기준)."""
+    return k * sixteenth + (SWING if k % 2 == 1 else 0.0)
+
+
+def groove(t0, dur, ch, riff, bass_line, lead_amp=0.26):
+    """킥(4분)+햇(스윙 8분 오프비트)+스네어(백비트)+삼각파 베이스(8분)+마림바 리프(스윙 16분)."""
     beats = int(round(dur / BEAT))
     for b in range(beats):
         add(kick(), t0 + b * BEAT, ch)
-        add(hat(), t0 + (b + 0.5) * BEAT, ch)
+        add(hat(), t0 + (b + 0.5) * BEAT + SWING / 2, ch)  # 오프비트 햇도 살짝 뒤로
         if b % 4 in (1, 3):  # 백비트 스네어
             add(snare(), t0 + b * BEAT, ch)
     eighth = BEAT / 2
     for k in range(beats * 2):
         add(bassnote(N[bass_line[(k // 4) % len(bass_line)]], eighth * 0.9), t0 + k * eighth, ch)
-    sixteenth = BEAT / 4
     for k in range(beats * 4):
         note = riff[k % len(riff)]
         if note:
-            add(lead(N[note], sixteenth * 1.6, 0.32), t0 + k * sixteenth, ch)
+            add(marimba(N[note], sixteenth * 2.2, lead_amp), t0 + swung(k), ch)
 
 
-# A마이너 펜타토닉 리프 — v4: v3에서 한 옥타브 더 내림(A2~E3/G3). ""는 쉼표
-RIFF_L = ["A2", "", "C3", "A2", "E3", "", "D3", "C3", "A2", "", "C3", "D3", "E3", "D3", "C3", "A2"]
-RIFF_R = ["C3", "", "E3", "C3", "G3", "", "E3", "D3", "C3", "", "D3", "E3", "G3", "E3", "D3", "C3"]
-BASS = ["A1", "A1", "C2", "D2"]
+# C 메이저 펜타토닉 리프 (v5: 밝고 순하게, 쉼표 많이 — 통통 튀는 SMW 프레이즈). ""는 쉼표
+RIFF_L = ["C3", "", "E3", "G3", "", "E3", "D3", "", "C3", "", "D3", "E3", "G3", "", "E3", ""]
+RIFF_R = ["E3", "", "G3", "A3", "", "G3", "E3", "", "D3", "", "E3", "G3", "A3", "", "G3", ""]
+BASS = ["C2", "C2", "F2", "G2"]
 
 # 1) 0–8s 왼쪽만 / 2) 8–16s 오른쪽만
 groove(0.0, 8.0, 0, RIFF_L, BASS)
@@ -154,7 +161,6 @@ groove(8.0, 8.0, 1, RIFF_R, BASS)
 # 3) 16–26s 풀 믹스: 리듬 섹션은 센터, 리드는 반마디(2박)마다 L↔R 핑퐁
 groove(16.0, 10.0, 2, [""] * 16, BASS)  # 킥+햇+스네어+베이스만 (리프는 핑퐁으로 따로)
 half_bar = BEAT * 2
-sixteenth = BEAT / 4
 k = 0
 t = 16.0
 while t < 25.8:
@@ -163,50 +169,48 @@ while t < 25.8:
     for j in range(8):  # 반마디 = 16분음표 8개
         note = riff[j % len(riff)]
         if note:
-            add(lead(N[note], sixteenth * 1.6, 0.36), t + j * sixteenth, side)
+            add(marimba(N[note], sixteenth * 2.2, 0.3), t + swung(j), side)
     k += 1
     t += half_bar
 
-# 칩튠 상징: 고속 아르페지오(16분) — 마디(2s)마다 코드 전환, 양 채널 은은하게
-CHORDS = [["A2", "C3", "E3"], ["C3", "E3", "G3"], ["D3", "G3", "A3"], ["A2", "C3", "E3"], ["A2", "C3", "E3"]]
+# 배경 벨 아르페지오(16분) — 마디(2s)마다 코드 전환: C → Am → F → G → C
+CHORDS = [["C3", "E3", "G3"], ["A2", "C3", "E3"], ["C3", "F3", "A3"], ["D3", "G3", "B3"], ["C3", "E3", "G3"]]
 ARP_PATTERN = [0, 1, 2, 1]
 for bar, chord in enumerate(CHORDS):
     bar_t = 16.0 + bar * BEAT * 4
     for k in range(16):  # 1마디 = 16분음표 16개
-        tt = bar_t + k * sixteenth
+        tt = bar_t + swung(k)
         if tt >= 25.9:
             break
-        add(arp_note(N[chord[ARP_PATTERN[k % 4]]], sixteenth * 1.2), tt, ch=2)  # v4: 옥타브 상향 제거
+        add(bell(N[chord[ARP_PATTERN[k % 4]]], sixteenth * 1.6), tt, ch=2)
 
 # 4a) 26–28.2s 저음 스윕 35→90Hz (우퍼)
 n = int(SR * 2.2)
 t = np.arange(n) / SR
 freq = 35 + (90 - 35) * t / 2.2
 phase = 2 * np.pi * np.cumsum(freq) / SR
-add(0.55 * np.minimum(1, t * 8) * np.minimum(1, (2.2 - t) * 2) * np.sin(phase), 26.0, ch=2)
+add(0.5 * np.minimum(1, t * 8) * np.minimum(1, (2.2 - t) * 2) * np.sin(phase), 26.0, ch=2)
 
-# 4b) 28.2–29.6s 고음 핑 (트위터, L→R→양쪽)
+# 4b) 28.2–29.6s 고음 핑 (트위터, L→R→양쪽) — v5: 음량 소폭 축소
 for k, (f, ch) in enumerate([(8000, 0), (10000, 1), (12000, 2)]):
     tt = np.arange(int(SR * 0.35)) / SR
     e = np.minimum(1, tt * 300) * np.exp(-7 * tt)
-    add(0.11 * e * np.sin(2 * np.pi * f * tt), 28.2 + k * 0.45, ch=ch)  # v4: 음량 축소
+    add(0.09 * e * np.sin(2 * np.pi * f * tt), 28.2 + k * 0.45, ch=ch)
 
-# 5) 29.6–32s 마무리: 킥 + A 마이너 칩 코드(삼각파 베이스 + 펄스 화음) 페이드
-# v4: 화음도 한 옥타브 내리고(A2~A3) 듀티 50% + 로우패스로 부드럽게
-add(kick(0.9), 29.6, 2)
+# 5) 29.6–32s 마무리: 소프트 킥 + C 메이저 마림바 롤(C3-E3-G3-C4) + 저음 페이드
+add(kick(0.75), 29.6, 2)
+for i, x in enumerate(["C3", "E3", "G3", "C4"]):
+    add(marimba(N[x], 1.2, 0.22), 29.65 + i * 0.11, ch=2)
 n = int(SR * 2.3)
 t = np.arange(n) / SR
 fade = np.minimum(1, t * 6) * np.exp(-1.4 * t)
-w = 0.5 * nes_triangle(N["A1"], n)
-for x in ["A2", "C3", "E3", "A3"]:
-    w += 0.22 * square(N[x], n, duty=0.5)
-add(0.16 * fade * lowpass(w, 3500), 29.65, ch=2)
+add(0.2 * fade * nes_triangle(N["C2"], n), 29.65, ch=2)
 
-# 소프트 클립(v4: 1.15→1.0 — 클리핑 배음 최소화) → 정규화 → 16bit WAV
-buf = np.tanh(buf * 1.0)
-buf *= 0.95 / max(1e-9, np.abs(buf).max())
+# 소프트 클립 → 정규화 → 16bit WAV
+buf = np.tanh(buf)
+buf *= 0.9 / max(1e-9, np.abs(buf).max())
 pcm = (buf * 32767).astype("<i2")
-with wave.open("/tmp/zp-test-audio.wav", "wb") as f:
+with wave.open(OUT, "wb") as f:
     f.setnchannels(2)
     f.setsampwidth(2)
     f.setframerate(SR)
@@ -217,4 +221,4 @@ for name, a, b in [("1 L만", 0, 8), ("2 R만", 8, 16), ("3 풀믹스", 16, 26),
                    ("4 테스트톤", 26, 29.6), ("5 아웃트로", 29.6, 32)]:
     seg = buf[int(a * SR):int(b * SR)]
     print(f"{name}: L rms={np.sqrt((seg[:, 0] ** 2).mean()):.3f}  R rms={np.sqrt((seg[:, 1] ** 2).mean()):.3f}")
-print("wrote /tmp/zp-test-audio.wav")
+print("wrote " + OUT)
