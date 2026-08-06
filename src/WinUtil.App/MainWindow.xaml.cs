@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using WinUtil.Core.Cli;
 using WinUtil.Core.Contracts;
@@ -13,10 +14,12 @@ public sealed partial class MainWindow : Window
     private static readonly string IconPath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
 
+    private static readonly string SponsorLogoPath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "sponsor-msi.png");
+
     private readonly FileTypeRouter _router;
     private readonly WindowManager _manager;
     private readonly TrayIcon _tray;
-    private bool _suppressNavSelection;
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
@@ -30,7 +33,7 @@ public sealed partial class MainWindow : Window
         Title = "ZP";
         _manager = manager;
         _router = App.Services.GetRequiredService<FileTypeRouter>();
-        BuildNavigation();
+        BuildStartMenu();
 
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
         if (File.Exists(IconPath)) AppWindow.SetIcon(IconPath);
@@ -53,22 +56,129 @@ public sealed partial class MainWindow : Window
         _tray.SetTooltip(title);
     }
 
-    /// <summary>등록된 모듈들로 네비게이션 메뉴를 구성한다.</summary>
-    private void BuildNavigation()
+    // ---------- 시작 메뉴 (하단 바에서 위로 떠오르는 플라이아웃) ----------
+
+    /// <summary>
+    /// 시작 메뉴 구성. 패널은 위→아래 순서로 채우므로, 사용자가 정한 "아래부터" 순서
+    /// (사진-영상-문서, 여백, 압축, 여백x2, 광고)를 뒤집어 넣는다.
+    /// </summary>
+    private void BuildStartMenu()
     {
-        foreach (var module in _router.Modules)
+        StartMenuPanel.Children.Clear();
+
+        // 최상단: 스폰서(광고) 자리 — 지금은 MSI 로고 플레이스홀더, 파일 교체만으로 변경 가능
+        StartMenuPanel.Children.Add(BuildSponsorCard());
+        StartMenuPanel.Children.Add(Spacer(16)); // 여백 x2
+
+        AddModuleItem("archive");
+        StartMenuPanel.Children.Add(Spacer(8)); // 여백
+
+        // 사진-영상-문서 그룹 (아래부터 사진 → 위로 갈수록 문서)
+        AddDocumentPlaceholder();
+        AddModuleItem("video");
+        AddModuleItem("image");
+
+        // 하단 바 우측 Info 아이콘: 하드웨어 모듈 글리프 재사용
+        var hardware = _router.Modules.FirstOrDefault(m => m.Id == "hardware");
+        if (hardware is not null)
         {
-            var item = new NavigationViewItem
-            {
-                Content = module.DisplayName,
-                Tag = module.Id,
-                // 접힌 네비게이션에서는 아이콘만 보이므로 아이콘이 없으면 텍스트가 잘려 보인다.
-                Icon = new FontIcon { Glyph = module.IconGlyph },
-            };
-            ToolTipService.SetToolTip(item, module.DisplayName);
-            Nav.MenuItems.Add(item);
+            InfoButton.Content = new FontIcon { Glyph = hardware.IconGlyph, FontSize = 16 };
+            ToolTipService.SetToolTip(InfoButton, hardware.DisplayName);
+        }
+        else
+        {
+            InfoButton.Visibility = Visibility.Collapsed;
         }
     }
+
+    private void AddModuleItem(string moduleId)
+    {
+        var module = _router.Modules.FirstOrDefault(m => m.Id == moduleId);
+        if (module is null) return;
+
+        var item = MakeMenuItem(module.IconGlyph, module.DisplayName);
+        item.Click += (_, _) =>
+        {
+            StartFlyout.Hide();
+            OpenModule(module);
+        };
+        StartMenuPanel.Children.Add(item);
+    }
+
+    /// <summary>문서 모듈 자리(마크다운·PDF·HWP 등 예정) — 메뉴 배치를 먼저 확정해 둔다.</summary>
+    private void AddDocumentPlaceholder()
+    {
+        var item = MakeMenuItem("", "Document");
+        item.IsEnabled = false;
+        ToolTipService.SetToolTip(item, "Coming soon — Markdown, PDF, HWP, and more");
+        StartMenuPanel.Children.Add(item);
+    }
+
+    private static Button MakeMenuItem(string glyph, string label)
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        content.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16 });
+        content.Children.Add(new TextBlock { Text = label });
+
+        return new Button
+        {
+            Content = content,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(10, 8, 10, 8),
+        };
+    }
+
+    private UIElement BuildSponsorCard()
+    {
+        var panel = new StackPanel { Spacing = 6 };
+        panel.Children.Add(new TextBlock { Text = "SPONSOR", FontSize = 10, Opacity = 0.5 });
+
+        if (File.Exists(SponsorLogoPath))
+        {
+            panel.Children.Add(new Image
+            {
+                Height = 44,
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(SponsorLogoPath)),
+            });
+        }
+
+        return new Border
+        {
+            Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12),
+            Child = panel,
+        };
+    }
+
+    private static Border Spacer(double height) => new() { Height = height };
+
+    private void OpenModule(IModule module)
+    {
+        SetTitle($"{module.DisplayName} — ZP");
+        ShowModule(module, OpenContext.Empty);
+    }
+
+    private void OnInfoClick(object sender, RoutedEventArgs e)
+    {
+        var module = _router.Modules.FirstOrDefault(m => m.Id == "hardware");
+        if (module is not null) OpenModule(module);
+    }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    {
+        SetTitle("Settings — ZP");
+        ModuleHost.Content = new SettingsView(_router);
+        CurrentModuleId = null;
+        IsUntouched = false;
+    }
+
+    // ---------- 파일 열기 ----------
 
     /// <summary>파일 라우팅의 종착점: 확장자로 모듈을 찾아 뷰를 띄운다.</summary>
     public void OpenFile(string path)
@@ -128,41 +238,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowModule(IModule module, OpenContext context)
     {
-        // 중요: SelectedItem 대입이 SelectionChanged를 동기 재진입시키므로,
-        // 억제 플래그 없이는 방금 만든 파일 컨텍스트 뷰가 빈 뷰로 즉시 덮여버린다(v0.5.8 실기기 버그).
-        _suppressNavSelection = true;
-        Nav.SelectedItem = Nav.MenuItems
-            .OfType<NavigationViewItem>()
-            .FirstOrDefault(i => (string?)i.Tag == module.Id);
-        _suppressNavSelection = false;
-
         ModuleHost.Content = (UIElement)module.CreateView(context);
         CurrentModuleId = module.Id;
         IsUntouched = false;
-    }
-
-    private void OnNavSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
-    {
-        if (_suppressNavSelection) return;
-
-        if (args.IsSettingsSelected)
-        {
-            SetTitle("Settings — ZP");
-            ModuleHost.Content = new SettingsView(_router);
-            CurrentModuleId = null;
-            IsUntouched = false;
-            return;
-        }
-
-        if (args.SelectedItem is NavigationViewItem { Tag: string id })
-        {
-            var module = _router.Modules.FirstOrDefault(m => m.Id == id);
-            if (module is not null)
-            {
-                SetTitle($"{module.DisplayName} — ZP");
-                ShowModule(module, OpenContext.Empty);
-            }
-        }
     }
 
     public void BringToFront()

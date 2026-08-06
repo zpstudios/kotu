@@ -3,23 +3,58 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- 창 전체 드롭: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅 -->
-    <!-- 배경은 시스템 테마 기본값 유지 — 브랜드 색은 타이틀바(TitleBarTheming)에만 쓴다 -->
-    <NavigationView x:Name="Nav"
-                    PaneDisplayMode="LeftCompact"
-                    IsBackButtonVisible="Collapsed"
-                    IsSettingsVisible="True"
-                    AllowDrop="True"
-                    DragOver="OnWindowDragOver"
-                    Drop="OnWindowDrop"
-                    SelectionChanged="OnNavSelectionChanged">
-        <!-- 메뉴 항목은 등록된 모듈로부터 코드에서 채운다 -->
+    <!--
+      Windows 시작 메뉴 스타일 셸(v0.18.0, 기존 좌측 NavigationView 대체):
+      하단 바 좌측의 메뉴 버튼을 누르면 위로 플라이아웃이 떠오른다.
+      항목 순서(아래→위): 사진·영상·문서 그룹 - 여백 - 압축 - 여백x2 - 스폰서(광고).
+      하단 바 우측은 Windows 트레이 위치처럼 Info·Settings 아이콘.
+      창 전체 드롭은 유지: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅.
+    -->
+    <Grid AllowDrop="True" DragOver="OnWindowDragOver" Drop="OnWindowDrop">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="44" />
+        </Grid.RowDefinitions>
+
         <ContentControl x:Name="ModuleHost"
+                        Grid.Row="0"
                         HorizontalContentAlignment="Stretch"
                         VerticalContentAlignment="Stretch">
-            <TextBlock Text="Open a file or pick a feature on the left"
+            <TextBlock Text="Open a file, or use the menu at the bottom left"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Opacity="0.6"/>
         </ContentControl>
-    </NavigationView>
+
+        <!-- 하단 바 (작업표시줄 느낌) -->
+        <Grid Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <Button x:Name="StartButton"
+                    Margin="6,0,0,0" Padding="12,6"
+                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                    Background="Transparent" BorderThickness="0"
+                    ToolTipService.ToolTip="Menu">
+                <FontIcon Glyph="&#xE700;" FontSize="16" />
+                <Button.Flyout>
+                    <Flyout x:Name="StartFlyout" Placement="TopEdgeAlignedLeft">
+                        <!-- 항목은 코드(BuildStartMenu)에서 채운다 -->
+                        <StackPanel x:Name="StartMenuPanel" Width="248" />
+                    </Flyout>
+                </Button.Flyout>
+            </Button>
+
+            <!-- 우측: Info·Settings (아이콘은 코드에서 모듈 글리프로 채운다) -->
+            <StackPanel Orientation="Horizontal" Spacing="2"
+                        HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Margin="0,0,8,0">
+                <Button x:Name="InfoButton" Padding="10,6"
+                        Background="Transparent" BorderThickness="0"
+                        Click="OnInfoClick" />
+                <Button x:Name="SettingsButton" Padding="10,6"
+                        Background="Transparent" BorderThickness="0"
+                        ToolTipService.ToolTip="Settings"
+                        Click="OnSettingsClick">
+                    <FontIcon Glyph="&#xE713;" FontSize="16" />
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
 </Window>
