@@ -268,8 +268,16 @@ public sealed partial class MainWindow : Window
 
     private UIElement BuildSponsorCard()
     {
-        var panel = new StackPanel { Spacing = 6 };
-        panel.Children.Add(new TextBlock { Text = "SPONSOR", FontSize = 10, Opacity = 0.5 });
+        var panel = new StackPanel { Spacing = 4 };
+        // 라벨은 카드 좌상단 구석으로 바짝(패딩을 음수 마진으로 상쇄) + 더 작게 (v0.39.0 사용자 요청)
+        panel.Children.Add(new TextBlock
+        {
+            Text = "SPONSOR",
+            FontSize = 8,
+            Opacity = 0.45,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(-8, -9, 0, 0),
+        });
 
         if (SponsorImages.Length > 0)
         {
