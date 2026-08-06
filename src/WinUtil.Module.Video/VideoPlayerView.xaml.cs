@@ -159,6 +159,12 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         VideoSurface.AddHandler(PointerWheelChangedEvent,
             new PointerEventHandler(OnSurfaceWheel), handledEventsToo: true);
 
+        // Fit width/height는 표면 크기에 따라 배율이 달라지므로 크기 변화에 추종한다 (v0.41.0)
+        VideoSurface.SizeChanged += (_, _) =>
+        {
+            if (_fitMode is VideoFitMode.FitWidth or VideoFitMode.FitHeight) ApplyFitMode();
+        };
+
         // 시크 슬라이더 스크럽 감지: 드래그 중에는 시킹하지 않고 놓을 때 1회만 시킹한다.
         // (드래그 틱마다 p.Time을 설정하면 시킹이 폭주해 드래그를 멈춰도 재생이 멎는 실기기 버그)
         // Slider가 포인터 이벤트를 내부에서 소비하므로 handledEventsToo 필수.
@@ -458,6 +464,9 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         {
             player.SetRate(Speeds[i]);
         }
+
+        // 보기 모드도 미디어·플레이어 교체 후 다시 적용한다 (v0.41.0 — 해상도가 달라질 수 있다)
+        ApplyFitMode();
     });
 
     private void OnPlayerPaused(object? sender, EventArgs e) =>
@@ -613,6 +622,95 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (_player is not { } p) return;
         p.Mute = !p.Mute;
         MuteButton.Content = p.Mute ? "🔇" : "🔊";
+    }
+
+    // ---------- 보기 모드 (v0.41.0: 1:1 / Fit / Fit width / Fit height) ----------
+
+    /// <summary>
+    /// Fit = libvlc 자동 맞춤(긴 변이 잘리지 않는 레터박스, 기본).
+    /// FitWidth/FitHeight = 표면의 해당 축을 꽉 채우는 배율(반대 축은 잘리거나 남는다).
+    /// ActualSize = 원본 픽셀 1:1. 파일을 바꿔도 선택은 유지된다.
+    /// </summary>
+    private enum VideoFitMode { Fit, FitWidth, FitHeight, ActualSize }
+
+    private VideoFitMode _fitMode = VideoFitMode.Fit;
+
+    /// <summary>현재 보기 모드를 플레이어 Scale에 적용한다(0 = 자동 맞춤, 1 = 원본 1:1).</summary>
+    private void ApplyFitMode()
+    {
+        if (_player is not { } p) return;
+
+        switch (_fitMode)
+        {
+            case VideoFitMode.Fit:
+                p.Scale = 0;
+                break;
+            case VideoFitMode.ActualSize:
+                p.Scale = 1;
+                break;
+            case VideoFitMode.FitWidth:
+            case VideoFitMode.FitHeight:
+                var (videoW, videoH) = VideoPixelSize();
+                var scale = XamlRoot?.RasterizationScale ?? 1.0;
+                var surfaceW = VideoSurface.ActualWidth * scale;
+                var surfaceH = VideoSurface.ActualHeight * scale;
+                if (videoW <= 0 || videoH <= 0 || surfaceW <= 0 || surfaceH <= 0)
+                {
+                    p.Scale = 0; // 트랙 정보가 아직 없으면(파싱 전·음악) 자동 맞춤으로 대체
+                    break;
+                }
+                p.Scale = (float)(_fitMode == VideoFitMode.FitWidth
+                    ? surfaceW / videoW
+                    : surfaceH / videoH);
+                break;
+        }
+    }
+
+    /// <summary>현재 미디어의 비디오 트랙 해상도. 없으면 (0, 0).</summary>
+    private (double W, double H) VideoPixelSize()
+    {
+        try
+        {
+            // Media 게터는 새 래퍼를 만들어 참조를 늘리므로 쓰고 바로 해제한다.
+            using var media = _player?.Media;
+            foreach (var track in media?.Tracks ?? [])
+            {
+                if (track.TrackType == TrackType.Video)
+                {
+                    var v = track.Data.Video;
+                    return (v.Width, v.Height);
+                }
+            }
+        }
+        catch
+        {
+            // 트랙 조회 실패는 자동 맞춤으로 대체된다.
+        }
+        return (0, 0);
+    }
+
+    private void OnActualSizeClicked(object sender, RoutedEventArgs e)
+    {
+        _fitMode = VideoFitMode.ActualSize;
+        ApplyFitMode();
+    }
+
+    private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args)
+    {
+        _fitMode = VideoFitMode.Fit;
+        ApplyFitMode();
+    }
+
+    private void OnFitWidthClicked(object sender, RoutedEventArgs e)
+    {
+        _fitMode = VideoFitMode.FitWidth;
+        ApplyFitMode();
+    }
+
+    private void OnFitHeightClicked(object sender, RoutedEventArgs e)
+    {
+        _fitMode = VideoFitMode.FitHeight;
+        ApplyFitMode();
     }
 
     private void ToggleFullScreen()

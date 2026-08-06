@@ -112,6 +112,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;
         if (Scroller.ZoomFactor > 1.001f) return;
+        // 1:1·Fit width/height로 이미지가 뷰포트를 넘치면 휠은 팬 스크롤에 양보한다 (v0.41.0)
+        if (Scroller.ScrollableHeight > 0 || Scroller.ScrollableWidth > 0) return;
 
         var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
         if (delta == 0) return;
@@ -250,16 +252,73 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         UpdateFit();
     }
 
-    /// <summary>창맞춤: 뷰포트 크기로 이미지 레이아웃을 제한(작은 이미지는 원본 크기 유지).</summary>
+    // ---------- 보기 모드 (v0.41.0: 1:1 / Fit / Fit width / Fit height) ----------
+
+    /// <summary>
+    /// Fit = 긴 변이 잘리지 않게 창에 맞춤(기본, 작은 이미지는 원본 유지).
+    /// FitWidth/FitHeight = 해당 축을 꽉 채움(반대 축은 스크롤). ActualSize = 실제 픽셀 1:1.
+    /// ←/→ 탐색 간에도 선택한 모드를 유지한다.
+    /// </summary>
+    private enum FitMode { Fit, FitWidth, FitHeight, ActualSize }
+
+    private FitMode _fitMode = FitMode.Fit;
+
+    /// <summary>현재 보기 모드를 이미지 레이아웃에 적용한다(창맞춤은 뷰포트 크기로 제한).</summary>
     private void UpdateFit()
     {
         if (Scroller.ViewportWidth <= 0 || Scroller.ViewportHeight <= 0) return;
 
-        // 90°/270° 회전 시 가로·세로 제한을 맞바꿔 회전 후에도 창에 들어오게 한다.
+        var vw = Scroller.ViewportWidth;
+        var vh = Scroller.ViewportHeight;
+        // 90°/270° 회전 시 레이아웃 축이 바뀌므로 가로·세로 제한을 맞바꿔 적용한다.
         var swapped = (_exifRotation + _userRotation) % 180 != 0;
-        ImageControl.MaxWidth = swapped ? Scroller.ViewportHeight : Scroller.ViewportWidth;
-        ImageControl.MaxHeight = swapped ? Scroller.ViewportWidth : Scroller.ViewportHeight;
+
+        ImageControl.ClearValue(FrameworkElement.WidthProperty);
+        ImageControl.ClearValue(FrameworkElement.HeightProperty);
+        ImageControl.MaxWidth = double.PositiveInfinity;
+        ImageControl.MaxHeight = double.PositiveInfinity;
+
+        switch (_fitMode)
+        {
+            case FitMode.Fit:
+                ImageControl.MaxWidth = swapped ? vh : vw;
+                ImageControl.MaxHeight = swapped ? vw : vh;
+                break;
+            case FitMode.FitWidth:
+                // 명시 크기(Uniform이 비율 유지)로 작은 이미지도 좌우를 채운다.
+                if (swapped) ImageControl.Height = vw;
+                else ImageControl.Width = vw;
+                break;
+            case FitMode.FitHeight:
+                if (swapped) ImageControl.Width = vh;
+                else ImageControl.Height = vh;
+                break;
+            case FitMode.ActualSize:
+                // 논리 픽셀 = 물리 픽셀 / 배율 → 화면에서 실제 픽셀 1:1로 보인다.
+                if (_pixelWidth > 0 && _pixelHeight > 0)
+                {
+                    var scale = XamlRoot?.RasterizationScale ?? 1.0;
+                    ImageControl.Width = _pixelWidth / scale;
+                    ImageControl.Height = _pixelHeight / scale;
+                }
+                break;
+        }
     }
+
+    private void SetFitMode(FitMode mode)
+    {
+        _fitMode = mode;
+        Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true); // 줌 초기화 후 모드 적용
+        UpdateFit();
+    }
+
+    private void OnActualSizeClick(object sender, RoutedEventArgs e) => SetFitMode(FitMode.ActualSize);
+
+    private void OnFitClick(SplitButton sender, SplitButtonClickEventArgs args) => SetFitMode(FitMode.Fit);
+
+    private void OnFitWidthClick(object sender, RoutedEventArgs e) => SetFitMode(FitMode.FitWidth);
+
+    private void OnFitHeightClick(object sender, RoutedEventArgs e) => SetFitMode(FitMode.FitHeight);
 
     private void OnScrollerSizeChanged(object sender, SizeChangedEventArgs e) => UpdateFit();
 

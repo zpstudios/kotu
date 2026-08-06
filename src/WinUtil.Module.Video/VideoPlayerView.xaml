@@ -73,6 +73,8 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <Button Grid.Column="0"
@@ -97,7 +99,20 @@
                       ToolTipService.ToolTip="Playback speed" SelectionChanged="OnSpeedChanged" />
             <ComboBox x:Name="SubtitleBox" Grid.Column="8" MinWidth="120"
                       ToolTipService.ToolTip="Subtitles" SelectionChanged="OnSubtitleChanged" />
-            <Button Grid.Column="9" Content="⛶"
+            <!-- 우측 기능 순서(v0.41.0 사용자 지정): 1:1 → Fit(방향 선택) → 전체화면 -->
+            <Button Grid.Column="9" Content="1:1"
+                    ToolTipService.ToolTip="Actual size (100%)" Click="OnActualSizeClicked" />
+            <!-- 기본 클릭 = 긴 변이 잘리지 않게 창에 맞춤(레터박스). 화살표로 좌우/상하 채움 선택 -->
+            <SplitButton Grid.Column="10" Content="Fit" Click="OnFitClicked"
+                         ToolTipService.ToolTip="Fit to window — long edge fits, nothing cropped">
+                <SplitButton.Flyout>
+                    <MenuFlyout Placement="Top">
+                        <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClicked" />
+                        <MenuFlyoutItem Text="Fit height" Click="OnFitHeightClicked" />
+                    </MenuFlyout>
+                </SplitButton.Flyout>
+            </SplitButton>
+            <Button Grid.Column="11" Content="⛶"
                     ToolTipService.ToolTip="Full screen (Enter)" Click="OnFullScreenClicked" />
         </Grid>
     </Grid>
