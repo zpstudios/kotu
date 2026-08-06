@@ -6,8 +6,8 @@
     <!--
       Windows 시작 메뉴 스타일 셸(v0.18.0, 기존 좌측 NavigationView 대체):
       하단 바 좌측의 메뉴 버튼을 누르면 위로 플라이아웃이 떠오른다.
-      항목 순서(아래→위): 사진·영상·문서 그룹 - 여백 - 압축 - 여백x2 - 스폰서(광고).
-      하단 바 우측은 Windows 트레이 위치처럼 Info·Settings 아이콘.
+      항목 순서(아래→위): 사진·영상·문서 그룹 - 압축 - H/W·Settings - 스폰서(광고).
+      하단 바 우측 Info·Settings 아이콘은 제거(v0.28.2) — 시작 메뉴로 일원화.
       창 전체 드롭은 유지: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅.
     -->
     <!-- ScaleHost: UI 스케일 오버라이드(v0.24.0)의 기준 크기. RootLayout에 ScaleTransform을
@@ -81,7 +81,7 @@
             <!-- 모듈 제공 하단 바(동영상 트랜스포트 등) — 메뉴 버튼과 우측 아이콘 사이 (v0.21.0) -->
             <ContentControl x:Name="ModuleBarHost"
                             IsTabStop="False"
-                            Margin="52,0,88,0"
+                            Margin="52,0,12,0"
                             HorizontalAlignment="Stretch" VerticalAlignment="Center"
                             HorizontalContentAlignment="Stretch" />
 
@@ -98,21 +98,6 @@
                     </Flyout>
                 </Button.Flyout>
             </Button>
-
-            <!-- 우측: Info·Settings (아이콘은 코드에서 모듈 글리프로 채운다) -->
-            <StackPanel Orientation="Horizontal" Spacing="2"
-                        HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Margin="0,0,8,0">
-                <Button x:Name="InfoButton" Padding="10,6"
-                        Background="Transparent" BorderThickness="0"
-                        Click="OnInfoClick" />
-                <Button x:Name="SettingsButton" Padding="10,6"
-                        Background="Transparent" BorderThickness="0"
-                        ToolTipService.ToolTip="Settings"
-                        Click="OnSettingsClick">
-                    <FontIcon Glyph="&#xE713;" FontSize="16" />
-                </Button>
-            </StackPanel>
         </Grid>
     </Grid>
     </Grid>

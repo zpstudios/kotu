@@ -188,18 +188,7 @@ public sealed partial class MainWindow : Window
         AddDocumentPlaceholder();
         AddModuleItem("video");
         AddModuleItem("image");
-
-        // 하단 바 우측 Info 아이콘: 하드웨어 모듈 글리프 재사용
-        var hardware = _router.Modules.FirstOrDefault(m => m.Id == "hardware");
-        if (hardware is not null)
-        {
-            InfoButton.Content = new FontIcon { Glyph = hardware.IconGlyph, FontSize = 16 };
-            ToolTipService.SetToolTip(InfoButton, hardware.DisplayName);
-        }
-        else
-        {
-            InfoButton.Visibility = Visibility.Collapsed;
-        }
+        // 하단 바 우측 Info·Settings 아이콘은 제거(v0.28.2) — 시작 메뉴 항목으로 일원화.
     }
 
     private void AddModuleItem(string moduleId)
@@ -303,12 +292,6 @@ public sealed partial class MainWindow : Window
         if (module is null) return;
         OpenModule(module);
         IsUntouched = true;
-    }
-
-    private void OnInfoClick(object sender, RoutedEventArgs e)
-    {
-        var module = _router.Modules.FirstOrDefault(m => m.Id == "hardware");
-        if (module is not null) OpenModule(module);
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
