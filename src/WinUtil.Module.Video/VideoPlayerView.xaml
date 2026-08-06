@@ -95,16 +95,19 @@
             <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
-            <ComboBox x:Name="SpeedBox" Grid.Column="7" MinWidth="84"
+            <!-- 배속 콤보는 압축 표시(v0.49.0 사용자 요청 — 공간 절약) -->
+            <ComboBox x:Name="SpeedBox" Grid.Column="7" MinWidth="60"
                       ToolTipService.ToolTip="Playback speed" SelectionChanged="OnSpeedChanged" />
             <ComboBox x:Name="SubtitleBox" Grid.Column="8" MinWidth="120"
                       ToolTipService.ToolTip="Subtitles" SelectionChanged="OnSubtitleChanged" />
-            <!-- 우측 기능 순서(v0.41.0 사용자 지정): 1:1 → Fit(방향 선택) → 전체화면 -->
-            <Button Grid.Column="9" Content="1:1"
+            <!-- 우측 기능 순서(v0.41.0 사용자 지정): 1:1 → Auto-fit(방향 선택) → 전체화면.
+                 폭·간격은 이미지/문서 모듈과 고정 통일(v0.49.0) — 모듈 전환 시 위치가 안 흔들리게.
+                 이 바는 ColumnSpacing=10이라 이미지 모듈의 Margin 10과 같은 간격이 된다. -->
+            <Button Grid.Column="9" Width="48" Content="1:1"
                     ToolTipService.ToolTip="Actual size (100%)" Click="OnActualSizeClicked" />
-            <!-- 기본 클릭 = 긴 변이 잘리지 않게 창에 맞춤(레터박스). 화살표로 좌우/상하 채움 선택 -->
-            <SplitButton Grid.Column="10" Content="Fit" Click="OnFitClicked"
-                         ToolTipService.ToolTip="Fit to window — long edge fits, nothing cropped">
+            <!-- 기본 클릭 = 자동 맞춤(긴 변이 잘리지 않는 레터박스). 화살표로 좌우/상하 채움 선택 -->
+            <SplitButton Grid.Column="10" Width="120" Content="Auto-fit" Click="OnFitClicked"
+                         ToolTipService.ToolTip="Auto-fit to window — long edge fits, nothing cropped">
                 <SplitButton.Flyout>
                     <MenuFlyout Placement="Top">
                         <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClicked" />
@@ -112,7 +115,7 @@
                     </MenuFlyout>
                 </SplitButton.Flyout>
             </SplitButton>
-            <Button Grid.Column="11" Content="⛶"
+            <Button Grid.Column="11" Width="48" Content="⛶"
                     ToolTipService.ToolTip="Full screen (Enter)" Click="OnFullScreenClicked" />
         </Grid>
     </Grid>

@@ -98,20 +98,23 @@
                     Content="Rotate"
                     Click="OnRotateButtonClick"
                     ToolTipService.ToolTip="Rotate 90° clockwise (R)" />
-                <!-- 우측 기능 순서(v0.41.0 사용자 지정): 1:1 → Fit(방향 선택) → 전체화면 -->
+                <!-- 우측 기능 순서(v0.41.0 사용자 지정): 1:1 → Auto-fit(방향 선택) → 전체화면.
+                     폭·간격은 영상/문서 모듈과 고정 통일(v0.49.0) — 모듈 전환 시 위치가 안 흔들리게. -->
                 <Button
                     Grid.Column="5"
-                    Margin="8,0,0,0"
+                    Margin="10,0,0,0"
+                    Width="48"
                     Content="1:1"
                     Click="OnActualSizeClick"
                     ToolTipService.ToolTip="Actual size (100%)" />
-                <!-- 기본 클릭 = 긴 변이 잘리지 않게 창에 맞춤. 화살표로 좌우/상하 채움 선택 -->
+                <!-- 기본 클릭 = 자동 맞춤(긴 변이 잘리지 않게). 화살표로 좌우/상하 채움 선택 -->
                 <SplitButton
                     Grid.Column="6"
-                    Margin="8,0,0,0"
-                    Content="Fit"
+                    Margin="10,0,0,0"
+                    Width="120"
+                    Content="Auto-fit"
                     Click="OnFitClick"
-                    ToolTipService.ToolTip="Fit to window — long edge fits, nothing cropped">
+                    ToolTipService.ToolTip="Auto-fit to window — long edge fits, nothing cropped">
                     <SplitButton.Flyout>
                         <MenuFlyout Placement="Top">
                             <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClick" />
@@ -122,7 +125,8 @@
                 <!-- 전체화면 전환 아이콘 (v0.29.0 사용자 요청) — 동영상 트랜스포트 바와 동일한 ⛶ -->
                 <Button
                     Grid.Column="7"
-                    Margin="8,0,0,0"
+                    Margin="10,0,0,0"
+                    Width="48"
                     Content="⛶"
                     Click="OnFullScreenButtonClick"
                     ToolTipService.ToolTip="Full screen (Enter)" />
