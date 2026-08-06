@@ -30,5 +30,5 @@ internal static class Branding
         "• Easy to install & uninstall — all files in one folder, all settings in settings.ini beside the app.\n" +
         "• No personal information collected, whatsoever — no watch history, no file history.\n" +
         "• Free forever, for everyone — personal and commercial use alike.\n" +
-        "• Our only revenue: Patreon and one silent Google ad.";
+        "• Our only revenue: Patreon and silent in-app ad."; // v0.27.0 문구 확정 (사용자 요청)
 }

@@ -24,7 +24,7 @@ MISSION = [
     "   no watch history, no file history.",
     "Free forever, for everyone — personal and",
     "   commercial use alike.",
-    "Our only revenue: Patreon and one silent Google ad.",
+    "Our only revenue: Patreon and silent in-app ad.",
 ]
 # 들여쓰기(   )로 시작하는 줄은 앞 항목의 이어지는 줄 — 불릿을 찍지 않는다
 

@@ -16,8 +16,21 @@ namespace WinUtil.Module.Image;
 /// 이미지 뷰어 화면. 폴더 내 ←/→ 탐색, 줌/팬, 회전(R), 휴지통 삭제(Delete),
 /// 전체화면(F11/더블클릭), 하단 상태바를 제공한다.
 /// </summary>
-public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider
+public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
+    IBottomBarProvider
 {
+    /// <summary>
+    /// 상태바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.27.0 — 동영상 v0.21.0과 같은 통합).
+    /// 셸 바가 배경·여백을 제공하므로 자체 배경과 패딩은 걷어낸다. 컨트롤 필드 참조는 유효 유지.
+    /// </summary>
+    public object? TakeBottomBar()
+    {
+        RootGrid.Children.Remove(StatusBar);
+        StatusBar.Background = null;
+        StatusBar.Padding = new Thickness(0, 2, 0, 2);
+        return StatusBar;
+    }
+
     /// <summary>이미지를 열거나 ←/→로 바꿀 때 셸에 알린다(v0.25.0 — 탐색기·오버레이 동기화).</summary>
     public event Action<string>? ContentOpened;
 

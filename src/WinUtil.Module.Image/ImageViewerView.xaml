@@ -17,7 +17,7 @@
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
     </UserControl.KeyboardAccelerators>
 
-    <Grid>
+    <Grid x:Name="RootGrid">
         <!-- 줌(Ctrl+휠 10%~800%)/팬. 기본은 창맞춤(코드에서 MaxWidth/MaxHeight로 제한) -->
         <ScrollViewer
             x:Name="Scroller"
@@ -50,8 +50,10 @@
             VerticalAlignment="Center"
             Visibility="Collapsed" />
 
-        <!-- 하단 오버레이 상태바: 파일명 · 해상도 · 몇 번째/전체 -->
+        <!-- 하단 상태바: 파일명 · 해상도 · 몇 번째/전체.
+             셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(v0.27.0, 동영상 v0.21.0과 동일) -->
         <Border
+            x:Name="StatusBar"
             VerticalAlignment="Bottom"
             Padding="12,6"
             Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}">

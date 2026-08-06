@@ -88,12 +88,15 @@ public sealed partial class SettingsView : UserControl
         Root.Children.Add(new TextBlock { Text = $"Current version: v{currentVersion}", Opacity = 0.8 });
 
         var updateStatus = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
+        var updateCountdown = new TextBlock { Opacity = 0.55, FontSize = 12 };
         var updateButton = new Button { Content = "Update", Visibility = Visibility.Collapsed };
         Root.Children.Add(updateStatus);
+        Root.Children.Add(updateCountdown);
         Root.Children.Add(updateButton);
 
-        // 주기 체크 금지(사용자 결정) — 설정 화면에 들어올 때만 한 번 확인한다
-        _ = CheckForUpdatesAsync(updateStatus, updateButton);
+        // v0.27.0(사용자 요청): 설정 화면에 머무는 동안에만 1분 간격 재확인 + 다음 체크 카운트다운.
+        // 화면 밖 백그라운드 주기 체크는 여전히 하지 않는다(기존 정책 유지).
+        StartUpdateLoop(currentVersion, updateStatus, updateCountdown, updateButton);
 
         AddHeader("About");
         Root.Children.Add(new TextBlock { Text = $"ZP v{currentVersion} · github.com/tsusaikang/winutil", Opacity = 0.7 });
@@ -146,8 +149,16 @@ public sealed partial class SettingsView : UserControl
         Root.Children.Add(scaleBox);
     }
 
-    /// <summary>설정 진입 시 1회 업데이트 확인: 새 버전이 있을 때만 Update 버튼을 보여준다.</summary>
-    private async Task CheckForUpdatesAsync(TextBlock status, Button updateButton)
+    private DispatcherTimer? _updateTimer;
+    private int _nextCheckSeconds;
+    private bool _updateChecking;
+
+    /// <summary>
+    /// 설정 화면 체류 중 업데이트 루프(v0.27.0): 진입 즉시 1회 확인 후 60초마다 재확인.
+    /// 1초 틱 타이머로 다음 체크까지 카운트다운을 보여주고, Unloaded(화면 이탈)에서 멈춘다.
+    /// 새 버전을 찾으면 더 확인할 게 없으므로 루프를 중단한다.
+    /// </summary>
+    private void StartUpdateLoop(string currentVersion, TextBlock status, TextBlock countdown, Button updateButton)
     {
         if (!UpdateService.IsUpdatableBuild)
         {
@@ -156,26 +167,54 @@ public sealed partial class SettingsView : UserControl
             return;
         }
 
+        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _updateTimer.Tick += async (_, _) =>
+        {
+            if (_updateChecking) return;
+            _nextCheckSeconds--;
+            if (_nextCheckSeconds <= 0)
+                await CheckOnceAsync(currentVersion, status, countdown, updateButton);
+            else
+                countdown.Text = $"Next check in {_nextCheckSeconds}s";
+        };
+        Unloaded += (_, _) => _updateTimer?.Stop();
+
+        _ = CheckOnceAsync(currentVersion, status, countdown, updateButton);
+        _updateTimer.Start();
+    }
+
+    /// <summary>1회 확인. 새 버전이 있으면 현재/새 버전을 함께 표시하고 루프를 멈춘다.</summary>
+    private async Task CheckOnceAsync(string currentVersion, TextBlock status, TextBlock countdown, Button updateButton)
+    {
+        _updateChecking = true;
         status.Text = "Checking for updates...";
+        countdown.Text = string.Empty;
         try
         {
             var info = await UpdateService.CheckAsync();
-            if (info is null)
+            if (info is not null)
             {
-                status.Text = "You are on the latest version.";
+                var newVersion = info.TargetFullRelease.Version;
+                status.Text = $"New version v{newVersion} is available (current: v{currentVersion}).";
+                updateButton.Content = $"Update to v{newVersion}";
+                if (updateButton.Visibility != Visibility.Visible)
+                {
+                    updateButton.Visibility = Visibility.Visible;
+                    updateButton.Click += async (_, _) => await DownloadAndInstallAsync(status, updateButton, info);
+                }
+                _updateTimer?.Stop(); // 찾았으면 주기 확인 종료
+                _updateChecking = false;
                 return;
             }
-
-            var newVersion = info.TargetFullRelease.Version;
-            status.Text = $"New version v{newVersion} is available.";
-            updateButton.Content = $"Update to v{newVersion}";
-            updateButton.Visibility = Visibility.Visible;
-            updateButton.Click += async (_, _) => await DownloadAndInstallAsync(status, updateButton, info);
+            status.Text = $"You are on the latest version (v{currentVersion}).";
         }
         catch (Exception ex)
         {
             status.Text = "Update check failed: " + ex.Message;
         }
+        _nextCheckSeconds = 60;
+        countdown.Text = "Next check in 60s";
+        _updateChecking = false;
     }
 
     /// <summary>다운로드 → 사람 확인(Install and restart / Later) 대기 → 적용. 자동 재시작 없음.</summary>
