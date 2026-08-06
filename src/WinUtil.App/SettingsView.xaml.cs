@@ -124,6 +124,20 @@ public sealed partial class SettingsView : UserControl
             Opacity = 0.8,
             TextWrapping = TextWrapping.Wrap,
         });
+
+        // Patreon 후원 안내 (v0.46.0 사용자 지정 문구·표시 URL)
+        Root.Children.Add(new TextBlock
+        {
+            Text = "Kindly support us on Patreon !",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 0),
+        });
+        Root.Children.Add(new HyperlinkButton
+        {
+            Content = "www.patreon.com/zpstudios/",
+            NavigateUri = new Uri("https://www.patreon.com/zpdevelop/"),
+            Padding = new Thickness(0),
+        });
     }
 
     /// <summary>
