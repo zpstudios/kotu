@@ -33,9 +33,10 @@ public static class Program
         {
             // Velopack 훅: 설치/업데이트/제거 시 넘어오는 특수 인자를 처리한다.
             // (해당 인자면 여기서 프로세스가 종료되므로 반드시 가장 먼저 호출)
-            // WithFirstRun: 설치 후 첫 실행 감지 → 웰컴 다이얼로그(App에서 표시)
+            // OnFirstRun: 설치 후 첫 실행 감지 → 웰컴 다이얼로그(App에서 표시)
+            // (Velopack 1.x API — WithFirstRun은 구 0.x 이름이라 CS1061로 CI가 죽었음, v0.19.2)
             Velopack.VelopackApp.Build()
-                .WithFirstRun(_ => IsFirstRun = true)
+                .OnFirstRun(_ => IsFirstRun = true)
                 .Run();
 
             WinRT.ComWrappersSupport.InitializeComWrappers();
