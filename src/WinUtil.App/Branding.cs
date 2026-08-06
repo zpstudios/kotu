@@ -11,8 +11,9 @@ internal static class Branding
     public const string AppName = "ZP";
 
     /// <summary>
-    /// 모듈별 액센트 색(현재 모드 시각 표시, v0.20.0). 하단 바 스트립·모드 칩에서 사용.
-    /// 라이트/다크 어느 배경에서도 읽히는 중간 톤으로 고른다. 미등록 ID는 null(중립).
+    /// 모듈별 액센트 색. v0.26.0부터 하단 바 스트립/칩 색 대신 창·트레이의 모듈 색
+    /// ZP 아이콘(packaging/gen_app_icon.py — 색을 여기와 동일하게 유지할 것)이 모드를 구분한다.
+    /// 이 메서드는 색의 단일 소스 정의로 유지. 미등록 ID는 null(중립).
     /// </summary>
     public static Windows.UI.Color? ModuleAccent(string? moduleId) => moduleId switch
     {

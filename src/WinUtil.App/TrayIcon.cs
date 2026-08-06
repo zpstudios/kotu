@@ -28,8 +28,8 @@ internal sealed class TrayIcon : IDisposable
     private readonly WndProcDelegate _wndProc; // 델리게이트 GC 방지 — 반드시 필드로 유지
     private readonly uint _taskbarCreatedMsg;
     private readonly IntPtr _hwnd;
-    private readonly IntPtr _hIcon;
-    private readonly bool _ownsIcon;
+    private IntPtr _hIcon;
+    private bool _ownsIcon;
     private string _tip = "ZP";
     private bool _added;
     private bool _disposed;
@@ -64,6 +64,21 @@ internal sealed class TrayIcon : IDisposable
         (_hIcon, _ownsIcon) = LoadTrayIcon(iconPath);
         AddOrUpdate(NimAdd);
         _added = true;
+    }
+
+    /// <summary>트레이 아이콘 교체 — 현재 모듈 색 아이콘 표시(v0.26.0). 로드 실패 시 기존 유지.</summary>
+    public void SetIcon(string? iconPath)
+    {
+        if (_disposed) return;
+        var (icon, owns) = LoadTrayIcon(iconPath);
+        if (icon == IntPtr.Zero) return;
+
+        var oldIcon = _hIcon;
+        var oldOwns = _ownsIcon;
+        _hIcon = icon;
+        _ownsIcon = owns;
+        if (_added) AddOrUpdate(NimModify);
+        if (oldOwns && oldIcon != IntPtr.Zero) _ = DestroyIcon(oldIcon);
     }
 
     /// <summary>알림 영역 툴팁 갱신(127자 제한). 열린 파일명·모듈 표시에 쓴다.</summary>

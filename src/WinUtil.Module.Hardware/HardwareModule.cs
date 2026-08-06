@@ -7,7 +7,7 @@ public sealed class HardwareModule : IModule
 {
     public string Id => "hardware";
 
-    public string DisplayName => "Hardware";
+    public string DisplayName => "Hardware-info"; // v0.26.0 사용자 요청
 
     public string BrandName => "ZP-info";
 

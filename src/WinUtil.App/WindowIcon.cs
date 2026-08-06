@@ -15,17 +15,24 @@ internal static class WindowIcon
     private const uint ImageIcon = 1;       // LoadImage: IMAGE_ICON
     private const uint LrLoadFromFile = 0x0010;
 
+    /// <summary>경로별 로드 핸들 캐시 — 모듈 전환마다 교체(v0.26.0)해도 핸들이 새지 않게.</summary>
+    private static readonly Dictionary<string, (IntPtr Small, IntPtr Big)> s_cache = new();
+
     /// <summary>
     /// 창의 작업표시줄/타이틀바 아이콘을 .ico 파일로 강제 지정.
-    /// 로드한 핸들은 창 수명 동안 유효해야 하므로 해제하지 않는다(프로세스 종료 시 OS 정리).
+    /// 핸들은 캐시에 남겨 창 수명 동안 유효(프로세스 종료 시 OS 정리).
     /// </summary>
     public static void Apply(Microsoft.UI.Xaml.Window window, string icoPath)
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-        var small = LoadImageW(IntPtr.Zero, icoPath, ImageIcon, 16, 16, LrLoadFromFile);
-        var big = LoadImageW(IntPtr.Zero, icoPath, ImageIcon, 32, 32, LrLoadFromFile);
-        if (small != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconSmall, small);
-        if (big != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconBig, big);
+        if (!s_cache.TryGetValue(icoPath, out var icons))
+        {
+            icons = (LoadImageW(IntPtr.Zero, icoPath, ImageIcon, 16, 16, LrLoadFromFile),
+                     LoadImageW(IntPtr.Zero, icoPath, ImageIcon, 32, 32, LrLoadFromFile));
+            s_cache[icoPath] = icons;
+        }
+        if (icons.Small != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconSmall, icons.Small);
+        if (icons.Big != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconBig, icons.Big);
     }
 
     [DllImport("user32", CharSet = CharSet.Unicode)]

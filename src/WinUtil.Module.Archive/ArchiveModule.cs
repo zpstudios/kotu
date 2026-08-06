@@ -11,7 +11,7 @@ public sealed class ArchiveModule : IModule
 
     public string Id => "archive";
 
-    public string DisplayName => "Archive";
+    public string DisplayName => "zip"; // v0.26.0: "Archive"가 압축임을 못 알아보는 사용자 배려 (사용자 요청)
 
     public string BrandName => "ZP-zip";
 

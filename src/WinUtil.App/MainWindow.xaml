@@ -68,13 +68,8 @@
 
         <!-- 하단 바 (작업표시줄 느낌). 전체화면에서는 코드에서 통째로 숨긴다(v0.21.0) -->
         <Grid x:Name="BottomBar" Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
-            <!-- 현재 모드 액센트 스트립: 하단 바 상단 3px, 모듈 색 (v0.20.0) -->
-            <Border x:Name="ModeStrip" Height="3"
-                    VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                    Background="Transparent" IsHitTestVisible="False" />
-
-            <!-- 현재 모드 칩: 모듈 글리프 + 브랜드명, 모듈 색 (v0.20.0).
-                 모듈이 하단 바 줄(ModuleBarHost)을 제공하면 칩은 숨기고 스트립 색으로만 구분 -->
+            <!-- 현재 모드 칩: 모듈 글리프 + 브랜드명(중립색). 색 구분은 창·트레이 아이콘이 담당(v0.26.0).
+                 모듈이 하단 바 줄(ModuleBarHost)을 제공하면 칩은 숨긴다 -->
             <StackPanel x:Name="ModeChip" Orientation="Horizontal" Spacing="8"
                         HorizontalAlignment="Center" VerticalAlignment="Center"
                         IsHitTestVisible="False" Visibility="Collapsed">

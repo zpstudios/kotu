@@ -174,15 +174,15 @@ public sealed partial class MainWindow : Window
 
         // 최상단: 스폰서(광고) 자리 — 지금은 MSI 로고 플레이스홀더, 파일 교체만으로 변경 가능
         StartMenuPanel.Children.Add(BuildSponsorCard());
-        StartMenuPanel.Children.Add(Spacer(16)); // 여백 x2
+        StartMenuPanel.Children.Add(Divider()); // 그룹 경계는 구분선으로 명확히 (v0.26.0 사용자 요청)
 
-        // Settings·Hardware 묶음 (사용자 지정: Archive 위에 약간 공백 두고 Hardware, 그 위 Settings)
+        // Settings·Hardware-info 묶음 (사용자 지정: zip 위에 공백 두고 Hardware-info, 그 위 Settings)
         AddSettingsItem();
         AddModuleItem("hardware");
-        StartMenuPanel.Children.Add(Spacer(8)); // 여백
+        StartMenuPanel.Children.Add(Divider());
 
         AddModuleItem("archive");
-        StartMenuPanel.Children.Add(Spacer(8)); // 여백
+        StartMenuPanel.Children.Add(Divider());
 
         // 사진-영상-문서 그룹 (아래부터 사진 → 위로 갈수록 문서)
         AddDocumentPlaceholder();
@@ -231,7 +231,7 @@ public sealed partial class MainWindow : Window
     /// <summary>문서 모듈 자리(마크다운·PDF·HWP 등 예정) — 메뉴 배치를 먼저 확정해 둔다.</summary>
     private void AddDocumentPlaceholder()
     {
-        var item = MakeMenuItem("", "Document");
+        var item = MakeMenuItem("", "Documents");
         item.IsEnabled = false;
         ToolTipService.SetToolTip(item, "Coming soon — Markdown, PDF, HWP, and more");
         StartMenuPanel.Children.Add(item);
@@ -279,7 +279,13 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private static Border Spacer(double height) => new() { Height = height };
+    /// <summary>시작 메뉴 그룹 구분선: 여백 + 1px 라인 (v0.26.0, 공백만으로는 정리가 안 보인다는 피드백).</summary>
+    private static Border Divider() => new()
+    {
+        Height = 1,
+        Margin = new Thickness(4, 8, 4, 8),
+        Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
+    };
 
     private void OpenModule(IModule module)
     {
@@ -573,53 +579,57 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ---------- 현재 모드 시각 표시 (v0.20.0) ----------
+    // ---------- 현재 모드 시각 표시 (v0.20.0 → v0.26.0 개편) ----------
 
     /// <summary>
-    /// 하단 바의 모드 표시 갱신: 모듈이면 액센트 스트립(3px) + 칩(글리프·브랜드명)을
-    /// 모듈 색으로, 설정이면 중립(테마 전경색) 칩만, 그 외(빈 셸·미지원 파일)는 모두 숨긴다.
-    /// 창이 여러 개일 때 어느 창이 무슨 모드인지 색만으로 구분되게 하는 것이 목적.
+    /// 현재 모드 표시 갱신: 색 구분은 하단 바 스트립/칩 색 대신 창(타이틀바·작업표시줄)·
+    /// 트레이의 모듈 색 ZP 아이콘이 담당한다(사용자 요청, v0.26.0).
+    /// 칩은 모듈 글리프+브랜드명을 중립색으로만 표시.
     /// </summary>
     private void UpdateModeIndicator(IModule? module, bool isSettings = false)
     {
+        ApplyWindowIcon(module?.Id);
+
         if (module is null && !isSettings)
         {
-            ModeStrip.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             ModeChip.Visibility = Visibility.Collapsed;
             return;
         }
 
-        // 모듈이 하단 바 줄을 차지하면 칩은 생략 — 모드는 스트립 색으로만 구분 (v0.21.0)
+        // 모듈이 하단 바 줄을 차지하면 칩은 생략 (v0.21.0)
         ModeChip.Visibility = ModuleBarHost.Content is null
             ? Visibility.Visible : Visibility.Collapsed;
 
         if (isSettings || module is null)
         {
-            ModeStrip.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             ModeChipIcon.Glyph = "\uE713"; // Settings gear
-            ModeChipIcon.ClearValue(IconElement.ForegroundProperty);
             ModeChipText.Text = "Settings";
-            ModeChipText.ClearValue(TextBlock.ForegroundProperty);
-            return;
-        }
-
-        var accent = Branding.ModuleAccent(module.Id);
-        var brush = accent is { } c
-            ? new SolidColorBrush(c)
-            : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        ModeStrip.Background = brush;
-        ModeChipIcon.Glyph = module.IconGlyph;
-        ModeChipText.Text = module.BrandName;
-        if (accent is { } color)
-        {
-            ModeChipIcon.Foreground = new SolidColorBrush(color);
-            ModeChipText.Foreground = new SolidColorBrush(color);
         }
         else
         {
-            ModeChipIcon.ClearValue(IconElement.ForegroundProperty);
-            ModeChipText.ClearValue(TextBlock.ForegroundProperty);
+            ModeChipIcon.Glyph = module.IconGlyph;
+            ModeChipText.Text = module.BrandName;
         }
+    }
+
+    /// <summary>타이틀바·작업표시줄·트레이 아이콘을 현재 모듈 색 ZP 아이콘으로 교체(v0.26.0).</summary>
+    private void ApplyWindowIcon(string? moduleId)
+    {
+        var name = moduleId switch
+        {
+            "archive" => "app-archive.ico",
+            "image" => "app-image.ico",
+            "video" => "app-video.ico",
+            "hardware" => "app-hardware.ico",
+            _ => "app.ico", // 빈 셸·설정·미지원 파일 = 중립(브랜드 색)
+        };
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", name);
+        if (!File.Exists(path)) path = IconPath;
+        if (!File.Exists(path)) return;
+
+        AppWindow.SetIcon(path);
+        WindowIcon.Apply(this, path);
+        _tray.SetIcon(path);
     }
 
     public void BringToFront()

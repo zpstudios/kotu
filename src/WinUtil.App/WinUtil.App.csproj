@@ -41,8 +41,10 @@
     <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
   <ItemGroup>
-    <!-- 런타임 로드용 .ico 원본: 타이틀바(AppWindow.SetIcon)·트레이 아이콘(TrayIcon)이 exe 옆에서 읽는다 -->
-    <Content Include="Assets\app.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 런타임 로드용 .ico 원본: 타이틀바(AppWindow.SetIcon)·트레이 아이콘(TrayIcon)이 exe 옆에서 읽는다.
+         app-*.ico = 모듈별 색 변형(v0.26.0, packaging/gen_app_icon.py로 생성) -->
+    <Content Include="Assets\app.ico;Assets\app-archive.ico;Assets\app-image.ico;Assets\app-video.ico;Assets\app-hardware.ico"
+             CopyToOutputDirectory="PreserveNewest" />
     <!-- 시작 메뉴 스폰서 자리 로고 (packaging/gen_sponsor_placeholder.py로 생성, 실제 로고로 교체 가능) -->
     <Content Include="Assets\sponsor-msi.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
