@@ -10,7 +10,7 @@ namespace WinUtil.App.Integration;
 /// </summary>
 public static class UpdateService
 {
-    private const string RepoUrl = "https://github.com/tsusaikang/winutil";
+    private const string RepoUrl = "https://github.com/zpstudios/zpro";
 
     private static UpdateManager CreateManager() =>
         new(new GithubSource(RepoUrl, accessToken: null, prerelease: false));

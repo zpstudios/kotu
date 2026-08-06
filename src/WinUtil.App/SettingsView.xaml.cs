@@ -111,7 +111,7 @@ public sealed partial class SettingsView : UserControl
         StartUpdateLoop(currentVersion, updateStatus, updateCountdown, updateButton);
 
         AddHeader("About");
-        Root.Children.Add(new TextBlock { Text = $"ZP v{currentVersion} · github.com/tsusaikang/winutil", Opacity = 0.7 });
+        Root.Children.Add(new TextBlock { Text = $"ZP v{currentVersion} · github.com/zpstudios/zpro", Opacity = 0.7 });
         Root.Children.Add(new TextBlock
         {
             Text = "Mission Statement",
