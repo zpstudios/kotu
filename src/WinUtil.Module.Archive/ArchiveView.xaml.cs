@@ -188,7 +188,7 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
     {
         if (_busy || _archivePath is null) return;
 
-        var tempDir = Path.Combine(Path.GetTempPath(), "WinUtil", "Archive", Guid.NewGuid().ToString("N"));
+        var tempDir = Path.Combine(Path.GetTempPath(), "ZP", "Archive", Guid.NewGuid().ToString("N"));
         if (!await ExtractWithRetryAsync(tempDir, [node.FullPath], "Opening...")) return;
 
         var extracted = Path.Combine(tempDir, node.FullPath.Replace('/', Path.DirectorySeparatorChar));

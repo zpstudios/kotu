@@ -40,14 +40,14 @@ internal sealed class TrayIcon : IDisposable
     /// <summary>메뉴의 '이 창 닫기'.</summary>
     public event Action? CloseRequested;
 
-    /// <summary>메뉴의 'WinUtil 모두 종료'.</summary>
+    /// <summary>메뉴의 'Exit ZP' (모든 창 닫기).</summary>
     public event Action? ExitAllRequested;
 
     /// <param name="iconPath">.ico 파일 경로. 없거나 로드 실패 시 시스템 기본 아이콘.</param>
     public TrayIcon(string? iconPath)
     {
         _taskbarCreatedMsg = RegisterWindowMessageW("TaskbarCreated");
-        _className = "WinUtilTray_" + Guid.NewGuid().ToString("N");
+        _className = "ZPTray_" + Guid.NewGuid().ToString("N");
         _wndProc = WndProc;
 
         var hInstance = GetModuleHandleW(null);

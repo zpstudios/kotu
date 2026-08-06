@@ -1,4 +1,4 @@
-# WinUtil
+# ZP
 
 > 윈도우 새로 깔면 제일 먼저 설치하던 필수 유틸들 — 압축, 이미지 뷰어, 동영상 플레이어 — 를 하나의 앱으로.
 
@@ -8,7 +8,7 @@
 ![UI](https://img.shields.io/badge/UI-WinUI%203-41b883)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-파일을 더블클릭하면 확장자에 맞는 기능이 하나의 창에서 열립니다. 압축 파일이면 내부 탐색, 이미지면 뷰어, 동영상이면 플레이어. 각 기능은 검증된 엔진(7-Zip, libvlc 등)을 통합하고, WinUtil은 하나로 묶인 경험에 집중합니다.
+파일을 더블클릭하면 확장자에 맞는 기능이 하나의 창에서 열립니다. 압축 파일이면 내부 탐색, 이미지면 뷰어, 동영상이면 플레이어. 각 기능은 검증된 엔진(7-Zip, libvlc 등)을 통합하고, ZP는 하나로 묶인 경험에 집중합니다.
 
 ## 기능
 
@@ -17,14 +17,14 @@
 | 압축 | ✅ v0.4.0 | zip·7z·rar·tar·gz 해제 / zip·7z 생성(암호 지원) / 풀지 않고 내부 탐색 / 드래그&드롭 압축 / 한글 파일명(CP949) 자동 복구 |
 | 이미지 뷰어 | ✅ v0.3.0 | ←/→ 폴더 탐색(자연 정렬) / 줌·팬 / 회전 / 전체화면 / 휴지통 삭제 / EXIF 회전 / GIF 애니메이션 |
 | 동영상·음악 플레이어 | ✅ v0.13.0 | libvlc 기반 재생(코덱 설치 불필요) / 음악 파일(mp3·flac·wav 등) 재생 + 파형 표시 / 빈 상태 ▶=내장 화면·스피커 테스트 클립 / 시킹·볼륨·배속 / 자막 자동 탐지(srt·smi, CP949 자동 변환) / 이어보기 / 전체화면 |
-| 탐색기 통합 | ✅ v0.8.0 | 파일 연결 등록(모듈별, 현재 사용자 범위) / 우클릭 "여기에 풀기"·"WinUtil로 압축" / 설정에서 켜고 끔 |
+| 탐색기 통합 | ✅ v0.8.0 | 파일 연결 등록(모듈별, 현재 사용자 범위) / 우클릭 "여기에 풀기"·"ZP-zip으로 압축" / 설정에서 켜고 끔 |
 | 설치·자동 업데이트 | ✅ v0.9.0 | Setup.exe 한 파일 설치(Velopack) / GitHub Releases 피드로 시작 시 업데이트 확인·원클릭 적용 |
 | 하드웨어 | 🚧 v0.10.0 | 스펙 표시(CPU·메인보드·메모리·그래픽·저장장치, 전체 복사) — 센서 모니터링·스트레스는 예정 |
 
 **다운로드**: [Releases](https://github.com/tsusaikang/winutil/releases/latest)에서 —
 
-- **`WinUtil-win-Setup.exe`** — 설치판. 시작 메뉴 등록, 자동 업데이트. 사용자 범위 설치라 관리자 권한 불필요.
-- **`WinUtil-win-Portable.zip`** — 무설치판. 아무 폴더에나 풀어 실행하면 되고, 역시 자동 업데이트됩니다.
+- **`ZP-win-Setup.exe`** — 설치판. 시작 메뉴 등록, 자동 업데이트. 사용자 범위 설치라 관리자 권한 불필요.
+- **`ZP-win-Portable.zip`** — 무설치판. 아무 폴더에나 풀어 실행하면 되고, 역시 자동 업데이트됩니다.
 
 어느 쪽이든 압축(7z.dll)·동영상(libvlc) 엔진이 전부 동봉되어 바로 동작합니다. 그 외 릴리스 파일(nupkg 등)은 업데이트 시스템 내부용이니 받지 않아도 됩니다.
 
@@ -73,4 +73,4 @@ tests/                  # 단위 테스트 (xunit)
 
 ## 라이선스
 
-WinUtil 자체 코드는 [MIT](LICENSE)입니다. 함께 배포·사용되는 외부 구성요소는 각자의 라이선스를 따릅니다 — [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 참고 (7-Zip: LGPL, libvlc: LGPL, LibreHardwareMonitor: MPL-2.0 등).
+ZP 자체 코드는 [MIT](LICENSE)입니다. 함께 배포·사용되는 외부 구성요소는 각자의 라이선스를 따릅니다 — [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 참고 (7-Zip: LGPL, libvlc: LGPL, LibreHardwareMonitor: MPL-2.0 등).

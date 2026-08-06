@@ -14,14 +14,14 @@ namespace WinUtil.App;
 /// </summary>
 public static class Program
 {
-    private const string InstanceKey = "WinUtil-Main";
+    private const string InstanceKey = "ZP-Main"; // v0.33.0 리브랜딩 (구: WinUtil-Main)
 
     /// <summary>설치 후 첫 실행 여부(Velopack 훅). 미션 웰컴 다이얼로그 표시에 쓴다.</summary>
     internal static bool IsFirstRun { get; private set; }
 
-    /// <summary>시작 실패 로그 경로: %TEMP%\WinUtil\startup-error.log</summary>
+    /// <summary>시작 실패 로그 경로: %TEMP%\ZP\startup-error.log</summary>
     private static string LogPath =>
-        Path.Combine(Path.GetTempPath(), "WinUtil", "startup-error.log");
+        Path.Combine(Path.GetTempPath(), "ZP", "startup-error.log");
 
     [STAThread]
     private static int Main(string[] args)

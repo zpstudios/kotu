@@ -12,21 +12,29 @@ namespace WinUtil.App.Integration;
 /// </summary>
 public static class ExplorerIntegration
 {
-    private const string ExtractHereVerbName = "WinUtil.ExtractHere";
-    private const string CompressVerbName = "WinUtil.Compress";
+    private const string ExtractHereVerbName = "ZP.ExtractHere";
+    private const string CompressVerbName = "ZP.Compress";
+
+    // 구 이름(WinUtil.*) — v0.33.0 리브랜딩 이전에 등록된 흔적의 탐지·청소용.
+    private const string LegacyExtractHereVerbName = "WinUtil.ExtractHere";
+    private const string LegacyCompressVerbName = "WinUtil.Compress";
 
     private static string ExePath =>
         Environment.ProcessPath
         ?? throw new InvalidOperationException("Cannot determine the executable path.");
 
-    private static string ProgId(IModule module) => "WinUtil." + module.Id;
+    private static string ProgId(IModule module) => "ZP." + module.Id;
+
+    private static string LegacyProgId(IModule module) => "WinUtil." + module.Id;
 
     // ---------- 파일 연결 ("연결 프로그램" 목록 등록) ----------
 
     public static bool IsAssociationRegistered(IModule module)
     {
         using var key = Registry.CurrentUser.OpenSubKey($@"Software\Classes\{ProgId(module)}");
-        return key is not null;
+        if (key is not null) return true;
+        using var legacy = Registry.CurrentUser.OpenSubKey($@"Software\Classes\{LegacyProgId(module)}");
+        return legacy is not null; // 구 이름 등록만 있어도 '켜짐'으로 보여 재등록(=이관)을 유도
     }
 
     public static void RegisterAssociation(IModule module)
@@ -51,13 +59,19 @@ public static class ExplorerIntegration
             extKey.SetValue(progId, Array.Empty<byte>(), RegistryValueKind.None);
         }
 
+        RemoveAssociationKeys(module, LegacyProgId(module)); // 구 WinUtil.* 등록 흔적 청소 (v0.33.0)
         NotifyShell();
     }
 
     public static void UnregisterAssociation(IModule module)
     {
-        var progId = ProgId(module);
+        RemoveAssociationKeys(module, ProgId(module));
+        RemoveAssociationKeys(module, LegacyProgId(module));
+        NotifyShell();
+    }
 
+    private static void RemoveAssociationKeys(IModule module, string progId)
+    {
         foreach (var ext in module.SupportedExtensions)
         {
             using var extKey = Registry.CurrentUser.OpenSubKey(
@@ -67,7 +81,6 @@ public static class ExplorerIntegration
         }
 
         Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{progId}", throwOnMissingSubKey: false);
-        NotifyShell();
     }
 
     // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with ZP-zip" ----------
@@ -77,7 +90,10 @@ public static class ExplorerIntegration
         if (archiveExtensions.Count == 0) return false;
         using var key = Registry.CurrentUser.OpenSubKey(
             $@"Software\Classes\SystemFileAssociations\{archiveExtensions[0]}\shell\{ExtractHereVerbName}");
-        return key is not null;
+        if (key is not null) return true;
+        using var legacy = Registry.CurrentUser.OpenSubKey(
+            $@"Software\Classes\SystemFileAssociations\{archiveExtensions[0]}\shell\{LegacyExtractHereVerbName}");
+        return legacy is not null;
     }
 
     public static void RegisterExtractHereMenu(IReadOnlyList<string> archiveExtensions)
@@ -90,6 +106,11 @@ public static class ExplorerIntegration
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.ExtractHereToken} \"%1\"");
+
+            // 구 WinUtil.* 등록 흔적 청소 (v0.33.0)
+            Registry.CurrentUser.DeleteSubKeyTree(
+                $@"Software\Classes\SystemFileAssociations\{ext}\shell\{LegacyExtractHereVerbName}",
+                throwOnMissingSubKey: false);
         }
         NotifyShell();
     }
@@ -101,6 +122,9 @@ public static class ExplorerIntegration
             Registry.CurrentUser.DeleteSubKeyTree(
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractHereVerbName}",
                 throwOnMissingSubKey: false);
+            Registry.CurrentUser.DeleteSubKeyTree(
+                $@"Software\Classes\SystemFileAssociations\{ext}\shell\{LegacyExtractHereVerbName}",
+                throwOnMissingSubKey: false);
         }
         NotifyShell();
     }
@@ -108,11 +132,14 @@ public static class ExplorerIntegration
     // ---------- 우클릭 메뉴: 모든 파일 → "Compress with ZP-zip" ----------
 
     private const string CompressVerbKeyPath = @"Software\Classes\*\shell\" + CompressVerbName;
+    private const string LegacyCompressVerbKeyPath = @"Software\Classes\*\shell\" + LegacyCompressVerbName;
 
     public static bool IsCompressMenuRegistered()
     {
         using var key = Registry.CurrentUser.OpenSubKey(CompressVerbKeyPath);
-        return key is not null;
+        if (key is not null) return true;
+        using var legacy = Registry.CurrentUser.OpenSubKey(LegacyCompressVerbKeyPath);
+        return legacy is not null;
     }
 
     public static void RegisterCompressMenu()
@@ -124,12 +151,15 @@ public static class ExplorerIntegration
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.CompressToken} \"%1\"");
         }
+        // 구 WinUtil.* 등록 흔적 청소 (v0.33.0)
+        Registry.CurrentUser.DeleteSubKeyTree(LegacyCompressVerbKeyPath, throwOnMissingSubKey: false);
         NotifyShell();
     }
 
     public static void UnregisterCompressMenu()
     {
         Registry.CurrentUser.DeleteSubKeyTree(CompressVerbKeyPath, throwOnMissingSubKey: false);
+        Registry.CurrentUser.DeleteSubKeyTree(LegacyCompressVerbKeyPath, throwOnMissingSubKey: false);
         NotifyShell();
     }
 
