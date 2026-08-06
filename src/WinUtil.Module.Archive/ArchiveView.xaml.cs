@@ -32,8 +32,11 @@ public sealed class ArchiveRow
 /// 새 압축(zip/7z, 드래그&amp;드롭 포함), 암호 재시도, 진행률/취소를 제공한다.
 /// 모든 파일 I/O는 Task.Run으로 UI 스레드 밖에서 수행한다.
 /// </summary>
-public sealed partial class ArchiveView : UserControl
+public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IContentStateSource
 {
+    /// <summary>아카이브를 열면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
+    public event Action<string>? ContentOpened;
+
     private readonly IArchiveBackend _backend = new SevenZipBackend();
     private readonly string? _initialFile;
     private readonly IReadOnlyList<string> _initialArgs;
@@ -109,6 +112,7 @@ public sealed partial class ArchiveView : UserControl
                 _currentFolder = _root;
                 RefreshRows();
                 StatusText.Text = $"{Path.GetFileName(path)} · {ArchiveEntryTree.FormatSize(_root.Size)} total";
+                ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
                 return;
             }
             catch (ArchivePasswordException)

@@ -16,8 +16,11 @@ namespace WinUtil.Module.Image;
 /// 이미지 뷰어 화면. 폴더 내 ←/→ 탐색, 줌/팬, 회전(R), 휴지통 삭제(Delete),
 /// 전체화면(F11/더블클릭), 하단 상태바를 제공한다.
 /// </summary>
-public sealed partial class ImageViewerView : UserControl
+public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider
 {
+    /// <summary>이미지를 열거나 ←/→로 바꿀 때 셸에 알린다(v0.25.0 — 탐색기·오버레이 동기화).</summary>
+    public event Action<string>? ContentOpened;
+
     private ImageFolderNavigator? _navigator;
     private int _openSeq;        // OpenPath 경쟁 방지: 느린 폴더 스캔이 최신 열기를 덮지 않게
     private int _userRotation;   // R 키 누적 회전 (0/90/180/270)
@@ -147,6 +150,7 @@ public sealed partial class ImageViewerView : UserControl
             ApplyRotation();
             Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true); // 줌 초기화(창맞춤)
             UpdateStatusBar();
+            ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
         }
         catch (Exception ex)
         {
@@ -324,4 +328,68 @@ public sealed partial class ImageViewerView : UserControl
     }
 
     private void OnRotateButtonClick(object sender, RoutedEventArgs e) => RotateClockwise();
+
+    // ---------- Ctrl 정보 오버레이 (v0.25.0) ----------
+
+    /// <summary>파일·해상도 + EXIF(촬영일·카메라·노출·조리개·ISO·초점거리). 미지원 포맷은 기본 정보만.</summary>
+    public async Task<string?> GetContentInfoAsync()
+    {
+        var path = _navigator?.Current;
+        if (path is null) return null;
+
+        var lines = new List<string> { Path.GetFileName(path) };
+        try
+        {
+            var info = new FileInfo(path);
+            lines.Add($"{info.Length / 1024.0 / 1024.0:0.##} MB · {info.LastWriteTime:yyyy-MM-dd HH:mm}");
+        }
+        catch
+        {
+            // 크기·날짜는 없어도 된다.
+        }
+        if (_pixelWidth > 0)
+            lines.Add($"{_pixelWidth}×{_pixelHeight} px");
+
+        try
+        {
+            var file = await StorageFile.GetFileFromPathAsync(path);
+            using var stream = await file.OpenAsync(FileAccessMode.Read);
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            var props = await decoder.BitmapProperties.GetPropertiesAsync(new[]
+            {
+                "System.Photo.DateTaken", "System.Photo.CameraManufacturer",
+                "System.Photo.CameraModel", "System.Photo.ExposureTime",
+                "System.Photo.FNumber", "System.Photo.ISOSpeed", "System.Photo.FocalLength",
+            });
+
+            if (Get(props, "System.Photo.DateTaken") is DateTimeOffset taken)
+                lines.Add($"Taken {taken.LocalDateTime:yyyy-MM-dd HH:mm}");
+
+            var maker = Get(props, "System.Photo.CameraManufacturer") as string;
+            var model = Get(props, "System.Photo.CameraModel") as string;
+            if (!string.IsNullOrWhiteSpace(maker) || !string.IsNullOrWhiteSpace(model))
+                lines.Add($"{maker} {model}".Trim());
+
+            var exposure = new List<string>();
+            if (Get(props, "System.Photo.ExposureTime") is double sec and > 0)
+                exposure.Add(sec >= 1 ? $"{sec:0.#} s" : $"1/{Math.Round(1 / sec)} s");
+            if (Get(props, "System.Photo.FNumber") is double f and > 0)
+                exposure.Add($"f/{f:0.#}");
+            if (Get(props, "System.Photo.ISOSpeed") is ushort iso)
+                exposure.Add($"ISO {iso}");
+            if (Get(props, "System.Photo.FocalLength") is double mm and > 0)
+                exposure.Add($"{mm:0.#} mm");
+            if (exposure.Count > 0)
+                lines.Add(string.Join(" · ", exposure));
+        }
+        catch
+        {
+            // EXIF 미지원 포맷(BMP/GIF 등)·손상 파일은 기본 정보만.
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    private static object? Get(IDictionary<string, Windows.Graphics.Imaging.BitmapTypedValue> props, string key) =>
+        props.TryGetValue(key, out var v) ? v.Value : null;
 }

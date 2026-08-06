@@ -1,8 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.System;
 using WinUtil.Core.Cli;
 using WinUtil.Core.Contracts;
 using WinUtil.Core.Routing;
@@ -24,6 +26,19 @@ public sealed partial class MainWindow : Window
     private readonly ISettingsService _settings;
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
+
+    // ---- 내장 탐색기 + Alt/Ctrl 오버레이 상태 (v0.25.0, docs/explorer-plan.md) ----
+    private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·Alt 목록에 사용)
+    private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
+    private ExplorerPane? _emptyExplorer; // 빈 상태 중앙 탐색기 (지연 생성)
+    private ExplorerPane? _altList;       // Alt 홀드 우측 리스트 (지연 생성)
+    private bool _altHeld;
+    private bool _ctrlHeld;
+    private bool _infoPinned;             // Ctrl 2연타로 고정된 정보 오버레이
+    private DateTime _lastCtrlDown = DateTime.MinValue;
+    private int _infoSeq;                 // 정보 로드 경쟁 방지
+    private string? _infoPath;            // 정보 캐시 (파일별 1회 로드)
+    private string? _infoText;
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
@@ -54,6 +69,15 @@ public sealed partial class MainWindow : Window
         ScaleHost.SizeChanged += (_, _) => LayoutUiScale();
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
+
+        // Alt/Ctrl 홀드 감지(v0.25.0): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서
+        // handledEventsToo로 구독한다. 창 비활성화로 KeyUp을 놓치면 홀드 상태를 초기화.
+        RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
+        RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
+        Activated += (_, e) =>
+        {
+            if (e.WindowActivationState == WindowActivationState.Deactivated) ResetKeyOverlays();
+        };
 
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
         if (File.Exists(IconPath))
@@ -289,6 +313,7 @@ public sealed partial class MainWindow : Window
         CurrentModuleId = null;
         IsUntouched = false;
         UpdateModeIndicator(null, isSettings: true);
+        SetContentState(null, null);
     }
 
     // ---------- 파일 열기 ----------
@@ -309,6 +334,7 @@ public sealed partial class MainWindow : Window
             CurrentModuleId = null;
             IsUntouched = false;
             UpdateModeIndicator(null);
+            SetContentState(null, null);
             return;
         }
         SetTitle($"ZP {module.DisplayName} — {Path.GetFileName(path)}");
@@ -360,6 +386,191 @@ public sealed partial class MainWindow : Window
         CurrentModuleId = module.Id;
         IsUntouched = false;
         UpdateModeIndicator(module);
+
+        // 뷰 내부 열기(열기 버튼·◀/▶ 탐색·테스트 클립)도 셸과 동기화 (v0.25.0)
+        if (view is IContentStateSource source)
+            source.ContentOpened += path => DispatcherQueue.TryEnqueue(() => OnContentOpened(path));
+        SetContentState(module, context.FilePath);
+    }
+
+    // ---------- 내장 탐색기 + Alt/Ctrl 오버레이 (v0.25.0) ----------
+
+    /// <summary>현재 모듈·파일 상태를 바꾸고 탐색기/오버레이 표시를 갱신한다.</summary>
+    private void SetContentState(IModule? module, string? filePath)
+    {
+        _currentModule = module;
+        _currentFilePath = filePath;
+        _infoPath = null;
+        _infoText = null;
+        UpdateEmptyExplorer();
+        ResetKeyOverlays();
+    }
+
+    /// <summary>모듈 뷰가 파일을 열었다는 알림(IContentStateSource) — 탐색기를 내리고 기준 경로 갱신.</summary>
+    private void OnContentOpened(string path)
+    {
+        _currentFilePath = path;
+        _infoPath = null;
+        _infoText = null;
+        UpdateEmptyExplorer();
+        if (AltOverlayRoot.Visibility == Visibility.Visible) ShowAltOverlay(); // 폴더가 바뀌었을 수 있다
+        if (InfoOverlay.Visibility == Visibility.Visible) UpdateInfoOverlay();
+    }
+
+    /// <summary>
+    /// 빈 상태(파일 없이 연 압축/이미지/동영상 모듈)면 중앙에 탐색기를 띄운다.
+    /// 시작 위치는 바탕화면, 파일은 담당 확장자만(사용자 확정). Hardware/Settings에는 띄우지 않는다.
+    /// </summary>
+    private void UpdateEmptyExplorer()
+    {
+        if (_currentFilePath is null &&
+            _currentModule is { Id: "archive" or "image" or "video" } module)
+        {
+            if (_emptyExplorer is null)
+            {
+                _emptyExplorer = new ExplorerPane();
+                _emptyExplorer.FileActivated += OpenFile;
+                ExplorerHost.Children.Add(_emptyExplorer);
+            }
+            _emptyExplorer.NavigateTo(
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                module.SupportedExtensions);
+            ExplorerHost.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            ExplorerHost.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Menu)
+        {
+            if (!_altHeld && !e.KeyStatus.WasKeyDown)
+            {
+                _altHeld = true;
+                ShowAltOverlay();
+            }
+            // Alt 기본 동작(메뉴 모드 진입)과의 충돌 방지 — 오버레이가 떠 있을 때만 소비한다.
+            if (AltOverlayRoot.Visibility == Visibility.Visible) e.Handled = true;
+        }
+        else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
+        {
+            if (_ctrlHeld || e.KeyStatus.WasKeyDown) return;
+            _ctrlHeld = true;
+            if (_currentFilePath is null) return; // 콘텐츠 없으면 정보도 핀 토글도 없다
+
+            // Ctrl 2연타 = 고정 토글, 다시 2연타로 해제 (사용자 확정)
+            var now = DateTime.UtcNow;
+            if ((now - _lastCtrlDown).TotalMilliseconds < 450)
+            {
+                _infoPinned = !_infoPinned;
+                _lastCtrlDown = DateTime.MinValue;
+            }
+            else
+            {
+                _lastCtrlDown = now;
+            }
+            UpdateInfoOverlay();
+        }
+    }
+
+    private void OnRootKeyUp(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Menu)
+        {
+            if (_altHeld) e.Handled = true;
+            _altHeld = false;
+            AltOverlayRoot.Visibility = Visibility.Collapsed;
+        }
+        else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
+        {
+            _ctrlHeld = false;
+            UpdateInfoOverlay();
+        }
+    }
+
+    /// <summary>창 비활성화 등으로 KeyUp을 놓칠 수 있어 홀드 상태를 초기화한다(고정 오버레이는 유지).</summary>
+    private void ResetKeyOverlays()
+    {
+        _altHeld = false;
+        _ctrlHeld = false;
+        AltOverlayRoot.Visibility = Visibility.Collapsed;
+        UpdateInfoOverlay();
+    }
+
+    /// <summary>Alt 홀드: 현재 파일이 있는 폴더의 리스트 뷰를 우측 30%에 띄운다(콘텐츠 로딩 후에만).</summary>
+    private void ShowAltOverlay()
+    {
+        if (_currentModule is null || _currentFilePath is null) return;
+        if (Path.GetDirectoryName(_currentFilePath) is not { } folder || !Directory.Exists(folder)) return;
+
+        if (_altList is null)
+        {
+            _altList = new ExplorerPane();
+            _altList.ConfigureListOnly();
+            _altList.FileActivated += OpenFile;
+            AltListHost.Content = _altList;
+        }
+        _altList.NavigateTo(folder, _currentModule.SupportedExtensions);
+        AltOverlayRoot.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Ctrl 홀드(또는 고정) 정보 오버레이의 표시 상태를 갱신한다.</summary>
+    private void UpdateInfoOverlay()
+    {
+        var show = (_ctrlHeld || _infoPinned) && _currentFilePath is not null;
+        InfoOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        InfoOverlay.IsHitTestVisible = show && _infoPinned; // 고정했을 때만 스크롤 등 상호작용 허용
+        InfoPinnedText.Visibility = show && _infoPinned ? Visibility.Visible : Visibility.Collapsed;
+        if (show) _ = LoadContentInfoAsync();
+    }
+
+    /// <summary>모듈 제공 정보(IContentInfoProvider) 우선, 없으면 파일 기본 정보. 파일별 1회 캐시.</summary>
+    private async Task LoadContentInfoAsync()
+    {
+        var path = _currentFilePath;
+        if (path is null) return;
+        if (_infoPath == path && _infoText is not null)
+        {
+            InfoOverlayText.Text = _infoText;
+            return;
+        }
+
+        var seq = ++_infoSeq;
+        InfoOverlayText.Text = "Loading info...";
+
+        string? text = null;
+        try
+        {
+            if (ModuleHost.Content is IContentInfoProvider provider)
+                text = await provider.GetContentInfoAsync();
+        }
+        catch
+        {
+            // 모듈 정보 실패 → 아래 파일 기본 정보로 대체
+        }
+        text ??= BuildBasicFileInfo(path);
+
+        if (seq != _infoSeq || _currentFilePath != path) return; // 그새 파일이 바뀜
+        _infoPath = path;
+        _infoText = text;
+        InfoOverlayText.Text = text;
+    }
+
+    private static string BuildBasicFileInfo(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return $"{info.Name}\n{ExplorerListing.FormatSize(info.Length)}\n"
+                 + $"{info.LastWriteTime:yyyy-MM-dd HH:mm}\n{info.DirectoryName}";
+        }
+        catch (Exception ex)
+        {
+            return Path.GetFileName(path) + "\nInfo unavailable: " + ex.Message;
+        }
     }
 
     // ---------- 현재 모드 시각 표시 (v0.20.0) ----------

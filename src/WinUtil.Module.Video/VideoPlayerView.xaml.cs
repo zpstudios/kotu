@@ -20,8 +20,72 @@ namespace WinUtil.Module.Video;
 /// 음악 파일은 같은 파이프라인으로 재생하되 영상 표면에 ♪ 오버레이를 띄운다.
 /// libvlc 이벤트는 백그라운드 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다.
 /// </summary>
-public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider
+public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
+    IContentStateSource, IContentInfoProvider
 {
+    /// <summary>파일 재생을 시작하면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
+    public event Action<string>? ContentOpened;
+
+    /// <summary>Ctrl 정보 오버레이(v0.25.0)용 미디어 정보: 파일·시간·비디오/오디오 트랙.</summary>
+    public Task<string?> GetContentInfoAsync()
+    {
+        if (_filePath is not { } path) return Task.FromResult<string?>(null);
+
+        var lines = new List<string> { Path.GetFileName(path) };
+        try
+        {
+            var info = new FileInfo(path);
+            lines.Add($"{info.Length / 1024.0 / 1024.0:0.##} MB · {info.LastWriteTime:yyyy-MM-dd HH:mm}");
+        }
+        catch
+        {
+            // 크기·날짜는 없어도 된다.
+        }
+
+        if (_durationMs > 0)
+            lines.Add("Duration " + TimeText.Format(_durationMs));
+
+        try
+        {
+            // 재생 중이면 libvlc가 파싱한 트랙 정보를 그대로 읽는다 (별도 Parse 불필요).
+            // Media 게터는 새 래퍼를 만들어 참조를 늘리므로 쓰고 바로 해제한다.
+            using var media = _player?.Media;
+            foreach (var track in media?.Tracks ?? [])
+            {
+                if (track.TrackType == TrackType.Video)
+                {
+                    var v = track.Data.Video;
+                    var fps = v.FrameRateDen > 0
+                        ? $" @ {(double)v.FrameRateNum / v.FrameRateDen:0.##} fps" : string.Empty;
+                    lines.Add($"Video {v.Width}×{v.Height}{fps} · {FourCc(track.Codec)}");
+                }
+                else if (track.TrackType == TrackType.Audio)
+                {
+                    var a = track.Data.Audio;
+                    lines.Add($"Audio {a.Channels} ch · {a.Rate:N0} Hz · {FourCc(track.Codec)}");
+                }
+            }
+        }
+        catch
+        {
+            // 트랙 정보 실패는 기본 정보만 보여준다.
+        }
+
+        return Task.FromResult<string?>(string.Join("\n", lines));
+    }
+
+    /// <summary>libvlc 코덱 FourCC(uint) → 사람이 읽는 문자열.</summary>
+    private static string FourCc(uint codec)
+    {
+        Span<char> chars = stackalloc char[4];
+        for (var i = 0; i < 4; i++)
+        {
+            var c = (char)((codec >> (8 * i)) & 0xFF);
+            chars[i] = char.IsLetterOrDigit(c) ? c : '?';
+        }
+        return new string(chars);
+    }
+
     /// <summary>
     /// 트랜스포트 바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.21.0, 실기기 피드백:
     /// 재생줄과 하단 바가 두 줄로 중복). 컨트롤 필드 참조는 그대로 유효하다.
@@ -225,6 +289,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider
         p.Play(media);
         PlaceholderText.Visibility = Visibility.Collapsed;
         UpdateAudioOverlay();
+        ContentOpened?.Invoke(_filePath); // 셸 동기화 (v0.25.0)
     }
 
     /// <summary>음악 파일이면 검은 영상 표면 대신 ♪ 아이콘 + 파일명을 보여준다.</summary>

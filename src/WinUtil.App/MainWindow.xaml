@@ -28,6 +28,44 @@
                        Opacity="0.6"/>
         </ContentControl>
 
+        <!-- 빈 상태 탐색기 (v0.25.0): 모듈을 파일 없이 열면 중앙 영역을 덮는다.
+             파일 더블클릭 → 라우팅으로 열리며 자동으로 내려간다. -->
+        <Grid x:Name="ExplorerHost" Grid.Row="0" Visibility="Collapsed"
+              Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+
+        <!-- Alt 홀드 오버레이 (v0.25.0): 우측 30%에 현재 파일 폴더의 리스트 뷰 -->
+        <Grid x:Name="AltOverlayRoot" Grid.Row="0" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="7*" />
+                <ColumnDefinition Width="3*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="1"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    BorderThickness="1,0,0,0">
+                <ContentControl x:Name="AltListHost" IsTabStop="False"
+                                HorizontalContentAlignment="Stretch"
+                                VerticalContentAlignment="Stretch" />
+            </Border>
+        </Grid>
+
+        <!-- Ctrl 홀드 정보 오버레이 (v0.25.0): 좌측에 현재 콘텐츠 정보. Ctrl 2연타로 고정/해제 -->
+        <Border x:Name="InfoOverlay" Grid.Row="0" Visibility="Collapsed"
+                HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                MinWidth="300" MaxWidth="440"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                BorderThickness="0,0,1,0"
+                Padding="16" IsHitTestVisible="False">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="8">
+                    <TextBlock x:Name="InfoOverlayText" TextWrapping="Wrap" FontSize="13" />
+                    <TextBlock x:Name="InfoPinnedText" Text="Pinned — press Ctrl twice to unpin"
+                               Visibility="Collapsed" FontSize="11" Opacity="0.6" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
         <!-- 하단 바 (작업표시줄 느낌). 전체화면에서는 코드에서 통째로 숨긴다(v0.21.0) -->
         <Grid x:Name="BottomBar" Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
             <!-- 현재 모드 액센트 스트립: 하단 바 상단 3px, 모듈 색 (v0.20.0) -->
