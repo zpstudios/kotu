@@ -19,8 +19,18 @@ namespace WinUtil.Module.Video;
 /// 음악 파일은 같은 파이프라인으로 재생하되 영상 표면에 ♪ 오버레이를 띄운다.
 /// libvlc 이벤트는 백그라운드 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다.
 /// </summary>
-public sealed partial class VideoPlayerView : UserControl
+public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider
 {
+    /// <summary>
+    /// 트랜스포트 바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.21.0, 실기기 피드백:
+    /// 재생줄과 하단 바가 두 줄로 중복). 컨트롤 필드 참조는 그대로 유효하다.
+    /// </summary>
+    public object? TakeBottomBar()
+    {
+        RootGrid.Children.Remove(TransportBar);
+        return TransportBar;
+    }
+
     private const long SeekStepMs = 5_000;
     private const int VolumeStep = 5;
     private const long ResumeReportIntervalMs = 10_000;

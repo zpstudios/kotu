@@ -45,6 +45,16 @@ public sealed partial class MainWindow : Window
         // 창 헤더만 브랜드 색(#15072E) — 본문은 시스템 테마 기본값
         TitleBarTheming.Apply(AppWindow.TitleBar);
 
+        // 전체화면(동영상 F11/더블클릭)에서는 하단 바를 통째로 숨긴다 —
+        // 재생줄이 하단 바로 통합되면서(v0.21.0) 전체화면 겹침도 여기서 함께 해결
+        AppWindow.Changed += (sender, args) =>
+        {
+            if (!args.DidPresenterChange) return;
+            var full = sender.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
+            BottomBar.Visibility = full ? Visibility.Collapsed : Visibility.Visible;
+            BottomBarRow.Height = full ? new GridLength(0) : new GridLength(44);
+        };
+
         // 창별 트레이 미니 아이콘: 좌클릭=활성화, 우클릭=메뉴, 툴팁=창 제목
         _tray = new TrayIcon(File.Exists(IconPath) ? IconPath : null);
         _tray.ActivateRequested += BringToFront;
@@ -207,6 +217,7 @@ public sealed partial class MainWindow : Window
     {
         SetTitle("ZP Settings");
         ModuleHost.Content = new SettingsView(_router);
+        ModuleBarHost.Content = null;
         CurrentModuleId = null;
         IsUntouched = false;
         UpdateModeIndicator(null, isSettings: true);
@@ -226,6 +237,7 @@ public sealed partial class MainWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            ModuleBarHost.Content = null;
             CurrentModuleId = null;
             IsUntouched = false;
             UpdateModeIndicator(null);
@@ -273,7 +285,10 @@ public sealed partial class MainWindow : Window
 
     private void ShowModule(IModule module, OpenContext context)
     {
-        ModuleHost.Content = (UIElement)module.CreateView(context);
+        var view = (UIElement)module.CreateView(context);
+        ModuleHost.Content = view;
+        // 모듈이 제공하는 하단 바 줄(동영상 트랜스포트 등)을 셸 하단 바에 통합 (v0.21.0)
+        ModuleBarHost.Content = (view as IBottomBarProvider)?.TakeBottomBar() as UIElement;
         CurrentModuleId = module.Id;
         IsUntouched = false;
         UpdateModeIndicator(module);
@@ -295,7 +310,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        ModeChip.Visibility = Visibility.Visible;
+        // 모듈이 하단 바 줄을 차지하면 칩은 생략 — 모드는 스트립 색으로만 구분 (v0.21.0)
+        ModeChip.Visibility = ModuleBarHost.Content is null
+            ? Visibility.Visible : Visibility.Collapsed;
 
         if (isSettings || module is null)
         {
