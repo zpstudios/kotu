@@ -6,13 +6,14 @@
     KeyboardAcceleratorPlacementMode="Hidden"
     DoubleTapped="OnDoubleTapped">
 
-    <!-- 단축키: ←/→ 탐색, R 회전, Delete 휴지통 삭제, F11 전체화면.
+    <!-- 단축키: ←/→ 탐색, R 회전, Delete 휴지통 삭제, Enter/F11 전체화면(동영상과 동일, v0.29.0).
          PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Left" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Left" Invoked="OnPreviousInvoked" />
         <KeyboardAccelerator Key="Right" Invoked="OnNextInvoked" />
         <KeyboardAccelerator Key="R" Invoked="OnRotateInvoked" />
         <KeyboardAccelerator Key="Delete" Invoked="OnDeleteInvoked" />
+        <KeyboardAccelerator Key="Enter" Invoked="OnFullScreenInvoked" />
         <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
     </UserControl.KeyboardAccelerators>
@@ -63,6 +64,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button
                     Grid.Column="0"
@@ -86,6 +88,13 @@
                     Content="Rotate"
                     Click="OnRotateButtonClick"
                     ToolTipService.ToolTip="Rotate 90° clockwise (R)" />
+                <!-- 전체화면 전환 아이콘 (v0.29.0 사용자 요청) — 동영상 트랜스포트 바와 동일한 ⛶ -->
+                <Button
+                    Grid.Column="4"
+                    Margin="8,0,0,0"
+                    Content="⛶"
+                    Click="OnFullScreenButtonClick"
+                    ToolTipService.ToolTip="Full screen (Enter)" />
             </Grid>
         </Border>
     </Grid>
