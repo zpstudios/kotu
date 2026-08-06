@@ -16,12 +16,13 @@ public sealed record HardwareSection(string Title, IReadOnlyList<HardwareItem> I
 /// </summary>
 public static class HardwareInfoService
 {
+    // 섹션 순서는 사용자 지정: CPU → GPU → RAM → Motherboard → Storage → System
     public static IReadOnlyList<HardwareSection> Collect() =>
     [
         Safe("CPU", CollectCpu),
+        Safe("GPU", CollectGpu),
+        Safe("RAM", CollectMemory),
         Safe("Motherboard", CollectBoard),
-        Safe("Memory", CollectMemory),
-        Safe("Graphics", CollectGpu),
         Safe("Storage", CollectStorage),
         Safe("System", CollectSystem),
     ];

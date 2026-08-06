@@ -164,6 +164,18 @@ public sealed partial class MainWindow : Window
         ShowModule(module, OpenContext.Empty);
     }
 
+    /// <summary>
+    /// 앱 첫 화면 기본 뷰(Info/하드웨어). 사용자가 고른 화면이 아니므로
+    /// IsUntouched를 되돌려서, 첫 파일 열기가 새 창을 만들지 않고 이 창을 쓰게 한다.
+    /// </summary>
+    public void ShowDefaultModule()
+    {
+        var module = _router.Modules.FirstOrDefault(m => m.Id == "hardware");
+        if (module is null) return;
+        OpenModule(module);
+        IsUntouched = true;
+    }
+
     private void OnInfoClick(object sender, RoutedEventArgs e)
     {
         var module = _router.Modules.FirstOrDefault(m => m.Id == "hardware");

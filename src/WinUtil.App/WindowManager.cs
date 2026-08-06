@@ -27,10 +27,11 @@ public sealed class WindowManager
     /// <summary>가장 최근 활성화된 창. 업데이트 다이얼로그 등 공용 UI의 호스트로 쓴다.</summary>
     public MainWindow? ActiveWindow => _windows.Count > 0 ? _windows[^1] : null;
 
-    /// <summary>파일 없이 시작할 때의 첫 창.</summary>
+    /// <summary>파일 없이 시작할 때의 첫 창 — 기본 화면은 Info(하드웨어) 모듈(사용자 지정).</summary>
     public MainWindow OpenInitialWindow()
     {
         var window = Create();
+        window.ShowDefaultModule();
         window.Activate();
         return window;
     }

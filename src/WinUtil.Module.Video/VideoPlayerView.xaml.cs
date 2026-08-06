@@ -83,6 +83,16 @@ public sealed partial class VideoPlayerView : UserControl
         // 휠 = 볼륨 (플레이어 관례). 자식 요소가 소비해도 받도록 handledEventsToo.
         VideoSurface.AddHandler(PointerWheelChangedEvent,
             new PointerEventHandler(OnSurfaceWheel), handledEventsToo: true);
+
+        // 시크 슬라이더 스크럽 감지: 드래그 중에는 시킹하지 않고 놓을 때 1회만 시킹한다.
+        // (드래그 틱마다 p.Time을 설정하면 시킹이 폭주해 드래그를 멈춰도 재생이 멎는 실기기 버그)
+        // Slider가 포인터 이벤트를 내부에서 소비하므로 handledEventsToo 필수.
+        SeekSlider.AddHandler(PointerPressedEvent,
+            new PointerEventHandler(OnSeekPointerPressed), handledEventsToo: true);
+        SeekSlider.AddHandler(PointerReleasedEvent,
+            new PointerEventHandler(OnSeekPointerReleased), handledEventsToo: true);
+        SeekSlider.AddHandler(PointerCaptureLostEvent,
+            new PointerEventHandler(OnSeekPointerReleased), handledEventsToo: true);
     }
 
     // ---------- libvlc 초기화 / 해제 ----------
@@ -130,9 +140,10 @@ public sealed partial class VideoPlayerView : UserControl
             _libVlc = null;
             if (oldPlayer is not null) UnhookPlayerEvents(oldPlayer);
 
+            // --no-video-title-show: 재생 시작 시 파일명이 화면에 오버레이되는 libvlc 기본 동작 끔 (사용자 요청)
             string[] options = withVisualizer
-                ? [.. swapOptions, "--audio-visual=visual", "--effect-list=scope"]
-                : swapOptions;
+                ? [.. swapOptions, "--no-video-title-show", "--audio-visual=visual", "--effect-list=scope"]
+                : [.. swapOptions, "--no-video-title-show"];
 
             var (libVlc, player) = await Task.Run(() =>
             {
@@ -331,6 +342,8 @@ public sealed partial class VideoPlayerView : UserControl
 
         Dispatch(() =>
         {
+            if (_isScrubbing) return; // 드래그 중에는 사용자의 손 위치를 지키고 미리보기 텍스트 유지
+
             PositionText.Text = TimeText.Format(e.Time);
             if (_durationMs > 0)
             {
@@ -575,10 +588,40 @@ public sealed partial class VideoPlayerView : UserControl
         appWindow.SetPresenter(AppWindowPresenterKind.Default);
     }
 
+    private bool _isScrubbing;
+    private bool _resumeAfterScrub;
+
+    private void OnSeekPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_player is not { } p || _durationMs <= 0) return;
+        _isScrubbing = true;
+        _resumeAfterScrub = p.IsPlaying;
+    }
+
+    private void OnSeekPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isScrubbing) return;
+        _isScrubbing = false;
+        if (_player is not { } p || _durationMs <= 0) return;
+
+        p.Time = (long)(SeekSlider.Value / SeekSlider.Maximum * _durationMs);
+
+        // 드래그 중 멈췄던(또는 시킹으로 멎어버린) 재생을 되살린다
+        if (_resumeAfterScrub && !p.IsPlaying) p.Play();
+    }
+
     private void OnSeekSliderChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         if (_suppressSeekEvent || _player is not { } p || _durationMs <= 0) return;
-        p.Time = (long)(e.NewValue / SeekSlider.Maximum * _durationMs);
+
+        var targetMs = (long)(e.NewValue / SeekSlider.Maximum * _durationMs);
+        if (_isScrubbing)
+        {
+            // 드래그 중에는 위치 미리보기만 — 실제 시킹은 놓을 때(OnSeekPointerReleased) 1회
+            PositionText.Text = TimeText.Format(targetMs);
+            return;
+        }
+        p.Time = targetMs; // 키보드 조작·트랙 클릭 등 단발 변경은 즉시 시킹
     }
 
     private void OnVolumeSliderChanged(object sender, RangeBaseValueChangedEventArgs e)
