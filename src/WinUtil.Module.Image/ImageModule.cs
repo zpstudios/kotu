@@ -9,6 +9,8 @@ public sealed class ImageModule : IModule
 
     public string DisplayName => "Image";
 
+    public string BrandName => "zp-image";
+
     public string IconGlyph => "\uE8B9"; // Picture
 
     public IReadOnlyList<string> SupportedExtensions => ImageFolderNavigator.SupportedExtensions;

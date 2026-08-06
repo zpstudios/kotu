@@ -27,7 +27,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(WindowManager manager)
     {
         InitializeComponent();
-        Title = "WinUtil";
+        Title = "zp";
         _manager = manager;
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         BuildNavigation();
@@ -35,7 +35,7 @@ public sealed partial class MainWindow : Window
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
         if (File.Exists(IconPath)) AppWindow.SetIcon(IconPath);
 
-        // 창 헤더를 브랜드 색(#15072E)으로 — 본문 배경(MainWindow.xaml)과 같은 색
+        // 창 헤더만 브랜드 색(#15072E) — 본문은 시스템 테마 기본값
         TitleBarTheming.Apply(AppWindow.TitleBar);
 
         // 창별 트레이 미니 아이콘: 좌클릭=활성화, 우클릭=메뉴, 툴팁=창 제목
@@ -86,7 +86,7 @@ public sealed partial class MainWindow : Window
             IsUntouched = false;
             return;
         }
-        SetTitle(Path.GetFileName(path) + " — WinUtil");
+        SetTitle(Path.GetFileName(path) + " — zp");
         ShowModule(module, OpenContext.ForFile(path));
     }
 
@@ -102,7 +102,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        SetTitle(Path.GetFileName(file) + " — WinUtil");
+        SetTitle(Path.GetFileName(file) + " — zp");
         ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] });
     }
 
@@ -147,7 +147,7 @@ public sealed partial class MainWindow : Window
 
         if (args.IsSettingsSelected)
         {
-            SetTitle("Settings — WinUtil");
+            SetTitle("Settings — zp");
             ModuleHost.Content = new SettingsView(_router);
             CurrentModuleId = null;
             IsUntouched = false;
@@ -159,7 +159,7 @@ public sealed partial class MainWindow : Window
             var module = _router.Modules.FirstOrDefault(m => m.Id == id);
             if (module is not null)
             {
-                SetTitle($"{module.DisplayName} — WinUtil");
+                SetTitle($"{module.DisplayName} — zp");
                 ShowModule(module, OpenContext.Empty);
             }
         }

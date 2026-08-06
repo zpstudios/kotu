@@ -27,7 +27,7 @@ public sealed partial class SettingsView : UserControl
         Root.Children.Add(new TextBlock
         {
             Text = "Applies to the current user account only (no admin rights needed); turning a switch off removes the registration completely. "
-                 + "File association adds WinUtil to the \"Open with\" candidates; picking the default app is done in Windows Settings.",
+                 + "File association adds zp to the \"Open with\" candidates; picking the default app is done in Windows Settings.",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -36,7 +36,7 @@ public sealed partial class SettingsView : UserControl
         {
             var toggle = new ToggleSwitch
             {
-                Header = $"Register {module.DisplayName} file associations  ({string.Join(" ", module.SupportedExtensions)})",
+                Header = $"Register {module.BrandName} file associations  ({string.Join(" ", module.SupportedExtensions)})",
                 IsOn = Safe(() => ExplorerIntegration.IsAssociationRegistered(module)),
             };
             toggle.Toggled += (_, _) => Apply(toggle,
@@ -50,7 +50,7 @@ public sealed partial class SettingsView : UserControl
 
         var extractToggle = new ToggleSwitch
         {
-            Header = "Archive right-click menu: \"Extract here with WinUtil\"",
+            Header = "Archive right-click menu: \"Extract here with zp-zip\"",
             IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)),
         };
         extractToggle.Toggled += (_, _) => Apply(extractToggle,
@@ -60,7 +60,7 @@ public sealed partial class SettingsView : UserControl
 
         var compressToggle = new ToggleSwitch
         {
-            Header = "All-files right-click menu: \"Compress with WinUtil\"",
+            Header = "All-files right-click menu: \"Compress with zp-zip\"",
             IsOn = Safe(ExplorerIntegration.IsCompressMenuRegistered),
         };
         compressToggle.Toggled += (_, _) => Apply(compressToggle,
@@ -118,7 +118,7 @@ public sealed partial class SettingsView : UserControl
 
         AddHeader("About");
         var version = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
-        Root.Children.Add(new TextBlock { Text = $"WinUtil v{version} · github.com/tsusaikang/winutil", Opacity = 0.7 });
+        Root.Children.Add(new TextBlock { Text = $"zp v{version} · github.com/tsusaikang/winutil", Opacity = 0.7 });
     }
 
     private void AddHeader(string text) => Root.Children.Add(new TextBlock

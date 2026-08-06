@@ -83,9 +83,10 @@ jobs:
         run: |
           dotnet tool install --global vpk --version 1.2.0
           $publishDir = (Get-ChildItem -Path src/WinUtil.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1).FullName
+          # packId/exe 이름은 기존 설치본의 자동 업데이트 호환을 위해 WinUtil 유지, 표시명(packTitle)만 zp
           vpk pack --packId WinUtil --packVersion ${{ steps.ver.outputs.version }} `
                    --packDir $publishDir --mainExe WinUtil.App.exe `
-                   --packTitle WinUtil --packAuthors tsusaikang --outputDir vpk_out
+                   --packTitle zp --packAuthors tsusaikang --outputDir vpk_out
           if ($LASTEXITCODE -ne 0) { Write-Error "vpk pack 실패"; exit 1 }
           Get-ChildItem vpk_out | ForEach-Object { Write-Host ("생성됨: " + $_.Name) }
 

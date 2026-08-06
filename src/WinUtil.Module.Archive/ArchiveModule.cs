@@ -13,6 +13,8 @@ public sealed class ArchiveModule : IModule
 
     public string DisplayName => "Archive";
 
+    public string BrandName => "zp-zip";
+
     public string IconGlyph => "\uF012"; // ZipFolder
 
     public IReadOnlyList<string> SupportedExtensions => Extensions;

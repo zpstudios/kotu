@@ -9,6 +9,8 @@ public sealed class HardwareModule : IModule
 
     public string DisplayName => "Hardware";
 
+    public string BrandName => "zp-info";
+
     public string IconGlyph => "\uE950"; // Component (칩 모양)
 
     public IReadOnlyList<string> SupportedExtensions => [];

@@ -13,6 +13,12 @@ public interface IModule
     string DisplayName { get; }
 
     /// <summary>
+    /// OS에 노출되는 모듈 브랜드명(탐색기 우클릭 메뉴·파일 연결 표시명 등).
+    /// 앱 이름 "zp"에 기능 접미사를 붙인다. 예: "zp-zip".
+    /// </summary>
+    string BrandName { get; }
+
+    /// <summary>
     /// 네비게이션 아이콘(Segoe Fluent/MDL2 글리프 코드).
     /// 접힌(compact) 네비게이션에서 텍스트 대신 표시된다. 기본값: 문서 아이콘.
     /// </summary>

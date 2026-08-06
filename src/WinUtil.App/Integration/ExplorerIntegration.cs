@@ -35,7 +35,7 @@ public static class ExplorerIntegration
 
         using (var progKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}"))
         {
-            progKey.SetValue(null, $"WinUtil {module.DisplayName}");
+            progKey.SetValue(null, $"{module.BrandName} file");
             using (var icon = progKey.CreateSubKey("DefaultIcon"))
                 icon.SetValue(null, $"\"{ExePath}\",0");
             using (var command = progKey.CreateSubKey(@"shell\open\command"))
@@ -70,7 +70,7 @@ public static class ExplorerIntegration
         NotifyShell();
     }
 
-    // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with WinUtil" ----------
+    // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with zp-zip" ----------
 
     public static bool IsExtractHereMenuRegistered(IReadOnlyList<string> archiveExtensions)
     {
@@ -86,7 +86,7 @@ public static class ExplorerIntegration
         {
             using var verb = Registry.CurrentUser.CreateSubKey(
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractHereVerbName}");
-            verb.SetValue(null, "Extract here with WinUtil");
+            verb.SetValue(null, "Extract here with zp-zip");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.ExtractHereToken} \"%1\"");
@@ -105,7 +105,7 @@ public static class ExplorerIntegration
         NotifyShell();
     }
 
-    // ---------- 우클릭 메뉴: 모든 파일 → "Compress with WinUtil" ----------
+    // ---------- 우클릭 메뉴: 모든 파일 → "Compress with zp-zip" ----------
 
     private const string CompressVerbKeyPath = @"Software\Classes\*\shell\" + CompressVerbName;
 
@@ -119,7 +119,7 @@ public static class ExplorerIntegration
     {
         using (var verb = Registry.CurrentUser.CreateSubKey(CompressVerbKeyPath))
         {
-            verb.SetValue(null, "Compress with WinUtil");
+            verb.SetValue(null, "Compress with zp-zip");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.CompressToken} \"%1\"");

@@ -89,8 +89,8 @@ public static class Program
         {
             _ = MessageBoxW(
                 IntPtr.Zero,
-                $"WinUtil failed to start.\n\n{ex?.GetType().Name}: {ex?.Message}\n\nDetails: {LogPath}",
-                "WinUtil startup error",
+                $"zp failed to start.\n\n{ex?.GetType().Name}: {ex?.Message}\n\nDetails: {LogPath}",
+                "zp startup error",
                 0x00000010 /* MB_ICONERROR */);
         }
         catch

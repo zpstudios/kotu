@@ -35,6 +35,8 @@ public sealed class VideoModule : IModule
 
     public string DisplayName => "Video";
 
+    public string BrandName => "zp-video";
+
     public string IconGlyph => "\uE714"; // Video
 
     public IReadOnlyList<string> SupportedExtensions => Extensions;
