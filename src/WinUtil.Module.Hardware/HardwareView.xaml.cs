@@ -313,8 +313,12 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         LayoutSensorCards(0); // 실측 폭을 알기 전엔 1줄로 시작
     }
 
-    /// <summary>이보다 카드가 좁아지면 줄 수를 늘린다(제목·값이 잘려 못 읽는 폭 방지).</summary>
-    private const double MinCardWidth = 104;
+    /// <summary>
+    /// 이보다 카드가 좁아지면 줄 수를 늘린다. 하한 근거: 좌우 패딩 12 + 최장 값
+    /// "4500 MHz"(13px SemiBold ≈ 62px) — 제목은 스타 칸이라 먼저 말줄임되므로
+    /// 값만 안 잘리면 된다(v0.64.3 사용자 피드백: 104는 너무 일찍 줄바꿈됨).
+    /// </summary>
+    private const double MinCardWidth = 76;
 
     /// <summary>SensorGrid의 ColumnSpacing/RowSpacing과 같은 값 — 폭 계산에 쓴다.</summary>
     private const double CardSpacing = 8;
@@ -360,7 +364,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
         var titleText = new TextBlock
         {
-            Text = channel.Title,
+            Text = channel.ShortTitle, // 초단축 제목(v0.64.3) — 전체 이름은 툴팁에
             FontSize = 11,
             Opacity = 0.55,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -382,7 +386,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(6, 0, 0, 0),
         };
         var header = new Grid();
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -412,7 +416,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(8, 2, 8, 2),
+            Padding = new Thickness(6, 2, 6, 2),
             Height = 36, // 하단 바(44px 최소) 한 줄에 들어가는 높이
             Opacity = 0.45, // 값이 들어오면 1로
             Child = panel,
@@ -420,7 +424,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
         // 카드 클릭 = 트레이 표시 토글(A18, 사용자 확정 UX). 이미 2개면 오래된 선택이 밀려난다.
         root.Tapped += (_, _) => TraySensors.Toggle(channel.Id);
-        ToolTipService.SetToolTip(root, "Show in tray (up to 2)");
+        ToolTipService.SetToolTip(root, $"{channel.Title} — click to show in tray (up to 2)");
 
         _cards.Add(new SensorCard
         {

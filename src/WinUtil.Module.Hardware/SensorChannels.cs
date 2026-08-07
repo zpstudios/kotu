@@ -5,7 +5,9 @@ namespace WinUtil.Module.Hardware;
 /// 같은 정의를 쓴다 — 제목·색·선택자·포맷이 두 곳에서 어긋나면 안 되기 때문.
 /// </summary>
 /// <param name="Id">설정 저장·선택 식별용 영구 ID (예: "cpuTemp"). 바꾸면 저장된 선택이 풀린다.</param>
-/// <param name="Title">카드 제목·트레이 툴팁에 쓰는 표시명.</param>
+/// <param name="Title">전체 표시명 — 트레이 툴팁·Copy all·카드 툴팁용.</param>
+/// <param name="ShortTitle">카드 제목용 초단축 표기(v0.64.3 사용자 지시 — Temp·Power 같은
+/// 단어 지양): 장치명 + 기호(°=온도, W=전력, %=부하, Clk=클럭). 전체 이름은 툴팁으로 보완.</param>
 /// <param name="Accent">채널 색(대시보드 섹션 액센트 계열) — 카드 스파크라인·트레이 글자 색.</param>
 /// <param name="Select">프레임에서 이 채널 값을 꺼낸다. null = 미가용.</param>
 /// <param name="FormatFull">단위 포함 전체 표기 (카드 값·툴팁, 예: "62 °C").</param>
@@ -13,7 +15,7 @@ namespace WinUtil.Module.Hardware;
 /// <param name="FixedMax">&gt;0이면 그래프 고정 스케일 상한 (온도·부하).</param>
 /// <param name="AutoFloor">자동 스케일 시작 하한 (전력·클럭·팬).</param>
 public sealed record SensorChannel(
-    string Id, string Title, Windows.UI.Color Accent,
+    string Id, string Title, string ShortTitle, Windows.UI.Color Accent,
     Func<SensorFrame, float?> Select,
     Func<float, string> FormatFull,
     Func<float, string> FormatCompact,
@@ -30,16 +32,16 @@ public static class SensorChannels
 
     public static IReadOnlyList<SensorChannel> All { get; } =
     [
-        new("cpuTemp", "CPU Temp", Cpu, f => f.CpuTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
-        new("cpuPower", "CPU Power", Cpu, f => f.CpuPower, Watts, CompactWatts, FixedMax: 0, AutoFloor: 65),
-        new("cpuLoad", "CPU Load", Cpu, f => f.CpuLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
-        new("cpuClock", "CPU Clock", Cpu, f => f.CpuClock, Clock, CompactClock, FixedMax: 0, AutoFloor: 4000),
-        new("gpuTemp", "GPU Temp", Gpu, f => f.GpuTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
-        new("gpuPower", "GPU Power", Gpu, f => f.GpuPower, Watts, CompactWatts, FixedMax: 0, AutoFloor: 100),
-        new("gpuLoad", "GPU Load", Gpu, f => f.GpuLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
-        new("ram", "RAM", Ram, f => f.RamLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
-        new("fan", "Fan", Fan, f => f.FanRpm, Rpm, CompactRpm, FixedMax: 0, AutoFloor: 1500),
-        new("ssdTemp", "SSD Temp", Ssd, f => f.SsdTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
+        new("cpuTemp", "CPU Temp", "CPU°", Cpu, f => f.CpuTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
+        new("cpuPower", "CPU Power", "CPU W", Cpu, f => f.CpuPower, Watts, CompactWatts, FixedMax: 0, AutoFloor: 65),
+        new("cpuLoad", "CPU Load", "CPU %", Cpu, f => f.CpuLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
+        new("cpuClock", "CPU Clock", "CPU Clk", Cpu, f => f.CpuClock, Clock, CompactClock, FixedMax: 0, AutoFloor: 4000),
+        new("gpuTemp", "GPU Temp", "GPU°", Gpu, f => f.GpuTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
+        new("gpuPower", "GPU Power", "GPU W", Gpu, f => f.GpuPower, Watts, CompactWatts, FixedMax: 0, AutoFloor: 100),
+        new("gpuLoad", "GPU Load", "GPU %", Gpu, f => f.GpuLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
+        new("ram", "RAM", "RAM", Ram, f => f.RamLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
+        new("fan", "Fan", "Fan", Fan, f => f.FanRpm, Rpm, CompactRpm, FixedMax: 0, AutoFloor: 1500),
+        new("ssdTemp", "SSD Temp", "SSD°", Ssd, f => f.SsdTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
     ];
 
     /// <summary>ID로 채널을 찾는다. 미지의 ID(옛 설정 잔재 등)는 null.</summary>
