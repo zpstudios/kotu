@@ -145,7 +145,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 | 스레드 | 수 | 우선순위 | 수명·비고 |
 |---|---|---|---|
 | UI 스레드 | 창마다 1 | Normal | WinUI 3 디스패처. 렌더·입력·결과 반영만 |
-| `ZP hardware poller` | 프로세스 1 (**공유**) | **BelowNormal** | 200ms WMI 수집. H/W 뷰 구독 0이면 휴면 |
+| `ZP hardware poller` | 프로세스 1 (**공유**) | **BelowNormal** | 200ms 폴링: 센서(LHM)는 매 주기, WMI 스펙은 2초 캐시, SMART는 10초마다(A17). H/W 뷰 구독 0이면 휴면 |
 | `ZP explorer worker` | 페인마다 1 | Normal | 폴더 스캔·썸네일 추출. Unloaded 시 정리 |
 | `ZP archive worker` | 뷰마다 1 | Normal | 목록/해제/생성/항목 미리보기 |
 | `ZP image worker` | 뷰마다 1 | Normal | 파일 읽기·WIC 메타데이터·Magick 디코드·EXIF 정보 |
@@ -158,7 +158,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 
 | 작업 | 스레드 | UI 스레드가 하는 일 |
 |---|---|---|
-| 하드웨어 WMI 수집(200ms) | hardware poller | 스냅샷 dedup 후 트리 반영 |
+| 하드웨어 WMI 스펙 + LHM 센서 수집(200ms) | hardware poller | 스펙은 dedup 후 트리 반영, 센서 카드·그래프는 매 프레임 갱신 |
 | 탐색기 폴더 스캔 / 썸네일 추출 | explorer worker | 목록 채우기 / 비트맵 표시 |
 | 압축 목록·해제·생성 | archive worker | 진행률 바·완료 상태 |
 | 이미지 파일 읽기·메타데이터(WIC)·psd(Magick) | image worker | `SetSourceAsync` 표시 |
@@ -170,6 +170,6 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 
 ### 8.4 공유/분리·예산 정책 (사용자 확정 2026-08-07)
 
-- **Hardware 폴러만 프로세스 공유**: 창이 몇 개든 WMI 수집은 1회(구독 N). 나머지 파일 모듈 워커는 **뷰(창)별 분리** — 창 A의 압축 해제가 창 B를 기다리게 하지 않는다.
+- **Hardware 폴러만 프로세스 공유**: 창이 몇 개든 WMI·센서 수집은 1회(구독 N). LHM(커널 드라이버) 접근도 이 스레드 한 곳뿐(A17) — 뷰의 그래프 이력 조회는 별도 잠금이라 수집에 안 막힌다. 나머지 파일 모듈 워커는 **뷰(창)별 분리** — 창 A의 압축 해제가 창 B를 기다리게 하지 않는다.
 - **스레드 예산**: 배경 폴링은 BelowNormal로 재생·UI와 CPU를 다투지 않는다. 워커는 유휴 시 큐 대기(비용 0). 겹침 방지는 직렬 큐·단일 루프가 구조적으로 보장.
 - **수명**: 뷰 Unloaded → `Dispose()`(큐만 닫음, Join 없음 — 느린 I/O가 UI 해제를 막지 않게). 남은 작업은 워커가 마저 실행. 닫힌 뒤의 `Post`(네이티브 해제 등)는 스레드풀 폴백으로 실행을 보장.

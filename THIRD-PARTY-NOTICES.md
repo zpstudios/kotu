@@ -16,12 +16,11 @@ ZP는 아래 외부 구성요소를 사용합니다. 각 구성요소는 자체 
 | System.Text.Encoding.CodePages | CP949 인코딩(압축 항목명·자막) | MIT | NuGet |
 | System.Management | WMI 조회(하드웨어 정보) | MIT | NuGet |
 | [Velopack](https://github.com/velopack/velopack) | 설치본·자동 업데이트 | MIT | NuGet |
+| [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (LibreHardwareMonitorLib) | 센서 모니터링(온도·전력·팬 등, A17) | MPL-2.0 | NuGet, 동적 링크. 커널 드라이버(WinRing0/PawnIO)를 동봉·자동 로드 — 파일 무수정 사용이라 MPL 공개 의무 없음 |
+| [DiskInfoToolkit](https://github.com/Blacktempel/DiskInfoToolkit) | LHM 종속(SMART 디스크 정보) | MPL-2.0 | NuGet |
+| [RAMSPDToolkit](https://github.com/Blacktempel/RAMSPDToolkit) (RAMSPDToolkit-NDD) | LHM 종속(RAM SPD) | MPL-2.0 | NuGet |
+| [HidSharp](https://www.zer7.com/software/hidsharp) | LHM 종속(HID 장치) | Apache-2.0 | NuGet |
 | [xunit](https://xunit.net/) | 테스트 | Apache-2.0 | 개발 시에만 |
 
-## 도입 예정 (로드맵)
-
-| 구성요소 | 용도 | 라이선스 |
-|---|---|---|
-| [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) | 하드웨어 정보·센서 | MPL-2.0 |
-
 LGPL 구성요소는 모두 별도 dll로 동적 링크하며 정적 링크하지 않습니다. rar 형식 지원은 7-Zip에 포함된 unRAR 코드의 제한(역공학하여 rar 압축기를 만드는 것 금지)을 따릅니다.
+MPL-2.0 구성요소(LibreHardwareMonitor 계열)는 해당 파일을 수정하지 않고 그대로 사용하므로 소스 공개 의무가 발생하지 않습니다.
