@@ -35,7 +35,8 @@
                         Spacing="16" HorizontalAlignment="Center" />
         </ScrollViewer>
 
-        <!-- 센서 그래프 스트립(A17): 10채널 5×2 카드, 일반·전체화면 모두 뷰 하단에 고정.
+        <!-- 센서 그래프 스트립(A17): 10채널 카드, 기본 1줄 — 좁으면 2·3줄로 반응형(v0.64.1).
+             일반·전체화면 모두 뷰 하단에 고정.
              카드는 코드(BuildSensorCards)가 만든다. AdminRow는 비관리자라 못 잡는 센서가
              있을 때만 나타나는 안내 + 관리자 재시작 버튼. -->
         <Border x:Name="SensorStrip" Grid.Row="1" Padding="16,4,16,8">

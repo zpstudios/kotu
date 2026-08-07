@@ -19,7 +19,7 @@ public sealed record SensorChannel(
     Func<float, string> FormatCompact,
     float FixedMax, float AutoFloor);
 
-/// <summary>10채널 정의 단일 소스. 순서 = 뷰 카드 5×2 배치 순서(사용자 확정, v0.63.0).</summary>
+/// <summary>10채널 정의 단일 소스. 순서 = 뷰 카드 배치 순서(사용자 확정, v0.63.0 — v0.64.1부터 기본 1줄).</summary>
 public static class SensorChannels
 {
     private static readonly Windows.UI.Color Cpu = Windows.UI.Color.FromArgb(255, 0xE9, 0x60, 0x3D);

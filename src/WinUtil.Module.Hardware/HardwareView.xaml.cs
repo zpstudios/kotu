@@ -296,26 +296,57 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     private static readonly TimeSpan GraphWindow = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// 카드 10개를 5×2로 배치(사용자 확정 순서). 채널 정의(제목·색·선택자·포맷·스케일)는
+    /// 카드 10개 배치(순서는 사용자 확정). 채널 정의(제목·색·선택자·포맷·스케일)는
     /// SensorChannels 단일 소스(A18에서 트레이와 공용화) — 색은 대시보드 섹션 액센트 계열:
     /// CPU 주황 / GPU 보라 / RAM 초록 / 팬 황금 / SSD 파랑.
     /// 스케일: 온도·부하는 0~100 고정, 전력·클럭·팬은 자동(하한 있는 관찰 최댓값).
+    /// 배치는 기본 1줄(10칸) — 창 폭이 좁아 카드가 MinCardWidth 밑으로 내려갈 때만
+    /// 5칸(2줄)→4칸(3줄)로 늘어난다(v0.64.1 사용자 확정: 기본은 반드시 1줄).
     /// </summary>
     private void BuildSensorCards()
     {
         foreach (var channel in SensorChannels.All)
             AddCard(channel);
+        SensorGrid.SizeChanged += (_, e) => LayoutSensorCards(e.NewSize.Width);
+        LayoutSensorCards(0); // 실측 폭을 알기 전엔 1줄로 시작
+    }
 
-        const int columns = 5;
+    /// <summary>이보다 카드가 좁아지면 줄 수를 늘린다(제목·값이 잘려 못 읽는 폭 방지).</summary>
+    private const double MinCardWidth = 104;
+
+    /// <summary>SensorGrid의 ColumnSpacing/RowSpacing과 같은 값 — 폭 계산에 쓴다.</summary>
+    private const double CardSpacing = 8;
+
+    private int _sensorColumns;
+
+    /// <summary>폭에 맞는 칸 수(10→5→4)를 골라 카드를 재배치한다. 칸 수가 그대로면 아무것도 안 한다.</summary>
+    private void LayoutSensorCards(double width)
+    {
+        var columns = 4; // 최저 단계 = 4칸 3줄 (그 밑으로는 안 내려간다)
+        foreach (var c in new[] { 10, 5 })
+        {
+            if (width <= 0 || (width - (c - 1) * CardSpacing) / c >= MinCardWidth)
+            {
+                columns = c;
+                break;
+            }
+        }
+        if (columns == _sensorColumns) return;
+        _sensorColumns = columns;
+
+        SensorGrid.ColumnDefinitions.Clear();
+        SensorGrid.RowDefinitions.Clear();
         for (var c = 0; c < columns; c++)
             SensorGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        SensorGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        SensorGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var rows = (_cards.Count + columns - 1) / columns;
+        for (var r = 0; r < rows; r++)
+            SensorGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         for (var i = 0; i < _cards.Count; i++)
         {
             Grid.SetColumn(_cards[i].Root, i % columns);
             Grid.SetRow(_cards[i].Root, i / columns);
-            SensorGrid.Children.Add(_cards[i].Root);
+            if (_cards[i].Root.Parent is null)
+                SensorGrid.Children.Add(_cards[i].Root);
         }
     }
 
