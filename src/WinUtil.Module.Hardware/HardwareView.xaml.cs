@@ -11,39 +11,35 @@ using WinUtil.Core.Contracts;
 namespace WinUtil.Module.Hardware;
 
 /// <summary>
-/// 하드웨어 스펙 화면. WMI 수집은 느릴 수 있어 백그라운드에서 읽고, 전체 복사를 지원한다.
+/// 하드웨어 스펙 화면. WMI 수집은 HardwareModule.Poller(프로세스 공유 폴링 워커, A42)가
+/// 전담하고, 뷰는 구독해서 스냅샷을 UI 스레드로 디스패치 받아 그리기만 한다.
 /// 일반 모드는 라벨-값 리스트, 전체화면(F11/⛶)은 섹션 카드 대시보드로 보여준다(v0.42.0).
 /// Refresh·Copy·⛶는 하단 바로 이동 — 셸이 TakeBottomBar()로 떼어간다.
 /// </summary>
 public sealed partial class HardwareView : UserControl, IBottomBarProvider
 {
-    /// <summary>자동 갱신 주기(v0.51.0 사용자 지정) — 하단 바 "200 ms" 표기와 일치해야 한다.</summary>
-    private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromMilliseconds(200);
-
     private IReadOnlyList<HardwareSection> _sections = [];
-    private bool _loadedOnce;
     private AppWindow? _appWindow;
     private bool _dashboardRendered; // 같은 데이터로 대시보드를 다시 만들지 않기 위한 플래그
-    private DispatcherTimer? _autoTimer;
-    private bool _refreshing;            // WMI 수집이 주기보다 길면 다음 틱을 건너뛴다
+    private IDisposable? _subscription;  // 공유 폴러 구독(로드 중에만 유지 — 없으면 폴러 휴면)
+    private bool _refreshPending;        // Busy 링 표시 중 — 다음 스냅샷 도착 시 끈다
     private string _dataSignature = ""; // 값이 안 바뀌면 UI 재구성 생략
 
     public HardwareView(OpenContext context)
     {
         _ = context; // 파일 컨텍스트 없음
         InitializeComponent();
-        Loaded += async (_, _) =>
+        Loaded += (_, _) =>
         {
             HookPresenterChanged();
             Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
-            StartAutoRefresh();
-            if (_loadedOnce) return;
-            _loadedOnce = true;
-            await RefreshAsync();
+            if (_dataSignature.Length == 0) ShowBusy(); // 첫 데이터가 올 때까지 링 표시(기존 동작 유지)
+            _subscription ??= HardwareModule.Poller.Subscribe(OnSnapshot); // 구독 즉시 1회 폴링됨
         };
         Unloaded += (_, _) =>
         {
-            _autoTimer?.Stop();
+            _subscription?.Dispose(); // 마지막 뷰가 내려가면 폴러는 휴면
+            _subscription = null;
             if (_appWindow is { } w) w.Changed -= OnAppWindowChanged;
             _appWindow = null;
         };
@@ -56,65 +52,37 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         return ControlBar;
     }
 
-    private async Task RefreshAsync()
+    // ---------- 갱신 (A42: 수집은 공유 폴러, 뷰는 스냅샷 구독) ----------
+
+    /// <summary>폴러 스냅샷 도착 — 워커 스레드에서 불리므로 UI 스레드로 넘겨 반영한다.</summary>
+    private void OnSnapshot(IReadOnlyList<HardwareSection> sections)
+        => DispatcherQueue?.TryEnqueue(() => ApplySnapshot(sections));
+
+    /// <summary>
+    /// UI 스레드: Busy 링을 끄고(수동 Refresh·첫 로드), 값이 지난번과 같으면
+    /// UI 재구성을 생략한다(200ms마다 트리 재생성 방지). 겹침 방지는 폴러가 보장(단일 루프).
+    /// </summary>
+    private void ApplySnapshot(IReadOnlyList<HardwareSection> sections)
     {
-        Busy.IsActive = true;
-        RefreshButton.IsEnabled = false;
-        _refreshing = true; // 자동 갱신 틱과 겹치지 않게
-        try
+        if (_refreshPending)
         {
-            _sections = await Task.Run(HardwareInfoService.Collect);
-            _dataSignature = Signature(_sections);
-            ApplySections();
-        }
-        finally
-        {
-            _refreshing = false;
+            _refreshPending = false;
             Busy.IsActive = false;
             RefreshButton.IsEnabled = true;
         }
+        var signature = Signature(sections);
+        if (signature == _dataSignature) return;
+        _dataSignature = signature;
+        _sections = sections;
+        ApplySections();
     }
 
-    // ---------- 자동 갱신 (v0.51.0: 200ms 주기, 하단 바 표기와 일치) ----------
-
-    private void StartAutoRefresh()
+    /// <summary>Busy 링은 수동 Refresh·첫 로드에서만 돌린다 — 200ms마다 깜빡이면 안 된다.</summary>
+    private void ShowBusy()
     {
-        if (_autoTimer is not null)
-        {
-            _autoTimer.Start();
-            return;
-        }
-        _autoTimer = new DispatcherTimer { Interval = AutoRefreshInterval };
-        _autoTimer.Tick += async (_, _) => await AutoRefreshTickAsync();
-        _autoTimer.Start();
-    }
-
-    /// <summary>
-    /// 자동 갱신 1틱: WMI 수집이 주기보다 오래 걸리면 그 틱은 건너뛰고(겹침 방지),
-    /// 값이 지난번과 같으면 UI 재구성을 생략한다(200ms마다 트리 재생성 방지).
-    /// Busy 링은 수동 Refresh에서만 돌린다 — 200ms마다 깜빡이면 안 된다.
-    /// </summary>
-    private async Task AutoRefreshTickAsync()
-    {
-        if (_refreshing) return;
-        _refreshing = true;
-        try
-        {
-            var sections = await Task.Run(HardwareInfoService.Collect);
-            var signature = Signature(sections);
-            if (signature == _dataSignature) return;
-            _dataSignature = signature;
-            _sections = sections;
-            ApplySections();
-        }
-        catch
-        {
-            // 일시적 WMI 실패는 다음 틱에서 재시도
-        }
-        finally
-        {
-            _refreshing = false;
-        }
+        _refreshPending = true;
+        Busy.IsActive = true;
+        RefreshButton.IsEnabled = false;
     }
 
     /// <summary>새 수집 결과를 현재 보이는 뷰(리스트/대시보드)에 반영한다.</summary>
@@ -365,7 +333,11 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
     // ---------- 조작 ----------
 
-    private async void OnRefreshClick(object sender, RoutedEventArgs e) => await RefreshAsync();
+    private void OnRefreshClick(object sender, RoutedEventArgs e)
+    {
+        ShowBusy();
+        HardwareModule.Poller.Poke(); // 간격을 기다리지 않고 즉시 수집 — 결과는 OnSnapshot으로
+    }
 
     /// <summary>모든 섹션을 텍스트로 클립보드에 복사 (사양 공유용).</summary>
     private void OnCopyClick(object sender, RoutedEventArgs e)
