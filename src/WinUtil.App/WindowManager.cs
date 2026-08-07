@@ -22,6 +22,13 @@ public sealed class WindowManager
     /// <summary>열린 창 목록. 끝쪽이 가장 최근에 활성화된 창(MRU).</summary>
     private readonly List<MainWindow> _windows = [];
 
+    /// <summary>
+    /// 창 생성 순서 목록 (A2, v0.58.0) — 인스턴스 번호(1~9)의 기준.
+    /// MRU(_windows)는 활성화마다 순서가 바뀌므로 번호용으로는 따로 유지한다.
+    /// 창이 닫히면 제거되어 뒷번호가 자연히 당겨진다.
+    /// </summary>
+    private readonly List<MainWindow> _ordered = [];
+
     public WindowManager(FileTypeRouter router) => _router = router;
 
     /// <summary>가장 최근 활성화된 창. 업데이트 다이얼로그 등 공용 UI의 호스트로 쓴다.</summary>
@@ -101,6 +108,8 @@ public sealed class WindowManager
         window.Closed += (_, _) =>
         {
             _windows.Remove(window);
+            _ordered.Remove(window);
+            UpdateInstanceBadges(); // 중간 창이 닫히면 번호 당겨오기 (A2)
             if (_windows.Count == 0)
                 Application.Current.Exit();
         };
@@ -116,6 +125,18 @@ public sealed class WindowManager
         };
 
         _windows.Add(window);
+        _ordered.Add(window);
+        UpdateInstanceBadges(); // 2번째 창이 뜨는 순간 1번 창에도 배지가 생긴다 (A2)
         return window;
+    }
+
+    /// <summary>
+    /// 인스턴스 번호 배지 갱신 (A2, v0.58.0): 창이 2개 이상일 때만 생성 순서대로
+    /// 1~9번을 표시한다(10번째부터는 표시 없음). 창이 하나면 전부 숨김.
+    /// </summary>
+    private void UpdateInstanceBadges()
+    {
+        for (var i = 0; i < _ordered.Count; i++)
+            _ordered[i].SetInstanceBadge(_ordered.Count > 1 && i < 9 ? i + 1 : 0);
     }
 }

@@ -787,4 +787,38 @@ public sealed partial class MainWindow : Window
         AppWindow.MoveInZOrderAtTop();
         Activate();
     }
+
+    // ---------- 인스턴스 번호 배지 (A2, v0.58.0) ----------
+
+    /// <summary>배지 색 팔레트 — 번호(1~9)마다 다른 색. 창을 눈으로 구분하는 용도.</summary>
+    private static readonly Windows.UI.Color[] InstanceColors =
+    [
+        Windows.UI.Color.FromArgb(255, 0xE8, 0x11, 0x23), // 1 red
+        Windows.UI.Color.FromArgb(255, 0x00, 0x78, 0xD7), // 2 blue
+        Windows.UI.Color.FromArgb(255, 0x10, 0x7C, 0x10), // 3 green
+        Windows.UI.Color.FromArgb(255, 0xF7, 0x63, 0x0C), // 4 orange
+        Windows.UI.Color.FromArgb(255, 0x8E, 0x24, 0xAA), // 5 purple
+        Windows.UI.Color.FromArgb(255, 0x00, 0x99, 0xBC), // 6 teal
+        Windows.UI.Color.FromArgb(255, 0xC3, 0x00, 0x52), // 7 magenta
+        Windows.UI.Color.FromArgb(255, 0x76, 0x76, 0x76), // 8 gray
+        Windows.UI.Color.FromArgb(255, 0x4A, 0x37, 0x8C), // 9 indigo
+    ];
+
+    /// <summary>
+    /// 인스턴스 번호 표시. 0 = 숨김(창이 하나뿐이거나 10번째 이상).
+    /// 창이 2개가 되는 순간 1번 창에도 배지가 생기고, 중간 창이 닫히면
+    /// WindowManager가 번호를 당겨서 다시 부른다.
+    /// </summary>
+    public void SetInstanceBadge(int number)
+    {
+        if (number <= 0)
+        {
+            InstanceBadge.Visibility = Visibility.Collapsed;
+            return;
+        }
+        InstanceBadge.Visibility = Visibility.Visible;
+        InstanceBadge.Background =
+            new SolidColorBrush(InstanceColors[(number - 1) % InstanceColors.Length]);
+        InstanceBadgeText.Text = number.ToString();
+    }
 }
