@@ -245,8 +245,8 @@ public sealed partial class MainWindow : Window
         RootLayout.KeyboardAccelerators.Add(accelerator);
     }
 
-    /// <summary>단축키로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호).</summary>
-    private void OpenModuleById(string id)
+    /// <summary>단축키·센서 트레이(A18)로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호).</summary>
+    internal void OpenModuleById(string id)
     {
         if (CurrentModuleId == id) return;
         var module = _router.Modules.FirstOrDefault(m => m.Id == id);

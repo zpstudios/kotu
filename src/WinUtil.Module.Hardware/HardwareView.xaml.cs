@@ -39,12 +39,17 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             HookPresenterChanged();
             Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
             if (_dataSignature.Length == 0) ShowBusy(); // 첫 데이터가 올 때까지 링 표시(기존 동작 유지)
-            _subscription ??= HardwareModule.Poller.Subscribe(OnSnapshot); // 구독 즉시 1회 폴링됨
+            // 뷰 구독(스펙+센서, A18에서 API 분리) — 구독 즉시 1회 폴링됨
+            _subscription ??= HardwareModule.SubscribeSnapshots(OnSnapshot);
+            TraySensors.Changed -= UpdateTrayPins; // Loaded 중복 발화 대비 — 이중 구독 방지
+            TraySensors.Changed += UpdateTrayPins; // 다른 창에서 토글해도 이 창 카드에 반영
+            UpdateTrayPins();
         };
         Unloaded += (_, _) =>
         {
-            _subscription?.Dispose(); // 마지막 뷰가 내려가면 폴러는 휴면
+            _subscription?.Dispose(); // 마지막 뷰가 내려가면 폴러는 휴면(트레이 구독이 없다면)
             _subscription = null;
+            TraySensors.Changed -= UpdateTrayPins;
             if (_appWindow is { } w) w.Changed -= OnAppWindowChanged;
             _appWindow = null;
         };
@@ -291,28 +296,15 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     private static readonly TimeSpan GraphWindow = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// 카드 10개를 5×2로 배치(사용자 확정 순서). 색은 대시보드 섹션 액센트를 재사용:
+    /// 카드 10개를 5×2로 배치(사용자 확정 순서). 채널 정의(제목·색·선택자·포맷·스케일)는
+    /// SensorChannels 단일 소스(A18에서 트레이와 공용화) — 색은 대시보드 섹션 액센트 계열:
     /// CPU 주황 / GPU 보라 / RAM 초록 / 팬 황금 / SSD 파랑.
     /// 스케일: 온도·부하는 0~100 고정, 전력·클럭·팬은 자동(하한 있는 관찰 최댓값).
     /// </summary>
     private void BuildSensorCards()
     {
-        var cpu = Windows.UI.Color.FromArgb(255, 0xE9, 0x60, 0x3D);
-        var gpu = Windows.UI.Color.FromArgb(255, 0x7A, 0x5A, 0xF8);
-        var ram = Windows.UI.Color.FromArgb(255, 0x2E, 0x9E, 0x6B);
-        var fan = Windows.UI.Color.FromArgb(255, 0xC5, 0x8A, 0x00);
-        var ssd = Windows.UI.Color.FromArgb(255, 0x3A, 0x7B, 0xD5);
-
-        AddCard("CPU Temp", cpu, f => f.CpuTemp, Celsius, fixedMax: 100);
-        AddCard("CPU Power", cpu, f => f.CpuPower, Watts, autoFloor: 65);
-        AddCard("CPU Load", cpu, f => f.CpuLoad, Percent, fixedMax: 100);
-        AddCard("CPU Clock", cpu, f => f.CpuClock, Clock, autoFloor: 4000);
-        AddCard("GPU Temp", gpu, f => f.GpuTemp, Celsius, fixedMax: 100);
-        AddCard("GPU Power", gpu, f => f.GpuPower, Watts, autoFloor: 100);
-        AddCard("GPU Load", gpu, f => f.GpuLoad, Percent, fixedMax: 100);
-        AddCard("RAM", ram, f => f.RamLoad, Percent, fixedMax: 100);
-        AddCard("Fan", fan, f => f.FanRpm, Rpm, autoFloor: 1500);
-        AddCard("SSD Temp", ssd, f => f.SsdTemp, Celsius, fixedMax: 100);
+        foreach (var channel in SensorChannels.All)
+            AddCard(channel);
 
         const int columns = 5;
         for (var c = 0; c < columns; c++)
@@ -327,26 +319,29 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         }
     }
 
-    private static string Celsius(float v) => $"{v:0} °C";
-    private static string Watts(float v) => $"{v:0} W";
-    private static string Percent(float v) => $"{v:0} %";
-    private static string Rpm(float v) => $"{v:0} RPM";
-    private static string Clock(float v) => HardwareFormat.MegaHertz((uint)Math.Round(v));
-
-    private void AddCard(string title, Windows.UI.Color accent,
-        Func<SensorFrame, float?> select, Func<float, string> format,
-        float fixedMax = 0, float autoFloor = 0)
+    private void AddCard(SensorChannel channel)
     {
+        var accent = channel.Accent;
         var stroke = new SolidColorBrush(accent);
         var fill = new SolidColorBrush(Windows.UI.Color.FromArgb(56, accent.R, accent.G, accent.B));
 
         var titleText = new TextBlock
         {
-            Text = title,
+            Text = channel.Title,
             FontSize = 11,
             Opacity = 0.55,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
+        };
+        // 트레이 선택 핀(A18): 이 채널이 트레이에 표시 중이면 보인다.
+        var pinIcon = new FontIcon
+        {
+            Glyph = "\uE718",
+            FontSize = 10,
+            Foreground = stroke,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 0, 0),
+            Visibility = Visibility.Collapsed,
         };
         var valueText = new TextBlock
         {
@@ -359,8 +354,11 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         var header = new Grid();
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(valueText, 1);
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(pinIcon, 1);
+        Grid.SetColumn(valueText, 2);
         header.Children.Add(titleText);
+        header.Children.Add(pinIcon);
         header.Children.Add(valueText);
 
         var line = new Polyline { Stroke = stroke, StrokeThickness = 1.5 };
@@ -387,19 +385,29 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             Child = panel,
         };
 
+        // 카드 클릭 = 트레이 표시 토글(A18, 사용자 확정 UX). 이미 2개면 오래된 선택이 밀려난다.
+        root.Tapped += (_, _) => TraySensors.Toggle(channel.Id);
+        ToolTipService.SetToolTip(root, "Show in tray (up to 2)");
+
         _cards.Add(new SensorCard
         {
             Root = root,
             ValueText = valueText,
+            Pin = pinIcon,
             GraphHost = graphHost,
             Line = line,
             Area = area,
-            Title = title,
-            Select = select,
-            Format = format,
-            FixedMax = fixedMax,
-            AutoMax = autoFloor,
+            Channel = channel,
+            AutoMax = channel.AutoFloor,
         });
+    }
+
+    /// <summary>트레이 선택이 바뀌면(이 창 클릭이든 다른 창이든) 카드 핀 표시를 맞춘다(A18).</summary>
+    private void UpdateTrayPins()
+    {
+        foreach (var card in _cards)
+            card.Pin.Visibility = TraySensors.IsSelected(card.Channel.Id)
+                ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>매 스냅샷: 승격 안내 표시 여부 + 카드 값·스파크라인 갱신.</summary>
@@ -422,8 +430,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
     private static void UpdateCard(SensorCard card, SensorFrame frame, SensorFrame[] history)
     {
-        var value = frame.Timestamp == DateTime.MinValue ? null : card.Select(frame);
-        card.ValueText.Text = value is { } v ? card.Format(v) : "—";
+        var value = frame.Timestamp == DateTime.MinValue ? null : card.Channel.Select(frame);
+        card.ValueText.Text = value is { } v ? card.Channel.FormatFull(v) : "—";
         if (value is not null) card.HasEverHadValue = true;
         card.Root.Opacity = card.HasEverHadValue ? 1.0 : 0.45;
         RenderSparkline(card, history);
@@ -449,15 +457,15 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         var start = now - GraphWindow;
 
         // 자동 스케일 상한 갱신 (창 안의 최댓값 기준)
-        if (card.FixedMax <= 0)
+        if (card.Channel.FixedMax <= 0)
         {
             foreach (var f in history)
             {
                 if (f.Timestamp < start) continue;
-                if (card.Select(f) is { } v && v * 1.1f > card.AutoMax) card.AutoMax = v * 1.1f;
+                if (card.Channel.Select(f) is { } v && v * 1.1f > card.AutoMax) card.AutoMax = v * 1.1f;
             }
         }
-        var max = card.FixedMax > 0 ? card.FixedMax : card.AutoMax;
+        var max = card.Channel.FixedMax > 0 ? card.Channel.FixedMax : card.AutoMax;
         if (max <= 0) max = 1;
 
         var linePoints = new PointCollection();
@@ -469,7 +477,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         {
             var f = history[i];
             if (f.Timestamp < start) continue;
-            if (card.Select(f) is not { } v) continue; // null 구간은 건너뛴다(선이 이어짐)
+            if (card.Channel.Select(f) is not { } v) continue; // null 구간은 건너뛴다(선이 이어짐)
 
             var x = (f.Timestamp - start).TotalSeconds / GraphWindow.TotalSeconds * w;
             var y = h - Math.Clamp(v / max, 0f, 1f) * h;
@@ -521,19 +529,17 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         Application.Current.Exit();
     }
 
-    /// <summary>센서 카드 하나의 구성 요소·스케일 상태.</summary>
+    /// <summary>센서 카드 하나의 구성 요소·스케일 상태. 채널 정의는 SensorChannels 공용(A18).</summary>
     private sealed class SensorCard
     {
         public required Border Root;
         public required TextBlock ValueText;
+        public required FontIcon Pin;  // 트레이 표시 중 핀 (A18)
         public required Grid GraphHost;
         public required Polyline Line;
         public required Polygon Area;
-        public required string Title;
-        public required Func<SensorFrame, float?> Select;
-        public required Func<float, string> Format;
-        public float FixedMax;         // >0이면 고정 스케일 상한
-        public float AutoMax;          // 자동 스케일: 하한으로 시작해 관찰 최대 ×1.1로 커진다
+        public required SensorChannel Channel;
+        public float AutoMax;          // 자동 스케일: 채널 하한으로 시작해 관찰 최대 ×1.1로 커진다
         public bool HasEverHadValue;   // 한 번도 값이 없던 채널은 흐리게
     }
 
@@ -616,7 +622,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         {
             sb.AppendLine("[Sensors]");
             foreach (var card in _cards)
-                sb.AppendLine($"{card.Title}: {(card.Select(_lastFrame) is { } v ? card.Format(v) : "-")}");
+                sb.AppendLine($"{card.Channel.Title}: {(card.Channel.Select(_lastFrame) is { } v ? card.Channel.FormatFull(v) : "-")}");
         }
 
         var package = new DataPackage();

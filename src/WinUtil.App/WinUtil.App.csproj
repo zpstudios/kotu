@@ -39,6 +39,8 @@
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.*" />
     <!-- 설치본(Setup.exe)·자동 업데이트 (설계 2장: unpackaged + Velopack) -->
     <PackageReference Include="Velopack" Version="1.2.0" />
+    <!-- 센서 트레이 아이콘 동적 렌더링(A18) — Windows 전용 TFM이라 경고 없음 -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.*" />
   </ItemGroup>
   <ItemGroup>
     <!-- 런타임 로드용 .ico 원본: 타이틀바(AppWindow.SetIcon)·트레이 아이콘(TrayIcon)이 exe 옆에서 읽는다.

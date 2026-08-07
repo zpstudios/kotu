@@ -42,7 +42,8 @@ public partial class App : Application
             router.Register(new WinUtil.Module.Video.VideoModule(
                 sp.GetRequiredService<ISettingsService>()));
             router.Register(new WinUtil.Module.Document.DocumentModule()); // v0.44.0
-            router.Register(new WinUtil.Module.Hardware.HardwareModule());
+            router.Register(new WinUtil.Module.Hardware.HardwareModule(
+                sp.GetRequiredService<ISettingsService>())); // 트레이 센서 선택 복원 (A18)
             return router;
         });
         services.AddSingleton(sp => new WindowManager(sp.GetRequiredService<FileTypeRouter>()));
@@ -59,6 +60,10 @@ public partial class App : Application
         // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당
         var request = LaunchRequest.Parse(Environment.GetCommandLineArgs().Skip(1).ToList());
         _windowManager.Dispatch(request);
+
+        // 선택 센서 트레이(A18): 저장된 선택(기본 CPU 온도/전력)이 있으면 즉시 표시.
+        // 하드웨어 창이 없어도 앱이 살아 있는 동안 유지된다(사용자 확정).
+        SensorTray.Initialize(_windowManager);
 
         // 업데이트 주기 체크 금지(사용자 결정) — 설정 화면 진입 시 SettingsView가 1회 확인한다.
         // 설치 직후 첫 실행이면 미션 스테이트먼트 웰컴을 띄운다.
