@@ -89,10 +89,9 @@ public sealed class ModuleWorker : IDisposable
         }
         catch (InvalidOperationException)
         {
-            return false; // Dispose로 큐가 닫힌 뒤 — 조용히 거절(호출자에겐 취소된 Task)
-        }
-        catch (ObjectDisposedException)
-        {
+            // Dispose로 큐가 닫힌 뒤 — 조용히 거절(호출자에겐 취소된 Task).
+            // CompleteAdding 후 Add는 IOE, Dispose 후는 ODE인데 ODE가 IOE의 파생이라
+            // 이 catch 하나로 둘 다 잡힌다(따로 잡으면 CS0160).
             return false;
         }
     }
