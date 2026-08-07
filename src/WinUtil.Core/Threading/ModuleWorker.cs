@@ -64,13 +64,21 @@ public sealed class ModuleWorker : IDisposable
 
     /// <summary>
     /// 완료를 기다리지 않는 뒷정리성 작업(fire-and-forget). 예외는 삼킨다 —
-    /// libvlc 해제처럼 "실패해도 그만"인 정리 전용. 순서는 Run과 같은 큐로 보장된다.
+    /// libvlc 해제처럼 "실패해도 그만"인 정리 전용. 큐가 열려 있으면 Run과 같은 큐라
+    /// 순서가 보장되고, Dispose로 닫힌 뒤라면 스레드풀로 폴백해 실행 자체는 보장한다
+    /// (네이티브 해제가 조용히 버려져 누수되면 안 된다).
     /// </summary>
-    public void Post(Action work) => TryAdd(() =>
+    public void Post(Action work)
     {
-        try { work(); }
-        catch { /* 뒷정리 실패는 무시 */ }
-    });
+        void Guarded()
+        {
+            try { work(); }
+            catch { /* 뒷정리 실패는 무시 */ }
+        }
+
+        if (!TryAdd(Guarded))
+            ThreadPool.UnsafeQueueUserWorkItem(_ => Guarded(), null);
+    }
 
     private bool TryAdd(Action item)
     {

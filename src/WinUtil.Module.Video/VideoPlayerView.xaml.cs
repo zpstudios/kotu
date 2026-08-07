@@ -10,6 +10,7 @@ using Windows.Storage.Pickers;
 using WinRT.Interop;
 using WinUtil.Core.Contracts;
 using WinUtil.Core.Settings;
+using WinUtil.Core.Threading;
 
 namespace WinUtil.Module.Video;
 
@@ -18,7 +19,9 @@ namespace WinUtil.Module.Video;
 /// 배속, 자막(자동 탐지 + CP949 자동 변환), 이어보기, 전체화면(Enter/F11)을 제공한다.
 /// 더블클릭 전체화면은 제거(v0.23.0) — 클릭(재생/일시정지)과 겹쳐 의도치 않은 전환이 잦았다.
 /// 음악 파일은 같은 파이프라인으로 재생하되 영상 표면에 ♪ 오버레이를 띄운다.
-/// libvlc 이벤트는 백그라운드 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다.
+/// 스레드 모델(A42): libvlc 생성·해제와 자막 탐지·변환은 뷰 전용 워커에서 직렬로 —
+/// 생성/해제가 같은 큐라 순서가 구조적으로 보장된다. libvlc 이벤트는 libvlc 자체 스레드에서
+/// 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
 public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     IContentStateSource, IContentInfoProvider
@@ -127,6 +130,10 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private bool _suppressSeekEvent;
     private bool _suppressVolumeEvent;
     private bool _tornDown;
+    private ModuleWorker? _worker; // libvlc 생성·해제/자막 탐지·변환 전용(A42) — 뷰별 분리
+
+    /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP video worker");
 
     public VideoPlayerView(OpenContext context, ISettingsService settings)
     {
@@ -222,10 +229,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
                 ? [.. swapOptions, "--no-video-title-show", "--audio-visual=visual", "--effect-list=scope"]
                 : [.. swapOptions, "--no-video-title-show"];
 
-            var (libVlc, player) = await Task.Run(() =>
+            var (libVlc, player) = await Worker.Run(_ =>
             {
                 // 이전 인스턴스 정리 후 생성 — 두 vout이 스왑체인을 동시에 잡지 않게 순차로.
                 // (Stop/Dispose를 UI 스레드에서 부르면 libvlc 콜백과 교착할 수 있다)
+                // 워커 큐가 직렬이라 해제·생성 순서는 구조적으로도 보장된다(A42).
                 try
                 {
                     oldPlayer?.Stop();
@@ -246,11 +254,12 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
             if (_tornDown)
             {
-                // 생성이 끝나기 전에 뷰가 내려갔다 — 연결하지 않고 백그라운드에서 해제만.
-                _ = Task.Run(() =>
+                // 생성이 끝나기 전에 뷰가 내려갔다 — 연결하지 않고 워커에서 해제만.
+                // (워커가 이미 닫혔으면 Post가 스레드풀로 폴백해 해제 실행은 보장된다)
+                Worker.Post(() =>
                 {
-                    try { player.Dispose(); libVlc.Dispose(); }
-                    catch { /* 해제 중 예외는 무시 */ }
+                    player.Dispose();
+                    libVlc.Dispose();
                 });
                 return;
             }
@@ -367,23 +376,20 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             }
 
             UnhookPlayerEvents(player);
-            Task.Run(() =>
+            Worker.Post(() =>
             {
-                try
-                {
-                    player.Stop();
-                    player.Dispose();
-                    libVlc?.Dispose();
-                }
-                catch
-                {
-                    // 해제 중 예외는 무시.
-                }
+                player.Stop();
+                player.Dispose();
+                libVlc?.Dispose();
             });
         }
 
         _settings.Set("video.volume", (int)VolumeSlider.Value);
         _settings.Save();
+
+        // 마지막 해제 작업까지 큐에 넣었으니 워커를 닫는다(남은 작업은 워커가 마저 실행).
+        // null로 되돌리지 않는다 — 해체된 뷰에서 게터가 새 워커를 만들면 스레드가 샌다.
+        _worker?.Dispose();
     }
 
     // ---------- 플레이어 이벤트 (백그라운드 스레드 → 디스패치) ----------
@@ -519,7 +525,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         List<string> found;
         try
         {
-            found = await Task.Run(() => SubtitleFileLocator.Find(file).ToList());
+            found = await Worker.Run(_ => SubtitleFileLocator.Find(file).ToList());
         }
         catch
         {
@@ -586,9 +592,13 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         var source = _subtitleFiles[index - 1];
         try
         {
-            var utf8Path = await Task.Run(() => SubtitleCharset.EnsureUtf8File(source));
+            var utf8Path = await Worker.Run(_ => SubtitleCharset.EnsureUtf8File(source));
             if (_tornDown || _player is not { } player) return;
             player.AddSlave(MediaSlaveType.Subtitle, new Uri(utf8Path).AbsoluteUri, true);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 뷰가 내려가며 워커가 닫힘
         }
         catch (Exception ex)
         {
