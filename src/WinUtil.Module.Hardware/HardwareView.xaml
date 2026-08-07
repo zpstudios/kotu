@@ -35,12 +35,11 @@
                         Spacing="16" HorizontalAlignment="Center" />
         </ScrollViewer>
 
-        <!-- 센서 그래프 스트립(A17): 10채널 카드, 기본 1줄 — 좁으면 2·3줄로 반응형(v0.64.1).
-             일반·전체화면 모두 뷰 하단에 고정.
-             카드는 코드(BuildSensorCards)가 만든다. AdminRow는 비관리자라 못 잡는 센서가
-             있을 때만 나타나는 안내 + 관리자 재시작 버튼. -->
-        <Border x:Name="SensorStrip" Grid.Row="1" Padding="16,4,16,8">
-            <StackPanel Spacing="6">
+        <!-- 센서 스트립(A17→v0.64.2 개편): 평소엔 비어 있고(Collapsed), ① 비관리자 안내(AdminRow)가
+             필요할 때 ② 전체화면(하단 바가 숨는 동안 SensorGrid가 여기로 옮겨온다)일 때만 나타난다.
+             카드 자체는 코드(BuildSensorCards)가 만들어 하단 바 안 SensorGrid에 얹는다. -->
+        <Border x:Name="SensorStrip" Grid.Row="1" Padding="16,4,16,8" Visibility="Collapsed">
+            <StackPanel x:Name="StripPanel" Spacing="6">
                 <Grid x:Name="AdminRow" Visibility="Collapsed" ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -53,14 +52,15 @@
                     <Button Grid.Column="1" FontSize="12" Padding="10,2,10,3"
                             Content="Restart as admin" Click="OnElevateClick" />
                 </Grid>
-                <Grid x:Name="SensorGrid" ColumnSpacing="8" RowSpacing="8" />
             </StackPanel>
         </Border>
 
         <!-- 하단 바: 셸이 TakeBottomBar()로 떼어가 한 줄에 얹는다(v0.42.0).
+             센서 카드 10개는 이 줄의 가운데 공간(SensorGrid)에 산다(v0.64.2 사용자 지시 —
+             별도 줄 금지, 기본 1줄. 창이 좁으면 카드만 2·3줄로 접혀 바가 세로로 자란다).
              우측 끝 ⛶ = 전체화면(전 모듈 공통 배치, 사용자 요청). -->
         <Border x:Name="ControlBar" Grid.Row="2" Padding="0,2,0,2">
-            <Grid ColumnSpacing="10">
+            <Grid x:Name="BarGrid" ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -70,18 +70,20 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button x:Name="RefreshButton" Grid.Column="0" Content="Refresh"
-                        Click="OnRefreshClick" />
+                        VerticalAlignment="Center" Click="OnRefreshClick" />
                 <Button x:Name="CopyButton" Grid.Column="1" Content="Copy all"
-                        Click="OnCopyClick" />
+                        VerticalAlignment="Center" Click="OnCopyClick" />
                 <ProgressRing x:Name="Busy" Grid.Column="2" IsActive="False"
                               Width="20" Height="20" VerticalAlignment="Center" />
+                <Grid x:Name="SensorGrid" Grid.Column="3" ColumnSpacing="8" RowSpacing="4"
+                      VerticalAlignment="Center" />
                 <!-- 자동 갱신 주기 표기 (v0.51.0 사용자 요청 — 실제 갱신도 이 주기) -->
                 <TextBlock Grid.Column="4" Text="200 ms" FontSize="12" Opacity="0.6"
                            VerticalAlignment="Center"
                            ToolTipService.ToolTip="Auto-refresh interval" />
                 <!-- 40×40 정사각 아이콘 = 다른 모듈 ⛶와 통일 (v0.53.0) -->
                 <Button Grid.Column="5" Width="40" Height="40" Padding="4"
-                        Click="OnFullScreenButtonClick"
+                        VerticalAlignment="Center" Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen dashboard (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />
                 </Button>

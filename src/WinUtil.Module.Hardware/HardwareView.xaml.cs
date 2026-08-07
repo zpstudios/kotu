@@ -15,8 +15,9 @@ namespace WinUtil.Module.Hardware;
 /// 하드웨어 스펙 화면. WMI 수집·센서 수집은 HardwareModule.Poller(프로세스 공유 폴링 워커,
 /// A42)가 전담하고, 뷰는 구독해서 스냅샷을 UI 스레드로 디스패치 받아 그리기만 한다.
 /// 일반 모드는 라벨-값 리스트, 전체화면(F11/⛶)은 섹션 카드 대시보드로 보여준다(v0.42.0).
-/// 하단 센서 그래프 스트립(A17)은 두 모드 공통. Refresh·Copy·⛶는 하단 바로 이동 —
-/// 셸이 TakeBottomBar()로 떼어간다.
+/// 센서 그래프 카드(A17)는 하단 바 한 줄 안에 산다(v0.64.2 사용자 지시) — 전체화면에서만
+/// 셸 하단 바가 숨는 동안 SensorStrip으로 옮겨 표시. Refresh·Copy·⛶·센서를 담은
+/// 하단 바는 셸이 TakeBottomBar()로 떼어간다.
 /// </summary>
 public sealed partial class HardwareView : UserControl, IBottomBarProvider
 {
@@ -300,8 +301,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     /// SensorChannels 단일 소스(A18에서 트레이와 공용화) — 색은 대시보드 섹션 액센트 계열:
     /// CPU 주황 / GPU 보라 / RAM 초록 / 팬 황금 / SSD 파랑.
     /// 스케일: 온도·부하는 0~100 고정, 전력·클럭·팬은 자동(하한 있는 관찰 최댓값).
-    /// 배치는 기본 1줄(10칸) — 창 폭이 좁아 카드가 MinCardWidth 밑으로 내려갈 때만
-    /// 5칸(2줄)→4칸(3줄)로 늘어난다(v0.64.1 사용자 확정: 기본은 반드시 1줄).
+    /// 카드는 하단 바 한 줄에 들어가는 36px 컴팩트형(v0.64.2 사용자 지시) — 그래프가 카드
+    /// 전체를 채우고 제목·값이 그 위에 얹힌다. 배치는 기본 1줄(10칸), 창 폭이 좁아
+    /// 카드가 MinCardWidth 밑으로 내려갈 때만 5칸(2줄)→4칸(3줄)로 늘어난다.
     /// </summary>
     private void BuildSensorCards()
     {
@@ -392,18 +394,17 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         header.Children.Add(pinIcon);
         header.Children.Add(valueText);
 
+        header.VerticalAlignment = VerticalAlignment.Center;
+
         var line = new Polyline { Stroke = stroke, StrokeThickness = 1.5 };
         var area = new Polygon { Fill = fill };
-        var graphHost = new Grid { Height = 26, Margin = new Thickness(0, 4, 0, 0) };
+        var graphHost = new Grid(); // 카드 전체가 그래프 — 텍스트는 그 위에 겹친다(v0.64.2 컴팩트형)
         graphHost.Children.Add(area);
         graphHost.Children.Add(line);
 
         var panel = new Grid();
-        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        Grid.SetRow(graphHost, 1);
-        panel.Children.Add(header);
         panel.Children.Add(graphHost);
+        panel.Children.Add(header);
 
         var root = new Border
         {
@@ -411,7 +412,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(10, 5, 10, 6),
+            Padding = new Thickness(8, 2, 8, 2),
+            Height = 36, // 하단 바(44px 최소) 한 줄에 들어가는 높이
             Opacity = 0.45, // 값이 들어오면 1로
             Child = panel,
         };
@@ -453,6 +455,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             && (frame.CpuTemp is null || frame.CpuPower is null
                 || frame.FanRpm is null || frame.SsdTemp is null);
         AdminRow.Visibility = needsAdmin ? Visibility.Visible : Visibility.Collapsed;
+        UpdateStripVisibility();
 
         var history = SensorService.History();
         foreach (var card in _cards)
@@ -594,14 +597,36 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         DispatcherQueue?.TryEnqueue(UpdateViewMode);
     }
 
-    /// <summary>전체화면이면 대시보드, 아니면 리스트를 보여준다.</summary>
+    /// <summary>
+    /// 전체화면이면 대시보드, 아니면 리스트를 보여준다.
+    /// 센서 카드(v0.64.2): 평소엔 하단 바 안에 살지만 전체화면은 셸이 하단 바를 통째로
+    /// 숨기므로 그동안만 뷰의 SensorStrip으로 옮겨 대시보드 하단에 계속 보이게 한다.
+    /// </summary>
     private void UpdateViewMode()
     {
-        var full = _appWindow?.Presenter.Kind == AppWindowPresenterKind.FullScreen;
-        ListScroller.Visibility = full ? Visibility.Collapsed : Visibility.Visible;
-        DashboardScroller.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
-        if (full) RenderDashboard();
+        _fullScreen = _appWindow?.Presenter.Kind == AppWindowPresenterKind.FullScreen;
+        ListScroller.Visibility = _fullScreen ? Visibility.Collapsed : Visibility.Visible;
+        DashboardScroller.Visibility = _fullScreen ? Visibility.Visible : Visibility.Collapsed;
+        PlaceSensorGrid(inBar: !_fullScreen);
+        UpdateStripVisibility();
+        if (_fullScreen) RenderDashboard();
     }
+
+    private bool _fullScreen;
+
+    /// <summary>SensorGrid를 하단 바(BarGrid 가운데 칸)와 SensorStrip 사이에서 옮긴다.</summary>
+    private void PlaceSensorGrid(bool inBar)
+    {
+        Panel target = inBar ? BarGrid : StripPanel;
+        if (ReferenceEquals(SensorGrid.Parent, target)) return;
+        (SensorGrid.Parent as Panel)?.Children.Remove(SensorGrid);
+        target.Children.Add(SensorGrid); // Grid.Column=3은 요소에 붙어 있어 바로 복귀해도 유효
+    }
+
+    /// <summary>SensorStrip은 내용(비관리자 안내 또는 전체화면 센서 카드)이 있을 때만 보인다.</summary>
+    private void UpdateStripVisibility()
+        => SensorStrip.Visibility = _fullScreen || AdminRow.Visibility == Visibility.Visible
+            ? Visibility.Visible : Visibility.Collapsed;
 
     private void ToggleFullScreen()
     {

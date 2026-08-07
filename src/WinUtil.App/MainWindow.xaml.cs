@@ -100,7 +100,7 @@ public sealed partial class MainWindow : Window
             if (!args.DidPresenterChange) return;
             var full = sender.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
             BottomBar.Visibility = full ? Visibility.Collapsed : Visibility.Visible;
-            BottomBarRow.Height = full ? new GridLength(0) : new GridLength(44);
+            BottomBarRow.Height = full ? new GridLength(0) : GridLength.Auto; // 평소 Auto(최소 44, v0.64.2)
         };
 
         // 창별 트레이 미니 아이콘: 좌클릭=활성화, 우클릭=메뉴, 툴팁=창 제목

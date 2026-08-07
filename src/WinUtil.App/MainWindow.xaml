@@ -16,7 +16,9 @@
     <Grid x:Name="RootLayout" AllowDrop="True" DragOver="OnWindowDragOver" Drop="OnWindowDrop">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
-            <RowDefinition x:Name="BottomBarRow" Height="44" />
+            <!-- Auto+MinHeight 44: 평소 44px 한 줄, 모듈 바 내용이 접히면(H/W 센서 카드
+                 2·3줄, v0.64.2) 그만큼만 세로로 자란다 -->
+            <RowDefinition x:Name="BottomBarRow" Height="Auto" />
         </Grid.RowDefinitions>
 
         <ContentControl x:Name="ModuleHost"
@@ -80,7 +82,8 @@
         </Border>
 
         <!-- 하단 바 (작업표시줄 느낌). 전체화면에서는 코드에서 통째로 숨긴다(v0.21.0) -->
-        <Grid x:Name="BottomBar" Grid.Row="1" Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <Grid x:Name="BottomBar" Grid.Row="1" MinHeight="44"
+              Background="{ThemeResource LayerFillColorDefaultBrush}">
             <!-- 현재 모드 칩: 모듈 글리프 + 브랜드명(중립색). 색 구분은 창·트레이 아이콘이 담당(v0.26.0).
                  모듈이 하단 바 줄(ModuleBarHost)을 제공하면 칩은 숨긴다 -->
             <StackPanel x:Name="ModeChip" Orientation="Horizontal" Spacing="8"
