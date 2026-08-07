@@ -125,3 +125,51 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 1. 이 설계 검토·확정
 2. Phase 0 착수: 솔루션 뼈대 + Core 계약
 3. 스파이크 2건 선행: WinUI3+LibVLCSharp 재생 검증, 7z.dll 래퍼 후보 비교
+
+## 8. 스레드 모델 (v0.62.0, A42)
+
+원칙: **UI 스레드는 렌더·입력만.** 모듈의 장기 작업은 Core의 스레딩 계약을 거쳐 전용 워커에서 돌고, 뷰는 완료·진행률을 디스패치로 받아 그리기만 한다.
+
+### 8.1 Core 계약 (`WinUtil.Core.Threading`)
+
+| 타입 | 역할 |
+|---|---|
+| `ModuleWorker` | 모듈(뷰) 전용 직렬 워커. 이름 있는 전용 스레드 1 + FIFO 큐. `Run`(완료 Task)/`Post`(뒷정리 fire-and-forget) |
+| `WorkContext` | 작업에 전달되는 실행 맥락 — 취소(`Cancellation`)·진행률(`Progress`, 없으면 no-op) 통일 |
+| `PollingWorker<T>` | 주기 폴링 루프. 구독 없으면 휴면, 첫 구독 시 즉시 1회, `Poke()`로 간격 건너뛰기 |
+
+계약 한 형태: **요청** = `worker.Run(ctx => 작업, ct, progress)` / **취소** = `CancellationToken` / **진행률** = `IProgress<double>`(UI 스레드에서 만든 `Progress<T>`는 자동 마샬링) / **완료** = 반환 `Task`(UI에서 await → UI로 복귀). 워커 큐는 직렬이라 같은 워커의 작업은 겹치지 않고 순서가 보장된다.
+
+### 8.2 스레드 목록 (누가 도는가)
+
+| 스레드 | 수 | 우선순위 | 수명·비고 |
+|---|---|---|---|
+| UI 스레드 | 창마다 1 | Normal | WinUI 3 디스패처. 렌더·입력·결과 반영만 |
+| `ZP hardware poller` | 프로세스 1 (**공유**) | **BelowNormal** | 200ms WMI 수집. H/W 뷰 구독 0이면 휴면 |
+| `ZP explorer worker` | 페인마다 1 | Normal | 폴더 스캔·썸네일 추출. Unloaded 시 정리 |
+| `ZP archive worker` | 뷰마다 1 | Normal | 목록/해제/생성/항목 미리보기 |
+| `ZP image worker` | 뷰마다 1 | Normal | 파일 읽기·WIC 메타데이터·Magick 디코드·EXIF 정보 |
+| `ZP video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
+| `ZP document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지) |
+| libvlc 내부 스레드 | libvlc 관리 | — | 디코드·이벤트 콜백. 이벤트는 `Dispatch()`로 UI 이관 |
+| .NET 스레드풀 | 런타임 관리 | — | await 연속, 닫힌 워커의 `Post` 폴백 |
+
+### 8.3 작업 → 스레드 매핑 (어느 작업이 어디서 도는가)
+
+| 작업 | 스레드 | UI 스레드가 하는 일 |
+|---|---|---|
+| 하드웨어 WMI 수집(200ms) | hardware poller | 스냅샷 dedup 후 트리 반영 |
+| 탐색기 폴더 스캔 / 썸네일 추출 | explorer worker | 목록 채우기 / 비트맵 표시 |
+| 압축 목록·해제·생성 | archive worker | 진행률 바·완료 상태 |
+| 이미지 파일 읽기·메타데이터(WIC)·psd(Magick) | image worker | `SetSourceAsync` 표시 |
+| 영상 libvlc 생성·해제(음악↔영상 교체 포함) | video worker | 뷰 연결(`Vlc.MediaPlayer`) |
+| 자막 탐지·CP949→UTF-8 변환 | video worker | 플라이아웃·`AddSlave` 적용 |
+| 문서 텍스트 읽기 | document worker | 본문 표시 |
+| 드라이브 정보(`DriveStatus.Describe`) | 각 뷰의 워커 | 하단 바 텍스트 반영 |
+| libvlc 재생 이벤트(시간·상태) | libvlc 스레드 | `Dispatch()` 경유 슬라이더·라벨 갱신 |
+
+### 8.4 공유/분리·예산 정책 (사용자 확정 2026-08-07)
+
+- **Hardware 폴러만 프로세스 공유**: 창이 몇 개든 WMI 수집은 1회(구독 N). 나머지 파일 모듈 워커는 **뷰(창)별 분리** — 창 A의 압축 해제가 창 B를 기다리게 하지 않는다.
+- **스레드 예산**: 배경 폴링은 BelowNormal로 재생·UI와 CPU를 다투지 않는다. 워커는 유휴 시 큐 대기(비용 0). 겹침 방지는 직렬 큐·단일 루프가 구조적으로 보장.
+- **수명**: 뷰 Unloaded → `Dispose()`(큐만 닫음, Join 없음 — 느린 I/O가 UI 해제를 막지 않게). 남은 작업은 워커가 마저 실행. 닫힌 뒤의 `Post`(네이티브 해제 등)는 스레드풀 폴백으로 실행을 보장.
