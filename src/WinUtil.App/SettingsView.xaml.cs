@@ -77,7 +77,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(new TextBlock
         {
             Text = "Applies to the current user account only (no admin rights needed); turning a switch off removes the registration completely. "
-                 + "File association adds ZP to the \"Open with\" candidates; picking the default app is done in Windows Settings.",
+                 + "Windows protects the final \"default app\" choice, so turning a switch on opens the Windows default-apps page for ZP — "
+                 + "confirm there once, or use \"Set default...\" per extension. (A25)",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -100,10 +101,66 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 Header = $"Register {module.BrandName} file associations  ({string.Join(" ", module.SupportedExtensions)})",
                 IsOn = Safe(() => ExplorerIntegration.IsAssociationRegistered(module)),
             };
-            toggle.Toggled += (_, _) => Apply(toggle,
-                () => ExplorerIntegration.RegisterAssociation(module),
-                () => ExplorerIntegration.UnregisterAssociation(module));
             Root.Children.Add(toggle);
+
+            // A25(v0.61.0): 현재 기본 앱 현황(n/m) + 확장자별 '연결 프로그램' 대화상자 진입
+            var defaultsText = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.7,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            void RefreshDefaults()
+            {
+                int count;
+                try { count = ExplorerIntegration.CountDefaults(module); }
+                catch { count = 0; }
+                defaultsText.Text = $"Default app for {count}/{module.SupportedExtensions.Count} extensions";
+            }
+            RefreshDefaults();
+
+            var setDefaultButton = new DropDownButton
+            {
+                Content = "Set default...",
+                FontSize = 12,
+                Padding = new Thickness(8, 2, 8, 2),
+            };
+            var flyout = new MenuFlyout();
+            foreach (var ext in module.SupportedExtensions)
+            {
+                var item = new MenuFlyoutItem { Text = ext };
+                item.Click += (_, _) =>
+                {
+                    ExplorerIntegration.ShowSetDefaultDialog(GetHwnd(), ext);
+                    RefreshDefaults(); // 대화상자에서 고르면 즉시 반영된다
+                };
+                flyout.Items.Add(item);
+            }
+            setDefaultButton.Flyout = flyout;
+
+            var defaultsRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 12,
+                Margin = new Thickness(0, -8, 0, 0),
+            };
+            defaultsRow.Children.Add(defaultsText);
+            defaultsRow.Children.Add(setDefaultButton);
+            Root.Children.Add(defaultsRow);
+
+            toggle.Toggled += (_, _) =>
+            {
+                if (_suppressToggle) return;
+                var turnedOn = toggle.IsOn;
+                Apply(toggle,
+                    () => ExplorerIntegration.RegisterAssociation(module),
+                    () => ExplorerIntegration.UnregisterAssociation(module));
+                RefreshDefaults();
+                // 켠 직후 Windows 설정의 ZP 기본 앱 페이지로 — 기본 앱 지정은 OS가 보호해
+                // 여기서 사용자가 한 번 확정해야 한다 (A25 ①). 실패로 토글이 되돌아왔으면 안 연다.
+                if (turnedOn && toggle.IsOn) ExplorerIntegration.OpenDefaultAppsSettings();
+            };
         }
 
         var archiveExts = router.Modules.FirstOrDefault(m => m.Id == "archive")?.SupportedExtensions
@@ -357,5 +414,13 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     {
         try { return check(); }
         catch { return false; }
+    }
+
+    /// <summary>'연결 프로그램' 대화상자 소유자용 창 핸들 — Window 객체 없이 XamlRoot 경유 (A25).</summary>
+    private nint GetHwnd()
+    {
+        var environment = XamlRoot?.ContentIslandEnvironment
+            ?? throw new InvalidOperationException("Cannot determine the window handle.");
+        return Microsoft.UI.Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
     }
 }

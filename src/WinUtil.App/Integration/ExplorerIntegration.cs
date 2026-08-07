@@ -38,6 +38,120 @@ public static class ExplorerIntegration
         return File.Exists(path) ? path : null;
     }
 
+    // ---------- 앱 등록 + 기본 앱 지정 보조 (A25, v0.61.0) ----------
+    // 기본 앱(UserChoice) 자체는 Windows 10+가 비공개 해시로 보호해 프로그램이 직접 쓸 수 없다.
+    // 그래서 ① 설정 '기본 앱' 목록에 ZP가 앱으로 나타나게 Capabilities를 등록하고,
+    // ② 그 페이지로 바로 가는 딥링크와 ③ 확장자별 '연결 프로그램' 대화상자,
+    // ④ 현재 기본 앱 여부 읽기(조회는 허용됨)를 제공한다.
+
+    private const string CapabilitiesKeyPath = @"Software\ZP\Capabilities";
+
+    /// <summary>설정 '기본 앱' 목록에 ZP가 앱으로 나타나도록 모듈 확장자를 Capabilities에 병합 등록.</summary>
+    private static void RegisterCapabilities(IModule module)
+    {
+        using (var cap = Registry.CurrentUser.CreateSubKey(CapabilitiesKeyPath))
+        {
+            cap.SetValue("ApplicationName", "ZP");
+            cap.SetValue("ApplicationDescription", "ZP - archives, images, video, documents");
+            using var fa = cap.CreateSubKey("FileAssociations");
+            foreach (var ext in module.SupportedExtensions)
+                fa.SetValue(ext, ExtProgId(module, ext));
+        }
+        using var registered = Registry.CurrentUser.CreateSubKey(@"Software\RegisteredApplications");
+        registered.SetValue("ZP", CapabilitiesKeyPath);
+    }
+
+    /// <summary>모듈 확장자를 Capabilities에서 제거. 남는 연결이 없으면 앱 등록 자체를 걷어낸다.</summary>
+    private static void UnregisterCapabilities(IModule module)
+    {
+        using (var fa = Registry.CurrentUser.OpenSubKey(
+                   CapabilitiesKeyPath + @"\FileAssociations", writable: true))
+        {
+            if (fa is not null)
+            {
+                foreach (var ext in module.SupportedExtensions)
+                    fa.DeleteValue(ext, throwOnMissingValue: false);
+            }
+        }
+
+        using var remaining = Registry.CurrentUser.OpenSubKey(CapabilitiesKeyPath + @"\FileAssociations");
+        if (remaining is null || remaining.ValueCount == 0)
+        {
+            // 이 키는 여기서만 만든다(앱 설정은 settings.ini 파일) — 통째로 정리해도 안전.
+            Registry.CurrentUser.DeleteSubKeyTree(@"Software\ZP", throwOnMissingSubKey: false);
+            using var registered = Registry.CurrentUser.OpenSubKey(
+                @"Software\RegisteredApplications", writable: true);
+            registered?.DeleteValue("ZP", throwOnMissingValue: false);
+        }
+    }
+
+    /// <summary>ext의 현재 기본 앱이 ZP인지(UserChoice 읽기 — 쓰기는 OS 보호라 조회만).</summary>
+    public static bool IsDefaultForExtension(string ext)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(
+                $@"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\{ext}\UserChoice");
+            return key?.GetValue("ProgId") is string progId &&
+                   progId.StartsWith("ZP.", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>모듈 확장자 중 ZP가 기본 앱인 개수 (설정 화면 "n/m" 표시용).</summary>
+    public static int CountDefaults(IModule module) =>
+        module.SupportedExtensions.Count(IsDefaultForExtension);
+
+    /// <summary>
+    /// Windows 설정의 ZP 기본 앱 페이지를 연다(Win11 22H2+ 딥링크).
+    /// 파라미터를 모르는 구버전은 기본 앱 목록 페이지가 열린다 — 둘 다 사용자가
+    /// 파일 형식별로 ZP를 지정할 수 있는 화면이다.
+    /// </summary>
+    public static void OpenDefaultAppsSettings()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "ms-settings:defaultapps?registeredAppUser=ZP",
+                UseShellExecute = true,
+            });
+        }
+        catch
+        {
+            // 설정 앱을 못 열어도 토글 동작 자체는 성공이어야 한다.
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct OpenAsInfo
+    {
+        [MarshalAs(UnmanagedType.LPWStr)] public string FileName;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? FileTypeDescription;
+        public uint Flags;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHOpenWithDialog(nint parent, ref OpenAsInfo info);
+
+    private const uint OaifRegisterExt = 0x00000002;       // 선택을 확장자 기본으로 등록
+    private const uint OaifForceRegistration = 0x00000020; // "항상 이 앱 사용" 강제 표시
+
+    /// <summary>확장자별 OS '연결 프로그램' 대화상자 — 여기서 ZP를 고르면 기본 앱이 된다.</summary>
+    public static void ShowSetDefaultDialog(nint ownerHwnd, string ext)
+    {
+        var info = new OpenAsInfo
+        {
+            FileName = ext, // ".mp4" 형태 — OAIF_REGISTER_EXT와 함께면 확장자 등록 모드로 동작
+            FileTypeDescription = null,
+            Flags = OaifRegisterExt | OaifForceRegistration,
+        };
+        _ = SHOpenWithDialog(ownerHwnd, ref info);
+    }
+
     // ---------- 파일 연결 ("연결 프로그램" 목록 등록) ----------
 
     public static bool IsAssociationRegistered(IModule module)
@@ -82,6 +196,7 @@ public static class ExplorerIntegration
         // 구 형태 청소: 모듈 단일 ProgID(v0.60.0 이전)·WinUtil.*(v0.33.0 이전)
         RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: false);
         RemoveAssociationKeys(module, LegacyProgId(module), removeExtProgIds: false);
+        RegisterCapabilities(module); // 설정 '기본 앱' 목록 노출 (A25, v0.61.0)
         NotifyShell();
     }
 
@@ -89,6 +204,7 @@ public static class ExplorerIntegration
     {
         RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: true);
         RemoveAssociationKeys(module, LegacyProgId(module), removeExtProgIds: false);
+        UnregisterCapabilities(module); // (A25, v0.61.0)
         NotifyShell();
     }
 
