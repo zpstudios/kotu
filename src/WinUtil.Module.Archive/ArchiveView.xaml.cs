@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Pickers;
 using WinUtil.Core.Contracts;
+using WinUtil.Core.Threading;
 
 namespace WinUtil.Module.Archive;
 
@@ -30,7 +31,8 @@ public sealed class ArchiveRow
 /// <summary>
 /// 압축 화면. 내부 탐색(브레드크럼/더블클릭 진입/뒤로), 풀기(폴더 선택·여기에 풀기),
 /// 새 압축(zip/7z, 드래그&amp;드롭 포함), 암호 재시도, 진행률/취소를 제공한다.
-/// 모든 파일 I/O는 Task.Run으로 UI 스레드 밖에서 수행한다.
+/// 모든 파일 I/O는 뷰 전용 워커(A42)에서 직렬로 수행하고 UI 스레드는 결과 반영만 한다 —
+/// 창이 여러 개면 워커도 창마다 하나라 서로의 압축/해제를 기다리지 않는다.
 /// </summary>
 public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IContentStateSource,
     IBottomBarProvider
@@ -62,6 +64,10 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
     private CancellationTokenSource? _cts;
     private bool _busy;
     private bool _initialized;
+    private ModuleWorker? _worker;      // 압축 목록/해제/생성 전용(A42) — 뷰별 분리
+
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP archive worker");
 
     public ObservableCollection<ArchiveRow> Rows { get; } = [];
 
@@ -72,6 +78,11 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
         _initialFile = context.FilePath;
         _initialArgs = context.Arguments;
         Loaded += OnLoaded;
+        Unloaded += (_, _) =>
+        {
+            _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
+            _worker = null;
+        };
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -126,7 +137,7 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
                 _currentFolder = _root;
                 RefreshRows();
                 StatusText.Text = $"{Path.GetFileName(path)} · {ArchiveEntryTree.FormatSize(_root.Size)} total";
-                DriveInfoText.Text = WinUtil.Core.Routing.DriveStatus.Describe(path); // v0.47.0
+                UpdateDriveInfo(path); // v0.47.0 표시 — 조회는 워커에서(A42: UI 스레드 동기 I/O 제거)
                 ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
                 return;
             }
@@ -141,6 +152,22 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
                 StatusText.Text = "Failed to open: " + ex.Message;
                 return;
             }
+        }
+    }
+
+    /// <summary>
+    /// 드라이브 정보 조회(DriveInfo — 네트워크 경로면 느릴 수 있다)를 워커로 보내고
+    /// 결과만 UI에 반영한다. 부가 정보라 실패·지연은 조용히 무시.
+    /// </summary>
+    private async void UpdateDriveInfo(string path)
+    {
+        try
+        {
+            DriveInfoText.Text = await Worker.Run(_ => WinUtil.Core.Routing.DriveStatus.Describe(path));
+        }
+        catch
+        {
+            // 표시는 부가 기능 — 실패가 흐름을 막으면 안 된다.
         }
     }
 
@@ -495,8 +522,8 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
     private void OnCancelClick(object sender, RoutedEventArgs e) => _cts?.Cancel();
 
     /// <summary>
-    /// 작업을 Task.Run으로 실행하고 진행률/취소를 연결한다. 취소되면 false.
-    /// ArchivePasswordException 등은 호출자에게 그대로 전파된다.
+    /// 작업을 뷰 전용 워커에서 실행하고 진행률/취소를 연결한다(A42 계약: Run+WorkContext).
+    /// 취소되면 false. ArchivePasswordException 등은 호출자에게 그대로 전파된다.
     /// </summary>
     private async Task<bool> RunOperationAsync(string label, Action<IProgress<double>, CancellationToken> work)
     {
@@ -509,7 +536,7 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
         SetBusy(true, label);
         try
         {
-            await Task.Run(() => work(progress, cts.Token), CancellationToken.None);
+            await Worker.Run(ctx => work(ctx.Progress, ctx.Cancellation), cts.Token, progress);
             return true;
         }
         catch (OperationCanceledException)

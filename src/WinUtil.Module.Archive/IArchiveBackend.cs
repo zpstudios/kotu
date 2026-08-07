@@ -13,7 +13,7 @@ public sealed class ArchivePasswordException : Exception
 }
 
 /// <summary>
-/// 압축 백엔드 추상화. 구현은 UI 비의존이며 모든 메서드는 동기(호출자가 Task.Run으로 감싼다).
+/// 압축 백엔드 추상화. 구현은 UI 비의존이며 모든 메서드는 동기(호출자가 뷰 전용 ModuleWorker에서 실행한다 — A42).
 /// </summary>
 public interface IArchiveBackend
 {
