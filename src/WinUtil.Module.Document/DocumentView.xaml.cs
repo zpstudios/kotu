@@ -7,13 +7,14 @@ using Microsoft.UI.Xaml.Input;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 using WinUtil.Core.Contracts;
+using WinUtil.Core.Threading;
 
 namespace WinUtil.Module.Document;
 
 /// <summary>
 /// 문서 뷰어 화면(1단계): 텍스트·마크다운 원문 표시. UTF-8(BOM 포함) 우선,
 /// 깨지면 CP949로 재해석(레거시 한글 텍스트). 큰 파일은 앞부분만 보여준다.
-/// 파일 I/O는 Task.Run으로 UI 스레드 밖에서 수행한다.
+/// 파일 I/O는 뷰 전용 워커(A42)에서 수행하고 UI 스레드는 결과 반영만 한다.
 /// </summary>
 public sealed partial class DocumentView : UserControl, IContentStateSource, IBottomBarProvider
 {
@@ -24,6 +25,10 @@ public sealed partial class DocumentView : UserControl, IContentStateSource, IBo
     private const int MaxBytes = 4 * 1024 * 1024;
 
     private int _openSeq; // 느린 읽기가 최신 열기를 덮지 않게
+    private ModuleWorker? _worker; // 파일 읽기·드라이브 조회 전용(A42) — 뷰별 분리
+
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP document worker");
 
     static DocumentView() =>
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // CP949 사용 전 1회 등록
@@ -32,6 +37,11 @@ public sealed partial class DocumentView : UserControl, IContentStateSource, IBo
     {
         InitializeComponent();
         Loaded += (_, _) => Focus(FocusState.Programmatic);
+        Unloaded += (_, _) =>
+        {
+            _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
+            _worker = null;
+        };
 
         if (context.FilePath is { } path && File.Exists(path))
             OpenPath(path);
@@ -54,7 +64,11 @@ public sealed partial class DocumentView : UserControl, IContentStateSource, IBo
         string text;
         try
         {
-            text = await Task.Run(() => ReadTextSmart(path));
+            text = await Worker.Run(_ => ReadTextSmart(path));
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 뷰가 내려가며 워커가 닫힘
         }
         catch (Exception ex)
         {
@@ -67,8 +81,24 @@ public sealed partial class DocumentView : UserControl, IContentStateSource, IBo
         ContentText.Text = text;
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
-        DriveInfoText.Text = WinUtil.Core.Routing.DriveStatus.Describe(path); // v0.47.0
+        UpdateDriveInfo(path); // v0.47.0 표시 — 조회는 워커에서(A42: UI 스레드 동기 I/O 제거)
         ContentOpened?.Invoke(path); // 셸 동기화
+    }
+
+    /// <summary>
+    /// 드라이브 정보 조회(DriveInfo — 네트워크 경로면 느릴 수 있다)를 워커로 보내고
+    /// 결과만 UI에 반영한다. 부가 정보라 실패·지연은 조용히 무시.
+    /// </summary>
+    private async void UpdateDriveInfo(string path)
+    {
+        try
+        {
+            DriveInfoText.Text = await Worker.Run(_ => WinUtil.Core.Routing.DriveStatus.Describe(path));
+        }
+        catch
+        {
+            // 표시는 부가 기능 — 실패가 흐름을 막으면 안 된다.
+        }
     }
 
     /// <summary>
