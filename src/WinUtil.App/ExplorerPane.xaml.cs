@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
 using WinUtil.Core.Routing;
+using WinUtil.Core.Threading;
 
 namespace WinUtil.App;
 
@@ -12,6 +13,7 @@ namespace WinUtil.App;
 /// 좌 70% 썸네일 그리드 + 우 30% 리스트로 같은 폴더를 두 방식으로 보여준다.
 /// 폴더는 전부, 파일은 주입된 담당 확장자만(사용자 확정). 더블클릭: 폴더=진입, 파일=FileActivated.
 /// Alt 오버레이용으로는 ConfigureListOnly()로 리스트만 남겨 재사용한다.
+/// 폴더 스캔·썸네일 추출은 페인 전용 워커(A42)에서 돌고, UI 스레드는 결과 반영만 한다.
 /// </summary>
 public sealed partial class ExplorerPane : UserControl
 {
@@ -25,10 +27,19 @@ public sealed partial class ExplorerPane : UserControl
     private string _folder = string.Empty;
     private int _loadSeq;                     // 빠른 연속 탐색 시 늦은 결과 폐기
     private (string Path, DateTime At)? _lastClick;
+    private ModuleWorker? _worker;            // 스캔·썸네일 전용 — 페인별 분리(A42 정책)
+
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도(Alt 오버레이 재오픈) 되살아난다.</summary>
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP explorer worker");
 
     public ExplorerPane()
     {
         InitializeComponent();
+        Unloaded += (_, _) =>
+        {
+            _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
+            _worker = null;
+        };
     }
 
     /// <summary>Alt 오버레이용: 썸네일 그리드를 숨기고 리스트만 남긴다.</summary>
@@ -51,7 +62,11 @@ public sealed partial class ExplorerPane : UserControl
         IReadOnlyList<ExplorerListing.Entry> entries;
         try
         {
-            entries = await Task.Run(() => ExplorerListing.List(folder, extensions));
+            entries = await Worker.Run(_ => ExplorerListing.List(folder, extensions));
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 페인이 내려가며 워커가 닫힘 — 그릴 곳도 없다
         }
         catch (Exception ex)
         {
@@ -157,8 +172,9 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 파일 썸네일을 비동기로 채운다(그리드 타일의 글리프를 이미지로 교체).
-    /// GetThumbnailAsync는 항목마다 느릴 수 있으므로 상한을 두고, 폴더 이동 시 중단한다.
+    /// 파일 썸네일을 채운다(그리드 타일의 글리프를 이미지로 교체).
+    /// 추출(셸 API 호출·스트림 읽기)은 워커에서 하고 UI 스레드는 비트맵 표시만 한다(A42).
+    /// 항목마다 느릴 수 있으므로 상한을 두고, 폴더 이동 시 중단한다.
     /// </summary>
     private async Task LoadThumbnailsAsync(int seq)
     {
@@ -172,13 +188,14 @@ public sealed partial class ExplorerPane : UserControl
 
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(entry.Path);
-                using var thumb = await file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96);
+                var png = await Worker.Run(_ => FetchThumbnail(entry.Path));
                 if (seq != _loadSeq) return;
-                if (thumb is null || thumb.Size == 0) continue;
+                if (png is null) continue;
 
                 var bitmap = new BitmapImage();
-                await bitmap.SetSourceAsync(thumb);
+                using (var stream = new MemoryStream(png))
+                    await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+                if (seq != _loadSeq) return;
 
                 var host = (Grid)((StackPanel)item.Content).Children[0];
                 host.Children.Clear();
@@ -189,11 +206,32 @@ public sealed partial class ExplorerPane : UserControl
                 });
                 loaded++;
             }
+            catch (OperationCanceledException)
+            {
+                return; // 페인이 내려가며 워커가 닫힘
+            }
             catch
             {
                 // 썸네일 실패는 글리프 유지로 충분하다.
             }
         }
+    }
+
+    /// <summary>
+    /// 워커 스레드: 셸 썸네일을 PNG/JPG 바이트로 추출한다. 없으면 null.
+    /// StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는 여기서 동기 대기한다
+    /// (전용 스레드라 UI 교착 없음).
+    /// </summary>
+    private static byte[]? FetchThumbnail(string path)
+    {
+        var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
+        using var thumb = file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96).AsTask().GetAwaiter().GetResult();
+        if (thumb is null || thumb.Size == 0) return null;
+
+        using var stream = thumb.AsStreamForRead();
+        using var buffer = new MemoryStream((int)thumb.Size);
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
     }
 
     // ---------- 입력 ----------
