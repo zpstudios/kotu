@@ -310,56 +310,32 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 시작 메뉴 항목. shortcutHint("Ctrl+1" 등)가 있으면 마우스 오버 동안만
-    /// 우측 끝에 보조 표시한다(v0.45.0 — 평소엔 좁은 메뉴 폭을 라벨이 전부 쓰게).
+    /// 시작 메뉴 항목. shortcutHint("Ctrl+1" 등)가 있으면 표준 툴팁으로 단다 —
+    /// 다른 버튼들과 같은 지연(약 1초)·모양으로 표시된다(A1, v0.57.0 —
+    /// v0.45.0의 즉시 인라인 힌트를 사용자 지시로 교체).
     /// </summary>
     private static Button MakeMenuItem(string glyph, string label, string? shortcutHint = null)
     {
-        var content = new Grid { ColumnSpacing = 12 };
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         content.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16 });
-        var labelText = new TextBlock
+        content.Children.Add(new TextBlock
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        Grid.SetColumn(labelText, 1);
-        content.Children.Add(labelText);
-
-        TextBlock? hintText = null;
-        if (shortcutHint is not null)
-        {
-            hintText = new TextBlock
-            {
-                Text = shortcutHint,
-                FontSize = 10,
-                Opacity = 0.55,
-                VerticalAlignment = VerticalAlignment.Center,
-                Visibility = Visibility.Collapsed,
-            };
-            Grid.SetColumn(hintText, 2);
-            content.Children.Add(hintText);
-        }
+        });
 
         var button = new Button
         {
             Content = content,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
             Padding = new Thickness(10, 8, 10, 8),
         };
-
-        if (hintText is not null)
-        {
-            button.PointerEntered += (_, _) => hintText.Visibility = Visibility.Visible;
-            button.PointerExited += (_, _) => hintText.Visibility = Visibility.Collapsed;
-        }
+        if (shortcutHint is not null)
+            ToolTipService.SetToolTip(button, shortcutHint);
         return button;
     }
 
