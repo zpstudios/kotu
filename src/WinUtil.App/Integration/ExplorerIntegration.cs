@@ -27,50 +27,73 @@ public static class ExplorerIntegration
 
     private static string LegacyProgId(IModule module) => "WinUtil." + module.Id;
 
+    /// <summary>확장자별 ProgID (A23, v0.60.0). 예: "ZP.archive.zip" — 확장자마다 다른 아이콘을 달기 위함.</summary>
+    private static string ExtProgId(IModule module, string ext) => ProgId(module) + ext;
+
+    /// <summary>확장자 전용 아이콘 경로(Assets\fileicons\zp-{ext}.ico). 없으면 null → exe 아이콘 폴백.</summary>
+    private static string? FileIconPath(string ext)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "fileicons",
+            $"zp-{ext.TrimStart('.')}.ico");
+        return File.Exists(path) ? path : null;
+    }
+
     // ---------- 파일 연결 ("연결 프로그램" 목록 등록) ----------
 
     public static bool IsAssociationRegistered(IModule module)
     {
+        foreach (var ext in module.SupportedExtensions)
+        {
+            using var extProg = Registry.CurrentUser.OpenSubKey(
+                $@"Software\Classes\{ExtProgId(module, ext)}");
+            if (extProg is not null) return true;
+        }
+        // 구 형태(모듈 단일 ProgID·WinUtil.*) 등록만 있어도 '켜짐'으로 보여 재등록(=이관)을 유도
         using var key = Registry.CurrentUser.OpenSubKey($@"Software\Classes\{ProgId(module)}");
         if (key is not null) return true;
         using var legacy = Registry.CurrentUser.OpenSubKey($@"Software\Classes\{LegacyProgId(module)}");
-        return legacy is not null; // 구 이름 등록만 있어도 '켜짐'으로 보여 재등록(=이관)을 유도
+        return legacy is not null;
     }
 
+    /// <summary>
+    /// 확장자마다 전용 ProgID를 만들어 등록한다(A23) — DefaultIcon이 확장자별 아이콘
+    /// (모듈 색 + 확장자 글씨 + zp 표식)을 가리킨다. OpenWithProgids 등록이라 기본 앱
+    /// 강탈이 아니라 후보 등록 — 기본 앱 지정은 Windows 설정에서 사용자가 한다.
+    /// </summary>
     public static void RegisterAssociation(IModule module)
     {
-        var progId = ProgId(module);
-
-        using (var progKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}"))
-        {
-            progKey.SetValue(null, $"{module.BrandName} file");
-            using (var icon = progKey.CreateSubKey("DefaultIcon"))
-                icon.SetValue(null, $"\"{ExePath}\",0");
-            using (var command = progKey.CreateSubKey(@"shell\open\command"))
-                command.SetValue(null, $"\"{ExePath}\" \"%1\"");
-        }
-
-        // 확장자마다 OpenWithProgids에 등록 → 탐색기 "연결 프로그램" 목록에 나타난다.
-        // (기본 앱 강탈이 아니라 후보 등록 — 기본 앱 지정은 Windows 설정에서 사용자가 한다)
         foreach (var ext in module.SupportedExtensions)
         {
+            var progId = ExtProgId(module, ext);
+            using (var progKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}"))
+            {
+                progKey.SetValue(null, $"{module.BrandName} {ext.TrimStart('.').ToUpperInvariant()} file");
+                using (var icon = progKey.CreateSubKey("DefaultIcon"))
+                    icon.SetValue(null, FileIconPath(ext) is { } ico ? $"\"{ico}\"" : $"\"{ExePath}\",0");
+                using (var command = progKey.CreateSubKey(@"shell\open\command"))
+                    command.SetValue(null, $"\"{ExePath}\" \"%1\"");
+            }
+
             using var extKey = Registry.CurrentUser.CreateSubKey(
                 $@"Software\Classes\{ext}\OpenWithProgids");
             extKey.SetValue(progId, Array.Empty<byte>(), RegistryValueKind.None);
         }
 
-        RemoveAssociationKeys(module, LegacyProgId(module)); // 구 WinUtil.* 등록 흔적 청소 (v0.33.0)
+        // 구 형태 청소: 모듈 단일 ProgID(v0.60.0 이전)·WinUtil.*(v0.33.0 이전)
+        RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: false);
+        RemoveAssociationKeys(module, LegacyProgId(module), removeExtProgIds: false);
         NotifyShell();
     }
 
     public static void UnregisterAssociation(IModule module)
     {
-        RemoveAssociationKeys(module, ProgId(module));
-        RemoveAssociationKeys(module, LegacyProgId(module));
+        RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: true);
+        RemoveAssociationKeys(module, LegacyProgId(module), removeExtProgIds: false);
         NotifyShell();
     }
 
-    private static void RemoveAssociationKeys(IModule module, string progId)
+    /// <summary>progId(모듈 단일)와 — 요청 시 — 확장자별 ProgID들의 등록 흔적을 지운다.</summary>
+    private static void RemoveAssociationKeys(IModule module, string progId, bool removeExtProgIds)
     {
         foreach (var ext in module.SupportedExtensions)
         {
@@ -78,6 +101,15 @@ public static class ExplorerIntegration
                 $@"Software\Classes\{ext}\OpenWithProgids", writable: true);
             if (extKey?.GetValueNames().Contains(progId, StringComparer.OrdinalIgnoreCase) == true)
                 extKey.DeleteValue(progId, throwOnMissingValue: false);
+
+            if (removeExtProgIds)
+            {
+                var extProgId = ExtProgId(module, ext);
+                if (extKey?.GetValueNames().Contains(extProgId, StringComparer.OrdinalIgnoreCase) == true)
+                    extKey.DeleteValue(extProgId, throwOnMissingValue: false);
+                Registry.CurrentUser.DeleteSubKeyTree(
+                    $@"Software\Classes\{extProgId}", throwOnMissingSubKey: false);
+            }
         }
 
         Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{progId}", throwOnMissingSubKey: false);
