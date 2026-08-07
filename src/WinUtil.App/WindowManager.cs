@@ -111,7 +111,12 @@ public sealed class WindowManager
             _ordered.Remove(window);
             UpdateInstanceBadges(); // 중간 창이 닫히면 번호 당겨오기 (A2)
             if (_windows.Count == 0)
+            {
+                // 센서 커널 드라이버 정리(A17) — 안 해도 프로세스는 내려가지만,
+                // Close()가 드라이버 서비스를 해제해 재부팅 전까지 남는 걸 막는다.
+                WinUtil.Module.Hardware.SensorService.Shutdown();
                 Application.Current.Exit();
+            }
         };
 
         // MRU 유지: 활성화될 때마다 목록 끝으로
