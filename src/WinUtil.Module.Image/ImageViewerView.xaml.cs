@@ -9,12 +9,15 @@ using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 using WinUtil.Core.Contracts;
+using WinUtil.Core.Threading;
 
 namespace WinUtil.Module.Image;
 
 /// <summary>
 /// 이미지 뷰어 화면. 폴더 내 ←/→ 탐색, 줌/팬, 회전(R), 휴지통 삭제(Delete),
 /// 전체화면(F11/더블클릭), 하단 상태바를 제공한다.
+/// 폴더 스캔·파일 읽기·디코드(WIC 메타데이터/Magick)는 뷰 전용 워커(A42)에서 직렬로 돌고
+/// UI 스레드는 비트맵 표시만 한다 — 직렬이라 빠른 ←/→ 연타에도 적용 순서가 요청 순서와 같다.
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider
@@ -41,6 +44,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private int _exifRotation;   // EXIF orientation에서 읽은 회전
     private uint _pixelWidth;
     private uint _pixelHeight;
+    private ModuleWorker? _worker; // 폴더 스캔·파일 읽기·디코드 전용(A42) — 뷰별 분리
+
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP image worker");
 
     public ImageViewerView(OpenContext context)
     {
@@ -48,6 +55,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
         // 키 입력을 받기 위해 로드 시 포커스 확보 (IsTabStop은 XAML에서 설정)
         Loaded += (_, _) => Focus(FocusState.Programmatic);
+        Unloaded += (_, _) =>
+        {
+            _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
+            _worker = null;
+        };
 
         // 휠 = 이전/다음 (일반 뷰어 관례). ScrollViewer가 휠을 먼저 소비하므로 handledEventsToo로 받는다.
         Scroller.AddHandler(PointerWheelChangedEvent,
@@ -68,12 +80,16 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     private async void OpenPath(string path)
     {
-        // 폴더 스캔 + 자연 정렬은 대형 폴더·네트워크 드라이브에서 느릴 수 있다 — UI 스레드 밖에서.
+        // 폴더 스캔 + 자연 정렬은 대형 폴더·네트워크 드라이브에서 느릴 수 있다 — 워커에서.
         var seq = ++_openSeq;
         ImageFolderNavigator navigator;
         try
         {
-            navigator = await Task.Run(() => ImageFolderNavigator.Create(path));
+            navigator = await Worker.Run(_ => ImageFolderNavigator.Create(path));
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 뷰가 내려가며 워커가 닫힘
         }
         catch (Exception ex)
         {
@@ -142,29 +158,17 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
                 return;
             }
 
-            var file = await StorageFile.GetFileFromPathAsync(path);
-            using var stream = await file.OpenAsync(FileAccessMode.Read);
+            // 파일 읽기와 메타데이터 디코드(해상도·EXIF orientation)는 워커에서(A42).
+            // BitmapImage는 EXIF 회전을 자동 반영하지 않으므로 여기서 읽어 RotateTransform에 합산한다.
+            var (data, width, height, exifRotation) = await Worker.Run(_ => ReadImageFile(path));
 
-            _pixelWidth = 0;
-            _pixelHeight = 0;
-            _exifRotation = 0;
-            try
-            {
-                // 해상도와 EXIF orientation 확인. BitmapImage는 EXIF 회전을
-                // 자동 반영하지 않으므로 여기서 읽어 RotateTransform에 합산한다.
-                var decoder = await BitmapDecoder.CreateAsync(stream);
-                _pixelWidth = decoder.PixelWidth;
-                _pixelHeight = decoder.PixelHeight;
-                _exifRotation = await ReadExifRotationAsync(decoder);
-            }
-            catch
-            {
-                // 메타데이터를 못 읽어도 표시는 계속 시도한다.
-            }
+            _pixelWidth = width;
+            _pixelHeight = height;
+            _exifRotation = exifRotation;
 
-            stream.Seek(0);
             var bitmap = new BitmapImage(); // GIF 애니메이션은 BitmapImage 기본 지원
-            await bitmap.SetSourceAsync(stream);
+            using (var stream = new MemoryStream(data))
+                await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
 
             ImageControl.Source = bitmap;
             PlaceholderText.Visibility = Visibility.Collapsed;
@@ -190,11 +194,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     /// <summary>
     /// psd 등을 Magick.NET으로 PNG 바이트로 변환해 표시한다. psd는 첫 이미지가
-    /// 병합(composite) 미리보기라 레이어 펼침 없이 그대로 쓴다. 디코드는 백그라운드에서.
+    /// 병합(composite) 미리보기라 레이어 펼침 없이 그대로 쓴다. 디코드는 워커에서(A42).
     /// </summary>
     private async Task LoadViaMagickAsync(string path)
     {
-        var (png, width, height) = await Task.Run(() =>
+        var (png, width, height) = await Worker.Run(_ =>
         {
             using var magick = new ImageMagick.MagickImage(path);
             return (magick.ToByteArray(ImageMagick.MagickFormat.Png), magick.Width, magick.Height);
@@ -218,13 +222,37 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         ContentOpened?.Invoke(path);
     }
 
+    /// <summary>
+    /// 워커 스레드: 파일 전체를 읽고 WIC로 해상도·EXIF 회전을 뽑는다. WinRT 비동기는
+    /// 전용 스레드라 동기 대기해도 UI 교착이 없다. 메타데이터 실패는 0으로 두고 표시는 계속.
+    /// </summary>
+    private static (byte[] Data, uint Width, uint Height, int ExifRotation) ReadImageFile(string path)
+    {
+        var data = File.ReadAllBytes(path);
+        uint width = 0, height = 0;
+        var exifRotation = 0;
+        try
+        {
+            using var stream = new MemoryStream(data).AsRandomAccessStream();
+            var decoder = BitmapDecoder.CreateAsync(stream).AsTask().GetAwaiter().GetResult();
+            width = decoder.PixelWidth;
+            height = decoder.PixelHeight;
+            exifRotation = ReadExifRotation(decoder);
+        }
+        catch
+        {
+            // 메타데이터를 못 읽어도 표시는 계속 시도한다.
+        }
+        return (data, width, height, exifRotation);
+    }
+
     /// <summary>EXIF orientation → 시계방향 회전 각도. 미러링 값은 회전만 근사 적용(TODO: 반전 처리).</summary>
-    private static async Task<int> ReadExifRotationAsync(BitmapDecoder decoder)
+    private static int ReadExifRotation(BitmapDecoder decoder)
     {
         try
         {
-            var props = await decoder.BitmapProperties.GetPropertiesAsync(
-                new[] { "System.Photo.Orientation" });
+            var props = decoder.BitmapProperties.GetPropertiesAsync(
+                new[] { "System.Photo.Orientation" }).AsTask().GetAwaiter().GetResult();
             if (props.TryGetValue("System.Photo.Orientation", out var value) &&
                 value.Value is ushort orientation)
             {
@@ -385,7 +413,23 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         FileNameText.Text = Path.GetFileName(path);
         var resolution = _pixelWidth > 0 ? $"{_pixelWidth}×{_pixelHeight}  ·  " : string.Empty;
         InfoText.Text = resolution + PositionText();
-        DriveInfoText.Text = WinUtil.Core.Routing.DriveStatus.Describe(path); // v0.47.0
+        UpdateDriveInfo(path); // v0.47.0 표시 — 조회는 워커에서(A42: UI 스레드 동기 I/O 제거)
+    }
+
+    /// <summary>
+    /// 드라이브 정보 조회(DriveInfo — 네트워크 경로면 느릴 수 있다)를 워커로 보내고
+    /// 결과만 UI에 반영한다. 부가 정보라 실패·지연은 조용히 무시.
+    /// </summary>
+    private async void UpdateDriveInfo(string path)
+    {
+        try
+        {
+            DriveInfoText.Text = await Worker.Run(_ => WinUtil.Core.Routing.DriveStatus.Describe(path));
+        }
+        catch
+        {
+            // 표시는 부가 기능 — 실패가 흐름을 막으면 안 된다.
+        }
     }
 
     private string PositionText() =>
@@ -456,6 +500,21 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         var path = _navigator?.Current;
         if (path is null) return null;
 
+        // 파일 크기·EXIF 조회는 파일 I/O — 워커에서 만들어 결과 문자열만 받는다(A42).
+        var (width, height) = (_pixelWidth, _pixelHeight);
+        try
+        {
+            return await Worker.Run(_ => BuildContentInfo(path, width, height));
+        }
+        catch
+        {
+            return null; // 오버레이 정보는 부가 기능
+        }
+    }
+
+    /// <summary>워커 스레드: 정보 오버레이 텍스트 구성(WinRT 비동기는 동기 대기 — 전용 스레드).</summary>
+    private static string BuildContentInfo(string path, uint pixelWidth, uint pixelHeight)
+    {
         var lines = new List<string> { Path.GetFileName(path) };
         try
         {
@@ -466,20 +525,20 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         {
             // 크기·날짜는 없어도 된다.
         }
-        if (_pixelWidth > 0)
-            lines.Add($"{_pixelWidth}×{_pixelHeight} px");
+        if (pixelWidth > 0)
+            lines.Add($"{pixelWidth}×{pixelHeight} px");
 
         try
         {
-            var file = await StorageFile.GetFileFromPathAsync(path);
-            using var stream = await file.OpenAsync(FileAccessMode.Read);
-            var decoder = await BitmapDecoder.CreateAsync(stream);
-            var props = await decoder.BitmapProperties.GetPropertiesAsync(new[]
+            var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
+            using var stream = file.OpenAsync(FileAccessMode.Read).AsTask().GetAwaiter().GetResult();
+            var decoder = BitmapDecoder.CreateAsync(stream).AsTask().GetAwaiter().GetResult();
+            var props = decoder.BitmapProperties.GetPropertiesAsync(new[]
             {
                 "System.Photo.DateTaken", "System.Photo.CameraManufacturer",
                 "System.Photo.CameraModel", "System.Photo.ExposureTime",
                 "System.Photo.FNumber", "System.Photo.ISOSpeed", "System.Photo.FocalLength",
-            });
+            }).AsTask().GetAwaiter().GetResult();
 
             if (Get(props, "System.Photo.DateTaken") is DateTimeOffset taken)
                 lines.Add($"Taken {taken.LocalDateTime:yyyy-MM-dd HH:mm}");
