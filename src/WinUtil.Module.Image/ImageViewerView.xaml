@@ -76,11 +76,26 @@
                     ToolTipService.ToolTip="Open image file">
                     <FontIcon Glyph="&#xE8E5;" FontSize="14" />
                 </Button>
-                <TextBlock
-                    x:Name="FileNameText"
-                    Grid.Column="1"
-                    VerticalAlignment="Center"
-                    TextTrimming="CharacterEllipsis" />
+                <!-- A9: 파일명 + 메타 요약(용량·종류·EXIF)이 남는 공간을 나눠 쓴다.
+                     파일명이 우선(Auto), 메타는 남는 폭에서 말줄임(전체 텍스트는 툴팁). -->
+                <Grid Grid.Column="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        x:Name="FileNameText"
+                        VerticalAlignment="Center"
+                        TextTrimming="CharacterEllipsis" />
+                    <TextBlock
+                        x:Name="MetaText"
+                        Grid.Column="1"
+                        Margin="12,0,0,0"
+                        FontSize="12"
+                        Opacity="0.6"
+                        VerticalAlignment="Center"
+                        TextTrimming="CharacterEllipsis" />
+                </Grid>
                 <!-- 현재 이미지가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
                 <TextBlock
                     x:Name="DriveInfoText"

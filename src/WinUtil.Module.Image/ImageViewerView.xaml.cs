@@ -44,6 +44,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private int _exifRotation;   // EXIF orientation에서 읽은 회전
     private uint _pixelWidth;
     private uint _pixelHeight;
+    private string _metaText = string.Empty; // A9: 용량 · 종류(확장자·비트뎁스) · EXIF 요약
     private ModuleWorker? _worker; // 폴더 스캔·파일 읽기·디코드 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
@@ -158,13 +159,14 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
                 return;
             }
 
-            // 파일 읽기와 메타데이터 디코드(해상도·EXIF orientation)는 워커에서(A42).
+            // 파일 읽기와 메타데이터 디코드(해상도·EXIF orientation·A9 메타 요약)는 워커에서(A42).
             // BitmapImage는 EXIF 회전을 자동 반영하지 않으므로 여기서 읽어 RotateTransform에 합산한다.
-            var (data, width, height, exifRotation) = await Worker.Run(_ => ReadImageFile(path));
+            var (data, width, height, exifRotation, meta) = await Worker.Run(_ => ReadImageFile(path));
 
             _pixelWidth = width;
             _pixelHeight = height;
             _exifRotation = exifRotation;
+            _metaText = meta;
 
             var bitmap = new BitmapImage(); // GIF 애니메이션은 BitmapImage 기본 지원
             using (var stream = new MemoryStream(data))
@@ -183,6 +185,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             ImageControl.Source = null;
             FileNameText.Text = $"Failed to load: {Path.GetFileName(path)} ({ex.Message})";
             InfoText.Text = PositionText();
+            _metaText = string.Empty; // 이전 이미지 메타가 남지 않게
+            MetaText.Text = string.Empty;
+            ToolTipService.SetToolTip(MetaText, null);
         }
     }
 
@@ -198,10 +203,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// </summary>
     private async Task LoadViaMagickAsync(string path)
     {
-        var (png, width, height) = await Worker.Run(_ =>
+        var (png, width, height, meta) = await Worker.Run(_ =>
         {
             using var magick = new ImageMagick.MagickImage(path);
-            return (magick.ToByteArray(ImageMagick.MagickFormat.Png), magick.Width, magick.Height);
+            // A9: 비트뎁스 = 채널당 비트 × 채널 수 (Q8 빌드라 채널당 8비트 상한 — 근사값)
+            var bitDepth = (uint)(magick.Depth * magick.ChannelCount);
+            var metaText = string.Join("  ·  ",
+                FormatSize(new FileInfo(path).Length),
+                FormatKind(path, bitDepth));
+            return (magick.ToByteArray(ImageMagick.MagickFormat.Png), magick.Width, magick.Height, metaText);
         });
 
         if (_navigator?.Current != path) return; // 그새 다른 파일로 이동함
@@ -209,6 +219,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         _pixelWidth = width;
         _pixelHeight = height;
         _exifRotation = 0; // Magick 디코드 경로에서는 EXIF 회전을 별도 적용하지 않는다
+        _metaText = meta;
         using var stream = new MemoryStream(png);
         var bitmap = new BitmapImage();
         await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
@@ -223,14 +234,16 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     }
 
     /// <summary>
-    /// 워커 스레드: 파일 전체를 읽고 WIC로 해상도·EXIF 회전을 뽑는다. WinRT 비동기는
+    /// 워커 스레드: 파일 전체를 읽고 WIC로 해상도·EXIF 회전과 하단 바 메타 요약(A9 —
+    /// 용량·종류(확장자·비트뎁스)·EXIF 요약)을 뽑는다. WinRT 비동기는
     /// 전용 스레드라 동기 대기해도 UI 교착이 없다. 메타데이터 실패는 0으로 두고 표시는 계속.
     /// </summary>
-    private static (byte[] Data, uint Width, uint Height, int ExifRotation) ReadImageFile(string path)
+    private static (byte[] Data, uint Width, uint Height, int ExifRotation, string Meta) ReadImageFile(string path)
     {
         var data = File.ReadAllBytes(path);
         uint width = 0, height = 0;
         var exifRotation = 0;
+        var meta = new List<string> { FormatSize(data.LongLength) };
         try
         {
             using var stream = new MemoryStream(data).AsRandomAccessStream();
@@ -238,12 +251,95 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             width = decoder.PixelWidth;
             height = decoder.PixelHeight;
             exifRotation = ReadExifRotation(decoder);
+            meta.Add(FormatKind(path, ReadBitDepth(decoder)));
+            if (ReadExifSummary(decoder) is { Length: > 0 } exif)
+                meta.Add(exif);
         }
         catch
         {
-            // 메타데이터를 못 읽어도 표시는 계속 시도한다.
+            // 메타데이터를 못 읽어도 표시는 계속 시도한다 — 용량·확장자만이라도 보여준다.
+            meta.Add(FormatKind(path, 0));
         }
-        return (data, width, height, exifRotation);
+        return (data, width, height, exifRotation, string.Join("  ·  ", meta));
+    }
+
+    // ---------- 하단 바 메타 요약 구성 (A9) ----------
+
+    /// <summary>파일 크기를 자릿수에 맞는 단위로. (예: 812 B / 34.2 KB / 2.41 MB / 1.2 GB)</summary>
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1L << 30 => $"{bytes / 1024.0 / 1024.0 / 1024.0:0.##} GB",
+        >= 1L << 20 => $"{bytes / 1024.0 / 1024.0:0.##} MB",
+        >= 1L << 10 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes} B",
+    };
+
+    /// <summary>종류 표기: 확장자 대문자 + 비트뎁스. (예: "JPG 24-bit", 뎁스 없으면 "JPG")</summary>
+    private static string FormatKind(string path, uint bitDepth)
+    {
+        var ext = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
+        return bitDepth > 0 ? $"{ext} {bitDepth}-bit" : ext;
+    }
+
+    /// <summary>픽셀당 비트 수(System.Image.BitDepth). 코덱이 지원 안 하면 0.</summary>
+    private static uint ReadBitDepth(BitmapDecoder decoder)
+    {
+        try
+        {
+            var props = decoder.BitmapProperties.GetPropertiesAsync(
+                new[] { "System.Image.BitDepth" }).AsTask().GetAwaiter().GetResult();
+            if (props.TryGetValue("System.Image.BitDepth", out var v) && v.Value is uint depth)
+                return depth;
+        }
+        catch
+        {
+            // BMP/GIF 등 속성 저장소 미지원 코덱은 무시.
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// EXIF 요약 한 줄: 촬영일 · 카메라(제조사 모델) · 노출(셔터 f/조리개 ISO 초점거리).
+    /// 정보 오버레이(BuildContentInfo)의 여러 줄 표기를 하단 바용 인라인으로 압축한 것.
+    /// EXIF 미지원 포맷·손상 파일은 빈 문자열.
+    /// </summary>
+    private static string ReadExifSummary(BitmapDecoder decoder)
+    {
+        try
+        {
+            var props = decoder.BitmapProperties.GetPropertiesAsync(new[]
+            {
+                "System.Photo.DateTaken", "System.Photo.CameraManufacturer",
+                "System.Photo.CameraModel", "System.Photo.ExposureTime",
+                "System.Photo.FNumber", "System.Photo.ISOSpeed", "System.Photo.FocalLength",
+            }).AsTask().GetAwaiter().GetResult();
+
+            var parts = new List<string>();
+            if (Get(props, "System.Photo.DateTaken") is DateTimeOffset taken)
+                parts.Add(taken.LocalDateTime.ToString("yyyy-MM-dd HH:mm"));
+
+            var maker = Get(props, "System.Photo.CameraManufacturer") as string;
+            var model = Get(props, "System.Photo.CameraModel") as string;
+            var camera = $"{maker} {model}".Trim();
+            if (camera.Length > 0) parts.Add(camera);
+
+            var exposure = new List<string>();
+            if (Get(props, "System.Photo.ExposureTime") is double sec and > 0)
+                exposure.Add(sec >= 1 ? $"{sec:0.#}s" : $"1/{Math.Round(1 / sec)}s");
+            if (Get(props, "System.Photo.FNumber") is double f and > 0)
+                exposure.Add($"f/{f:0.#}");
+            if (Get(props, "System.Photo.ISOSpeed") is ushort iso)
+                exposure.Add($"ISO {iso}");
+            if (Get(props, "System.Photo.FocalLength") is double mm and > 0)
+                exposure.Add($"{mm:0.#}mm");
+            if (exposure.Count > 0) parts.Add(string.Join(" ", exposure));
+
+            return string.Join("  ·  ", parts);
+        }
+        catch
+        {
+            return string.Empty; // EXIF 미지원 포맷(BMP/GIF 등)·손상 파일
+        }
     }
 
     /// <summary>EXIF orientation → 시계방향 회전 각도. 미러링 값은 회전만 근사 적용(TODO: 반전 처리).</summary>
@@ -407,10 +503,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             FileNameText.Text = "No file open";
             InfoText.Text = string.Empty;
             DriveInfoText.Text = string.Empty;
+            MetaText.Text = string.Empty;
+            ToolTipService.SetToolTip(MetaText, null);
             return;
         }
 
         FileNameText.Text = Path.GetFileName(path);
+        // A9: 용량·종류(확장자·비트뎁스)·EXIF 요약. 좁으면 말줄임되므로 전체는 툴팁으로.
+        MetaText.Text = _metaText;
+        ToolTipService.SetToolTip(MetaText, _metaText.Length > 0 ? _metaText : null);
         var resolution = _pixelWidth > 0 ? $"{_pixelWidth}×{_pixelHeight}  ·  " : string.Empty;
         InfoText.Text = resolution + PositionText();
         UpdateDriveInfo(path); // v0.47.0 표시 — 조회는 워커에서(A42: UI 스레드 동기 I/O 제거)
