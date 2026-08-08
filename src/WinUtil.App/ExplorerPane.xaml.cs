@@ -102,9 +102,16 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private void RefreshView()
     {
-        var seq = ++_loadSeq; // 돌고 있던 썸네일 루프 중단
+        var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
         Fill(ExplorerListing.Arrange(_entries, _sortKey));
-        _ = LoadThumbnailsAsync(seq);
+        _ = LoadDetailsAsync(seq);
+    }
+
+    /// <summary>가벼운 길이 텍스트를 먼저 채우고, 무거운 썸네일을 이어서 채운다(같은 워커 직렬 큐).</summary>
+    private async Task LoadDetailsAsync(int seq)
+    {
+        await LoadDurationsAsync(seq);
+        await LoadThumbnailsAsync(seq);
     }
 
     /// <summary>Alt 오버레이용: 썸네일 그리드를 숨기고 리스트만 남긴다.</summary>
@@ -214,12 +221,13 @@ public sealed partial class ExplorerPane : UserControl
         return item;
     }
 
-    /// <summary>리스트 행: 아이콘 + 이름 + 크기(파일만).</summary>
+    /// <summary>리스트 행: 아이콘 + 이름 + 길이(미디어만, 지연 로드 — A6) + 크기(파일만).</summary>
     private ListViewItem MakeListItem(ExplorerListing.Entry entry)
     {
         var row = new Grid { ColumnSpacing = 8 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var icon = new FontIcon
@@ -236,6 +244,14 @@ public sealed partial class ExplorerPane : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         Grid.SetColumn(name, 1);
+        // Children[2] = 길이 자리 — LoadDurationsAsync가 나중에 채운다(A6). 인덱스 수동 동기.
+        var duration = new TextBlock
+        {
+            FontSize = 11,
+            Opacity = 0.6,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(duration, 2);
         var size = new TextBlock
         {
             Text = entry.IsFolder ? string.Empty : ExplorerListing.FormatSize(entry.Size),
@@ -243,16 +259,82 @@ public sealed partial class ExplorerPane : UserControl
             Opacity = 0.6,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        Grid.SetColumn(size, 2);
+        Grid.SetColumn(size, 3);
 
         row.Children.Add(icon);
         row.Children.Add(name);
+        row.Children.Add(duration);
         row.Children.Add(size);
         ToolTipService.SetToolTip(row, entry.Name);
 
         var item = new ListViewItem { Content = row, Tag = entry };
         AttachContextMenu(item, entry); // A24
         return item;
+    }
+
+    /// <summary>재생 길이 캐시(A6): 경로→(수정시각, 표시 텍스트). 수정시각이 다르면 무효.</summary>
+    private readonly Dictionary<string, (DateTime Modified, string Text)> _durationCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>재생 길이를 물어볼 파일인지 — 비디오 모듈 담당 확장자(영상+음악) 기준(A6).</summary>
+    private static bool IsMediaFile(string name) =>
+        ExplorerListing.MatchesExtension(name, WinUtil.Module.Video.VideoModule.Extensions);
+
+    /// <summary>
+    /// 미디어 파일의 재생 길이를 리스트 행 셋째 칸에 채운다(A6).
+    /// 셸 속성(System.Media.Duration) 읽기는 워커에서, UI는 텍스트 반영만.
+    /// 정렬·필터 재그리기는 캐시가 흡수한다(수정시각 일치 시 재조회 없음).
+    /// </summary>
+    private async Task LoadDurationsAsync(int seq)
+    {
+        var items = ListPane.Items.ToList(); // 스냅샷 — await 중 컬렉션 변경 대비
+        foreach (var obj in items)
+        {
+            if (seq != _loadSeq) return;
+            if (obj is not ListViewItem { Tag: ExplorerListing.Entry { IsFolder: false } entry } item) continue;
+            if (!IsMediaFile(entry.Name)) continue;
+
+            string text;
+            if (_durationCache.TryGetValue(entry.Path, out var hit) && hit.Modified == entry.Modified)
+            {
+                text = hit.Text;
+            }
+            else
+            {
+                try
+                {
+                    var ticks = await Worker.Run(_ => FetchDurationTicks(entry.Path));
+                    if (seq != _loadSeq) return;
+                    text = ticks > 0
+                        ? ExplorerListing.FormatDuration(TimeSpan.FromTicks(ticks))
+                        : string.Empty;
+                }
+                catch (OperationCanceledException)
+                {
+                    return; // 페인이 내려가며 워커가 닫힘
+                }
+                catch
+                {
+                    continue; // 속성을 못 읽는 파일은 빈 칸 유지
+                }
+                if (_durationCache.Count > 4000) _durationCache.Clear(); // 장시간 세션 폭주 방지
+                _durationCache[entry.Path] = (entry.Modified, text);
+            }
+
+            if (text.Length == 0) continue;
+            // MakeListItem의 Children[2] = 길이 TextBlock (인덱스 수동 동기)
+            if (item.Content is Grid row && row.Children.Count > 3 && row.Children[2] is TextBlock tb)
+                tb.Text = text;
+        }
+    }
+
+    /// <summary>워커 스레드: 셸 미디어 길이 속성(100ns 단위 = TimeSpan 틱)을 읽는다. 없으면 0.</summary>
+    private static long FetchDurationTicks(string path)
+    {
+        var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
+        var props = file.Properties.RetrievePropertiesAsync(["System.Media.Duration"])
+            .AsTask().GetAwaiter().GetResult();
+        return props.TryGetValue("System.Media.Duration", out var v) && v is ulong u ? (long)u : 0L;
     }
 
     /// <summary>

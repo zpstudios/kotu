@@ -126,4 +126,14 @@ public class ExplorerListingTests : IDisposable
         Assert.Equal("1 KB", ExplorerListing.FormatSize(1024));
         Assert.Equal("1.5 MB", ExplorerListing.FormatSize(1024 * 1024 + 512 * 1024));
     }
+
+    [Fact]
+    public void FormatDuration_시간_유무에_따라_포맷을_고른다()
+    {
+        Assert.Equal(string.Empty, ExplorerListing.FormatDuration(TimeSpan.Zero));
+        Assert.Equal("0:03", ExplorerListing.FormatDuration(TimeSpan.FromSeconds(3)));
+        Assert.Equal("4:07", ExplorerListing.FormatDuration(new TimeSpan(0, 4, 7)));
+        Assert.Equal("1:02:03", ExplorerListing.FormatDuration(new TimeSpan(1, 2, 3)));
+        Assert.Equal("27:00:00", ExplorerListing.FormatDuration(TimeSpan.FromHours(27)));
+    }
 }

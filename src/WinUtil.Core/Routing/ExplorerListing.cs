@@ -79,6 +79,13 @@ public static class ExplorerListing
         return [.. folders, .. files];
     }
 
+    /// <summary>재생 길이 표시용 텍스트 (A6): 1시간 미만 m:ss, 이상 h:mm:ss. 1초 미만은 빈 문자열.</summary>
+    public static string FormatDuration(TimeSpan duration) => duration.TotalSeconds < 1
+        ? string.Empty
+        : duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}"
+            : $"{duration.Minutes}:{duration.Seconds:00}";
+
     /// <summary>파일 크기 표시용 텍스트 (B/KB/MB/GB).</summary>
     public static string FormatSize(long bytes) => bytes switch
     {
