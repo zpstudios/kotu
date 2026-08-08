@@ -41,6 +41,44 @@ public static class ExplorerListing
         return result;
     }
 
+    /// <summary>우측 리스트 정렬 키 (A5). 설정 저장 문자열은 소문자 이름과 수동 동기.</summary>
+    public enum SortKey
+    {
+        Name,
+        Size,
+        Modified,
+    }
+
+    /// <summary>
+    /// 정렬·필터를 적용한 표시용 목록을 만든다 (A5·A7). 폴더 먼저 규칙은 유지.
+    /// Name=이름 오름차순, Size=큰 것부터(폴더는 크기가 없어 이름순), Modified=최신부터. 동률은 이름순.
+    /// hiddenExtensions(소문자, 점 포함)에 있는 확장자의 파일은 뺀다 — 폴더는 항상 남긴다.
+    /// </summary>
+    public static IReadOnlyList<Entry> Arrange(
+        IReadOnlyList<Entry> entries, SortKey key, IReadOnlyCollection<string>? hiddenExtensions = null)
+    {
+        var folders = entries.Where(e => e.IsFolder);
+        var files = entries.Where(e => !e.IsFolder);
+        if (hiddenExtensions is { Count: > 0 })
+            files = files.Where(f =>
+                !hiddenExtensions.Contains(System.IO.Path.GetExtension(f.Name).ToLowerInvariant()));
+
+        var byName = StringComparer.OrdinalIgnoreCase;
+        (folders, files) = key switch
+        {
+            SortKey.Size => (
+                folders.OrderBy(e => e.Name, byName),
+                files.OrderByDescending(e => e.Size).ThenBy(e => e.Name, byName)),
+            SortKey.Modified => (
+                folders.OrderByDescending(e => e.Modified).ThenBy(e => e.Name, byName),
+                files.OrderByDescending(e => e.Modified).ThenBy(e => e.Name, byName)),
+            _ => (
+                folders.OrderBy(e => e.Name, byName),
+                files.OrderBy(e => e.Name, byName)),
+        };
+        return [.. folders, .. files];
+    }
+
     /// <summary>파일 크기 표시용 텍스트 (B/KB/MB/GB).</summary>
     public static string FormatSize(long bytes) => bytes switch
     {

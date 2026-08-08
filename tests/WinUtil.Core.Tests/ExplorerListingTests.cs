@@ -71,6 +71,54 @@ public class ExplorerListingTests : IDisposable
         Assert.Equal(3, ExplorerListing.List(_dir, [".jpg"], maxItems: 3).Count);
     }
 
+    // ---------- Arrange (A5·A7) ----------
+
+    private static ExplorerListing.Entry AFile(string name, long size, int day) =>
+        new($@"C:\t\{name}", name, false, size, new DateTime(2026, 1, day));
+
+    private static ExplorerListing.Entry AFolder(string name, int day) =>
+        new($@"C:\t\{name}", name, true, 0, new DateTime(2026, 1, day));
+
+    [Fact]
+    public void Arrange_이름순_폴더_먼저_이름_오름차순()
+    {
+        var entries = new[] { AFile("b.jpg", 1, 1), AFolder("z", 1), AFile("A.jpg", 2, 2), AFolder("a", 2) };
+
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Name);
+
+        Assert.Equal(["a", "z", "A.jpg", "b.jpg"], result.Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void Arrange_크기순_파일은_큰_것부터_폴더는_이름순()
+    {
+        var entries = new[] { AFolder("z", 1), AFolder("a", 2), AFile("small.jpg", 10, 1), AFile("big.jpg", 999, 1) };
+
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Size);
+
+        Assert.Equal(["a", "z", "big.jpg", "small.jpg"], result.Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void Arrange_수정일순_최신부터_폴더도_수정일순()
+    {
+        var entries = new[] { AFolder("old", 1), AFolder("new", 9), AFile("old.jpg", 1, 2), AFile("new.jpg", 1, 8) };
+
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Modified);
+
+        Assert.Equal(["new", "old", "new.jpg", "old.jpg"], result.Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void Arrange_숨김_확장자_파일만_거르고_폴더는_남긴다()
+    {
+        var entries = new[] { AFolder("sub", 1), AFile("a.jpg", 1, 1), AFile("b.png", 1, 1), AFile("c.JPG", 1, 1) };
+
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Name, [".jpg"]);
+
+        Assert.Equal(["sub", "b.png"], result.Select(e => e.Name).ToArray());
+    }
+
     [Fact]
     public void FormatSize_단위를_고른다()
     {

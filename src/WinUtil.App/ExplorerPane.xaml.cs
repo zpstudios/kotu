@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
 using WinUtil.Core.Routing;
+using WinUtil.Core.Settings;
 using WinUtil.Core.Threading;
 
 namespace WinUtil.App;
@@ -29,11 +30,33 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     public event Action<string>? FileActivatedNewWindow;
 
+    private const string SortSettingKey = "explorer.sort"; // "name"/"size"/"modified" — SortKey와 수동 동기
+
     private IReadOnlyList<string> _extensions = [];
     private string _folder = string.Empty;
     private int _loadSeq;                     // 빠른 연속 탐색 시 늦은 결과 폐기
     private (string Path, DateTime At)? _lastClick;
     private ModuleWorker? _worker;            // 스캔·썸네일 전용 — 페인별 분리(A42 정책)
+    private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 정렬 변경 시 재스캔 없이 재배치(A5)
+    private ExplorerListing.SortKey _sortKey = ExplorerListing.SortKey.Name;
+    private ISettingsService? _settings;
+
+    /// <summary>정렬 키 저장용(A5). 셸(MainWindow)이 페인 생성 직후 주입한다 — 없어도 동작(기본 이름순).</summary>
+    public ISettingsService? Settings
+    {
+        get => _settings;
+        set
+        {
+            _settings = value;
+            _sortKey = value?.Get(SortSettingKey, "name") switch
+            {
+                "size" => ExplorerListing.SortKey.Size,
+                "modified" => ExplorerListing.SortKey.Modified,
+                _ => ExplorerListing.SortKey.Name,
+            };
+            SyncSortChecks();
+        }
+    }
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도(Alt 오버레이 재오픈) 되살아난다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP explorer worker");
@@ -41,11 +64,47 @@ public sealed partial class ExplorerPane : UserControl
     public ExplorerPane()
     {
         InitializeComponent();
+        SyncSortChecks();
         Unloaded += (_, _) =>
         {
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
         };
+    }
+
+    // ---------- 정렬 (A5) ----------
+
+    /// <summary>정렬 플라이아웃의 체크 상태를 _sortKey에 맞춘다.</summary>
+    private void SyncSortChecks()
+    {
+        SortByName.IsChecked = _sortKey == ExplorerListing.SortKey.Name;
+        SortBySize.IsChecked = _sortKey == ExplorerListing.SortKey.Size;
+        SortByModified.IsChecked = _sortKey == ExplorerListing.SortKey.Modified;
+    }
+
+    private void OnSortChanged(object sender, RoutedEventArgs e)
+    {
+        var key = ReferenceEquals(sender, SortBySize) ? ExplorerListing.SortKey.Size
+                : ReferenceEquals(sender, SortByModified) ? ExplorerListing.SortKey.Modified
+                : ExplorerListing.SortKey.Name;
+        if (key == _sortKey) return;
+
+        _sortKey = key;
+        SyncSortChecks();
+        _settings?.Set(SortSettingKey, key.ToString().ToLowerInvariant());
+        _settings?.Save();
+        RefreshView();
+    }
+
+    /// <summary>
+    /// 캐시된 스캔 결과를 현재 정렬로 재배치해 다시 그린다. 재스캔 없음.
+    /// 항목이 새로 만들어지므로 썸네일도 다시 채운다(셸 썸네일 캐시라 재추출은 싸다).
+    /// </summary>
+    private void RefreshView()
+    {
+        var seq = ++_loadSeq; // 돌고 있던 썸네일 루프 중단
+        Fill(ExplorerListing.Arrange(_entries, _sortKey));
+        _ = LoadThumbnailsAsync(seq);
     }
 
     /// <summary>Alt 오버레이용: 썸네일 그리드를 숨기고 리스트만 남긴다.</summary>
@@ -86,8 +145,8 @@ public sealed partial class ExplorerPane : UserControl
 
         if (seq != _loadSeq) return; // 그새 다른 폴더로 이동함
 
-        Fill(entries);
-        _ = LoadThumbnailsAsync(seq);
+        _entries = entries;
+        RefreshView();
     }
 
     private void Fill(IReadOnlyList<ExplorerListing.Entry> entries)

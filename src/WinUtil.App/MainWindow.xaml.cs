@@ -606,7 +606,7 @@ public sealed partial class MainWindow : Window
         {
             if (_emptyExplorer is null)
             {
-                _emptyExplorer = new ExplorerPane();
+                _emptyExplorer = new ExplorerPane { Settings = _settings };           // 정렬 키 저장(A5)
                 _emptyExplorer.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
                 _emptyExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
                 ExplorerHost.Children.Add(_emptyExplorer);
@@ -711,7 +711,7 @@ public sealed partial class MainWindow : Window
 
         if (_altList is null)
         {
-            _altList = new ExplorerPane();
+            _altList = new ExplorerPane { Settings = _settings }; // 정렬 키 저장(A5)
             _altList.ConfigureListOnly();
             _altList.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
             _altList.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
