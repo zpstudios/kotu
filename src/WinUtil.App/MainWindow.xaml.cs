@@ -591,7 +591,7 @@ public sealed partial class MainWindow : Window
         RememberLastFolder(); // v0.55.0
         UpdateEmptyExplorer();
         if (AltOverlayRoot.Visibility == Visibility.Visible) ShowAltOverlay(); // 폴더가 바뀌었을 수 있다
-        if (InfoOverlay.Visibility == Visibility.Visible) UpdateInfoOverlay();
+        if (InfoOverlayRoot.Visibility == Visibility.Visible) UpdateInfoOverlay();
     }
 
     /// <summary>
@@ -725,7 +725,7 @@ public sealed partial class MainWindow : Window
     private void UpdateInfoOverlay()
     {
         var show = (_ctrlHeld || _infoPinned) && _currentFilePath is not null;
-        InfoOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        InfoOverlayRoot.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         InfoOverlay.IsHitTestVisible = show && _infoPinned; // 고정했을 때만 스크롤 등 상호작용 허용
         InfoPinnedText.Visibility = show && _infoPinned ? Visibility.Visible : Visibility.Collapsed;
         if (show) _ = LoadContentInfoAsync();
