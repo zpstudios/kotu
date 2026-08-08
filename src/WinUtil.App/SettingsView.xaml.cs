@@ -258,25 +258,46 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             TextWrapping = TextWrapping.Wrap,
         });
 
-        // A21: 사용자가 윈도우 디스플레이 설정에 잡아둔 배율을 그대로 보여준다.
+        // A44(A21 보강): 현재 윈도우 배율을 별도 줄이 아니라 배율 목록 항목 옆에 표기한다.
         // XamlRoot.RasterizationScale = 이 창이 떠 있는 모니터의 시스템 배율(앱 자체 배율과 무관).
+        // 항목을 ComboBoxItem으로 만들어 Content만 갱신 — 선택 상태를 건드리지 않고 라이브 갱신 가능.
         // 생성 시점엔 XamlRoot가 없으므로 Loaded에서 채우고, 모니터 이동/배율 변경(Changed)에 추종.
-        var dpiText = new TextBlock { FontSize = 12, Opacity = 0.7 };
-        void UpdateDpiText()
-            => dpiText.Text = XamlRoot is { } xr
-                ? $"Current Windows display scaling on this monitor: {Math.Round(xr.RasterizationScale * 100)}%"
-                : string.Empty;
+        var scaleBox = new ComboBox { Header = "UI scale", MinWidth = 200 };
+        scaleBox.Items.Add(new ComboBoxItem { Content = "System default" });
+        foreach (var p in UiScale.Percents)
+            scaleBox.Items.Add(new ComboBoxItem { Content = $"{p}%", Tag = p });
+
+        // 윈도우 배율이 특이값(예: 커스텀 110%)이라 목록에 일치 항목이 없을 때만 보이는 안내 줄.
+        var offListNote = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed,
+        };
+
+        void UpdateWindowsScaleMark()
+        {
+            if (XamlRoot is not { } xr) return;
+            var winPercent = (int)Math.Round(xr.RasterizationScale * 100);
+            var matched = false;
+            foreach (var item in scaleBox.Items)
+            {
+                if (item is not ComboBoxItem { Tag: int p } cbi) continue;
+                var text = p == winPercent ? $"{p}% (current Windows setting)" : $"{p}%";
+                if (!Equals(cbi.Content as string, text)) cbi.Content = text;
+                matched |= p == winPercent;
+            }
+            offListNote.Text = matched
+                ? string.Empty
+                : $"Current Windows display scaling on this monitor is {winPercent}%, which is not in the list above.";
+            offListNote.Visibility = matched ? Visibility.Collapsed : Visibility.Visible;
+        }
         Loaded += (_, _) =>
         {
-            UpdateDpiText();
-            if (XamlRoot is { } xr) xr.Changed += (_, _) => UpdateDpiText();
+            UpdateWindowsScaleMark();
+            if (XamlRoot is { } xr) xr.Changed += (_, _) => UpdateWindowsScaleMark();
         };
-        Root.Children.Add(dpiText);
-
-        var scaleBox = new ComboBox { Header = "UI scale", MinWidth = 200 };
-        scaleBox.Items.Add("System default");
-        foreach (var p in UiScale.Percents)
-            scaleBox.Items.Add($"{p}%");
 
         var current = _settings.Get(UiScale.SettingKey, 0);
         var index = Array.IndexOf(UiScale.Percents, current);
@@ -291,6 +312,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             UiScale.NotifyChanged();
         };
         Root.Children.Add(scaleBox);
+        Root.Children.Add(offListNote);
     }
 
     /// <summary>
