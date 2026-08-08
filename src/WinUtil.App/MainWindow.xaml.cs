@@ -24,17 +24,18 @@ public sealed partial class MainWindow : Window
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
 
-    // ---- 내장 탐색기 + Alt/Shift 오버레이 상태 (v0.25.0; 정보 오버레이 키는
-    //      v0.45.0에 Ctrl → Shift로 이동 — Ctrl은 모듈 전환 단축키가 가져갔다) ----
+    // ---- 내장 탐색기 + Alt/Ctrl 오버레이 상태 (v0.25.0; 정보 오버레이 키는
+    //      v0.45.0에 Ctrl → Shift로 갔다가 A32에서 Ctrl로 회귀 — 모듈 전환이
+    //      숫자 단독 키가 되면서 Ctrl이 다시 비었고, Shift는 A24 새 창 더블클릭이 쓴다) ----
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·Alt 목록에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ExplorerPane? _emptyExplorer; // 빈 상태 중앙 탐색기 (지연 생성)
     private ExplorerPane? _altList;       // Alt 홀드 우측 리스트 (지연 생성)
     private bool _altHeld;
-    private bool _shiftHeld;
-    private bool _infoPinned;             // Shift 2연타로 고정된 정보 오버레이
+    private bool _ctrlHeld;
+    private bool _infoPinned;             // Ctrl 2연타로 고정된 정보 오버레이
     private bool _altPinned;              // Alt 2연타로 고정된 우측 리스트 (v0.32.0)
-    private DateTime _lastShiftDown = DateTime.MinValue;
+    private DateTime _lastCtrlDown = DateTime.MinValue;
     private DateTime _lastAltDown = DateTime.MinValue;
     private int _infoSeq;                 // 정보 로드 경쟁 방지
     private string? _infoPath;            // 정보 캐시 (파일별 1회 로드)
@@ -74,7 +75,7 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
-        // Alt/Shift 홀드 감지(v0.25.0): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서
+        // Alt/Ctrl 홀드 감지(v0.25.0, A32에서 정보 키 Shift→Ctrl 회귀): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서
         // handledEventsToo로 구독한다. 창 비활성화로 KeyUp을 놓치면 홀드 상태를 초기화.
         RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
@@ -203,21 +204,26 @@ public sealed partial class MainWindow : Window
     // ---------- 단축키 (v0.45.0 사용자 지정) ----------
 
     /// <summary>
-    /// 모듈 번호(메뉴 아래→위 순서): Ctrl+1=이미지, 2=영상, 3=문서, 4=압축, 5=하드웨어.
-    /// 힌트 문자열은 시작 메뉴 항목 마우스 오버 시 우측에 보조 표시된다.
+    /// 모듈 번호(메뉴 아래→위 순서): 1=이미지, 2=영상, 3=문서, 4=압축, 5=하드웨어.
+    /// A32: Ctrl 없이 숫자 단독(사용자 확정) — Ctrl은 정보 오버레이로 회귀.
+    /// 힌트 문자열은 시작 메뉴 항목 마우스 오버 시 툴팁으로 보조 표시된다.
     /// </summary>
     private static readonly (string Id, VirtualKey Key, string Hint)[] ModuleShortcuts =
     [
-        ("image", VirtualKey.Number1, "Ctrl+1"),
-        ("video", VirtualKey.Number2, "Ctrl+2"),
-        ("document", VirtualKey.Number3, "Ctrl+3"),
-        ("archive", VirtualKey.Number4, "Ctrl+4"),
-        ("hardware", VirtualKey.Number5, "Ctrl+5"),
+        ("image", VirtualKey.Number1, "1"),
+        ("video", VirtualKey.Number2, "2"),
+        ("document", VirtualKey.Number3, "3"),
+        ("archive", VirtualKey.Number4, "4"),
+        ("hardware", VirtualKey.Number5, "5"),
     ];
 
-    private const string SettingsShortcutHint = "Ctrl+0";
+    private const string SettingsShortcutHint = "0";
 
-    /// <summary>Ctrl+`(1 왼쪽 키) = 시작 메뉴, Ctrl+숫자 = 모듈 전환, Ctrl+0 = Settings, Ctrl+N = 새 창(A24).</summary>
+    /// <summary>
+    /// `(1 왼쪽 키) = 시작 메뉴, 숫자 = 모듈 전환, 0 = Settings — 전부 수정자 없는 단독 키(A32).
+    /// Ctrl+N = 새 창(A24)만 수정자 유지. 단독 키는 텍스트 입력란에 포커스가 있으면
+    /// 가로채지 않고 통과시킨다(A32 예외 — 압축 암호 입력 등에서 숫자를 쳐야 하므로).
+    /// </summary>
     private void RegisterShortcuts()
     {
         // 액셀러레이터 키 이름 툴팁이 화면 중앙에 뜨는 WinUI 기본 동작 방지 (모듈 뷰들과 동일)
@@ -229,23 +235,33 @@ public sealed partial class MainWindow : Window
             AddShortcut(key, () => OpenModuleById(id));
         AddShortcut(VirtualKey.Number0, () => OnSettingsClick(StartButton, new RoutedEventArgs()));
         // 새 창 = 지금 보는 모듈의 빈 인스턴스(A24 사용자 확정). 설정 화면 등 모듈 없는 창은 기본 화면으로.
-        AddShortcut(VirtualKey.N, () => _manager.OpenNewWindow(CurrentModuleId));
+        AddShortcut(VirtualKey.N, () => _manager.OpenNewWindow(CurrentModuleId),
+            Windows.System.VirtualKeyModifiers.Control);
     }
 
-    private void AddShortcut(VirtualKey key, Action action)
+    private void AddShortcut(VirtualKey key, Action action,
+        Windows.System.VirtualKeyModifiers modifiers = Windows.System.VirtualKeyModifiers.None)
     {
-        var accelerator = new KeyboardAccelerator
-        {
-            Key = key,
-            Modifiers = Windows.System.VirtualKeyModifiers.Control,
-        };
+        var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
         accelerator.Invoked += (_, e) =>
         {
+            // A32 예외: 단독 키는 입력 컨트롤 타이핑을 뺏으면 안 된다.
+            if (modifiers == Windows.System.VirtualKeyModifiers.None && IsTextInputFocused())
+            {
+                e.Handled = false; // 계속 흘려보내 컨트롤이 문자를 받게
+                return;
+            }
             e.Handled = true;
             action();
         };
         RootLayout.KeyboardAccelerators.Add(accelerator);
     }
+
+    /// <summary>포커스가 텍스트 입력 컨트롤(TextBox·PasswordBox·RichEditBox 계열)에 있는지.</summary>
+    private bool IsTextInputFocused()
+        => RootLayout.XamlRoot is { } xr
+           && Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(xr)
+               is TextBox or PasswordBox or RichEditBox;
 
     /// <summary>단축키·센서 트레이(A18)로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호).</summary>
     internal void OpenModuleById(string id)
@@ -326,7 +342,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 시작 메뉴 항목. shortcutHint("Ctrl+1" 등)가 있으면 표준 툴팁으로 단다 —
+    /// 시작 메뉴 항목. shortcutHint("1" 등)가 있으면 표준 툴팁으로 단다 —
     /// 다른 버튼들과 같은 지연(약 1초)·모양으로 표시된다(A1, v0.57.0 —
     /// v0.45.0의 즉시 인라인 힌트를 사용자 지시로 교체).
     /// </summary>
@@ -348,7 +364,10 @@ public sealed partial class MainWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
-            Padding = new Thickness(10, 8, 10, 8),
+            // A31: 히트 영역 확대 — 상하 패딩 8→12 + 최소 높이 44 (터치 타깃 권장 크기).
+            // 좌우는 10 유지: 메뉴 폭 124(v0.35.0 축소 확정) 안에서 라벨 말줄임을 늘리지 않기 위해.
+            Padding = new Thickness(10, 12, 10, 12),
+            MinHeight = 44,
         };
         if (shortcutHint is not null)
             ToolTipService.SetToolTip(button, shortcutHint);
@@ -629,22 +648,22 @@ public sealed partial class MainWindow : Window
             // Alt 기본 동작(메뉴 모드 진입)과의 충돌 방지 — 오버레이가 떠 있을 때만 소비한다.
             if (AltOverlayRoot.Visibility == Visibility.Visible) e.Handled = true;
         }
-        else if (e.Key is VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift)
+        else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
         {
-            if (_shiftHeld || e.KeyStatus.WasKeyDown) return;
-            _shiftHeld = true;
+            if (_ctrlHeld || e.KeyStatus.WasKeyDown) return;
+            _ctrlHeld = true;
             if (_currentFilePath is null) return; // 콘텐츠 없으면 정보도 핀 토글도 없다
 
-            // Shift 2연타 = 고정 토글, 다시 2연타로 해제 (v0.45.0 — Ctrl에서 이동, UX 동일)
+            // Ctrl 2연타 = 고정 토글, 다시 2연타로 해제 (A32 — Shift에서 회귀, UX 동일)
             var now = DateTime.UtcNow;
-            if ((now - _lastShiftDown).TotalMilliseconds < 450)
+            if ((now - _lastCtrlDown).TotalMilliseconds < 450)
             {
                 _infoPinned = !_infoPinned;
-                _lastShiftDown = DateTime.MinValue;
+                _lastCtrlDown = DateTime.MinValue;
             }
             else
             {
-                _lastShiftDown = now;
+                _lastCtrlDown = now;
             }
             UpdateInfoOverlay();
         }
@@ -658,9 +677,9 @@ public sealed partial class MainWindow : Window
             _altHeld = false;
             UpdateAltOverlay(); // 고정(_altPinned) 상태면 유지된다 (v0.32.0)
         }
-        else if (e.Key is VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift)
+        else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
         {
-            _shiftHeld = false;
+            _ctrlHeld = false;
             UpdateInfoOverlay();
         }
     }
@@ -669,7 +688,7 @@ public sealed partial class MainWindow : Window
     private void ResetKeyOverlays()
     {
         _altHeld = false;
-        _shiftHeld = false;
+        _ctrlHeld = false;
         UpdateAltOverlay();
         UpdateInfoOverlay();
     }
@@ -702,10 +721,10 @@ public sealed partial class MainWindow : Window
         AltOverlayRoot.Visibility = Visibility.Visible;
     }
 
-    /// <summary>Shift 홀드(또는 고정) 정보 오버레이의 표시 상태를 갱신한다.</summary>
+    /// <summary>Ctrl 홀드(또는 고정) 정보 오버레이의 표시 상태를 갱신한다(A32에서 Shift→Ctrl 회귀).</summary>
     private void UpdateInfoOverlay()
     {
-        var show = (_shiftHeld || _infoPinned) && _currentFilePath is not null;
+        var show = (_ctrlHeld || _infoPinned) && _currentFilePath is not null;
         InfoOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         InfoOverlay.IsHitTestVisible = show && _infoPinned; // 고정했을 때만 스크롤 등 상호작용 허용
         InfoPinnedText.Visibility = show && _infoPinned ? Visibility.Visible : Visibility.Collapsed;

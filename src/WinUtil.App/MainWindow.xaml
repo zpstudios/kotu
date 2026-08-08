@@ -63,8 +63,9 @@
             </Border>
         </Grid>
 
-        <!-- Shift 홀드 정보 오버레이 (v0.25.0, v0.45.0에 Ctrl→Shift — Ctrl은 모듈 전환 단축키로):
-             좌측에 현재 콘텐츠 정보. Shift 2연타로 고정/해제. 배경은 반투명 인앱 아크릴(v0.31.0). -->
+        <!-- Ctrl 홀드 정보 오버레이 (v0.25.0; v0.45.0 Ctrl→Shift, A32에서 Ctrl 회귀 —
+             모듈 전환이 숫자 단독 키로 바뀌며 Ctrl이 다시 비었다):
+             좌측에 현재 콘텐츠 정보. Ctrl 2연타로 고정/해제. 배경은 반투명 인앱 아크릴(v0.31.0). -->
         <Border x:Name="InfoOverlay" Grid.Row="0" Visibility="Collapsed"
                 HorizontalAlignment="Left" VerticalAlignment="Stretch"
                 MinWidth="300" MaxWidth="440"
@@ -75,7 +76,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="InfoOverlayText" TextWrapping="Wrap" FontSize="13" />
-                    <TextBlock x:Name="InfoPinnedText" Text="Pinned — press Shift twice to unpin"
+                    <TextBlock x:Name="InfoPinnedText" Text="Pinned — press Ctrl twice to unpin"
                                Visibility="Collapsed" FontSize="11" Opacity="0.6" />
                 </StackPanel>
             </ScrollViewer>
