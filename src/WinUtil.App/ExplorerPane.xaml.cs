@@ -20,8 +20,14 @@ public sealed partial class ExplorerPane : UserControl
     private const int ThumbnailLimit = 300;   // 썸네일 로드 상한 (초대형 폴더 보호)
     private const int DoubleClickMs = 500;
 
-    /// <summary>파일 더블클릭 시 전체 경로와 함께 발생. 셸이 라우팅한다.</summary>
+    /// <summary>파일 더블클릭 시 전체 경로와 함께 발생. 셸이 라우팅한다(재사용 규칙 적용, A24).</summary>
     public event Action<string>? FileActivated;
+
+    /// <summary>
+    /// 파일을 명시적으로 새 창에서 열라는 요청(A24: Shift+더블클릭 또는 우클릭 메뉴).
+    /// 셸이 재사용 규칙과 무관하게 항상 새 창으로 연다.
+    /// </summary>
+    public event Action<string>? FileActivatedNewWindow;
 
     private IReadOnlyList<string> _extensions = [];
     private string _folder = string.Empty;
@@ -100,8 +106,23 @@ public sealed partial class ExplorerPane : UserControl
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>파일 항목 우클릭 메뉴(A24): "Open in new window" 하나 — 폴더에는 안 단다.</summary>
+    private void AttachContextMenu(FrameworkElement item, ExplorerListing.Entry entry)
+    {
+        if (entry.IsFolder) return;
+        var open = new MenuFlyoutItem
+        {
+            Text = "Open in new window",
+            Icon = new FontIcon { Glyph = "\uE8A7" }, // OpenInNewWindow
+        };
+        open.Click += (_, _) => FileActivatedNewWindow?.Invoke(entry.Path);
+        var flyout = new MenuFlyout();
+        flyout.Items.Add(open);
+        item.ContextFlyout = flyout;
+    }
+
     /// <summary>그리드 타일: 썸네일 자리(우선 글리프, 이후 비동기 교체) + 이름 2줄.</summary>
-    private static GridViewItem MakeGridItem(ExplorerListing.Entry entry)
+    private GridViewItem MakeGridItem(ExplorerListing.Entry entry)
     {
         var icon = new FontIcon
         {
@@ -129,11 +150,13 @@ public sealed partial class ExplorerPane : UserControl
         panel.Children.Add(name);
         ToolTipService.SetToolTip(panel, entry.Name);
 
-        return new GridViewItem { Content = panel, Tag = entry };
+        var item = new GridViewItem { Content = panel, Tag = entry };
+        AttachContextMenu(item, entry); // A24
+        return item;
     }
 
     /// <summary>리스트 행: 아이콘 + 이름 + 크기(파일만).</summary>
-    private static ListViewItem MakeListItem(ExplorerListing.Entry entry)
+    private ListViewItem MakeListItem(ExplorerListing.Entry entry)
     {
         var row = new Grid { ColumnSpacing = 8 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -168,7 +191,9 @@ public sealed partial class ExplorerPane : UserControl
         row.Children.Add(size);
         ToolTipService.SetToolTip(row, entry.Name);
 
-        return new ListViewItem { Content = row, Tag = entry };
+        var item = new ListViewItem { Content = row, Tag = entry };
+        AttachContextMenu(item, entry); // A24
+        return item;
     }
 
     /// <summary>
@@ -236,7 +261,10 @@ public sealed partial class ExplorerPane : UserControl
 
     // ---------- 입력 ----------
 
-    /// <summary>클릭 2회(500ms 내 같은 항목) = 더블클릭: 폴더 진입 또는 파일 열기.</summary>
+    /// <summary>
+    /// 클릭 2회(500ms 내 같은 항목) = 더블클릭: 폴더 진입 또는 파일 열기.
+    /// Shift를 누른 채 더블클릭하면 파일을 새 창으로(A24) — 폴더에는 효과 없음.
+    /// </summary>
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
         if (e.ClickedItem is not FrameworkElement { Tag: ExplorerListing.Entry entry }) return;
@@ -248,7 +276,16 @@ public sealed partial class ExplorerPane : UserControl
         if (!isDouble) return;
 
         _lastClick = null;
-        if (entry.IsFolder) NavigateTo(entry.Path, _extensions);
+        if (entry.IsFolder)
+        {
+            NavigateTo(entry.Path, _extensions);
+            return;
+        }
+
+        var shift = Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if (shift) FileActivatedNewWindow?.Invoke(entry.Path);
         else FileActivated?.Invoke(entry.Path);
     }
 

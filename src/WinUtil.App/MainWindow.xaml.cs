@@ -217,7 +217,7 @@ public sealed partial class MainWindow : Window
 
     private const string SettingsShortcutHint = "Ctrl+0";
 
-    /// <summary>Ctrl+`(1 왼쪽 키) = 시작 메뉴, Ctrl+숫자 = 모듈 전환, Ctrl+0 = Settings.</summary>
+    /// <summary>Ctrl+`(1 왼쪽 키) = 시작 메뉴, Ctrl+숫자 = 모듈 전환, Ctrl+0 = Settings, Ctrl+N = 새 창(A24).</summary>
     private void RegisterShortcuts()
     {
         // 액셀러레이터 키 이름 툴팁이 화면 중앙에 뜨는 WinUI 기본 동작 방지 (모듈 뷰들과 동일)
@@ -228,6 +228,8 @@ public sealed partial class MainWindow : Window
         foreach (var (id, key, _) in ModuleShortcuts)
             AddShortcut(key, () => OpenModuleById(id));
         AddShortcut(VirtualKey.Number0, () => OnSettingsClick(StartButton, new RoutedEventArgs()));
+        // 새 창 = 지금 보는 모듈의 빈 인스턴스(A24 사용자 확정). 설정 화면 등 모듈 없는 창은 기본 화면으로.
+        AddShortcut(VirtualKey.N, () => _manager.OpenNewWindow(CurrentModuleId));
     }
 
     private void AddShortcut(VirtualKey key, Action action)
@@ -267,6 +269,8 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(BuildSponsorCard());
         StartMenuPanel.Children.Add(Divider()); // 그룹 경계는 구분선으로 명확히 (v0.26.0 사용자 요청)
 
+        // New window(A24) — Settings 위, 최상단 그룹
+        AddNewWindowItem();
         // Settings·Hardware-info 묶음 (사용자 지정: zip 위에 공백 두고 Hardware-info, 그 위 Settings)
         AddSettingsItem();
         AddModuleItem("hardware");
@@ -293,6 +297,18 @@ public sealed partial class MainWindow : Window
         {
             StartFlyout.Hide();
             OpenModule(module);
+        };
+        StartMenuPanel.Children.Add(item);
+    }
+
+    /// <summary>시작 메뉴의 New window 항목(A24) — Ctrl+N과 같은 동작.</summary>
+    private void AddNewWindowItem()
+    {
+        var item = MakeMenuItem("\uE78B", "New window", "Ctrl+N"); // NewWindow 글리프
+        item.Click += (_, _) =>
+        {
+            StartFlyout.Hide();
+            _manager.OpenNewWindow(CurrentModuleId);
         };
         StartMenuPanel.Children.Add(item);
     }
@@ -435,6 +451,19 @@ public sealed partial class MainWindow : Window
 
     // ---------- 파일 열기 ----------
 
+    /// <summary>
+    /// 내장 탐색기·Alt 리스트의 일반 더블클릭 열기(A24): 재사용 규칙이 "항상 새 창"이면
+    /// WindowManager로 넘겨 새 창에 열고, 아니면(기본) 이 창에서 그대로 연다.
+    /// 외부 진입(WindowManager가 창을 이미 골라 OpenFile을 부르는 경로)과 섞이지 않게 별도 메서드.
+    /// </summary>
+    private void OpenFileRouted(string path)
+    {
+        if (_settings.Get(WindowManager.AlwaysNewWindowKey, false))
+            _manager.OpenFileInNewWindow(path);
+        else
+            OpenFile(path);
+    }
+
     /// <summary>파일 라우팅의 종착점: 확장자로 모듈을 찾아 뷰를 띄운다.</summary>
     public void OpenFile(string path)
     {
@@ -559,7 +588,8 @@ public sealed partial class MainWindow : Window
             if (_emptyExplorer is null)
             {
                 _emptyExplorer = new ExplorerPane();
-                _emptyExplorer.FileActivated += OpenFile;
+                _emptyExplorer.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
+                _emptyExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
                 ExplorerHost.Children.Add(_emptyExplorer);
             }
             var start = _settings.Get($"lastFolder.{module.Id}", string.Empty);
@@ -664,7 +694,8 @@ public sealed partial class MainWindow : Window
         {
             _altList = new ExplorerPane();
             _altList.ConfigureListOnly();
-            _altList.FileActivated += OpenFile;
+            _altList.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
+            _altList.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
             AltListHost.Content = _altList;
         }
         _altList.NavigateTo(folder, _currentModule.SupportedExtensions);

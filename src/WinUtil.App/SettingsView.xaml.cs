@@ -72,6 +72,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     private void Build(FileTypeRouter router)
     {
         BuildDisplaySection();
+        BuildWindowsSection(); // 창 재사용 규칙 (A24)
 
         AddHeader("Explorer integration");
         Root.Children.Add(new TextBlock
@@ -275,6 +276,36 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             UiScale.NotifyChanged();
         };
         Root.Children.Add(scaleBox);
+    }
+
+    /// <summary>
+    /// Windows 섹션(A24): 창 재사용 규칙. 기본 off = 같은 모듈 창 재사용(현행).
+    /// on = 파일을 열 때마다 새 창(내장 탐색기·외부 열기 공통). Ctrl+N·Shift+더블클릭·
+    /// 우클릭 "Open in new window"는 규칙과 무관하게 항상 새 창이므로 여기 영향 없음.
+    /// </summary>
+    private void BuildWindowsSection()
+    {
+        AddHeader("Windows");
+        var toggle = new ToggleSwitch
+        {
+            Header = "Always open files in a new window",
+            IsOn = _settings.Get(WindowManager.AlwaysNewWindowKey, false),
+        };
+        toggle.Toggled += (_, _) =>
+        {
+            _settings.Set(WindowManager.AlwaysNewWindowKey, toggle.IsOn);
+            _settings.Save();
+        };
+        Root.Children.Add(toggle);
+        Root.Children.Add(new TextBlock
+        {
+            Text = "Off: a file opens in the existing window of the same module (default). "
+                 + "On: every file opens a new window. Explicit \"new window\" actions "
+                 + "(Ctrl+N, Shift+double-click, right-click menu) always open a new window either way.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
     }
 
     private DispatcherTimer? _updateTimer;

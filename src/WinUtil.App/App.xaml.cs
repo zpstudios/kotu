@@ -46,7 +46,9 @@ public partial class App : Application
                 sp.GetRequiredService<ISettingsService>())); // 트레이 센서 선택 복원 (A18)
             return router;
         });
-        services.AddSingleton(sp => new WindowManager(sp.GetRequiredService<FileTypeRouter>()));
+        services.AddSingleton(sp => new WindowManager(
+            sp.GetRequiredService<FileTypeRouter>(),
+            sp.GetRequiredService<ISettingsService>())); // 창 재사용 규칙(A24)
         return services.BuildServiceProvider();
     }
 

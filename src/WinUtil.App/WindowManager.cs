@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using WinUtil.Core.Cli;
 using WinUtil.Core.Routing;
+using WinUtil.Core.Settings;
 
 namespace WinUtil.App;
 
@@ -10,14 +11,20 @@ namespace WinUtil.App;
 ///
 /// 창 선택 규칙(파일 열기 시):
 ///  1) 같은 모듈을 보여주는 창이 있으면 재사용 (이미지 ←/→ 탐색 컨텍스트 유지)
+///     — 단 "항상 새 창" 설정(A24)이면 이 단계를 건너뛴다
 ///  2) 아직 아무것도 안 연 빈 셸 창이 있으면 재사용 (시작 직후 등)
 ///  3) 없으면 새 창
+/// 명시적 새 창 수단(Ctrl+N·Shift+더블클릭·우클릭 메뉴, A24)은 규칙과 무관하게 항상 새 창.
 /// 마지막 창이 닫히면 앱을 종료한다.
 /// 모든 메서드는 UI 스레드에서 호출해야 한다.
 /// </summary>
 public sealed class WindowManager
 {
+    /// <summary>창 재사용 규칙 설정 키(A24): true = 파일을 열 때마다 새 창(기본 false = 재사용).</summary>
+    public const string AlwaysNewWindowKey = "window.alwaysNewWindow";
+
     private readonly FileTypeRouter _router;
+    private readonly ISettingsService _settings;
 
     /// <summary>열린 창 목록. 끝쪽이 가장 최근에 활성화된 창(MRU).</summary>
     private readonly List<MainWindow> _windows = [];
@@ -29,7 +36,11 @@ public sealed class WindowManager
     /// </summary>
     private readonly List<MainWindow> _ordered = [];
 
-    public WindowManager(FileTypeRouter router) => _router = router;
+    public WindowManager(FileTypeRouter router, ISettingsService settings)
+    {
+        _router = router;
+        _settings = settings;
+    }
 
     /// <summary>가장 최근 활성화된 창. 업데이트 다이얼로그 등 공용 UI의 호스트로 쓴다.</summary>
     public MainWindow? ActiveWindow => _windows.Count > 0 ? _windows[^1] : null;
@@ -67,12 +78,35 @@ public sealed class WindowManager
         }
     }
 
-    /// <summary>파일을 담당 모듈 창으로 라우팅해 연다.</summary>
+    /// <summary>파일을 담당 모듈 창으로 라우팅해 연다. 창 선택은 재사용 규칙(A24)을 따른다.</summary>
     public void OpenFile(string path)
     {
         var target = FindReusable(_router.Resolve(path)?.Id);
         target.OpenFile(path);
         target.BringToFront();
+    }
+
+    /// <summary>
+    /// 명시적 "새 창으로 열기"(A24: Shift+더블클릭·우클릭 메뉴). 재사용 규칙과 무관하게
+    /// 항상 새 창을 만든다 — 빈 셸 재사용도 안 한다(요청한 창을 그대로 두는 게 의도).
+    /// </summary>
+    public void OpenFileInNewWindow(string path)
+    {
+        var window = Create();
+        window.OpenFile(path);
+        window.Activate();
+    }
+
+    /// <summary>
+    /// 새 창 열기(A24: Ctrl+N·시작 메뉴). 현재 모듈의 빈 인스턴스로 시작한다(사용자 확정) —
+    /// 모듈이 없는 창(설정·시작 직후)에서 부르면 기본 화면(하드웨어)으로.
+    /// </summary>
+    public void OpenNewWindow(string? moduleId)
+    {
+        var window = Create();
+        if (moduleId is not null) window.OpenModuleById(moduleId);
+        else window.ShowDefaultModule();
+        window.Activate();
     }
 
     /// <summary>
@@ -95,8 +129,10 @@ public sealed class WindowManager
 
     private MainWindow FindReusable(string? moduleId)
     {
-        // 1) 같은 모듈 창 (여러 개면 가장 최근 활성화된 것)
-        if (moduleId is not null)
+        // 1) 같은 모듈 창 (여러 개면 가장 최근 활성화된 것).
+        //    "항상 새 창" 설정(A24)이면 건너뛴다 — 빈 셸 재사용(2)은 유지:
+        //    방금 뜬 빈 창을 두고 또 창을 만드는 건 규칙의 의도가 아니다.
+        if (moduleId is not null && !_settings.Get(AlwaysNewWindowKey, false))
         {
             for (var i = _windows.Count - 1; i >= 0; i--)
                 if (_windows[i].CurrentModuleId == moduleId)
