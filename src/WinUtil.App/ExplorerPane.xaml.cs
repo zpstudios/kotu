@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
@@ -97,14 +99,73 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 캐시된 스캔 결과를 현재 정렬로 재배치해 다시 그린다. 재스캔 없음.
+    /// 캐시된 스캔 결과를 현재 정렬·필터로 재배치해 다시 그린다. 재스캔 없음.
     /// 항목이 새로 만들어지므로 썸네일도 다시 채운다(셸 썸네일 캐시라 재추출은 싸다).
     /// </summary>
     private void RefreshView()
     {
         var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
-        Fill(ExplorerListing.Arrange(_entries, _sortKey));
+        Fill(ExplorerListing.Arrange(_entries, _sortKey, _hiddenExts));
         _ = LoadDetailsAsync(seq);
+    }
+
+    // ---------- 파일 종류 필터 (A7) ----------
+
+    private readonly HashSet<string> _hiddenExts = new(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlyList<string> _filterBuiltFor = []; // 마지막으로 플라이아웃을 만든 확장자 목록
+    private Brush? _filterDefaultBrush;                 // 아이콘 원래 색 (활성 표시 해제용)
+
+    /// <summary>
+    /// 담당 확장자 목록으로 필터 플라이아웃을 만든다. 목록이 그대로면 재사용(체크 상태 유지),
+    /// 모듈 전환 등으로 바뀌면 새로 만들고 필터를 초기화한다. 필터는 저장하지 않는다(세션 한정).
+    /// </summary>
+    private void EnsureFilterFlyout()
+    {
+        if (_extensions.SequenceEqual(_filterBuiltFor)) return;
+        _filterBuiltFor = _extensions;
+        _hiddenExts.Clear();
+
+        var flyout = new MenuFlyout { Placement = FlyoutPlacementMode.BottomEdgeAlignedRight };
+        foreach (var ext in _extensions)
+        {
+            var toggle = new ToggleMenuFlyoutItem { Text = ext, IsChecked = true };
+            toggle.Click += (_, _) =>
+            {
+                if (toggle.IsChecked) _hiddenExts.Remove(ext);
+                else _hiddenExts.Add(ext);
+                UpdateFilterVisual();
+                RefreshView();
+            };
+            flyout.Items.Add(toggle);
+        }
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        var showAll = new MenuFlyoutItem { Text = "Show all" };
+        showAll.Click += (_, _) =>
+        {
+            if (_hiddenExts.Count == 0) return;
+            _hiddenExts.Clear();
+            foreach (var i in flyout.Items)
+                if (i is ToggleMenuFlyoutItem t) t.IsChecked = true;
+            UpdateFilterVisual();
+            RefreshView();
+        };
+        flyout.Items.Add(showAll);
+
+        FilterButton.Flyout = flyout;
+        UpdateFilterVisual();
+    }
+
+    /// <summary>필터가 걸려 있으면 아이콘을 강조색으로 — 걸린 걸 잊지 않게.</summary>
+    private void UpdateFilterVisual()
+    {
+        _filterDefaultBrush ??= FilterIcon.Foreground;
+        FilterIcon.Foreground = _hiddenExts.Count > 0 &&
+            Application.Current.Resources["AccentTextFillColorPrimaryBrush"] is Brush accent
+            ? accent
+            : _filterDefaultBrush;
+        ToolTipService.SetToolTip(FilterButton, _hiddenExts.Count > 0
+            ? $"Filter file types ({_hiddenExts.Count} hidden)"
+            : "Filter file types");
     }
 
     /// <summary>가벼운 길이 텍스트를 먼저 채우고, 무거운 썸네일을 이어서 채운다(같은 워커 직렬 큐).</summary>
@@ -126,6 +187,7 @@ public sealed partial class ExplorerPane : UserControl
     public async void NavigateTo(string folder, IReadOnlyList<string> extensions)
     {
         _extensions = extensions;
+        EnsureFilterFlyout(); // A7 — 확장자 목록이 바뀌었으면 필터 재구성
         _folder = folder;
         PathText.Text = folder;
         UpButton.IsEnabled = Directory.GetParent(folder) is not null;
