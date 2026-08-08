@@ -190,6 +190,7 @@ public sealed partial class ExplorerPane : UserControl
         EnsureFilterFlyout(); // A7 — 확장자 목록이 바뀌었으면 필터 재구성
         _folder = folder;
         PathText.Text = folder;
+        ToolTipService.SetToolTip(PathText, folder); // 잘려도 전체 경로 확인 가능(A8)
         UpButton.IsEnabled = Directory.GetParent(folder) is not null;
 
         var seq = ++_loadSeq;

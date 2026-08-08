@@ -11,7 +11,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 경로 바: 위로 이동 + 현재 경로 + 필터(A7) + 정렬(A5) -->
+        <!-- 경로 바: 위로 이동 + 현재 경로(우측 정렬 — 리스트 쪽, A8) + 필터(A7) + 정렬(A5) -->
         <Grid Grid.Row="0" ColumnSpacing="8" Padding="10,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -23,6 +23,7 @@
                 <FontIcon Glyph="&#xE74A;" FontSize="13" />
             </Button>
             <TextBlock x:Name="PathText" Grid.Column="1" VerticalAlignment="Center"
+                       HorizontalAlignment="Right" TextAlignment="Right"
                        Opacity="0.75" FontSize="12" TextTrimming="CharacterEllipsis" />
             <!-- 항목은 담당 확장자에 따라 코드에서 채운다(EnsureFilterFlyout) -->
             <DropDownButton x:Name="FilterButton" Grid.Column="2" Padding="8,5"
