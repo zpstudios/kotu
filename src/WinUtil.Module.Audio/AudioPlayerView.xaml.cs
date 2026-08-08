@@ -12,24 +12,24 @@ using WinUtil.Core.Contracts;
 using WinUtil.Core.Settings;
 using WinUtil.Core.Threading;
 
-namespace WinUtil.Module.Video;
+namespace WinUtil.Module.Audio;
 
 /// <summary>
-/// 동영상 플레이어 화면. 재생/일시정지, 시킹(슬라이더·←/→ 5초), 볼륨(↑/↓)·음소거(M),
-/// 배속, 자막(자동 탐지 + CP949 자동 변환), 이어보기, 전체화면(Enter/F11)을 제공한다.
-/// 더블클릭 전체화면은 제거(v0.23.0) — 클릭(재생/일시정지)과 겹쳐 의도치 않은 전환이 잦았다.
-/// 음악 재생은 오디오 모듈(ZP-audio)로 분리(A10, v0.75.0) — 파형 시각화 인스턴스 교체 로직도 함께 이관.
-/// 스레드 모델(A42): libvlc 생성·해제와 자막 탐지·변환은 뷰 전용 워커에서 직렬로 —
-/// 생성/해제가 같은 큐라 순서가 구조적으로 보장된다. libvlc 이벤트는 libvlc 자체 스레드에서
-/// 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
+/// 음악 플레이어 화면 (A10 — 비디오 모듈에서 분리). 재생/일시정지, 시킹(슬라이더·←/→ 5초),
+/// 볼륨(↑/↓)·음소거(M), 배속, 이어듣기, 전체화면(Enter/F11)을 제공한다.
+/// 표면은 libvlc 파형 시각화(scope)가 채우고 상단에 ♪ + 파일명 오버레이를 띄운다.
+/// 파형 시각화는 인스턴스 옵션으로만 동작하므로(v0.12.0 실기기 확인) 항상 켠 인스턴스를
+/// 1회 생성해 재사용한다 — 비디오처럼 음악↔영상 교체 재생성이 필요 없다.
+/// 스레드 모델(A42): libvlc 생성·해제는 뷰 전용 워커에서 직렬로. libvlc 이벤트는
+/// libvlc 자체 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
-public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
+public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     IContentStateSource, IContentInfoProvider
 {
-    /// <summary>파일 재생을 시작하면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
+    /// <summary>파일 재생을 시작하면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
 
-    /// <summary>Ctrl 정보 오버레이(v0.25.0)용 미디어 정보: 파일·시간·비디오/오디오 트랙.</summary>
+    /// <summary>Ctrl 정보 오버레이용 미디어 정보: 파일·시간·오디오 트랙.</summary>
     public Task<string?> GetContentInfoAsync()
     {
         if (_filePath is not { } path) return Task.FromResult<string?>(null);
@@ -55,14 +55,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             using var media = _player?.Media;
             foreach (var track in media?.Tracks ?? [])
             {
-                if (track.TrackType == TrackType.Video)
-                {
-                    var v = track.Data.Video;
-                    var fps = v.FrameRateDen > 0
-                        ? $" @ {(double)v.FrameRateNum / v.FrameRateDen:0.##} fps" : string.Empty;
-                    lines.Add($"Video {v.Width}×{v.Height}{fps} · {FourCc(track.Codec)}");
-                }
-                else if (track.TrackType == TrackType.Audio)
+                if (track.TrackType == TrackType.Audio)
                 {
                     var a = track.Data.Audio;
                     lines.Add($"Audio {a.Channels} ch · {a.Rate:N0} Hz · {FourCc(track.Codec)}");
@@ -89,10 +82,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         return new string(chars);
     }
 
-    /// <summary>
-    /// 트랜스포트 바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.21.0, 실기기 피드백:
-    /// 재생줄과 하단 바가 두 줄로 중복). 컨트롤 필드 참조는 그대로 유효하다.
-    /// </summary>
+    /// <summary>트랜스포트 바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(비디오와 동일 규격).</summary>
     public object? TakeBottomBar()
     {
         RootGrid.Children.Remove(TransportBar);
@@ -104,14 +94,6 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private const long ResumeReportIntervalMs = 10_000;
     private static readonly float[] Speeds = [0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f];
 
-    /// <summary>내장 테스트 클립(화면 색감 + 스피커 테스트 음악) — 배포본 Assets에 동봉.</summary>
-    private static readonly string TestClipPath =
-        Path.Combine(AppContext.BaseDirectory, "Assets", "test-clip.mp4");
-
-    /// <summary>테스트 클립은 이어보기 대상에서 뺀다 (32초 점검용 클립에 이어보기는 무의미).</summary>
-    private static bool IsTestClip(string? path) =>
-        string.Equals(path, TestClipPath, StringComparison.OrdinalIgnoreCase);
-
     private readonly ISettingsService _settings;
     private readonly PlaybackResumeStore _resumeStore;
     private string? _filePath;
@@ -120,21 +102,18 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private MediaPlayer? _player;
     private string[]? _swapChainOptions;   // 스왑체인 준비 전 OpenPath 대비 (Vlc.Initialized에서 1회 저장)
     private readonly SemaphoreSlim _playerGate = new(1, 1); // 생성 직렬화 (Initialized·OpenPath 경합 대비)
-    private List<string> _subtitleFiles = [];
-    private int _subtitleIndex; // 0 = 끔, 1부터 _subtitleFiles[i-1] (v0.53.0 콤보 → 플라이아웃)
     private long _durationMs;
     private long _lastReportedMs;
     private long _pendingResumeMs = -1;
-    private bool _pendingAutoSubtitle;
     private bool _suppressSeekEvent;
     private bool _suppressVolumeEvent;
     private bool _tornDown;
-    private ModuleWorker? _worker; // libvlc 생성·해제/자막 탐지·변환 전용(A42) — 뷰별 분리
+    private ModuleWorker? _worker; // libvlc 생성·해제 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
-    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP video worker");
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP audio worker");
 
-    public VideoPlayerView(OpenContext context, ISettingsService settings)
+    public AudioPlayerView(OpenContext context, ISettingsService settings)
     {
         InitializeComponent();
         _settings = settings;
@@ -144,10 +123,9 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         foreach (var s in Speeds)
             SpeedBox.Items.Add($"{s:0.##}×");
         SpeedBox.SelectedIndex = Array.IndexOf(Speeds, 1.0f);
-        FillSubtitleFlyout(); // "No subtitles"만 있는 초기 상태
 
         _suppressVolumeEvent = true;
-        VolumeSlider.Value = Math.Clamp(_settings.Get("video.volume", 80), 0, 100);
+        VolumeSlider.Value = Math.Clamp(_settings.Get("audio.volume", 80), 0, 100);
         _suppressVolumeEvent = false;
 
         if (_filePath is null)
@@ -158,17 +136,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         Unloaded += OnUnloaded;
 
         // 휠 = 볼륨 (플레이어 관례). 자식 요소가 소비해도 받도록 handledEventsToo.
-        VideoSurface.AddHandler(PointerWheelChangedEvent,
+        AudioSurface.AddHandler(PointerWheelChangedEvent,
             new PointerEventHandler(OnSurfaceWheel), handledEventsToo: true);
 
-        // Fit width/height는 표면 크기에 따라 배율이 달라지므로 크기 변화에 추종한다 (v0.41.0)
-        VideoSurface.SizeChanged += (_, _) =>
-        {
-            if (_fitMode is VideoFitMode.FitWidth or VideoFitMode.FitHeight) ApplyFitMode();
-        };
-
         // 시크 슬라이더 스크럽 감지: 드래그 중에는 시킹하지 않고 놓을 때 1회만 시킹한다.
-        // (드래그 틱마다 p.Time을 설정하면 시킹이 폭주해 드래그를 멈춰도 재생이 멎는 실기기 버그)
+        // (드래그 틱마다 p.Time을 설정하면 시킹이 폭주하는 실기기 버그 — 비디오와 동일 대응)
         // Slider가 포인터 이벤트를 내부에서 소비하므로 handledEventsToo 필수.
         SeekSlider.AddHandler(PointerPressedEvent,
             new PointerEventHandler(OnSeekPointerPressed), handledEventsToo: true);
@@ -200,8 +172,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     }
 
     /// <summary>
-    /// 플레이어를 1회 생성한다(이미 있으면 그대로). 음악용 파형 시각화 인스턴스 교체는
-    /// 오디오 모듈로 이관(A10) — 이 뷰는 동영상용(시각화 끔) 인스턴스만 쓴다.
+    /// 파형 시각화를 켠 libvlc 인스턴스를 1회 생성한다(이미 있으면 그대로).
     /// 중요: libvlc 생성은 첫 실행 시 플러그인 캐시 생성으로 수 초가 걸린다(v0.10.1 실기기 버그).
     /// 생성은 전부 백그라운드에서 하고, 뷰 연결만 UI 스레드에서 한다.
     /// </summary>
@@ -214,8 +185,10 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         {
             if (_tornDown || _player is not null) return;
 
-            // --no-video-title-show: 재생 시작 시 파일명이 화면에 오버레이되는 libvlc 기본 동작 끔 (사용자 요청)
-            string[] options = [.. swapOptions, "--no-video-title-show"];
+            // --no-video-title-show: 재생 시작 시 파일명이 화면에 오버레이되는 libvlc 기본 동작 끔.
+            // --audio-visual/--effect-list: 파형 시각화(scope) — 인스턴스 옵션으로만 동작(A10 이관).
+            string[] options =
+                [.. swapOptions, "--no-video-title-show", "--audio-visual=visual", "--effect-list=scope"];
 
             var (libVlc, player) = await Worker.Run(_ =>
             {
@@ -256,22 +229,21 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         }
     }
 
-    /// <summary>현재 _filePath를 처음부터(또는 이어보기 지점부터) 재생한다. 플레이어 준비 후에만 호출.</summary>
+    /// <summary>현재 _filePath를 처음부터(또는 이어듣기 지점부터) 재생한다. 플레이어 준비 후에만 호출.</summary>
     private void PlayCurrent()
     {
         if (_player is not { } p || _libVlc is not { } lib || _filePath is null) return;
 
         _durationMs = 0;
         _lastReportedMs = 0;
-        _pendingResumeMs = IsTestClip(_filePath)
-            ? -1
-            : _resumeStore.GetResumePositionMs(_filePath) ?? -1;
-        LoadSubtitleList();
+        _pendingResumeMs = _resumeStore.GetResumePositionMs(_filePath) ?? -1;
 
         using var media = new Media(lib, new Uri(_filePath));
         p.Play(media);
         PlaceholderText.Visibility = Visibility.Collapsed;
-        ContentOpened?.Invoke(_filePath); // 셸 동기화 (v0.25.0)
+        TitleOverlay.Visibility = Visibility.Visible;
+        TitleText.Text = Path.GetFileNameWithoutExtension(_filePath);
+        ContentOpened?.Invoke(_filePath); // 셸 동기화
     }
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
@@ -280,8 +252,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     {
         if (!File.Exists(path)) return;
 
-        // 보던 파일이 있으면 위치를 저장하고 전환한다.
-        if (_player is { } p && _filePath is not null && !IsTestClip(_filePath) && _durationMs > 0)
+        // 듣던 파일이 있으면 위치를 저장하고 전환한다.
+        if (_player is { } p && _filePath is not null && _durationMs > 0)
         {
             try { _resumeStore.Report(_filePath, p.Time, _durationMs); }
             catch { /* 저장 실패가 전환을 막으면 안 된다 */ }
@@ -289,7 +261,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         _filePath = path;
 
-        await EnsurePlayerAsync(); // 이미 있으면 즉시 반환 — 인스턴스 교체 없음(A10 이후 동영상 전용)
+        await EnsurePlayerAsync(); // 이미 있으면 즉시 반환 — 인스턴스 교체 없음(항상 시각화 켬)
         if (_tornDown || _filePath != path) return; // 그새 또 다른 파일로 전환됨
 
         if (_player is not null) PlayCurrent();
@@ -302,8 +274,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (environment is null) return;
         var hwnd = Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
 
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.VideosLibrary };
-        foreach (var ext in VideoModule.Extensions)
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.MusicLibrary };
+        foreach (var ext in AudioModule.Extensions)
             picker.FileTypeFilter.Add(ext);
         InitializeWithWindow.Initialize(picker, hwnd);
 
@@ -324,11 +296,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         if (player is not null)
         {
-            // 이어보기 저장 후 해제. Stop/Dispose는 UI 스레드에서 부르면
+            // 이어듣기 저장 후 해제. Stop/Dispose는 UI 스레드에서 부르면
             // libvlc 콜백과 교착할 수 있어 백그라운드로 넘긴다.
             try
             {
-                if (_filePath is not null && !IsTestClip(_filePath) && _durationMs > 0)
+                if (_filePath is not null && _durationMs > 0)
                     _resumeStore.Report(_filePath, player.Time, _durationMs);
             }
             catch
@@ -345,7 +317,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             });
         }
 
-        _settings.Set("video.volume", (int)VolumeSlider.Value);
+        _settings.Set("audio.volume", (int)VolumeSlider.Value);
         _settings.Save();
 
         // 마지막 해제 작업까지 큐에 넣었으니 워커를 닫는다(남은 작업은 워커가 마저 실행).
@@ -377,8 +349,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     private void OnPlayerTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
     {
-        // 이어보기 위치 보고는 UI와 무관하므로 이벤트 스레드에서 바로 처리(스토어는 스레드 안전).
-        if (_filePath is not null && !IsTestClip(_filePath) && _durationMs > 0 &&
+        // 이어듣기 위치 보고는 UI와 무관하므로 이벤트 스레드에서 바로 처리(스토어는 스레드 안전).
+        if (_filePath is not null && _durationMs > 0 &&
             Math.Abs(e.Time - _lastReportedMs) >= ResumeReportIntervalMs)
         {
             _lastReportedMs = e.Time;
@@ -409,16 +381,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     {
         PlayButton.Content = "❚❚";
 
-        // 재생이 실제로 시작된 뒤에만 시킹·자막 선택이 적용된다.
+        // 재생이 실제로 시작된 뒤에만 시킹이 적용된다.
         if (_pendingResumeMs > 0 && _player is { } p)
         {
             p.Time = _pendingResumeMs;
             _pendingResumeMs = -1;
-        }
-        if (_pendingAutoSubtitle)
-        {
-            _pendingAutoSubtitle = false;
-            ApplySubtitle(_subtitleIndex);
         }
 
         // 배속은 미디어가 바뀌면 초기화되므로 콤보의 현재 선택을 다시 적용한다(같은 값 재적용은 무해).
@@ -427,9 +394,6 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         {
             player.SetRate(Speeds[i]);
         }
-
-        // 보기 모드도 미디어·플레이어 교체 후 다시 적용한다 (v0.41.0 — 해상도가 달라질 수 있다)
-        ApplyFitMode();
     });
 
     private void OnPlayerPaused(object? sender, EventArgs e) =>
@@ -437,8 +401,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     private void OnPlayerEndReached(object? sender, EventArgs e)
     {
-        // 끝까지 봤으면 이어보기 기록을 지운다. (이 콜백 안에서 Stop()을 부르면 교착 — 금지)
-        if (_filePath is not null && !IsTestClip(_filePath) && _durationMs > 0)
+        // 끝까지 들었으면 이어듣기 기록을 지운다. (이 콜백 안에서 Stop()을 부르면 교착 — 금지)
+        if (_filePath is not null && _durationMs > 0)
             _resumeStore.Report(_filePath, _durationMs, _durationMs);
 
         Dispatch(() =>
@@ -469,115 +433,16 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         PlaceholderText.Visibility = Visibility.Visible;
     });
 
-    // ---------- 자막 ----------
-
-    /// <summary>
-    /// 같은 폴더의 자막 후보를 찾아 콤보에 채우고, 있으면 자동 선택한다.
-    /// 폴더 스캔은 네트워크 드라이브에서 느릴 수 있어 백그라운드에서 수행하고,
-    /// 결과가 오기 전에 파일이 바뀌었으면 버린다.
-    /// </summary>
-    private async void LoadSubtitleList()
-    {
-        var file = _filePath!;
-        _subtitleFiles = [];
-        _pendingAutoSubtitle = false;
-        FillSubtitleFlyout();
-
-        List<string> found;
-        try
-        {
-            found = await Worker.Run(_ => SubtitleFileLocator.Find(file).ToList());
-        }
-        catch
-        {
-            return; // 자막 탐지 실패가 재생을 방해하면 안 된다.
-        }
-
-        if (_tornDown || file != _filePath) return; // 그새 다른 파일로 전환됨
-
-        _subtitleFiles = found;
-        FillSubtitleFlyout();
-
-        if (found.Count > 0)
-        {
-            // 이미 재생 중이면 바로 적용, 아니면 Playing 이벤트에서 적용하도록 예약.
-            if (_player is { IsPlaying: true }) ApplySubtitle(_subtitleIndex);
-            else _pendingAutoSubtitle = true;
-        }
-    }
-
-    /// <summary>
-    /// 현재 _subtitleFiles로 자막 플라이아웃을 다시 채운다(첫 후보 자동 선택).
-    /// v0.53.0: 넓은 콤보 대신 아이콘 버튼 + 라디오 플라이아웃으로 공간 절약.
-    /// </summary>
-    private void FillSubtitleFlyout()
-    {
-        _subtitleIndex = _subtitleFiles.Count > 0 ? 1 : 0;
-        SubtitleFlyout.Items.Clear();
-        AddSubtitleChoice("No subtitles", 0);
-        for (var i = 0; i < _subtitleFiles.Count; i++)
-            AddSubtitleChoice(Path.GetFileName(_subtitleFiles[i]), i + 1);
-        SubtitleButton.IsEnabled = _subtitleFiles.Count > 0;
-    }
-
-    private void AddSubtitleChoice(string label, int index)
-    {
-        var item = new RadioMenuFlyoutItem
-        {
-            Text = label,
-            GroupName = "subtitles",
-            IsChecked = index == _subtitleIndex,
-        };
-        item.Click += (_, _) =>
-        {
-            _subtitleIndex = index;
-            ApplySubtitle(index);
-        };
-        SubtitleFlyout.Items.Add(item);
-    }
-
-    /// <summary>
-    /// 콤보 인덱스(0=끔, 1부터 파일)를 플레이어에 적용. CP949 자막은 UTF-8 사본으로 변환.
-    /// 변환은 파일 읽기+쓰기이므로 백그라운드에서 하고 적용만 이어서 한다.
-    /// </summary>
-    private async void ApplySubtitle(int index)
-    {
-        if (_player is not { } p) return;
-
-        if (index <= 0 || index > _subtitleFiles.Count)
-        {
-            p.SetSpu(-1);
-            return;
-        }
-
-        var source = _subtitleFiles[index - 1];
-        try
-        {
-            var utf8Path = await Worker.Run(_ => SubtitleCharset.EnsureUtf8File(source));
-            if (_tornDown || _player is not { } player) return;
-            player.AddSlave(MediaSlaveType.Subtitle, new Uri(utf8Path).AbsoluteUri, true);
-        }
-        catch (OperationCanceledException)
-        {
-            return; // 뷰가 내려가며 워커가 닫힘
-        }
-        catch (Exception ex)
-        {
-            ShowMessage($"Failed to load subtitles: {ex.Message}");
-        }
-    }
-
     // ---------- 조작 ----------
 
     private void TogglePlayPause()
     {
         if (_player is not { } p) return;
 
-        // 아무것도 열지 않은 상태의 ▶ = 내장 테스트 클립 재생 (화면 색감 + 스피커 점검).
+        // 아무것도 열지 않은 상태의 ▶ = 열기 대화상자 (오디오에는 내장 테스트 클립이 없다).
         if (_filePath is null)
         {
-            if (File.Exists(TestClipPath)) OpenPath(TestClipPath);
-            else ShowMessage(@"Test clip not found (Assets\test-clip.mp4)");
+            _ = PickAndOpenAsync();
             return;
         }
 
@@ -608,95 +473,6 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         MuteButton.Content = p.Mute ? "🔇" : "🔊";
     }
 
-    // ---------- 보기 모드 (v0.41.0: 1:1 / Fit / Fit width / Fit height) ----------
-
-    /// <summary>
-    /// Fit = libvlc 자동 맞춤(긴 변이 잘리지 않는 레터박스, 기본).
-    /// FitWidth/FitHeight = 표면의 해당 축을 꽉 채우는 배율(반대 축은 잘리거나 남는다).
-    /// ActualSize = 원본 픽셀 1:1. 파일을 바꿔도 선택은 유지된다.
-    /// </summary>
-    private enum VideoFitMode { Fit, FitWidth, FitHeight, ActualSize }
-
-    private VideoFitMode _fitMode = VideoFitMode.Fit;
-
-    /// <summary>현재 보기 모드를 플레이어 Scale에 적용한다(0 = 자동 맞춤, 1 = 원본 1:1).</summary>
-    private void ApplyFitMode()
-    {
-        if (_player is not { } p) return;
-
-        switch (_fitMode)
-        {
-            case VideoFitMode.Fit:
-                p.Scale = 0;
-                break;
-            case VideoFitMode.ActualSize:
-                p.Scale = 1;
-                break;
-            case VideoFitMode.FitWidth:
-            case VideoFitMode.FitHeight:
-                var (videoW, videoH) = VideoPixelSize();
-                var scale = XamlRoot?.RasterizationScale ?? 1.0;
-                var surfaceW = VideoSurface.ActualWidth * scale;
-                var surfaceH = VideoSurface.ActualHeight * scale;
-                if (videoW <= 0 || videoH <= 0 || surfaceW <= 0 || surfaceH <= 0)
-                {
-                    p.Scale = 0; // 트랙 정보가 아직 없으면(파싱 전) 자동 맞춤으로 대체
-                    break;
-                }
-                p.Scale = (float)(_fitMode == VideoFitMode.FitWidth
-                    ? surfaceW / videoW
-                    : surfaceH / videoH);
-                break;
-        }
-    }
-
-    /// <summary>현재 미디어의 비디오 트랙 해상도. 없으면 (0, 0).</summary>
-    private (double W, double H) VideoPixelSize()
-    {
-        try
-        {
-            // Media 게터는 새 래퍼를 만들어 참조를 늘리므로 쓰고 바로 해제한다.
-            using var media = _player?.Media;
-            foreach (var track in media?.Tracks ?? [])
-            {
-                if (track.TrackType == TrackType.Video)
-                {
-                    var v = track.Data.Video;
-                    return (v.Width, v.Height);
-                }
-            }
-        }
-        catch
-        {
-            // 트랙 조회 실패는 자동 맞춤으로 대체된다.
-        }
-        return (0, 0);
-    }
-
-    private void OnActualSizeClicked(object sender, RoutedEventArgs e)
-    {
-        _fitMode = VideoFitMode.ActualSize;
-        ApplyFitMode();
-    }
-
-    private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args)
-    {
-        _fitMode = VideoFitMode.Fit;
-        ApplyFitMode();
-    }
-
-    private void OnFitWidthClicked(object sender, RoutedEventArgs e)
-    {
-        _fitMode = VideoFitMode.FitWidth;
-        ApplyFitMode();
-    }
-
-    private void OnFitHeightClicked(object sender, RoutedEventArgs e)
-    {
-        _fitMode = VideoFitMode.FitHeight;
-        ApplyFitMode();
-    }
-
     private void ToggleFullScreen()
     {
         // Window 객체 없이 XamlRoot 경유로 AppWindow에 접근한다 (이미지 뷰어와 동일 패턴).
@@ -717,14 +493,14 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     private void OnFullScreenClicked(object sender, RoutedEventArgs e) => ToggleFullScreen();
 
-    /// <summary>영상 클릭 = 재생/일시정지 (플레이어 관례).</summary>
+    /// <summary>표면 클릭 = 재생/일시정지 (플레이어 관례).</summary>
     private void OnSurfaceTapped(object sender, TappedRoutedEventArgs e)
     {
         e.Handled = true;
         TogglePlayPause();
     }
 
-    /// <summary>영상 위 휠 = 볼륨 조절.</summary>
+    /// <summary>표면 위 휠 = 볼륨 조절.</summary>
     private void OnSurfaceWheel(object sender, PointerRoutedEventArgs e)
     {
         var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;

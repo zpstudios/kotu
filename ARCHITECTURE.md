@@ -35,12 +35,12 @@
 │  Core (공통 서비스 계층)                       │
 │  DI 컨테이너 · 설정 저장 · 로깅 · 테마          │
 │  파일 타입 라우터 · 파일 연결(OS 등록) · 업데이트  │
-├──────────┬──────────┬──────────┬────────────┤
-│ Archive  │ Image    │ Video    │ Hardware   │
-│ Module   │ Viewer   │ Player   │ (Phase 5)  │
-│          │ Module   │ Module   │ Info·Mon·  │
-│          │          │          │ Stress     │
-└──────────┴──────────┴──────────┴────────────┘
+├────────┬────────┬────────┬────────┬───────┤
+│Archive │ Image  │ Video  │ Audio  │ HW    │
+│Module  │ Viewer │ Player │ Player │ Info· │
+│        │ Module │ Module │ (A10)  │ Mon·  │
+│        │        │        │ Module │ Stress│
+└────────┴────────┴────────┴────────┴───────┘
 ```
 
 핵심 규칙:
@@ -68,6 +68,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 ├─ src/WinUtil.Module.Archive
 ├─ src/WinUtil.Module.Image
 ├─ src/WinUtil.Module.Video
+├─ src/WinUtil.Module.Audio      # A10(v0.75.0)에서 Video로부터 분리
 ├─ src/WinUtil.Module.Hardware   # Phase 5
 └─ tests/                   # 모듈별 단위 테스트
 ```
@@ -86,8 +87,14 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 
 ### 4.3 동영상 플레이어 (Video)
 
-- 필수: mp4·mkv·avi·webm 등 재생(libvlc가 커버) / 재생·일시정지·시킹 / 볼륨·배속 / 자막(srt·smi, 한글 인코딩 처리) / 전체화면 / 이어보기(마지막 위치 기억) / ←→ 키 탐색(초 단위 점프) / 음악 파일 재생(mp3·flac·wav 등, 동일 파이프라인 + 파형 시각화(libvlc visual/scope, 인스턴스 옵션) / 빈 상태 ▶=내장 화면·스피커 테스트 클립 — v0.11.0~v0.13.0)
+- 필수: mp4·mkv·avi·webm 등 재생(libvlc가 커버) / 재생·일시정지·시킹 / 볼륨·배속 / 자막(srt·smi, 한글 인코딩 처리) / 전체화면 / 이어보기(마지막 위치 기억) / ←→ 키 탐색(초 단위 점프) / 빈 상태 ▶=내장 화면·스피커 테스트 클립(v0.11.0~v0.13.0)
 - 옵션: 자막 싱크·폰트 조절, 오디오 트랙 선택, 스크린샷, 구간 반복, 재생목록
+- 음악 파일 재생(mp3·flac·wav 등)은 A10(v0.75.0)에서 오디오 모듈(ZP-audio)로 분리
+
+### 4.3b 오디오 플레이어 (Audio — A10, v0.75.0에서 Video로부터 분리)
+
+- 필수: mp3·flac·wav·ogg·opus·m4a·aac·wma 재생(libvlc, 파형 시각화 visual/scope 인스턴스 상시 켬) / 재생·일시정지·시킹 / 볼륨·배속 / 이어듣기 / 전체화면 / ♪+파일명 오버레이
+- 옵션: 재생목록·루프(A11 계열과 함께 설계), 태그(ID3) 표시
 
 ### 4.4 하드웨어 (Phase 5)
 
@@ -150,6 +157,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 | `ZP archive worker` | 뷰마다 1 | Normal | 목록/해제/생성/항목 미리보기 |
 | `ZP image worker` | 뷰마다 1 | Normal | 파일 읽기·WIC 메타데이터·Magick 디코드·EXIF 정보 |
 | `ZP video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
+| `ZP audio worker` | 뷰마다 1 | Normal | libvlc(시각화 인스턴스) 생성·해제 (A10) |
 | `ZP document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지) |
 | libvlc 내부 스레드 | libvlc 관리 | — | 디코드·이벤트 콜백. 이벤트는 `Dispatch()`로 UI 이관 |
 | .NET 스레드풀 | 런타임 관리 | — | await 연속, 닫힌 워커의 `Post` 폴백 |
@@ -162,7 +170,8 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 | 탐색기 폴더 스캔 / 썸네일 추출 | explorer worker | 목록 채우기 / 비트맵 표시 |
 | 압축 목록·해제·생성 | archive worker | 진행률 바·완료 상태 |
 | 이미지 파일 읽기·메타데이터(WIC)·psd(Magick) | image worker | `SetSourceAsync` 표시 |
-| 영상 libvlc 생성·해제(음악↔영상 교체 포함) | video worker | 뷰 연결(`Vlc.MediaPlayer`) |
+| 영상 libvlc 생성·해제 | video worker | 뷰 연결(`Vlc.MediaPlayer`) |
+| 음악 libvlc(파형 시각화) 생성·해제 (A10) | audio worker | 뷰 연결(`Vlc.MediaPlayer`) |
 | 자막 탐지·CP949→UTF-8 변환 | video worker | 플라이아웃·`AddSlave` 적용 |
 | 문서 텍스트 읽기 | document worker | 본문 표시 |
 | 드라이브 정보(`DriveStatus.Describe`) | 각 뷰의 워커 | 하단 바 텍스트 반영 |

@@ -52,7 +52,7 @@ public static class ExplorerIntegration
         using (var cap = Registry.CurrentUser.CreateSubKey(CapabilitiesKeyPath))
         {
             cap.SetValue("ApplicationName", "ZP");
-            cap.SetValue("ApplicationDescription", "ZP - archives, images, video, documents");
+            cap.SetValue("ApplicationDescription", "ZP - archives, images, video, music, documents");
             using var fa = cap.CreateSubKey("FileAssociations");
             foreach (var ext in module.SupportedExtensions)
                 fa.SetValue(ext, ExtProgId(module, ext));

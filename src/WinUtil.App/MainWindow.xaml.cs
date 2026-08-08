@@ -204,7 +204,8 @@ public sealed partial class MainWindow : Window
     // ---------- 단축키 (v0.45.0 사용자 지정) ----------
 
     /// <summary>
-    /// 모듈 번호(메뉴 아래→위 순서): 1=이미지, 2=영상, 3=문서, 4=압축, 5=하드웨어.
+    /// 모듈 번호(메뉴 아래→위 순서): 1=이미지, 2=영상, 3=오디오, 4=문서, 5=압축, 6=하드웨어.
+    /// A10: 오디오 모듈이 3번에 삽입되며 문서 이후가 한 칸씩 밀림(사용자 확정).
     /// A32: Ctrl 없이 숫자 단독(사용자 확정) — Ctrl은 정보 오버레이로 회귀.
     /// 힌트 문자열은 시작 메뉴 항목 마우스 오버 시 툴팁으로 보조 표시된다.
     /// </summary>
@@ -212,9 +213,10 @@ public sealed partial class MainWindow : Window
     [
         ("image", VirtualKey.Number1, "1"),
         ("video", VirtualKey.Number2, "2"),
-        ("document", VirtualKey.Number3, "3"),
-        ("archive", VirtualKey.Number4, "4"),
-        ("hardware", VirtualKey.Number5, "5"),
+        ("audio", VirtualKey.Number3, "3"),
+        ("document", VirtualKey.Number4, "4"),
+        ("archive", VirtualKey.Number5, "5"),
+        ("hardware", VirtualKey.Number6, "6"),
     ];
 
     private const string SettingsShortcutHint = "0";
@@ -295,8 +297,9 @@ public sealed partial class MainWindow : Window
         AddModuleItem("archive");
         StartMenuPanel.Children.Add(Divider());
 
-        // 사진-영상-문서 그룹 (아래부터 사진 → 위로 갈수록 문서)
+        // 사진-영상-오디오-문서 그룹 (아래부터 사진 → 위로 갈수록 문서)
         AddModuleItem("document"); // v0.44.0 실제 모듈로 교체 (텍스트·마크다운 1단계)
+        AddModuleItem("audio"); // 음악 재생 분리 (A10, v0.75.0)
         AddModuleItem("video");
         AddModuleItem("image");
         // 하단 바 우측 Info·Settings 아이콘은 제거(v0.28.2) — 시작 메뉴 항목으로 일원화.
@@ -595,14 +598,14 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 빈 상태(파일 없이 연 압축/이미지/동영상/문서 모듈)면 중앙에 탐색기를 띄운다.
+    /// 빈 상태(파일 없이 연 압축/이미지/동영상/오디오/문서 모듈)면 중앙에 탐색기를 띄운다.
     /// 시작 위치는 그 모듈의 마지막 폴더(v0.55.0, 없으면 바탕화면), 파일은 담당 확장자만.
     /// Hardware/Settings에는 띄우지 않는다.
     /// </summary>
     private void UpdateEmptyExplorer()
     {
         if (_currentFilePath is null &&
-            _currentModule is { Id: "archive" or "image" or "video" or "document" } module)
+            _currentModule is { Id: "archive" or "image" or "video" or "audio" or "document" } module)
         {
             if (_emptyExplorer is null)
             {
@@ -818,6 +821,7 @@ public sealed partial class MainWindow : Window
             "archive" => "app-archive.ico",
             "image" => "app-image.ico",
             "video" => "app-video.ico",
+            "audio" => "app-audio.ico",
             "hardware" => "app-hardware.ico",
             "document" => "app-document.ico", // 아직 미생성 — 아래 File.Exists로 중립 아이콘 대체
 

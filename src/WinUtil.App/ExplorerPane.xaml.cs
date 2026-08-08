@@ -339,9 +339,10 @@ public sealed partial class ExplorerPane : UserControl
     private readonly Dictionary<string, (DateTime Modified, string Text)> _durationCache =
         new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>재생 길이를 물어볼 파일인지 — 비디오 모듈 담당 확장자(영상+음악) 기준(A6).</summary>
+    /// <summary>재생 길이를 물어볼 파일인지 — 비디오(영상)·오디오(음악) 모듈 담당 확장자 기준(A6, A10 분리 반영).</summary>
     private static bool IsMediaFile(string name) =>
-        ExplorerListing.MatchesExtension(name, WinUtil.Module.Video.VideoModule.Extensions);
+        ExplorerListing.MatchesExtension(name, WinUtil.Module.Video.VideoModule.Extensions) ||
+        ExplorerListing.MatchesExtension(name, WinUtil.Module.Audio.AudioModule.Extensions);
 
     /// <summary>
     /// 미디어 파일의 재생 길이를 리스트 행 셋째 칸에 채운다(A6).

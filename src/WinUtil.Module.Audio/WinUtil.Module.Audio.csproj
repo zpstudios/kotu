@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWinUI>true</UseWinUI>
+    <Description>오디오 플레이어 모듈 (A10, 비디오에서 분리): libvlc 재생 + 파형 시각화, 시킹·볼륨·배속, 이어듣기, 전체화면.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- LibVLCSharp.WinUI는 WindowsAppSDK 1.8+를 요구한다 (전 프로젝트 1.8로 통일) -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
+    <PackageReference Include="LibVLCSharp.WinUI" Version="3.10.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinUtil.Core\WinUtil.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -9,6 +9,7 @@ A3(사용자 지정): 메인 표식 = 모듈 식별 글씨(ZIP/IMG/VID/HW/DOC), 
   app-archive.ico  amber  #C77E1F — "ZIP" + zp
   app-image.ico    green  #2E9E5B — "IMG" + zp
   app-video.ico    red    #D6494F — "VID" + zp
+  app-audio.ico    teal   #1FA8A0 — "AUD" + zp (A10)
   app-hardware.ico blue   #3874D8 — "HW" + zp
   app-document.ico purple #7A5AC8 — "DOC" + zp
 
@@ -28,6 +29,7 @@ VARIANTS = {
     "app-archive.ico": ((0xC7, 0x7E, 0x1F), "ZIP", True),
     "app-image.ico": ((0x2E, 0x9E, 0x5B), "IMG", True),
     "app-video.ico": ((0xD6, 0x49, 0x4F), "VID", True),
+    "app-audio.ico": ((0x1F, 0xA8, 0xA0), "AUD", True),
     "app-hardware.ico": ((0x38, 0x74, 0xD8), "HW", True),
     "app-document.ico": ((0x7A, 0x5A, 0xC8), "DOC", True),
 }

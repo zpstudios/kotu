@@ -6,7 +6,8 @@
 확장자 목록은 각 모듈 코드와 동일하게 유지할 것:
   archive  → ArchiveModule.Extensions
   image    → ImageFolderNavigator.SupportedExtensions
-  video    → VideoModule.Extensions (동영상+음악)
+  video    → VideoModule.Extensions (동영상)
+  audio    → AudioModule.Extensions (음악 — A10에서 video로부터 분리)
   document → DocumentModule.Extensions
 
 실행: python3 packaging/gen_file_icons.py
@@ -28,8 +29,9 @@ MODULES = {
               ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff", "ico", "psd"]),
     "video": ((0xD6, 0x49, 0x4F),
               ["mp4", "mkv", "avi", "webm", "mov", "wmv", "m4v", "mpg", "mpeg",
-               "ts", "m2ts", "flv", "3gp", "ogv",
-               "mp3", "flac", "wav", "ogg", "opus", "m4a", "aac", "wma"]),
+               "ts", "m2ts", "flv", "3gp", "ogv"]),
+    "audio": ((0x1F, 0xA8, 0xA0),
+              ["mp3", "flac", "wav", "ogg", "opus", "m4a", "aac", "wma"]),
     "document": ((0x7A, 0x5A, 0xC8),
                  ["txt", "md", "markdown", "log"]),
 }

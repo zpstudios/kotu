@@ -45,7 +45,7 @@
   <ItemGroup>
     <!-- 런타임 로드용 .ico 원본: 타이틀바(AppWindow.SetIcon)·트레이 아이콘(TrayIcon)이 exe 옆에서 읽는다.
          app-*.ico = 모듈별 색 변형(v0.26.0, packaging/gen_app_icon.py로 생성) -->
-    <Content Include="Assets\app.ico;Assets\app-archive.ico;Assets\app-image.ico;Assets\app-video.ico;Assets\app-hardware.ico;Assets\app-document.ico"
+    <Content Include="Assets\app.ico;Assets\app-archive.ico;Assets\app-image.ico;Assets\app-video.ico;Assets\app-audio.ico;Assets\app-hardware.ico;Assets\app-document.ico"
              CopyToOutputDirectory="PreserveNewest" />
     <!-- 시작 메뉴 스폰서 자리 로고 (packaging/gen_sponsor_placeholder.py로 생성, 실제 로고로 교체 가능) -->
     <!-- 광고 이미지 로테이션(v0.38.0): sponsor-*.png 전부 동봉, 파일 추가/교체만으로 갱신 -->
@@ -58,6 +58,7 @@
     <ProjectReference Include="..\WinUtil.Module.Image\WinUtil.Module.Image.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Archive\WinUtil.Module.Archive.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Video\WinUtil.Module.Video.csproj" />
+    <ProjectReference Include="..\WinUtil.Module.Audio\WinUtil.Module.Audio.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Hardware\WinUtil.Module.Hardware.csproj" />
     <ProjectReference Include="..\WinUtil.Module.Document\WinUtil.Module.Document.csproj" />
   </ItemGroup>
