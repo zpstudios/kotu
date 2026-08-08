@@ -258,6 +258,21 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             TextWrapping = TextWrapping.Wrap,
         });
 
+        // A21: 사용자가 윈도우 디스플레이 설정에 잡아둔 배율을 그대로 보여준다.
+        // XamlRoot.RasterizationScale = 이 창이 떠 있는 모니터의 시스템 배율(앱 자체 배율과 무관).
+        // 생성 시점엔 XamlRoot가 없으므로 Loaded에서 채우고, 모니터 이동/배율 변경(Changed)에 추종.
+        var dpiText = new TextBlock { FontSize = 12, Opacity = 0.7 };
+        void UpdateDpiText()
+            => dpiText.Text = XamlRoot is { } xr
+                ? $"Current Windows display scaling on this monitor: {Math.Round(xr.RasterizationScale * 100)}%"
+                : string.Empty;
+        Loaded += (_, _) =>
+        {
+            UpdateDpiText();
+            if (XamlRoot is { } xr) xr.Changed += (_, _) => UpdateDpiText();
+        };
+        Root.Children.Add(dpiText);
+
         var scaleBox = new ComboBox { Header = "UI scale", MinWidth = 200 };
         scaleBox.Items.Add("System default");
         foreach (var p in UiScale.Percents)
