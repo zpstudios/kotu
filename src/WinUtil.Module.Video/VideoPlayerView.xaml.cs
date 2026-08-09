@@ -131,6 +131,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private bool _tornDown;
     private bool _pendingStartOverlay; // A12: 다음 Playing에서 시작 오버레이 표시(일시정지 해제와 구분)
     private DispatcherTimer? _startOverlayTimer;
+    private DispatcherTimer? _feedbackTimer; // A13: 전체화면 조작 피드백 칩
     private ModuleWorker? _worker; // libvlc 생성·해제/자막 탐지·변환 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
@@ -377,6 +378,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         }
 
         _startOverlayTimer?.Stop(); // A12: 해체 후 틱 방지
+        _feedbackTimer?.Stop();     // A13
 
         _settings.Set("video.volume", (int)VolumeSlider.Value);
         _settings.Save();
@@ -609,6 +611,37 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     // ---------- 조작 ----------
 
+    /// <summary>
+    /// A13: 전체화면에서만 중앙에 조작 피드백 칩을 0.9초 표시.
+    /// 하단 바(시크·볼륨 슬라이더)가 숨어 있어 조작 결과가 안 보이는 상태를 보완한다.
+    /// 창 모드에서는 슬라이더가 그대로 보이므로 띄우지 않는다.
+    /// </summary>
+    private void ShowFeedback(string text)
+    {
+        if (!IsFullScreen()) return;
+
+        FeedbackText.Text = text;
+        FeedbackOverlay.Visibility = Visibility.Visible;
+
+        if (_feedbackTimer is not { } timer)
+        {
+            timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                FeedbackOverlay.Visibility = Visibility.Collapsed;
+            };
+            _feedbackTimer = timer;
+        }
+        timer.Stop(); // 연타 시 표시 시간 리셋
+        timer.Start();
+    }
+
+    private bool IsFullScreen() =>
+        XamlRoot?.ContentIslandEnvironment is { } environment &&
+        AppWindow.GetFromWindowId(environment.AppWindowId).Presenter.Kind
+            == AppWindowPresenterKind.FullScreen;
+
     private void TogglePlayPause()
     {
         if (_player is not { } p) return;
@@ -625,27 +658,42 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (p.State == VLCState.Ended)
         {
             PlayCurrent();
+            ShowFeedback("▶"); // A13
             return;
         }
 
-        if (p.CanPause && p.IsPlaying) p.Pause();
-        else p.Play();
+        if (p.CanPause && p.IsPlaying)
+        {
+            p.Pause();
+            ShowFeedback("❚❚"); // A13: 멎었음을 표시
+        }
+        else
+        {
+            p.Play();
+            ShowFeedback("▶"); // A13: 재생 재개
+        }
     }
 
     private void SeekBy(long deltaMs)
     {
         if (_player is not { } p || _durationMs <= 0) return;
-        p.Time = Math.Clamp(p.Time + deltaMs, 0, _durationMs);
+        var target = Math.Clamp(p.Time + deltaMs, 0, _durationMs);
+        p.Time = target;
+        ShowFeedback($"{TimeText.Format(target)} / {TimeText.Format(_durationMs)}"); // A13
     }
 
-    private void ChangeVolume(int delta) =>
+    private void ChangeVolume(int delta)
+    {
         VolumeSlider.Value = Math.Clamp(VolumeSlider.Value + delta, 0, 100);
+        ShowFeedback($"Volume {(int)VolumeSlider.Value}%"); // A13
+    }
 
     private void ToggleMute()
     {
         if (_player is not { } p) return;
         p.Mute = !p.Mute;
         MuteButton.Content = p.Mute ? "🔇" : "🔊";
+        ShowFeedback(p.Mute ? "Muted" : $"Volume {(int)VolumeSlider.Value}%"); // A13
     }
 
     // ---------- 보기 모드 (v0.41.0: 1:1 / Fit / Fit width / Fit height) ----------

@@ -50,6 +50,23 @@
                     MaxWidth="520"
                     TextTrimming="CharacterEllipsis" />
             </Border>
+            <!-- A13: 전체화면 조작 피드백 칩 (볼륨·시킹·재생/일시정지) — 하단 바가 숨어
+                 상태가 안 보일 때만(전체화면) 코드에서 잠깐 표시, 입력 통과 -->
+            <Border
+                x:Name="FeedbackOverlay"
+                Visibility="Collapsed"
+                IsHitTestVisible="False"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                CornerRadius="6"
+                Background="#CC202020"
+                Padding="18,10">
+                <TextBlock
+                    x:Name="FeedbackText"
+                    Foreground="White"
+                    FontSize="20"
+                    TextAlignment="Center" />
+            </Border>
             <TextBlock
                 x:Name="PlaceholderText"
                 Text="Open a video file, or drop one onto the window&#x0A;▶ = built-in display and speaker test clip"
