@@ -158,7 +158,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 | `ZP image worker` | 뷰마다 1 | Normal | 파일 읽기·WIC 메타데이터·Magick 디코드·EXIF 정보 |
 | `ZP video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
 | `ZP audio worker` | 뷰마다 1 | Normal | libvlc(시각화 인스턴스) 생성·해제 (A10) |
-| `ZP document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지) |
+| `ZP document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지)·저장(인코딩 보존, A37) |
 | libvlc 내부 스레드 | libvlc 관리 | — | 디코드·이벤트 콜백. 이벤트는 `Dispatch()`로 UI 이관 |
 | .NET 스레드풀 | 런타임 관리 | — | await 연속, 닫힌 워커의 `Post` 폴백 |
 
@@ -173,7 +173,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 | 영상 libvlc 생성·해제 | video worker | 뷰 연결(`Vlc.MediaPlayer`) |
 | 음악 libvlc(파형 시각화) 생성·해제 (A10) | audio worker | 뷰 연결(`Vlc.MediaPlayer`) |
 | 자막 탐지·CP949→UTF-8 변환 | video worker | 플라이아웃·`AddSlave` 적용 |
-| 문서 텍스트 읽기 | document worker | 본문 표시 |
+| 문서 텍스트 읽기·저장(A37) | document worker | 본문 표시·수정됨 표시 갱신 |
 | 드라이브 정보(`DriveStatus.Describe`) | 각 뷰의 워커 | 하단 바 텍스트 반영 |
 | libvlc 재생 이벤트(시간·상태) | libvlc 스레드 | `Dispatch()` 경유 슬라이더·라벨 갱신 |
 

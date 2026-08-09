@@ -3,13 +3,14 @@ using WinUtil.Core.Contracts;
 namespace WinUtil.Module.Document;
 
 /// <summary>
-/// 문서 뷰어 모듈(v0.44.0 — 사용자 요청: 메뉴에서 누를 수 있게 + 설정 탐색기 연결 토글).
-/// 1단계는 텍스트·마크다운 원문 표시. PDF·HWP·오픈오피스는 ARCHITECTURE 계획대로 추후 확장.
+/// 문서 모듈(v0.44.0 뷰어 → A37 편집·저장 승격).
+/// 플레인 텍스트(txt·md·log·ini)는 편집·저장까지 지원. PDF·HWP·오픈오피스는 뷰어가 생기면 확장.
 /// </summary>
 public sealed class DocumentModule : IModule
 {
-    /// <summary>1단계 담당 확장자. PDF·HWP는 뷰어가 생기면 추가한다(스텁에 연결하지 않는다).</summary>
-    public static readonly string[] Extensions = [".txt", ".md", ".markdown", ".log"];
+    /// <summary>담당 확장자(.ini는 A37에서 추가 — A36 설정 파일 열기의 선행).
+    /// HWP·오픈오피스는 뷰어가 생기면 추가한다(스텁에 연결하지 않는다).</summary>
+    public static readonly string[] Extensions = [".txt", ".md", ".markdown", ".log", ".ini"];
 
     public string Id => "document";
 

@@ -104,10 +104,13 @@ public sealed partial class MainWindow : Window
             BottomBarRow.Height = full ? new GridLength(0) : GridLength.Auto; // 평소 Auto(최소 44, v0.64.2)
         };
 
+        // 문서 편집 미저장 확인(A37): X 버튼/Alt+F4를 가로채 저장/버리기/취소를 묻는다
+        AppWindow.Closing += OnAppWindowClosing;
+
         // 창별 트레이 미니 아이콘: 좌클릭=활성화, 우클릭=메뉴, 툴팁=창 제목
         _tray = new TrayIcon(File.Exists(IconPath) ? IconPath : null);
         _tray.ActivateRequested += BringToFront;
-        _tray.CloseRequested += Close;
+        _tray.CloseRequested += () => _ = ConfirmThenCloseAsync(); // 닫기도 미저장 가드 경유 (A37)
         _tray.ExitAllRequested += _manager.CloseAll;
         Closed += (_, _) => _tray.Dispose();
     }
@@ -160,9 +163,19 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>창 제목과 트레이 툴팁을 함께 갱신한다.</summary>
+    /// <summary>창 제목과 트레이 툴팁을 함께 갱신한다. 미저장 변경(A37)이 있으면 ● 접두.</summary>
     private void SetTitle(string title)
     {
+        _baseTitle = title;
+        ApplyTitle();
+    }
+
+    private string _baseTitle = "ZP";
+    private bool _titleDirtyMark; // 현재 뷰의 미저장 표시(A37 — ICloseGuard.UnsavedChanged)
+
+    private void ApplyTitle()
+    {
+        var title = _titleDirtyMark ? "● " + _baseTitle : _baseTitle;
         Title = title;
         _tray.SetTooltip(title);
     }
@@ -441,10 +454,7 @@ public sealed partial class MainWindow : Window
     };
 
     private void OpenModule(IModule module)
-    {
-        SetTitle($"ZP {module.DisplayName}");
-        ShowModule(module, OpenContext.Empty);
-    }
+        => ShowModule(module, OpenContext.Empty, $"ZP {module.DisplayName}");
 
     /// <summary>
     /// 앱 첫 화면 기본 뷰(Info/하드웨어). 사용자가 고른 화면이 아니므로
@@ -458,8 +468,10 @@ public sealed partial class MainWindow : Window
         IsUntouched = true;
     }
 
-    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    private async void OnSettingsClick(object sender, RoutedEventArgs e)
     {
+        if (!await ConfirmDiscardAsync()) return; // 문서 편집 미저장 가드 (A37)
+        _titleDirtyMark = false;
         SetTitle("ZP Settings");
         var settings = new SettingsView(_router);
         ModuleHost.Content = settings;
@@ -487,11 +499,14 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>파일 라우팅의 종착점: 확장자로 모듈을 찾아 뷰를 띄운다.</summary>
-    public void OpenFile(string path)
+    public async void OpenFile(string path)
     {
         var module = _router.Resolve(path);
         if (module is null)
         {
+            if (!await ConfirmDiscardAsync()) return; // 문서 편집 미저장 가드 (A37)
+            _titleDirtyMark = false;
+            ApplyTitle();
             ModuleHost.Content = new TextBlock
             {
                 Text = $"Unsupported file type: {Path.GetFileName(path)}",
@@ -505,8 +520,8 @@ public sealed partial class MainWindow : Window
             SetContentState(null, null);
             return;
         }
-        SetTitle($"ZP {module.DisplayName} — {Path.GetFileName(path)}");
-        ShowModule(module, OpenContext.ForFile(path));
+        ShowModule(module, OpenContext.ForFile(path),
+            $"ZP {module.DisplayName} — {Path.GetFileName(path)}");
     }
 
     /// <summary>탐색기 우클릭 동사(여기에 풀기/압축) 진입점. 동사는 압축 모듈이 처리한다.</summary>
@@ -521,8 +536,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        SetTitle($"ZP {module.DisplayName} — {Path.GetFileName(file)}");
-        ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] });
+        ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] },
+            $"ZP {module.DisplayName} — {Path.GetFileName(file)}");
     }
 
     // ---------- 창 전체 드래그&드롭 → 파일 라우팅 ----------
@@ -545,8 +560,14 @@ public sealed partial class MainWindow : Window
         if (path is not null) OpenFile(path);
     }
 
-    private void ShowModule(IModule module, OpenContext context)
+    private async void ShowModule(IModule module, OpenContext context, string title)
     {
+        // 현재 뷰에 미저장 변경이 있으면 먼저 정리(저장/버리기/취소) — 취소면 아무것도 안 바꾼다 (A37).
+        // 제목 변경도 가드 뒤로 미뤄서, 취소 시 제목이 어긋나지 않는다.
+        if (!await ConfirmDiscardAsync()) return;
+        _titleDirtyMark = false;
+        SetTitle(title);
+
         var view = (UIElement)module.CreateView(context);
         ModuleHost.Content = view;
         // 모듈이 제공하는 하단 바 줄(동영상 트랜스포트 등)을 셸 하단 바에 통합 (v0.21.0)
@@ -558,7 +579,54 @@ public sealed partial class MainWindow : Window
         // 뷰 내부 열기(열기 버튼·◀/▶ 탐색·테스트 클립)도 셸과 동기화 (v0.25.0)
         if (view is IContentStateSource source)
             source.ContentOpened += path => DispatcherQueue.TryEnqueue(() => OnContentOpened(path));
+        // 미저장 표시(A37): 창 제목·트레이 툴팁에 ● — 뷰가 이미 교체됐으면 무시
+        if (view is ICloseGuard guard)
+            guard.UnsavedChanged += dirty => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                _titleDirtyMark = dirty;
+                ApplyTitle();
+            });
         SetContentState(module, context.FilePath);
+    }
+
+    // ---------- 미저장 가드 (A37) ----------
+
+    private bool _confirmInProgress; // ContentDialog는 동시에 1개만 — 중복 진입 방지
+    private bool _closeConfirmed;    // 확인을 마친 뒤의 재진입 Close 허용
+
+    /// <summary>현재 뷰(ICloseGuard)에 미저장 변경이 있으면 사용자에게 확인. true = 계속 진행.</summary>
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (ModuleHost.Content is not ICloseGuard { HasUnsavedChanges: true } guard) return true;
+        if (_confirmInProgress) return false;
+        _confirmInProgress = true;
+        try
+        {
+            return await guard.ConfirmCloseAsync();
+        }
+        finally
+        {
+            _confirmInProgress = false;
+        }
+    }
+
+    /// <summary>트레이 닫기·X 버튼 공용: 미저장 확인 후 닫는다.</summary>
+    private async Task ConfirmThenCloseAsync()
+    {
+        if (!await ConfirmDiscardAsync()) return;
+        _closeConfirmed = true;
+        Close();
+    }
+
+    /// <summary>X 버튼/Alt+F4 닫기 가로채기(A37) — 미저장 변경이 있을 때만 개입한다.</summary>
+    private void OnAppWindowClosing(Microsoft.UI.Windowing.AppWindow sender,
+        Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+    {
+        if (_closeConfirmed) return;
+        if (ModuleHost.Content is not ICloseGuard { HasUnsavedChanges: true }) return;
+        args.Cancel = true;
+        _ = ConfirmThenCloseAsync();
     }
 
     // ---------- 내장 탐색기 + Alt/Ctrl 오버레이 (v0.25.0) ----------
