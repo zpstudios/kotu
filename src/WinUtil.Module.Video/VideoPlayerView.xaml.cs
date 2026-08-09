@@ -128,6 +128,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private bool _pendingAutoSubtitle;
     private bool _suppressSeekEvent;
     private bool _suppressVolumeEvent;
+    private bool _muted; // A28: 음소거 상태 로컬 소유 — libvlc Mute 게터의 스테일 값 회피
     private bool _tornDown;
     private bool _pendingStartOverlay; // A12: 다음 Playing에서 시작 오버레이 표시(일시정지 해제와 구분)
     private DispatcherTimer? _startOverlayTimer;
@@ -246,7 +247,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             Vlc.MediaPlayer = player;
 
             player.Volume = (int)VolumeSlider.Value;
-            MuteButton.Content = "🔊"; // 새 인스턴스는 음소거 해제 상태
+            _muted = false; // 새 인스턴스는 음소거 해제 상태 (A28: 로컬 상태도 동기)
+            MuteButton.Content = "🔊";
             HookPlayerEvents(player);
         }
         catch (Exception ex)
@@ -688,12 +690,17 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         ShowFeedback($"Volume {(int)VolumeSlider.Value}%"); // A13
     }
 
+    /// <summary>
+    /// 음소거 상태는 로컬(_muted)이 소유한다(A28). libvlc의 Mute 게터는 설정 직후
+    /// 이전 값을 돌려줄 수 있어(비동기 반영), 토글 직후 읽어 아이콘을 정하면 반전돼 보였다.
+    /// </summary>
     private void ToggleMute()
     {
         if (_player is not { } p) return;
-        p.Mute = !p.Mute;
-        MuteButton.Content = p.Mute ? "🔇" : "🔊";
-        ShowFeedback(p.Mute ? "Muted" : $"Volume {(int)VolumeSlider.Value}%"); // A13
+        _muted = !_muted;
+        p.Mute = _muted;
+        MuteButton.Content = _muted ? "🔇" : "🔊";
+        ShowFeedback(_muted ? "Muted" : $"Volume {(int)VolumeSlider.Value}%"); // A13
     }
 
     // ---------- 보기 모드 (v0.41.0: 1:1 / Fit / Fit width / Fit height) ----------
