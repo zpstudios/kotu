@@ -323,6 +323,14 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         _filePath = path;
 
+        // A30: 재생 영상이 바뀌면 핏 옵션은 A(자동)로 회귀 — 이번 실행 내에서도 기억하지 않는다(사용자 확정).
+        if (_fitMode != VideoFitMode.Fit || _lastFitOption != VideoFitMode.Fit)
+        {
+            _lastFitOption = VideoFitMode.Fit;
+            _fitMode = VideoFitMode.Fit;
+            UpdateFitButton();
+        }
+
         await EnsurePlayerAsync(); // 이미 있으면 즉시 반환 — 인스턴스 교체 없음(A10 이후 동영상 전용)
         if (_tornDown || _filePath != path) return; // 그새 또 다른 파일로 전환됨
 
@@ -714,6 +722,42 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     private VideoFitMode _fitMode = VideoFitMode.Fit;
 
+    /// <summary>
+    /// A30: Fit 버튼이 표시·실행할 마지막 핏 옵션(Fit/FitWidth/FitHeight — 1:1은 별도 버튼이라 제외).
+    /// 기억하지 않는다 — 재생 영상이 바뀌면 Fit(자동)으로 회귀(사용자 확정).
+    /// </summary>
+    private VideoFitMode _lastFitOption = VideoFitMode.Fit;
+
+    /// <summary>A30: Fit 버튼 본체 내용(A 텍스트/좌우/상하 아이콘)과 툴팁을 마지막 옵션에 맞춘다.</summary>
+    private void UpdateFitButton()
+    {
+        (object content, string tip) = _lastFitOption switch
+        {
+            VideoFitMode.FitWidth =>
+                ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
+            VideoFitMode.FitHeight =>
+                (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
+            _ => (new TextBlock
+            {
+                Text = "A",
+                FontSize = 13,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            }, "Auto-fit to window — long edge fits, nothing cropped"),
+        };
+        FitButton.Content = content;
+        ToolTipService.SetToolTip(FitButton, tip);
+    }
+
+    /// <summary>A30: 플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
+    private void SelectFitOption(VideoFitMode option)
+    {
+        _lastFitOption = option;
+        _fitMode = option;
+        ApplyFitMode();
+        UpdateFitButton();
+    }
+
     /// <summary>현재 보기 모드를 플레이어 Scale에 적용한다(0 = 자동 맞춤, 1 = 원본 1:1).</summary>
     private void ApplyFitMode()
     {
@@ -774,23 +818,21 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         ApplyFitMode();
     }
 
+    /// <summary>A30: 본체 클릭 = 버튼에 표시된 마지막 옵션 적용(1:1에서 되돌아올 때도 이 경로).</summary>
     private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args)
     {
-        _fitMode = VideoFitMode.Fit;
+        _fitMode = _lastFitOption;
         ApplyFitMode();
     }
 
-    private void OnFitWidthClicked(object sender, RoutedEventArgs e)
-    {
-        _fitMode = VideoFitMode.FitWidth;
-        ApplyFitMode();
-    }
+    private void OnFitAutoClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(VideoFitMode.Fit);
 
-    private void OnFitHeightClicked(object sender, RoutedEventArgs e)
-    {
-        _fitMode = VideoFitMode.FitHeight;
-        ApplyFitMode();
-    }
+    private void OnFitWidthClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(VideoFitMode.FitWidth);
+
+    private void OnFitHeightClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(VideoFitMode.FitHeight);
 
     private void ToggleFullScreen()
     {

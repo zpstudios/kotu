@@ -127,12 +127,20 @@
                  Auto-fit = 2칸 폭(90) + 핏 옵션 전부 아이콘. 이미지/문서 모듈과 동일 규격. -->
             <Button Grid.Column="9" Width="40" Height="40" Padding="0" Content="1:1" FontSize="13"
                     ToolTipService.ToolTip="Actual size (100%)" Click="OnActualSizeClicked" />
-            <!-- 기본 클릭 = 자동 맞춤(긴 변이 잘리지 않는 레터박스). 화살표로 좌우/상하 채움 선택 -->
-            <SplitButton Grid.Column="10" Width="90" Height="40" Click="OnFitClicked"
+            <!-- A30: 상태형 Fit 버튼 — 마지막으로 고른 옵션(A/좌우/상하)이 본체에 표시되고
+                 본체 클릭 = 그 옵션 재적용, 화살표 = 3옵션 선택. 기억 안 함 — 재생 영상이
+                 바뀌면 A(자동)로 회귀(사용자 확정). 본체 내용·툴팁은 UpdateFitButton()이 갱신. -->
+            <SplitButton x:Name="FitButton" Grid.Column="10" Width="90" Height="40" Click="OnFitClicked"
                          ToolTipService.ToolTip="Auto-fit to window — long edge fits, nothing cropped">
-                <FontIcon Glyph="&#xE9A6;" FontSize="18" />
+                <TextBlock Text="A" FontSize="13"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
                 <SplitButton.Flyout>
                     <MenuFlyout Placement="Top">
+                        <MenuFlyoutItem Text="Auto-fit" Click="OnFitAutoClicked">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE9A6;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
                         <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClicked">
                             <MenuFlyoutItem.Icon>
                                 <FontIcon Glyph="&#xE8AB;" />
