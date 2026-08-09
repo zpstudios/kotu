@@ -35,6 +35,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         _ = context; // 파일 컨텍스트 없음
         InitializeComponent();
         BuildSensorCards();
+        BuildIntervalFlyout(); // 리프레시 주기 선택 (A29)
         Loaded += (_, _) =>
         {
             HookPresenterChanged();
@@ -86,6 +87,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             Busy.IsActive = false;
             RefreshButton.IsEnabled = true;
         }
+        RecordPulse(); // 맥박 그래프(A29) — 스냅샷이 실제 도착한 타이밍 기록
         UpdateSensors(snapshot.Sensors);
         // 폴러는 스펙 섹션을 2초 캐시로 재사용한다 — 같은 참조면 서명 계산조차 불필요
         if (ReferenceEquals(_sections, snapshot.Sections)) return;
@@ -650,6 +652,72 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     }
 
     private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
+
+    // ---------- 리프레시 주기 선택 + 맥박(EKG) 그래프 (A29) ----------
+
+    /// <summary>맥박 그래프 시간 창 — 1000ms 주기에서도 박동 5개가 보인다.</summary>
+    private static readonly TimeSpan PulseWindow = TimeSpan.FromSeconds(5);
+
+    /// <summary>창 안의 스냅샷 도착 시각들 — UI 스레드에서만 접근.</summary>
+    private readonly List<DateTime> _pulseTicks = [];
+
+    /// <summary>주기 선택 플라이아웃(100/300/1000ms) 구성 + 현재 값 표기(A29).</summary>
+    private void BuildIntervalFlyout()
+    {
+        var flyout = new MenuFlyout();
+        foreach (var ms in HardwareModule.RefreshChoices)
+        {
+            var choice = ms; // 클로저 캡처 고정
+            var item = new MenuFlyoutItem { Text = $"{choice} ms" };
+            item.Click += (_, _) =>
+            {
+                HardwareModule.SetRefreshMs(choice); // 폴러 즉시 반영 + 설정 저장
+                IntervalText.Text = $"{choice} ms";
+            };
+            flyout.Items.Add(item);
+        }
+        IntervalButton.Flyout = flyout;
+        IntervalText.Text = $"{HardwareModule.RefreshMs} ms"; // 설정 복원값 표기
+    }
+
+    /// <summary>스냅샷 도착 시각을 기록하고 창 밖 기록을 버린 뒤 그래프를 다시 그린다.</summary>
+    private void RecordPulse()
+    {
+        var now = DateTime.UtcNow;
+        _pulseTicks.Add(now);
+        var cutoff = now - PulseWindow;
+        _pulseTicks.RemoveAll(t => t < cutoff);
+        RenderPulse(now);
+    }
+
+    /// <summary>
+    /// 병원 심박 모니터풍: 평평한 기준선 위에 도착 시각마다 QRS풍 스파이크(위로 크게 →
+    /// 아래로 살짝 → 복귀). 주기가 바뀌면 스파이크 간격이 그대로 벌어지고 좁아진다 —
+    /// "리프레시 타이밍이 튀는" 모습 자체가 정보다. 폴링 주기마다만 다시 그린다(비용 미미).
+    /// </summary>
+    private void RenderPulse(DateTime now)
+    {
+        var w = PulseHost.ActualWidth;
+        var h = PulseHost.ActualHeight;
+        if (w <= 2 || h <= 2) return; // 레이아웃 전 — 다음 스냅샷에서 그려진다
+
+        var baseline = h * 0.68;
+        var start = now - PulseWindow;
+        var points = new Microsoft.UI.Xaml.Media.PointCollection
+        {
+            new Windows.Foundation.Point(0, baseline),
+        };
+        foreach (var tick in _pulseTicks)
+        {
+            var x = (tick - start).TotalSeconds / PulseWindow.TotalSeconds * w;
+            points.Add(new Windows.Foundation.Point(Math.Max(0, x - 3), baseline));
+            points.Add(new Windows.Foundation.Point(x - 1, h * 0.12));                          // R파(위로 크게)
+            points.Add(new Windows.Foundation.Point(x + 1, Math.Min(h - 1, baseline + h * 0.22))); // S파(아래로 살짝)
+            points.Add(new Windows.Foundation.Point(Math.Min(w, x + 3), baseline));
+        }
+        points.Add(new Windows.Foundation.Point(w, baseline));
+        PulseLine.Points = points;
+    }
 
     // ---------- Always on top (A39 — 사용자 확정: 인포 모듈 전용) ----------
 

@@ -15,7 +15,7 @@ namespace WinUtil.Core.Threading;
 public sealed class PollingWorker<T> : IDisposable
 {
     private readonly Func<T> _poll;
-    private readonly TimeSpan _interval;
+    private TimeSpan _interval; // A29: 런타임 변경 가능 — _gate로 보호
     private readonly object _gate = new();
     private readonly List<Action<T>> _subscribers = [];
     private readonly ManualResetEventSlim _active = new(false); // 구독자 있음 → 루프 가동
@@ -52,6 +52,20 @@ public sealed class PollingWorker<T> : IDisposable
     /// <summary>대기 중인 간격을 건너뛰고 즉시 다음 폴링을 당긴다(수동 새로고침).</summary>
     public void Poke() => _wake.Set();
 
+    /// <summary>
+    /// 폴링 간격(A29: 하드웨어 100/300/1000ms 선택). 바꾸면 대기 중인 이전 간격을
+    /// 건너뛰고 즉시 1회 폴링한 뒤 새 간격으로 돈다 — 변경이 바로 체감되게.
+    /// </summary>
+    public TimeSpan Interval
+    {
+        get { lock (_gate) return _interval; }
+        set
+        {
+            lock (_gate) _interval = value;
+            _wake.Set();
+        }
+    }
+
     private void Unsubscribe(Action<T> handler)
     {
         lock (_gate)
@@ -68,7 +82,9 @@ public sealed class PollingWorker<T> : IDisposable
             _active.Wait(); // 구독자 생길 때까지 휴면
             if (_disposed) break;
             PollOnce();
-            _wake.WaitOne(_interval);
+            TimeSpan interval;
+            lock (_gate) interval = _interval; // TimeSpan은 8바이트 — 찢긴 읽기 방지
+            _wake.WaitOne(interval);
         }
         // 이벤트는 의도적으로 Dispose하지 않는다 — Dispose 스레드의 Set과 경합하면
         // ObjectDisposedException이 나기 때문. 이 워커는 프로세스 수명 공유 싱글턴 용도라

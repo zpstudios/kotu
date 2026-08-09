@@ -27,9 +27,10 @@ public sealed record SensorFrame(
 ///   폴러가 BelowNormal 백그라운드라 UI는 안 막힌다. 뷰는 그동안 Busy 링 표시).
 /// - 관리자 권한이 없으면 커널 드라이버를 못 올려 CPU 온도·전력·클럭(MSR)·팬(SuperIO)·
 ///   SSD 온도(SMART)가 null이 된다. GPU(벤더 API)·RAM·CPU 부하는 비관리자도 나온다.
-/// - Storage 갱신은 50폴링마다 1회(200ms 기준 10초) — SMART 질의는 상대적으로 무겁고
+/// - Storage 갱신은 10초마다 1회(A29에서 폴링 횟수 기반 → 시간 기반으로 교체 — 주기가
+///   100/1000ms로 바뀌어도 SMART 부하가 일정) — SMART 질의는 상대적으로 무겁고
 ///   드라이브 온도는 느리게 변한다. 센서 값은 다음 갱신까지 마지막 값을 유지한다.
-/// - 최근 프레임은 링 버퍼 600개(200ms 기준 2분 분량)에 쌓아 그래프 이력으로 쓴다.
+/// - 최근 프레임은 링 버퍼 600개(기본 300ms 기준 3분, 최단 100ms 기준 60초)에 쌓아 그래프 이력으로 쓴다.
 ///   구독자가 없어 폴러가 휴면하는 동안은 이력에 공백이 생긴다(의도된 동작 — 수집 비용 0 유지).
 /// </summary>
 public static class SensorService
@@ -37,8 +38,10 @@ public static class SensorService
     /// <summary>그래프 이력 링 용량. 최소 주기 100ms(A29 예정) 기준 60초 이상을 담는다.</summary>
     private const int HistoryCapacity = 600;
 
-    /// <summary>Storage(SMART) 갱신 간격 — N폴링마다 1회.</summary>
-    private const int StoragePollEvery = 50;
+    /// <summary>Storage(SMART) 갱신 간격 — 시간 기반(A29: 폴링 주기와 무관하게 일정 부하).</summary>
+    private static readonly TimeSpan StorageInterval = TimeSpan.FromSeconds(10);
+
+    private static DateTime _lastStorageAt = DateTime.MinValue;
 
     /// <summary>LHM(Computer) 접근 직렬화 — 폴러 Read와 종료 Shutdown의 경합만 막는다.</summary>
     private static readonly object _gate = new();
@@ -53,7 +56,6 @@ public static class SensorService
     private static Computer? _computer;
     private static bool _openFailed;   // Open 실패(드라이버 로드 불가 등) — 재시도하지 않는다
     private static bool _shutdown;     // 종료 후 재오픈 금지
-    private static int _pollCount;
     private static int _historyNext;   // 다음 쓰기 위치
     private static int _historyCount;  // 채워진 개수(≤ 용량)
 
@@ -85,8 +87,9 @@ public static class SensorService
             {
                 if (!EnsureOpen()) return SensorFrame.Empty;
 
-                var includeStorage = _pollCount % StoragePollEvery == 0;
-                _pollCount++;
+                var now = DateTime.UtcNow;
+                var includeStorage = now - _lastStorageAt >= StorageInterval;
+                if (includeStorage) _lastStorageAt = now;
                 _computer!.Accept(new UpdateVisitor(includeStorage));
 
                 var frame = Extract(_computer);

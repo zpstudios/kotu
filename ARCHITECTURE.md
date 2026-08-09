@@ -152,7 +152,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 | 스레드 | 수 | 우선순위 | 수명·비고 |
 |---|---|---|---|
 | UI 스레드 | 창마다 1 | Normal | WinUI 3 디스패처. 렌더·입력·결과 반영만 |
-| `ZP hardware poller` | 프로세스 1 (**공유**) | **BelowNormal** | 200ms 폴링: 센서(LHM)는 매 주기, WMI 스펙은 2초 캐시, SMART는 10초마다(A17). H/W 뷰 구독 0이면 휴면 |
+| `ZP hardware poller` | 프로세스 1 (**공유**) | **BelowNormal** | 100/300/1000ms 폴링(A29 선택, 기본 300): 센서(LHM)는 매 주기, WMI 스펙은 2초 캐시, SMART는 10초마다(A17). H/W 뷰 구독 0이면 휴면 |
 | `ZP explorer worker` | 페인마다 1 | Normal | 폴더 스캔·썸네일 추출. Unloaded 시 정리 |
 | `ZP archive worker` | 뷰마다 1 | Normal | 목록/해제/생성/항목 미리보기 |
 | `ZP image worker` | 뷰마다 1 | Normal | 파일 읽기·WIC 메타데이터·Magick 디코드·EXIF 정보 |
@@ -166,7 +166,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 
 | 작업 | 스레드 | UI 스레드가 하는 일 |
 |---|---|---|
-| 하드웨어 WMI 스펙 + LHM 센서 수집(200ms) | hardware poller | 스펙은 dedup 후 트리 반영, 센서 카드·그래프는 매 프레임 갱신 |
+| 하드웨어 WMI 스펙 + LHM 센서 수집(100/300/1000ms, A29) | hardware poller | 스펙은 dedup 후 트리 반영, 센서 카드·그래프는 매 프레임 갱신 |
 | 탐색기 폴더 스캔 / 썸네일 추출 | explorer worker | 목록 채우기 / 비트맵 표시 |
 | 압축 목록·해제·생성 | archive worker | 진행률 바·완료 상태 |
 | 이미지 파일 읽기·메타데이터(WIC)·psd(Magick) | image worker | `SetSourceAsync` 표시 |

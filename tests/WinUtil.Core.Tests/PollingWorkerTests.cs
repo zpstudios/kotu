@@ -87,6 +87,22 @@ public sealed class PollingWorkerTests
     }
 
     [Fact]
+    public void Interval_change_takes_effect_immediately()
+    {
+        // A29: 긴 간격(30초)으로 대기 중이어도 Interval을 줄이면
+        // 이전 간격을 기다리지 않고 새 주기로 폴링이 이어져야 한다.
+        var polls = 0;
+        using var worker = new PollingWorker<int>("interval", TimeSpan.FromSeconds(30),
+            () => Interlocked.Increment(ref polls));
+        using var sub = worker.Subscribe(_ => { });
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref polls) >= 1, Wait));
+
+        worker.Interval = TimeSpan.FromMilliseconds(10);
+        Assert.Equal(TimeSpan.FromMilliseconds(10), worker.Interval);
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref polls) >= 4, Wait));
+    }
+
+    [Fact]
     public void Poll_exception_does_not_kill_loop()
     {
         var calls = 0;
