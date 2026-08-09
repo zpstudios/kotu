@@ -78,8 +78,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(new TextBlock
         {
             Text = "Applies to the current user account only (no admin rights needed); turning a switch off removes the registration completely. "
-                 + "Windows protects the final \"default app\" choice, so turning a switch on opens the Windows default-apps page for ZP — "
-                 + "confirm there once, or use \"Set default...\" per extension. (A25)",
+                 + "Turning a switch on also makes ZP the default app for those file types automatically. "
+                 + "Windows may block this for a few protected types — those open the Windows default-apps page so you can confirm once, "
+                 + "or use \"Set default...\" per extension. (A38)",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -157,10 +158,35 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 Apply(toggle,
                     () => ExplorerIntegration.RegisterAssociation(module),
                     () => ExplorerIntegration.UnregisterAssociation(module));
-                RefreshDefaults();
-                // 켠 직후 Windows 설정의 ZP 기본 앱 페이지로 — 기본 앱 지정은 OS가 보호해
-                // 여기서 사용자가 한 번 확정해야 한다 (A25 ①). 실패로 토글이 되돌아왔으면 안 연다.
-                if (turnedOn && toggle.IsOn) ExplorerIntegration.OpenDefaultAppsSettings();
+
+                // 켤 때만: A38 — 기본 앱까지 자동 지정 시도. Apply가 실패로 토글을 되돌렸으면 건너뛴다.
+                if (turnedOn && toggle.IsOn)
+                {
+                    IReadOnlyList<string> failed;
+                    try { failed = ExplorerIntegration.SetAsDefault(module); }
+                    catch { failed = module.SupportedExtensions; }
+
+                    RefreshDefaults();
+
+                    var total = module.SupportedExtensions.Count;
+                    if (failed.Count == 0)
+                    {
+                        _status.Text = $"{module.BrandName}: set as the default app for all {total} file types.";
+                    }
+                    else
+                    {
+                        // 실패 확장자는 A25 폴백 — 설정 딥링크를 한 번 열어 사용자가 확정하게 한다
+                        // (확장자별 대화상자는 "Set default..." 버튼으로 여전히 가능).
+                        _status.Text = $"{module.BrandName}: set {total - failed.Count}/{total} automatically. "
+                                     + $"Windows blocks the rest ({string.Join(" ", failed)}) — confirm them on the "
+                                     + "page that just opened, or use \"Set default...\".";
+                        ExplorerIntegration.OpenDefaultAppsSettings();
+                    }
+                }
+                else
+                {
+                    RefreshDefaults();
+                }
             };
         }
 

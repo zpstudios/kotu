@@ -1,7 +1,10 @@
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
 using WinUtil.Core.Cli;
 using WinUtil.Core.Contracts;
+using WinUtil.Core.Integration;
 
 namespace WinUtil.App.Integration;
 
@@ -151,6 +154,102 @@ public static class ExplorerIntegration
         };
         _ = SHOpenWithDialog(ownerHwnd, ref info);
     }
+
+    // ---------- 기본 앱 강제 지정 (A38, v0.85.0) ----------
+    // A25는 여기까지(후보 등록 + 사용자가 설정에서 확정)였다. A38은 한 걸음 더 나아가
+    // UserChoice(ProgId+Hash)를 직접 써서 사용자 클릭 없이 기본 앱 지정을 완결한다.
+    // 해시는 UserChoiceHash가 자체 계산(외부 exe 없음). 비공식이라 쓴 뒤 반드시 재검증하고,
+    // 실패한 확장자는 호출 측이 A25 폴백(설정 딥링크/'연결 프로그램' 대화상자)으로 넘긴다.
+
+    private const string FileExtsPath =
+        @"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts";
+
+    /// <summary>
+    /// 모듈의 모든 확장자를 ZP 기본 앱으로 강제 지정 시도.
+    /// 반드시 <see cref="RegisterAssociation"/> 이후 호출(ProgID 클래스 키가 있어야 UserChoice가 유효).
+    /// </summary>
+    /// <returns>강제 지정에 실패한 확장자 목록 — A25 폴백 대상. 비어 있으면 전부 성공.</returns>
+    public static IReadOnlyList<string> SetAsDefault(IModule module)
+    {
+        string sid;
+        try { sid = WindowsIdentity.GetCurrent().User?.Value ?? string.Empty; }
+        catch { sid = string.Empty; }
+        if (string.IsNullOrEmpty(sid))
+            return module.SupportedExtensions.ToList(); // SID를 못 구하면 전부 폴백
+
+        var failed = new List<string>();
+        foreach (var ext in module.SupportedExtensions)
+        {
+            if (!TrySetDefaultForExtension(ext, ExtProgId(module, ext), sid))
+                failed.Add(ext);
+        }
+        if (failed.Count < module.SupportedExtensions.Count)
+            NotifyShell(); // 하나라도 바뀌었으면 아이콘/기본앱 캐시 갱신
+        return failed;
+    }
+
+    /// <summary>
+    /// 확장자 하나를 UserChoice 직접 쓰기로 기본 앱 지정하고 실제 LastWrite 기준으로 검증.
+    /// 최신 빌드는 UserChoice 값 쓰기를 ACL로 막으므로, 부모에서 하위 키를 지우고 새로 만들면
+    /// 새 키는 쓰기 가능한 기본 ACL을 얻는다(SetUserFTA/Mozilla와 동일한 우회).
+    /// 분 경계로 해시가 어긋날 수 있어 최대 3회 재시도하고, 최종 실패 시 우리가 남긴 흔적을 지운다.
+    /// </summary>
+    private static bool TrySetDefaultForExtension(string ext, string progId, string sid)
+    {
+        try
+        {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                using (var extKey = Registry.CurrentUser.CreateSubKey($@"{FileExtsPath}\{ext}"))
+                {
+                    extKey.DeleteSubKey("UserChoice", throwOnMissingSubKey: false); // ACL 우회
+                    var ft = UserChoiceHash.FloorToMinute(DateTime.UtcNow.ToFileTimeUtc());
+                    var hash = UserChoiceHash.Generate(ext, sid, progId, ft);
+                    using var uc = extKey.CreateSubKey("UserChoice");
+                    uc.SetValue("ProgId", progId, RegistryValueKind.String);
+                    uc.SetValue("Hash", hash, RegistryValueKind.String);
+                }
+
+                if (VerifyUserChoice(ext, progId, sid))
+                    return true;
+                // 검증 실패 = 분 경계로 어긋났거나 OS가 되돌림 → 재시도
+            }
+
+            // 3회 모두 실패: 우리가 남긴 UserChoice를 지워 상태를 되돌린다
+            // (유효하지 않은 Hash에 ProgId만 남아 CountDefaults가 오판하는 것 방지).
+            using var parent = Registry.CurrentUser.OpenSubKey($@"{FileExtsPath}\{ext}", writable: true);
+            parent?.DeleteSubKey("UserChoice", throwOnMissingSubKey: false);
+            return false;
+        }
+        catch
+        {
+            return false; // ACL/UCPD 차단 등 — 폴백
+        }
+    }
+
+    /// <summary>쓴 UserChoice가 실제 키 LastWrite 기준 해시와 일치하는지(=Windows가 수용하는지) 확인.</summary>
+    private static bool VerifyUserChoice(string ext, string progId, string sid)
+    {
+        using var uc = Registry.CurrentUser.OpenSubKey($@"{FileExtsPath}\{ext}\UserChoice");
+        if (uc is null) return false;
+        if (uc.GetValue("ProgId") as string != progId) return false;
+        if (uc.GetValue("Hash") is not string storedHash) return false;
+        if (!TryGetKeyLastWriteFileTime(uc, out var lastWrite)) return false;
+
+        var expected = UserChoiceHash.Generate(ext, sid, progId, UserChoiceHash.FloorToMinute(lastWrite));
+        return string.Equals(storedHash, expected, StringComparison.Ordinal);
+    }
+
+    [DllImport("advapi32.dll")]
+    private static extern int RegQueryInfoKey(
+        SafeRegistryHandle hKey, nint lpClass, nint lpcchClass, nint lpReserved,
+        nint lpcSubKeys, nint lpcbMaxSubKeyLen, nint lpcbMaxClassLen, nint lpcValues,
+        nint lpcbMaxValueNameLen, nint lpcbMaxValueLen, nint lpcbSecurityDescriptor,
+        out long lpftLastWriteTime);
+
+    /// <summary>레지스트리 키의 LastWrite 시각(FILETIME, UTC)을 읽는다(.NET이 직접 노출하지 않아 P/Invoke).</summary>
+    private static bool TryGetKeyLastWriteFileTime(RegistryKey key, out long fileTime) =>
+        RegQueryInfoKey(key.Handle, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, out fileTime) == 0;
 
     // ---------- 파일 연결 ("연결 프로그램" 목록 등록) ----------
 
