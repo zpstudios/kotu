@@ -16,7 +16,7 @@ public sealed record HardwareSection(string Title, IReadOnlyList<HardwareItem> I
 /// </summary>
 public static class HardwareInfoService
 {
-    // 섹션 순서는 사용자 지정: CPU → GPU → RAM → Motherboard → Storage → System
+    // 섹션 순서는 사용자 지정: CPU → GPU → RAM → Motherboard → Storage → (Network, A20) → System
     public static IReadOnlyList<HardwareSection> Collect() =>
     [
         Safe("CPU", CollectCpu),
@@ -24,6 +24,7 @@ public static class HardwareInfoService
         Safe("RAM", CollectMemory),
         Safe("Motherboard", CollectBoard),
         Safe("Storage", CollectStorage),
+        Safe("Network", CollectNetwork),
         Safe("System", CollectSystem),
     ];
 
@@ -142,6 +143,82 @@ public static class HardwareInfoService
                 + (string.IsNullOrEmpty(drive.VolumeLabel) ? "" : $" · {drive.VolumeLabel}")));
         }
         return items;
+    }
+
+    // ---------- Network (A20) ----------
+
+    /// <summary>업/다운 전송률 차분용 직전 관측치. Collect는 폴러 스레드에서만 불린다 — 잠금 불필요.</summary>
+    private static (long Rx, long Tx, DateTime At)? _lastTraffic;
+
+    /// <summary>
+    /// 연결 여부·대표 어댑터·링크 속도·업/다운 전송률(A20).
+    /// 전송률은 활성 어댑터 합계 바이트의 스펙 수집 간격(2초) 차분 — 첫 수집은 "measuring…".
+    /// WMI가 아닌 NetworkInterface(GetIPStatistics) 사용: 가볍고 관리자 권한 불필요.
+    /// </summary>
+    private static List<HardwareItem> CollectNetwork()
+    {
+        var items = new List<HardwareItem>();
+        var nics = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up
+                        && n.NetworkInterfaceType is not
+                            (System.Net.NetworkInformation.NetworkInterfaceType.Loopback
+                             or System.Net.NetworkInformation.NetworkInterfaceType.Tunnel))
+            .ToList();
+
+        var connected = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable()
+                        && nics.Count > 0;
+        items.Add(new HardwareItem("Status", connected ? "Connected" : "Disconnected"));
+
+        // 대표 어댑터 = 기본 게이트웨이가 있는 것(인터넷 경로) — 없으면 첫 활성 어댑터
+        var primary = nics.FirstOrDefault(HasGateway) ?? nics.FirstOrDefault();
+        if (primary is not null)
+        {
+            items.Add(new HardwareItem("Adapter",
+                $"{primary.Name} · {primary.Description}"));
+            items.Add(new HardwareItem("Link speed", HardwareFormat.BitsPerSecond(primary.Speed)));
+        }
+
+        // 업/다운 스트림: 활성 어댑터 합계 바이트의 시간 차분
+        long rx = 0, tx = 0;
+        foreach (var nic in nics)
+        {
+            try
+            {
+                var stats = nic.GetIPStatistics();
+                rx += stats.BytesReceived;
+                tx += stats.BytesSent;
+            }
+            catch
+            {
+                // 어댑터 하나 실패는 무시 — 나머지 합계로 계속
+            }
+        }
+        var now = DateTime.UtcNow;
+        if (_lastTraffic is { } last && now > last.At && rx >= last.Rx && tx >= last.Tx)
+        {
+            var seconds = (now - last.At).TotalSeconds;
+            items.Add(new HardwareItem("Down / Up",
+                $"{HardwareFormat.BytesPerSecond((rx - last.Rx) / seconds)} ↓ · "
+                + $"{HardwareFormat.BytesPerSecond((tx - last.Tx) / seconds)} ↑"));
+        }
+        else
+        {
+            items.Add(new HardwareItem("Down / Up", "measuring…")); // 첫 수집·어댑터 변경 직후
+        }
+        _lastTraffic = (rx, tx, now);
+        return items;
+    }
+
+    private static bool HasGateway(System.Net.NetworkInformation.NetworkInterface nic)
+    {
+        try
+        {
+            return nic.GetIPProperties().GatewayAddresses.Count > 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static List<HardwareItem> CollectSystem()

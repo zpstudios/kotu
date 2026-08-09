@@ -42,4 +42,22 @@ public class HardwareFormatTests
     [InlineData(99, "")]
     public void MemoryType_SMBIOS_코드를_DDR_세대로(int code, string expected) =>
         Assert.Equal(expected, HardwareFormat.MemoryType(code));
+
+    [Theory]
+    [InlineData(-1L, "-")]                    // NIC Speed 미보고
+    [InlineData(0L, "-")]
+    [InlineData(100_000_000L, "100 Mbps")]    // 100M 이더넷
+    [InlineData(1_000_000_000L, "1 Gbps")]    // 기가비트
+    [InlineData(866_700_000L, "866.7 Mbps")]  // Wi-Fi 5 링크
+    [InlineData(2_500_000_000L, "2.5 Gbps")]  // 2.5G 이더넷
+    public void BitsPerSecond_링크_속도_표기(long bps, string expected) =>
+        Assert.Equal(expected, HardwareFormat.BitsPerSecond(bps)); // A20
+
+    [Theory]
+    [InlineData(0.0, "0 B/s")]
+    [InlineData(1024.0, "1 KB/s")]
+    [InlineData(12.3 * 1024 * 1024, "12.3 MB/s")]
+    [InlineData(-1.0, "-")]
+    public void BytesPerSecond_전송률_표기(double rate, string expected) =>
+        Assert.Equal(expected, HardwareFormat.BytesPerSecond(rate)); // A20
 }

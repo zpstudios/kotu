@@ -178,6 +178,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         "RAM" => Windows.UI.Color.FromArgb(255, 0x2E, 0x9E, 0x6B),
         "Motherboard" => Windows.UI.Color.FromArgb(255, 0xC5, 0x8A, 0x00),
         "Storage" => Windows.UI.Color.FromArgb(255, 0x3A, 0x7B, 0xD5),
+        "Network" => Windows.UI.Color.FromArgb(255, 0x1F, 0xA8, 0xA0), // A20 — 오디오 모듈 청록 계열
         _ => Windows.UI.Color.FromArgb(255, 0x8A, 0x8A, 0x8E), // System 등
     };
 

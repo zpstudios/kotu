@@ -27,6 +27,20 @@ public static class HardwareFormat
     public static string MegaHertz(uint megahertz) =>
         megahertz >= 1000 ? $"{megahertz / 1000.0:0.##} GHz" : $"{megahertz} MHz";
 
+    /// <summary>링크 속도(bits/s, NIC Speed) → Mbps/Gbps 표기. 알 수 없음(≤0)은 "-". (A20)</summary>
+    public static string BitsPerSecond(long bitsPerSecond) => bitsPerSecond switch
+    {
+        <= 0 => "-",
+        >= 1_000_000_000 => $"{bitsPerSecond / 1_000_000_000.0:0.#} Gbps",
+        >= 1_000_000 => $"{bitsPerSecond / 1_000_000.0:0.#} Mbps",
+        >= 1_000 => $"{bitsPerSecond / 1_000.0:0.#} Kbps",
+        _ => $"{bitsPerSecond} bps",
+    };
+
+    /// <summary>전송률(bytes/s) → 이진 단위 /s 표기. 예: "12.3 MB/s". (A20 업/다운 스트림)</summary>
+    public static string BytesPerSecond(double bytesPerSecond) =>
+        bytesPerSecond < 0 ? "-" : Bytes((ulong)Math.Round(bytesPerSecond)) + "/s";
+
     /// <summary>SMBIOS 메모리 타입 코드 → DDR 세대 이름. 모르면 빈 문자열.</summary>
     public static string MemoryType(int smbiosType) => smbiosType switch
     {
