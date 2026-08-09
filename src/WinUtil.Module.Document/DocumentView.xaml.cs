@@ -13,9 +13,10 @@ using WinUtil.Core.Threading;
 namespace WinUtil.Module.Document;
 
 /// <summary>
-/// 문서 화면: 플레인 텍스트(txt·md·log·ini)는 열어서 바로 편집·저장까지 한다(A37 — 뷰어→에디터 승격).
-/// 인코딩은 열 때 감지한 것(UTF-8/UTF-8 BOM/UTF-16/CP949)을 저장 시 그대로 보존하고,
-/// 줄바꿈도 원본 스타일(CRLF/LF)을 유지한다. 큰 파일(4MB 초과)은 앞부분만 읽으므로 읽기 전용.
+/// 문서 화면: 플레인 텍스트(txt·md·log·ini)는 열어서 바로 편집·저장까지 하고(A37 — 뷰어→에디터 승격),
+/// PDF는 PdfPane으로 본다(A16). 텍스트 인코딩은 열 때 감지한 것(UTF-8/UTF-8 BOM/UTF-16/CP949)을
+/// 저장 시 그대로 보존하고, 줄바꿈도 원본 스타일(CRLF/LF)을 유지한다.
+/// 큰 파일(4MB 초과)은 앞부분만 읽으므로 읽기 전용.
 /// 파일 I/O는 뷰 전용 워커(A42)에서 수행하고 UI 스레드는 결과 반영만 한다.
 /// </summary>
 public sealed partial class DocumentView : UserControl,
@@ -58,9 +59,18 @@ public sealed partial class DocumentView : UserControl,
         };
 
         if (context.FilePath is { } path && File.Exists(path))
-            OpenPath(path);
+            OpenAny(path);
         else
             PlaceholderText.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>확장자로 텍스트/PDF 경로를 나눈다(A16).</summary>
+    private void OpenAny(string path)
+    {
+        if (Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            OpenPdf(path);
+        else
+            OpenPath(path);
     }
 
     /// <summary>하단 상태바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(이미지 v0.27.0과 동일 패턴).</summary>
@@ -93,6 +103,7 @@ public sealed partial class DocumentView : UserControl,
 
         if (seq != _openSeq) return; // 그새 다른 파일이 열렸다
 
+        HidePdf(); // PDF → 텍스트 전환 (A16)
         _path = path;
         _encoding = loaded.Encoding;
         _newLine = loaded.NewLine;
@@ -125,6 +136,56 @@ public sealed partial class DocumentView : UserControl,
         {
             // 표시는 부가 기능 — 실패가 흐름을 막으면 안 된다.
         }
+    }
+
+    // ---------- PDF (A16) ----------
+
+    private PdfPane? _pdfPane; // 지연 생성 — 텍스트만 쓰는 세션에는 만들지 않는다
+
+    private async void OpenPdf(string path)
+    {
+        var seq = ++_openSeq; // 텍스트 열기와 같은 경쟁 방지 시퀀스 공유
+
+        if (_pdfPane is null)
+        {
+            _pdfPane = new PdfPane();
+            _pdfPane.PageChanged += (current, total) =>
+                PageInfoText.Text = total > 0 ? $"{current} / {total}" : string.Empty;
+            RootGrid.Children.Insert(0, _pdfPane); // 상태바·플레이스홀더보다 뒤(z 순서)
+        }
+
+        // 화면 전환: 에디터 내리고 PDF 패널 표시. PDF는 편집 대상이 아니다 — 저장 상태 초기화.
+        _path = null;
+        _truncated = false;
+        SetDirty(false);
+        EditorBox.Visibility = Visibility.Collapsed;
+        PlaceholderText.Visibility = Visibility.Collapsed;
+        _pdfPane.Visibility = Visibility.Visible;
+        PageInfoText.Visibility = Visibility.Visible;
+        PageInfoText.Text = string.Empty;
+        FileNameText.Text = Path.GetFileName(path);
+
+        var ok = await _pdfPane.LoadAsync(path); // 실패 다이얼로그는 패널이 띄운다
+        if (seq != _openSeq) return;             // 그새 다른 파일이 열렸다
+        if (!ok)
+        {
+            HidePdf();
+            FileNameText.Text = "No file open";
+            PlaceholderText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        UpdateDriveInfo(path);
+        ContentOpened?.Invoke(path); // 셸 동기화
+    }
+
+    /// <summary>PDF 패널을 내린다(텍스트로 전환·열기 실패 시). 비트맵·문서 참조 해제.</summary>
+    private void HidePdf()
+    {
+        if (_pdfPane is null) return;
+        _pdfPane.Clear();
+        _pdfPane.Visibility = Visibility.Collapsed;
+        PageInfoText.Visibility = Visibility.Collapsed;
     }
 
     // ---------- 인코딩 감지·보존 (A37) ----------
@@ -366,7 +427,7 @@ public sealed partial class DocumentView : UserControl,
 
         // 미저장 확인은 실제로 다른 파일을 고른 뒤에만 (A37)
         if (await picker.PickSingleFileAsync() is { } file && await ConfirmCloseAsync())
-            OpenPath(file.Path);
+            OpenAny(file.Path);
     }
 
     private void OnOpenButtonClick(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();

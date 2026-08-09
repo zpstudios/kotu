@@ -34,9 +34,10 @@
             TextChanged="OnEditorTextChanged"
             KeyDown="OnEditorKeyDown" />
 
+        <!-- PDF 페이지 뷰(A16, PdfPane)는 코드에서 지연 생성해 RootGrid 맨 아래(z 순서상 뒤)에 꽂는다 -->
         <TextBlock
             x:Name="PlaceholderText"
-            Text="Open a text or Markdown file, or drop one onto the window&#x0A;Plain text files can be edited and saved here (Ctrl+S)"
+            Text="Open a text, Markdown, or PDF file, or drop one onto the window&#x0A;Plain text files can be edited and saved here (Ctrl+S)"
             TextAlignment="Center"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
@@ -50,6 +51,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -70,11 +72,14 @@
                 <TextBlock x:Name="ModifiedText" Grid.Column="3" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed"
                            Text="● Unsaved" />
+                <!-- PDF 현재 페이지/전체 (A16) — PDF가 열려 있을 때만 -->
+                <TextBlock x:Name="PageInfoText" Grid.Column="4" VerticalAlignment="Center"
+                           FontSize="12" Opacity="0.8" Visibility="Collapsed" />
                 <!-- 현재 문서가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
-                <TextBlock x:Name="DriveInfoText" Grid.Column="4" VerticalAlignment="Center"
+                <TextBlock x:Name="DriveInfoText" Grid.Column="5" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.6" />
                 <!-- 40×40 정사각 아이콘 = 이미지/영상 ⛶와 통일 (v0.53.0) -->
-                <Button Grid.Column="5" Width="40" Height="40" Padding="4"
+                <Button Grid.Column="6" Width="40" Height="40" Padding="4"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />
