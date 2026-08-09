@@ -68,6 +68,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button x:Name="RefreshButton" Grid.Column="0" Content="Refresh"
                         VerticalAlignment="Center" Click="OnRefreshClick" />
@@ -81,8 +82,15 @@
                 <TextBlock Grid.Column="4" Text="200 ms" FontSize="12" Opacity="0.6"
                            VerticalAlignment="Center"
                            ToolTipService.ToolTip="Auto-refresh interval" />
+                <!-- Always on top 토글(A39) — ⛶ 바로 왼쪽, 켜짐 상태가 보이는 ToggleButton -->
+                <ToggleButton x:Name="TopToggle" Grid.Column="5" Width="40" Height="40" Padding="4"
+                              VerticalAlignment="Center"
+                              Checked="OnTopToggleChanged" Unchecked="OnTopToggleChanged"
+                              ToolTipService.ToolTip="Always on top">
+                    <FontIcon Glyph="&#xE718;" FontSize="18" />
+                </ToggleButton>
                 <!-- 40×40 정사각 아이콘 = 다른 모듈 ⛶와 통일 (v0.53.0) -->
-                <Button Grid.Column="5" Width="40" Height="40" Padding="4"
+                <Button Grid.Column="6" Width="40" Height="40" Padding="4"
                         VerticalAlignment="Center" Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen dashboard (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />

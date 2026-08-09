@@ -51,6 +51,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             _subscription?.Dispose(); // 마지막 뷰가 내려가면 폴러는 휴면(트레이 구독이 없다면)
             _subscription = null;
             TraySensors.Changed -= UpdateTrayPins;
+            // A39: 토글 버튼은 인포 모듈에만 있으므로, 뷰가 내려가면(모듈 전환 등)
+            // 끌 방법이 없는 상태가 남지 않게 항상 위 고정을 해제한다.
+            if (_appWindow?.Presenter is OverlappedPresenter presenter)
+                presenter.IsAlwaysOnTop = false;
             if (_appWindow is { } w) w.Changed -= OnAppWindowChanged;
             _appWindow = null;
         };
@@ -615,6 +619,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         PlaceSensorGrid(inBar: !_fullScreen);
         UpdateStripVisibility();
         if (_fullScreen) RenderDashboard();
+        else ApplyAlwaysOnTop(); // 전체화면 복귀 시 새 OverlappedPresenter에 토글 상태 재적용 (A39)
     }
 
     private bool _fullScreen;
@@ -645,6 +650,22 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     }
 
     private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
+
+    // ---------- Always on top (A39 — 사용자 확정: 인포 모듈 전용) ----------
+
+    private void OnTopToggleChanged(object sender, RoutedEventArgs e) => ApplyAlwaysOnTop();
+
+    /// <summary>
+    /// 토글 상태를 창 프레젠터에 반영한다. 전체화면(FullScreenPresenter) 동안은 대상이
+    /// 없으므로 건너뛰고, 창 모드로 돌아올 때 UpdateViewMode가 다시 불러 복원한다
+    /// (SetPresenter가 OverlappedPresenter를 새로 만들어 IsAlwaysOnTop이 초기화되기 때문).
+    /// </summary>
+    private void ApplyAlwaysOnTop()
+    {
+        if (_appWindow is null) HookPresenterChanged(); // Loaded 전 클릭 대비
+        if (_appWindow?.Presenter is OverlappedPresenter presenter)
+            presenter.IsAlwaysOnTop = TopToggle.IsChecked == true;
+    }
 
     private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
