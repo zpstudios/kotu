@@ -129,6 +129,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private bool _suppressSeekEvent;
     private bool _suppressVolumeEvent;
     private bool _tornDown;
+    private bool _pendingStartOverlay; // A12: 다음 Playing에서 시작 오버레이 표시(일시정지 해제와 구분)
+    private DispatcherTimer? _startOverlayTimer;
     private ModuleWorker? _worker; // libvlc 생성·해제/자막 탐지·변환 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
@@ -269,9 +271,38 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         LoadSubtitleList();
 
         using var media = new Media(lib, new Uri(_filePath));
+        _pendingStartOverlay = true; // A12: 실제 재생이 시작되면(Playing) 오버레이 표시
         p.Play(media);
         PlaceholderText.Visibility = Visibility.Collapsed;
         ContentOpened?.Invoke(_filePath); // 셸 동기화 (v0.25.0)
+    }
+
+    /// <summary>
+    /// A12: 재생 시작 시 좌상단에 "파일명 · 1080p"를 3초 표시.
+    /// 해상도는 Playing 시점의 트랙 정보에서 읽는다 — 아직 파싱 전이면 파일명만.
+    /// </summary>
+    private void ShowStartOverlay()
+    {
+        if (_filePath is null) return;
+
+        var (_, h) = VideoPixelSize();
+        StartOverlayText.Text = h > 0
+            ? $"{Path.GetFileName(_filePath)} · {(int)h}p"
+            : Path.GetFileName(_filePath);
+        StartOverlay.Visibility = Visibility.Visible;
+
+        if (_startOverlayTimer is not { } timer)
+        {
+            timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                StartOverlay.Visibility = Visibility.Collapsed;
+            };
+            _startOverlayTimer = timer;
+        }
+        timer.Stop(); // 연속 전환 시 표시 시간 리셋
+        timer.Start();
     }
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
@@ -345,6 +376,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             });
         }
 
+        _startOverlayTimer?.Stop(); // A12: 해체 후 틱 방지
+
         _settings.Set("video.volume", (int)VolumeSlider.Value);
         _settings.Save();
 
@@ -408,6 +441,13 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private void OnPlayerPlaying(object? sender, EventArgs e) => Dispatch(() =>
     {
         PlayButton.Content = "❚❚";
+
+        // A12: 새 미디어의 첫 Playing에서만 (일시정지 해제 Playing 제외)
+        if (_pendingStartOverlay)
+        {
+            _pendingStartOverlay = false;
+            ShowStartOverlay();
+        }
 
         // 재생이 실제로 시작된 뒤에만 시킹·자막 선택이 적용된다.
         if (_pendingResumeMs > 0 && _player is { } p)

@@ -31,6 +31,25 @@
         <Grid x:Name="VideoSurface" Grid.Row="0" Background="Black" Tapped="OnSurfaceTapped">
             <vlc:VideoView x:Name="Vlc" />
             <!-- 음악 재생 ♪ 오버레이는 오디오 모듈로 이관 (A10) -->
+            <!-- A12: 재생 시작 시 파일명+해상도(1080p 등) 좌상단 3초 표시
+                 (libvlc 기본 타이틀은 v0.19.0부터 꺼둔 상태 — 자체 오버레이로 대체, 입력 통과) -->
+            <Border
+                x:Name="StartOverlay"
+                Visibility="Collapsed"
+                IsHitTestVisible="False"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="12"
+                CornerRadius="4"
+                Background="#CC202020"
+                Padding="10,6">
+                <TextBlock
+                    x:Name="StartOverlayText"
+                    Foreground="White"
+                    FontSize="13"
+                    MaxWidth="520"
+                    TextTrimming="CharacterEllipsis" />
+            </Border>
             <TextBlock
                 x:Name="PlaceholderText"
                 Text="Open a video file, or drop one onto the window&#x0A;▶ = built-in display and speaker test clip"
