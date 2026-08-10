@@ -495,6 +495,79 @@ public static class ExplorerIntegration
         NotifyShell();
     }
 
+    // ---------- exe 경로 자동 재등록 (A78, v0.89.0) ----------
+    // 파일 연결·우클릭 메뉴 등록에는 그 시점의 exe 절대 경로가 구워진다
+    // (ProgID의 shell\open\command, DefaultIcon 폴백, verb의 command·Icon).
+    // exe 이름·위치가 바뀌면(A64의 WinUtil.App.exe → KOTU.exe가 실제 사례) 등록은 살아 있는데
+    // 없는 파일을 가리켜 더블클릭이 '어떤 앱으로 열까요' 팝업으로 빠진다.
+    // 그래서 매 실행 시 등록된 경로와 현재 경로를 비교해 다르면 조용히 재등록한다.
+    //
+    // 확정된 결정(2026-08-10):
+    //  · 이미 켜 둔 등록만 대상 — 꺼 둔 것을 임의로 켜지 않는다.
+    //  · 검사는 모듈당 대표 확장자 1개 — RegisterAssociation이 모듈의 전 확장자를 한 번에
+    //    다시 쓰므로 하나만 어긋나도 전체 재기록으로 충분하다.
+    //  · 조용히 처리(알림 없음). 실패해도 무시 — 다음 실행에서 다시 시도된다.
+    //  · UserChoice(A38)는 ProgID만 참조하므로 여기서 건드리지 않는다.
+
+    /// <summary>
+    /// 켜져 있는 탐색기 등록(파일 연결·우클릭 메뉴)의 exe 경로가 현재 경로와 다르면 재등록한다.
+    /// 앱 시작 시 워커 스레드에서 매 실행 호출(App.ShellRegistrationMaintenance).
+    /// </summary>
+    /// <param name="modules">전체 모듈(확장자 없는 모듈은 자동 제외).</param>
+    /// <param name="archiveBrandLabel">우클릭 메뉴 라벨용 압축 모듈 BrandName.</param>
+    public static void ReRegisterIfExeMoved(IReadOnlyList<IModule> modules, string archiveBrandLabel)
+    {
+        try
+        {
+            foreach (var module in modules.Where(m => m.SupportedExtensions.Count > 0))
+            {
+                if (!IsAssociationRegistered(module)) continue;
+                if (AssociationCommandIsCurrent(module)) continue;
+                RegisterAssociation(module); // 전 확장자의 command·DefaultIcon·Capabilities 재기록
+            }
+
+            var archiveExts = modules.FirstOrDefault(m => m.Id == "archive")?.SupportedExtensions
+                              ?? (IReadOnlyList<string>)[];
+            if (archiveExts.Count > 0 && IsExtractHereMenuRegistered(archiveExts) && !VerbCommandIsCurrent(
+                    $@"Software\Classes\SystemFileAssociations\{archiveExts[0]}\shell\{ExtractHereVerbName}\command"))
+            {
+                RegisterExtractHereMenu(archiveExts, archiveBrandLabel);
+            }
+
+            if (IsCompressMenuRegistered() && !VerbCommandIsCurrent(CompressVerbKeyPath + @"\command"))
+                RegisterCompressMenu(archiveBrandLabel);
+        }
+        catch
+        {
+            // 재등록 실패는 치명적이지 않다 — 다음 실행에서 다시 시도된다.
+        }
+    }
+
+    /// <summary>
+    /// 모듈의 파일 연결 command가 현재 exe를 가리키는지 — 대표 확장자 1개만 검사.
+    /// ProgID는 있는데 command를 못 읽는 경우와, 확장자별 ProgID가 하나도 없는
+    /// 구 형태(모듈 단일 ProgID, v0.60.0 이전) 등록은 '어긋남'으로 보고 재등록시킨다(손상 복구 겸용).
+    /// </summary>
+    private static bool AssociationCommandIsCurrent(IModule module)
+    {
+        foreach (var ext in module.SupportedExtensions)
+        {
+            using var cmd = Registry.CurrentUser.OpenSubKey(
+                $@"Software\Classes\{ExtProgId(module, ext)}\shell\open\command");
+            if (cmd is null) continue;
+            return ShellCommand.IsSameExe(ShellCommand.ExtractExePath(cmd.GetValue(null) as string), ExePath);
+        }
+        return false;
+    }
+
+    /// <summary>우클릭 verb의 command 키가 현재 exe를 가리키는지.</summary>
+    private static bool VerbCommandIsCurrent(string commandKeyPath)
+    {
+        using var cmd = Registry.CurrentUser.OpenSubKey(commandKeyPath);
+        return cmd is not null &&
+               ShellCommand.IsSameExe(ShellCommand.ExtractExePath(cmd.GetValue(null) as string), ExePath);
+    }
+
     // ---------- 공통 ----------
 
     /// <summary>탐색기에 연결 변경을 알린다(아이콘/메뉴 캐시 갱신).</summary>
