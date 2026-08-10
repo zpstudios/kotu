@@ -21,7 +21,7 @@ public sealed class AudioModule : IModule
 
     public string Id => "audio";
 
-    public string DisplayName => "Music"; // 용도(음악 감상) 중심 — Videos·Images와 같은 결 (사용자 확정)
+    public string DisplayName => "Audio"; // A52: 매체명으로 통일 (v0.75.0 "Music" 확정을 대체)
 
     public string BrandName => "KOTU-audio";
 

@@ -85,9 +85,11 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             TextWrapping = TextWrapping.Wrap,
         });
 
-        // 토글 순서: 압축 → 문서 → 영상 → 이미지 (사용자 지정, v0.28.0 — 문서 모듈 v0.44.0 합류).
+        // 토글 순서(A35, 사용자 확정 2026-08-10): 이미지 → 비디오 → 오디오 → 문서 → 압축.
+        // 시작 메뉴 번호 순서(1이미지 2영상 3오디오 4문서 5압축)와 일치시킨 것 —
+        // v0.28.0의 "압축→문서→영상→이미지"를 대체한다.
         // 파일을 다루지 않는 모듈(hardware)은 연결할 확장자가 없으므로 토글을 만들지 않는다.
-        string[] associationOrder = ["archive", "document", "audio", "video", "image"]; // A10: 오디오 토글 추가
+        string[] associationOrder = ["image", "video", "audio", "document", "archive"];
         var associationModules = router.Modules
             .Where(m => m.SupportedExtensions.Count > 0)
             .OrderBy(m =>
@@ -190,22 +192,24 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             };
         }
 
-        var archiveExts = router.Modules.FirstOrDefault(m => m.Id == "archive")?.SupportedExtensions
-            ?? (IReadOnlyList<string>)[];
+        var archiveModule = router.Modules.FirstOrDefault(m => m.Id == "archive");
+        var archiveExts = archiveModule?.SupportedExtensions ?? (IReadOnlyList<string>)[];
+        // 우클릭 메뉴 라벨은 모듈 BrandName을 따른다(A52로 KOTU-zip → KOTU-archive).
+        var archiveBrand = archiveModule?.BrandName ?? Branding.AppName;
 
         // 우클릭 메뉴 토글 통합(v0.30.0 사용자 요청): "여기에 풀기"(압축 파일)와
         // "압축하기"(모든 파일)를 하나의 스위치로 함께 등록/해제한다.
         var menuToggle = new ToggleSwitch
         {
-            Header = "Explorer right-click menu: \"Extract here with KOTU-zip\" (archives) · \"Compress with KOTU-zip\" (all files)",
+            Header = $"Explorer right-click menu: \"Extract here with {archiveBrand}\" (archives) · \"Compress with {archiveBrand}\" (all files)",
             IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)
                            || ExplorerIntegration.IsCompressMenuRegistered()),
         };
         menuToggle.Toggled += (_, _) => Apply(menuToggle,
             () =>
             {
-                ExplorerIntegration.RegisterExtractHereMenu(archiveExts);
-                ExplorerIntegration.RegisterCompressMenu();
+                ExplorerIntegration.RegisterExtractHereMenu(archiveExts, archiveBrand);
+                ExplorerIntegration.RegisterCompressMenu(archiveBrand);
             },
             () =>
             {
@@ -344,14 +348,15 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     /// <summary>
     /// Windows 섹션(A24): 창 재사용 규칙. 기본 off = 같은 모듈 창 재사용(현행).
     /// on = 파일을 열 때마다 새 창(내장 탐색기·외부 열기 공통). Ctrl+N·Shift+더블클릭·
-    /// 우클릭 "Open in new window"는 규칙과 무관하게 항상 새 창이므로 여기 영향 없음.
+    /// 우클릭 "Open in new instance"는 규칙과 무관하게 항상 새 창이므로 여기 영향 없음.
+    /// 문구는 A53에서 "new window" → "new instance"로 통일.
     /// </summary>
     private void BuildWindowsSection()
     {
         AddHeader("Windows");
         var toggle = new ToggleSwitch
         {
-            Header = "Always open files in a new window",
+            Header = "Always open files in a new instance",
             IsOn = _settings.Get(WindowManager.AlwaysNewWindowKey, false),
         };
         toggle.Toggled += (_, _) =>
@@ -362,9 +367,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(toggle);
         Root.Children.Add(new TextBlock
         {
-            Text = "Off: a file opens in the existing window of the same module (default). "
-                 + "On: every file opens a new window. Explicit \"new window\" actions "
-                 + "(Ctrl+N, Shift+double-click, right-click menu) always open a new window either way.",
+            Text = "Off: a file opens in the existing instance of the same module (default). "
+                 + "On: every file opens a new instance. Explicit \"new instance\" actions "
+                 + "(Ctrl+N, Shift+double-click, right-click menu) always open a new instance either way.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,

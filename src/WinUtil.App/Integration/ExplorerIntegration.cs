@@ -407,7 +407,9 @@ public static class ExplorerIntegration
         Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{progId}", throwOnMissingSubKey: false);
     }
 
-    // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with KOTU-zip" ----------
+    // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with {압축 모듈 BrandName}" ----------
+    // 표시 라벨은 하드코딩하지 않고 호출 측(SettingsView)이 모듈 BrandName을 넘긴다 —
+    // A52처럼 모듈명이 바뀔 때 문구가 따라오게 하기 위함.
 
     public static bool IsExtractHereMenuRegistered(IReadOnlyList<string> archiveExtensions)
     {
@@ -418,13 +420,13 @@ public static class ExplorerIntegration
         return key is not null;
     }
 
-    public static void RegisterExtractHereMenu(IReadOnlyList<string> archiveExtensions)
+    public static void RegisterExtractHereMenu(IReadOnlyList<string> archiveExtensions, string brandLabel)
     {
         foreach (var ext in archiveExtensions)
         {
             using var verb = Registry.CurrentUser.CreateSubKey(
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractHereVerbName}");
-            verb.SetValue(null, "Extract here with KOTU-zip");
+            verb.SetValue(null, $"Extract here with {brandLabel}");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.ExtractHereToken} \"%1\"");
@@ -457,7 +459,7 @@ public static class ExplorerIntegration
         NotifyShell();
     }
 
-    // ---------- 우클릭 메뉴: 모든 파일 → "Compress with KOTU-zip" ----------
+    // ---------- 우클릭 메뉴: 모든 파일 → "Compress with {압축 모듈 BrandName}" ----------
 
     private const string CompressVerbKeyPath = @"Software\Classes\*\shell\" + CompressVerbName;
 
@@ -470,11 +472,11 @@ public static class ExplorerIntegration
         return key is not null; // 구 브랜드 등록은 세지 않는다 (A46 — 이관 없음)
     }
 
-    public static void RegisterCompressMenu()
+    public static void RegisterCompressMenu(string brandLabel)
     {
         using (var verb = Registry.CurrentUser.CreateSubKey(CompressVerbKeyPath))
         {
-            verb.SetValue(null, "Compress with KOTU-zip");
+            verb.SetValue(null, $"Compress with {brandLabel}");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.CompressToken} \"%1\"");

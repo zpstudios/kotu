@@ -144,7 +144,8 @@
             </Button>
 
             <!-- 인스턴스 번호 배지 (A2, v0.58.0): 창이 2개 이상일 때만, 생성 순서 1~9 + 색 구분.
-                 메뉴 버튼 우상단에 겹쳐 표시. 값은 WindowManager가 SetInstanceBadge로 준다. -->
+                 메뉴 버튼 우상단에 겹쳐 표시. 값은 WindowManager가 SetInstanceNumber로 준다.
+                 제목표시줄 문자열에도 "[n]"으로 함께 표시된다(A56). -->
             <Border x:Name="InstanceBadge"
                     Width="16" Height="16" CornerRadius="8"
                     HorizontalAlignment="Left" VerticalAlignment="Top"

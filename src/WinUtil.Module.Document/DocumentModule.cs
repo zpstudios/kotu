@@ -15,7 +15,7 @@ public sealed class DocumentModule : IModule
 
     public string Id => "document";
 
-    public string DisplayName => "Documents";
+    public string DisplayName => "Document"; // A52: 단수형 확정
 
     public string BrandName => "KOTU-doc";
 

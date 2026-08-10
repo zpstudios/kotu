@@ -17,7 +17,7 @@ internal static class Branding
     /// </summary>
     public static Windows.UI.Color? ModuleAccent(string? moduleId) => moduleId switch
     {
-        "archive" => Windows.UI.Color.FromArgb(0xFF, 0xC7, 0x7E, 0x1F), // amber  — KOTU-zip
+        "archive" => Windows.UI.Color.FromArgb(0xFF, 0xC7, 0x7E, 0x1F), // amber  — KOTU-archive
         "image" => Windows.UI.Color.FromArgb(0xFF, 0x2E, 0x9E, 0x5B), // green  — KOTU-image
         "video" => Windows.UI.Color.FromArgb(0xFF, 0xD6, 0x49, 0x4F), // red    — KOTU-video
         "audio" => Windows.UI.Color.FromArgb(0xFF, 0x1F, 0xA8, 0xA0), // teal   — KOTU-audio (A10)

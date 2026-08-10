@@ -22,7 +22,7 @@ public sealed class VideoModule : IModule
 
     public string Id => "video";
 
-    public string DisplayName => "Videos"; // v0.38.0 복수형 (사용자 요청)
+    public string DisplayName => "Video"; // A52: 단수형 확정 (v0.38.0 복수형 지정을 대체)
 
     public string BrandName => "KOTU-video";
 

@@ -163,7 +163,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>창 제목과 트레이 툴팁을 함께 갱신한다. 미저장 변경(A37)이 있으면 ● 접두.</summary>
+    /// <summary>
+    /// 창 제목과 트레이 툴팁을 함께 갱신한다.
+    /// 최종 형태(A56): "● [2] KOTU Document — sample.pdf"
+    /// — ● = 미저장 변경(A37), [2] = 인스턴스 번호(창이 2개 이상일 때만).
+    /// </summary>
     private void SetTitle(string title)
     {
         _baseTitle = title;
@@ -172,10 +176,14 @@ public sealed partial class MainWindow : Window
 
     private string _baseTitle = Branding.AppName;
     private bool _titleDirtyMark; // 현재 뷰의 미저장 표시(A37 — ICloseGuard.UnsavedChanged)
+    private int _instanceNumber;  // 0 = 창이 하나뿐 → 번호 표시 안 함 (A56)
 
     private void ApplyTitle()
     {
-        var title = _titleDirtyMark ? "● " + _baseTitle : _baseTitle;
+        // 순서: 상태(●) → 인스턴스([n]) → 내용. 작업표시줄·Alt+Tab에서 잘려도
+        // 앞쪽 두 표식이 남도록 상태와 번호를 앞에 둔다.
+        var title = _instanceNumber > 0 ? $"[{_instanceNumber}] {_baseTitle}" : _baseTitle;
+        if (_titleDirtyMark) title = "● " + title;
         Title = title;
         _tray.SetTooltip(title);
     }
@@ -300,8 +308,8 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(BuildSponsorCard());
         StartMenuPanel.Children.Add(Divider()); // 그룹 경계는 구분선으로 명확히 (v0.26.0 사용자 요청)
 
-        // New window(A24) — Settings 위, 최상단 그룹
-        AddNewWindowItem();
+        // New Instance(A24, 문구는 A53) — Settings 위, 최상단 그룹
+        AddNewInstanceItem();
         // Settings·Hardware-info 묶음 (사용자 지정: zip 위에 공백 두고 Hardware-info, 그 위 Settings)
         AddSettingsItem();
         AddModuleItem("hardware");
@@ -333,10 +341,13 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(item);
     }
 
-    /// <summary>시작 메뉴의 New window 항목(A24) — Ctrl+N과 같은 동작.</summary>
-    private void AddNewWindowItem()
+    /// <summary>
+    /// 시작 메뉴의 New Instance 항목(A24) — Ctrl+N과 같은 동작.
+    /// 표기는 A53에서 "New window" → "New Instance"로 변경(인스턴스 배지·번호 용어와 일치).
+    /// </summary>
+    private void AddNewInstanceItem()
     {
-        var item = MakeMenuItem("\uE78B", "New window", "Ctrl+N"); // NewWindow 글리프
+        var item = MakeMenuItem("\uE78B", "New Instance", "Ctrl+N"); // NewWindow 글리프
         item.Click += (_, _) =>
         {
             StartFlyout.Hide();
@@ -927,20 +938,24 @@ public sealed partial class MainWindow : Window
     ];
 
     /// <summary>
-    /// 인스턴스 번호 표시. 0 = 숨김(창이 하나뿐이거나 10번째 이상).
-    /// 창이 2개가 되는 순간 1번 창에도 배지가 생기고, 중간 창이 닫히면
+    /// 인스턴스 번호 설정. 0 = 창이 하나뿐 → 배지·제목 번호 모두 숨김.
+    /// 창이 2개가 되는 순간 1번 창에도 생기고, 중간 창이 닫히면
     /// WindowManager가 번호를 당겨서 다시 부른다.
+    /// 표시는 두 곳(A56): 타이틀바 색상 배지(A2 — 색이 9개뿐이라 1~9만)와
+    /// 제목 문자열 접두 "[n]"(개수 제한 없음 — 작업표시줄·Alt+Tab에서도 구분되게).
     /// </summary>
-    public void SetInstanceBadge(int number)
+    public void SetInstanceNumber(int number)
     {
-        if (number <= 0)
+        _instanceNumber = number > 0 ? number : 0;
+        ApplyTitle();
+
+        if (number is <= 0 or > 9)
         {
             InstanceBadge.Visibility = Visibility.Collapsed;
             return;
         }
         InstanceBadge.Visibility = Visibility.Visible;
-        InstanceBadge.Background =
-            new SolidColorBrush(InstanceColors[(number - 1) % InstanceColors.Length]);
+        InstanceBadge.Background = new SolidColorBrush(InstanceColors[number - 1]);
         InstanceBadgeText.Text = number.ToString();
     }
 }

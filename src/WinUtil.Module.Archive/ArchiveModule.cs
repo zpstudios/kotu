@@ -16,9 +16,9 @@ public sealed class ArchiveModule : IModule
 
     public string Id => "archive";
 
-    public string DisplayName => "ZIP"; // v0.38.0 대문자 (사용자 요청; v0.26.0 "Archive"→"zip"에서 변경)
+    public string DisplayName => "Archive"; // A52: v0.26.0 "Archive"로 회귀 (v0.38.0 "ZIP" 지정을 대체)
 
-    public string BrandName => "KOTU-zip";
+    public string BrandName => "KOTU-archive";
 
     public string IconGlyph => "\uF012"; // ZipFolder
 

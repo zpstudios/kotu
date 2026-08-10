@@ -235,13 +235,13 @@ public sealed partial class ExplorerPane : UserControl
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>파일 항목 우클릭 메뉴(A24): "Open in new window" 하나 — 폴더에는 안 단다.</summary>
+    /// <summary>파일 항목 우클릭 메뉴(A24): "Open in new instance" 하나 — 폴더에는 안 단다.</summary>
     private void AttachContextMenu(FrameworkElement item, ExplorerListing.Entry entry)
     {
         if (entry.IsFolder) return;
         var open = new MenuFlyoutItem
         {
-            Text = "Open in new window",
+            Text = "Open in new instance", // A53 문구
             Icon = new FontIcon { Glyph = "\uE8A7" }, // OpenInNewWindow
         };
         open.Click += (_, _) => FileActivatedNewWindow?.Invoke(entry.Path);

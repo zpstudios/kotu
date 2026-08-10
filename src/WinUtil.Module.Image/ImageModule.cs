@@ -7,7 +7,7 @@ public sealed class ImageModule : IModule
 {
     public string Id => "image";
 
-    public string DisplayName => "Images"; // v0.38.0 복수형 (사용자 요청)
+    public string DisplayName => "Image"; // A52: 단수형 확정 (v0.38.0 복수형 지정을 대체)
 
     public string BrandName => "KOTU-image";
 

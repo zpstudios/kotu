@@ -156,7 +156,7 @@ public sealed class WindowManager
         {
             _windows.Remove(window);
             _ordered.Remove(window);
-            UpdateInstanceBadges(); // 중간 창이 닫히면 번호 당겨오기 (A2)
+            UpdateInstanceNumbers(); // 중간 창이 닫히면 번호 당겨오기 (A2)
             if (_windows.Count == 0)
             {
                 // 센서 커널 드라이버 정리(A17) — 안 해도 프로세스는 내려가지만,
@@ -178,17 +178,19 @@ public sealed class WindowManager
 
         _windows.Add(window);
         _ordered.Add(window);
-        UpdateInstanceBadges(); // 2번째 창이 뜨는 순간 1번 창에도 배지가 생긴다 (A2)
+        UpdateInstanceNumbers(); // 2번째 창이 뜨는 순간 1번 창에도 번호가 생긴다 (A2)
         return window;
     }
 
     /// <summary>
-    /// 인스턴스 번호 배지 갱신 (A2, v0.58.0): 창이 2개 이상일 때만 생성 순서대로
-    /// 1~9번을 표시한다(10번째부터는 표시 없음). 창이 하나면 전부 숨김.
+    /// 인스턴스 번호 갱신 (A2, v0.58.0 / A56, v0.87.0): 창이 2개 이상일 때만 생성 순서대로
+    /// 번호를 매긴다. 창이 하나면 0(표시 없음).
+    /// 10번째 이상도 실제 번호를 그대로 넘긴다 — 색상 배지는 9색뿐이라 창 쪽에서 숨기지만
+    /// 제목표시줄 번호는 계속 유효해야 하기 때문(A56).
     /// </summary>
-    private void UpdateInstanceBadges()
+    private void UpdateInstanceNumbers()
     {
         for (var i = 0; i < _ordered.Count; i++)
-            _ordered[i].SetInstanceBadge(_ordered.Count > 1 && i < 9 ? i + 1 : 0);
+            _ordered[i].SetInstanceNumber(_ordered.Count > 1 ? i + 1 : 0);
     }
 }
