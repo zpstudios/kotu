@@ -8,7 +8,7 @@ public sealed class VideoModule : IModule
 {
     /// <summary>
     /// 동영상 확장자(소문자, 점 포함). libvlc가 전부 재생 가능.
-    /// 음악 확장자는 오디오 모듈(ZP-audio)로 이관(A10, v0.75.0).
+    /// 음악 확장자는 오디오 모듈(KOTU-audio)로 이관(A10, v0.75.0).
     /// </summary>
     public static readonly IReadOnlyList<string> Extensions =
     [
@@ -24,7 +24,7 @@ public sealed class VideoModule : IModule
 
     public string DisplayName => "Videos"; // v0.38.0 복수형 (사용자 요청)
 
-    public string BrandName => "ZP-video";
+    public string BrandName => "KOTU-video";
 
     public string IconGlyph => "\uE714"; // Video
 

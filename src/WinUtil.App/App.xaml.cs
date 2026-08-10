@@ -69,9 +69,36 @@ public partial class App : Application
         // 하드웨어 창이 없어도 앱이 살아 있는 동안 유지된다(사용자 확정).
         SensorTray.Initialize(_windowManager);
 
+        // 구 브랜드(ZP·WinUtil) 등록 흔적 1회 청소 (A46, v0.86.0).
+        // 리브랜딩으로 ProgID가 바뀌어 구 키는 유령이 되므로, 남아 있으면 지운다.
+        CleanUpLegacyBrandRegistrationsOnce();
+
         // 업데이트 주기 체크 금지(사용자 결정) — 설정 화면 진입 시 SettingsView가 1회 확인한다.
         // 설치 직후 첫 실행이면 미션 스테이트먼트 웰컴을 띄운다.
         if (Program.IsFirstRun) ShowFirstRunWelcome();
+    }
+
+    /// <summary>
+    /// 구 브랜드 레지스트리 청소 — 설정 플래그로 1회만 수행한다(A46).
+    /// 설정 파일은 새 폴더(%AppData%\KOTU)라 리브랜딩 후 첫 실행에서는 항상 플래그가 없다 =
+    /// 정확히 한 번 돈다. 레지스트리 접근이라 UI를 막지 않게 워커 스레드에서 실행.
+    /// </summary>
+    private static void CleanUpLegacyBrandRegistrationsOnce()
+    {
+        var settings = Services.GetRequiredService<ISettingsService>();
+        const string key = "integration.legacyBrandCleanupDone";
+        if (settings.Get(key, false)) return;
+
+        var modules = Services.GetRequiredService<FileTypeRouter>().Modules.ToList();
+        var worker = new WinUtil.Core.Threading.ModuleWorker(
+            $"{Branding.AppName} legacy cleanup", ThreadPriority.BelowNormal);
+        worker.Post(() =>
+        {
+            Integration.ExplorerIntegration.CleanUpLegacyBrandRegistrations(modules);
+            settings.Set(key, true);
+            settings.Save();
+            worker.Dispose();
+        });
     }
 
     /// <summary>
@@ -89,7 +116,7 @@ public partial class App : Application
 
                 var dialog = new ContentDialog
                 {
-                    Title = "Welcome to ZP",
+                    Title = $"Welcome to {Branding.AppName}",
                     Content = new TextBlock
                     {
                         Text = Branding.MissionStatement,

@@ -7,7 +7,7 @@ v3(v0.22.0): LEFT/RIGHT 텍스트를 스피커 아이콘으로 교체 (사용자
   2) 8–16s   RGB/그레이 램프 + 우측 스피커 아이콘 (우 스피커 구간)
   3) 16–26s  해상력 차트 — 존 플레이트 + 수평/수직 라인 웨지 + 미세 체커보드
   4) 26–29.6s 그레이스케일 11스텝 + 균일도 (저음 스윕 구간)
-  5) 29.6–32s ZP 브랜드 아웃트로 (#15072E)
+  5) 29.6–32s KOTU 브랜드 아웃트로 (#15072E)
 
 실행: python3 docs/gen_test_clip.py   (오디오 wav가 없으면 gen_test_audio.py를 먼저 돌린다)
 """
@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1920, 1080
-TMP = "/tmp/zp-testclip-v3"
+TMP = "/tmp/kotu-testclip-v3"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(REPO, "src", "WinUtil.Module.Video", "Assets", "test-clip.mp4")
 FONT_B = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -167,10 +167,10 @@ def grayscale_steps():
 
 
 def outro():
-    """5) ZP 브랜드 아웃트로 — 타이틀바와 같은 #15072E."""
+    """5) KOTU 브랜드 아웃트로 — 타이틀바와 같은 #15072E."""
     img = Image.new("RGB", (W, H), (0x15, 0x07, 0x2E))
     d = ImageDraw.Draw(img)
-    d.text((W / 2, H / 2 - 40), "ZP", font=font(280), fill=(255, 255, 255), anchor="mm")
+    d.text((W / 2, H / 2 - 40), "KOTU", font=font(280), fill=(255, 255, 255), anchor="mm")
     d.text((W / 2, H / 2 + 180), "display & speaker test", font=font(48),
            fill=(205, 198, 224), anchor="mm")
     return img
@@ -179,7 +179,7 @@ def outro():
 def main():
     os.makedirs(TMP, exist_ok=True)
 
-    wav = "/tmp/zp-test-audio.wav"
+    wav = "/tmp/kotu-test-audio.wav"
     if not os.path.exists(wav):
         subprocess.run([sys.executable, os.path.join(REPO, "docs", "gen_test_audio.py")], check=True)
 

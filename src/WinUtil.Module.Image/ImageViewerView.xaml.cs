@@ -48,7 +48,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private ModuleWorker? _worker; // 폴더 스캔·파일 읽기·디코드 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
-    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP image worker");
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU image worker");
 
     public ImageViewerView(OpenContext context)
     {

@@ -9,7 +9,7 @@ public sealed class ImageModule : IModule
 
     public string DisplayName => "Images"; // v0.38.0 복수형 (사용자 요청)
 
-    public string BrandName => "ZP-image";
+    public string BrandName => "KOTU-image";
 
     public string IconGlyph => "\uE8B9"; // Picture
 

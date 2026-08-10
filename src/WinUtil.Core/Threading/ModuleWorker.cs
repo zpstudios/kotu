@@ -17,7 +17,7 @@ public sealed class ModuleWorker : IDisposable
     private readonly BlockingCollection<Action> _queue = new();
     private readonly Thread _thread;
 
-    /// <param name="name">스레드 이름(디버거·덤프에서 식별용). 예: "ZP archive worker".</param>
+    /// <param name="name">스레드 이름(디버거·덤프에서 식별용). 예: "KOTU archive worker".</param>
     /// <param name="priority">사용자가 결과를 기다리는 작업은 Normal, 배경성 작업은 BelowNormal.</param>
     public ModuleWorker(string name, ThreadPriority priority = ThreadPriority.Normal)
     {

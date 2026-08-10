@@ -6,7 +6,7 @@ namespace WinUtil.Core.Tests;
 public class ExplorerListingTests : IDisposable
 {
     private readonly string _dir =
-        Path.Combine(Path.GetTempPath(), "zp-explorer-test-" + Guid.NewGuid().ToString("N"));
+        Path.Combine(Path.GetTempPath(), "kotu-explorer-test-" + Guid.NewGuid().ToString("N"));
 
     public ExplorerListingTests() => Directory.CreateDirectory(_dir);
 

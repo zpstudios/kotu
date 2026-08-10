@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace WinUtil.Core.Settings;
 
-/// <summary>JSON 파일 기반 설정. 기본 위치: %AppData%\ZP\settings.json (경로 주입 가능 — 테스트용).</summary>
+/// <summary>JSON 파일 기반 설정. 기본 위치: %AppData%\KOTU\settings.json (경로 주입 가능 — 테스트용).</summary>
 public sealed class JsonSettingsService : ISettingsService
 {
     private static readonly JsonSerializerOptions s_json = new() { WriteIndented = true };
@@ -17,28 +17,15 @@ public sealed class JsonSettingsService : ISettingsService
     }
 
     /// <summary>
-    /// 기본 경로: %AppData%\ZP\settings.json. 구 폴더(%AppData%\WinUtil)의 설정이 있고
-    /// 새 폴더에 아직 없으면 1회 복사해 이관한다(v0.33.0 리브랜딩 — 볼륨·이어보기 기록 유지).
+    /// 기본 경로: %AppData%\KOTU\settings.json.
+    /// A46(v0.86.0) 리브랜딩 — 사용자 결정(2026-08-10)에 따라 구 폴더(%AppData%\ZP,
+    /// 그 전 %AppData%\WinUtil)의 설정은 <b>이관하지 않는다</b>. 새 이름으로 기본값부터 시작한다.
+    /// (구 폴더는 그대로 남으므로 사용자가 직접 지우거나 되돌릴 수 있다.)
     /// </summary>
-    private static string DefaultPath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var newPath = Path.Combine(appData, "ZP", "settings.json");
-        try
-        {
-            var oldPath = Path.Combine(appData, "WinUtil", "settings.json");
-            if (!File.Exists(newPath) && File.Exists(oldPath))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(newPath)!);
-                File.Copy(oldPath, newPath);
-            }
-        }
-        catch
-        {
-            // 이관 실패는 새 설정으로 시작하면 그만이다.
-        }
-        return newPath;
-    }
+    private static string DefaultPath() =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "KOTU", "settings.json");
 
     public T Get<T>(string key, T defaultValue)
     {

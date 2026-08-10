@@ -17,7 +17,7 @@ public sealed class DocumentModule : IModule
 
     public string DisplayName => "Documents";
 
-    public string BrandName => "ZP-doc";
+    public string BrandName => "KOTU-doc";
 
     public string IconGlyph => "\uE8A5"; // Document
 

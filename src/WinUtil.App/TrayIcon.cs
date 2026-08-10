@@ -30,7 +30,7 @@ internal sealed class TrayIcon : IDisposable
     private readonly IntPtr _hwnd;
     private IntPtr _hIcon;
     private bool _ownsIcon;
-    private string _tip = "ZP";
+    private string _tip = Branding.AppName;
     private bool _added;
     private bool _disposed;
 
@@ -40,14 +40,14 @@ internal sealed class TrayIcon : IDisposable
     /// <summary>메뉴의 '이 창 닫기'.</summary>
     public event Action? CloseRequested;
 
-    /// <summary>메뉴의 'Exit ZP' (모든 창 닫기).</summary>
+    /// <summary>메뉴의 'Exit KOTU' (모든 창 닫기).</summary>
     public event Action? ExitAllRequested;
 
     /// <param name="iconPath">.ico 파일 경로. 없거나 로드 실패 시 시스템 기본 아이콘.</param>
     public TrayIcon(string? iconPath)
     {
         _taskbarCreatedMsg = RegisterWindowMessageW("TaskbarCreated");
-        _className = "ZPTray_" + Guid.NewGuid().ToString("N");
+        _className = Branding.AppName + "Tray_" + Guid.NewGuid().ToString("N");
         _wndProc = WndProc;
 
         var hInstance = GetModuleHandleW(null);
@@ -174,7 +174,7 @@ internal sealed class TrayIcon : IDisposable
             _ = AppendMenuW(menu, MfString, CmdActivate, "Activate window");
             _ = AppendMenuW(menu, MfString, CmdClose, "Close this window");
             _ = AppendMenuW(menu, MfSeparator, 0, null);
-            _ = AppendMenuW(menu, MfString, CmdExitAll, "Exit ZP");
+            _ = AppendMenuW(menu, MfString, CmdExitAll, $"Exit {Branding.AppName}");
             _ = SetMenuDefaultItem(menu, CmdActivate, 0);
 
             // 메뉴 밖 클릭으로 닫히게 하려면 먼저 포그라운드가 되어야 한다(Win32 관례)

@@ -1,6 +1,6 @@
 # 빌드 가이드
 
-소스에서 ZP를 빌드해 실행하기까지의 전체 과정입니다.
+소스에서 KOTU를 빌드해 실행하기까지의 전체 과정입니다.
 
 ## 1. 필요 환경
 
@@ -57,7 +57,7 @@ dotnet publish src/WinUtil.App -c Release -p:Platform=x64 -r win-x64 --self-cont
 
 - **`Microsoft.WindowsAppSDK` 복원 실패** — nuget.org 소스가 활성화돼 있는지 확인: `dotnet nuget list source`
 - **XAML 컴파일 오류 (WMC/XLS 계열)** — Visual Studio의 "Windows App SDK" 구성요소 미설치가 흔한 원인. CLI 빌드라면 `dotnet workload restore` 시도.
-- **앱 실행 직후 종료** — unpackaged 실행에는 x64 빌드가 필수입니다. `-p:Platform=x64` 누락 여부 확인. 오류 상세는 `%TEMP%\ZP\startup-error.log`에 남습니다.
+- **앱 실행 직후 종료** — unpackaged 실행에는 x64 빌드가 필수입니다. `-p:Platform=x64` 누락 여부 확인. 오류 상세는 `%TEMP%\KOTU\startup-error.log`에 남습니다.
 - **XamlParseException("XAML parsing failed")으로 시작 실패** — 실행 폴더에 `resources.pri`가 있는지 확인. `dotnet publish`가 이 파일을 빠뜨리는 문제가 있어 csproj의 `CopyPriToPublish` 타깃이 보정합니다(v0.5.6). 수동 복구: 빌드 출력 폴더의 `resources.pri`를 exe 옆에 복사.
 - **압축 파일 열기 실패: "7z.dll을 찾을 수 없습니다"** — 3장 참고. 반드시 **x64** dll이어야 합니다(32비트 7-Zip의 dll 불가).
 - **동영상 재생 실패 / 검은 화면** — 출력 폴더에 `libvlc.dll`·`libvlccore.dll`과 `plugins\` 폴더가 있는지 확인(NuGet 복원이 정상이면 자동 포함). LibVLCSharp.WinUI는 WindowsAppSDK 1.8+ 필요.

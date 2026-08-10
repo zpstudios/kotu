@@ -43,7 +43,7 @@ public sealed partial class DocumentView : UserControl,
     private bool _loadingText;             // 프로그램적 Text 설정 중 TextChanged 무시용
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
-    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP document worker");
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU document worker");
 
     static DocumentView() =>
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // CP949 사용 전 1회 등록

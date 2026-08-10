@@ -41,7 +41,7 @@ internal sealed class SensorTray : IDisposable
     private readonly uint _taskbarCreatedMsg;
     private readonly IntPtr _hwnd;
     private IntPtr _hIcon;
-    private string _tip = "ZP sensors";
+    private string _tip = Branding.AppName + " sensors";
     private bool _added;
     private volatile bool _disposed;
 
@@ -60,7 +60,7 @@ internal sealed class SensorTray : IDisposable
         _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
 
         _taskbarCreatedMsg = RegisterWindowMessageW("TaskbarCreated");
-        _className = "ZPSensorTray_" + Guid.NewGuid().ToString("N");
+        _className = Branding.AppName + "SensorTray_" + Guid.NewGuid().ToString("N");
         _wndProc = WndProc;
         var hInstance = GetModuleHandleW(null);
         var wc = new WNDCLASSW

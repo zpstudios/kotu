@@ -1,4 +1,4 @@
-# ZP — 올인원 Windows 유틸리티 아키텍처 설계
+# KOTU — 올인원 Windows 유틸리티 아키텍처 설계
 
 버전: v0.1.0 (설계 초안) · 2026-08-03
 
@@ -62,7 +62,7 @@ public interface IModule
 ### 솔루션 구성(예정)
 
 ```
-WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 WinUtil 유지 (제품명은 ZP)
+WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 WinUtil 유지 (제품명은 KOTU — A46에서 표시명·시스템 등록 ID만 교체)
 ├─ src/WinUtil.App          # 셸 (실행 파일)
 ├─ src/WinUtil.Core         # 계약(인터페이스) + 공통 서비스
 ├─ src/WinUtil.Module.Archive
@@ -89,7 +89,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 
 - 필수: mp4·mkv·avi·webm 등 재생(libvlc가 커버) / 재생·일시정지·시킹 / 볼륨·배속 / 자막(srt·smi, 한글 인코딩 처리) / 전체화면 / 이어보기(마지막 위치 기억) / ←→ 키 탐색(초 단위 점프) / 빈 상태 ▶=내장 화면·스피커 테스트 클립(v0.11.0~v0.13.0)
 - 옵션: 자막 싱크·폰트 조절, 오디오 트랙 선택, 스크린샷, 구간 반복, 재생목록
-- 음악 파일 재생(mp3·flac·wav 등)은 A10(v0.75.0)에서 오디오 모듈(ZP-audio)로 분리
+- 음악 파일 재생(mp3·flac·wav 등)은 A10(v0.75.0)에서 오디오 모듈(KOTU-audio)로 분리
 
 ### 4.3b 오디오 플레이어 (Audio — A10, v0.75.0에서 Video로부터 분리)
 
@@ -152,13 +152,13 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 | 스레드 | 수 | 우선순위 | 수명·비고 |
 |---|---|---|---|
 | UI 스레드 | 창마다 1 | Normal | WinUI 3 디스패처. 렌더·입력·결과 반영만 |
-| `ZP hardware poller` | 프로세스 1 (**공유**) | **BelowNormal** | 100/300/1000ms 폴링(A29 선택, 기본 300): 센서(LHM)는 매 주기, WMI 스펙은 2초 캐시, SMART는 10초마다(A17). H/W 뷰 구독 0이면 휴면 |
-| `ZP explorer worker` | 페인마다 1 | Normal | 폴더 스캔·썸네일 추출. Unloaded 시 정리 |
-| `ZP archive worker` | 뷰마다 1 | Normal | 목록/해제/생성/항목 미리보기 |
-| `ZP image worker` | 뷰마다 1 | Normal | 파일 읽기·WIC 메타데이터·Magick 디코드·EXIF 정보 |
-| `ZP video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
-| `ZP audio worker` | 뷰마다 1 | Normal | libvlc(시각화 인스턴스) 생성·해제 (A10) |
-| `ZP document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지)·저장(인코딩 보존, A37) |
+| `KOTU hardware poller` | 프로세스 1 (**공유**) | **BelowNormal** | 100/300/1000ms 폴링(A29 선택, 기본 300): 센서(LHM)는 매 주기, WMI 스펙은 2초 캐시, SMART는 10초마다(A17). H/W 뷰 구독 0이면 휴면 |
+| `KOTU explorer worker` | 페인마다 1 | Normal | 폴더 스캔·썸네일 추출. Unloaded 시 정리 |
+| `KOTU archive worker` | 뷰마다 1 | Normal | 목록/해제/생성/항목 미리보기 |
+| `KOTU image worker` | 뷰마다 1 | Normal | 파일 읽기·WIC 메타데이터·Magick 디코드·EXIF 정보 |
+| `KOTU video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
+| `KOTU audio worker` | 뷰마다 1 | Normal | libvlc(시각화 인스턴스) 생성·해제 (A10) |
+| `KOTU document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지)·저장(인코딩 보존, A37) |
 | libvlc 내부 스레드 | libvlc 관리 | — | 디코드·이벤트 콜백. 이벤트는 `Dispatch()`로 UI 이관 |
 | .NET 스레드풀 | 런타임 관리 | — | await 연속, 닫힌 워커의 `Post` 폴백 |
 

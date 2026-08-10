@@ -78,7 +78,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(new TextBlock
         {
             Text = "Applies to the current user account only (no admin rights needed); turning a switch off removes the registration completely. "
-                 + "Turning a switch on also makes ZP the default app for those file types automatically. "
+                 + $"Turning a switch on also makes {Branding.AppName} the default app for those file types automatically. "
                  + "Windows may block this for a few protected types — those open the Windows default-apps page so you can confirm once, "
                  + "or use \"Set default...\" per extension. (A38)",
             Opacity = 0.7,
@@ -197,7 +197,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // "압축하기"(모든 파일)를 하나의 스위치로 함께 등록/해제한다.
         var menuToggle = new ToggleSwitch
         {
-            Header = "Explorer right-click menu: \"Extract here with ZP-zip\" (archives) · \"Compress with ZP-zip\" (all files)",
+            Header = "Explorer right-click menu: \"Extract here with KOTU-zip\" (archives) · \"Compress with KOTU-zip\" (all files)",
             IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)
                            || ExplorerIntegration.IsCompressMenuRegistered()),
         };
@@ -243,7 +243,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var aboutLine = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         aboutLine.Children.Add(new TextBlock
         {
-            Text = $"ZP v{currentVersion} ·",
+            Text = $"KOTU v{currentVersion} ·",
             Opacity = 0.7,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -278,7 +278,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         AddHeader("Display");
         Root.Children.Add(new TextBlock
         {
-            Text = "Scale of the ZP interface. \"System default\" follows the Windows display scaling; "
+            Text = $"Scale of the {Branding.AppName} interface. \"System default\" follows the Windows display scaling; "
                  + "picking a value overrides it for this app only, applied to all open windows immediately.",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
@@ -453,7 +453,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             var confirm = new ContentDialog
             {
                 Title = "Ready to install",
-                Content = $"ZP will close and restart to finish installing v{version}. Install now?",
+                Content = $"KOTU will close and restart to finish installing v{version}. Install now?",
                 PrimaryButtonText = "Install and restart",
                 CloseButtonText = "Later",
                 DefaultButton = ContentDialogButton.Primary,

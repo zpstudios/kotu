@@ -63,7 +63,7 @@ public sealed class HardwareModule : IModule
     /// 재생·UI와 CPU를 다투지 않는다. 수집 스레드는 여기 하나다.
     /// </summary>
     internal static PollingWorker<HardwareSnapshot> Poller { get; } =
-        new("ZP hardware poller", AutoRefreshInterval, Poll);
+        new("KOTU hardware poller", AutoRefreshInterval, Poll);
 
     /// <summary>
     /// 뷰 구독(스펙 + 센서). 이 구독이 하나라도 있어야 WMI 스펙 재수집이 돈다 —
@@ -123,7 +123,7 @@ public sealed class HardwareModule : IModule
 
     public string DisplayName => "H/W Info"; // v0.28.1 사용자 요청 (이전: Hardware-info)
 
-    public string BrandName => "ZP-info";
+    public string BrandName => "KOTU-info";
 
     public string IconGlyph => "\uE950"; // Component (칩 모양)
 

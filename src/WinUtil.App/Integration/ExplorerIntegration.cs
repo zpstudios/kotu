@@ -15,53 +15,83 @@ namespace WinUtil.App.Integration;
 /// </summary>
 public static class ExplorerIntegration
 {
-    private const string ExtractHereVerbName = "ZP.ExtractHere";
-    private const string CompressVerbName = "ZP.Compress";
+    /// <summary>
+    /// 현재 브랜드 접두사. 리브랜딩(A46) 때 여기만 바꾸고 <see cref="LegacyBrands"/>에 구 이름을 추가한다.
+    /// </summary>
+    private const string Brand = Branding.AppName; // "KOTU"
 
-    // 구 이름(WinUtil.*) — v0.33.0 리브랜딩 이전에 등록된 흔적의 탐지·청소용.
-    private const string LegacyExtractHereVerbName = "WinUtil.ExtractHere";
-    private const string LegacyCompressVerbName = "WinUtil.Compress";
+    /// <summary>
+    /// 지난 브랜드 이름들 — 등록 흔적의 탐지·청소용(신→구 순).
+    /// "ZP" = v0.33.0~v0.85.0, "WinUtil" = v0.33.0 이전.
+    /// 사용자 결정(2026-08-10): 설정·연결의 **자동 이관은 하지 않는다**. 다만 남은 구 등록은
+    /// 탐색기에 유령 메뉴·아이콘으로 보이므로 등록/해제 시 발견되는 대로 지운다.
+    /// </summary>
+    private static readonly string[] LegacyBrands = ["ZP", "WinUtil"];
+
+    private const string ExtractHereVerbName = Brand + ".ExtractHere";
+    private const string CompressVerbName = Brand + ".Compress";
+
+    private static IEnumerable<string> LegacyExtractHereVerbNames =>
+        LegacyBrands.Select(b => b + ".ExtractHere");
+
+    private static IEnumerable<string> LegacyCompressVerbNames =>
+        LegacyBrands.Select(b => b + ".Compress");
 
     private static string ExePath =>
         Environment.ProcessPath
         ?? throw new InvalidOperationException("Cannot determine the executable path.");
 
-    private static string ProgId(IModule module) => "ZP." + module.Id;
+    private static string ProgId(IModule module) => Brand + "." + module.Id;
 
-    private static string LegacyProgId(IModule module) => "WinUtil." + module.Id;
+    private static IEnumerable<string> LegacyProgIds(IModule module) =>
+        LegacyBrands.Select(b => b + "." + module.Id);
 
-    /// <summary>확장자별 ProgID (A23, v0.60.0). 예: "ZP.archive.zip" — 확장자마다 다른 아이콘을 달기 위함.</summary>
+    /// <summary>확장자별 ProgID (A23, v0.60.0). 예: "KOTU.archive.zip" — 확장자마다 다른 아이콘을 달기 위함.</summary>
     private static string ExtProgId(IModule module, string ext) => ProgId(module) + ext;
 
-    /// <summary>확장자 전용 아이콘 경로(Assets\fileicons\zp-{ext}.ico). 없으면 null → exe 아이콘 폴백.</summary>
+    /// <summary>확장자 전용 아이콘 경로(Assets\fileicons\kotu-{ext}.ico). 없으면 null → exe 아이콘 폴백.</summary>
     private static string? FileIconPath(string ext)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Assets", "fileicons",
-            $"zp-{ext.TrimStart('.')}.ico");
+            $"{Brand.ToLowerInvariant()}-{ext.TrimStart('.')}.ico");
         return File.Exists(path) ? path : null;
     }
 
     // ---------- 앱 등록 + 기본 앱 지정 보조 (A25, v0.61.0) ----------
     // 기본 앱(UserChoice) 자체는 Windows 10+가 비공개 해시로 보호해 프로그램이 직접 쓸 수 없다.
-    // 그래서 ① 설정 '기본 앱' 목록에 ZP가 앱으로 나타나게 Capabilities를 등록하고,
+    // 그래서 ① 설정 '기본 앱' 목록에 KOTU가 앱으로 나타나게 Capabilities를 등록하고,
     // ② 그 페이지로 바로 가는 딥링크와 ③ 확장자별 '연결 프로그램' 대화상자,
     // ④ 현재 기본 앱 여부 읽기(조회는 허용됨)를 제공한다.
 
-    private const string CapabilitiesKeyPath = @"Software\ZP\Capabilities";
+    private const string CapabilitiesKeyPath = @"Software\" + Brand + @"\Capabilities";
 
-    /// <summary>설정 '기본 앱' 목록에 ZP가 앱으로 나타나도록 모듈 확장자를 Capabilities에 병합 등록.</summary>
+    /// <summary>설정 '기본 앱' 목록에 KOTU가 앱으로 나타나도록 모듈 확장자를 Capabilities에 병합 등록.</summary>
     private static void RegisterCapabilities(IModule module)
     {
         using (var cap = Registry.CurrentUser.CreateSubKey(CapabilitiesKeyPath))
         {
-            cap.SetValue("ApplicationName", "ZP");
-            cap.SetValue("ApplicationDescription", "ZP - archives, images, video, music, documents");
+            cap.SetValue("ApplicationName", Brand);
+            cap.SetValue("ApplicationDescription", Brand + " - archives, images, video, music, documents");
             using var fa = cap.CreateSubKey("FileAssociations");
             foreach (var ext in module.SupportedExtensions)
                 fa.SetValue(ext, ExtProgId(module, ext));
         }
         using var registered = Registry.CurrentUser.CreateSubKey(@"Software\RegisteredApplications");
-        registered.SetValue("ZP", CapabilitiesKeyPath);
+        registered.SetValue(Brand, CapabilitiesKeyPath);
+        RemoveLegacyCapabilities();
+    }
+
+    /// <summary>구 브랜드의 Capabilities·RegisteredApplications 등록을 걷어낸다(A46 리브랜딩 청소).</summary>
+    private static void RemoveLegacyCapabilities()
+    {
+        using var registered = Registry.CurrentUser.OpenSubKey(
+            @"Software\RegisteredApplications", writable: true);
+        foreach (var legacy in LegacyBrands)
+        {
+            // 이 키는 우리가 만든 것만 들어 있다(앱 설정은 설정 파일) — 통째로 정리해도 안전.
+            Registry.CurrentUser.DeleteSubKeyTree($@"Software\{legacy}", throwOnMissingSubKey: false);
+            registered?.DeleteValue(legacy, throwOnMissingValue: false);
+        }
     }
 
     /// <summary>모듈 확장자를 Capabilities에서 제거. 남는 연결이 없으면 앱 등록 자체를 걷어낸다.</summary>
@@ -80,15 +110,20 @@ public static class ExplorerIntegration
         using var remaining = Registry.CurrentUser.OpenSubKey(CapabilitiesKeyPath + @"\FileAssociations");
         if (remaining is null || remaining.ValueCount == 0)
         {
-            // 이 키는 여기서만 만든다(앱 설정은 settings.ini 파일) — 통째로 정리해도 안전.
-            Registry.CurrentUser.DeleteSubKeyTree(@"Software\ZP", throwOnMissingSubKey: false);
+            // 이 키는 여기서만 만든다(앱 설정은 설정 파일) — 통째로 정리해도 안전.
+            Registry.CurrentUser.DeleteSubKeyTree($@"Software\{Brand}", throwOnMissingSubKey: false);
             using var registered = Registry.CurrentUser.OpenSubKey(
                 @"Software\RegisteredApplications", writable: true);
-            registered?.DeleteValue("ZP", throwOnMissingValue: false);
+            registered?.DeleteValue(Brand, throwOnMissingValue: false);
         }
+        RemoveLegacyCapabilities();
     }
 
-    /// <summary>ext의 현재 기본 앱이 ZP인지(UserChoice 읽기 — 쓰기는 OS 보호라 조회만).</summary>
+    /// <summary>
+    /// ext의 현재 기본 앱이 KOTU인지(UserChoice 읽기 — 쓰기는 A38이 담당).
+    /// 구 브랜드(ZP.*) ProgID는 리브랜딩 후 클래스 키가 없어 무효이므로 <b>세지 않는다</b> —
+    /// 설정 화면의 "n/m"이 0으로 떨어지고, 토글을 켜면 A38이 새 ProgID로 다시 지정한다.
+    /// </summary>
     public static bool IsDefaultForExtension(string ext)
     {
         try
@@ -96,7 +131,7 @@ public static class ExplorerIntegration
             using var key = Registry.CurrentUser.OpenSubKey(
                 $@"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\{ext}\UserChoice");
             return key?.GetValue("ProgId") is string progId &&
-                   progId.StartsWith("ZP.", StringComparison.OrdinalIgnoreCase);
+                   progId.StartsWith(Brand + ".", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
@@ -104,14 +139,14 @@ public static class ExplorerIntegration
         }
     }
 
-    /// <summary>모듈 확장자 중 ZP가 기본 앱인 개수 (설정 화면 "n/m" 표시용).</summary>
+    /// <summary>모듈 확장자 중 KOTU가 기본 앱인 개수 (설정 화면 "n/m" 표시용).</summary>
     public static int CountDefaults(IModule module) =>
         module.SupportedExtensions.Count(IsDefaultForExtension);
 
     /// <summary>
-    /// Windows 설정의 ZP 기본 앱 페이지를 연다(Win11 22H2+ 딥링크).
+    /// Windows 설정의 KOTU 기본 앱 페이지를 연다(Win11 22H2+ 딥링크).
     /// 파라미터를 모르는 구버전은 기본 앱 목록 페이지가 열린다 — 둘 다 사용자가
-    /// 파일 형식별로 ZP를 지정할 수 있는 화면이다.
+    /// 파일 형식별로 KOTU를 지정할 수 있는 화면이다.
     /// </summary>
     public static void OpenDefaultAppsSettings()
     {
@@ -119,7 +154,7 @@ public static class ExplorerIntegration
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "ms-settings:defaultapps?registeredAppUser=ZP",
+                FileName = "ms-settings:defaultapps?registeredAppUser=KOTU",
                 UseShellExecute = true,
             });
         }
@@ -143,7 +178,7 @@ public static class ExplorerIntegration
     private const uint OaifRegisterExt = 0x00000002;       // 선택을 확장자 기본으로 등록
     private const uint OaifForceRegistration = 0x00000020; // "항상 이 앱 사용" 강제 표시
 
-    /// <summary>확장자별 OS '연결 프로그램' 대화상자 — 여기서 ZP를 고르면 기본 앱이 된다.</summary>
+    /// <summary>확장자별 OS '연결 프로그램' 대화상자 — 여기서 KOTU를 고르면 기본 앱이 된다.</summary>
     public static void ShowSetDefaultDialog(nint ownerHwnd, string ext)
     {
         var info = new OpenAsInfo
@@ -165,7 +200,7 @@ public static class ExplorerIntegration
         @"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts";
 
     /// <summary>
-    /// 모듈의 모든 확장자를 ZP 기본 앱으로 강제 지정 시도.
+    /// 모듈의 모든 확장자를 KOTU 기본 앱으로 강제 지정 시도.
     /// 반드시 <see cref="RegisterAssociation"/> 이후 호출(ProgID 클래스 키가 있어야 UserChoice가 유효).
     /// </summary>
     /// <returns>강제 지정에 실패한 확장자 목록 — A25 폴백 대상. 비어 있으면 전부 성공.</returns>
@@ -261,16 +296,53 @@ public static class ExplorerIntegration
                 $@"Software\Classes\{ExtProgId(module, ext)}");
             if (extProg is not null) return true;
         }
-        // 구 형태(모듈 단일 ProgID·WinUtil.*) 등록만 있어도 '켜짐'으로 보여 재등록(=이관)을 유도
+        // 구 형태(모듈 단일 ProgID, v0.60.0 이전)도 현재 브랜드면 '켜짐'으로 본다.
+        // 구 브랜드(ZP.*/WinUtil.*)는 세지 않는다 — 이관하지 않기로 했으므로(A46, 2026-08-10)
+        // 토글은 꺼진 상태로 보이고, 남은 흔적은 CleanUpLegacyBrandRegistrations가 지운다.
         using var key = Registry.CurrentUser.OpenSubKey($@"Software\Classes\{ProgId(module)}");
-        if (key is not null) return true;
-        using var legacy = Registry.CurrentUser.OpenSubKey($@"Software\Classes\{LegacyProgId(module)}");
-        return legacy is not null;
+        return key is not null;
+    }
+
+    /// <summary>
+    /// 구 브랜드(ZP·WinUtil)로 등록됐던 파일 연결·우클릭 메뉴 흔적을 전부 지운다 (A46, v0.86.0).
+    /// 리브랜딩으로 ProgID가 바뀌면 구 키는 동작하지 않는 유령이 되므로 앱 시작 시 1회 청소한다.
+    /// 실패해도 앱 동작에는 영향이 없다.
+    /// </summary>
+    public static void CleanUpLegacyBrandRegistrations(IEnumerable<IModule> modules)
+    {
+        try
+        {
+            foreach (var module in modules)
+            {
+                foreach (var legacyProgId in LegacyProgIds(module))
+                    RemoveAssociationKeys(module, legacyProgId, removeExtProgIds: true);
+
+                foreach (var ext in module.SupportedExtensions)
+                {
+                    foreach (var verb in LegacyExtractHereVerbNames)
+                    {
+                        Registry.CurrentUser.DeleteSubKeyTree(
+                            $@"Software\Classes\SystemFileAssociations\{ext}\shell\{verb}",
+                            throwOnMissingSubKey: false);
+                    }
+                }
+            }
+
+            foreach (var legacyPath in LegacyCompressVerbKeyPaths)
+                Registry.CurrentUser.DeleteSubKeyTree(legacyPath, throwOnMissingSubKey: false);
+
+            RemoveLegacyCapabilities();
+            NotifyShell();
+        }
+        catch
+        {
+            // 청소 실패는 치명적이지 않다 — 다음 실행에서 다시 시도된다.
+        }
     }
 
     /// <summary>
     /// 확장자마다 전용 ProgID를 만들어 등록한다(A23) — DefaultIcon이 확장자별 아이콘
-    /// (모듈 색 + 확장자 글씨 + zp 표식)을 가리킨다. OpenWithProgids 등록이라 기본 앱
+    /// (모듈 색 + 확장자 글씨 + kotu 표식)을 가리킨다. OpenWithProgids 등록이라 기본 앱
     /// 강탈이 아니라 후보 등록 — 기본 앱 지정은 Windows 설정에서 사용자가 한다.
     /// </summary>
     public static void RegisterAssociation(IModule module)
@@ -292,9 +364,10 @@ public static class ExplorerIntegration
             extKey.SetValue(progId, Array.Empty<byte>(), RegistryValueKind.None);
         }
 
-        // 구 형태 청소: 모듈 단일 ProgID(v0.60.0 이전)·WinUtil.*(v0.33.0 이전)
+        // 구 형태 청소: 모듈 단일 ProgID(v0.60.0 이전) + 구 브랜드 전체(ZP·WinUtil)
         RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: false);
-        RemoveAssociationKeys(module, LegacyProgId(module), removeExtProgIds: false);
+        foreach (var legacyProgId in LegacyProgIds(module))
+            RemoveAssociationKeys(module, legacyProgId, removeExtProgIds: true);
         RegisterCapabilities(module); // 설정 '기본 앱' 목록 노출 (A25, v0.61.0)
         NotifyShell();
     }
@@ -302,12 +375,16 @@ public static class ExplorerIntegration
     public static void UnregisterAssociation(IModule module)
     {
         RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: true);
-        RemoveAssociationKeys(module, LegacyProgId(module), removeExtProgIds: false);
+        foreach (var legacyProgId in LegacyProgIds(module))
+            RemoveAssociationKeys(module, legacyProgId, removeExtProgIds: true);
         UnregisterCapabilities(module); // (A25, v0.61.0)
         NotifyShell();
     }
 
-    /// <summary>progId(모듈 단일)와 — 요청 시 — 확장자별 ProgID들의 등록 흔적을 지운다.</summary>
+    /// <summary>
+    /// progId(모듈 단일)와 — 요청 시 — 그 확장자별 파생 ProgID(progId+ext)들의 등록 흔적을 지운다.
+    /// 파생 ID를 현재 브랜드가 아니라 전달받은 progId에서 만들기 때문에 구 브랜드 청소에도 그대로 쓸 수 있다.
+    /// </summary>
     private static void RemoveAssociationKeys(IModule module, string progId, bool removeExtProgIds)
     {
         foreach (var ext in module.SupportedExtensions)
@@ -319,7 +396,7 @@ public static class ExplorerIntegration
 
             if (removeExtProgIds)
             {
-                var extProgId = ExtProgId(module, ext);
+                var extProgId = progId + ext;
                 if (extKey?.GetValueNames().Contains(extProgId, StringComparer.OrdinalIgnoreCase) == true)
                     extKey.DeleteValue(extProgId, throwOnMissingValue: false);
                 Registry.CurrentUser.DeleteSubKeyTree(
@@ -330,17 +407,15 @@ public static class ExplorerIntegration
         Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{progId}", throwOnMissingSubKey: false);
     }
 
-    // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with ZP-zip" ----------
+    // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with KOTU-zip" ----------
 
     public static bool IsExtractHereMenuRegistered(IReadOnlyList<string> archiveExtensions)
     {
         if (archiveExtensions.Count == 0) return false;
         using var key = Registry.CurrentUser.OpenSubKey(
             $@"Software\Classes\SystemFileAssociations\{archiveExtensions[0]}\shell\{ExtractHereVerbName}");
-        if (key is not null) return true;
-        using var legacy = Registry.CurrentUser.OpenSubKey(
-            $@"Software\Classes\SystemFileAssociations\{archiveExtensions[0]}\shell\{LegacyExtractHereVerbName}");
-        return legacy is not null;
+        // 구 브랜드 등록은 세지 않는다(A46 — 이관 없음). 남은 흔적은 등록/해제 시 청소된다.
+        return key is not null;
     }
 
     public static void RegisterExtractHereMenu(IReadOnlyList<string> archiveExtensions)
@@ -349,15 +424,18 @@ public static class ExplorerIntegration
         {
             using var verb = Registry.CurrentUser.CreateSubKey(
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractHereVerbName}");
-            verb.SetValue(null, "Extract here with ZP-zip");
+            verb.SetValue(null, "Extract here with KOTU-zip");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.ExtractHereToken} \"%1\"");
 
-            // 구 WinUtil.* 등록 흔적 청소 (v0.33.0)
-            Registry.CurrentUser.DeleteSubKeyTree(
-                $@"Software\Classes\SystemFileAssociations\{ext}\shell\{LegacyExtractHereVerbName}",
-                throwOnMissingSubKey: false);
+            // 구 브랜드(ZP·WinUtil) 등록 흔적 청소
+            foreach (var legacyVerb in LegacyExtractHereVerbNames)
+            {
+                Registry.CurrentUser.DeleteSubKeyTree(
+                    $@"Software\Classes\SystemFileAssociations\{ext}\shell\{legacyVerb}",
+                    throwOnMissingSubKey: false);
+            }
         }
         NotifyShell();
     }
@@ -369,44 +447,49 @@ public static class ExplorerIntegration
             Registry.CurrentUser.DeleteSubKeyTree(
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractHereVerbName}",
                 throwOnMissingSubKey: false);
-            Registry.CurrentUser.DeleteSubKeyTree(
-                $@"Software\Classes\SystemFileAssociations\{ext}\shell\{LegacyExtractHereVerbName}",
-                throwOnMissingSubKey: false);
+            foreach (var legacyVerb in LegacyExtractHereVerbNames)
+            {
+                Registry.CurrentUser.DeleteSubKeyTree(
+                    $@"Software\Classes\SystemFileAssociations\{ext}\shell\{legacyVerb}",
+                    throwOnMissingSubKey: false);
+            }
         }
         NotifyShell();
     }
 
-    // ---------- 우클릭 메뉴: 모든 파일 → "Compress with ZP-zip" ----------
+    // ---------- 우클릭 메뉴: 모든 파일 → "Compress with KOTU-zip" ----------
 
     private const string CompressVerbKeyPath = @"Software\Classes\*\shell\" + CompressVerbName;
-    private const string LegacyCompressVerbKeyPath = @"Software\Classes\*\shell\" + LegacyCompressVerbName;
+
+    private static IEnumerable<string> LegacyCompressVerbKeyPaths =>
+        LegacyCompressVerbNames.Select(v => @"Software\Classes\*\shell\" + v);
 
     public static bool IsCompressMenuRegistered()
     {
         using var key = Registry.CurrentUser.OpenSubKey(CompressVerbKeyPath);
-        if (key is not null) return true;
-        using var legacy = Registry.CurrentUser.OpenSubKey(LegacyCompressVerbKeyPath);
-        return legacy is not null;
+        return key is not null; // 구 브랜드 등록은 세지 않는다 (A46 — 이관 없음)
     }
 
     public static void RegisterCompressMenu()
     {
         using (var verb = Registry.CurrentUser.CreateSubKey(CompressVerbKeyPath))
         {
-            verb.SetValue(null, "Compress with ZP-zip");
+            verb.SetValue(null, "Compress with KOTU-zip");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
             using var command = verb.CreateSubKey("command");
             command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.CompressToken} \"%1\"");
         }
-        // 구 WinUtil.* 등록 흔적 청소 (v0.33.0)
-        Registry.CurrentUser.DeleteSubKeyTree(LegacyCompressVerbKeyPath, throwOnMissingSubKey: false);
+        // 구 브랜드(ZP·WinUtil) 등록 흔적 청소
+        foreach (var legacyPath in LegacyCompressVerbKeyPaths)
+            Registry.CurrentUser.DeleteSubKeyTree(legacyPath, throwOnMissingSubKey: false);
         NotifyShell();
     }
 
     public static void UnregisterCompressMenu()
     {
         Registry.CurrentUser.DeleteSubKeyTree(CompressVerbKeyPath, throwOnMissingSubKey: false);
-        Registry.CurrentUser.DeleteSubKeyTree(LegacyCompressVerbKeyPath, throwOnMissingSubKey: false);
+        foreach (var legacyPath in LegacyCompressVerbKeyPaths)
+            Registry.CurrentUser.DeleteSubKeyTree(legacyPath, throwOnMissingSubKey: false);
         NotifyShell();
     }
 

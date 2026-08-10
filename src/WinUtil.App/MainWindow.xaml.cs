@@ -50,7 +50,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(WindowManager manager)
     {
         InitializeComponent();
-        Title = "ZP";
+        Title = Branding.AppName;
         _manager = manager;
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
@@ -170,7 +170,7 @@ public sealed partial class MainWindow : Window
         ApplyTitle();
     }
 
-    private string _baseTitle = "ZP";
+    private string _baseTitle = Branding.AppName;
     private bool _titleDirtyMark; // 현재 뷰의 미저장 표시(A37 — ICloseGuard.UnsavedChanged)
 
     private void ApplyTitle()
@@ -454,7 +454,7 @@ public sealed partial class MainWindow : Window
     };
 
     private void OpenModule(IModule module)
-        => ShowModule(module, OpenContext.Empty, $"ZP {module.DisplayName}");
+        => ShowModule(module, OpenContext.Empty, $"{Branding.AppName} {module.DisplayName}");
 
     /// <summary>
     /// 앱 첫 화면 기본 뷰(Info/하드웨어). 사용자가 고른 화면이 아니므로
@@ -472,7 +472,7 @@ public sealed partial class MainWindow : Window
     {
         if (!await ConfirmDiscardAsync()) return; // 문서 편집 미저장 가드 (A37)
         _titleDirtyMark = false;
-        SetTitle("ZP Settings");
+        SetTitle($"{Branding.AppName} Settings");
         var settings = new SettingsView(_router);
         ModuleHost.Content = settings;
         // 설정도 하단 바 제공(광고 + ⛶, v0.50.0) — 모듈들과 같은 통합 방식
@@ -521,7 +521,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         ShowModule(module, OpenContext.ForFile(path),
-            $"ZP {module.DisplayName} — {Path.GetFileName(path)}");
+            $"{Branding.AppName} {module.DisplayName} — {Path.GetFileName(path)}");
     }
 
     /// <summary>탐색기 우클릭 동사(여기에 풀기/압축) 진입점. 동사는 압축 모듈이 처리한다.</summary>
@@ -537,7 +537,7 @@ public sealed partial class MainWindow : Window
         }
 
         ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] },
-            $"ZP {module.DisplayName} — {Path.GetFileName(file)}");
+            $"{Branding.AppName} {module.DisplayName} — {Path.GetFileName(file)}");
     }
 
     // ---------- 창 전체 드래그&드롭 → 파일 라우팅 ----------
@@ -852,7 +852,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 현재 모드 표시 갱신: 색 구분은 하단 바 스트립/칩 색 대신 창(타이틀바·작업표시줄)·
-    /// 트레이의 모듈 색 ZP 아이콘이 담당한다(사용자 요청, v0.26.0).
+    /// 트레이의 모듈 색 KOTU 아이콘이 담당한다(사용자 요청, v0.26.0).
     /// 칩은 모듈 글리프+브랜드명을 중립색으로만 표시.
     /// </summary>
     private void UpdateModeIndicator(IModule? module, bool isSettings = false)
@@ -881,7 +881,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>타이틀바·작업표시줄·트레이 아이콘을 현재 모듈 색 ZP 아이콘으로 교체(v0.26.0).</summary>
+    /// <summary>타이틀바·작업표시줄·트레이 아이콘을 현재 모듈 색 KOTU 아이콘으로 교체(v0.26.0).</summary>
     private void ApplyWindowIcon(string? moduleId)
     {
         var name = moduleId switch

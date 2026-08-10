@@ -18,7 +18,7 @@ namespace WinUtil.Module.Video;
 /// 동영상 플레이어 화면. 재생/일시정지, 시킹(슬라이더·←/→ 5초), 볼륨(↑/↓)·음소거(M),
 /// 배속, 자막(자동 탐지 + CP949 자동 변환), 이어보기, 전체화면(Enter/F11)을 제공한다.
 /// 더블클릭 전체화면은 제거(v0.23.0) — 클릭(재생/일시정지)과 겹쳐 의도치 않은 전환이 잦았다.
-/// 음악 재생은 오디오 모듈(ZP-audio)로 분리(A10, v0.75.0) — 파형 시각화 인스턴스 교체 로직도 함께 이관.
+/// 음악 재생은 오디오 모듈(KOTU-audio)로 분리(A10, v0.75.0) — 파형 시각화 인스턴스 교체 로직도 함께 이관.
 /// 스레드 모델(A42): libvlc 생성·해제와 자막 탐지·변환은 뷰 전용 워커에서 직렬로 —
 /// 생성/해제가 같은 큐라 순서가 구조적으로 보장된다. libvlc 이벤트는 libvlc 자체 스레드에서
 /// 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
@@ -136,7 +136,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private ModuleWorker? _worker; // libvlc 생성·해제/자막 탐지·변환 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
-    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP video worker");
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU video worker");
 
     public VideoPlayerView(OpenContext context, ISettingsService settings)
     {

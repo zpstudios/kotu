@@ -17,8 +17,8 @@
   5) 29.6–32s 마무리 킥 + C 메이저 마림바 롤 페이드
 
 재생성:
-  python3 docs/gen_test_audio.py           # /tmp/zp-test-audio.wav 생성
-  ffmpeg -y -i src/WinUtil.Module.Video/Assets/test-clip.mp4 -i /tmp/zp-test-audio.wav \
+  python3 docs/gen_test_audio.py           # /tmp/kotu-test-audio.wav 생성
+  ffmpeg -y -i src/WinUtil.Module.Video/Assets/test-clip.mp4 -i /tmp/kotu-test-audio.wav \
          -map 0:v -map 1:a -c:v copy -c:a aac -b:a 160k -movflags +faststart /tmp/test-clip-new.mp4
   mv /tmp/test-clip-new.mp4 src/WinUtil.Module.Video/Assets/test-clip.mp4
 """
@@ -27,7 +27,7 @@ import wave
 
 import numpy as np
 
-OUT = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"zp-test-audio-{os.getpid()}.wav")
+OUT = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"kotu-test-audio-{os.getpid()}.wav")
 SR = 44100
 DUR = 32.0
 BPM = 120.0

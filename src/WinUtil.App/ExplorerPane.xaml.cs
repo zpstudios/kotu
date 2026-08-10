@@ -61,7 +61,7 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도(Alt 오버레이 재오픈) 되살아난다.</summary>
-    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP explorer worker");
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU explorer worker");
 
     public ExplorerPane()
     {

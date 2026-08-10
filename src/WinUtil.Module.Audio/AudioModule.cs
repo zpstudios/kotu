@@ -23,7 +23,7 @@ public sealed class AudioModule : IModule
 
     public string DisplayName => "Music"; // 용도(음악 감상) 중심 — Videos·Images와 같은 결 (사용자 확정)
 
-    public string BrandName => "ZP-audio";
+    public string BrandName => "KOTU-audio";
 
     public string IconGlyph => "\uE8D6"; // MusicInfo (♪)
 

@@ -67,7 +67,7 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
     private ModuleWorker? _worker;      // 압축 목록/해제/생성 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
-    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP archive worker");
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU archive worker");
 
     public ObservableCollection<ArchiveRow> Rows { get; } = [];
 
@@ -230,7 +230,7 @@ public sealed partial class ArchiveView : UserControl, WinUtil.Core.Contracts.IC
     {
         if (_busy || _archivePath is null) return;
 
-        var tempDir = Path.Combine(Path.GetTempPath(), "ZP", "Archive", Guid.NewGuid().ToString("N"));
+        var tempDir = Path.Combine(Path.GetTempPath(), "KOTU", "Archive", Guid.NewGuid().ToString("N"));
         if (!await ExtractWithRetryAsync(tempDir, [node.FullPath], "Opening...")) return;
 
         var extracted = Path.Combine(tempDir, node.FullPath.Replace('/', Path.DirectorySeparatorChar));

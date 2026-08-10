@@ -567,7 +567,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         catch
         {
             // UAC 취소 — 유일한 인스턴스이므로 키를 되찾는다 (Program.InstanceKey와 동일해야 함)
-            Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey("ZP-Main");
+            Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey("KOTU-Main");
             return;
         }
         SensorService.Shutdown(); // 드라이버 핸들을 먼저 정리하고 내려간다

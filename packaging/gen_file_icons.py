@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""ZP 확장자별 파일 아이콘 생성기 (A23, v0.60.0) → src/WinUtil.App/Assets/fileicons/zp-*.ico
+"""KOTU 확장자별 파일 아이콘 생성기 (A23, v0.60.0 → A46/v0.86.0 리브랜딩)
+→ src/WinUtil.App/Assets/fileicons/kotu-*.ico
 
-탐색기에서 ZP에 연결된 파일이 쓰는 아이콘: 모듈 고유색 배경에
-확장자 텍스트를 크게(현 앱 아이콘의 "ZP" 스타일), 우측 하단에 작은 zp(연결 표식).
+탐색기에서 KOTU에 연결된 파일이 쓰는 아이콘: 모듈 고유색 배경에
+확장자 텍스트를 크게, 우측 하단에 작은 kotu(연결 표식).
+파일명 접두사는 ExplorerIntegration.FileIconPath와 반드시 일치해야 한다.
 확장자 목록은 각 모듈 코드와 동일하게 유지할 것:
   archive  → ArchiveModule.Extensions
   image    → ImageFolderNavigator.SupportedExtensions
@@ -20,6 +22,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(REPO, "src", "WinUtil.App", "Assets", "fileicons")
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+PREFIX = "kotu"   # 파일명 접두사 (구: "zp") — ExplorerIntegration.FileIconPath와 일치
+SUBMARK = "kotu"  # 우하단 연결 표식 (구: "zp")
 
 # 모듈 색 = Branding.ModuleAccent와 동일하게 유지
 MODULES = {
@@ -50,7 +54,7 @@ def fit_font(draw, text, max_width, start=150, minimum=34):
 
 
 def make(color, ext):
-    """256px 마스터: 모듈 색 라운드 사각 + 확장자 대문자 + 우하단 작은 zp."""
+    """256px 마스터: 모듈 색 라운드 사각 + 확장자 대문자 + 우하단 작은 kotu."""
     s = 256
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -61,8 +65,8 @@ def make(color, ext):
     d.text((s / 2, s / 2 - 10), ext.upper(),
            font=font, fill=(255, 255, 255, 255), anchor="mm")
 
-    sub = ImageFont.truetype(FONT, 44)
-    d.text((s - 26, s - 20), "zp", font=sub, fill=(255, 255, 255, 210), anchor="rb")
+    sub = ImageFont.truetype(FONT, 30)  # 4글자라 구 "zp"(44)보다 작게
+    d.text((s - 26, s - 20), SUBMARK, font=sub, fill=(255, 255, 255, 210), anchor="rb")
     return img
 
 
@@ -71,7 +75,7 @@ def main():
     count = 0
     for _module, (color, exts) in MODULES.items():
         for ext in exts:
-            path = os.path.join(OUT_DIR, f"zp-{ext}.ico")
+            path = os.path.join(OUT_DIR, f"{PREFIX}-{ext}.ico")
             make(color, ext).save(path, format="ICO", sizes=SIZES)
             count += 1
     print(f"생성: {count}개 → {OUT_DIR}")

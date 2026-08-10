@@ -112,7 +112,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     private ModuleWorker? _worker; // libvlc 생성·해제 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
-    private ModuleWorker Worker => _worker ??= new ModuleWorker("ZP audio worker");
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU audio worker");
 
     public AudioPlayerView(OpenContext context, ISettingsService settings)
     {

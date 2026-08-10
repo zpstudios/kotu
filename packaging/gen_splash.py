@@ -37,7 +37,7 @@ def main() -> None:
     small = ImageFont.truetype(DEJAVU, 14)
 
     # 워드마크
-    d.text((W / 2, 78), "ZP", font=title, fill=WHITE, anchor="mm")
+    d.text((W / 2, 78), "KOTU", font=title, fill=WHITE, anchor="mm")
     d.text((W / 2, 128), "Installing...", font=small, fill=DIM, anchor="mm")
 
     # 구분선

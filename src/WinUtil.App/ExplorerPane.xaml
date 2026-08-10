@@ -36,11 +36,11 @@
                 <DropDownButton.Flyout>
                     <MenuFlyout Placement="BottomEdgeAlignedRight">
                         <RadioMenuFlyoutItem x:Name="SortByName" Text="Name"
-                                             GroupName="zp-explorer-sort" Click="OnSortChanged" />
+                                             GroupName="kotu-explorer-sort" Click="OnSortChanged" />
                         <RadioMenuFlyoutItem x:Name="SortBySize" Text="Size"
-                                             GroupName="zp-explorer-sort" Click="OnSortChanged" />
+                                             GroupName="kotu-explorer-sort" Click="OnSortChanged" />
                         <RadioMenuFlyoutItem x:Name="SortByModified" Text="Date modified"
-                                             GroupName="zp-explorer-sort" Click="OnSortChanged" />
+                                             GroupName="kotu-explorer-sort" Click="OnSortChanged" />
                     </MenuFlyout>
                 </DropDownButton.Flyout>
             </DropDownButton>

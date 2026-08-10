@@ -14,7 +14,7 @@ public interface IModule
 
     /// <summary>
     /// OS에 노출되는 모듈 브랜드명(탐색기 우클릭 메뉴·파일 연결 표시명 등).
-    /// 앱 이름 "ZP"에 기능 접미사를 붙인다. 예: "ZP-zip".
+    /// 앱 이름 "KOTU"에 기능 접미사를 붙인다. 예: "KOTU-zip".
     /// </summary>
     string BrandName { get; }
 

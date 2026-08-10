@@ -83,12 +83,12 @@ jobs:
         run: |
           dotnet tool install --global vpk --version 1.2.0
           $publishDir = (Get-ChildItem -Path src/WinUtil.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1).FullName
-          # packId도 ZP (v0.33.0 사용자 결정) — 구 WinUtil packId 설치본은 자동 업데이트가
-          # 끊기므로 새 ZP-win-Setup.exe를 1회 수동 설치해야 한다 (릴리스 본문에 안내).
+          # packId = KOTU (A46/v0.86.0 리브랜딩). packId가 바뀌면 구 packId(ZP·WinUtil) 설치본은
+          # 자동 업데이트가 끊기므로 새 KOTU-win-Setup.exe를 1회 수동 설치해야 한다 (릴리스 본문에 안내).
           # 스플래시(미션 스테이트먼트) + Setup/Update 다이얼로그 아이콘
-          vpk pack --packId ZP --packVersion ${{ steps.ver.outputs.version }} `
+          vpk pack --packId KOTU --packVersion ${{ steps.ver.outputs.version }} `
                    --packDir $publishDir --mainExe WinUtil.App.exe `
-                   --packTitle ZP --packAuthors "ZP Studios" --outputDir vpk_out `
+                   --packTitle KOTU --packAuthors "KOTU Studios" --outputDir vpk_out `
                    --splashImage packaging/splash.png --icon src/WinUtil.App/Assets/app.ico
           if ($LASTEXITCODE -ne 0) { Write-Error "vpk pack 실패"; exit 1 }
           Get-ChildItem vpk_out | ForEach-Object { Write-Host ("생성됨: " + $_.Name) }
@@ -101,12 +101,17 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: vpk_out/*
           body: |
-            ## 받을 파일은 둘 중 하나입니다
-            - **`ZP-win-Setup.exe`** — 설치판. 시작 메뉴 등록, 이후 자동 업데이트.
-            - **`ZP-win-Portable.zip`** — 무설치판. 아무 폴더에나 풀어 실행, 역시 자동 업데이트.
+            ## 앱 이름이 **KOTU (King Of The Util)** 로 바뀌었습니다 (v0.86.0, A46)
 
-            > 구 **WinUtil** 이름(v0.32.0 이하)으로 설치했다면 자동 업데이트가 여기서 끊깁니다 —
-            > 새 `ZP-win-Setup.exe`를 한 번 설치해 주세요 (설정·이어보기 기록은 자동 이관).
+            ## 받을 파일은 둘 중 하나입니다
+            - **`KOTU-win-Setup.exe`** — 설치판. 시작 메뉴 등록, 이후 자동 업데이트.
+            - **`KOTU-win-Portable.zip`** — 무설치판. 아무 폴더에나 풀어 실행, 역시 자동 업데이트.
+
+            > **구 `ZP`(v0.85.0 이하) 또는 `WinUtil`(v0.32.0 이하) 설치본을 쓰고 있다면** 자동 업데이트가
+            > 여기서 끊깁니다 — 새 `KOTU-win-Setup.exe`를 한 번 설치해 주세요.
+            > 이번에는 **설정·이어보기 기록이 이관되지 않습니다**(사용자 결정) — 기본값으로 시작하고,
+            > 파일 연결·우클릭 메뉴는 설정 화면에서 다시 켜 주세요. 구 ZP 등록 흔적은 첫 실행에서 자동 청소됩니다.
+            > 구 설정이 필요하면 `%AppData%\ZP\settings.json`에 그대로 남아 있습니다.
 
             둘 다 압축·이미지·동영상 엔진(7z.dll·libvlc, 각 LGPL — THIRD-PARTY-NOTICES.md 참고)이 동봉되어 바로 동작합니다.
             _그 외 파일(`*.nupkg`, `*.json`, `RELEASES`)은 자동 업데이트 시스템이 읽는 내부 파일입니다 — 받지 마세요._
