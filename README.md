@@ -57,7 +57,7 @@ tests/                  # 단위 테스트 (xunit)
 > 표시명·시스템 등록 ID는 A46(v0.86.0)에서, 프로젝트·네임스페이스·실행 파일(`KOTU.exe`)은 A64(v0.88.0)에서 정리했습니다.
 > 내부 이름은 빌드·자동 업데이트 호환을 위해 유지합니다.
 
-설계 배경과 로드맵은 [ARCHITECTURE.md](ARCHITECTURE.md) 참고.
+설계 배경과 로드맵은 [ARCHITECTURE.md](ARCHITECTURE.md), 남은 작업 목록은 [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md), 작업 이어받기용 요약은 [docs/HANDOVER.md](docs/HANDOVER.md) 참고.
 
 ## 버전 이력
 
