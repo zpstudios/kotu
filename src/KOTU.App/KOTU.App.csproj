@@ -18,7 +18,8 @@
       exe·어셈블리 이름 (A64, v0.88.0). 프로젝트는 KOTU.App이지만 산출물은 "KOTU.exe"다 —
       UAC 대화상자·작업 관리자에 "KOTU.exe"로 보여야 하기 때문(구 WinUtil.App.exe 노출이 A64의 계기).
       ※ TargetName이 바뀌므로 아래 CopyPriToPublish의 $(TargetName).pri 폴백과
-        release.yml의 --mainExe 도 함께 KOTU.exe 기준이어야 한다.
+        release.yml의 mainExe 인자도 함께 KOTU.exe 기준이어야 한다.
+        (XML 주석 안에는 하이픈 두 개를 연달아 쓸 수 없어 인자명을 그대로 적지 못한다.)
     -->
     <AssemblyName>KOTU</AssemblyName>
     <RootNamespace>KOTU.App</RootNamespace>
