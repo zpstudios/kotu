@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KOTU — King of the Utilities</title>
+<meta name="description" content="Photo, video, archive, documents. All the Windows software you must install, in one no-bloat package. 100% offline, open source, free.">
+<meta name="theme-color" content="#0b1521">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="KOTU — King of the Utilities">
+<meta property="og:description" content="All the Windows utilities you must install, in 1 no-bloat package.">
+<!-- TODO(art): og:image — 캐릭터 리소스 확정되면 1200x630 이미지로 교체
+<meta property="og:image" content="assets/og-cover.png"> -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   KOTU landing page — single file, no build step.
+
+   ART STATUS: the mascot character is NOT in this build (the
+   design mock-up used third-party character art). Everything
+   here is original geometry — an SVG night skyline in the hero
+   and an SVG crown mark for the logo.
+   Every slot that expects the real mascot is marked TODO(art).
+   ============================================================ */
+:root{
+  --bg:          #0b1521;
+  --bg-deep:     #060d18;
+  --bg-card:     #121b28;
+  --line:        #1e2b3c;
+
+  --mint:        #86d3a5;
+  --mint-deep:   #5eb884;
+  --pink:        #ee8ca3;
+  --amber:       #f5c56b;
+  --blue:        #7bb8d6;
+  --violet:      #b39ae0;
+
+  --ink:         #f2e9e0;
+  --ink-dim:     #a8b8c6;
+  --ink-faint:   #7e91a4;
+
+  --maxw:        1240px;
+  --r:           18px;
+  --ease:        cubic-bezier(.22,.61,.36,1);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:88px;-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:17px;line-height:1.6;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4{font-family:'Archivo','Arial Black','Helvetica Neue',Arial,sans-serif;margin:0;line-height:1.05;letter-spacing:-.01em}
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 28px}
+
+/* ---------- nav ---------- */
+.nav{
+  position:sticky;top:0;z-index:60;
+  background:rgba(6,13,24,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid transparent;transition:border-color .3s var(--ease),background .3s var(--ease);
+}
+.nav.scrolled{border-bottom-color:var(--line);background:rgba(6,13,24,.9)}
+.nav-in{display:flex;align-items:center;gap:26px;height:76px}
+.brand{display:flex;align-items:center;gap:11px;flex-shrink:0}
+.brand img{width:40px;height:40px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+.brand-txt{display:flex;flex-direction:column;line-height:1}
+.brand-name{font-family:'Archivo',Arial,sans-serif;font-weight:900;font-size:25px;color:var(--mint);letter-spacing:.02em}
+.brand-sub{font-size:9.5px;font-weight:600;letter-spacing:.19em;color:var(--ink-faint);margin-top:4px}
+
+.nav-links{display:flex;gap:30px;margin-left:auto}
+.nav-links a{
+  font-size:13px;font-weight:600;letter-spacing:.11em;color:var(--ink-dim);
+  padding:6px 0;position:relative;transition:color .2s var(--ease);white-space:nowrap;
+}
+.nav-links a::after{
+  content:"";position:absolute;left:0;right:100%;bottom:0;height:2px;
+  background:var(--pink);transition:right .3s var(--ease);
+}
+.nav-links a:hover{color:var(--ink)}
+.nav-links a:hover::after,.nav-links a.active::after{right:0}
+.nav-links a.active{color:var(--ink)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  font-family:'Barlow',system-ui,sans-serif;font-weight:700;font-size:14px;letter-spacing:.09em;
+  padding:13px 26px;border-radius:999px;border:1px solid transparent;cursor:pointer;
+  transition:transform .2s var(--ease),box-shadow .25s var(--ease),background .2s var(--ease);
+  white-space:nowrap;
+}
+.btn svg{width:17px;height:17px;flex:0 0 auto}
+.btn-primary{background:linear-gradient(180deg,#9adfb5,#6fbf90);color:#08301d;box-shadow:0 6px 20px -8px rgba(134,211,165,.65)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 28px -10px rgba(134,211,165,.8)}
+.btn-ghost{background:rgba(255,255,255,.035);color:var(--ink);border-color:rgba(255,255,255,.16)}
+.btn-ghost:hover{background:rgba(255,255,255,.09);transform:translateY(-2px)}
+.nav .btn{padding:11px 22px;font-size:12.5px}
+
+.burger{display:none;margin-left:auto;background:none;border:0;color:var(--ink);padding:8px;cursor:pointer}
+.burger svg{width:26px;height:26px}
+
+/* ---------- hero ---------- */
+.hero{position:relative;overflow:hidden;background:linear-gradient(180deg,#060d18 0%,#0a1220 55%,#0b1521 100%)}
+.stars{position:absolute;inset:0;pointer-events:none;opacity:.75}
+/* The art panel bleeds off the right edge. Both fades are done in CSS, so
+   whatever goes inside — today's SVG skyline, tomorrow's mascot PNG — works
+   at any viewport width without re-cutting the asset. */
+.hero-art{position:absolute;right:0;top:0;bottom:0;width:min(63%,1000px);pointer-events:none;z-index:1}
+.hero-art > *{
+  width:100%;height:100%;object-fit:contain;object-position:100% 100%;
+  -webkit-mask-image:linear-gradient(to right,transparent 4%,#000 44%),linear-gradient(to bottom,#000 82%,transparent 100%);
+  -webkit-mask-composite:source-in;
+          mask-image:linear-gradient(to right,transparent 4%,#000 44%),linear-gradient(to bottom,#000 82%,transparent 100%);
+          mask-composite:intersect;
+}
+.hero-art .skyline{display:block}
+.hero-in{
+  display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,1fr);align-items:center;
+  gap:20px;min-height:min(660px,82vh);padding-top:56px;padding-bottom:74px;position:relative;z-index:2;
+}
+.hero-copy{grid-column:1}
+
+.wordmark{
+  font-family:'Archivo',Arial,sans-serif;font-weight:900;font-size:clamp(64px,9.4vw,132px);line-height:.86;
+  color:var(--mint);letter-spacing:-.015em;position:relative;display:inline-block;
+  text-shadow:0 4px 0 rgba(0,0,0,.22);
+}
+.crown{position:absolute;left:-2px;top:-.36em;width:.27em;color:var(--pink);transform:rotate(-11deg)}
+.crown svg{width:100%;height:auto;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.tagline{
+  font-family:'Archivo',Arial,sans-serif;font-weight:800;color:var(--pink);
+  font-size:clamp(21px,2.7vw,37px);letter-spacing:.005em;margin:14px 0 22px;
+}
+.cats{display:flex;flex-wrap:wrap;gap:22px;margin-bottom:12px}
+.cat{display:flex;align-items:center;gap:9px;font-weight:700;font-size:clamp(14px,1.35vw,19px);letter-spacing:.055em}
+.cat svg{width:1.15em;height:1.15em}
+.cat.c1{color:var(--mint)} .cat.c2{color:var(--pink)} .cat.c3{color:var(--amber)} .cat.c4{color:var(--blue)}
+.mission{font-size:clamp(15px,1.5vw,19px);font-weight:600;letter-spacing:.04em;color:#dfe7ee;max-width:46ch;margin:0 0 30px}
+.mission em{font-style:normal;color:var(--mint);font-weight:700}
+.mission .n{color:var(--pink);font-weight:700}
+
+.badges{display:flex;flex-wrap:wrap;gap:26px;margin-bottom:34px}
+.badge{display:flex;align-items:center;gap:11px}
+.badge-ic{
+  width:38px;height:38px;border-radius:50%;flex:0 0 auto;
+  display:grid;place-items:center;background:rgba(134,211,165,.13);border:1px solid rgba(134,211,165,.28);color:var(--mint);
+}
+.badge-ic svg{width:19px;height:19px}
+.badge b{display:block;font-size:14px;font-weight:700;letter-spacing:.02em;line-height:1.25}
+.badge span{display:block;font-size:12.5px;color:var(--ink-faint);line-height:1.3}
+.hero-cta{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.hero-cta .btn{padding:16px 30px;font-size:14.5px}
+.verline{margin-top:16px;font-size:12.5px;letter-spacing:.09em;color:var(--ink-faint);font-weight:500}
+
+/* ---------- sections ---------- */
+section{position:relative}
+.sec{padding:96px 0}
+.sec-head{text-align:center;max-width:760px;margin:0 auto 54px}
+.sec-title{font-weight:900;font-size:clamp(28px,4vw,46px);letter-spacing:.005em}
+.sec-title .hl{color:var(--pink)}
+.sec-sub{color:var(--ink-dim);margin-top:14px;font-size:16.5px}
+.eyebrow{
+  display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.22em;color:var(--mint);
+  margin-bottom:16px;
+}
+
+/* module cards — 3 x 2 so the six modules stay balanced */
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+@media (max-width:1020px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.cards{grid-template-columns:1fr}}
+.card{
+  position:relative;overflow:hidden;border-radius:var(--r);
+  background:var(--bg-card);border:1px solid var(--line);
+  padding:26px 24px 26px;min-height:270px;
+  transition:transform .28s var(--ease),border-color .28s var(--ease),box-shadow .28s var(--ease);
+}
+.card:hover{transform:translateY(-5px);border-color:var(--c,rgba(255,255,255,.2));box-shadow:0 18px 40px -22px rgba(0,0,0,.9)}
+.card::after{content:"";position:absolute;inset:0;border-radius:var(--r);background:radial-gradient(120% 90% at 100% 0%,color-mix(in srgb,var(--c) 11%,transparent),transparent 62%);pointer-events:none}
+.card-mascot{
+  position:absolute;right:12px;bottom:0;width:auto;height:126px;pointer-events:none;
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.5));transition:transform .35s var(--ease);
+}
+.card:hover .card-mascot{transform:translateY(-5px) scale(1.05)}
+.card-ic{
+  width:46px;height:46px;border-radius:13px;display:grid;place-items:center;margin-bottom:16px;
+  background:color-mix(in srgb,var(--c) 22%,transparent);color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 34%,transparent);
+}
+.card-ic svg{width:23px;height:23px}
+.card h3{font-size:20px;font-weight:800;letter-spacing:.05em;color:var(--c);margin-bottom:7px}
+.card p{margin:0 0 16px;font-size:14.5px;color:var(--ink-dim)}
+.card ul{list-style:none;margin:0;padding:0;position:relative;z-index:2}
+.card li{font-size:14px;color:#c7d3de;padding-left:15px;position:relative;margin-bottom:6px}
+/* keep the last lines clear of the mascot sitting in the bottom-right corner */
+.card:has(.card-mascot) li:nth-last-child(-n+2){padding-right:104px}
+.card li::before{content:"";position:absolute;left:0;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--c)}
+
+/* trust strip */
+.trust{
+  position:relative;margin-top:26px;border-radius:var(--r);
+  background:linear-gradient(180deg,#0d1522,#0a111d);border:1px solid var(--line);
+  padding:30px 34px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:26px;overflow:hidden;
+}
+.trust-item{display:flex;gap:14px;align-items:flex-start;position:relative;z-index:2}
+.trust-item svg{width:26px;height:26px;flex:0 0 auto;margin-top:2px}
+.trust-item b{display:block;font-family:'Archivo',Arial,sans-serif;font-weight:800;font-size:15px;letter-spacing:.09em;margin-bottom:3px}
+.trust-item span{display:block;font-size:13.5px;color:var(--ink-faint);line-height:1.45}
+
+/* inside */
+.inside{background:linear-gradient(180deg,#0b1521,#08111c)}
+.replace{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-bottom:44px}
+.rep{border:1px solid var(--line);border-radius:14px;padding:20px 22px;background:rgba(255,255,255,.017)}
+.rep h4{font-size:13px;font-weight:800;letter-spacing:.16em;color:var(--c);margin-bottom:12px}
+.rep p{margin:0;font-size:14.5px;color:var(--ink-dim);line-height:1.75}
+.rep s{color:var(--ink-faint);text-decoration-color:rgba(238,140,163,.55)}
+
+.engines{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.engines{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.engines{grid-template-columns:1fr}}
+.eng{
+  border:1px solid var(--line);border-radius:14px;padding:18px 20px;background:var(--bg-card);
+  transition:border-color .25s var(--ease),transform .25s var(--ease);
+}
+.eng:hover{border-color:rgba(134,211,165,.4);transform:translateY(-3px)}
+.eng b{display:block;font-family:'Archivo',Arial,sans-serif;font-weight:700;font-size:15.5px;margin-bottom:4px}
+.eng span{display:block;font-size:13px;color:var(--ink-faint)}
+.eng i{display:inline-block;font-style:normal;font-size:10.5px;letter-spacing:.11em;font-weight:700;color:var(--mint);
+  border:1px solid rgba(134,211,165,.32);border-radius:5px;padding:2px 7px;margin-top:9px}
+
+/* screenshots */
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.shot{
+  border-radius:16px;overflow:hidden;border:1px solid var(--line);background:var(--bg-card);
+  transition:transform .28s var(--ease),border-color .28s var(--ease);
+}
+.shot:hover{transform:translateY(-4px);border-color:rgba(134,211,165,.35)}
+.shot-bar{display:flex;gap:6px;align-items:center;padding:11px 14px;background:#0d1622;border-bottom:1px solid var(--line)}
+.dot{width:9px;height:9px;border-radius:50%;background:#2b3a4c}
+.shot-bar span{margin-left:8px;font-size:11.5px;letter-spacing:.12em;color:var(--ink-faint);font-weight:600}
+.shot-body{
+  aspect-ratio:16/10;display:grid;place-items:center;gap:10px;text-align:center;padding:20px;
+  background:
+    linear-gradient(135deg,rgba(134,211,165,.05),rgba(238,140,163,.05)),
+    repeating-linear-gradient(45deg,rgba(255,255,255,.014) 0 12px,transparent 12px 24px);
+}
+.shot-body p{margin:0;font-size:13px;color:var(--ink-faint);letter-spacing:.06em}
+.shot-body strong{font-family:'Archivo',Arial,sans-serif;font-weight:800;font-size:17px;letter-spacing:.07em;color:#c7d3de;display:block;margin-bottom:6px}
+
+/* faq */
+.faq{max-width:840px;margin:0 auto}
+.q{border-bottom:1px solid var(--line)}
+.q summary{
+  list-style:none;cursor:pointer;padding:22px 44px 22px 0;position:relative;
+  font-family:'Archivo',Arial,sans-serif;font-weight:700;font-size:17.5px;letter-spacing:.005em;
+  transition:color .2s var(--ease);
+}
+.q summary::-webkit-details-marker{display:none}
+.q summary:hover{color:var(--mint)}
+.q summary::after{
+  content:"";position:absolute;right:8px;top:50%;width:11px;height:11px;
+  border-right:2px solid var(--ink-faint);border-bottom:2px solid var(--ink-faint);
+  transform:translateY(-70%) rotate(45deg);transition:transform .25s var(--ease);
+}
+.q[open] summary::after{transform:translateY(-30%) rotate(-135deg)}
+.q .a{padding:0 30px 24px 0;color:var(--ink-dim);font-size:15.5px}
+.q .a code{background:rgba(255,255,255,.06);padding:2px 7px;border-radius:5px;font-size:13.5px;color:var(--mint)}
+
+/* download */
+.dl{background:linear-gradient(180deg,#08111c,#060d18)}
+.dl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;max-width:900px;margin:0 auto}
+.dl-card{
+  position:relative;border-radius:var(--r);padding:32px 30px;border:1px solid var(--line);
+  background:var(--bg-card);display:flex;flex-direction:column;
+  transition:transform .28s var(--ease),border-color .28s var(--ease);
+}
+.dl-card:hover{transform:translateY(-4px)}
+.dl-card.feat{border-color:rgba(134,211,165,.42);background:linear-gradient(180deg,rgba(134,211,165,.07),var(--bg-card))}
+.dl-tag{position:absolute;top:-11px;left:30px;background:var(--mint);color:#08301d;font-size:10.5px;font-weight:800;letter-spacing:.14em;padding:4px 11px;border-radius:999px}
+.dl-card h3{font-size:22px;font-weight:800;margin-bottom:8px}
+.dl-card > p{color:var(--ink-dim);font-size:15px;margin:0 0 18px}
+.dl-card ul{list-style:none;padding:0;margin:0 0 26px}
+.dl-card li{font-size:14px;color:#c1cdd8;padding-left:24px;position:relative;margin-bottom:9px}
+.dl-card li::before{content:"";position:absolute;left:2px;top:.42em;width:11px;height:6px;border-left:2px solid var(--mint);border-bottom:2px solid var(--mint);transform:rotate(-45deg)}
+.dl-card .btn{margin-top:auto;width:100%}
+.dl-note{text-align:center;color:var(--ink-faint);font-size:13.5px;margin-top:30px;max-width:640px;margin-left:auto;margin-right:auto}
+
+/* footer */
+footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0 40px}
+.foot{display:flex;flex-wrap:wrap;gap:26px;align-items:center;justify-content:space-between}
+.foot-links{display:flex;flex-wrap:wrap;gap:24px}
+.foot-links a{font-size:13.5px;color:var(--ink-dim);transition:color .2s var(--ease)}
+.foot-links a:hover{color:var(--mint)}
+.foot-legal{font-size:12.5px;color:var(--ink-faint);margin-top:24px;line-height:1.7}
+
+/* reveal */
+.rv{opacity:0;transform:translateY(22px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.rv.in{opacity:1;transform:none}
+
+/* responsive */
+@media (max-width:1080px){
+  .nav-links{gap:20px}
+  .nav-links a{font-size:12px;letter-spacing:.08em}
+}
+@media (max-width:900px){
+  .nav-links,.nav .btn{display:none}
+  .nav.open .nav-links{
+    display:flex;position:absolute;top:76px;left:0;right:0;flex-direction:column;gap:0;
+    background:rgba(6,13,24,.98);border-bottom:1px solid var(--line);padding:8px 28px 22px;
+  }
+  .nav.open .nav-links a{padding:14px 0;font-size:14px;border-bottom:1px solid rgba(255,255,255,.05)}
+  .burger{display:block}
+  .hero-in{grid-template-columns:1fr;text-align:center;padding-top:64px;padding-bottom:24px;gap:6px;min-height:0}
+  .hero-art{position:relative;width:100%;height:auto;inset:auto;margin-top:-8px}
+  .hero-art img{
+    width:100%;height:auto;max-height:52vh;object-position:center 42%;
+    -webkit-mask-image:linear-gradient(to bottom,#000 62%,transparent 99%);
+            mask-image:linear-gradient(to bottom,#000 62%,transparent 99%);
+    -webkit-mask-composite:source-over;mask-composite:add;
+  }
+  .cats,.badges,.hero-cta{justify-content:center}
+  .mission{margin-left:auto;margin-right:auto}
+  .badges{display:grid;grid-template-columns:1fr 1fr;gap:16px 18px;justify-items:start;text-align:left;max-width:440px;margin-inline:auto}
+  .badges .badge:last-child{grid-column:1 / -1;justify-self:center}
+  .card p,.card li{max-width:none}
+  .card:has(.card-mascot) li:nth-last-child(-n+2){padding-right:104px}
+  .sec{padding:74px 0}
+}
+@media (max-width:520px){
+  body{font-size:16px}
+  .wrap{padding-left:20px;padding-right:20px}
+  .badges{grid-template-columns:1fr;max-width:250px}
+  .badges .badge:last-child{grid-column:auto;justify-self:start}
+  .hero-cta .btn{width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .rv{opacity:1;transform:none}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#home">
+      <img src="assets/logo-mark.svg" alt="" width="64" height="64">
+      <span class="brand-txt">
+        <span class="brand-name">KOTU</span>
+        <span class="brand-sub">KING OF THE UTILITIES</span>
+      </span>
+    </a>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <nav class="nav-links" id="navlinks">
+      <a href="#home">HOME</a>
+      <a href="#features">FEATURES</a>
+      <a href="#inside">WHAT'S INSIDE</a>
+      <a href="#screenshots">SCREENSHOTS</a>
+      <a href="#faq">FAQ</a>
+      <a href="#download">DOWNLOAD</a>
+    </nav>
+    <a class="btn btn-primary" href="#download">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M3.5 17.5V19a2 2 0 002 2h13a2 2 0 002-2v-1.5"/></svg>
+      DOWNLOAD KOTU
+    </a>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="home">
+  <canvas class="stars" id="stars" aria-hidden="true"></canvas>
+  <div class="wrap hero-in">
+    <div class="hero-copy">
+      <h1 class="wordmark">
+        <span class="crown" aria-hidden="true">
+          <svg viewBox="0 0 64 44" fill="currentColor"><circle cx="7" cy="9" r="6"/><circle cx="32" cy="4" r="6"/><circle cx="57" cy="9" r="6"/><path d="M4 12l10 15 18-19 18 19 10-15 3 30H1z" /></svg>
+        </span>
+        KOTU
+      </h1>
+      <p class="tagline">KING OF THE UTILITIES</p>
+
+      <div class="cats">
+        <span class="cat c1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="6" width="19" height="14" rx="3"/><circle cx="12" cy="13" r="3.6"/><path d="M8.5 6l1.6-2.5h3.8L15.5 6"/></svg>PHOTO</span>
+        <span class="cat c2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4.5" width="19" height="15" rx="4"/><path d="M10.2 9.2l5 2.8-5 2.8z" fill="currentColor" stroke="none"/></svg>VIDEO</span>
+        <span class="cat c3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="5" rx="1.6"/><path d="M4.5 9v9.5a2 2 0 002 2h11a2 2 0 002-2V9"/><path d="M10 13.5h4"/></svg>ARCHIVE</span>
+        <span class="cat c4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13.5 2.8H7a2.5 2.5 0 00-2.5 2.5v13.4A2.5 2.5 0 007 21.2h10a2.5 2.5 0 002.5-2.5V8.8z"/><path d="M13.5 2.8v6h6"/></svg>DOCUMENTS</span>
+      </div>
+
+      <p class="mission">… ALL YOU MUST INSTALL WINDOWS SOFTWARE<br>IN <span class="n">1 NO BLOAT</span> PACKAGE.</p>
+
+      <div class="badges">
+        <div class="badge">
+          <span class="badge-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3.2 12h17.6M12 3.2a15 15 0 010 17.6 15 15 0 010-17.6"/></svg></span>
+          <span><b>100% Offline</b><span>Works anywhere</span></span>
+        </div>
+        <div class="badge">
+          <span class="badge-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7.5 3.2v5.4c0 4.4-3.1 8.2-7.5 9.4-4.4-1.2-7.5-5-7.5-9.4V6.2z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg></span>
+          <span><b>No Bloat</b><span>Clean &amp; lightweight</span></span>
+        </div>
+        <div class="badge">
+          <span class="badge-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3.5l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.9l6.1-.8z"/></svg></span>
+          <span><b>All Essential</b><span>Everything you need</span></span>
+        </div>
+      </div>
+
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#download">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M3.5 17.5V19a2 2 0 002 2h13a2 2 0 002-2v-1.5"/></svg>
+          DOWNLOAD KOTU
+        </a>
+        <a class="btn btn-ghost" href="#features">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5l11 6.5-11 6.5z"/></svg>
+          SEE WHAT IT DOES
+        </a>
+      </div>
+      <p class="verline">v0.89.0 · For Windows 10 / 11 (64-bit) · Free &amp; open source</p>
+    </div>
+
+  </div>
+  <!-- TODO(art): 마스코트 확정되면 아래 <object>를 교체
+       <img src="assets/hero-art.png" alt="…" width="900" height="522" fetchpriority="high">
+       (불투명·투명 어느 쪽이든 됨. 좌·하단 페이드는 .hero-art > * 의 mask가 처리) -->
+  <div class="hero-art">
+    <img class="skyline" src="assets/skyline.svg" alt="" width="900" height="522" fetchpriority="high">
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="sec" id="features">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">SIX MODULES · ONE WINDOW</span>
+      <h2 class="sec-title">EVERYTHING YOU NEED. <span class="hl">NOTHING YOU DON'T.</span></h2>
+      <p class="sec-sub">Double-click any file and the right module opens in the same window. No app switching, no installer roulette, no toolbars.</p>
+    </div>
+
+    <div class="cards">
+      <article class="card rv" style="--c:var(--mint)">
+        <!-- TODO(art): <img class="card-mascot" src="assets/mascot-photo.png" alt="" loading="lazy"> -->
+        <span class="card-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="6" width="19" height="14" rx="3"/><circle cx="12" cy="13" r="3.6"/><path d="M8.5 6l1.6-2.5h3.8L15.5 6"/></svg></span>
+        <h3>IMAGE</h3>
+        <p>View, browse &amp; organize photos</p>
+        <ul>
+          <li>Arrow-key folder browsing</li>
+          <li>Zoom, pan, rotate, fullscreen</li>
+          <li>EXIF orientation &amp; info bar</li>
+          <li>Animated GIF · trash delete</li>
+        </ul>
+      </article>
+
+      <article class="card rv" style="--c:var(--pink)">
+        <!-- TODO(art): <img class="card-mascot" src="assets/mascot-video.png" alt="" loading="lazy"> -->
+        <span class="card-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4.5" width="19" height="15" rx="4"/><path d="M10.2 9.2l5 2.8-5 2.8z" fill="currentColor" stroke="none"/></svg></span>
+        <h3>VIDEO</h3>
+        <p>Play anything, no codec packs</p>
+        <ul>
+          <li>libvlc engine, bundled</li>
+          <li>Subtitles (srt · smi, CP949)</li>
+          <li>Speed, seek, resume playback</li>
+          <li>Fullscreen HUD feedback</li>
+        </ul>
+      </article>
+
+      <article class="card rv" style="--c:var(--violet)">
+        <span class="card-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5.5l11-2v12"/><circle cx="6.4" cy="18" r="2.6"/><circle cx="17.4" cy="15.5" r="2.6"/></svg></span>
+        <h3>AUDIO</h3>
+        <p>Music without the media library</p>
+        <ul>
+          <li>mp3 · flac · wav · m4a · ogg</li>
+          <li>Live waveform visualisation</li>
+          <li>Resume where you stopped</li>
+          <li>Built-in speaker test clip</li>
+        </ul>
+      </article>
+
+      <article class="card rv" style="--c:var(--blue)">
+        <!-- TODO(art): <img class="card-mascot" src="assets/mascot-docs.png" alt="" loading="lazy"> -->
+        <span class="card-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13.5 2.8H7a2.5 2.5 0 00-2.5 2.5v13.4A2.5 2.5 0 007 21.2h10a2.5 2.5 0 002.5-2.5V8.8z"/><path d="M13.5 2.8v6h6"/></svg></span>
+        <h3>DOCUMENT</h3>
+        <p>Read PDFs, edit plain text</p>
+        <ul>
+          <li>PDF viewer, continuous scroll</li>
+          <li>Ctrl+wheel zoom · page counter</li>
+          <li>Text editor with Ctrl+S</li>
+          <li>Keeps encoding &amp; line endings</li>
+        </ul>
+      </article>
+
+      <article class="card rv" style="--c:var(--amber)">
+        <!-- TODO(art): <img class="card-mascot" src="assets/mascot-archive.png" alt="" loading="lazy"> -->
+        <span class="card-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="5" rx="1.6"/><path d="M4.5 9v9.5a2 2 0 002 2h11a2 2 0 002-2V9"/><path d="M10 13.5h4"/></svg></span>
+        <h3>ARCHIVE</h3>
+        <p>Compress, extract &amp; peek inside</p>
+        <ul>
+          <li>zip · 7z · rar · tar · gz</li>
+          <li>Browse without extracting</li>
+          <li>Password-protected zip / 7z</li>
+          <li>Fixes broken CP949 filenames</li>
+        </ul>
+      </article>
+
+      <article class="card rv" style="--c:#5ec8c0">
+        <span class="card-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="8.5" y="8.5" width="7" height="7" rx="1.4"/><path d="M9.5 1.8v2.2M14.5 1.8v2.2M9.5 20v2.2M14.5 20v2.2M1.8 9.5h2.2M1.8 14.5h2.2M20 9.5h2.2M20 14.5h2.2"/></svg></span>
+        <h3>HARDWARE</h3>
+        <p>Know what's inside your PC</p>
+        <ul>
+          <li>CPU · RAM · GPU · disks · net</li>
+          <li>Live sensor graphs</li>
+          <li>Two sensors pinned to the tray</li>
+          <li>Copy full spec sheet in a click</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="trust rv">
+      <div class="trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--mint)" stroke-width="2"><path d="M12 3l7.5 3.2v5.4c0 4.4-3.1 8.2-7.5 9.4-4.4-1.2-7.5-5-7.5-9.4V6.2z"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
+        <span><b>SAFE &amp; TRUSTED</b><span>No malware. No ads. MIT-licensed source on GitHub.</span></span>
+      </div>
+      <div class="trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M13.5 2.5L5 13.2h5.6L9.8 21.5 18.5 10.4h-5.7z"/></svg>
+        <span><b>LIGHTWEIGHT</b><span>One process. Modules load only when you open a file.</span></span>
+      </div>
+      <div class="trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M3 8l4.5 3.5L12 4.5l4.5 7L21 8l-1.8 10.5H4.8z"/></svg>
+        <span><b>ALL-IN-ONE</b><span>One installer. Every engine bundled. Nothing to add later.</span></span>
+      </div>
+      <div class="trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--pink)" stroke-width="2"><path d="M12 20.2S3.5 14.8 3.5 9.3A4.8 4.8 0 0112 6.6a4.8 4.8 0 018.5 2.7c0 5.5-8.5 10.9-8.5 10.9z"/></svg>
+        <span><b>MADE WITH LOVE</b><span>By a utility lover, for everyone.</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHAT'S INSIDE ============ -->
+<section class="sec inside" id="inside">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">WHAT'S INSIDE</span>
+      <h2 class="sec-title">ONE APP INSTEAD OF <span class="hl">TWELVE</span></h2>
+      <p class="sec-sub">KOTU isn't a bundle of other people's installers. It's a single app that takes over the jobs you used to install a separate program for.</p>
+    </div>
+
+    <div class="replace rv">
+      <div class="rep" style="--c:var(--mint)">
+        <h4>INSTEAD OF</h4>
+        <p><s>IrfanView</s> · <s>XnView MP</s> · <s>FastStone</s> · <s>PhotoScape</s></p>
+      </div>
+      <div class="rep" style="--c:var(--pink)">
+        <h4>INSTEAD OF</h4>
+        <p><s>VLC</s> · <s>PotPlayer</s> · <s>foobar2000</s> · <s>codec packs</s></p>
+      </div>
+      <div class="rep" style="--c:var(--amber)">
+        <h4>INSTEAD OF</h4>
+        <p><s>WinRAR</s> · <s>Bandizip</s> · <s>PeaZip</s> · <s>7-Zip shell</s></p>
+      </div>
+      <div class="rep" style="--c:var(--blue)">
+        <h4>INSTEAD OF</h4>
+        <p><s>Acrobat Reader</s> · <s>Sumatra</s> · <s>Notepad++</s> · <s>CPU-Z</s></p>
+      </div>
+    </div>
+
+    <div class="sec-head rv" style="margin-bottom:34px">
+      <h3 class="sec-title" style="font-size:clamp(21px,2.6vw,30px)">Powered by engines you already trust</h3>
+      <p class="sec-sub" style="font-size:15.5px">Every one of them ships inside the download — nothing is fetched at runtime.</p>
+    </div>
+
+    <div class="engines rv">
+      <div class="eng"><b>7-Zip (7z.dll)</b><span>Archive extraction &amp; creation</span><i>LGPL</i></div>
+      <div class="eng"><b>libvlc</b><span>Video &amp; audio playback, all codecs</span><i>LGPL</i></div>
+      <div class="eng"><b>LibreHardwareMonitor</b><span>Temperature, fan &amp; power sensors</span><i>MPL-2.0</i></div>
+      <div class="eng"><b>Windows.Data.Pdf</b><span>PDF rendering, built into Windows</span><i>OS BUILT-IN</i></div>
+      <div class="eng"><b>WinUI 3 · .NET 8</b><span>Native Windows 11 look and feel</span><i>MIT</i></div>
+      <div class="eng"><b>Velopack</b><span>One-file setup &amp; auto-update</span><i>MIT</i></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCREENSHOTS ============ -->
+<section class="sec" id="screenshots">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">SCREENSHOTS</span>
+      <h2 class="sec-title">SAME WINDOW. <span class="hl">EVERY FILE TYPE.</span></h2>
+      <p class="sec-sub">The shell stays put — only the centre view and the bottom bar change to match what you opened.</p>
+    </div>
+    <!-- Drop real captures at assets/shot-image.png etc. and replace .shot-body
+         with  <img src="assets/shot-image.png" alt="…">  — the frame styling stays. -->
+    <div class="shots">
+      <figure class="shot rv" style="margin:0">
+        <div class="shot-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>KOTU IMAGE — beach.jpg</span></div>
+        <div class="shot-body"><p><strong>IMAGE MODULE</strong>Screenshot coming with the 1.0 release</p></div>
+      </figure>
+      <figure class="shot rv" style="margin:0">
+        <div class="shot-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>KOTU VIDEO — trailer.mkv</span></div>
+        <div class="shot-body"><p><strong>VIDEO MODULE</strong>Screenshot coming with the 1.0 release</p></div>
+      </figure>
+      <figure class="shot rv" style="margin:0">
+        <div class="shot-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>KOTU ARCHIVE — backup.7z</span></div>
+        <div class="shot-body"><p><strong>ARCHIVE MODULE</strong>Screenshot coming with the 1.0 release</p></div>
+      </figure>
+      <figure class="shot rv" style="margin:0">
+        <div class="shot-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>KOTU INFO — hardware</span></div>
+        <div class="shot-body"><p><strong>HARDWARE MODULE</strong>Screenshot coming with the 1.0 release</p></div>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="sec" id="faq" style="background:linear-gradient(180deg,#0b1521,#08111c)">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">FAQ</span>
+      <h2 class="sec-title">QUESTIONS, <span class="hl">ANSWERED.</span></h2>
+    </div>
+    <div class="faq rv">
+      <details class="q"><summary>Is it really free?</summary>
+        <div class="a">Yes. KOTU's own code is MIT-licensed and the source is public. There is no paid tier, no account, and no telemetry.</div></details>
+
+      <details class="q"><summary>What does it cost me in disk space?</summary>
+        <div class="a">One user-scope install, engines included. Because everything shares a single process and modules are loaded on demand, it replaces a folder full of separate utilities with one entry in your Start menu.</div></details>
+
+      <details class="q"><summary>Do I need administrator rights?</summary>
+        <div class="a">No. The installer writes to your user profile, so no UAC prompt is needed to install or update. Only live hardware sensors (temperature, fan speed, power) need elevation — KOTU offers a one-click <em>Restart as admin</em> when you open that panel.</div></details>
+
+      <details class="q"><summary>Will it take over my file associations?</summary>
+        <div class="a">Only if you ask it to. File associations and the Explorer right-click entries are off by default and live behind per-module toggles in Settings, so you can hand over just images and leave everything else alone.</div></details>
+
+      <details class="q"><summary>Does it work offline?</summary>
+        <div class="a">Completely. Every engine — <code>7z.dll</code>, <code>libvlc</code>, the sensor library — ships inside the download. The only thing that touches the network is the optional update check.</div></details>
+
+      <details class="q"><summary>Is there a portable version?</summary>
+        <div class="a">Yes — <code>KOTU-win-Portable.zip</code>. Unzip it anywhere, including a USB stick, and run it. It updates itself the same way the installed build does.</div></details>
+
+      <details class="q"><summary>Which Windows versions are supported?</summary>
+        <div class="a">Windows 10 version 1809 or newer, and Windows 11 — 64-bit (x64) only. No separate .NET install is required.</div></details>
+
+      <details class="q"><summary>How finished is it?</summary>
+        <div class="a">KOTU is in active development. All six modules work and every build passes CI on Windows, but real-world polish is still landing release by release — expect frequent updates.</div></details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DOWNLOAD ============ -->
+<section class="sec dl" id="download">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <span class="eyebrow">DOWNLOAD</span>
+      <h2 class="sec-title">GRAB IT. <span class="hl">IT'S FREE.</span></h2>
+      <p class="sec-sub">Windows 10 / 11 · 64-bit · v0.89.0</p>
+    </div>
+
+    <div class="dl-grid rv">
+      <div class="dl-card feat">
+        <span class="dl-tag">RECOMMENDED</span>
+        <h3>Installer</h3>
+        <p><code style="font-size:13px">KOTU-win-Setup.exe</code></p>
+        <ul>
+          <li>Single-file setup, no admin rights</li>
+          <li>Start menu entry &amp; file icons</li>
+          <li>Automatic updates</li>
+        </ul>
+        <a class="btn btn-primary" href="https://github.com/zpstudios/kotu/releases/latest" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M3.5 17.5V19a2 2 0 002 2h13a2 2 0 002-2v-1.5"/></svg>
+          DOWNLOAD SETUP
+        </a>
+      </div>
+
+      <div class="dl-card">
+        <h3>Portable</h3>
+        <p><code style="font-size:13px">KOTU-win-Portable.zip</code></p>
+        <ul>
+          <li>Unzip anywhere and run</li>
+          <li>No Start menu, no registry writes</li>
+          <li>Still updates itself</li>
+        </ul>
+        <a class="btn btn-ghost" href="https://github.com/zpstudios/kotu/releases/latest" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="5" rx="1.6"/><path d="M4.5 9v9.5a2 2 0 002 2h11a2 2 0 002-2V9"/><path d="M10 13.5h4"/></svg>
+          DOWNLOAD ZIP
+        </a>
+      </div>
+    </div>
+
+    <p class="dl-note">Both builds include every engine and work straight away. The other files on the release page (<code>.nupkg</code> and friends) are used by the updater — you don't need them.</p>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="brand" href="#home">
+        <img src="assets/logo-mark.svg" alt="" width="64" height="64" loading="lazy">
+        <span class="brand-txt">
+          <span class="brand-name" style="font-size:22px">KOTU</span>
+          <span class="brand-sub">KING OF THE UTILITIES</span>
+        </span>
+      </a>
+      <nav class="foot-links">
+        <a href="https://github.com/zpstudios/kotu" rel="noopener">GitHub</a>
+        <a href="https://github.com/zpstudios/kotu/releases" rel="noopener">Releases</a>
+        <a href="https://github.com/zpstudios/kotu/blob/master/ARCHITECTURE.md" rel="noopener">Architecture</a>
+        <a href="https://github.com/zpstudios/kotu/blob/master/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a>
+        <a href="https://github.com/zpstudios/kotu/issues" rel="noopener">Report a bug</a>
+      </nav>
+    </div>
+    <p class="foot-legal">
+      KOTU is MIT-licensed. Bundled components keep their own licences — 7-Zip and libvlc (LGPL), LibreHardwareMonitor (MPL-2.0).<br>
+      Windows is a trademark of Microsoft Corporation. All other product names are trademarks of their respective owners and are referenced for comparison only.
+    </p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var nav=document.getElementById('nav'), burger=document.getElementById('burger');
+
+  /* nav shadow on scroll */
+  var onScroll=function(){ nav.classList.toggle('scrolled', window.scrollY>12); };
+  onScroll(); addEventListener('scroll',onScroll,{passive:true});
+
+  /* mobile menu */
+  burger.addEventListener('click',function(){
+    var open=nav.classList.toggle('open');
+    burger.setAttribute('aria-expanded',open?'true':'false');
+  });
+  document.querySelectorAll('#navlinks a').forEach(function(a){
+    a.addEventListener('click',function(){ nav.classList.remove('open'); burger.setAttribute('aria-expanded','false'); });
+  });
+
+  /* active section highlight */
+  var links=[].slice.call(document.querySelectorAll('#navlinks a'));
+  var sections=links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  var spy=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting) return;
+      links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href')==='#'+e.target.id); });
+    });
+  },{rootMargin:'-45% 0px -50% 0px'});
+  sections.forEach(function(s){ spy.observe(s); });
+
+  /* reveal on scroll */
+  var rv=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); rv.unobserve(e.target); } });
+  },{rootMargin:'0px 0px -8% 0px',threshold:.08});
+  document.querySelectorAll('.rv').forEach(function(el,i){
+    el.style.transitionDelay=(Math.min(i,4)*60)+'ms';
+    rv.observe(el);
+  });
+
+  /* twinkling starfield behind the hero */
+  var cv=document.getElementById('stars');
+  if(cv && !matchMedia('(prefers-reduced-motion: reduce)').matches){
+    var ctx=cv.getContext('2d'), stars=[], raf, dpr=Math.min(devicePixelRatio||1,2);
+    function build(){
+      var r=cv.parentElement.getBoundingClientRect();
+      cv.width=r.width*dpr; cv.height=r.height*dpr;
+      cv.style.width=r.width+'px'; cv.style.height=r.height+'px';
+      var n=Math.round(r.width*r.height/13000);
+      stars=[]; for(var i=0;i<n;i++) stars.push({
+        x:Math.random()*cv.width, y:Math.random()*cv.height*0.82,
+        r:(Math.random()*1.1+0.3)*dpr, p:Math.random()*Math.PI*2, s:Math.random()*0.9+0.35
+      });
+    }
+    function draw(t){
+      ctx.clearRect(0,0,cv.width,cv.height);
+      for(var i=0;i<stars.length;i++){ var s=stars[i];
+        var a=0.24+0.5*(0.5+0.5*Math.sin(t/1000*s.s+s.p));
+        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.2832);
+        ctx.fillStyle='rgba(226,238,250,'+a.toFixed(3)+')'; ctx.fill();
+      }
+      raf=requestAnimationFrame(draw);
+    }
+    build(); raf=requestAnimationFrame(draw);
+    var to; addEventListener('resize',function(){ clearTimeout(to); to=setTimeout(build,180); });
+  }
+})();
+</script>
+</body>
+</html>
