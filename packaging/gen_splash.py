@@ -2,7 +2,7 @@
 """설치 스플래시(packaging/splash.png) 생성기.
 
 Velopack Setup.exe가 설치 진행 중에 띄우는 이미지 (release.yml --splashImage).
-미션 스테이트먼트 문구를 바꾸면 src/WinUtil.App/Branding.cs와 함께 이 파일을 고치고
+미션 스테이트먼트 문구를 바꾸면 src/KOTU.App/Branding.cs와 함께 이 파일을 고치고
 재실행해서 png를 갱신할 것: python3 packaging/gen_splash.py
 """
 from PIL import Image, ImageDraw, ImageFont

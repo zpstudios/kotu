@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """KOTU 확장자별 파일 아이콘 생성기 (A23, v0.60.0 → A46/v0.86.0 리브랜딩)
-→ src/WinUtil.App/Assets/fileicons/kotu-*.ico
+→ src/KOTU.App/Assets/fileicons/kotu-*.ico
 
 탐색기에서 KOTU에 연결된 파일이 쓰는 아이콘: 모듈 고유색 배경에
 확장자 텍스트를 크게, 우측 하단에 작은 kotu(연결 표식).
@@ -19,7 +19,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.path.join(REPO, "src", "WinUtil.App", "Assets", "fileicons")
+OUT_DIR = os.path.join(REPO, "src", "KOTU.App", "Assets", "fileicons")
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 PREFIX = "kotu"   # 파일명 접두사 (구: "zp") — ExplorerIntegration.FileIconPath와 일치

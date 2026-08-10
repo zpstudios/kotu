@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """KOTU 앱 아이콘 생성기 (v0.26.0 → A3/v0.59.0 반전 → A46/v0.86.0 리브랜딩)
-→ src/WinUtil.App/Assets/app*.ico
+→ src/KOTU.App/Assets/app*.ico
 
 A3(사용자 지정): 메인 표식 = 모듈 식별 글씨(ZIP/IMG/VID/HW/DOC), 우측 하단 작은 표식 = kotu.
 중립 app.ico(빈 셸·설정)는 브랜드를 메인으로 유지하되, A46에서 이름이 4글자가 되면서
@@ -22,7 +22,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.path.join(REPO, "src", "WinUtil.App", "Assets")
+OUT_DIR = os.path.join(REPO, "src", "KOTU.App", "Assets")
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 SUBMARK = "kotu"  # 브랜드 연결 표식 (구: "zp")

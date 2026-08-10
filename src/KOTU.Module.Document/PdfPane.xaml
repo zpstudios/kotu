@@ -1,0 +1,34 @@
+<UserControl
+    x:Class="KOTU.Module.Document.PdfPane"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- A16: 세로 연속 스크롤 PDF 뷰어. ListView 가상화로 보이는 페이지만 렌더하고,
+         내장 ScrollViewer 줌(Ctrl+휠·핀치)을 그대로 쓴다(비트맵 확대 — 재렌더 없음). -->
+    <ListView
+        x:Name="PageList"
+        SelectionMode="None"
+        IsItemClickEnabled="False"
+        ScrollViewer.ZoomMode="Enabled"
+        ScrollViewer.HorizontalScrollBarVisibility="Auto"
+        ScrollViewer.HorizontalScrollMode="Enabled"
+        ContainerContentChanging="OnContainerContentChanging">
+        <ListView.ItemTemplate>
+            <DataTemplate>
+                <!-- PDF 페이지는 흰 배경 전제 — 다크 테마에서도 종이처럼 보이게 고정 -->
+                <Border Background="White" Margin="0,8,0,8" BorderThickness="1"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <Image Stretch="Uniform" />
+                </Border>
+            </DataTemplate>
+        </ListView.ItemTemplate>
+        <ListView.ItemContainerStyle>
+            <Style TargetType="ListViewItem">
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+            </Style>
+        </ListView.ItemContainerStyle>
+    </ListView>
+</UserControl>

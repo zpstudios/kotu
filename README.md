@@ -2,7 +2,7 @@
 
 > 윈도우 새로 깔면 제일 먼저 설치하던 필수 유틸들 — 압축, 이미지 뷰어, 동영상 플레이어 — 를 하나의 앱으로.
 
-![build](https://github.com/zpstudios/zpro/actions/workflows/build.yml/badge.svg)
+![build](https://github.com/zpstudios/kotu/actions/workflows/build.yml/badge.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B%20(x64)-0078d4)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512bd4)
 ![UI](https://img.shields.io/badge/UI-WinUI%203-41b883)
@@ -21,7 +21,7 @@
 | 설치·자동 업데이트 | ✅ v0.9.0 | Setup.exe 한 파일 설치(Velopack) / GitHub Releases 피드로 시작 시 업데이트 확인·원클릭 적용 |
 | 하드웨어 | 🚧 v0.10.0 | 스펙 표시(CPU·메인보드·메모리·그래픽·저장장치, 전체 복사) — 센서 모니터링·스트레스는 예정 |
 
-**다운로드**: [Releases](https://github.com/zpstudios/zpro/releases/latest)에서 —
+**다운로드**: [Releases](https://github.com/zpstudios/kotu/releases/latest)에서 —
 
 - **`KOTU-win-Setup.exe`** — 설치판. 시작 메뉴 등록, 자동 업데이트. 사용자 범위 설치라 관리자 권한 불필요.
 - **`KOTU-win-Portable.zip`** — 무설치판. 아무 폴더에나 풀어 실행하면 되고, 역시 자동 업데이트됩니다.
@@ -35,11 +35,11 @@
 요약 (자세한 안내는 **[docs/BUILD.md](docs/BUILD.md)**):
 
 ```powershell
-git clone https://github.com/zpstudios/zpro.git
-cd zpro
+git clone https://github.com/zpstudios/kotu.git
+cd kotu
 dotnet test                                     # Core·모듈 로직 단위 테스트
-dotnet build src/WinUtil.App -p:Platform=x64    # 앱 빌드
-copy "C:\Program Files\7-Zip\7z.dll" src\WinUtil.App\bin\x64\Debug\net8.0-windows10.0.19041.0\  # 압축 기능용
+dotnet build src/KOTU.App -p:Platform=x64    # 앱 빌드
+copy "C:\Program Files\7-Zip\7z.dll" src\KOTU.App\bin\x64\Debug\net8.0-windows10.0.19041.0\  # 압축 기능용
 ```
 
 필요 환경: Windows 10 1809+ (x64), .NET 8 SDK, Visual Studio 2022(또는 Build Tools) + "WinUI 애플리케이션 개발" 워크로드.
@@ -47,13 +47,14 @@ copy "C:\Program Files\7-Zip\7z.dll" src\WinUtil.App\bin\x64\Debug\net8.0-window
 ## 프로젝트 구조
 
 ```
-src/WinUtil.Core        # 모듈 계약(IModule)·파일 라우터·설정 — UI 비의존
-src/WinUtil.App         # WinUI 3 셸: 단일 인스턴스, 파일 → 모듈 라우팅
-src/WinUtil.Module.*    # 기능 모듈 (압축, 이미지, ...)
+src/KOTU.Core        # 모듈 계약(IModule)·파일 라우터·설정 — UI 비의존
+src/KOTU.App         # WinUI 3 셸: 단일 인스턴스, 파일 → 모듈 라우팅
+src/KOTU.Module.*    # 기능 모듈 (압축, 이미지, ...)
 tests/                  # 단위 테스트 (xunit)
 ```
 
-> 폴더·프로젝트 이름의 `WinUtil`은 초기 코드명입니다 — 제품명은 **KOTU (King Of The Util)** 로 리브랜딩되었고(A46, v0.86.0 — 그 전 이름은 `ZP`),
+> 이름 변경 이력: 초기 코드명 `WinUtil` → `ZP`(v0.33.0) → **KOTU (King Of The Util)**.
+> 표시명·시스템 등록 ID는 A46(v0.86.0)에서, 프로젝트·네임스페이스·실행 파일(`KOTU.exe`)은 A64(v0.88.0)에서 정리했습니다.
 > 내부 이름은 빌드·자동 업데이트 호환을 위해 유지합니다.
 
 설계 배경과 로드맵은 [ARCHITECTURE.md](ARCHITECTURE.md) 참고.

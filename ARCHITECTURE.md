@@ -62,14 +62,14 @@ public interface IModule
 ### 솔루션 구성(예정)
 
 ```
-WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 WinUtil 유지 (제품명은 KOTU — A46에서 표시명·시스템 등록 ID만 교체)
-├─ src/WinUtil.App          # 셸 (실행 파일)
-├─ src/WinUtil.Core         # 계약(인터페이스) + 공통 서비스
-├─ src/WinUtil.Module.Archive
-├─ src/WinUtil.Module.Image
-├─ src/WinUtil.Module.Video
-├─ src/WinUtil.Module.Audio      # A10(v0.75.0)에서 Video로부터 분리
-├─ src/WinUtil.Module.Hardware   # Phase 5
+KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
+├─ src/KOTU.App          # 셸 (실행 파일)
+├─ src/KOTU.Core         # 계약(인터페이스) + 공통 서비스
+├─ src/KOTU.Module.Archive
+├─ src/KOTU.Module.Image
+├─ src/KOTU.Module.Video
+├─ src/KOTU.Module.Audio      # A10(v0.75.0)에서 Video로부터 분리
+├─ src/KOTU.Module.Hardware   # Phase 5
 └─ tests/                   # 모듈별 단위 테스트
 ```
 
@@ -137,7 +137,7 @@ WinUtil.sln                 # 내부 프로젝트 이름은 초기 코드명 Win
 
 원칙: **UI 스레드는 렌더·입력만.** 모듈의 장기 작업은 Core의 스레딩 계약을 거쳐 전용 워커에서 돌고, 뷰는 완료·진행률을 디스패치로 받아 그리기만 한다.
 
-### 8.1 Core 계약 (`WinUtil.Core.Threading`)
+### 8.1 Core 계약 (`KOTU.Core.Threading`)
 
 | 타입 | 역할 |
 |---|---|

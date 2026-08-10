@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWinUI>true</UseWinUI>
+    <Description>하드웨어 모듈: WMI 기반 스펙 표시(CPU·메인보드·메모리·그래픽·저장장치) + 센서 모니터링 그래프(A17). 스트레스는 Phase 5c.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
+    <!-- WMI 조회(Win32_Processor 등) — 관리자 권한 불필요.
+         LibreHardwareMonitorLib 계열이 10.0.2+ 하한을 요구 — 직접 참조가 더 낮으면 NU1605.
+         와일드카드로 항상 최신 10.0.x를 잡아 전이 하한과의 충돌을 피한다. -->
+    <PackageReference Include="System.Management" Version="10.0.*" />
+    <!-- 센서 수집(온도·전력·팬 등, A17) — MPL-2.0. 커널 드라이버를 동봉·자동 로드하며
+         CPU MSR·SuperIO·SMART 계열 센서는 관리자 권한이 있어야 잡힌다(없으면 해당 채널 null). -->
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""내장 테스트 클립(영상) 생성기 v3 → src/WinUtil.Module.Video/Assets/test-clip.mp4
+"""내장 테스트 클립(영상) 생성기 v3 → src/KOTU.Module.Video/Assets/test-clip.mp4
 
 방송 테스트 패턴 스타일, 오디오(gen_test_audio.py) 섹션과 동기화된 32초 1080p.
 v3(v0.22.0): LEFT/RIGHT 텍스트를 스피커 아이콘으로 교체 (사용자 요청 — 언어 없이 직관적으로).
@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 W, H = 1920, 1080
 TMP = "/tmp/kotu-testclip-v3"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(REPO, "src", "WinUtil.Module.Video", "Assets", "test-clip.mp4")
+OUT = os.path.join(REPO, "src", "KOTU.Module.Video", "Assets", "test-clip.mp4")
 FONT_B = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 

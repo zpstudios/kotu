@@ -1,0 +1,90 @@
+<UserControl
+    x:Class="KOTU.Module.Document.DocumentView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="True"
+    KeyboardAcceleratorPlacementMode="Hidden">
+
+    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (전 모듈 공통 배치), Ctrl+S 저장 (A37) -->
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
+        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
+        <KeyboardAccelerator Key="S" Modifiers="Control" Invoked="OnSaveInvoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <Grid x:Name="RootGrid">
+        <!-- A37: 뷰어 → 에디터 승격. TextBox 하나가 표시·편집을 겸한다.
+             레이아웃(패딩·최대 폭·폰트)은 기존 뷰어 TextBlock과 동일하게 유지.
+             4MB 초과 잘림 표시 파일은 IsReadOnly로 두어 잘린 채 저장되는 사고를 막는다. -->
+        <TextBox
+            x:Name="EditorBox"
+            Padding="24,16,24,24"
+            MaxWidth="900"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Stretch"
+            FontSize="14"
+            AcceptsReturn="True"
+            TextWrapping="Wrap"
+            IsSpellCheckEnabled="False"
+            Background="Transparent"
+            BorderThickness="0"
+            CornerRadius="0"
+            Visibility="Collapsed"
+            ScrollViewer.VerticalScrollBarVisibility="Auto"
+            TextChanged="OnEditorTextChanged"
+            KeyDown="OnEditorKeyDown" />
+
+        <!-- PDF 페이지 뷰(A16, PdfPane)는 코드에서 지연 생성해 RootGrid 맨 아래(z 순서상 뒤)에 꽂는다 -->
+        <TextBlock
+            x:Name="PlaceholderText"
+            Text="Open a text, Markdown, or PDF file, or drop one onto the window&#x0A;Plain text files can be edited and saved here (Ctrl+S)"
+            TextAlignment="Center"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Opacity="0.6" />
+
+        <!-- 하단 상태바: 열기 · 저장 · 파일명 · 수정됨 · 드라이브 · 전체화면.
+             셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(이미지 v0.27.0과 동일 패턴). -->
+        <Border x:Name="StatusBar" VerticalAlignment="Bottom" Padding="0,2,0,2">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Click="OnOpenButtonClick"
+                        ToolTipService.ToolTip="Open document file">
+                    <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                </Button>
+                <!-- 저장 버튼(A37): 편집 가능한 텍스트가 열려 있고 변경이 있을 때만 활성 -->
+                <Button x:Name="SaveButton" Grid.Column="1" IsEnabled="False"
+                        Click="OnSaveButtonClick"
+                        ToolTipService.ToolTip="Save (Ctrl+S)">
+                    <FontIcon Glyph="&#xE74E;" FontSize="14" />
+                </Button>
+                <TextBlock x:Name="FileNameText" Grid.Column="2" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Text="No file open" />
+                <!-- 수정됨 표시(A37) — 창 제목의 ●는 셸이 UnsavedChanged로 단다 -->
+                <TextBlock x:Name="ModifiedText" Grid.Column="3" VerticalAlignment="Center"
+                           FontSize="12" Opacity="0.8" Visibility="Collapsed"
+                           Text="● Unsaved" />
+                <!-- PDF 현재 페이지/전체 (A16) — PDF가 열려 있을 때만 -->
+                <TextBlock x:Name="PageInfoText" Grid.Column="4" VerticalAlignment="Center"
+                           FontSize="12" Opacity="0.8" Visibility="Collapsed" />
+                <!-- 현재 문서가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
+                <TextBlock x:Name="DriveInfoText" Grid.Column="5" VerticalAlignment="Center"
+                           FontSize="12" Opacity="0.6" />
+                <!-- 40×40 정사각 아이콘 = 이미지/영상 ⛶와 통일 (v0.53.0) -->
+                <Button Grid.Column="6" Width="40" Height="40" Padding="4"
+                        Click="OnFullScreenButtonClick"
+                        ToolTipService.ToolTip="Full screen (F11)">
+                    <FontIcon Glyph="&#xE740;" FontSize="18" />
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

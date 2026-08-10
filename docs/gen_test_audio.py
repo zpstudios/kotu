@@ -18,9 +18,9 @@
 
 재생성:
   python3 docs/gen_test_audio.py           # /tmp/kotu-test-audio.wav 생성
-  ffmpeg -y -i src/WinUtil.Module.Video/Assets/test-clip.mp4 -i /tmp/kotu-test-audio.wav \
+  ffmpeg -y -i src/KOTU.Module.Video/Assets/test-clip.mp4 -i /tmp/kotu-test-audio.wav \
          -map 0:v -map 1:a -c:v copy -c:a aac -b:a 160k -movflags +faststart /tmp/test-clip-new.mp4
-  mv /tmp/test-clip-new.mp4 src/WinUtil.Module.Video/Assets/test-clip.mp4
+  mv /tmp/test-clip-new.mp4 src/KOTU.Module.Video/Assets/test-clip.mp4
 """
 import os
 import wave
