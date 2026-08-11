@@ -1,6 +1,15 @@
 <Project>
   <PropertyGroup>
-    <Version>0.89.0</Version>
+    <Version>0.90.0</Version>
+    <!--
+      A82(v0.90.0): 저작권자 = ZP Studios 한 이름으로 통일.
+      개인 실명은 배포물·저장소 어디에도 표시하지 않는다(문서에도 다시 적지 말 것).
+      여기 값은 빌드된 exe의 [속성 > 자세히]에 노출되며, LICENSE·release.yml의 packAuthors 인자와 같아야 한다.
+      ※ XML 주석 안에는 하이픈 2개를 연속으로 쓸 수 없다(파싱 실패) — 옵션명을 적을 때 주의.
+    -->
+    <Company>ZP Studios</Company>
+    <Authors>ZP Studios</Authors>
+    <Copyright>Copyright (c) 2026 ZP Studios</Copyright>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

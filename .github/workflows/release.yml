@@ -90,7 +90,7 @@ jobs:
           # 스플래시(미션 스테이트먼트) + Setup/Update 다이얼로그 아이콘
           vpk pack --packId KOTU --packVersion ${{ steps.ver.outputs.version }} `
                    --packDir $publishDir --mainExe KOTU.exe `
-                   --packTitle KOTU --packAuthors "KOTU Studios" --outputDir vpk_out `
+                   --packTitle KOTU --packAuthors "ZP Studios" --outputDir vpk_out `
                    --splashImage packaging/splash.png --icon src/KOTU.App/Assets/app.ico
           if ($LASTEXITCODE -ne 0) { Write-Error "vpk pack 실패"; exit 1 }
           Get-ChildItem vpk_out | ForEach-Object { Write-Host ("생성됨: " + $_.Name) }
