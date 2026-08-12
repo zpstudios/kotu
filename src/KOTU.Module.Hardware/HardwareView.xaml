@@ -56,8 +56,9 @@
         </Border>
 
         <!-- 하단 바: 셸이 TakeBottomBar()로 떼어가 한 줄에 얹는다(v0.42.0).
-             센서 카드 10개는 이 줄의 가운데 공간(SensorGrid)에 산다(v0.64.2 사용자 지시 —
-             별도 줄 금지, 기본 1줄. 창이 좁으면 카드만 2·3줄로 접혀 바가 세로로 자란다).
+             센서 카드 10개는 이 줄의 가운데 공간(SensorGrid)에 산다(v0.64.2 사용자 지시,
+             별도 줄 금지). A40(하단 바 두께 고정 44): 항상 1줄 — 창이 좁으면 접히는 대신
+             맥박 그래프, 그다음 뒤 순서 카드부터 숨긴다(LayoutSensorCards/UpdateBarDensity).
              우측 끝 ⛶ = 전체화면(전 모듈 공통 배치, 사용자 요청). -->
         <Border x:Name="ControlBar" Grid.Row="2" Padding="0,2,0,2">
             <Grid x:Name="BarGrid" ColumnSpacing="10">

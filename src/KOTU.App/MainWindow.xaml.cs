@@ -17,6 +17,9 @@ public sealed partial class MainWindow : Window
     private static readonly string IconPath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
 
+    /// <summary>하단 바 고정 두께(A40) — XAML BottomBarRow 기본값 44와 같아야 한다.</summary>
+    private const double BottomBarHeight = 44;
+
     private readonly FileTypeRouter _router;
     private readonly WindowManager _manager;
     private readonly TrayIcon _tray;
@@ -57,6 +60,7 @@ public sealed partial class MainWindow : Window
         BuildStartMenu();
         RegisterShortcuts(); // Ctrl+` 시작 메뉴, Ctrl+숫자 모듈 전환 (v0.45.0)
         RestoreWindowSize(); // 마지막 창 크기 복원 + 닫을 때 저장 (v0.55.0)
+        WindowMinSize.Apply(this); // 최소 창 크기 720×540 DIP 강제 (A40) — 창 생성 경로는 이 생성자 하나뿐
         // 광고 로테이션: 메뉴가 열릴 때 현재 분 기준 이미지로 갱신 (같은 분 = 같은 이미지)
         StartFlyout.Opening += (_, _) => UpdateSponsorImage();
 
@@ -101,7 +105,7 @@ public sealed partial class MainWindow : Window
             if (!args.DidPresenterChange) return;
             var full = sender.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
             BottomBar.Visibility = full ? Visibility.Collapsed : Visibility.Visible;
-            BottomBarRow.Height = full ? new GridLength(0) : GridLength.Auto; // 평소 Auto(최소 44, v0.64.2)
+            BottomBarRow.Height = full ? new GridLength(0) : new GridLength(BottomBarHeight); // 평소 고정 44 (A40)
         };
 
         // 문서 편집 미저장 확인(A37): X 버튼/Alt+F4를 가로채 저장/버리기/취소를 묻는다
@@ -197,7 +201,14 @@ public sealed partial class MainWindow : Window
         var h = _settings.Get("window.height", 0);
         if (w >= 320 && h >= 240)
         {
-            try { AppWindow.Resize(new Windows.Graphics.SizeInt32(w, h)); }
+            try
+            {
+                // A40: 구버전 저장값이 새 최소(720×540 DIP)보다 작으면 최소로 올려 연다 —
+                // WM_GETMINMAXINFO는 사용자 리사이즈만 막고 프로그램 Resize는 안 막기 때문.
+                var (minW, minH) = WindowMinSize.MinPhysical(
+                    WinRT.Interop.WindowNative.GetWindowHandle(this));
+                AppWindow.Resize(new Windows.Graphics.SizeInt32(Math.Max(w, minW), Math.Max(h, minH)));
+            }
             catch { /* 모니터 구성이 바뀌었어도 열리기는 해야 한다 */ }
         }
         Closed += (_, _) => SaveWindowSize();

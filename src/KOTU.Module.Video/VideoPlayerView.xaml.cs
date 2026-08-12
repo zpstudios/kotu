@@ -99,6 +99,21 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         return TransportBar;
     }
 
+    /// <summary>
+    /// A40: 좁은 하단 바에서 우선순위 낮은 요소를 숨겨 잘림을 막는다. 고정 요소 합
+    /// (버튼·콤보·볼륨 96 + 칸 간격 10×11)이 시간 텍스트가 길 때("1:23:45") 약 740px —
+    /// 최소 창 폭 720(바 폭 약 656)에서는 시크 슬라이더가 0으로 밀리고 우측 ⛶가 잘린다.
+    /// 임계값 760은 실측 오차 여유 포함. 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼,
+    /// 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
+    /// </summary>
+    private void UpdateCompactTransport(double width)
+    {
+        var visibility = width < 760 ? Visibility.Collapsed : Visibility.Visible;
+        VolumeSlider.Visibility = visibility;
+        PositionText.Visibility = visibility;
+        DurationText.Visibility = visibility;
+    }
+
     private const long SeekStepMs = 5_000;
     private const int VolumeStep = 5;
     private const long ResumeReportIntervalMs = 10_000;
@@ -170,6 +185,9 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         {
             if (_fitMode is VideoFitMode.FitWidth or VideoFitMode.FitHeight) ApplyFitMode();
         };
+
+        // A40: 바 폭이 좁으면 볼륨 슬라이더·시간 텍스트를 숨긴다(셸 하단 바로 옮겨진 뒤에도 유효)
+        TransportBar.SizeChanged += (_, e) => UpdateCompactTransport(e.NewSize.Width);
 
         // 시크 슬라이더 스크럽 감지: 드래그 중에는 시킹하지 않고 놓을 때 1회만 시킹한다.
         // (드래그 틱마다 p.Time을 설정하면 시킹이 폭주해 드래그를 멈춰도 재생이 멎는 실기기 버그)

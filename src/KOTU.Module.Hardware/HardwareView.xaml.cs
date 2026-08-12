@@ -311,55 +311,66 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     /// CPU 주황 / GPU 보라 / RAM 초록 / 팬 황금 / SSD 파랑.
     /// 스케일: 온도·부하는 0~100 고정, 전력·클럭·팬은 자동(하한 있는 관찰 최댓값).
     /// 카드는 하단 바 한 줄에 들어가는 36px 컴팩트형(v0.64.2 사용자 지시) — 그래프가 카드
-    /// 전체를 채우고 제목·값이 그 위에 얹힌다. 배치는 기본 1줄(10칸), 창 폭이 좁아
-    /// 카드가 MinCardWidth 밑으로 내려갈 때만 5칸(2줄)→4칸(3줄)로 늘어난다.
+    /// 전체를 채우고 제목·값이 그 위에 얹힌다. 배치는 항상 1줄(A40: 하단 바 두께 고정 44) —
+    /// 폭이 모자라면 뒤 순서 카드부터 생략한다(LayoutSensorCards 참고).
     /// </summary>
     private void BuildSensorCards()
     {
         foreach (var channel in SensorChannels.All)
             AddCard(channel);
         SensorGrid.SizeChanged += (_, e) => LayoutSensorCards(e.NewSize.Width);
-        LayoutSensorCards(0); // 실측 폭을 알기 전엔 1줄로 시작
+        // A40: 하단 바 전체 폭 기준으로 장식 요소(맥박 그래프)를 먼저 내린다 — 카드 폭 확보
+        BarGrid.SizeChanged += (_, e) => UpdateBarDensity(e.NewSize.Width);
+        LayoutSensorCards(0); // 실측 폭을 알기 전엔 10칸 1줄로 시작
     }
 
     /// <summary>
-    /// 이보다 카드가 좁아지면 줄 수를 늘린다. 하한 근거: 좌우 패딩 12 + 최장 값
-    /// "4500 MHz"(13px SemiBold ≈ 62px) — 제목은 스타 칸이라 먼저 말줄임되므로
+    /// 카드가 이보다 좁아지면 안 된다(좁으면 표시 카드 수를 줄인다). 하한 근거: 좌우 패딩 12 +
+    /// 최장 값 "4500 MHz"(13px SemiBold ≈ 62px) — 제목은 스타 칸이라 먼저 말줄임되므로
     /// 값만 안 잘리면 된다(v0.64.3 사용자 피드백: 104는 너무 일찍 줄바꿈됨).
     /// </summary>
     private const double MinCardWidth = 76;
 
+    /// <summary>
+    /// A40: 하단 바 폭이 좁으면 장식성 요소부터 내린다 — 맥박 그래프(A29)는 카드 10개가
+    /// 전부 들어갈 폭이 안 되면 숨긴다(카드 = 정보, 맥박 = 장식이므로 카드가 우선).
+    /// 임계값 근거: 카드 10개 최소 폭 832(76×10 + 8×9) + 고정 요소·간격 약 380 ≈ 1212, 여유 포함 1240.
+    /// PulseHost 표시 여부는 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다.
+    /// </summary>
+    private void UpdateBarDensity(double width)
+        => PulseHost.Visibility = width >= 1240 ? Visibility.Visible : Visibility.Collapsed;
+
     /// <summary>SensorGrid의 ColumnSpacing/RowSpacing과 같은 값 — 폭 계산에 쓴다.</summary>
     private const double CardSpacing = 8;
 
+    /// <summary>현재 표시 중인 카드 수(= 칸 수). 0 = 아직 배치 전.</summary>
     private int _sensorColumns;
 
-    /// <summary>폭에 맞는 칸 수(10→5→4)를 골라 카드를 재배치한다. 칸 수가 그대로면 아무것도 안 한다.</summary>
+    /// <summary>
+    /// 폭에 맞는 카드 수를 골라 항상 1줄로 배치한다. A40(하단 바 두께 고정)으로
+    /// v0.64.2의 5칸 2줄·4칸 3줄 접힘은 폐기 — 바가 세로로 자라면 안 되므로, 폭이
+    /// 모자라면 뒤 순서 카드부터 숨긴다(SensorChannels.All 순서 = 사용자 확정 = 우선순위).
+    /// 숨긴 카드는 폭이 돌아오면(전체화면 SensorStrip 포함) 다시 나타난다.
+    /// 카드 수가 그대로면 아무것도 안 한다.
+    /// </summary>
     private void LayoutSensorCards(double width)
     {
-        var columns = 4; // 최저 단계 = 4칸 3줄 (그 밑으로는 안 내려간다)
-        foreach (var c in new[] { 10, 5 })
-        {
-            if (width <= 0 || (width - (c - 1) * CardSpacing) / c >= MinCardWidth)
-            {
-                columns = c;
-                break;
-            }
-        }
-        if (columns == _sensorColumns) return;
-        _sensorColumns = columns;
+        var visible = _cards.Count; // 실측 폭을 알기 전엔 전부(10칸 1줄)
+        if (width > 0)
+            visible = Math.Clamp(
+                (int)((width + CardSpacing) / (MinCardWidth + CardSpacing)), 1, _cards.Count);
+        if (visible == _sensorColumns) return;
+        _sensorColumns = visible;
 
         SensorGrid.ColumnDefinitions.Clear();
-        SensorGrid.RowDefinitions.Clear();
-        for (var c = 0; c < columns; c++)
+        SensorGrid.RowDefinitions.Clear(); // 항상 1줄 — 행 정의 없이 암시적 0행만 쓴다
+        for (var c = 0; c < visible; c++)
             SensorGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var rows = (_cards.Count + columns - 1) / columns;
-        for (var r = 0; r < rows; r++)
-            SensorGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         for (var i = 0; i < _cards.Count; i++)
         {
-            Grid.SetColumn(_cards[i].Root, i % columns);
-            Grid.SetRow(_cards[i].Root, i / columns);
+            _cards[i].Root.Visibility = i < visible ? Visibility.Visible : Visibility.Collapsed;
+            Grid.SetColumn(_cards[i].Root, i < visible ? i : 0);
+            Grid.SetRow(_cards[i].Root, 0);
             if (_cards[i].Root.Parent is null)
                 SensorGrid.Children.Add(_cards[i].Root);
         }
