@@ -33,16 +33,10 @@ public sealed partial class MainWindow : Window
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·Alt 목록에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ExplorerPane? _emptyExplorer; // 빈 상태 중앙 탐색기 (지연 생성)
-    private ExplorerPane? _altList;       // Alt 홀드 우측 리스트 (지연 생성)
     private bool _altHeld;
     private bool _ctrlHeld;
     private bool _infoPinned;             // Ctrl 2연타로 고정된 정보 오버레이
-    private bool _altPinned;              // Alt 2연타로 고정된 우측 리스트 (v0.32.0)
-    private DateTime _lastCtrlDown = DateTime.MinValue;
-    private DateTime _lastAltDown = DateTime.MinValue;
-    private int _infoSeq;                 // 정보 로드 경쟁 방지
-    private string? _infoPath;            // 정보 캐시 (파일별 1회 로드)
-    private string? _infoText;
+    private bool _altPinned;              // Alt 2연타로 고정된 리스트 (v0.32.0; A57 ①에서 좌측으로)
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
@@ -57,6 +51,12 @@ public sealed partial class MainWindow : Window
         _manager = manager;
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
+
+        // 좌측 파일 리스트 오버레이(A57 ②) 배선 — 열기 이벤트는 기존 Alt 리스트와 동일 경로
+        ListOverlay.Settings = _settings;                                  // 정렬 키 저장(A5)
+        ListOverlay.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
+        ListOverlay.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
+
         BuildStartMenu();
         RegisterShortcuts(); // Ctrl+` 시작 메뉴, Ctrl+숫자 모듈 전환 (v0.45.0)
         RestoreWindowBounds(); // 마지막 창 크기·위치 복원 + 닫을 때 저장 (v0.55.0 크기, A55 위치·최대화)
@@ -766,8 +766,7 @@ public sealed partial class MainWindow : Window
     {
         _currentModule = module;
         _currentFilePath = filePath;
-        _infoPath = null;
-        _infoText = null;
+        InfoOverlay.InvalidateCache();
         RememberLastFolder(); // 모듈별 마지막 폴더 저장 (v0.55.0)
         UpdateEmptyExplorer();
         ResetKeyOverlays();
@@ -787,12 +786,11 @@ public sealed partial class MainWindow : Window
     private void OnContentOpened(string path)
     {
         _currentFilePath = path;
-        _infoPath = null;
-        _infoText = null;
+        InfoOverlay.InvalidateCache();
         RememberLastFolder(); // v0.55.0
         UpdateEmptyExplorer();
-        if (AltOverlayRoot.Visibility == Visibility.Visible) ShowAltOverlay(); // 폴더가 바뀌었을 수 있다
-        if (InfoOverlayRoot.Visibility == Visibility.Visible) UpdateInfoOverlay();
+        if (ListOverlay.IsOpen) ShowAltOverlay(); // 폴더가 바뀌었을 수 있다
+        if (InfoOverlay.IsOpen) UpdateInfoOverlay();
     }
 
     /// <summary>
@@ -847,7 +845,7 @@ public sealed partial class MainWindow : Window
                 UpdateAltOverlay();
             }
             // Alt 기본 동작(메뉴 모드 진입)과의 충돌 방지 — 오버레이가 떠 있을 때만 소비한다.
-            if (AltOverlayRoot.Visibility == Visibility.Visible) e.Handled = true;
+            if (ListOverlay.IsOpen) e.Handled = true;
         }
         else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
         {
@@ -899,83 +897,35 @@ public sealed partial class MainWindow : Window
     {
         var show = (_altHeld || _altPinned) && _currentFilePath is not null;
         if (show) ShowAltOverlay();
-        else AltOverlayRoot.Visibility = Visibility.Collapsed;
-        AltPinnedText.Visibility = AltOverlayRoot.Visibility == Visibility.Visible && _altPinned
-            ? Visibility.Visible : Visibility.Collapsed;
+        else ListOverlay.Hide();
+        // ShowAltOverlay가 폴더 부재 등으로 못 띄웠을 수 있어 실제 표시 상태 기준으로 판단(컨트롤 내부)
+        ListOverlay.SetPinned(_altPinned);
     }
 
-    /// <summary>Alt 홀드: 현재 파일이 있는 폴더의 리스트 뷰를 우측 30%에 띄운다(콘텐츠 로딩 후에만).</summary>
+    /// <summary>
+    /// Alt 홀드: 현재 파일이 있는 폴더의 리스트 뷰를 좌측 30%에 띄운다(콘텐츠 로딩 후에만;
+    /// A57 ①에서 우측 → 좌측). 필터 컨텍스트는 현재 모듈의 담당 확장자(A57 ③) —
+    /// A7 드롭다운은 리스트 안에서 그 목록을 추가로 좁힌다.
+    /// </summary>
     private void ShowAltOverlay()
     {
         if (_currentModule is null || _currentFilePath is null) return;
         if (Path.GetDirectoryName(_currentFilePath) is not { } folder || !Directory.Exists(folder)) return;
-
-        if (_altList is null)
-        {
-            _altList = new ExplorerPane { Settings = _settings }; // 정렬 키 저장(A5)
-            _altList.ConfigureListOnly();
-            _altList.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
-            _altList.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
-            AltListHost.Content = _altList;
-        }
-        _altList.NavigateTo(folder, _currentModule.SupportedExtensions);
-        AltOverlayRoot.Visibility = Visibility.Visible;
+        ListOverlay.Show(folder, _currentModule.SupportedExtensions);
     }
 
-    /// <summary>Ctrl 홀드(또는 고정) 정보 오버레이의 표시 상태를 갱신한다(A32에서 Shift→Ctrl 회귀).</summary>
+    /// <summary>
+    /// Ctrl 홀드(또는 고정) 정보 오버레이의 표시 상태를 갱신한다(A32에서 Shift→Ctrl 회귀;
+    /// A57 ①에서 좌측 → 우측). 정보 컨텍스트는 현재 모듈 뷰(IContentInfoProvider) —
+    /// 미구현 모듈은 컨트롤이 파일 기본 정보로 대체한다.
+    /// </summary>
     private void UpdateInfoOverlay()
     {
         var show = (_ctrlHeld || _infoPinned) && _currentFilePath is not null;
-        InfoOverlayRoot.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        InfoOverlay.IsHitTestVisible = show && _infoPinned; // 고정했을 때만 스크롤 등 상호작용 허용
-        InfoPinnedText.Visibility = show && _infoPinned ? Visibility.Visible : Visibility.Collapsed;
-        if (show) _ = LoadContentInfoAsync();
-    }
-
-    /// <summary>모듈 제공 정보(IContentInfoProvider) 우선, 없으면 파일 기본 정보. 파일별 1회 캐시.</summary>
-    private async Task LoadContentInfoAsync()
-    {
-        var path = _currentFilePath;
-        if (path is null) return;
-        if (_infoPath == path && _infoText is not null)
-        {
-            InfoOverlayText.Text = _infoText;
-            return;
-        }
-
-        var seq = ++_infoSeq;
-        InfoOverlayText.Text = "Loading info...";
-
-        string? text = null;
-        try
-        {
-            if (ModuleHost.Content is IContentInfoProvider provider)
-                text = await provider.GetContentInfoAsync();
-        }
-        catch
-        {
-            // 모듈 정보 실패 → 아래 파일 기본 정보로 대체
-        }
-        text ??= BuildBasicFileInfo(path);
-
-        if (seq != _infoSeq || _currentFilePath != path) return; // 그새 파일이 바뀜
-        _infoPath = path;
-        _infoText = text;
-        InfoOverlayText.Text = text;
-    }
-
-    private static string BuildBasicFileInfo(string path)
-    {
-        try
-        {
-            var info = new FileInfo(path);
-            return $"{info.Name}\n{ExplorerListing.FormatSize(info.Length)}\n"
-                 + $"{info.LastWriteTime:yyyy-MM-dd HH:mm}\n{info.DirectoryName}";
-        }
-        catch (Exception ex)
-        {
-            return Path.GetFileName(path) + "\nInfo unavailable: " + ex.Message;
-        }
+        if (show)
+            InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider, _infoPinned);
+        else
+            InfoOverlay.Hide();
     }
 
     // ---------- 현재 모드 시각 표시 (v0.20.0 → v0.26.0 개편) ----------
