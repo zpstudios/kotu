@@ -5,6 +5,7 @@ using KOTU.App.Integration;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
+using KOTU.Core.Threading;
 
 namespace KOTU.App;
 
@@ -14,6 +15,8 @@ namespace KOTU.App;
 /// 하단 바(광고 + ⛶ 전체화면)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
 /// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시·조작만 한다
 /// (A26·A76, v0.105.0 — 주기 확인·토스트는 앱 전역 서비스가 소유).
+/// 연결 토글의 레지스트리 작업·기본 앱 개수 조회는 전부 <see cref="Worker"/>에서 돌고
+/// UI에는 진행률과 결과만 흘러온다(A77, v0.106.0).
 /// </summary>
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
@@ -21,12 +24,41 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     private readonly ISettingsService _settings;
     private bool _suppressToggle;
 
+    /// <summary>
+    /// 설정 화면 전용 직렬 워커(A42 계약, A77에서 도입). 레지스트리 등록·해제·UserChoice 쓰기·
+    /// 기본 앱 개수 조회가 전부 여기서 돈다. 모듈별로 나누지 않고 하나로 둔 이유 —
+    /// 모듈들이 Capabilities 키 하나를 공유해 동시 쓰기가 서로를 지울 수 있다.
+    /// 화면 UI는 모듈마다 따로 놀지만(각자 링·텍스트·토글) 실제 작업은 큐 순서대로 직렬 실행된다.
+    /// </summary>
+    private ModuleWorker? _worker;
+
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다(ExplorerPane과 같은 규칙).</summary>
+    private ModuleWorker Worker => _worker ??= new ModuleWorker($"{Branding.AppName} settings worker");
+
+    /// <summary>
+    /// 뷰가 화면에 붙어 있는지 (A77). 워커 결과가 Unloaded 뒤에 도착해도 UI 요소·설정 페이지 열기
+    /// 같은 부수효과로 새지 않게 막는 가드다.
+    /// </summary>
+    private bool _uiAlive = true;
+
     public SettingsView(FileTypeRouter router)
     {
         InitializeComponent();
         _settings = App.Services.GetRequiredService<ISettingsService>();
         Build(router);
-        Loaded += (_, _) => Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
+        Loaded += (_, _) =>
+        {
+            _uiAlive = true;
+            Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
+        };
+        Unloaded += (_, _) =>
+        {
+            // A77: 화면을 떠난 뒤 워커가 끝나도 UI를 만지지 않는다.
+            // 진행 중인 레지스트리 작업은 중간에 끊지 않고(반쯤 등록된 상태 방지) 워커가 마저 끝낸다.
+            _uiAlive = false;
+            _worker?.Dispose();
+            _worker = null;
+        };
     }
 
     /// <summary>하단 바(광고·⛶)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.50.0).</summary>
@@ -106,8 +138,38 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             {
                 Header = $"Register {module.BrandName} file associations  ({string.Join(" ", module.SupportedExtensions)})",
                 IsOn = Safe(() => ExplorerIntegration.IsAssociationRegistered(module)),
+                VerticalAlignment = VerticalAlignment.Center,
             };
-            Root.Children.Add(toggle);
+
+            // A77(v0.106.0): 토글 행 우측에 진행 링 + 진행/결과 텍스트.
+            // StackPanel이 아니라 Grid를 쓰는 이유 — 헤더 문구가 길어도(확장자 나열) 링·텍스트가
+            // MaxWidth 680 밖으로 밀려나 잘리지 않게 오른쪽에 고정하기 위함.
+            var progressRing = new ProgressRing
+            {
+                Width = 16,
+                Height = 16,
+                IsActive = false,
+                Visibility = Visibility.Collapsed,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var progressText = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.8,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+            };
+            var toggleRow = new Grid { ColumnSpacing = 8 };
+            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(toggle, 0);
+            Grid.SetColumn(progressRing, 1);
+            Grid.SetColumn(progressText, 2);
+            toggleRow.Children.Add(toggle);
+            toggleRow.Children.Add(progressRing);
+            toggleRow.Children.Add(progressText);
+            Root.Children.Add(toggleRow);
 
             // A25(v0.61.0): 현재 기본 앱 현황(n/m) + 확장자별 '연결 프로그램' 대화상자 진입
             var defaultsText = new TextBlock
@@ -115,16 +177,28 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 FontSize = 12,
                 Opacity = 0.7,
                 VerticalAlignment = VerticalAlignment.Center,
+                // 조회 결과가 오기 전 자리 — 숫자만 나중에 채워져 줄 너비가 튀지 않는다.
+                Text = $"Default app for .../{module.SupportedExtensions.Count} extensions",
             };
 
-            void RefreshDefaults()
-            {
-                int count;
-                try { count = ExplorerIntegration.CountDefaults(module); }
-                catch { count = 0; }
+            void ShowDefaults(int count) =>
                 defaultsText.Text = $"Default app for {count}/{module.SupportedExtensions.Count} extensions";
+
+            // A77: 레지스트리 조회는 워커에서, 대입만 UI에서. 큐가 직렬이라 등록 작업 뒤에 넣으면
+            // 항상 '작업이 끝난 뒤의 값'을 읽는다.
+            void RefreshDefaultsAsync()
+            {
+                var dispatcher = DispatcherQueue;
+                Worker.Post(() =>
+                {
+                    var count = SafeCountDefaults(module);
+                    dispatcher.TryEnqueue(() =>
+                    {
+                        if (_uiAlive) ShowDefaults(count);
+                    });
+                });
             }
-            RefreshDefaults();
+            RefreshDefaultsAsync();
 
             var setDefaultButton = new DropDownButton
             {
@@ -139,7 +213,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 item.Click += (_, _) =>
                 {
                     ExplorerIntegration.ShowSetDefaultDialog(GetHwnd(), ext);
-                    RefreshDefaults(); // 대화상자에서 고르면 즉시 반영된다
+                    RefreshDefaultsAsync(); // 대화상자에서 고르면 즉시 반영된다
                 };
                 flyout.Items.Add(item);
             }
@@ -155,41 +229,85 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             defaultsRow.Children.Add(setDefaultButton);
             Root.Children.Add(defaultsRow);
 
-            toggle.Toggled += (_, _) =>
+            // 같은 모듈의 재진입 방지 플래그(A77). 작업 중에는 토글도 비활성이라 사람 조작으로는
+            // 도달하지 않지만, 실패 되돌리기(IsOn 재설정)나 프로그램적 변경까지 막아 준다.
+            var busy = false;
+
+            toggle.Toggled += async (_, _) =>
             {
-                if (_suppressToggle) return;
+                if (_suppressToggle || busy) return;
                 var turnedOn = toggle.IsOn;
-                Apply(toggle,
-                    () => ExplorerIntegration.RegisterAssociation(module),
-                    () => ExplorerIntegration.UnregisterAssociation(module));
+                var total = module.SupportedExtensions.Count;
 
-                // 켤 때만: A38 — 기본 앱까지 자동 지정 시도. Apply가 실패로 토글을 되돌렸으면 건너뛴다.
-                if (turnedOn && toggle.IsOn)
+                // 작업 시작: 이 모듈의 토글만 잠그고 진행 링을 켠다(다른 모듈 토글은 그대로).
+                busy = true;
+                toggle.IsEnabled = false;
+                progressRing.Visibility = Visibility.Visible;
+                progressRing.IsActive = true;
+                progressText.Text = $"{(turnedOn ? AssociationProgress.Registering : AssociationProgress.Unregistering)}... (0/{total})";
+                _status.Text = string.Empty;
+
+                var progress = new DispatcherProgress<AssociationProgress>(DispatcherQueue, p =>
                 {
-                    IReadOnlyList<string> failed;
-                    try { failed = ExplorerIntegration.SetAsDefault(module); }
-                    catch { failed = module.SupportedExtensions; }
+                    if (_uiAlive) progressText.Text = $"{p.Phase}... ({p.Done}/{p.Total})";
+                });
 
-                    RefreshDefaults();
+                AssociationOutcome outcome;
+                try
+                {
+                    outcome = await Worker.Run(ctx => ApplyAssociation(module, turnedOn, progress));
+                }
+                catch (Exception ex)
+                {
+                    // 워커가 이미 닫혔거나(뷰 이탈) 예상 못 한 실패 — 기존 Apply()와 같은 실패 처리로 보낸다.
+                    // 개수는 세어 보지도 못했으므로 -1 = "모름"으로 두고 화면 숫자는 건드리지 않는다.
+                    outcome = new AssociationOutcome(false, ex.Message, [], -1);
+                }
 
-                    var total = module.SupportedExtensions.Count;
-                    if (failed.Count == 0)
-                    {
-                        _status.Text = $"{module.BrandName}: set as the default app for all {total} file types.";
-                    }
-                    else
-                    {
-                        // 실패 확장자는 A25 폴백 — 설정 딥링크를 한 번 열어 사용자가 확정하게 한다
-                        // (확장자별 대화상자는 "Set default..." 버튼으로 여전히 가능).
-                        _status.Text = $"{module.BrandName}: set {total - failed.Count}/{total} automatically. "
-                                     + $"Windows blocks the rest ({string.Join(" ", failed)}) — confirm them on the "
-                                     + "page that just opened, or use \"Set default...\".";
-                        ExplorerIntegration.OpenDefaultAppsSettings();
-                    }
+                // 여기부터는 UI 스레드. 화면을 떠났어도 잠금은 풀어 둔다(다시 로드되면 그대로 쓰인다).
+                busy = false;
+                toggle.IsEnabled = true;
+                progressRing.IsActive = false;
+                progressRing.Visibility = Visibility.Collapsed;
+                if (!_uiAlive) return;
+
+                if (outcome.Defaults >= 0) ShowDefaults(outcome.Defaults);
+
+                if (!outcome.Ok)
+                {
+                    // 기존 Apply()의 실패 동작 유지: 토글을 원위치로 되돌리고 이유를 표시한다.
+                    _suppressToggle = true;
+                    toggle.IsOn = !toggle.IsOn;
+                    _suppressToggle = false;
+                    progressText.Text = string.Empty;
+                    _status.Text = "Failed to apply: " + outcome.Error;
+                    return;
+                }
+
+                if (!turnedOn)
+                {
+                    progressText.Text = string.Empty; // 해제는 부분 실패 개념이 없다
+                    return;
+                }
+
+                // 켤 때만: A38 — 기본 앱까지 자동 지정 시도(ApplyAssociation 안에서 이미 끝났다).
+                var failed = outcome.Failed;
+                if (failed.Count == 0)
+                {
+                    progressText.Text = string.Empty;
+                    _status.Text = $"{module.BrandName}: set as the default app for all {total} file types.";
                 }
                 else
                 {
-                    RefreshDefaults();
+                    // 부분 실패는 토글을 되돌리지 않는다(A77 확정) — 결과를 행에 남겨 다음 조작 전까지 유지한다.
+                    progressText.Text = $"Registered {total - failed.Count}/{total} ({failed.Count} failed)";
+
+                    // 실패 확장자는 A25 폴백 — 설정 딥링크를 한 번 열어 사용자가 확정하게 한다
+                    // (확장자별 대화상자는 "Set default..." 버튼으로 여전히 가능).
+                    _status.Text = $"{module.BrandName}: set {total - failed.Count}/{total} automatically. "
+                                 + $"Windows blocks the rest ({string.Join(" ", failed)}) — confirm them on the "
+                                 + "page that just opened, or use \"Set default...\".";
+                    ExplorerIntegration.OpenDefaultAppsSettings();
                 }
             };
         }
@@ -537,6 +655,68 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         };
         Root.Children.Add(header);
         return header;
+    }
+
+    /// <summary>
+    /// 연결 토글 한 번의 결과 (A77, v0.106.0). 워커에서 만들어 UI 스레드로 통째로 건너온다.
+    /// </summary>
+    /// <param name="Ok">등록/해제 자체가 성공했는지. false면 토글을 원위치로 되돌린다.</param>
+    /// <param name="Error">실패 사유(성공이면 null).</param>
+    /// <param name="Failed">기본 앱 지정(A38)에 실패한 확장자 — 부분 실패는 토글을 되돌리지 않는다.</param>
+    /// <param name="Defaults">작업 후 다시 센 "기본 앱인 확장자" 개수. 세지 못했으면 -1(화면 숫자 유지).</param>
+    private readonly record struct AssociationOutcome(
+        bool Ok, string? Error, IReadOnlyList<string> Failed, int Defaults);
+
+    /// <summary>
+    /// 워커 스레드 전용 (A77, v0.106.0) — 연결 등록/해제 + (켤 때만) 기본 앱 지정 + 개수 조회를
+    /// 한 작업으로 묶어 처리한다. UI 요소는 일절 건드리지 않고 진행률만 <paramref name="progress"/>로 흘린다.
+    /// </summary>
+    private static AssociationOutcome ApplyAssociation(IModule module, bool turnOn,
+        IProgress<AssociationProgress> progress)
+    {
+        try
+        {
+            if (turnOn) ExplorerIntegration.RegisterAssociation(module, progress);
+            else ExplorerIntegration.UnregisterAssociation(module, progress);
+        }
+        catch (Exception ex)
+        {
+            return new AssociationOutcome(false, ex.Message, [], SafeCountDefaults(module));
+        }
+
+        IReadOnlyList<string> failed = [];
+        if (turnOn)
+        {
+            try { failed = ExplorerIntegration.SetAsDefault(module, progress); }
+            catch { failed = module.SupportedExtensions; }
+        }
+        return new AssociationOutcome(true, null, failed, SafeCountDefaults(module));
+    }
+
+    /// <summary>기본 앱인 확장자 개수 — 조회 실패는 0으로 본다(워커에서만 호출).</summary>
+    private static int SafeCountDefaults(IModule module)
+    {
+        try { return ExplorerIntegration.CountDefaults(module); }
+        catch { return 0; }
+    }
+
+    /// <summary>
+    /// 워커 → UI 진행률 마샬링 (A77, v0.106.0). <see cref="Progress{T}"/>의 SynchronizationContext
+    /// 캡처 대신 DispatcherQueue.TryEnqueue를 쓴다(확정 사항). 창이 닫혀 큐가 멈춘 뒤의 보고는
+    /// TryEnqueue가 false를 돌려주며 조용히 버려지고, 뷰가 살아 있는지는 콜백 안에서 따로 확인한다.
+    /// </summary>
+    private sealed class DispatcherProgress<T> : IProgress<T>
+    {
+        private readonly Microsoft.UI.Dispatching.DispatcherQueue _queue;
+        private readonly Action<T> _onReport;
+
+        public DispatcherProgress(Microsoft.UI.Dispatching.DispatcherQueue queue, Action<T> onReport)
+        {
+            _queue = queue;
+            _onReport = onReport;
+        }
+
+        public void Report(T value) => _queue.TryEnqueue(() => _onReport(value));
     }
 
     /// <summary>토글 적용. 실패하면 토글을 원위치로 되돌리고 이유를 표시한다.</summary>

@@ -203,8 +203,11 @@ public static class ExplorerIntegration
     /// 모듈의 모든 확장자를 KOTU 기본 앱으로 강제 지정 시도.
     /// 반드시 <see cref="RegisterAssociation"/> 이후 호출(ProgID 클래스 키가 있어야 UserChoice가 유효).
     /// </summary>
+    /// <param name="module">대상 모듈.</param>
+    /// <param name="progress">확장자 하나를 끝낼 때마다 n/m을 보고할 곳 (A77, v0.106.0). 없으면 보고 안 함.</param>
     /// <returns>강제 지정에 실패한 확장자 목록 — A25 폴백 대상. 비어 있으면 전부 성공.</returns>
-    public static IReadOnlyList<string> SetAsDefault(IModule module)
+    public static IReadOnlyList<string> SetAsDefault(IModule module,
+        IProgress<AssociationProgress>? progress = null)
     {
         string sid;
         try { sid = WindowsIdentity.GetCurrent().User?.Value ?? string.Empty; }
@@ -213,10 +216,13 @@ public static class ExplorerIntegration
             return module.SupportedExtensions.ToList(); // SID를 못 구하면 전부 폴백
 
         var failed = new List<string>();
+        var total = module.SupportedExtensions.Count;
+        var done = 0;
         foreach (var ext in module.SupportedExtensions)
         {
             if (!TrySetDefaultForExtension(ext, ExtProgId(module, ext), sid))
                 failed.Add(ext);
+            progress?.Report(new AssociationProgress(++done, total, AssociationProgress.SettingDefault));
         }
         if (failed.Count < module.SupportedExtensions.Count)
             NotifyShell(); // 하나라도 바뀌었으면 아이콘/기본앱 캐시 갱신
@@ -345,8 +351,12 @@ public static class ExplorerIntegration
     /// (모듈 색 + 확장자 글씨 + kotu 표식)을 가리킨다. OpenWithProgids 등록이라 기본 앱
     /// 강탈이 아니라 후보 등록 — 기본 앱 지정은 Windows 설정에서 사용자가 한다.
     /// </summary>
-    public static void RegisterAssociation(IModule module)
+    /// <param name="module">대상 모듈.</param>
+    /// <param name="progress">확장자 하나를 끝낼 때마다 n/m을 보고할 곳 (A77, v0.106.0). 없으면 보고 안 함.</param>
+    public static void RegisterAssociation(IModule module, IProgress<AssociationProgress>? progress = null)
     {
+        var total = module.SupportedExtensions.Count;
+        var done = 0;
         foreach (var ext in module.SupportedExtensions)
         {
             var progId = ExtProgId(module, ext);
@@ -359,9 +369,13 @@ public static class ExplorerIntegration
                     command.SetValue(null, $"\"{ExePath}\" \"%1\"");
             }
 
-            using var extKey = Registry.CurrentUser.CreateSubKey(
-                $@"Software\Classes\{ext}\OpenWithProgids");
-            extKey.SetValue(progId, Array.Empty<byte>(), RegistryValueKind.None);
+            using (var extKey = Registry.CurrentUser.CreateSubKey(
+                       $@"Software\Classes\{ext}\OpenWithProgids"))
+            {
+                extKey.SetValue(progId, Array.Empty<byte>(), RegistryValueKind.None);
+            }
+
+            progress?.Report(new AssociationProgress(++done, total, AssociationProgress.Registering));
         }
 
         // 구 형태 청소: 모듈 단일 ProgID(v0.60.0 이전) + 구 브랜드 전체(ZP·WinUtil)
@@ -372,9 +386,12 @@ public static class ExplorerIntegration
         NotifyShell();
     }
 
-    public static void UnregisterAssociation(IModule module)
+    /// <param name="module">대상 모듈.</param>
+    /// <param name="progress">확장자 하나를 끝낼 때마다 n/m을 보고할 곳 (A77, v0.106.0).
+    /// 진행률은 현재 브랜드 정리분만 센다 — 구 브랜드 청소는 보통 지울 게 없어 순식간에 끝난다.</param>
+    public static void UnregisterAssociation(IModule module, IProgress<AssociationProgress>? progress = null)
     {
-        RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: true);
+        RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: true, progress);
         foreach (var legacyProgId in LegacyProgIds(module))
             RemoveAssociationKeys(module, legacyProgId, removeExtProgIds: true);
         UnregisterCapabilities(module); // (A25, v0.61.0)
@@ -385,8 +402,11 @@ public static class ExplorerIntegration
     /// progId(모듈 단일)와 — 요청 시 — 그 확장자별 파생 ProgID(progId+ext)들의 등록 흔적을 지운다.
     /// 파생 ID를 현재 브랜드가 아니라 전달받은 progId에서 만들기 때문에 구 브랜드 청소에도 그대로 쓸 수 있다.
     /// </summary>
-    private static void RemoveAssociationKeys(IModule module, string progId, bool removeExtProgIds)
+    private static void RemoveAssociationKeys(IModule module, string progId, bool removeExtProgIds,
+        IProgress<AssociationProgress>? progress = null)
     {
+        var total = module.SupportedExtensions.Count;
+        var done = 0;
         foreach (var ext in module.SupportedExtensions)
         {
             using var extKey = Registry.CurrentUser.OpenSubKey(
@@ -402,6 +422,8 @@ public static class ExplorerIntegration
                 Registry.CurrentUser.DeleteSubKeyTree(
                     $@"Software\Classes\{extProgId}", throwOnMissingSubKey: false);
             }
+
+            progress?.Report(new AssociationProgress(++done, total, AssociationProgress.Unregistering));
         }
 
         Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{progId}", throwOnMissingSubKey: false);
