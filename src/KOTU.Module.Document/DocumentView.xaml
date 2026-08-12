@@ -58,12 +58,16 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Click="OnOpenButtonClick"
+                <!-- A27(v0.107.0): 하단 바 버튼은 1칸(40×40)·2칸(84×40) 두 규격만 —
+                     치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
+                <Button Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
+                        Click="OnOpenButtonClick"
                         ToolTipService.ToolTip="Open document file">
                     <FontIcon Glyph="&#xE8E5;" FontSize="14" />
                 </Button>
                 <!-- 저장 버튼(A37): 편집 가능한 텍스트가 열려 있고 변경이 있을 때만 활성 -->
-                <Button x:Name="SaveButton" Grid.Column="1" IsEnabled="False"
+                <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
+                        IsEnabled="False"
                         Click="OnSaveButtonClick"
                         ToolTipService.ToolTip="Save (Ctrl+S)">
                     <FontIcon Glyph="&#xE74E;" FontSize="14" />
@@ -81,11 +85,14 @@
                 <TextBlock x:Name="DriveInfoText" Grid.Column="5" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.6" />
                 <!-- A49: PDF 전용 1:1(1칸)·상태형 Fit(2칸, A30 규격) — 텍스트 에디터 모드(A37)에서는 숨김.
-                     Fit 본체 = 마지막 옵션 표시·클릭 시 재적용, 화살표 = 3옵션. 내용·툴팁은 UpdateFitButton()이 갱신. -->
-                <Button x:Name="ActualSizeButton" Grid.Column="6" Width="40" Height="40" Padding="0"
+                     Fit 본체 = 마지막 옵션 표시·클릭 시 재적용, 화살표 = 3옵션. 내용·툴팁은 UpdateFitButton()이 갱신.
+                     SplitButton은 WinUI가 키 있는 기본 스타일을 노출하지 않아(BasedOn 대상 없음)
+                     전역 스타일 대신 2칸 값(84×40)을 그대로 적는다 — A27(v0.107.0). -->
+                <Button x:Name="ActualSizeButton" Grid.Column="6" Style="{StaticResource BottomBarButtonStyle}"
                         Content="1:1" FontSize="13" Visibility="Collapsed"
                         ToolTipService.ToolTip="Actual size (100%)" Click="OnActualSizeClick" />
-                <SplitButton x:Name="FitButton" Grid.Column="7" Width="90" Height="40"
+                <SplitButton x:Name="FitButton" Grid.Column="7" Width="84" Height="40"
+                             VerticalAlignment="Center" CornerRadius="4"
                              Visibility="Collapsed" Click="OnFitClicked"
                              ToolTipService.ToolTip="Auto-fit to window — whole page fits, or actual size if smaller">
                     <TextBlock Text="A" FontSize="13"
@@ -110,8 +117,8 @@
                         </MenuFlyout>
                     </SplitButton.Flyout>
                 </SplitButton>
-                <!-- 40×40 정사각 아이콘 = 이미지/영상 ⛶와 통일 (v0.53.0) -->
-                <Button Grid.Column="8" Width="40" Height="40" Padding="4"
+                <!-- 1칸(40×40) = 이미지/영상 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일) -->
+                <Button Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />

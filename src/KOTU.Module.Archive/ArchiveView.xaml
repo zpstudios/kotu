@@ -117,7 +117,11 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Button x:Name="OpenButton" Grid.Column="0" Click="OnOpenClick"
+                <!-- A27(v0.107.0): 하단 바 버튼은 1칸(40×40)·2칸(84×40) 두 규격만 —
+                     치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다.
+                     상단 툴바(Extract 등)는 본문 버튼이라 대상이 아니다. -->
+                <Button x:Name="OpenButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
+                        Click="OnOpenClick"
                         ToolTipService.ToolTip="Open archive">
                     <FontIcon Glyph="&#xE8E5;" FontSize="14" />
                 </Button>
@@ -129,10 +133,12 @@
                 <ProgressBar x:Name="OperationProgress" Grid.Column="3" Width="160"
                              Minimum="0" Maximum="100" VerticalAlignment="Center"
                              Visibility="Collapsed" />
-                <Button x:Name="CancelButton" Grid.Column="4" Content="Cancel"
-                        Click="OnCancelClick" Visibility="Collapsed" VerticalAlignment="Center" />
-                <!-- 40×40 정사각 아이콘 = 이미지/영상 ⛶와 통일 (v0.53.0) -->
-                <Button Grid.Column="5" Width="40" Height="40" Padding="4"
+                <!-- "Cancel"은 1칸(40)에 안 들어가는 텍스트라 2칸 규격 -->
+                <Button x:Name="CancelButton" Grid.Column="4" Style="{StaticResource BottomBarWideButtonStyle}"
+                        Content="Cancel"
+                        Click="OnCancelClick" Visibility="Collapsed" />
+                <!-- 1칸(40×40) = 이미지/영상 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일) -->
+                <Button Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />
