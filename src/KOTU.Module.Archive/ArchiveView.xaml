@@ -8,7 +8,9 @@
     Drop="OnDrop"
     KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (v0.40.0 — 전 모듈 전체화면 지원) -->
+    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (v0.40.0 — 전 모듈 전체화면 지원).
+         버튼 단독 문자 키(E 여기에 풀기 · T 폴더 지정 풀기 · C 새 압축 · O 열기 · U 상위 폴더)는
+         A34에서 코드(SetupHotkeys)가 건다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들기 위해서다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
@@ -28,12 +30,11 @@
             <!-- 진행/상태 -->
         </Grid.RowDefinitions>
 
-        <!-- 상단 툴바 (열기 버튼은 셸 하단 바 좌측으로 이동 — v0.40.0 사용자 요청) -->
+        <!-- 상단 툴바 (열기 버튼은 셸 하단 바 좌측으로 이동 — v0.40.0 사용자 요청).
+             A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button x:Name="ExtractToButton" Content="Extract..." Click="OnExtractToClick" IsEnabled="False"
-                    ToolTipService.ToolTip="Choose a folder to extract into (only selected items, if any)" />
-            <Button x:Name="ExtractHereButton" Content="Extract here" Click="OnExtractHereClick" IsEnabled="False"
-                    ToolTipService.ToolTip="Extract into a folder named after the archive, next to it" />
+            <Button x:Name="ExtractToButton" Content="Extract..." Click="OnExtractToClick" IsEnabled="False" />
+            <Button x:Name="ExtractHereButton" Content="Extract here" Click="OnExtractHereClick" IsEnabled="False" />
             <Button x:Name="CreateButton" Content="New archive">
                 <Button.Flyout>
                     <MenuFlyout>
@@ -46,8 +47,7 @@
 
         <!-- 브레드크럼 + 뒤로가기 -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
-            <Button x:Name="BackButton" Click="OnBackClick" IsEnabled="False"
-                    ToolTipService.ToolTip="Up one level">
+            <Button x:Name="BackButton" Click="OnBackClick" IsEnabled="False">
                 <FontIcon Glyph="&#xE72B;" FontSize="14" />
             </Button>
             <TextBlock x:Name="BreadcrumbText" VerticalAlignment="Center"
@@ -121,8 +121,7 @@
                      치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다.
                      상단 툴바(Extract 등)는 본문 버튼이라 대상이 아니다. -->
                 <Button x:Name="OpenButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
-                        Click="OnOpenClick"
-                        ToolTipService.ToolTip="Open archive">
+                        Click="OnOpenClick">
                     <FontIcon Glyph="&#xE8E5;" FontSize="14" />
                 </Button>
                 <TextBlock x:Name="StatusText" Grid.Column="1" VerticalAlignment="Center"

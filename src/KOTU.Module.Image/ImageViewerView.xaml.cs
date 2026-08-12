@@ -7,9 +7,11 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Windows.System;
 using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Threading;
+using KOTU.Input;
 
 namespace KOTU.Module.Image;
 
@@ -68,6 +70,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     public ImageViewerView(OpenContext context)
     {
         InitializeComponent();
+        SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
         // 키 입력을 받기 위해 로드 시 포커스 확보 (IsTabStop은 XAML에서 설정)
         Loaded += (_, _) => Focus(FocusState.Programmatic);
@@ -619,12 +622,6 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         await MoveAsync(forward: true);
     }
 
-    private void OnRotateInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        RotateClockwise();
-    }
-
     private async void OnDeleteInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
@@ -661,6 +658,27 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private void OnRotateButtonClick(object sender, RoutedEventArgs e) => RotateClockwise();
 
     private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
+
+    // ---------- 하단 바 버튼 핫키 (A34) ----------
+
+    /// <summary>
+    /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다 —
+    /// 키와 표기가 어긋날 수 없다. 텍스트 입력·탐색기 파일 리스트에 포커스가 있으면
+    /// HotkeySupport가 키를 삼키지 않고 통과시킨다(A32/A84 통과 규칙 재사용).
+    /// R(회전)은 v0.29.0부터 있던 키를 XAML 액셀러레이터에서 여기로 옮긴 것 — 의미는 그대로다.
+    /// A(1:1)·F(Fit)는 영상·문서 모듈과 같은 뜻으로 통일한 키.
+    /// </summary>
+    private void SetupHotkeys()
+    {
+        HotkeySupport.Bind(this, OpenButton, VirtualKey.O,
+            "Open image file", () => _ = PickAndOpenAsync());
+        HotkeySupport.Bind(this, RotateButton, VirtualKey.R,
+            "Rotate 90° clockwise", RotateClockwise);
+        HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,
+            "Actual size (100%)", () => SetFitMode(FitMode.ActualSize));
+        HotkeySupport.Bind(this, FitButton, VirtualKey.F,
+            "Auto-fit to window — long edge fits, nothing cropped", () => SetFitMode(FitMode.Fit));
+    }
 
     // ---------- Ctrl 정보 오버레이 (v0.25.0) ----------
 

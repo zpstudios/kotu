@@ -7,10 +7,12 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Windows.Storage.Pickers;
+using Windows.System;
 using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
+using KOTU.Input;
 
 namespace KOTU.Module.Audio;
 
@@ -132,6 +134,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         foreach (var s in Speeds)
             SpeedBox.Items.Add($"{s:0.##}×");
         SpeedBox.SelectedIndex = Array.IndexOf(Speeds, 1.0f);
+        SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
         _suppressVolumeEvent = true;
         VolumeSlider.Value = Math.Clamp(_settings.Get("audio.volume", 80), 0, 100);
@@ -616,15 +619,26 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         ChangeVolume(-VolumeStep);
     }
 
-    private void OnMuteInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleMute();
-    }
-
     private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
         ToggleFullScreen();
+    }
+
+    // ---------- 하단 바 버튼 핫키 (A34) ----------
+
+    /// <summary>
+    /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
+    /// 텍스트 입력·탐색기 파일 리스트 포커스에서는 HotkeySupport가 키를 통과시킨다(A32/A84 규칙).
+    /// M(음소거)은 v0.75.0부터 있던 키를 XAML 액셀러레이터에서 여기로 옮긴 것 — 의미는 그대로다.
+    /// 키 배정은 같은 뜻의 동작에 같은 키를 쓰는 규칙에 따라 영상 모듈과 일치시켰다(O·M·S).
+    /// </summary>
+    private void SetupHotkeys()
+    {
+        HotkeySupport.Bind(this, OpenButton, VirtualKey.O,
+            "Open music file", () => _ = PickAndOpenAsync());
+        HotkeySupport.Bind(this, MuteButton, VirtualKey.M, "Mute", ToggleMute);
+        HotkeySupport.Bind(this, SpeedBox, VirtualKey.S,
+            "Playback speed", () => SpeedBox.IsDropDownOpen = true);
     }
 }

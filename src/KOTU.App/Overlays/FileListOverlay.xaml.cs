@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using KOTU.Core.Settings;
+using KOTU.Input;
 
 namespace KOTU.App.Overlays;
 
@@ -39,6 +40,9 @@ public sealed partial class FileListOverlay : UserControl
     public FileListOverlay()
     {
         InitializeComponent();
+        // A34: 폴더 트리에 포커스가 있는 동안에도 모듈 버튼 핫키는 통과시킨다
+        // (트리 타이핑 탐색 우선 — 하단 리스트는 ExplorerPane이 같은 표시를 건다).
+        FolderTree.Tag = HotkeySupport.PassThroughTag;
     }
 
     /// <summary>

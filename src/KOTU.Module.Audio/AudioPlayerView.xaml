@@ -6,8 +6,10 @@
     IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨, M 음소거, Enter/F11 전체화면.
-         비디오 플레이어와 동일 배치(A10 분리 — 자막·핏 계열만 없음).
+    <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨, Enter/F11 전체화면.
+         버튼에 걸린 단독 문자 키(O 열기 · M 음소거 · S 배속)는 A34에서 코드(SetupHotkeys)로
+         옮겼다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들고, 텍스트 입력·파일 리스트
+         포커스에서는 통과시켜야 하기 때문. 비디오 플레이어와 동일 배치(A10 분리 — 자막·핏 계열만 없음).
          PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Space" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Space" Invoked="OnTogglePlayInvoked" />
@@ -16,7 +18,6 @@
         <KeyboardAccelerator Key="Right" Invoked="OnSeekForwardInvoked" />
         <KeyboardAccelerator Key="Up" Invoked="OnVolumeUpInvoked" />
         <KeyboardAccelerator Key="Down" Invoked="OnVolumeDownInvoked" />
-        <KeyboardAccelerator Key="M" Invoked="OnMuteInvoked" />
         <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
     </UserControl.KeyboardAccelerators>
@@ -76,8 +77,9 @@
 
             <!-- A27(v0.107.0): 하단 바 버튼은 1칸(40×40)·2칸(84×40) 두 규격만 —
                  치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
-            <Button Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
-                    ToolTipService.ToolTip="Open music file" Click="OnOpenClicked">
+            <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
+            <Button x:Name="OpenButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
+                    Click="OnOpenClicked">
                 <FontIcon Glyph="&#xE8E5;" FontSize="14" />
             </Button>
             <Button x:Name="PlayButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
@@ -91,16 +93,15 @@
             <TextBlock x:Name="DurationText" Grid.Column="4" Text="0:00"
                        VerticalAlignment="Center" />
             <Button x:Name="MuteButton" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
-                    Content="🔊"
-                    ToolTipService.ToolTip="Mute (M)" Click="OnMuteClicked" />
+                    Content="🔊" Click="OnMuteClicked" />
             <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸 84×40) -->
             <ComboBox x:Name="SpeedBox" Grid.Column="7" Style="{StaticResource BottomBarWideComboBoxStyle}"
-                      ToolTipService.ToolTip="Playback speed" SelectionChanged="OnSpeedChanged" />
+                      SelectionChanged="OnSpeedChanged" />
             <Button Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
-                    ToolTipService.ToolTip="Full screen (Enter)" Click="OnFullScreenClicked">
+                    ToolTipService.ToolTip="Full screen (Enter / F11)" Click="OnFullScreenClicked">
                 <FontIcon Glyph="&#xE740;" FontSize="18" />
             </Button>
         </Grid>

@@ -17,6 +17,10 @@
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- A34(v0.112.0): 버튼 핫키 공용 지원(키 등록·툴팁 표기·통과 판정). KOTU.Core는 UI 비의존이라 소스 링크로 공유한다. -->
+    <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!--
       내장 샘플 곡(A66): C 메이저 펜타토닉 아르페지오 멜로디, 18초 128kbps 약 282KB.
       numpy 합성 + ffmpeg 인코딩 — 생성: docs/gen_test_audio.py sample 모드 참고.

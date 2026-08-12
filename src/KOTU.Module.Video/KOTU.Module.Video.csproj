@@ -19,6 +19,10 @@
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- A34(v0.112.0): 버튼 핫키 공용 지원(키 등록·툴팁 표기·통과 판정). KOTU.Core는 UI 비의존이라 소스 링크로 공유한다. -->
+    <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!--
       내장 테스트 클립(화면 색감 + 스피커 테스트 음악, 32초 1.3MB).
       ffmpeg(lavfi)+numpy로 생성 — 생성 스크립트: docs/gen_test_audio.py 참고.

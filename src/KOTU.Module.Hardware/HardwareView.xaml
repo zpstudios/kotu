@@ -5,7 +5,9 @@
     IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (v0.42.0 — 전 모듈 전체화면 지원) -->
+    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (v0.42.0 — 전 모듈 전체화면 지원).
+         하단 바 버튼의 단독 문자 키(C 복사 · I 주기 · B 바 크기 · P 핀)는 A34에서
+         코드(SetupHotkeys)가 건다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들기 위해서다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
@@ -76,9 +78,9 @@
                      기능 설명은 툴팁으로. 수동 Refresh 버튼은 A75에서 제거(주기 폴링이 있어 불필요).
                      A27(v0.107.0): 이 줄의 버튼 치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다.
                      A60·A71·A72에서 이 바가 크게 바뀔 예정이라 구성은 그대로 두고 규격만 맞췄다. -->
+                <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
                 <Button x:Name="CopyButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
-                        Click="OnCopyClick"
-                        ToolTipService.ToolTip="Copy all hardware info and sensor values">
+                        Click="OnCopyClick">
                     <FontIcon Glyph="&#xE8C8;" FontSize="18" />
                 </Button>
                 <!-- Busy 링: 첫 로드에서 첫 스냅샷이 올 때까지만 돈다 (A75 이후 수동 Refresh 경로 없음) -->
@@ -98,8 +100,7 @@
                      2칸(84×40) 규격, 우측 정렬. 가장 긴 표기 "5000 ms"는 구 "1000 ms"와 같은 7글자라
                      폭 여유는 그대로다. 플라이아웃(50ms 부하 경고 툴팁 포함)은 코드에서 채운다. -->
                 <DropDownButton x:Name="IntervalButton" Grid.Column="4"
-                                Style="{StaticResource BottomBarWideDropDownButtonStyle}"
-                                ToolTipService.ToolTip="Sensor refresh interval">
+                                Style="{StaticResource BottomBarWideDropDownButtonStyle}">
                     <TextBlock x:Name="IntervalText" FontSize="12" Text="500 ms" />
                 </DropDownButton>
                 <!-- 하단 바 표시 크기(A62): 1칸(40×40) 버튼 하나로 S → M → L → S 순환.
@@ -115,8 +116,7 @@
                      A61(v0.111.0): 켜면 메인 영역을 접어 하단 바만 남는다(툴팁도 그 동작으로 갱신). -->
                 <ToggleButton x:Name="TopToggle" Grid.Column="6"
                               Style="{StaticResource BottomBarToggleButtonStyle}"
-                              Checked="OnTopToggleChanged" Unchecked="OnTopToggleChanged"
-                              ToolTipService.ToolTip="Always on top (collapses to the bar)">
+                              Checked="OnTopToggleChanged" Unchecked="OnTopToggleChanged">
                     <FontIcon Glyph="&#xE718;" FontSize="18" />
                 </ToggleButton>
                 <!-- 1칸(40×40) = 다른 모듈 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일) -->

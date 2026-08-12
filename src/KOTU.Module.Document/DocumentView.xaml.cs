@@ -9,6 +9,7 @@ using Windows.System;
 using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Threading;
+using KOTU.Input;
 
 namespace KOTU.Module.Document;
 
@@ -52,6 +53,7 @@ public sealed partial class DocumentView : UserControl,
     public DocumentView(OpenContext context)
     {
         InitializeComponent();
+        SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
         // A22(v0.108.0): A49의 "좁으면 드라이브 텍스트 숨김"(임계 760) 규칙은 제거했다 —
         // 드라이브 표시가 Auto 폭 텍스트에서 남는 폭(star 칸)을 쓰는 슬롯으로 바뀌어
@@ -231,7 +233,7 @@ public sealed partial class DocumentView : UserControl,
             }, "Auto-fit to window — whole page fits, or actual size if smaller"),
         };
         FitButton.Content = content;
-        ToolTipService.SetToolTip(FitButton, tip);
+        ToolTipService.SetToolTip(FitButton, HotkeySupport.Tip(tip, FitKey)); // A34: 표기는 키 상수에서
     }
 
     /// <summary>플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
@@ -533,5 +535,27 @@ public sealed partial class DocumentView : UserControl,
 
         args.Handled = true;
         appWindow.SetPresenter(AppWindowPresenterKind.Default);
+    }
+
+    // ---------- 하단 바 버튼 핫키 (A34) ----------
+
+    /// <summary>Fit 키 — 툴팁 표기(UpdateFitButton)와 액셀러레이터가 이 한 값을 함께 쓴다.</summary>
+    private const VirtualKey FitKey = VirtualKey.F;
+
+    /// <summary>
+    /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
+    /// **이 모듈은 에디터(TextBox)가 본문**이라 통과 규칙이 특히 중요하다 — 타이핑 중에는
+    /// HotkeySupport가 O·A·F를 삼키지 않고 글자를 그대로 흘려보낸다(A32/A84 규칙 재사용).
+    /// 1:1(A)·Fit(F)은 PDF에서만 보이는 버튼이라, 텍스트 모드(Collapsed)에서는 키도 동작하지 않는다.
+    /// 저장은 Ctrl+S 그대로(A84의 유일한 Ctrl 예외) — XAML 액셀러레이터에 남겨 둔다.
+    /// </summary>
+    private void SetupHotkeys()
+    {
+        HotkeySupport.Bind(this, OpenButton, VirtualKey.O,
+            "Open document file", () => _ = PickAndOpenAsync());
+        HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,
+            "Actual size (100%)", () => _pdfPane?.ApplyFit(PdfFitMode.ActualSize));
+        HotkeySupport.Register(this, FitButton, FitKey, () => _pdfPane?.ApplyFit(_lastFitOption));
+        UpdateFitButton(); // Fit 툴팁은 표시 상태를 따라가므로 초기값도 여기서 만든다
     }
 }

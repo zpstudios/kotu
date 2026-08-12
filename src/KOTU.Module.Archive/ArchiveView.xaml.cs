@@ -6,8 +6,10 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Pickers;
+using Windows.System;
 using KOTU.Core.Contracts;
 using KOTU.Core.Threading;
+using KOTU.Input;
 
 namespace KOTU.Module.Archive;
 
@@ -102,6 +104,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     public ArchiveView(OpenContext context, KOTU.Core.Settings.ISettingsService settings)
     {
         InitializeComponent();
+        SetupHotkeys(); // A34: 툴바·하단 바 버튼 핫키 + 툴팁 표기
         _settings = settings;
         _initialFile = context.FilePath;
         _initialArgs = context.Arguments;
@@ -220,7 +223,10 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         RefreshRows();
     }
 
-    private void OnBackClick(object sender, RoutedEventArgs e)
+    private void OnBackClick(object sender, RoutedEventArgs e) => NavigateBack();
+
+    /// <summary>상위 폴더로. 버튼과 U 키(A34)가 공유한다.</summary>
+    private void NavigateBack()
     {
         if (_navStack.Count == 0) return;
         _currentFolder = _navStack.Pop();
@@ -260,7 +266,10 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     // ---------- 해제 ----------
 
-    private async void OnExtractToClick(object sender, RoutedEventArgs e)
+    private async void OnExtractToClick(object sender, RoutedEventArgs e) => await ExtractToAsync();
+
+    /// <summary>"폴더를 골라 풀기" 실행. 버튼과 T 키(A34)가 공유한다.</summary>
+    private async Task ExtractToAsync()
     {
         if (_busy || _archivePath is null) return;
 
@@ -590,7 +599,10 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     // ---------- 열기 버튼 / 창 핸들 ----------
 
-    private async void OnOpenClick(object sender, RoutedEventArgs e)
+    private async void OnOpenClick(object sender, RoutedEventArgs e) => await PickAndOpenAsync();
+
+    /// <summary>열기 대화상자. 버튼과 O 키(A34)가 공유한다(다른 모듈의 열기와 같은 키).</summary>
+    private async Task PickAndOpenAsync()
     {
         if (_busy) return;
 
@@ -639,6 +651,31 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
         args.Handled = true;
         appWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
+    }
+
+    // ---------- 툴바·하단 바 버튼 핫키 (A34) ----------
+
+    /// <summary>
+    /// A34: 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
+    /// E(Extract here)가 이 모듈의 주 동작이라 첫 글자를 먼저 가져가고, 폴더를 고르는 쪽은
+    /// "Extract to"의 T를 쓴다. C(새 압축)는 형식 선택 플라이아웃을 여는 키다.
+    /// 항목 목록(EntryList)은 통과 대상이 아니다 — 리스트에서 항목을 고른 뒤 바로 E를 눌러야
+    /// 하고, 행이 표시 전용 객체(ArchiveRow)라 첫 글자 점프 대상도 아니기 때문
+    /// (통과는 셸 탐색기 파일 리스트·폴더 트리 한정).
+    /// 버튼이 비활성(작업 중·아카이브 없음)이면 키도 아무 일도 하지 않는다 — HotkeySupport가 판정한다.
+    /// Cancel(진행 중에만 뜨는 버튼)에는 키를 주지 않았다: 스치듯 눌린 한 글자로 긴 작업이
+    /// 중단되는 편이 손해가 크다.
+    /// </summary>
+    private void SetupHotkeys()
+    {
+        HotkeySupport.Bind(this, OpenButton, VirtualKey.O, "Open archive", () => _ = PickAndOpenAsync());
+        HotkeySupport.Bind(this, ExtractHereButton, VirtualKey.E,
+            "Extract into a folder named after the archive, next to it", () => _ = ExtractHereAsync());
+        HotkeySupport.Bind(this, ExtractToButton, VirtualKey.T,
+            "Choose a folder to extract into (only selected items, if any)", () => _ = ExtractToAsync());
+        HotkeySupport.Bind(this, CreateButton, VirtualKey.C,
+            "Create a new archive (ZIP or 7z)", () => CreateButton.Flyout?.ShowAt(CreateButton));
+        HotkeySupport.Bind(this, BackButton, VirtualKey.U, "Up one level", NavigateBack);
     }
 
     /// <summary>SynchronizationContext에 의존하지 않는 IProgress 구현(명시적 디스패처 마샬링용).</summary>

@@ -7,6 +7,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
 using KOTU.App.Controls;
 using KOTU.App.Overlays;
+using KOTU.Input;
 using KOTU.Core.Cli;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
@@ -532,6 +533,9 @@ public sealed partial class MainWindow : Window
 
     private const string SettingsShortcutHint = "0";
 
+    /// <summary>시작 메뉴 키 = `(숫자 1 왼쪽, VK_OEM_3). 툴팁 표기(A34)도 이 값으로 조립한다.</summary>
+    private const string MenuShortcutHint = "`";
+
     /// <summary>
     /// `(1 왼쪽 키) = 시작 메뉴, 숫자 = 모듈 전환, 0 = Settings — 전부 수정자 없는 단독 키(A32).
     /// Shift+N = 새 창(A24 — A84에서 Ctrl+N을 Shift 계열로 전환. 앱에 남는 Ctrl 조합은
@@ -545,6 +549,8 @@ public sealed partial class MainWindow : Window
             Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
 
         AddShortcut((VirtualKey)192, () => StartFlyout.ShowAt(StartButton)); // VK_OEM_3 = `(~)
+        // A34: 하단 바 메뉴 버튼도 툴팁에 키를 표기한다(문자열은 여기서만 만든다).
+        ToolTipService.SetToolTip(StartButton, $"Menu ({MenuShortcutHint})");
         foreach (var (id, key, _) in ModuleShortcuts)
             AddShortcut(key, () => OpenModuleById(id));
         AddShortcut(VirtualKey.Number0, () => OnSettingsClick(StartButton, new RoutedEventArgs()));
@@ -574,11 +580,13 @@ public sealed partial class MainWindow : Window
         RootLayout.KeyboardAccelerators.Add(accelerator);
     }
 
-    /// <summary>포커스가 텍스트 입력 컨트롤(TextBox·PasswordBox·RichEditBox 계열)에 있는지.</summary>
-    private bool IsTextInputFocused()
-        => RootLayout.XamlRoot is { } xr
-           && Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(xr)
-               is TextBox or PasswordBox or RichEditBox;
+    /// <summary>
+    /// 포커스가 텍스트 입력 컨트롤(TextBox·PasswordBox·RichEditBox 계열)에 있는지.
+    /// A34에서 판정 자체는 공용 헬퍼(HotkeySupport)로 옮겼다 — 모듈 버튼 핫키가 같은 규칙을 쓴다.
+    /// 셸 키(숫자·`·Shift+N)는 파일 리스트 포커스에서는 계속 동작해야 하므로
+    /// 리스트 통과까지 보는 ShouldPassThrough가 아니라 텍스트 입력만 보는 이 판정을 쓴다.
+    /// </summary>
+    private bool IsTextInputFocused() => HotkeySupport.IsTextInputFocused(RootLayout);
 
     /// <summary>단축키·센서 트레이(A18)로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호).</summary>
     internal void OpenModuleById(string id)

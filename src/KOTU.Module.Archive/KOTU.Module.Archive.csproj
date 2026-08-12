@@ -20,6 +20,10 @@
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- A34(v0.112.0): 버튼 핫키 공용 지원(키 등록·툴팁 표기·통과 판정). KOTU.Core는 UI 비의존이라 소스 링크로 공유한다. -->
+    <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!--
       7z.dll(x64)은 LGPL이라 NuGet에 동봉하지 않는다.
       7-Zip 설치본(C:\Program Files\7-Zip\7z.dll) 또는 7-zip.org의 "7z extra"에서

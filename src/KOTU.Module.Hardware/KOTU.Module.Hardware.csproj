@@ -21,4 +21,8 @@
   <ItemGroup>
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- A34(v0.112.0): 버튼 핫키 공용 지원(키 등록·툴팁 표기·통과 판정). KOTU.Core는 UI 비의존이라 소스 링크로 공유한다. -->
+    <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
+  </ItemGroup>
 </Project>

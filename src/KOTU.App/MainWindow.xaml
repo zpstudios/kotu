@@ -89,11 +89,12 @@
             <!-- A27(v0.107.0): 메뉴 버튼도 1칸(40×40) 공통 규격 —
                  투명 배경·테두리 0이던 예외를 없애 다른 하단 바 버튼과 외곽선을 통일.
                  좌측 여백 6은 유지(ModuleBarHost의 Margin 52가 이 폭 6+40을 전제한다). -->
+            <!-- 툴팁은 코드(RegisterShortcuts)가 단다 — A34: 키 문자(MenuShortcutHint)와
+                 표기를 한 값에서 조립해 어긋날 수 없게 하기 위해서다. -->
             <Button x:Name="StartButton"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Margin="6,0,0,0"
-                    HorizontalAlignment="Left"
-                    ToolTipService.ToolTip="Menu">
+                    HorizontalAlignment="Left">
                 <FontIcon Glyph="&#xE700;" FontSize="16" />
                 <Button.Flyout>
                     <Flyout x:Name="StartFlyout" Placement="TopEdgeAlignedLeft">

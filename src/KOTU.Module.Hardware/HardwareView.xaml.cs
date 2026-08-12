@@ -7,7 +7,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Input;
 
 namespace KOTU.Module.Hardware;
 
@@ -39,7 +41,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         InitializeComponent();
         BuildSensorCards();
         BuildIntervalFlyout(); // 리프레시 주기 선택 (A29)
-        ApplyBarScale();       // 하단 바 표시 크기 복원값 반영 (A62)
+        SetupHotkeys();        // A34: 하단 바 버튼 핫키 + 툴팁 표기
+        ApplyBarScale();       // 하단 바 표시 크기 복원값 반영 (A62 — 바 크기 툴팁도 여기서)
         Loaded += (_, _) =>
         {
             HookPresenterChanged();
@@ -351,8 +354,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         PulseHost.Height = height; // 맥박 그래프도 카드와 같은 높이 유지 (v0.64.2 규격)
         PulseLine.StrokeThickness = BaseStrokeThickness * scale;
         BarScaleIcon.FontSize = BaseBarIconFontSize * scale;
-        ToolTipService.SetToolTip(BarScaleButton,
-            $"Bottom bar size: {HardwareModule.BarScaleSteps[HardwareModule.BarScaleIndex].Label}");
+        // A34: 표기는 키 상수에서 조립한다(단계 표시가 바뀌어도 키 표기는 어긋나지 않는다).
+        ToolTipService.SetToolTip(BarScaleButton, HotkeySupport.Tip(
+            $"Bottom bar size: {HardwareModule.BarScaleSteps[HardwareModule.BarScaleIndex].Label}",
+            BarScaleKey));
 
         _sensorColumns = 0; // 카드 최소 폭이 바뀌었다 — 같은 폭이어도 다시 계산하게 한다
         LayoutSensorCards(SensorGrid.ActualWidth);
@@ -1019,8 +1024,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     // ---------- 조작 ----------
 
-    /// <summary>모든 섹션 + 현재 센서 값을 텍스트로 클립보드에 복사 (사양 공유용).</summary>
-    private void OnCopyClick(object sender, RoutedEventArgs e)
+    private void OnCopyClick(object sender, RoutedEventArgs e) => CopyAllToClipboard();
+
+    /// <summary>모든 섹션 + 현재 센서 값을 텍스트로 클립보드에 복사 (사양 공유용). 버튼과 C 키(A34) 공용.</summary>
+    private void CopyAllToClipboard()
     {
         var sb = new StringBuilder();
         foreach (var section in _sections)
@@ -1041,5 +1048,27 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         var package = new DataPackage();
         package.SetText(sb.ToString().TrimEnd());
         Clipboard.SetContent(package);
+    }
+
+    // ---------- 하단 바 버튼 핫키 (A34) ----------
+
+    /// <summary>바 크기 순환 키 — 툴팁 표기(ApplyBarScale)와 액셀러레이터가 이 한 값을 함께 쓴다.</summary>
+    private const VirtualKey BarScaleKey = VirtualKey.B;
+
+    /// <summary>
+    /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
+    /// I(주기)는 누르면 선택 플라이아웃이 열리고, P(핀)는 누를 때마다 토글된다.
+    /// A(1:1)·F(Fit)가 없는 모듈이라 A는 비워 두고 핀은 P(Pin)로 — 다른 모듈의 A와 뜻이 겹치지 않게 했다.
+    /// 이 바는 A60·A71·A72에서 개편 예정이라 구성은 그대로 두고 키만 얹었다.
+    /// </summary>
+    private void SetupHotkeys()
+    {
+        HotkeySupport.Bind(this, CopyButton, VirtualKey.C,
+            "Copy all hardware info and sensor values", CopyAllToClipboard);
+        HotkeySupport.Bind(this, IntervalButton, VirtualKey.I,
+            "Sensor refresh interval", () => IntervalButton.Flyout?.ShowAt(IntervalButton));
+        HotkeySupport.Bind(this, TopToggle, VirtualKey.P,
+            "Always on top (collapses to the bar)", () => TopToggle.IsChecked = TopToggle.IsChecked != true);
+        HotkeySupport.Register(this, BarScaleButton, BarScaleKey, HardwareModule.CycleBarScale);
     }
 }

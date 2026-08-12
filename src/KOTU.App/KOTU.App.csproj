@@ -65,6 +65,13 @@
     <Content Include="Assets\fileicons\*.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
+    <!--
+      A34(v0.112.0): 버튼 핫키 공용 지원. KOTU.Core는 UI 비의존(net8.0)이라 WinUI 타입을 쓸 수 없어
+      소스 링크로 공유한다(어셈블리마다 internal 사본). 모듈 프로젝트 전부가 같은 항목을 갖는다.
+    -->
+    <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
     <ProjectReference Include="..\KOTU.Module.Image\KOTU.Module.Image.csproj" />
     <ProjectReference Include="..\KOTU.Module.Archive\KOTU.Module.Archive.csproj" />

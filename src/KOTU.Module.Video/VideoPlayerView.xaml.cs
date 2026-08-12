@@ -7,10 +7,12 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Windows.Storage.Pickers;
+using Windows.System;
 using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
+using KOTU.Input;
 
 namespace KOTU.Module.Video;
 
@@ -164,6 +166,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             SpeedBox.Items.Add($"{s:0.##}×");
         SpeedBox.SelectedIndex = Array.IndexOf(Speeds, 1.0f);
         FillSubtitleFlyout(); // "No subtitles"만 있는 초기 상태
+        SetupHotkeys();       // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
         _suppressVolumeEvent = true;
         VolumeSlider.Value = Math.Clamp(_settings.Get("video.volume", 80), 0, 100);
@@ -764,7 +767,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             }, "Auto-fit to window — long edge fits, nothing cropped"),
         };
         FitButton.Content = content;
-        ToolTipService.SetToolTip(FitButton, tip);
+        ToolTipService.SetToolTip(FitButton, HotkeySupport.Tip(tip, FitKey)); // A34: 표기는 키 상수에서
     }
 
     /// <summary>A30: 플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
@@ -830,14 +833,20 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         return (0, 0);
     }
 
-    private void OnActualSizeClicked(object sender, RoutedEventArgs e)
+    private void OnActualSizeClicked(object sender, RoutedEventArgs e) => ApplyActualSize();
+
+    /// <summary>1:1 버튼·A 키(A34) 공용 경로.</summary>
+    private void ApplyActualSize()
     {
         _fitMode = VideoFitMode.ActualSize;
         ApplyFitMode();
     }
 
     /// <summary>A30: 본체 클릭 = 버튼에 표시된 마지막 옵션 적용(1:1에서 되돌아올 때도 이 경로).</summary>
-    private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args)
+    private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args) => ApplyLastFitOption();
+
+    /// <summary>Fit 본체 클릭·F 키(A34) 공용 경로 — 플라이아웃이 아니라 마지막 옵션 재적용이다.</summary>
+    private void ApplyLastFitOption()
     {
         _fitMode = _lastFitOption;
         ApplyFitMode();
@@ -977,15 +986,36 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         ChangeVolume(-VolumeStep);
     }
 
-    private void OnMuteInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleMute();
-    }
-
     private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
         ToggleFullScreen();
+    }
+
+    // ---------- 하단 바 버튼 핫키 (A34) ----------
+
+    /// <summary>Fit 키 — 툴팁 표기(UpdateFitButton)와 액셀러레이터가 이 한 값을 함께 쓴다.</summary>
+    private const VirtualKey FitKey = VirtualKey.F;
+
+    /// <summary>
+    /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
+    /// 텍스트 입력·탐색기 파일 리스트 포커스에서는 HotkeySupport가 키를 통과시킨다(A32/A84 규칙).
+    /// M(음소거)은 v0.21.0부터 있던 키를 XAML 액셀러레이터에서 여기로 옮긴 것 — 의미는 그대로다.
+    /// 플라이아웃형(S 배속·C 자막)은 누르면 목록이 열리고, Fit(F)·1:1(A)은 본체 클릭과 같은 동작이다.
+    /// 자막이 S가 아니라 C인 것은 S를 배속(Speed)이 먼저 쓰기 때문 — 캡션 관습 키를 따랐다.
+    /// </summary>
+    private void SetupHotkeys()
+    {
+        HotkeySupport.Bind(this, OpenButton, VirtualKey.O,
+            "Open video file", () => _ = PickAndOpenAsync());
+        HotkeySupport.Bind(this, MuteButton, VirtualKey.M, "Mute", ToggleMute);
+        HotkeySupport.Bind(this, SpeedBox, VirtualKey.S,
+            "Playback speed", () => SpeedBox.IsDropDownOpen = true);
+        HotkeySupport.Bind(this, SubtitleButton, VirtualKey.C,
+            "Subtitles", () => SubtitleFlyout.ShowAt(SubtitleButton));
+        HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,
+            "Actual size (100%)", ApplyActualSize);
+        HotkeySupport.Register(this, FitButton, FitKey, ApplyLastFitOption);
+        UpdateFitButton(); // Fit 툴팁은 표시 상태를 따라가므로 초기값도 여기서 만든다
     }
 }

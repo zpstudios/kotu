@@ -8,6 +8,7 @@ using Windows.Storage.FileProperties;
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
+using KOTU.Input;
 
 namespace KOTU.App;
 
@@ -67,6 +68,10 @@ public sealed partial class ExplorerPane : UserControl
     {
         InitializeComponent();
         SyncSortChecks();
+        // A34: 파일 리스트에 포커스가 있는 동안에는 모듈 버튼 핫키를 삼키지 않는다 —
+        // 리스트의 타이핑 탐색(첫 글자 점프)이 우선(빈 모듈 탐색기·좌측 오버레이 공통).
+        IconGrid.Tag = HotkeySupport.PassThroughTag;
+        ListPane.Tag = HotkeySupport.PassThroughTag;
         Unloaded += (_, _) =>
         {
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
