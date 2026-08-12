@@ -111,8 +111,8 @@
             <Grid ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
+                    <!-- 상태 텍스트(작업 중·파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 -->
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -127,18 +127,21 @@
                 </Button>
                 <TextBlock x:Name="StatusText" Grid.Column="1" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
-                <!-- 현재 아카이브가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
-                <TextBlock x:Name="DriveInfoText" Grid.Column="2" VerticalAlignment="Center"
-                           FontSize="12" Opacity="0.6" />
-                <ProgressBar x:Name="OperationProgress" Grid.Column="3" Width="160"
+                <!-- A22(v0.108.0): 파일이 열려 있지 않을 때만 뜨는 공용 드라이브 줄(셸이 주입).
+                     v0.47.0의 "현재 아카이브가 있는 드라이브" 텍스트를 대체한다 —
+                     상태 텍스트와 같은 칸을 쓰고, 상태 문구가 있으면 그쪽이 우선이다. -->
+                <ContentPresenter x:Name="DriveStripHost" Grid.Column="1"
+                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                  VerticalAlignment="Center" Visibility="Collapsed" />
+                <ProgressBar x:Name="OperationProgress" Grid.Column="2" Width="160"
                              Minimum="0" Maximum="100" VerticalAlignment="Center"
                              Visibility="Collapsed" />
                 <!-- "Cancel"은 1칸(40)에 안 들어가는 텍스트라 2칸 규격 -->
-                <Button x:Name="CancelButton" Grid.Column="4" Style="{StaticResource BottomBarWideButtonStyle}"
+                <Button x:Name="CancelButton" Grid.Column="3" Style="{StaticResource BottomBarWideButtonStyle}"
                         Content="Cancel"
                         Click="OnCancelClick" Visibility="Collapsed" />
                 <!-- 1칸(40×40) = 이미지/영상 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일) -->
-                <Button Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
+                <Button Grid.Column="4" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />

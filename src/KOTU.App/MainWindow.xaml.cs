@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
+using KOTU.App.Controls;
 using KOTU.App.Overlays;
 using KOTU.Core.Cli;
 using KOTU.Core.Contracts;
@@ -39,6 +40,12 @@ public sealed partial class MainWindow : Window
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ExplorerPane? _emptyExplorer; // 빈 상태 중앙 탐색기 (지연 생성)
+
+    // ---- 하단 바 드라이브 줄 (A22, v0.108.0) ----
+    // 표시 컨트롤은 셸에 하나(공용 DriveStrip)만 두고 모듈 하단 바가 슬롯을 내준다(IDriveStripHost).
+    // 보임 조건은 "파일이 열려 있지 않을 때"뿐이라, 새 상태 플래그 없이 _currentFilePath를 그대로 쓴다.
+    private DriveStrip? _driveStrip;          // 지금 모듈 바에 끼워둔 줄 (뷰마다 새로 만든다)
+    private IDriveStripHost? _driveStripHost; // 그 줄을 받은 모듈 뷰
 
     private enum OverlayState { Closed, Holding, TranslucentPinned, OpaqueDocked }
 
@@ -661,6 +668,7 @@ public sealed partial class MainWindow : Window
         ModuleHost.Content = settings;
         // 설정도 하단 바 제공(광고 + ⛶, v0.50.0) — 모듈들과 같은 통합 방식
         ModuleBarHost.Content = settings.TakeBottomBar() as UIElement;
+        AttachDriveStrip(null); // 설정 바에는 드라이브 줄이 없다 — 이전 뷰 참조를 끊는다 (A22)
         CurrentModuleId = null;
         IsUntouched = false;
         UpdateModeIndicator(null, isSettings: true);
@@ -699,6 +707,7 @@ public sealed partial class MainWindow : Window
                 VerticalAlignment = VerticalAlignment.Center,
             };
             ModuleBarHost.Content = null;
+            AttachDriveStrip(null); // 미지원 파일 안내 화면 — 모듈 바와 함께 드라이브 줄도 내린다 (A22)
             CurrentModuleId = null;
             IsUntouched = false;
             UpdateModeIndicator(null);
@@ -757,6 +766,7 @@ public sealed partial class MainWindow : Window
         ModuleHost.Content = view;
         // 모듈이 제공하는 하단 바 줄(동영상 트랜스포트 등)을 셸 하단 바에 통합 (v0.21.0)
         ModuleBarHost.Content = (view as IBottomBarProvider)?.TakeBottomBar() as UIElement;
+        AttachDriveStrip(view as IDriveStripHost); // A22: 하단 바 드라이브 줄 주입(파일 없을 때만 표시)
         CurrentModuleId = module.Id;
         IsUntouched = false;
         UpdateModeIndicator(module);
@@ -828,6 +838,7 @@ public sealed partial class MainWindow : Window
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // 모듈별 마지막 폴더 저장 (v0.55.0)
         UpdateEmptyExplorer();
+        UpdateDriveStrip(); // A22: 파일 유무가 바뀌면 드라이브 줄도 함께 켜고 끈다
         // 홀드 판정만 리셋하고(A58), 반투명 고정·불투명 밀어내기 상태는 유지한 채
         // 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 — 기존 "고정은 콘텐츠를 넘어 유지" 규칙.
         ResetOverlayInput();
@@ -851,7 +862,39 @@ public sealed partial class MainWindow : Window
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // v0.55.0
         UpdateEmptyExplorer();
+        UpdateDriveStrip();   // A22: 뷰가 파일을 열었다 → 드라이브 줄을 숨긴다
         ApplyOverlayStates(); // 폴더·정보가 바뀌었을 수 있다 — 떠 있는 오버레이·도크 갱신
+    }
+
+    // ---------- 하단 바 드라이브 줄 (A22, v0.108.0) ----------
+
+    /// <summary>
+    /// 새 모듈 바에 드라이브 줄을 끼운다(A57 ②의 공용 오버레이 주입과 같은 방식).
+    /// 뷰마다 새 인스턴스를 만드는 이유: 같은 UIElement를 다른 부모로 옮기면 XAML이 예외를 던진다.
+    /// 드라이브 줄을 받지 않는 화면(설정·정보·미지원 파일 안내)에서는 null로 참조만 끊는다.
+    /// </summary>
+    private void AttachDriveStrip(IDriveStripHost? host)
+    {
+        _driveStripHost = host;
+        _driveStrip = null;
+        if (host is null) return;
+
+        _driveStrip = new DriveStrip();
+        host.AttachDriveStrip(_driveStrip);
+        // 보임 여부는 곧바로 이어지는 SetContentState → UpdateDriveStrip이 정한다.
+        // 여기서 미리 켜면 파일을 열고 있는 중에도 WMI 조회가 한 번 돌아 낭비다.
+    }
+
+    /// <summary>
+    /// 표시 시점(A22 — v0.47.0의 반대): 파일이 열려 있지 않을 때만 보인다.
+    /// 숨기면 컨트롤이 30초 갱신·자동 스크롤도 함께 멈춘다.
+    /// </summary>
+    private void UpdateDriveStrip()
+    {
+        if (_driveStrip is null || _driveStripHost is null) return;
+        var show = _currentFilePath is null;
+        _driveStrip.SetActive(show);
+        _driveStripHost.ShowDriveStrip(show);
     }
 
     /// <summary>파일 모듈(파일 없이 열면 빈 상태 탐색기·A81 빈 도크가 성립)인지 — H/W·설정은 제외.</summary>

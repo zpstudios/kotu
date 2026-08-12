@@ -35,7 +35,7 @@ public sealed class ArchiveRow
 /// 창이 여러 개면 워커도 창마다 하나라 서로의 압축/해제를 기다리지 않는다.
 /// </summary>
 public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.IContentStateSource,
-    IBottomBarProvider
+    IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost
 {
     /// <summary>아카이브를 열면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -49,6 +49,34 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     {
         RootGrid.Children.Remove(StatusBar);
         return StatusBar;
+    }
+
+    /// <summary>
+    /// A22(v0.108.0): 셸이 만든 공용 드라이브 줄을 하단 바 슬롯에 끼운다.
+    /// v0.47.0의 모듈별 드라이브 텍스트(DriveInfoText)를 대체한다.
+    /// </summary>
+    public void AttachDriveStrip(object strip) => DriveStripHost.Content = strip as UIElement;
+
+    /// <summary>셸 판정(파일이 열려 있지 않음)을 기억하고 실제 표시는 상태 문구와 함께 정한다.</summary>
+    public void ShowDriveStrip(bool show)
+    {
+        _driveStripRequested = show;
+        ApplyDriveStrip();
+    }
+
+    private bool _driveStripRequested; // 셸이 요청한 표시 여부 (A22)
+
+    /// <summary>
+    /// 드라이브 줄과 상태 텍스트는 같은 칸을 쓴다 — 상태 문구가 우선이다.
+    /// 아카이브를 여는 중("Reading archive...")·만드는 중에는 아직 파일이 없어 셸은 표시를
+    /// 요청하지만, 진행 문구를 가리면 안 되므로 문구가 있는 동안에는 줄을 내린다.
+    /// (StatusText.Text는 여러 곳에서 바뀌므로 대입 지점마다 부르지 않고 속성 변경 알림으로 잡는다.)
+    /// </summary>
+    private void ApplyDriveStrip()
+    {
+        var show = _driveStripRequested && StatusText.Text.Length == 0;
+        DriveStripHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        StatusText.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private readonly IArchiveBackend _backend = new SevenZipBackend();
@@ -77,6 +105,8 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         _settings = settings;
         _initialFile = context.FilePath;
         _initialArgs = context.Arguments;
+        // A22: 상태 문구가 생기거나 사라지면 드라이브 줄 표시를 다시 판정한다.
+        StatusText.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => ApplyDriveStrip());
         Loaded += OnLoaded;
         Unloaded += (_, _) =>
         {
@@ -137,8 +167,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
                 _currentFolder = _root;
                 RefreshRows();
                 StatusText.Text = $"{Path.GetFileName(path)} · {ArchiveEntryTree.FormatSize(_root.Size)} total";
-                UpdateDriveInfo(path); // v0.47.0 표시 — 조회는 워커에서(A42: UI 스레드 동기 I/O 제거)
-                ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
+                ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0) — A22: 셸이 드라이브 줄을 내린다
                 return;
             }
             catch (ArchivePasswordException)
@@ -152,22 +181,6 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
                 StatusText.Text = "Failed to open: " + ex.Message;
                 return;
             }
-        }
-    }
-
-    /// <summary>
-    /// 드라이브 정보 조회(DriveInfo — 네트워크 경로면 느릴 수 있다)를 워커로 보내고
-    /// 결과만 UI에 반영한다. 부가 정보라 실패·지연은 조용히 무시.
-    /// </summary>
-    private async void UpdateDriveInfo(string path)
-    {
-        try
-        {
-            DriveInfoText.Text = await Worker.Run(_ => KOTU.Core.Routing.DriveStatus.Describe(path));
-        }
-        catch
-        {
-            // 표시는 부가 기능 — 실패가 흐름을 막으면 안 된다.
         }
     }
 

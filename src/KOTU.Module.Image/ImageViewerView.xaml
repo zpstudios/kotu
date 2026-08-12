@@ -61,8 +61,8 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
+                    <!-- 파일명·메타(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 -->
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -81,7 +81,7 @@
                 </Button>
                 <!-- A9: 파일명 + 메타 요약(용량·종류·EXIF)이 남는 공간을 나눠 쓴다.
                      파일명이 우선(Auto), 메타는 남는 폭에서 말줄임(전체 텍스트는 툴팁). -->
-                <Grid Grid.Column="1">
+                <Grid x:Name="FileInfoPanel" Grid.Column="1">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -99,29 +99,32 @@
                         VerticalAlignment="Center"
                         TextTrimming="CharacterEllipsis" />
                 </Grid>
-                <!-- 현재 이미지가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
-                <TextBlock
-                    x:Name="DriveInfoText"
-                    Grid.Column="2"
-                    FontSize="12"
-                    Opacity="0.6"
-                    VerticalAlignment="Center" />
+                <!-- A22(v0.108.0): 파일이 열려 있지 않을 때만 뜨는 공용 드라이브 줄(셸이 주입).
+                     v0.47.0의 "현재 이미지가 있는 드라이브" 텍스트를 대체한다 —
+                     파일명·메타 칸과 같은 자리를 쓰고 둘은 서로 배타적으로 표시된다. -->
+                <ContentPresenter
+                    x:Name="DriveStripHost"
+                    Grid.Column="1"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    Visibility="Collapsed" />
                 <TextBlock
                     x:Name="InfoText"
-                    Grid.Column="3"
+                    Grid.Column="2"
                     Margin="12,0"
                     VerticalAlignment="Center" />
                 <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·1:1·전체화면 = 1칸,
                      Auto-fit = 2칸 + 핏 옵션 전부 아이콘(A27에서 84×40으로 확정). -->
                 <Button
-                    Grid.Column="4"
+                    Grid.Column="3"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Click="OnRotateButtonClick"
                     ToolTipService.ToolTip="Rotate 90° clockwise (R)">
                     <FontIcon Glyph="&#xE7AD;" FontSize="18" />
                 </Button>
                 <Button
-                    Grid.Column="5"
+                    Grid.Column="4"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Margin="10,0,0,0"
                     Content="1:1"
@@ -132,7 +135,7 @@
                      SplitButton은 WinUI가 키 있는 기본 스타일을 노출하지 않아(BasedOn 대상 없음)
                      전역 스타일 대신 2칸 값(84×40)을 그대로 적는다 — A27(v0.107.0). -->
                 <SplitButton
-                    Grid.Column="6"
+                    Grid.Column="5"
                     Margin="10,0,0,0"
                     Width="84" Height="40"
                     VerticalAlignment="Center" CornerRadius="4"
@@ -155,7 +158,7 @@
                     </SplitButton.Flyout>
                 </SplitButton>
                 <Button
-                    Grid.Column="7"
+                    Grid.Column="6"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Margin="10,0,0,0"
                     Click="OnFullScreenButtonClick"

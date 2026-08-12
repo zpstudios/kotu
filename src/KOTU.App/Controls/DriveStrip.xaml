@@ -1,0 +1,29 @@
+<UserControl
+    x:Class="KOTU.App.Controls.DriveStrip"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 드라이브 정보 줄 (A22, v0.108.0) — 모듈마다 복붙하던 v0.47.0 텍스트를 공용 컨트롤 하나로
+         뽑았다(A57 ②의 오버레이 추출과 같은 방식: 컨트롤은 셸에 두고 모듈 하단 바가 자리를 내준다).
+         파일이 열려 있지 않을 때만 뜨고(셸이 SetActive로 제어), 시스템의 모든 드라이브를
+         "이름 · 종류 · 사용량 of 전체 (사용률%) + 막대" 순서로 나열한다.
+         내용이 표시 영역보다 넓으면 왼쪽으로 흐르는 무한 루프(마퀴, 초당 30px)로 순환한다.
+         항목은 코드(Build)에서 채운다 — 드라이브 수·문구가 조회 결과에 따라 달라진다. -->
+    <Grid x:Name="Viewport" SizeChanged="OnViewportSizeChanged">
+        <!-- Track = 같은 내용의 사본 2개(PrimaryItems + LoopItems). 사본 하나 폭만큼 왼쪽으로
+             밀면 두 번째 사본이 정확히 제자리에 오므로, 처음으로 되돌리는 이음새가 보이지 않는다.
+             넘치지 않을 때는 LoopItems를 접고 이동도 하지 않는다. -->
+        <StackPanel x:Name="Track" Orientation="Horizontal"
+                    HorizontalAlignment="Left" VerticalAlignment="Center">
+            <StackPanel.RenderTransform>
+                <TranslateTransform x:Name="TrackShift" />
+            </StackPanel.RenderTransform>
+            <StackPanel x:Name="PrimaryItems" Orientation="Horizontal"
+                        VerticalAlignment="Center" Margin="0,0,32,0"
+                        SizeChanged="OnItemsSizeChanged" />
+            <StackPanel x:Name="LoopItems" Orientation="Horizontal"
+                        VerticalAlignment="Center" Margin="0,0,32,0"
+                        Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</UserControl>

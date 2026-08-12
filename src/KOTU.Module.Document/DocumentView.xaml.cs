@@ -20,7 +20,7 @@ namespace KOTU.Module.Document;
 /// 파일 I/O는 뷰 전용 워커(A42)에서 수행하고 UI 스레드는 결과 반영만 한다.
 /// </summary>
 public sealed partial class DocumentView : UserControl,
-    IContentStateSource, IBottomBarProvider, ICloseGuard
+    IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -32,7 +32,8 @@ public sealed partial class DocumentView : UserControl,
     private const int MaxBytes = 4 * 1024 * 1024;
 
     private int _openSeq; // 느린 읽기가 최신 열기를 덮지 않게
-    private ModuleWorker? _worker; // 파일 읽기·쓰기·드라이브 조회 전용(A42) — 뷰별 분리
+    private ModuleWorker? _worker; // 파일 읽기·쓰기 전용(A42) — 뷰별 분리
+                                   // (드라이브 조회는 A22에서 셸의 드라이브 줄 워커로 옮겼다)
 
     // ---- 편집 상태 (A37) ----
     private string? _path;                 // 지금 편집 중인 파일
@@ -52,14 +53,10 @@ public sealed partial class DocumentView : UserControl,
     {
         InitializeComponent();
 
-        // A49(A40 규칙 준용): 하단 바가 좁으면 우선순위 낮은 드라이브 정보를 숨겨 잘림을 막는다.
-        // PDF 모드 고정 요소 합(버튼 40×3+84 + 페이지 표시 약 60 + 칸 간격 10×8, A27 v0.107.0 규격)에 드라이브
-        // 텍스트가 길 때(약 300px) 약 690px — 최소 창 폭 720(바 폭 약 656)에서 넘친다.
-        // 임계값 760은 비디오 A40과 동일(실측 오차 여유 포함). 숨겨도 드라이브 정보는 부가 표시일 뿐.
-        StatusBar.SizeChanged += (_, e) =>
-            DriveInfoText.Visibility = e.NewSize.Width < 760
-                ? Visibility.Collapsed
-                : Visibility.Visible;
+        // A22(v0.108.0): A49의 "좁으면 드라이브 텍스트 숨김"(임계 760) 규칙은 제거했다 —
+        // 드라이브 표시가 Auto 폭 텍스트에서 남는 폭(star 칸)을 쓰는 슬롯으로 바뀌어
+        // 더는 버튼들을 밀어내지 않는다(넘치면 줄 자체가 스크롤한다). 게다가 이제는
+        // 파일이 열려 있지 않을 때만 뜨는데, 그때는 페이지·Fit 표시가 아예 없어 자리도 넉넉하다.
 
         Loaded += (_, _) => Focus(FocusState.Programmatic);
         Unloaded += (_, _) =>
@@ -88,6 +85,22 @@ public sealed partial class DocumentView : UserControl,
     {
         RootGrid.Children.Remove(StatusBar);
         return StatusBar;
+    }
+
+    /// <summary>
+    /// A22(v0.108.0): 셸이 만든 공용 드라이브 줄을 하단 바 슬롯에 끼운다.
+    /// v0.47.0의 모듈별 드라이브 텍스트(DriveInfoText)를 대체한다.
+    /// </summary>
+    public void AttachDriveStrip(object strip) => DriveStripHost.Content = strip as UIElement;
+
+    /// <summary>
+    /// 드라이브 줄과 파일명은 같은 칸을 나눠 쓴다 — 줄이 뜨는 동안(파일 없음, 파일명은
+    /// "No file open"뿐)에는 파일명을 비켜준다.
+    /// </summary>
+    public void ShowDriveStrip(bool show)
+    {
+        DriveStripHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        FileNameText.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
     }
 
     // ---------- 파일 열기 ----------
@@ -128,24 +141,7 @@ public sealed partial class DocumentView : UserControl,
         EditorBox.Visibility = Visibility.Visible;
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
-        UpdateDriveInfo(path); // v0.47.0 표시 — 조회는 워커에서(A42: UI 스레드 동기 I/O 제거)
-        ContentOpened?.Invoke(path); // 셸 동기화
-    }
-
-    /// <summary>
-    /// 드라이브 정보 조회(DriveInfo — 네트워크 경로면 느릴 수 있다)를 워커로 보내고
-    /// 결과만 UI에 반영한다. 부가 정보라 실패·지연은 조용히 무시.
-    /// </summary>
-    private async void UpdateDriveInfo(string path)
-    {
-        try
-        {
-            DriveInfoText.Text = await Worker.Run(_ => KOTU.Core.Routing.DriveStatus.Describe(path));
-        }
-        catch
-        {
-            // 표시는 부가 기능 — 실패가 흐름을 막으면 안 된다.
-        }
+        ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
     }
 
     // ---------- PDF (A16) ----------
@@ -195,8 +191,7 @@ public sealed partial class DocumentView : UserControl,
             return;
         }
 
-        UpdateDriveInfo(path);
-        ContentOpened?.Invoke(path); // 셸 동기화
+        ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
     }
 
     /// <summary>PDF 패널을 내린다(텍스트로 전환·열기 실패 시). 비트맵·문서 참조 해제.</summary>

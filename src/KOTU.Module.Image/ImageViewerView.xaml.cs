@@ -20,7 +20,7 @@ namespace KOTU.Module.Image;
 /// UI 스레드는 비트맵 표시만 한다 — 직렬이라 빠른 ←/→ 연타에도 적용 순서가 요청 순서와 같다.
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
-    IBottomBarProvider
+    IBottomBarProvider, IDriveStripHost
 {
     /// <summary>
     /// 전체화면은 Enter/F11/더블클릭/⛶ 버튼(v0.29.0 — 동영상과 단축키 통일).
@@ -33,6 +33,21 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         StatusBar.Background = null;
         StatusBar.Padding = new Thickness(0, 2, 0, 2);
         return StatusBar;
+    }
+
+    /// <summary>
+    /// A22(v0.108.0): 셸이 만든 공용 드라이브 줄을 하단 바 슬롯에 끼운다.
+    /// v0.47.0의 모듈별 드라이브 텍스트(DriveInfoText)를 대체한다.
+    /// </summary>
+    public void AttachDriveStrip(object strip) => DriveStripHost.Content = strip as UIElement;
+
+    /// <summary>
+    /// 드라이브 줄과 파일명·메타는 같은 칸을 나눠 쓴다 — 줄이 뜨는 동안(파일 없음)에는 비켜준다.
+    /// </summary>
+    public void ShowDriveStrip(bool show)
+    {
+        DriveStripHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        FileInfoPanel.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>이미지를 열거나 ←/→로 바꿀 때 셸에 알린다(v0.25.0 — 탐색기·오버레이 동기화).</summary>
@@ -572,7 +587,6 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         {
             FileNameText.Text = "No file open";
             InfoText.Text = string.Empty;
-            DriveInfoText.Text = string.Empty;
             MetaText.Text = string.Empty;
             ToolTipService.SetToolTip(MetaText, null);
             return;
@@ -584,23 +598,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         ToolTipService.SetToolTip(MetaText, _metaText.Length > 0 ? _metaText : null);
         var resolution = _pixelWidth > 0 ? $"{_pixelWidth}×{_pixelHeight}  ·  " : string.Empty;
         InfoText.Text = resolution + PositionText();
-        UpdateDriveInfo(path); // v0.47.0 표시 — 조회는 워커에서(A42: UI 스레드 동기 I/O 제거)
-    }
-
-    /// <summary>
-    /// 드라이브 정보 조회(DriveInfo — 네트워크 경로면 느릴 수 있다)를 워커로 보내고
-    /// 결과만 UI에 반영한다. 부가 정보라 실패·지연은 조용히 무시.
-    /// </summary>
-    private async void UpdateDriveInfo(string path)
-    {
-        try
-        {
-            DriveInfoText.Text = await Worker.Run(_ => KOTU.Core.Routing.DriveStatus.Describe(path));
-        }
-        catch
-        {
-            // 표시는 부가 기능 — 실패가 흐름을 막으면 안 된다.
-        }
+        // A22(v0.108.0): 드라이브 표시는 파일이 열려 있을 때가 아니라 없을 때만 —
+        // 여기서 조회하던 v0.47.0 텍스트는 셸이 주입하는 공용 드라이브 줄로 대체됐다.
     }
 
     private string PositionText() =>

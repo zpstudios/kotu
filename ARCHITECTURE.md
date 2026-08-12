@@ -159,6 +159,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 | `KOTU video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
 | `KOTU audio worker` | 뷰마다 1 | Normal | libvlc(시각화 인스턴스) 생성·해제 (A10) |
 | `KOTU document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지)·저장(인코딩 보존, A37) |
+| `KOTU drive strip worker` | 하단 바 드라이브 줄마다 1 (= 모듈 뷰마다 1) | **BelowNormal** | 드라이브 열거·용량(`DriveInfo`) 30초 주기 + 종류 WMI 1회 캐시 (A22, v0.108.0). 줄이 숨겨지면(파일 열림) 타이머 정지, 뷰 Unloaded 시 정리 |
 | `KOTU settings worker` | 설정 뷰마다 1 | Normal | 탐색기 연결 등록·해제, UserChoice 쓰기(A38), 기본 앱 개수 조회 (A77, v0.106.0). 모듈별로 나누지 않는다 — Capabilities 키를 모듈들이 공유해 동시 쓰기가 위험 |
 | libvlc 내부 스레드 | libvlc 관리 | — | 디코드·이벤트 콜백. 이벤트는 `Dispatch()`로 UI 이관 |
 | .NET 스레드풀 | 런타임 관리 | — | await 연속, 닫힌 워커의 `Post` 폴백 |
@@ -176,7 +177,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 | 자막 탐지·CP949→UTF-8 변환 | video worker | 플라이아웃·`AddSlave` 적용 |
 | 문서 텍스트 읽기·저장(A37) | document worker | 본문 표시·수정됨 표시 갱신 |
 | PDF 로드·페이지 렌더(A16, Windows.Data.Pdf) | WinRT 비동기(OS 관리) | 페이지 비트맵 표시(가상화 지연 렌더) |
-| 드라이브 정보(`DriveStatus.Describe`) | 각 뷰의 워커 | 하단 바 텍스트 반영 |
+| 드라이브 목록·용량(`DriveStatus.Collect`) + 종류 WMI 조회(`PhysicalDiskKinds`, 프로세스 1회 캐시) | drive strip worker | 공용 드라이브 줄(`DriveStrip`) 항목·막대 그리기, 넘치면 마퀴 |
 | 탐색기 연결 등록·해제 + 기본 앱 지정(A38)·개수 조회 (A77) | settings worker | 진행 링·`Registering... (n/m)` 텍스트, 완료 후 "Default app for n/m extensions"·결과 문구 반영 |
 | libvlc 재생 이벤트(시간·상태) | libvlc 스레드 | `Dispatch()` 경유 슬라이더·라벨 갱신 |
 
