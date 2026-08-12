@@ -9,6 +9,12 @@ using Windows.Storage.Streams;
 namespace KOTU.Module.Document;
 
 /// <summary>
+/// PDF 맞춤 보기 모드(A49 — A30 규격 준용). AutoFit = 페이지가 뷰포트보다 크면 전부 보이게
+/// 줄이고, 작으면 100%(원본 크기) — 비디오 A30의 Auto-fit과 같은 의미론.
+/// </summary>
+public enum PdfFitMode { AutoFit, FitWidth, FitHeight, ActualSize }
+
+/// <summary>
 /// PDF 뷰어 패널(A16). OS 내장 Windows.Data.Pdf로 페이지를 비트맵 렌더한다 —
 /// 외부 네이티브 의존성 없음(라이선스·배포 부담 없음), unpackaged 지원.
 /// 페이지 크기는 열 때 전부 훑어 레이아웃을 확정하고, 실제 렌더는 ListView 가상화로
@@ -31,9 +37,19 @@ public sealed partial class PdfPane : UserControl
         public int Index;      // 0-base 페이지 번호
         public double Width;   // 표시 크기(DIP) — 레이아웃 고정용
         public double Height;
+        public double NativeWidth; // 원본 페이지 폭(DIP) — 1:1 배율 계산용 (A49)
     }
 
-    public PdfPane() => InitializeComponent();
+    public PdfPane()
+    {
+        InitializeComponent();
+        // A49: Fit이 적용된 동안은 뷰포트 크기 변화를 추종해 배율을 다시 계산한다
+        // (비디오 v0.41.0의 Fit width/height 크기 추종과 같은 규칙).
+        SizeChanged += (_, _) =>
+        {
+            if (_appliedFit is { } mode) ApplyFit(mode);
+        };
+    }
 
     /// <summary>문서를 열어 페이지 목록을 구성한다. 실패(암호 취소 포함)면 false.</summary>
     public async Task<bool> LoadAsync(string path)
@@ -66,7 +82,13 @@ public sealed partial class PdfPane : UserControl
         {
             using var page = doc.GetPage((uint)i); // Size만 읽는다 — 렌더는 지연
             var aspect = page.Size.Height / Math.Max(1, page.Size.Width);
-            var item = new PageItem { Index = i, Width = width, Height = width * aspect };
+            var item = new PageItem
+            {
+                Index = i,
+                Width = width,
+                Height = width * aspect,
+                NativeWidth = page.Size.Width, // Windows.Data.Pdf 좌표 = 96DPI DIP (A49 1:1 기준)
+            };
             items.Add(item);
             offsets[i] = y;
             y += item.Height + 16; // ItemTemplate 상하 마진 8+8
@@ -76,6 +98,11 @@ public sealed partial class PdfPane : UserControl
         PageList.ItemsSource = items;
         PageChanged?.Invoke(1, items.Count);
         HookScroll();
+        // A49: 파일이 바뀌면 Auto-fit으로 회귀(A30 규칙, 기억 안 함) — 이전 문서에서 쓰던
+        // 줌 배율이 남지 않게 즉시 적용한다. 새 문서는 1페이지 머리에 앵커(이전 문서의
+        // 스크롤 오프셋이 남아 엉뚱한 페이지로 가는 것 방지). 뷰포트가 0이면 SizeChanged가 이어받는다.
+        PageList.UpdateLayout();
+        ApplyFitAt(PdfFitMode.AutoFit, 0);
         return true;
     }
 
@@ -87,6 +114,7 @@ public sealed partial class PdfPane : UserControl
         _items = [];
         _pageOffsets = [];
         _doc = null;
+        _appliedFit = null; // A49: 문서가 없으면 추종할 Fit도 없다
         PageChanged?.Invoke(0, 0);
     }
 
@@ -167,13 +195,84 @@ public sealed partial class PdfPane : UserControl
     private void OnViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
     {
         if (_scroll is null || _items.Count == 0) return;
-        // 뷰포트 세로 중앙이 걸친 페이지 = 현재 페이지. 오프셋은 줌 배율을 되돌려 비교.
+
+        // A49: Ctrl+휠/핀치 수동 줌(A16)이 들어오면 Fit "적용 중" 상태를 해제한다(크기 추종 중단).
+        // ApplyFit이 건 ChangeView는 _appliedZoom과 일치하므로 여기 걸리지 않는다.
+        if (_appliedFit is not null && Math.Abs(_scroll.ZoomFactor - _appliedZoom) > 0.01)
+            _appliedFit = null;
+
+        PageChanged?.Invoke(CurrentPageIndex() + 1, _items.Count);
+    }
+
+    /// <summary>뷰포트 세로 중앙이 걸친 페이지(0-base) = 현재 페이지. 오프셋은 줌 배율을 되돌려 비교.</summary>
+    private int CurrentPageIndex()
+    {
+        if (_scroll is null || _items.Count == 0) return 0;
         var center = (_scroll.VerticalOffset + _scroll.ViewportHeight / 2)
                      / Math.Max(0.1, _scroll.ZoomFactor);
         var idx = Array.BinarySearch(_pageOffsets, center);
         if (idx < 0) idx = ~idx - 1;
+        return Math.Clamp(idx, 0, _items.Count - 1);
+    }
+
+    // ---------- 맞춤 보기 (A49 — A30 규격 준용) ----------
+
+    /// <summary>적용 중인 Fit 모드 — 크기 추종용. 수동 줌(Ctrl+휠·핀치)이 들어오면 null로 풀린다.</summary>
+    private PdfFitMode? _appliedFit;
+
+    /// <summary>ApplyFit이 마지막으로 건 배율 — 수동 줌과 자체 ChangeView를 구분하는 기준.</summary>
+    private float _appliedZoom = 1f;
+
+    /// <summary>
+    /// 현재 페이지 기준으로 배율을 계산해 적용한다(A49).
+    /// FitHeight = 현재 페이지 전체가 세로로 보이는 배율(페이지 스냅 스크롤은 없다 — 연속 스크롤 유지).
+    /// AutoFit = 페이지가 뷰포트보다 크면 전부 보이게 줄이고, 작으면 100%(원본 크기).
+    /// 적용 후에는 뷰포트 크기 변화를 추종하고, 수동 줌이 들어오면 추종을 멈춘다.
+    /// </summary>
+    public void ApplyFit(PdfFitMode mode)
+    {
+        HookScroll();
+        ApplyFitAt(mode, CurrentPageIndex());
+    }
+
+    /// <summary>idx 페이지를 기준 페이지로 Fit을 적용한다(새 문서는 0으로 고정 호출).</summary>
+    private void ApplyFitAt(PdfFitMode mode, int idx)
+    {
+        _appliedFit = mode; // 뷰포트가 아직 0이어도 기억해 두면 SizeChanged 재적용이 이어받는다
+        HookScroll();
+        if (_scroll is null || _items.Count == 0) return;
+
+        var viewportW = _scroll.ViewportWidth;
+        var viewportH = _scroll.ViewportHeight;
+        if (viewportW <= 0 || viewportH <= 0) return;
+
         idx = Math.Clamp(idx, 0, _items.Count - 1);
-        PageChanged?.Invoke(idx + 1, _items.Count);
+        var item = _items[idx];
+        if (item.Width <= 0 || item.Height <= 0) return;
+
+        // 페이지 실측: 가로 = 비트맵 폭 + 테두리 2, 세로 = 높이 + 테두리 2 + 상하 마진 16(전부 보이게)
+        var fitWidth = viewportW / (item.Width + 2);
+        var fitHeight = viewportH / (item.Height + 18);
+        var actual = item.NativeWidth > 0 ? item.NativeWidth / item.Width : 1.0;
+        var zoom = mode switch
+        {
+            PdfFitMode.FitWidth => fitWidth,
+            PdfFitMode.FitHeight => fitHeight,
+            PdfFitMode.ActualSize => actual,
+            _ => Math.Min(actual, Math.Min(fitWidth, fitHeight)), // AutoFit
+        };
+        zoom = Math.Clamp(zoom, (double)_scroll.MinZoomFactor, (double)_scroll.MaxZoomFactor);
+
+        // 세로: 페이지 전체가 보여야 하는 모드는 현재 페이지 머리로 스냅, 나머지는 보던 지점 유지.
+        var top = mode is PdfFitMode.FitHeight or PdfFitMode.AutoFit
+            ? _pageOffsets[idx] * zoom
+            : _scroll.VerticalOffset / Math.Max(0.1, _scroll.ZoomFactor) * zoom;
+        // 가로: 확대로 콘텐츠가 뷰포트보다 넓어지면 중앙 정렬(페이지는 콘텐츠 가로 중앙에 있다).
+        var baseWidth = _scroll.ExtentWidth / Math.Max(0.1, _scroll.ZoomFactor);
+        var left = Math.Max(0, (baseWidth * zoom - viewportW) / 2);
+
+        _appliedZoom = (float)zoom;
+        _scroll.ChangeView(left, top, (float)zoom, disableAnimation: true);
     }
 
     private static ScrollViewer? FindScrollViewer(DependencyObject root)

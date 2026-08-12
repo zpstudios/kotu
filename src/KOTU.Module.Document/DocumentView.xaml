@@ -43,7 +43,7 @@
             VerticalAlignment="Center"
             Opacity="0.6" />
 
-        <!-- 하단 상태바: 열기 · 저장 · 파일명 · 수정됨 · 드라이브 · 전체화면.
+        <!-- 하단 상태바: 열기 · 저장 · 파일명 · 수정됨 · 페이지 · 드라이브 · 1:1 · Fit · 전체화면.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(이미지 v0.27.0과 동일 패턴). -->
         <Border x:Name="StatusBar" VerticalAlignment="Bottom" Padding="0,2,0,2">
             <Grid ColumnSpacing="10">
@@ -51,6 +51,8 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -78,8 +80,38 @@
                 <!-- 현재 문서가 있는 드라이브 요약 (v0.47.0 사용자 요청) -->
                 <TextBlock x:Name="DriveInfoText" Grid.Column="5" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.6" />
+                <!-- A49: PDF 전용 1:1(1칸)·상태형 Fit(2칸, A30 규격) — 텍스트 에디터 모드(A37)에서는 숨김.
+                     Fit 본체 = 마지막 옵션 표시·클릭 시 재적용, 화살표 = 3옵션. 내용·툴팁은 UpdateFitButton()이 갱신. -->
+                <Button x:Name="ActualSizeButton" Grid.Column="6" Width="40" Height="40" Padding="0"
+                        Content="1:1" FontSize="13" Visibility="Collapsed"
+                        ToolTipService.ToolTip="Actual size (100%)" Click="OnActualSizeClick" />
+                <SplitButton x:Name="FitButton" Grid.Column="7" Width="90" Height="40"
+                             Visibility="Collapsed" Click="OnFitClicked"
+                             ToolTipService.ToolTip="Auto-fit to window — whole page fits, or actual size if smaller">
+                    <TextBlock Text="A" FontSize="13"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <SplitButton.Flyout>
+                        <MenuFlyout Placement="Top">
+                            <MenuFlyoutItem Text="Auto-fit" Click="OnFitAutoClicked">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE9A6;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClicked">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8AB;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Fit height" Click="OnFitHeightClicked">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8CB;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyout>
+                    </SplitButton.Flyout>
+                </SplitButton>
                 <!-- 40×40 정사각 아이콘 = 이미지/영상 ⛶와 통일 (v0.53.0) -->
-                <Button Grid.Column="6" Width="40" Height="40" Padding="4"
+                <Button Grid.Column="8" Width="40" Height="40" Padding="4"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />

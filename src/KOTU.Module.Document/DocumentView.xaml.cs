@@ -51,6 +51,16 @@ public sealed partial class DocumentView : UserControl,
     public DocumentView(OpenContext context)
     {
         InitializeComponent();
+
+        // A49(A40 규칙 준용): 하단 바가 좁으면 우선순위 낮은 드라이브 정보를 숨겨 잘림을 막는다.
+        // PDF 모드 고정 요소 합(버튼 40×3+90 + 페이지 표시 약 60 + 칸 간격 10×8)에 드라이브
+        // 텍스트가 길 때(약 300px) 약 690px — 최소 창 폭 720(바 폭 약 656)에서 넘친다.
+        // 임계값 760은 비디오 A40과 동일(실측 오차 여유 포함). 숨겨도 드라이브 정보는 부가 표시일 뿐.
+        StatusBar.SizeChanged += (_, e) =>
+            DriveInfoText.Visibility = e.NewSize.Width < 760
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
         Loaded += (_, _) => Focus(FocusState.Programmatic);
         Unloaded += (_, _) =>
         {
@@ -165,6 +175,16 @@ public sealed partial class DocumentView : UserControl,
         PageInfoText.Text = string.Empty;
         FileNameText.Text = Path.GetFileName(path);
 
+        // A49: 1:1·Fit 버튼은 PDF 모드에서만. 파일이 바뀌면 버튼 표시도 Auto-fit으로
+        // 회귀(A30 규칙, 기억 안 함) — 실제 배율 적용은 PdfPane.LoadAsync가 한다.
+        ActualSizeButton.Visibility = Visibility.Visible;
+        FitButton.Visibility = Visibility.Visible;
+        if (_lastFitOption != PdfFitMode.AutoFit)
+        {
+            _lastFitOption = PdfFitMode.AutoFit;
+            UpdateFitButton();
+        }
+
         var ok = await _pdfPane.LoadAsync(path); // 실패 다이얼로그는 패널이 띄운다
         if (seq != _openSeq) return;             // 그새 다른 파일이 열렸다
         if (!ok)
@@ -186,7 +206,62 @@ public sealed partial class DocumentView : UserControl,
         _pdfPane.Clear();
         _pdfPane.Visibility = Visibility.Collapsed;
         PageInfoText.Visibility = Visibility.Collapsed;
+        ActualSizeButton.Visibility = Visibility.Collapsed; // A49: 텍스트 에디터 모드는 Fit 대상 아님
+        FitButton.Visibility = Visibility.Collapsed;
     }
+
+    // ---------- PDF 맞춤 보기 (A49 — A30 규격) ----------
+
+    /// <summary>
+    /// A30 규격: Fit 버튼 본체가 표시·재적용할 마지막 핏 옵션(Auto/좌우/상하 — 1:1은 별도 버튼이라 제외).
+    /// 기억하지 않는다 — 파일이 바뀌면 Auto-fit으로 회귀(A30 규칙).
+    /// </summary>
+    private PdfFitMode _lastFitOption = PdfFitMode.AutoFit;
+
+    /// <summary>A30 규격: Fit 버튼 본체 내용(A 텍스트/좌우/상하 아이콘)과 툴팁을 마지막 옵션에 맞춘다.</summary>
+    private void UpdateFitButton()
+    {
+        (object content, string tip) = _lastFitOption switch
+        {
+            PdfFitMode.FitWidth =>
+                ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
+            PdfFitMode.FitHeight =>
+                (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
+            _ => (new TextBlock
+            {
+                Text = "A",
+                FontSize = 13,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            }, "Auto-fit to window — whole page fits, or actual size if smaller"),
+        };
+        FitButton.Content = content;
+        ToolTipService.SetToolTip(FitButton, tip);
+    }
+
+    /// <summary>플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
+    private void SelectFitOption(PdfFitMode option)
+    {
+        _lastFitOption = option;
+        UpdateFitButton();
+        _pdfPane?.ApplyFit(option);
+    }
+
+    private void OnActualSizeClick(object sender, RoutedEventArgs e) =>
+        _pdfPane?.ApplyFit(PdfFitMode.ActualSize);
+
+    /// <summary>A30 규격: 본체 클릭 = 버튼에 표시된 마지막 옵션 재적용(1:1에서 되돌아올 때도 이 경로).</summary>
+    private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args) =>
+        _pdfPane?.ApplyFit(_lastFitOption);
+
+    private void OnFitAutoClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(PdfFitMode.AutoFit);
+
+    private void OnFitWidthClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(PdfFitMode.FitWidth);
+
+    private void OnFitHeightClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(PdfFitMode.FitHeight);
 
     // ---------- 인코딩 감지·보존 (A37) ----------
 
