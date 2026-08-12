@@ -53,7 +53,7 @@ public sealed class PollingWorker<T> : IDisposable
     public void Poke() => _wake.Set();
 
     /// <summary>
-    /// 폴링 간격(A29: 하드웨어 100/300/1000ms 선택). 바꾸면 대기 중인 이전 간격을
+    /// 폴링 간격(A73: 하드웨어 50/200/500/1000/2000/5000ms 선택). 바꾸면 대기 중인 이전 간격을
     /// 건너뛰고 즉시 1회 폴링한 뒤 새 간격으로 돈다 — 변경이 바로 체감되게.
     /// </summary>
     public TimeSpan Interval

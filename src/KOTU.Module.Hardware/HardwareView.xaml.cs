@@ -302,8 +302,23 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
     // ---------- 센서 그래프 스트립 (A17) ----------
 
-    /// <summary>그래프 시간 창 — 최근 60초를 카드 폭에 맞춰 그린다.</summary>
-    private static readonly TimeSpan GraphWindow = TimeSpan.FromSeconds(60);
+    /// <summary>그래프가 보여주는 최대 시간 범위(ms) — A17의 "최근 60초".</summary>
+    private const double GraphWindowMaxMs = 60_000;
+
+    /// <summary>
+    /// 그래프 시간 창(A17: 최근 60초)을 카드 폭에 맞춰 그린다. 단 이력 링
+    /// (<see cref="SensorService.HistoryCapacity"/>개)이 담는 시간이 그보다 짧으면 그만큼만 —
+    /// A73의 최단 주기 50ms에서는 600표본 = 30초뿐이라 60초 창을 쓰면 좌측 절반이 빈 채로 남는다.
+    /// A74의 x축 표기도 이 값을 그대로 쓴다("표본 개수 × 주기"가 곧 창 길이).
+    /// </summary>
+    private static TimeSpan GraphWindow => TimeSpan.FromMilliseconds(
+        Math.Min(GraphWindowMaxMs, (double)SensorService.HistoryCapacity * HardwareModule.RefreshMs));
+
+    /// <summary>
+    /// 축 라벨(A74)을 표시하는 최소 그래프 폭. 이보다 좁으면 라벨 두 개가 셀을 다 덮어
+    /// 그래프가 안 읽힌다 — A40의 "좁으면 축약" 관례와 같은 방식으로 숨긴다.
+    /// </summary>
+    private const double AxisMinWidth = 90;
 
     /// <summary>
     /// 카드 10개 배치(순서는 사용자 확정). 채널 정의(제목·색·선택자·포맷·스케일)는
@@ -313,6 +328,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     /// 카드는 하단 바 한 줄에 들어가는 36px 컴팩트형(v0.64.2 사용자 지시) — 그래프가 카드
     /// 전체를 채우고 제목·값이 그 위에 얹힌다. 배치는 항상 1줄(A40: 하단 바 두께 고정 44) —
     /// 폭이 모자라면 뒤 순서 카드부터 생략한다(LayoutSensorCards 참고).
+    /// A74: 각 카드 모서리에 y 최대값·x 시간 범위 라벨이 얹힌다(폭이 좁으면 숨김).
     /// </summary>
     private void BuildSensorCards()
     {
@@ -422,9 +438,32 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
         var line = new Polyline { Stroke = stroke, StrokeThickness = 1.5 };
         var area = new Polygon { Fill = fill };
+
+        // 축 스케일 라벨(A74): 눈금선·축선은 그리지 않는다(정사각에 가까운 작은 셀이 지저분해진다).
+        // 좌상단 = y 최대값 + 단위("100°C"), 우하단 = x 시간 범위("60s"). y 하한 0은 자명해 생략.
+        // 값·표시 여부는 RenderSparkline이 매 프레임 채운다 — 여기선 빈 채로 만들어 둔다.
+        var yAxisText = new TextBlock
+        {
+            FontSize = 10,
+            Opacity = 0.55,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Visibility = Visibility.Collapsed,
+        };
+        var xAxisText = new TextBlock
+        {
+            FontSize = 10,
+            Opacity = 0.55,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Visibility = Visibility.Collapsed,
+        };
+
         var graphHost = new Grid(); // 카드 전체가 그래프 — 텍스트는 그 위에 겹친다(v0.64.2 컴팩트형)
         graphHost.Children.Add(area);
         graphHost.Children.Add(line);
+        graphHost.Children.Add(yAxisText); // 선 위에 얹어 겹쳐도 읽히게 (Opacity 0.55)
+        graphHost.Children.Add(xAxisText);
 
         var panel = new Grid();
         panel.Children.Add(graphHost);
@@ -454,8 +493,11 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             GraphHost = graphHost,
             Line = line,
             Area = area,
+            YAxisText = yAxisText,
+            XAxisText = xAxisText,
             Channel = channel,
-            AutoMax = channel.AutoFloor,
+            // 축 상한 시작점(A74): 고정 스케일 채널(온도·%)은 100, 나머지는 채널별 하한.
+            AxisMax = channel.FixedMax > 0 ? channel.FixedMax : channel.AutoFloor,
         });
     }
 
@@ -496,9 +538,11 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     }
 
     /// <summary>
-    /// 최근 60초 이력을 카드 폭에 맞춰 꺾은선 + 면으로 그린다. x는 시간 비례(주기가
-    /// 바뀌어도 올바름 — A29 대비), y는 고정(온도·부하) 또는 자동(관찰 최대의 1.1배,
-    /// 세션 내 단조 증가) 스케일. 레이아웃 전(폭 0)엔 그리지 않는다 — 다음 프레임(≤200ms)에 그려진다.
+    /// 이력을 카드 폭에 맞춰 꺾은선 + 면으로 그린다. x는 시간 비례(주기가 바뀌어도 올바름 —
+    /// A29 대비), y는 채널별 축 상한(A74: %는 0~100 고정 / 온도는 100 시작 + 초과 시 확장 /
+    /// 그 외는 1·2·5 눈금 올림, 셋 다 세션 내 단조 증가) 기준.
+    /// 그리고 나서 모서리 축 라벨을 갱신한다(A74).
+    /// 레이아웃 전(폭 0)엔 그리지 않는다 — 다음 프레임에 그려진다.
     /// </summary>
     private static void RenderSparkline(SensorCard card, SensorFrame[] history)
     {
@@ -506,24 +550,23 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         var h = card.GraphHost.ActualHeight;
         if (w <= 2 || h <= 2 || history.Length == 0)
         {
-            card.Line.Points = null;
-            card.Area.Points = null;
+            ClearSparkline(card);
             return;
         }
 
+        var window = GraphWindow; // 한 렌더 안에서는 같은 값 — 주기 변경과 겹쳐도 x가 어긋나지 않게
         var now = history[^1].Timestamp;
-        var start = now - GraphWindow;
+        var start = now - window;
 
-        // 자동 스케일 상한 갱신 (창 안의 최댓값 기준)
-        if (card.Channel.FixedMax <= 0)
+        // 축 상한 갱신(A74): 창 안의 관측값이 현재 상한을 넘을 때만 올린다. 한 번 올라간 상한은
+        // 세션 중 내려오지 않는다 — 값이 튈 때마다 그래프 전체가 출렁이는 것을 막기 위해서다.
+        foreach (var f in history)
         {
-            foreach (var f in history)
-            {
-                if (f.Timestamp < start) continue;
-                if (card.Channel.Select(f) is { } v && v * 1.1f > card.AutoMax) card.AutoMax = v * 1.1f;
-            }
+            if (f.Timestamp < start) continue;
+            if (card.Channel.Select(f) is { } v && v > card.AxisMax)
+                card.AxisMax = AxisCeiling(card.Channel, v);
         }
-        var max = card.Channel.FixedMax > 0 ? card.Channel.FixedMax : card.AutoMax;
+        var max = card.AxisMax;
         if (max <= 0) max = 1;
 
         var linePoints = new PointCollection();
@@ -537,7 +580,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             if (f.Timestamp < start) continue;
             if (card.Channel.Select(f) is not { } v) continue; // null 구간은 건너뛴다(선이 이어짐)
 
-            var x = (f.Timestamp - start).TotalSeconds / GraphWindow.TotalSeconds * w;
+            var x = (f.Timestamp - start).TotalSeconds / window.TotalSeconds * w;
             var y = h - Math.Clamp(v / max, 0f, 1f) * h;
             linePoints.Add(new Windows.Foundation.Point(x, y));
             areaPoints.Add(new Windows.Foundation.Point(x, y));
@@ -547,8 +590,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
         if (linePoints.Count < 2)
         {
-            card.Line.Points = null;
-            card.Area.Points = null;
+            ClearSparkline(card);
             return;
         }
         // 면은 선 아래를 바닥까지 닫는다
@@ -556,7 +598,58 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         areaPoints.Add(new Windows.Foundation.Point(firstX, h));
         card.Line.Points = linePoints;
         card.Area.Points = areaPoints;
+
+        // 축 라벨(A74): 좌상단 y 최대값 + 단위, 우하단 x 시간 범위. 카드가 좁으면(그래프 폭
+        // 90 미만) 숨긴다 — 값이 한 번도 없던 채널도 숨긴다(축만 떠 있으면 오히려 오해를 준다).
+        var showAxis = w >= AxisMinWidth && card.HasEverHadValue;
+        if (showAxis)
+        {
+            card.YAxisText.Text = $"{max:0}{card.Channel.AxisUnit}";
+            card.XAxisText.Text = FormatSpan(window);
+        }
+        card.YAxisText.Visibility = showAxis ? Visibility.Visible : Visibility.Collapsed;
+        card.XAxisText.Visibility = showAxis ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>그릴 게 없을 때: 선·면과 축 라벨(A74)을 함께 비운다.</summary>
+    private static void ClearSparkline(SensorCard card)
+    {
+        card.Line.Points = null;
+        card.Area.Points = null;
+        card.YAxisText.Visibility = Visibility.Collapsed;
+        card.XAxisText.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 채널별 축 상한 규칙(A74).
+    /// · 백분율(%)은 0~100 고정 — 100%가 정의상 최대라 넘겨도 확장하지 않는다(클램프로 그린다).
+    /// · 온도(FixedMax가 있는 나머지 = ℃)는 0~100 고정이되 초과 관측 시에만 10 단위로 확장 —
+    ///   여기에 1·2·5 눈금을 쓰면 105℃ 한 번에 축이 200℃가 되어 그래프가 바닥에 깔린다.
+    /// · 그 외(W·RPM·MHz)는 관측 최대를 1·2·5 × 10ⁿ 눈금으로 올림(NiceCeiling).
+    /// </summary>
+    private static float AxisCeiling(SensorChannel channel, float value)
+    {
+        if (channel.AxisUnit == "%") return 100;
+        if (channel.FixedMax > 0) return (float)(Math.Ceiling(value / 10.0) * 10.0);
+        return NiceCeiling(value);
+    }
+
+    /// <summary>
+    /// 값을 1·2·5 × 10ⁿ 눈금으로 올린다(A74). 예: 47→50, 63→100, 250→500, 1500→2000, 4550→5000.
+    /// 차트 축의 관례적인 눈금이라 사람이 한눈에 읽고, 값이 조금 튀어도 상한이 자주 바뀌지 않는다.
+    /// </summary>
+    private static float NiceCeiling(float value)
+    {
+        if (value <= 0) return 1;
+        var power = Math.Pow(10, Math.Floor(Math.Log10(value)));
+        var normalized = value / power; // 1 이상 10 미만
+        var step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+        return (float)(step * power);
+    }
+
+    /// <summary>x축 시간 범위 표기(A74) — 60초를 넘으면 분으로. 예: "30s"·"60s"·"3m".</summary>
+    private static string FormatSpan(TimeSpan span)
+        => span.TotalSeconds > 60 ? $"{span.TotalMinutes:0.#}m" : $"{span.TotalSeconds:0}s";
 
     /// <summary>
     /// 관리자 재시작(A17): 단일 인스턴스 키를 먼저 반납해야 새(관리자) 프로세스가
@@ -596,9 +689,11 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         public required Grid GraphHost;
         public required Polyline Line;
         public required Polygon Area;
+        public required TextBlock YAxisText; // A74 좌상단: y 최대값 + 단위
+        public required TextBlock XAxisText; // A74 우하단: x 시간 범위
         public required SensorChannel Channel;
-        public float AutoMax;          // 자동 스케일: 채널 하한으로 시작해 관찰 최대 ×1.1로 커진다
-        public bool HasEverHadValue;   // 한 번도 값이 없던 채널은 흐리게
+        public float AxisMax;          // 축 상한(A74): 채널 규칙대로 시작해 관측 초과 시에만 커진다(단조 증가)
+        public bool HasEverHadValue;   // 한 번도 값이 없던 채널은 흐리게 + 축 라벨도 숨김
     }
 
     // ---------- 전체화면 전환 (v0.42.0) ----------
@@ -671,8 +766,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     /// <summary>
     /// 맥박 그래프 시간 창 = 리프레시 주기 × 2 (A51). 어느 주기에서든 스파이크 1~2개만
     /// 보인다 — 목적이 "설정한 레이트대로 갱신 중" 표시뿐이라 그걸로 충분(5초 고정 창에
-    /// 30~40틱이 몰리던 v0.84.0 동작을 대체). 주기 기준 계산이므로 주기 목록이 바뀌어도
-    /// (A73 예정: 50~5000ms) 그대로 성립한다.
+    /// 30~40틱이 몰리던 v0.84.0 동작을 대체). 주기 기준 계산이므로 A73의 50~5000ms
+    /// (창 100ms~10초) 전 구간에서 그대로 성립한다 — 클램프를 넣지 않는 이유가 이것이다.
     /// </summary>
     private static TimeSpan PulseWindow
         => TimeSpan.FromMilliseconds(HardwareModule.RefreshMs * 2);
@@ -680,7 +775,11 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     /// <summary>창 안의 스냅샷 도착 시각들 — UI 스레드에서만 접근.</summary>
     private readonly List<DateTime> _pulseTicks = [];
 
-    /// <summary>주기 선택 플라이아웃(100/300/1000ms) 구성 + 현재 값 표기(A29).</summary>
+    /// <summary>
+    /// 주기 선택 플라이아웃(A73: 50/200/500/1000/2000/5000ms) 구성 + 현재 값 표기(A29).
+    /// 항목 텍스트는 숫자 그대로 두고(숫자가 정보다), 최단값 50ms에만 부하 경고를 툴팁으로 붙인다 —
+    /// 실측 부하는 기기마다 달라 상한을 강제하지 않는다는 것이 A73의 결정.
+    /// </summary>
     private void BuildIntervalFlyout()
     {
         var flyout = new MenuFlyout();
@@ -688,16 +787,31 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         {
             var choice = ms; // 클로저 캡처 고정
             var item = new MenuFlyoutItem { Text = $"{choice} ms" };
+            if (choice == HardwareModule.RefreshChoices[0]) // 목록 최단값 = 50ms
+                ToolTipService.SetToolTip(item, "Very frequent polling — higher CPU load");
             item.Click += (_, _) =>
             {
                 HardwareModule.SetRefreshMs(choice); // 폴러 즉시 반영 + 설정 저장
                 IntervalText.Text = $"{choice} ms";
-                RerenderPulse(); // 맥박 창 길이(주기 × 2, A51)도 즉시 반영
+                RerenderPulse();       // 맥박 창 길이(주기 × 2, A51)도 즉시 반영
+                RerenderSparklines();  // 그래프 창 길이·x축 표기(A74)도 즉시 반영
             };
             flyout.Items.Add(item);
         }
         IntervalButton.Flyout = flyout;
         IntervalText.Text = $"{HardwareModule.RefreshMs} ms"; // 설정 복원값 표기
+    }
+
+    /// <summary>
+    /// 주기 변경 직후(A74): 그래프 창 길이가 주기에 묶여 있으므로(GraphWindow) 다음 스냅샷을
+    /// 기다리지 않고 다시 그린다 — 5000ms를 고르면 최대 5초 동안 옛 x축 표기가 남기 때문.
+    /// A51의 RerenderPulse와 같은 계열.
+    /// </summary>
+    private void RerenderSparklines()
+    {
+        var history = SensorService.History();
+        foreach (var card in _cards)
+            RenderSparkline(card, history);
     }
 
     /// <summary>스냅샷 도착 시각을 기록하고 창 밖 기록을 버린 뒤 그래프를 다시 그린다.</summary>
@@ -724,6 +838,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     /// 아래로 살짝 → 복귀). 창이 주기 × 2라(A51) 어느 주기에서든 스파이크 1~2개가
     /// 주기에 맞춰 흐른다 — 박동이 흐르는 속도가 곧 리프레시 레이트다.
     /// 폴링 주기마다만 다시 그린다(비용 미미).
+    /// ※ 스파이크 폭(±3·±1)은 **픽셀 상수**지 ms 상수가 아니다 — 창 길이가 100ms(50ms 주기)든
+    /// 10초(5000ms 주기)든 90px 안에서 같은 모양·같은 6px 폭으로 그려지므로 A73의 양 끝에서도
+    /// 뭉개지지 않는다. 여기를 시간 단위로 바꾸면 짧은 창에서 스파이크가 창을 삼킨다.
     /// </summary>
     private void RenderPulse(DateTime now)
     {

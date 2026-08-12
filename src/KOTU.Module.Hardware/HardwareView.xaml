@@ -93,12 +93,13 @@
                       ToolTipService.ToolTip="Refresh pulse — one beat per sensor poll">
                     <Polyline x:Name="PulseLine" Stroke="#2E9E6B" StrokeThickness="1.5" />
                 </Grid>
-                <!-- 리프레시 주기 선택(A29): 100/300/1000ms — 2칸(84×40) 규격, 우측 정렬.
-                     v0.51.0 고정 200ms 표기를 대체. 플라이아웃은 코드에서 채운다. -->
+                <!-- 리프레시 주기 선택(A29 → A73에서 목록 교체): 50/200/500/1000/2000/5000ms —
+                     2칸(84×40) 규격, 우측 정렬. 가장 긴 표기 "5000 ms"는 구 "1000 ms"와 같은 7글자라
+                     폭 여유는 그대로다. 플라이아웃(50ms 부하 경고 툴팁 포함)은 코드에서 채운다. -->
                 <DropDownButton x:Name="IntervalButton" Grid.Column="4"
                                 Style="{StaticResource BottomBarWideDropDownButtonStyle}"
                                 ToolTipService.ToolTip="Sensor refresh interval">
-                    <TextBlock x:Name="IntervalText" FontSize="12" Text="300 ms" />
+                    <TextBlock x:Name="IntervalText" FontSize="12" Text="500 ms" />
                 </DropDownButton>
                 <!-- Always on top 토글(A39) — ⛶ 바로 왼쪽, 켜짐 상태가 보이는 ToggleButton -->
                 <ToggleButton x:Name="TopToggle" Grid.Column="5"

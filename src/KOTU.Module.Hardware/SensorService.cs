@@ -28,15 +28,19 @@ public sealed record SensorFrame(
 /// - 관리자 권한이 없으면 커널 드라이버를 못 올려 CPU 온도·전력·클럭(MSR)·팬(SuperIO)·
 ///   SSD 온도(SMART)가 null이 된다. GPU(벤더 API)·RAM·CPU 부하는 비관리자도 나온다.
 /// - Storage 갱신은 10초마다 1회(A29에서 폴링 횟수 기반 → 시간 기반으로 교체 — 주기가
-///   100/1000ms로 바뀌어도 SMART 부하가 일정) — SMART 질의는 상대적으로 무겁고
+///   50~5000ms 어디로 바뀌어도 SMART 부하가 일정) — SMART 질의는 상대적으로 무겁고
 ///   드라이브 온도는 느리게 변한다. 센서 값은 다음 갱신까지 마지막 값을 유지한다.
-/// - 최근 프레임은 링 버퍼 600개(기본 300ms 기준 3분, 최단 100ms 기준 60초)에 쌓아 그래프 이력으로 쓴다.
+/// - 최근 프레임은 링 버퍼 600개(기본 500ms 기준 5분, 최단 50ms 기준 30초)에 쌓아 그래프 이력으로 쓴다.
 ///   구독자가 없어 폴러가 휴면하는 동안은 이력에 공백이 생긴다(의도된 동작 — 수집 비용 0 유지).
 /// </summary>
 public static class SensorService
 {
-    /// <summary>그래프 이력 링 용량. 최소 주기 100ms(A29 예정) 기준 60초 이상을 담는다.</summary>
-    private const int HistoryCapacity = 600;
+    /// <summary>
+    /// 그래프 이력 링 용량. 담기는 시간 = 용량 × 리프레시 주기라 주기에 따라 달라진다
+    /// (A73 최단 50ms에서는 30초 = 그래프 창 60초보다 짧다) — 뷰가 그래프 창을 이 값으로
+    /// 제한하고 x축에도 그대로 표기하므로(A74) internal로 공개한다.
+    /// </summary>
+    internal const int HistoryCapacity = 600;
 
     /// <summary>Storage(SMART) 갱신 간격 — 시간 기반(A29: 폴링 주기와 무관하게 일정 부하).</summary>
     private static readonly TimeSpan StorageInterval = TimeSpan.FromSeconds(10);

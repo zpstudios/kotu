@@ -14,12 +14,17 @@ namespace KOTU.Module.Hardware;
 /// <param name="FormatCompact">트레이 아이콘용 초압축 표기 — 16px 안에 들어가야 한다 (예: "62°", "4.6").</param>
 /// <param name="FixedMax">&gt;0이면 그래프 고정 스케일 상한 (온도·부하).</param>
 /// <param name="AutoFloor">자동 스케일 시작 하한 (전력·클럭·팬).</param>
+/// <param name="AxisUnit">
+/// 그래프 y축 라벨의 단위 접미 (A74, 예: "°C"·"W"·"%"·"RPM"·"MHz"). 값 표기(FormatFull)와 달리
+/// 공백 없이 붙여 쓴다 — 작은 셀 모서리에 겹쳐 놓는 10px 라벨이라 한 글자가 아깝다.
+/// "%"인 채널은 상한을 100으로 못 박고(100%가 정의상 최대), 그 외는 관측값이 상한을 넘으면 확장한다.
+/// </param>
 public sealed record SensorChannel(
     string Id, string Title, string ShortTitle, Windows.UI.Color Accent,
     Func<SensorFrame, float?> Select,
     Func<float, string> FormatFull,
     Func<float, string> FormatCompact,
-    float FixedMax, float AutoFloor);
+    float FixedMax, float AutoFloor, string AxisUnit);
 
 /// <summary>10채널 정의 단일 소스. 순서 = 뷰 카드 배치 순서(사용자 확정, v0.63.0 — v0.64.1부터 기본 1줄).</summary>
 public static class SensorChannels
@@ -32,16 +37,16 @@ public static class SensorChannels
 
     public static IReadOnlyList<SensorChannel> All { get; } =
     [
-        new("cpuTemp", "CPU Temp", "CPU°", Cpu, f => f.CpuTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
-        new("cpuPower", "CPU Power", "CPU W", Cpu, f => f.CpuPower, Watts, CompactWatts, FixedMax: 0, AutoFloor: 65),
-        new("cpuLoad", "CPU Load", "CPU %", Cpu, f => f.CpuLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
-        new("cpuClock", "CPU Clock", "CPU Clk", Cpu, f => f.CpuClock, Clock, CompactClock, FixedMax: 0, AutoFloor: 4000),
-        new("gpuTemp", "GPU Temp", "GPU°", Gpu, f => f.GpuTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
-        new("gpuPower", "GPU Power", "GPU W", Gpu, f => f.GpuPower, Watts, CompactWatts, FixedMax: 0, AutoFloor: 100),
-        new("gpuLoad", "GPU Load", "GPU %", Gpu, f => f.GpuLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
-        new("ram", "RAM", "RAM", Ram, f => f.RamLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0),
-        new("fan", "Fan", "Fan", Fan, f => f.FanRpm, Rpm, CompactRpm, FixedMax: 0, AutoFloor: 1500),
-        new("ssdTemp", "SSD Temp", "SSD°", Ssd, f => f.SsdTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0),
+        new("cpuTemp", "CPU Temp", "CPU°", Cpu, f => f.CpuTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0, AxisUnit: "°C"),
+        new("cpuPower", "CPU Power", "CPU W", Cpu, f => f.CpuPower, Watts, CompactWatts, FixedMax: 0, AutoFloor: 65, AxisUnit: "W"),
+        new("cpuLoad", "CPU Load", "CPU %", Cpu, f => f.CpuLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0, AxisUnit: "%"),
+        new("cpuClock", "CPU Clock", "CPU Clk", Cpu, f => f.CpuClock, Clock, CompactClock, FixedMax: 0, AutoFloor: 4000, AxisUnit: "MHz"),
+        new("gpuTemp", "GPU Temp", "GPU°", Gpu, f => f.GpuTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0, AxisUnit: "°C"),
+        new("gpuPower", "GPU Power", "GPU W", Gpu, f => f.GpuPower, Watts, CompactWatts, FixedMax: 0, AutoFloor: 100, AxisUnit: "W"),
+        new("gpuLoad", "GPU Load", "GPU %", Gpu, f => f.GpuLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0, AxisUnit: "%"),
+        new("ram", "RAM", "RAM", Ram, f => f.RamLoad, Percent, CompactPercent, FixedMax: 100, AutoFloor: 0, AxisUnit: "%"),
+        new("fan", "Fan", "Fan", Fan, f => f.FanRpm, Rpm, CompactRpm, FixedMax: 0, AutoFloor: 1500, AxisUnit: "RPM"),
+        new("ssdTemp", "SSD Temp", "SSD°", Ssd, f => f.SsdTemp, Celsius, CompactDegrees, FixedMax: 100, AutoFloor: 0, AxisUnit: "°C"),
     ];
 
     /// <summary>ID로 채널을 찾는다. 미지의 ID(옛 설정 잔재 등)는 null.</summary>

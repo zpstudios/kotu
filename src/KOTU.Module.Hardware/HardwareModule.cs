@@ -10,10 +10,14 @@ public sealed record HardwareSnapshot(IReadOnlyList<HardwareSection> Sections, S
 /// <summary>하드웨어 모듈 (Phase 5a 정보 표시 + 5b 센서 그래프, A17). 파일을 다루지 않으므로 담당 확장자는 없다.</summary>
 public sealed class HardwareModule : IModule
 {
-    /// <summary>리프레시 주기 선택지(A29, ms). v0.51.0 고정 200ms를 대체 — 기본 300(사용자 확정).</summary>
-    internal static readonly int[] RefreshChoices = [100, 300, 1000];
+    /// <summary>
+    /// 리프레시 주기 선택지(A73, ms). A29(v0.84.0)의 100/300/1000을 대체 — 기본 500(사용자 확정).
+    /// **오름차순을 유지할 것** — <see cref="NormalizeRefreshMs"/>가 이 정렬을 전제로 이관값을 고른다.
+    /// 최단 50ms는 초당 20회 폴링이라 CPU 부담이 눈에 띈다(드롭다운 항목에 경고 툴팁, A73).
+    /// </summary>
+    internal static readonly int[] RefreshChoices = [50, 200, 500, 1000, 2000, 5000];
 
-    internal const int DefaultRefreshMs = 300;
+    internal const int DefaultRefreshMs = 500;
 
     internal const string RefreshSettingKey = "hardware.refreshMs";
 
@@ -36,9 +40,28 @@ public sealed class HardwareModule : IModule
     {
         TraySensors.Initialize(settings);
         _settings = settings;
-        var ms = settings.Get(RefreshSettingKey, DefaultRefreshMs);
-        if (!RefreshChoices.Contains(ms)) ms = DefaultRefreshMs; // 구버전 200 등 목록 밖 값 정리
+        var stored = settings.Get(RefreshSettingKey, DefaultRefreshMs);
+        var ms = NormalizeRefreshMs(stored);
+        // 이관은 읽을 때 1회만 — 정규화 결과를 바로 되써서 다음 실행부터는 그대로 통과한다(A73).
+        if (ms != stored)
+        {
+            settings.Set(RefreshSettingKey, ms);
+            settings.Save();
+        }
         Poller.Interval = TimeSpan.FromMilliseconds(ms);
+    }
+
+    /// <summary>
+    /// 목록 밖 저장값을 새 목록으로 이관한다(A73). 규칙 = **그보다 크거나 같은 가장 가까운 값으로 올린다**
+    /// (A29의 100 → 200, 300 → 500, v0.51.0의 200 → 200). 목록 최대(5000)보다 크면 최대값.
+    /// 내림이 아니라 올림인 이유: 내리면 폴링 빈도가 사용자 동의 없이 늘어 체감 부하가 나빠진다.
+    /// 0·음수 저장값도 최단값(50)으로 올라가므로 폴러가 0 간격으로 도는 사고가 없다.
+    /// </summary>
+    internal static int NormalizeRefreshMs(int ms)
+    {
+        foreach (var choice in RefreshChoices) // 오름차순 전제
+            if (choice >= ms) return choice;
+        return RefreshChoices[^1];
     }
 
     /// <summary>현재 리프레시 주기(ms) — 하단 바 버튼 표기용(A29).</summary>
@@ -57,7 +80,7 @@ public sealed class HardwareModule : IModule
 
     /// <summary>
     /// 프로세스 공유 폴러(A42 결정: Hardware만 공유, 창 여러 개여도 수집은 1회).
-    /// 매 주기(100/300/1000ms 선택, A29) 센서 한 프레임을 읽고, WMI 스펙은 2초마다만 재수집한다.
+    /// 매 주기(50/200/500/1000/2000/5000ms 선택, A73) 센서 한 프레임을 읽고, WMI 스펙은 2초마다만 재수집한다.
     /// 구독이 없으면(뷰도 트레이도) 휴면하므로 그때 비용은 0. BelowNormal 우선순위라
     /// 재생·UI와 CPU를 다투지 않는다. 수집 스레드는 여기 하나다.
     /// </summary>
