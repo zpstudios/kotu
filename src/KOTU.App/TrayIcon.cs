@@ -66,12 +66,26 @@ internal sealed class TrayIcon : IDisposable
         _added = true;
     }
 
-    /// <summary>트레이 아이콘 교체 — 현재 모듈 색 아이콘 표시(v0.26.0). 로드 실패 시 기존 유지.</summary>
-    public void SetIcon(string? iconPath)
+    /// <summary>
+    /// 트레이 아이콘 교체 — 현재 모듈 색 아이콘 표시(v0.26.0). 로드 실패 시 기존 유지.
+    /// instanceNumber &gt; 0이면(창 2개 이상, A68) 인스턴스 색 테두리·원형 번호 배지를
+    /// 합성한 아이콘을 쓴다. 합성 핸들은 InstanceIcon의 프로세스 수명 캐시 소유
+    /// (owns=false — 여기서 파괴하지 않음). 합성 실패 시 무테두리 원본으로 폴백.
+    /// ※ 센서 트레이(SensorTray, A18)는 값 표시가 우선이라 인스턴스 테두리를 적용하지 않는다.
+    /// </summary>
+    public void SetIcon(string? iconPath, int instanceNumber = 0)
     {
         if (_disposed) return;
-        var (icon, owns) = LoadTrayIcon(iconPath);
+        var icon = IntPtr.Zero;
+        var owns = false;
+        if (instanceNumber > 0 && iconPath is not null)
+        {
+            icon = InstanceIcon.GetComposed(iconPath, instanceNumber,
+                Math.Max(16, GetSystemMetrics(SmCxSmIcon)));
+        }
+        if (icon == IntPtr.Zero) (icon, owns) = LoadTrayIcon(iconPath);
         if (icon == IntPtr.Zero) return;
+        if (icon == _hIcon) return; // 캐시 재사용으로 같은 핸들이면 교체할 것 없음
 
         var oldIcon = _hIcon;
         var oldOwns = _ownsIcon;

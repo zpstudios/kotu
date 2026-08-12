@@ -125,6 +125,7 @@ public sealed partial class MainWindow : Window
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
         if (File.Exists(IconPath))
         {
+            _moduleIconPath = IconPath; // 인스턴스 번호가 생기면 이 경로로 다시 합성 (A68)
             AppWindow.SetIcon(IconPath);
             WindowIcon.Apply(this, IconPath); // 작업표시줄 기본 문서 아이콘 문제 보정 (실기기)
         }
@@ -1183,6 +1184,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>현재 모듈 색 .ico 경로 — 인스턴스 번호 변경 시 재합성 기준(A68).</summary>
+    private string? _moduleIconPath;
+
     /// <summary>타이틀바·작업표시줄·트레이 아이콘을 현재 모듈 색 KOTU 아이콘으로 교체(v0.26.0).</summary>
     private void ApplyWindowIcon(string? moduleId)
     {
@@ -1201,9 +1205,24 @@ public sealed partial class MainWindow : Window
         if (!File.Exists(path)) path = IconPath;
         if (!File.Exists(path)) return;
 
+        _moduleIconPath = path;
+        RefreshShellIcons();
+    }
+
+    /// <summary>
+    /// 창·트레이 아이콘을 현재 모듈 색 + 인스턴스 번호로 다시 지정한다(A68).
+    /// 창이 2개 이상이면(_instanceNumber &gt; 0) 인스턴스 색 테두리와 원형 번호 배지를
+    /// 합성한 아이콘, 하나뿐이면 무테두리 원본 — 배지·제목 번호 숨김 규칙과 일관.
+    /// 모듈 전환(ApplyWindowIcon)과 번호 변경(SetInstanceNumber) 양쪽에서 불린다.
+    /// AppWindow.SetIcon은 원본 경로 유지 — 실제 표시는 직후 WM_SETICON(WindowIcon)이 덮는다.
+    /// </summary>
+    private void RefreshShellIcons()
+    {
+        if (_moduleIconPath is not { } path || !File.Exists(path)) return;
+
         AppWindow.SetIcon(path);
-        WindowIcon.Apply(this, path);
-        _tray.SetIcon(path);
+        WindowIcon.Apply(this, path, _instanceNumber);
+        _tray.SetIcon(path, _instanceNumber);
     }
 
     public void BringToFront()
@@ -1213,32 +1232,22 @@ public sealed partial class MainWindow : Window
     }
 
     // ---------- 인스턴스 번호 배지 (A2, v0.58.0) ----------
-
-    /// <summary>배지 색 팔레트 — 번호(1~9)마다 다른 색. 창을 눈으로 구분하는 용도.</summary>
-    private static readonly Windows.UI.Color[] InstanceColors =
-    [
-        Windows.UI.Color.FromArgb(255, 0xE8, 0x11, 0x23), // 1 red
-        Windows.UI.Color.FromArgb(255, 0x00, 0x78, 0xD7), // 2 blue
-        Windows.UI.Color.FromArgb(255, 0x10, 0x7C, 0x10), // 3 green
-        Windows.UI.Color.FromArgb(255, 0xF7, 0x63, 0x0C), // 4 orange
-        Windows.UI.Color.FromArgb(255, 0x8E, 0x24, 0xAA), // 5 purple
-        Windows.UI.Color.FromArgb(255, 0x00, 0x99, 0xBC), // 6 teal
-        Windows.UI.Color.FromArgb(255, 0xC3, 0x00, 0x52), // 7 magenta
-        Windows.UI.Color.FromArgb(255, 0x76, 0x76, 0x76), // 8 gray
-        Windows.UI.Color.FromArgb(255, 0x4A, 0x37, 0x8C), // 9 indigo
-    ];
+    // 색 팔레트는 InstanceIcon.ColorFor로 이동(A68) — 배지·아이콘 테두리·트레이가 공유한다.
 
     /// <summary>
     /// 인스턴스 번호 설정. 0 = 창이 하나뿐 → 배지·제목 번호 모두 숨김.
     /// 창이 2개가 되는 순간 1번 창에도 생기고, 중간 창이 닫히면
     /// WindowManager가 번호를 당겨서 다시 부른다.
-    /// 표시는 두 곳(A56): 타이틀바 색상 배지(A2 — 색이 9개뿐이라 1~9만)와
-    /// 제목 문자열 접두 "[n]"(개수 제한 없음 — 작업표시줄·Alt+Tab에서도 구분되게).
+    /// 표시는 세 곳: 타이틀바 원형 색상 배지(A2 — 색이 9개뿐이라 1~9만),
+    /// 제목 문자열 접두 "[n]"(A56 — 개수 제한 없음, 작업표시줄·Alt+Tab에서도 구분되게),
+    /// 창·트레이 아이콘의 인스턴스 색 테두리 + 원형 번호(A68 — 10번째부터 색 순환).
     /// </summary>
     public void SetInstanceNumber(int number)
     {
+        var previous = _instanceNumber;
         _instanceNumber = number > 0 ? number : 0;
         ApplyTitle();
+        if (_instanceNumber != previous) RefreshShellIcons(); // 아이콘 테두리·트레이 갱신 (A68)
 
         if (number is <= 0 or > 9)
         {
@@ -1246,7 +1255,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         InstanceBadge.Visibility = Visibility.Visible;
-        InstanceBadge.Background = new SolidColorBrush(InstanceColors[number - 1]);
+        InstanceBadge.Background = new SolidColorBrush(InstanceIcon.ColorFor(number));
         InstanceBadgeText.Text = number.ToString();
     }
 }

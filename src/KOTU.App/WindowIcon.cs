@@ -21,18 +21,32 @@ internal static class WindowIcon
     /// <summary>
     /// 창의 작업표시줄/타이틀바 아이콘을 .ico 파일로 강제 지정.
     /// 핸들은 캐시에 남겨 창 수명 동안 유효(프로세스 종료 시 OS 정리).
+    /// instanceNumber &gt; 0이면(창 2개 이상, A68) 인스턴스 색 테두리·원형 번호 배지를
+    /// 합성한 아이콘(InstanceIcon — 역시 프로세스 수명 캐시)을 대신 지정한다.
+    /// 합성 실패 시 무테두리 원본으로 폴백.
     /// </summary>
-    public static void Apply(Microsoft.UI.Xaml.Window window, string icoPath)
+    public static void Apply(Microsoft.UI.Xaml.Window window, string icoPath, int instanceNumber = 0)
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        var icons = instanceNumber > 0
+            ? (Small: InstanceIcon.GetComposed(icoPath, instanceNumber, 16),
+               Big: InstanceIcon.GetComposed(icoPath, instanceNumber, 32))
+            : LoadPlain(icoPath);
+        if (icons.Small == IntPtr.Zero || icons.Big == IntPtr.Zero)
+            icons = LoadPlain(icoPath); // 한쪽만 성공해도 혼합 표시가 되지 않게 통째로 폴백
+        if (icons.Small != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconSmall, icons.Small);
+        if (icons.Big != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconBig, icons.Big);
+    }
+
+    private static (IntPtr Small, IntPtr Big) LoadPlain(string icoPath)
+    {
         if (!s_cache.TryGetValue(icoPath, out var icons))
         {
             icons = (LoadImageW(IntPtr.Zero, icoPath, ImageIcon, 16, 16, LrLoadFromFile),
                      LoadImageW(IntPtr.Zero, icoPath, ImageIcon, 32, 32, LrLoadFromFile));
             s_cache[icoPath] = icons;
         }
-        if (icons.Small != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconSmall, icons.Small);
-        if (icons.Big != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconBig, icons.Big);
+        return icons;
     }
 
     [DllImport("user32", CharSet = CharSet.Unicode)]
