@@ -308,8 +308,8 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(BuildSponsorCard());
         StartMenuPanel.Children.Add(Divider()); // 그룹 경계는 구분선으로 명확히 (v0.26.0 사용자 요청)
 
-        // New Instance(A24, 문구는 A53) — Settings 위, 최상단 그룹
-        AddNewInstanceItem();
+        // New Instance 항목은 A65(v0.92.0)에서 제거 — 메뉴 항목만 뺐고,
+        // Ctrl+N·탐색기 Shift+더블클릭·우클릭 "Open in new instance"·설정 토글 진입로는 그대로다.
         // Settings·Hardware-info 묶음 (사용자 지정: zip 위에 공백 두고 Hardware-info, 그 위 Settings)
         AddSettingsItem();
         AddModuleItem("hardware");
@@ -337,21 +337,6 @@ public sealed partial class MainWindow : Window
         {
             StartFlyout.Hide();
             OpenModule(module);
-        };
-        StartMenuPanel.Children.Add(item);
-    }
-
-    /// <summary>
-    /// 시작 메뉴의 New Instance 항목(A24) — Ctrl+N과 같은 동작.
-    /// 표기는 A53에서 "New window" → "New Instance"로 변경(인스턴스 배지·번호 용어와 일치).
-    /// </summary>
-    private void AddNewInstanceItem()
-    {
-        var item = MakeMenuItem("\uE78B", "New Instance", "Ctrl+N"); // NewWindow 글리프
-        item.Click += (_, _) =>
-        {
-            StartFlyout.Hide();
-            _manager.OpenNewWindow(CurrentModuleId);
         };
         StartMenuPanel.Children.Add(item);
     }
@@ -393,6 +378,8 @@ public sealed partial class MainWindow : Window
             BorderThickness = new Thickness(0),
             // A31: 히트 영역 확대 — 상하 패딩 8→12 + 최소 높이 44 (터치 타깃 권장 크기).
             // 좌우는 10 유지: 메뉴 폭 124(v0.35.0 축소 확정) 안에서 라벨 말줄임을 늘리지 않기 위해.
+            // A50(v0.92.0): 좌측 히트 영역은 플라이아웃 프레젠터 패딩 0(XAML)으로 확대 —
+            // Stretch인 버튼이 메뉴 좌우 가장자리까지 닿아, 포인터가 라벨보다 왼쪽이어도 눌린다.
             Padding = new Thickness(10, 12, 10, 12),
             MinHeight = 44,
         };
@@ -456,11 +443,14 @@ public sealed partial class MainWindow : Window
         if (_sponsorImage is not null) SponsorAds.Apply(_sponsorImage);
     }
 
-    /// <summary>시작 메뉴 그룹 구분선: 여백 + 1px 라인 (v0.26.0, 공백만으로는 정리가 안 보인다는 피드백).</summary>
+    /// <summary>
+    /// 시작 메뉴 그룹 구분선: 여백 + 1px 라인 (v0.26.0, 공백만으로는 정리가 안 보인다는 피드백).
+    /// 상하 여백 8→3 (A50 항목 간격 축소, v0.92.0) — 항목 높이 44(A31)는 그대로 두고 사이 여백만 줄인다.
+    /// </summary>
     private static Border Divider() => new()
     {
         Height = 1,
-        Margin = new Thickness(4, 8, 4, 8),
+        Margin = new Thickness(4, 3, 4, 3),
         Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
     };
 

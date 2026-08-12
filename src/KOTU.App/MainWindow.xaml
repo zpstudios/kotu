@@ -135,10 +135,19 @@
                 <FontIcon Glyph="&#xE700;" FontSize="16" />
                 <Button.Flyout>
                     <Flyout x:Name="StartFlyout" Placement="TopEdgeAlignedLeft">
+                        <Flyout.FlyoutPresenterStyle>
+                            <!-- A50(v0.92.0): 프레젠터 기본 패딩(좌우 16의 데드존 포함)을 0으로.
+                                 Stretch인 항목 버튼이 메뉴 좌우 가장자리까지 닿아,
+                                 포인터가 라벨보다 왼쪽에 있어도 항목이 선택된다.
+                                 상하 여백은 아래 StackPanel Padding 4가 대신한다. -->
+                            <Style TargetType="FlyoutPresenter">
+                                <Setter Property="Padding" Value="0" />
+                            </Style>
+                        </Flyout.FlyoutPresenterStyle>
                         <!-- 항목은 코드(BuildStartMenu)에서 채운다.
                              폭 124(v0.35.0 사용자 요청 축소): 광고 카드(2:1 이미지가 폭을
                              꽉 채움, v0.43.0)가 이 폭의 기준. -->
-                        <StackPanel x:Name="StartMenuPanel" Width="124" />
+                        <StackPanel x:Name="StartMenuPanel" Width="124" Padding="0,4,0,4" />
                     </Flyout>
                 </Button.Flyout>
             </Button>
