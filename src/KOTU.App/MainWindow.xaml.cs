@@ -572,17 +572,27 @@ public sealed partial class MainWindow : Window
 
     private Image? _sponsorImage;
 
+    /// <summary>광고 카드(A67) — 커서·툴팁·클릭을 이미지가 아니라 카드가 받는다.</summary>
+    private SponsorCard? _sponsorCard;
+
+    /// <summary>지금 보이는 광고의 링크(A67). null이면 클릭 무반응 — 링크 없는 광고의 현행 동작.</summary>
+    private SponsorLink? _sponsorLink;
+
     private UIElement BuildSponsorCard()
     {
         // v0.43.0(사용자 스샷 피드백): 광고가 카드 전 영역을 차지하고(패딩 제거, 메뉴 폭에 맞춰 확대),
         // SPONSOR 라벨은 이미지 위 좌상단에 반투명 배지로 겹쳐서 아주 작게 표시한다.
-        var host = new Grid
+        var host = new SponsorCard
         {
             CornerRadius = new CornerRadius(8),
             Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
             Padding = new Thickness(2),
             MinHeight = 60,
         };
+        _sponsorCard = host;
+        // A67(v0.109.0): 이미지·SPONSOR 배지 어디를 눌러도 광고를 누른 것으로 친다
+        // (Tapped는 자식에서 카드로 버블링된다). 링크가 없으면 핸들러가 그냥 돌아간다.
+        host.Tapped += OnSponsorTapped;
 
         if (SponsorAds.Any)
         {
@@ -595,7 +605,6 @@ public sealed partial class MainWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            SponsorAds.Apply(_sponsorImage);
             host.Children.Add(_sponsorImage);
         }
 
@@ -616,13 +625,80 @@ public sealed partial class MainWindow : Window
             },
         });
 
+        UpdateSponsorImage(); // 첫 이미지·링크 반영 (커서는 카드가 로드된 뒤에 걸린다)
         return host;
     }
 
-    /// <summary>메뉴가 열릴 때 현재 분 기준 광고로 갱신한다(로직은 SponsorAds 공용, v0.50.0).</summary>
+    /// <summary>
+    /// 메뉴가 열릴 때 현재 분 기준 광고로 갱신한다(로직은 SponsorAds 공용, v0.50.0).
+    /// A67(v0.109.0): 이미지와 함께 링크·커서·툴팁도 그 광고의 것으로 바꾼다 —
+    /// 링크 없는 광고는 커서 기본·툴팁 없음·클릭 무반응(현행 유지).
+    /// </summary>
     private void UpdateSponsorImage()
     {
         if (_sponsorImage is not null) SponsorAds.Apply(_sponsorImage);
+        if (_sponsorCard is null) return;
+
+        _sponsorLink = SponsorAds.CurrentLink();
+        _sponsorCard.SetHandCursor(_sponsorLink is not null);
+        ToolTipService.SetToolTip(_sponsorCard, _sponsorLink?.Tip);
+    }
+
+    /// <summary>
+    /// 광고 클릭(A67, v0.109.0) — 스폰서 링크를 기본 브라우저로 연다.
+    /// 확인 창은 두지 않는다(미션 문구의 "silent in-app ad"와 정합) — 대신 매핑을 읽을 때
+    /// http/https만 통과시켜 안전을 확보한다. 클릭하면 시작 메뉴는 닫는다(사용자 확정).
+    /// </summary>
+    private void OnSponsorTapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (_sponsorLink is not { } link) return; // 링크 없는 광고 = 아무 일도 일어나지 않는다
+        e.Handled = true;
+        StartFlyout.Hide();
+        _ = Windows.System.Launcher.LaunchUriAsync(link.Url);
+    }
+
+    /// <summary>
+    /// 광고 카드 호스트(A67, v0.109.0). WinUI 3에는 공개 커서 속성이 없고
+    /// UIElement.ProtectedCursor가 protected라 파생 클래스에서만 지정할 수 있어 Grid를 상속했다.
+    /// 커서는 자식(이미지·SPONSOR 배지) 위에서도 그대로 적용된다.
+    /// ProtectedCursor는 비주얼 트리에 붙기 전에는 지정할 수 없으므로, 로드 전 요청은 예약만 하고
+    /// Loaded에서 실제로 건다(플라이아웃 콘텐츠라 메뉴를 열 때마다 로드된다).
+    /// </summary>
+    private sealed partial class SponsorCard : Grid
+    {
+        private bool _loaded;
+        private bool _hand;
+
+        public SponsorCard()
+        {
+            Loaded += (_, _) =>
+            {
+                _loaded = true;
+                ApplyCursor();
+            };
+            Unloaded += (_, _) => _loaded = false;
+        }
+
+        /// <summary>true = 손가락 커서(링크 있는 광고), false = 기본 화살표.</summary>
+        public void SetHandCursor(bool hand)
+        {
+            _hand = hand;
+            if (_loaded) ApplyCursor();
+        }
+
+        private void ApplyCursor()
+        {
+            try
+            {
+                ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(
+                    _hand ? Microsoft.UI.Input.InputSystemCursorShape.Hand
+                          : Microsoft.UI.Input.InputSystemCursorShape.Arrow);
+            }
+            catch
+            {
+                // 커서 하나 때문에 메뉴가 죽으면 안 된다 — 모양만 기본으로 남는다.
+            }
+        }
     }
 
     /// <summary>

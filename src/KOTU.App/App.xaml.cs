@@ -46,6 +46,10 @@ public partial class App : Application
             router.Register(new KOTU.Module.Document.DocumentModule()); // v0.44.0
             router.Register(new KOTU.Module.Hardware.HardwareModule(
                 sp.GetRequiredService<ISettingsService>())); // 트레이 센서 선택 복원 (A18)
+            // A36(v0.109.0): 설정 화면의 "Open settings.json"이 설정 파일을 문서 모듈 에디터로 연다.
+            // .json은 어느 모듈의 SupportedExtensions에도 없어(탐색기 연결 대상이 아니다) 라우팅 재정의로만
+            // 문서 모듈에 붙인다 — 레지스트리 등록 목록·파일 아이콘은 그대로다.
+            router.SetOverride(".json", "document");
             return router;
         });
         services.AddSingleton(sp => new WindowManager(

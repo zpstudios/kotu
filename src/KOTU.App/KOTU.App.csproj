@@ -59,6 +59,8 @@
     <!-- 시작 메뉴 스폰서 자리 로고 (packaging/gen_sponsor_placeholder.py로 생성, 실제 로고로 교체 가능) -->
     <!-- 광고 이미지 로테이션(v0.38.0): sponsor-*.png 전부 동봉, 파일 추가/교체만으로 갱신 -->
     <Content Include="Assets\sponsor-*.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 광고 이미지 ↔ 링크 매핑(A67, v0.109.0). 없거나 깨져도 링크 없는 광고로 조용히 넘어간다 -->
+    <Content Include="Assets\sponsors.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- 확장자별 파일 아이콘 (A23, v0.60.0 — packaging/gen_file_icons.py로 생성) -->
     <Content Include="Assets\fileicons\*.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

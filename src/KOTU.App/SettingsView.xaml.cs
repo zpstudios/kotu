@@ -347,6 +347,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         Root.Children.Add(_status);
 
+        BuildSettingsFileSection(); // A36: 연결 섹션 아래 "Open settings.json"
+
         _updatesHeader = AddHeader("Updates");
         var currentVersion = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
         Root.Children.Add(new TextBlock { Text = $"Current version: v{currentVersion}", Opacity = 0.8 });
@@ -484,6 +486,69 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
+    }
+
+    /// <summary>
+    /// A36(v0.109.0): 연결 섹션 아래 "Open settings.json" 버튼 + 경로·주의 안내.
+    /// 저장 위치·포맷은 현행 %AppData%\KOTU\settings.json 그대로고(부록 B 37번 확정)
+    /// 표기만 실제 파일명에 맞춘다 — 경로 문자열은 하드코딩하지 않고 ISettingsService.FilePath에서 읽는다.
+    /// 여는 방식은 <b>새 인스턴스</b>(WindowManager.OpenFileInNewWindow) — 보고 있던 설정 화면을 잃지 않게.
+    /// .json은 어느 모듈의 SupportedExtensions에도 없어서 App의 라우팅 재정의(.json → document)가
+    /// 이 파일을 문서 모듈(KOTU-doc) 에디터로 보낸다.
+    /// 저장 후 자동 재로드는 넣지 않는다(사용자 확정) — 재시작 반영이며 아래 안내 줄이 그 고지다.
+    /// </summary>
+    private void BuildSettingsFileSection()
+    {
+        var openButton = new Button
+        {
+            Content = "Open settings.json",
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        Root.Children.Add(openButton);
+
+        Root.Children.Add(new TextBlock
+        {
+            Text = $"{_settings.FilePath} — changes apply after restart. "
+                 + "Editing this file directly can break your settings.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true, // 경로를 그대로 복사해 갈 수 있게
+        });
+
+        // 실패 사유 전용 줄(성공하면 보이지 않는다) — 공용 _status는 연결 토글 결과가 쓴다.
+        var status = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = 0.8,
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed,
+        };
+        Root.Children.Add(status);
+
+        openButton.Click += (_, _) =>
+        {
+            var path = _settings.FilePath;
+            try
+            {
+                // 설정을 한 번도 바꾸지 않은 프로필에는 파일이 아직 없다 — 현재 값을 먼저 디스크로 내린다.
+                if (!File.Exists(path)) _settings.Save();
+                if (!File.Exists(path))
+                {
+                    status.Text = "Could not create the settings file.";
+                    status.Visibility = Visibility.Visible;
+                    return;
+                }
+
+                status.Visibility = Visibility.Collapsed;
+                App.Services.GetRequiredService<WindowManager>().OpenFileInNewWindow(path);
+            }
+            catch (Exception ex)
+            {
+                status.Text = "Could not open the settings file: " + ex.Message;
+                status.Visibility = Visibility.Visible;
+            }
+        };
     }
 
     /// <summary>업데이트 섹션 머리글 — 토스트 클릭 진입 시 스크롤 목표(A26, v0.105.0).</summary>
