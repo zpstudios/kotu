@@ -826,15 +826,37 @@ public sealed partial class MainWindow : Window
         ApplyOverlayStates(); // 폴더·정보가 바뀌었을 수 있다 — 떠 있는 오버레이·도크 갱신
     }
 
+    /// <summary>파일 모듈(파일 없이 열면 빈 상태 탐색기·A81 빈 도크가 성립)인지 — H/W·설정은 제외.</summary>
+    private static bool IsFileModule(IModule? module) =>
+        module is { Id: "archive" or "image" or "video" or "audio" or "document" };
+
+    /// <summary>
+    /// 파일 없이 연 파일 모듈(빈 모듈 상태)인지 — 중앙 탐색기(v0.25.0)와
+    /// A81 빈 도크 오버레이가 공유하는 조건.
+    /// </summary>
+    private bool IsEmptyFileModule => _currentFilePath is null && IsFileModule(_currentModule);
+
+    /// <summary>
+    /// 빈 상태의 시작 폴더: 그 모듈의 마지막 폴더(v0.55.0), 없으면 바탕화면.
+    /// 중앙 탐색기와 A81 빈 도크의 리스트 오버레이가 같은 규칙을 공유한다.
+    /// </summary>
+    private string ModuleStartFolder(IModule module)
+    {
+        var start = _settings.Get($"lastFolder.{module.Id}", string.Empty);
+        if (string.IsNullOrEmpty(start) || !Directory.Exists(start))
+            start = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        return start;
+    }
+
     /// <summary>
     /// 빈 상태(파일 없이 연 압축/이미지/동영상/오디오/문서 모듈)면 중앙에 탐색기를 띄운다.
     /// 시작 위치는 그 모듈의 마지막 폴더(v0.55.0, 없으면 바탕화면), 파일은 담당 확장자만.
     /// Hardware/Settings에는 띄우지 않는다.
+    /// 좌측 리스트가 불투명 도크로 떠 있으면(A81 기본 도크) 중복이라 ApplyOverlayStates가 다시 숨긴다.
     /// </summary>
     private void UpdateEmptyExplorer()
     {
-        if (_currentFilePath is null &&
-            _currentModule is { Id: "archive" or "image" or "video" or "audio" or "document" } module)
+        if (IsEmptyFileModule && _currentModule is { } module)
         {
             if (_emptyExplorer is null)
             {
@@ -843,10 +865,7 @@ public sealed partial class MainWindow : Window
                 _emptyExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
                 ExplorerHost.Children.Add(_emptyExplorer);
             }
-            var start = _settings.Get($"lastFolder.{module.Id}", string.Empty);
-            if (string.IsNullOrEmpty(start) || !Directory.Exists(start))
-                start = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            _emptyExplorer.NavigateTo(start, module.SupportedExtensions);
+            _emptyExplorer.NavigateTo(ModuleStartFolder(module), module.SupportedExtensions);
             ExplorerHost.Visibility = Visibility.Visible;
         }
         else
@@ -912,7 +931,10 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnOverlaySideDown(OverlaySide side)
     {
-        if (_currentFilePath is null) return; // 콘텐츠 없으면 오버레이도 판정도 없다 (기존 규칙 유지)
+        // 오버레이 컨텍스트가 없으면(설정·H/W·미지원 파일 안내) 판정도 없다. 파일 없이 연
+        // 파일 모듈(빈 모듈 상태)은 A81부터 컨텍스트에 포함 — 기본 도크를 2연타로 닫고
+        // 다시 여는 입력이 성립해야 한다. 상태 전이(홀드/2초/2연타) 자체는 A58 그대로.
+        if (_currentFilePath is null && !IsEmptyFileModule) return;
 
         var now = DateTime.UtcNow;
         if ((now - side.LastTapDown).TotalMilliseconds < OverlayDoubleTapMs)
@@ -1031,7 +1053,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 외부에서 좌/우 오버레이의 불투명 밀어내기 상태를 지정한다 — 시작 경로별 기본 표시
-    /// 상태(A81 예정: 모듈 실행 시 양쪽 불투명, 부록 B 30번)용 공개 API.
+    /// 상태(A81: 파일 인자 없이 모듈로 연 창은 양쪽 불투명, 부록 B 30번)용 공개 API.
+    /// WindowManager가 창 생성 진입에서 1회만 부른다 — 이후 모듈 전환·파일 열기는
+    /// 사용자가 바꾼 상태를 그대로 유지(재적용 없음)하고, 세션 간 저장도 없다(A55 미포함).
     /// true = OpaqueDocked, false = 닫힘. 반투명 고정은 키 입력 전용이라 여기서 만들지 않는다.
     /// </summary>
     public void SetDockedState(bool listDocked, bool infoDocked)
@@ -1045,14 +1069,17 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 상태 머신 → 화면 반영 (A58). 표시 여부·모드(반투명/불투명)·안내 문구·도크 컬럼을
-    /// 한 곳에서 일괄 갱신한다. 콘텐츠 파일이 없으면(빈 셸·설정·H/W) 상태와 무관하게 숨긴다 —
+    /// 한 곳에서 일괄 갱신한다. 오버레이 컨텍스트가 없으면(빈 셸·설정·H/W) 상태와 무관하게 숨긴다 —
     /// 상태 자체는 남아 있어 다음 파일을 열면 같은 모드로 되살아난다(기존 고정 유지 규칙).
+    /// 파일 없이 연 파일 모듈(빈 모듈 상태)도 컨텍스트다(A81): 좌측 리스트는 모듈 시작 폴더,
+    /// 우측 정보는 "No file open" 플레이스홀더를 보여준다.
     /// </summary>
     private void ApplyOverlayStates()
     {
         var hasFile = _currentFilePath is not null;
-        var listShow = hasFile && _listSide.State != OverlayState.Closed;
-        var infoShow = hasFile && _infoSide.State != OverlayState.Closed;
+        var emptyModule = IsEmptyFileModule; // 파일 없이 연 파일 모듈 — A81부터 오버레이 컨텍스트
+        var listShow = (hasFile || emptyModule) && _listSide.State != OverlayState.Closed;
+        var infoShow = (hasFile || emptyModule) && _infoSide.State != OverlayState.Closed;
 
         if (listShow) ShowListOverlay();
         else ListOverlay.Hide();
@@ -1062,8 +1089,10 @@ public sealed partial class MainWindow : Window
                 ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
             pinned: _listSide.State == OverlayState.TranslucentPinned);
 
-        if (infoShow)
+        if (infoShow && hasFile)
             InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider);
+        else if (infoShow)
+            InfoOverlay.ShowPlaceholder(); // 빈 모듈 상태 — 보여줄 파일 정보가 없다 (A81)
         else
             InfoOverlay.Hide();
         InfoOverlay.SetState(
@@ -1079,17 +1108,32 @@ public sealed partial class MainWindow : Window
         LeftDockColumn.Width = new GridLength(left, GridUnitType.Star);
         RightDockColumn.Width = new GridLength(right, GridUnitType.Star);
         CenterColumn.Width = new GridLength(10 - left - right, GridUnitType.Star);
+
+        // A81: 빈 모듈 상태에서 좌측 리스트가 불투명 도크로 떠 있으면 중앙 탐색기는 숨긴다 —
+        // 같은 폴더의 파일 목록이 나란히 두 번 보이는 중복 제거. 도크를 닫으면 다시 나타난다.
+        // 반투명(홀드·고정)은 중앙을 덮는 표시라 그대로 둔다(아크릴 아래로 비쳐 보이는 게 정상).
+        if (emptyModule)
+            ExplorerHost.Visibility = left > 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>
     /// 좌측 리스트 오버레이 표시: 현재 파일이 있는 폴더 + 현재 모듈의 담당 확장자(A57 ③)를
     /// 주입한다 — A7 드롭다운은 리스트 안에서 그 목록을 추가로 좁힌다.
+    /// 파일이 없으면(빈 모듈 상태 — A81) 모듈 시작 폴더(마지막 폴더/바탕화면)를 대신 쓴다 —
+    /// 중앙 빈 상태 탐색기와 같은 규칙.
     /// 폴더가 사라졌으면(이동식 드라이브 탈착 등) 띄우지 않는다 — 문구·도크는 IsOpen 기준으로 따라온다.
     /// </summary>
     private void ShowListOverlay()
     {
-        if (_currentModule is null || _currentFilePath is null ||
-            Path.GetDirectoryName(_currentFilePath) is not { } folder || !Directory.Exists(folder))
+        if (_currentModule is null)
+        {
+            ListOverlay.Hide();
+            return;
+        }
+        var folder = _currentFilePath is not null
+            ? Path.GetDirectoryName(_currentFilePath)
+            : ModuleStartFolder(_currentModule);
+        if (folder is not { Length: > 0 } || !Directory.Exists(folder))
         {
             ListOverlay.Hide();
             return;

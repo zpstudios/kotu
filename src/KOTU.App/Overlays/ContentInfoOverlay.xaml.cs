@@ -51,6 +51,19 @@ public sealed partial class ContentInfoOverlay : UserControl
     }
 
     /// <summary>
+    /// 파일 없는 상태의 플레이스홀더 (A81 — 빈 모듈에서 기본 도크로 뜰 때):
+    /// 보여줄 파일 정보가 없으므로 간단한 안내 한 줄만 표시한다.
+    /// 진행 중이던 로드가 늦게 도착해 문구를 덮지 않게 캐시·시퀀스를 함께 무효화한다.
+    /// 모드·안내 문구는 ShowFor와 동일하게 SetState가 별도로 반영한다.
+    /// </summary>
+    public void ShowPlaceholder()
+    {
+        InvalidateCache();
+        Visibility = Visibility.Visible;
+        InfoText.Text = "No file open";
+    }
+
+    /// <summary>
     /// 표시 모드·고정 안내 반영 (A58). TranslucentOver = 아크릴 반투명(A33): 홀드 중이면
     /// 문구 없음, pinned(2초 홀드 고정)면 unpin 안내. OpaqueDocked = 불투명 배경 + close 안내 —
     /// 실제 폭 차지(메인 축소)는 셸의 도크 컬럼이 담당하고 여기서는 시각·문구만 바꾼다.

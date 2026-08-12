@@ -56,6 +56,10 @@ public sealed class WindowManager
     {
         var window = Create();
         window.ShowDefaultModule();
+        // A81: 파일 인자 없이 모듈로 시작한 창은 좌·우 불투명 밀어내기가 기본(부록 B 30번).
+        // 기본 화면(H/W)에서는 오버레이가 숨겨진 채 상태만 남고, 파일 모듈로 전환하는 순간
+        // 도크로 나타난다. 주입은 이 진입 1회뿐 — 이후에는 사용자가 바꾼 상태를 존중한다.
+        window.SetDockedState(listDocked: true, infoDocked: true);
         window.Activate();
         return window;
     }
@@ -112,6 +116,9 @@ public sealed class WindowManager
         var window = Create();
         if (moduleId is not null) window.OpenModuleById(moduleId);
         else window.ShowDefaultModule();
+        // A81: 파일 없이 모듈로 여는 새 창도 "모듈 실행" 진입 — 양쪽 불투명 도크가 기본.
+        // 파일로 여는 새 창(OpenFileInNewWindow·FindReusable)은 기본이 닫힘이라 주입 없음.
+        window.SetDockedState(listDocked: true, infoDocked: true);
         window.Activate();
     }
 
