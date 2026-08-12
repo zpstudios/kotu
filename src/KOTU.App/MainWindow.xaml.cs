@@ -59,7 +59,7 @@ public sealed partial class MainWindow : Window
         _settings = App.Services.GetRequiredService<ISettingsService>();
         BuildStartMenu();
         RegisterShortcuts(); // Ctrl+` 시작 메뉴, Ctrl+숫자 모듈 전환 (v0.45.0)
-        RestoreWindowSize(); // 마지막 창 크기 복원 + 닫을 때 저장 (v0.55.0)
+        RestoreWindowBounds(); // 마지막 창 크기·위치 복원 + 닫을 때 저장 (v0.55.0 크기, A55 위치·최대화)
         WindowMinSize.Apply(this); // 최소 창 크기 720×540 DIP 강제 (A40) — 창 생성 경로는 이 생성자 하나뿐
         // 광고 로테이션: 메뉴가 열릴 때 현재 분 기준 이미지로 갱신 (같은 분 = 같은 이미지)
         StartFlyout.Opening += (_, _) => UpdateSponsorImage();
@@ -192,13 +192,28 @@ public sealed partial class MainWindow : Window
         _tray.SetTooltip(title);
     }
 
-    // ---------- 창 크기 저장/복원 (v0.55.0 사용자 요청) ----------
+    // ---------- 창 크기·위치 저장/복원 (v0.55.0 크기만 → A55에서 위치·최대화 추가) ----------
 
-    /// <summary>마지막으로 닫힌 창의 크기(물리 픽셀)를 복원한다. 저장값이 없으면 기본 크기.</summary>
-    private void RestoreWindowSize()
+    /// <summary>
+    /// 마지막 "일반 상태(Restored)"의 위치·크기(물리 픽셀) — 최대화·전체화면·최소화로 닫혀도
+    /// 최대화 직전 값을 저장할 수 있게 AppWindow.Changed에서 추적한다(A55).
+    /// </summary>
+    private Windows.Graphics.PointInt32? _lastNormalPos;
+    private Windows.Graphics.SizeInt32? _lastNormalSize;
+
+    /// <summary>
+    /// 마지막으로 닫힌 창의 크기·위치(물리 픽셀)를 복원한다(v0.55.0 크기, A55 위치).
+    /// 저장값이 없으면 기본 크기·위치. 다중 인스턴스(A24)는 저장 위치에서 창마다
+    /// +32px 계단식 오프셋으로 열고, 오프셋 결과까지 화면 밖 보정을 거친다.
+    /// 최대화로 닫혔으면 최대화로 열되, 복원(Restore Down) 시 돌아갈 일반 크기·위치는
+    /// 먼저 적용해 둔 저장값이 된다.
+    /// </summary>
+    private void RestoreWindowBounds()
     {
         var w = _settings.Get("window.width", 0);
         var h = _settings.Get("window.height", 0);
+        var x = _settings.Get("window.x", int.MinValue);
+        var y = _settings.Get("window.y", int.MinValue);
         if (w >= 320 && h >= 240)
         {
             try
@@ -207,30 +222,133 @@ public sealed partial class MainWindow : Window
                 // WM_GETMINMAXINFO는 사용자 리사이즈만 막고 프로그램 Resize는 안 막기 때문.
                 var (minW, minH) = WindowMinSize.MinPhysical(
                     WinRT.Interop.WindowNative.GetWindowHandle(this));
-                AppWindow.Resize(new Windows.Graphics.SizeInt32(Math.Max(w, minW), Math.Max(h, minH)));
+                w = Math.Max(w, minW);
+                h = Math.Max(h, minH);
+                if (x != int.MinValue && y != int.MinValue)
+                {
+                    // 계단식 오프셋(A55): 생성자 시점 OpenWindowCount = 기존 창 수 = 인스턴스 - 1.
+                    // 클램프는 최소 크기 반영 후의 최종 크기로 계산해야 맞는다(A40 정합).
+                    var offset = 32 * _manager.OpenWindowCount;
+                    AppWindow.MoveAndResize(ClampToWorkArea(
+                        new Windows.Graphics.RectInt32(x + offset, y + offset, w, h)));
+                }
+                else
+                {
+                    AppWindow.Resize(new Windows.Graphics.SizeInt32(w, h)); // 구버전 저장값(위치 없음)
+                }
             }
             catch { /* 모니터 구성이 바뀌었어도 열리기는 해야 한다 */ }
         }
-        Closed += (_, _) => SaveWindowSize();
+
+        try
+        {
+            // 일반 상태 기준값을 "지금 적용한 값"으로 먼저 기록하고 나서 추적·최대화 순서 —
+            // 최대화 복원 직후 닫아도 직전 일반 크기·위치가 저장되게(A55).
+            _lastNormalPos = AppWindow.Position;
+            _lastNormalSize = AppWindow.Size;
+            AppWindow.Changed += TrackNormalBounds;
+            if (_settings.Get("window.maximized", false)
+                && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter op)
+            {
+                op.Maximize();
+            }
+        }
+        catch { /* 프레젠터 조작 실패가 시작을 막으면 안 된다 */ }
+
+        Closed += (_, _) => SaveWindowBounds();
     }
 
-    /// <summary>전체화면·최대화 상태는 저장하지 않는다 — 다음 실행이 이상한 크기로 열리지 않게.</summary>
-    private void SaveWindowSize()
+    /// <summary>
+    /// 일반 상태(OverlappedPresenter.Restored)의 위치·크기만 기록한다(A55).
+    /// 최대화·전체화면(별도 프레젠터)·최소화(좌표 -32000)는 State/Kind 검사로 자연히 걸러진다.
+    /// </summary>
+    private void TrackNormalBounds(Microsoft.UI.Windowing.AppWindow sender,
+        Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
+    {
+        if (!args.DidSizeChange && !args.DidPositionChange) return;
+        if (sender.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter
+            { State: Microsoft.UI.Windowing.OverlappedPresenterState.Restored }) return;
+        _lastNormalPos = sender.Position;
+        _lastNormalSize = sender.Size;
+    }
+
+    /// <summary>
+    /// 화면 밖 보정(A55): 모니터 분리 등으로 저장 위치가 현재 구성에서 안 보이면
+    /// 가장 가까운 WorkArea 안으로 클램프한다. 타이틀바를 마우스로 잡을 수 있는 정도
+    /// (가로 노출 48px + 타이틀바 세로 밴드가 WorkArea 안)면 그대로 통과.
+    /// </summary>
+    private static Windows.Graphics.RectInt32 ClampToWorkArea(Windows.Graphics.RectInt32 rect)
+    {
+        const int MinVisible = 48; // 타이틀바를 잡을 수 있는 최소 노출(물리 px)
+        try
+        {
+            var area = Microsoft.UI.Windowing.DisplayArea.GetFromRect(
+                    rect, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest)
+                ?? Microsoft.UI.Windowing.DisplayArea.Primary;
+            if (area is null) return rect; // 디스플레이 정보를 못 얻으면 무보정
+            var wa = area.WorkArea;
+
+            var overlapW = Math.Min(rect.X + rect.Width, wa.X + wa.Width) - Math.Max(rect.X, wa.X);
+            var titleVisible = rect.Y >= wa.Y && rect.Y <= wa.Y + wa.Height - MinVisible;
+            if (overlapW >= MinVisible && titleVisible) return rect;
+
+            // 창이 WorkArea보다 크면 Math.Max가 상한을 원점으로 눌러 좌상단 기준이 된다
+            var x = Math.Clamp(rect.X, wa.X, Math.Max(wa.X, wa.X + wa.Width - rect.Width));
+            var y = Math.Clamp(rect.Y, wa.Y, Math.Max(wa.Y, wa.Y + wa.Height - rect.Height));
+            return new Windows.Graphics.RectInt32(x, y, rect.Width, rect.Height);
+        }
+        catch
+        {
+            return rect; // 보정 실패해도 열리기는 해야 한다
+        }
+    }
+
+    /// <summary>
+    /// 마지막으로 닫힌 창이 이긴다(현행 규칙 — 창별 저장은 A70 별도).
+    /// 최대화로 닫히면 window.maximized=true + 직전 일반 크기·위치를,
+    /// 전체화면·최소화로 닫히면 직전 일반 크기·위치만 저장한다(전체화면은 일시 모드 — A55).
+    /// </summary>
+    private void SaveWindowBounds()
     {
         try
         {
-            if (AppWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) return;
-            if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter { State: Microsoft.UI.Windowing.OverlappedPresenterState.Maximized }) return;
-            var size = AppWindow.Size;
-            if (size.Width < 320 || size.Height < 240) return;
-            _settings.Set("window.width", size.Width);
-            _settings.Set("window.height", size.Height);
-            _settings.Save();
+            var presenter = AppWindow.Presenter;
+            if (presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
+            {
+                SaveBounds(_lastNormalSize, _lastNormalPos, maximized: false);
+            }
+            else if (presenter is Microsoft.UI.Windowing.OverlappedPresenter p
+                && p.State != Microsoft.UI.Windowing.OverlappedPresenterState.Restored)
+            {
+                SaveBounds(_lastNormalSize, _lastNormalPos,
+                    maximized: p.State == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized);
+            }
+            else
+            {
+                SaveBounds(AppWindow.Size, AppWindow.Position, maximized: false);
+            }
         }
         catch
         {
             // 저장 실패가 종료를 막으면 안 된다.
         }
+    }
+
+    /// <summary>크기가 유효할 때만 크기·위치를 덮어쓴다 — 추적값이 없으면 기존 저장값 유지.</summary>
+    private void SaveBounds(Windows.Graphics.SizeInt32? size, Windows.Graphics.PointInt32? pos, bool maximized)
+    {
+        if (size is { Width: >= 320, Height: >= 240 } s)
+        {
+            _settings.Set("window.width", s.Width);
+            _settings.Set("window.height", s.Height);
+            if (pos is { } p)
+            {
+                _settings.Set("window.x", p.X);
+                _settings.Set("window.y", p.Y);
+            }
+        }
+        _settings.Set("window.maximized", maximized);
+        _settings.Save();
     }
 
     // ---------- 단축키 (v0.45.0 사용자 지정) ----------
