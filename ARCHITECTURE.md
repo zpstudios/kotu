@@ -70,6 +70,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 ├─ src/KOTU.Module.Video
 ├─ src/KOTU.Module.Audio      # A10(v0.75.0)에서 Video로부터 분리
 ├─ src/KOTU.Module.Hardware   # Phase 5
+├─ src/KOTU.Module.AllReadable # A59(v0.113.0) 통합 모듈 — 아래 9장(중첩 호스팅)
 └─ tests/                   # 모듈별 단위 테스트
 ```
 
@@ -159,6 +160,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 | `KOTU video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
 | `KOTU audio worker` | 뷰마다 1 | Normal | libvlc(시각화 인스턴스) 생성·해제 (A10) |
 | `KOTU document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지)·저장(인코딩 보존, A37) |
+| (All Readable 전용 워커 없음) | — | — | 자식 모듈 뷰의 워커를 그대로 쓴다 — 자식이 바뀌면 이전 워커도 함께 정리(9장) |
 | `KOTU drive strip worker` | 하단 바 드라이브 줄마다 1 (= 모듈 뷰마다 1) | **BelowNormal** | 드라이브 열거·용량(`DriveInfo`) 30초 주기 + 종류 WMI 1회 캐시 (A22, v0.108.0). 줄이 숨겨지면(파일 열림) 타이머 정지, 뷰 Unloaded 시 정리 |
 | `KOTU settings worker` | 설정 뷰마다 1 | Normal | 탐색기 연결 등록·해제, UserChoice 쓰기(A38), 기본 앱 개수 조회 (A77, v0.106.0). 모듈별로 나누지 않는다 — Capabilities 키를 모듈들이 공유해 동시 쓰기가 위험 |
 | libvlc 내부 스레드 | libvlc 관리 | — | 디코드·이벤트 콜백. 이벤트는 `Dispatch()`로 UI 이관 |
@@ -186,3 +188,19 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 - **Hardware 폴러만 프로세스 공유**: 창이 몇 개든 WMI·센서 수집은 1회(구독 N). LHM(커널 드라이버) 접근도 이 스레드 한 곳뿐(A17) — 뷰의 그래프 이력 조회는 별도 잠금이라 수집에 안 막힌다. 나머지 파일 모듈 워커는 **뷰(창)별 분리** — 창 A의 압축 해제가 창 B를 기다리게 하지 않는다.
 - **스레드 예산**: 배경 폴링은 BelowNormal로 재생·UI와 CPU를 다투지 않는다. 워커는 유휴 시 큐 대기(비용 0). 겹침 방지는 직렬 큐·단일 루프가 구조적으로 보장.
 - **수명**: 뷰 Unloaded → `Dispose()`(큐만 닫음, Join 없음 — 느린 I/O가 UI 해제를 막지 않게). 남은 작업은 워커가 마저 실행. 닫힌 뒤의 `Post`(네이티브 해제 등)는 스레드풀 폴백으로 실행을 보장.
+
+## 9. 중첩 호스팅 — All Readable 모듈 (A59, v0.113.0)
+
+원칙: **셸의 모듈 슬롯 하나를 통합 모듈이 차지하고, 그 안에서 다시 모듈 뷰를 갈아 끼운다.** 창·오버레이·시작 메뉴는 계속 All Readable의 것이고, 파일 형식에 따라 바뀌는 것은 **센터와 하단 바 두 곳뿐**이다.
+
+```
+셸(MainWindow)                     All Readable 뷰                자식 모듈 뷰
+ ModuleHost      ──────────────►   ChildHost      ────────────►   (Image/Video/Audio/Document/Archive)
+ ModuleBarHost   ◄── TakeBottomBar ─ StatusBar ──► ChildBarHost ◄─ TakeBottomBar ─
+ 좌/우 오버레이  ◄── 필터 = All Readable.SupportedExtensions(자식 확장자 합집합)
+```
+
+- **모듈 등록 순서**: All Readable은 **맨 마지막**에 등록한다. `FileTypeRouter`는 등록 순서가 우선순위라, 확장자 합집합을 가진 이 모듈이 앞에 오면 탐색기 더블클릭이 전부 여기로 빨려 들어간다.
+- **자식 선택**: `KOTU.Core.Routing.AllReadableRouting`(순수 함수, 단위 테스트 대상) — 자식 후보는 "확장자가 있는 파일 모듈 − 자기 자신"이라 정보(H/W) 모듈과 자기 자신은 자동으로 빠진다(중첩 재귀 차단).
+- **셸 계약은 전부 위임**: `IContentStateSource`(자식이 연 파일 중계) · `IContentInfoProvider`(우측 정보 오버레이) · `ICloseGuard`(문서 미저장 가드 A37) · `IBottomBarProvider` · `IDriveStripHost`(A22). 셸이 새로 아는 계약은 `IFileOpenTarget` 하나뿐 — "이 파일 네가 열래?"를 라우팅보다 먼저 묻는 지점이다.
+- **워커 수명 규칙(A42 연장)**: 통합 모듈은 자기 워커를 만들지 않고 자식 뷰의 워커를 그대로 쓴다. 그래서 **자식을 트리에서 떼는 것이 곧 정리**다 — 자식 교체·뷰 Unloaded 양쪽에서 ① 이벤트 구독 해제 → ② **하단 바 조각 제거**(셸 하단 바 트리에 얹혀 있어 센터를 비워도 남는다) → ③ 센터 비우기(자식 `Unloaded` → 워커·libvlc·구독 정리) 순서로 내린다. 이 순서를 지키지 않으면 죽은 자식의 버튼이 하단 바에 남거나(②를 빼먹음) 소리·파일 핸들이 그대로 남는다(③을 빼먹음).

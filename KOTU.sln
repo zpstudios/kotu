@@ -28,6 +28,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KOTU.Module.Audio", "src\KO
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KOTU.Module.Audio.Tests", "tests\KOTU.Module.Audio.Tests\KOTU.Module.Audio.Tests.csproj", "{A1000000-0000-0000-0000-00000000000E}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KOTU.Module.AllReadable", "src\KOTU.Module.AllReadable\KOTU.Module.AllReadable.csproj", "{A1000000-0000-0000-0000-00000000000F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -90,5 +92,9 @@ Global
 		{A1000000-0000-0000-0000-00000000000E}.Debug|x64.Build.0 = Debug|x64
 		{A1000000-0000-0000-0000-00000000000E}.Release|x64.ActiveCfg = Release|x64
 		{A1000000-0000-0000-0000-00000000000E}.Release|x64.Build.0 = Release|x64
+		{A1000000-0000-0000-0000-00000000000F}.Debug|x64.ActiveCfg = Debug|x64
+		{A1000000-0000-0000-0000-00000000000F}.Debug|x64.Build.0 = Debug|x64
+		{A1000000-0000-0000-0000-00000000000F}.Release|x64.ActiveCfg = Release|x64
+		{A1000000-0000-0000-0000-00000000000F}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 EndGlobal

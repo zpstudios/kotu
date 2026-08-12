@@ -23,6 +23,11 @@ internal static class Branding
         "audio" => Windows.UI.Color.FromArgb(0xFF, 0x1F, 0xA8, 0xA0), // teal   — KOTU-audio (A10)
         "hardware" => Windows.UI.Color.FromArgb(0xFF, 0x38, 0x74, 0xD8), // blue   — KOTU-info
         "document" => Windows.UI.Color.FromArgb(0xFF, 0x7A, 0x5A, 0xC8), // purple — KOTU-doc (아이콘 생성 시 이 색 사용)
+        // A59(v0.113.0): 기존 6색(amber 37°·green 145°·teal 177°·blue 220°·purple 258°·red 358°)에서
+        // 가장 넓게 빈 구간이 red와 purple 사이라 그 한가운데 마젠타 320°를 골랐다 —
+        // 어느 색과도 38° 이상 떨어져 16px 아이콘에서도 헷갈리지 않는다.
+        KOTU.Module.AllReadable.AllReadableModule.ModuleId =>
+            Windows.UI.Color.FromArgb(0xFF, 0xC2, 0x49, 0x9A), // magenta — KOTU-all
         _ => null,
     };
 

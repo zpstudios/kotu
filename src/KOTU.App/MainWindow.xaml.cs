@@ -516,7 +516,9 @@ public sealed partial class MainWindow : Window
     // ---------- 단축키 (v0.45.0 사용자 지정) ----------
 
     /// <summary>
-    /// 모듈 번호(메뉴 아래→위 순서): 1=이미지, 2=영상, 3=오디오, 4=문서, 5=압축, 6=하드웨어.
+    /// 모듈 번호(메뉴 아래→위 순서): 1=이미지, 2=영상, 3=오디오, 4=문서, 5=압축, 6=하드웨어,
+    /// 7=All Readable(A59, v0.113.0 — 정보 다음 자리에 이어 붙였다. 1~6은 근육기억·A32·A35·문서가
+    /// 전부 그 순서에 묶여 있어 절대 재배치하지 않는다).
     /// A10: 오디오 모듈이 3번에 삽입되며 문서 이후가 한 칸씩 밀림(사용자 확정).
     /// A32: Ctrl 없이 숫자 단독(사용자 확정) — Ctrl은 정보 오버레이로 회귀.
     /// 힌트 문자열은 시작 메뉴 항목 마우스 오버 시 툴팁으로 보조 표시된다.
@@ -529,6 +531,7 @@ public sealed partial class MainWindow : Window
         ("document", VirtualKey.Number4, "4"),
         ("archive", VirtualKey.Number5, "5"),
         ("hardware", VirtualKey.Number6, "6"),
+        (KOTU.Module.AllReadable.AllReadableModule.ModuleId, VirtualKey.Number7, "7"),
     ];
 
     private const string SettingsShortcutHint = "0";
@@ -615,6 +618,9 @@ public sealed partial class MainWindow : Window
         // 설정 토글 진입로는 그대로다.
         // Settings·Hardware-info 묶음 (사용자 지정: zip 위에 공백 두고 Hardware-info, 그 위 Settings)
         AddSettingsItem();
+        // A59(v0.113.0): All Readable = 번호 7. 아래→위 번호 순서상 정보(6) 바로 다음 자리라
+        // 위→아래로 채우는 이 목록에서는 Settings와 hardware 사이에 들어간다.
+        AddModuleItem(KOTU.Module.AllReadable.AllReadableModule.ModuleId);
         AddModuleItem("hardware");
         StartMenuPanel.Children.Add(Divider());
 
@@ -891,6 +897,27 @@ public sealed partial class MainWindow : Window
     /// <summary>파일 라우팅의 종착점: 확장자로 모듈을 찾아 뷰를 띄운다.</summary>
     public async void OpenFile(string path)
     {
+        // A59: 지금 뷰가 "내가 안에서 연다"고 하는 모듈(All Readable)이면 모듈을 바꾸지 않는다 —
+        // 창은 그대로 두고 센터·하단 바만 그 파일 형식의 자식 모듈로 갈린다.
+        // 새 창으로 여는 경로(A24: Shift+더블클릭·우클릭 새 인스턴스·탐색기 더블클릭)는 새 창에
+        // 아직 뷰가 없어 여기 걸리지 않는다 = 전용 모듈로 열리는 현행 동작 그대로다.
+        if (ModuleHost.Content is IFileOpenTarget target)
+        {
+            if (!await ConfirmDiscardAsync()) return; // 자식 문서의 미저장 변경 (A37)
+            if (target.TryOpenFile(path))
+            {
+                _titleDirtyMark = false;
+                SetTitle(_currentModule is { } host
+                    ? $"{Branding.AppName} {host.DisplayName} — {Path.GetFileName(path)}"
+                    : $"{Branding.AppName} — {Path.GetFileName(path)}");
+                IsUntouched = false;
+                SetContentState(_currentModule, path); // 모듈은 그대로, 파일만 바뀐다
+                return;
+            }
+            // 자식 모듈이 없는 형식(예: 라우팅 재정의로만 열리는 .json)은 아래 일반 라우팅으로 —
+            // 그 파일의 전용 모듈로 창이 바뀐다("Unsupported file type"보다 낫다).
+        }
+
         var module = _router.Resolve(path);
         if (module is null)
         {
@@ -1109,9 +1136,13 @@ public sealed partial class MainWindow : Window
         _driveStripHost.ShowDriveStrip(show);
     }
 
-    /// <summary>파일 모듈(파일 없이 열면 빈 상태 탐색기·A81 빈 도크가 성립)인지 — H/W·설정은 제외.</summary>
+    /// <summary>
+    /// 파일 모듈(파일 없이 열면 빈 상태 탐색기·A81 빈 도크가 성립)인지 — H/W·설정은 제외.
+    /// A59: All Readable도 파일 모듈이다 — 빈 상태의 탐색기·도크 필터가 전 모듈 확장자 합집합이 된다.
+    /// </summary>
     private static bool IsFileModule(IModule? module) =>
-        module is { Id: "archive" or "image" or "video" or "audio" or "document" };
+        module is { Id: "archive" or "image" or "video" or "audio" or "document" }
+        || module?.Id == KOTU.Module.AllReadable.AllReadableModule.ModuleId;
 
     /// <summary>
     /// 파일 없이 연 파일 모듈(빈 모듈 상태)인지 — 중앙 탐색기(v0.25.0)와
@@ -1472,6 +1503,7 @@ public sealed partial class MainWindow : Window
             "audio" => "app-audio.ico",
             "hardware" => "app-hardware.ico",
             "document" => "app-document.ico", // 아직 미생성 — 아래 File.Exists로 중립 아이콘 대체
+            KOTU.Module.AllReadable.AllReadableModule.ModuleId => "app-allreadable.ico", // A59
 
             _ => "app.ico", // 빈 셸·설정·미지원 파일 = 중립(브랜드 색)
         };

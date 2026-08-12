@@ -318,7 +318,8 @@ public static class ExplorerIntegration
     {
         try
         {
-            foreach (var module in modules)
+            // A59: 연결 대상이 아닌 모듈(All Readable)은 등록한 적이 없으니 청소할 것도 없다.
+            foreach (var module in modules.Where(m => m.RegistersFileAssociations))
             {
                 foreach (var legacyProgId in LegacyProgIds(module))
                     RemoveAssociationKeys(module, legacyProgId, removeExtProgIds: true);
@@ -541,7 +542,9 @@ public static class ExplorerIntegration
     {
         try
         {
-            foreach (var module in modules.Where(m => m.SupportedExtensions.Count > 0))
+            // A59: 연결 대상이 아닌 모듈(All Readable)은 확장자가 있어도 등록 자체를 하지 않는다.
+            foreach (var module in modules.Where(m => m.SupportedExtensions.Count > 0
+                                                      && m.RegistersFileAssociations))
             {
                 if (!IsAssociationRegistered(module)) continue;
                 if (AssociationCommandIsCurrent(module)) continue;

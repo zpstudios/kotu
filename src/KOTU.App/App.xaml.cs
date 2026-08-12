@@ -46,6 +46,11 @@ public partial class App : Application
             router.Register(new KOTU.Module.Document.DocumentModule()); // v0.44.0
             router.Register(new KOTU.Module.Hardware.HardwareModule(
                 sp.GetRequiredService<ISettingsService>())); // 트레이 센서 선택 복원 (A18)
+            // A59(v0.113.0): All Readable 통합 모듈은 **맨 마지막**에 등록한다 —
+            // 담당 확장자가 다른 모듈의 합집합이라, 먼저 등록하면 라우팅(등록 순서 = 우선순위)에서
+            // 전용 모듈을 가로채 탐색기 더블클릭이 전부 이 모듈로 빨려 들어간다.
+            // 자식 후보는 지금까지 등록된 모듈들(자기 자신 제외)에서 뽑는다.
+            router.Register(new KOTU.Module.AllReadable.AllReadableModule(router.Modules.ToList()));
             // A36(v0.109.0): 설정 화면의 "Open settings.json"이 설정 파일을 문서 모듈 에디터로 연다.
             // .json은 어느 모듈의 SupportedExtensions에도 없어(탐색기 연결 대상이 아니다) 라우팅 재정의로만
             // 문서 모듈에 붙인다 — 레지스트리 등록 목록·파일 아이콘은 그대로다.

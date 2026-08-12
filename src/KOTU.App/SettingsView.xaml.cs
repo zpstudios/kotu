@@ -123,9 +123,12 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // 시작 메뉴 번호 순서(1이미지 2영상 3오디오 4문서 5압축)와 일치시킨 것 —
         // v0.28.0의 "압축→문서→영상→이미지"를 대체한다.
         // 파일을 다루지 않는 모듈(hardware)은 연결할 확장자가 없으므로 토글을 만들지 않는다.
+        // A59(v0.113.0): All Readable도 이 섹션에 없다 — 담당 확장자가 다른 모듈의 합집합이라
+        // 함께 등록하면 확장자마다 ProgID·UserChoice·Capabilities를 서로 덮어쓴다
+        // (제외 판단의 단일 소스 = IModule.RegistersFileAssociations).
         string[] associationOrder = ["image", "video", "audio", "document", "archive"];
         var associationModules = router.Modules
-            .Where(m => m.SupportedExtensions.Count > 0)
+            .Where(m => m.SupportedExtensions.Count > 0 && m.RegistersFileAssociations)
             .OrderBy(m =>
             {
                 var i = Array.IndexOf(associationOrder, m.Id);

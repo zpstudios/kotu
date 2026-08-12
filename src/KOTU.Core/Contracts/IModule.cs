@@ -28,6 +28,16 @@ public interface IModule
     IReadOnlyList<string> SupportedExtensions { get; }
 
     /// <summary>
+    /// 이 모듈의 확장자를 탐색기 연결(ProgID·Capabilities·UserChoice, A25/A38)과
+    /// 설정 화면의 연결 섹션(A35)에 노출할지. 기본값 true — 파일 모듈은 전부 그대로다.
+    /// false는 All Readable(A59)뿐이다: 담당 확장자가 자식 모듈들과 전부 겹쳐,
+    /// 같이 등록하면 확장자마다 ProgID·UserChoice·Capabilities 값을 서로 덮어써
+    /// 어느 모듈이 열릴지 예측할 수 없게 된다. 확장자가 아예 없는 모듈(정보)은
+    /// 이 값과 무관하게 호출부의 "확장자 0개" 조건에서 이미 빠진다.
+    /// </summary>
+    bool RegistersFileAssociations => true;
+
+    /// <summary>
     /// 셸에 꽂힐 뷰를 생성한다. 반환 타입은 UI 프레임워크 비의존을 위해 object이며,
     /// 셸(WinUI 3)에서 UIElement로 캐스팅한다.
     /// </summary>

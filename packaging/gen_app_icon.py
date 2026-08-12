@@ -14,6 +14,7 @@ A3(사용자 지정): 메인 표식 = 모듈 식별 글씨(ZIP/IMG/VID/HW/DOC), 
   app-audio.ico    teal   #1FA8A0 — "AUD" + kotu (A10)
   app-hardware.ico blue   #3874D8 — "HW" + kotu
   app-document.ico purple #7A5AC8 — "DOC" + kotu
+  app-allreadable.ico magenta #C2499A — "ALL" + kotu (A59)
 
 실행: python3 packaging/gen_app_icon.py
 """
@@ -36,6 +37,7 @@ VARIANTS = {
     "app-audio.ico": ((0x1F, 0xA8, 0xA0), ["AUD"], True),
     "app-hardware.ico": ((0x38, 0x74, 0xD8), ["HW"], True),
     "app-document.ico": ((0x7A, 0x5A, 0xC8), ["DOC"], True),
+    "app-allreadable.ico": ((0xC2, 0x49, 0x9A), ["ALL"], True),
 }
 SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 

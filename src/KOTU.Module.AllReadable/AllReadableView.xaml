@@ -1,0 +1,92 @@
+<UserControl
+    x:Class="KOTU.Module.AllReadable.AllReadableView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    IsTabStop="True"
+    KeyboardAcceleratorPlacementMode="Hidden">
+
+    <!-- A59 중첩 호스팅: 센터(ChildHost)와 하단 바(ChildBarHost)만 자식 모듈 뷰의 것으로 갈아 끼운다.
+         단축키는 F11(전체화면)·Escape(해제)뿐이다 — 자식 뷰가 자기 핫키를 그대로 들고 오므로
+         이 뷰가 새 키를 만들면 안 된다(A34/A59). Enter를 넣지 않은 것도 같은 이유:
+         문서 편집기의 줄바꿈·리스트의 기본 동작을 뺏는다(압축·문서·정보 모듈도 F11/Escape만 쓴다).
+         PlacementMode=Hidden: 안 그러면 WinUI가 키 이름 툴팁을 화면 중앙에 띄운다. -->
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
+        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <Grid x:Name="RootGrid">
+        <!-- 센터: 지금 파일의 담당 모듈 뷰가 통째로 들어온다. 파일이 없으면 비어 있고
+             셸이 그 위에 빈 상태 탐색기(ExplorerHost)를 덮는다(A81과 같은 규칙). -->
+        <ContentControl
+            x:Name="ChildHost"
+            IsTabStop="False"
+            HorizontalContentAlignment="Stretch"
+            VerticalContentAlignment="Stretch" />
+
+        <TextBlock
+            x:Name="PlaceholderText"
+            Text="Open any supported file — the view and the bottom bar switch to match it"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Opacity="0.6" />
+
+        <!-- 하단 바: 셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(v0.21.0 통합 방식).
+             한 칸에 두 줄이 배타적으로 들어간다 — 자식 바(파일 열림) / 자체 바(빈 상태). -->
+        <Border
+            x:Name="StatusBar"
+            VerticalAlignment="Bottom"
+            Padding="12,6"
+            Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}">
+            <Grid>
+                <!-- 자식 뷰가 IBottomBarProvider로 내놓은 줄을 그대로 얹는 자리 -->
+                <ContentPresenter
+                    x:Name="ChildBarHost"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    Visibility="Collapsed" />
+
+                <!-- 자체 바(빈 상태 전용): 열기 · 파일명/드라이브 줄 · 전체화면 -->
+                <Grid x:Name="OwnBar">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <!-- A27(v0.107.0): 하단 바 버튼은 1칸(40×40) 규격 — 앱 전역 스타일이 치수를 정한다. -->
+                    <Button
+                        Grid.Column="0"
+                        Style="{StaticResource BottomBarButtonStyle}"
+                        Margin="0,0,12,0"
+                        ToolTipService.ToolTip="Open file"
+                        Click="OnOpenButtonClick">
+                        <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                    </Button>
+                    <TextBlock
+                        x:Name="FileNameText"
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        TextTrimming="CharacterEllipsis" />
+                    <!-- A22(v0.108.0): 파일이 열려 있지 않을 때만 뜨는 공용 드라이브 줄(셸이 주입).
+                         파일명 칸과 같은 자리를 쓰고 둘은 서로 배타적으로 표시된다. -->
+                    <ContentPresenter
+                        x:Name="DriveStripHost"
+                        Grid.Column="1"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed" />
+                    <Button
+                        Grid.Column="2"
+                        Style="{StaticResource BottomBarButtonStyle}"
+                        Margin="10,0,0,0"
+                        ToolTipService.ToolTip="Full screen (F11)"
+                        Click="OnFullScreenButtonClick">
+                        <FontIcon Glyph="&#xE740;" FontSize="18" />
+                    </Button>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

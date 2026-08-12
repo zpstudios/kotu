@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWinUI>true</UseWinUI>
+    <Description>All Readable 통합 모듈(A59): 파일을 열면 센터와 하단 바만 그 형식의 모듈 뷰로 교체하는 중첩 호스팅. 좌우 오버레이는 이 모듈이 계속 소유한다.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
+  </ItemGroup>
+  <!--
+    다른 모듈 csproj에 있는 Shared\HotkeySupport.cs 링크(A34)는 여기 없다:
+    이 모듈은 자기 버튼 핫키를 만들지 않는다(A59 결정 — 자식 뷰가 자기 핫키를 그대로 들고 온다).
+    자식 모듈 프로젝트를 참조하지도 않는다 — 모듈끼리 직접 참조하지 않는 규칙(ARCHITECTURE 3장)은
+    이 모듈에도 그대로 적용되고, 자식 뷰는 셸이 넘겨준 IModule 계약으로만 만든다.
+  -->
+</Project>
