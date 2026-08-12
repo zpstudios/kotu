@@ -37,6 +37,8 @@ public sealed partial class MainWindow : Window
     private bool _ctrlHeld;
     private bool _infoPinned;             // Ctrl 2연타로 고정된 정보 오버레이
     private bool _altPinned;              // Alt 2연타로 고정된 리스트 (v0.32.0; A57 ①에서 좌측으로)
+    private DateTime _lastCtrlDown = DateTime.MinValue; // 2연타 고정 판정 (v0.32.0)
+    private DateTime _lastAltDown = DateTime.MinValue;
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
