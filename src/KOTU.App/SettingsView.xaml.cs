@@ -534,7 +534,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             TextWrapping = TextWrapping.Wrap,
         });
 
-        var lastChecked = new TextBlock { FontSize = 12, Opacity = 0.7, IsEnabled = available };
+        // TextBlock은 Control이 아니라 IsEnabled가 없다 — 업데이트 불가 빌드의 '비활성' 표현은
+        // 흐리게(Opacity)로 대신한다. 토글·버튼은 진짜 IsEnabled=false로 잠근다. (v0.108.1)
+        var lastChecked = new TextBlock { FontSize = 12, Opacity = available ? 0.7 : 0.4 };
         var status = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
         var checkNow = new Button { Content = "Check now", IsEnabled = available };
         var updateButton = new Button { Visibility = Visibility.Collapsed };
