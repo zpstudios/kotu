@@ -19,8 +19,10 @@ namespace KOTU.Module.Hardware;
 /// 셸 하단 바가 숨는 동안 SensorStrip으로 옮겨 표시. Copy·⛶·센서를 담은
 /// 하단 바는 셸이 TakeBottomBar()로 떼어간다. 수동 Refresh 버튼은 A75에서 제거
 /// (주기 폴링이 이미 최신 상태를 유지하므로 불필요 — 사용자 확정).
+/// A61(v0.111.0): 핀(A39)을 켜면 셸에 접기를 요청해 하단 바만 남는 상시 표시 바가 된다
+/// (IWindowCollapseSource). A62: 그 바의 글씨·선 굵기·카드 폭을 S/M/L로 키운다.
 /// </summary>
-public sealed partial class HardwareView : UserControl, IBottomBarProvider
+public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWindowCollapseSource
 {
     private IReadOnlyList<HardwareSection> _sections = [];
     private AppWindow? _appWindow;
@@ -37,6 +39,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         InitializeComponent();
         BuildSensorCards();
         BuildIntervalFlyout(); // 리프레시 주기 선택 (A29)
+        ApplyBarScale();       // 하단 바 표시 크기 복원값 반영 (A62)
         Loaded += (_, _) =>
         {
             HookPresenterChanged();
@@ -46,6 +49,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             _subscription ??= HardwareModule.SubscribeSnapshots(OnSnapshot);
             TraySensors.Changed -= UpdateTrayPins; // Loaded 중복 발화 대비 — 이중 구독 방지
             TraySensors.Changed += UpdateTrayPins; // 다른 창에서 토글해도 이 창 카드에 반영
+            HardwareModule.BarScaleChanged -= ApplyBarScale; // 같은 이유의 이중 구독 방지 (A62)
+            HardwareModule.BarScaleChanged += ApplyBarScale; // 다른 창에서 바꿔도 이 창 바에 반영
             UpdateTrayPins();
         };
         Unloaded += (_, _) =>
@@ -53,10 +58,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             _subscription?.Dispose(); // 마지막 뷰가 내려가면 폴러는 휴면(트레이 구독이 없다면)
             _subscription = null;
             TraySensors.Changed -= UpdateTrayPins;
+            HardwareModule.BarScaleChanged -= ApplyBarScale; // A62
             // A39: 토글 버튼은 인포 모듈에만 있으므로, 뷰가 내려가면(모듈 전환 등)
             // 끌 방법이 없는 상태가 남지 않게 항상 위 고정을 해제한다.
             if (_appWindow?.Presenter is OverlappedPresenter presenter)
                 presenter.IsAlwaysOnTop = false;
+            // A61: 같은 이유로 접힘도 함께 푼다 — 접힌 채 다른 모듈로 넘어가면
+            // 펼 수단(핀 버튼)이 없는 납작한 창이 남는다.
+            SendCollapse(false);
             if (_appWindow is { } w) w.Changed -= OnAppWindowChanged;
             _appWindow = null;
         };
@@ -300,6 +309,57 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         };
     }
 
+    // ---------- 하단 바 표시 크기 S/M/L (A62, v0.111.0) ----------
+
+    // M(1.0) 기준 치수. 실제 값은 ApplyBarScale이 HardwareModule.BarScale을 곱해 정한다.
+    private const double BaseCardHeight = 36;      // v0.64.2 컴팩트 카드 높이
+    private const double MaxCardHeight = 40;       // 44px 바(A40 불변) 안에 남는 상한 — L도 이걸 넘지 않는다
+    private const double BaseTitleFontSize = 11;   // 카드 초단축 제목
+    private const double BaseValueFontSize = 13;   // 카드 값
+    private const double BaseSmallFontSize = 10;   // 트레이 핀 아이콘(A18) + 축 라벨(A74)
+    private const double BaseStrokeThickness = 1.5; // 스파크라인·맥박 선 굵기
+    private const double BaseBarIconFontSize = 18;  // 하단 바 아이콘(A27 규격 버튼 안)
+
+    /// <summary>
+    /// 크기 버튼 클릭 = S → M → L → S 순환(A62). 설정은 프로세스 공유라 열려 있는 다른
+    /// 정보 창도 HardwareModule.BarScaleChanged로 같은 단계를 따라온다.
+    /// </summary>
+    private void OnBarScaleClick(object sender, RoutedEventArgs e) => HardwareModule.CycleBarScale();
+
+    /// <summary>
+    /// 현재 단계를 하단 바 요소에 반영한다(A62). 바 두께 44는 불변(A40)이므로 **바 안 요소**의
+    /// 글씨 크기·선 굵기·카드 높이(최대 40)·카드 최소 폭만 바뀐다.
+    /// 폭 임계값(카드 수 축소·맥박 숨김·축 라벨 숨김)도 같이 스케일해야 글씨가 커졌을 때
+    /// 더 이른 폭에서 축약된다 — 그래서 마지막에 배치·밀도·스파크라인을 다시 계산한다.
+    /// 버튼 아이콘 크기도 단계를 따라 커져 툴팁 없이도 지금 단계가 보인다.
+    /// 전역 UI 배율(A41 UiScale)은 건드리지 않는다 — 별개의 배수(A62 확정).
+    /// </summary>
+    private void ApplyBarScale()
+    {
+        var scale = HardwareModule.BarScale;
+        var height = Math.Min(MaxCardHeight, BaseCardHeight * scale);
+        foreach (var card in _cards)
+        {
+            card.Root.Height = height;
+            card.TitleText.FontSize = BaseTitleFontSize * scale;
+            card.ValueText.FontSize = BaseValueFontSize * scale;
+            card.Pin.FontSize = BaseSmallFontSize * scale;
+            card.YAxisText.FontSize = BaseSmallFontSize * scale;
+            card.XAxisText.FontSize = BaseSmallFontSize * scale;
+            card.Line.StrokeThickness = BaseStrokeThickness * scale;
+        }
+        PulseHost.Height = height; // 맥박 그래프도 카드와 같은 높이 유지 (v0.64.2 규격)
+        PulseLine.StrokeThickness = BaseStrokeThickness * scale;
+        BarScaleIcon.FontSize = BaseBarIconFontSize * scale;
+        ToolTipService.SetToolTip(BarScaleButton,
+            $"Bottom bar size: {HardwareModule.BarScaleSteps[HardwareModule.BarScaleIndex].Label}");
+
+        _sensorColumns = 0; // 카드 최소 폭이 바뀌었다 — 같은 폭이어도 다시 계산하게 한다
+        LayoutSensorCards(SensorGrid.ActualWidth);
+        UpdateBarDensity(BarGrid.ActualWidth);
+        RerenderSparklines(); // 축 라벨 표시 임계값(A74)·선 굵기를 다음 스냅샷 전에 반영
+    }
+
     // ---------- 센서 그래프 스트립 (A17) ----------
 
     /// <summary>그래프가 보여주는 최대 시간 범위(ms) — A17의 "최근 60초".</summary>
@@ -315,10 +375,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         Math.Min(GraphWindowMaxMs, (double)SensorService.HistoryCapacity * HardwareModule.RefreshMs));
 
     /// <summary>
-    /// 축 라벨(A74)을 표시하는 최소 그래프 폭. 이보다 좁으면 라벨 두 개가 셀을 다 덮어
+    /// 축 라벨(A74)을 표시하는 최소 그래프 폭(M 기준). 이보다 좁으면 라벨 두 개가 셀을 다 덮어
     /// 그래프가 안 읽힌다 — A40의 "좁으면 축약" 관례와 같은 방식으로 숨긴다.
+    /// A62: 글씨가 커지면 같은 폭에서 더 많이 가리므로 임계값에도 배수를 곱한다(AxisMinWidthNow).
     /// </summary>
     private const double AxisMinWidth = 90;
+
+    /// <summary>현재 단계(A62)를 반영한 축 라벨 표시 임계 폭.</summary>
+    private static double AxisMinWidthNow => AxisMinWidth * HardwareModule.BarScale;
 
     /// <summary>
     /// 카드 10개 배치(순서는 사용자 확정). 채널 정의(제목·색·선택자·포맷·스케일)는
@@ -344,17 +408,36 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     /// 카드가 이보다 좁아지면 안 된다(좁으면 표시 카드 수를 줄인다). 하한 근거: 좌우 패딩 12 +
     /// 최장 값 "4500 MHz"(13px SemiBold ≈ 62px) — 제목은 스타 칸이라 먼저 말줄임되므로
     /// 값만 안 잘리면 된다(v0.64.3 사용자 피드백: 104는 너무 일찍 줄바꿈됨).
+    /// A62: 글씨가 커지면 값도 그만큼 넓어지므로 이 하한에 배수를 곱한다(MinCardWidthNow).
     /// </summary>
     private const double MinCardWidth = 76;
+
+    /// <summary>현재 단계(A62)를 반영한 카드 최소 폭.</summary>
+    private static double MinCardWidthNow => MinCardWidth * HardwareModule.BarScale;
+
+    /// <summary>
+    /// 하단 바의 고정 요소(Copy·Busy·주기·크기·핀·⛶ + 좌우 여백·간격) 합. A62 배수와 무관하다 —
+    /// 버튼 규격은 A27이 40×40·84×40으로 못 박아 두었고 배율은 카드 쪽에만 곱하기 때문.
+    /// v0.94.0(A40) 산정치 1240 − 카드 10개 최소 폭 832 = 408에, v0.111.0에서 늘어난
+    /// 크기 버튼 1칸(40 + 간격 10)을 더한 값.
+    /// </summary>
+    private const double BarFixedWidth = 458;
+
+    /// <summary>카드 10개가 최소 폭으로 다 들어가는 데 필요한 폭 — 단계(A62)에 따라 함께 커진다.</summary>
+    private double CardsMinTotalWidth
+        => MinCardWidthNow * _cards.Count + CardSpacing * Math.Max(0, _cards.Count - 1);
 
     /// <summary>
     /// A40: 하단 바 폭이 좁으면 장식성 요소부터 내린다 — 맥박 그래프(A29)는 카드 10개가
     /// 전부 들어갈 폭이 안 되면 숨긴다(카드 = 정보, 맥박 = 장식이므로 카드가 우선).
-    /// 임계값 근거: 카드 10개 최소 폭 832(76×10 + 8×9) + 고정 요소·간격 약 380 ≈ 1212, 여유 포함 1240.
+    /// 임계값 = 카드 전체 최소 폭 + 고정 요소·간격(M 단계에서 832 + 458 = 1290,
+    /// v0.94.0의 1240에 A62 크기 버튼 1칸이 더해진 값). A62에서 글씨가 커지면 임계값도
+    /// 같이 올라가 맥박이 더 이른 폭에서 사라진다 — 카드 우선 원칙은 그대로다.
     /// PulseHost 표시 여부는 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다.
     /// </summary>
     private void UpdateBarDensity(double width)
-        => PulseHost.Visibility = width >= 1240 ? Visibility.Visible : Visibility.Collapsed;
+        => PulseHost.Visibility = width >= CardsMinTotalWidth + BarFixedWidth
+            ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>SensorGrid의 ColumnSpacing/RowSpacing과 같은 값 — 폭 계산에 쓴다.</summary>
     private const double CardSpacing = 8;
@@ -374,7 +457,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         var visible = _cards.Count; // 실측 폭을 알기 전엔 전부(10칸 1줄)
         if (width > 0)
             visible = Math.Clamp(
-                (int)((width + CardSpacing) / (MinCardWidth + CardSpacing)), 1, _cards.Count);
+                (int)((width + CardSpacing) / (MinCardWidthNow + CardSpacing)), 1, _cards.Count);
         if (visible == _sensorColumns) return;
         _sensorColumns = visible;
 
@@ -398,10 +481,12 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         var stroke = new SolidColorBrush(accent);
         var fill = new SolidColorBrush(Windows.UI.Color.FromArgb(56, accent.R, accent.G, accent.B));
 
+        // 글씨 크기·선 굵기·카드 높이는 M 단계 기준값으로 만들고, 직후 ApplyBarScale(A62)이
+        // 현재 단계 배수를 곱해 덮어쓴다 — 단계가 바뀔 때마다 카드를 다시 만들지 않기 위해서다.
         var titleText = new TextBlock
         {
             Text = channel.ShortTitle, // 초단축 제목(v0.64.3) — 전체 이름은 툴팁에
-            FontSize = 11,
+            FontSize = BaseTitleFontSize,
             Opacity = 0.55,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
@@ -410,7 +495,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         var pinIcon = new FontIcon
         {
             Glyph = "\uE718",
-            FontSize = 10,
+            FontSize = BaseSmallFontSize,
             Foreground = stroke,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 0, 0),
@@ -419,7 +504,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         var valueText = new TextBlock
         {
             Text = "—",
-            FontSize = 13,
+            FontSize = BaseValueFontSize,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 0, 0),
@@ -436,7 +521,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
         header.VerticalAlignment = VerticalAlignment.Center;
 
-        var line = new Polyline { Stroke = stroke, StrokeThickness = 1.5 };
+        var line = new Polyline { Stroke = stroke, StrokeThickness = BaseStrokeThickness };
         var area = new Polygon { Fill = fill };
 
         // 축 스케일 라벨(A74): 눈금선·축선은 그리지 않는다(정사각에 가까운 작은 셀이 지저분해진다).
@@ -444,7 +529,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         // 값·표시 여부는 RenderSparkline이 매 프레임 채운다 — 여기선 빈 채로 만들어 둔다.
         var yAxisText = new TextBlock
         {
-            FontSize = 10,
+            FontSize = BaseSmallFontSize,
             Opacity = 0.55,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
@@ -452,7 +537,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         };
         var xAxisText = new TextBlock
         {
-            FontSize = 10,
+            FontSize = BaseSmallFontSize,
             Opacity = 0.55,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Bottom,
@@ -476,7 +561,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(6, 2, 6, 2),
-            Height = 36, // 하단 바(44px 최소) 한 줄에 들어가는 높이
+            Height = BaseCardHeight, // 하단 바(A40 고정 44) 한 줄에 들어가는 높이 — A62에서 최대 40까지
             Opacity = 0.45, // 값이 들어오면 1로
             Child = panel,
         };
@@ -488,6 +573,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         _cards.Add(new SensorCard
         {
             Root = root,
+            TitleText = titleText,
             ValueText = valueText,
             Pin = pinIcon,
             GraphHost = graphHost,
@@ -601,7 +687,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
         // 축 라벨(A74): 좌상단 y 최대값 + 단위, 우하단 x 시간 범위. 카드가 좁으면(그래프 폭
         // 90 미만) 숨긴다 — 값이 한 번도 없던 채널도 숨긴다(축만 떠 있으면 오히려 오해를 준다).
-        var showAxis = w >= AxisMinWidth && card.HasEverHadValue;
+        var showAxis = w >= AxisMinWidthNow && card.HasEverHadValue;
         if (showAxis)
         {
             card.YAxisText.Text = $"{max:0}{card.Channel.AxisUnit}";
@@ -684,6 +770,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     private sealed class SensorCard
     {
         public required Border Root;
+        public required TextBlock TitleText; // 초단축 제목 — A62 배수 적용 대상
         public required TextBlock ValueText;
         public required FontIcon Pin;  // 트레이 표시 중 핀 (A18)
         public required Grid GraphHost;
@@ -730,6 +817,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         UpdateStripVisibility();
         if (_fullScreen) RenderDashboard();
         else ApplyAlwaysOnTop(); // 전체화면 복귀 시 새 OverlappedPresenter에 토글 상태 재적용 (A39)
+        // A61: 전체화면에서 나오면 핀이 여전히 켜져 있는 한 다시 접힌다(파생 상태 재계산).
+        ApplyCollapse();
     }
 
     private bool _fullScreen;
@@ -754,9 +843,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         if (environment is null) return;
 
         var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        appWindow.SetPresenter(appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen
-            ? AppWindowPresenterKind.Default
-            : AppWindowPresenterKind.FullScreen);
+        var entering = appWindow.Presenter.Kind != AppWindowPresenterKind.FullScreen;
+        // A61: 접힌 채로 전체화면에 들어가지 않는다 — 먼저 펼쳐서 창을 원래 크기로 돌려놓고
+        // 전환한다(전체화면에서 빠져나올 때 복원되는 크기가 접힌 높이가 되지 않게).
+        // 나올 때는 UpdateViewMode가 파생 상태를 다시 계산해 (핀이 켜져 있으면) 다시 접는다.
+        if (entering) SendCollapse(false);
+        appWindow.SetPresenter(entering
+            ? AppWindowPresenterKind.FullScreen
+            : AppWindowPresenterKind.Default);
     }
 
     private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
@@ -868,9 +962,13 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         PulseLine.Points = points;
     }
 
-    // ---------- Always on top (A39 — 사용자 확정: 인포 모듈 전용) ----------
+    // ---------- Always on top (A39 — 사용자 확정: 인포 모듈 전용) + 접힘 (A61) ----------
 
-    private void OnTopToggleChanged(object sender, RoutedEventArgs e) => ApplyAlwaysOnTop();
+    private void OnTopToggleChanged(object sender, RoutedEventArgs e)
+    {
+        ApplyAlwaysOnTop();
+        ApplyCollapse(); // A61: 핀이 접힘의 단일 소스 — 별도 토글을 두지 않는다
+    }
 
     /// <summary>
     /// 토글 상태를 창 프레젠터에 반영한다. 전체화면(FullScreenPresenter) 동안은 대상이
@@ -882,6 +980,28 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         if (_appWindow is null) HookPresenterChanged(); // Loaded 전 클릭 대비
         if (_appWindow?.Presenter is OverlappedPresenter presenter)
             presenter.IsAlwaysOnTop = TopToggle.IsChecked == true;
+    }
+
+    /// <summary>셸에 보내는 접기/펼치기 요청(A61 — IWindowCollapseSource). 실행은 셸이 한다.</summary>
+    public event Action<bool>? CollapseRequested;
+
+    /// <summary>셸에 마지막으로 보낸 값 — 같은 값을 반복해 보내지 않는다(셸 쪽도 멱등).</summary>
+    private bool _collapseSent;
+
+    /// <summary>
+    /// 접힘은 **"핀 ON && 전체화면 아님"으로 계산되는 파생 상태**다(A61 확정) —
+    /// 별도 플래그를 들고 다니지 않으므로 전체화면 왕복·핀 토글 어느 순서로도 어긋나지 않는다.
+    /// </summary>
+    private bool ShouldCollapse => TopToggle.IsChecked == true && !_fullScreen;
+
+    /// <summary>파생 상태를 다시 계산해 바뀌었으면 셸에 알린다(핀 토글·프레젠터 변화에서 호출).</summary>
+    private void ApplyCollapse() => SendCollapse(ShouldCollapse);
+
+    private void SendCollapse(bool collapse)
+    {
+        if (collapse == _collapseSent) return;
+        _collapseSent = collapse;
+        CollapseRequested?.Invoke(collapse);
     }
 
     private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)

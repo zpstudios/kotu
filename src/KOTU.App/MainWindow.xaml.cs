@@ -309,6 +309,8 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 일반 상태(OverlappedPresenter.Restored)의 위치·크기만 기록한다(A55).
     /// 최대화·전체화면(별도 프레젠터)·최소화(좌표 -32000)는 State/Kind 검사로 자연히 걸러진다.
+    /// A61: 하단 바만 남긴 접힘 중에는 **높이만** 기록하지 않는다 — 접힌 높이가 저장돼서는 안 되고
+    /// (A55와의 상호작용 조건), 접힌 채로 사용자가 바꾼 폭·위치는 그대로 저장돼야 하기 때문이다.
     /// </summary>
     private void TrackNormalBounds(Microsoft.UI.Windowing.AppWindow sender,
         Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
@@ -317,7 +319,10 @@ public sealed partial class MainWindow : Window
         if (sender.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter
             { State: Microsoft.UI.Windowing.OverlappedPresenterState.Restored }) return;
         _lastNormalPos = sender.Position;
-        _lastNormalSize = sender.Size;
+        if (_barOnlyCollapsed && _lastNormalSize is { } kept)
+            _lastNormalSize = new Windows.Graphics.SizeInt32(sender.Size.Width, kept.Height); // 높이만 동결
+        else
+            _lastNormalSize = sender.Size;
     }
 
     /// <summary>
@@ -355,6 +360,8 @@ public sealed partial class MainWindow : Window
     /// 마지막으로 닫힌 창이 이긴다(현행 규칙 — 창별 저장은 A70 별도).
     /// 최대화로 닫히면 window.maximized=true + 직전 일반 크기·위치를,
     /// 전체화면·최소화로 닫히면 직전 일반 크기·위치만 저장한다(전체화면은 일시 모드 — A55).
+    /// 하단 바만 남긴 접힘(A61)도 일시 모드로 취급 — 접기 전 크기(TrackNormalBounds가 높이를
+    /// 동결해 둔 값) + 현재 위치를 저장한다. 접힌 높이를 저장하면 다음 실행이 납작하게 열린다.
     /// </summary>
     private void SaveWindowBounds()
     {
@@ -370,6 +377,10 @@ public sealed partial class MainWindow : Window
             {
                 SaveBounds(_lastNormalSize, _lastNormalPos,
                     maximized: p.State == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized);
+            }
+            else if (_barOnlyCollapsed)
+            {
+                SaveBounds(_lastNormalSize, _lastNormalPos, maximized: _preCollapseMaximized);
             }
             else
             {
@@ -397,6 +408,108 @@ public sealed partial class MainWindow : Window
         }
         _settings.Set("window.maximized", maximized);
         _settings.Save();
+    }
+
+    // ---------- 하단 바만 남기는 접힘 (A61, v0.111.0) ----------
+
+    /// <summary>지금 하단 바만 남기고 접혀 있는지. 접힘의 판단(핀 ON && 전체화면 아님)은 모듈 뷰가 한다.</summary>
+    private bool _barOnlyCollapsed;
+
+    /// <summary>접기 직전 창 높이(물리 픽셀) — 펼칠 때 그대로 되돌린다. 폭·위치는 건드리지 않는다.</summary>
+    private int _preCollapseHeight;
+
+    /// <summary>접기 직전이 최대화 상태였는지 — 최대화된 창은 Resize가 먹지 않아 먼저 Restore한다.</summary>
+    private bool _preCollapseMaximized;
+
+    /// <summary>
+    /// 창을 "타이틀바 + 하단 바 44"만 남기고 접거나(A61) 접기 전 높이로 되돌린다.
+    /// 타이틀바는 남긴다 — 드래그 이동·닫기 수단이고 인스턴스 번호 `[n]`(A56) 표기가 거기 있다.
+    /// 폭·위치는 그대로 두고 높이만 바꾼다. 같은 상태 요청은 무시(멱등).
+    /// 전체화면 중에는 접지 않는다(프레젠터가 OverlappedPresenter가 아니다) — 뷰가
+    /// "핀 ON && 전체화면 아님"으로 계산해 보내므로 정상 경로에선 오지 않는 방어선이다.
+    /// </summary>
+    private void SetBarOnlyCollapsed(bool collapse)
+    {
+        if (collapse == _barOnlyCollapsed) return;
+        if (AppWindow.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter presenter)
+        {
+            // 전체화면 프레젠터에서는 창 크기를 만질 수 없다. 펼치기 요청이면 상태와 최소 높이
+            // 제약만 정리해 둔다 — 창 모드로 돌아온 뒤의 접기 요청이 정상적으로 먹어야 한다.
+            // (정상 경로에선 뷰가 전체화면 진입 **전에** 펼치기를 보내므로 여기 오지 않는다.)
+            if (!collapse) ResetCollapseState();
+            return;
+        }
+
+        try
+        {
+            if (collapse)
+            {
+                // 실측은 창 상태를 바꾸기 전에 — 지금 창 크기와 지금 레이아웃(ScaleHost)이 서로
+                // 맞는 시점이어야 테두리 두께가 정확하다(Restore 직후엔 레이아웃이 아직 옛 값이다).
+                var scale = RasterScale();
+                if (scale <= 0) return;  // XamlRoot 준비 전 — 접지 않는다(무동작이 낫다)
+                var height = CollapsedHeight();
+                if (height <= 0) return; // 아직 레이아웃 전 = 실측 불가
+                _preCollapseMaximized =
+                    presenter.State == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized;
+                // 최대화 상태에서는 Resize가 먹지 않는다 — 일반 상태로 내린 뒤 접는다.
+                // 되돌릴 높이는 A55가 추적해 둔 일반 높이(Restore 직후 Size는 아직 최대화 값일 수 있다).
+                _preCollapseHeight = AppWindow.Size.Height;
+                if (_preCollapseMaximized)
+                {
+                    if (_lastNormalSize is { } normal) _preCollapseHeight = normal.Height;
+                    presenter.Restore();
+                }
+                _barOnlyCollapsed = true; // TrackNormalBounds가 높이를 동결하도록 Resize보다 먼저
+                // A40의 최소 높이 540 DIP를 접힌 높이로 잠시 낮춘다 — 이걸 빼면 접히지 않는다.
+                WindowMinSize.SetMinHeightOverride(this, height / scale);
+                AppWindow.Resize(new Windows.Graphics.SizeInt32(AppWindow.Size.Width, height));
+            }
+            else
+            {
+                var restoreHeight = _preCollapseHeight;
+                var wasMaximized = _preCollapseMaximized;
+                // 플래그·최소 높이 하한을 Resize보다 먼저 원복한다 —
+                // 그래야 이어지는 크기 변화를 TrackNormalBounds(A55)가 다시 정상 기록한다.
+                ResetCollapseState();
+                if (restoreHeight > 0)
+                    AppWindow.Resize(new Windows.Graphics.SizeInt32(
+                        AppWindow.Size.Width, restoreHeight)); // 폭은 접힘 중 값 그대로
+                if (wasMaximized) presenter.Maximize(); // 최대화로 접었으면 최대화로 돌아간다
+            }
+        }
+        catch
+        {
+            // 창 조작 실패가 앱을 멈추면 안 된다 — 접힘만 안 될 뿐 나머지는 그대로 동작한다.
+        }
+    }
+
+    /// <summary>접힘 관련 상태와 최소 높이 오버라이드(A40 하한 복귀)를 한 번에 되돌린다.</summary>
+    private void ResetCollapseState()
+    {
+        _barOnlyCollapsed = false;
+        _preCollapseHeight = 0;
+        _preCollapseMaximized = false;
+        WindowMinSize.SetMinHeightOverride(this, null); // 720×540 하한 복귀
+    }
+
+    /// <summary>XamlRoot 배율(시스템 DPI / 96). 준비 전이면 0 — 호출부가 실측 실패로 처리한다.</summary>
+    private double RasterScale() => RootLayout.XamlRoot?.RasterizationScale ?? 0;
+
+    /// <summary>
+    /// 접힌 창의 전체 높이(물리 픽셀) = 비클라이언트(타이틀바 + 테두리) + 하단 바 44 DIP.
+    /// **타이틀바 높이를 하드코딩하지 않는다**(A61): 창 전체 높이 - 클라이언트 높이로 실측한다
+    /// (ScaleHost는 UI 스케일 변환 밖의 최상위 그리드라 그 ActualHeight가 곧 클라이언트 DIP).
+    /// 하단 바는 UI 스케일 오버라이드(v0.24.0)가 걸리면 실제로 그만큼 커지므로 배율을 함께 곱한다.
+    /// 레이아웃 전이거나 배율을 못 읽으면 0을 돌려 접기를 포기한다.
+    /// </summary>
+    private int CollapsedHeight()
+    {
+        var scale = RasterScale();
+        if (scale <= 0 || ScaleHost.ActualHeight <= 0) return 0;
+        var frame = AppWindow.Size.Height - (int)Math.Round(ScaleHost.ActualHeight * scale);
+        if (frame < 0) frame = 0; // 이론상 없음 — 음수 높이 방지
+        return frame + (int)Math.Ceiling(BottomBarHeight * _uiScaleFactor * scale);
     }
 
     // ---------- 단축키 (v0.45.0 사용자 지정) ----------
@@ -850,6 +963,21 @@ public sealed partial class MainWindow : Window
         // 뷰 내부 열기(열기 버튼·◀/▶ 탐색·테스트 클립)도 셸과 동기화 (v0.25.0)
         if (view is IContentStateSource source)
             source.ContentOpened += path => DispatcherQueue.TryEnqueue(() => OnContentOpened(path));
+        // 하단 바만 남기는 접힘(A61): 판단은 뷰(핀 ON && 전체화면 아님), 실행은 셸.
+        // 접기는 지금 보이는 뷰의 요청만 받고, 펼치기는 뷰가 내려간 뒤(Unloaded)에도 받아준다 —
+        // 그래야 "모듈을 바꾸면 접힘도 함께 풀린다"(A39 자동 해제와 같은 규칙)가 성립한다.
+        // UI 스레드에서 온 요청은 **큐에 넣지 않고 즉시** 처리한다: 전체화면 진입 직전의
+        // "먼저 펼치기"가 SetPresenter보다 늦게 실행되면 접힌 크기가 전체화면의 복원 크기로 굳는다.
+        // 다른 스레드면 ApplyUiScale과 같은 방식으로 디스패치한다.
+        if (view is IWindowCollapseSource collapseSource)
+            collapseSource.CollapseRequested += collapse =>
+            {
+                if (collapse && !ReferenceEquals(ModuleHost.Content, view)) return;
+                if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+                    dq.TryEnqueue(() => SetBarOnlyCollapsed(collapse));
+                else
+                    SetBarOnlyCollapsed(collapse);
+            };
         // 미저장 표시(A37): 창 제목·트레이 툴팁에 ● — 뷰가 이미 교체됐으면 무시
         if (view is ICloseGuard guard)
             guard.UnsavedChanged += dirty => DispatcherQueue.TryEnqueue(() =>

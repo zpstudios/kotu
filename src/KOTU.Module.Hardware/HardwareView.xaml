@@ -70,6 +70,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <!-- Copy all(A75): 1칸 아이콘 버튼(A27 40×40 규격, ⛶·핀과 동일 계열).
                      기능 설명은 툴팁으로. 수동 Refresh 버튼은 A75에서 제거(주기 폴링이 있어 불필요).
@@ -101,15 +102,25 @@
                                 ToolTipService.ToolTip="Sensor refresh interval">
                     <TextBlock x:Name="IntervalText" FontSize="12" Text="500 ms" />
                 </DropDownButton>
-                <!-- Always on top 토글(A39) — ⛶ 바로 왼쪽, 켜짐 상태가 보이는 ToggleButton -->
-                <ToggleButton x:Name="TopToggle" Grid.Column="5"
+                <!-- 하단 바 표시 크기(A62): 1칸(40×40) 버튼 하나로 S → M → L → S 순환.
+                     2칸 +/- 방식을 쓰지 않은 이유는 하단 바 폭이 이미 빡빡하기 때문(A40의 720px 축약).
+                     글리프 E71E(Zoom, 돋보기)는 방향이 없어 순환 버튼에 맞는다. 아이콘 크기 자체가
+                     현재 단계를 따라 커져 툴팁을 열지 않아도 지금 단계가 보인다(코드 ApplyBarScale). -->
+                <Button x:Name="BarScaleButton" Grid.Column="5"
+                        Style="{StaticResource BottomBarButtonStyle}"
+                        Click="OnBarScaleClick">
+                    <FontIcon x:Name="BarScaleIcon" Glyph="&#xE71E;" FontSize="18" />
+                </Button>
+                <!-- Always on top 토글(A39) — ⛶ 바로 왼쪽, 켜짐 상태가 보이는 ToggleButton.
+                     A61(v0.111.0): 켜면 메인 영역을 접어 하단 바만 남는다(툴팁도 그 동작으로 갱신). -->
+                <ToggleButton x:Name="TopToggle" Grid.Column="6"
                               Style="{StaticResource BottomBarToggleButtonStyle}"
                               Checked="OnTopToggleChanged" Unchecked="OnTopToggleChanged"
-                              ToolTipService.ToolTip="Always on top">
+                              ToolTipService.ToolTip="Always on top (collapses to the bar)">
                     <FontIcon Glyph="&#xE718;" FontSize="18" />
                 </ToggleButton>
                 <!-- 1칸(40×40) = 다른 모듈 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일) -->
-                <Button Grid.Column="6" Style="{StaticResource BottomBarButtonStyle}"
+                <Button Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen dashboard (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />
