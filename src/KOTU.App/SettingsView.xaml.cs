@@ -12,6 +12,8 @@ namespace KOTU.App;
 /// 설정 페이지. UI 스케일(v0.24.0), 탐색기 통합(파일 연결·우클릭 메뉴)을 관리한다.
 /// 탐색기 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
 /// 하단 바(광고 + ⛶ 전체화면)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
+/// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시·조작만 한다
+/// (A26·A76, v0.105.0 — 주기 확인·토스트는 앱 전역 서비스가 소유).
 /// </summary>
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
@@ -227,20 +229,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         Root.Children.Add(_status);
 
-        AddHeader("Updates");
+        _updatesHeader = AddHeader("Updates");
         var currentVersion = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
         Root.Children.Add(new TextBlock { Text = $"Current version: v{currentVersion}", Opacity = 0.8 });
-
-        var updateStatus = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
-        var updateCountdown = new TextBlock { Opacity = 0.55, FontSize = 12 };
-        var updateButton = new Button { Content = "Update", Visibility = Visibility.Collapsed };
-        Root.Children.Add(updateStatus);
-        Root.Children.Add(updateCountdown);
-        Root.Children.Add(updateButton);
-
-        // v0.27.0(사용자 요청): 설정 화면에 머무는 동안에만 1분 간격 재확인 + 다음 체크 카운트다운.
-        // 화면 밖 백그라운드 주기 체크는 여전히 하지 않는다(기존 정책 유지).
-        StartUpdateLoop(currentVersion, updateStatus, updateCountdown, updateButton);
+        BuildUpdatesSection(currentVersion);
 
         AddHeader("About");
         // 저장소 주소는 클릭해서 이동 가능 (v0.52.0 사용자 요청)
@@ -376,72 +368,123 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         });
     }
 
-    private DispatcherTimer? _updateTimer;
-    private int _nextCheckSeconds;
-    private bool _updateChecking;
+    /// <summary>업데이트 섹션 머리글 — 토스트 클릭 진입 시 스크롤 목표(A26, v0.105.0).</summary>
+    private TextBlock? _updatesHeader;
 
     /// <summary>
-    /// 설정 화면 체류 중 업데이트 루프(v0.27.0): 진입 즉시 1회 확인 후 60초마다 재확인.
-    /// 1초 틱 타이머로 다음 체크까지 카운트다운을 보여주고, Unloaded(화면 이탈)에서 멈춘다.
-    /// 새 버전을 찾으면 더 확인할 게 없으므로 루프를 중단한다.
+    /// 토스트 클릭으로 열린 설정 화면을 업데이트 섹션까지 스크롤한다(A26, v0.105.0).
+    /// 호출 시점에 아직 레이아웃 전일 수 있어 Loaded와 낮은 우선순위 큐 양쪽에서 시도한다.
     /// </summary>
-    private void StartUpdateLoop(string currentVersion, TextBlock status, TextBlock countdown, Button updateButton)
+    public void ScrollToUpdates()
     {
-        if (!UpdateService.IsUpdatableBuild)
+        if (_updatesHeader is not { } target) return;
+
+        void OnLoadedOnce(object sender, RoutedEventArgs e)
         {
-            status.Text = "Automatic updates are unavailable in this build. "
-                        + "Install with Setup.exe from Releases to enable them.";
-            return;
+            Loaded -= OnLoadedOnce;
+            target.StartBringIntoView();
         }
+        Loaded += OnLoadedOnce;
 
-        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _updateTimer.Tick += async (_, _) =>
-        {
-            if (_updateChecking) return;
-            _nextCheckSeconds--;
-            if (_nextCheckSeconds <= 0)
-                await CheckOnceAsync(currentVersion, status, countdown, updateButton);
-            else
-                countdown.Text = $"Next check in {_nextCheckSeconds}s";
-        };
-        Unloaded += (_, _) => _updateTimer?.Stop();
-
-        _ = CheckOnceAsync(currentVersion, status, countdown, updateButton);
-        _updateTimer.Start();
+        DispatcherQueue.TryEnqueue(
+            Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+            () => target.StartBringIntoView());
     }
 
-    /// <summary>1회 확인. 새 버전이 있으면 현재/새 버전을 함께 표시하고 루프를 멈춘다.</summary>
-    private async Task CheckOnceAsync(string currentVersion, TextBlock status, TextBlock countdown, Button updateButton)
+    /// <summary>
+    /// Updates 섹션(A26·A76, v0.105.0). 실제 확인은 전역 <see cref="UpdateCoordinator"/>가 소유하고
+    /// 여기서는 그 상태를 <b>표시·조작만</b> 한다 — 설정 화면을 닫아도 주기 확인은 계속된다.
+    /// v0.27.0의 "설정 화면 체류 중 1분 카운트다운 루프"는 이걸로 대체됐다.
+    /// 업데이트 불가 빌드에서는 토글·시각 표시를 숨기지 않고 비활성으로 남긴다(사용자 확정).
+    /// </summary>
+    private void BuildUpdatesSection(string currentVersion)
     {
-        _updateChecking = true;
-        status.Text = "Checking for updates...";
-        countdown.Text = string.Empty;
-        try
+        var available = UpdateCoordinator.IsAvailable;
+
+        var autoToggle = new ToggleSwitch
         {
-            var info = await UpdateService.CheckAsync();
-            if (info is not null)
+            Header = "Check for updates automatically",
+            IsOn = UpdateCoordinator.AutoCheckEnabled,
+            IsEnabled = available,
+        };
+        Root.Children.Add(autoToggle);
+        Root.Children.Add(new TextBlock
+        {
+            Text = "Checks every 10 minutes in the background and notifies you when a new version is available.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var lastChecked = new TextBlock { FontSize = 12, Opacity = 0.7, IsEnabled = available };
+        var status = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
+        var checkNow = new Button { Content = "Check now", IsEnabled = available };
+        var updateButton = new Button { Visibility = Visibility.Collapsed };
+
+        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        buttonRow.Children.Add(checkNow);
+        buttonRow.Children.Add(updateButton);
+
+        Root.Children.Add(lastChecked);
+        Root.Children.Add(status);
+        Root.Children.Add(buttonRow);
+
+        // 다운로드·설치 중에는 그 진행 문구를 전역 상태 갱신이 덮어쓰지 않게 한다.
+        var installing = false;
+
+        void Render()
+        {
+            autoToggle.IsOn = UpdateCoordinator.AutoCheckEnabled; // 다른 창에서 바꿔도 따라온다
+            lastChecked.Text = UpdateCoordinator.DescribeLastCheck();
+            checkNow.IsEnabled = available && !UpdateCoordinator.IsChecking;
+
+            // 이미 찾아 둔 업데이트가 있으면 오토체크를 꺼도 적용 버튼은 유지한다(사용자 확정).
+            if (UpdateCoordinator.PendingUpdate is { } pending)
             {
-                var newVersion = info.TargetFullRelease.Version;
-                status.Text = $"New version v{newVersion} is available (current: v{currentVersion}).";
-                updateButton.Content = $"Update to v{newVersion}";
-                if (updateButton.Visibility != Visibility.Visible)
-                {
-                    updateButton.Visibility = Visibility.Visible;
-                    updateButton.Click += async (_, _) => await DownloadAndInstallAsync(status, updateButton, info);
-                }
-                _updateTimer?.Stop(); // 찾았으면 주기 확인 종료
-                _updateChecking = false;
-                return;
+                updateButton.Content = $"Update to v{pending.TargetFullRelease.Version}";
+                updateButton.Visibility = Visibility.Visible;
             }
-            status.Text = $"You are on the latest version (v{currentVersion}).";
+
+            if (installing) return;
+
+            if (!available)
+            {
+                status.Text = "Automatic updates are unavailable in this build. "
+                            + "Install with Setup.exe from Releases to enable them.";
+            }
+            else if (UpdateCoordinator.IsChecking)
+            {
+                status.Text = "Checking for updates...";
+            }
+            else if (UpdateCoordinator.PendingUpdate is { } newer)
+            {
+                status.Text = $"New version v{newer.TargetFullRelease.Version} is available (current: v{currentVersion}).";
+            }
+            else if (UpdateCoordinator.LastCheckError.Length > 0)
+            {
+                status.Text = "Update check failed: " + UpdateCoordinator.LastCheckError;
+            }
+            else
+            {
+                status.Text = UpdateCoordinator.LastCheckedAt is null
+                    ? string.Empty
+                    : $"You are on the latest version (v{currentVersion}).";
+            }
         }
-        catch (Exception ex)
+
+        autoToggle.Toggled += (_, _) => UpdateCoordinator.SetAutoCheck(autoToggle.IsOn);
+        checkNow.Click += async (_, _) => await UpdateCoordinator.CheckNowAsync();
+        updateButton.Click += async (_, _) =>
         {
-            status.Text = "Update check failed: " + ex.Message;
-        }
-        _nextCheckSeconds = 60;
-        countdown.Text = "Next check in 60s";
-        _updateChecking = false;
+            if (UpdateCoordinator.PendingUpdate is not { } info) return;
+            installing = true;
+            await DownloadAndInstallAsync(status, updateButton, info);
+            installing = false;
+        };
+
+        UpdateCoordinator.Changed += Render;
+        Unloaded += (_, _) => UpdateCoordinator.Changed -= Render;
+        Render();
     }
 
     /// <summary>다운로드 → 사람 확인(Install and restart / Later) 대기 → 적용. 자동 재시작 없음.</summary>
@@ -482,13 +525,19 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         }
     }
 
-    private void AddHeader(string text) => Root.Children.Add(new TextBlock
+    /// <summary>섹션 머리글 추가. 만든 요소를 돌려준다(A26 — 업데이트 섹션 스크롤 목표로 쓴다).</summary>
+    private TextBlock AddHeader(string text)
     {
-        Text = text,
-        FontSize = 20,
-        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-        Margin = new Thickness(0, 8, 0, 0),
-    });
+        var header = new TextBlock
+        {
+            Text = text,
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        Root.Children.Add(header);
+        return header;
+    }
 
     /// <summary>토글 적용. 실패하면 토글을 원위치로 되돌리고 이유를 표시한다.</summary>
     private void Apply(ToggleSwitch toggle, Action register, Action unregister)
