@@ -25,11 +25,10 @@ public sealed class HardwareModule : IModule
     /// <summary>WMI 스펙 재수집 간격 — 스펙은 거의 안 변하므로(디스크 여유 공간 정도) 매 주기 돌릴 이유가 없다.</summary>
     private static readonly TimeSpan SpecRefreshInterval = TimeSpan.FromSeconds(2);
 
-    // 아래 상태는 전부 폴러 스레드에서만 읽고 쓴다(_forceSpecs만 UI에서 set — volatile,
-    // _snapshotSubscribers는 구독/해지 스레드에서 Interlocked로 증감).
+    // 아래 상태는 전부 폴러 스레드에서만 읽고 쓴다
+    // (_snapshotSubscribers만 구독/해지 스레드에서 Interlocked로 증감).
     private static IReadOnlyList<HardwareSection> _sections = [];
     private static DateTime _sectionsAt;
-    private static volatile bool _forceSpecs;
     private static int _snapshotSubscribers;
 
     /// <summary>트레이 센서 선택(A18)·리프레시 주기(A29)는 설정에서 복원해야 하므로 모듈 등록 시 주입받는다.</summary>
@@ -58,7 +57,7 @@ public sealed class HardwareModule : IModule
 
     /// <summary>
     /// 프로세스 공유 폴러(A42 결정: Hardware만 공유, 창 여러 개여도 수집은 1회).
-    /// 매 주기(100/300/1000ms 선택, A29) 센서 한 프레임을 읽고, WMI 스펙은 2초마다(또는 수동 Refresh 시)만 재수집한다.
+    /// 매 주기(100/300/1000ms 선택, A29) 센서 한 프레임을 읽고, WMI 스펙은 2초마다만 재수집한다.
     /// 구독이 없으면(뷰도 트레이도) 휴면하므로 그때 비용은 0. BelowNormal 우선순위라
     /// 재생·UI와 CPU를 다투지 않는다. 수집 스레드는 여기 하나다.
     /// </summary>
@@ -82,22 +81,15 @@ public sealed class HardwareModule : IModule
     public static IDisposable SubscribeSensors(Action<SensorFrame> handler)
         => Poller.Subscribe(snapshot => handler(snapshot.Sensors));
 
-    /// <summary>수동 Refresh: WMI 스펙까지 강제 재수집하며 남은 간격을 건너뛴다.</summary>
-    internal static void RefreshNow()
-    {
-        _forceSpecs = true;
-        Poller.Poke();
-    }
-
     private static HardwareSnapshot Poll()
     {
         var now = DateTime.UtcNow;
-        // 스펙은 뷰 구독자가 있을 때만 수집한다(강제 Refresh 포함 — 버튼은 뷰에만 있다).
+        // 스펙은 뷰 구독자가 있을 때만 수집한다. 수동 Refresh(RefreshNow)는 A75에서
+        // 버튼과 함께 제거 — 주기 폴링이 이미 최신 상태를 유지한다.
         // 트레이 전용 기간엔 마지막 섹션을 그대로 실어 보낸다(트레이는 Sensors만 쓴다).
         var wantSpecs = Volatile.Read(ref _snapshotSubscribers) > 0;
-        if (wantSpecs && (_forceSpecs || _sections.Count == 0 || now - _sectionsAt >= SpecRefreshInterval))
+        if (wantSpecs && (_sections.Count == 0 || now - _sectionsAt >= SpecRefreshInterval))
         {
-            _forceSpecs = false;
             _sections = HardwareInfoService.Collect();
             _sectionsAt = now;
         }

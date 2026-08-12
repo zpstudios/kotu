@@ -16,8 +16,9 @@ namespace KOTU.Module.Hardware;
 /// A42)가 전담하고, 뷰는 구독해서 스냅샷을 UI 스레드로 디스패치 받아 그리기만 한다.
 /// 일반 모드는 라벨-값 리스트, 전체화면(F11/⛶)은 섹션 카드 대시보드로 보여준다(v0.42.0).
 /// 센서 그래프 카드(A17)는 하단 바 한 줄 안에 산다(v0.64.2 사용자 지시) — 전체화면에서만
-/// 셸 하단 바가 숨는 동안 SensorStrip으로 옮겨 표시. Refresh·Copy·⛶·센서를 담은
-/// 하단 바는 셸이 TakeBottomBar()로 떼어간다.
+/// 셸 하단 바가 숨는 동안 SensorStrip으로 옮겨 표시. Copy·⛶·센서를 담은
+/// 하단 바는 셸이 TakeBottomBar()로 떼어간다. 수동 Refresh 버튼은 A75에서 제거
+/// (주기 폴링이 이미 최신 상태를 유지하므로 불필요 — 사용자 확정).
 /// </summary>
 public sealed partial class HardwareView : UserControl, IBottomBarProvider
 {
@@ -25,7 +26,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     private AppWindow? _appWindow;
     private bool _dashboardRendered; // 같은 데이터로 대시보드를 다시 만들지 않기 위한 플래그
     private IDisposable? _subscription;  // 공유 폴러 구독(로드 중에만 유지 — 없으면 폴러 휴면)
-    private bool _refreshPending;        // Busy 링 표시 중 — 다음 스냅샷 도착 시 끈다
+    private bool _firstLoadPending;      // 첫 로드 Busy 링 표시 중 — 첫 스냅샷 도착 시 끈다(A75)
     private string _dataSignature = ""; // 값이 안 바뀌면 UI 재구성 생략
     private readonly List<SensorCard> _cards = []; // 센서 그래프 카드 10개 (A17)
     private SensorFrame _lastFrame = SensorFrame.Empty; // Copy all에 센서 값 포함용
@@ -40,7 +41,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         {
             HookPresenterChanged();
             Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
-            if (_dataSignature.Length == 0) ShowBusy(); // 첫 데이터가 올 때까지 링 표시(기존 동작 유지)
+            if (_dataSignature.Length == 0) ShowBusy(); // 첫 데이터가 올 때까지 링 표시(A75에서 첫 로드 용도만 유지)
             // 뷰 구독(스펙+센서, A18에서 API 분리) — 구독 즉시 1회 폴링됨
             _subscription ??= HardwareModule.SubscribeSnapshots(OnSnapshot);
             TraySensors.Changed -= UpdateTrayPins; // Loaded 중복 발화 대비 — 이중 구독 방지
@@ -75,17 +76,16 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         => DispatcherQueue?.TryEnqueue(() => ApplySnapshot(snapshot));
 
     /// <summary>
-    /// UI 스레드: Busy 링을 끄고(수동 Refresh·첫 로드), 센서 카드는 매 프레임 갱신,
+    /// UI 스레드: 첫 로드 Busy 링을 끄고, 센서 카드는 매 프레임 갱신,
     /// 스펙 리스트는 값이 지난번과 같으면 재구성을 생략한다(200ms마다 트리 재생성 방지).
     /// 겹침 방지는 폴러가 보장(단일 루프).
     /// </summary>
     private void ApplySnapshot(HardwareSnapshot snapshot)
     {
-        if (_refreshPending)
+        if (_firstLoadPending)
         {
-            _refreshPending = false;
+            _firstLoadPending = false;
             Busy.IsActive = false;
-            RefreshButton.IsEnabled = true;
         }
         RecordPulse(); // 맥박 그래프(A29) — 스냅샷이 실제 도착한 타이밍 기록
         UpdateSensors(snapshot.Sensors);
@@ -98,12 +98,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         ApplySections();
     }
 
-    /// <summary>Busy 링은 수동 Refresh·첫 로드에서만 돌린다 — 200ms마다 깜빡이면 안 된다.</summary>
+    /// <summary>
+    /// Busy 링은 첫 로드(첫 스냅샷 도착 전)에서만 돌린다 — 매 폴링마다 깜빡이면 안 된다.
+    /// 센서 드라이버 로드·첫 WMI 수집이 1초 이상 걸릴 수 있어 빈 화면 동안의 표시는 유지(A75).
+    /// </summary>
     private void ShowBusy()
     {
-        _refreshPending = true;
+        _firstLoadPending = true;
         Busy.IsActive = true;
-        RefreshButton.IsEnabled = false;
     }
 
     /// <summary>새 수집 결과를 현재 보이는 뷰(리스트/대시보드)에 반영한다.</summary>
@@ -632,7 +634,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         Panel target = inBar ? BarGrid : StripPanel;
         if (ReferenceEquals(SensorGrid.Parent, target)) return;
         (SensorGrid.Parent as Panel)?.Children.Remove(SensorGrid);
-        target.Children.Add(SensorGrid); // Grid.Column=3은 요소에 붙어 있어 바로 복귀해도 유효
+        target.Children.Add(SensorGrid); // Grid.Column=2는 요소에 붙어 있어 바로 복귀해도 유효
     }
 
     /// <summary>SensorStrip은 내용(비관리자 안내 또는 전체화면 센서 카드)이 있을 때만 보인다.</summary>
@@ -655,8 +657,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
 
     // ---------- 리프레시 주기 선택 + 맥박(EKG) 그래프 (A29) ----------
 
-    /// <summary>맥박 그래프 시간 창 — 1000ms 주기에서도 박동 5개가 보인다.</summary>
-    private static readonly TimeSpan PulseWindow = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// 맥박 그래프 시간 창 = 리프레시 주기 × 2 (A51). 어느 주기에서든 스파이크 1~2개만
+    /// 보인다 — 목적이 "설정한 레이트대로 갱신 중" 표시뿐이라 그걸로 충분(5초 고정 창에
+    /// 30~40틱이 몰리던 v0.84.0 동작을 대체). 주기 기준 계산이므로 주기 목록이 바뀌어도
+    /// (A73 예정: 50~5000ms) 그대로 성립한다.
+    /// </summary>
+    private static TimeSpan PulseWindow
+        => TimeSpan.FromMilliseconds(HardwareModule.RefreshMs * 2);
 
     /// <summary>창 안의 스냅샷 도착 시각들 — UI 스레드에서만 접근.</summary>
     private readonly List<DateTime> _pulseTicks = [];
@@ -673,6 +681,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
             {
                 HardwareModule.SetRefreshMs(choice); // 폴러 즉시 반영 + 설정 저장
                 IntervalText.Text = $"{choice} ms";
+                RerenderPulse(); // 맥박 창 길이(주기 × 2, A51)도 즉시 반영
             };
             flyout.Items.Add(item);
         }
@@ -690,10 +699,20 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         RenderPulse(now);
     }
 
+    /// <summary>주기 변경 직후(A51): 새 창 길이 기준으로 기록을 정리하고 즉시 다시 그린다.</summary>
+    private void RerenderPulse()
+    {
+        var now = DateTime.UtcNow;
+        var cutoff = now - PulseWindow;
+        _pulseTicks.RemoveAll(t => t < cutoff);
+        RenderPulse(now);
+    }
+
     /// <summary>
     /// 병원 심박 모니터풍: 평평한 기준선 위에 도착 시각마다 QRS풍 스파이크(위로 크게 →
-    /// 아래로 살짝 → 복귀). 주기가 바뀌면 스파이크 간격이 그대로 벌어지고 좁아진다 —
-    /// "리프레시 타이밍이 튀는" 모습 자체가 정보다. 폴링 주기마다만 다시 그린다(비용 미미).
+    /// 아래로 살짝 → 복귀). 창이 주기 × 2라(A51) 어느 주기에서든 스파이크 1~2개가
+    /// 주기에 맞춰 흐른다 — 박동이 흐르는 속도가 곧 리프레시 레이트다.
+    /// 폴링 주기마다만 다시 그린다(비용 미미).
     /// </summary>
     private void RenderPulse(DateTime now)
     {
@@ -702,14 +721,16 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
         if (w <= 2 || h <= 2) return; // 레이아웃 전 — 다음 스냅샷에서 그려진다
 
         var baseline = h * 0.68;
-        var start = now - PulseWindow;
+        var window = PulseWindow; // 주기 × 2 (A51) — 한 렌더 안에서는 같은 값 사용
+        var start = now - window;
         var points = new Microsoft.UI.Xaml.Media.PointCollection
         {
             new Windows.Foundation.Point(0, baseline),
         };
         foreach (var tick in _pulseTicks)
         {
-            var x = (tick - start).TotalSeconds / PulseWindow.TotalSeconds * w;
+            if (tick < start) continue; // 주기 축소 직후 창 밖에 남은 기록은 건너뛴다
+            var x = (tick - start).TotalSeconds / window.TotalSeconds * w;
             points.Add(new Windows.Foundation.Point(Math.Max(0, x - 3), baseline));
             points.Add(new Windows.Foundation.Point(x - 1, h * 0.12));                          // R파(위로 크게)
             points.Add(new Windows.Foundation.Point(x + 1, Math.Min(h - 1, baseline + h * 0.22))); // S파(아래로 살짝)
@@ -749,12 +770,6 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider
     }
 
     // ---------- 조작 ----------
-
-    private void OnRefreshClick(object sender, RoutedEventArgs e)
-    {
-        ShowBusy();
-        HardwareModule.RefreshNow(); // WMI 스펙 강제 재수집 + 즉시 폴링 — 결과는 OnSnapshot으로
-    }
 
     /// <summary>모든 섹션 + 현재 센서 값을 텍스트로 클립보드에 복사 (사양 공유용).</summary>
     private void OnCopyClick(object sender, RoutedEventArgs e)
