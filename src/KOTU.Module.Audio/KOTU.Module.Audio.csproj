@@ -16,4 +16,12 @@
   <ItemGroup>
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!--
+      내장 샘플 곡(A66): C 메이저 펜타토닉 아르페지오 멜로디, 18초 128kbps 약 282KB.
+      numpy 합성 + ffmpeg 인코딩 — 생성: docs/gen_test_audio.py sample 모드 참고.
+      Content라 참조하는 App의 출력·publish에 Assets\ 경로 그대로 복사된다 (비디오 test-clip.mp4와 동일 패턴).
+    -->
+    <Content Include="Assets\sample.mp3" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

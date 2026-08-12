@@ -52,7 +52,7 @@
             </StackPanel>
             <TextBlock
                 x:Name="PlaceholderText"
-                Text="Open a music file, or drop one onto the window"
+                Text="Open a music file, or drop one onto the window&#x0A;▶ = built-in sample tune"
                 Visibility="Collapsed"
                 Foreground="Gray"
                 TextAlignment="Center"

@@ -94,6 +94,14 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     private const long ResumeReportIntervalMs = 10_000;
     private static readonly float[] Speeds = [0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f];
 
+    /// <summary>내장 샘플 곡(A66: 펜타토닉 멜로디 18초) — 배포본 Assets에 동봉 (비디오 테스트 클립과 동일 패턴).</summary>
+    private static readonly string SampleTrackPath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "sample.mp3");
+
+    /// <summary>샘플 곡은 이어듣기 대상에서 뺀다 (18초 샘플에 이어듣기는 무의미 — 비디오 IsTestClip과 동일).</summary>
+    private static bool IsSampleTrack(string? path) =>
+        string.Equals(path, SampleTrackPath, StringComparison.OrdinalIgnoreCase);
+
     private readonly ISettingsService _settings;
     private readonly PlaybackResumeStore _resumeStore;
     private string? _filePath;
@@ -238,7 +246,9 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
         _durationMs = 0;
         _lastReportedMs = 0;
-        _pendingResumeMs = _resumeStore.GetResumePositionMs(_filePath) ?? -1;
+        _pendingResumeMs = IsSampleTrack(_filePath)
+            ? -1
+            : _resumeStore.GetResumePositionMs(_filePath) ?? -1;
 
         using var media = new Media(lib, new Uri(_filePath));
         p.Play(media);
@@ -254,8 +264,8 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         if (!File.Exists(path)) return;
 
-        // 듣던 파일이 있으면 위치를 저장하고 전환한다.
-        if (_player is { } p && _filePath is not null && _durationMs > 0)
+        // 듣던 파일이 있으면 위치를 저장하고 전환한다 (샘플 곡은 이어듣기 제외).
+        if (_player is { } p && _filePath is not null && !IsSampleTrack(_filePath) && _durationMs > 0)
         {
             try { _resumeStore.Report(_filePath, p.Time, _durationMs); }
             catch { /* 저장 실패가 전환을 막으면 안 된다 */ }
@@ -302,7 +312,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             // libvlc 콜백과 교착할 수 있어 백그라운드로 넘긴다.
             try
             {
-                if (_filePath is not null && _durationMs > 0)
+                if (_filePath is not null && !IsSampleTrack(_filePath) && _durationMs > 0)
                     _resumeStore.Report(_filePath, player.Time, _durationMs);
             }
             catch
@@ -352,7 +362,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     private void OnPlayerTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
     {
         // 이어듣기 위치 보고는 UI와 무관하므로 이벤트 스레드에서 바로 처리(스토어는 스레드 안전).
-        if (_filePath is not null && _durationMs > 0 &&
+        if (_filePath is not null && !IsSampleTrack(_filePath) && _durationMs > 0 &&
             Math.Abs(e.Time - _lastReportedMs) >= ResumeReportIntervalMs)
         {
             _lastReportedMs = e.Time;
@@ -404,7 +414,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     private void OnPlayerEndReached(object? sender, EventArgs e)
     {
         // 끝까지 들었으면 이어듣기 기록을 지운다. (이 콜백 안에서 Stop()을 부르면 교착 — 금지)
-        if (_filePath is not null && _durationMs > 0)
+        if (_filePath is not null && !IsSampleTrack(_filePath) && _durationMs > 0)
             _resumeStore.Report(_filePath, _durationMs, _durationMs);
 
         Dispatch(() =>
@@ -441,10 +451,11 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         if (_player is not { } p) return;
 
-        // 아무것도 열지 않은 상태의 ▶ = 열기 대화상자 (오디오에는 내장 테스트 클립이 없다).
+        // 아무것도 열지 않은 상태의 ▶ = 내장 샘플 곡 재생 (A66 — 비디오의 테스트 클립과 동일 UX).
         if (_filePath is null)
         {
-            _ = PickAndOpenAsync();
+            if (File.Exists(SampleTrackPath)) OpenPath(SampleTrackPath);
+            else ShowMessage(@"Sample track not found (Assets\sample.mp3)");
             return;
         }
 

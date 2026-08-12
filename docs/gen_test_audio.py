@@ -21,8 +21,14 @@
   ffmpeg -y -i src/KOTU.Module.Video/Assets/test-clip.mp4 -i /tmp/kotu-test-audio.wav \
          -map 0:v -map 1:a -c:v copy -c:a aac -b:a 160k -movflags +faststart /tmp/test-clip-new.mp4
   mv /tmp/test-clip-new.mp4 src/KOTU.Module.Video/Assets/test-clip.mp4
+
+A66 — 오디오 모듈 동봉 샘플 곡(sample 모드):
+  python3 docs/gen_test_audio.py sample    # src/KOTU.Module.Audio/Assets/sample.mp3 생성
+  C 메이저 펜타토닉 아르페지오 멜로디 18초(마림바 리드 + 벨 아르페지오 + NES 삼각파 베이스),
+  전체 페이드 인/아웃, 128kbps mp3(ffmpeg libmp3lame, 없으면 lameenc 폴백). 자체 생성이라 저작권 무관.
 """
 import os
+import sys
 import wave
 
 import numpy as np
@@ -122,6 +128,115 @@ N = {  # 음이름 → 주파수
     "C3": 130.81, "D3": 146.83, "E3": 164.81, "F3": 174.61, "G3": 196.00, "A3": 220.00, "B3": 246.94,
     "C4": 261.63, "D4": 293.66, "E4": 329.63, "G4": 392.00, "A4": 440.00,
 }
+
+# ---------- A66: 오디오 모듈 동봉 샘플 곡 (sample 모드 — 아래 본편 합성과 독립) ----------
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SAMPLE_OUT = os.path.join(REPO, "src", "KOTU.Module.Audio", "Assets", "sample.mp3")
+
+
+def encode_mp3_ffmpeg(wav_path, mp3_path):
+    """ffmpeg(libmp3lame) 128kbps CBR 인코딩. ffmpeg가 없거나 실패하면 False."""
+    import subprocess
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", wav_path,
+             "-codec:a", "libmp3lame", "-b:a", "128k", mp3_path],
+            check=True, capture_output=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
+
+
+def encode_mp3_lameenc(pcm, mp3_path):
+    """순수 파이썬 폴백: pip install lameenc (PEP 668 관리 환경이면 break-system-packages 플래그)."""
+    import lameenc
+    enc = lameenc.Encoder()
+    enc.set_bit_rate(128)
+    enc.set_in_sample_rate(SR)
+    enc.set_channels(2)
+    enc.set_quality(2)
+    with open(mp3_path, "wb") as f:
+        f.write(bytes(enc.encode(pcm.tobytes())) + bytes(enc.flush()))
+
+
+def make_sample_mp3():
+    """A66: 샘플 곡 18초를 합성해 128kbps mp3로 저장한다 (약 290KB).
+
+    비디오 test-clip과 같은 어법(마림바/벨/NES 삼각파)을 쓰되 스피커 점검 요소(하드 팬·
+    스윕·핑) 없이 순수 감상용 멜로디만: C 메이저 펜타토닉, 코드 진행 C > Am > F > G > C,
+    84 BPM 6마디 + 마림바 롤 아웃트로, 전체 페이드 인(0.8s)/아웃(2.5s).
+    """
+    dur = 18.0
+    beat = 60.0 / 84.0            # 84 BPM — 1마디(4박) 약 2.857s, 6마디 약 17.1s
+    sbuf = np.zeros((int(SR * dur), 2))
+
+    def sadd(sig, t0, pan=0.5):
+        """pan: 0=L, 1=R (등파워 팬). t0초 위치에 신호를 더한다."""
+        i = int(t0 * SR)
+        seg = sbuf[i:i + len(sig)]
+        s = sig[:len(seg)]
+        seg[:, 0] += s * np.cos(pan * np.pi / 2)
+        seg[:, 1] += s * np.sin(pan * np.pi / 2)
+
+    # 마디별 (벨 아르페지오 코드 톤, 베이스 루트, 멜로디 8분음표 8칸 — ""는 쉼표).
+    # 멜로디는 C 메이저 펜타토닉(C D E G A)만 사용 — 어느 코드 위에서도 부딪히지 않는다.
+    bars = [
+        (["C3", "E3", "G3"], "C2", ["C4", "", "E4", "G4", "", "E4", "D4", ""]),
+        (["A2", "C3", "E3"], "A2", ["A3", "", "C4", "E4", "", "C4", "D4", ""]),
+        (["C3", "F3", "A3"], "F2", ["E4", "", "D4", "C4", "", "A3", "G3", ""]),
+        (["D3", "G3", "B3"], "G2", ["D4", "", "G3", "A3", "", "D4", "E4", ""]),
+        (["C3", "E3", "G3"], "C2", ["G4", "", "E4", "D4", "", "C4", "D4", ""]),
+        (["C3", "E3", "G3"], "C2", ["", "", "", "", "", "", "", ""]),  # 아웃트로: 롤만
+    ]
+    eighth = beat / 2
+    arp = [0, 1, 2, 1, 0, 1, 2, 1]
+    for b, (chord, root, melody) in enumerate(bars):
+        t_bar = b * beat * 4
+        for k in range(8):
+            tt = t_bar + k * eighth
+            sadd(bell(N[chord[arp[k]]], eighth * 1.6, amp=0.07), tt,
+                 pan=0.38 if k % 2 == 0 else 0.62)   # 살짝만 좌우 교차 — 하드 팬 아님
+            if melody[k]:
+                sadd(marimba(N[melody[k]], eighth * 2.4, amp=0.30), tt)
+        for h in range(2):  # 베이스: 2분음표 2개 (루트 유지)
+            n = int(SR * beat * 1.9)
+            sadd(0.28 * env_ad(n, 0.004, 0.40) * nes_triangle(N[root], n),
+                 t_bar + h * beat * 2)
+
+    # 아웃트로: C 메이저 마림바 롤(C3-E3-G3-C4) + 낮은 C 페이드 (본편 클립 마무리와 동일 어법)
+    t_out = 5 * beat * 4
+    for i, x in enumerate(["C3", "E3", "G3", "C4"]):
+        sadd(marimba(N[x], 1.6, 0.24), t_out + i * 0.12)
+    n = int(SR * 2.6)
+    t = np.arange(n) / SR
+    sadd(0.18 * np.minimum(1, t * 6) * np.exp(-1.2 * t) * nes_triangle(N["C2"], n), t_out + 0.05)
+
+    # 전체 페이드 인(0.8s)/아웃(마지막 2.5s) → 소프트 클립 → 정규화 → 16bit PCM
+    t_all = np.arange(len(sbuf)) / SR
+    sbuf *= (np.minimum(1, t_all / 0.8) * np.clip((dur - t_all) / 2.5, 0, 1))[:, None]
+    sbuf = np.tanh(sbuf)
+    sbuf *= 0.9 / max(1e-9, np.abs(sbuf).max())
+    pcm = (sbuf * 32767).astype("<i2")
+
+    wav_path = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"kotu-sample-{os.getpid()}.wav")
+    with wave.open(wav_path, "wb") as f:
+        f.setnchannels(2)
+        f.setsampwidth(2)
+        f.setframerate(SR)
+        f.writeframes(pcm.tobytes())
+
+    os.makedirs(os.path.dirname(SAMPLE_OUT), exist_ok=True)
+    if not encode_mp3_ffmpeg(wav_path, SAMPLE_OUT):
+        encode_mp3_lameenc(pcm, SAMPLE_OUT)
+    os.remove(wav_path)
+    print(f"wrote {SAMPLE_OUT} ({os.path.getsize(SAMPLE_OUT) / 1024:.0f} KB, {dur:.0f}s)")
+
+
+if len(sys.argv) > 1 and sys.argv[1] == "sample":
+    make_sample_mp3()
+    raise SystemExit(0)
+
 
 sixteenth = BEAT / 4
 SWING = sixteenth / 3   # 16분 뒤박을 1/3 밀기 — 가벼운 셔플 (SMW 그루브)
