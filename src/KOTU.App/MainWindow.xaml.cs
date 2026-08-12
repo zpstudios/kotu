@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
+using KOTU.App.Overlays;
 using KOTU.Core.Cli;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
@@ -27,18 +28,35 @@ public sealed partial class MainWindow : Window
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
 
-    // ---- 내장 탐색기 + Alt/Ctrl 오버레이 상태 (v0.25.0; 정보 오버레이 키는
-    //      v0.45.0에 Ctrl → Shift로 갔다가 A32에서 Ctrl로 회귀 — 모듈 전환이
-    //      숫자 단독 키가 되면서 Ctrl이 다시 비었고, Shift는 A24 새 창 더블클릭이 쓴다) ----
-    private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·Alt 목록에 사용)
+    // ---- 내장 탐색기 + 좌/우 오버레이 입력 상태 머신 (A58 — v0.25.0 홀드·v0.32.0 2연타 고정 대체) ----
+    // 키 할당(부록 B 26번): Alt = 좌측 파일 리스트 / Shift = 우측 정보 (Ctrl은 오버레이에서 손 뗌 —
+    //   v0.45.0 Ctrl→Shift, A32에서 Ctrl 회귀를 거쳐 A58에서 Shift로 확정).
+    // 사이드마다 4상태: Closed(닫힘) / Holding(키 홀드 — 반투명 덮기, 메인 크기 불변) /
+    //   TranslucentPinned(2초 이상 홀드 — 키를 떼도 반투명 유지) /
+    //   OpaqueDocked(2연타 — 불투명 + 메인을 반대쪽 7*로 축소, 양쪽이면 3:4:3).
+    // 고정 해제는 반투명 고정·불투명 밀어내기 둘 다 2연타. 홀드 판정은 다른 키·포인터가
+    // 함께 개입하면 취소된다(OS Alt 메뉴 모드와 같은 규칙 — Shift 조합 단축키 안전장치).
+    private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ExplorerPane? _emptyExplorer; // 빈 상태 중앙 탐색기 (지연 생성)
-    private bool _altHeld;
-    private bool _ctrlHeld;
-    private bool _infoPinned;             // Ctrl 2연타로 고정된 정보 오버레이
-    private bool _altPinned;              // Alt 2연타로 고정된 리스트 (v0.32.0; A57 ①에서 좌측으로)
-    private DateTime _lastCtrlDown = DateTime.MinValue; // 2연타 고정 판정 (v0.32.0)
-    private DateTime _lastAltDown = DateTime.MinValue;
+
+    private enum OverlayState { Closed, Holding, TranslucentPinned, OpaqueDocked }
+
+    /// <summary>오버레이 한쪽(좌 = Alt 리스트 / 우 = Shift 정보)의 입력·표시 상태.</summary>
+    private sealed class OverlaySide
+    {
+        public OverlayState State;
+        public bool KeyIsDown;          // 물리 키가 눌려 있는지 — 수정자 조합(Alt+Shift) 감지용
+        public bool HoldSessionActive;  // 이번 누름이 홀드 판정 세션인지 (2연타·조합·취소면 아님)
+        public DateTime LastTapDown = DateTime.MinValue; // 2연타 판정 (down→down)
+        public DispatcherTimer? PinTimer; // 2초 홀드 → 반투명 고정 승격 (생성자에서 배선)
+    }
+
+    private const double OverlayDoubleTapMs = 450;  // 2연타 판정 창 (v0.32.0 값 유지)
+    private const double OverlayPinHoldMs = 2000;   // 홀드 → 반투명 고정 승격 시간 (A58)
+
+    private readonly OverlaySide _listSide = new(); // 좌측 파일 리스트 (Alt)
+    private readonly OverlaySide _infoSide = new(); // 우측 정보 (Shift)
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
@@ -81,13 +99,24 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
-        // Alt/Ctrl 홀드 감지(v0.25.0, A32에서 정보 키 Shift→Ctrl 회귀): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서
-        // handledEventsToo로 구독한다. 창 비활성화로 KeyUp을 놓치면 홀드 상태를 초기화.
+        // Alt/Shift 오버레이 입력 감지(A58 — v0.25.0 Alt/Ctrl 홀드 대체): 포커스가 모듈 뷰 안에
+        // 있어도 받도록 창 루트에서 handledEventsToo로 구독한다. 포인터 개입(클릭)도 홀드 판정
+        // 취소 트리거(A58 안전장치 — Shift+클릭 다중 선택·Shift+더블클릭이 오버레이를 물지 않게).
+        // 창 비활성화로 KeyUp을 놓치면 홀드 판정·키 상태를 초기화(고정·불투명 상태는 유지).
         RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
+        RootLayout.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnRootPointerPressed), handledEventsToo: true);
+        _listSide.PinTimer = MakePinTimer(_listSide);
+        _infoSide.PinTimer = MakePinTimer(_infoSide);
         Activated += (_, e) =>
         {
-            if (e.WindowActivationState == WindowActivationState.Deactivated) ResetKeyOverlays();
+            if (e.WindowActivationState == WindowActivationState.Deactivated)
+            {
+                _listSide.KeyIsDown = false;
+                _infoSide.KeyIsDown = false;
+                ResetOverlayInput();
+            }
         };
 
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
@@ -761,7 +790,7 @@ public sealed partial class MainWindow : Window
         _ = ConfirmThenCloseAsync();
     }
 
-    // ---------- 내장 탐색기 + Alt/Ctrl 오버레이 (v0.25.0) ----------
+    // ---------- 내장 탐색기 + 좌/우 오버레이 (v0.25.0 → A58 상태 머신) ----------
 
     /// <summary>현재 모듈·파일 상태를 바꾸고 탐색기/오버레이 표시를 갱신한다.</summary>
     private void SetContentState(IModule? module, string? filePath)
@@ -771,7 +800,10 @@ public sealed partial class MainWindow : Window
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // 모듈별 마지막 폴더 저장 (v0.55.0)
         UpdateEmptyExplorer();
-        ResetKeyOverlays();
+        // 홀드 판정만 리셋하고(A58), 반투명 고정·불투명 밀어내기 상태는 유지한 채
+        // 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 — 기존 "고정은 콘텐츠를 넘어 유지" 규칙.
+        ResetOverlayInput();
+        ApplyOverlayStates();
     }
 
     /// <summary>현재 파일의 폴더를 모듈별 설정("lastFolder.{id}")에 기억한다 (v0.55.0).</summary>
@@ -791,8 +823,7 @@ public sealed partial class MainWindow : Window
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // v0.55.0
         UpdateEmptyExplorer();
-        if (ListOverlay.IsOpen) ShowAltOverlay(); // 폴더가 바뀌었을 수 있다
-        if (InfoOverlay.IsOpen) UpdateInfoOverlay();
+        ApplyOverlayStates(); // 폴더·정보가 바뀌었을 수 있다 — 떠 있는 오버레이·도크 갱신
     }
 
     /// <summary>
@@ -824,110 +855,246 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // ---------- 좌/우 오버레이 입력 상태 머신 (A58) ----------
+
+    /// <summary>
+    /// 키 → 오버레이 사이드 매핑 (부록 B 26번): Alt = 좌측 파일 리스트, Shift = 우측 정보.
+    /// 그 밖의 키는 null — 홀드 취소 트리거(다른 키 개입)로만 쓰인다.
+    /// </summary>
+    private OverlaySide? SideForKey(VirtualKey key) => key switch
+    {
+        VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu => _listSide,
+        VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift => _infoSide,
+        _ => null,
+    };
+
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Menu)
+        // A32 통과 규칙 유지: 텍스트 입력 컨트롤에 포커스가 있으면 오버레이 입력을 받지 않는다 —
+        // Shift는 대문자 입력이 우선(에디터 타이핑을 오버레이가 방해하면 안 된다).
+        // 어떤 키든 홀드 판정·2연타 카운트만 리셋하고 흘려보낸다.
+        if (IsTextInputFocused())
         {
-            if (!_altHeld && !e.KeyStatus.WasKeyDown)
-            {
-                _altHeld = true;
-
-                // Alt 2연타 = 고정 토글, 다시 2연타로 해제 (v0.32.0 — Ctrl 정보 오버레이와 동일 UX).
-                // 고정하면 키를 놓거나 창 활성화를 뺏겨도(화면 공유 컨트롤 등) 리스트가 유지된다.
-                var now = DateTime.UtcNow;
-                if ((now - _lastAltDown).TotalMilliseconds < 450)
-                {
-                    _altPinned = !_altPinned;
-                    _lastAltDown = DateTime.MinValue;
-                }
-                else
-                {
-                    _lastAltDown = now;
-                }
-                UpdateAltOverlay();
-            }
-            // Alt 기본 동작(메뉴 모드 진입)과의 충돌 방지 — 오버레이가 떠 있을 때만 소비한다.
-            if (ListOverlay.IsOpen) e.Handled = true;
+            ResetOverlayInput();
+            return;
         }
-        else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
-        {
-            if (_ctrlHeld || e.KeyStatus.WasKeyDown) return;
-            _ctrlHeld = true;
-            if (_currentFilePath is null) return; // 콘텐츠 없으면 정보도 핀 토글도 없다
 
-            // Ctrl 2연타 = 고정 토글, 다시 2연타로 해제 (A32 — Shift에서 회귀, UX 동일)
-            var now = DateTime.UtcNow;
-            if ((now - _lastCtrlDown).TotalMilliseconds < 450)
-            {
-                _infoPinned = !_infoPinned;
-                _lastCtrlDown = DateTime.MinValue;
-            }
+        var side = SideForKey(e.Key);
+        if (side is null)
+        {
+            // 다른 키가 함께 눌림 → 진행 중 홀드 세션 취소(이미 떠 있으면 즉시 내림) +
+            // 2연타 카운트 리셋 — OS의 Alt 메뉴 모드와 같은 규칙 (A58 공통 안전장치:
+            // Shift+더블클릭 새 인스턴스·향후 A84 Shift 조합이 오버레이를 깜빡이지 않게).
+            // 비수정자 키를 먼저 누르고 있던 조합은 그 키의 반복 입력이 곧 도착해 같은 경로로 취소된다.
+            ResetOverlayInput();
+            return;
+        }
+
+        var other = ReferenceEquals(side, _listSide) ? _infoSide : _listSide;
+        side.KeyIsDown = true; // 반복 입력에서도 갱신 — 수정자 조합 감지의 근거
+        if (!e.KeyStatus.WasKeyDown)
+        {
+            if (other.KeyIsDown)
+                ResetOverlayInput(); // Alt+Shift 같은 오버레이 키끼리의 조합 — 양쪽 다 홀드 판정 없음
             else
-            {
-                _lastCtrlDown = now;
-            }
-            UpdateInfoOverlay();
+                OnOverlaySideDown(side);
         }
+
+        // Alt 기본 동작(OS 메뉴 모드 진입)과의 충돌 방지 — 기존 방식 유지(v0.25.0):
+        // 좌측 오버레이가 떠 있을 때만 KeyDown을 소비한다.
+        if (ReferenceEquals(side, _listSide) && ListOverlay.IsOpen) e.Handled = true;
+    }
+
+    /// <summary>
+    /// 사이드 키 최초 down(반복·조합 제외)의 상태 전이 (A58 표):
+    /// 2연타 = 고정 상태(반투명 고정·불투명 밀어내기)면 해제, 닫힘이면 불투명 밀어내기.
+    /// 단독 down = 닫힘 상태에서만 홀드 세션 시작(반투명 덮기 + 2초 승격 타이머).
+    /// </summary>
+    private void OnOverlaySideDown(OverlaySide side)
+    {
+        if (_currentFilePath is null) return; // 콘텐츠 없으면 오버레이도 판정도 없다 (기존 규칙 유지)
+
+        var now = DateTime.UtcNow;
+        if ((now - side.LastTapDown).TotalMilliseconds < OverlayDoubleTapMs)
+        {
+            side.LastTapDown = DateTime.MinValue;
+            CancelHoldCore(side); // 이번 누름은 홀드 세션이 아니다 — 계속 눌러도 승격 없음
+            side.State = side.State is OverlayState.TranslucentPinned or OverlayState.OpaqueDocked
+                ? OverlayState.Closed         // 고정 해제 — 두 고정 상태 모두 2연타로 집어넣는다
+                : OverlayState.OpaqueDocked;  // 닫힘(첫 탭은 이미 내려간 상태)에서 2연타 = 불투명 밀어내기
+        }
+        else
+        {
+            side.LastTapDown = now;
+            if (side.State == OverlayState.Closed)
+            {
+                side.State = OverlayState.Holding;
+                side.HoldSessionActive = true;
+                side.PinTimer?.Start(); // 2초 경과 시 TranslucentPinned로 승격
+            }
+            // 이미 고정·불투명이면 홀드는 의미 없음 — 탭 시각만 기록(다음 2연타 판정용)
+        }
+        ApplyOverlayStates();
     }
 
     private void OnRootKeyUp(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Menu)
+        var side = SideForKey(e.Key);
+        if (side is null) return;
+
+        var sawDown = side.KeyIsDown;
+        side.KeyIsDown = false;
+        if (side.HoldSessionActive)
         {
-            if (_altHeld) e.Handled = true;
-            _altHeld = false;
-            UpdateAltOverlay(); // 고정(_altPinned) 상태면 유지된다 (v0.32.0)
+            side.HoldSessionActive = false;
+            side.PinTimer?.Stop();
+            if (side.State == OverlayState.Holding)
+            {
+                side.State = OverlayState.Closed; // 2초 미만 홀드 — 키를 떼면 내려간다
+                ApplyOverlayStates();
+            }
+            // 타이머가 이미 TranslucentPinned로 승격했다면 그대로 유지 —
+            // "2초 넘겨 뗐을 때 = 고정 유지" (A58 확정 해석)
         }
-        else if (e.Key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl)
-        {
-            _ctrlHeld = false;
-            UpdateInfoOverlay();
-        }
+
+        // Alt 기본 동작 충돌 방지 — 기존 방식 유지: OS 메뉴 모드는 Alt KeyUp에서 발동하므로
+        // down을 우리가 본 Alt의 up은 소비한다(기존 _altHeld 소비와 같은 범위).
+        if (ReferenceEquals(side, _listSide) && sawDown) e.Handled = true;
     }
 
-    /// <summary>창 비활성화 등으로 KeyUp을 놓칠 수 있어 홀드 상태를 초기화한다(고정 오버레이는 유지).</summary>
-    private void ResetKeyOverlays()
+    /// <summary>
+    /// 포인터 개입도 홀드 판정을 취소한다(A58 안전장치) — Shift+클릭 다중 선택,
+    /// Shift+더블클릭 새 인스턴스(A24)가 오버레이를 물고 있지 않게. 단, 그 오버레이
+    /// 자신 안에서의 클릭은 예외 — Alt를 쥔 채 리스트에서 파일을 더블클릭해 여는
+    /// 기존 흐름(v0.25.0)을 끊으면 안 된다.
+    /// </summary>
+    private void OnRootPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        _altHeld = false;
-        _ctrlHeld = false;
-        UpdateAltOverlay();
-        UpdateInfoOverlay();
+        var origin = e.OriginalSource as DependencyObject;
+        var changed = false;
+        if (!IsWithin(origin, ListOverlay)) changed |= CancelHoldCore(_listSide);
+        if (!IsWithin(origin, InfoOverlay)) changed |= CancelHoldCore(_infoSide);
+        _listSide.LastTapDown = DateTime.MinValue; // 2연타 카운트 리셋
+        _infoSide.LastTapDown = DateTime.MinValue;
+        if (changed) ApplyOverlayStates();
     }
 
-    /// <summary>Alt 홀드(또는 2연타 고정) 리스트 오버레이의 표시 상태를 갱신한다 (v0.32.0).</summary>
-    private void UpdateAltOverlay()
+    /// <summary>element가 root의 비주얼 트리 안에 있는지 (팝업 등 별도 트리는 false).</summary>
+    private static bool IsWithin(DependencyObject? element, UIElement root)
     {
-        var show = (_altHeld || _altPinned) && _currentFilePath is not null;
-        if (show) ShowAltOverlay();
+        while (element is not null)
+        {
+            if (ReferenceEquals(element, root)) return true;
+            element = VisualTreeHelper.GetParent(element);
+        }
+        return false;
+    }
+
+    /// <summary>2초 홀드 승격 타이머(A58): 홀드 세션이 아직 살아 있으면 반투명 고정으로 승격.</summary>
+    private DispatcherTimer MakePinTimer(OverlaySide side)
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(OverlayPinHoldMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (side.HoldSessionActive && side.State == OverlayState.Holding)
+            {
+                side.State = OverlayState.TranslucentPinned; // 이제 키를 떼도 유지된다
+                ApplyOverlayStates(); // 안내 문구(Pinned)가 이 시점부터 보인다
+            }
+        };
+        return timer;
+    }
+
+    /// <summary>
+    /// 홀드 판정 리셋(A58): 다른 키·포인터 개입, 창 비활성화(KeyUp 유실), 콘텐츠 전환에서
+    /// 부른다. 홀드 중(Holding)이던 오버레이만 즉시 내리고, 반투명 고정·불투명 밀어내기
+    /// 상태는 유지한다. 2연타 카운트도 함께 리셋한다.
+    /// </summary>
+    private void ResetOverlayInput()
+    {
+        var changed = CancelHoldCore(_listSide) | CancelHoldCore(_infoSide);
+        _listSide.LastTapDown = DateTime.MinValue;
+        _infoSide.LastTapDown = DateTime.MinValue;
+        if (changed) ApplyOverlayStates();
+    }
+
+    /// <summary>홀드 세션만 종료한다. 반환값 = 표시가 바뀌어야 하는지(Holding을 닫았는지).</summary>
+    private static bool CancelHoldCore(OverlaySide side)
+    {
+        side.PinTimer?.Stop();
+        side.HoldSessionActive = false;
+        if (side.State != OverlayState.Holding) return false;
+        side.State = OverlayState.Closed;
+        return true;
+    }
+
+    /// <summary>
+    /// 외부에서 좌/우 오버레이의 불투명 밀어내기 상태를 지정한다 — 시작 경로별 기본 표시
+    /// 상태(A81 예정: 모듈 실행 시 양쪽 불투명, 부록 B 30번)용 공개 API.
+    /// true = OpaqueDocked, false = 닫힘. 반투명 고정은 키 입력 전용이라 여기서 만들지 않는다.
+    /// </summary>
+    public void SetDockedState(bool listDocked, bool infoDocked)
+    {
+        CancelHoldCore(_listSide);
+        CancelHoldCore(_infoSide);
+        _listSide.State = listDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
+        _infoSide.State = infoDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
+        ApplyOverlayStates();
+    }
+
+    /// <summary>
+    /// 상태 머신 → 화면 반영 (A58). 표시 여부·모드(반투명/불투명)·안내 문구·도크 컬럼을
+    /// 한 곳에서 일괄 갱신한다. 콘텐츠 파일이 없으면(빈 셸·설정·H/W) 상태와 무관하게 숨긴다 —
+    /// 상태 자체는 남아 있어 다음 파일을 열면 같은 모드로 되살아난다(기존 고정 유지 규칙).
+    /// </summary>
+    private void ApplyOverlayStates()
+    {
+        var hasFile = _currentFilePath is not null;
+        var listShow = hasFile && _listSide.State != OverlayState.Closed;
+        var infoShow = hasFile && _infoSide.State != OverlayState.Closed;
+
+        if (listShow) ShowListOverlay();
         else ListOverlay.Hide();
-        // ShowAltOverlay가 폴더 부재 등으로 못 띄웠을 수 있어 실제 표시 상태 기준으로 판단(컨트롤 내부)
-        ListOverlay.SetPinned(_altPinned);
-    }
+        // ShowListOverlay가 폴더 부재 등으로 못 띄웠을 수 있다 — 문구는 컨트롤이 IsOpen 기준으로 판단
+        ListOverlay.SetState(
+            _listSide.State == OverlayState.OpaqueDocked
+                ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
+            pinned: _listSide.State == OverlayState.TranslucentPinned);
 
-    /// <summary>
-    /// Alt 홀드: 현재 파일이 있는 폴더의 리스트 뷰를 좌측 30%에 띄운다(콘텐츠 로딩 후에만;
-    /// A57 ①에서 우측 → 좌측). 필터 컨텍스트는 현재 모듈의 담당 확장자(A57 ③) —
-    /// A7 드롭다운은 리스트 안에서 그 목록을 추가로 좁힌다.
-    /// </summary>
-    private void ShowAltOverlay()
-    {
-        if (_currentModule is null || _currentFilePath is null) return;
-        if (Path.GetDirectoryName(_currentFilePath) is not { } folder || !Directory.Exists(folder)) return;
-        ListOverlay.Show(folder, _currentModule.SupportedExtensions);
-    }
-
-    /// <summary>
-    /// Ctrl 홀드(또는 고정) 정보 오버레이의 표시 상태를 갱신한다(A32에서 Shift→Ctrl 회귀;
-    /// A57 ①에서 좌측 → 우측). 정보 컨텍스트는 현재 모듈 뷰(IContentInfoProvider) —
-    /// 미구현 모듈은 컨트롤이 파일 기본 정보로 대체한다.
-    /// </summary>
-    private void UpdateInfoOverlay()
-    {
-        var show = (_ctrlHeld || _infoPinned) && _currentFilePath is not null;
-        if (show)
-            InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider, _infoPinned);
+        if (infoShow)
+            InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider);
         else
             InfoOverlay.Hide();
+        InfoOverlay.SetState(
+            _infoSide.State == OverlayState.OpaqueDocked
+                ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
+            pinned: _infoSide.State == OverlayState.TranslucentPinned);
+
+        // 불투명 밀어내기(OpaqueDocked)만 실제 공간을 차지한다: 도크 컬럼을 3*로 키워
+        // 메인(ModuleHost/ExplorerHost)을 반대쪽으로 축소 — 한쪽 3:7, 양쪽 3:4:3 (좌우 30% 유지).
+        // 오버레이 내부 3:7(좌)·7:3(우) 분할이 전폭 기준 정확히 30%라 도크 컬럼과 정렬된다.
+        var left = ListOverlay.IsOpen && _listSide.State == OverlayState.OpaqueDocked ? 3 : 0;
+        var right = InfoOverlay.IsOpen && _infoSide.State == OverlayState.OpaqueDocked ? 3 : 0;
+        LeftDockColumn.Width = new GridLength(left, GridUnitType.Star);
+        RightDockColumn.Width = new GridLength(right, GridUnitType.Star);
+        CenterColumn.Width = new GridLength(10 - left - right, GridUnitType.Star);
+    }
+
+    /// <summary>
+    /// 좌측 리스트 오버레이 표시: 현재 파일이 있는 폴더 + 현재 모듈의 담당 확장자(A57 ③)를
+    /// 주입한다 — A7 드롭다운은 리스트 안에서 그 목록을 추가로 좁힌다.
+    /// 폴더가 사라졌으면(이동식 드라이브 탈착 등) 띄우지 않는다 — 문구·도크는 IsOpen 기준으로 따라온다.
+    /// </summary>
+    private void ShowListOverlay()
+    {
+        if (_currentModule is null || _currentFilePath is null ||
+            Path.GetDirectoryName(_currentFilePath) is not { } folder || !Directory.Exists(folder))
+        {
+            ListOverlay.Hide();
+            return;
+        }
+        ListOverlay.Show(folder, _currentModule.SupportedExtensions);
     }
 
     // ---------- 현재 모드 시각 표시 (v0.20.0 → v0.26.0 개편) ----------

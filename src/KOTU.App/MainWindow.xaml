@@ -26,31 +26,45 @@
             <RowDefinition x:Name="BottomBarRow" Height="44" />
         </Grid.RowDefinitions>
 
-        <ContentControl x:Name="ModuleHost"
-                        Grid.Row="0"
-                        HorizontalContentAlignment="Stretch"
-                        VerticalContentAlignment="Stretch">
-            <TextBlock Text="Open a file, or use the menu at the bottom left"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Opacity="0.6"/>
-        </ContentControl>
+        <!-- 중앙 영역 (A58 불투명 밀어내기 레이아웃): 좌 도크 / 메인 / 우 도크 3컬럼.
+             평소에는 도크 폭 0 = 메인이 전폭. 오버레이가 불투명 밀어내기(OpaqueDocked)면
+             코드(ApplyOverlayStates)가 도크 컬럼을 3*로 키워 메인(ModuleHost/ExplorerHost)이
+             반대쪽 7*로 축소된다. 양쪽 다 밀어내면 3:4:3.
+             오버레이 컨트롤은 항상 전폭으로 겹치고(ColumnSpan=3) 내부 3:7(좌)·7:3(우) 분할이
+             전폭 기준 정확히 30%라서 도크 컬럼과 픽셀 단위로 정렬된다. -->
+        <Grid x:Name="CenterArea" Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="LeftDockColumn" Width="0" />
+                <ColumnDefinition x:Name="CenterColumn" Width="10*" />
+                <ColumnDefinition x:Name="RightDockColumn" Width="0" />
+            </Grid.ColumnDefinitions>
 
-        <!-- 빈 상태 탐색기 (v0.25.0): 모듈을 파일 없이 열면 중앙 영역을 덮는다.
-             파일 더블클릭 → 라우팅으로 열리며 자동으로 내려간다. -->
-        <Grid x:Name="ExplorerHost" Grid.Row="0" Visibility="Collapsed"
-              Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+            <ContentControl x:Name="ModuleHost"
+                            Grid.Column="1"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch">
+                <TextBlock Text="Open a file, or use the menu at the bottom left"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Opacity="0.6"/>
+            </ContentControl>
 
-        <!-- Alt 홀드 파일 리스트 오버레이 (v0.25.0 → A57 ②에서 공용 컨트롤로 추출):
-             좌측 30%(A57 ①에서 우측과 스왑)에 현재 파일 폴더의 리스트 뷰.
-             모듈 컨텍스트(폴더·확장자 필터)는 코드에서 Show()로 주입한다.
-             Alt 2연타로 고정/해제(v0.32.0, Ctrl 정보 오버레이와 동일 패턴). -->
-        <overlays:FileListOverlay x:Name="ListOverlay" Grid.Row="0" Visibility="Collapsed" />
+            <!-- 빈 상태 탐색기 (v0.25.0): 모듈을 파일 없이 열면 중앙 영역을 덮는다.
+                 파일 더블클릭 → 라우팅으로 열리며 자동으로 내려간다. -->
+            <Grid x:Name="ExplorerHost" Grid.Column="1" Visibility="Collapsed"
+                  Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
 
-        <!-- Ctrl 홀드 정보 오버레이 (v0.25.0; v0.45.0 Ctrl→Shift, A32에서 Ctrl 회귀 —
-             모듈 전환이 숫자 단독 키로 바뀌며 Ctrl이 다시 비었다. A57 ②에서 공용 컨트롤로 추출):
-             우측 30%(A57 ①에서 좌측과 스왑, 폭은 A33 균등 분할 유지)에 현재 콘텐츠 정보.
-             정보 항목은 모듈 뷰(IContentInfoProvider)가 주입. Ctrl 2연타로 고정/해제. -->
-        <overlays:ContentInfoOverlay x:Name="InfoOverlay" Grid.Row="0" Visibility="Collapsed" />
+            <!-- 좌측 파일 리스트 오버레이 (v0.25.0 → A57 ②에서 공용 컨트롤로 추출).
+                 입력 매핑(A58): Alt 홀드 = 반투명 덮기 / 2초 홀드 = 반투명 고정 /
+                 Alt 2연타 = 불투명 밀어내기, 고정 상태에서 2연타 = 해제. -->
+            <overlays:FileListOverlay x:Name="ListOverlay" Grid.ColumnSpan="3" Visibility="Collapsed" />
+
+            <!-- 우측 정보 오버레이 (A57 ②에서 공용 컨트롤로 추출. 키는 v0.45.0 Ctrl→Shift,
+                 A32에서 Ctrl 회귀를 거쳐 A58에서 Shift로 확정 — 부록 B 26번.
+                 정보 항목은 모듈 뷰(IContentInfoProvider)가 주입).
+                 입력 매핑(A58): Shift 홀드 = 반투명 덮기 / 2초 홀드 = 반투명 고정 /
+                 Shift 2연타 = 불투명 밀어내기, 고정 상태에서 2연타 = 해제. -->
+            <overlays:ContentInfoOverlay x:Name="InfoOverlay" Grid.ColumnSpan="3" Visibility="Collapsed" />
+        </Grid>
 
         <!-- 하단 바 (작업표시줄 느낌). 전체화면에서는 코드에서 통째로 숨긴다(v0.21.0) -->
         <Grid x:Name="BottomBar" Grid.Row="1" Height="44"

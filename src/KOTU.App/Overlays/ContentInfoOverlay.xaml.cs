@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 
@@ -12,7 +13,9 @@ namespace KOTU.App.Overlays;
 /// 정보 항목은 모듈이 주입한다: ShowFor()에 넘기는 IContentInfoProvider(모듈 뷰)가 내용을 만들고,
 /// 없거나 실패하면 파일 기본 정보로 대체한다. 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
 /// 애초에 ShowFor를 부르지 않는다(현행 동작 유지).
-/// 입력(Ctrl 홀드·2연타 고정, A32)은 셸(MainWindow)이 그대로 담당한다 — A58에서 별도 대체 예정.
+/// 입력(A58: Shift 홀드 = 반투명 / 2초 = 고정 / 2연타 = 불투명 밀어내기·해제 —
+/// 기존 Ctrl을 대체, 부록 B 26번)은 셸(MainWindow)의 상태 머신이 담당한다 —
+/// 이 컨트롤은 ShowFor/Hide/SetState만 받는다.
 /// </summary>
 public sealed partial class ContentInfoOverlay : UserControl
 {
@@ -31,14 +34,12 @@ public sealed partial class ContentInfoOverlay : UserControl
 
     /// <summary>
     /// 모듈 컨텍스트를 주입받아 표시한다: path = 현재 콘텐츠 파일,
-    /// provider = 모듈 뷰의 정보 계약(IContentInfoProvider, null이면 파일 기본 정보),
-    /// pinned = 2연타 고정 상태(고정했을 때만 스크롤 등 상호작용 허용 + 안내 문구).
+    /// provider = 모듈 뷰의 정보 계약(IContentInfoProvider, null이면 파일 기본 정보).
+    /// 모드·고정 안내는 SetState가 별도로 반영한다(A58 — 기존 pinned 인자 대체).
     /// </summary>
-    public void ShowFor(string path, IContentInfoProvider? provider, bool pinned)
+    public void ShowFor(string path, IContentInfoProvider? provider)
     {
         Visibility = Visibility.Visible;
-        OverlayBorder.IsHitTestVisible = pinned;
-        PinnedText.Visibility = pinned ? Visibility.Visible : Visibility.Collapsed;
         _ = LoadAsync(path, provider);
     }
 
@@ -47,6 +48,26 @@ public sealed partial class ContentInfoOverlay : UserControl
         Visibility = Visibility.Collapsed;
         OverlayBorder.IsHitTestVisible = false;
         PinnedText.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 표시 모드·고정 안내 반영 (A58). TranslucentOver = 아크릴 반투명(A33): 홀드 중이면
+    /// 문구 없음, pinned(2초 홀드 고정)면 unpin 안내. OpaqueDocked = 불투명 배경 + close 안내 —
+    /// 실제 폭 차지(메인 축소)는 셸의 도크 컬럼이 담당하고 여기서는 시각·문구만 바꾼다.
+    /// 상호작용(스크롤)은 고정·불투명에서만 허용 — 홀드 중에는 아래 콘텐츠 클릭을 막지 않는다
+    /// (기존 pinned 규칙 유지).
+    /// </summary>
+    public void SetState(OverlayMode mode, bool pinned)
+    {
+        var docked = mode == OverlayMode.OpaqueDocked;
+        OverlayBorder.Background = (Brush)Application.Current.Resources[
+            docked ? "SolidBackgroundFillColorBaseBrush" : "OverlayAcrylicBrush"];
+        OverlayBorder.IsHitTestVisible = IsOpen && (docked || pinned);
+        PinnedText.Text = docked
+            ? "Docked — press Shift twice to close"
+            : "Pinned — press Shift twice to unpin";
+        PinnedText.Visibility = IsOpen && (docked || pinned)
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>

@@ -15,7 +15,8 @@ namespace KOTU.App.Overlays;
 /// 상단 25%는 디스크 계층 트리(A57 ④): 폴더만 표시, 노드 펼침 시점 지연 로드,
 /// Show() 시 현재 폴더까지 자동 펼침·선택·스크롤. 트리 선택은 하단 리스트를 그 폴더로 옮긴다
 /// (NavigateTo 재사용이라 A5 정렬·A7 필터·A8 경로 표시가 그대로 따라온다).
-/// 입력(Alt 홀드·2연타 고정, A32)은 셸(MainWindow)이 그대로 담당한다 — A58에서 별도 대체 예정.
+/// 입력(A58: Alt 홀드 = 반투명 / 2초 = 고정 / 2연타 = 불투명 밀어내기·해제)은
+/// 셸(MainWindow)의 상태 머신이 담당한다 — 이 컨트롤은 Show/Hide/SetState만 받는다.
 /// </summary>
 public sealed partial class FileListOverlay : UserControl
 {
@@ -65,9 +66,24 @@ public sealed partial class FileListOverlay : UserControl
 
     public void Hide() => Visibility = Visibility.Collapsed;
 
-    /// <summary>고정(2연타) 안내 문구 표시 — 떠 있는 상태에서 고정됐을 때만 보인다(v0.32.0).</summary>
-    public void SetPinned(bool pinned) =>
-        PinnedText.Visibility = IsOpen && pinned ? Visibility.Visible : Visibility.Collapsed;
+    /// <summary>
+    /// 표시 모드·고정 안내 반영 (A58 — v0.32.0 SetPinned 대체).
+    /// TranslucentOver = 아크릴 반투명(A33): 홀드 중이면 문구 없음, pinned(2초 홀드 고정)면
+    /// unpin 안내. OpaqueDocked = 불투명 배경 + close 안내 — 실제 폭 차지(메인 축소)는
+    /// 셸의 도크 컬럼이 담당하고 여기서는 시각·문구만 바꾼다.
+    /// 문구는 실제 표시 상태(IsOpen) 기준 — 폴더 부재 등으로 Show가 못 떴으면 숨긴 채 둔다.
+    /// </summary>
+    public void SetState(OverlayMode mode, bool pinned)
+    {
+        var docked = mode == OverlayMode.OpaqueDocked;
+        PanelBorder.Background = (Brush)Application.Current.Resources[
+            docked ? "SolidBackgroundFillColorBaseBrush" : "OverlayAcrylicBrush"];
+        PinnedText.Text = docked
+            ? "Docked — press Alt twice to close"
+            : "Pinned — press Alt twice to unpin";
+        PinnedText.Visibility = IsOpen && (docked || pinned)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     // ---------- 디스크 계층 트리 (A57 ④) ----------
 
