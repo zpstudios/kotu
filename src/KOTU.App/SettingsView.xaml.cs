@@ -347,7 +347,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
     /// <summary>
     /// Windows 섹션(A24): 창 재사용 규칙. 기본 off = 같은 모듈 창 재사용(현행).
-    /// on = 파일을 열 때마다 새 창(내장 탐색기·외부 열기 공통). Ctrl+N·Shift+더블클릭·
+    /// on = 파일을 열 때마다 새 창(내장 탐색기·외부 열기 공통). Shift+N(A84)·Shift+더블클릭·
     /// 우클릭 "Open in new instance"는 규칙과 무관하게 항상 새 창이므로 여기 영향 없음.
     /// 문구는 A53에서 "new window" → "new instance"로 통일.
     /// </summary>
@@ -369,7 +369,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         {
             Text = "Off: a file opens in the existing instance of the same module (default). "
                  + "On: every file opens a new instance. Explicit \"new instance\" actions "
-                 + "(Ctrl+N, Shift+double-click, right-click menu) always open a new instance either way.",
+                 + "(Shift+N, Shift+double-click, right-click menu) always open a new instance either way.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,

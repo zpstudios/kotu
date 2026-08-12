@@ -66,6 +66,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         Scroller.AddHandler(PointerWheelChangedEvent,
             new PointerEventHandler(OnScrollerWheel), handledEventsToo: true);
 
+        // A84: 줌 수정자 Ctrl→Shift. 내장 Ctrl+휠 줌은 ScrollViewer 자신이 처리하므로 그보다
+        // 먼저(버블 경로상 앞서는 콘텐츠 프레젠터에서) 가로채야 막고 대체할 수 있다 —
+        // 프레젠터는 템플릿 적용 후에야 존재하므로 Loaded에서 배선한다.
+        Scroller.Loaded += (_, _) => HookZoomWheel();
+
         if (context.FilePath is { } path && File.Exists(path))
         {
             OpenPath(path);
@@ -124,10 +129,12 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private void OnOpenButtonClick(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
     // 드래그&드롭은 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
-    /// <summary>휠: 기본은 이전/다음 탐색. Ctrl+휠(줌)과 확대 상태(팬 스크롤)에서는 개입하지 않는다.</summary>
+    /// <summary>휠: 기본은 이전/다음 탐색. 수정자 휠(A84 — Shift=줌, Ctrl=무동작)과 확대 상태(팬 스크롤)에서는 개입하지 않는다.</summary>
     private async void OnScrollerWheel(object sender, PointerRoutedEventArgs e)
     {
-        if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;
+        // 수정자 휠은 OnContentWheel(콘텐츠 프레젠터, 버블 선행)이 소비한다 — 여기서는 탐색만 거른다.
+        if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Shift)
+            || e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;
         if (Scroller.ZoomFactor > 1.001f) return;
         // 1:1·Fit width/height로 이미지가 뷰포트를 넘치면 휠은 팬 스크롤에 양보한다 (v0.41.0)
         if (Scroller.ScrollableHeight > 0 || Scroller.ScrollableWidth > 0) return;
@@ -136,6 +143,69 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         if (delta == 0) return;
         e.Handled = true;
         await MoveAsync(forward: delta < 0);
+    }
+
+    // ---------- Shift+휠 줌 (A84 — 내장 Ctrl+휠 줌 대체) ----------
+
+    private ScrollContentPresenter? _zoomPresenter; // 휠 가로채기 지점 (Scroller 템플릿 로드 후 탐색)
+
+    /// <summary>
+    /// ScrollViewer 콘텐츠 프레젠터에 휠 핸들러를 단다(A84). 버블 순서상 프레젠터가
+    /// ScrollViewer보다 먼저 이벤트를 받으므로 여기서 Handled 처리하면 내장 Ctrl+휠 줌이 막힌다.
+    /// 핀치 줌은 ZoomMode=Enabled 그대로 유지된다. 뷰어 콘텐츠 위에서만 동작한다는
+    /// A84 규칙(리스트/그리드 무동작)은 배선 지점 자체가 보장한다.
+    /// </summary>
+    private void HookZoomWheel()
+    {
+        if (_zoomPresenter is not null) return; // Loaded 재진입(전체화면 왕복 등) 중복 배선 방지
+        _zoomPresenter = FindPresenter(Scroller);
+        if (_zoomPresenter is not null)
+            _zoomPresenter.PointerWheelChanged += OnContentWheel;
+    }
+
+    /// <summary>뷰어 콘텐츠 위 수정자 휠(A84): Shift+휠 = 줌, Ctrl+휠 = 무동작(구 조합 차단).</summary>
+    private void OnContentWheel(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Shift))
+        {
+            e.Handled = true; // ScrollViewer 기본 처리(스크롤·줌)보다 먼저 소비
+            ZoomAtPointer(e);
+        }
+        else if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control))
+        {
+            e.Handled = true; // 구 Ctrl+휠 줌 차단 — 앱에 남는 Ctrl 조합은 문서 Ctrl+S뿐(A84)
+        }
+    }
+
+    /// <summary>포인터 위치를 고정점으로 노치당 10% 줌. 범위는 XAML MinZoomFactor 0.1~MaxZoomFactor 8 그대로.</summary>
+    private void ZoomAtPointer(PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(Scroller).Properties.MouseWheelDelta;
+        if (delta == 0) return;
+        var oldZoom = Scroller.ZoomFactor;
+        var newZoom = (float)Math.Clamp(oldZoom * Math.Pow(1.1, delta / 120.0),
+            Scroller.MinZoomFactor, Scroller.MaxZoomFactor);
+        if (Math.Abs(newZoom - oldZoom) < 0.0001f) return;
+
+        // 포인터 아래 콘텐츠 지점이 화면에서 움직이지 않게 오프셋을 배율 변화만큼 이동
+        var pt = e.GetCurrentPoint(Scroller).Position;
+        var ratio = newZoom / oldZoom;
+        Scroller.ChangeView(
+            (Scroller.HorizontalOffset + pt.X) * ratio - pt.X,
+            (Scroller.VerticalOffset + pt.Y) * ratio - pt.Y,
+            newZoom, disableAnimation: true);
+    }
+
+    /// <summary>Scroller 템플릿에서 콘텐츠 프레젠터를 찾는다(휠 가로채기 지점).</summary>
+    private static ScrollContentPresenter? FindPresenter(DependencyObject root)
+    {
+        for (var i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is ScrollContentPresenter presenter) return presenter;
+            if (FindPresenter(child) is { } nested) return nested;
+        }
+        return null;
     }
 
     // ---------- 이미지 로드 ----------

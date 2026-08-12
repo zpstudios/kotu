@@ -34,8 +34,8 @@ public sealed partial class MainWindow : Window
     // 사이드마다 4상태: Closed(닫힘) / Holding(키 홀드 — 반투명 덮기, 메인 크기 불변) /
     //   TranslucentPinned(2초 이상 홀드 — 키를 떼도 반투명 유지) /
     //   OpaqueDocked(2연타 — 불투명 + 메인을 반대쪽 7*로 축소, 양쪽이면 3:4:3).
-    // 고정 해제는 반투명 고정·불투명 밀어내기 둘 다 2연타. 홀드 판정은 다른 키·포인터가
-    // 함께 개입하면 취소된다(OS Alt 메뉴 모드와 같은 규칙 — Shift 조합 단축키 안전장치).
+    // 고정 해제는 반투명 고정·불투명 밀어내기 둘 다 2연타. 홀드 판정은 다른 키·포인터(클릭·휠)가
+    // 함께 개입하면 취소된다(OS Alt 메뉴 모드와 같은 규칙 — A84 Shift 조합 단축키·Shift+휠 줌 안전장치).
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ExplorerPane? _emptyExplorer; // 빈 상태 중앙 탐색기 (지연 생성)
@@ -78,7 +78,7 @@ public sealed partial class MainWindow : Window
         ListOverlay.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
 
         BuildStartMenu();
-        RegisterShortcuts(); // Ctrl+` 시작 메뉴, Ctrl+숫자 모듈 전환 (v0.45.0)
+        RegisterShortcuts(); // `·숫자 단독 키(A32) + Shift+N 새 창(A84 — 기존 Ctrl+N 전환)
         RestoreWindowBounds(); // 마지막 창 크기·위치 복원 + 닫을 때 저장 (v0.55.0 크기, A55 위치·최대화)
         WindowMinSize.Apply(this); // 최소 창 크기 720×540 DIP 강제 (A40) — 창 생성 경로는 이 생성자 하나뿐
         // 광고 로테이션: 메뉴가 열릴 때 현재 분 기준 이미지로 갱신 (같은 분 = 같은 이미지)
@@ -100,13 +100,16 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
         // Alt/Shift 오버레이 입력 감지(A58 — v0.25.0 Alt/Ctrl 홀드 대체): 포커스가 모듈 뷰 안에
-        // 있어도 받도록 창 루트에서 handledEventsToo로 구독한다. 포인터 개입(클릭)도 홀드 판정
-        // 취소 트리거(A58 안전장치 — Shift+클릭 다중 선택·Shift+더블클릭이 오버레이를 물지 않게).
+        // 있어도 받도록 창 루트에서 handledEventsToo로 구독한다. 포인터 개입(클릭·휠)도 홀드 판정
+        // 취소 트리거(A58 안전장치 — Shift+클릭 다중 선택·Shift+더블클릭이 오버레이를 물지 않게.
+        // 휠은 A84에서 추가: Shift+휠 줌은 KeyDown이 아니라 다른-키 취소에 안 걸리므로 여기서 방어).
         // 창 비활성화로 KeyUp을 놓치면 홀드 판정·키 상태를 초기화(고정·불투명 상태는 유지).
         RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.PointerPressedEvent,
-            new PointerEventHandler(OnRootPointerPressed), handledEventsToo: true);
+            new PointerEventHandler(OnRootPointerIntervened), handledEventsToo: true);
+        RootLayout.AddHandler(UIElement.PointerWheelChangedEvent,
+            new PointerEventHandler(OnRootPointerIntervened), handledEventsToo: true);
         _listSide.PinTimer = MakePinTimer(_listSide);
         _infoSide.PinTimer = MakePinTimer(_infoSide);
         Activated += (_, e) =>
@@ -404,8 +407,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// `(1 왼쪽 키) = 시작 메뉴, 숫자 = 모듈 전환, 0 = Settings — 전부 수정자 없는 단독 키(A32).
-    /// Ctrl+N = 새 창(A24)만 수정자 유지. 단독 키는 텍스트 입력란에 포커스가 있으면
-    /// 가로채지 않고 통과시킨다(A32 예외 — 압축 암호 입력 등에서 숫자를 쳐야 하므로).
+    /// Shift+N = 새 창(A24 — A84에서 Ctrl+N을 Shift 계열로 전환. 앱에 남는 Ctrl 조합은
+    /// 문서 Ctrl+S 하나뿐). 단독 키와 Shift 조합은 텍스트 입력란에 포커스가 있으면
+    /// 가로채지 않고 통과시킨다(A32 예외 — 숫자 타이핑·Shift+N 대문자 입력이 우선).
     /// </summary>
     private void RegisterShortcuts()
     {
@@ -419,7 +423,7 @@ public sealed partial class MainWindow : Window
         AddShortcut(VirtualKey.Number0, () => OnSettingsClick(StartButton, new RoutedEventArgs()));
         // 새 창 = 지금 보는 모듈의 빈 인스턴스(A24 사용자 확정). 설정 화면 등 모듈 없는 창은 기본 화면으로.
         AddShortcut(VirtualKey.N, () => _manager.OpenNewWindow(CurrentModuleId),
-            Windows.System.VirtualKeyModifiers.Control);
+            Windows.System.VirtualKeyModifiers.Shift); // A84: Ctrl+N → Shift+N
     }
 
     private void AddShortcut(VirtualKey key, Action action,
@@ -429,7 +433,10 @@ public sealed partial class MainWindow : Window
         accelerator.Invoked += (_, e) =>
         {
             // A32 예외: 단독 키는 입력 컨트롤 타이핑을 뺏으면 안 된다.
-            if (modifiers == Windows.System.VirtualKeyModifiers.None && IsTextInputFocused())
+            // A84: Shift 조합도 동일 — 에디터에서 Shift+글자는 대문자 입력이 우선(Shift+N 통과).
+            if (modifiers is Windows.System.VirtualKeyModifiers.None
+                    or Windows.System.VirtualKeyModifiers.Shift
+                && IsTextInputFocused())
             {
                 e.Handled = false; // 계속 흘려보내 컨트롤이 문자를 받게
                 return;
@@ -469,7 +476,8 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(Divider()); // 그룹 경계는 구분선으로 명확히 (v0.26.0 사용자 요청)
 
         // New Instance 항목은 A65(v0.92.0)에서 제거 — 메뉴 항목만 뺐고,
-        // Ctrl+N·탐색기 Shift+더블클릭·우클릭 "Open in new instance"·설정 토글 진입로는 그대로다.
+        // Shift+N(A84 — 기존 Ctrl+N)·탐색기 Shift+더블클릭·우클릭 "Open in new instance"·
+        // 설정 토글 진입로는 그대로다.
         // Settings·Hardware-info 묶음 (사용자 지정: zip 위에 공백 두고 Hardware-info, 그 위 Settings)
         AddSettingsItem();
         AddModuleItem("hardware");
@@ -903,7 +911,7 @@ public sealed partial class MainWindow : Window
         {
             // 다른 키가 함께 눌림 → 진행 중 홀드 세션 취소(이미 떠 있으면 즉시 내림) +
             // 2연타 카운트 리셋 — OS의 Alt 메뉴 모드와 같은 규칙 (A58 공통 안전장치:
-            // Shift+더블클릭 새 인스턴스·향후 A84 Shift 조합이 오버레이를 깜빡이지 않게).
+            // Shift+더블클릭 새 인스턴스·A84 Shift 조합(Shift+N 등)이 오버레이를 물지 않게).
             // 비수정자 키를 먼저 누르고 있던 조합은 그 키의 반복 입력이 곧 도착해 같은 경로로 취소된다.
             ResetOverlayInput();
             return;
@@ -985,12 +993,13 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 포인터 개입도 홀드 판정을 취소한다(A58 안전장치) — Shift+클릭 다중 선택,
-    /// Shift+더블클릭 새 인스턴스(A24)가 오버레이를 물고 있지 않게. 단, 그 오버레이
-    /// 자신 안에서의 클릭은 예외 — Alt를 쥔 채 리스트에서 파일을 더블클릭해 여는
+    /// 포인터 개입(클릭·휠)도 홀드 판정을 취소한다(A58 안전장치, 휠은 A84에서 추가) —
+    /// Shift+클릭 다중 선택, Shift+더블클릭 새 인스턴스(A24), Shift+휠 줌(A84)이
+    /// 오버레이를 물고 있지 않게. 단, 그 오버레이 자신 안에서의 클릭·스크롤은 예외 —
+    /// Alt를 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
     /// 기존 흐름(v0.25.0)을 끊으면 안 된다.
     /// </summary>
-    private void OnRootPointerPressed(object sender, PointerRoutedEventArgs e)
+    private void OnRootPointerIntervened(object sender, PointerRoutedEventArgs e)
     {
         var origin = e.OriginalSource as DependencyObject;
         var changed = false;
