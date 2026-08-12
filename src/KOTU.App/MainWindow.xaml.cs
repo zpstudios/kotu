@@ -152,6 +152,12 @@ public sealed partial class MainWindow : Window
         _tray.CloseRequested += () => _ = ConfirmThenCloseAsync(); // 닫기도 미저장 가드 경유 (A37)
         _tray.ExitAllRequested += _manager.CloseAll;
         Closed += (_, _) => _tray.Dispose();
+
+        // A69: 최소화 = 트레이로 숨김 (전 모듈). 감지는 AppWindow.Changed의 프레젠터 상태 검사 —
+        // A55 TrackNormalBounds가 이미 실증한 이벤트 경로. WindowMinSize 서브클래스에
+        // WM_SYSCOMMAND(SC_MINIMIZE)를 더하는 대안은 최소화 애니메이션 전에 개입하게 되는 데다
+        // wParam 하위 4비트 마스킹 등 판정 부담이 있어 채택하지 않았다.
+        AppWindow.Changed += OnMinimizeStateChanged;
     }
 
     // ---------- UI 스케일 오버라이드 (v0.24.0) ----------
@@ -784,6 +790,10 @@ public sealed partial class MainWindow : Window
     /// <summary>트레이 닫기·X 버튼 공용: 미저장 확인 후 닫는다.</summary>
     private async Task ConfirmThenCloseAsync()
     {
+        // A69: 트레이로 숨긴 창의 닫기(트레이 Close·Exit KOTU)에서 미저장 확인(A37)이 필요하면
+        // 대화상자가 보이도록 먼저 복귀시킨다 — 숨긴 채 ContentDialog를 띄우면 응답할 방법이 없다.
+        if (_hiddenInTray && ModuleHost.Content is ICloseGuard { HasUnsavedChanges: true })
+            BringToFront();
         if (!await ConfirmDiscardAsync()) return;
         _closeConfirmed = true;
         Close();
@@ -1225,8 +1235,59 @@ public sealed partial class MainWindow : Window
         _tray.SetIcon(path, _instanceNumber);
     }
 
+    // ---------- 최소화 = 트레이로 숨김 (A69) ----------
+
+    /// <summary>
+    /// 트레이로 숨긴 상태(A69) — 작업표시줄·Alt+Tab에 없고 창별 트레이 아이콘으로만 복귀한다.
+    /// 숨김은 닫힘이 아니다: WindowManager의 창 목록 제거는 Closed에서만 일어나므로
+    /// 마지막 창까지 숨겨도 열린 창으로 계산되어 프로세스가 유지된다(창 0개 = 종료 로직과 무충돌).
+    /// </summary>
+    private bool _hiddenInTray;
+
+    /// <summary>
+    /// 최소화 전이 감지(A69). 이 이벤트가 올 땐 창이 이미 -32000으로 이동한 뒤라(A55와 같은 관찰)
+    /// 최소화 애니메이션이 끝나 있다 — "애니메이션 후 Hide" 순서가 자연히 성립한다.
+    /// A39 핀(always on top) 창도 예외 없다: 사용자가 직접 띄워둔 창이라도 최소화 버튼을
+    /// 눌렀다는 사실이 우선(일관성). 실제 숨김은 큐로 미뤄 Changed 디스패치 중의 재진입을 피한다.
+    /// </summary>
+    private void OnMinimizeStateChanged(Microsoft.UI.Windowing.AppWindow sender,
+        Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
+    {
+        if (_hiddenInTray) return;
+        if (sender.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter
+            { State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized }) return;
+
+        _hiddenInTray = true; // 연쇄 Changed(위치·크기·Z순서)로 중복 큐잉되지 않게 먼저 표시
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_hiddenInTray) return; // 큐 대기 중 트레이 좌클릭으로 이미 복귀했으면 숨기지 않는다
+            // 숨김 동안만 WS_EX_TOOLWINDOW(부록 B 18번 사양 메모) — Hide가 주 동작이고
+            // 스타일은 숨김 창을 순환 목록에 남기는 셸 변형에 대한 보조 방어선이다.
+            AltTabExclusion.Set(this, true);
+            AppWindow.Hide(); // 작업표시줄 버튼 제거. 트레이 아이콘(_tray)은 창 수명 내내 남는다
+        });
+    }
+
+    /// <summary>
+    /// 창을 앞으로 — 트레이 좌클릭·메뉴 'Activate window'·파일 열기 재사용(A24)·재전달 공용.
+    /// A69: 트레이로 숨긴 창이면 Alt+Tab 제외를 풀고 다시 보인 뒤 최소화까지 해제한다 —
+    /// 숨김 상태의 복귀 경로는 전부 이 메서드로 모인다.
+    /// </summary>
     public void BringToFront()
     {
+        if (_hiddenInTray)
+        {
+            _hiddenInTray = false;
+            AltTabExclusion.Set(this, false); // 보이기 전에 스타일부터 원복 — Alt+Tab·작업표시줄 정상 노출
+            AppWindow.Show();
+        }
+        // Show(SW_SHOW)는 최소화 상태를 바꾸지 않는다 — 숨김 전이 최소화였으므로 명시적으로
+        // 복원한다. 숨김이 아니어도(숨김 실패·경합) 최소화된 창의 활성화면 같은 복원이 필요하다.
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+            { State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized } op)
+        {
+            op.Restore();
+        }
         AppWindow.MoveInZOrderAtTop();
         Activate();
     }
