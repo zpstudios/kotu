@@ -14,13 +14,13 @@
 
     <Grid x:Name="RootGrid">
         <!-- A37: 뷰어 → 에디터 승격. TextBox 하나가 표시·편집을 겸한다.
-             레이아웃(패딩·최대 폭·폰트)은 기존 뷰어 TextBlock과 동일하게 유지.
+             A80(v0.91.0): 기존 MaxWidth 900 + HorizontalAlignment Left(v0.44.0 뷰어 유래)를
+             제거 — 900px보다 넓은 창에서 포커스된 TextBox 배경이 좌측 900px에만 그려져
+             우측이 검게 비어 보였다(오버레이와 무관). 본문이 창 전체 폭을 쓴다.
              4MB 초과 잘림 표시 파일은 IsReadOnly로 두어 잘린 채 저장되는 사고를 막는다. -->
         <TextBox
             x:Name="EditorBox"
             Padding="24,16,24,24"
-            MaxWidth="900"
-            HorizontalAlignment="Left"
             VerticalAlignment="Stretch"
             FontSize="14"
             AcceptsReturn="True"
