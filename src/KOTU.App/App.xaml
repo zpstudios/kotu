@@ -27,10 +27,15 @@
             </ResourceDictionary.ThemeDictionaries>
 
             <!-- A27(v0.107.0): 하단 바 버튼 규격을 앱 전역 스타일 2종으로 못 박는다.
-                 1칸 = 40×40 (재생·볼륨·열기·메뉴 등 아이콘 하나짜리),
-                 2칸 = 84×40 (Fit·재생속도·리프레시 주기 등 텍스트·드롭다운. 1칸 2개 + 간격 4).
-                 40은 v0.53.0부터 "다른 모듈과 통일" 주석과 함께 굳어 있던 정사각 버튼 크기이고,
-                 하단 바 두께는 A40의 고정 44 — 40 + 위아래 2 여백으로 그대로 들어간다.
+                 ⚠️ A97(v0.116.0)이 A27의 치수를 개정했다 — **40 → 36**(사용자 "10% 축소" 지시).
+                 A27 기록만 보고 40으로 되돌리지 말 것.
+                 1칸 = 36×36 (재생·볼륨·열기·메뉴 등 아이콘 하나짜리),
+                 2칸 = 84×36 (Fit·재생속도·리프레시 주기 등 텍스트·드롭다운).
+                 2칸 폭 84는 **유지**한다(사용자 확정: 폭을 줄이는 것은 "1칸 차지해야 한다고 말한
+                 버튼들에 한해서"). 그래서 84는 더 이상 "1칸 2개 + 간격"의 계산값이 아니라
+                 텍스트가 들어가는 관습 폭이다.
+                 하단 바 두께는 A40의 고정 44 — 36 + 위아래 4 여백으로 들어간다(두께는 불변).
+                 버튼 사이 간격은 A97에서 **6으로 통일**했다(각 모듈 바의 ColumnSpacing).
                  통일 대상은 치수·테두리·모서리·패딩·수직 정렬뿐이다. 색은 지정하지 않아
                  시스템 기본 Button 룩(테마 리소스)이 그대로 유지된다(재디자인 아님).
                  WinUI는 Style의 TargetType이 정확히 일치해야 해서 타입별로 파생 스타일을 둔다
@@ -47,10 +52,10 @@
                  Button·ToggleButton의 DefaultButtonStyle·DefaultToggleButtonStyle은
                  파싱 순서상 실기기에서 해석 성공이 확인돼 그대로 둔다 — 이후 같은
                  예외가 이 키들로 나오면 여기와 똑같이 BasedOn만 제거하면 된다.
-                 SplitButton(Fit)만 예외: 같은 값(84×40)을 뷰에서 직접 지정한다. -->
+                 SplitButton(Fit)만 예외: 같은 값(84×36)을 뷰에서 직접 지정한다(3곳). -->
             <Style x:Key="BottomBarButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
-                <Setter Property="Width" Value="40" />
-                <Setter Property="Height" Value="40" />
+                <Setter Property="Width" Value="36" />
+                <Setter Property="Height" Value="36" />
                 <Setter Property="Padding" Value="4" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="4" />
@@ -58,13 +63,14 @@
                 <Setter Property="HorizontalContentAlignment" Value="Center" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
             </Style>
+            <!-- 2칸 Button — Height 36은 위 1칸 스타일에서 상속받는다(폭만 덮어쓴다) -->
             <Style x:Key="BottomBarWideButtonStyle" TargetType="Button" BasedOn="{StaticResource BottomBarButtonStyle}">
                 <Setter Property="Width" Value="84" />
             </Style>
             <!-- 1칸 토글(정보 모듈 Always on top) -->
             <Style x:Key="BottomBarToggleButtonStyle" TargetType="ToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
-                <Setter Property="Width" Value="40" />
-                <Setter Property="Height" Value="40" />
+                <Setter Property="Width" Value="36" />
+                <Setter Property="Height" Value="36" />
                 <Setter Property="Padding" Value="4" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="4" />
@@ -75,7 +81,7 @@
             <!-- 2칸 드롭다운(정보 모듈 리프레시 주기) -->
             <Style x:Key="BottomBarWideDropDownButtonStyle" TargetType="DropDownButton">
                 <Setter Property="Width" Value="84" />
-                <Setter Property="Height" Value="40" />
+                <Setter Property="Height" Value="36" />
                 <Setter Property="Padding" Value="4" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="4" />
@@ -87,7 +93,7 @@
                  치수와 정렬만 맞추고 Padding·BorderThickness는 기본값을 그대로 둔다. -->
             <Style x:Key="BottomBarWideComboBoxStyle" TargetType="ComboBox">
                 <Setter Property="Width" Value="84" />
-                <Setter Property="Height" Value="40" />
+                <Setter Property="Height" Value="36" />
                 <Setter Property="CornerRadius" Value="4" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />

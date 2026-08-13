@@ -60,7 +60,9 @@
             VerticalAlignment="Bottom"
             Padding="12,6"
             Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}">
-            <Grid>
+            <!-- A97(v0.116.0): 바 안 요소 간격은 전 모듈 6으로 통일 — 개별 Margin(10/12 혼재)을
+                 걷어내고 부모 Grid의 ColumnSpacing 한 곳에서 정한다(다시 흩어지지 않게). -->
+            <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <!-- 파일명·메타(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 -->
@@ -71,14 +73,13 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <!-- A27(v0.107.0): 하단 바 버튼은 1칸(40×40)·2칸(84×40) 두 규격만 —
+                <!-- A27(v0.107.0): 하단 바 버튼은 1칸(36×36)·2칸(84×36) 두 규격만 (A97/v0.116.0에서 40→36) —
                      치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
                 <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
                 <Button
                     x:Name="OpenButton"
                     Grid.Column="0"
                     Style="{StaticResource BottomBarButtonStyle}"
-                    Margin="0,0,12,0"
                     Click="OnOpenButtonClick">
                     <FontIcon Glyph="&#xE8E5;" FontSize="14" />
                 </Button>
@@ -115,10 +116,9 @@
                 <TextBlock
                     x:Name="InfoText"
                     Grid.Column="2"
-                    Margin="12,0"
                     VerticalAlignment="Center" />
                 <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·1:1·전체화면 = 1칸,
-                     Auto-fit = 2칸 + 핏 옵션 전부 아이콘(A27에서 84×40으로 확정). -->
+                     Auto-fit = 2칸 + 핏 옵션 전부 아이콘(A27에서 확정 → A97에서 84×36). -->
                 <Button
                     x:Name="RotateButton"
                     Grid.Column="3"
@@ -130,18 +130,17 @@
                     x:Name="ActualSizeButton"
                     Grid.Column="4"
                     Style="{StaticResource BottomBarButtonStyle}"
-                    Margin="10,0,0,0"
                     Content="1:1"
                     FontSize="13"
                     Click="OnActualSizeClick" />
                 <!-- 기본 클릭 = 자동 맞춤(긴 변이 잘리지 않게). 화살표로 좌우/상하 채움 선택.
                      SplitButton은 WinUI가 키 있는 기본 스타일을 노출하지 않아(BasedOn 대상 없음)
-                     전역 스타일 대신 2칸 값(84×40)을 그대로 적는다 — A27(v0.107.0). -->
+                     전역 스타일 대신 2칸 값(84×36)을 그대로 적는다 — A27(v0.107.0),
+                     높이는 A97(v0.116.0)에서 40→36. 폭 84는 유지. -->
                 <SplitButton
                     x:Name="FitButton"
                     Grid.Column="5"
-                    Margin="10,0,0,0"
-                    Width="84" Height="40"
+                    Width="84" Height="36"
                     VerticalAlignment="Center" CornerRadius="4"
                     Click="OnFitClick">
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />
@@ -163,7 +162,6 @@
                 <Button
                     Grid.Column="6"
                     Style="{StaticResource BottomBarButtonStyle}"
-                    Margin="10,0,0,0"
                     Click="OnFullScreenButtonClick"
                     ToolTipService.ToolTip="Full screen (Enter / F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />

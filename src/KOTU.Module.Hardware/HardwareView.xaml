@@ -63,7 +63,10 @@
              맥박 그래프, 그다음 뒤 순서 카드부터 숨긴다(LayoutSensorCards/UpdateBarDensity).
              우측 끝 ⛶ = 전체화면(전 모듈 공통 배치, 사용자 요청). -->
         <Border x:Name="ControlBar" Grid.Row="2" Padding="0,2,0,2">
-            <Grid x:Name="BarGrid" ColumnSpacing="10">
+            <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10).
+                 ⚠️ 이 값과 아래 요소 폭의 합이 코드의 BarFixedWidth 상수다 — 함께 고칠 것.
+                 SensorGrid 안쪽 카드 간격 8(= CardSpacing 상수)은 별개라 그대로 둔다. -->
+            <Grid x:Name="BarGrid" ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -74,7 +77,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <!-- Copy all(A75): 1칸 아이콘 버튼(A27 40×40 규격, ⛶·핀과 동일 계열).
+                <!-- Copy all(A75): 1칸 아이콘 버튼(A27 규격 — A97/v0.116.0에서 36×36, ⛶·핀과 동일 계열).
                      기능 설명은 툴팁으로. 수동 Refresh 버튼은 A75에서 제거(주기 폴링이 있어 불필요).
                      A27(v0.107.0): 이 줄의 버튼 치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다.
                      A60·A71·A72에서 이 바가 크게 바뀔 예정이라 구성은 그대로 두고 규격만 맞췄다. -->
@@ -97,13 +100,13 @@
                     <Polyline x:Name="PulseLine" Stroke="#2E9E6B" StrokeThickness="1.5" />
                 </Grid>
                 <!-- 리프레시 주기 선택(A29 → A73에서 목록 교체): 50/200/500/1000/2000/5000ms —
-                     2칸(84×40) 규격, 우측 정렬. 가장 긴 표기 "5000 ms"는 구 "1000 ms"와 같은 7글자라
+                     2칸(84×36, A97) 규격, 우측 정렬. 가장 긴 표기 "5000 ms"는 구 "1000 ms"와 같은 7글자라
                      폭 여유는 그대로다. 플라이아웃(50ms 부하 경고 툴팁 포함)은 코드에서 채운다. -->
                 <DropDownButton x:Name="IntervalButton" Grid.Column="4"
                                 Style="{StaticResource BottomBarWideDropDownButtonStyle}">
                     <TextBlock x:Name="IntervalText" FontSize="12" Text="500 ms" />
                 </DropDownButton>
-                <!-- 하단 바 표시 크기(A62): 1칸(40×40) 버튼 하나로 S → M → L → S 순환.
+                <!-- 하단 바 표시 크기(A62): 1칸(36×36, A97) 버튼 하나로 S → M → L → S 순환.
                      2칸 +/- 방식을 쓰지 않은 이유는 하단 바 폭이 이미 빡빡하기 때문(A40의 720px 축약).
                      글리프 E71E(Zoom, 돋보기)는 방향이 없어 순환 버튼에 맞는다. 아이콘 크기 자체가
                      현재 단계를 따라 커져 툴팁을 열지 않아도 지금 단계가 보인다(코드 ApplyBarScale). -->
@@ -119,7 +122,7 @@
                               Checked="OnTopToggleChanged" Unchecked="OnTopToggleChanged">
                     <FontIcon Glyph="&#xE718;" FontSize="18" />
                 </ToggleButton>
-                <!-- 1칸(40×40) = 다른 모듈 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일) -->
+                <!-- 1칸(36×36) = 다른 모듈 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일, A97에서 36) -->
                 <Button Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen dashboard (F11)">

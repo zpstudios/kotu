@@ -61,8 +61,9 @@
                 VerticalAlignment="Center" />
         </Grid>
 
-        <!-- 트랜스포트 바 — 셸이 TakeBottomBar()로 떼어가 하단 바(44px) 한 줄에 얹는다(비디오와 동일) -->
-        <Grid x:Name="TransportBar" Grid.Row="1" Padding="0,2" ColumnSpacing="10">
+        <!-- 트랜스포트 바 — 셸이 TakeBottomBar()로 떼어가 하단 바(44px) 한 줄에 얹는다(비디오와 동일).
+             ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
+        <Grid x:Name="TransportBar" Grid.Row="1" Padding="0,2" ColumnSpacing="6">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -75,7 +76,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- A27(v0.107.0): 하단 바 버튼은 1칸(40×40)·2칸(84×40) 두 규격만 —
+            <!-- A27(v0.107.0): 하단 바 버튼은 1칸(36×36)·2칸(84×36) 두 규격만 (A97/v0.116.0에서 40→36) —
                  치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
             <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
             <Button x:Name="OpenButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
@@ -97,7 +98,7 @@
             <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
-            <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸 84×40) -->
+            <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸, A97에서 84×36) -->
             <ComboBox x:Name="SpeedBox" Grid.Column="7" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
             <Button Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"

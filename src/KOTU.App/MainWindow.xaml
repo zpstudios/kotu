@@ -7,7 +7,8 @@
     <!--
       Windows 시작 메뉴 스타일 셸(v0.18.0, 기존 좌측 NavigationView 대체):
       하단 바 좌측의 메뉴 버튼을 누르면 위로 플라이아웃이 떠오른다.
-      항목 순서(아래→위): 사진·영상·문서 그룹 - 압축 - H/W·Settings - 스폰서(광고).
+      항목 순서(아래→위, A96/v0.116.0 기준): All Readable(1) - 사진·영상·오디오·문서 그룹(2~5) -
+      압축(6) - H/W(7) - Settings(0) - 스폰서(광고). 실제 조립은 코드(BuildStartMenu)가 한다.
       하단 바 우측 Info·Settings 아이콘은 제거(v0.28.2) — 시작 메뉴로 일원화.
       창 전체 드롭은 유지: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅.
     -->
@@ -80,15 +81,17 @@
             </StackPanel>
 
             <!-- 모듈 제공 하단 바(동영상 트랜스포트 등) — 메뉴 버튼과 우측 아이콘 사이 (v0.21.0) -->
+            <!-- 좌측 Margin 48 = 바 좌측 가장자리 여백 6 + 메뉴 버튼 36(A97) + 버튼 간격 6(A97).
+                 A97(v0.116.0)에서 버튼이 40→36이 되며 52→48. 가장자리 여백 6·우측 12는 유지. -->
             <ContentControl x:Name="ModuleBarHost"
                             IsTabStop="False"
-                            Margin="52,0,12,0"
+                            Margin="48,0,12,0"
                             HorizontalAlignment="Stretch" VerticalAlignment="Center"
                             HorizontalContentAlignment="Stretch" />
 
-            <!-- A27(v0.107.0): 메뉴 버튼도 1칸(40×40) 공통 규격 —
-                 투명 배경·테두리 0이던 예외를 없애 다른 하단 바 버튼과 외곽선을 통일.
-                 좌측 여백 6은 유지(ModuleBarHost의 Margin 52가 이 폭 6+40을 전제한다). -->
+            <!-- A27(v0.107.0): 메뉴 버튼도 1칸 공통 규격 — 투명 배경·테두리 0이던 예외를 없애
+                 다른 하단 바 버튼과 외곽선을 통일. A97(v0.116.0)에서 규격이 40×40 → 36×36.
+                 좌측 여백 6은 유지(ModuleBarHost의 Margin 48이 이 폭 6+36+간격 6을 전제한다). -->
             <!-- 툴팁은 코드(RegisterShortcuts)가 단다 — A34: 키 문자(MenuShortcutHint)와
                  표기를 한 값에서 조립해 어긋날 수 없게 하기 위해서다. -->
             <Button x:Name="StartButton"
@@ -102,26 +105,41 @@
                             <!-- A50(v0.92.0): 프레젠터 기본 패딩(좌우 16의 데드존 포함)을 0으로.
                                  Stretch인 항목 버튼이 메뉴 좌우 가장자리까지 닿아,
                                  포인터가 라벨보다 왼쪽에 있어도 항목이 선택된다.
-                                 상하 여백은 아래 StackPanel Padding 4가 대신한다. -->
+                                 상하 여백은 아래 StackPanel Padding 4가 대신한다.
+
+                                 A96(v0.116.0) 하단 바 밀착: 메뉴 바탕창이 하단 바에서 떠서
+                                 뒤 배경이 얇게 비친다는 지적. WinUI Flyout은 대상 요소와의
+                                 간격 오프셋을 속성으로도 테마 리소스로도 내놓지 않으므로,
+                                 프레젠터에 음수 아래 여백을 줘 그만큼 끌어내린다
+                                 (Flyout 배치는 프레젠터의 DesiredSize 기준이라, 아래 여백이
+                                 음수면 그 크기만큼 아래로 내려간다).
+                                 값 6의 근거 = 44px 바 안에서 StartButton이 36(A97)이라
+                                 위아래로 남는 여백 4 + WinUI 기본 플라이아웃 간격의 합을 상쇄.
+                                 ⚠️ **실기기에서 눈으로 보고 미세 조정하는 단일 지점**이다 —
+                                 더 붙이려면 숫자를 키우고(예: -8), 겹치면 줄인다. 다른 곳은 손대지 말 것. -->
                             <Style TargetType="FlyoutPresenter">
                                 <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0,0,0,-6" />
                             </Style>
                         </Flyout.FlyoutPresenterStyle>
                         <!-- 항목은 코드(BuildStartMenu)에서 채운다.
-                             폭 124(v0.35.0 사용자 요청 축소): 광고 카드(2:1 이미지가 폭을
-                             꽉 채움, v0.43.0)가 이 폭의 기준. -->
-                        <StackPanel x:Name="StartMenuPanel" Width="124" Padding="0,4,0,4" />
+                             폭 136(A96/v0.116.0 — v0.35.0의 124에서 +10%): 광고 카드
+                             (2:1 이미지가 폭을 꽉 채움, v0.43.0)가 이 폭의 기준이라
+                             BuildSponsorCard의 이미지 규격 132×66도 같이 움직인다. -->
+                        <StackPanel x:Name="StartMenuPanel" Width="136" Padding="0,4,0,4" />
                     </Flyout>
                 </Button.Flyout>
             </Button>
 
             <!-- 인스턴스 번호 배지 (A2, v0.58.0): 창이 2개 이상일 때만, 생성 순서 1~9 + 색 구분.
                  메뉴 버튼 우상단에 겹쳐 표시. 값은 WindowManager가 SetInstanceNumber로 준다.
-                 제목표시줄 문자열에도 "[n]"으로 함께 표시된다(A56). -->
+                 제목표시줄 문자열에도 "[n]"으로 함께 표시된다(A56).
+                 Margin은 메뉴 버튼 크기에 묶여 있다: 28 = 좌측 여백 6 + 버튼 36 − 배지 16 + 우측 돌출 2,
+                 4 = 44px 바에서 36px 버튼의 윗변. A97(v0.116.0) 40→36에 맞춰 32,2 → 28,4. -->
             <Border x:Name="InstanceBadge"
                     Width="16" Height="16" CornerRadius="8"
                     HorizontalAlignment="Left" VerticalAlignment="Top"
-                    Margin="32,2,0,0"
+                    Margin="28,4,0,0"
                     Visibility="Collapsed" IsHitTestVisible="False">
                 <TextBlock x:Name="InstanceBadgeText"
                            FontSize="10" FontWeight="Bold" Foreground="White"

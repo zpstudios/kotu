@@ -30,7 +30,8 @@
         <!-- 하단 바: 좌측 Patreon 후원 문구(v0.52.0 — 광고 배너는 사용자 정정으로 철회) + 우측 ⛶.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다. -->
         <Border x:Name="ControlBar" Grid.Row="1" Padding="0,2,0,2">
-            <Grid ColumnSpacing="10">
+            <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
+            <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -40,7 +41,7 @@
                                  NavigateUri="https://www.patreon.com/zpstudios/"
                                  VerticalAlignment="Center" Padding="4,2"
                                  ToolTipService.ToolTip="www.patreon.com/zpstudios/" />
-                <!-- 1칸(40×40) 공통 규격 — A27(v0.107.0)에서 앱 전역 스타일로 이관 -->
+                <!-- 1칸(36×36) 공통 규격 — A27(v0.107.0)에서 앱 전역 스타일로 이관, A97(v0.116.0)에서 40→36 -->
                 <Button Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)">

@@ -517,22 +517,25 @@ public sealed partial class MainWindow : Window
     // ---------- 단축키 (v0.45.0 사용자 지정) ----------
 
     /// <summary>
-    /// 모듈 번호(메뉴 아래→위 순서): 1=이미지, 2=영상, 3=오디오, 4=문서, 5=압축, 6=하드웨어,
-    /// 7=All Readable(A59, v0.113.0 — 정보 다음 자리에 이어 붙였다. 1~6은 근육기억·A32·A35·문서가
-    /// 전부 그 순서에 묶여 있어 절대 재배치하지 않는다).
-    /// A10: 오디오 모듈이 3번에 삽입되며 문서 이후가 한 칸씩 밀림(사용자 확정).
+    /// 모듈 번호(메뉴 아래→위 순서): 1=All Readable, 2=이미지, 3=영상, 4=오디오, 5=문서,
+    /// 6=압축, 7=하드웨어.
+    /// A96(v0.116.0, 2026-08-13 사용자 확정): All Readable을 **1번**으로 올리고 나머지는
+    /// **기존 순서 그대로 한 칸씩 밀었다**. A59(v0.113.0)의 "1~6 근육기억 유지, 신설은 7"을 대체한다.
+    /// A10: 오디오 모듈이 영상 다음에 삽입되며 문서 이후가 한 칸씩 밀림(사용자 확정).
     /// A32: Ctrl 없이 숫자 단독(사용자 확정) — Ctrl은 정보 오버레이로 회귀.
     /// 힌트 문자열은 시작 메뉴 항목 마우스 오버 시 툴팁으로 보조 표시된다.
+    /// ⚠️ 번호를 또 바꾸면 <see cref="BuildStartMenu"/> 항목 순서 · A34 키 맵 표
+    /// (docs/REQUIREMENTS.md) · docs/A86-keymap.md 를 **한 번에** 고쳐야 한다(번호가 사방에 박혀 있다).
     /// </summary>
     private static readonly (string Id, VirtualKey Key, string Hint)[] ModuleShortcuts =
     [
-        ("image", VirtualKey.Number1, "1"),
-        ("video", VirtualKey.Number2, "2"),
-        ("audio", VirtualKey.Number3, "3"),
-        ("document", VirtualKey.Number4, "4"),
-        ("archive", VirtualKey.Number5, "5"),
-        ("hardware", VirtualKey.Number6, "6"),
-        (KOTU.Module.AllReadable.AllReadableModule.ModuleId, VirtualKey.Number7, "7"),
+        (KOTU.Module.AllReadable.AllReadableModule.ModuleId, VirtualKey.Number1, "1"),
+        ("image", VirtualKey.Number2, "2"),
+        ("video", VirtualKey.Number3, "3"),
+        ("audio", VirtualKey.Number4, "4"),
+        ("document", VirtualKey.Number5, "5"),
+        ("archive", VirtualKey.Number6, "6"),
+        ("hardware", VirtualKey.Number7, "7"),
     ];
 
     private const string SettingsShortcutHint = "0";
@@ -603,8 +606,13 @@ public sealed partial class MainWindow : Window
     // ---------- 시작 메뉴 (하단 바에서 위로 떠오르는 플라이아웃) ----------
 
     /// <summary>
-    /// 시작 메뉴 구성. 패널은 위→아래 순서로 채우므로, 사용자가 정한 "아래부터" 순서
-    /// (사진-영상-문서, 여백, 압축, 여백x2, 광고)를 뒤집어 넣는다.
+    /// 시작 메뉴 구성. 패널은 **위→아래**로 채우는데 **번호는 아래에서 위로** 올라간다
+    /// (1번이 메뉴 최하단) — 그래서 <see cref="ModuleShortcuts"/> 순서를 뒤집어 넣는다.
+    /// A96(v0.116.0) 이후 배치(위→아래):
+    /// 광고 · 구분선 · Settings(0) · **구분선** · 하드웨어(7) · 구분선 · 압축(6) · 구분선 ·
+    /// 문서(5) · 오디오(4) · 영상(3) · 사진(2) · **구분선** · All Readable(1).
+    /// 굵게 표시한 구분선 2개가 A96 신규다 — ① 1번과 2번 사이 ② 하드웨어와 Settings 사이
+    /// (둘이 서로 붙어 보인다는 사용자 지적).
     /// </summary>
     private void BuildStartMenu()
     {
@@ -617,22 +625,23 @@ public sealed partial class MainWindow : Window
         // New Instance 항목은 A65(v0.92.0)에서 제거 — 메뉴 항목만 뺐고,
         // Shift+N(A84 — 기존 Ctrl+N)·탐색기 Shift+더블클릭·우클릭 "Open in new instance"·
         // 설정 토글 진입로는 그대로다.
-        // Settings·Hardware-info 묶음 (사용자 지정: zip 위에 공백 두고 Hardware-info, 그 위 Settings)
-        AddSettingsItem();
-        // A59(v0.113.0): All Readable = 번호 7. 아래→위 번호 순서상 정보(6) 바로 다음 자리라
-        // 위→아래로 채우는 이 목록에서는 Settings와 hardware 사이에 들어간다.
-        AddModuleItem(KOTU.Module.AllReadable.AllReadableModule.ModuleId);
-        AddModuleItem("hardware");
+        AddSettingsItem(); // 키 0 — 번호 배열과 무관하게 항상 최상단(광고 바로 아래)
+        StartMenuPanel.Children.Add(Divider()); // A96 신규 ②: 하드웨어 인포 ↔ Settings 분리
+
+        AddModuleItem("hardware"); // 7
         StartMenuPanel.Children.Add(Divider());
 
-        AddModuleItem("archive");
+        AddModuleItem("archive"); // 6
         StartMenuPanel.Children.Add(Divider());
 
-        // 사진-영상-오디오-문서 그룹 (아래부터 사진 → 위로 갈수록 문서)
-        AddModuleItem("document"); // v0.44.0 실제 모듈로 교체 (텍스트·마크다운 1단계)
-        AddModuleItem("audio"); // 음악 재생 분리 (A10, v0.75.0)
-        AddModuleItem("video");
-        AddModuleItem("image");
+        // 문서-오디오-영상-사진 그룹 (아래부터 사진 → 위로 갈수록 문서)
+        AddModuleItem("document"); // 5 — v0.44.0 실제 모듈로 교체 (텍스트·마크다운 1단계)
+        AddModuleItem("audio"); // 4 — 음악 재생 분리 (A10, v0.75.0)
+        AddModuleItem("video"); // 3
+        AddModuleItem("image"); // 2
+        StartMenuPanel.Children.Add(Divider()); // A96 신규 ①: 1번 ↔ 2번 분리
+
+        AddModuleItem(KOTU.Module.AllReadable.AllReadableModule.ModuleId); // 1 — A96에서 최하단으로
         // 하단 바 우측 Info·Settings 아이콘은 제거(v0.28.2) — 시작 메뉴 항목으로 일원화.
     }
 
@@ -686,12 +695,15 @@ public sealed partial class MainWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
-            // A31: 히트 영역 확대 — 상하 패딩 8→12 + 최소 높이 44 (터치 타깃 권장 크기).
-            // 좌우는 10 유지: 메뉴 폭 124(v0.35.0 축소 확정) 안에서 라벨 말줄임을 늘리지 않기 위해.
+            // A31(v0.66.0): 히트 영역 확대 — 상하 패딩 8→12 + 최소 높이 44 (터치 타깃 권장 크기).
+            // ⚠️ A96(v0.116.0)이 "항목 높이 −10%" 지시로 **44→40 · 상하 패딩 12→10**으로 조정했다.
+            //    A31의 44는 이제 유효하지 않다 — 되돌리지 말 것(아이콘 16 + 상하 패딩 20 = 36이라
+            //    실제 높이를 정하는 것은 MinHeight 쪽이다).
+            // 좌우는 10 유지: 메뉴 폭 136(A96 — v0.35.0의 124에서 +10%) 안에서 라벨 말줄임을 늘리지 않기 위해.
             // A50(v0.92.0): 좌측 히트 영역은 플라이아웃 프레젠터 패딩 0(XAML)으로 확대 —
             // Stretch인 버튼이 메뉴 좌우 가장자리까지 닿아, 포인터가 라벨보다 왼쪽이어도 눌린다.
-            Padding = new Thickness(10, 12, 10, 12),
-            MinHeight = 44,
+            Padding = new Thickness(10, 10, 10, 10),
+            MinHeight = 40,
         };
         if (shortcutHint is not null)
             ToolTipService.SetToolTip(button, shortcutHint);
@@ -715,7 +727,7 @@ public sealed partial class MainWindow : Window
             CornerRadius = new CornerRadius(8),
             Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
             Padding = new Thickness(2),
-            MinHeight = 60,
+            MinHeight = 66, // 아래 이미지 높이와 같은 값 — 광고가 없을 때도 카드 크기가 유지된다
         };
         _sponsorCard = host;
         // A67(v0.109.0): 이미지·SPONSOR 배지 어디를 눌러도 광고를 누른 것으로 친다
@@ -724,11 +736,13 @@ public sealed partial class MainWindow : Window
 
         if (SponsorAds.Any)
         {
-            // 광고 표시 규격 120×60 (v0.54.0 사용자 확대 지시 — 원본 2:1 비율 유지 확대)
+            // 광고 표시 규격 132×66 (v0.54.0 사용자 확대 지시 — 원본 2:1 비율 유지 확대).
+            // 폭은 메뉴 폭에 묶여 있다: StartMenuPanel 136 − 카드 Padding 2×2 = 132.
+            // A96(v0.116.0)에서 메뉴 폭 124→136이 되며 120×60 → 132×66으로 함께 커졌다.
             _sponsorImage = new Image
             {
-                Width = 120,
-                Height = 60,
+                Width = 132,
+                Height = 66,
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -831,7 +845,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 시작 메뉴 그룹 구분선: 여백 + 1px 라인 (v0.26.0, 공백만으로는 정리가 안 보인다는 피드백).
-    /// 상하 여백 8→3 (A50 항목 간격 축소, v0.92.0) — 항목 높이 44(A31)는 그대로 두고 사이 여백만 줄인다.
+    /// 상하 여백 8→3 (A50 항목 간격 축소, v0.92.0) — 항목 높이는 그대로 두고 사이 여백만 줄인다.
+    /// ※ A50 기록의 "항목 높이 44(A31)"는 A96(v0.116.0)에서 **40**으로 조정됐다.
+    /// 여백 3은 유지 — A96이 바꾼 것은 항목 높이·메뉴 폭이지 구분선 여백이 아니다.
     /// </summary>
     private static Border Divider() => new()
     {

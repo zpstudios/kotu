@@ -48,7 +48,8 @@
         <!-- 하단 상태바: 열기 · 저장 · 파일명 · 수정됨 · 페이지 · 드라이브 · 1:1 · Fit · 전체화면.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(이미지 v0.27.0과 동일 패턴). -->
         <Border x:Name="StatusBar" VerticalAlignment="Bottom" Padding="0,2,0,2">
-            <Grid ColumnSpacing="10">
+            <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
+            <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -60,7 +61,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <!-- A27(v0.107.0): 하단 바 버튼은 1칸(40×40)·2칸(84×40) 두 규격만 —
+                <!-- A27(v0.107.0): 하단 바 버튼은 1칸(36×36)·2칸(84×36) 두 규격만 (A97/v0.116.0에서 40→36) —
                      치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
                 <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
                 <Button x:Name="OpenButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
@@ -92,12 +93,13 @@
                 <!-- A49: PDF 전용 1:1(1칸)·상태형 Fit(2칸, A30 규격) — 텍스트 에디터 모드(A37)에서는 숨김.
                      Fit 본체 = 마지막 옵션 표시·클릭 시 재적용, 화살표 = 3옵션. 내용·툴팁은 UpdateFitButton()이 갱신.
                      SplitButton은 WinUI가 키 있는 기본 스타일을 노출하지 않아(BasedOn 대상 없음)
-                     전역 스타일 대신 2칸 값(84×40)을 그대로 적는다 — A27(v0.107.0). -->
+                     전역 스타일 대신 2칸 값(84×36)을 그대로 적는다 — A27(v0.107.0),
+                     높이는 A97(v0.116.0)에서 40→36. 폭 84는 유지. -->
                 <Button x:Name="ActualSizeButton" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
                         Content="1:1" FontSize="13" Visibility="Collapsed"
                         Click="OnActualSizeClick" />
                 <!-- 툴팁(키 표기 포함)은 UpdateFitButton()이 상태와 함께 갱신한다 — A34 -->
-                <SplitButton x:Name="FitButton" Grid.Column="6" Width="84" Height="40"
+                <SplitButton x:Name="FitButton" Grid.Column="6" Width="84" Height="36"
                              VerticalAlignment="Center" CornerRadius="4"
                              Visibility="Collapsed" Click="OnFitClicked">
                     <TextBlock Text="A" FontSize="13"
@@ -122,7 +124,7 @@
                         </MenuFlyout>
                     </SplitButton.Flyout>
                 </SplitButton>
-                <!-- 1칸(40×40) = 이미지/영상 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일) -->
+                <!-- 1칸(36×36) = 이미지/영상 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일, A97에서 36) -->
                 <Button Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)">
