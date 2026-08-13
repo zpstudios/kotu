@@ -4,15 +4,26 @@
 > 저장소가 이미 기록하는 것(코드 구조는 `ARCHITECTURE.md`, 빌드는 `docs/BUILD.md`, 변경 이력은 git log)은
 > 여기에 중복해 적지 않는다. 여기 적는 건 **코드를 읽어도 알 수 없는 것** — 결정의 배경, 함정, 대기 중인 확인.
 >
-> 최종 갱신: 2026-08-13 (v0.113.0 시점)
+> 최종 갱신: 2026-08-13 (v0.113.1 시점)
 
 ---
 
 ## 1. 지금 상태 한 줄
 
-앱 이름 **KOTU (King Of The Util)**, 저장소 **zpstudios/kotu**, 실행 파일 **KOTU.exe**, 최신 **v0.113.0**.
+앱 이름 **KOTU (King Of The Util)**, 저장소 **zpstudios/kotu**, 실행 파일 **KOTU.exe**, 최신 **v0.113.1**.
 저작 주체는 **ZP Studios**(A82/v0.90.0) — 개인 실명·개인 메일은 어디에도 쓰지 않는다. 커밋도 이 이름으로 남는다.
 **실기기 확인이 v0.85.0부터 28개 버전치 밀려 있고**(§4), A38 관련 **미해결 관찰 2건**이 있다(§5 첫 항목).
+
+**2026-08-13 세션 (핫픽스) — v0.113.1: 실기기 시작 크래시 수정**
+사용자가 최신 빌드로 업데이트 후 실행하자 시작 즉시 `XamlParseException: Cannot find a Resource
+with the Name/Key DefaultDropDownButtonStyle`. 원인은 v0.107.0(A27)의 App.xaml
+`BasedOn="{StaticResource DefaultDropDownButtonStyle}"` — **WinAppSDK 1.8이 WinUI 컨트롤의
+키 있는 기본 스타일을 지연 로딩으로 쪼개서**(소스 파일명 `DropDownButton_perf2026.xaml`) App.xaml
+파싱 시점 StaticResource 조회가 실기기에서만 실패한다. **CI는 컴파일만 하므로 이 부류를 못 잡는다**(§3.4).
+DropDownButton·ComboBox 두 스타일의 BasedOn을 제거해 해결(기본 템플릿은 명시 스타일에 Template
+setter가 없으면 유지됨 — SplitButton 인라인 예외와 같은 원리). Button·ToggleButton의 BasedOn은
+파싱 순서상 실기기 해석 성공이 확인돼 유지. **v0.107.0~v0.113.0 실기기 빌드는 시작 자체가 안 되므로
+§4의 해당 구간 확인은 반드시 v0.113.1 이상으로 할 것.**
 
 **2026-08-13 세션 (4회전) — "확인 없이 돌릴 수 있는 것 전부" 5배치, CI 5/5 초록**
 (사용자가 항목 선정까지 오케스트레이터에 위임했다. 부록 B 39):
@@ -142,12 +153,19 @@ A36 = settings.json 그대로 열고 표기만 수정(37), 3회전 배치 선정
 - `resources.pri` — unpackaged WinUI는 exe 옆의 **고정 이름 `resources.pri`** 만 찾는다.
   없으면 시작 시 `XamlParseException`으로 조용히 죽는다(v0.5.5~0.5.7에 실제로 겪음).
   `AssemblyName`을 바꾸면 `$(TargetName).pri` 폴백 이름도 따라 바뀌므로 `release.yml`을 같이 고쳐야 한다.
+- **`{StaticResource Default*Style}` BasedOn 참조는 런타임에만 터진다** — v0.107.0의
+  `DefaultDropDownButtonStyle`이 실기기 시작 크래시를 냈다(v0.113.1에서 수정). WinAppSDK 1.8이
+  WinUI 컨트롤 기본 스타일을 지연 로딩해 App.xaml 파싱 시점에 키가 없다. **CI(컴파일)로는 못 잡고,
+  정적 검사로도 못 잡는 부류** — 새 XAML에서 프레임워크 키를 StaticResource로 참조할 때는
+  "그 키가 파싱 시점에 로드돼 있는가"를 의심할 것. 키 없이 setter만 둬도 기본 템플릿은 유지된다.
 
 ---
 
 ## 4. 실기기 확인 대기 (사용자 몫) — **28개 버전치 밀려 있음**
 
 한 번에 묶어서 확인하는 게 효율적이다.
+⚠️ **v0.107.0~v0.113.0 빌드는 실기기에서 시작 자체가 안 된다**(A27 스타일 크래시, v0.113.1에서 수정) —
+아래 확인은 전부 **v0.113.1 이상**으로 할 것.
 ※ v0.90.0(A82)은 문자열·메타데이터만 바꿨다 — 실기기 확인 항목은 **exe 속성 창의 회사/저작권 표기 정도**로 가볍다.
 
 **v0.85.0 (A38) — 기본 앱 강제 지정**
