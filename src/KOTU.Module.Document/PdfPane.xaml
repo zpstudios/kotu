@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- A16: 세로 연속 스크롤 PDF 뷰어. ListView 가상화로 보이는 페이지만 렌더하고,
-         줌은 Shift+휠(A84 — 구 Ctrl+휠은 코드에서 차단)·내장 핀치(비트맵 확대 — 재렌더 없음). -->
+         줌은 Ctrl+휠(A98 — 내장 줌 대신 코드의 수동 줌)·내장 핀치(비트맵 확대 — 재렌더 없음). -->
     <ListView
         x:Name="PageList"
         SelectionMode="None"

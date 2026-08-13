@@ -22,7 +22,7 @@
     </UserControl.KeyboardAccelerators>
 
     <Grid x:Name="RootGrid">
-        <!-- 줌(Shift+휠 10%~800% — A84, 핀치는 내장 유지)/팬. 기본은 창맞춤(코드에서 MaxWidth/MaxHeight로 제한) -->
+        <!-- 줌(휠 단독·Ctrl+휠 10%~800% — A98, 핀치는 내장 유지)/팬. 기본은 창맞춤(코드에서 MaxWidth/MaxHeight로 제한) -->
         <ScrollViewer
             x:Name="Scroller"
             ZoomMode="Enabled"

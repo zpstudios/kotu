@@ -32,7 +32,7 @@ public sealed partial class PdfPane : UserControl
     private List<PageItem> _items = [];
     private double[] _pageOffsets = [];      // 페이지별 누적 세로 오프셋(줌 1 기준)
     private ScrollViewer? _scroll;           // ListView 내장 ScrollViewer (지연 탐색)
-    private ScrollContentPresenter? _presenter; // Shift+휠 줌 가로채기 지점 (A84, 지연 탐색)
+    private ScrollContentPresenter? _presenter; // Ctrl+휠 줌 가로채기 지점 (A98, 지연 탐색)
 
     private sealed class PageItem
     {
@@ -193,8 +193,9 @@ public sealed partial class PdfPane : UserControl
         _scroll.ViewChanged -= OnViewChanged; // 중복 구독 방지
         _scroll.ViewChanged += OnViewChanged;
 
-        // A84: 줌 수정자 Ctrl→Shift. 내장 Ctrl+휠 줌은 ScrollViewer 자신이 처리하므로 그보다
-        // 먼저(버블 경로상 앞서는 콘텐츠 프레젠터에서) 가로채야 막고 대체할 수 있다.
+        // A98: Ctrl+휠 줌. 내장 Ctrl+휠 줌은 ScrollViewer 자신이 처리하므로 그보다
+        // 먼저(버블 경로상 앞서는 콘텐츠 프레젠터에서) 가로채 우리 수동 줌으로 대체한다
+        // (Fit 추종 해제(A49)를 명시 호출해야 해서 내장 줌에 맡길 수 없다).
         // 페이지(콘텐츠) 위에서만 배선되므로 리스트/그리드 무동작 규칙도 함께 성립한다.
         if (_presenter is null && FindDescendant<ScrollContentPresenter>(_scroll) is { } presenter)
         {
@@ -207,7 +208,7 @@ public sealed partial class PdfPane : UserControl
     {
         if (_scroll is null || _items.Count == 0) return;
 
-        // A49: 수동 줌(Shift+휠(A84)·핀치, A16)이 들어오면 Fit "적용 중" 상태를 해제한다(크기 추종 중단).
+        // A49: 수동 줌(Ctrl+휠(A98)·핀치, A16)이 들어오면 Fit "적용 중" 상태를 해제한다(크기 추종 중단).
         // ApplyFit이 건 ChangeView는 _appliedZoom과 일치하므로 여기 걸리지 않는다.
         if (_appliedFit is not null && Math.Abs(_scroll.ZoomFactor - _appliedZoom) > 0.01)
             _appliedFit = null;
@@ -228,7 +229,7 @@ public sealed partial class PdfPane : UserControl
 
     // ---------- 맞춤 보기 (A49 — A30 규격 준용) ----------
 
-    /// <summary>적용 중인 Fit 모드 — 크기 추종용. 수동 줌(Shift+휠(A84)·핀치)이 들어오면 null로 풀린다.</summary>
+    /// <summary>적용 중인 Fit 모드 — 크기 추종용. 수동 줌(Ctrl+휠(A98)·핀치)이 들어오면 null로 풀린다.</summary>
     private PdfFitMode? _appliedFit;
 
     /// <summary>ApplyFit이 마지막으로 건 배율 — 수동 줌과 자체 ChangeView를 구분하는 기준.</summary>
@@ -297,20 +298,14 @@ public sealed partial class PdfPane : UserControl
         return null;
     }
 
-    // ---------- Shift+휠 줌 (A84 — 내장 Ctrl+휠 줌 대체) ----------
+    // ---------- Ctrl+휠 줌 (A98 — A84 Shift+휠 대체) ----------
 
-    /// <summary>뷰어 콘텐츠(페이지) 위 수정자 휠(A84): Shift+휠 = 줌, Ctrl+휠 = 무동작(구 조합 차단).</summary>
+    /// <summary>뷰어 콘텐츠(페이지) 위 수정자 휠(A98): Ctrl+휠 = 줌. 휠 단독은 스크롤(기본 처리) 유지.</summary>
     private void OnPresenterWheel(object sender, PointerRoutedEventArgs e)
     {
-        if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Shift))
-        {
-            e.Handled = true; // ScrollViewer 기본 처리(스크롤·줌)보다 먼저 소비
-            ZoomAtPointer(e);
-        }
-        else if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control))
-        {
-            e.Handled = true; // 구 Ctrl+휠 줌 차단 — 앱에 남는 Ctrl 조합은 문서 Ctrl+S뿐(A84)
-        }
+        if (!e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;
+        e.Handled = true; // 내장 Ctrl+휠 줌보다 먼저 소비 — Fit 추종 해제가 있는 수동 줌으로 대체
+        ZoomAtPointer(e);
     }
 
     /// <summary>포인터 위치를 고정점으로 노치당 10% 줌. 핀치와 같은 수동 줌이므로 Fit 추종을 해제한다(A49).</summary>

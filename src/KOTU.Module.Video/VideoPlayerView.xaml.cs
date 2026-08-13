@@ -205,7 +205,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         Loaded += (_, _) => Focus(FocusState.Programmatic);
         Unloaded += OnUnloaded;
 
-        // 휠 = 볼륨 (플레이어 관례). 자식 요소가 소비해도 받도록 handledEventsToo.
+        // 휠 = 볼륨 (플레이어 관례), Ctrl+휠 = 줌 (A98). 자식 요소가 소비해도 받도록 handledEventsToo.
         VideoSurface.AddHandler(PointerWheelChangedEvent,
             new PointerEventHandler(OnSurfaceWheel), handledEventsToo: true);
 
@@ -372,6 +372,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         _filePath = path;
 
         // A30: 재생 영상이 바뀌면 핏 옵션은 A(자동)로 회귀 — 이번 실행 내에서도 기억하지 않는다(사용자 확정).
+        // Manual(Ctrl+휠 줌, A98)도 같은 규칙으로 회귀한다 — 실제 Scale 리셋은 Playing 핸들러의
+        // ApplyFitMode() 재적용이 수행(Fit이면 p.Scale = 0).
         if (_fitMode != VideoFitMode.Fit || _lastFitOption != VideoFitMode.Fit)
         {
             _lastFitOption = VideoFitMode.Fit;
@@ -767,8 +769,9 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// Fit = libvlc 자동 맞춤(긴 변이 잘리지 않는 레터박스, 기본).
     /// FitWidth/FitHeight = 표면의 해당 축을 꽉 채우는 배율(반대 축은 잘리거나 남는다).
     /// ActualSize = 원본 픽셀 1:1. 파일을 바꿔도 선택은 유지된다.
+    /// Manual = Ctrl+휠 수동 줌(A98)이 정한 명시 배율 — Fit 추종 없음(이미지·PDF의 A49 UX와 동일).
     /// </summary>
-    private enum VideoFitMode { Fit, FitWidth, FitHeight, ActualSize }
+    private enum VideoFitMode { Fit, FitWidth, FitHeight, ActualSize, Manual }
 
     private VideoFitMode _fitMode = VideoFitMode.Fit;
 
@@ -821,6 +824,9 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             case VideoFitMode.ActualSize:
                 p.Scale = 1;
                 break;
+            case VideoFitMode.Manual:
+                break; // 수동 줌 배율은 ZoomBy가 직접 설정한다 — 여기서 재적용할 것 없음
+
             case VideoFitMode.FitWidth:
             case VideoFitMode.FitHeight:
                 var (videoW, videoH) = VideoPixelSize();
@@ -860,6 +866,56 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             // 트랙 조회 실패는 자동 맞춤으로 대체된다.
         }
         return (0, 0);
+    }
+
+    // ---------- Ctrl+휠 줌 (A98 — 영상 줌 신규, A30 Scale 메커니즘 위에) ----------
+
+    /// <summary>Manual 줌(A98)이 마지막으로 정한 배율 — _fitMode == Manual일 때만 읽는다.</summary>
+    private double _manualScale;
+
+    /// <summary>
+    /// A98: Ctrl+휠 줌 — 현재 유효 배율에서 노치당 ×1.1(양방향), 0.1~8 클램프.
+    /// VideoView는 스왑체인이라 XAML transform 줌이 불가 — libvlc Scale(A30)로만 구현한다.
+    /// 수동 줌이 들어오면 Fit 추종은 해제된다(SizeChanged 재적용 대상에서 빠진다 — A49 UX와 동일).
+    /// 새 미디어로 바뀌면 OpenPath의 Fit 회귀 + Playing 핸들러의 ApplyFitMode 재적용이 줌을 리셋한다.
+    /// </summary>
+    private void ZoomBy(int delta)
+    {
+        if (_player is not { } p) return;
+        var current = CurrentEffectiveScale();
+        if (current <= 0) return; // 트랙·표면 정보가 아직 없다 — 줌 시작 불가(안전)
+
+        var next = Math.Clamp(current * Math.Pow(1.1, delta / 120.0), 0.1, 8.0);
+        _fitMode = VideoFitMode.Manual;
+        _manualScale = next;
+        p.Scale = (float)next;
+        ShowFeedback($"Zoom {(int)Math.Round(next * 100)}%"); // A13: 볼륨 칩과 같은 패턴(전체화면 한정)
+    }
+
+    /// <summary>
+    /// 현재 화면에 걸린 유효 배율. Scale == 0(자동 맞춤) 계열은 libvlc가 배율 값을 주지 않으므로
+    /// 뷰포트·트랙 크기로 직접 계산한다(ApplyFitMode의 FitWidth/FitHeight 계산식 재활용). 계산 불가면 0.
+    /// </summary>
+    private double CurrentEffectiveScale()
+    {
+        switch (_fitMode)
+        {
+            case VideoFitMode.Manual: return _manualScale;
+            case VideoFitMode.ActualSize: return 1;
+        }
+
+        var (videoW, videoH) = VideoPixelSize();
+        var rs = XamlRoot?.RasterizationScale ?? 1.0;
+        var surfaceW = VideoSurface.ActualWidth * rs;
+        var surfaceH = VideoSurface.ActualHeight * rs;
+        if (videoW <= 0 || videoH <= 0 || surfaceW <= 0 || surfaceH <= 0) return 0;
+
+        return _fitMode switch
+        {
+            VideoFitMode.FitWidth => surfaceW / videoW,
+            VideoFitMode.FitHeight => surfaceH / videoH,
+            _ => Math.Min(surfaceW / videoW, surfaceH / videoH), // Fit = 긴 변이 맞는 레터박스 배율
+        };
     }
 
     private void OnActualSizeClicked(object sender, RoutedEventArgs e) => ApplyActualSize();
@@ -917,13 +973,16 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         TogglePlayPause();
     }
 
-    /// <summary>영상 위 휠 = 볼륨 조절.</summary>
+    /// <summary>영상 위 휠 = 볼륨 조절(유지), Ctrl+휠 = 줌(A98 — 영상 줌 신규).</summary>
     private void OnSurfaceWheel(object sender, PointerRoutedEventArgs e)
     {
         var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
         if (delta == 0) return;
         e.Handled = true;
-        ChangeVolume(delta > 0 ? VolumeStep : -VolumeStep);
+        if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control))
+            ZoomBy(delta); // 트랙 정보 전이면 무동작 — 볼륨으로 새지 않는다
+        else
+            ChangeVolume(delta > 0 ? VolumeStep : -VolumeStep);
     }
 
     private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
