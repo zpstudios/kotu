@@ -1019,7 +1019,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     {
         // A86: 파일이 없으면(빈 영상 모듈 = 셸 S1) 삼키지 않는다 — Enter는 셸의 일괄 토글 몫이고
         // (keymap의 전체화면 예외는 "영상 콘텐츠 열림"뿐), 빈 화면 전체화면 자체도 의미가 없다.
-        // F11도 같은 가드를 공유한다(핸들러가 하나 — 빈 상태 전체화면은 원래 쓸 일이 없던 동작).
+        // A90 전까지는 F11·Enter가 이 핸들러 하나를 공유했다 — 지금 F11은 여기 직결이고
+        // Enter는 아래 OnFullScreenEnterInvoked(통과 표면 예외)를 거쳐 들어온다.
         if (_filePath is null)
         {
             args.Handled = false;
@@ -1027,6 +1028,24 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         }
         args.Handled = true;
         ToggleFullScreen();
+    }
+
+    /// <summary>
+    /// Enter = 전체화면 (A90에서 F11과 핸들러 분리): 포커스가 통과 표면(탐색기 리스트·트리·썸네일 —
+    /// 셸 S4 '오픈 파일' 그리드 포함)이나 텍스트 입력에 있으면 삼키지 않는다.
+    /// 근거 = A86 keymap 포커스 예외("탐색기 포커스에서 Enter = 선택 항목 열기 우선")와
+    /// A90 keymap S4 행("Enter = 선택 열기 우선") — 액셀러레이터는 셸 루트 핸들러보다 먼저 돌아
+    /// 여기서 흘려 주지 않으면 셸이 받을 방법이 없다. F11은 이 예외 없이 종전대로
+    /// (OnFullScreenInvoked 직결) — 탐색기 포커스에서도 전체화면 키로 남는다.
+    /// </summary>
+    private void OnFullScreenEnterInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (HotkeySupport.ShouldPassThrough(this))
+        {
+            args.Handled = false;
+            return;
+        }
+        OnFullScreenInvoked(sender, args);
     }
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------

@@ -43,6 +43,11 @@ public sealed partial class MainWindow : Window
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ThumbnailExplorer? _thumbnailExplorer; // S1 중앙 썸네일 뷰 (A93, 지연 생성 — 구 ExplorerPane 대체)
+    // S4('오픈 파일' 탐색, A90) 중앙 반투명 썸네일 — S1 인스턴스와 공유하지 않는 별도 인스턴스.
+    // 두 그리드가 동시에 뜨는 상태는 없지만(S1에서는 S4 진입 자체가 없음 — 강조만), 공유하면
+    // 부모(ExplorerHost/S4CenterHost) 사이를 옮겨 다니는 reparent 함정(옛 부모에서 먼저 제거 —
+    // v0.111.0 COMException 전례)에 걸려서다.
+    private ThumbnailExplorer? _s4Explorer;
 
     // ---- 하단 바 드라이브 줄 (A22, v0.108.0) ----
     // 표시 컨트롤은 셸에 하나(공용 DriveStrip)만 두고 모듈 하단 바가 슬롯을 내준다(IDriveStripHost).
@@ -56,19 +61,28 @@ public sealed partial class MainWindow : Window
     /// 셸 수준 "구성 상태" (A86 keymap): A58의 오버레이별 4상태를 대체하는 게 아니라 그 위에서
     /// "지금 화면 구성이 어떤 조합인가"를 요약한다 — Enter 일괄 토글·경계 버튼 분배의 기준.
     /// None = 오버레이 컨텍스트 없음(빈 셸·설정·H/W·미지원 안내) — keymap 표 밖, 셸 키 무동작.
-    /// S4('오픈 파일' 탐색 모드)의 진입/복귀 구현은 A90 몫 — 여기서는 자리와 판정 훅만 둔다.
+    /// S4('오픈 파일' 탐색 모드)의 진입/복귀는 A90(v0.122.0) — 아래 '오픈 파일' 버튼 절 참고.
     /// </summary>
     private enum ShellState { None, S1, S2, S3L, S3R, S3B, S4 }
 
-    /// <summary>'오픈 파일' 탐색 모드(S4) 여부 — 구현은 A90 몫이라 아직 항상 false인 훅이다.</summary>
-    private static bool IsOpenFileBrowsing => false;
+    /// <summary>'오픈 파일' 탐색 모드(S4, A90) 진행 중인지 — A86이 심어 둔 훅이 실제 상태가 됐다.</summary>
+    private bool IsOpenFileBrowsing => _openFileBrowsing;
+
+    private bool _openFileBrowsing;
+
+    /// <summary>
+    /// S4 진입 직전의 좌/우 오버레이 상태 스냅샷(A90) — Esc/'오픈 파일' 재누름 복귀의 원본.
+    /// A86 <see cref="_lastBatchStates"/>(Enter 일괄 닫기의 복원 기억)와는 별개 개념이라 섞지 않는다.
+    /// 파일이 열려 S4가 자동 종료되면 버린다(복귀 없음 — 새 콘텐츠가 화면을 차지).
+    /// </summary>
+    private (OverlayState List, OverlayState Info)? _s4Restore;
 
     /// <summary>A86 keymap의 구성 상태 판정. 홀드(반투명 덮기)도 "열림"으로 센다 — 표의 상태 기준.</summary>
     private ShellState CurrentShellState
     {
         get
         {
-            if (IsOpenFileBrowsing) return ShellState.S4; // A90 — 진입 경로가 생기면 이 훅이 산다
+            if (IsOpenFileBrowsing) return ShellState.S4; // A90 — '오픈 파일' 탐색 진입 중
             if (IsEmptyFileModule) return ShellState.S1;
             if (_currentFilePath is null) return ShellState.None;
             var left = _listSide.State != OverlayState.Closed;
@@ -125,10 +139,14 @@ public sealed partial class MainWindow : Window
         ListOverlay.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
         ListOverlay.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
         // A93: S1 중앙 썸네일 뷰는 좌 리스트(ExplorerPane)와 폴더·필터(A7)·정렬(A5) 상태를 공유한다 —
-        // 리스트가 다시 그려질 때마다 같은 목록을 받아 타일로 그린다. S1 밖(콘텐츠 열림)에서는 버린다.
+        // 리스트가 다시 그려질 때마다 같은 목록을 받아 타일로 그린다.
+        // A90: S4('오픈 파일' 탐색)가 떠 있는 동안은 같은 목록이 S4 오버레이 썸네일로만 흐른다 —
+        // 데이터 경로는 좌 리스트 하나뿐이고, 받는 그리드가 상태에 따라 갈릴 뿐이다
+        // (S1과 S4는 동시에 성립하지 않는다: S1에서는 S4 진입 자체가 없음 — 강조만).
         ListOverlay.ViewChanged += entries =>
         {
-            if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(entries);
+            if (_openFileBrowsing) _s4Explorer?.ShowEntries(entries);
+            else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(entries);
         };
         // A93 드랍 규칙: 우측 인포 영역 드랍 = 그 파일 열기 — 콘텐츠가 없으면 OpenFile의
         // 라우터(A59)가 담당 모듈로 전환한 뒤 여는 기존 경로를 그대로 쓴다.
@@ -1171,6 +1189,12 @@ public sealed partial class MainWindow : Window
     /// <summary>현재 모듈·파일 상태를 바꾸고 탐색기/오버레이 표시를 갱신한다.</summary>
     private void SetContentState(IModule? module, string? filePath)
     {
+        // A90: 콘텐츠·모듈이 바뀌면 S4('오픈 파일' 탐색)는 자동 종료 — 파일 열기(더블클릭·Enter·인포
+        // 드랍)는 물론 숫자 키 모듈 전환·설정 진입도 같은 경로로 닫힌다. 새 콘텐츠가 화면을 차지하므로
+        // 복귀 스냅샷은 버리고(restore:false), 좌/우는 지금 상태 그대로 A86 "상태는 콘텐츠를 넘어 유지"
+        // 규칙을 탄다(자연 상태). 표시 갱신은 아래 ApplyOverlayStates가 하므로 여기서는 생략(refresh:false).
+        ExitOpenFileBrowsing(restore: false, refresh: false);
+        HideS1Flash(); // A90-b 강조가 콘텐츠 전환 뒤까지 남지 않게
         _currentModule = module;
         _currentFilePath = filePath;
         InfoOverlay.InvalidateCache();
@@ -1197,6 +1221,8 @@ public sealed partial class MainWindow : Window
     /// <summary>모듈 뷰가 파일을 열었다는 알림(IContentStateSource) — 탐색기를 내리고 기준 경로 갱신.</summary>
     private void OnContentOpened(string path)
     {
+        // A90: 뷰 내부 열기도 "새 콘텐츠가 화면을 차지"이므로 S4 자동 종료(SetContentState와 동일 규칙).
+        ExitOpenFileBrowsing(restore: false, refresh: false);
         _currentFilePath = path;
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // v0.55.0
@@ -1313,9 +1339,17 @@ public sealed partial class MainWindow : Window
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        // A90: Esc는 텍스트 입력 판정보다 먼저 본다 — keymap 포커스 예외가 "텍스트 입력에서도
+        // Esc만은 통과"라서다(필터 입력란에 포커스를 둔 채로도 S4 복귀가 성립해야 한다).
+        if (e.Key == VirtualKey.Escape)
+        {
+            OnShellEscape(e);
+            return;
+        }
+
         // A86 포커스 예외 ①(A32 통과 규칙 재사용): 텍스트 입력 컨트롤에 포커스가 있으면
         // Z·X·Enter 전부 입력이 우선이다(문서 에디터의 z/x 타이핑·Enter 줄바꿈을 뺏으면 안 된다).
-        // Esc만 통과인데 셸은 Esc를 애초에 안 쓴다(전체화면 해제는 모듈 액셀러레이터 몫, S3*는 무동작 Q8).
+        // Esc는 위에서 따로 처리했다 — 셸이 Esc를 소비하는 상태는 S4뿐(그 외는 종전대로 무개입).
         // 어떤 키든 홀드 판정·2연타 카운트만 리셋하고 흘려보낸다.
         if (IsTextInputFocused())
         {
@@ -1348,6 +1382,14 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // A90 keymap S4 행: Z/X·2연타 = 무동작 (Q5 확정) — 판정에 태우지 않고 소비만 한다.
+        // (통과 표면 포커스는 위에서 이미 타이핑 탐색으로 흘렀다 — Q4 예외는 S4에서도 유효.)
+        if (IsOpenFileBrowsing)
+        {
+            e.Handled = true;
+            return;
+        }
+
         var other = ReferenceEquals(side, _listSide) ? _infoSide : _listSide;
         side.KeyIsDown = true; // 반복 입력에서도 갱신 — Z+X 동시 누름 감지의 근거
         if (!e.KeyStatus.WasKeyDown) // 문자 키 오토리피트(홀드 중 반복 down)는 전이에 안 태운다
@@ -1375,6 +1417,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnOverlaySideDown(OverlaySide side)
     {
+        if (IsOpenFileBrowsing) return; // A90 keymap S4: Z/X = 무동작 — OnRootKeyDown 가드의 이중 방어선
+
         // 오버레이 컨텍스트가 없으면(설정·H/W·미지원 파일 안내) 판정도 없다. 파일 없이 연
         // 파일 모듈(빈 모듈 상태)은 A81부터 컨텍스트에 포함 — 기본 도크를 키로 닫고
         // 다시 여는 입력이 성립해야 한다.
@@ -1433,11 +1477,13 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Enter 분배 (A86 keymap): S1 = 선택 파일 있으면 열기, 없으면 일괄 토글 /
     /// S2 = 일괄 토글(직전 구성 복원 — 세션 한정, 기억 없으면 A81 기본 세트 좌+우 도크) /
-    /// S3L·S3R·S3B = 일괄 닫기 / S4 = A90 몫(선택 열기 우선·복귀 — 지금은 도달하지 않는다).
+    /// S3L·S3R·S3B = 일괄 닫기 / S4 = 선택 열기 우선, 없으면 복귀와 동일(A90 — keymap S4 행).
     /// 원 기능 우선 예외: ① 텍스트 입력(에디터 줄바꿈)은 호출 전에 걸러진다 ②
-    /// 탐색기 리스트/트리/썸네일 포커스 = 선택 항목 열기 우선(통과 표면 판정) ③ 영상 콘텐츠 =
+    /// 탐색기 리스트/트리/썸네일 포커스 = 선택 항목 열기 우선(통과 표면 판정 — 단 S4 그리드는
+    /// 예외에서 제외한다: 그 표면의 "원 기능"이 곧 아래 S4 분기 자신이다) ③ 영상 콘텐츠 =
     /// 전체화면 진입 — 모듈 액셀러레이터가 먼저 처리(Handled)하고, 이벤트 순서가 그 표식을
-    /// 안 물고 올 가능성에 대비해 모듈 ID 가드를 이중으로 둔다.
+    /// 안 물고 올 가능성에 대비해 모듈 ID 가드를 이중으로 둔다(S4에서는 Enter가 셸 몫이라 제외 — A90.
+    /// 영상 쪽도 통과 표면 포커스에서는 Enter 액셀러레이터를 흘린다: VideoPlayerView.OnFullScreenEnterInvoked).
     /// </summary>
     private void OnShellEnter(KeyRoutedEventArgs e)
     {
@@ -1449,9 +1495,15 @@ public sealed partial class MainWindow : Window
         var snapshot = (List: Sticky(_listSide.State), Info: Sticky(_infoSide.State));
         ResetOverlayInput(); // Enter도 "다른 키 개입"이다 — 홀드 취소·2연타 리셋(A58 안전장치 유지)
 
-        if (e.Handled) return; // 영상 Enter=전체화면 액셀러레이터가 이미 소비 — 원 기능 우선
-        if (HotkeySupport.ShouldPassThrough(RootLayout)) return; // 탐색기 표면 — 선택 항목 열기 우선
-        if (_currentModule?.Id == "video" && _currentFilePath is not null) return; // 영상 이중 방어(위 요약 ③)
+        // 영상 Enter=전체화면 액셀러레이터·탐색기 그리드(Enter=선택 항목 열기, A90)가 이미 소비 — 원 기능 우선
+        if (e.Handled) return;
+        // 탐색기 표면 — 선택 항목 열기 우선. 단 S4 그리드 포커스는 통과시키지 않는다(A90):
+        // 그리드가 선택을 직접 열었으면 위 Handled에서 이미 끝났고, 선택이 없어 안 삼킨 Enter는
+        // keymap S4 행의 "없으면 복귀와 동일"이라 아래 S4 분기가 받아야 한다.
+        if (HotkeySupport.ShouldPassThrough(RootLayout)
+            && !(state == ShellState.S4 && IsFocusWithin(_s4Explorer))) return;
+        if (state != ShellState.S4
+            && _currentModule?.Id == "video" && _currentFilePath is not null) return; // 영상 이중 방어(위 요약 ③)
 
         switch (state)
         {
@@ -1470,11 +1522,48 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 BatchToggleOverlays(snapshot);
                 return;
-            case ShellState.S4: // 선택 열기 우선·없으면 복귀 — A90 몫 (지금은 도달하지 않는다)
+            case ShellState.S4: // A90 keymap S4 행: 선택 열기 우선, 없으면 복귀와 동일
+                e.Handled = true;
+                if (_s4Explorer?.SelectedEntry is { } s4Entry)
+                {
+                    // 폴더 = 좌 리스트 항해(A93 상태 공유의 되돌이 경로 — ViewChanged로 그리드도 이동)
+                    if (s4Entry.IsFolder) ListOverlay.NavigateList(s4Entry.Path);
+                    else OpenFileRouted(s4Entry.Path); // 열리면 SetContentState가 S4를 자동 종료한다
+                }
+                else
+                {
+                    ExitOpenFileBrowsing(restore: true);
+                }
+                return;
             default:            // None — 오버레이 컨텍스트 없음(빈 셸·설정·H/W): 무동작, 삼키지도 않는다
                 return;
         }
     }
+
+    // ---------- Esc (A90 — 셸이 소비하는 상태는 S4뿐) ----------
+
+    /// <summary>
+    /// Esc 분배 (keymap): S4 = 진입 전 상태로 복귀 — 셸이 Esc를 소비하는 유일한 상태다.
+    /// 그 외(S2 = 전체화면 해제 — 모듈 액셀러레이터 몫 / S3* = 무동작 Q8)는 종전대로 건드리지 않는다.
+    /// 영상 전체화면 Esc와의 우선순위: 모듈 액셀러레이터가 이 루트 핸들러보다 먼저 돈다(A86 Enter에서
+    /// 실증된 순서 — handledEventsToo 구독은 그 결과의 Handled를 본다). 그래서 셸이 역전시킬 수 없고,
+    /// S4와 전체화면이 겹쳐 있으면(S4 중에도 모듈 하단 바 전체화면 버튼·비통과 포커스의 F11로 진입
+    /// 가능) **첫 Esc = 전체화면 해제(액셀러레이터 소비), 다음 Esc = S4 복귀** 순서로 정리한다.
+    /// 보통의 S4(전체화면 아님)에서는 액셀러레이터가 소비하지 않아 곧바로 S4 복귀다 — 이중 발화 없음.
+    /// </summary>
+    private void OnShellEscape(KeyRoutedEventArgs e)
+    {
+        ResetOverlayInput(); // 종전에도 Esc는 "다른 키 개입"으로 홀드 취소·2연타 리셋만 했다(A58 유지)
+        if (!IsOpenFileBrowsing || e.KeyStatus.WasKeyDown || e.Handled) return;
+        e.Handled = true;
+        ExitOpenFileBrowsing(restore: true);
+    }
+
+    /// <summary>포커스 요소가 주어진 루트의 비주얼 트리 안에 있는지 (A90 — S4 그리드 포커스 판정).</summary>
+    private bool IsFocusWithin(UIElement? root)
+        => root is not null && RootLayout.XamlRoot is { } xr
+           && FocusManager.GetFocusedElement(xr) is DependencyObject focused
+           && IsWithin(focused, root);
 
     /// <summary>복원 기억용 상태 정규화: 홀드(키 홀드 중)는 반투명 고정으로 승격해 기억한다.</summary>
     private static OverlayState Sticky(OverlayState state) =>
@@ -1640,7 +1729,23 @@ public sealed partial class MainWindow : Window
         if (emptyModule)
             _thumbnailExplorer?.SetColumns(left > 0 && right > 0 ? 4 : 8);
 
-        UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다
+        // A90 S4: 중앙 오버레이 썸네일 영역을 좌/우 패널이 덮는 폭만큼 비켜 세운다.
+        // 반투명(TranslucentPinned) 패널은 도크 컬럼을 차지하지 않으므로(위 left/right 계산은
+        // OpaqueDocked만 — S4의 반투명 추가가 도크 폭·경계 버튼 계산을 오염시키지 않는 근거)
+        // S4 호스트가 스스로 같은 %의 스페이서를 잡아야 패널과 픽셀 정렬된다(SetPanelPercent 산식).
+        // 열 수는 A93 규칙 준용(좌우 모두 떠 있으면 4, 아니면 8) — S4는 양쪽을 항상 채우므로 통상 4,
+        // 폴더 소실로 리스트가 못 뜬 경우(IsOpen=false)만 8이 된다.
+        if (_openFileBrowsing)
+        {
+            var s4Left = ListOverlay.IsOpen ? dockPercent : 0;
+            var s4Right = InfoOverlay.IsOpen ? dockPercent : 0;
+            S4LeftSpacer.Width = new GridLength(s4Left, GridUnitType.Star);
+            S4RightSpacer.Width = new GridLength(s4Right, GridUnitType.Star);
+            S4CenterColumn.Width = new GridLength(100 - s4Left - s4Right, GridUnitType.Star);
+            _s4Explorer?.SetColumns(s4Left > 0 && s4Right > 0 ? 4 : 8);
+        }
+
+        UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다 (S4에서는 숨김 — A90)
     }
 
     // ---------- 경계 버튼 (A86 keymap Q7) ----------
@@ -1669,7 +1774,7 @@ public sealed partial class MainWindow : Window
         var width = CenterArea.ActualWidth;
         if (width <= 0) return;
         var context = _currentFilePath is not null || IsEmptyFileModule;
-        if (!context || IsOpenFileBrowsing) // S4에서는 표시 안 함(keymap) — A90 훅
+        if (!context || IsOpenFileBrowsing) // S4에서는 표시 안 함(keymap) — A86 훅이 A90에서 살았다
         {
             HideEdgeButtons();
             return;
@@ -1751,6 +1856,154 @@ public sealed partial class MainWindow : Window
             return;
         }
         ListOverlay.Show(folder, _currentModule.SupportedExtensions);
+    }
+
+    // ---------- '오픈 파일' 버튼 · S4 탐색 모드 (A90) ----------
+
+    /// <summary>
+    /// 하단 바 '오픈 파일' 버튼 (A90 — 시작 메뉴 버튼 바로 옆): 네이티브 파일 대화상자를 띄우지 않고
+    /// 자체 탐색기를 쓴다. 분배는 keymap '오픈 파일' 행 그대로 — S1 = "이미 열려 있음" 강조만(A90-b,
+    /// 복귀 개념 없음) / S2·S3* = S4 진입 / S4 = 진입 전 상태로 복귀(재누름).
+    /// None(빈 셸·설정·H/W·미지원 안내)은 keymap 표 밖 — 띄울 탐색기 컨텍스트가 없어 무동작(구현 결정).
+    /// 전체화면 중에는 하단 바가 통째로 숨어(AppWindow.Changed) 이 버튼 자체를 누를 수 없다 —
+    /// 사양 밖이라 특별 처리하지 않는다(A90 확인 사항).
+    /// </summary>
+    private void OnOpenFileClick(object sender, RoutedEventArgs e)
+    {
+        switch (CurrentShellState)
+        {
+            case ShellState.S4:
+                ExitOpenFileBrowsing(restore: true); // 재누름 = Esc와 동일(keymap '오픈 파일' 행)
+                break;
+            case ShellState.S1:
+                FlashAlreadyOpen(); // A90-b: 새로 띄울 게 없다 — 의사 표시만
+                break;
+            case ShellState.S2:
+            case ShellState.S3L:
+            case ShellState.S3R:
+            case ShellState.S3B:
+                EnterOpenFileBrowsing();
+                break;
+            default:
+                break; // None — 무동작(위 요약)
+        }
+    }
+
+    /// <summary>
+    /// S4 진입 (A90, keymap "S4 구성 규칙"): 이미 떠 있는 구획은 그대로 두고(다시 얹지 않음),
+    /// 없는 구획만 반투명 고정(A58 TranslucentPinned 재사용 — 새 표시 모드를 만들지 않는다.
+    /// 덮기 표시라 공간을 차지하지 않아 도크 폭·썸네일 열 수 계산도 오염시키지 않는다)으로 추가하고,
+    /// 중앙 콘텐츠는 반투명 썸네일 탐색기(S4 전용 인스턴스)로 덮는다. 포커스는 썸네일 그리드로.
+    /// 좌 리스트는 **현재 콘텐츠 파일의 폴더**로 항해한다(ApplyOverlayStates → ShowListOverlay가
+    /// 파일 폴더 기준 — "보던 파일 근처에서 다음 파일을 고른다"가 자연스러워서다. S2·S3*에서만
+    /// 진입하므로 파일은 항상 있고, 폴더가 사라진 경우만 모듈 시작 폴더로 폴백).
+    /// 목록 원본은 S1과 같은 좌 리스트 하나 — 결과가 ViewChanged로 S4 그리드로 흐른다(생성자 배선).
+    /// </summary>
+    private void EnterOpenFileBrowsing()
+    {
+        if (_openFileBrowsing) return;
+        if (_currentFilePath is null || _currentModule is null) return; // S2·S3* 전용 — 방어선
+        ResetOverlayInput(); // Holding(키 홀드 과도 상태)이 스냅샷에 섞이지 않게 — 이후는 안정 상태 3종뿐
+        _s4Restore = (_listSide.State, _infoSide.State);
+        if (_listSide.State == OverlayState.Closed) _listSide.State = OverlayState.TranslucentPinned;
+        if (_infoSide.State == OverlayState.Closed) _infoSide.State = OverlayState.TranslucentPinned;
+        _openFileBrowsing = true;
+        EnsureS4Explorer();
+        S4Host.Visibility = Visibility.Visible;
+        ApplyOverlayStates(); // ShowListOverlay가 현재 파일의 폴더로 Show → ViewChanged → S4 그리드 채움
+        if (!ListOverlay.IsOpen) // 파일 폴더 소실(드라이브 탈착 등) — 모듈 시작 폴더로라도 목록을 만든다
+            ListOverlay.NavigateList(ModuleStartFolder(_currentModule), _currentModule.SupportedExtensions);
+        _s4Explorer?.FocusGrid();
+    }
+
+    /// <summary>
+    /// S4 종료 (A90): restore=true(Esc·재누름·Enter 빈 선택) = 진입 전 스냅샷으로 복귀 —
+    /// 이번에 추가된 구획만 내려가고 원래 있던 구획은 원래 모습(불투명이면 불투명) 그대로.
+    /// S4 중에는 Z/X·경계 버튼이 전부 무동작이라 좌/우 상태가 변할 길이 없어, 스냅샷 전체 대입이
+    /// 곧 "추가분만 되돌리기"와 같다. restore=false(콘텐츠 전환 = SetContentState/OnContentOpened) =
+    /// 스냅샷을 버리고 좌/우는 지금 상태 그대로 A86 "상태는 콘텐츠를 넘어 유지" 규칙을 탄다.
+    /// refresh=false는 호출부가 곧바로 ApplyOverlayStates를 부르는 경로(콘텐츠 전환)용.
+    /// </summary>
+    private void ExitOpenFileBrowsing(bool restore, bool refresh = true)
+    {
+        if (!_openFileBrowsing) return;
+        _openFileBrowsing = false;
+        S4Host.Visibility = Visibility.Collapsed;
+        if (restore && _s4Restore is { } snap)
+        {
+            _listSide.State = snap.List;
+            _infoSide.State = snap.Info;
+        }
+        _s4Restore = null;
+        if (!refresh) return; // 콘텐츠 전환 경로 — 호출부(SetContentState 등)가 곧 표시를 다시 그린다
+        ApplyOverlayStates();
+        // 포커스가 방금 사라진 S4 그리드에 남지 않게 모듈 뷰로 되돌린다 — 실패해도 무해(포커스만 표류)
+        (ModuleHost.Content as Control)?.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// S4 전용 썸네일 인스턴스 지연 생성 (A90). S1의 <see cref="_thumbnailExplorer"/>와 공유하지
+    /// 않는다 — 같은 UIElement를 두 부모(ExplorerHost/S4CenterHost) 사이에서 옮기면 reparent 함정
+    /// (옛 부모에서 먼저 제거 — v0.111.0 COMException 전례)에 걸린다. 배선은 S1 쪽과 동일 구성.
+    /// </summary>
+    private void EnsureS4Explorer()
+    {
+        if (_s4Explorer is not null) return;
+        _s4Explorer = new ThumbnailExplorer
+        {
+            ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
+        };
+        _s4Explorer.UseTranslucentBackground(); // 중앙을 "반투명으로 덮는다"(A90 원문 — A33 아크릴)
+        _s4Explorer.FolderActivated += folder => ListOverlay.NavigateList(folder);
+        _s4Explorer.FileActivated += OpenFileRouted; // 열리면 SetContentState가 S4를 자동 종료한다
+        // 새 창 열기(Shift+더블클릭·우클릭)는 이 창의 콘텐츠가 안 바뀌므로 S4를 유지한다(구현 결정 —
+        // 다른 창에 하나 열고 계속 고르는 흐름이 자연스럽다).
+        _s4Explorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow;
+        S4CenterHost.Children.Add(_s4Explorer);
+    }
+
+    /// <summary>A90-b "이미 열려 있음" 강조 지속 시간 — 2연타 판정 창(450ms)과 같은 "잠깐"의 감각.</summary>
+    private const double S1FlashMs = 450;
+
+    private DispatcherTimer? _s1FlashTimer;
+
+    /// <summary>
+    /// A90-b: S1에서 '오픈 파일' = 새로 띄울 것 없음 — 중앙 썸네일 뷰 둘레의 액센트 테두리를 잠깐
+    /// 비춘다. Storyboard 애니메이션은 CI(컴파일 전용)로 검증할 수 없고 실패 시 상태가 남을 수 있어
+    /// (A92 페이드 선례) 타이머 + Visibility 두 단계로만 구현 — 최악의 실패도 "강조가 안 보인다"로
+    /// 끝난다(A90 안전 요건).
+    /// </summary>
+    private void FlashAlreadyOpen()
+    {
+        try
+        {
+            S1FlashBorder.Visibility = Visibility.Visible;
+            _s1FlashTimer ??= MakeS1FlashTimer();
+            _s1FlashTimer.Stop(); // 연타 시 표시 시간 되감기 (A92 관용구)
+            _s1FlashTimer.Start();
+        }
+        catch
+        {
+            HideS1Flash(); // 실패 시 테두리 잔존 방지 — 강조만 포기한다
+        }
+    }
+
+    private DispatcherTimer MakeS1FlashTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(S1FlashMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop(); // 반복 타이머 — Tick에서 반드시 멈춘다(MakePinTimer와 같은 관용구)
+            S1FlashBorder.Visibility = Visibility.Collapsed;
+        };
+        return timer;
+    }
+
+    /// <summary>강조 즉시 종료 — 콘텐츠 전환(SetContentState)에서 테두리 잔존을 막는 안전선.</summary>
+    private void HideS1Flash()
+    {
+        _s1FlashTimer?.Stop();
+        S1FlashBorder.Visibility = Visibility.Collapsed;
     }
 
     // ---------- 현재 모드 시각 표시 (v0.20.0 → v0.26.0 개편) ----------

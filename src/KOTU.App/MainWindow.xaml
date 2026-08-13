@@ -94,6 +94,30 @@
                     Click="OnRightEdgeToggle">
                 <FontIcon x:Name="RightEdgeGlyph" Glyph="&#xE76B;" FontSize="10" />
             </Button>
+
+            <!-- A90 S4('오픈 파일' 탐색 모드) 중앙 오버레이: 반투명 썸네일 탐색기(S4 전용 인스턴스,
+                 코드 EnsureS4Explorer)가 가운데 스페이서 컬럼(S4CenterHost)에 얹힌다.
+                 좌/우 스페이서는 그때 떠 있는 좌/우 패널 폭(%)과 같은 별 값으로
+                 코드(ApplyOverlayStates)가 맞춘다 — 반투명 패널(TranslucentPinned)은 도크 컬럼을
+                 차지하지 않으므로 이 호스트가 스스로 비켜야 패널과 겹치지 않는다.
+                 경계 버튼보다 나중 선언이지만 S4에서 경계 버튼은 표시 안 함(keymap)이라 z순서 무관. -->
+            <Grid x:Name="S4Host" Grid.ColumnSpan="3" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="S4LeftSpacer" Width="0" />
+                    <ColumnDefinition x:Name="S4CenterColumn" Width="10*" />
+                    <ColumnDefinition x:Name="S4RightSpacer" Width="0" />
+                </Grid.ColumnDefinitions>
+                <Grid x:Name="S4CenterHost" Grid.Column="1" />
+            </Grid>
+
+            <!-- A90-b "이미 열려 있음" 강조: S1에서 '오픈 파일'을 누르면 중앙 썸네일 뷰 둘레에
+                 잠깐 비추는 액센트 테두리(코드 FlashAlreadyOpen — 타이머 + Visibility 2단계,
+                 Storyboard 불사용: 실패해도 강조만 안 보인다). 브러시 키는 DriveStrip이 이미 쓰는
+                 AccentFillColorDefaultBrush — 실기기 해석 선례가 있는 테마 리소스만 쓴다. -->
+            <Border x:Name="S1FlashBorder" Grid.Column="1"
+                    BorderThickness="3"
+                    BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                    IsHitTestVisible="False" Visibility="Collapsed" />
         </Grid>
 
         <!-- 하단 바 (작업표시줄 느낌). 전체화면에서는 코드에서 통째로 숨긴다(v0.21.0) -->
@@ -110,17 +134,19 @@
             </StackPanel>
 
             <!-- 모듈 제공 하단 바(동영상 트랜스포트 등) — 메뉴 버튼과 우측 아이콘 사이 (v0.21.0) -->
-            <!-- 좌측 Margin 48 = 바 좌측 가장자리 여백 6 + 메뉴 버튼 36(A97) + 버튼 간격 6(A97).
-                 A97(v0.116.0)에서 버튼이 40→36이 되며 52→48. 가장자리 여백 6·우측 12는 유지. -->
+            <!-- 좌측 Margin 90 = 바 좌측 가장자리 여백 6 + 메뉴 버튼 36(A97) + 간격 6
+                 + '오픈 파일' 버튼 36(A90) + 간격 6. A97(v0.116.0)에서 52→48이었고,
+                 A90이 버튼 하나를 더해 48→90. 가장자리 여백 6·우측 12는 유지. -->
             <ContentControl x:Name="ModuleBarHost"
                             IsTabStop="False"
-                            Margin="48,0,12,0"
+                            Margin="90,0,12,0"
                             HorizontalAlignment="Stretch" VerticalAlignment="Center"
                             HorizontalContentAlignment="Stretch" />
 
             <!-- A27(v0.107.0): 메뉴 버튼도 1칸 공통 규격 — 투명 배경·테두리 0이던 예외를 없애
                  다른 하단 바 버튼과 외곽선을 통일. A97(v0.116.0)에서 규격이 40×40 → 36×36.
-                 좌측 여백 6은 유지(ModuleBarHost의 Margin 48이 이 폭 6+36+간격 6을 전제한다). -->
+                 좌측 여백 6은 유지(ModuleBarHost의 Margin 90이 이 폭 6+36과
+                 '오픈 파일' 버튼 36(A90)·간격 6×2를 전제한다). -->
             <!-- 툴팁은 코드(RegisterShortcuts)가 단다 — A34: 키 문자(MenuShortcutHint)와
                  표기를 한 값에서 조립해 어긋날 수 없게 하기 위해서다. -->
             <Button x:Name="StartButton"
@@ -158,6 +184,21 @@
                         <StackPanel x:Name="StartMenuPanel" Width="136" Padding="0,4,0,4" />
                     </Flyout>
                 </Button.Flyout>
+            </Button>
+
+            <!-- A90 '오픈 파일' 버튼 — 시작 메뉴 버튼 바로 옆(좌측 48 = 여백 6 + 메뉴 버튼 36 + 간격 6).
+                 네이티브 파일 대화상자를 띄우지 않고 자체 탐색기(S4 탐색 모드)를 연다 —
+                 상태별 분배는 코드 OnOpenFileClick(keymap '오픈 파일' 행).
+                 핫키는 배정하지 않는다: A34 키 맵 표(문자 키 전수 배정)가 확정된 뒤 신설된 버튼이라
+                 표에 자리가 없다 — 키가 필요해지면 A34 표·keymap과 함께 재론. 그래서 툴팁도
+                 A34 "(키)" 표기 없이 설명만 단다. 글리프 E8E5 = 모듈 Open 버튼들과 같은 OpenFile. -->
+            <Button x:Name="OpenFileButton"
+                    Style="{StaticResource BottomBarButtonStyle}"
+                    Margin="48,0,0,0"
+                    HorizontalAlignment="Left"
+                    ToolTipService.ToolTip="Open file"
+                    Click="OnOpenFileClick">
+                <FontIcon Glyph="&#xE8E5;" FontSize="16" />
             </Button>
 
             <!-- 인스턴스 번호 배지 (A2, v0.58.0): 창이 2개 이상일 때만, 생성 순서 1~9 + 색 구분.

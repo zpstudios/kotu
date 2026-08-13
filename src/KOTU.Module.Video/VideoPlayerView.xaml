@@ -14,7 +14,7 @@
          PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Space" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Space" Invoked="OnTogglePlayInvoked" />
-        <KeyboardAccelerator Key="Enter" Invoked="OnFullScreenInvoked" />
+        <KeyboardAccelerator Key="Enter" Invoked="OnFullScreenEnterInvoked" />
         <KeyboardAccelerator Key="Left" Invoked="OnSeekBackInvoked" />
         <KeyboardAccelerator Key="Right" Invoked="OnSeekForwardInvoked" />
         <KeyboardAccelerator Key="Up" Invoked="OnVolumeUpInvoked" />

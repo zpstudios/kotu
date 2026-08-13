@@ -1,9 +1,11 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.System;
 using KOTU.Core.Routing;
 using KOTU.Input;
 
@@ -50,12 +52,44 @@ public sealed partial class ThumbnailExplorer : UserControl
         TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry }
             ? entry.Path : null;
 
+    /// <summary>선택된 항목(파일·폴더 불문) — 없으면 null (A90: S4 Enter "선택 열기 우선" 판정).</summary>
+    public ExplorerListing.Entry? SelectedEntry =>
+        TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry entry } ? entry : null;
+
     public ThumbnailExplorer()
     {
         InitializeComponent();
         // A34: 타일 그리드에 포커스가 있어도 모듈 버튼 핫키는 통과 — 타이핑 탐색(첫 글자 점프) 우선
-        // (ExplorerPane의 IconGrid·ListPane과 같은 규칙).
+        // (ExplorerPane의 IconGrid·ListPane과 같은 규칙). A90의 S4 키맵("A34 문자 핫키 = 무동작")도
+        // 이 태그 하나로 충족된다 — S4 그리드에 포커스가 있는 동안 HotkeySupport가 전부 통과시킨다.
         TileGrid.Tag = HotkeySupport.PassThroughTag;
+        // A90: Enter = 선택 항목 열기 (keymap S1 "선택 파일 있으면 열기"·S4 "선택 열기 우선"의
+        // 그리드 쪽 구현). GridView의 기본 Enter 처리(ItemClick — 이 클래스에선 더블클릭 판정에만
+        // 쓰여 단발 Enter로는 안 열린다)가 이벤트를 Handled로 만들 수 있어 handledEventsToo로 받는다
+        // (MainWindow의 루트 KeyDown 구독과 같은 관용구).
+        TileGrid.AddHandler(UIElement.KeyDownEvent,
+            new KeyEventHandler(OnGridKeyDown), handledEventsToo: true);
+    }
+
+    /// <summary>
+    /// 배경을 오버레이 아크릴(A33 OverlayAcrylicBrush)로 바꾼다 — S4('오픈 파일' 탐색, A90)의
+    /// 중앙 오버레이 인스턴스 전용. S1 중앙(불투명 기본 배경)에서는 부르지 않는다.
+    /// </summary>
+    public void UseTranslucentBackground() =>
+        LayoutRoot.Background = (Brush)Application.Current.Resources["OverlayAcrylicBrush"];
+
+    /// <summary>썸네일 그리드로 포커스 이동 (A90: S4 진입 시) — 실패해도 무해(포커스만 안 옮겨진다).</summary>
+    public void FocusGrid() => TileGrid.Focus(FocusState.Programmatic);
+
+    /// <summary>Enter = 선택 항목 열기 (A90 — 위 생성자 주석 참고). 선택이 없으면 셸 분배로 흘린다.</summary>
+    private void OnGridKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != VirtualKey.Enter || e.KeyStatus.WasKeyDown) return;
+        if (SelectedEntry is not { } entry) return; // 선택 없음 — 셸(OnShellEnter)이 상태별로 받는다
+        e.Handled = true; // 셸 루트 핸들러의 이중 처리 방지 — OnShellEnter는 Handled면 물러난다
+        _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
+        if (entry.IsFolder) FolderActivated?.Invoke(entry.Path);
+        else FileActivated?.Invoke(entry.Path);
     }
 
     /// <summary>열 수 지정(A93: 도크 둘 다 열림 4 / 하나라도 닫힘 8). 바뀌면 타일 크기 재계산.</summary>

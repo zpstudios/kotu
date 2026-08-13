@@ -13,7 +13,9 @@
          드래그 앤 드랍: 중앙 영역 드랍(이동/복사)은 A94 몫 — 이번에는 무동작으로 소비만 한다
          (여기서 안 막으면 창 전체 핸들러가 "열기"로 삼킨다). 루트 Grid가 AllowDrop을 받는
          구조는 MainWindow.RootLayout과 같다(GridView 자체는 AllowDrop 기본 false). -->
-    <Grid AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
+    <!-- LayoutRoot 이름은 A90용: S4('오픈 파일' 탐색) 인스턴스가 배경을 오버레이 아크릴로
+         바꾼다(UseTranslucentBackground). S1 인스턴스는 이 불투명 기본값 그대로다. -->
+    <Grid x:Name="LayoutRoot" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
           Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
         <GridView x:Name="TileGrid"
                   Padding="0"
