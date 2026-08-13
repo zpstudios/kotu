@@ -475,7 +475,12 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             _cards[i].Root.Visibility = i < visible ? Visibility.Visible : Visibility.Collapsed;
             Grid.SetColumn(_cards[i].Root, i < visible ? i : 0);
             Grid.SetRow(_cards[i].Root, 0);
-            if (_cards[i].Root.Parent is null)
+            // ⚠️ FrameworkElement.Parent는 라이브 트리 부착 전(생성자 안)에는 Children.Add
+            // 뒤에도 null이라 중복 추가 가드로 못 쓴다 — v0.111.0(A62)의 ApplyBarScale이
+            // 생성자에서 이 메서드를 두 번째로 태우면서 같은 카드가 두 번 Add되어
+            // COMException 0x800F1000("설치된 구성 요소가 감지되지 않았습니다")으로 죽었다
+            // (v0.113.2에서 수정). 컬렉션 멤버십을 직접 확인한다 — 카드 10개라 비용은 무시 가능.
+            if (!SensorGrid.Children.Contains(_cards[i].Root))
                 SensorGrid.Children.Add(_cards[i].Root);
         }
     }
