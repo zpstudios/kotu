@@ -35,9 +35,19 @@
                  시스템 기본 Button 룩(테마 리소스)이 그대로 유지된다(재디자인 아님).
                  WinUI는 Style의 TargetType이 정확히 일치해야 해서 타입별로 파생 스타일을 둔다
                  (Button 스타일을 DropDownButton·ToggleButton·ComboBox에 쓸 수 없다).
-                 BasedOn은 필수 — 생략하면 기본 스타일의 ControlTemplate을 잃을 수 있다.
-                 SplitButton(Fit)만 예외: WinUI가 키 있는 기본 스타일을 노출하지 않아
-                 BasedOn 대상이 없어서 같은 값(84×40)을 뷰에서 직접 지정한다. -->
+                 ⚠️ v0.113.1: DropDownButton·ComboBox의 BasedOn을 제거했다.
+                 WinAppSDK 1.8이 WinUI 컨트롤(DropDownButton 등)의 키 있는 기본 스타일을
+                 지연 로딩으로 쪼개서(DropDownButton_perf2026.xaml), App.xaml 파싱 시점의
+                 StaticResource 조회가 실기기에서 XamlParseException으로 죽는다
+                 ("Cannot find a Resource with the Name/Key DefaultDropDownButtonStyle").
+                 CI는 컴파일만 하므로 이 오류를 못 잡는다 — 런타임 리소스 키 참조 주의.
+                 BasedOn이 없어도 기본 ControlTemplate은 유지된다: WinUI는 명시 스타일에
+                 Template setter가 없으면 컨트롤의 기본 스타일 템플릿을 그대로 쓴다
+                 (SplitButton 3곳이 인라인 값만으로 정상 동작하는 것과 같은 원리).
+                 Button·ToggleButton의 DefaultButtonStyle·DefaultToggleButtonStyle은
+                 파싱 순서상 실기기에서 해석 성공이 확인돼 그대로 둔다 — 이후 같은
+                 예외가 이 키들로 나오면 여기와 똑같이 BasedOn만 제거하면 된다.
+                 SplitButton(Fit)만 예외: 같은 값(84×40)을 뷰에서 직접 지정한다. -->
             <Style x:Key="BottomBarButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="Width" Value="40" />
                 <Setter Property="Height" Value="40" />
@@ -63,7 +73,7 @@
                 <Setter Property="VerticalContentAlignment" Value="Center" />
             </Style>
             <!-- 2칸 드롭다운(정보 모듈 리프레시 주기) -->
-            <Style x:Key="BottomBarWideDropDownButtonStyle" TargetType="DropDownButton" BasedOn="{StaticResource DefaultDropDownButtonStyle}">
+            <Style x:Key="BottomBarWideDropDownButtonStyle" TargetType="DropDownButton">
                 <Setter Property="Width" Value="84" />
                 <Setter Property="Height" Value="40" />
                 <Setter Property="Padding" Value="4" />
@@ -75,7 +85,7 @@
             </Style>
             <!-- 2칸 콤보(재생속도). 콤보는 안쪽 화살표 배치가 기본 Padding·테두리에 묶여 있어
                  치수와 정렬만 맞추고 Padding·BorderThickness는 기본값을 그대로 둔다. -->
-            <Style x:Key="BottomBarWideComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
+            <Style x:Key="BottomBarWideComboBoxStyle" TargetType="ComboBox">
                 <Setter Property="Width" Value="84" />
                 <Setter Property="Height" Value="40" />
                 <Setter Property="CornerRadius" Value="4" />
