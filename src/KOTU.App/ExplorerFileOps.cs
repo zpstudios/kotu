@@ -6,8 +6,8 @@ using Windows.Storage;
 namespace KOTU.App;
 
 /// <summary>
-/// 자체 탐색기 파일 조작 공용 로직 (A94 1차, v0.124.0) — 드래그 아웃 데이터 구성,
-/// 드랍 이동/복사, 클립보드 복사/잘라내기/붙여넣기가 한곳에 모인다.
+/// 자체 탐색기 파일 조작 공용 로직 (A94 1차 v0.124.0 · 2차 v0.125.0) — 드래그 아웃 데이터 구성,
+/// 드랍 이동/복사, 클립보드 복사/잘라내기/붙여넣기, 휴지통 삭제·이름변경·새 폴더가 한곳에 모인다.
 /// 세 표면(ExplorerPane 리스트 · ThumbnailExplorer 타일 · FileListOverlay 패널)이 같은 규칙을 쓴다.
 ///
 /// 동작 결정(윈도우 관례): 같은 볼륨 = 이동, 다른 볼륨 = 복사. Ctrl 홀드 = 복사 강제,
@@ -35,14 +35,25 @@ internal static class ExplorerFileOps
         internal static OpResult Empty { get; } = new(0, 0, 0, null);
 
         /// <summary>실패가 있을 때만 짧은 안내 문구 — 성공은 뷰 갱신이 곧 피드백이라 조용히 넘어간다.</summary>
-        internal string? Notice(bool move) => Failed == 0
+        internal string? Notice(bool move) => Notice(move ? "moved" : "copied");
+
+        /// <summary>임의 동사형(A94 2차 — 삭제 "deleted" 등). 규칙은 위와 동일 — 실패가 있을 때만.</summary>
+        internal string? Notice(string verb) => Failed == 0
             ? null
-            : $"{Failed} item(s) could not be {(move ? "moved" : "copied")} — {FirstError}";
+            : $"{Failed} item(s) could not be {verb} — {FirstError}";
     }
 
     /// <summary>Ctrl이 눌린 상태인지 — 클립보드 키 판정용(ExplorerPane의 Shift 판정과 같은 API).</summary>
     internal static bool IsCtrlDown() => Microsoft.UI.Input.InputKeyboardSource
         .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+        .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    /// <summary>
+    /// Shift가 눌린 상태인지 (A94 2차) — Ctrl+Shift+N(새 폴더) 판정과 Del에서 Shift+Del(영구 삭제 —
+    /// 이번 범위 아님, 후속 등재)을 비켜 가는 판정용. IsCtrlDown과 같은 API.
+    /// </summary>
+    internal static bool IsShiftDown() => Microsoft.UI.Input.InputKeyboardSource
+        .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
         .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     // ---------- 드래그 아웃 (앱 → OS 탐색기 · 다른 KOTU 창 · 앱 내 다른 표면) ----------
@@ -186,6 +197,98 @@ internal static class ExplorerFileOps
             try { Clipboard.Clear(); } catch { /* 소유권 등 — 비우기 실패는 무해 */ }
         }
         return (true, result.Notice(move));
+    }
+
+    // ---------- 삭제: Del = 휴지통 (A94 2차, v0.125.0) ----------
+
+    /// <summary>
+    /// 선택 항목 전부(파일·폴더)를 휴지통으로 보낸다 — WinRT <c>IStorageItem.DeleteAsync</c>의
+    /// StorageDeleteOption.Default가 휴지통 경유다(ImageViewerView.DeleteCurrentAsync 선례 —
+    /// COM 인터롭(SHFileOperation류) 없이 성립한다). 확인 대화상자 없음(윈도우 탐색기도
+    /// 휴지통행은 기본 무확인). 영구 삭제(Shift+Del)는 이번 범위가 아니다(후속 등재 —
+    /// docs/A94-matrix.md). 항목별 실패 격리 — Skipped = 그새 사라져 수집조차 안 된 항목.
+    /// </summary>
+    internal static async Task<OpResult> DeleteToRecycleAsync(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return OpResult.Empty;
+        var items = await CollectStorageItemsAsync(paths);
+        int done = 0, failed = 0;
+        string? firstError = null;
+        foreach (var item in items)
+        {
+            try
+            {
+                await item.DeleteAsync(StorageDeleteOption.Default); // Default = 휴지통 경유
+                done++;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                firstError ??= ex.Message;
+            }
+        }
+        return new OpResult(done, paths.Count - items.Count, failed, firstError);
+    }
+
+    // ---------- 이름변경 · 새 폴더 (A94 2차, v0.125.0) ----------
+
+    /// <summary>
+    /// 같은 폴더 안 이름변경 — File.Move/Directory.Move. 반환 = 실패 안내 문구(성공·무변경 = null).
+    /// 검증 실패(빈 이름·잘못된 문자·충돌)면 아무것도 바꾸지 않는다 — 이동/복사와 달리 자동 "(2)"를
+    /// 붙이지 않는다(이름변경 결과가 입력과 다른 이름이 되는 건 사용자 의도와 다른 결과다).
+    /// 대소문자만 바꾸는 이름은 허용 — 같은 경로 취급(NTFS 대소문자 무시)이라 충돌 검사를 건너뛴다
+    /// (Directory.Move의 대소문자 전용 이름변경은 .NET Core 3.0부터 허용).
+    /// 단일 메타데이터 조작이라 워커를 태우지 않는다(즉시 반환 — Transfer류 대량 조작과 다르다).
+    /// </summary>
+    internal static string? Rename(string path, string newName)
+    {
+        try
+        {
+            var name = newName.Trim();
+            if (name.Length == 0) return "Name cannot be empty";
+            if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                return "Name contains characters that are not allowed";
+
+            var src = TrimSep(Path.GetFullPath(path));
+            var oldName = Path.GetFileName(src);
+            if (oldName.Length == 0) return "Cannot rename a drive root";
+            if (string.Equals(oldName, name, StringComparison.Ordinal)) return null; // 무변경 = 무동작
+            if (Path.GetDirectoryName(src) is not { Length: > 0 } parent)
+                return "Cannot rename this item";
+
+            var dest = Path.Combine(parent, name);
+            if (!string.Equals(oldName, name, StringComparison.OrdinalIgnoreCase) &&
+                (File.Exists(dest) || Directory.Exists(dest)))
+                return $"\"{name}\" already exists here";
+
+            if (Directory.Exists(src)) Directory.Move(src, dest);
+            else if (File.Exists(src)) File.Move(src, dest);
+            else return "The item no longer exists";
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex.Message; // 잠긴 파일·권한 부족 등 — 호출부가 안내 문구로 띄운다
+        }
+    }
+
+    /// <summary>
+    /// 현재 폴더에 "New folder"를 만든다 — 충돌 시 "New folder (2)"(UniqueDestination 재사용,
+    /// 탐색기 관례). 반환 = (생성된 전체 경로, 실패 안내 문구) — 성공이면 문구가 null이다.
+    /// 호출부는 재스캔 완료 후 이 경로의 항목을 찾아 곧바로 이름변경 편집에 진입시킨다.
+    /// </summary>
+    internal static (string? Created, string? Notice) CreateFolder(string parentFolder)
+    {
+        try
+        {
+            var dest = UniqueDestination(Path.GetFullPath(parentFolder), "New folder");
+            Directory.CreateDirectory(dest);
+            return (dest, null);
+        }
+        catch (Exception ex)
+        {
+            return (null, "Could not create a folder — " + ex.Message);
+        }
     }
 
     // ---------- 내부: 경로 판정 ----------

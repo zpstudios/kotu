@@ -407,7 +407,15 @@
     GenerateUniqueName식 "이름 (2)" — 대화상자 없음) / 클립보드 Ctrl+C·X·V(잘라내기 =
     RequestedOperation Move — 탐색기 표면 포커스에서만 듣는다). 공용 로직 =
     `src/KOTU.App/ExplorerFileOps.cs`. **대조표 = docs/A94-matrix.md가 A94 진행의 단일 원본.**
-  - **남은 것**: 이름변경(F2)·새 폴더·휴지통 삭제(Del) = 2차. 영구 삭제·권한 상승 = 후속 등재(사용자 확정).
+  - **2차(v0.125.0) 반영**: F2 이름변경(인라인 편집 `ExplorerRenameBox` — 파일은 확장자 제외 부분
+    선택, 다중 선택이어도 첫 항목만. Enter/포커스 상실 = 커밋·Esc = 취소. 충돌·빈 이름·잘못된 문자 =
+    커밋하지 않고 안내 + 원복, 자동 "(2)" 없음) / 새 폴더 Ctrl+Shift+N("New folder", 충돌 =
+    "New folder (2)" — 생성 직후 그 항목 선택 + 자동 이름변경 진입. 빈 영역 우클릭 메뉴는 원래 없어
+    **키만**) / Del = 휴지통 삭제(WinRT DeleteAsync StorageDeleteOption.Default — 확인 대화상자
+    없음, Shift+Del은 비켜 감) / 항목 우클릭 메뉴에 Rename·Delete 추가(폴더 항목에도 메뉴가 생겼다 —
+    종전 파일 전용).
+  - **남은 것**: 영구 삭제(Shift+Del)·권한 상승(UAC)·이동/복사 충돌 대화상자·폴더 감시
+    (FileSystemWatcher)·빈 영역 컨텍스트 메뉴 등 후속(사용자 결정 대기).
 
 ## 3. 이미지 모듈
 

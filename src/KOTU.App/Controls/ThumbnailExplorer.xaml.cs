@@ -48,6 +48,13 @@ public sealed partial class ThumbnailExplorer : UserControl
     private (string Path, DateTime At)? _lastClick;
 
     /// <summary>
+    /// Ctrl+Shift+N(새 폴더) 직후의 편집 진입 예약 (A94 2차). 이 뷰의 재스캔은 좌 리스트 경유
+    /// 비동기(FolderActivated → 셸 → ViewChanged → ShowEntries)라 완료 시점을 직접 기다릴 수 없다 —
+    /// 다음 ShowEntries가 이 경로의 타일을 찾아 이름변경 편집으로 진입하고 지운다(1회성).
+    /// </summary>
+    private string? _pendingRenamePath;
+
+    /// <summary>
     /// 지금 그리고 있는 폴더 경로 (A94 — 빈 영역 드랍·붙여넣기의 대상). ShowEntries가 좌 리스트의
     /// ViewChanged에서 받은 폴더로 갱신한다 — 이 컨트롤은 폴더 상태의 원본이 아니다(A93).
     /// </summary>
@@ -92,12 +99,17 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     /// <summary>
     /// Enter = 선택 항목 열기 (A90 — 위 생성자 주석 참고. 선택이 없으면 셸 분배로 흘린다) +
-    /// 클립보드 키 (A94): Ctrl+C/X/V/A — 이 그리드에 포커스가 있을 때만 온다(KeyDown 버블링이라
-    /// 문서 에디터 등 텍스트 표면으로 새지 않고, A34 통과 규칙과도 겹치지 않는다 — 수정자 조합).
+    /// 클립보드 키 (A94): Ctrl+C/X/V/A + 2차(v0.125.0): F2 = 이름변경(첫 선택 타일만),
+    /// Del = 휴지통 삭제, Ctrl+Shift+N = 새 폴더 — 이 그리드에 포커스가 있을 때만 온다
+    /// (KeyDown 버블링이라 문서 에디터 등 텍스트 표면으로 새지 않고, A34 통과 규칙과도 겹치지 않는다).
     /// </summary>
     private async void OnGridKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.KeyStatus.WasKeyDown) return;
+        // A94 2차: 이름변경 편집 상자(TextBox) 안의 키는 전부 편집 몫 — handledEventsToo 구독이라
+        // 편집 상자가 Handled를 걸어도 여기까지 오므로 원본 요소로 걸러낸다
+        // (Enter가 '항목 열기'로, Del·Ctrl+A/V가 파일 조작으로 새면 안 된다).
+        if (e.OriginalSource is TextBox) return;
         if (e.Key == VirtualKey.Enter)
         {
             if (SelectedEntry is not { } entry) return; // 선택 없음 — 셸(OnShellEnter)이 상태별로 받는다
@@ -108,9 +120,38 @@ public sealed partial class ThumbnailExplorer : UserControl
             return;
         }
 
+        // A94 2차: F2 = 이름변경(첫 선택 타일 1개 — 다중 선택이어도 첫 항목만), Del = 휴지통 삭제.
+        if (e.Key == VirtualKey.F2)
+        {
+            if (TileGrid.SelectedItem is not GridViewItem selected) return;
+            e.Handled = true;
+            BeginRenameOf(selected);
+            return;
+        }
+        if (e.Key == VirtualKey.Delete)
+        {
+            // Shift+Del(영구 삭제)은 이번 범위 아님(후속 등재) — 삼키지도 않고 비켜 준다.
+            if (ExplorerFileOps.IsShiftDown() || ExplorerFileOps.IsCtrlDown()) return;
+            var targets = SelectedPaths();
+            if (targets.Count == 0) return;
+            e.Handled = true;
+            await DeleteWithNoticeAsync(targets);
+            return;
+        }
+
         if (!ExplorerFileOps.IsCtrlDown()) return;
         switch (e.Key)
         {
+            case VirtualKey.N: // Ctrl+Shift+N = 새 폴더 (Shift 없는 Ctrl+N 아님 —
+                // 앱 전역 Shift+N 새 창(A84)과도 다른 조합. 판정 = Ctrl(위) && Shift && N)
+                if (!ExplorerFileOps.IsShiftDown() || CurrentFolder is not { Length: > 0 } parent) return;
+                e.Handled = true;
+                var (created, createNotice) = ExplorerFileOps.CreateFolder(parent);
+                if (createNotice is not null) ShowNotice(createNotice);
+                if (created is null) return;
+                _pendingRenamePath = created; // 재스캔 결과(ShowEntries)가 돌아오면 그 타일로 편집 진입
+                FolderActivated?.Invoke(parent); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
+                break;
             case VirtualKey.A:
                 e.Handled = true;
                 TileGrid.SelectAll(); // Extended 모드 전제
@@ -166,6 +207,56 @@ public sealed partial class ThumbnailExplorer : UserControl
 
         TileGrid.UpdateLayout(); // 새 항목의 패널 실체화 — 아래 타일 크기 반영이 헛돌지 않게
         ApplyTileSize();
+
+        // A94 2차: 새 폴더(Ctrl+Shift+N) 직후의 재스캔이면 그 타일을 선택하고 곧바로 이름변경
+        // 편집 진입(탐색기 관례). 반드시 '재스캔 결과가 그려진 뒤' — 편집 중 재스캔은 편집 UI를 지운다.
+        if (_pendingRenamePath is { } pending)
+        {
+            _pendingRenamePath = null; // 1회성 — 다음 갱신(다른 폴더 이동 등)에 재발화하지 않게
+            if (FindTileByPath(pending) is { } tile)
+            {
+                TileGrid.SelectedItem = tile;
+                TileGrid.ScrollIntoView(tile);
+                TileGrid.UpdateLayout(); // 컨테이너 실체화 — 편집 상자 삽입·포커스가 성립하게
+                BeginRenameOf(tile);
+            }
+        }
+    }
+
+    /// <summary>경로로 타일 컨테이너 찾기 — 항목 = 컨테이너 직접 추가(Tag = Entry) 구조 전제.</summary>
+    private GridViewItem? FindTileByPath(string path) =>
+        TileGrid.Items.OfType<GridViewItem>().FirstOrDefault(i =>
+            i.Tag is ExplorerListing.Entry entry &&
+            string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// F2·우클릭 Rename 진입 (A94 2차): 타일 캡션 TextBlock을 인라인 편집(ExplorerRenameBox)으로
+    /// 바꾼다. 캡션 위치 = MakeTile의 tile.Children[1](아래 행 캡션 — 인덱스 수동 동기).
+    /// 커밋 성공 갱신 = RefreshViaShell(편집이 끝난 뒤에만 — 편집 중 재스캔 금지).
+    /// </summary>
+    private void BeginRenameOf(GridViewItem item)
+    {
+        if (item.Tag is not ExplorerListing.Entry entry) return;
+        if (item.Content is not Grid { Children.Count: > 1 } tile ||
+            tile.Children[1] is not TextBlock caption) return;
+        ExplorerRenameBox.Begin(tile, caption, entry.Path, ShowNotice, RefreshViaShell);
+    }
+
+    /// <summary>조작 후 갱신 — 폴더 상태의 단일 원본(좌 리스트)을 셸이 다시 항해시키는 A93 경로.</summary>
+    private void RefreshViaShell()
+    {
+        if (CurrentFolder is { Length: > 0 } folder) FolderActivated?.Invoke(folder);
+    }
+
+    /// <summary>
+    /// Del·우클릭 Delete (A94 2차): 휴지통 경유 삭제(StorageDeleteOption.Default —
+    /// ExplorerFileOps 주석). 확인 대화상자 없음(탐색기 관례) — 실패만 안내 문구.
+    /// </summary>
+    private async Task DeleteWithNoticeAsync(IReadOnlyList<string> paths)
+    {
+        var result = await ExplorerFileOps.DeleteToRecycleAsync(paths);
+        RefreshViaShell();
+        if (result.Notice("deleted") is { } notice) ShowNotice(notice);
     }
 
     /// <summary>
@@ -344,18 +435,51 @@ public sealed partial class ThumbnailExplorer : UserControl
         };
     }
 
-    /// <summary>파일 항목 우클릭 메뉴(A24): "Open in new instance" — ExplorerPane과 같은 구성.</summary>
-    private void AttachContextMenu(FrameworkElement item, ExplorerListing.Entry entry)
+    /// <summary>
+    /// 항목 우클릭 메뉴 — ExplorerPane.AttachContextMenu와 같은 구성(A94 2차):
+    /// 파일 = "Open in new instance"(A24) + Rename·Delete, 폴더 = Rename·Delete만
+    /// (종전에는 파일 전용 메뉴라 폴더 타일에 안 달았다. 빈 영역 메뉴는 원래 없어 이번에도
+    /// 안 만든다 — 새 폴더는 키만: docs/A94-matrix.md 명기). Delete 대상은 드래그와 같은 규칙 —
+    /// 그 타일이 선택에 포함돼 있으면 선택 전부, 아니면 그 타일 하나.
+    /// Rename은 플라이아웃이 닫히며 포커스를 되돌린 '뒤'에 진입해야 편집 상자가 곧장 LostFocus
+    /// 커밋으로 닫혀 버리지 않는다 — 디스패처로 한 박자 미룬다.
+    /// </summary>
+    private void AttachContextMenu(GridViewItem item, ExplorerListing.Entry entry)
     {
-        if (entry.IsFolder) return;
-        var open = new MenuFlyoutItem
-        {
-            Text = "Open in new instance", // A53 문구
-            Icon = new FontIcon { Glyph = "\uE8A7" }, // OpenInNewWindow
-        };
-        open.Click += (_, _) => FileActivatedNewWindow?.Invoke(entry.Path);
         var flyout = new MenuFlyout();
-        flyout.Items.Add(open);
+        if (!entry.IsFolder)
+        {
+            var open = new MenuFlyoutItem
+            {
+                Text = "Open in new instance", // A53 문구
+                Icon = new FontIcon { Glyph = "\uE8A7" }, // OpenInNewWindow
+            };
+            open.Click += (_, _) => FileActivatedNewWindow?.Invoke(entry.Path);
+            flyout.Items.Add(open);
+            flyout.Items.Add(new MenuFlyoutSeparator());
+        }
+        var rename = new MenuFlyoutItem
+        {
+            Text = "Rename",
+            Icon = new FontIcon { Glyph = "\uE8AC" }, // Rename
+        };
+        rename.Click += (_, _) => DispatcherQueue.TryEnqueue(() => BeginRenameOf(item));
+        flyout.Items.Add(rename);
+        var delete = new MenuFlyoutItem
+        {
+            Text = "Delete",
+            Icon = new FontIcon { Glyph = "\uE74D" }, // Delete
+        };
+        delete.Click += async (_, _) =>
+        {
+            var selected = SelectedPaths();
+            IReadOnlyList<string> targets =
+                selected.Contains(entry.Path, StringComparer.OrdinalIgnoreCase)
+                    ? selected
+                    : [entry.Path];
+            await DeleteWithNoticeAsync(targets);
+        };
+        flyout.Items.Add(delete);
         item.ContextFlyout = flyout;
     }
 
