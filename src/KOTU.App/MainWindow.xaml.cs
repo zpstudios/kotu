@@ -252,8 +252,10 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 마지막으로 닫힌 창의 크기·위치(물리 픽셀)를 복원한다(v0.55.0 크기, A55 위치).
-    /// 저장값이 없으면 기본 크기·위치. 다중 인스턴스(A24)는 저장 위치에서 창마다
-    /// +32px 계단식 오프셋으로 열고, 오프셋 결과까지 화면 밖 보정을 거친다.
+    /// 저장값이 없으면 기본 크기·위치.
+    /// A89(v0.114.0): 다중 인스턴스(A24)도 **저장값을 그대로 승계**한다 — A55의 +32px 계단식
+    /// 오프셋은 폐기. 살아 있는 창과 정확히 겹쳐도 비켜 주지 않는다(사용자 확정: "그대로 승계").
+    /// 화면 밖 보정(ClampToWorkArea)과 A40 최소 크기 클램프는 그대로 거친다.
     /// 최대화로 닫혔으면 최대화로 열되, 복원(Restore Down) 시 돌아갈 일반 크기·위치는
     /// 먼저 적용해 둔 저장값이 된다.
     /// </summary>
@@ -275,11 +277,10 @@ public sealed partial class MainWindow : Window
                 h = Math.Max(h, minH);
                 if (x != int.MinValue && y != int.MinValue)
                 {
-                    // 계단식 오프셋(A55): 생성자 시점 OpenWindowCount = 기존 창 수 = 인스턴스 - 1.
+                    // A89: 저장 위치를 오프셋 없이 그대로 쓴다(마지막에 닫은 창 승계).
                     // 클램프는 최소 크기 반영 후의 최종 크기로 계산해야 맞는다(A40 정합).
-                    var offset = 32 * _manager.OpenWindowCount;
                     AppWindow.MoveAndResize(ClampToWorkArea(
-                        new Windows.Graphics.RectInt32(x + offset, y + offset, w, h)));
+                        new Windows.Graphics.RectInt32(x, y, w, h)));
                 }
                 else
                 {

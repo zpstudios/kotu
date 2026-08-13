@@ -54,6 +54,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             TraySensors.Changed += UpdateTrayPins; // 다른 창에서 토글해도 이 창 카드에 반영
             HardwareModule.BarScaleChanged -= ApplyBarScale; // 같은 이유의 이중 구독 방지 (A62)
             HardwareModule.BarScaleChanged += ApplyBarScale; // 다른 창에서 바꿔도 이 창 바에 반영
+            // A88: 맥박 렌더 루프를 붙인다(프레임마다 다시 그려 스파이크가 흐르게).
+            // static 이벤트라 같은 이중 구독 방지 패턴을 그대로 쓴다.
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnPulseFrame;
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnPulseFrame;
             UpdateTrayPins();
         };
         Unloaded += (_, _) =>
@@ -62,6 +66,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             _subscription = null;
             TraySensors.Changed -= UpdateTrayPins;
             HardwareModule.BarScaleChanged -= ApplyBarScale; // A62
+            // A88: 반드시 해제 — CompositionTarget.Rendering은 static 이벤트라 남겨 두면
+            // 이 뷰(와 붙어 있는 창 전체)가 통째로 누수되고, UI 스레드도 매 프레임 계속 깨운다.
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnPulseFrame;
             // A39: 토글 버튼은 인포 모듈에만 있으므로, 뷰가 내려가면(모듈 전환 등)
             // 끌 방법이 없는 상태가 남지 않게 항상 위 고정을 해제한다.
             if (_appWindow?.Presenter is OverlappedPresenter presenter)
@@ -918,6 +925,24 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             RenderSparkline(card, history);
     }
 
+    /// <summary>
+    /// A88: 렌더 루프(프레임마다 호출). 데이터(도착 기록)와 그리기를 분리한 결과 —
+    /// <see cref="RenderPulse"/>의 x 좌표가 "현재 시각" 기준이라, 같은 <c>_pulseTicks</c>를
+    /// 매 프레임 다시 그리기만 해도 스파이크가 우→좌로 흘러간다(수술실 심전도 모니터).
+    /// 안 보이면(A40의 폭 축약으로 맥박이 내려간 상태) 즉시 빠져나가 CPU를 쓰지 않는다.
+    /// 창이 최소화·숨김이면 그 스레드에 그릴 창이 없어 프레임이 멈추므로 호출도 멎는다 —
+    /// 단 같은 UI 스레드에 보이는 창이 따로 있으면 프레임은 계속 오고, 그때 이 핸들러가
+    /// 안 보이는 창 몫까지 도는 것은 점 10개 미만이라 비용이 무시할 수준이라 그냥 둔다.
+    /// ※ 기록 정리(<c>RemoveAll</c>)는 여기서 하지 않는다 — RecordPulse/RerenderPulse의 몫이고,
+    /// 창 밖 기록은 RenderPulse의 <c>tick &lt; start</c> 검사가 이미 건너뛴다.
+    /// 두 번째 인자는 반드시 object여야 한다(EventHandler&lt;object&gt;) — RenderingEventArgs로 받으면 안 된다.
+    /// </summary>
+    private void OnPulseFrame(object? sender, object? e)
+    {
+        if (PulseHost.Visibility != Visibility.Visible) return;
+        RenderPulse(DateTime.UtcNow);
+    }
+
     /// <summary>스냅샷 도착 시각을 기록하고 창 밖 기록을 버린 뒤 그래프를 다시 그린다.</summary>
     private void RecordPulse()
     {
@@ -941,7 +966,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 병원 심박 모니터풍: 평평한 기준선 위에 도착 시각마다 QRS풍 스파이크(위로 크게 →
     /// 아래로 살짝 → 복귀). 창이 주기 × 2라(A51) 어느 주기에서든 스파이크 1~2개가
     /// 주기에 맞춰 흐른다 — 박동이 흐르는 속도가 곧 리프레시 레이트다.
-    /// 폴링 주기마다만 다시 그린다(비용 미미).
+    /// A88(v0.114.0): 호출자가 <see cref="OnPulseFrame"/>(디스플레이 주사율)이라 **매 프레임** 그린다 —
+    /// 좌표가 인자 <paramref name="now"/> 기준이므로 계산식은 그대로 두고 호출 빈도만 올렸다.
+    /// 점은 스파이크 1~2개분(10개 미만)이라 프레임당 비용은 무시할 수준.
     /// ※ 스파이크 폭(±3·±1)은 **픽셀 상수**지 ms 상수가 아니다 — 창 길이가 100ms(50ms 주기)든
     /// 10초(5000ms 주기)든 90px 안에서 같은 모양·같은 6px 폭으로 그려지므로 A73의 양 끝에서도
     /// 뭉개지지 않는다. 여기를 시간 단위로 바꾸면 짧은 창에서 스파이크가 창을 삼킨다.

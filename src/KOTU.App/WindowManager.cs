@@ -47,8 +47,10 @@ public sealed class WindowManager
     public MainWindow? ActiveWindow => _windows.Count > 0 ? _windows[^1] : null;
 
     /// <summary>
-    /// 현재 열린 창 수. MainWindow 생성자(계단식 오프셋, A55)에서 부르면 새 창은 아직
-    /// 등록 전이므로 "기존 창 수 = 새 창의 인스턴스 번호 - 1"이 된다.
+    /// 현재 열린 창 수. MainWindow 생성자에서 부르면 새 창은 아직 등록 전이므로
+    /// "기존 창 수 = 새 창의 인스턴스 번호 - 1"이 된다.
+    /// ※ A55의 계단식 오프셋 용도는 A89(v0.114.0)에서 폐기됐다(오프셋 없이 그대로 승계).
+    /// 값 자체는 다른 항목이 쓸 수 있어 그대로 둔다.
     /// </summary>
     public int OpenWindowCount => _windows.Count;
 
