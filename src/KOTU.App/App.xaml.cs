@@ -81,10 +81,9 @@ public partial class App : Application
         // 셸 등록 정비: 구 브랜드 흔적 1회 청소(A46) + exe 경로 자동 재등록(A78, 매 실행).
         ShellRegistrationMaintenance();
 
-        // 업데이트 백그라운드 주기 체크 + 네이티브 토스트(A26·A76, v0.105.0).
-        // v0.17.0의 "주기 체크 금지, 설정 진입 시에만" 정책을 대체한다 —
-        // 타이머는 프로세스당 1개(UpdateCoordinator)이고 설정 화면은 그 상태를 표시만 한다.
-        Integration.UpdateCoordinator.Initialize(Services.GetRequiredService<WindowManager>());
+        // 업데이트 전역 상태 준비(A95, v0.117.0) — 저장된 마지막 확인 결과를 읽어 놓기만 한다.
+        // 실제 확인은 설정 화면의 "Check now"를 눌렀을 때만 돈다(주기 타이머·토스트는 제거됐다).
+        Integration.UpdateCoordinator.Initialize();
 
         // 설치 직후 첫 실행이면 미션 스테이트먼트 웰컴을 띄운다.
         if (Program.IsFirstRun) ShowFirstRunWelcome();

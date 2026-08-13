@@ -13,8 +13,8 @@ namespace KOTU.App;
 /// 설정 페이지. UI 스케일(v0.24.0), 탐색기 통합(파일 연결·우클릭 메뉴)을 관리한다.
 /// 탐색기 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
 /// 하단 바(광고 + ⛶ 전체화면)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
-/// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시·조작만 한다
-/// (A26·A76, v0.105.0 — 주기 확인·토스트는 앱 전역 서비스가 소유).
+/// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시만 하고 확인은
+/// "Check now"를 눌렀을 때만 돈다 (A95, v0.117.0 — 주기 확인·토스트·오토체크 토글은 제거됐다).
 /// 연결 토글의 레지스트리 작업·기본 앱 개수 조회는 전부 <see cref="Worker"/>에서 돌고
 /// UI에는 진행률과 결과만 흘러온다(A77, v0.106.0).
 /// </summary>
@@ -352,9 +352,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         BuildSettingsFileSection(); // A36: 연결 섹션 아래 "Open settings.json"
 
-        _updatesHeader = AddHeader("Updates");
+        AddHeader("Updates");
         var currentVersion = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
-        Root.Children.Add(new TextBlock { Text = $"Current version: v{currentVersion}", Opacity = 0.8 });
         BuildUpdatesSection(currentVersion);
 
         AddHeader("About");
@@ -554,57 +553,24 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         };
     }
 
-    /// <summary>업데이트 섹션 머리글 — 토스트 클릭 진입 시 스크롤 목표(A26, v0.105.0).</summary>
-    private TextBlock? _updatesHeader;
-
     /// <summary>
-    /// 토스트 클릭으로 열린 설정 화면을 업데이트 섹션까지 스크롤한다(A26, v0.105.0).
-    /// 호출 시점에 아직 레이아웃 전일 수 있어 Loaded와 낮은 우선순위 큐 양쪽에서 시도한다.
-    /// </summary>
-    public void ScrollToUpdates()
-    {
-        if (_updatesHeader is not { } target) return;
-
-        void OnLoadedOnce(object sender, RoutedEventArgs e)
-        {
-            Loaded -= OnLoadedOnce;
-            target.StartBringIntoView();
-        }
-        Loaded += OnLoadedOnce;
-
-        DispatcherQueue.TryEnqueue(
-            Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
-            () => target.StartBringIntoView());
-    }
-
-    /// <summary>
-    /// Updates 섹션(A26·A76, v0.105.0). 실제 확인은 전역 <see cref="UpdateCoordinator"/>가 소유하고
-    /// 여기서는 그 상태를 <b>표시·조작만</b> 한다 — 설정 화면을 닫아도 주기 확인은 계속된다.
-    /// v0.27.0의 "설정 화면 체류 중 1분 카운트다운 루프"는 이걸로 대체됐다.
-    /// 업데이트 불가 빌드에서는 토글·시각 표시를 숨기지 않고 비활성으로 남긴다(사용자 확정).
+    /// Updates 섹션(A95, v0.117.0). 구성은 위에서부터
+    /// <b>현재 버전 · 최신 버전 · 마지막 확인 시각 · [Check now][Update to vX] · 안내 문구</b>.
+    /// 확인은 Check now를 눌렀을 때만 돈다 — 주기 타이머·토스트·오토체크 토글은 A95에서 제거됐다
+    /// (v0.17.0 → v0.105.0 → v0.117.0으로 세 번 뒤집힌 정책이다. 상세는 UpdateCoordinator 주석).
+    /// 실제 확인은 전역 <see cref="UpdateCoordinator"/>가 소유하고 여기서는 그 상태를 <b>표시만</b> 한다 —
+    /// 다른 창에서 확인해도 이 화면이 따라 갱신된다.
+    /// 업데이트 불가 빌드에서는 표시를 숨기지 않고 비활성으로 남긴다(사용자 확정).
     /// </summary>
     private void BuildUpdatesSection(string currentVersion)
     {
         var available = UpdateCoordinator.IsAvailable;
 
-        var autoToggle = new ToggleSwitch
-        {
-            Header = "Check for updates automatically",
-            IsOn = UpdateCoordinator.AutoCheckEnabled,
-            IsEnabled = available,
-        };
-        Root.Children.Add(autoToggle);
-        Root.Children.Add(new TextBlock
-        {
-            Text = "Checks every 10 minutes in the background and notifies you when a new version is available.",
-            FontSize = 12,
-            Opacity = 0.7,
-            TextWrapping = TextWrapping.Wrap,
-        });
-
         // TextBlock은 Control이 아니라 IsEnabled가 없다 — 업데이트 불가 빌드의 '비활성' 표현은
-        // 흐리게(Opacity)로 대신한다. 토글·버튼은 진짜 IsEnabled=false로 잠근다. (v0.108.1)
-        var lastChecked = new TextBlock { FontSize = 12, Opacity = available ? 0.7 : 0.4 };
+        // 흐리게(Opacity)로 대신한다. 버튼만 진짜 IsEnabled=false로 잠근다. (v0.108.1)
+        var dim = available ? 0.7 : 0.4;
+        var latest = new TextBlock { FontSize = 12, Opacity = dim };
+        var lastChecked = new TextBlock { FontSize = 12, Opacity = dim };
         var status = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
         var checkNow = new Button { Content = "Check now", IsEnabled = available };
         var updateButton = new Button { Visibility = Visibility.Collapsed };
@@ -613,54 +579,67 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         buttonRow.Children.Add(checkNow);
         buttonRow.Children.Add(updateButton);
 
+        Root.Children.Add(new TextBlock { Text = $"Current version: v{currentVersion}", Opacity = 0.8 });
+        Root.Children.Add(latest);
         Root.Children.Add(lastChecked);
-        Root.Children.Add(status);
         Root.Children.Add(buttonRow);
+        Root.Children.Add(status); // 안내 문구는 버튼 줄 '밑'이다(A95).
 
         // 다운로드·설치 중에는 그 진행 문구를 전역 상태 갱신이 덮어쓰지 않게 한다.
         var installing = false;
 
         void Render()
         {
-            autoToggle.IsOn = UpdateCoordinator.AutoCheckEnabled; // 다른 창에서 바꿔도 따라온다
             lastChecked.Text = UpdateCoordinator.DescribeLastCheck();
             checkNow.IsEnabled = available && !UpdateCoordinator.IsChecking;
 
-            // 이미 찾아 둔 업데이트가 있으면 오토체크를 꺼도 적용 버튼은 유지한다(사용자 확정).
+            // 한 번 찾은 업데이트는 뒤이은 확인이 실패해도 적용 버튼을 유지한다.
             if (UpdateCoordinator.PendingUpdate is { } pending)
             {
+                latest.Text = $"Latest version: v{pending.TargetFullRelease.Version}";
                 updateButton.Content = $"Update to v{pending.TargetFullRelease.Version}";
                 updateButton.Visibility = Visibility.Visible;
+            }
+            else if (UpdateCoordinator.LastCheckedAt is null)
+            {
+                latest.Text = "Latest version: not checked yet";
+            }
+            else
+            {
+                // 확인은 했는데 새 버전이 없다 = 지금 것이 최신. 실패했으면 최신이 뭔지 알 수 없다.
+                latest.Text = UpdateCoordinator.LastCheckError.Length > 0
+                    ? "Latest version: unknown"
+                    : $"Latest version: v{currentVersion}";
             }
 
             if (installing) return;
 
             if (!available)
             {
-                status.Text = "Automatic updates are unavailable in this build. "
+                status.Text = "In-app updates are unavailable in this build. "
                             + "Install with Setup.exe from Releases to enable them.";
             }
             else if (UpdateCoordinator.IsChecking)
             {
                 status.Text = "Checking for updates...";
             }
-            else if (UpdateCoordinator.PendingUpdate is { } newer)
-            {
-                status.Text = $"New version v{newer.TargetFullRelease.Version} is available (current: v{currentVersion}).";
-            }
             else if (UpdateCoordinator.LastCheckError.Length > 0)
             {
                 status.Text = "Update check failed: " + UpdateCoordinator.LastCheckError;
             }
+            else if (UpdateCoordinator.PendingUpdate is not null)
+            {
+                status.Text = string.Empty; // 새 버전은 위 줄과 적용 버튼이 이미 말한다.
+            }
             else
             {
+                // 아직 한 번도 확인하지 않았으면 아무 말도 하지 않는다(A95).
                 status.Text = UpdateCoordinator.LastCheckedAt is null
                     ? string.Empty
-                    : $"You are on the latest version (v{currentVersion}).";
+                    : "You are on the latest version.";
             }
         }
 
-        autoToggle.Toggled += (_, _) => UpdateCoordinator.SetAutoCheck(autoToggle.IsOn);
         checkNow.Click += async (_, _) => await UpdateCoordinator.CheckNowAsync();
         updateButton.Click += async (_, _) =>
         {
@@ -713,18 +692,16 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         }
     }
 
-    /// <summary>섹션 머리글 추가. 만든 요소를 돌려준다(A26 — 업데이트 섹션 스크롤 목표로 쓴다).</summary>
-    private TextBlock AddHeader(string text)
+    /// <summary>섹션 머리글 추가.</summary>
+    private void AddHeader(string text)
     {
-        var header = new TextBlock
+        Root.Children.Add(new TextBlock
         {
             Text = text,
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 8, 0, 0),
-        };
-        Root.Children.Add(header);
-        return header;
+        });
     }
 
     /// <summary>

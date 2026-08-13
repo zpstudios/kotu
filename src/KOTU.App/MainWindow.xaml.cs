@@ -873,13 +873,10 @@ public sealed partial class MainWindow : Window
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => ShowSettings();
 
-    /// <summary>
-    /// 설정 화면 열기. scrollToUpdates면 업데이트 섹션까지 스크롤한다
-    /// (A26, v0.105.0 — 업데이트 토스트 클릭 진입).
-    /// </summary>
-    public void ShowSettings(bool scrollToUpdates = false) => _ = ShowSettingsAsync(scrollToUpdates);
+    /// <summary>설정 화면 열기.</summary>
+    public void ShowSettings() => _ = ShowSettingsAsync();
 
-    private async Task ShowSettingsAsync(bool scrollToUpdates)
+    private async Task ShowSettingsAsync()
     {
         if (!await ConfirmDiscardAsync()) return; // 문서 편집 미저장 가드 (A37)
         _titleDirtyMark = false;
@@ -893,7 +890,6 @@ public sealed partial class MainWindow : Window
         IsUntouched = false;
         UpdateModeIndicator(null, isSettings: true);
         SetContentState(null, null);
-        if (scrollToUpdates) settings.ScrollToUpdates();
     }
 
     // ---------- 파일 열기 ----------

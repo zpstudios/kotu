@@ -136,17 +136,6 @@ public sealed class WindowManager
         target.BringToFront();
     }
 
-    /// <summary>
-    /// 설정 화면 열기/활성화 (A26, v0.105.0 — 업데이트 토스트 클릭). 최근 창을 재사용하고,
-    /// 창이 하나도 없으면(모두 닫히는 경합 등) 새로 만든다.
-    /// </summary>
-    public void ShowSettings(bool scrollToUpdates = false)
-    {
-        var target = ActiveWindow ?? Create();
-        target.ShowSettings(scrollToUpdates);
-        target.BringToFront();
-    }
-
     /// <summary>모든 창 닫기 = 앱 종료 (트레이 메뉴 'Exit KOTU').</summary>
     public void CloseAll()
     {
