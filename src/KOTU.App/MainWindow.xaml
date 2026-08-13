@@ -10,7 +10,9 @@
       항목 순서(아래→위, A96/v0.116.0 기준): All Readable(1) - 사진·영상·오디오·문서 그룹(2~5) -
       압축(6) - H/W(7) - Settings(0) - 스폰서(광고). 실제 조립은 코드(BuildStartMenu)가 한다.
       하단 바 우측 Info·Settings 아이콘은 제거(v0.28.2) — 시작 메뉴로 일원화.
-      창 전체 드롭은 유지: 어떤 파일이든 떨어뜨리면 확장자로 담당 모듈에 라우팅.
+      창 전체 드롭(A93에서 "콘텐츠 영역" 폴백으로 재정의): 우측 인포 드랍 = 열기(오버레이가 소비),
+      좌 패널·중앙 썸네일 드랍 = 무동작(A94 몫), 나머지 영역은 콘텐츠 열림 시 같은 종류만
+      그 자리에서 열고 다른 종류는 새 인스턴스로(OnWindowDrop).
     -->
     <!-- ScaleHost: UI 스케일 오버라이드(v0.24.0)의 기준 크기. RootLayout에 ScaleTransform을
          걸고 역수 크기를 줘서 창 전체가 선택 배율로 그려지게 한다(ApplyUiScale). -->
@@ -29,10 +31,11 @@
 
         <!-- 중앙 영역 (A58 불투명 밀어내기 레이아웃): 좌 도크 / 메인 / 우 도크 3컬럼.
              평소에는 도크 폭 0 = 메인이 전폭. 오버레이가 불투명 밀어내기(OpaqueDocked)면
-             코드(ApplyOverlayStates)가 도크 컬럼을 3*로 키워 메인(ModuleHost/ExplorerHost)이
-             반대쪽 7*로 축소된다. 양쪽 다 밀어내면 3:4:3.
-             오버레이 컨트롤은 항상 전폭으로 겹치고(ColumnSpan=3) 내부 3:7(좌)·7:3(우) 분할이
-             전폭 기준 정확히 30%라서 도크 컬럼과 픽셀 단위로 정렬된다. -->
+             코드(ApplyOverlayStates)가 도크 컬럼을 키워 메인(ModuleHost/ExplorerHost)을 축소한다.
+             도크 폭은 상태별(A93): 콘텐츠 상태 = 30%씩(한쪽 3:7, 양쪽 3:4:3 — A57/A58 그대로) /
+             S1(빈 파일 모듈) = 25%씩(3구획 25:50:25).
+             오버레이 컨트롤은 항상 전폭으로 겹치고(ColumnSpan=3) 내부 별 분할(SetPanelPercent)을
+             같은 %로 맞춰서 도크 컬럼과 픽셀 단위로 정렬된다. -->
         <Grid x:Name="CenterArea" Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="LeftDockColumn" Width="0" />
@@ -49,8 +52,10 @@
                            Opacity="0.6"/>
             </ContentControl>
 
-            <!-- 빈 상태 탐색기 (v0.25.0): 모듈을 파일 없이 열면 중앙 영역을 덮는다.
-                 파일 더블클릭 → 라우팅으로 열리며 자동으로 내려간다. -->
+            <!-- 빈 상태(S1) 중앙 썸네일 뷰 호스트 (v0.25.0 ExplorerPane → A93 ThumbnailExplorer):
+                 모듈을 파일 없이 열면 중앙 영역을 채운다. 목록은 좌 도크 리스트와 공유(A93),
+                 파일 더블클릭 → 라우팅으로 열리며 자동으로 내려간다. 좌 도크가 열려 있어도
+                 숨기지 않는다(A81 중앙 숨김 대체). -->
             <Grid x:Name="ExplorerHost" Grid.Column="1" Visibility="Collapsed"
                   Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
 

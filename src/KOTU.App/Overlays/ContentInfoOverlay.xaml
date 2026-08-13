@@ -4,23 +4,27 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- 콘텐츠 정보 오버레이 (A57 ①②): 기존 MainWindow의 InfoOverlayRoot를 공용 컨트롤로 추출.
-         A57 ①에 따라 우측 30%에 배치(기존 좌측에서 스왑) — 폭은 A33 규칙대로 7*/3* 균등 분할.
+         A57 ①에 따라 우측에 배치(기존 좌측에서 스왑). 폭은 코드(SetPanelPercent, A93)가 정한다:
+         콘텐츠 상태 = 30%(A33/A57 규칙 그대로) / S1(빈 파일 모듈) = 25%(3구획 25:50:25).
          키 매핑(A58) = Shift(기존 Ctrl 대체, 부록 B 26번): 홀드 = 반투명 덮기 /
          2초 홀드 = 반투명 고정 / 2연타 = 불투명 밀어내기·해제. 입력 처리는 셸 담당 —
          이 컨트롤은 SetState로 모드(TranslucentOver/OpaqueDocked)와 안내 문구만 받는다.
-         불투명일 때의 실제 폭 차지는 셸의 도크 컬럼 담당(내부 7*/3* 분할은 두 모드 공통).
+         불투명일 때의 실제 폭 차지는 셸의 도크 컬럼 담당(내부 별 분할은 두 모드 공통).
          정보 항목은 모듈 뷰(IContentInfoProvider)가 주입하고, 없으면 파일 기본 정보로 대체.
-         기본 배경은 약한 틴트 아크릴(A33). -->
+         기본 배경은 약한 틴트 아크릴(A33).
+         패널 드랍(A93) = 그 파일 열기(FileDropped) — 홀드 반투명 중에는 IsHitTestVisible이
+         false라 드랍이 아래 콘텐츠 영역 규칙으로 흘러간다(의도된 동작). -->
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="7*" />
-            <ColumnDefinition Width="3*" />
+            <ColumnDefinition x:Name="RestColumn" Width="70*" />
+            <ColumnDefinition x:Name="PanelColumn" Width="30*" />
         </Grid.ColumnDefinitions>
         <Border x:Name="OverlayBorder" Grid.Column="1"
                 Background="{ThemeResource OverlayAcrylicBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="1,0,0,0"
-                Padding="16" IsHitTestVisible="False">
+                Padding="16" IsHitTestVisible="False"
+                AllowDrop="True" DragOver="OnPanelDragOver" Drop="OnPanelDrop">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="InfoText" TextWrapping="Wrap" FontSize="13" />

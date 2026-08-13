@@ -2,6 +2,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using Windows.ApplicationModel.DataTransfer;
+using KOTU.Core.Routing;
 using KOTU.Core.Settings;
 using KOTU.Input;
 
@@ -9,7 +11,8 @@ namespace KOTU.App.Overlays;
 
 /// <summary>
 /// 파일 리스트 오버레이 공용 컨트롤 (A57 ②) — 기존 MainWindow의 AltOverlayRoot(우측 30%,
-/// v0.25.0)를 추출해 좌측 30%로 스왑(A57 ①)한 것. 내부는 ExplorerPane 리스트 전용 모드 재사용.
+/// v0.25.0)를 추출해 좌측으로 스왑(A57 ①)한 것. 내부는 ExplorerPane 리스트 전용 모드 재사용.
+/// 패널 폭은 상태별(A93, SetPanelPercent): 콘텐츠 상태 30% / S1(빈 파일 모듈) 25%.
 /// 컨텍스트는 모듈이 주입한다: Show(folder, extensions)의 확장자 목록이 모듈별 필터(A57 ③)가 되고,
 /// ExplorerPane의 A7 드롭다운은 그 안에서 추가로 좁힌다. 적용 대상은 파일 모듈
 /// (Image·Video·Audio·Document·Archive) — 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
@@ -32,6 +35,13 @@ public sealed partial class FileListOverlay : UserControl
     /// <summary>명시적 새 창 열기(A24: Shift+더블클릭·우클릭 메뉴) — 셸이 항상 새 창으로.</summary>
     public event Action<string>? FileActivatedNewWindow;
 
+    /// <summary>
+    /// 내부 리스트(ExplorerPane)의 표시 목록이 다시 그려질 때 그대로 전달 (A93).
+    /// 셸이 구독해 S1 중앙 썸네일 뷰(ThumbnailExplorer)를 같은 목록으로 갱신한다 —
+    /// 좌 리스트와 중앙이 폴더·필터(A7)·정렬(A5) 상태를 공유하는 유일한 통로.
+    /// </summary>
+    public event Action<IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
+
     /// <summary>정렬 키 저장용(A5) — 셸이 리스트 첫 생성 전에 주입한다. 없어도 동작(기본 이름순).</summary>
     public ISettingsService? Settings { get; set; }
 
@@ -53,7 +63,22 @@ public sealed partial class FileListOverlay : UserControl
     /// </summary>
     public void Show(string folder, IReadOnlyList<string> extensions)
     {
-        _extensions = extensions;
+        NavigateList(folder, extensions);
+        Visibility = Visibility.Visible;
+
+        EnsureDriveRoots(); // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
+        _ = ExpandToFolderAsync(folder);
+    }
+
+    /// <summary>
+    /// 표시 여부를 바꾸지 않고 리스트만 만들어 항해시킨다 (A93 — Show에서 분리).
+    /// S1에서는 좌 도크가 닫혀 있어도 이 리스트가 폴더 상태의 원본이라, 셸이 중앙 썸네일 뷰를
+    /// 채우기 위해 이 경로를 쓴다(결과는 ViewChanged로 돌아온다). extensions를 생략하면
+    /// 마지막 모듈 필터 유지 — 썸네일 뷰의 폴더 더블클릭이 이 형태로 온다.
+    /// </summary>
+    public void NavigateList(string folder, IReadOnlyList<string>? extensions = null)
+    {
+        if (extensions is not null) _extensions = extensions;
         if (_list is null)
         {
             _list = new ExplorerPane { Settings = Settings }; // 정렬 키 저장(A5)
@@ -65,14 +90,36 @@ public sealed partial class FileListOverlay : UserControl
             PathBarHost.Child ??= _list.DetachPathBar();
             _list.FileActivated += path => FileActivated?.Invoke(path);
             _list.FileActivatedNewWindow += path => FileActivatedNewWindow?.Invoke(path);
+            _list.ViewChanged += entries => ViewChanged?.Invoke(entries); // A93 — 중앙 썸네일 동기화
             ListHost.Content = _list;
         }
-        _list.NavigateTo(folder, extensions);
-        Visibility = Visibility.Visible;
-
-        EnsureDriveRoots(); // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
-        _ = ExpandToFolderAsync(folder);
+        _list.NavigateTo(folder, _extensions);
     }
+
+    /// <summary>
+    /// 패널 폭(전폭 대비 %) 지정 (A93): S1(빈 파일 모듈) = 25(3구획 25:50:25),
+    /// 콘텐츠 상태 = 30(A57/A58 그대로). 내부 별 분할이 셸 도크 컬럼과 같은 비율이어야
+    /// 불투명 밀어내기에서 픽셀 단위로 정렬된다. ContentInfoOverlay에도 같은 메서드가 있다.
+    /// </summary>
+    public void SetPanelPercent(double percent)
+    {
+        PanelColumn.Width = new GridLength(percent, GridUnitType.Star);
+        RestColumn.Width = new GridLength(100 - percent, GridUnitType.Star);
+    }
+
+    /// <summary>
+    /// 좌 패널 드랍 = 탐색기식 이동/복사 자리인데 구현은 A94 몫 (A93 드랍 규칙) —
+    /// 이번에는 무동작으로 소비만 한다. 안 막으면 창 전체 핸들러(OnWindowDrop)가 "열기"로 삼킨다.
+    /// ThumbnailExplorer의 중앙 영역 핸들러와 같은 규칙.
+    /// </summary>
+    private void OnPanelDragOver(object sender, DragEventArgs e)
+    {
+        e.AcceptedOperation = DataPackageOperation.None;
+        e.Handled = true;
+    }
+
+    /// <summary>AcceptedOperation이 None이라 보통 오지 않지만, 와도 삼킨다(A94 전까지 무동작).</summary>
+    private void OnPanelDrop(object sender, DragEventArgs e) => e.Handled = true;
 
     public void Hide()
     {

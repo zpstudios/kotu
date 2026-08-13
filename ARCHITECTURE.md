@@ -172,6 +172,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 |---|---|---|
 | 하드웨어 WMI 스펙 + LHM 센서 수집(50~5000ms 선택, A73) | hardware poller | 스펙은 dedup 후 트리 반영, 센서 카드·그래프는 매 프레임 갱신 |
 | 탐색기 폴더 스캔 / 썸네일 추출 | explorer worker | 목록 채우기 / 비트맵 표시 |
+| S1 중앙 썸네일 뷰 타일(`ThumbnailExplorer`, A93) | 전용 워커 없음 — 목록은 좌 도크 리스트(ExplorerPane)의 결과를 공유, 이미지 미리보기는 XAML `BitmapImage` 비동기 디코드(DecodePixelWidth 256) | 타일 구성·크기 재계산(floor(실폭/열수)) |
 | 압축 목록·해제·생성 | archive worker | 진행률 바·완료 상태 |
 | 이미지 파일 읽기·메타데이터(WIC)·psd(Magick) | image worker | `SetSourceAsync` 표시 |
 | 영상 libvlc 생성·해제 | video worker | 뷰 연결(`Vlc.MediaPlayer`) |

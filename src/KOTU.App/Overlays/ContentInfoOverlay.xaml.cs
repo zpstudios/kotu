@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using Windows.ApplicationModel.DataTransfer;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 
@@ -9,7 +10,8 @@ namespace KOTU.App.Overlays;
 
 /// <summary>
 /// 콘텐츠 정보 오버레이 공용 컨트롤 (A57 ②) — 기존 MainWindow의 InfoOverlayRoot(좌측 30%,
-/// v0.25.0)를 추출해 우측 30%로 스왑(A57 ①)한 것. 정보 로드 로직(v0.25.0의
+/// v0.25.0)를 추출해 우측으로 스왑(A57 ①)한 것. 패널 폭은 상태별(A93, SetPanelPercent):
+/// 콘텐츠 상태 30% / S1(빈 파일 모듈) 25%. 정보 로드 로직(v0.25.0의
 /// LoadContentInfoAsync — 파일별 1회 캐시·경쟁 방지 시퀀스·기본 파일 정보 폴백)도 함께 이관.
 /// 정보 항목은 모듈이 주입한다: ShowFor()에 넘기는 IContentInfoProvider(모듈 뷰)가 내용을 만들고,
 /// 없거나 실패하면 파일 기본 정보로 대체한다. 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
@@ -27,6 +29,12 @@ public sealed partial class ContentInfoOverlay : UserControl
 
     /// <summary>오버레이가 화면에 떠 있는지 — 셸의 표시 갱신 판단에 쓴다.</summary>
     public bool IsOpen => Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// 인포 영역에 파일이 드랍됨 (A93) = "그 파일 열기". 셸이 OpenFile로 배선한다 —
+    /// 콘텐츠가 없으면 라우터(A59)가 담당 모듈로 전환한 뒤 여는 기존 경로 그대로다.
+    /// </summary>
+    public event Action<string>? FileDropped;
 
     public ContentInfoOverlay()
     {
@@ -53,7 +61,9 @@ public sealed partial class ContentInfoOverlay : UserControl
 
     /// <summary>
     /// 파일 없는 상태의 플레이스홀더 (A81 — 빈 모듈에서 기본 도크로 뜰 때):
-    /// 보여줄 파일 정보가 없으므로 간단한 안내 한 줄만 표시한다.
+    /// 보여줄 파일 정보가 없으므로 간단한 안내만 표시한다.
+    /// A93: 드랍 안내(Drop a file here...)는 인포에 아무것도 표시 중이 아닐 때만 —
+    /// 이 플레이스홀더가 정확히 그 상태라 여기서만 문구를 낸다(파일 정보 표시 중에는 없음).
     /// 진행 중이던 로드가 늦게 도착해 문구를 덮지 않게 캐시·시퀀스를 함께 무효화한다.
     /// 모드·안내 문구는 ShowFor와 동일하게 SetState가 별도로 반영한다.
     /// </summary>
@@ -61,7 +71,39 @@ public sealed partial class ContentInfoOverlay : UserControl
     {
         InvalidateCache();
         Visibility = Visibility.Visible;
-        InfoText.Text = "No file open";
+        InfoText.Text = "No file open\nDrop a file here to open it";
+    }
+
+    /// <summary>
+    /// 패널 폭(전폭 대비 %) 지정 (A93): S1(빈 파일 모듈) = 25(3구획 25:50:25),
+    /// 콘텐츠 상태 = 30(A57/A58 그대로). FileListOverlay에도 같은 메서드가 있다.
+    /// </summary>
+    public void SetPanelPercent(double percent)
+    {
+        PanelColumn.Width = new GridLength(percent, GridUnitType.Star);
+        RestColumn.Width = new GridLength(100 - percent, GridUnitType.Star);
+    }
+
+    /// <summary>
+    /// 인포 영역 드랍 = 그 파일 열기 (A93 드랍 규칙). 좌·중(탐색기 영역)의 무동작과 달리
+    /// 여기만 실제 동작이 있다. 홀드 반투명 중에는 IsHitTestVisible=false라 여기로 안 온다.
+    /// </summary>
+    private void OnPanelDragOver(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        e.Handled = true; // 창 전체 핸들러(콘텐츠 영역 규칙)가 다시 판정하지 않게
+    }
+
+    private async void OnPanelDrop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        e.Handled = true;
+        var items = await e.DataView.GetStorageItemsAsync();
+        var path = items.OfType<Windows.Storage.StorageFile>()
+            .Select(f => f.Path)
+            .FirstOrDefault(p => !string.IsNullOrEmpty(p));
+        if (path is not null) FileDropped?.Invoke(path);
     }
 
     /// <summary>

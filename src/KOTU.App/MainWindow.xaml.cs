@@ -40,7 +40,7 @@ public sealed partial class MainWindow : Window
     // 함께 개입하면 취소된다(OS Alt 메뉴 모드와 같은 규칙 — A84 Shift 조합 단축키·Shift+휠 줌 안전장치).
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
-    private ExplorerPane? _emptyExplorer; // 빈 상태 중앙 탐색기 (지연 생성)
+    private ThumbnailExplorer? _thumbnailExplorer; // S1 중앙 썸네일 뷰 (A93, 지연 생성 — 구 ExplorerPane 대체)
 
     // ---- 하단 바 드라이브 줄 (A22, v0.108.0) ----
     // 표시 컨트롤은 셸에 하나(공용 DriveStrip)만 두고 모듈 하단 바가 슬롯을 내준다(IDriveStripHost).
@@ -84,6 +84,15 @@ public sealed partial class MainWindow : Window
         ListOverlay.Settings = _settings;                                  // 정렬 키 저장(A5)
         ListOverlay.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
         ListOverlay.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
+        // A93: S1 중앙 썸네일 뷰는 좌 리스트(ExplorerPane)와 폴더·필터(A7)·정렬(A5) 상태를 공유한다 —
+        // 리스트가 다시 그려질 때마다 같은 목록을 받아 타일로 그린다. S1 밖(콘텐츠 열림)에서는 버린다.
+        ListOverlay.ViewChanged += entries =>
+        {
+            if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(entries);
+        };
+        // A93 드랍 규칙: 우측 인포 영역 드랍 = 그 파일 열기 — 콘텐츠가 없으면 OpenFile의
+        // 라우터(A59)가 담당 모듈로 전환한 뒤 여는 기존 경로를 그대로 쓴다.
+        InfoOverlay.FileDropped += OpenFile;
 
         BuildStartMenu();
         RegisterShortcuts(); // `·숫자 단독 키(A32) + Shift+N 새 창(A84 — 기존 Ctrl+N 전환)
@@ -979,7 +988,10 @@ public sealed partial class MainWindow : Window
             $"{Branding.AppName} {module.DisplayName} — {Path.GetFileName(file)}");
     }
 
-    // ---------- 창 전체 드래그&드롭 → 파일 라우팅 ----------
+    // ---------- 창 전체 드래그&드롭 → 파일 라우팅 (A93 드랍 규칙의 "콘텐츠 영역" 폴백) ----------
+    // 특정 영역이 먼저 소비한 드랍은 여기 오지 않는다: 우측 인포 = 열기(ContentInfoOverlay),
+    // 좌 패널·중앙 썸네일(S1) = 무동작(A94 전까지 — FileListOverlay·ThumbnailExplorer),
+    // 압축 뷰 = 압축 생성(ArchiveView). 여기 남는 것은 콘텐츠 영역·하단 바 등이다.
 
     private void OnWindowDragOver(object sender, DragEventArgs e)
     {
@@ -996,7 +1008,19 @@ public sealed partial class MainWindow : Window
         var path = items.OfType<Windows.Storage.StorageFile>()
             .Select(f => f.Path)
             .FirstOrDefault(p => !string.IsNullOrEmpty(p));
-        if (path is not null) OpenFile(path);
+        if (path is null) return;
+
+        // A93: 콘텐츠가 열려 있을 때 콘텐츠 영역 드랍 — 같은 종류(현재 모듈 담당 확장자)면
+        // 그 자리에서 새로 열고, 다른 종류면 담당 모듈의 새 인스턴스를 만들어 거기서 연다
+        // (WindowManager의 "파일로 새 창" 경로 재사용 — 담당 모듈이 없는 확장자도 그 경로에서
+        // 기존 "Unsupported file type" 안내로 떨어진다). 콘텐츠가 없으면 종전대로 현재 창 라우팅.
+        if (_currentFilePath is not null && _currentModule is { } module
+            && !ExplorerListing.MatchesExtension(path, module.SupportedExtensions))
+        {
+            _manager.OpenFileInNewWindow(path);
+            return;
+        }
+        OpenFile(path);
     }
 
     private async void ShowModule(IModule module, OpenContext context, string title)
@@ -1176,8 +1200,8 @@ public sealed partial class MainWindow : Window
         || module?.Id == KOTU.Module.AllReadable.AllReadableModule.ModuleId;
 
     /// <summary>
-    /// 파일 없이 연 파일 모듈(빈 모듈 상태)인지 — 중앙 탐색기(v0.25.0)와
-    /// A81 빈 도크 오버레이가 공유하는 조건.
+    /// 파일 없이 연 파일 모듈(빈 모듈 상태 = A86 표의 S1)인지 — 중앙 썸네일 뷰
+    /// (v0.25.0 탐색기 → A93)와 A81 빈 도크 오버레이가 공유하는 조건.
     /// </summary>
     private bool IsEmptyFileModule => _currentFilePath is null && IsFileModule(_currentModule);
 
@@ -1194,23 +1218,31 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 빈 상태(파일 없이 연 압축/이미지/동영상/오디오/문서 모듈)면 중앙에 탐색기를 띄운다.
+    /// 빈 상태(파일 없이 연 압축/이미지/동영상/오디오/문서 모듈)면 중앙에 썸네일 뷰를 띄운다
+    /// (A93 — 구 ExplorerPane 중앙 탐색기 대체. A81의 "좌 도크 열림 시 숨김"도 대체 — 항상 표시).
     /// 시작 위치는 그 모듈의 마지막 폴더(v0.55.0, 없으면 바탕화면), 파일은 담당 확장자만.
     /// Hardware/Settings에는 띄우지 않는다.
-    /// 좌측 리스트가 불투명 도크로 떠 있으면(A81 기본 도크) 중복이라 ApplyOverlayStates가 다시 숨긴다.
+    /// 목록의 원본은 좌 도크의 리스트(ExplorerPane) 하나다: 도크가 닫혀 있어도 NavigateList로
+    /// 그 리스트를 항해시키면 ViewChanged가 돌아와 썸네일 뷰까지 같은 목록으로 채워진다.
     /// </summary>
     private void UpdateEmptyExplorer()
     {
         if (IsEmptyFileModule && _currentModule is { } module)
         {
-            if (_emptyExplorer is null)
+            if (_thumbnailExplorer is null)
             {
-                _emptyExplorer = new ExplorerPane { Settings = _settings };           // 정렬 키 저장(A5)
-                _emptyExplorer.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
-                _emptyExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
-                ExplorerHost.Children.Add(_emptyExplorer);
+                _thumbnailExplorer = new ThumbnailExplorer
+                {
+                    ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
+                };
+                // 폴더 더블클릭 = 좌 리스트를 같은 폴더로 항해 — 결과가 ViewChanged로 돌아와
+                // 양쪽이 함께 이동한다(A93 상태 공유). 파일 열기는 기존 라우팅 그대로(A24).
+                _thumbnailExplorer.FolderActivated += folder => ListOverlay.NavigateList(folder);
+                _thumbnailExplorer.FileActivated += OpenFileRouted;
+                _thumbnailExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow;
+                ExplorerHost.Children.Add(_thumbnailExplorer);
             }
-            _emptyExplorer.NavigateTo(ModuleStartFolder(module), module.SupportedExtensions);
+            ListOverlay.NavigateList(ModuleStartFolder(module), module.SupportedExtensions);
             ExplorerHost.Visibility = Visibility.Visible;
         }
         else
@@ -1446,20 +1478,27 @@ public sealed partial class MainWindow : Window
                 ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
             pinned: _infoSide.State == OverlayState.TranslucentPinned);
 
-        // 불투명 밀어내기(OpaqueDocked)만 실제 공간을 차지한다: 도크 컬럼을 3*로 키워
-        // 메인(ModuleHost/ExplorerHost)을 반대쪽으로 축소 — 한쪽 3:7, 양쪽 3:4:3 (좌우 30% 유지).
-        // 오버레이 내부 3:7(좌)·7:3(우) 분할이 전폭 기준 정확히 30%라 도크 컬럼과 정렬된다.
-        var left = ListOverlay.IsOpen && _listSide.State == OverlayState.OpaqueDocked ? 3 : 0;
-        var right = InfoOverlay.IsOpen && _infoSide.State == OverlayState.OpaqueDocked ? 3 : 0;
+        // 불투명 밀어내기(OpaqueDocked)만 실제 공간을 차지한다: 도크 컬럼을 키워
+        // 메인(ModuleHost/ExplorerHost)을 반대쪽으로 축소한다.
+        // 도크 폭(A93): S1(빈 파일 모듈) = 25%씩 → 3구획 25:50:25 / 콘텐츠 상태 = 30%씩
+        // (A57/A58 그대로 — 한쪽 3:7, 양쪽 3:4:3). 오버레이 내부 별 분할(SetPanelPercent)을
+        // 같은 %로 맞춰야 불투명 밀어내기에서 도크 컬럼과 픽셀 단위로 정렬된다.
+        var dockPercent = emptyModule ? 25.0 : 30.0;
+        ListOverlay.SetPanelPercent(dockPercent);
+        InfoOverlay.SetPanelPercent(dockPercent);
+        var left = ListOverlay.IsOpen && _listSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
+        var right = InfoOverlay.IsOpen && _infoSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
         LeftDockColumn.Width = new GridLength(left, GridUnitType.Star);
         RightDockColumn.Width = new GridLength(right, GridUnitType.Star);
         CenterColumn.Width = new GridLength(10 - left - right, GridUnitType.Star);
 
-        // A81: 빈 모듈 상태에서 좌측 리스트가 불투명 도크로 떠 있으면 중앙 탐색기는 숨긴다 —
-        // 같은 폴더의 파일 목록이 나란히 두 번 보이는 중복 제거. 도크를 닫으면 다시 나타난다.
-        // 반투명(홀드·고정)은 중앙을 덮는 표시라 그대로 둔다(아크릴 아래로 비쳐 보이는 게 정상).
+        // A93: S1 중앙은 항상 썸네일 뷰다 — A81의 "좌 도크가 불투명이면 중앙 탐색기 숨김"
+        // (중복 목록 제거)을 대체한다. 중앙이 리스트가 아니라 타일이라 중복으로 보이지 않는다.
+        // 열 수 = 좌우 도크가 둘 다 (불투명으로) 열려 있으면 4, 하나라도 닫히면 8 (A63 대체 —
+        // 타일 크기는 SizeChanged에서 floor(실폭/열수)로 따라온다). 반투명(홀드·고정)은
+        // 공간을 차지하지 않으므로 "닫힘"과 같게 센다 — 덮인 동안에도 뒤 타일은 전폭 기준.
         if (emptyModule)
-            ExplorerHost.Visibility = left > 0 ? Visibility.Collapsed : Visibility.Visible;
+            _thumbnailExplorer?.SetColumns(left > 0 && right > 0 ? 4 : 8);
     }
 
     /// <summary>

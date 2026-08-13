@@ -17,6 +17,10 @@ namespace KOTU.App;
 /// 좌 70% 썸네일 그리드 + 우 30% 리스트로 같은 폴더를 두 방식으로 보여준다.
 /// 폴더는 전부, 파일은 주입된 담당 확장자만(사용자 확정). 더블클릭: 폴더=진입, 파일=FileActivated.
 /// Alt 오버레이용으로는 ConfigureListOnly()로 리스트만 남겨 재사용한다.
+/// ※ A93(v0.120.0)부터 살아 있는 사용처는 좌 오버레이(리스트 전용)뿐이다 — S1 중앙은
+/// ThumbnailExplorer가 대체했고, 이 페인의 표시 목록(ViewChanged)이 그 뷰의 데이터 원본이다.
+/// 썸네일 그리드 경로(MakeGridItem·LoadThumbnailsAsync)는 전체 페인 사용처가 다시 생길 때를
+/// 위해 남겨 뒀다(리스트 전용 모드에서는 그리드가 숨겨져 실행되지 않는다).
 /// 폴더 스캔·썸네일 추출은 페인 전용 워커(A42)에서 돌고, UI 스레드는 결과 반영만 한다.
 /// </summary>
 public sealed partial class ExplorerPane : UserControl
@@ -32,6 +36,13 @@ public sealed partial class ExplorerPane : UserControl
     /// 셸이 재사용 규칙과 무관하게 항상 새 창으로 연다.
     /// </summary>
     public event Action<string>? FileActivatedNewWindow;
+
+    /// <summary>
+    /// 표시 목록이 다시 그려질 때(폴더 이동·정렬 A5·필터 A7) 정렬·필터 적용 결과와 함께 발생 (A93).
+    /// 중앙 썸네일 뷰(ThumbnailExplorer)가 좌 리스트와 같은 폴더 상태를 공유하는 통로 —
+    /// 셸이 구독해 같은 항목을 타일로 다시 그린다. 폴더를 못 읽으면 빈 목록으로 알린다.
+    /// </summary>
+    public event Action<IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
 
     private const string SortSettingKey = "explorer.sort"; // "name"/"size"/"modified" — SortKey와 수동 동기
 
@@ -110,7 +121,9 @@ public sealed partial class ExplorerPane : UserControl
     private void RefreshView()
     {
         var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
-        Fill(ExplorerListing.Arrange(_entries, _sortKey, _hiddenExts));
+        var arranged = ExplorerListing.Arrange(_entries, _sortKey, _hiddenExts);
+        Fill(arranged);
+        ViewChanged?.Invoke(arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
         _ = LoadDetailsAsync(seq);
     }
 
@@ -192,8 +205,8 @@ public sealed partial class ExplorerPane : UserControl
     /// 경로 바(위로 이동 + 경로 + 필터 + 정렬) 한 줄을 이 페인에서 떼어 돌려준다 (A91, v0.115.0).
     /// 오버레이(A91)가 이 줄을 자기 최상단으로 옮겨 붙이려고 떼어 간다 — 트리와 리스트 사이에
     /// 끼어 있던 줄을 패널 맨 위로 올리는 것이 요구다. 뗀 뒤 Grid.Row 0(Auto)은 자식이 없어
-    /// 높이 0으로 접힌다 — RowDefinition은 그대로 둔다(같은 XAML을 쓰는 다른 사용처에는
-    /// 여전히 이 줄이 붙어 있어야 한다).
+    /// 높이 0으로 접힌다 — RowDefinition은 그대로 둔다(전체 페인 사용처가 다시 생기면
+    /// 이 줄이 제자리에 붙은 채 쓰여야 한다 — A93 이후 현재 사용처는 좌 오버레이뿐).
     /// 이미 떼어 간 뒤면 null을 돌려준다(멱등) — 같은 UIElement는 부모를 둘 가질 수 없으므로
     /// 호출이 반복돼도 두 번 붙지 않게 컬렉션 멤버십으로 직접 판정한다(FrameworkElement.Parent는
     /// 라이브 트리 부착 전에 null이라 가드로 못 쓴다 — HardwareView.EnsureCards 주석 참고).
@@ -236,6 +249,7 @@ public sealed partial class ExplorerPane : UserControl
             ListPane.Items.Clear();
             EmptyText.Text = "Cannot read this folder: " + ex.Message;
             EmptyText.Visibility = Visibility.Visible;
+            ViewChanged?.Invoke([]); // A93 — 썸네일 뷰도 옛 폴더 목록을 남기지 않는다
             return;
         }
 
