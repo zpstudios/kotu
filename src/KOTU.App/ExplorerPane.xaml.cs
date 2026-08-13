@@ -188,6 +188,27 @@ public sealed partial class ExplorerPane : UserControl
         ListPane.BorderThickness = new Thickness(0);
     }
 
+    /// <summary>
+    /// 경로 바(위로 이동 + 경로 + 필터 + 정렬) 한 줄을 이 페인에서 떼어 돌려준다 (A91, v0.115.0).
+    /// 오버레이(A91)가 이 줄을 자기 최상단으로 옮겨 붙이려고 떼어 간다 — 트리와 리스트 사이에
+    /// 끼어 있던 줄을 패널 맨 위로 올리는 것이 요구다. 뗀 뒤 Grid.Row 0(Auto)은 자식이 없어
+    /// 높이 0으로 접힌다 — RowDefinition은 그대로 둔다(같은 XAML을 쓰는 다른 사용처에는
+    /// 여전히 이 줄이 붙어 있어야 한다).
+    /// 이미 떼어 간 뒤면 null을 돌려준다(멱등) — 같은 UIElement는 부모를 둘 가질 수 없으므로
+    /// 호출이 반복돼도 두 번 붙지 않게 컬렉션 멤버십으로 직접 판정한다(FrameworkElement.Parent는
+    /// 라이브 트리 부착 전에 null이라 가드로 못 쓴다 — HardwareView.EnsureCards 주석 참고).
+    /// x:Name 필드(UpButton·PathText·FilterButton·SortButton…)는 부모에서 떼어도 그대로
+    /// 살아 있어 NavigateTo·EnsureFilterFlyout 등 기존 코드는 손댈 필요가 없다
+    /// (ImageViewerView.TakeBottomBar와 같은 관용구).
+    /// </summary>
+    public UIElement? DetachPathBar()
+    {
+        if (!PaneRoot.Children.Contains(PathBar)) return null;
+        PaneRoot.Children.Remove(PathBar);
+        Grid.SetRow(PathBar, 0); // 새 부모의 0행 — 옛 부모 기준 행 번호가 따라가지 않게 명시
+        return PathBar;
+    }
+
     /// <summary>폴더로 이동해 내용을 채운다. 목록 스캔은 백그라운드, UI 채우기는 이어서.</summary>
     public async void NavigateTo(string folder, IReadOnlyList<string> extensions)
     {

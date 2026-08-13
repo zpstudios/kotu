@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 
@@ -47,7 +48,7 @@ public sealed partial class ContentInfoOverlay : UserControl
     {
         Visibility = Visibility.Collapsed;
         OverlayBorder.IsHitTestVisible = false;
-        PinnedText.Visibility = Visibility.Collapsed;
+        HideHint(); // A92 — 다시 열릴 때 안내가 처음부터 다시 보이게 상태를 비운다
     }
 
     /// <summary>
@@ -69,6 +70,7 @@ public sealed partial class ContentInfoOverlay : UserControl
     /// 실제 폭 차지(메인 축소)는 셸의 도크 컬럼이 담당하고 여기서는 시각·문구만 바꾼다.
     /// 상호작용(스크롤)은 고정·불투명에서만 허용 — 홀드 중에는 아래 콘텐츠 클릭을 막지 않는다
     /// (기존 pinned 규칙 유지).
+    /// A92(v0.115.0): 문구는 상시 표시가 아니라 잠깐 보였다 사라진다(아래 안내 문구 절 참고).
     /// </summary>
     public void SetState(OverlayMode mode, bool pinned)
     {
@@ -76,11 +78,98 @@ public sealed partial class ContentInfoOverlay : UserControl
         OverlayBorder.Background = (Brush)Application.Current.Resources[
             docked ? "SolidBackgroundFillColorBaseBrush" : "OverlayAcrylicBrush"];
         OverlayBorder.IsHitTestVisible = IsOpen && (docked || pinned);
-        PinnedText.Text = docked
-            ? "Docked — press Shift twice to close"
-            : "Pinned — press Shift twice to unpin";
-        PinnedText.Visibility = IsOpen && (docked || pinned)
-            ? Visibility.Visible : Visibility.Collapsed;
+        if (IsOpen && (docked || pinned))
+            ShowHint(docked
+                ? "Docked — press Shift twice to close"
+                : "Pinned — press Shift twice to unpin");
+        else
+            HideHint();
+    }
+
+    // ---------- 안내 문구 일시 표시 (A92, v0.115.0) ----------
+    // ⚠️ FileListOverlay에 같은 이름의 상수·필드·메서드가 한 벌 더 있다(문구만 Alt/Shift로 다름).
+    // 공용 헬퍼로 빼지 않은 것은 A93·A86이 곧 이 두 파일의 구성과 문구를 다시 뒤집기 때문 —
+    // 한쪽을 고치면 반드시 다른 쪽도 맞출 것. 문구 텍스트 자체는 A86(Z/X 키 체계) 확정 시 갱신 대상이다.
+
+    private const double HintOpacity = 0.6; // XAML PinnedText.Opacity와 같아야 한다(페이드 후 되돌릴 값)
+    private static readonly TimeSpan HintHoldFor = TimeSpan.FromSeconds(2.5);      // 표시 시간(구현 시 결정)
+    private static readonly TimeSpan HintFadeFor = TimeSpan.FromMilliseconds(300); // 페이드아웃 시간
+
+    private DispatcherTimer? _hintTimer; // UI 스레드 타이머 (MainWindow.MakePinTimer·DriveStrip과 같은 방식)
+    private Storyboard? _hintFade;
+    private bool _hintVisible;    // 지금 "보여야 하는 상태"인가 — 매 SetState마다 되감지 않기 위한 기억
+    private string? _hintText;    // 마지막으로 띄운 문구 — 내용이 바뀔 때만 다시 띄운다
+
+    /// <summary>
+    /// 안내를 잠깐 띄운다: 2.5초 표시 → 300ms 페이드아웃 → Collapsed.
+    /// SetState는 상태 머신이 움직일 때마다 여러 번 불리므로, **표시 상태로 새로 진입했거나
+    /// 문구가 바뀐 경우에만** 다시 띄우고 타이머를 되감는다(매번 재시작하면 영영 안 사라진다).
+    /// </summary>
+    private void ShowHint(string text)
+    {
+        if (_hintVisible && _hintText == text) return; // 이미 이 안내를 낸 뒤 — 그대로 둔다(사라진 채라도)
+        _hintVisible = true;
+        _hintText = text;
+
+        StopHint(); // 돌던 타이머·페이드를 먼저 정리해야 아래 Opacity 대입이 애니메이션에 눌리지 않는다
+        PinnedText.Text = text;
+        PinnedText.Opacity = HintOpacity; // 직전 페이드로 0이 된 채 남아 있을 수 있다
+        PinnedText.Visibility = Visibility.Visible;
+
+        _hintTimer ??= CreateHintTimer();
+        _hintTimer.Stop();  // DispatcherTimer는 반복 타이머 — Stop 후 Start로 확실히 되감는다
+        _hintTimer.Start();
+    }
+
+    /// <summary>숨겨야 하는 상태(닫힘·도크도 고정도 아님) — 타이머·페이드를 즉시 멈추고 감춘다.</summary>
+    private void HideHint()
+    {
+        _hintVisible = false;
+        _hintText = null;
+        StopHint();
+        PinnedText.Visibility = Visibility.Collapsed;
+    }
+
+    private DispatcherTimer CreateHintTimer()
+    {
+        var timer = new DispatcherTimer { Interval = HintHoldFor };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop(); // 반복 타이머라 Tick 안에서 반드시 멈춘다(MainWindow.MakePinTimer와 같은 관용구)
+            FadeOutHint();
+        };
+        return timer;
+    }
+
+    /// <summary>Storyboard + DoubleAnimation(Opacity) — DriveStrip 마퀴와 같은 관용구.</summary>
+    private void FadeOutHint()
+    {
+        var animation = new DoubleAnimation
+        {
+            From = HintOpacity,
+            To = 0,
+            Duration = new Duration(HintFadeFor),
+            EnableDependentAnimation = true,
+        };
+        Storyboard.SetTarget(animation, PinnedText);
+        Storyboard.SetTargetProperty(animation, "Opacity");
+
+        var fade = new Storyboard();
+        fade.Children.Add(animation);
+        fade.Completed += (_, _) =>
+        {
+            if (!ReferenceEquals(_hintFade, fade)) return; // 그새 다시 띄워졌다 — 감추면 안 된다
+            PinnedText.Visibility = Visibility.Collapsed;
+        };
+        _hintFade = fade;
+        fade.Begin();
+    }
+
+    private void StopHint()
+    {
+        _hintTimer?.Stop();
+        _hintFade?.Stop(); // Stop은 Completed를 부르지 않는다 — 보류 중인 Collapsed도 함께 사라진다
+        _hintFade = null;
     }
 
     /// <summary>
