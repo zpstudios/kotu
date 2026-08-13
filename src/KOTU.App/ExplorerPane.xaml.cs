@@ -1,8 +1,10 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
 using KOTU.Core.Routing;
@@ -38,11 +40,21 @@ public sealed partial class ExplorerPane : UserControl
     public event Action<string>? FileActivatedNewWindow;
 
     /// <summary>
-    /// 표시 목록이 다시 그려질 때(폴더 이동·정렬 A5·필터 A7) 정렬·필터 적용 결과와 함께 발생 (A93).
+    /// 표시 목록이 다시 그려질 때(폴더 이동·정렬 A5·필터 A7) 폴더 경로·정렬·필터 적용 결과와 함께
+    /// 발생 (A93 — 폴더 인자는 A94: 썸네일 뷰가 드랍·붙여넣기 대상 폴더를 알아야 한다).
     /// 중앙 썸네일 뷰(ThumbnailExplorer)가 좌 리스트와 같은 폴더 상태를 공유하는 통로 —
     /// 셸이 구독해 같은 항목을 타일로 다시 그린다. 폴더를 못 읽으면 빈 목록으로 알린다.
     /// </summary>
-    public event Action<IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
+    public event Action<string, IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
+
+    /// <summary>
+    /// 파일 조작(드랍 이동/복사·붙여넣기 — A94) 실패 안내 문구. 이 페인에는 상태 표시 줄이 없어
+    /// 호스트(FileListOverlay)가 받아 A92류 일시 문구로 띄운다. 성공은 조용(뷰 갱신이 피드백).
+    /// </summary>
+    internal event Action<string>? Notice;
+
+    /// <summary>현재 폴더 경로 (A94 — 호스트의 패널 드랍·붙여넣기 대상). 항해 전이면 빈 문자열.</summary>
+    internal string CurrentFolder => _folder;
 
     private const string SortSettingKey = "explorer.sort"; // "name"/"size"/"modified" — SortKey와 수동 동기
 
@@ -83,6 +95,12 @@ public sealed partial class ExplorerPane : UserControl
         // 리스트의 타이핑 탐색(첫 글자 점프)이 우선(빈 모듈 탐색기·좌측 오버레이 공통).
         IconGrid.Tag = HotkeySupport.PassThroughTag;
         ListPane.Tag = HotkeySupport.PassThroughTag;
+        // A94: 클립보드 키(Ctrl+C/X/V/A)는 이 표면에 포커스가 있을 때만 받는다 — KeyDown은
+        // 포커스 요소에서만 버블링하므로 문서 에디터 등 텍스트 표면으로 샐 일이 없고,
+        // A34 통과 규칙(단독 문자 키만 다루는 HotkeySupport)과도 겹치지 않는다(수정자 키 조합).
+        // 컨트롤이 먼저 Handled를 걸어도 받게 handledEventsToo (ThumbnailExplorer Enter와 같은 관용구).
+        IconGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSurfaceKeyDown), true);
+        ListPane.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSurfaceKeyDown), true);
         Unloaded += (_, _) =>
         {
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
@@ -123,7 +141,7 @@ public sealed partial class ExplorerPane : UserControl
         var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
         var arranged = ExplorerListing.Arrange(_entries, _sortKey, _hiddenExts);
         Fill(arranged);
-        ViewChanged?.Invoke(arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
+        ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
         _ = LoadDetailsAsync(seq);
     }
 
@@ -249,7 +267,7 @@ public sealed partial class ExplorerPane : UserControl
             ListPane.Items.Clear();
             EmptyText.Text = "Cannot read this folder: " + ex.Message;
             EmptyText.Visibility = Visibility.Visible;
-            ViewChanged?.Invoke([]); // A93 — 썸네일 뷰도 옛 폴더 목록을 남기지 않는다
+            ViewChanged?.Invoke(folder, []); // A93 — 썸네일 뷰도 옛 폴더 목록을 남기지 않는다
             return;
         }
 
@@ -321,6 +339,7 @@ public sealed partial class ExplorerPane : UserControl
 
         var item = new GridViewItem { Content = panel, Tag = entry };
         AttachContextMenu(item, entry); // A24
+        AttachDragDrop(item, entry, IconGrid); // A94 — 드래그 아웃 + 폴더 항목 드랍
         return item;
     }
 
@@ -372,6 +391,7 @@ public sealed partial class ExplorerPane : UserControl
 
         var item = new ListViewItem { Content = row, Tag = entry };
         AttachContextMenu(item, entry); // A24
+        AttachDragDrop(item, entry, ListPane); // A94 — 드래그 아웃 + 폴더 항목 드랍
         return item;
     }
 
@@ -508,13 +528,127 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>
     /// 선택된 **파일** 항목의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기" 판정).
-    /// 그리드·리스트 중 선택이 있는 쪽을 쓴다 — SelectionMode가 둘 다 Single이라 동시 선택은 없다.
+    /// 그리드·리스트 중 선택이 있는 쪽을 쓴다. A94(Extended)부터 다중 선택이 가능하지만
+    /// 열기·인포류 단일 대상 동작은 종전대로 첫 선택 항목(SelectedItem) 기준을 유지한다.
     /// </summary>
     internal string? SelectedFilePath =>
         PathOfSelection(IconGrid.SelectedItem) ?? PathOfSelection(ListPane.SelectedItem);
 
     private static string? PathOfSelection(object? item) =>
         item is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry } ? entry.Path : null;
+
+    // ---------- 파일 조작: 드래그 아웃 · 드랍 이동/복사 · 클립보드 (A94 1차, v0.124.0) ----------
+
+    /// <summary>
+    /// 항목 컨테이너에 드래그 아웃(전 항목)과 드랍 대상(폴더 항목만)을 건다.
+    /// 드래그 데이터는 DragStarting에서 채운다 — CanDragItems의 DragItemsStarting은 await가
+    /// 안 되는데 StorageItems 수집이 비동기라, 데퍼럴이 있는 컨테이너 CanDrag 경로를 쓴다
+    /// (ExplorerFileOps.FillDragDataAsync 주석 참고). 폴더 항목 드랍은 그 폴더가 대상 —
+    /// 빈 영역·파일 항목 드랍은 호스트(FileListOverlay 패널)가 현재 폴더 대상으로 받는다.
+    /// 항목 핸들러가 Handled를 걸므로 패널 핸들러와 이중 처리되지 않는다.
+    /// </summary>
+    private void AttachDragDrop(SelectorItem item, ExplorerListing.Entry entry, ListViewBase owner)
+    {
+        item.CanDrag = true;
+        item.DragStarting += async (_, args) =>
+        {
+            var deferral = args.GetDeferral();
+            try
+            {
+                if (!await ExplorerFileOps.FillDragDataAsync(args.Data, PathsForDrag(owner, entry)))
+                    args.Cancel = true; // 실을 항목이 없다(그새 삭제 등) — 빈 드래그는 시작하지 않는다
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
+
+        if (!entry.IsFolder) return;
+        item.AllowDrop = true;
+        item.DragOver += (_, e) => ExplorerFileOps.HandleTargetDragOver(e, entry.Path);
+        item.Drop += (_, e) => HandleDrop(e, entry.Path);
+    }
+
+    /// <summary>
+    /// 드래그에 실을 경로들: 잡은 항목이 현재 선택에 포함돼 있으면 선택 전부(다중 드래그 —
+    /// 윈도우 관례), 아니면 그 항목 하나만.
+    /// </summary>
+    private static IReadOnlyList<string> PathsForDrag(ListViewBase owner, ExplorerListing.Entry entry)
+    {
+        var selected = SelectedPathsOf(owner);
+        return selected.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) ? selected : [entry.Path];
+    }
+
+    /// <summary>표면의 선택 항목 경로 전부(폴더 포함) — 항목 = 컨테이너 직접 추가라 Tag에서 꺼낸다.</summary>
+    private static IReadOnlyList<string> SelectedPathsOf(ListViewBase owner) =>
+        owner.SelectedItems
+            .OfType<FrameworkElement>()
+            .Select(i => i.Tag)
+            .OfType<ExplorerListing.Entry>()
+            .Select(e => e.Path)
+            .ToList();
+
+    /// <summary>
+    /// 드랍 실행: 동작 결정(같은 볼륨 이동/다른 볼륨 복사·Ctrl/Shift 강제)은 DragOver와 같은
+    /// 판정을 다시 쓴다. 조작은 워커에서 비동기, 완료 후 현재 폴더 재스캔 — 이 페인이 폴더
+    /// 상태의 단일 원본이라 ViewChanged로 중앙 썸네일까지 함께 갱신된다(A93 경로).
+    /// </summary>
+    private async void HandleDrop(DragEventArgs e, string targetFolder)
+    {
+        e.Handled = true; // 창 수준 라우팅과의 이중 처리 방지 (await 전에 동기로 지정해야 유효)
+        var operation = ExplorerFileOps.DecideOperation(e, targetFolder);
+        if (operation == DataPackageOperation.None ||
+            !e.DataView.Contains(StandardDataFormats.StorageItems))
+            return;
+        e.AcceptedOperation = operation; // 소스(OS 탐색기 등)에 확정 동작을 알린다
+
+        var result = await ExplorerFileOps.TransferDroppedAsync(
+            e.DataView, targetFolder, operation == DataPackageOperation.Move);
+        RefreshAfterFileOp();
+        if (result.Notice(operation == DataPackageOperation.Move) is { } notice) Notice?.Invoke(notice);
+    }
+
+    /// <summary>파일 조작 뒤 현재 폴더 재스캔 — FileSystemWatcher가 없어 명시 갱신이 유일한 경로.</summary>
+    private void RefreshAfterFileOp()
+    {
+        if (_folder.Length > 0) NavigateTo(_folder, _extensions);
+    }
+
+    /// <summary>
+    /// 클립보드 키 (A94): Ctrl+C = 복사, Ctrl+X = 잘라내기(RequestedOperation=Move로 구분),
+    /// Ctrl+V = 현재 폴더에 붙여넣기, Ctrl+A = 전체 선택. 이 표면(그리드/리스트)에 포커스가
+    /// 있을 때만 온다 — 생성자 AddHandler 주석 참고.
+    /// </summary>
+    private async void OnSurfaceKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.KeyStatus.WasKeyDown || sender is not ListViewBase owner) return;
+        if (!ExplorerFileOps.IsCtrlDown()) return;
+
+        switch (e.Key)
+        {
+            case Windows.System.VirtualKey.A:
+                e.Handled = true;
+                owner.SelectAll(); // Extended 모드 전제 — Single이면 던진다
+                break;
+            case Windows.System.VirtualKey.C:
+            case Windows.System.VirtualKey.X:
+                var cut = e.Key == Windows.System.VirtualKey.X;
+                var paths = SelectedPathsOf(owner);
+                if (paths.Count == 0) return;
+                e.Handled = true;
+                if (await ExplorerFileOps.CopyToClipboardAsync(paths, cut) is { } copyNotice)
+                    Notice?.Invoke(copyNotice);
+                break;
+            case Windows.System.VirtualKey.V:
+                if (_folder.Length == 0) return;
+                e.Handled = true;
+                var (didWork, pasteNotice) = await ExplorerFileOps.PasteFromClipboardAsync(_folder);
+                if (didWork) RefreshAfterFileOp();
+                if (pasteNotice is not null) Notice?.Invoke(pasteNotice);
+                break;
+        }
+    }
 
     /// <summary>
     /// 클릭 2회(500ms 내 같은 항목) = 더블클릭: 폴더 진입 또는 파일 열기.

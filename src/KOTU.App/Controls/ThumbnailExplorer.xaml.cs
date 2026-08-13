@@ -47,7 +47,16 @@ public sealed partial class ThumbnailExplorer : UserControl
     private int _columns = 8; // 기본 = 도크 하나라도 닫힘(전폭) 기준 — 셸이 곧 SetColumns로 덮는다
     private (string Path, DateTime At)? _lastClick;
 
-    /// <summary>선택된 파일 타일의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기").</summary>
+    /// <summary>
+    /// 지금 그리고 있는 폴더 경로 (A94 — 빈 영역 드랍·붙여넣기의 대상). ShowEntries가 좌 리스트의
+    /// ViewChanged에서 받은 폴더로 갱신한다 — 이 컨트롤은 폴더 상태의 원본이 아니다(A93).
+    /// </summary>
+    public string? CurrentFolder { get; private set; }
+
+    /// <summary>
+    /// 선택된 파일 타일의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기").
+    /// A94(Extended)부터 다중 선택이 가능하지만 열기류 단일 대상 동작은 첫 선택(SelectedItem) 기준 유지.
+    /// </summary>
     public string? SelectedFilePath =>
         TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry }
             ? entry.Path : null;
@@ -81,16 +90,58 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>썸네일 그리드로 포커스 이동 (A90: S4 진입 시) — 실패해도 무해(포커스만 안 옮겨진다).</summary>
     public void FocusGrid() => TileGrid.Focus(FocusState.Programmatic);
 
-    /// <summary>Enter = 선택 항목 열기 (A90 — 위 생성자 주석 참고). 선택이 없으면 셸 분배로 흘린다.</summary>
-    private void OnGridKeyDown(object sender, KeyRoutedEventArgs e)
+    /// <summary>
+    /// Enter = 선택 항목 열기 (A90 — 위 생성자 주석 참고. 선택이 없으면 셸 분배로 흘린다) +
+    /// 클립보드 키 (A94): Ctrl+C/X/V/A — 이 그리드에 포커스가 있을 때만 온다(KeyDown 버블링이라
+    /// 문서 에디터 등 텍스트 표면으로 새지 않고, A34 통과 규칙과도 겹치지 않는다 — 수정자 조합).
+    /// </summary>
+    private async void OnGridKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key != VirtualKey.Enter || e.KeyStatus.WasKeyDown) return;
-        if (SelectedEntry is not { } entry) return; // 선택 없음 — 셸(OnShellEnter)이 상태별로 받는다
-        e.Handled = true; // 셸 루트 핸들러의 이중 처리 방지 — OnShellEnter는 Handled면 물러난다
-        _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
-        if (entry.IsFolder) FolderActivated?.Invoke(entry.Path);
-        else FileActivated?.Invoke(entry.Path);
+        if (e.KeyStatus.WasKeyDown) return;
+        if (e.Key == VirtualKey.Enter)
+        {
+            if (SelectedEntry is not { } entry) return; // 선택 없음 — 셸(OnShellEnter)이 상태별로 받는다
+            e.Handled = true; // 셸 루트 핸들러의 이중 처리 방지 — OnShellEnter는 Handled면 물러난다
+            _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
+            if (entry.IsFolder) FolderActivated?.Invoke(entry.Path);
+            else FileActivated?.Invoke(entry.Path);
+            return;
+        }
+
+        if (!ExplorerFileOps.IsCtrlDown()) return;
+        switch (e.Key)
+        {
+            case VirtualKey.A:
+                e.Handled = true;
+                TileGrid.SelectAll(); // Extended 모드 전제
+                break;
+            case VirtualKey.C:
+            case VirtualKey.X:
+                var paths = SelectedPaths();
+                if (paths.Count == 0) return;
+                e.Handled = true;
+                if (await ExplorerFileOps.CopyToClipboardAsync(paths, cut: e.Key == VirtualKey.X)
+                    is { } copyNotice)
+                    ShowNotice(copyNotice);
+                break;
+            case VirtualKey.V:
+                if (CurrentFolder is not { Length: > 0 } folder) return;
+                e.Handled = true;
+                var (didWork, pasteNotice) = await ExplorerFileOps.PasteFromClipboardAsync(folder);
+                if (didWork) FolderActivated?.Invoke(folder); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
+                if (pasteNotice is not null) ShowNotice(pasteNotice);
+                break;
+        }
     }
+
+    /// <summary>선택 타일 경로 전부(폴더 포함) — 항목 = 컨테이너 직접 추가라 Tag에서 꺼낸다(A94).</summary>
+    private IReadOnlyList<string> SelectedPaths() =>
+        TileGrid.SelectedItems
+            .OfType<FrameworkElement>()
+            .Select(i => i.Tag)
+            .OfType<ExplorerListing.Entry>()
+            .Select(e => e.Path)
+            .ToList();
 
     /// <summary>열 수 지정(A93: 도크 둘 다 열림 4 / 하나라도 닫힘 8). 바뀌면 타일 크기 재계산.</summary>
     public void SetColumns(int columns)
@@ -102,10 +153,12 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     /// <summary>
     /// 표시 목록 교체 — 좌 리스트(ExplorerPane)가 정렬·필터를 적용해 넘긴 결과를 그대로 그린다.
+    /// folder = 그 목록의 폴더 경로(A94 — 드랍·붙여넣기 대상으로 기억한다).
     /// 이미지 미리보기는 BitmapImage가 스스로 비동기 디코드하므로 별도 로드 루프가 없다.
     /// </summary>
-    public void ShowEntries(IReadOnlyList<ExplorerListing.Entry> entries)
+    public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
+        CurrentFolder = folder;
         TileGrid.Items.Clear();
         foreach (var entry in entries)
             TileGrid.Items.Add(MakeTile(entry));
@@ -179,7 +232,41 @@ public sealed partial class ThumbnailExplorer : UserControl
             VerticalContentAlignment = VerticalAlignment.Stretch,
         };
         AttachContextMenu(item, entry); // A24 — 좌 리스트와 같은 우클릭 메뉴
+        AttachDragDrop(item, entry); // A94 — 드래그 아웃 + 폴더 타일 드랍
         return item;
+    }
+
+    /// <summary>
+    /// 타일에 드래그 아웃(전 항목)과 드랍 대상(폴더 타일만)을 건다 (A94 —
+    /// ExplorerPane.AttachDragDrop과 같은 구성: 데퍼럴이 있는 컨테이너 CanDrag 경로).
+    /// 잡은 타일이 선택에 포함돼 있으면 선택 전부를, 아니면 그 타일 하나만 싣는다(윈도우 관례).
+    /// 폴더 타일 핸들러가 Handled를 걸므로 루트(LayoutRoot) 핸들러와 이중 처리되지 않는다.
+    /// </summary>
+    private void AttachDragDrop(GridViewItem item, ExplorerListing.Entry entry)
+    {
+        item.CanDrag = true;
+        item.DragStarting += async (_, args) =>
+        {
+            var deferral = args.GetDeferral();
+            try
+            {
+                var selected = SelectedPaths();
+                IReadOnlyList<string> paths = selected.Contains(entry.Path, StringComparer.OrdinalIgnoreCase)
+                    ? selected
+                    : [entry.Path];
+                if (!await ExplorerFileOps.FillDragDataAsync(args.Data, paths))
+                    args.Cancel = true; // 실을 항목이 없다(그새 삭제 등)
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
+
+        if (!entry.IsFolder) return;
+        item.AllowDrop = true;
+        item.DragOver += (_, e) => ExplorerFileOps.HandleTargetDragOver(e, entry.Path);
+        item.Drop += (_, e) => HandleDrop(e, entry.Path);
     }
 
     /// <summary>폴더 타일: Segoe Fluent 폴더 글리프 — ExplorerPane 그리드/리스트와 같은 E8B7.</summary>
@@ -303,19 +390,67 @@ public sealed partial class ThumbnailExplorer : UserControl
         else FileActivated?.Invoke(entry.Path);
     }
 
-    // ---------- 드래그 앤 드랍 (A93 — 이동/복사 자체는 A94 몫) ----------
+    // ---------- 드래그 앤 드랍 (A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로 전환) ----------
 
     /// <summary>
-    /// 중앙(탐색기) 영역 드랍 = 탐색기식 이동/복사 자리인데 그 구현은 A94다 — 이번에는
-    /// **무동작으로 소비만** 한다. 여기서 Handled를 안 걸면 창 전체 핸들러(OnWindowDrop)가
-    /// "열기"로 삼켜 A93 드랍 매트릭스(좌·중 = 무동작)가 깨진다.
+    /// 중앙(탐색기) 빈 영역·파일 타일 위 드래그 = 현재 폴더로 이동/복사(같은 볼륨 이동/다른 볼륨
+    /// 복사·Ctrl 복사 강제·Shift 이동 강제 — ExplorerFileOps.DecideOperation). 폴더 타일 위는
+    /// 타일 자체 핸들러(AttachDragDrop)가 먼저 Handled로 받는다. 목록이 아직 없으면(폴더 미정)
+    /// None으로 소비만 — 어느 쪽이든 Handled라 창 전체 "열기" 폴백(OnWindowDrop)에 안 넘어간다.
     /// </summary>
-    private void OnDragOver(object sender, DragEventArgs e)
+    private void OnDragOver(object sender, DragEventArgs e) =>
+        ExplorerFileOps.HandleTargetDragOver(e, CurrentFolder);
+
+    /// <summary>빈 영역·파일 타일 위 드랍 — 대상 = 현재 폴더.</summary>
+    private void OnDrop(object sender, DragEventArgs e)
     {
-        e.AcceptedOperation = DataPackageOperation.None; // 커서로 "여긴 아직 안 됨"을 알린다
-        e.Handled = true;
+        if (CurrentFolder is { Length: > 0 } folder) HandleDrop(e, folder);
+        else e.Handled = true; // 폴더 미정 — A93 때처럼 소비만
     }
 
-    /// <summary>AcceptedOperation이 None이라 보통 오지 않지만, 와도 삼킨다(A94 전까지 무동작).</summary>
-    private void OnDrop(object sender, DragEventArgs e) => e.Handled = true;
+    /// <summary>
+    /// 드랍 실행(A94): 조작은 워커에서 비동기, 완료 후 FolderActivated로 현재 폴더를 다시 항해 —
+    /// 폴더 상태의 단일 원본인 좌 리스트(ExplorerPane)를 셸이 항해시키고 결과가 ViewChanged로
+    /// 돌아와 이 그리드까지 갱신된다(A93 경로 그대로. FileSystemWatcher가 없어 명시 갱신).
+    /// </summary>
+    private async void HandleDrop(DragEventArgs e, string targetFolder)
+    {
+        e.Handled = true; // 창 수준 라우팅과의 이중 처리 방지 (await 전에 동기로 지정해야 유효)
+        var operation = ExplorerFileOps.DecideOperation(e, targetFolder);
+        if (operation == DataPackageOperation.None ||
+            !e.DataView.Contains(StandardDataFormats.StorageItems))
+            return;
+        e.AcceptedOperation = operation; // 소스(OS 탐색기 등)에 확정 동작을 알린다
+
+        var result = await ExplorerFileOps.TransferDroppedAsync(
+            e.DataView, targetFolder, operation == DataPackageOperation.Move);
+        FolderActivated?.Invoke(CurrentFolder is { Length: > 0 } current ? current : targetFolder);
+        if (result.Notice(operation == DataPackageOperation.Move) is { } notice) ShowNotice(notice);
+    }
+
+    // ---------- 조작 실패 안내 (A94 — A92류 일시 문구) ----------
+    // Storyboard 페이드는 CI(컴파일 전용)로 검증할 수 없고 실패 시 상태가 남을 수 있어(A92 선례)
+    // A90 강조와 같은 타이머 + Visibility 두 단계로만 구현 — 최악의 실패도 "문구가 안 보인다".
+
+    private static readonly TimeSpan NoticeHoldFor = TimeSpan.FromSeconds(2.5); // A92 표시 시간과 동일
+
+    private DispatcherTimer? _noticeTimer;
+
+    private void ShowNotice(string text)
+    {
+        NoticeText.Text = text;
+        NoticeText.Visibility = Visibility.Visible;
+        if (_noticeTimer is null)
+        {
+            var timer = new DispatcherTimer { Interval = NoticeHoldFor };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop(); // 반복 타이머 — Tick에서 반드시 멈춘다(A92 관용구)
+                NoticeText.Visibility = Visibility.Collapsed;
+            };
+            _noticeTimer = timer;
+        }
+        _noticeTimer.Stop(); // 연속 실패 시 표시 시간 되감기
+        _noticeTimer.Start();
+    }
 }

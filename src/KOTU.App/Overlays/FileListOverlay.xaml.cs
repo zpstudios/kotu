@@ -37,11 +37,12 @@ public sealed partial class FileListOverlay : UserControl
     public event Action<string>? FileActivatedNewWindow;
 
     /// <summary>
-    /// 내부 리스트(ExplorerPane)의 표시 목록이 다시 그려질 때 그대로 전달 (A93).
+    /// 내부 리스트(ExplorerPane)의 표시 목록이 다시 그려질 때 폴더 경로와 함께 그대로 전달 (A93 —
+    /// 폴더 인자는 A94: 썸네일 뷰가 드랍·붙여넣기 대상 폴더를 알아야 한다).
     /// 셸이 구독해 S1 중앙 썸네일 뷰(ThumbnailExplorer)를 같은 목록으로 갱신한다 —
     /// 좌 리스트와 중앙이 폴더·필터(A7)·정렬(A5) 상태를 공유하는 유일한 통로.
     /// </summary>
-    public event Action<IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
+    public event Action<string, IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
 
     /// <summary>정렬 키 저장용(A5) — 셸이 리스트 첫 생성 전에 주입한다. 없어도 동작(기본 이름순).</summary>
     public ISettingsService? Settings { get; set; }
@@ -97,7 +98,8 @@ public sealed partial class FileListOverlay : UserControl
             PathBarHost.Child ??= _list.DetachPathBar();
             _list.FileActivated += path => FileActivated?.Invoke(path);
             _list.FileActivatedNewWindow += path => FileActivatedNewWindow?.Invoke(path);
-            _list.ViewChanged += entries => ViewChanged?.Invoke(entries); // A93 — 중앙 썸네일 동기화
+            _list.ViewChanged += (folder, entries) => ViewChanged?.Invoke(folder, entries); // A93 — 중앙 썸네일 동기화
+            _list.Notice += ShowTransientNotice; // A94 — 리스트 항목 드랍·클립보드 실패 안내
             ListHost.Content = _list;
         }
         _list.NavigateTo(folder, _extensions);
@@ -115,18 +117,42 @@ public sealed partial class FileListOverlay : UserControl
     }
 
     /// <summary>
-    /// 좌 패널 드랍 = 탐색기식 이동/복사 자리인데 구현은 A94 몫 (A93 드랍 규칙) —
-    /// 이번에는 무동작으로 소비만 한다. 안 막으면 창 전체 핸들러(OnWindowDrop)가 "열기"로 삼킨다.
-    /// ThumbnailExplorer의 중앙 영역 핸들러와 같은 규칙.
+    /// 좌 패널 드래그 = 현재 폴더로 이동/복사 (A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로
+    /// 전환. ThumbnailExplorer의 중앙 영역 핸들러와 같은 규칙). 폴더 항목 위는 내부 리스트
+    /// (ExplorerPane)의 항목 핸들러가 먼저 Handled로 받아 그 폴더가 대상이 된다.
+    /// 리스트가 아직 없으면 None으로 소비만 — 어느 쪽이든 Handled라 창 전체 "열기" 폴백에
+    /// 안 넘어간다(OnWindowDrop).
     /// </summary>
-    private void OnPanelDragOver(object sender, DragEventArgs e)
+    private void OnPanelDragOver(object sender, DragEventArgs e) =>
+        ExplorerFileOps.HandleTargetDragOver(e, _list?.CurrentFolder);
+
+    /// <summary>빈 영역·파일 항목·트리 영역 드랍 — 대상 = 현재 폴더 (A94).</summary>
+    private async void OnPanelDrop(object sender, DragEventArgs e)
     {
-        e.AcceptedOperation = DataPackageOperation.None;
-        e.Handled = true;
+        e.Handled = true; // 창 수준 라우팅과의 이중 처리 방지 (await 전에 동기로 지정해야 유효)
+        if (_list?.CurrentFolder is not { Length: > 0 } folder) return;
+        var operation = ExplorerFileOps.DecideOperation(e, folder);
+        if (operation == DataPackageOperation.None ||
+            !e.DataView.Contains(StandardDataFormats.StorageItems))
+            return;
+        e.AcceptedOperation = operation; // 소스(OS 탐색기 등)에 확정 동작을 알린다
+
+        var result = await ExplorerFileOps.TransferDroppedAsync(
+            e.DataView, folder, operation == DataPackageOperation.Move);
+        NavigateList(folder); // 단일 원본(내부 리스트) 재스캔 — ViewChanged로 중앙 썸네일까지 갱신
+        if (result.Notice(operation == DataPackageOperation.Move) is { } notice)
+            ShowTransientNotice(notice);
     }
 
-    /// <summary>AcceptedOperation이 None이라 보통 오지 않지만, 와도 삼킨다(A94 전까지 무동작).</summary>
-    private void OnPanelDrop(object sender, DragEventArgs e) => e.Handled = true;
+    /// <summary>
+    /// 파일 조작 실패 안내(A94): A92 힌트 표시 경로 재사용 — 상태를 비우고 다시 띄워
+    /// 같은 문구의 연속 실패에도 다시 보이게 한다(ShowHint의 동일 문구 중복 억제 우회).
+    /// </summary>
+    private void ShowTransientNotice(string text)
+    {
+        HideHint();
+        ShowHint(text);
+    }
 
     public void Hide()
     {

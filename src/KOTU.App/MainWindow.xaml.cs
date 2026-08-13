@@ -143,10 +143,10 @@ public sealed partial class MainWindow : Window
         // A90: S4('오픈 파일' 탐색)가 떠 있는 동안은 같은 목록이 S4 오버레이 썸네일로만 흐른다 —
         // 데이터 경로는 좌 리스트 하나뿐이고, 받는 그리드가 상태에 따라 갈릴 뿐이다
         // (S1과 S4는 동시에 성립하지 않는다: S1에서는 S4 진입 자체가 없음 — 강조만).
-        ListOverlay.ViewChanged += entries =>
+        ListOverlay.ViewChanged += (folder, entries) =>
         {
-            if (_openFileBrowsing) _s4Explorer?.ShowEntries(entries);
-            else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(entries);
+            if (_openFileBrowsing) _s4Explorer?.ShowEntries(folder, entries);
+            else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(folder, entries);
         };
         // A93 드랍 규칙: 우측 인포 영역 드랍 = 그 파일 열기 — 콘텐츠가 없으면 OpenFile의
         // 라우터(A59)가 담당 모듈로 전환한 뒤 여는 기존 경로를 그대로 쓴다.
@@ -1054,8 +1054,9 @@ public sealed partial class MainWindow : Window
 
     // ---------- 창 전체 드래그&드롭 → 파일 라우팅 (A93 드랍 규칙의 "콘텐츠 영역" 폴백) ----------
     // 특정 영역이 먼저 소비한 드랍은 여기 오지 않는다: 우측 인포 = 열기(ContentInfoOverlay),
-    // 좌 패널·중앙 썸네일(S1) = 무동작(A94 전까지 — FileListOverlay·ThumbnailExplorer),
-    // 압축 뷰 = 압축 생성(ArchiveView). 여기 남는 것은 콘텐츠 영역·하단 바 등이다.
+    // 좌 패널·중앙 썸네일(S1) = 이동/복사(A94 1차, v0.124.0 — FileListOverlay·ThumbnailExplorer.
+    // A93 당시의 무동작 소비를 실동작으로 전환), 압축 뷰 = 압축 생성(ArchiveView).
+    // 여기 남는 것은 콘텐츠 영역·하단 바 등이다.
 
     private void OnWindowDragOver(object sender, DragEventArgs e)
     {

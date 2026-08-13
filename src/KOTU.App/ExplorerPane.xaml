@@ -55,17 +55,19 @@
                 <ColumnDefinition Width="3*" />
             </Grid.ColumnDefinitions>
 
-            <!-- 좌: 썸네일 아이콘 그리드 (더블클릭 열기 — 판정은 코드) -->
+            <!-- 좌: 썸네일 아이콘 그리드 (더블클릭 열기 — 판정은 코드).
+                 A94(v0.124.0): Extended = 윈도우 관례 다중선택(Ctrl 토글·Shift 범위·Ctrl+A).
+                 드래그 아웃·폴더 항목 드랍은 코드가 항목 컨테이너에 건다(AttachDragDrop). -->
             <GridView x:Name="IconGrid"
                       Padding="12,4"
-                      SelectionMode="Single"
+                      SelectionMode="Extended"
                       IsItemClickEnabled="True"
                       ItemClick="OnItemClick" />
 
-            <!-- 우: 리스트 뷰 -->
+            <!-- 우: 리스트 뷰 (다중선택·드래그·드랍은 그리드와 같은 규칙 — A94) -->
             <ListView x:Name="ListPane" Grid.Column="1"
                       Padding="4"
-                      SelectionMode="Single"
+                      SelectionMode="Extended"
                       IsItemClickEnabled="True"
                       ItemClick="OnItemClick"
                       BorderThickness="1,0,0,0"

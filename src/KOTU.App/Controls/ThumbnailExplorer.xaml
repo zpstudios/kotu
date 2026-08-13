@@ -10,21 +10,28 @@
          액센트 색 + 확장자 타일. 항목은 전부 코드(ShowEntries)에서 채운다.
          열 수는 셸이 SetColumns로 준다(도크 둘 다 열림 4, 하나라도 닫힘 8 — A63 대체).
          타일 크기 = floor(실폭/열수), SizeChanged마다 재계산(ApplyTileSize).
-         드래그 앤 드랍: 중앙 영역 드랍(이동/복사)은 A94 몫 — 이번에는 무동작으로 소비만 한다
-         (여기서 안 막으면 창 전체 핸들러가 "열기"로 삼킨다). 루트 Grid가 AllowDrop을 받는
-         구조는 MainWindow.RootLayout과 같다(GridView 자체는 AllowDrop 기본 false). -->
+         드래그 앤 드랍(A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로 전환):
+         빈 영역·파일 타일 드랍 = 현재 폴더로 이동/복사, 폴더 타일 드랍 = 그 폴더로(코드가
+         타일 컨테이너에 건다). 루트 Grid가 AllowDrop을 받는 구조는 MainWindow.RootLayout과
+         같다(GridView 자체는 AllowDrop 기본 false). SelectionMode=Extended = 다중선택(A94).
+         NoticeText = 조작 실패 일시 안내(A92류 — 타이머+Visibility, Storyboard 없음: A90 선례). -->
     <!-- LayoutRoot 이름은 A90용: S4('오픈 파일' 탐색) 인스턴스가 배경을 오버레이 아크릴로
          바꾼다(UseTranslucentBackground). S1 인스턴스는 이 불투명 기본값 그대로다. -->
     <Grid x:Name="LayoutRoot" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
           Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
         <GridView x:Name="TileGrid"
                   Padding="0"
-                  SelectionMode="Single"
+                  SelectionMode="Extended"
                   IsItemClickEnabled="True"
                   ItemClick="OnItemClick"
                   SizeChanged="OnSizeChanged" />
         <TextBlock x:Name="EmptyText" Text="No matching files here"
                    Visibility="Collapsed" Opacity="0.6"
                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <TextBlock x:Name="NoticeText"
+                   Visibility="Collapsed" FontSize="12" Opacity="0.8"
+                   TextTrimming="CharacterEllipsis"
+                   HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                   Margin="12,0,12,10" />
     </Grid>
 </UserControl>

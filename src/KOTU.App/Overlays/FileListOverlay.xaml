@@ -17,7 +17,9 @@
          그 아래 25% = 드라이브/폴더 트리(지연 로드), 나머지 75% = 폴더 파일 리스트.
          스플리터 없이 1*/3* 고정. 트리 선택은 코드에서 ExplorerPane.NavigateTo로 이어진다.
          기본 배경은 약한 틴트 아크릴(A33) — 아래 콘텐츠가 또렷이 비친다.
-         패널 드랍(A93): 이동/복사는 A94 몫이라 무동작으로 소비만 한다(OnPanelDragOver). -->
+         패널 드랍(A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로 전환): 빈 영역·파일 항목·
+         트리 영역 = 현재 폴더로 이동/복사(OnPanelDrop), 리스트의 폴더 항목 위 = 그 폴더로
+         (ExplorerPane이 항목 컨테이너에 건다). 폴더 트리는 Single·드래그 불가 유지. -->
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="PanelColumn" Width="30*" />
