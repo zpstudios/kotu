@@ -16,7 +16,7 @@ namespace KOTU.App;
 /// 내장 탐색기 컨트롤 (v0.25.0, docs/explorer-plan.md).
 /// 좌 70% 썸네일 그리드 + 우 30% 리스트로 같은 폴더를 두 방식으로 보여준다.
 /// 폴더는 전부, 파일은 주입된 담당 확장자만(사용자 확정). 더블클릭: 폴더=진입, 파일=FileActivated.
-/// Alt 오버레이용으로는 ConfigureListOnly()로 리스트만 남겨 재사용한다.
+/// 좌 리스트 오버레이(FileListOverlay)용으로는 ConfigureListOnly()로 리스트만 남겨 재사용한다.
 /// ※ A93(v0.120.0)부터 살아 있는 사용처는 좌 오버레이(리스트 전용)뿐이다 — S1 중앙은
 /// ThumbnailExplorer가 대체했고, 이 페인의 표시 목록(ViewChanged)이 그 뷰의 데이터 원본이다.
 /// 썸네일 그리드 경로(MakeGridItem·LoadThumbnailsAsync)는 전체 페인 사용처가 다시 생길 때를
@@ -72,7 +72,7 @@ public sealed partial class ExplorerPane : UserControl
         }
     }
 
-    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도(Alt 오버레이 재오픈) 되살아난다.</summary>
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도(좌 리스트 오버레이 재오픈) 되살아난다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU explorer worker");
 
     public ExplorerPane()
@@ -193,7 +193,7 @@ public sealed partial class ExplorerPane : UserControl
         await LoadThumbnailsAsync(seq);
     }
 
-    /// <summary>Alt 오버레이용: 썸네일 그리드를 숨기고 리스트만 남긴다.</summary>
+    /// <summary>좌 리스트 오버레이용: 썸네일 그리드를 숨기고 리스트만 남긴다.</summary>
     public void ConfigureListOnly()
     {
         GridColumn.Width = new GridLength(0);
@@ -505,6 +505,16 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     // ---------- 입력 ----------
+
+    /// <summary>
+    /// 선택된 **파일** 항목의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기" 판정).
+    /// 그리드·리스트 중 선택이 있는 쪽을 쓴다 — SelectionMode가 둘 다 Single이라 동시 선택은 없다.
+    /// </summary>
+    internal string? SelectedFilePath =>
+        PathOfSelection(IconGrid.SelectedItem) ?? PathOfSelection(ListPane.SelectedItem);
+
+    private static string? PathOfSelection(object? item) =>
+        item is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry } ? entry.Path : null;
 
     /// <summary>
     /// 클릭 2회(500ms 내 같은 항목) = 더블클릭: 폴더 진입 또는 파일 열기.

@@ -45,6 +45,11 @@ public sealed partial class ThumbnailExplorer : UserControl
     private int _columns = 8; // 기본 = 도크 하나라도 닫힘(전폭) 기준 — 셸이 곧 SetColumns로 덮는다
     private (string Path, DateTime At)? _lastClick;
 
+    /// <summary>선택된 파일 타일의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기").</summary>
+    public string? SelectedFilePath =>
+        TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry }
+            ? entry.Path : null;
+
     public ThumbnailExplorer()
     {
         InitializeComponent();

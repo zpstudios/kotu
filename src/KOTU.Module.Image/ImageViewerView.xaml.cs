@@ -47,7 +47,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     }
 
     /// <summary>
-    /// 전체화면은 Enter/F11/더블클릭/⛶ 버튼(v0.29.0 — 동영상과 단축키 통일).
+    /// 전체화면은 F11/더블클릭/⛶ 버튼(v0.29.0 — Enter는 A86/v0.121.0에서 셸 오버레이 일괄 토글로 이관).
 /// 상태바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.27.0 — 동영상 v0.21.0과 같은 통합).
     /// 셸 바가 배경·여백을 제공하므로 자체 배경과 패딩은 걷어낸다. 컨트롤 필드 참조는 유효 유지.
     /// </summary>

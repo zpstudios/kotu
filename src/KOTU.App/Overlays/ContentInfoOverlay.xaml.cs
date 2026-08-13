@@ -16,8 +16,8 @@ namespace KOTU.App.Overlays;
 /// 정보 항목은 모듈이 주입한다: ShowFor()에 넘기는 IContentInfoProvider(모듈 뷰)가 내용을 만들고,
 /// 없거나 실패하면 파일 기본 정보로 대체한다. 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
 /// 애초에 ShowFor를 부르지 않는다(현행 동작 유지).
-/// 입력(A58: Shift 홀드 = 반투명 / 2초 = 고정 / 2연타 = 불투명 밀어내기·해제 —
-/// 기존 Ctrl을 대체, 부록 B 26번)은 셸(MainWindow)의 상태 머신이 담당한다 —
+/// 입력(A86 — A58의 Shift를 X로 대체: X 홀드 = 반투명 / 2초 = 고정 / 2연타 = 불투명 밀어내기 /
+/// 열림 상태에서 X 1회 = 닫기)은 셸(MainWindow)의 상태 머신이 담당한다 —
 /// 이 컨트롤은 ShowFor/Hide/SetState만 받는다.
 /// </summary>
 public sealed partial class ContentInfoOverlay : UserControl
@@ -122,16 +122,16 @@ public sealed partial class ContentInfoOverlay : UserControl
         OverlayBorder.IsHitTestVisible = IsOpen && (docked || pinned);
         if (IsOpen && (docked || pinned))
             ShowHint(docked
-                ? "Docked — press Shift twice to close"
-                : "Pinned — press Shift twice to unpin");
+                ? "Docked — press X to close"
+                : "Pinned — press X to close");
         else
             HideHint();
     }
 
-    // ---------- 안내 문구 일시 표시 (A92, v0.115.0) ----------
-    // ⚠️ FileListOverlay에 같은 이름의 상수·필드·메서드가 한 벌 더 있다(문구만 Alt/Shift로 다름).
-    // 공용 헬퍼로 빼지 않은 것은 A93·A86이 곧 이 두 파일의 구성과 문구를 다시 뒤집기 때문 —
-    // 한쪽을 고치면 반드시 다른 쪽도 맞출 것. 문구 텍스트 자체는 A86(Z/X 키 체계) 확정 시 갱신 대상이다.
+    // ---------- 안내 문구 일시 표시 (A92, v0.115.0 — 문구는 A86/v0.121.0에서 X 기준으로 갱신) ----------
+    // ⚠️ FileListOverlay에 같은 이름의 상수·필드·메서드가 한 벌 더 있다(문구만 Z/X로 다름).
+    // 공용 헬퍼로 빼지 않은 것은 이 두 파일의 구성과 문구가 계속 뒤집혀 왔기 때문 —
+    // 한쪽을 고치면 반드시 다른 쪽도 맞출 것.
 
     private const double HintOpacity = 0.6; // XAML PinnedText.Opacity와 같아야 한다(페이드 후 되돌릴 값)
     private static readonly TimeSpan HintHoldFor = TimeSpan.FromSeconds(2.5);      // 표시 시간(구현 시 결정)

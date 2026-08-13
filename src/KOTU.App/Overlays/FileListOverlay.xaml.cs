@@ -20,8 +20,9 @@ namespace KOTU.App.Overlays;
 /// 상단 25%는 디스크 계층 트리(A57 ④): 폴더만 표시, 노드 펼침 시점 지연 로드,
 /// Show() 시 현재 폴더까지 자동 펼침·선택·스크롤. 트리 선택은 하단 리스트를 그 폴더로 옮긴다
 /// (NavigateTo 재사용이라 A5 정렬·A7 필터·A8 경로 표시가 그대로 따라온다).
-/// 입력(A58: Alt 홀드 = 반투명 / 2초 = 고정 / 2연타 = 불투명 밀어내기·해제)은
-/// 셸(MainWindow)의 상태 머신이 담당한다 — 이 컨트롤은 Show/Hide/SetState만 받는다.
+/// 입력(A86 — A58의 Alt를 Z로 대체: Z 홀드 = 반투명 / 2초 = 고정 / 2연타 = 불투명 밀어내기 /
+/// 열림 상태에서 Z 1회 = 닫기)은 셸(MainWindow)의 상태 머신이 담당한다 —
+/// 이 컨트롤은 Show/Hide/SetState만 받는다.
 /// </summary>
 public sealed partial class FileListOverlay : UserControl
 {
@@ -45,8 +46,14 @@ public sealed partial class FileListOverlay : UserControl
     /// <summary>정렬 키 저장용(A5) — 셸이 리스트 첫 생성 전에 주입한다. 없어도 동작(기본 이름순).</summary>
     public ISettingsService? Settings { get; set; }
 
-    /// <summary>오버레이가 화면에 떠 있는지 — 셸의 표시 갱신·Alt 키 소비 판단에 쓴다.</summary>
+    /// <summary>오버레이가 화면에 떠 있는지 — 셸의 표시 갱신·경계 버튼 위치 판단에 쓴다.</summary>
     public bool IsOpen => Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// 떠 있는 동안의 선택 파일 경로 (A86 — 셸 Enter의 "선택 파일 있으면 열기" 판정).
+    /// 닫혀 있거나(보이지 않는 선택은 열지 않는다) 선택이 폴더·없음이면 null.
+    /// </summary>
+    public string? SelectedFilePath => IsOpen ? _list?.SelectedFilePath : null;
 
     public FileListOverlay()
     {
@@ -142,16 +149,16 @@ public sealed partial class FileListOverlay : UserControl
             docked ? "SolidBackgroundFillColorBaseBrush" : "OverlayAcrylicBrush"];
         if (IsOpen && (docked || pinned))
             ShowHint(docked
-                ? "Docked — press Alt twice to close"
-                : "Pinned — press Alt twice to unpin");
+                ? "Docked — press Z to close"
+                : "Pinned — press Z to close");
         else
             HideHint();
     }
 
-    // ---------- 안내 문구 일시 표시 (A92, v0.115.0) ----------
-    // ⚠️ ContentInfoOverlay에 같은 이름의 상수·필드·메서드가 한 벌 더 있다. 공용 헬퍼로 빼지 않은 것은
-    // A93·A86이 곧 이 두 파일의 구성과 문구를 다시 뒤집기 때문 — 한쪽을 고치면 반드시 다른 쪽도 맞출 것.
-    // 문구 텍스트 자체는 A86(Z/X 키 체계) 확정 시 갱신 대상이다(여기서는 건드리지 않는다).
+    // ---------- 안내 문구 일시 표시 (A92, v0.115.0 — 문구는 A86/v0.121.0에서 Z 기준으로 갱신) ----------
+    // ⚠️ ContentInfoOverlay에 같은 이름의 상수·필드·메서드가 한 벌 더 있다(문구만 Z/X로 다름).
+    // 공용 헬퍼로 빼지 않은 것은 이 두 파일의 구성과 문구가 계속 뒤집혀 왔기 때문 —
+    // 한쪽을 고치면 반드시 다른 쪽도 맞출 것.
 
     private const double HintOpacity = 0.6; // XAML PinnedText.Opacity와 같아야 한다(페이드 후 되돌릴 값)
     private static readonly TimeSpan HintHoldFor = TimeSpan.FromSeconds(2.5);      // 표시 시간(구현 시 결정)

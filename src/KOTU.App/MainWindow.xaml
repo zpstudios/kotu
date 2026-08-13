@@ -60,16 +60,40 @@
                   Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
 
             <!-- 좌측 파일 리스트 오버레이 (v0.25.0 → A57 ②에서 공용 컨트롤로 추출).
-                 입력 매핑(A58): Alt 홀드 = 반투명 덮기 / 2초 홀드 = 반투명 고정 /
-                 Alt 2연타 = 불투명 밀어내기, 고정 상태에서 2연타 = 해제. -->
+                 입력 매핑(A86 — A58의 Alt를 Z로 대체): Z 홀드 = 반투명 덮기 / 2초 홀드 = 반투명 고정 /
+                 Z 2연타 = 불투명 밀어내기, 열림 상태에서 Z 1회 = 닫기(A86 신설). -->
             <overlays:FileListOverlay x:Name="ListOverlay" Grid.ColumnSpan="3" Visibility="Collapsed" />
 
             <!-- 우측 정보 오버레이 (A57 ②에서 공용 컨트롤로 추출. 키는 v0.45.0 Ctrl→Shift,
-                 A32에서 Ctrl 회귀를 거쳐 A58에서 Shift로 확정 — 부록 B 26번.
+                 A32 Ctrl 회귀 → A58 Shift → A86(v0.121.0) X로 확정.
                  정보 항목은 모듈 뷰(IContentInfoProvider)가 주입).
-                 입력 매핑(A58): Shift 홀드 = 반투명 덮기 / 2초 홀드 = 반투명 고정 /
-                 Shift 2연타 = 불투명 밀어내기, 고정 상태에서 2연타 = 해제. -->
+                 입력 매핑(A86): X 홀드 = 반투명 덮기 / 2초 홀드 = 반투명 고정 /
+                 X 2연타 = 불투명 밀어내기, 열림 상태에서 X 1회 = 닫기(A86 신설). -->
             <overlays:ContentInfoOverlay x:Name="InfoOverlay" Grid.ColumnSpan="3" Visibility="Collapsed" />
+
+            <!-- A86 경계 버튼(keymap Q7): 좌/우 각각 중간 높이, 오버레이(도크)와 메인의 경계선에
+                 반씩 걸친다(메인을 살짝 덮음). 동작 = 불투명 도크 토글, 마우스가 경계 근처에
+                 왔을 때만 표시(코드 OnRootPointerMoved), 닫힌 상태에서는 창 가장자리가 그 자리.
+                 크기 20×44: 높이 44 = 터치 타깃 관례(하단 바 두께와 동일), 폭 20 = 하단 바 버튼
+                 36의 절반 근처로 좁혀 콘텐츠 가림 최소화. 위치(Margin)·글리프는 코드
+                 UpdateEdgeButtons가 도크 폭 계산과 함께 정한다. 오버레이들보다 나중 선언 = 위
+                 z순서라, 반투명 홀드 중(IsHitTestVisible=false인 오버레이) 위에서도 눌린다. -->
+            <Button x:Name="LeftEdgeButton" Grid.ColumnSpan="3"
+                    Width="20" Height="44" Padding="0"
+                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                    Visibility="Collapsed" IsTabStop="False"
+                    ToolTipService.ToolTip="Dock or close the left panel"
+                    Click="OnLeftEdgeToggle">
+                <FontIcon x:Name="LeftEdgeGlyph" Glyph="&#xE76C;" FontSize="10" />
+            </Button>
+            <Button x:Name="RightEdgeButton" Grid.ColumnSpan="3"
+                    Width="20" Height="44" Padding="0"
+                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Visibility="Collapsed" IsTabStop="False"
+                    ToolTipService.ToolTip="Dock or close the right panel"
+                    Click="OnRightEdgeToggle">
+                <FontIcon x:Name="RightEdgeGlyph" Glyph="&#xE76B;" FontSize="10" />
+            </Button>
         </Grid>
 
         <!-- 하단 바 (작업표시줄 느낌). 전체화면에서는 코드에서 통째로 숨긴다(v0.21.0) -->

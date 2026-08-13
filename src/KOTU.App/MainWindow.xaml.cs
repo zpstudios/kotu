@@ -30,14 +30,16 @@ public sealed partial class MainWindow : Window
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
 
-    // ---- 내장 탐색기 + 좌/우 오버레이 입력 상태 머신 (A58 — v0.25.0 홀드·v0.32.0 2연타 고정 대체) ----
-    // 키 할당(부록 B 26번): Alt = 좌측 파일 리스트 / Shift = 우측 정보 (Ctrl은 오버레이에서 손 뗌 —
-    //   v0.45.0 Ctrl→Shift, A32에서 Ctrl 회귀를 거쳐 A58에서 Shift로 확정).
+    // ---- 내장 탐색기 + 좌/우 오버레이 입력 상태 머신 (A58 상태 전이 + A86 키·일괄 토글) ----
+    // 키 할당(A86, v0.121.0 — A58의 Alt/Shift·부록 B 26번을 대체): Z = 좌측 파일 리스트 / X = 우측 정보.
     // 사이드마다 4상태: Closed(닫힘) / Holding(키 홀드 — 반투명 덮기, 메인 크기 불변) /
     //   TranslucentPinned(2초 이상 홀드 — 키를 떼도 반투명 유지) /
     //   OpaqueDocked(2연타 — 불투명 + 메인을 반대쪽 7*로 축소, 양쪽이면 3:4:3).
-    // 고정 해제는 반투명 고정·불투명 밀어내기 둘 다 2연타. 홀드 판정은 다른 키·포인터(클릭·휠)가
-    // 함께 개입하면 취소된다(OS Alt 메뉴 모드와 같은 규칙 — A84 Shift 조합 단축키·Shift+휠 줌 안전장치).
+    // 2연타 = 불투명 도크 고정/해제(A58 유지). A86 추가: **열림 상태(고정·도크)에서 해당 키 1회 = 그 쪽 닫기**
+    //   (keymap S3 행 — 판정 충돌은 "첫 탭 이전 상태" 기준 2연타로 푼다, OnOverlaySideDown 참고).
+    // 셸 수준 구성 상태(S1~S4, ShellState)는 Enter 일괄 토글·경계 버튼의 분배 기준 — 아래 CurrentShellState.
+    // 홀드 판정은 다른 키·포인터(클릭·휠 — Ctrl+휠 줌 포함)가 함께 개입하면 취소된다(A58 안전장치 유지).
+    // Alt의 OS 메뉴 모드 회피 로직은 제거 — Z/X는 문자 키라 근거가 사라졌다(A86 확정).
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ThumbnailExplorer? _thumbnailExplorer; // S1 중앙 썸네일 뷰 (A93, 지연 생성 — 구 ExplorerPane 대체)
@@ -50,21 +52,59 @@ public sealed partial class MainWindow : Window
 
     private enum OverlayState { Closed, Holding, TranslucentPinned, OpaqueDocked }
 
-    /// <summary>오버레이 한쪽(좌 = Alt 리스트 / 우 = Shift 정보)의 입력·표시 상태.</summary>
+    /// <summary>
+    /// 셸 수준 "구성 상태" (A86 keymap): A58의 오버레이별 4상태를 대체하는 게 아니라 그 위에서
+    /// "지금 화면 구성이 어떤 조합인가"를 요약한다 — Enter 일괄 토글·경계 버튼 분배의 기준.
+    /// None = 오버레이 컨텍스트 없음(빈 셸·설정·H/W·미지원 안내) — keymap 표 밖, 셸 키 무동작.
+    /// S4('오픈 파일' 탐색 모드)의 진입/복귀 구현은 A90 몫 — 여기서는 자리와 판정 훅만 둔다.
+    /// </summary>
+    private enum ShellState { None, S1, S2, S3L, S3R, S3B, S4 }
+
+    /// <summary>'오픈 파일' 탐색 모드(S4) 여부 — 구현은 A90 몫이라 아직 항상 false인 훅이다.</summary>
+    private static bool IsOpenFileBrowsing => false;
+
+    /// <summary>A86 keymap의 구성 상태 판정. 홀드(반투명 덮기)도 "열림"으로 센다 — 표의 상태 기준.</summary>
+    private ShellState CurrentShellState
+    {
+        get
+        {
+            if (IsOpenFileBrowsing) return ShellState.S4; // A90 — 진입 경로가 생기면 이 훅이 산다
+            if (IsEmptyFileModule) return ShellState.S1;
+            if (_currentFilePath is null) return ShellState.None;
+            var left = _listSide.State != OverlayState.Closed;
+            var right = _infoSide.State != OverlayState.Closed;
+            return (left, right) switch
+            {
+                (true, true) => ShellState.S3B,
+                (true, false) => ShellState.S3L,
+                (false, true) => ShellState.S3R,
+                _ => ShellState.S2,
+            };
+        }
+    }
+
+    /// <summary>오버레이 한쪽(좌 = Z 리스트 / 우 = X 정보)의 입력·표시 상태.</summary>
     private sealed class OverlaySide
     {
         public OverlayState State;
-        public bool KeyIsDown;          // 물리 키가 눌려 있는지 — 수정자 조합(Alt+Shift) 감지용
+        public bool KeyIsDown;          // 물리 키가 눌려 있는지 — Z+X 동시 누름(조합) 감지용
         public bool HoldSessionActive;  // 이번 누름이 홀드 판정 세션인지 (2연타·조합·취소면 아님)
         public DateTime LastTapDown = DateTime.MinValue; // 2연타 판정 (down→down)
+        public OverlayState TapStartState;               // 첫 탭 "이전" 상태 — A86 2연타 판정 기준
         public DispatcherTimer? PinTimer; // 2초 홀드 → 반투명 고정 승격 (생성자에서 배선)
     }
 
     private const double OverlayDoubleTapMs = 450;  // 2연타 판정 창 (v0.32.0 값 유지)
     private const double OverlayPinHoldMs = 2000;   // 홀드 → 반투명 고정 승격 시간 (A58)
 
-    private readonly OverlaySide _listSide = new(); // 좌측 파일 리스트 (Alt)
-    private readonly OverlaySide _infoSide = new(); // 우측 정보 (Shift)
+    private readonly OverlaySide _listSide = new(); // 좌측 파일 리스트 (Z)
+    private readonly OverlaySide _infoSide = new(); // 우측 정보 (X)
+
+    /// <summary>
+    /// Enter 일괄 닫기 직전의 좌/우 구성 — "직전 구성 복원"(A86 keymap Q3)의 세션 한정 기억.
+    /// null = 아직 일괄 닫기를 안 했다 → 복원 시 A81 기본 세트(좌+우 불투명 도크). 저장하지 않는다.
+    /// </summary>
+    private (OverlayState List, OverlayState Info)? _lastBatchStates;
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
@@ -80,7 +120,7 @@ public sealed partial class MainWindow : Window
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
 
-        // 좌측 파일 리스트 오버레이(A57 ②) 배선 — 열기 이벤트는 기존 Alt 리스트와 동일 경로
+        // 좌측 파일 리스트 오버레이(A57 ②) 배선 — 열기 이벤트는 기존(v0.25.0) 홀드 리스트와 동일 경로
         ListOverlay.Settings = _settings;                                  // 정렬 키 저장(A5)
         ListOverlay.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
         ListOverlay.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
@@ -116,10 +156,10 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
-        // Alt/Shift 오버레이 입력 감지(A58 — v0.25.0 Alt/Ctrl 홀드 대체): 포커스가 모듈 뷰 안에
-        // 있어도 받도록 창 루트에서 handledEventsToo로 구독한다. 포인터 개입(클릭·휠)도 홀드 판정
-        // 취소 트리거(A58 안전장치 — Shift+클릭 다중 선택·Shift+더블클릭이 오버레이를 물지 않게.
-        // 휠은 A84에서 추가: Shift+휠 줌은 KeyDown이 아니라 다른-키 취소에 안 걸리므로 여기서 방어).
+        // Z/X 오버레이 입력 감지(A58 전이 + A86 키 — v0.25.0 Alt/Ctrl 홀드 → A58 Alt/Shift 대체):
+        // 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.
+        // 포인터 개입(클릭·휠)도 홀드 판정 취소 트리거(A58 안전장치 유지 — 휠은 A84에서 추가,
+        // Ctrl+휠 줌 개입도 같은 경로로 취소된다: A86 확정. 줌 재정의 자체는 A98 몫).
         // 창 비활성화로 KeyUp을 놓치면 홀드 판정·키 상태를 초기화(고정·불투명 상태는 유지).
         RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
@@ -127,6 +167,12 @@ public sealed partial class MainWindow : Window
             new PointerEventHandler(OnRootPointerIntervened), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.PointerWheelChangedEvent,
             new PointerEventHandler(OnRootPointerIntervened), handledEventsToo: true);
+        // A86 경계 버튼: 마우스가 경계 근처에 왔을 때만 보이므로 이동·이탈을 창 루트에서 감시한다
+        // (handledEventsToo — 오버레이·모듈 뷰가 이동 이벤트를 소비해도 근접 판정은 계속 돌아야 한다).
+        RootLayout.AddHandler(UIElement.PointerMovedEvent,
+            new PointerEventHandler(OnRootPointerMoved), handledEventsToo: true);
+        RootLayout.PointerExited += (_, _) => HideEdgeButtons();
+        CenterArea.SizeChanged += (_, _) => UpdateEdgeButtons(); // 경계 x 좌표는 실폭 기준
         _listSide.PinTimer = MakePinTimer(_listSide);
         _infoSide.PinTimer = MakePinTimer(_infoSide);
         Activated += (_, e) =>
@@ -912,7 +958,7 @@ public sealed partial class MainWindow : Window
     // ---------- 파일 열기 ----------
 
     /// <summary>
-    /// 내장 탐색기·Alt 리스트의 일반 더블클릭 열기(A24): 재사용 규칙이 "항상 새 창"이면
+    /// 내장 탐색기·좌 리스트 오버레이의 일반 더블클릭 열기(A24): 재사용 규칙이 "항상 새 창"이면
     /// WindowManager로 넘겨 새 창에 열고, 아니면(기본) 이 창에서 그대로 연다.
     /// 외부 진입(WindowManager가 창을 이미 골라 OpenFile을 부르는 경로)과 섞이지 않게 별도 메서드.
     /// </summary>
@@ -1251,23 +1297,25 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ---------- 좌/우 오버레이 입력 상태 머신 (A58) ----------
+    // ---------- 좌/우 오버레이 입력 상태 머신 (A58 전이 + A86 Z/X·Enter) ----------
 
     /// <summary>
-    /// 키 → 오버레이 사이드 매핑 (부록 B 26번): Alt = 좌측 파일 리스트, Shift = 우측 정보.
-    /// 그 밖의 키는 null — 홀드 취소 트리거(다른 키 개입)로만 쓰인다.
+    /// 키 → 오버레이 사이드 매핑 (A86 — A58의 Alt/Shift·부록 B 26번을 Z/X로 대체):
+    /// Z = 좌측 파일 리스트, X = 우측 정보. 그 밖의 키는 null — 홀드 취소 트리거(다른 키 개입)로만 쓰인다.
+    /// A34가 Z·X를 어느 모듈에도 배정하지 않고 비워 둔 것이 이 키의 예약이었다.
     /// </summary>
     private OverlaySide? SideForKey(VirtualKey key) => key switch
     {
-        VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu => _listSide,
-        VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift => _infoSide,
+        VirtualKey.Z => _listSide,
+        VirtualKey.X => _infoSide,
         _ => null,
     };
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        // A32 통과 규칙 유지: 텍스트 입력 컨트롤에 포커스가 있으면 오버레이 입력을 받지 않는다 —
-        // Shift는 대문자 입력이 우선(에디터 타이핑을 오버레이가 방해하면 안 된다).
+        // A86 포커스 예외 ①(A32 통과 규칙 재사용): 텍스트 입력 컨트롤에 포커스가 있으면
+        // Z·X·Enter 전부 입력이 우선이다(문서 에디터의 z/x 타이핑·Enter 줄바꿈을 뺏으면 안 된다).
+        // Esc만 통과인데 셸은 Esc를 애초에 안 쓴다(전체화면 해제는 모듈 액셀러레이터 몫, S3*는 무동작 Q8).
         // 어떤 키든 홀드 판정·2연타 카운트만 리셋하고 흘려보낸다.
         if (IsTextInputFocused())
         {
@@ -1275,42 +1323,61 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (e.Key == VirtualKey.Enter)
+        {
+            OnShellEnter(e); // A86 일괄 토글 — 원 기능 우선 판정 포함
+            return;
+        }
+
         var side = SideForKey(e.Key);
         if (side is null)
         {
             // 다른 키가 함께 눌림 → 진행 중 홀드 세션 취소(이미 떠 있으면 즉시 내림) +
-            // 2연타 카운트 리셋 — OS의 Alt 메뉴 모드와 같은 규칙 (A58 공통 안전장치:
-            // Shift+더블클릭 새 인스턴스·A84 Shift 조합(Shift+N 등)이 오버레이를 물지 않게).
+            // 2연타 카운트 리셋 (A58 공통 안전장치 유지 — Shift+더블클릭 새 인스턴스·Shift+N 등
+            // 조합 입력이 오버레이를 물지 않게).
             // 비수정자 키를 먼저 누르고 있던 조합은 그 키의 반복 입력이 곧 도착해 같은 경로로 취소된다.
             ResetOverlayInput();
             return;
         }
 
+        // A86 포커스 예외 ②(Q4): 리스트/트리/썸네일 포커스에서는 Z/X가 타이핑 탐색(첫 글자 점프)
+        // 우선이다 — 키를 삼키지 않고 판정만 접는다. 오버레이 여닫기는 Enter·경계 버튼·마우스 몫.
+        if (HotkeySupport.ShouldPassThrough(RootLayout))
+        {
+            ResetOverlayInput();
+            return;
+        }
+
         var other = ReferenceEquals(side, _listSide) ? _infoSide : _listSide;
-        side.KeyIsDown = true; // 반복 입력에서도 갱신 — 수정자 조합 감지의 근거
-        if (!e.KeyStatus.WasKeyDown)
+        side.KeyIsDown = true; // 반복 입력에서도 갱신 — Z+X 동시 누름 감지의 근거
+        if (!e.KeyStatus.WasKeyDown) // 문자 키 오토리피트(홀드 중 반복 down)는 전이에 안 태운다
         {
             if (other.KeyIsDown)
-                ResetOverlayInput(); // Alt+Shift 같은 오버레이 키끼리의 조합 — 양쪽 다 홀드 판정 없음
+                ResetOverlayInput(); // Z+X 오버레이 키끼리의 조합 — 양쪽 다 홀드 판정 없음
             else
                 OnOverlaySideDown(side);
         }
 
-        // Alt 기본 동작(OS 메뉴 모드 진입)과의 충돌 방지 — 기존 방식 유지(v0.25.0):
-        // 좌측 오버레이가 떠 있을 때만 KeyDown을 소비한다.
-        if (ReferenceEquals(side, _listSide) && ListOverlay.IsOpen) e.Handled = true;
+        // Z/X는 오버레이 전용 키다(A34가 비워 둠) — 여기까지 왔으면(텍스트 입력·탐색기 표면 아님)
+        // 흘려보낼 곳이 없어 컨텍스트가 있으면 소비한다(오토리피트 포함 — 반복 문자가 새지 않게).
+        // Alt 시절의 "오버레이가 떠 있을 때만 소비"(OS 메뉴 모드 회피)는 근거가 사라져 제거(A86).
+        if (_currentFilePath is not null || IsEmptyFileModule) e.Handled = true;
     }
 
     /// <summary>
-    /// 사이드 키 최초 down(반복·조합 제외)의 상태 전이 (A58 표):
-    /// 2연타 = 고정 상태(반투명 고정·불투명 밀어내기)면 해제, 닫힘이면 불투명 밀어내기.
-    /// 단독 down = 닫힘 상태에서만 홀드 세션 시작(반투명 덮기 + 2초 승격 타이머).
+    /// 사이드 키 최초 down(반복·조합 제외)의 상태 전이 (A58 전이 + A86 keymap):
+    /// 닫힘에서 단독 down = 홀드 세션 시작(반투명 덮기 + 2초 승격 타이머) — "닫힌 오버레이 꺼내기".
+    /// **열림(반투명 고정·불투명 도크)에서 단독 down = 그 쪽 닫기** (A86 신설 — keymap S3 행:
+    /// S3L에서 Z = 좌 닫기. A58에서는 무동작이던 자리).
+    /// 2연타 = 불투명 도크 고정/해제(A58 유지). 첫 탭이 이미 상태를 옮기므로 판정은
+    /// **첫 탭 이전 상태(TapStartState)** 기준이다: 닫힘에서 시작한 2연타 = 도크,
+    /// 열림에서 시작한 2연타 = 해제(첫 탭이 이미 닫았다 — 두 번째 탭은 그대로 둔다).
     /// </summary>
     private void OnOverlaySideDown(OverlaySide side)
     {
         // 오버레이 컨텍스트가 없으면(설정·H/W·미지원 파일 안내) 판정도 없다. 파일 없이 연
-        // 파일 모듈(빈 모듈 상태)은 A81부터 컨텍스트에 포함 — 기본 도크를 2연타로 닫고
-        // 다시 여는 입력이 성립해야 한다. 상태 전이(홀드/2초/2연타) 자체는 A58 그대로.
+        // 파일 모듈(빈 모듈 상태)은 A81부터 컨텍스트에 포함 — 기본 도크를 키로 닫고
+        // 다시 여는 입력이 성립해야 한다.
         if (_currentFilePath is null && !IsEmptyFileModule) return;
 
         var now = DateTime.UtcNow;
@@ -1318,20 +1385,24 @@ public sealed partial class MainWindow : Window
         {
             side.LastTapDown = DateTime.MinValue;
             CancelHoldCore(side); // 이번 누름은 홀드 세션이 아니다 — 계속 눌러도 승격 없음
-            side.State = side.State is OverlayState.TranslucentPinned or OverlayState.OpaqueDocked
-                ? OverlayState.Closed         // 고정 해제 — 두 고정 상태 모두 2연타로 집어넣는다
-                : OverlayState.OpaqueDocked;  // 닫힘(첫 탭은 이미 내려간 상태)에서 2연타 = 불투명 밀어내기
+            side.State = side.TapStartState == OverlayState.Closed
+                ? OverlayState.OpaqueDocked // 닫힘에서 시작한 2연타 = 불투명 밀어내기 (A58)
+                : OverlayState.Closed;      // 열림에서 시작한 2연타 = 해제 — 첫 탭이 이미 닫힌 상태 유지
         }
         else
         {
             side.LastTapDown = now;
+            side.TapStartState = side.State; // 다음 탭이 2연타가 되면 이 값이 판정 기준
             if (side.State == OverlayState.Closed)
             {
                 side.State = OverlayState.Holding;
                 side.HoldSessionActive = true;
                 side.PinTimer?.Start(); // 2초 경과 시 TranslucentPinned로 승격
             }
-            // 이미 고정·불투명이면 홀드는 의미 없음 — 탭 시각만 기록(다음 2연타 판정용)
+            else if (side.State is OverlayState.TranslucentPinned or OverlayState.OpaqueDocked)
+            {
+                side.State = OverlayState.Closed; // A86: 열림 상태에서 해당 키 1회 = 그 쪽 닫기
+            }
         }
         ApplyOverlayStates();
     }
@@ -1341,7 +1412,6 @@ public sealed partial class MainWindow : Window
         var side = SideForKey(e.Key);
         if (side is null) return;
 
-        var sawDown = side.KeyIsDown;
         side.KeyIsDown = false;
         if (side.HoldSessionActive)
         {
@@ -1355,17 +1425,87 @@ public sealed partial class MainWindow : Window
             // 타이머가 이미 TranslucentPinned로 승격했다면 그대로 유지 —
             // "2초 넘겨 뗐을 때 = 고정 유지" (A58 확정 해석)
         }
+        // Alt 시절의 KeyUp 소비(OS 메뉴 모드가 Alt up에서 발동)는 문자 키 Z/X에서는 불필요 — 제거(A86).
+    }
 
-        // Alt 기본 동작 충돌 방지 — 기존 방식 유지: OS 메뉴 모드는 Alt KeyUp에서 발동하므로
-        // down을 우리가 본 Alt의 up은 소비한다(기존 _altHeld 소비와 같은 범위).
-        if (ReferenceEquals(side, _listSide) && sawDown) e.Handled = true;
+    // ---------- Enter 일괄 토글 (A86 keymap) ----------
+
+    /// <summary>
+    /// Enter 분배 (A86 keymap): S1 = 선택 파일 있으면 열기, 없으면 일괄 토글 /
+    /// S2 = 일괄 토글(직전 구성 복원 — 세션 한정, 기억 없으면 A81 기본 세트 좌+우 도크) /
+    /// S3L·S3R·S3B = 일괄 닫기 / S4 = A90 몫(선택 열기 우선·복귀 — 지금은 도달하지 않는다).
+    /// 원 기능 우선 예외: ① 텍스트 입력(에디터 줄바꿈)은 호출 전에 걸러진다 ②
+    /// 탐색기 리스트/트리/썸네일 포커스 = 선택 항목 열기 우선(통과 표면 판정) ③ 영상 콘텐츠 =
+    /// 전체화면 진입 — 모듈 액셀러레이터가 먼저 처리(Handled)하고, 이벤트 순서가 그 표식을
+    /// 안 물고 올 가능성에 대비해 모듈 ID 가드를 이중으로 둔다.
+    /// </summary>
+    private void OnShellEnter(KeyRoutedEventArgs e)
+    {
+        if (e.KeyStatus.WasKeyDown) return; // 오토리피트 — 토글이 연사되면 안 된다
+
+        // 구성 스냅샷은 홀드 취소보다 먼저 뜬다: 홀드(반투명 덮기)도 keymap 기준 "열림"이고
+        // 복원 구성(Q3)에도 들어가야 한다. 홀드는 키를 떼면 사라지는 과도 상태라 반투명 고정으로 기억.
+        var state = CurrentShellState;
+        var snapshot = (List: Sticky(_listSide.State), Info: Sticky(_infoSide.State));
+        ResetOverlayInput(); // Enter도 "다른 키 개입"이다 — 홀드 취소·2연타 리셋(A58 안전장치 유지)
+
+        if (e.Handled) return; // 영상 Enter=전체화면 액셀러레이터가 이미 소비 — 원 기능 우선
+        if (HotkeySupport.ShouldPassThrough(RootLayout)) return; // 탐색기 표면 — 선택 항목 열기 우선
+        if (_currentModule?.Id == "video" && _currentFilePath is not null) return; // 영상 이중 방어(위 요약 ③)
+
+        switch (state)
+        {
+            case ShellState.S1:
+                // 선택 파일 있으면 열기(keymap S1 행): 중앙 썸네일 우선, 다음 좌 리스트(떠 있을 때만).
+                var selected = _thumbnailExplorer?.SelectedFilePath ?? ListOverlay.SelectedFilePath;
+                e.Handled = true;
+                if (selected is not null) OpenFileRouted(selected);
+                else BatchToggleOverlays(snapshot);
+                return;
+            case ShellState.S2:
+            case ShellState.S3L:
+            case ShellState.S3R:
+            case ShellState.S3B:
+                // S2 = 되살리기, S3* = 일괄 닫기 — 분기는 스냅샷의 "하나라도 열림"이 겸한다.
+                e.Handled = true;
+                BatchToggleOverlays(snapshot);
+                return;
+            case ShellState.S4: // 선택 열기 우선·없으면 복귀 — A90 몫 (지금은 도달하지 않는다)
+            default:            // None — 오버레이 컨텍스트 없음(빈 셸·설정·H/W): 무동작, 삼키지도 않는다
+                return;
+        }
+    }
+
+    /// <summary>복원 기억용 상태 정규화: 홀드(키 홀드 중)는 반투명 고정으로 승격해 기억한다.</summary>
+    private static OverlayState Sticky(OverlayState state) =>
+        state == OverlayState.Holding ? OverlayState.TranslucentPinned : state;
+
+    /// <summary>
+    /// Enter 일괄 토글 실행부: 하나라도 열려 있으면 전부 닫고(직전 구성을 세션 한정 기억 — Q3),
+    /// 전부 닫혀 있으면 기억한 구성으로, 기억이 없으면 A81 기본 세트(좌+우 불투명 도크)로 되살린다.
+    /// </summary>
+    private void BatchToggleOverlays((OverlayState List, OverlayState Info) snapshot)
+    {
+        if (snapshot.List != OverlayState.Closed || snapshot.Info != OverlayState.Closed)
+        {
+            _lastBatchStates = snapshot;
+            _listSide.State = OverlayState.Closed;
+            _infoSide.State = OverlayState.Closed;
+        }
+        else
+        {
+            var (list, info) = _lastBatchStates ?? (OverlayState.OpaqueDocked, OverlayState.OpaqueDocked);
+            _listSide.State = list;
+            _infoSide.State = info;
+        }
+        ApplyOverlayStates();
     }
 
     /// <summary>
-    /// 포인터 개입(클릭·휠)도 홀드 판정을 취소한다(A58 안전장치, 휠은 A84에서 추가) —
-    /// Shift+클릭 다중 선택, Shift+더블클릭 새 인스턴스(A24), Shift+휠 줌(A84)이
+    /// 포인터 개입(클릭·휠 — Ctrl+휠 줌 포함, A86 확정)도 홀드 판정을 취소한다(A58 안전장치,
+    /// 휠은 A84에서 추가) — 클릭 다중 선택·더블클릭 새 인스턴스(A24)·휠 줌이
     /// 오버레이를 물고 있지 않게. 단, 그 오버레이 자신 안에서의 클릭·스크롤은 예외 —
-    /// Alt를 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
+    /// Z를 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
     /// 기존 흐름(v0.25.0)을 끊으면 안 된다.
     /// </summary>
     private void OnRootPointerIntervened(object sender, PointerRoutedEventArgs e)
@@ -1499,6 +1639,93 @@ public sealed partial class MainWindow : Window
         // 공간을 차지하지 않으므로 "닫힘"과 같게 센다 — 덮인 동안에도 뒤 타일은 전폭 기준.
         if (emptyModule)
             _thumbnailExplorer?.SetColumns(left > 0 && right > 0 ? 4 : 8);
+
+        UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다
+    }
+
+    // ---------- 경계 버튼 (A86 keymap Q7) ----------
+
+    /// <summary>경계 버튼이 경계선에서 메인 쪽으로 걸치는 깊이 — 버튼 폭 20의 절반(반씩 걸침).</summary>
+    private const double EdgeButtonOverlap = 10;
+
+    /// <summary>
+    /// 근접 판정 반경(경계선 좌우 각각): 터치 타깃 관례 44px보다 약간 넓은 48 — 버튼(20px)을
+    /// 노리고 다가가면 확실히 뜨되, 화면을 가로지르는 이동에 스치기만 해도 뜰 만큼 넓지는 않게.
+    /// </summary>
+    private const double EdgeProximity = 48;
+
+    private double _leftEdgeX;   // 좌 경계선 x (CenterArea 기준) — 닫힘이면 0(창 가장자리)
+    private double _rightEdgeX;  // 우 경계선 x — 닫힘이면 실폭(창 가장자리)
+
+    /// <summary>
+    /// 경계 버튼 위치·글리프 갱신 (A86): 경계선 = 그 쪽 패널의 화면 폭.
+    /// 불투명 도크든 반투명(홀드·고정) 덮기든 열려 있으면 dockPercent%(25/30 — ApplyOverlayStates와
+    /// 같은 값), 닫혀 있으면 0 = 창 가장자리(닫힌 상태에서도 같은 자리에서 꺼낼 수 있어야 한다).
+    /// 버튼은 경계선에서 메인 쪽으로 절반(EdgeButtonOverlap) 걸친다 — "메인을 살짝 덮게"(A86 원문).
+    /// 표시 여부는 근접 판정(OnRootPointerMoved)이 정하고, 여기서는 컨텍스트가 사라졌을 때만 감춘다.
+    /// </summary>
+    private void UpdateEdgeButtons()
+    {
+        var width = CenterArea.ActualWidth;
+        if (width <= 0) return;
+        var context = _currentFilePath is not null || IsEmptyFileModule;
+        if (!context || IsOpenFileBrowsing) // S4에서는 표시 안 함(keymap) — A90 훅
+        {
+            HideEdgeButtons();
+            return;
+        }
+
+        var dockPercent = IsEmptyFileModule ? 25.0 : 30.0; // ApplyOverlayStates의 상태별 폭과 동일(A93)
+        _leftEdgeX = ListOverlay.IsOpen ? width * dockPercent / 100 : 0;
+        _rightEdgeX = InfoOverlay.IsOpen ? width - width * dockPercent / 100 : width;
+        LeftEdgeButton.Margin = new Thickness(Math.Max(0, _leftEdgeX - EdgeButtonOverlap), 0, 0, 0);
+        RightEdgeButton.Margin = new Thickness(0, 0, Math.Max(0, width - _rightEdgeX - EdgeButtonOverlap), 0);
+        // 글리프 = 누르면 일어날 일의 방향: 도크가 아니면 "불투명 도크로 밀어내기"(안쪽), 도크면 닫기(바깥쪽).
+        LeftEdgeGlyph.Glyph = _listSide.State == OverlayState.OpaqueDocked ? "\uE76B" : "\uE76C";
+        RightEdgeGlyph.Glyph = _infoSide.State == OverlayState.OpaqueDocked ? "\uE76C" : "\uE76B";
+    }
+
+    /// <summary>
+    /// 마우스 근접 시에만 경계 버튼 표시 (A86 원문: "마우스가 근처에 갔을 때만").
+    /// 경계선 x에서 EdgeProximity 이내이고 콘텐츠 영역 세로 범위 안일 때만 보인다.
+    /// </summary>
+    private void OnRootPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        var context = _currentFilePath is not null || IsEmptyFileModule;
+        if (!context || IsOpenFileBrowsing)
+        {
+            HideEdgeButtons();
+            return;
+        }
+        var p = e.GetCurrentPoint(CenterArea).Position;
+        var insideY = p.Y >= 0 && p.Y <= CenterArea.ActualHeight;
+        LeftEdgeButton.Visibility = insideY && Math.Abs(p.X - _leftEdgeX) <= EdgeProximity
+            ? Visibility.Visible : Visibility.Collapsed;
+        RightEdgeButton.Visibility = insideY && Math.Abs(p.X - _rightEdgeX) <= EdgeProximity
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void HideEdgeButtons()
+    {
+        LeftEdgeButton.Visibility = Visibility.Collapsed;
+        RightEdgeButton.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>경계 버튼 동작 = 불투명 도크 토글 (A86 keymap Q7 확정 — 좌).</summary>
+    private void OnLeftEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_listSide);
+
+    /// <summary>경계 버튼 동작 = 불투명 도크 토글 (A86 keymap Q7 확정 — 우).</summary>
+    private void OnRightEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_infoSide);
+
+    /// <summary>불투명 도크면 닫고, 그 외(닫힘·홀드·반투명 고정)면 불투명 도크로 (Q7).</summary>
+    private void ToggleOpaqueDock(OverlaySide side)
+    {
+        CancelHoldCore(side);
+        side.LastTapDown = DateTime.MinValue; // 버튼 클릭이 키 2연타 판정에 섞이지 않게
+        side.State = side.State == OverlayState.OpaqueDocked
+            ? OverlayState.Closed
+            : OverlayState.OpaqueDocked;
+        ApplyOverlayStates();
     }
 
     /// <summary>

@@ -1017,6 +1017,14 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        // A86: 파일이 없으면(빈 영상 모듈 = 셸 S1) 삼키지 않는다 — Enter는 셸의 일괄 토글 몫이고
+        // (keymap의 전체화면 예외는 "영상 콘텐츠 열림"뿐), 빈 화면 전체화면 자체도 의미가 없다.
+        // F11도 같은 가드를 공유한다(핸들러가 하나 — 빈 상태 전체화면은 원래 쓸 일이 없던 동작).
+        if (_filePath is null)
+        {
+            args.Handled = false;
+            return;
+        }
         args.Handled = true;
         ToggleFullScreen();
     }
