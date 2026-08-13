@@ -14,6 +14,8 @@ namespace KOTU.App;
 /// ② 우하단 원형 번호 배지(타이틀바 배지와 같은 ①②③ 형태 — 인스턴스 색 원 + 흰 숫자)
 /// 를 System.Drawing(GDI+)으로 얹는다 — A18 센서 트레이 아이콘(SensorTray)과 같은 도구.
 /// 창이 하나뿐이면(번호 0) 합성 자체를 부르지 않는다 — 배지·번호 숨김 규칙과 일관.
+/// ※ A54(v0.118.0): ②번 배지는 <b>창 아이콘 전용</b>이 됐다. 트레이 아이콘은 값 텍스트를
+/// 2줄로 그리게 되어(TrayStatusIcon) 배지가 글자를 덮으므로 withBadge=false로 부른다.
 ///
 /// 반환 HICON은 (경로, 번호, 크기)별로 캐시되어 프로세스 수명 동안 유효하다.
 /// WM_SETICON은 핸들을 복사하지 않으므로(WindowIcon.cs와 같은 이유) 호출자는
@@ -52,21 +54,24 @@ internal static class InstanceIcon
     private static readonly Dictionary<string, IntPtr> s_cache = new();
 
     /// <summary>
-    /// 모듈 색 .ico 위에 인스턴스 테두리 링과 원형 번호 배지를 얹은 HICON을 돌려준다.
+    /// 모듈 색 .ico 위에 인스턴스 테두리 링(+ 선택적으로 원형 번호 배지)을 얹은 HICON을 돌려준다.
     /// 실패(파일 없음·GDI 오류)하면 IntPtr.Zero — 호출자는 무테두리 아이콘으로 폴백할 것.
     /// UI 스레드 전용(캐시가 잠금 없음 — 호출 경로가 전부 UI 스레드라 충분).
     /// </summary>
-    public static IntPtr GetComposed(string icoPath, int number, int size)
+    /// <param name="withBadge">
+    /// 우하단 원형 번호 배지 표시 여부. 창 아이콘은 true(A68), 트레이 아이콘은 false(A54 — 값 텍스트가 있다).
+    /// </param>
+    public static IntPtr GetComposed(string icoPath, int number, int size, bool withBadge = true)
     {
         if (number <= 0 || size < 8 || !File.Exists(icoPath)) return IntPtr.Zero;
 
-        var key = $"{icoPath}|{number}|{size}";
+        var key = $"{icoPath}|{number}|{size}|{withBadge}";
         if (s_cache.TryGetValue(key, out var cached)) return cached;
 
         IntPtr icon;
         try
         {
-            icon = Compose(icoPath, number, size);
+            icon = Compose(icoPath, number, size, withBadge);
         }
         catch
         {
@@ -76,7 +81,7 @@ internal static class InstanceIcon
         return icon;
     }
 
-    private static IntPtr Compose(string icoPath, int number, int size)
+    private static IntPtr Compose(string icoPath, int number, int size, bool withBadge)
     {
         using var bitmap = new System.Drawing.Bitmap(size, size,
             System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -107,36 +112,40 @@ internal static class InstanceIcon
             // ③ 원형 번호 배지(우하단): 타이틀바 배지와 같은 형태 — 색 원 + 흰 굵은 숫자.
             //    흰 외곽선으로 링·본체와 분리. A3의 kotu 서브마크 위를 덮지만
             //    다중 창일 때 번호 구분이 우선(사용자 사양 — ①②③ 통일).
-            var d = Math.Max(9, size * 5 / 8);
-            float bx = size - d, by = size - d;
-            using (var fill = new System.Drawing.SolidBrush(color))
-                g.FillEllipse(fill, bx, by, d - 1f, d - 1f);
-            using (var outline = new System.Drawing.Pen(GdiColor.White, Math.Max(1f, size / 24f)))
-                g.DrawEllipse(outline, bx, by, d - 1f, d - 1f);
+            //    A54(v0.118.0): 트레이 아이콘에서는 생략한다(withBadge=false) — 값 2줄을 덮기 때문.
+            if (withBadge)
+            {
+                var d = Math.Max(9, size * 5 / 8);
+                float bx = size - d, by = size - d;
+                using (var fill = new System.Drawing.SolidBrush(color))
+                    g.FillEllipse(fill, bx, by, d - 1f, d - 1f);
+                using (var outline = new System.Drawing.Pen(GdiColor.White, Math.Max(1f, size / 24f)))
+                    g.DrawEllipse(outline, bx, by, d - 1f, d - 1f);
 
-            var text = number.ToString();
-            using var format = new System.Drawing.StringFormat(
-                System.Drawing.StringFormat.GenericTypographic)
-            {
-                Alignment = System.Drawing.StringAlignment.Center,
-                LineAlignment = System.Drawing.StringAlignment.Center,
-                FormatFlags = System.Drawing.StringFormatFlags.NoWrap,
-            };
-            // 폭 초과 시 축소 — 10 이상(두 자리, 색 순환 구간)에서도 원 안에 들어가게
-            var fontPx = d * 0.72f;
-            var font = MakeFont(fontPx);
-            while (fontPx > 4f
-                   && g.MeasureString(text, font, int.MaxValue, format).Width > d - 2)
-            {
-                font.Dispose();
-                fontPx -= 0.5f;
-                font = MakeFont(fontPx);
-            }
-            using (font)
-            using (var brush = new System.Drawing.SolidBrush(GdiColor.White))
-            {
-                g.DrawString(text, font, brush,
-                    new System.Drawing.RectangleF(bx, by, d - 1f, d - 1f), format);
+                var text = number.ToString();
+                using var format = new System.Drawing.StringFormat(
+                    System.Drawing.StringFormat.GenericTypographic)
+                {
+                    Alignment = System.Drawing.StringAlignment.Center,
+                    LineAlignment = System.Drawing.StringAlignment.Center,
+                    FormatFlags = System.Drawing.StringFormatFlags.NoWrap,
+                };
+                // 폭 초과 시 축소 — 10 이상(두 자리, 색 순환 구간)에서도 원 안에 들어가게
+                var fontPx = d * 0.72f;
+                var font = MakeFont(fontPx);
+                while (fontPx > 4f
+                       && g.MeasureString(text, font, int.MaxValue, format).Width > d - 2)
+                {
+                    font.Dispose();
+                    fontPx -= 0.5f;
+                    font = MakeFont(fontPx);
+                }
+                using (font)
+                using (var brush = new System.Drawing.SolidBrush(GdiColor.White))
+                {
+                    g.DrawString(text, font, brush,
+                        new System.Drawing.RectangleF(bx, by, d - 1f, d - 1f), format);
+                }
             }
         }
         return bitmap.GetHicon();

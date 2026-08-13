@@ -28,11 +28,12 @@ internal sealed class TrayIcon : IDisposable
     private readonly WndProcDelegate _wndProc; // 델리게이트 GC 방지 — 반드시 필드로 유지
     private readonly uint _taskbarCreatedMsg;
     private readonly IntPtr _hwnd;
+    private readonly EventHandler _processExitHandler; // 창 Closed를 못 거치는 종료 경로 방어 (A54)
     private IntPtr _hIcon;
     private bool _ownsIcon;
     private string _tip = Branding.AppName;
     private bool _added;
-    private bool _disposed;
+    private volatile bool _disposed; // ProcessExit(비 UI 스레드)와 창 Closed 양쪽에서 읽힌다 (A54 — SensorTray와 동일)
 
     /// <summary>트레이 아이콘 좌클릭(또는 메뉴의 '창 활성화').</summary>
     public event Action? ActivateRequested;
@@ -64,13 +65,22 @@ internal sealed class TrayIcon : IDisposable
         (_hIcon, _ownsIcon) = LoadTrayIcon(iconPath);
         AddOrUpdate(NimAdd);
         _added = true;
+
+        // A54 감사: 아이콘 제거는 창 Closed → Dispose 하나뿐이라, 창을 닫지 않고 프로세스가
+        // 내려가는 경로(관리자 승격 재실행의 Application.Exit 등)에서 아이콘이 남을 수 있다.
+        // A18 SensorTray가 같은 이유로 이미 쓰는 방어선을 창별 아이콘에도 건다(중복 호출은 무해 — _disposed 가드).
+        _processExitHandler = (_, _) => Dispose();
+        AppDomain.CurrentDomain.ProcessExit += _processExitHandler;
     }
 
     /// <summary>
     /// 트레이 아이콘 교체 — 현재 모듈 색 아이콘 표시(v0.26.0). 로드 실패 시 기존 유지.
-    /// instanceNumber &gt; 0이면(창 2개 이상, A68) 인스턴스 색 테두리·원형 번호 배지를
-    /// 합성한 아이콘을 쓴다. 합성 핸들은 InstanceIcon의 프로세스 수명 캐시 소유
-    /// (owns=false — 여기서 파괴하지 않음). 합성 실패 시 무테두리 원본으로 폴백.
+    /// instanceNumber &gt; 0이면(창 2개 이상, A68) 인스턴스 색 테두리를 합성한 아이콘을 쓴다.
+    /// 합성 핸들은 InstanceIcon의 프로세스 수명 캐시 소유(owns=false — 여기서 파괴하지 않음).
+    /// 합성 실패 시 무테두리 원본으로 폴백.
+    /// ※ A54(v0.118.0): 원형 번호 배지는 <b>창 아이콘에만</b> 남긴다(withBadge: false).
+    ///   값 텍스트를 그리는 경로는 <see cref="SetRenderedIcon"/>이고, 이 경로는
+    ///   표시할 값이 없는 화면(설정·미지원 파일 안내)의 중립 아이콘 폴백으로만 쓴다.
     /// ※ 센서 트레이(SensorTray, A18)는 값 표시가 우선이라 인스턴스 테두리를 적용하지 않는다.
     /// </summary>
     public void SetIcon(string? iconPath, int instanceNumber = 0)
@@ -81,9 +91,30 @@ internal sealed class TrayIcon : IDisposable
         if (instanceNumber > 0 && iconPath is not null)
         {
             icon = InstanceIcon.GetComposed(iconPath, instanceNumber,
-                Math.Max(16, GetSystemMetrics(SmCxSmIcon)));
+                Math.Max(16, GetSystemMetrics(SmCxSmIcon)), withBadge: false);
         }
         if (icon == IntPtr.Zero) (icon, owns) = LoadTrayIcon(iconPath);
+        Swap(icon, owns);
+    }
+
+    /// <summary>
+    /// 값 텍스트를 그린 아이콘으로 교체한다(A54 — <see cref="TrayStatusIcon"/>이 만든 HICON).
+    /// 핸들 소유권을 이 인스턴스가 가져가며, 다음 교체·Dispose 때 DestroyIcon 한다
+    /// (창마다 곱해지는 GDI 핸들이라 캐시하지 않고 즉시 회수하는 쪽을 택했다).
+    /// </summary>
+    public void SetRenderedIcon(IntPtr icon)
+    {
+        if (_disposed || icon == IntPtr.Zero)
+        {
+            if (icon != IntPtr.Zero) _ = DestroyIcon(icon); // 이미 정리된 뒤라면 넘겨받은 핸들만 회수
+            return;
+        }
+        Swap(icon, owns: true);
+    }
+
+    /// <summary>아이콘 핸들 교체 공용부 — 알림 영역 갱신 후 이전 핸들을 소유했을 때만 파괴한다.</summary>
+    private void Swap(IntPtr icon, bool owns)
+    {
         if (icon == IntPtr.Zero) return;
         if (icon == _hIcon) return; // 캐시 재사용으로 같은 핸들이면 교체할 것 없음
 
@@ -102,10 +133,16 @@ internal sealed class TrayIcon : IDisposable
         if (_added && !_disposed) AddOrUpdate(NimModify);
     }
 
+    /// <summary>
+    /// 알림 영역에서 아이콘을 지우고 창·클래스·아이콘 핸들을 정리한다.
+    /// 창 Closed와 ProcessExit(비 UI 스레드) 양쪽에서 불릴 수 있다 — 알림 영역 제거(스레드 무관)를
+    /// 먼저 하고, 창 정리는 실패해도 무방하다(A18 SensorTray.Dispose와 같은 규칙).
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        AppDomain.CurrentDomain.ProcessExit -= _processExitHandler;
 
         if (_added)
         {
@@ -113,8 +150,15 @@ internal sealed class TrayIcon : IDisposable
             _ = Shell_NotifyIconW(NimDelete, ref data);
             _added = false;
         }
-        if (_hwnd != IntPtr.Zero) _ = DestroyWindow(_hwnd);
-        _ = UnregisterClassW(_className, GetModuleHandleW(null));
+        try
+        {
+            if (_hwnd != IntPtr.Zero) _ = DestroyWindow(_hwnd); // 생성 스레드가 아니면 실패해도 무방
+            _ = UnregisterClassW(_className, GetModuleHandleW(null));
+        }
+        catch
+        {
+            // 종료 경로 — 창·클래스 정리는 프로세스 종료가 대신한다.
+        }
         if (_ownsIcon && _hIcon != IntPtr.Zero) _ = DestroyIcon(_hIcon);
     }
 

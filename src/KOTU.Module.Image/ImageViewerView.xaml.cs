@@ -22,8 +22,30 @@ namespace KOTU.Module.Image;
 /// UI 스레드는 비트맵 표시만 한다 — 직렬이라 빠른 ←/→ 연타에도 적용 순서가 요청 순서와 같다.
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
-    IBottomBarProvider, IDriveStripHost
+    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider
 {
+    /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패 시점.</summary>
+    public event Action? TrayStatusChanged;
+
+    /// <summary>
+    /// 트레이 아이콘 내용(A54): 열림 = 확장자 · 용량, 유휴 = "IMG".
+    /// 용량은 표시 중인 파일에서 그때그때 읽는다 — 이벤트 기반 호출이라 빈도가 낮다.
+    /// </summary>
+    public TrayStatus GetTrayStatus()
+    {
+        if (_navigator?.Current is not { } path) return TrayStatus.Idle("IMG");
+        long bytes = -1;
+        try
+        {
+            bytes = new FileInfo(path).Length;
+        }
+        catch
+        {
+            // 크기를 못 읽으면 그 줄만 "—"가 된다.
+        }
+        return TrayStatus.Open(TrayFormat.Extension(path), TrayFormat.Size(bytes));
+    }
+
     /// <summary>
     /// 전체화면은 Enter/F11/더블클릭/⛶ 버튼(v0.29.0 — 동영상과 단축키 통일).
 /// 상태바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.27.0 — 동영상 v0.21.0과 같은 통합).
@@ -236,6 +258,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             ImageControl.Source = null;
             PlaceholderText.Visibility = Visibility.Visible;
             UpdateStatusBar();
+            TrayStatusChanged?.Invoke(); // A54: 볼 파일이 없어졌다 → 유휴("IMG")로
             return;
         }
 
@@ -267,6 +290,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true); // 줌 초기화(창맞춤)
             UpdateStatusBar();
             ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
+            TrayStatusChanged?.Invoke(); // A54: 트레이 = 확장자 · 용량
         }
         catch (Exception ex)
         {
@@ -276,6 +300,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             _metaText = string.Empty; // 이전 이미지 메타가 남지 않게
             MetaText.Text = string.Empty;
             ToolTipService.SetToolTip(MetaText, null);
+            TrayStatusChanged?.Invoke();
         }
     }
 
@@ -319,6 +344,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true);
         UpdateStatusBar();
         ContentOpened?.Invoke(path);
+        TrayStatusChanged?.Invoke(); // A54
     }
 
     /// <summary>

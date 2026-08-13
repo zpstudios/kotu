@@ -26,10 +26,66 @@ namespace KOTU.Module.Audio;
 /// libvlc 자체 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
 public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
-    IContentStateSource, IContentInfoProvider
+    IContentStateSource, IContentInfoProvider, ITrayStatusProvider
 {
     /// <summary>파일 재생을 시작하면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    // ---------- 트레이 아이콘 내용 (A54, v0.118.0) ----------
+
+    /// <summary>트레이 표시 값이 바뀌었다 — 재생 중에는 1초 타이머가, 그 밖에는 상태 전이가 쏜다.</summary>
+    public event Action? TrayStatusChanged;
+
+    /// <summary>이퀄라이저 막대 개수(16px 아래 줄에 들어가는 한계).</summary>
+    private const int EqualizerBars = 4;
+
+    /// <summary>재생 중일 때만 도는 트레이 갱신 타이머(1초) — 그 이상 자주 하면 아이콘 재합성이 낭비다.</summary>
+    private DispatcherTimer? _trayTimer;
+
+    /// <summary>이퀄라이저 의사 패턴의 위상. 1초마다 1 증가한다.</summary>
+    private int _trayPhase;
+
+    /// <summary>
+    /// 트레이 아이콘 내용(A54): 열림 = 재생 위치 · 이퀄라이저 막대, 유휴 = "AUD".
+    /// <b>이퀄라이저는 실제 주파수 분석이 아니다</b>(구현 시 결정) — libvlc 오디오 콜백을 붙이는
+    /// 비용이 16px 장식에 비해 과해서, 재생 중임을 알리는 <b>의사 패턴</b>(위상 기반 결정론적 값)을 그린다.
+    /// 일시정지·정지면 막대가 낮게 고정되고 타이머도 멈춘다.
+    /// </summary>
+    public TrayStatus GetTrayStatus()
+    {
+        if (_filePath is null) return TrayStatus.Idle("AUD");
+
+        var playing = _player is { IsPlaying: true };
+        var position = _player?.Time ?? 0;
+        var bars = new double[EqualizerBars];
+        for (var i = 0; i < bars.Length; i++)
+        {
+            bars[i] = playing
+                ? 0.35 + 0.6 * Math.Abs(Math.Sin(_trayPhase * 0.9 + i * 1.7))
+                : 0.15; // 멈춘 상태 = 낮게 고정
+        }
+        return TrayStatus.OpenWithBars(TimeText.Format(position), bars);
+    }
+
+    /// <summary>재생 상태에 맞춰 1초 타이머를 켜고 끈다(UI 스레드에서만 호출).</summary>
+    private void SetTrayTimer(bool running)
+    {
+        if (_tornDown || !running)
+        {
+            _trayTimer?.Stop();
+            return;
+        }
+        if (_trayTimer is null)
+        {
+            _trayTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _trayTimer.Tick += (_, _) =>
+            {
+                _trayPhase++;
+                TrayStatusChanged?.Invoke();
+            };
+        }
+        _trayTimer.Start();
+    }
 
     /// <summary>Ctrl 정보 오버레이용 미디어 정보: 파일·시간·오디오 트랙.</summary>
     public Task<string?> GetContentInfoAsync()
@@ -259,6 +315,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         TitleOverlay.Visibility = Visibility.Visible;
         TitleText.Text = Path.GetFileNameWithoutExtension(_filePath);
         ContentOpened?.Invoke(_filePath); // 셸 동기화
+        TrayStatusChanged?.Invoke();      // A54: 유휴("AUD") → 열림(시간 · 이퀄라이저)
     }
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
@@ -304,6 +361,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _tornDown = true;
+        SetTrayTimer(false); // A54: 뷰가 내려가면 1초 타이머도 반드시 멈춘다
         var player = _player;
         var libVlc = _libVlc;
         _player = null;
@@ -409,10 +467,18 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         {
             player.SetRate(Speeds[i]);
         }
+
+        SetTrayTimer(true); // A54: 재생 중에만 1초마다 트레이(시간·이퀄라이저)를 갱신한다
+        TrayStatusChanged?.Invoke();
     });
 
     private void OnPlayerPaused(object? sender, EventArgs e) =>
-        Dispatch(() => PlayButton.Content = "▶");
+        Dispatch(() =>
+        {
+            PlayButton.Content = "▶";
+            SetTrayTimer(false); // A54: 멈추면 타이머도 멈춘다 — 막대는 낮게 고정
+            TrayStatusChanged?.Invoke();
+        });
 
     private void OnPlayerEndReached(object? sender, EventArgs e)
     {
@@ -427,6 +493,8 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             _suppressSeekEvent = true;
             SeekSlider.Value = SeekSlider.Maximum;
             _suppressSeekEvent = false;
+            SetTrayTimer(false); // A54
+            TrayStatusChanged?.Invoke();
         });
     }
 

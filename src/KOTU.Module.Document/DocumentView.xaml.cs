@@ -21,10 +21,35 @@ namespace KOTU.Module.Document;
 /// 파일 I/O는 뷰 전용 워커(A42)에서 수행하고 UI 스레드는 결과 반영만 한다.
 /// </summary>
 public sealed partial class DocumentView : UserControl,
-    IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard
+    IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 텍스트·PDF 열기와 닫기 시점.</summary>
+    public event Action? TrayStatusChanged;
+
+    /// <summary>
+    /// 지금 보고 있는 파일(트레이 표기용, A54). 편집 대상인 <c>_path</c>와 별개다 —
+    /// PDF는 편집하지 않아 <c>_path</c>가 null이지만 트레이에는 열린 파일로 보여야 한다.
+    /// </summary>
+    private string? _shownPath;
+
+    /// <summary>트레이 아이콘 내용(A54): 열림 = 확장자 · 용량, 유휴 = "DOC".</summary>
+    public TrayStatus GetTrayStatus()
+    {
+        if (_shownPath is not { } path) return TrayStatus.Idle("DOC");
+        long bytes = -1;
+        try
+        {
+            bytes = new FileInfo(path).Length;
+        }
+        catch
+        {
+            // 크기를 못 읽으면 그 줄만 "—"가 된다.
+        }
+        return TrayStatus.Open(TrayFormat.Extension(path), TrayFormat.Size(bytes));
+    }
 
     /// <summary>미저장 상태 변화(A37) — 셸이 창 제목 ● 표시에 쓴다.</summary>
     public event Action<bool>? UnsavedChanged;
@@ -143,7 +168,9 @@ public sealed partial class DocumentView : UserControl,
         EditorBox.Visibility = Visibility.Visible;
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
+        _shownPath = path;
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
+        TrayStatusChanged?.Invoke(); // A54: 트레이 = 확장자 · 용량
     }
 
     // ---------- PDF (A16) ----------
@@ -190,10 +217,14 @@ public sealed partial class DocumentView : UserControl,
             HidePdf();
             FileNameText.Text = "No file open";
             PlaceholderText.Visibility = Visibility.Visible;
+            _shownPath = null;
+            TrayStatusChanged?.Invoke(); // A54: 열기 실패 → 유휴("DOC")
             return;
         }
 
+        _shownPath = path;
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
+        TrayStatusChanged?.Invoke(); // A54: 트레이 = 확장자 · 용량
     }
 
     /// <summary>PDF 패널을 내린다(텍스트로 전환·열기 실패 시). 비트맵·문서 참조 해제.</summary>

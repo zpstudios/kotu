@@ -1034,6 +1034,14 @@ public sealed partial class MainWindow : Window
                 _titleDirtyMark = dirty;
                 ApplyTitle();
             });
+        // 트레이 아이콘 내용(A54): 모듈은 값만 내주고 아이콘 합성은 셸이 한다.
+        // UI 스레드 보장이 없는 계약이라 디스패치하고, 뷰가 이미 교체됐으면 무시한다(A37과 같은 가드).
+        if (view is ITrayStatusProvider trayStatus)
+            trayStatus.TrayStatusChanged += () => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                UpdateTrayIcon();
+            });
         SetContentState(module, context.FilePath);
     }
 
@@ -1095,6 +1103,7 @@ public sealed partial class MainWindow : Window
         // 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 — 기존 "고정은 콘텐츠를 넘어 유지" 규칙.
         ResetOverlayInput();
         ApplyOverlayStates();
+        UpdateTrayIcon(); // A54: 모듈 전환·설정 전환·A59 안에서의 파일 교체까지 이 한 지점으로 모인다
     }
 
     /// <summary>현재 파일의 폴더를 모듈별 설정("lastFolder.{id}")에 기억한다 (v0.55.0).</summary>
@@ -1116,6 +1125,7 @@ public sealed partial class MainWindow : Window
         UpdateEmptyExplorer();
         UpdateDriveStrip();   // A22: 뷰가 파일을 열었다 → 드라이브 줄을 숨긴다
         ApplyOverlayStates(); // 폴더·정보가 바뀌었을 수 있다 — 떠 있는 오버레이·도크 갱신
+        UpdateTrayIcon();     // A54: 유휴(3자) → 열림(2줄) 전환도 이 경로로 걸린다
     }
 
     // ---------- 하단 바 드라이브 줄 (A22, v0.108.0) ----------
@@ -1530,19 +1540,76 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 창·트레이 아이콘을 현재 모듈 색 + 인스턴스 번호로 다시 지정한다(A68).
-    /// 창이 2개 이상이면(_instanceNumber &gt; 0) 인스턴스 색 테두리와 원형 번호 배지를
-    /// 합성한 아이콘, 하나뿐이면 무테두리 원본 — 배지·제목 번호 숨김 규칙과 일관.
+    /// 창이 2개 이상이면(_instanceNumber &gt; 0) 창 아이콘은 인스턴스 색 테두리와 원형 번호 배지를
+    /// 합성한 것, 하나뿐이면 무테두리 원본 — 배지·제목 번호 숨김 규칙과 일관.
     /// 모듈 전환(ApplyWindowIcon)과 번호 변경(SetInstanceNumber) 양쪽에서 불린다.
     /// AppWindow.SetIcon은 원본 경로 유지 — 실제 표시는 직후 WM_SETICON(WindowIcon)이 덮는다.
+    /// ※ A54(v0.118.0): 트레이 아이콘은 더 이상 모듈 .ico가 아니라 값 텍스트를 그린다
+    ///   (<see cref="UpdateTrayIcon"/>). 인스턴스 표식은 테두리만 남고 번호 배지는 창 아이콘 전용.
     /// </summary>
     private void RefreshShellIcons()
     {
-        if (_moduleIconPath is not { } path || !File.Exists(path)) return;
-
-        AppWindow.SetIcon(path);
-        WindowIcon.Apply(this, path, _instanceNumber);
-        _tray.SetIcon(path, _instanceNumber);
+        if (_moduleIconPath is { } path && File.Exists(path))
+        {
+            AppWindow.SetIcon(path);
+            WindowIcon.Apply(this, path, _instanceNumber);
+        }
+        UpdateTrayIcon();
     }
+
+    // ---------- 트레이 아이콘 내용 (A54, v0.118.0) ----------
+
+    /// <summary>마지막으로 그린 트레이 아이콘의 키 — 같으면 GDI 재합성을 통째로 건너뛴다(A18 방식).</summary>
+    private string _trayIconKey = string.Empty;
+
+    /// <summary>
+    /// 모듈이 내준 <see cref="TrayStatus"/>를 16px 아이콘으로 합성해 트레이에 올린다(A54).
+    /// 값을 내주지 않는 화면(설정·미지원 파일 안내)은 모듈 ID → 3자 표기 표로 유휴 아이콘을 그리고,
+    /// 그 표에도 없으면(설정·빈 셸) 중립 모듈 .ico로 폴백한다 — 인스턴스당 아이콘 1개는 언제나 유지된다.
+    /// 호출 시점: 모듈 전환·설정 전환·파일 열기(IContentStateSource)·모듈의 TrayStatusChanged·
+    /// 인스턴스 번호 변경. 값이 그대로면 아무 일도 하지 않는다.
+    /// </summary>
+    private void UpdateTrayIcon()
+    {
+        var status = (ModuleHost.Content as ITrayStatusProvider)?.GetTrayStatus()
+            ?? (IdleTrayLabel(CurrentModuleId) is { Length: > 0 } label ? TrayStatus.Idle(label) : null);
+
+        var key = TrayStatusIcon.ComposeKey(status, CurrentModuleId, _instanceNumber);
+        if (key == _trayIconKey) return;
+        _trayIconKey = key;
+
+        if (status is null)
+        {
+            _tray.SetIcon(_moduleIconPath, _instanceNumber);
+            return;
+        }
+
+        var icon = TrayStatusIcon.Compose(status, Branding.ModuleAccent(CurrentModuleId), _instanceNumber);
+        if (icon == IntPtr.Zero)
+        {
+            _trayIconKey = string.Empty; // 합성 실패(GDI 고갈 등) — 다음 갱신 때 다시 시도
+            return;
+        }
+        _tray.SetRenderedIcon(icon);
+    }
+
+    /// <summary>
+    /// 콘텐츠를 안 열고 있을 때의 모듈 3자 표기(A54 — 사용자 확정: IMG/VID/AUD/DOC/ARC/ALL).
+    /// 정보(하드웨어) 모듈은 열 파일이 없어 값이 상수라 계약 대신 이 표가 담당한다 — 표기는 INF
+    /// (BrandName "KOTU-info"와 정합. 2자 "HW"는 3자 규칙에서 벗어나고 "HWM"은 조어라 채택 안 함).
+    /// 표에 없는 화면(설정·미지원 파일 안내)은 빈 문자열 → 중립 모듈 아이콘 폴백.
+    /// </summary>
+    private static string IdleTrayLabel(string? moduleId) => moduleId switch
+    {
+        "image" => "IMG",
+        "video" => "VID",
+        "audio" => "AUD",
+        "document" => "DOC",
+        "archive" => "ARC",
+        "hardware" => "INF",
+        KOTU.Module.AllReadable.AllReadableModule.ModuleId => "ALL",
+        _ => string.Empty,
+    };
 
     // ---------- 최소화 = 트레이로 숨김 (A69) ----------
 

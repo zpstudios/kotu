@@ -26,10 +26,36 @@ namespace KOTU.Module.Video;
 /// 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
 public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
-    IContentStateSource, IContentInfoProvider
+    IContentStateSource, IContentInfoProvider, ITrayStatusProvider
 {
     /// <summary>파일 재생을 시작하면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 재생 시작·길이 확정·트랙 파싱 시점.</summary>
+    public event Action? TrayStatusChanged;
+
+    /// <summary>
+    /// 트레이 아이콘 내용(A54): 열림 = 해상도("1080p") · 비트레이트("4.2M"), 유휴 = "VID".
+    /// 비트레이트는 libvlc 통계 대신 <b>파일 크기 ÷ 재생 길이</b>의 평균값이다 —
+    /// 16px 표기에는 순간값보다 안정적이고, 이미 쓰는 값(_durationMs·FileInfo)만으로 구해진다(구현 시 결정).
+    /// 아직 파싱 전이라 값이 없으면 그 줄만 "—"가 된다.
+    /// </summary>
+    public TrayStatus GetTrayStatus()
+    {
+        if (_filePath is not { } path) return TrayStatus.Idle("VID");
+
+        var (_, height) = VideoPixelSize();
+        long bytes = -1;
+        try
+        {
+            bytes = new FileInfo(path).Length;
+        }
+        catch
+        {
+            // 크기를 못 읽으면 비트레이트 줄만 "—"가 된다.
+        }
+        return TrayStatus.Open(TrayFormat.Resolution((int)height), TrayFormat.BitrateOf(bytes, _durationMs));
+    }
 
     /// <summary>Ctrl 정보 오버레이(v0.25.0)용 미디어 정보: 파일·시간·비디오/오디오 트랙.</summary>
     public Task<string?> GetContentInfoAsync()
@@ -299,6 +325,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         p.Play(media);
         PlaceholderText.Visibility = Visibility.Collapsed;
         ContentOpened?.Invoke(_filePath); // 셸 동기화 (v0.25.0)
+        TrayStatusChanged?.Invoke();      // A54: 유휴("VID") → 열림. 값은 파싱되는 대로 다시 올라온다
     }
 
     /// <summary>
@@ -469,6 +496,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     {
         _durationMs = e.Length;
         Dispatch(() => DurationText.Text = TimeText.Format(e.Length));
+        TrayStatusChanged?.Invoke(); // A54: 길이가 정해져야 평균 비트레이트가 나온다
     }
 
     private void OnPlayerPlaying(object? sender, EventArgs e) => Dispatch(() =>
@@ -481,6 +509,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             _pendingStartOverlay = false;
             ShowStartOverlay();
         }
+        TrayStatusChanged?.Invoke(); // A54: 이 시점에 트랙(해상도)이 파싱돼 있다 — A12 오버레이와 같은 근거
 
         // 재생이 실제로 시작된 뒤에만 시킹·자막 선택이 적용된다.
         if (_pendingResumeMs > 0 && _player is { } p)

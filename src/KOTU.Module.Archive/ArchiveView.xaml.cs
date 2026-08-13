@@ -37,10 +37,39 @@ public sealed class ArchiveRow
 /// 창이 여러 개면 워커도 창마다 하나라 서로의 압축/해제를 기다리지 않는다.
 /// </summary>
 public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.IContentStateSource,
-    IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost
+    IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider
 {
     /// <summary>아카이브를 열면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 열기·작업 시작/진행/종료 시점.</summary>
+    public event Action? TrayStatusChanged;
+
+    /// <summary>진행 중인 작업의 진행률(0~1) — 트레이 표기용 사본(A54).</summary>
+    private double _operationProgress;
+
+    /// <summary>
+    /// 트레이 아이콘 내용(A54): 열림 = 압축 종류 · 압축률(0.00~1.00), 유휴 = "ARC".
+    /// <b>압축·해제 작업 중에는 아래 줄이 진행률("45%")</b>로 바뀐다(사용자 사양).
+    /// 압축률 = 압축 파일 크기 ÷ 내부 항목 크기 합(ArchiveEntryTree가 이미 계산해 둔 루트 Size).
+    /// </summary>
+    public TrayStatus GetTrayStatus()
+    {
+        var kind = _archivePath is { } current ? TrayFormat.Extension(current) : "ARC";
+        if (_busy) return TrayStatus.Open(kind, TrayFormat.Percent(_operationProgress));
+        if (_archivePath is not { } path || _root is null) return TrayStatus.Idle("ARC");
+
+        long packed = -1;
+        try
+        {
+            packed = new FileInfo(path).Length;
+        }
+        catch
+        {
+            // 크기를 못 읽으면 압축률 줄만 "—"가 된다.
+        }
+        return TrayStatus.Open(kind, TrayFormat.Ratio(packed, _root.Size));
+    }
 
     /// <summary>
     /// 하단 상태바(열기·상태·진행·전체화면)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다
@@ -171,6 +200,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
                 RefreshRows();
                 StatusText.Text = $"{Path.GetFileName(path)} · {ArchiveEntryTree.FormatSize(_root.Size)} total";
                 ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0) — A22: 셸이 드라이브 줄을 내린다
+                TrayStatusChanged?.Invoke(); // A54: 트레이 = 압축 종류 · 압축률
                 return;
             }
             catch (ArchivePasswordException)
@@ -553,7 +583,13 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         _cts = cts;
         var dispatcher = DispatcherQueue;
         var progress = new DelegateProgress(v =>
-            dispatcher.TryEnqueue(() => OperationProgress.Value = Math.Clamp(v, 0, 1) * 100));
+            dispatcher.TryEnqueue(() =>
+            {
+                _operationProgress = Math.Clamp(v, 0, 1);
+                OperationProgress.Value = _operationProgress * 100;
+                // A54: 트레이는 정수 퍼센트만 보므로 셸의 키 비교가 재합성을 알아서 걸러 준다.
+                TrayStatusChanged?.Invoke();
+            }));
 
         SetBusy(true, label);
         try
@@ -581,10 +617,12 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         if (busy)
         {
+            _operationProgress = 0;
             OperationProgress.Value = 0;
             if (label is not null) StatusText.Text = label;
         }
         UpdateToolbarState();
+        TrayStatusChanged?.Invoke(); // A54: 진행률 표기 ↔ 압축률 표기 전환
     }
 
     private void UpdateToolbarState()

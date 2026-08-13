@@ -21,6 +21,7 @@ namespace KOTU.Module.AllReadable;
 ///  · <see cref="IContentInfoProvider"/> — 우측 정보 오버레이가 자식의 상세 정보를 그대로 받는다.
 ///  · <see cref="ICloseGuard"/> — 문서 자식의 미저장 가드(A37)가 셸까지 이어진다.
 ///  · <see cref="IBottomBarProvider"/>·<see cref="IDriveStripHost"/> — 하단 바 한 줄과 드라이브 줄(A22).
+///  · <see cref="ITrayStatusProvider"/> — 트레이 아이콘 표시 내용(A54)도 자식 것을 그대로 중계.
 ///  · <see cref="IFileOpenTarget"/> — 셸이 "이 파일 네가 열래?"를 먼저 물어보는 지점(A24 유지).
 ///
 /// <b>워커 수명(A42)</b>: 자식 뷰의 워커·재생·구독은 자식이 <c>Unloaded</c>에서 스스로 정리한다.
@@ -29,7 +30,7 @@ namespace KOTU.Module.AllReadable;
 /// 사라지지 않는다) 그다음 센터를 비운다. 이 뷰가 내려갈 때(Unloaded)도 같은 정리를 한 번 더 한다.
 /// </summary>
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
-    IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget
+    IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -47,6 +48,31 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>자식(문서 편집)의 미저장 상태 변화를 셸에 중계한다 — 창 제목 ● 표시(A37).</summary>
     public event Action<bool>? UnsavedChanged;
+
+    /// <summary>자식의 트레이 표시 값 변화를 그대로 중계한다(A54). 자식 교체 자체도 이 이벤트를 쏜다.</summary>
+    public event Action? TrayStatusChanged;
+
+    /// <summary>
+    /// 트레이 아이콘 내용(A54): <b>지금 자식의 것을 그대로</b> 쓴다 — 자식이 영상이면 해상도·비트레이트,
+    /// 사진이면 확장자·용량이 그대로 올라간다. 자식이 없으면 유휴 "ALL".
+    /// 자식이 계약을 구현하지 않는 경우(방어)는 파일 기본 표기(확장자 · 용량)로 대신한다.
+    /// </summary>
+    public TrayStatus GetTrayStatus()
+    {
+        if (_childView is ITrayStatusProvider provider) return provider.GetTrayStatus();
+        if (_filePath is not { } path) return TrayStatus.Idle("ALL");
+
+        long bytes = -1;
+        try
+        {
+            bytes = new FileInfo(path).Length;
+        }
+        catch
+        {
+            // 크기를 못 읽으면 그 줄만 "—"가 된다.
+        }
+        return TrayStatus.Open(TrayFormat.Extension(path), TrayFormat.Size(bytes));
+    }
 
     public AllReadableView(OpenContext context, IReadOnlyList<IModule> children)
     {
@@ -98,7 +124,9 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         ChildBarHost.Content = (view as IBottomBarProvider)?.TakeBottomBar() as UIElement;
         if (view is IContentStateSource source) source.ContentOpened += OnChildContentOpened;
         if (view is ICloseGuard guard) guard.UnsavedChanged += OnChildUnsavedChanged;
+        if (view is ITrayStatusProvider tray) tray.TrayStatusChanged += OnChildTrayStatusChanged;
         UpdateBars();
+        TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
     }
 
     /// <summary>
@@ -111,6 +139,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     {
         if (_childView is IContentStateSource source) source.ContentOpened -= OnChildContentOpened;
         if (_childView is ICloseGuard guard) guard.UnsavedChanged -= OnChildUnsavedChanged;
+        if (_childView is ITrayStatusProvider tray) tray.TrayStatusChanged -= OnChildTrayStatusChanged;
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
@@ -122,6 +151,9 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             UnsavedChanged?.Invoke(false);
         }
     }
+
+    /// <summary>자식의 트레이 값 변화를 그대로 셸로 올린다(A54 — 중계만, 판단은 자식이).</summary>
+    private void OnChildTrayStatusChanged() => TrayStatusChanged?.Invoke();
 
     /// <summary>자식이 파일을 열었다(첫 로드·자식 내부 탐색). 셸에 중계해 오버레이·탐색기를 맞춘다.</summary>
     private void OnChildContentOpened(string path)
