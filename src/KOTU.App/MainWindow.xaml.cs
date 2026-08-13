@@ -618,6 +618,14 @@ public sealed partial class MainWindow : Window
     {
         StartMenuPanel.Children.Clear();
 
+        // A79 ③: 워드마크는 메뉴의 맨 위 — 광고 카드 **위**다. 아래에 두면 "광고에 딸린 문구"로
+        // 보이고, 위에 두면 메뉴 머리글이 된다. 꺼져 있으면 요소 자체를 만들지 않는다(빈 자리 없음).
+        if (BrandAssets.CreateWordmark(32) is { } wordmark)
+        {
+            wordmark.Margin = new Thickness(6, 2, 6, 6);
+            StartMenuPanel.Children.Add(wordmark);
+        }
+
         // 최상단: 스폰서(광고) 자리 — 지금은 MSI 로고 플레이스홀더, 파일 교체만으로 변경 가능
         StartMenuPanel.Children.Add(BuildSponsorCard());
         StartMenuPanel.Children.Add(Divider()); // 그룹 경계는 구분선으로 명확히 (v0.26.0 사용자 요청)
@@ -1515,6 +1523,13 @@ public sealed partial class MainWindow : Window
     /// <summary>현재 모듈 색 .ico 경로 — 인스턴스 번호 변경 시 재합성 기준(A68).</summary>
     private string? _moduleIconPath;
 
+    /// <summary>
+    /// 지금 그려진 아이콘의 모듈 색 — 중립 아이콘이면 null (A79 브랜드 표식 ①/② 판단).
+    /// 모듈 ID가 아니라 <b>실제로 고른 .ico</b>를 기준으로 정한다: 모듈 .ico가 없어 중립으로
+    /// 폴백했으면 중립 표식이 맞기 때문.
+    /// </summary>
+    private Windows.UI.Color? _moduleIconAccent;
+
     /// <summary>타이틀바·작업표시줄·트레이 아이콘을 현재 모듈 색 KOTU 아이콘으로 교체(v0.26.0).</summary>
     private void ApplyWindowIcon(string? moduleId)
     {
@@ -1535,6 +1550,7 @@ public sealed partial class MainWindow : Window
         if (!File.Exists(path)) return;
 
         _moduleIconPath = path;
+        _moduleIconAccent = path == IconPath ? null : Branding.ModuleAccent(moduleId); // A79
         RefreshShellIcons();
     }
 
@@ -1552,7 +1568,7 @@ public sealed partial class MainWindow : Window
         if (_moduleIconPath is { } path && File.Exists(path))
         {
             AppWindow.SetIcon(path);
-            WindowIcon.Apply(this, path, _instanceNumber);
+            WindowIcon.Apply(this, path, _moduleIconAccent, _instanceNumber);
         }
         UpdateTrayIcon();
     }
@@ -1580,7 +1596,7 @@ public sealed partial class MainWindow : Window
 
         if (status is null)
         {
-            _tray.SetIcon(_moduleIconPath, _instanceNumber);
+            _tray.SetIcon(_moduleIconPath, _moduleIconAccent, _instanceNumber);
             return;
         }
 

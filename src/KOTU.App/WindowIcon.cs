@@ -24,14 +24,19 @@ internal static class WindowIcon
     /// instanceNumber &gt; 0이면(창 2개 이상, A68) 인스턴스 색 테두리·원형 번호 배지를
     /// 합성한 아이콘(InstanceIcon — 역시 프로세스 수명 캐시)을 대신 지정한다.
     /// 합성 실패 시 무테두리 원본으로 폴백.
+    /// A79(v0.119.0): 창이 하나뿐이어도 브랜드 표식(BrandIcons)이 켜져 있으면 합성본을 쓴다.
+    /// 표식이 꺼져 있으면 GetBranded가 0을 돌려주므로 지금까지처럼 파일을 그대로 로드한다.
     /// </summary>
-    public static void Apply(Microsoft.UI.Xaml.Window window, string icoPath, int instanceNumber = 0)
+    /// <param name="accent">현재 아이콘의 모듈 색(중립 아이콘이면 null) — A79 표식 판단용.</param>
+    public static void Apply(Microsoft.UI.Xaml.Window window, string icoPath,
+        Windows.UI.Color? accent = null, int instanceNumber = 0)
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
         var icons = instanceNumber > 0
-            ? (Small: InstanceIcon.GetComposed(icoPath, instanceNumber, 16),
-               Big: InstanceIcon.GetComposed(icoPath, instanceNumber, 32))
-            : LoadPlain(icoPath);
+            ? (Small: InstanceIcon.GetComposed(icoPath, instanceNumber, 16, accent),
+               Big: InstanceIcon.GetComposed(icoPath, instanceNumber, 32, accent))
+            : (Small: BrandIcons.GetBranded(icoPath, 16, accent),
+               Big: BrandIcons.GetBranded(icoPath, 32, accent));
         if (icons.Small == IntPtr.Zero || icons.Big == IntPtr.Zero)
             icons = LoadPlain(icoPath); // 한쪽만 성공해도 혼합 표시가 되지 않게 통째로 폴백
         if (icons.Small != IntPtr.Zero) SendMessageW(hwnd, WmSetIcon, (IntPtr)IconSmall, icons.Small);

@@ -105,6 +105,13 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
     private void Build(FileTypeRouter router)
     {
+        // A79 ③(v0.119.0): 설정 화면 상단 워드마크. 꺼져 있으면 요소를 만들지 않는다 — 빈 자리를 남기지 말 것.
+        if (BrandAssets.CreateWordmark(40) is { } wordmark)
+        {
+            wordmark.HorizontalAlignment = HorizontalAlignment.Left;
+            Root.Children.Add(wordmark);
+        }
+
         BuildDisplaySection();
         BuildWindowsSection(); // 창 재사용 규칙 (A24)
 
@@ -147,14 +154,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             // A77(v0.106.0): 토글 행 우측에 진행 링 + 진행/결과 텍스트.
             // StackPanel이 아니라 Grid를 쓰는 이유 — 헤더 문구가 길어도(확장자 나열) 링·텍스트가
             // MaxWidth 680 밖으로 밀려나 잘리지 않게 오른쪽에 고정하기 위함.
-            var progressRing = new ProgressRing
-            {
-                Width = 16,
-                Height = 16,
-                IsActive = false,
-                Visibility = Visibility.Collapsed,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+            // A79 ⑤(v0.119.0): 앱에서 가장 오래 도는 인디케이터라 발바닥 스피너를 여기 하나에만 붙였다.
+            // 브랜드 레벨이 낮으면 지금까지의 ProgressRing 그대로다.
+            var busySpinner = BrandSpinner.Create(16);
+            busySpinner.Element.Visibility = Visibility.Collapsed;
             var progressText = new TextBlock
             {
                 FontSize = 12,
@@ -167,10 +170,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Grid.SetColumn(toggle, 0);
-            Grid.SetColumn(progressRing, 1);
+            Grid.SetColumn(busySpinner.Element, 1);
             Grid.SetColumn(progressText, 2);
             toggleRow.Children.Add(toggle);
-            toggleRow.Children.Add(progressRing);
+            toggleRow.Children.Add(busySpinner.Element);
             toggleRow.Children.Add(progressText);
             Root.Children.Add(toggleRow);
 
@@ -245,8 +248,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 // 작업 시작: 이 모듈의 토글만 잠그고 진행 링을 켠다(다른 모듈 토글은 그대로).
                 busy = true;
                 toggle.IsEnabled = false;
-                progressRing.Visibility = Visibility.Visible;
-                progressRing.IsActive = true;
+                busySpinner.Element.Visibility = Visibility.Visible;
+                busySpinner.SetActive(true);
                 progressText.Text = $"{(turnedOn ? AssociationProgress.Registering : AssociationProgress.Unregistering)}... (0/{total})";
                 _status.Text = string.Empty;
 
@@ -270,8 +273,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 // 여기부터는 UI 스레드. 화면을 떠났어도 잠금은 풀어 둔다(다시 로드되면 그대로 쓰인다).
                 busy = false;
                 toggle.IsEnabled = true;
-                progressRing.IsActive = false;
-                progressRing.Visibility = Visibility.Collapsed;
+                busySpinner.SetActive(false);
+                busySpinner.Element.Visibility = Visibility.Collapsed;
                 if (!_uiAlive) return;
 
                 if (outcome.Defaults >= 0) ShowDefaults(outcome.Defaults);

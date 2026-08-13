@@ -353,6 +353,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 <header class="nav" id="nav">
   <div class="wrap nav-in">
     <a class="brand" href="#home">
+      <!-- A79 ⑥(v0.119.0): 브랜드 레벨 3의 로고는 assets/logo-mark-brand.png다.
+           site/는 정적 페이지라 앱의 branding.assetLevel 값이 닿지 않는다 —
+           바꿀 땐 아래 img의 src를 그 파일로 교체하는 한 줄이 전부다(푸터에도 같은 줄이 있다).
+           기본은 현행 유지. -->
       <img src="assets/logo-mark.svg" alt="" width="64" height="64">
       <span class="brand-txt">
         <span class="brand-name">KOTU</span>
@@ -703,6 +707,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
   <div class="wrap">
     <div class="foot">
       <a class="brand" href="#home">
+        <!-- A79 ⑥: 레벨 3 로고로 바꾸려면 src를 assets/logo-mark-brand.png로 (상단 nav와 함께) -->
         <img src="assets/logo-mark.svg" alt="" width="64" height="64" loading="lazy">
         <span class="brand-txt">
           <span class="brand-name" style="font-size:22px">KOTU</span>

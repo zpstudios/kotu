@@ -62,7 +62,20 @@ internal sealed class TrayIcon : IDisposable
         _hwnd = CreateWindowExW(0, _className, string.Empty, WsPopup,
             0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
 
-        (_hIcon, _ownsIcon) = LoadTrayIcon(iconPath);
+        // A79: 첫 아이콘부터 브랜드 표식을 반영한다 — 생성자에 오는 것은 언제나 중립 아이콘(①).
+        // 표식이 꺼져 있으면 0이 와서 지금까지처럼 파일을 그대로 로드한다.
+        var branded = iconPath is null
+            ? IntPtr.Zero
+            : BrandIcons.GetBranded(iconPath, Math.Max(16, GetSystemMetrics(SmCxSmIcon)), null);
+        if (branded != IntPtr.Zero)
+        {
+            _hIcon = branded;   // 프로세스 수명 캐시 소유 — 여기서 파괴하지 않는다
+            _ownsIcon = false;
+        }
+        else
+        {
+            (_hIcon, _ownsIcon) = LoadTrayIcon(iconPath);
+        }
         AddOrUpdate(NimAdd);
         _added = true;
 
@@ -82,16 +95,22 @@ internal sealed class TrayIcon : IDisposable
     ///   값 텍스트를 그리는 경로는 <see cref="SetRenderedIcon"/>이고, 이 경로는
     ///   표시할 값이 없는 화면(설정·미지원 파일 안내)의 중립 아이콘 폴백으로만 쓴다.
     /// ※ 센서 트레이(SensorTray, A18)는 값 표시가 우선이라 인스턴스 테두리를 적용하지 않는다.
+    /// ※ A79(v0.119.0): 브랜드 표식(BrandIcons)이 켜져 있으면 창이 하나뿐이어도 합성본을 쓴다.
+    ///   값 텍스트를 그리는 <see cref="SetRenderedIcon"/> 경로는 건드리지 않는다 —
+    ///   ①(중립 발바닥)이 A54의 트레이 글자를 덮으면 안 되기 때문.
     /// </summary>
-    public void SetIcon(string? iconPath, int instanceNumber = 0)
+    /// <param name="accent">현재 아이콘의 모듈 색(중립 아이콘이면 null) — A79 표식 판단용.</param>
+    public void SetIcon(string? iconPath, Windows.UI.Color? accent = null, int instanceNumber = 0)
     {
         if (_disposed) return;
         var icon = IntPtr.Zero;
         var owns = false;
-        if (instanceNumber > 0 && iconPath is not null)
+        var size = Math.Max(16, GetSystemMetrics(SmCxSmIcon));
+        if (iconPath is not null)
         {
-            icon = InstanceIcon.GetComposed(iconPath, instanceNumber,
-                Math.Max(16, GetSystemMetrics(SmCxSmIcon)), withBadge: false);
+            icon = instanceNumber > 0
+                ? InstanceIcon.GetComposed(iconPath, instanceNumber, size, accent, withBadge: false)
+                : BrandIcons.GetBranded(iconPath, size, accent);
         }
         if (icon == IntPtr.Zero) (icon, owns) = LoadTrayIcon(iconPath);
         Swap(icon, owns);

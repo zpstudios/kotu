@@ -58,20 +58,25 @@ internal static class InstanceIcon
     /// 실패(파일 없음·GDI 오류)하면 IntPtr.Zero — 호출자는 무테두리 아이콘으로 폴백할 것.
     /// UI 스레드 전용(캐시가 잠금 없음 — 호출 경로가 전부 UI 스레드라 충분).
     /// </summary>
+    /// <param name="accent">
+    /// 아이콘의 모듈 색(중립 아이콘이면 null). A79의 브랜드 표식이 켜져 있을 때
+    /// 바탕을 어떻게 그릴지 정하는 데만 쓴다 — 레벨 0에서는 아무 영향이 없다.
+    /// </param>
     /// <param name="withBadge">
     /// 우하단 원형 번호 배지 표시 여부. 창 아이콘은 true(A68), 트레이 아이콘은 false(A54 — 값 텍스트가 있다).
     /// </param>
-    public static IntPtr GetComposed(string icoPath, int number, int size, bool withBadge = true)
+    public static IntPtr GetComposed(string icoPath, int number, int size,
+        Windows.UI.Color? accent, bool withBadge = true)
     {
         if (number <= 0 || size < 8 || !File.Exists(icoPath)) return IntPtr.Zero;
 
-        var key = $"{icoPath}|{number}|{size}|{withBadge}";
+        var key = $"{icoPath}|{number}|{size}|{withBadge}|{accent?.ToString() ?? "neutral"}";
         if (s_cache.TryGetValue(key, out var cached)) return cached;
 
         IntPtr icon;
         try
         {
-            icon = Compose(icoPath, number, size, withBadge);
+            icon = Compose(icoPath, number, size, accent, withBadge);
         }
         catch
         {
@@ -81,7 +86,8 @@ internal static class InstanceIcon
         return icon;
     }
 
-    private static IntPtr Compose(string icoPath, int number, int size, bool withBadge)
+    private static IntPtr Compose(string icoPath, int number, int size,
+        Windows.UI.Color? accent, bool withBadge)
     {
         using var bitmap = new System.Drawing.Bitmap(size, size,
             System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -91,9 +97,9 @@ internal static class InstanceIcon
             // ClearType은 배경 없는 32bpp에 알파를 망가뜨린다 — 회색조 AA (SensorTray와 동일)
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
-            // ① 본체: 모듈 색 아이콘 그대로 (A3 유지 — .ico는 16/24/32… 프레임을 다 가짐)
-            using (var baseIcon = new System.Drawing.Icon(icoPath, size, size))
-                g.DrawIcon(baseIcon, new System.Drawing.Rectangle(0, 0, size, size));
+            // ① 본체: 모듈 색 아이콘 그대로 (A3 유지 — .ico는 16/24/32… 프레임을 다 가짐).
+            //    A79(v0.119.0): 브랜드 레벨이 켜져 있으면 여기서 발바닥 표식까지 함께 그려진다.
+            BrandIcons.DrawBase(g, icoPath, size, accent);
 
             var (r, gr, b) = Rgb(number);
             var color = GdiColor.FromArgb(r, gr, b);

@@ -136,15 +136,28 @@ public partial class App : Application
             {
                 await Task.Delay(600); // 창 콘텐츠·XamlRoot 준비 대기
 
+                var mission = new TextBlock
+                {
+                    Text = Branding.MissionStatement,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 480,
+                };
+
+                // A79 ④(v0.119.0): 마스코트는 브랜드 레벨이 높을 때만 문구 위에 붙는다.
+                // 꺼져 있으면 지금까지처럼 문구만 — 빈 자리를 만들지 않는다.
+                object content = mission;
+                if (BrandAssets.CreateMascot(128) is { } mascot)
+                {
+                    var stack = new StackPanel { Spacing = 12 };
+                    stack.Children.Add(mascot);
+                    stack.Children.Add(mission);
+                    content = stack;
+                }
+
                 var dialog = new ContentDialog
                 {
                     Title = $"Welcome to {Branding.AppName}",
-                    Content = new TextBlock
-                    {
-                        Text = Branding.MissionStatement,
-                        TextWrapping = TextWrapping.Wrap,
-                        MaxWidth = 480,
-                    },
+                    Content = content,
                     CloseButtonText = "Get started",
                     XamlRoot = window.Content.XamlRoot,
                 };

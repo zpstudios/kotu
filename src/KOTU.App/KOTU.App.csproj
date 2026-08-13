@@ -63,6 +63,10 @@
     <Content Include="Assets\sponsors.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- 확장자별 파일 아이콘 (A23, v0.60.0 — packaging/gen_file_icons.py로 생성) -->
     <Content Include="Assets\fileicons\*.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 브랜드 에셋 조각 (A79, v0.119.0 — packaging/gen_brand_assets.py가 브랜드 시트에서 잘라낸다).
+         BrandAssets가 exe 옆 Assets\Brand\에서 파일 이름으로 찾는다. 없어도 앱은 그대로 동작한다
+         (레벨 0의 모습으로 조용히 떨어진다). 원본 시트는 동봉하지 않는다 — 조각만. -->
+    <Content Include="Assets\Brand\*.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <!--

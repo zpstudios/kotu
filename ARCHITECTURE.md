@@ -204,3 +204,24 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 - **자식 선택**: `KOTU.Core.Routing.AllReadableRouting`(순수 함수, 단위 테스트 대상) — 자식 후보는 "확장자가 있는 파일 모듈 − 자기 자신"이라 정보(H/W) 모듈과 자기 자신은 자동으로 빠진다(중첩 재귀 차단).
 - **셸 계약은 전부 위임**: `IContentStateSource`(자식이 연 파일 중계) · `IContentInfoProvider`(우측 정보 오버레이) · `ICloseGuard`(문서 미저장 가드 A37) · `IBottomBarProvider` · `IDriveStripHost`(A22) · `ITrayStatusProvider`(트레이 표시 내용 A54 — 자식 교체 시점에도 이벤트를 쏴 옛 값이 남지 않게 한다). 셸이 새로 아는 계약은 `IFileOpenTarget` 하나뿐 — "이 파일 네가 열래?"를 라우팅보다 먼저 묻는 지점이다.
 - **워커 수명 규칙(A42 연장)**: 통합 모듈은 자기 워커를 만들지 않고 자식 뷰의 워커를 그대로 쓴다. 그래서 **자식을 트리에서 떼는 것이 곧 정리**다 — 자식 교체·뷰 Unloaded 양쪽에서 ① 이벤트 구독 해제 → ② **하단 바 조각 제거**(셸 하단 바 트리에 얹혀 있어 센터를 비워도 남는다) → ③ 센터 비우기(자식 `Unloaded` → 워커·libvlc·구독 정리) 순서로 내린다. 이 순서를 지키지 않으면 죽은 자식의 버튼이 하단 바에 남거나(②를 빼먹음) 소리·파일 핸들이 그대로 남는다(③을 빼먹음).
+
+## 10. 브랜드 에셋 단계형 적용 (A79, v0.119.0)
+
+원칙: **브랜드 장식이 들어가는 자리를 목록 하나로 모으고, 각 자리가 "몇 레벨부터 켜지는가"를 표 하나로 정한다.** 적용 지점 코드는 레벨 숫자를 절대 비교하지 않고 `IsEnabled(BrandPoint)` 하나만 물어본다 — 지점별 하드코딩이 퍼지면 레벨 값 하나로 일괄 전환한다는 목적 자체가 깨진다.
+
+```
+settings.json  branding.assetLevel (int, 기본 0, 0~3 클램프)
+      │  시작 후 1회 읽어 캐시 (실시간 반영 없음 — 고치면 재시작)
+      ▼
+BrandAssets.Level ──► MinimumLevel(BrandPoint) 표 ──► IsEnabled(point)
+                                                        │
+   ①NeutralPaw ②ModulePawMark(1) · ③Wordmark ⑤PawSpinner(2) · ④Mascot ⑥SiteLogo(3)
+                                                        │
+        BrandIcons(①②·GDI+ 벡터) · BrandAssets.CreateWordmark/CreateMascot(③④·래스터 조각)
+        BrandSpinner(⑤·조각 회전) · site/index.html(⑥·정적, 자동 전환 불가)
+```
+
+- **런타임이 닿는 곳 / 닿지 않는 곳**: 창·작업표시줄·트레이 아이콘은 원본 `.ico` 위에 GDI+로 표식을 덧그려 레벨을 즉시 반영한다. 반면 **커밋되는 산출물**(탐색기 파일 아이콘 `Assets/fileicons/*.ico`, 설치 스플래시 `packaging/splash.png`, `site/`)은 레벨 값이 닿지 않는다 — 생성 스크립트를 레벨 인자로 다시 돌려 커밋하거나 HTML을 한 줄 바꿔야 한다. **커밋되는 산출물은 언제나 레벨 0으로 만든 것**이어야 한다.
+- **표가 두 벌인 이유**: 런타임 표는 `src/KOTU.App/BrandAssets.cs`, 생성 스크립트 표는 `packaging/brand.py`. 언어가 달라 합칠 수 없고, 발바닥 도형(`BrandPaw.Shape` ↔ `brand.PAW`)도 같은 이유로 두 벌이다. **한쪽을 고치면 다른 쪽도 고친다**(서로를 주석으로 가리키고 있다).
+- **왜 발바닥만 벡터인가**: ①②는 16px에서 읽혀야 한다(A46이 "KO/TU" 2줄을 고른 바로 그 이유). 시트에서 잘라낸 래스터를 16px로 줄이면 뭉개지므로 아이콘용 발바닥만은 양쪽 다 코드로 그린다. 워드마크·마스코트처럼 큰 자리만 래스터 조각을 쓴다.
+- **실패는 조용히**: 에셋이 없거나 깨졌으면 장식을 생략하고 레벨 0의 모습으로 간다(SponsorAds의 sponsors.json 로드와 같은 규칙). 브랜드 장식 때문에 앱이 죽어서는 안 된다.
