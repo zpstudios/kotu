@@ -4,17 +4,28 @@
 > 저장소가 이미 기록하는 것(코드 구조는 `ARCHITECTURE.md`, 빌드는 `docs/BUILD.md`, 변경 이력은 git log)은
 > 여기에 중복해 적지 않는다. 여기 적는 건 **코드를 읽어도 알 수 없는 것** — 결정의 배경, 함정, 대기 중인 확인.
 >
-> 최종 갱신: 2026-08-13 (v0.113.1 시점)
+> 최종 갱신: 2026-08-13 (v0.113.2 시점)
 
 ---
 
 ## 1. 지금 상태 한 줄
 
-앱 이름 **KOTU (King Of The Util)**, 저장소 **zpstudios/kotu**, 실행 파일 **KOTU.exe**, 최신 **v0.113.1**.
+앱 이름 **KOTU (King Of The Util)**, 저장소 **zpstudios/kotu**, 실행 파일 **KOTU.exe**, 최신 **v0.113.2**.
 저작 주체는 **ZP Studios**(A82/v0.90.0) — 개인 실명·개인 메일은 어디에도 쓰지 않는다. 커밋도 이 이름으로 남는다.
 **실기기 확인이 v0.85.0부터 28개 버전치 밀려 있고**(§4), A38 관련 **미해결 관찰 2건**이 있다(§5 첫 항목).
 
-**2026-08-13 세션 (핫픽스) — v0.113.1: 실기기 시작 크래시 수정**
+**2026-08-13 세션 (핫픽스 2) — v0.113.2: 정보 모듈 열기 크래시 수정**
+v0.113.1로 올린 두 번째 실기기(v0.106에서 업데이트)에서 `COMException 0x800F1000
+(설치된 구성 요소가 감지되지 않았습니다)` — 사용자가 보내 준 startup-error.log 스택으로
+`HardwareView..ctor → ApplyBarScale → LayoutSensorCards → UIElementCollection.Add`를 특정.
+원인: **`FrameworkElement.Parent`는 라이브 트리 부착 전(생성자 안)에는 `Children.Add` 뒤에도
+null**이라 중복 추가 가드로 쓸 수 없다. v0.111.0(A62)이 생성자에서 `LayoutSensorCards`를
+두 번(BuildSensorCards 끝 + ApplyBarScale) 타게 만들면서 같은 카드가 두 번 Add돼 죽었다.
+`SensorGrid.Children.Contains`로 멤버십을 직접 확인하게 수정. 0x800F1000은 WinUI의 범용
+오류 코드라 메시지로는 원인을 알 수 없고 **스택(startup-error.log)이 필수**였다 — 같은 다이얼로그가
+떠도 원인은 제각각일 수 있으니 반드시 로그부터 받을 것.
+
+**2026-08-13 세션 (핫픽스 1) — v0.113.1: 실기기 시작 크래시 수정**
 사용자가 최신 빌드로 업데이트 후 실행하자 시작 즉시 `XamlParseException: Cannot find a Resource
 with the Name/Key DefaultDropDownButtonStyle`. 원인은 v0.107.0(A27)의 App.xaml
 `BasedOn="{StaticResource DefaultDropDownButtonStyle}"` — **WinAppSDK 1.8이 WinUI 컨트롤의
@@ -153,6 +164,10 @@ A36 = settings.json 그대로 열고 표기만 수정(37), 3회전 배치 선정
 - `resources.pri` — unpackaged WinUI는 exe 옆의 **고정 이름 `resources.pri`** 만 찾는다.
   없으면 시작 시 `XamlParseException`으로 조용히 죽는다(v0.5.5~0.5.7에 실제로 겪음).
   `AssemblyName`을 바꾸면 `$(TargetName).pri` 폴백 이름도 따라 바뀌므로 `release.yml`을 같이 고쳐야 한다.
+- **`FrameworkElement.Parent`를 "이미 추가했나" 가드로 쓰지 말 것** — 라이브 트리 부착 전
+  (뷰 생성자 안)에는 `Children.Add` 뒤에도 Parent가 null이라, 같은 요소를 두 번 Add해
+  `COMException 0x800F1000`으로 죽는다(v0.111.0/A62가 유발, v0.113.2에서 수정).
+  중복 방지는 `Children.Contains`(또는 자체 플래그)로. 이것도 **CI·정적 검사로 못 잡는 부류**다.
 - **`{StaticResource Default*Style}` BasedOn 참조는 런타임에만 터진다** — v0.107.0의
   `DefaultDropDownButtonStyle`이 실기기 시작 크래시를 냈다(v0.113.1에서 수정). WinAppSDK 1.8이
   WinUI 컨트롤 기본 스타일을 지연 로딩해 App.xaml 파싱 시점에 키가 없다. **CI(컴파일)로는 못 잡고,
@@ -164,8 +179,9 @@ A36 = settings.json 그대로 열고 표기만 수정(37), 3회전 배치 선정
 ## 4. 실기기 확인 대기 (사용자 몫) — **28개 버전치 밀려 있음**
 
 한 번에 묶어서 확인하는 게 효율적이다.
-⚠️ **v0.107.0~v0.113.0 빌드는 실기기에서 시작 자체가 안 된다**(A27 스타일 크래시, v0.113.1에서 수정) —
-아래 확인은 전부 **v0.113.1 이상**으로 할 것.
+⚠️ **v0.107.0~v0.113.0 빌드는 실기기에서 시작 자체가 안 된다**(A27 스타일 크래시, v0.113.1에서 수정).
+⚠️ **v0.111.0~v0.113.1은 정보(하드웨어) 모듈을 열면 죽는다**(A62 중복 Add, v0.113.2에서 수정) —
+아래 확인은 전부 **v0.113.2 이상**으로 할 것.
 ※ v0.90.0(A82)은 문자열·메타데이터만 바꿨다 — 실기기 확인 항목은 **exe 속성 창의 회사/저작권 표기 정도**로 가볍다.
 
 **v0.85.0 (A38) — 기본 앱 강제 지정**
