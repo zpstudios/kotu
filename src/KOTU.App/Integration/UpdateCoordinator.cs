@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
 using KOTU.Core.Settings;
 
 namespace KOTU.App.Integration;
@@ -8,21 +9,29 @@ namespace KOTU.App.Integration;
 /// <summary>
 /// 앱 전역 업데이트 코디네이터 — 프로세스당 1개.
 ///
-/// 확인은 <b>설정 화면의 "Check now"를 눌렀을 때만</b> 돈다(A95, v0.117.0). 타이머도 토스트도 없다.
+/// 확인 경로는 셋(A114, v0.136.0): <b>① 상시 2분 간격 자동 확인</b>(프로세스당 타이머 1개 —
+/// 창 수와 무관) · <b>② 설정 화면 진입 시 즉시 1회</b>(SettingsView가 부른다) ·
+/// <b>③ 수동 "Check now"</b>. 셋 다 <see cref="CheckNowAsync"/> 하나로 모이고, 확인이 진행 중이면
+/// 조용히 반환하므로 서로 겹쳐도 요청이 두 번 나가지 않는다.
+/// 새 버전을 찾아도 <b>팝업·토스트는 절대 띄우지 않는다</b> — 알림 방식 = (b) 조용히 반영만
+/// (2026-08-14 사용자 확정): 설정 화면 업데이트 섹션의 최신 버전 줄·[Update to vX] 버튼에만 나타난다.
 /// 여기 남는 건 여러 창이 함께 봐야 하는 전역 상태 1벌 — 확인 중인지, 마지막 확인 시각·실패 사유,
 /// 찾아 둔 새 버전 — 이고 설정 화면(SettingsView)은 그 상태를 <b>표시만</b> 한다.
 /// 창 A에서 확인하면 창 B의 설정 화면도 <see cref="Changed"/>로 따라 갱신된다.
 ///
-/// 정책 이력 — 같은 주제로 <b>세 번</b> 뒤집혔다. 또 뒤집기 전에 읽을 것:
+/// 정책 이력 — 같은 주제로 <b>네 번</b> 뒤집혔다. 또 뒤집기 전에 읽을 것:
 ///  · v0.17.0  주기 체크 금지, 설정 진입 시에만.
 ///  · v0.27.0  설정 화면 체류 중 1분 카운트다운 루프.
 ///  · v0.105.0 (A26·A76) 시작 30초 뒤 첫 체크 + 10분 간격 타이머 + 네이티브 토스트 + 오토체크 토글.
-///  · v0.117.0 (A95) <b>현행</b> — 타이머·토스트·오토체크 토글을 전부 걷어내고 수동 Check now만 남겼다.
-///    마지막 확인 시각 표시(A76)는 유지.
+///  · v0.117.0 (A95) 타이머·토스트·오토체크 토글을 전부 걷어내고 수동 Check now만 남겼다.
+///  · v0.136.0 (A114) <b>현행</b> — A26의 타이머 구조만 되살렸다(간격 2분·첫 확인도 2분 뒤).
+///    <b>토스트는 되살리지 않았다</b>(AppNotification 등록·발행·클릭 경로 전부 부활 금지) —
+///    오토체크 토글(<c>update.autoCheck</c>)·<c>update.lastNotifiedVersion</c>도 그대로 폐기 상태다.
 ///
 /// 확인 실패(오프라인 등)는 예외를 밖으로 던지지 않고 <c>update.lastCheckError</c>에 요약만 남긴다 —
 /// 설정 화면이 그 문구를 그대로 보여 준다.
-/// 업데이트 불가 빌드(수동 zip 실행 등)에서는 확인 자체를 하지 않는다(화면은 숨기지 않고 비활성).
+/// 업데이트 불가 빌드(수동 zip 실행 등)에서는 확인 자체를 하지 않는다(타이머도 시작하지 않는다.
+/// 화면은 숨기지 않고 비활성).
 /// </summary>
 internal static class UpdateCoordinator
 {
@@ -39,8 +48,23 @@ internal static class UpdateCoordinator
     /// <summary>실패 사유 표기 최대 길이(넘으면 말줄임).</summary>
     private const int ErrorSummaryLimit = 80;
 
+    /// <summary>
+    /// 자동 확인 간격(A114) — 첫 확인도 이 간격 뒤다. A26의 "30초 뒤 첫 확인"은 되살리지 않았다:
+    /// 시작 직후 네트워크 러시를 피하려고 첫 확인도 2분 뒤로 미룬다(2026-08-14 확정).
+    /// DispatcherTimer는 반복 타이머라 Interval 하나로 첫 틱·이후 주기가 모두 정해진다.
+    /// </summary>
+    private static readonly TimeSpan AutoCheckInterval = TimeSpan.FromMinutes(2);
+
     private static ISettingsService? _settings;
     private static DispatcherQueue? _dispatcher;
+
+    /// <summary>
+    /// 자동 확인 타이머(A114) — <b>프로세스당 1개</b>. 창을 몇 개 열든 늘지 않는다(정적 필드 +
+    /// <see cref="Initialize"/>의 1회 가드). UI 스레드 DispatcherTimer라 Tick·상태 변경이 모두
+    /// UI 스레드에서 일어난다(A26 전례와 동일 구조).
+    /// </summary>
+    private static DispatcherTimer? _timer;
+
     private static bool _initialized;
     private static bool _checking;
 
@@ -65,8 +89,8 @@ internal static class UpdateCoordinator
     public static event Action? Changed;
 
     /// <summary>
-    /// 앱 시작 시 1회(UI 스레드) — 저장해 둔 마지막 확인 결과를 읽어 놓기만 한다.
-    /// 시작 시점에는 <b>확인하지 않는다</b>(A95).
+    /// 앱 시작 시 1회(UI 스레드) — 저장해 둔 마지막 확인 결과를 읽고 자동 확인 타이머를 켠다(A114).
+    /// 시작 <b>시점</b>에는 확인하지 않는다 — 첫 확인은 2분 뒤 첫 틱이다.
     /// </summary>
     public static void Initialize()
     {
@@ -81,11 +105,28 @@ internal static class UpdateCoordinator
 
         // 업데이트 불가 빌드에서도 설정 화면은 표시를 숨기지 않고 비활성으로 남긴다(사용자 확정).
         IsAvailable = UpdateService.IsUpdatableBuild;
+        if (IsAvailable) StartAutoCheckTimer(); // A114 — 불가 빌드에서는 타이머도 만들지 않는다
     }
 
     /// <summary>
-    /// 수동 "Check now" (A95) — 업데이트를 확인하는 <b>유일한</b> 경로다.
+    /// 자동 확인 타이머 시작(A114) — 2분마다 <see cref="CheckNowAsync"/>를 부른다.
+    /// 멈추는 경로는 없다(오토체크 토글은 A95에서 폐기된 채다) — 프로세스가 살아 있는 동안 상시.
+    /// Tick은 UI 스레드에서 오고, 확인 중이면 CheckNowAsync가 스스로 되돌아간다(중복 요청 없음).
+    /// </summary>
+    private static void StartAutoCheckTimer()
+    {
+        if (_timer is not null) return; // 프로세스당 1개 — 재진입해도 새로 만들지 않는다
+        _timer = new DispatcherTimer { Interval = AutoCheckInterval };
+        _timer.Tick += async (_, _) => await CheckNowAsync();
+        _timer.Start();
+    }
+
+    /// <summary>
+    /// 업데이트 확인의 <b>단일 종착점</b>(A114): 수동 "Check now" · 설정 화면 진입 1회 ·
+    /// 2분 주기 타이머가 전부 여기로 모인다. 진행 중이면 곧바로 반환한다 —
+    /// 설정 진입과 타이머 틱이 겹쳐도 네트워크 요청은 하나뿐이라는 근거가 이 한 줄이다.
     /// 예외는 밖으로 나가지 않는다(사유는 <see cref="LastCheckError"/>로 흘린다).
+    /// 새 버전을 찾아도 여기서는 <b>상태만 갱신</b>한다 — 토스트·팝업은 없다(A114 알림 방식 b).
     /// </summary>
     public static async Task CheckNowAsync()
     {

@@ -73,11 +73,15 @@ public class ExplorerListingTests : IDisposable
 
     // ---------- Arrange (A5·A7) ----------
 
-    private static ExplorerListing.Entry AFile(string name, long size, int day) =>
-        new($@"C:\t\{name}", name, false, size, new DateTime(2026, 1, day));
+    // day = 수정일(1월 n일), createdDay = 만든 날짜(A117 — 생략하면 수정일과 같은 날).
+    // 두 날짜를 어긋나게 줘야 "만든 날짜 정렬이 수정일 정렬과 다른 순서를 낸다"를 증명할 수 있다.
+    private static ExplorerListing.Entry AFile(string name, long size, int day, int? createdDay = null) =>
+        new($@"C:\t\{name}", name, false, size,
+            new DateTime(2026, 1, day), new DateTime(2026, 1, createdDay ?? day));
 
-    private static ExplorerListing.Entry AFolder(string name, int day) =>
-        new($@"C:\t\{name}", name, true, 0, new DateTime(2026, 1, day));
+    private static ExplorerListing.Entry AFolder(string name, int day, int? createdDay = null) =>
+        new($@"C:\t\{name}", name, true, 0,
+            new DateTime(2026, 1, day), new DateTime(2026, 1, createdDay ?? day));
 
     [Fact]
     public void Arrange_이름순_폴더_먼저_이름_오름차순()
@@ -105,6 +109,23 @@ public class ExplorerListingTests : IDisposable
         var entries = new[] { AFolder("old", 1), AFolder("new", 9), AFile("old.jpg", 1, 2), AFile("new.jpg", 1, 8) };
 
         var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Modified);
+
+        Assert.Equal(["new", "old", "new.jpg", "old.jpg"], result.Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void Arrange_만든날짜순_최신부터_폴더도_만든날짜순()
+    {
+        // 수정일(day)은 일부러 뒤집어 둔다 — 만든 날짜(createdDay)만 보고 정렬해야 통과한다(A117).
+        var entries = new[]
+        {
+            AFolder("old", day: 9, createdDay: 1),
+            AFolder("new", day: 1, createdDay: 9),
+            AFile("old.jpg", 1, day: 8, createdDay: 2),
+            AFile("new.jpg", 1, day: 2, createdDay: 8),
+        };
+
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Created);
 
         Assert.Equal(["new", "old", "new.jpg", "old.jpg"], result.Select(e => e.Name).ToArray());
     }

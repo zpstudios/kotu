@@ -44,6 +44,9 @@
                                              GroupName="kotu-explorer-sort" Click="OnSortChanged" />
                         <RadioMenuFlyoutItem x:Name="SortByModified" Text="Date modified"
                                              GroupName="kotu-explorer-sort" Click="OnSortChanged" />
+                        <!-- A117(v0.136.0): 만든 날짜 - date modified와 같은 방식으로 병존 -->
+                        <RadioMenuFlyoutItem x:Name="SortByCreated" Text="Date created"
+                                             GroupName="kotu-explorer-sort" Click="OnSortChanged" />
                     </MenuFlyout>
                 </DropDownButton.Flyout>
             </DropDownButton>

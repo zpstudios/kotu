@@ -56,7 +56,9 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>현재 폴더 경로 (A94 — 호스트의 패널 드랍·붙여넣기 대상). 항해 전이면 빈 문자열.</summary>
     internal string CurrentFolder => _folder;
 
-    private const string SortSettingKey = "explorer.sort"; // "name"/"size"/"modified" — SortKey와 수동 동기
+    // "name"/"size"/"modified"/"created"(A117, v0.136.0) — SortKey.ToString().ToLowerInvariant()와 수동 동기.
+    // 모르는 값(구 버전·손편집)은 이름순으로 폴백한다(아래 switch의 _ 분기).
+    private const string SortSettingKey = "explorer.sort";
 
     private IReadOnlyList<string> _extensions = [];
     private string _folder = string.Empty;
@@ -79,6 +81,7 @@ public sealed partial class ExplorerPane : UserControl
             {
                 "size" => ExplorerListing.SortKey.Size,
                 "modified" => ExplorerListing.SortKey.Modified,
+                "created" => ExplorerListing.SortKey.Created, // A117
                 _ => ExplorerListing.SortKey.Name,
             };
             SyncSortChecks();
@@ -117,12 +120,14 @@ public sealed partial class ExplorerPane : UserControl
         SortByName.IsChecked = _sortKey == ExplorerListing.SortKey.Name;
         SortBySize.IsChecked = _sortKey == ExplorerListing.SortKey.Size;
         SortByModified.IsChecked = _sortKey == ExplorerListing.SortKey.Modified;
+        SortByCreated.IsChecked = _sortKey == ExplorerListing.SortKey.Created; // A117
     }
 
     private void OnSortChanged(object sender, RoutedEventArgs e)
     {
         var key = ReferenceEquals(sender, SortBySize) ? ExplorerListing.SortKey.Size
                 : ReferenceEquals(sender, SortByModified) ? ExplorerListing.SortKey.Modified
+                : ReferenceEquals(sender, SortByCreated) ? ExplorerListing.SortKey.Created // A117
                 : ExplorerListing.SortKey.Name;
         if (key == _sortKey) return;
 

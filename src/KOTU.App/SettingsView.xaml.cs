@@ -13,8 +13,9 @@ namespace KOTU.App;
 /// 설정 페이지. UI 스케일(v0.24.0), 탐색기 통합(파일 연결·우클릭 메뉴)을 관리한다.
 /// 탐색기 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
 /// 하단 바(광고 + ⛶ 전체화면)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
-/// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시만 하고 확인은
-/// "Check now"를 눌렀을 때만 돈다 (A95, v0.117.0 — 주기 확인·토스트·오토체크 토글은 제거됐다).
+/// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시만 하고, 확인은
+/// "Check now" · <b>이 화면 진입 1회</b> · 2분 주기 타이머의 세 경로가 코디네이터에서 돈다
+/// (A114, v0.136.0 — A95의 "수동 전용"을 대체. 토스트·오토체크 토글은 계속 없다).
 /// 연결 토글의 레지스트리 작업·기본 앱 개수 조회는 전부 <see cref="Worker"/>에서 돌고
 /// UI에는 진행률과 결과만 흘러온다(A77, v0.106.0).
 /// </summary>
@@ -557,10 +558,11 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     }
 
     /// <summary>
-    /// Updates 섹션(A95, v0.117.0). 구성은 위에서부터
+    /// Updates 섹션(A95, v0.117.0 — 확인 정책은 A114, v0.136.0). 구성은 위에서부터
     /// <b>현재 버전 · 최신 버전 · 마지막 확인 시각 · [Check now][Update to vX] · 안내 문구</b>.
-    /// 확인은 Check now를 눌렀을 때만 돈다 — 주기 타이머·토스트·오토체크 토글은 A95에서 제거됐다
-    /// (v0.17.0 → v0.105.0 → v0.117.0으로 세 번 뒤집힌 정책이다. 상세는 UpdateCoordinator 주석).
+    /// 확인은 Check now · <b>이 섹션을 만들 때(설정 진입) 1회</b> · 2분 주기 타이머 셋 다 돌지만
+    /// 새 버전 알림은 여기 표시가 전부다 — <b>토스트·팝업은 금지</b>(A114 알림 방식 b).
+    /// (v0.17.0 → v0.105.0 → v0.117.0 → v0.136.0으로 네 번 뒤집힌 정책이다. 상세는 UpdateCoordinator 주석).
     /// 실제 확인은 전역 <see cref="UpdateCoordinator"/>가 소유하고 여기서는 그 상태를 <b>표시만</b> 한다 —
     /// 다른 창에서 확인해도 이 화면이 따라 갱신된다.
     /// 업데이트 불가 빌드에서는 표시를 숨기지 않고 비활성으로 남긴다(사용자 확정).
@@ -655,6 +657,12 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         UpdateCoordinator.Changed += Render;
         Unloaded += (_, _) => UpdateCoordinator.Changed -= Render;
         Render();
+
+        // A114(v0.136.0): 설정 화면 진입마다 즉시 1회 확인. 이 뷰는 설정을 열 때마다 새로 만들어지므로
+        // (MainWindow.ShowSettingsAsync가 new SettingsView) 여기 한 줄이 곧 "진입 1회"다.
+        // 2분 주기 타이머와 겹쳐도 CheckNowAsync가 진행 중이면 되돌아가 요청이 두 번 나가지 않는다.
+        // 발사 후 망각 — 예외는 코디네이터가 삼키고 결과는 Render로 돌아온다.
+        _ = UpdateCoordinator.CheckNowAsync();
     }
 
     /// <summary>다운로드 → 사람 확인(Install and restart / Later) 대기 → 적용. 자동 재시작 없음.</summary>

@@ -696,7 +696,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private bool IsTextInputFocused() => HotkeySupport.IsTextInputFocused(RootLayout);
 
-    /// <summary>단축키·센서 트레이(A18)로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호).</summary>
+    /// <summary>
+    /// 단축키·센서 트레이(A18)로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호) —
+    /// A109(v0.136.0)의 사이드바 기본도 이 no-op 가드 뒤에 있어, 같은 모듈 재선택은 화면을 건드리지
+    /// 않는다(가드는 A109에서 손대지 않았다).
+    /// </summary>
     internal void OpenModuleById(string id)
     {
         if (CurrentModuleId == id) return;
@@ -969,8 +973,11 @@ public sealed partial class MainWindow : Window
     };
 
     // A103: 모듈만 연 상태의 제목은 모듈명 없이 "KOTU"뿐 — 모듈 구분은 아이콘 링 색(A102)이 한다.
+    // A109(v0.136.0): 모듈 실행·전환은 좌·우 사이드바가 뜬 기본 상태로 시작한다(defaultSidebars) —
+    // 파일을 여는 경로(OpenFile·OpenVerb → ShowModule 직접 호출)는 기본값 false라 종전 그대로다
+    // (파일 인자 직접 열기 = 무사이드바, A81 유지).
     private void OpenModule(IModule module)
-        => ShowModule(module, OpenContext.Empty, Branding.AppName);
+        => ShowModule(module, OpenContext.Empty, Branding.AppName, defaultSidebars: true);
 
     /// <summary>
     /// 앱 첫 화면 기본 뷰(Info/하드웨어). 사용자가 고른 화면이 아니므로
@@ -1117,7 +1124,15 @@ public sealed partial class MainWindow : Window
         OpenFile(path);
     }
 
-    private async void ShowModule(IModule module, OpenContext context, string title)
+    /// <summary>
+    /// 모듈 뷰 교체의 단일 종착점. defaultSidebars(A109, v0.136.0) = **모듈 실행·전환 경로**로 들어온
+    /// 호출인지 — true면 뷰 교체를 마친 뒤 좌·우 사이드바(불투명 도크) 기본 상태를 다시 적용한다
+    /// (A81이 창 생성 1회에만 주던 상태를 모듈 전환마다 준다 = A81의 "이후 사용자 상태 유지" 대체).
+    /// 파일을 여는 경로(OpenFile·OpenVerb)는 false로 두어 A81의 "파일 인자 직접 열기 = 무사이드바"가
+    /// 그대로 성립한다. 미저장 가드(A37)에서 취소되면 여기서 조기 반환하므로 사이드바도 손대지 않는다.
+    /// </summary>
+    private async void ShowModule(IModule module, OpenContext context, string title,
+        bool defaultSidebars = false)
     {
         // 현재 뷰에 미저장 변경이 있으면 먼저 정리(저장/버리기/취소) — 취소면 아무것도 안 바꾼다 (A37).
         // 제목 변경도 가드 뒤로 미뤄서, 취소 시 제목이 어긋나지 않는다.
@@ -1169,6 +1184,12 @@ public sealed partial class MainWindow : Window
                 UpdateTrayIcon();
             });
         SetContentState(module, context.FilePath);
+        // A109(v0.136.0): 모듈 전환의 기본 화면 = 좌·우 사이드바.
+        // 반드시 SetContentState **뒤**다 — 그 안에서 S4('오픈 파일')가 먼저 자동 종료되고(A90),
+        // 종료가 스냅샷(_s4Restore)을 버린 뒤에 사이드바 기본이 얹혀야 순서가 옳다.
+        // SetDockedState는 홀드만 취소하고 상태 2개를 대입할 뿐이라 Enter 일괄 토글의 직전 구성
+        // (_lastBatchStates)은 건드리지 않는다 — 전환 후 Enter는 종전 규칙 그대로 동작한다.
+        if (defaultSidebars) SetDockedState(listDocked: true, infoDocked: true);
     }
 
     // ---------- 미저장 가드 (A37) ----------
@@ -1752,16 +1773,31 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 외부에서 좌/우 사이드바(불투명 도크 — A108 용어) 상태를 지정한다 — 시작 경로별 기본 표시
     /// 상태(A81: 파일 인자 없이 모듈로 연 창은 양쪽 사이드바, 부록 B 30번)용 공개 API.
-    /// WindowManager가 창 생성 진입에서 1회만 부른다 — 이후 모듈 전환·파일 열기는
-    /// 사용자가 바꾼 상태를 그대로 유지(재적용 없음)하고, 세션 간 저장도 없다(A55 미포함).
+    /// 부르는 곳은 둘: WindowManager의 창 생성 진입(A81)과 **모듈 실행·전환**(A109, v0.136.0 —
+    /// ShowModule의 defaultSidebars). A109가 A81의 "창 생성 뒤에는 사용자가 바꾼 상태를 그대로
+    /// 유지(재적용 없음)"를 **모듈 전환에 한해 대체**한다 — 파일 열기는 여전히 재적용하지 않고,
+    /// 세션 간 저장도 없다(A55 미포함).
     /// true = OpaqueDocked, false = 닫힘. 반투명 고정은 키 입력 전용이라 여기서 만들지 않는다.
+    /// ⚠️ 이미 요청과 같은 상태면 <b>다시 그리지 않는다</b>(A109에서 추가한 가드):
+    /// <see cref="ApplyOverlayStates"/>는 좌 리스트를 매번 Show → 폴더 재스캔까지 시키므로,
+    /// A109의 재적용이 모듈 전환마다 같은 폴더를 두 번 훑는 낭비를 막는다
+    /// (SetContentState가 방금 같은 상태로 그려 놓은 직후에 불리는 자리라 결과는 동일하다).
     /// </summary>
     public void SetDockedState(bool listDocked, bool infoDocked)
     {
+        var list = listDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
+        var info = infoDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
+        // 홀드 세션이 살아 있으면(키를 쥔 채) 상태가 같아도 정리하고 다시 그려야 한다 —
+        // 아래 CancelHoldCore가 그 정리이므로, 건너뛰는 조건에 "홀드 없음"까지 넣는다.
+        if (_listSide.State == list && _infoSide.State == info
+            && !_listSide.HoldSessionActive && !_infoSide.HoldSessionActive)
+        {
+            return;
+        }
         CancelHoldCore(_listSide);
         CancelHoldCore(_infoSide);
-        _listSide.State = listDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
-        _infoSide.State = infoDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
+        _listSide.State = list;
+        _infoSide.State = info;
         ApplyOverlayStates();
     }
 
