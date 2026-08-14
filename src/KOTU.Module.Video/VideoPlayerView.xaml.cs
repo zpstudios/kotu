@@ -1,14 +1,11 @@
 using LibVLCSharp.Platforms.Windows;
 using LibVLCSharp.Shared;
-using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
-using Windows.Storage.Pickers;
 using Windows.System;
-using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
@@ -128,15 +125,16 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     }
 
     /// <summary>
-    /// A40: 좁은 하단 바에서 우선순위 낮은 요소를 숨겨 잘림을 막는다. 고정 요소 합
-    /// (버튼·콤보·볼륨 96 + 칸 간격 10×11)이 시간 텍스트가 길 때("1:23:45") 약 740px —
+    /// A40: 좁은 하단 바에서 우선순위 낮은 요소를 숨겨 잘림을 막는다. 당시 실측: 고정 요소 합
+    /// (버튼·콤보·볼륨 96 + 칸 간격)이 시간 텍스트가 길 때("1:23:45") 약 740px —
     /// 최소 창 폭 720(바 폭 약 656)에서는 시크 슬라이더가 0으로 밀리고 우측 ⛶가 잘린다.
-    /// 임계값 760은 실측 오차 여유 포함. 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼,
-    /// 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
+    /// 임계값 718 = A40의 760(실측 오차 여유 포함)에서 A99 열기 버튼 제거로 고정 요소 합이
+    /// 42px(버튼 36 + 간격 6) 줄어든 만큼을 뺀 값. 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거
+    /// 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
     /// </summary>
     private void UpdateCompactTransport(double width)
     {
-        var visibility = width < 760 ? Visibility.Collapsed : Visibility.Visible;
+        var visibility = width < 718 ? Visibility.Collapsed : Visibility.Visible;
         VolumeSlider.Visibility = visibility;
         PositionText.Visibility = visibility;
         DurationText.Visibility = visibility;
@@ -388,23 +386,9 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         // 플레이어가 아직 없으면(스왑체인 준비 전) OnVlcInitialized에서 PlayCurrent()가 이어받는다.
     }
 
-    private async Task PickAndOpenAsync()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var hwnd = Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
-
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.VideosLibrary };
-        foreach (var ext in VideoModule.Extensions)
-            picker.FileTypeFilter.Add(ext);
-        InitializeWithWindow.Initialize(picker, hwnd);
-
-        if (await picker.PickSingleFileAsync() is { } file)
-            OpenPath(file.Path);
-    }
-
-    private void OnOpenClicked(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
-    // 드래그&드롭은 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
+    // A99: 모듈 열기 버튼·O 키·파일 대화상자(PickAndOpenAsync)는 제거 — 파일 열기는
+    // 셸 S4 'Open file'(A90)로 일원화됐다.
+    // 드래그&드롭은 종전대로 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
@@ -1121,8 +1105,6 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// </summary>
     private void SetupHotkeys()
     {
-        HotkeySupport.Bind(this, OpenButton, VirtualKey.O,
-            "Open video file", () => _ = PickAndOpenAsync());
         HotkeySupport.Bind(this, MuteButton, VirtualKey.M, "Mute", ToggleMute);
         HotkeySupport.Bind(this, SpeedBox, VirtualKey.S,
             "Playback speed", () => SpeedBox.IsDropDownOpen = true);

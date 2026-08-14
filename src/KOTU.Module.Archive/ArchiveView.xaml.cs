@@ -627,7 +627,6 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     private void UpdateToolbarState()
     {
-        OpenButton.IsEnabled = !_busy;
         CreateButton.IsEnabled = !_busy;
         var hasArchive = !_busy && _root is not null;
         ExtractToButton.IsEnabled = hasArchive;
@@ -635,21 +634,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         BackButton.IsEnabled = !_busy && _navStack.Count > 0;
     }
 
-    // ---------- 열기 버튼 / 창 핸들 ----------
-
-    private async void OnOpenClick(object sender, RoutedEventArgs e) => await PickAndOpenAsync();
-
-    /// <summary>열기 대화상자. 버튼과 O 키(A34)가 공유한다(다른 모듈의 열기와 같은 키).</summary>
-    private async Task PickAndOpenAsync()
-    {
-        if (_busy) return;
-
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.Downloads };
-        foreach (var ext in ArchiveModule.Extensions) picker.FileTypeFilter.Add(ext);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
-        var file = await picker.PickSingleFileAsync();
-        if (file is not null) await LoadArchiveAsync(file.Path);
-    }
+    // ---------- 창 핸들 ----------
+    // A99: 열기 버튼·O 키·열기 대화상자(PickAndOpenAsync)는 제거 — 아카이브 열기는
+    // 셸 S4 'Open file'(A90)로 일원화됐다(풀기·새 압축 피커는 그대로).
 
     /// <summary>피커 초기화용 창 핸들. Window 객체 없이 XamlRoot 경유로 얻는다.</summary>
     private nint GetHwnd()
@@ -706,7 +693,6 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// </summary>
     private void SetupHotkeys()
     {
-        HotkeySupport.Bind(this, OpenButton, VirtualKey.O, "Open archive", () => _ = PickAndOpenAsync());
         HotkeySupport.Bind(this, ExtractHereButton, VirtualKey.E,
             "Extract into a folder named after the archive, next to it", () => _ = ExtractHereAsync());
         HotkeySupport.Bind(this, ExtractToButton, VirtualKey.T,

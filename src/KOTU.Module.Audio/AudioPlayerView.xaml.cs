@@ -1,14 +1,11 @@
 using LibVLCSharp.Platforms.Windows;
 using LibVLCSharp.Shared;
-using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
-using Windows.Storage.Pickers;
 using Windows.System;
-using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
@@ -340,23 +337,9 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         // 플레이어가 아직 없으면(스왑체인 준비 전) OnVlcInitialized에서 PlayCurrent()가 이어받는다.
     }
 
-    private async Task PickAndOpenAsync()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var hwnd = Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
-
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.MusicLibrary };
-        foreach (var ext in AudioModule.Extensions)
-            picker.FileTypeFilter.Add(ext);
-        InitializeWithWindow.Initialize(picker, hwnd);
-
-        if (await picker.PickSingleFileAsync() is { } file)
-            OpenPath(file.Path);
-    }
-
-    private void OnOpenClicked(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
-    // 드래그&드롭은 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
+    // A99: 모듈 열기 버튼·O 키·파일 대화상자(PickAndOpenAsync)는 제거 — 파일 열기는
+    // 셸 S4 'Open file'(A90)로 일원화됐다.
+    // 드래그&드롭은 종전대로 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
@@ -699,12 +682,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// 텍스트 입력·탐색기 파일 리스트 포커스에서는 HotkeySupport가 키를 통과시킨다(A32/A84 규칙).
     /// M(음소거)은 v0.75.0부터 있던 키를 XAML 액셀러레이터에서 여기로 옮긴 것 — 의미는 그대로다.
-    /// 키 배정은 같은 뜻의 동작에 같은 키를 쓰는 규칙에 따라 영상 모듈과 일치시켰다(O·M·S).
+    /// 키 배정은 같은 뜻의 동작에 같은 키를 쓰는 규칙에 따라 영상 모듈과 일치시켰다(M·S).
     /// </summary>
     private void SetupHotkeys()
     {
-        HotkeySupport.Bind(this, OpenButton, VirtualKey.O,
-            "Open music file", () => _ = PickAndOpenAsync());
         HotkeySupport.Bind(this, MuteButton, VirtualKey.M, "Mute", ToggleMute);
         HotkeySupport.Bind(this, SpeedBox, VirtualKey.S,
             "Playback speed", () => SpeedBox.IsDropDownOpen = true);

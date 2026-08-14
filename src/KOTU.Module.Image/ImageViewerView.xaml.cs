@@ -1,4 +1,3 @@
-using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -6,9 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.System;
-using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -147,24 +144,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         _ = LoadCurrentAsync();
     }
 
-    private async Task PickAndOpenAsync()
-    {
-        // Window 객체 없이 파일 선택기를 띄우려면 XamlRoot 경유로 HWND를 얻어야 한다.
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var hwnd = Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
-
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
-        foreach (var ext in ImageFolderNavigator.SupportedExtensions)
-            picker.FileTypeFilter.Add(ext);
-        InitializeWithWindow.Initialize(picker, hwnd);
-
-        if (await picker.PickSingleFileAsync() is { } file)
-            OpenPath(file.Path);
-    }
-
-    private void OnOpenButtonClick(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
-    // 드래그&드롭은 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
+    // A99: 모듈 열기 버튼·O 키·파일 대화상자(PickAndOpenAsync)는 제거 — 파일 열기는
+    // 셸 S4 'Open file'(A90)로 일원화됐다.
+    // 드래그&드롭은 종전대로 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
     // ---------- 휠 줌 (A98 — 휠 단독·Ctrl+휠, A84 Shift+휠 대체) ----------
 
@@ -675,8 +657,6 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// </summary>
     private void SetupHotkeys()
     {
-        HotkeySupport.Bind(this, OpenButton, VirtualKey.O,
-            "Open image file", () => _ = PickAndOpenAsync());
         HotkeySupport.Bind(this, RotateButton, VirtualKey.R,
             "Rotate 90° clockwise", RotateClockwise);
         HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,

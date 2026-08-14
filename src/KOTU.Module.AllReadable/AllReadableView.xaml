@@ -47,39 +47,32 @@
                     VerticalAlignment="Center"
                     Visibility="Collapsed" />
 
-                <!-- 자체 바(빈 상태 전용): 열기 · 파일명/드라이브 줄 · 전체화면.
-                     A97(v0.116.0): 요소 간격은 전 모듈 6으로 통일 — 개별 Margin 대신 ColumnSpacing. -->
+                <!-- 자체 바(빈 상태 전용): 파일명/드라이브 줄 · 전체화면.
+                     A97(v0.116.0): 요소 간격은 전 모듈 6으로 통일 — 개별 Margin 대신 ColumnSpacing.
+                     열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
                 <Grid x:Name="OwnBar" ColumnSpacing="6">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <!-- A27(v0.107.0): 하단 바 버튼은 1칸 규격 — 앱 전역 스타일이 치수를 정한다
                          (A97/v0.116.0에서 40×40 → 36×36). -->
-                    <Button
-                        Grid.Column="0"
-                        Style="{StaticResource BottomBarButtonStyle}"
-                        ToolTipService.ToolTip="Open file"
-                        Click="OnOpenButtonClick">
-                        <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-                    </Button>
                     <TextBlock
                         x:Name="FileNameText"
-                        Grid.Column="1"
+                        Grid.Column="0"
                         VerticalAlignment="Center"
                         TextTrimming="CharacterEllipsis" />
                     <!-- A22(v0.108.0): 파일이 열려 있지 않을 때만 뜨는 공용 드라이브 줄(셸이 주입).
                          파일명 칸과 같은 자리를 쓰고 둘은 서로 배타적으로 표시된다. -->
                     <ContentPresenter
                         x:Name="DriveStripHost"
-                        Grid.Column="1"
+                        Grid.Column="0"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Stretch"
                         VerticalAlignment="Center"
                         Visibility="Collapsed" />
                     <Button
-                        Grid.Column="2"
+                        Grid.Column="1"
                         Style="{StaticResource BottomBarButtonStyle}"
                         ToolTipService.ToolTip="Full screen (F11)"
                         Click="OnFullScreenButtonClick">

@@ -9,9 +9,10 @@
     <!-- 단축키: ←/→ 탐색, Delete 휴지통 삭제, F11 전체화면.
          Enter 전체화면(v0.29.0)은 A86(v0.121.0)에서 제거 — Enter는 셸의 오버레이 일괄 토글 키가
          됐고, keymap의 전체화면 예외는 영상 모듈뿐이다(전체화면은 F11로).
-         버튼에 걸린 단독 문자 키(O 열기 · R 회전 · A 1:1 · F Fit)는 A34에서 코드
+         버튼에 걸린 단독 문자 키(R 회전 · A 1:1 · F Fit)는 A34에서 코드
          (SetupHotkeys)로 옮겼다 — 툴팁 "(키)" 표기와 키를 한 값에서 만들고,
          텍스트 입력·파일 리스트 포커스에서는 통과시켜야 하기 때문.
+         O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
          PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Left" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Left" Invoked="OnPreviousInvoked" />
@@ -65,8 +66,8 @@
                  걷어내고 부모 Grid의 ColumnSpacing 한 곳에서 정한다(다시 흩어지지 않게). -->
             <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <!-- 파일명·메타(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 -->
+                    <!-- 파일명·메타(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸.
+                         열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -77,16 +78,9 @@
                 <!-- A27(v0.107.0): 하단 바 버튼은 1칸(36×36)·2칸(84×36) 두 규격만 (A97/v0.116.0에서 40→36) —
                      치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
                 <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
-                <Button
-                    x:Name="OpenButton"
-                    Grid.Column="0"
-                    Style="{StaticResource BottomBarButtonStyle}"
-                    Click="OnOpenButtonClick">
-                    <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-                </Button>
                 <!-- A9: 파일명 + 메타 요약(용량·종류·EXIF)이 남는 공간을 나눠 쓴다.
                      파일명이 우선(Auto), 메타는 남는 폭에서 말줄임(전체 텍스트는 툴팁). -->
-                <Grid x:Name="FileInfoPanel" Grid.Column="1">
+                <Grid x:Name="FileInfoPanel" Grid.Column="0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -109,27 +103,27 @@
                      파일명·메타 칸과 같은 자리를 쓰고 둘은 서로 배타적으로 표시된다. -->
                 <ContentPresenter
                     x:Name="DriveStripHost"
-                    Grid.Column="1"
+                    Grid.Column="0"
                     HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Stretch"
                     VerticalAlignment="Center"
                     Visibility="Collapsed" />
                 <TextBlock
                     x:Name="InfoText"
-                    Grid.Column="2"
+                    Grid.Column="1"
                     VerticalAlignment="Center" />
                 <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·1:1·전체화면 = 1칸,
                      Auto-fit = 2칸 + 핏 옵션 전부 아이콘(A27에서 확정 → A97에서 84×36). -->
                 <Button
                     x:Name="RotateButton"
-                    Grid.Column="3"
+                    Grid.Column="2"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Click="OnRotateButtonClick">
                     <FontIcon Glyph="&#xE7AD;" FontSize="18" />
                 </Button>
                 <Button
                     x:Name="ActualSizeButton"
-                    Grid.Column="4"
+                    Grid.Column="3"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Content="1:1"
                     FontSize="13"
@@ -140,7 +134,7 @@
                      높이는 A97(v0.116.0)에서 40→36. 폭 84는 유지. -->
                 <SplitButton
                     x:Name="FitButton"
-                    Grid.Column="5"
+                    Grid.Column="4"
                     Width="84" Height="36"
                     VerticalAlignment="Center" CornerRadius="4"
                     Click="OnFitClick">
@@ -161,7 +155,7 @@
                     </SplitButton.Flyout>
                 </SplitButton>
                 <Button
-                    Grid.Column="6"
+                    Grid.Column="5"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Click="OnFullScreenButtonClick"
                     ToolTipService.ToolTip="Full screen (F11)">

@@ -7,9 +7,10 @@
     KeyboardAcceleratorPlacementMode="Hidden">
 
     <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨, Enter/F11 전체화면.
-         버튼에 걸린 단독 문자 키(O 열기 · M 음소거 · S 배속 · C 자막 · A 1:1 · F Fit)는
+         버튼에 걸린 단독 문자 키(M 음소거 · S 배속 · C 자막 · A 1:1 · F Fit)는
          A34에서 코드(SetupHotkeys)로 옮겼다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들고,
          텍스트 입력·파일 리스트 포커스에서는 통과시켜야 하기 때문.
+         O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
          더블클릭 전체화면은 제거(v0.23.0 사용자 요청) — 클릭 재생/일시정지와 오동작 겹침.
          PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Space" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
@@ -82,8 +83,8 @@
         <!-- 트랜스포트 바 — 셸이 TakeBottomBar()로 떼어가 하단 바(44px) 한 줄에 얹는다(v0.21.0).
              ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
         <Grid x:Name="TransportBar" Grid.Row="1" Padding="0,2" ColumnSpacing="6">
+            <!-- 열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -100,31 +101,27 @@
             <!-- A27(v0.107.0): 하단 바 버튼은 1칸(36×36)·2칸(84×36) 두 규격만 (A97/v0.116.0에서 40→36) —
                  치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
             <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
-            <Button x:Name="OpenButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
-                    Click="OnOpenClicked">
-                <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-            </Button>
-            <Button x:Name="PlayButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="PlayButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
                     Content="▶"
                     ToolTipService.ToolTip="Play/Pause (Space)" Click="OnPlayClicked" />
-            <TextBlock x:Name="PositionText" Grid.Column="2" Text="0:00"
+            <TextBlock x:Name="PositionText" Grid.Column="1" Text="0:00"
                        VerticalAlignment="Center" />
-            <Slider x:Name="SeekSlider" Grid.Column="3" Minimum="0" Maximum="1000"
+            <Slider x:Name="SeekSlider" Grid.Column="2" Minimum="0" Maximum="1000"
                     IsThumbToolTipEnabled="False" VerticalAlignment="Center"
                     ValueChanged="OnSeekSliderChanged" />
-            <TextBlock x:Name="DurationText" Grid.Column="4" Text="0:00"
+            <TextBlock x:Name="DurationText" Grid.Column="3" Text="0:00"
                        VerticalAlignment="Center" />
-            <Button x:Name="MuteButton" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="MuteButton" Grid.Column="4" Style="{StaticResource BottomBarButtonStyle}"
                     Content="🔊" Click="OnMuteClicked" />
-            <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
+            <Slider x:Name="VolumeSlider" Grid.Column="5" Width="96" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(v0.49.0 사용자 요청 — 공간 절약).
                  A27(v0.107.0)에서 2칸 규격(A97에서 84×36) — "1.0×"가 1칸에 안 들어간다. -->
-            <ComboBox x:Name="SpeedBox" Grid.Column="7" Style="{StaticResource BottomBarWideComboBoxStyle}"
+            <ComboBox x:Name="SpeedBox" Grid.Column="6" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
             <!-- 자막: 콤보 → 아이콘 버튼 + 라디오 플라이아웃 (v0.53.0 사용자 요청 — 공간 절약) -->
-            <Button x:Name="SubtitleButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="SubtitleButton" Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
                     IsEnabled="False">
                 <FontIcon Glyph="&#xE190;" FontSize="18" />
                 <Button.Flyout>
@@ -133,7 +130,7 @@
             </Button>
             <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): 1:1·전체화면 = 1칸, Auto-fit = 2칸 +
                  핏 옵션 전부 아이콘. 이미지/문서 모듈과 동일 규격(A27에서 확정 → A97에서 84×36). -->
-            <Button x:Name="ActualSizeButton" Grid.Column="9" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="ActualSizeButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
                     Content="1:1" FontSize="13" Click="OnActualSizeClicked" />
             <!-- A30: 상태형 Fit 버튼 — 마지막으로 고른 옵션(A/좌우/상하)이 본체에 표시되고
                  본체 클릭 = 그 옵션 재적용, 화살표 = 3옵션 선택. 기억 안 함 — 재생 영상이
@@ -142,7 +139,7 @@
                  전역 스타일 대신 2칸 값(84×36)을 그대로 적는다 — A27(v0.107.0),
                  높이는 A97(v0.116.0)에서 40→36. 폭 84는 유지. -->
             <!-- 툴팁(키 표기 포함)은 UpdateFitButton()이 상태와 함께 갱신한다 — A34 -->
-            <SplitButton x:Name="FitButton" Grid.Column="10" Width="84" Height="36"
+            <SplitButton x:Name="FitButton" Grid.Column="9" Width="84" Height="36"
                          VerticalAlignment="Center" CornerRadius="4" Click="OnFitClicked">
                 <TextBlock Text="A" FontSize="13"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -166,7 +163,7 @@
                     </MenuFlyout>
                 </SplitButton.Flyout>
             </SplitButton>
-            <Button Grid.Column="11" Style="{StaticResource BottomBarButtonStyle}"
+            <Button Grid.Column="10" Style="{StaticResource BottomBarButtonStyle}"
                     ToolTipService.ToolTip="Full screen (Enter / F11)" Click="OnFullScreenClicked">
                 <FontIcon Glyph="&#xE740;" FontSize="18" />
             </Button>

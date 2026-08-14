@@ -1,10 +1,7 @@
-using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Windows.Storage.Pickers;
-using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 
@@ -34,9 +31,6 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
-
-    /// <summary>자식들의 확장자 합집합 — 열기 대화상자 필터에 쓴다(오버레이 필터는 모듈이 노출).</summary>
-    private readonly IReadOnlyList<string> _extensions;
 
     private UIElement? _childView;   // 지금 센터에 얹힌 자식 뷰 (null = 빈 상태)
     private string? _filePath;       // 지금 보고 있는 파일
@@ -78,7 +72,6 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     {
         InitializeComponent();
         _children = children;
-        _extensions = AllReadableRouting.UnionExtensions(children);
 
         // 빈 상태에서만 스스로 포커스를 잡는다 — 자식이 있으면 자식이 자기 Loaded에서 잡는다
         // (문서 편집기의 커서를 뺏으면 안 된다).
@@ -232,27 +225,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         _childView is ICloseGuard guard ? guard.ConfirmCloseAsync() : Task.FromResult(true);
 
     // ---------- 자체 바 동작 (빈 상태 전용) ----------
-
-    private void OnOpenButtonClick(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
-
-    /// <summary>열기 대화상자 — 필터는 자식 모듈 전체의 확장자 합집합.</summary>
-    private async Task PickAndOpenAsync()
-    {
-        // Window 객체 없이 파일 선택기를 띄우려면 XamlRoot 경유로 HWND를 얻어야 한다(전 모듈 공통).
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var hwnd = Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
-
-        // 시작 위치는 문서 라이브러리 — 형식이 섞여 있어 특정 라이브러리를 고를 근거가 없다
-        // (문서·압축 모듈이 이미 쓰는 값). 실제 시작 폴더 개념은 셸의 lastFolder가 담당한다.
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
-        foreach (var ext in _extensions)
-            picker.FileTypeFilter.Add(ext);
-        InitializeWithWindow.Initialize(picker, hwnd);
-
-        if (await picker.PickSingleFileAsync() is { } file)
-            TryOpenFile(file.Path);
-    }
+    // A99: 빈 상태 바의 열기 버튼·파일 대화상자(PickAndOpenAsync)는 제거 — 파일 열기는
+    // 셸 S4 'Open file'(A90)로 일원화됐다(자식 라우팅은 TryOpenFile이 종전대로 담당).
 
     private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
 

@@ -1,12 +1,9 @@
 using System.Text;
-using Microsoft.UI; // Win32Interop
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Windows.Storage.Pickers;
 using Windows.System;
-using WinRT.Interop;
 using KOTU.Core.Contracts;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -514,27 +511,9 @@ public sealed partial class DocumentView : UserControl,
         };
     }
 
-    // ---------- 열기 버튼 ----------
-
-    private async Task PickAndOpenAsync()
-    {
-        // Window 객체 없이 파일 선택기를 띄우려면 XamlRoot 경유로 HWND를 얻어야 한다.
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var hwnd = Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
-
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
-        foreach (var ext in DocumentModule.Extensions)
-            picker.FileTypeFilter.Add(ext);
-        InitializeWithWindow.Initialize(picker, hwnd);
-
-        // 미저장 확인은 실제로 다른 파일을 고른 뒤에만 (A37)
-        if (await picker.PickSingleFileAsync() is { } file && await ConfirmCloseAsync())
-            OpenAny(file.Path);
-    }
-
-    private void OnOpenButtonClick(object sender, RoutedEventArgs e) => _ = PickAndOpenAsync();
-    // 드래그&드롭은 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
+    // A99: 모듈 열기 버튼·O 키·파일 대화상자(PickAndOpenAsync)는 제거 — 파일 열기는
+    // 셸 S4 'Open file'(A90)로 일원화됐다(미저장 가드는 셸이 열기 전에 통과시킨다 — A37).
+    // 드래그&드롭은 종전대로 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
     // ---------- 전체화면 (전 모듈 공통 패턴) ----------
 
@@ -576,14 +555,12 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// **이 모듈은 에디터(TextBox)가 본문**이라 통과 규칙이 특히 중요하다 — 타이핑 중에는
-    /// HotkeySupport가 O·A·F를 삼키지 않고 글자를 그대로 흘려보낸다(A32/A84 규칙 재사용).
+    /// HotkeySupport가 A·F를 삼키지 않고 글자를 그대로 흘려보낸다(A32/A84 규칙 재사용).
     /// 1:1(A)·Fit(F)은 PDF에서만 보이는 버튼이라, 텍스트 모드(Collapsed)에서는 키도 동작하지 않는다.
     /// 저장은 Ctrl+S 그대로(A84의 유일한 Ctrl 예외) — XAML 액셀러레이터에 남겨 둔다.
     /// </summary>
     private void SetupHotkeys()
     {
-        HotkeySupport.Bind(this, OpenButton, VirtualKey.O,
-            "Open document file", () => _ = PickAndOpenAsync());
         HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,
             "Actual size (100%)", () => _pdfPane?.ApplyFit(PdfFitMode.ActualSize));
         HotkeySupport.Register(this, FitButton, FitKey, () => _pdfPane?.ApplyFit(_lastFitOption));

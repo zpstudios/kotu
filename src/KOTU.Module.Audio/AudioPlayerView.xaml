@@ -9,9 +9,10 @@
     <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨, F11 전체화면.
          Enter 전체화면은 A86(v0.121.0)에서 제거 — Enter는 셸의 오버레이 일괄 토글 키가 됐고,
          keymap의 전체화면 예외는 영상 모듈뿐이다(전체화면은 F11로).
-         버튼에 걸린 단독 문자 키(O 열기 · M 음소거 · S 배속)는 A34에서 코드(SetupHotkeys)로
+         버튼에 걸린 단독 문자 키(M 음소거 · S 배속)는 A34에서 코드(SetupHotkeys)로
          옮겼다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들고, 텍스트 입력·파일 리스트
          포커스에서는 통과시켜야 하기 때문. 비디오 플레이어와 동일 배치(A10 분리 — 자막·핏 계열만 없음).
+         O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
          PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Space" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Space" Invoked="OnTogglePlayInvoked" />
@@ -65,8 +66,8 @@
         <!-- 트랜스포트 바 — 셸이 TakeBottomBar()로 떼어가 하단 바(44px) 한 줄에 얹는다(비디오와 동일).
              ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
         <Grid x:Name="TransportBar" Grid.Row="1" Padding="0,2" ColumnSpacing="6">
+            <!-- 열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -80,29 +81,25 @@
             <!-- A27(v0.107.0): 하단 바 버튼은 1칸(36×36)·2칸(84×36) 두 규격만 (A97/v0.116.0에서 40→36) —
                  치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
             <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
-            <Button x:Name="OpenButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
-                    Click="OnOpenClicked">
-                <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-            </Button>
-            <Button x:Name="PlayButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="PlayButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
                     Content="▶"
                     ToolTipService.ToolTip="Play/Pause (Space)" Click="OnPlayClicked" />
-            <TextBlock x:Name="PositionText" Grid.Column="2" Text="0:00"
+            <TextBlock x:Name="PositionText" Grid.Column="1" Text="0:00"
                        VerticalAlignment="Center" />
-            <Slider x:Name="SeekSlider" Grid.Column="3" Minimum="0" Maximum="1000"
+            <Slider x:Name="SeekSlider" Grid.Column="2" Minimum="0" Maximum="1000"
                     IsThumbToolTipEnabled="False" VerticalAlignment="Center"
                     ValueChanged="OnSeekSliderChanged" />
-            <TextBlock x:Name="DurationText" Grid.Column="4" Text="0:00"
+            <TextBlock x:Name="DurationText" Grid.Column="3" Text="0:00"
                        VerticalAlignment="Center" />
-            <Button x:Name="MuteButton" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="MuteButton" Grid.Column="4" Style="{StaticResource BottomBarButtonStyle}"
                     Content="🔊" Click="OnMuteClicked" />
-            <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
+            <Slider x:Name="VolumeSlider" Grid.Column="5" Width="96" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸, A97에서 84×36) -->
-            <ComboBox x:Name="SpeedBox" Grid.Column="7" Style="{StaticResource BottomBarWideComboBoxStyle}"
+            <ComboBox x:Name="SpeedBox" Grid.Column="6" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
-            <Button Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
+            <Button Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
                     ToolTipService.ToolTip="Full screen (F11)" Click="OnFullScreenClicked">
                 <FontIcon Glyph="&#xE740;" FontSize="18" />
             </Button>
