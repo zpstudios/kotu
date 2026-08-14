@@ -28,7 +28,8 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="InfoText" TextWrapping="Wrap" FontSize="13" />
-                    <TextBlock x:Name="PinnedText" Text="Pinned - press X to close"
+                    <!-- 문구는 코드가 넣는다(OverlayHints 단일 출처, A107) — 표시 전 ShowHint가 항상 채운다. -->
+                    <TextBlock x:Name="PinnedText"
                                Visibility="Collapsed" FontSize="11" Opacity="0.6" />
                 </StackPanel>
             </ScrollViewer>

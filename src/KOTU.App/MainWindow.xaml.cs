@@ -30,16 +30,22 @@ public sealed partial class MainWindow : Window
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
 
-    // ---- 내장 탐색기 + 좌/우 오버레이 입력 상태 머신 (A58 상태 전이 + A86 키·일괄 토글) ----
-    // 키 할당(A86, v0.121.0 — A58의 Alt/Shift·부록 B 26번을 대체): Z = 좌측 파일 리스트 / X = 우측 정보.
+    // ---- 내장 탐색기 + 좌/우 오버레이 입력 상태 머신 (A58 상태 전이 + A86 일괄 토글 + A107 키) ----
+    // 키 할당(A107, v0.134.0 — A86의 단독 Z/X를 대체): **Alt+Z** = 좌측 파일 리스트 / **Alt+X** = 우측 정보.
+    // 단독 Z/X는 폐지 — 문자 입력·리스트 첫 글자 점프에 양보한다(충돌 자체가 소멸, A107의 계기).
     // 사이드마다 4상태: Closed(닫힘) / Holding(키 홀드 — 반투명 덮기, 메인 크기 불변) /
     //   TranslucentPinned(2초 이상 홀드 — 키를 떼도 반투명 유지) /
     //   OpaqueDocked(2연타 — 불투명 + 메인을 반대쪽 7*로 축소, 양쪽이면 3:4:3).
     // 2연타 = 불투명 도크 고정/해제(A58 유지). A86 추가: **열림 상태(고정·도크)에서 해당 키 1회 = 그 쪽 닫기**
-    //   (keymap S3 행 — 판정 충돌은 "첫 탭 이전 상태" 기준 2연타로 푼다, OnOverlaySideDown 참고).
+    //   (keymap S3 행 — 판정 충돌은 "첫 탭 이전 상태" 기준 2연타로 푼다, OnOverlaySideDown 참고.
+    //   A107 재검토 결과 유지 — 폐지 확정이 없었다).
+    // A107 신설: **Alt+Z+X 동시 누름 = 좌·우 동시 호출** — "다른 키 개입 = 홀드 취소"에서 Z↔X 상호만
+    //   예외로, 한쪽 홀드 중 다른 쪽 down이면 그쪽도 독립적으로 같은 전이를 시작한다(타이머·2연타도 사이드별).
     // 셸 수준 구성 상태(S1~S4, ShellState)는 Enter 일괄 토글·경계 버튼의 분배 기준 — 아래 CurrentShellState.
-    // 홀드 판정은 다른 키·포인터(클릭·휠 — Ctrl+휠 줌 포함)가 함께 개입하면 취소된다(A58 안전장치 유지).
-    // Alt의 OS 메뉴 모드 회피 로직은 제거 — Z/X는 문자 키라 근거가 사라졌다(A86 확정).
+    // 홀드 판정은 다른 키·포인터(클릭·휠 — Ctrl+휠 줌 포함)가 함께 개입하면 취소된다(A58 안전장치 유지.
+    // Alt 자체는 수식키라 "다른 키"에서 제외 — OnRootKeyDown 참고).
+    // Alt 단독 OS 메뉴 모드 회피는 A86이 제거했다가 A107이 재도입 — 우리 조합에 쓰인 Alt의
+    // 단독 up만 조건 소비한다(_altComboUsed, OnRootKeyUp — A58 방식의 개작).
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ThumbnailExplorer? _thumbnailExplorer; // S1 중앙 썸네일 뷰 (A93, 지연 생성 — 구 ExplorerPane 대체)
@@ -97,12 +103,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>오버레이 한쪽(좌 = Z 리스트 / 우 = X 정보)의 입력·표시 상태.</summary>
+    /// <summary>오버레이 한쪽(좌 = Alt+Z 리스트 / 우 = Alt+X 정보)의 입력·표시 상태.</summary>
     private sealed class OverlaySide
     {
+        // KeyIsDown 필드는 A107에서 제거 — Z+X 상호 취소(조합 감지)용이었는데, A107이 동시 누름을
+        // 정식 지원(사이드별 독립 전이)하면서 읽는 곳이 사라졌다(CS0414 예방).
         public OverlayState State;
-        public bool KeyIsDown;          // 물리 키가 눌려 있는지 — Z+X 동시 누름(조합) 감지용
-        public bool HoldSessionActive;  // 이번 누름이 홀드 판정 세션인지 (2연타·조합·취소면 아님)
+        public bool HoldSessionActive;  // 이번 누름이 홀드 판정 세션인지 (2연타·취소면 아님)
         public DateTime LastTapDown = DateTime.MinValue; // 2연타 판정 (down→down)
         public OverlayState TapStartState;               // 첫 탭 "이전" 상태 — A86 2연타 판정 기준
         public DispatcherTimer? PinTimer; // 2초 홀드 → 반투명 고정 승격 (생성자에서 배선)
@@ -111,8 +118,8 @@ public sealed partial class MainWindow : Window
     private const double OverlayDoubleTapMs = 450;  // 2연타 판정 창 (v0.32.0 값 유지)
     private const double OverlayPinHoldMs = 2000;   // 홀드 → 반투명 고정 승격 시간 (A58)
 
-    private readonly OverlaySide _listSide = new(); // 좌측 파일 리스트 (Z)
-    private readonly OverlaySide _infoSide = new(); // 우측 정보 (X)
+    private readonly OverlaySide _listSide = new(); // 좌측 파일 리스트 (Alt+Z)
+    private readonly OverlaySide _infoSide = new(); // 우측 정보 (Alt+X)
 
     /// <summary>
     /// Enter 일괄 닫기 직전의 좌/우 구성 — "직전 구성 복원"(A86 keymap Q3)의 세션 한정 기억.
@@ -174,8 +181,9 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
-        // Z/X 오버레이 입력 감지(A58 전이 + A86 키 — v0.25.0 Alt/Ctrl 홀드 → A58 Alt/Shift 대체):
-        // 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.
+        // Alt+Z/X 오버레이 입력 감지(A58 전이 + A107 키 — v0.25.0 Alt/Ctrl 홀드 → A58 Alt/Shift →
+        // A86 단독 Z/X를 대체): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.
+        // Alt(Menu) down/up도 같은 KeyDown/KeyUp 층으로 온다(A58 실증 — SystemKey도 이 핸들러가 받는다).
         // 포인터 개입(클릭·휠)도 홀드 판정 취소 트리거(A58 안전장치 유지 — 휠은 A84에서 추가,
         // Ctrl+휠 줌 개입도 같은 경로로 취소된다: A86 확정. 줌 재정의 자체는 A98 몫).
         // 창 비활성화로 KeyUp을 놓치면 홀드 판정·키 상태를 초기화(고정·불투명 상태는 유지).
@@ -197,8 +205,8 @@ public sealed partial class MainWindow : Window
         {
             if (e.WindowActivationState == WindowActivationState.Deactivated)
             {
-                _listSide.KeyIsDown = false;
-                _infoSide.KeyIsDown = false;
+                // Alt up을 못 본 채 비활성화(Alt+Tab 등) — 다음 활성 세션에 소비가 새면 안 된다(A107)
+                _altComboUsed = false;
                 ResetOverlayInput();
             }
         };
@@ -604,31 +612,34 @@ public sealed partial class MainWindow : Window
     /// **기존 순서 그대로 한 칸씩 밀었다**. A59(v0.113.0)의 "1~6 근육기억 유지, 신설은 7"을 대체한다.
     /// A10: 오디오 모듈이 영상 다음에 삽입되며 문서 이후가 한 칸씩 밀림(사용자 확정).
     /// A32: Ctrl 없이 숫자 단독(사용자 확정) — Ctrl은 정보 오버레이로 회귀.
+    /// A107(v0.134.0): 단독 숫자 → **Alt+숫자**(전역 키 전체가 Alt 조합으로 — A32 키 대체.
+    /// 배열·번호는 그대로, RegisterShortcuts가 Menu 수식자를 얹는다).
     /// 힌트 문자열은 시작 메뉴 항목 마우스 오버 시 툴팁으로 보조 표시된다.
     /// ⚠️ 번호를 또 바꾸면 <see cref="BuildStartMenu"/> 항목 순서 · A34 키 맵 표
     /// (docs/REQUIREMENTS.md) · docs/A86-keymap.md 를 **한 번에** 고쳐야 한다(번호가 사방에 박혀 있다).
     /// </summary>
     private static readonly (string Id, VirtualKey Key, string Hint)[] ModuleShortcuts =
     [
-        (KOTU.Module.AllReadable.AllReadableModule.ModuleId, VirtualKey.Number1, "1"),
-        ("image", VirtualKey.Number2, "2"),
-        ("video", VirtualKey.Number3, "3"),
-        ("audio", VirtualKey.Number4, "4"),
-        ("document", VirtualKey.Number5, "5"),
-        ("archive", VirtualKey.Number6, "6"),
-        ("hardware", VirtualKey.Number7, "7"),
+        (KOTU.Module.AllReadable.AllReadableModule.ModuleId, VirtualKey.Number1, "Alt+1"),
+        ("image", VirtualKey.Number2, "Alt+2"),
+        ("video", VirtualKey.Number3, "Alt+3"),
+        ("audio", VirtualKey.Number4, "Alt+4"),
+        ("document", VirtualKey.Number5, "Alt+5"),
+        ("archive", VirtualKey.Number6, "Alt+6"),
+        ("hardware", VirtualKey.Number7, "Alt+7"),
     ];
 
-    private const string SettingsShortcutHint = "0";
+    private const string SettingsShortcutHint = "Alt+0";
 
-    /// <summary>시작 메뉴 키 = `(숫자 1 왼쪽, VK_OEM_3). 툴팁 표기(A34)도 이 값으로 조립한다.</summary>
-    private const string MenuShortcutHint = "`";
+    /// <summary>시작 메뉴 키 = Alt+`(숫자 1 왼쪽, VK_OEM_3 — A107). 툴팁 표기(A34)도 이 값으로 조립한다.</summary>
+    private const string MenuShortcutHint = "Alt+`";
 
     /// <summary>
-    /// `(1 왼쪽 키) = 시작 메뉴, 숫자 = 모듈 전환, 0 = Settings — 전부 수정자 없는 단독 키(A32).
-    /// Shift+N = 새 창(A24 — A84에서 Ctrl+N을 Shift 계열로 전환. 앱에 남는 Ctrl 조합은
-    /// 문서 Ctrl+S 하나뿐). 단독 키와 Shift 조합은 텍스트 입력란에 포커스가 있으면
-    /// 가로채지 않고 통과시킨다(A32 예외 — 숫자 타이핑·Shift+N 대문자 입력이 우선).
+    /// Alt+`(1 왼쪽 키) = 시작 메뉴, Alt+숫자 = 모듈 전환, Alt+0 = Settings — A107(v0.134.0)이
+    /// A32의 단독 키에 Menu 수식자를 얹은 것(키 배열·동작은 그대로).
+    /// Shift+N = 새 창(A24 — A84에서 Ctrl+N을 Shift 계열로 전환, A107 무변경. 앱에 남는 Ctrl 조합은
+    /// 문서 Ctrl+S 하나뿐). 텍스트 입력 통과 예외(A32)는 이제 Shift+N에만 남는다 —
+    /// Alt 조합은 문자를 만들지 않아 뺏을 입력이 없으므로 어디서나 동작한다(A107 전환의 목적).
     /// </summary>
     private void RegisterShortcuts()
     {
@@ -636,12 +647,14 @@ public sealed partial class MainWindow : Window
         RootLayout.KeyboardAcceleratorPlacementMode =
             Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
 
-        AddShortcut((VirtualKey)192, () => StartFlyout.ShowAt(StartButton)); // VK_OEM_3 = `(~)
+        AddShortcut((VirtualKey)192, () => StartFlyout.ShowAt(StartButton),
+            Windows.System.VirtualKeyModifiers.Menu); // VK_OEM_3 = `(~) — A107: Alt+`
         // A34: 하단 바 메뉴 버튼도 툴팁에 키를 표기한다(문자열은 여기서만 만든다).
         ToolTipService.SetToolTip(StartButton, $"Menu ({MenuShortcutHint})");
         foreach (var (id, key, _) in ModuleShortcuts)
-            AddShortcut(key, () => OpenModuleById(id));
-        AddShortcut(VirtualKey.Number0, () => OnSettingsClick(StartButton, new RoutedEventArgs()));
+            AddShortcut(key, () => OpenModuleById(id), Windows.System.VirtualKeyModifiers.Menu);
+        AddShortcut(VirtualKey.Number0, () => OnSettingsClick(StartButton, new RoutedEventArgs()),
+            Windows.System.VirtualKeyModifiers.Menu);
         // 새 창 = 지금 보는 모듈의 빈 인스턴스(A24 사용자 확정). 설정 화면 등 모듈 없는 창은 기본 화면으로.
         AddShortcut(VirtualKey.N, () => _manager.OpenNewWindow(CurrentModuleId),
             Windows.System.VirtualKeyModifiers.Shift); // A84: Ctrl+N → Shift+N
@@ -655,6 +668,7 @@ public sealed partial class MainWindow : Window
         {
             // A32 예외: 단독 키는 입력 컨트롤 타이핑을 뺏으면 안 된다.
             // A84: Shift 조합도 동일 — 에디터에서 Shift+글자는 대문자 입력이 우선(Shift+N 통과).
+            // A107: Menu 조합은 이 예외에 안 걸린다(문자를 안 만든다) — 텍스트 입력 중에도 발화.
             if (modifiers is Windows.System.VirtualKeyModifiers.None
                     or Windows.System.VirtualKeyModifiers.Shift
                 && IsTextInputFocused())
@@ -662,6 +676,10 @@ public sealed partial class MainWindow : Window
                 e.Handled = false; // 계속 흘려보내 컨트롤이 문자를 받게
                 return;
             }
+            // A107: Alt 조합 발화 기록 — Alt 단독 up의 조건 소비(OS 메뉴 모드 회피) 근거.
+            // 액셀러레이터가 키 down을 소비하면 OS가 "Alt 중 다른 키가 눌렸다"를 못 보므로,
+            // Alt up에서 우리가 대신 소비해야 창 메뉴 모드로 포커스를 뺏기지 않는다(OnRootKeyUp).
+            if (modifiers.HasFlag(Windows.System.VirtualKeyModifiers.Menu)) _altComboUsed = true;
             e.Handled = true;
             action();
         };
@@ -671,8 +689,9 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 포커스가 텍스트 입력 컨트롤(TextBox·PasswordBox·RichEditBox 계열)에 있는지.
     /// A34에서 판정 자체는 공용 헬퍼(HotkeySupport)로 옮겼다 — 모듈 버튼 핫키가 같은 규칙을 쓴다.
-    /// 셸 키(숫자·`·Shift+N)는 파일 리스트 포커스에서는 계속 동작해야 하므로
-    /// 리스트 통과까지 보는 ShouldPassThrough가 아니라 텍스트 입력만 보는 이 판정을 쓴다.
+    /// 셸 키 중 이 판정에 걸리는 것은 A107부터 Shift+N뿐이다(숫자·`는 Alt 조합이 되어 예외 불필요).
+    /// 파일 리스트 포커스에서는 계속 동작해야 하므로 리스트 통과까지 보는 ShouldPassThrough가 아니라
+    /// 텍스트 입력만 보는 이 판정을 쓴다. 루트 KeyDown(Enter·홀드 취소 리셋)도 같은 판정을 공유한다.
     /// </summary>
     private bool IsTextInputFocused() => HotkeySupport.IsTextInputFocused(RootLayout);
 
@@ -1333,12 +1352,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ---------- 좌/우 오버레이 입력 상태 머신 (A58 전이 + A86 Z/X·Enter) ----------
+    // ---------- 좌/우 오버레이 입력 상태 머신 (A58 전이 + A86 Enter + A107 Alt+Z/X) ----------
 
     /// <summary>
-    /// 키 → 오버레이 사이드 매핑 (A86 — A58의 Alt/Shift·부록 B 26번을 Z/X로 대체):
-    /// Z = 좌측 파일 리스트, X = 우측 정보. 그 밖의 키는 null — 홀드 취소 트리거(다른 키 개입)로만 쓰인다.
-    /// A34가 Z·X를 어느 모듈에도 배정하지 않고 비워 둔 것이 이 키의 예약이었다.
+    /// 키 → 오버레이 사이드 매핑 (A107 — A86의 단독 Z/X에 Alt 게이트를 얹은 것):
+    /// Z = 좌측 파일 리스트, X = 우측 정보 — 단 **Alt(Menu)가 눌린 상태에서만**(호출부가 게이트).
+    /// 그 밖의 키는 null — 홀드 취소 트리거(다른 키 개입)로만 쓰인다.
+    /// A34가 Z·X를 어느 모듈에도 배정하지 않고 비워 둔 예약은 Alt 조합에서도 유효하다.
     /// </summary>
     private OverlaySide? SideForKey(VirtualKey key) => key switch
     {
@@ -1347,6 +1367,39 @@ public sealed partial class MainWindow : Window
         _ => null,
     };
 
+    /// <summary>Alt(Menu) 계열 키인지 — A58의 SideForKey가 매칭하던 3종 그대로(좌우 구분 없이 받는다).</summary>
+    private static bool IsAltKey(VirtualKey key)
+        => key is VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu;
+
+    /// <summary>
+    /// Alt(Menu)가 지금 눌려 있는지 — Z/X 게이트(A107). 판정 API는 저장소 선례
+    /// (ExplorerFileOps.IsCtrlDown/IsShiftDown — Ctrl+X 잘라내기와 같은 층)와 동일하다.
+    /// Ctrl+X·단독 X는 여기서 false라 오버레이 경로에 못 들어온다(수식키 실구분).
+    /// </summary>
+    private static bool IsAltDown() => Microsoft.UI.Input.InputKeyboardSource
+        .GetKeyStateForCurrentThread(VirtualKey.Menu)
+        .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    /// <summary>
+    /// 이번 Alt 세션(누름~뗌)에서 우리 조합(Alt+`/숫자/0 액셀러레이터·Alt+Z/X, Alt 홀드 중
+    /// 셸이 소비한 Enter/Esc 포함)이 발화했는지 — Alt 단독 up의 조건 소비(OS 메뉴 모드 회피,
+    /// A107이 A58 방식을 개작해 재도입)의 근거.
+    /// A58은 Alt 자체가 오버레이 키라 "down을 본 Alt의 up"을 전부 소비했지만, A107의 Alt는
+    /// 수식키라 깨끗한 단독 탭(조합 미사용)은 통과시켜 OS 기본 동작을 보존한다.
+    /// </summary>
+    private bool _altComboUsed;
+
+    /// <summary>
+    /// Alt가 눌린 채 도착한 키를 셸(또는 그보다 앞선 소비자)이 Handled로 끝냈으면 조합 사용으로
+    /// 기록한다(A107) — OS가 "Alt 중 눌린 키"를 못 봤으므로 Alt 단독 up을 우리가 소비해야 한다.
+    /// 소비되지 않고 흘러간 키(Alt+Space의 Space 등)는 OS가 직접 봤으니 기록하지 않는다 —
+    /// OS 자체 판정이 메뉴 모드를 막는다(시스템 조합 무간섭 원칙).
+    /// </summary>
+    private void MarkAltUseIfConsumed(KeyRoutedEventArgs e)
+    {
+        if (e.Handled && IsAltDown()) _altComboUsed = true;
+    }
+
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
         // A90: Esc는 텍스트 입력 판정보다 먼저 본다 — keymap 포커스 예외가 "텍스트 입력에서도
@@ -1354,11 +1407,51 @@ public sealed partial class MainWindow : Window
         if (e.Key == VirtualKey.Escape)
         {
             OnShellEscape(e);
+            MarkAltUseIfConsumed(e); // A107: Alt 홀드 중 셸이 Esc를 소비(S4 복귀)한 경우도 Alt up 소비 대상
+            return;
+        }
+
+        // A107: Alt(Menu) 자체는 "다른 키 개입"에서 제외 — Alt+Z 홀드 중 오토리피트·반대쪽 Alt가
+        // 홀드를 즉사시키면 안 된다(취소 트리거는 비수식 키·포인터만). 새 물리 누름마다 조합 사용
+        // 플래그만 초기화한다(깨끗한 단독 탭 = OS 기본 통과). down은 소비하지 않는다 — OS 메뉴
+        // 모드는 Alt "up"에서 발동하므로 소비는 OnRootKeyUp의 조건 소비 하나로 충분하고, down
+        // 시점에는 조합이 될지 아직 몰라 무조건 소비하면 시스템 조합까지 건드리는 반대 함정이 있다.
+        if (IsAltKey(e.Key))
+        {
+            if (!e.KeyStatus.WasKeyDown) _altComboUsed = false;
+            return;
+        }
+
+        // A107 게이트: Z/X는 "Alt가 눌린 상태"에서만 오버레이 키다. 단독 Z/X는 폐지 —
+        // 아래 일반 키 경로로 떨어져 문자 입력·리스트 첫 글자 점프에 양보한다(충돌 자체가 소멸).
+        // 게이트가 텍스트 입력·통과 표면(Q4) 판정보다 앞이다: Alt 조합은 문자를 만들지 않아
+        // 뺏을 입력이 없고(A32 예외·Q4 예외의 근거 소멸), 그래야 "외부 탐색기에서 파일을 열어
+        // 시작하면 Z/X 무반응"(에디터·리스트 포커스가 삼키던 증상)이 실제로 해소된다 — A107의 계기.
+        var side = IsAltDown() ? SideForKey(e.Key) : null;
+        if (side is not null)
+        {
+            _altComboUsed = true; // Alt 단독 up 소비 근거 — S4 무동작 소비도 조합 사용이다
+            // A90 keymap S4 행: 좌/우 키·2연타 = 무동작 (Q5 확정) — 판정에 태우지 않고 소비만 한다.
+            if (IsOpenFileBrowsing)
+            {
+                e.Handled = true;
+                return;
+            }
+            if (!e.KeyStatus.WasKeyDown) // 오토리피트(홀드 중 반복 down)는 전이에 안 태운다 — Alt 조합에서도 필수
+            {
+                // A107: Z↔X 상호는 "다른 키 개입" 취소의 예외 — 한쪽 홀드 중 다른 쪽 down이면
+                // 그쪽도 독립적으로 같은 전이를 시작한다(Alt+Z+X 동시 호출. 타이머·2연타 판정은
+                // 원래 사이드별 분리라 추가 작업 없음 — A86의 상호 취소 분기만 제거했다).
+                OnOverlaySideDown(side);
+            }
+            // 오버레이 컨텍스트가 있으면 소비한다(오토리피트 포함) — Alt+Z/X는 시스템 조합이
+            // 아니고 다른 수신자도 없다. 컨텍스트 없음(설정·H/W·미지원 안내)은 종전대로 무소비.
+            if (_currentFilePath is not null || IsEmptyFileModule) e.Handled = true;
             return;
         }
 
         // A86 포커스 예외 ①(A32 통과 규칙 재사용): 텍스트 입력 컨트롤에 포커스가 있으면
-        // Z·X·Enter 전부 입력이 우선이다(문서 에디터의 z/x 타이핑·Enter 줄바꿈을 뺏으면 안 된다).
+        // Enter 등 입력이 우선이다(문서 에디터의 Enter 줄바꿈을 뺏으면 안 된다).
         // Esc는 위에서 따로 처리했다 — 셸이 Esc를 소비하는 상태는 S4뿐(그 외는 종전대로 무개입).
         // 어떤 키든 홀드 판정·2연타 카운트만 리셋하고 흘려보낸다.
         if (IsTextInputFocused())
@@ -1370,64 +1463,33 @@ public sealed partial class MainWindow : Window
         if (e.Key == VirtualKey.Enter)
         {
             OnShellEnter(e); // A86 일괄 토글 — 원 기능 우선 판정 포함
+            // A107: Alt를 쥔 채 Enter(예: Alt+Z 홀드 → Enter 일괄 토글)를 셸이 소비하면 OS는
+            // "Alt 중 눌린 키"를 못 본다 — Z/X와 같은 이유로 이 Alt의 단독 up도 소비 대상이다.
+            MarkAltUseIfConsumed(e);
             return;
         }
 
-        var side = SideForKey(e.Key);
-        if (side is null)
-        {
-            // 다른 키가 함께 눌림 → 진행 중 홀드 세션 취소(이미 떠 있으면 즉시 내림) +
-            // 2연타 카운트 리셋 (A58 공통 안전장치 유지 — Shift+더블클릭 새 인스턴스·Shift+N 등
-            // 조합 입력이 오버레이를 물지 않게).
-            // 비수정자 키를 먼저 누르고 있던 조합은 그 키의 반복 입력이 곧 도착해 같은 경로로 취소된다.
-            ResetOverlayInput();
-            return;
-        }
-
-        // A86 포커스 예외 ②(Q4): 리스트/트리/썸네일 포커스에서는 Z/X가 타이핑 탐색(첫 글자 점프)
-        // 우선이다 — 키를 삼키지 않고 판정만 접는다. 오버레이 여닫기는 Enter·경계 버튼·마우스 몫.
-        if (HotkeySupport.ShouldPassThrough(RootLayout))
-        {
-            ResetOverlayInput();
-            return;
-        }
-
-        // A90 keymap S4 행: Z/X·2연타 = 무동작 (Q5 확정) — 판정에 태우지 않고 소비만 한다.
-        // (통과 표면 포커스는 위에서 이미 타이핑 탐색으로 흘렀다 — Q4 예외는 S4에서도 유효.)
-        if (IsOpenFileBrowsing)
-        {
-            e.Handled = true;
-            return;
-        }
-
-        var other = ReferenceEquals(side, _listSide) ? _infoSide : _listSide;
-        side.KeyIsDown = true; // 반복 입력에서도 갱신 — Z+X 동시 누름 감지의 근거
-        if (!e.KeyStatus.WasKeyDown) // 문자 키 오토리피트(홀드 중 반복 down)는 전이에 안 태운다
-        {
-            if (other.KeyIsDown)
-                ResetOverlayInput(); // Z+X 오버레이 키끼리의 조합 — 양쪽 다 홀드 판정 없음
-            else
-                OnOverlaySideDown(side);
-        }
-
-        // Z/X는 오버레이 전용 키다(A34가 비워 둠) — 여기까지 왔으면(텍스트 입력·탐색기 표면 아님)
-        // 흘려보낼 곳이 없어 컨텍스트가 있으면 소비한다(오토리피트 포함 — 반복 문자가 새지 않게).
-        // Alt 시절의 "오버레이가 떠 있을 때만 소비"(OS 메뉴 모드 회피)는 근거가 사라져 제거(A86).
-        if (_currentFilePath is not null || IsEmptyFileModule) e.Handled = true;
+        // 다른 키가 함께 눌림 → 진행 중 홀드 세션 취소(이미 떠 있으면 즉시 내림) +
+        // 2연타 카운트 리셋 (A58 공통 안전장치 유지 — Shift+더블클릭 새 인스턴스·Shift+N·
+        // Alt+숫자 모듈 전환 등 조합 입력이 오버레이를 물지 않게. 단독 Z/X도 A107부터는
+        // 여기로 온다 — 일반 키와 같은 취소 트리거일 뿐, 소비하지 않는다).
+        // 비수정자 키를 먼저 누르고 있던 조합은 그 키의 반복 입력이 곧 도착해 같은 경로로 취소된다.
+        ResetOverlayInput();
     }
 
     /// <summary>
-    /// 사이드 키 최초 down(반복·조합 제외)의 상태 전이 (A58 전이 + A86 keymap):
-    /// 닫힘에서 단독 down = 홀드 세션 시작(반투명 덮기 + 2초 승격 타이머) — "닫힌 오버레이 꺼내기".
-    /// **열림(반투명 고정·불투명 도크)에서 단독 down = 그 쪽 닫기** (A86 신설 — keymap S3 행:
-    /// S3L에서 Z = 좌 닫기. A58에서는 무동작이던 자리).
+    /// 사이드 키(A107: Alt+Z/X) 최초 down(오토리피트 제외)의 상태 전이 (A58 전이 + A86 keymap):
+    /// 닫힘에서 down = 홀드 세션 시작(반투명 덮기 + 2초 승격 타이머) — "닫힌 오버레이 꺼내기".
+    /// **열림(반투명 고정·불투명 도크)에서 down 1회 = 그 쪽 닫기** (A86 신설 — keymap S3 행:
+    /// S3L에서 Alt+Z = 좌 닫기. A58에서는 무동작이던 자리. A107 재검토 결과 유지).
     /// 2연타 = 불투명 도크 고정/해제(A58 유지). 첫 탭이 이미 상태를 옮기므로 판정은
     /// **첫 탭 이전 상태(TapStartState)** 기준이다: 닫힘에서 시작한 2연타 = 도크,
     /// 열림에서 시작한 2연타 = 해제(첫 탭이 이미 닫았다 — 두 번째 탭은 그대로 둔다).
+    /// 양쪽 사이드가 각자 이 전이를 독립적으로 탄다 — Alt+Z+X 동시 호출(A107)의 실행부.
     /// </summary>
     private void OnOverlaySideDown(OverlaySide side)
     {
-        if (IsOpenFileBrowsing) return; // A90 keymap S4: Z/X = 무동작 — OnRootKeyDown 가드의 이중 방어선
+        if (IsOpenFileBrowsing) return; // A90 keymap S4: 좌/우 키 = 무동작 — OnRootKeyDown 가드의 이중 방어선
 
         // 오버레이 컨텍스트가 없으면(설정·H/W·미지원 파일 안내) 판정도 없다. 파일 없이 연
         // 파일 모듈(빈 모듈 상태)은 A81부터 컨텍스트에 포함 — 기본 도크를 키로 닫고
@@ -1463,10 +1525,28 @@ public sealed partial class MainWindow : Window
 
     private void OnRootKeyUp(object sender, KeyRoutedEventArgs e)
     {
+        // A107: **우리 조합에 쓰인 Alt의 단독 up만 소비** — A86이 제거한 A58의 OS 메뉴 모드 회피를
+        // 개작 재도입한 본체다. 조합 키 down을 우리가 소비하면 OS는 "Alt가 깨끗하게 눌렸다 떼졌다"로
+        // 보고 up에서 창 메뉴 모드(SC_KEYMENU)에 들어가 포커스를 훔친다(Alt를 나중에 떼는 순서의 함정)
+        // — 그 up을 여기서 대신 소비해 막는다. 반대로 조합 미사용(깨끗한 Alt 탭)은 통과 = OS 기본
+        // 동작 유지. Alt+Tab(비활성화로 up이 우리에게 안 온다)·Alt+F4/Alt+Space(발동은 그 키의
+        // down이고 우리는 그 down을 소비하지 않는다)는 이 조건에 걸리지 않아 무영향이다.
+        if (IsAltKey(e.Key))
+        {
+            if (_altComboUsed)
+            {
+                _altComboUsed = false;
+                e.Handled = true;
+            }
+            return;
+        }
+
         var side = SideForKey(e.Key);
         if (side is null) return;
 
-        side.KeyIsDown = false;
+        // Z/X up은 Alt 게이트 없이 처리한다 — Alt를 먼저 뗀 경우에도 키를 놓으면 홀드 세션이
+        // 반드시 끝나야 한다(고아 세션 방지. 그 사이 잔여 홀드는 Z/X 오토리피트가 Alt 미검출로
+        // 일반 키 경로에 떨어지며 ResetOverlayInput으로 정리된다 — "Alt를 놓으면 홀드 끝" 동작).
         if (side.HoldSessionActive)
         {
             side.HoldSessionActive = false;
@@ -1479,7 +1559,7 @@ public sealed partial class MainWindow : Window
             // 타이머가 이미 TranslucentPinned로 승격했다면 그대로 유지 —
             // "2초 넘겨 뗐을 때 = 고정 유지" (A58 확정 해석)
         }
-        // Alt 시절의 KeyUp 소비(OS 메뉴 모드가 Alt up에서 발동)는 문자 키 Z/X에서는 불필요 — 제거(A86).
+        // Z/X 자체의 up은 소비하지 않는다(A86 유지) — Alt 조합의 up 소비는 위 Menu 분기가 담당.
     }
 
     // ---------- Enter 일괄 토글 (A86 keymap) ----------
@@ -1604,7 +1684,7 @@ public sealed partial class MainWindow : Window
     /// 포인터 개입(클릭·휠 — Ctrl+휠 줌 포함, A86 확정)도 홀드 판정을 취소한다(A58 안전장치,
     /// 휠은 A84에서 추가) — 클릭 다중 선택·더블클릭 새 인스턴스(A24)·휠 줌이
     /// 오버레이를 물고 있지 않게. 단, 그 오버레이 자신 안에서의 클릭·스크롤은 예외 —
-    /// Z를 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
+    /// Alt+Z를 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
     /// 기존 흐름(v0.25.0)을 끊으면 안 된다.
     /// </summary>
     private void OnRootPointerIntervened(object sender, PointerRoutedEventArgs e)
@@ -1929,7 +2009,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// S4 종료 (A90): restore=true(Esc·재누름·Enter 빈 선택) = 진입 전 스냅샷으로 복귀 —
     /// 이번에 추가된 구획만 내려가고 원래 있던 구획은 원래 모습(불투명이면 불투명) 그대로.
-    /// S4 중에는 Z/X·경계 버튼이 전부 무동작이라 좌/우 상태가 변할 길이 없어, 스냅샷 전체 대입이
+    /// S4 중에는 Alt+Z/X·경계 버튼이 전부 무동작이라 좌/우 상태가 변할 길이 없어, 스냅샷 전체 대입이
     /// 곧 "추가분만 되돌리기"와 같다. restore=false(콘텐츠 전환 = SetContentState/OnContentOpened) =
     /// 스냅샷을 버리고 좌/우는 지금 상태 그대로 A86 "상태는 콘텐츠를 넘어 유지" 규칙을 탄다.
     /// refresh=false는 호출부가 곧바로 ApplyOverlayStates를 부르는 경로(콘텐츠 전환)용.

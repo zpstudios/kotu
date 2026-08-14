@@ -122,15 +122,15 @@ public sealed partial class ContentInfoOverlay : UserControl
         OverlayBorder.IsHitTestVisible = IsOpen && (docked || pinned);
         if (IsOpen && (docked || pinned))
             ShowHint(docked
-                ? "Docked - press X to close"
-                : "Pinned - press X to close");
+                ? OverlayHints.Docked(OverlayHints.InfoKey)
+                : OverlayHints.Pinned(OverlayHints.InfoKey));
         else
             HideHint();
     }
 
-    // ---------- 안내 문구 일시 표시 (A92, v0.115.0 — 문구는 A86/v0.121.0에서 X 기준으로 갱신) ----------
-    // ⚠️ FileListOverlay에 같은 이름의 상수·필드·메서드가 한 벌 더 있다(문구만 Z/X로 다름).
-    // 공용 헬퍼로 빼지 않은 것은 이 두 파일의 구성과 문구가 계속 뒤집혀 왔기 때문 —
+    // ---------- 안내 문구 일시 표시 (A92, v0.115.0 — 문구·키 표기는 A107부터 OverlayHints가 단일 출처) ----------
+    // ⚠️ FileListOverlay에 같은 이름의 상수·필드·메서드(표시 타이밍 장치)가 한 벌 더 있다.
+    // 문구 문자열은 A107에서 OverlayHints로 모았지만 타이밍 장치는 여전히 두 벌 —
     // 한쪽을 고치면 반드시 다른 쪽도 맞출 것.
 
     private const double HintOpacity = 0.6; // XAML PinnedText.Opacity와 같아야 한다(페이드 후 되돌릴 값)
