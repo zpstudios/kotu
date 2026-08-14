@@ -23,6 +23,8 @@ namespace KOTU.Module.Hardware;
 /// (주기 폴링이 이미 최신 상태를 유지하므로 불필요 — 사용자 확정).
 /// A61(v0.111.0): 핀(A39)을 켜면 셸에 접기를 요청해 하단 바만 남는 상시 표시 바가 된다
 /// (IWindowCollapseSource). A62: 그 바의 글씨·선 굵기·카드 폭을 S/M/L로 키운다.
+/// A70(v0.131.0): 센서 선택(A18)·바 크기(A62)는 창(인스턴스)별 독립 — 이 뷰가
+/// HardwareInstanceState를 소유하고, 저장은 전역 1벌(마지막 커밋 우선)로만 남는다.
 /// </summary>
 public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWindowCollapseSource
 {
@@ -34,6 +36,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     private string _dataSignature = ""; // 값이 안 바뀌면 UI 재구성 생략
     private readonly List<SensorCard> _cards = []; // 센서 그래프 카드 10개 (A17)
     private SensorFrame _lastFrame = SensorFrame.Empty; // Copy all에 센서 값 포함용
+
+    // A70: 창(인스턴스)별 상태 — 센서 선택(A18)·하단 바 크기(A62). 전역 현재값(마지막 커밋
+    // 1벌)의 복사로 시작하고, 이 창의 조작은 즉시 전역 1벌로 커밋된다.
+    private readonly HardwareInstanceState _state = HardwareInstanceState.CreateForView();
 
     public HardwareView(OpenContext context)
     {
@@ -50,10 +56,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             if (_dataSignature.Length == 0) ShowBusy(); // 첫 데이터가 올 때까지 링 표시(A75에서 첫 로드 용도만 유지)
             // 뷰 구독(스펙+센서, A18에서 API 분리) — 구독 즉시 1회 폴링됨
             _subscription ??= HardwareModule.SubscribeSnapshots(OnSnapshot);
-            TraySensors.Changed -= UpdateTrayPins; // Loaded 중복 발화 대비 — 이중 구독 방지
-            TraySensors.Changed += UpdateTrayPins; // 다른 창에서 토글해도 이 창 카드에 반영
-            HardwareModule.BarScaleChanged -= ApplyBarScale; // 같은 이유의 이중 구독 방지 (A62)
-            HardwareModule.BarScaleChanged += ApplyBarScale; // 다른 창에서 바꿔도 이 창 바에 반영
+            // A70: 창 간 동기화 구독(TraySensors.Changed → 핀, BarScaleChanged → 배율)은 제거 —
+            // 선택·바 크기는 인스턴스 독립이 사양이라 다른 창을 따라가면 안 된다.
+            // 이 창의 핀 갱신은 토글 직후 UpdateTrayPins 직접 호출(이벤트 수명 문제 원천 차단).
             // A88: 맥박 렌더 루프를 붙인다(프레임마다 다시 그려 스파이크가 흐르게).
             // static 이벤트라 같은 이중 구독 방지 패턴을 그대로 쓴다.
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnPulseFrame;
@@ -64,8 +69,6 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         {
             _subscription?.Dispose(); // 마지막 뷰가 내려가면 폴러는 휴면(트레이 구독이 없다면)
             _subscription = null;
-            TraySensors.Changed -= UpdateTrayPins;
-            HardwareModule.BarScaleChanged -= ApplyBarScale; // A62
             // A88: 반드시 해제 — CompositionTarget.Rendering은 static 이벤트라 남겨 두면
             // 이 뷰(와 붙어 있는 창 전체)가 통째로 누수되고, UI 스레드도 매 프레임 계속 깨운다.
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnPulseFrame;
@@ -321,7 +324,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     // ---------- 하단 바 표시 크기 S/M/L (A62, v0.111.0) ----------
 
-    // M(1.0) 기준 치수. 실제 값은 ApplyBarScale이 HardwareModule.BarScale을 곱해 정한다.
+    // M(1.0) 기준 치수. 실제 값은 ApplyBarScale이 이 창의 배수(_state.BarScale, A70)를 곱해 정한다.
     private const double BaseCardHeight = 36;      // v0.64.2 컴팩트 카드 높이
     // 카드 높이 상한. A97(v0.116.0)에서 40 → 36 — 하단 바 버튼이 36이 됐고 카드가 그보다
     // 높으면 한 줄의 위아래 선이 어긋나 보인다. 44px 바(A40 불변) 안에도 그대로 들어간다.
@@ -335,10 +338,17 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     private const double BaseBarIconFontSize = 18;  // 하단 바 아이콘(A27 규격 버튼 안)
 
     /// <summary>
-    /// 크기 버튼 클릭 = S → M → L → S 순환(A62). 설정은 프로세스 공유라 열려 있는 다른
-    /// 정보 창도 HardwareModule.BarScaleChanged로 같은 단계를 따라온다.
+    /// 크기 버튼 클릭 = S → M → L → S 순환(A62). A70: **이 창만** 바뀐다 — 열려 있는 다른
+    /// 정보 창은 따라오지 않고, 저장은 전역 1벌(마지막 커밋 우선)로 남는다.
     /// </summary>
-    private void OnBarScaleClick(object sender, RoutedEventArgs e) => HardwareModule.CycleBarScale();
+    private void OnBarScaleClick(object sender, RoutedEventArgs e) => CycleBarScaleLocal();
+
+    /// <summary>버튼 클릭과 B 키(A34)의 공용 진입로 — 인스턴스 단계 순환 + 이 창에 즉시 반영(A70).</summary>
+    private void CycleBarScaleLocal()
+    {
+        _state.CycleBarScale();
+        ApplyBarScale();
+    }
 
     /// <summary>
     /// 현재 단계를 하단 바 요소에 반영한다(A62). 바 두께 44는 불변(A40)이므로 **바 안 요소**의
@@ -350,7 +360,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// </summary>
     private void ApplyBarScale()
     {
-        var scale = HardwareModule.BarScale;
+        var scale = _state.BarScale;
         var height = Math.Min(MaxCardHeight, BaseCardHeight * scale);
         foreach (var card in _cards)
         {
@@ -367,7 +377,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         BarScaleIcon.FontSize = BaseBarIconFontSize * scale;
         // A34: 표기는 키 상수에서 조립한다(단계 표시가 바뀌어도 키 표기는 어긋나지 않는다).
         ToolTipService.SetToolTip(BarScaleButton, HotkeySupport.Tip(
-            $"Bottom bar size: {HardwareModule.BarScaleSteps[HardwareModule.BarScaleIndex].Label}",
+            $"Bottom bar size: {HardwareInstanceState.BarScaleSteps[_state.BarScaleIndex].Label}",
             BarScaleKey));
 
         _sensorColumns = 0; // 카드 최소 폭이 바뀌었다 — 같은 폭이어도 다시 계산하게 한다
@@ -397,8 +407,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// </summary>
     private const double AxisMinWidth = 90;
 
-    /// <summary>현재 단계(A62)를 반영한 축 라벨 표시 임계 폭.</summary>
-    private static double AxisMinWidthNow => AxisMinWidth * HardwareModule.BarScale;
+    /// <summary>현재 단계(A62)를 반영한 축 라벨 표시 임계 폭 — 단계가 창별이라(A70) 인스턴스 멤버다.</summary>
+    private double AxisMinWidthNow => AxisMinWidth * _state.BarScale;
 
     /// <summary>
     /// 카드 10개 배치(순서는 사용자 확정). 채널 정의(제목·색·선택자·포맷·스케일)는
@@ -428,8 +438,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// </summary>
     private const double MinCardWidth = 76;
 
-    /// <summary>현재 단계(A62)를 반영한 카드 최소 폭.</summary>
-    private static double MinCardWidthNow => MinCardWidth * HardwareModule.BarScale;
+    /// <summary>현재 단계(A62)를 반영한 카드 최소 폭 — 단계가 창별이라(A70) 인스턴스 멤버다.</summary>
+    private double MinCardWidthNow => MinCardWidth * _state.BarScale;
 
     /// <summary>
     /// 하단 바(BarGrid)에서 센서 카드 칸(star)을 뺀 **고정 요소들의 폭 합**. A62 배수와 무관하다 —
@@ -593,7 +603,12 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         };
 
         // 카드 클릭 = 트레이 표시 토글(A18, 사용자 확정 UX). 이미 2개면 오래된 선택이 밀려난다.
-        root.Tapped += (_, _) => TraySensors.Toggle(channel.Id);
+        // A70: 이 창의 인스턴스 선택만 바뀌고 즉시 전역 1벌로 커밋된다(트레이 아이콘 = 마지막 커밋).
+        root.Tapped += (_, _) =>
+        {
+            _state.Toggle(channel.Id);
+            UpdateTrayPins();
+        };
         ToolTipService.SetToolTip(root, $"{channel.Title} - click to show in tray (up to 2)");
 
         _cards.Add(new SensorCard
@@ -613,11 +628,12 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         });
     }
 
-    /// <summary>트레이 선택이 바뀌면(이 창 클릭이든 다른 창이든) 카드 핀 표시를 맞춘다(A18).</summary>
+    /// <summary>이 창의 선택(A70: 인스턴스 상태)대로 카드 핀 표시를 맞춘다(A18).
+    /// 창 간 이벤트 구독은 제거됐다 — Loaded 1회 + 토글 직후 직접 호출이 전부다.</summary>
     private void UpdateTrayPins()
     {
         foreach (var card in _cards)
-            card.Pin.Visibility = TraySensors.IsSelected(card.Channel.Id)
+            card.Pin.Visibility = _state.IsSelected(card.Channel.Id)
                 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -640,7 +656,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             UpdateCard(card, frame, history);
     }
 
-    private static void UpdateCard(SensorCard card, SensorFrame frame, SensorFrame[] history)
+    // A70: RenderSparkline이 인스턴스 배수(AxisMinWidthNow)를 읽게 되면서 이 호출 연쇄
+    // (UpdateSensors → UpdateCard → RenderSparkline)는 인스턴스 메서드다.
+    private void UpdateCard(SensorCard card, SensorFrame frame, SensorFrame[] history)
     {
         var value = frame.Timestamp == DateTime.MinValue ? null : card.Channel.Select(frame);
         card.ValueText.Text = value is { } v ? card.Channel.FormatFull(v) : "—";
@@ -655,8 +673,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 그 외는 1·2·5 눈금 올림, 셋 다 세션 내 단조 증가) 기준.
     /// 그리고 나서 모서리 축 라벨을 갱신한다(A74).
     /// 레이아웃 전(폭 0)엔 그리지 않는다 — 다음 프레임에 그려진다.
+    /// A70: 축 라벨 임계(AxisMinWidthNow)가 창별 배수를 읽으므로 인스턴스 메서드다
+    /// (배수를 안 읽는 ClearSparkline·AxisCeiling·FormatSpan은 static 유지).
     /// </summary>
-    private static void RenderSparkline(SensorCard card, SensorFrame[] history)
+    private void RenderSparkline(SensorCard card, SensorFrame[] history)
     {
         var w = card.GraphHost.ActualWidth;
         var h = card.GraphHost.ActualHeight;
@@ -1110,6 +1130,6 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             "Sensor refresh interval", () => IntervalButton.Flyout?.ShowAt(IntervalButton));
         HotkeySupport.Bind(this, TopToggle, VirtualKey.P,
             "Always on top (collapses to the bar)", () => TopToggle.IsChecked = TopToggle.IsChecked != true);
-        HotkeySupport.Register(this, BarScaleButton, BarScaleKey, HardwareModule.CycleBarScale);
+        HotkeySupport.Register(this, BarScaleButton, BarScaleKey, CycleBarScaleLocal);
     }
 }

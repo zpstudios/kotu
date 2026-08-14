@@ -36,57 +36,14 @@ public sealed class HardwareModule : IModule
     private static int _snapshotSubscribers;
 
     /// <summary>
-    /// 하단 바 표시 크기 단계(A62): S / M(기본) / L = 0.85 / 1.0 / 1.25배.
-    /// A61의 상시 표시 바에서 가독성을 확보하는 것이 목적이라 **하단 바 안 요소에만** 곱한다 —
-    /// 전역 UI 배율(A41)과는 별개의 배수다(UiScale은 건드리지 않는다).
+    /// 센서 선택(A18)·하단 바 크기(A62)는 인스턴스 상태 스토어(<see cref="HardwareInstanceState"/>,
+    /// A70)가, 리프레시 주기(A29)는 여기가 설정에서 복원한다 — 모듈 등록 시 1회 주입받는다.
     /// </summary>
-    internal static readonly (string Id, string Label, double Factor)[] BarScaleSteps =
-    [
-        ("S", "Small", 0.85),
-        ("M", "Medium", 1.0),
-        ("L", "Large", 1.25),
-    ];
-
-    /// <summary>기본 단계 M의 인덱스 — 저장값이 목록 밖일 때도 여기로 떨어진다(A62).</summary>
-    private const int DefaultBarScaleIndex = 1;
-
-    internal const string BarScaleSettingKey = "hardware.barScale";
-
-    private static int _barScaleIndex = DefaultBarScaleIndex;
-
-    /// <summary>현재 단계 인덱스(<see cref="BarScaleSteps"/>) — 버튼 툴팁·아이콘 크기에 쓴다.</summary>
-    internal static int BarScaleIndex => _barScaleIndex;
-
-    /// <summary>현재 배수(0.85 / 1.0 / 1.25).</summary>
-    internal static double BarScale => BarScaleSteps[_barScaleIndex].Factor;
-
-    /// <summary>
-    /// 단계가 바뀌면(UI 스레드, 동기) 발생. 설정이 프로세스 공유라 열려 있는 다른 정보 창도
-    /// 같이 따라온다 — TraySensors.Changed와 같은 방식(인스턴스별 분리는 A70의 일).
-    /// </summary>
-    internal static event Action? BarScaleChanged;
-
-    /// <summary>다음 단계로 순환(S → M → L → S) + 설정 저장 + 통지. 버튼 1개가 유일한 진입로(A62).</summary>
-    internal static void CycleBarScale()
-    {
-        _barScaleIndex = (_barScaleIndex + 1) % BarScaleSteps.Length;
-        if (_settings is { } settings)
-        {
-            settings.Set(BarScaleSettingKey, BarScaleSteps[_barScaleIndex].Id);
-            settings.Save();
-        }
-        BarScaleChanged?.Invoke();
-    }
-
-    /// <summary>트레이 센서 선택(A18)·리프레시 주기(A29)·하단 바 크기(A62)는 설정에서 복원해야 하므로 모듈 등록 시 주입받는다.</summary>
     public HardwareModule(ISettingsService settings)
     {
-        TraySensors.Initialize(settings);
+        // A70: 선택·바 크기의 전역 1벌 로드(구 TraySensors.Initialize + barScale 복원을 흡수).
+        HardwareInstanceState.Initialize(settings);
         _settings = settings;
-        // 하단 바 크기 단계(A62) 복원 — 목록 밖 저장값(손으로 고친 settings.json 등)은 M으로.
-        var storedScale = settings.Get(BarScaleSettingKey, BarScaleSteps[DefaultBarScaleIndex].Id);
-        var scaleIndex = Array.FindIndex(BarScaleSteps, step => step.Id == storedScale);
-        _barScaleIndex = scaleIndex >= 0 ? scaleIndex : DefaultBarScaleIndex;
         var stored = settings.Get(RefreshSettingKey, DefaultRefreshMs);
         var ms = NormalizeRefreshMs(stored);
         // 이관은 읽을 때 1회만 — 정규화 결과를 바로 되써서 다음 실행부터는 그대로 통과한다(A73).
@@ -114,7 +71,11 @@ public sealed class HardwareModule : IModule
     /// <summary>현재 리프레시 주기(ms) — 하단 바 버튼 표기용(A29).</summary>
     internal static int RefreshMs => (int)Poller.Interval.TotalMilliseconds;
 
-    /// <summary>주기 변경(A29): 폴러에 즉시 반영(대기 중 간격 건너뜀) + 설정 저장.</summary>
+    /// <summary>
+    /// 주기 변경(A29): 폴러에 즉시 반영(대기 중 간격 건너뜀) + 설정 저장.
+    /// A70에서도 **프로세스 공유 유지** — 폴러가 하나라 주기는 폴러의 속성이다(인스턴스별
+    /// 주기는 폴러 분할이 필요해 비용 대비 이득이 없다 — A70 확정).
+    /// </summary>
     internal static void SetRefreshMs(int ms)
     {
         Poller.Interval = TimeSpan.FromMilliseconds(ms);

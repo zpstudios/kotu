@@ -1,76 +1,34 @@
-using KOTU.Core.Settings;
-
 namespace KOTU.Module.Hardware;
 
 /// <summary>
-/// 트레이 아이콘에 표시할 센서 선택 모델(A18). 최대 2개, 기본 CPU 온도/전력(사용자 확정).
+/// 트레이 아이콘(A18)용 **전역 선택 파사드**. A70부터 선택의 소유자는 창(인스턴스)별
+/// <see cref="HardwareInstanceState"/>이고, 여기의 전역 값은 **마지막으로 커밋된 1벌**이다 —
+/// 어느 창에서 조작했든 마지막 조작이 이기며(사용자 확정), 저장(`hardware.traySensors`)도 같은 1벌.
 ///
-/// - 변경(Toggle/Clear)은 UI 스레드에서만 한다 — 이 앱은 모든 창이 한 UI 스레드를 쓴다.
-///   구독자(뷰의 핀 표시, 앱의 SensorTray)도 같은 스레드에서 동기로 통지받는다.
-/// - <see cref="Selected"/>는 불변 스냅샷 배열을 돌려준다 — 폴러 워커 스레드가
-///   열거 중일 때 UI에서 선택이 바뀌어도 안전하다.
-/// - 이미 2개일 때 셋째를 고르면 가장 오래된 선택이 밀려난다(대화상자 없이 즉시).
-/// - 저장 키 "hardware.traySensors" = 채널 ID 콤마 목록. 미지의 ID는 로드 시 버린다.
+/// - App의 SensorTray가 소비하는 표면(MaxCount·Selected·Changed·Clear)만 남기고 내부는
+///   스토어(HardwareInstanceState) 위임 — App 쪽 수정 최소화.
+/// - <see cref="Selected"/>는 불변 스냅샷 배열 — SensorTray의 ComposeKey가 **워커 스레드**에서
+///   열거 중일 때 UI 스레드에서 커밋돼도 안전하다(A18 규약 유지 — 깨면 경합).
+/// - Toggle/IsSelected는 A70에서 인스턴스(HardwareInstanceState)로 이사 — 뷰가 직접 쓴다.
+///   Initialize도 스토어(HardwareInstanceState.Initialize)에 흡수됐다.
 /// </summary>
 public static class TraySensors
 {
-    public const int MaxCount = 2;
-    private const string SettingKey = "hardware.traySensors";
-    private const string DefaultSelection = "cpuTemp,cpuPower";
+    public const int MaxCount = HardwareInstanceState.MaxSelected;
 
-    private static readonly List<string> _selected = [];
-    private static volatile string[] _snapshot = [];
-    private static ISettingsService? _settings;
-
-    /// <summary>선택이 바뀔 때(UI 스레드, 동기). 트레이 아이콘·카드 핀 갱신용.</summary>
+    /// <summary>전역 1벌이 커밋될 때(UI 스레드, 동기). SensorTray의 구독·아이콘 갱신용.</summary>
     public static event Action? Changed;
 
-    /// <summary>현재 선택(선택한 순서). 불변 스냅샷 — 어느 스레드에서 읽어도 안전.</summary>
-    public static IReadOnlyList<string> Selected => _snapshot;
+    /// <summary>전역(마지막 커밋) 선택 — 불변 스냅샷, 어느 스레드에서 읽어도 안전.</summary>
+    public static IReadOnlyList<string> Selected => HardwareInstanceState.GlobalSelection;
 
-    public static bool IsSelected(string id) => Array.IndexOf(_snapshot, id) >= 0;
+    /// <summary>
+    /// 전부 해제(트레이 메뉴 "Hide tray sensors") = **전역 1벌만 비운다**(A70). 열려 있는 창들의
+    /// 런타임 선택은 그대로 남는다(허용된 발산) — 다음에 어느 창에서든 핀을 토글하면 그 창의
+    /// 선택 전체가 다시 커밋되어 아이콘이 되살아난다.
+    /// </summary>
+    public static void Clear() => HardwareInstanceState.ClearGlobalSelection();
 
-    /// <summary>앱 시작 시 1회(HardwareModule 생성) — 저장된 선택을 복원한다.</summary>
-    public static void Initialize(ISettingsService settings)
-    {
-        _settings = settings;
-        _selected.Clear();
-        var raw = settings.Get(SettingKey, DefaultSelection);
-        foreach (var id in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            if (SensorChannels.ById(id) is not null && !_selected.Contains(id) && _selected.Count < MaxCount)
-                _selected.Add(id);
-        _snapshot = [.. _selected];
-        // Initialize는 구독자가 붙기 전이라 Changed를 쏘지 않는다 — SensorTray가 생성 시 직접 읽는다.
-    }
-
-    /// <summary>카드 클릭 토글. 켤 때 이미 가득이면 가장 오래된 선택을 밀어낸다.</summary>
-    public static void Toggle(string id)
-    {
-        if (SensorChannels.ById(id) is null) return;
-        if (!_selected.Remove(id))
-        {
-            while (_selected.Count >= MaxCount) _selected.RemoveAt(0);
-            _selected.Add(id);
-        }
-        Commit();
-    }
-
-    /// <summary>전부 해제(트레이 메뉴 "Hide tray sensors").</summary>
-    public static void Clear()
-    {
-        if (_selected.Count == 0) return;
-        _selected.Clear();
-        Commit();
-    }
-
-    private static void Commit()
-    {
-        _snapshot = [.. _selected];
-        if (_settings is not null)
-        {
-            _settings.Set(SettingKey, string.Join(',', _selected));
-            _settings.Save();
-        }
-        Changed?.Invoke();
-    }
+    /// <summary>스토어의 선택 커밋 깔때기 전용 — 직접 부르지 말 것(커밋 없이 통지만 나가면 안 된다).</summary>
+    internal static void RaiseChanged() => Changed?.Invoke();
 }
