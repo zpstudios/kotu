@@ -165,8 +165,12 @@ internal sealed class SensorTray : IDisposable
         }
         var old = _hIcon;
         _hIcon = icon;
+        // A100 ②: 승격 요청은 첫 NimAdd 전이에서만 — Render는 200ms 폴링으로 수시 불리므로
+        // NimModify 경로에서 요청하면 스캔 태스크가 무한 증식한다.
+        var firstAdd = !_added;
         AddOrUpdate(_added ? NimModify : NimAdd);
         _added = true;
+        if (firstAdd) Integration.TrayPromotion.Request();
         if (old != IntPtr.Zero) _ = DestroyIcon(old);
     }
 
@@ -299,6 +303,8 @@ internal sealed class SensorTray : IDisposable
         if (msg == _taskbarCreatedMsg && _added && !_disposed)
         {
             AddOrUpdate(NimAdd);
+            // A100 ②: 재등록으로 항목이 새로 생겼을 수 있다 — 승격도 다시 보장.
+            Integration.TrayPromotion.Request();
             return IntPtr.Zero;
         }
 

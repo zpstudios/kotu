@@ -105,6 +105,8 @@ internal sealed class TrayIcon : IDisposable
         }
         AddOrUpdate(NimAdd);
         _added = true;
+        // A100 ②: 새 슬롯의 NotifyIconSettings 항목은 기본 '끔'으로 생긴다 — 자기 항목을 승격.
+        Integration.TrayPromotion.Request();
 
         // A54 감사: 아이콘 제거는 창 Closed → Dispose 하나뿐이라, 창을 닫지 않고 프로세스가
         // 내려가는 경로(관리자 승격 재실행의 Application.Exit 등)에서 아이콘이 남을 수 있다.
@@ -263,6 +265,8 @@ internal sealed class TrayIcon : IDisposable
         if (msg == _taskbarCreatedMsg && _added && !_disposed)
         {
             AddOrUpdate(NimAdd);
+            // A100 ②: 재등록으로 항목이 새로 생겼을 수 있다 — 승격도 다시 보장.
+            Integration.TrayPromotion.Request();
             return IntPtr.Zero;
         }
 
