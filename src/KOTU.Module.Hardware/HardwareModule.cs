@@ -89,15 +89,19 @@ public sealed class HardwareModule : IModule
     /// <summary>
     /// 프로세스 공유 폴러(A42 결정: Hardware만 공유, 창 여러 개여도 수집은 1회).
     /// 매 주기(50/200/500/1000/2000/5000ms 선택, A73) 센서 한 프레임을 읽고, WMI 스펙은 2초마다만 재수집한다.
-    /// 구독이 없으면(뷰도 트레이도) 휴면하므로 그때 비용은 0. BelowNormal 우선순위라
+    /// 구독(뷰)이 없으면 휴면하므로 그때 비용은 0. BelowNormal 우선순위라
     /// 재생·UI와 CPU를 다투지 않는다. 수집 스레드는 여기 하나다.
     /// </summary>
     internal static PollingWorker<HardwareSnapshot> Poller { get; } =
         new("KOTU hardware poller", AutoRefreshInterval, Poll);
 
     /// <summary>
-    /// 뷰 구독(스펙 + 센서). 이 구독이 하나라도 있어야 WMI 스펙 재수집이 돈다 —
-    /// 트레이만 살아 있을 때(A18 상시 표시) 스펙 WMI 질의를 2초마다 낭비하지 않기 위한 구분.
+    /// 뷰 구독(스펙 + 센서). 이 구독이 하나라도 있어야 WMI 스펙 재수집이 돈다.
+    /// 센서 전용 구독(구 SubscribeSensors — 스펙 수집 없이 폴러만 깨우던 A18 트레이용)은
+    /// A101(v0.137.0)에서 마지막 소비자(구 SensorTray)와 함께 제거 — 창별 트레이 표시는
+    /// 뷰가 이 구독으로 받는 프레임을 그대로 쓴다. 스펙 게이트(_snapshotSubscribers)는
+    /// 현재 구독 경로가 이것뿐이라 사실상 항상 참이지만, "스펙이 필요한 구독만 센다"는
+    /// 깔때기 계약으로 유지한다(센서 전용 구독이 다시 생겨도 Poll은 무수정).
     /// </summary>
     public static IDisposable SubscribeSnapshots(Action<HardwareSnapshot> handler)
     {
@@ -105,19 +109,12 @@ public sealed class HardwareModule : IModule
         return new SnapshotSubscription(Poller.Subscribe(handler));
     }
 
-    /// <summary>
-    /// 센서 전용 구독(A18 트레이). 폴러는 깨우되 스펙(WMI) 수집은 유발하지 않는다.
-    /// 핸들러는 워커 스레드에서 불린다 — UI 반영은 구독자가 디스패치할 책임.
-    /// </summary>
-    public static IDisposable SubscribeSensors(Action<SensorFrame> handler)
-        => Poller.Subscribe(snapshot => handler(snapshot.Sensors));
-
     private static HardwareSnapshot Poll()
     {
         var now = DateTime.UtcNow;
         // 스펙은 뷰 구독자가 있을 때만 수집한다. 수동 Refresh(RefreshNow)는 A75에서
         // 버튼과 함께 제거 — 주기 폴링이 이미 최신 상태를 유지한다.
-        // 트레이 전용 기간엔 마지막 섹션을 그대로 실어 보낸다(트레이는 Sensors만 쓴다).
+        // 게이트가 닫혀 있으면 마지막 섹션을 그대로 실어 보낸다(수집만 생략 — 스냅샷 모양 불변).
         var wantSpecs = Volatile.Read(ref _snapshotSubscribers) > 0;
         if (wantSpecs && (_sections.Count == 0 || now - _sectionsAt >= SpecRefreshInterval))
         {

@@ -129,16 +129,9 @@ public sealed class WindowManager
         window.Activate();
     }
 
-    /// <summary>
-    /// 하드웨어 모니터 열기/활성화 (A18 센서 트레이 좌클릭·메뉴). 하드웨어를 보여주는 창이
-    /// 있으면 그 창을, 없으면 빈 셸 또는 새 창에 하드웨어 모듈을 띄운다.
-    /// </summary>
-    public void ShowHardware()
-    {
-        var target = FindReusable("hardware");
-        target.OpenModuleById("hardware"); // 이미 하드웨어면 no-op
-        target.BringToFront();
-    }
+    // 구 ShowHardware(하드웨어 모니터 열기/활성화)는 A101(v0.137.0)에서 제거 — 유일한 호출자가
+    // A18 센서 트레이(좌클릭·메뉴)였고 그 아이콘 자체가 폐지됐다. 창별 아이콘 클릭은 TrayIcon의
+    // 기존 동작(그 창 활성화) 그대로다.
 
     /// <summary>모든 창 닫기 = 앱 종료 (트레이 메뉴 'Exit KOTU').</summary>
     public void CloseAll()

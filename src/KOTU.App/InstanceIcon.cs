@@ -103,7 +103,7 @@ internal static class InstanceIcon
         using (var g = System.Drawing.Graphics.FromImage(bitmap))
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            // ClearType은 배경 없는 32bpp에 알파를 망가뜨린다 — 회색조 AA (SensorTray와 동일)
+            // ClearType은 배경 없는 32bpp에 알파를 망가뜨린다 — 회색조 AA (구 SensorTray에서 온 관용구)
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
             // ① 본체: 모듈 색 아이콘 그대로 (A3 유지 — .ico는 16/24/32… 프레임을 다 가짐).

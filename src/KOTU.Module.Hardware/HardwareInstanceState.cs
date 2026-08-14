@@ -11,23 +11,22 @@ namespace KOTU.Module.Hardware;
 /// - **저장은 전역 1벌 · 마지막 조작 우선**: 모든 변경은 즉시 커밋 — 설정 키
 ///   (`hardware.traySensors`·`hardware.barScale`, 이름 불변 = 마이그레이션 0)에 쓰고
 ///   전역 런타임 사본(마지막 커밋 1벌)을 갱신한다. 재실행·새 창의 초기값 = 그 1벌.
-///   커밋 깔때기는 항목별로 하나씩 — 선택 커밋만 <see cref="TraySensors.Changed"/>를 쏜다
-///   (SensorTray 소비). 바 크기 커밋은 무통지: 창 간 동기화가 사양에서 제거됐고(A70)
-///   트레이는 바 크기를 쓰지 않는다.
+///   커밋 깔때기는 항목별로 하나씩 — **둘 다 무통지**: 선택 커밋의 통지(구 TraySensors.Changed →
+///   SensorTray)는 A101(v0.137.0)에서 소비자와 함께 삭제됐고(창별 트레이 표시는 뷰가 자기
+///   인스턴스 상태로 직접 통지한다), 바 크기는 A70부터 무통지(창 간 동기화 사양 제거).
 /// - 변경(Toggle/CycleBarScale)은 UI 스레드에서만 — 이 앱은 모든 창이 한 UI 스레드를 쓴다.
 ///
 /// 뒤 배치가 얹힐 훅:
 /// - **A60 3차**(피닝 목록·그래프 순서·대형 그래프 모드)의 창별 상태는 여기 인스턴스 측에
 ///   필드를 추가한다 — 저장 깔때기(전역 1벌·마지막 커밋)는 새 필드에도 같은 원칙.
-/// - **A101**(A18 센서 아이콘 폐지 → 창별 트레이 아이콘이 그 창 선택값 표시)은 인스턴스
-///   <see cref="Selection"/>을 창별 ITrayStatusProvider 경로로 읽는다 — HardwareView의
-///   ITrayStatusProvider 구현은 A101의 일(지금 H/W 유휴 표기는 셸 상수 INF).
+/// - A101(v0.137.0) 완료: 인스턴스 <see cref="Selection"/>을 HardwareView의 ITrayStatusProvider
+///   구현이 읽어 창별 트레이 아이콘에 표시한다(전역 1벌은 저장·새 창 초기값 전용으로 남았다).
 /// </summary>
 internal sealed class HardwareInstanceState
 {
     // ---------- 전역 스토어 (static): 마지막 커밋 1벌 + 설정 로드/저장 ----------
 
-    /// <summary>트레이 표시 센서 최대 개수(A18, 사용자 확정 2). TraySensors.MaxCount가 노출한다.</summary>
+    /// <summary>트레이 표시 센서 최대 개수(A18, 사용자 확정 2) — Toggle 밀어내기·뷰 트레이 표기 공용.</summary>
     internal const int MaxSelected = 2;
 
     private const string TraySensorsSettingKey = "hardware.traySensors"; // 채널 ID 콤마 목록
@@ -55,20 +54,20 @@ internal sealed class HardwareInstanceState
     private static ISettingsService? _settings; // Initialize에서 주입 — 커밋 깔때기 저장용
 
     /// <summary>
-    /// 전역(마지막 커밋) 선택 — 불변 스냅샷 배열. SensorTray의 ComposeKey가 **워커 스레드**에서
-    /// 열거하므로 volatile 교체만 하고 절대 제자리 수정하지 않는다(A18 규약 유지).
+    /// 전역(마지막 커밋) 선택 — 불변 스냅샷 배열. 워커 스레드 소비자(구 SensorTray의 ComposeKey)는
+    /// A101에서 사라졌지만 "volatile 교체만, 제자리 수정 금지" 규약은 유지한다(A18부터의 계약 —
+    /// 깨면 미래의 비 UI 스레드 소비자가 경합한다).
     /// </summary>
     private static volatile string[] _globalSelection = [];
 
     private static int _globalBarScaleIndex = DefaultBarScaleIndex; // UI 스레드에서만 접근
 
-    /// <summary>전역(마지막 커밋) 선택 — TraySensors.Selected가 그대로 노출한다.</summary>
-    internal static IReadOnlyList<string> GlobalSelection => _globalSelection;
+    // 구 GlobalSelection 노출 프로퍼티는 A101에서 제거 — 유일한 소비자가 TraySensors.Selected였다.
+    // 새 창 초기값은 CreateForView가 _globalSelection 필드를 직접 복사한다.
 
     /// <summary>
     /// 앱 시작 시 1회(HardwareModule 생성) — 저장된 1벌을 전역 사본으로 복원한다.
     /// 미지의 채널 ID는 버리고(손으로 고친 settings.json 등), barScale은 목록 밖이면 M으로.
-    /// Changed는 쏘지 않는다 — 구독자(SensorTray)가 붙기 전이고, SensorTray가 생성 시 직접 읽는다.
     /// </summary>
     internal static void Initialize(ISettingsService settings)
     {
@@ -85,20 +84,11 @@ internal sealed class HardwareInstanceState
     }
 
     /// <summary>
-    /// 트레이 메뉴 "Hide tray sensors"(TraySensors.Clear 경유) — **전역 1벌만 비운다**(A70).
-    /// 열려 있는 창들의 런타임 선택은 그대로 남는다(허용된 발산): 다음에 어느 창에서든 핀을
-    /// 토글하면 그 창의 선택 전체가 다시 커밋되어 아이콘이 되살아난다.
-    /// </summary>
-    internal static void ClearGlobalSelection()
-    {
-        if (_globalSelection.Length == 0) return; // 이미 비어 있으면 쓰기·통지 생략(현행 유지)
-        CommitSelection([]);
-    }
-
-    /// <summary>
-    /// 선택 커밋 깔때기 — `hardware.traySensors`를 쓰는 유일한 곳. 전역 사본 교체 → 설정 저장 →
-    /// TraySensors.Changed(UI 스레드 동기 — SensorTray가 구독·아이콘을 맞춘다). 핸들러는 읽기만
-    /// 한다는 것이 전제 — 핸들러 안에서 재커밋(재진입)하는 경로를 만들지 말 것.
+    /// 선택 커밋 깔때기 — `hardware.traySensors`를 쓰는 유일한 곳. 전역 사본 교체 → 설정 저장.
+    /// 통지 없음(A101): 구 TraySensors.Changed는 유일 소비자(SensorTray)와 함께 삭제됐다 —
+    /// 창별 트레이 표시는 뷰가 자기 인스턴스 상태에서 직접 통지한다(전역 1벌 = 저장 전용).
+    /// 전부 해제 경로였던 구 트레이 메뉴("Hide tray sensors" → ClearGlobalSelection)도 함께
+    /// 소멸 — 빈 커밋은 이제 열린 창에서 핀을 모두 끌 때만 나온다.
     /// </summary>
     private static void CommitSelection(string[] snapshot)
     {
@@ -108,7 +98,6 @@ internal sealed class HardwareInstanceState
             _settings.Set(TraySensorsSettingKey, string.Join(',', snapshot));
             _settings.Save();
         }
-        TraySensors.RaiseChanged();
     }
 
     /// <summary>바 크기 커밋 깔때기 — `hardware.barScale`을 쓰는 유일한 곳. 무통지(클래스 헤더 참조).</summary>
@@ -138,7 +127,8 @@ internal sealed class HardwareInstanceState
     /// <summary>새 뷰용 인스턴스 상태 — 전역 현재값(마지막 커밋 1벌)의 복사로 시작한다.</summary>
     internal static HardwareInstanceState CreateForView() => new([.. _globalSelection], _globalBarScaleIndex);
 
-    /// <summary>이 창의 선택(선택한 순서). 불변 스냅샷 — A101이 워커 스레드에서 읽어도 안전하게.</summary>
+    /// <summary>이 창의 선택(선택한 순서). 불변 스냅샷 규약(전역 사본과 동일) — A101의 트레이
+    /// 표기(GetTrayStatus·NotifyTrayStatus)는 UI 스레드에서 읽지만, 어느 스레드가 열거해도 안전하다.</summary>
     internal IReadOnlyList<string> Selection => _selectionSnapshot;
 
     internal bool IsSelected(string id) => Array.IndexOf(_selectionSnapshot, id) >= 0;

@@ -13,7 +13,7 @@ namespace KOTU.Core.Contracts;
 /// </summary>
 public sealed record TrayStatus
 {
-    /// <summary>값을 못 구한 줄에 쓰는 표기(A18 센서 트레이가 쓰는 em dash와 동일).</summary>
+    /// <summary>값을 못 구한 줄에 쓰는 표기(구 A18 센서 트레이가 쓰던 em dash 승계).</summary>
     public const string Unknown = "—";
 
     /// <summary>위 줄. 유휴면 이 줄 하나만 중앙에 그린다.</summary>
@@ -59,7 +59,7 @@ public interface ITrayStatusProvider
     /// <summary>
     /// 표시 값이 바뀌었을 때 발생한다(UI 스레드 보장 없음 — 셸이 디스패치한다).
     /// 값이 실제로 바뀐 경우만 쏠 필요는 없다: 셸이 문자열 키를 비교해
-    /// 같으면 아이콘을 다시 합성하지 않는다(A18 SensorTray의 ComposeKey 방식).
+    /// 같으면 아이콘을 다시 합성하지 않는다(구 A18 SensorTray의 ComposeKey 방식).
     /// </summary>
     event Action? TrayStatusChanged;
 

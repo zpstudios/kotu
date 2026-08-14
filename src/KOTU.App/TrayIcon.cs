@@ -43,7 +43,7 @@ internal sealed class TrayIcon : IDisposable
     private bool _ownsIcon;
     private string _tip = Branding.AppName;
     private bool _added;
-    private volatile bool _disposed; // ProcessExit(비 UI 스레드)와 창 Closed 양쪽에서 읽힌다 (A54 — SensorTray와 동일)
+    private volatile bool _disposed; // ProcessExit(비 UI 스레드)와 창 Closed 양쪽에서 읽힌다 (A54 — 구 SensorTray와 동일 규약)
 
     /// <summary>트레이 아이콘 좌클릭(또는 메뉴의 '창 활성화').</summary>
     public event Action? ActivateRequested;
@@ -58,8 +58,10 @@ internal sealed class TrayIcon : IDisposable
     public TrayIcon(string? iconPath)
     {
         _taskbarCreatedMsg = RegisterWindowMessageW("TaskbarCreated");
-        // A100: 결정적 식별 — 슬롯 번호 기반 클래스명 + uID(100번대 = SensorTray의 2와 대역 분리.
-        // 구 창 트레이가 쓰던 1도 피해서, 남아 있는 옛 NotifyIconSettings 항목과 섞이지 않는다).
+        // A100: 결정적 식별 — 슬롯 번호 기반 클래스명 + uID(100번대 = 구 SensorTray의 2와 대역 분리.
+        // 구 창 트레이가 쓰던 1도 피해서, 남아 있는 옛 NotifyIconSettings 항목과 섞이지 않는다.
+        // A101에서 SensorTray가 폐지됐어도 100번대는 유지 — 사용자 기기에 남은 옛 항목과의
+        // 분리라는 근거가 그대로다).
         var slot = System.Threading.Interlocked.Increment(ref _slotSeq);
         _uid = (uint)(100 + slot);
         _className = Branding.AppName + "TrayWnd_" + slot;
@@ -110,7 +112,7 @@ internal sealed class TrayIcon : IDisposable
 
         // A54 감사: 아이콘 제거는 창 Closed → Dispose 하나뿐이라, 창을 닫지 않고 프로세스가
         // 내려가는 경로(관리자 승격 재실행의 Application.Exit 등)에서 아이콘이 남을 수 있다.
-        // A18 SensorTray가 같은 이유로 이미 쓰는 방어선을 창별 아이콘에도 건다(중복 호출은 무해 — _disposed 가드).
+        // 구 A18 SensorTray가 같은 이유로 쓰던 방어선을 창별 아이콘에도 건다(중복 호출은 무해 — _disposed 가드).
         _processExitHandler = (_, _) => Dispose();
         AppDomain.CurrentDomain.ProcessExit += _processExitHandler;
     }
@@ -124,7 +126,8 @@ internal sealed class TrayIcon : IDisposable
     ///   값 텍스트를 그리는 경로는 <see cref="SetRenderedIcon"/>이다.
     /// ※ A102(v0.130.0): 원형 번호 배지는 창 아이콘에서도 사라졌다(렌더 코드째 제거) —
     ///   번호는 창 제목의 접두 숫자(A103)가 전담한다.
-    /// ※ 센서 트레이(SensorTray, A18)는 값 표시가 우선이라 테두리를 적용하지 않는다.
+    /// ※ 정보(H/W) 모듈 화면은 값 표시가 우선이라 테두리를 적용하지 않는다(A102 —
+    ///   Branding.IconRing이 null을 준다. 구 A18 SensorTray의 무테두리 규칙을 승계한 것).
     /// ※ A79(v0.119.0): 브랜드 표식(BrandIcons)이 켜져 있으면 링이 없어도 합성본을 쓴다.
     ///   값 텍스트를 그리는 <see cref="SetRenderedIcon"/> 경로는 건드리지 않는다 —
     ///   ①(중립 발바닥)이 A54의 트레이 글자를 덮으면 안 되기 때문.
@@ -186,7 +189,7 @@ internal sealed class TrayIcon : IDisposable
     /// <summary>
     /// 알림 영역에서 아이콘을 지우고 창·클래스·아이콘 핸들을 정리한다.
     /// 창 Closed와 ProcessExit(비 UI 스레드) 양쪽에서 불릴 수 있다 — 알림 영역 제거(스레드 무관)를
-    /// 먼저 하고, 창 정리는 실패해도 무방하다(A18 SensorTray.Dispose와 같은 규칙).
+    /// 먼저 하고, 창 정리는 실패해도 무방하다(구 A18 SensorTray.Dispose에서 온 규칙).
     /// </summary>
     public void Dispose()
     {

@@ -25,8 +25,11 @@ namespace KOTU.Module.Hardware;
 /// (IWindowCollapseSource). A62: 그 바의 글씨·선 굵기·카드 폭을 S/M/L로 키운다.
 /// A70(v0.131.0): 센서 선택(A18)·바 크기(A62)는 창(인스턴스)별 독립 — 이 뷰가
 /// HardwareInstanceState를 소유하고, 저장은 전역 1벌(마지막 커밋 우선)로만 남는다.
+/// A101(v0.137.0): 창별 트레이 아이콘(A54)이 **이 창의 선택값**을 직접 표시한다 —
+/// ITrayStatusProvider 구현. 구 프로세스 싱글턴 센서 아이콘(A18 SensorTray)은 폐지.
 /// </summary>
-public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWindowCollapseSource
+public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWindowCollapseSource,
+    ITrayStatusProvider
 {
     private IReadOnlyList<HardwareSection> _sections = [];
     private AppWindow? _appWindow;
@@ -67,7 +70,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         };
         Unloaded += (_, _) =>
         {
-            _subscription?.Dispose(); // 마지막 뷰가 내려가면 폴러는 휴면(트레이 구독이 없다면)
+            _subscription?.Dispose(); // 마지막 뷰가 내려가면 폴러는 휴면(A101부터 구독자는 뷰뿐)
             _subscription = null;
             // A88: 반드시 해제 — CompositionTarget.Rendering은 static 이벤트라 남겨 두면
             // 이 뷰(와 붙어 있는 창 전체)가 통째로 누수되고, UI 스레드도 매 프레임 계속 깨운다.
@@ -111,6 +114,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         }
         RecordPulse(); // 맥박 그래프(A29) — 스냅샷이 실제 도착한 타이밍 기록
         UpdateSensors(snapshot.Sensors);
+        NotifyTrayStatus(); // A101: 반드시 UI 스레드(여기) — OnSnapshot(워커)에서 쏘면 안 된다
         // 폴러는 스펙 섹션을 2초 캐시로 재사용한다 — 같은 참조면 서명 계산조차 불필요
         if (ReferenceEquals(_sections, snapshot.Sections)) return;
         var signature = Signature(snapshot.Sections);
@@ -609,11 +613,13 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         };
 
         // 카드 클릭 = 트레이 표시 토글(A18, 사용자 확정 UX). 이미 2개면 오래된 선택이 밀려난다.
-        // A70: 이 창의 인스턴스 선택만 바뀌고 즉시 전역 1벌로 커밋된다(트레이 아이콘 = 마지막 커밋).
+        // A70: 이 창의 인스턴스 선택만 바뀌고 즉시 전역 1벌로 커밋된다(저장·새 창 초기값용).
+        // A101: 이 창의 트레이 아이콘이 이 선택을 표시한다 — 토글 직후 즉시 통지.
         root.Tapped += (_, _) =>
         {
             _state.Toggle(channel.Id);
             UpdateTrayPins();
+            NotifyTrayStatus();
         };
         ToolTipService.SetToolTip(root, $"{channel.Title} - click to show in tray (up to 2)");
 
@@ -641,6 +647,66 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         foreach (var card in _cards)
             card.Pin.Visibility = _state.IsSelected(card.Channel.Id)
                 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ---------- 트레이 아이콘 내용 (A101: 창별 아이콘이 이 창의 선택값 표시) ----------
+
+    /// <summary>
+    /// 선택 0개일 때의 유휴 표기 — 셸의 미구현 화면 폴백 표(MainWindow.IdleTrayLabel의
+    /// "hardware" 행)와 같은 문자열이어야 한다: 어느 경로로 그려져도 결과가 같게(이중 규칙 방지).
+    /// </summary>
+    private const string IdleLabel = "INF";
+
+    /// <summary>마지막으로 통지한 표기 키(구 SensorTray의 ComposeKey 방식) — 같으면 통지 생략.</summary>
+    private string _trayKey = "";
+
+    public event Action? TrayStatusChanged;
+
+    /// <summary>
+    /// 이 창의 선택(A70 인스턴스 상태, 최대 2)을 초압축 표기(FormatCompact) 두 줄로 내준다(A101).
+    /// UI 스레드에서 호출된다(계약) — _lastFrame(UI 스레드 대입)과 _state.Selection(불변 스냅샷)만
+    /// 읽으므로 경합이 없다. 구 SensorTray 관례 승계: 값을 못 구한 줄은 "—"(Open이 null을 채운다).
+    /// 선택 1개면 아래 줄이 "—"다 — 계약상 열림은 2줄 고정(단줄 열림 없음)이고 Core 계약 확장은
+    /// 금지(A60 3차에서 필요해질 때 한 번에). 같은 이유로 줄별 채널 색·툴팁도 싣지 않는다 —
+    /// TrayStatus에 색·툴팁 자리가 없어 글자는 모듈 액센트 1색(셸 합성)으로 그려진다.
+    /// </summary>
+    public TrayStatus GetTrayStatus()
+    {
+        string? line1 = null, line2 = null;
+        var count = 0;
+        foreach (var id in _state.Selection)
+        {
+            if (SensorChannels.ById(id) is not { } channel) continue; // 미지 ID 방어(구 관례)
+            var value = _lastFrame.Timestamp == DateTime.MinValue ? null : channel.Select(_lastFrame);
+            var text = value is { } v ? channel.FormatCompact(v) : null;
+            if (count == 0) line1 = text ?? TrayStatus.Unknown;
+            else line2 = text ?? TrayStatus.Unknown;
+            if (++count == HardwareInstanceState.MaxSelected) break;
+        }
+        return count == 0 ? TrayStatus.Idle(IdleLabel) : TrayStatus.Open(line1, line2);
+    }
+
+    /// <summary>
+    /// 표기 키를 다시 계산해 바뀌었을 때만 셸에 알린다(A101). 키에 채널 ID를 포함해
+    /// "표기는 같은데 채널이 바뀐" 토글도 잡는다(구 SensorTray.ComposeKey와 같은 구성).
+    /// 두 갱신원(스냅샷 도착·선택 토글) 모두 **UI 스레드의 이 깔때기 하나**로 모은다 —
+    /// 계약상 이벤트는 스레드 무보장이지만 GetTrayStatus는 UI 스레드 호출이라, 워커 단계
+    /// (OnSnapshot 디스패치 전)에서 쏘면 셸이 읽는 시점과 값이 어긋날 수 있기 때문.
+    /// 뷰 Unloaded 뒤 잔여 디스패치가 쏴도 셸 구독 핸들러의 현재 뷰 가드가 걸러 준다(A54 배선).
+    /// </summary>
+    private void NotifyTrayStatus()
+    {
+        var parts = new List<string>();
+        foreach (var id in _state.Selection)
+        {
+            if (SensorChannels.ById(id) is not { } channel) continue;
+            var value = _lastFrame.Timestamp == DateTime.MinValue ? null : channel.Select(_lastFrame);
+            parts.Add($"{id}={(value is { } v ? channel.FormatCompact(v) : TrayStatus.Unknown)}");
+        }
+        var key = string.Join('|', parts);
+        if (key == _trayKey) return;
+        _trayKey = key;
+        TrayStatusChanged?.Invoke();
     }
 
     /// <summary>매 스냅샷: 승격 안내 표시 여부 + 카드 값·스파크라인 갱신.</summary>

@@ -2285,7 +2285,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 콘텐츠를 안 열고 있을 때의 모듈 3자 표기(A54 — 사용자 확정: IMG/VID/AUD/DOC/ARC/ALL).
-    /// 정보(하드웨어) 모듈은 열 파일이 없어 값이 상수라 계약 대신 이 표가 담당한다 — 표기는 INF
+    /// 정보(하드웨어)의 INF는 A101(v0.137.0)부터 안전망이다 — HardwareView가 계약을 구현해
+    /// 선택 0개면 같은 "INF" 유휴를 직접 돌려주므로 정상 경로에서 이 행에 닿지 않지만,
+    /// 두 경로의 결과가 같아야 하니 표기를 바꾸면 뷰의 IdleLabel도 함께 바꿀 것
     /// (BrandName "KOTU-info"와 정합. 2자 "HW"는 3자 규칙에서 벗어나고 "HWM"은 조어라 채택 안 함).
     /// 표에 없는 화면(설정·미지원 파일 안내)은 빈 문자열 → 중립 모듈 아이콘 폴백.
     /// </summary>

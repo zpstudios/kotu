@@ -6,7 +6,7 @@ namespace KOTU.App;
 
 /// <summary>
 /// 창별 트레이 아이콘의 내용 합성 (A54, v0.118.0) — 모듈이 내준 <see cref="TrayStatus"/>를
-/// 16px 아이콘에 그린다. 도구·관용구는 A18 <see cref="SensorTray"/>의 2값 세로 표기 그대로
+/// 16px 아이콘에 그린다. 도구·관용구는 구 A18 SensorTray(A101에서 폐지)의 2값 세로 표기 그대로
 /// (System.Drawing/GDI+ → <c>GetHicon</c>), 색만 모듈 액센트(<see cref="Branding.ModuleAccent"/>)를 쓴다.
 ///
 /// 표시 규칙(사용자 확정):
@@ -76,7 +76,7 @@ internal static class TrayStatusIcon
         using (var g = System.Drawing.Graphics.FromImage(bitmap))
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            // ClearType은 배경 없는 32bpp에 알파를 망가뜨린다 — 회색조 AA (SensorTray·InstanceIcon과 동일)
+            // ClearType은 배경 없는 32bpp에 알파를 망가뜨린다 — 회색조 AA (InstanceIcon과 동일, 구 SensorTray에서 온 관용구)
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
             // ① 배경: 밝은 작업표시줄에서도 대비가 나오는 반투명 다크 배지(A18과 같은 값)
@@ -175,7 +175,7 @@ internal static class TrayStatusIcon
     private static System.Drawing.Font MakeFont(float px)
         => new("Segoe UI", px, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
 
-    /// <summary>어두운 배지 위에서 읽히도록 밝힌다(A18 SensorTray.Lighten과 같은 계산).</summary>
+    /// <summary>어두운 배지 위에서 읽히도록 밝힌다(구 A18 SensorTray.Lighten에서 온 계산).</summary>
     private static GdiColor Lighten(GdiColor c, double amount) => GdiColor.FromArgb(
         c.R + (int)((255 - c.R) * amount),
         c.G + (int)((255 - c.G) * amount),

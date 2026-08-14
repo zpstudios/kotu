@@ -74,9 +74,8 @@ public partial class App : Application
         var request = LaunchRequest.Parse(Environment.GetCommandLineArgs().Skip(1).ToList());
         _windowManager.Dispatch(request);
 
-        // 선택 센서 트레이(A18): 저장된 선택(기본 CPU 온도/전력)이 있으면 즉시 표시.
-        // 하드웨어 창이 없어도 앱이 살아 있는 동안 유지된다(사용자 확정).
-        SensorTray.Initialize(_windowManager);
+        // 선택 센서 트레이(A18 SensorTray)는 A101(v0.137.0)에서 폐지 — 창별 트레이 아이콘이
+        // 그 창의 선택값을 표시한다(HardwareView의 ITrayStatusProvider). 상시 표시 축은 소멸.
 
         // 셸 등록 정비: 구 브랜드 흔적 1회 청소(A46) + exe 경로 자동 재등록(A78, 매 실행).
         ShellRegistrationMaintenance();
