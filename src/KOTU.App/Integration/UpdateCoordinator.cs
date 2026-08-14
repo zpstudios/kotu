@@ -131,7 +131,7 @@ internal static class UpdateCoordinator
         var local = at.ToLocalTime();
         return LastCheckError.Length == 0
             ? $"Last checked: {local:yyyy-MM-dd HH:mm}"
-            : $"Last checked: {local:HH:mm} — failed ({LastCheckError})";
+            : $"Last checked: {local:HH:mm} - failed ({LastCheckError})";
     }
 
     /// <summary>예외 메시지 첫 줄만, 길면 말줄임.</summary>

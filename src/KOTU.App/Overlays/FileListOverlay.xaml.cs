@@ -175,8 +175,8 @@ public sealed partial class FileListOverlay : UserControl
             docked ? "SolidBackgroundFillColorBaseBrush" : "OverlayAcrylicBrush"];
         if (IsOpen && (docked || pinned))
             ShowHint(docked
-                ? "Docked — press Z to close"
-                : "Pinned — press Z to close");
+                ? "Docked - press Z to close"
+                : "Pinned - press Z to close");
         else
             HideHint();
     }

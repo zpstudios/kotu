@@ -21,20 +21,20 @@ internal static class WindowIcon
     /// <summary>
     /// 창의 작업표시줄/타이틀바 아이콘을 .ico 파일로 강제 지정.
     /// 핸들은 캐시에 남겨 창 수명 동안 유효(프로세스 종료 시 OS 정리).
-    /// instanceNumber &gt; 0이면(창 2개 이상, A68) 인스턴스 색 테두리·원형 번호 배지를
-    /// 합성한 아이콘(InstanceIcon — 역시 프로세스 수명 캐시)을 대신 지정한다.
-    /// 합성 실패 시 무테두리 원본으로 폴백.
-    /// A79(v0.119.0): 창이 하나뿐이어도 브랜드 표식(BrandIcons)이 켜져 있으면 합성본을 쓴다.
+    /// ring이 있으면(A102 — 모듈 색, 창 개수 무관) 모듈 색 테두리를 합성한 아이콘
+    /// (InstanceIcon — 역시 프로세스 수명 캐시)을 대신 지정한다. 합성 실패 시 무테두리 원본으로 폴백.
+    /// A79(v0.119.0): 링이 없어도 브랜드 표식(BrandIcons)이 켜져 있으면 합성본을 쓴다.
     /// 표식이 꺼져 있으면 GetBranded가 0을 돌려주므로 지금까지처럼 파일을 그대로 로드한다.
     /// </summary>
     /// <param name="accent">현재 아이콘의 모듈 색(중립 아이콘이면 null) — A79 표식 판단용.</param>
+    /// <param name="ring">테두리 링 색(A102, Branding.IconRing) — null이면 링 없음.</param>
     public static void Apply(Microsoft.UI.Xaml.Window window, string icoPath,
-        Windows.UI.Color? accent = null, int instanceNumber = 0)
+        Windows.UI.Color? accent = null, Windows.UI.Color? ring = null)
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-        var icons = instanceNumber > 0
-            ? (Small: InstanceIcon.GetComposed(icoPath, instanceNumber, 16, accent),
-               Big: InstanceIcon.GetComposed(icoPath, instanceNumber, 32, accent))
+        var icons = ring is { } ringColor
+            ? (Small: InstanceIcon.GetComposed(icoPath, 16, accent, ringColor),
+               Big: InstanceIcon.GetComposed(icoPath, 32, accent, ringColor))
             : (Small: BrandIcons.GetBranded(icoPath, 16, accent),
                Big: BrandIcons.GetBranded(icoPath, 32, accent));
         if (icons.Small == IntPtr.Zero || icons.Big == IntPtr.Zero)

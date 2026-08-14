@@ -206,7 +206,7 @@ public sealed partial class MainWindow : Window
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
         if (File.Exists(IconPath))
         {
-            _moduleIconPath = IconPath; // 인스턴스 번호가 생기면 이 경로로 다시 합성 (A68)
+            _moduleIconPath = IconPath; // 모듈이 정해지면 그 색 .ico로 갈아탄다 (A102 링 합성 기준)
             AppWindow.SetIcon(IconPath);
             WindowIcon.Apply(this, IconPath); // 작업표시줄 기본 문서 아이콘 문제 보정 (실기기)
         }
@@ -291,8 +291,12 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 창 제목과 트레이 툴팁을 함께 갱신한다.
-    /// 최종 형태(A56): "● [2] KOTU Document — sample.pdf"
-    /// — ● = 미저장 변경(A37), [2] = 인스턴스 번호(창이 2개 이상일 때만).
+    /// 최종 형태(A103, v0.130.0): "● 2KOTU - sample.pdf"
+    /// — ● = 미저장 변경(A37), 2 = 인스턴스 번호(창이 2개 이상일 때만, 브래킷 없이 KOTU에 붙인다).
+    /// 모듈명 단어(Document·Image…)는 A103에서 전부 뺐다: 모듈은 아이콘 색·테두리(A102)가 알려 주고,
+    /// 제목은 "몇 번 창의 어떤 파일인가"만 남긴다. 파일이 없으면 "KOTU"(또는 "2KOTU")뿐이다.
+    /// 구분자는 ASCII 하이픈 — 옛 em-dash는 폭이 넓어 좁은 작업표시줄 버튼에서 손해였다.
+    /// <paramref name="title"/>은 이 규칙으로 만든 문자열이어야 한다(조립 지점은 아래 SetTitle 호출부).
     /// </summary>
     private void SetTitle(string title)
     {
@@ -300,15 +304,19 @@ public sealed partial class MainWindow : Window
         ApplyTitle();
     }
 
+    /// <summary>파일 있는 제목의 단일 조립 지점(A103) — "KOTU - 파일명".</summary>
+    private static string FileTitle(string path) => $"{Branding.AppName} - {Path.GetFileName(path)}";
+
     private string _baseTitle = Branding.AppName;
     private bool _titleDirtyMark; // 현재 뷰의 미저장 표시(A37 — ICloseGuard.UnsavedChanged)
-    private int _instanceNumber;  // 0 = 창이 하나뿐 → 번호 표시 안 함 (A56)
+    private int _instanceNumber;  // 0 = 창이 하나뿐 → 번호 표시 안 함 (A56/A103)
 
     private void ApplyTitle()
     {
-        // 순서: 상태(●) → 인스턴스([n]) → 내용. 작업표시줄·Alt+Tab에서 잘려도
+        // 순서: 상태(●) → 인스턴스 번호 → 내용. 작업표시줄·Alt+Tab에서 잘려도
         // 앞쪽 두 표식이 남도록 상태와 번호를 앞에 둔다.
-        var title = _instanceNumber > 0 ? $"[{_instanceNumber}] {_baseTitle}" : _baseTitle;
+        // A103: 번호는 브래킷·공백 없이 앞에 붙는다 — _baseTitle이 늘 "KOTU"로 시작하므로 "2KOTU"가 된다.
+        var title = _instanceNumber > 0 ? $"{_instanceNumber}{_baseTitle}" : _baseTitle;
         if (_titleDirtyMark) title = "● " + title;
         Title = title;
         _tray.SetTooltip(title);
@@ -498,7 +506,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 창을 "타이틀바 + 하단 바 44"만 남기고 접거나(A61) 접기 전 높이로 되돌린다.
-    /// 타이틀바는 남긴다 — 드래그 이동·닫기 수단이고 인스턴스 번호 `[n]`(A56) 표기가 거기 있다.
+    /// 타이틀바는 남긴다 — 드래그 이동·닫기 수단이고 인스턴스 번호 접두 표기(A103)가 거기 있다.
     /// 폭·위치는 그대로 두고 높이만 바꾼다. 같은 상태 요청은 무시(멱등).
     /// 전체화면 중에는 접지 않는다(프레젠터가 OverlappedPresenter가 아니다) — 뷰가
     /// "핀 ON && 전체화면 아님"으로 계산해 보내므로 정상 경로에선 오지 않는 방어선이다.
@@ -937,8 +945,9 @@ public sealed partial class MainWindow : Window
         Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
     };
 
+    // A103: 모듈만 연 상태의 제목은 모듈명 없이 "KOTU"뿐 — 모듈 구분은 아이콘 링 색(A102)이 한다.
     private void OpenModule(IModule module)
-        => ShowModule(module, OpenContext.Empty, $"{Branding.AppName} {module.DisplayName}");
+        => ShowModule(module, OpenContext.Empty, Branding.AppName);
 
     /// <summary>
     /// 앱 첫 화면 기본 뷰(Info/하드웨어). 사용자가 고른 화면이 아니므로
@@ -961,7 +970,7 @@ public sealed partial class MainWindow : Window
     {
         if (!await ConfirmDiscardAsync()) return; // 문서 편집 미저장 가드 (A37)
         _titleDirtyMark = false;
-        SetTitle($"{Branding.AppName} Settings");
+        SetTitle(Branding.AppName); // A103: 설정 화면도 파일이 없으니 "KOTU"뿐 (구: "KOTU Settings")
         var settings = new SettingsView(_router);
         ModuleHost.Content = settings;
         // 설정도 하단 바 제공(광고 + ⛶, v0.50.0) — 모듈들과 같은 통합 방식
@@ -1001,9 +1010,7 @@ public sealed partial class MainWindow : Window
             if (target.TryOpenFile(path))
             {
                 _titleDirtyMark = false;
-                SetTitle(_currentModule is { } host
-                    ? $"{Branding.AppName} {host.DisplayName} — {Path.GetFileName(path)}"
-                    : $"{Branding.AppName} — {Path.GetFileName(path)}");
+                SetTitle(FileTitle(path)); // A103: 모듈명 없이 "KOTU - 파일명" 하나로 통일
                 IsUntouched = false;
                 SetContentState(_currentModule, path); // 모듈은 그대로, 파일만 바뀐다
                 return;
@@ -1032,8 +1039,7 @@ public sealed partial class MainWindow : Window
             SetContentState(null, null);
             return;
         }
-        ShowModule(module, OpenContext.ForFile(path),
-            $"{Branding.AppName} {module.DisplayName} — {Path.GetFileName(path)}");
+        ShowModule(module, OpenContext.ForFile(path), FileTitle(path));
     }
 
     /// <summary>탐색기 우클릭 동사(여기에 풀기/압축) 진입점. 동사는 압축 모듈이 처리한다.</summary>
@@ -1049,7 +1055,7 @@ public sealed partial class MainWindow : Window
         }
 
         ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] },
-            $"{Branding.AppName} {module.DisplayName} — {Path.GetFileName(file)}");
+            FileTitle(file));
     }
 
     // ---------- 창 전체 드래그&드롭 → 파일 라우팅 (A93 드랍 규칙의 "콘텐츠 영역" 폴백) ----------
@@ -2040,7 +2046,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>현재 모듈 색 .ico 경로 — 인스턴스 번호 변경 시 재합성 기준(A68).</summary>
+    /// <summary>현재 모듈 색 .ico 경로 — 링·표식 합성의 바탕(A102).</summary>
     private string? _moduleIconPath;
 
     /// <summary>
@@ -2049,6 +2055,13 @@ public sealed partial class MainWindow : Window
     /// 폴백했으면 중립 표식이 맞기 때문.
     /// </summary>
     private Windows.UI.Color? _moduleIconAccent;
+
+    /// <summary>
+    /// 지금 그려진 아이콘의 테두리 링 색 — 링이 없으면 null (A102, v0.130.0).
+    /// 액센트와 마찬가지로 <b>실제로 고른 .ico</b> 기준이다: 모듈 .ico가 없어 중립으로
+    /// 폴백했으면 구분할 모듈 색 자체가 없으므로 링도 없다.
+    /// </summary>
+    private Windows.UI.Color? _moduleIconRing;
 
     /// <summary>타이틀바·작업표시줄·트레이 아이콘을 현재 모듈 색 KOTU 아이콘으로 교체(v0.26.0).</summary>
     private void ApplyWindowIcon(string? moduleId)
@@ -2071,24 +2084,26 @@ public sealed partial class MainWindow : Window
 
         _moduleIconPath = path;
         _moduleIconAccent = path == IconPath ? null : Branding.ModuleAccent(moduleId); // A79
+        _moduleIconRing = path == IconPath ? null : Branding.IconRing(moduleId);       // A102
         RefreshShellIcons();
     }
 
     /// <summary>
-    /// 창·트레이 아이콘을 현재 모듈 색 + 인스턴스 번호로 다시 지정한다(A68).
-    /// 창이 2개 이상이면(_instanceNumber &gt; 0) 창 아이콘은 인스턴스 색 테두리와 원형 번호 배지를
-    /// 합성한 것, 하나뿐이면 무테두리 원본 — 배지·제목 번호 숨김 규칙과 일관.
-    /// 모듈 전환(ApplyWindowIcon)과 번호 변경(SetInstanceNumber) 양쪽에서 불린다.
+    /// 창·트레이 아이콘을 현재 모듈 색으로 다시 지정한다(A68 → A102에서 의미 개편).
+    /// 창 아이콘은 모듈 색 테두리 링을 합성한 것 — 창이 몇 개든 같다(A102: 링의 목적이
+    /// 인스턴스 구분에서 모듈 식별로 바뀌어 "2개 이상일 때만" 조건이 사라졌다).
+    /// 링이 없는 화면(중립 아이콘·정보 모듈)은 _moduleIconRing이 null이라 무테두리로 간다.
+    /// 모듈 전환(ApplyWindowIcon)에서 불린다 — 번호 변경은 더 이상 아이콘을 바꾸지 않는다.
     /// AppWindow.SetIcon은 원본 경로 유지 — 실제 표시는 직후 WM_SETICON(WindowIcon)이 덮는다.
     /// ※ A54(v0.118.0): 트레이 아이콘은 더 이상 모듈 .ico가 아니라 값 텍스트를 그린다
-    ///   (<see cref="UpdateTrayIcon"/>). 인스턴스 표식은 테두리만 남고 번호 배지는 창 아이콘 전용.
+    ///   (<see cref="UpdateTrayIcon"/>). 그쪽도 테두리 규칙은 여기와 같다.
     /// </summary>
     private void RefreshShellIcons()
     {
         if (_moduleIconPath is { } path && File.Exists(path))
         {
             AppWindow.SetIcon(path);
-            WindowIcon.Apply(this, path, _moduleIconAccent, _instanceNumber);
+            WindowIcon.Apply(this, path, _moduleIconAccent, _moduleIconRing);
         }
         UpdateTrayIcon();
     }
@@ -2102,25 +2117,29 @@ public sealed partial class MainWindow : Window
     /// 모듈이 내준 <see cref="TrayStatus"/>를 16px 아이콘으로 합성해 트레이에 올린다(A54).
     /// 값을 내주지 않는 화면(설정·미지원 파일 안내)은 모듈 ID → 3자 표기 표로 유휴 아이콘을 그리고,
     /// 그 표에도 없으면(설정·빈 셸) 중립 모듈 .ico로 폴백한다 — 인스턴스당 아이콘 1개는 언제나 유지된다.
-    /// 호출 시점: 모듈 전환·설정 전환·파일 열기(IContentStateSource)·모듈의 TrayStatusChanged·
-    /// 인스턴스 번호 변경. 값이 그대로면 아무 일도 하지 않는다.
+    /// 호출 시점: 모듈 전환·설정 전환·파일 열기(IContentStateSource)·모듈의 TrayStatusChanged.
+    /// 값이 그대로면 아무 일도 하지 않는다.
+    /// ※ A102 테두리 링(모듈 색)의 출처가 두 갈래인 이유: .ico 폴백 경로는 그려질 바탕이
+    ///   중립일 수 있어 <see cref="_moduleIconRing"/>(실제 고른 파일 기준)을 쓰고,
+    ///   값 텍스트 경로는 바탕 없이 모듈 색 글자를 그리므로 모듈 ID에서 바로 구한다.
     /// </summary>
     private void UpdateTrayIcon()
     {
         var status = (ModuleHost.Content as ITrayStatusProvider)?.GetTrayStatus()
             ?? (IdleTrayLabel(CurrentModuleId) is { Length: > 0 } label ? TrayStatus.Idle(label) : null);
 
-        var key = TrayStatusIcon.ComposeKey(status, CurrentModuleId, _instanceNumber);
+        var key = TrayStatusIcon.ComposeKey(status, CurrentModuleId);
         if (key == _trayIconKey) return;
         _trayIconKey = key;
 
         if (status is null)
         {
-            _tray.SetIcon(_moduleIconPath, _moduleIconAccent, _instanceNumber);
+            _tray.SetIcon(_moduleIconPath, _moduleIconAccent, _moduleIconRing);
             return;
         }
 
-        var icon = TrayStatusIcon.Compose(status, Branding.ModuleAccent(CurrentModuleId), _instanceNumber);
+        var icon = TrayStatusIcon.Compose(status, Branding.ModuleAccent(CurrentModuleId),
+            Branding.IconRing(CurrentModuleId));
         if (icon == IntPtr.Zero)
         {
             _trayIconKey = string.Empty; // 합성 실패(GDI 고갈 등) — 다음 갱신 때 다시 시도
@@ -2205,22 +2224,22 @@ public sealed partial class MainWindow : Window
     }
 
     // ---------- 인스턴스 번호 배지 (A2, v0.58.0) ----------
-    // 색 팔레트는 InstanceIcon.ColorFor로 이동(A68) — 배지·아이콘 테두리·트레이가 공유한다.
+    // 색 팔레트는 InstanceIcon.ColorFor에 있다 — A102(v0.130.0)부터는 이 배지만 쓴다
+    // (아이콘 테두리는 모듈 색, 아이콘 번호 배지는 제거).
 
     /// <summary>
     /// 인스턴스 번호 설정. 0 = 창이 하나뿐 → 배지·제목 번호 모두 숨김.
     /// 창이 2개가 되는 순간 1번 창에도 생기고, 중간 창이 닫히면
     /// WindowManager가 번호를 당겨서 다시 부른다.
-    /// 표시는 세 곳: 타이틀바 원형 색상 배지(A2 — 색이 9개뿐이라 1~9만),
-    /// 제목 문자열 접두 "[n]"(A56 — 개수 제한 없음, 작업표시줄·Alt+Tab에서도 구분되게),
-    /// 창·트레이 아이콘의 인스턴스 색 테두리 + 원형 번호(A68 — 10번째부터 색 순환).
+    /// 표시는 두 곳: 타이틀바 원형 색상 배지(A2 — 색이 9개뿐이라 1~9만),
+    /// 제목 문자열 접두 숫자(A103 — 개수 제한 없음, 작업표시줄·Alt+Tab에서도 구분되게).
+    /// A102(v0.130.0)부터 아이콘은 번호와 무관하다(링 = 모듈 색·번호 배지 제거) —
+    /// 그래서 번호가 바뀌어도 아이콘을 다시 합성하지 않는다.
     /// </summary>
     public void SetInstanceNumber(int number)
     {
-        var previous = _instanceNumber;
         _instanceNumber = number > 0 ? number : 0;
         ApplyTitle();
-        if (_instanceNumber != previous) RefreshShellIcons(); // 아이콘 테두리·트레이 갱신 (A68)
 
         if (number is <= 0 or > 9)
         {

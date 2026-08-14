@@ -780,7 +780,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
                 FontSize = 13,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-            }, "Auto-fit to window — long edge fits, nothing cropped"),
+            }, "Auto-fit to window - long edge fits, nothing cropped"),
         };
         FitButton.Content = content;
         ToolTipService.SetToolTip(FitButton, HotkeySupport.Tip(tip, FitKey)); // A34: 표기는 키 상수에서

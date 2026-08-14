@@ -122,8 +122,8 @@ public sealed partial class ContentInfoOverlay : UserControl
         OverlayBorder.IsHitTestVisible = IsOpen && (docked || pinned);
         if (IsOpen && (docked || pinned))
             ShowHint(docked
-                ? "Docked — press X to close"
-                : "Pinned — press X to close");
+                ? "Docked - press X to close"
+                : "Pinned - press X to close");
         else
             HideHint();
     }

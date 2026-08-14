@@ -594,7 +594,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
         // 카드 클릭 = 트레이 표시 토글(A18, 사용자 확정 UX). 이미 2개면 오래된 선택이 밀려난다.
         root.Tapped += (_, _) => TraySensors.Toggle(channel.Id);
-        ToolTipService.SetToolTip(root, $"{channel.Title} — click to show in tray (up to 2)");
+        ToolTipService.SetToolTip(root, $"{channel.Title} - click to show in tray (up to 2)");
 
         _cards.Add(new SensorCard
         {
@@ -908,7 +908,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             var choice = ms; // 클로저 캡처 고정
             var item = new MenuFlyoutItem { Text = $"{choice} ms" };
             if (choice == HardwareModule.RefreshChoices[0]) // 목록 최단값 = 50ms
-                ToolTipService.SetToolTip(item, "Very frequent polling — higher CPU load");
+                ToolTipService.SetToolTip(item, "Very frequent polling - higher CPU load");
             item.Click += (_, _) =>
             {
                 HardwareModule.SetRefreshMs(choice); // 폴러 즉시 반영 + 설정 저장

@@ -26,7 +26,7 @@
 
         <TextBlock
             x:Name="PlaceholderText"
-            Text="Open any supported file — the view and the bottom bar switch to match it"
+            Text="Open any supported file - the view and the bottom bar switch to match it"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Opacity="0.6" />

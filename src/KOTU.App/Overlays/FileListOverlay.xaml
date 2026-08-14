@@ -61,7 +61,7 @@
                                 HorizontalContentAlignment="Stretch"
                                 VerticalContentAlignment="Stretch" />
                 <TextBlock x:Name="PinnedText" Grid.Row="3"
-                           Text="Pinned — press Z to close"
+                           Text="Pinned - press Z to close"
                            Visibility="Collapsed" FontSize="11" Opacity="0.6"
                            Margin="12,4,12,8" />
             </Grid>

@@ -96,7 +96,7 @@
                      창 길이는 리프레시 주기 × 2 — 스파이크 1~2개만 보인다(A51). -->
                 <Grid x:Name="PulseHost" Grid.Column="3" Width="90" Height="36"
                       VerticalAlignment="Center"
-                      ToolTipService.ToolTip="Refresh pulse — one beat per sensor poll">
+                      ToolTipService.ToolTip="Refresh pulse - one beat per sensor poll">
                     <Polyline x:Name="PulseLine" Stroke="#2E9E6B" StrokeThickness="1.5" />
                 </Grid>
                 <!-- 리프레시 주기 선택(A29 → A73에서 목록 교체): 50/200/500/1000/2000/5000ms —

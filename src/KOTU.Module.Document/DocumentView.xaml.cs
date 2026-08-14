@@ -258,7 +258,7 @@ public sealed partial class DocumentView : UserControl,
                 FontSize = 13,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-            }, "Auto-fit to window — whole page fits, or actual size if smaller"),
+            }, "Auto-fit to window - whole page fits, or actual size if smaller"),
         };
         FitButton.Content = content;
         ToolTipService.SetToolTip(FitButton, HotkeySupport.Tip(tip, FitKey)); // A34: 표기는 키 상수에서

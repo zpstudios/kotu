@@ -40,7 +40,7 @@ internal static class ExplorerFileOps
         /// <summary>임의 동사형(A94 2차 — 삭제 "deleted" 등). 규칙은 위와 동일 — 실패가 있을 때만.</summary>
         internal string? Notice(string verb) => Failed == 0
             ? null
-            : $"{Failed} item(s) could not be {verb} — {FirstError}";
+            : $"{Failed} item(s) could not be {verb} - {FirstError}";
     }
 
     /// <summary>Ctrl이 눌린 상태인지 — 클립보드 키 판정용(ExplorerPane의 Shift 판정과 같은 API).</summary>
@@ -166,7 +166,7 @@ internal static class ExplorerFileOps
         }
         catch (Exception ex)
         {
-            return "Clipboard error — " + ex.Message; // 다른 앱이 클립보드를 잠근 순간 등
+            return "Clipboard error - " + ex.Message; // 다른 앱이 클립보드를 잠근 순간 등
         }
         return null;
     }
@@ -287,7 +287,7 @@ internal static class ExplorerFileOps
         }
         catch (Exception ex)
         {
-            return (null, "Could not create a folder — " + ex.Message);
+            return (null, "Could not create a folder - " + ex.Message);
         }
     }
 

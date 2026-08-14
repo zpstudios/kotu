@@ -120,7 +120,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         {
             Text = "Applies to the current user account only (no admin rights needed); turning a switch off removes the registration completely. "
                  + $"Turning a switch on also makes {Branding.AppName} the default app for those file types automatically. "
-                 + "Windows may block this for a few protected types — those open the Windows default-apps page so you can confirm once, "
+                 + "Windows may block this for a few protected types - those open the Windows default-apps page so you can confirm once, "
                  + "or use \"Set default...\" per extension. (A38)",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
@@ -311,7 +311,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                     // 실패 확장자는 A25 폴백 — 설정 딥링크를 한 번 열어 사용자가 확정하게 한다
                     // (확장자별 대화상자는 "Set default..." 버튼으로 여전히 가능).
                     _status.Text = $"{module.BrandName}: set {total - failed.Count}/{total} automatically. "
-                                 + $"Windows blocks the rest ({string.Join(" ", failed)}) — confirm them on the "
+                                 + $"Windows blocks the rest ({string.Join(" ", failed)}) - confirm them on the "
                                  + "page that just opened, or use \"Set default...\".";
                     ExplorerIntegration.OpenDefaultAppsSettings();
                 }
@@ -513,7 +513,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         Root.Children.Add(new TextBlock
         {
-            Text = $"{_settings.FilePath} — changes apply after restart. "
+            Text = $"{_settings.FilePath} - changes apply after restart. "
                  + "Editing this file directly can break your settings.",
             FontSize = 12,
             Opacity = 0.7,
@@ -684,7 +684,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             }
             else
             {
-                status.Text = $"v{version} downloaded — click the button again to install when ready.";
+                status.Text = $"v{version} downloaded - click the button again to install when ready.";
                 updateButton.IsEnabled = true;
             }
         }

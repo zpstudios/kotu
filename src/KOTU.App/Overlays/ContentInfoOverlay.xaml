@@ -28,7 +28,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="InfoText" TextWrapping="Wrap" FontSize="13" />
-                    <TextBlock x:Name="PinnedText" Text="Pinned — press X to close"
+                    <TextBlock x:Name="PinnedText" Text="Pinned - press X to close"
                                Visibility="Collapsed" FontSize="11" Opacity="0.6" />
                 </StackPanel>
             </ScrollViewer>

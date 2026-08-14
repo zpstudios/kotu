@@ -31,6 +31,18 @@ internal static class Branding
         _ => null,
     };
 
+    /// <summary>
+    /// 창·트레이 아이콘 테두리 링 색 (A102, v0.130.0) — 모듈 액센트와 같은 색이다.
+    /// 링의 목적이 "몇 번째 창인가"(A68 인스턴스 9색)에서 "어느 모듈인가"로 바뀌면서
+    /// 색 원천이 <see cref="ModuleAccent"/>로 옮겨왔고, 창 개수 조건도 사라졌다.
+    /// null = 링을 그리지 않는다. 두 경우뿐이다:
+    ///  · 액센트가 없는 화면(설정·미지원 파일 안내 = 중립 아이콘) — 구분할 모듈이 없다.
+    ///  · 정보(하드웨어) 모듈 — 트레이 아이콘이 센서 값을 2줄로 채우는 유일한 모듈이라(A54)
+    ///    링이 글자를 갉아먹는다(사용자 확정: 유휴 INF 표기·값 표시 모두 링 없음).
+    /// </summary>
+    public static Windows.UI.Color? IconRing(string? moduleId)
+        => moduleId == "hardware" ? null : ModuleAccent(moduleId);
+
     public const string MissionStatement =
         "• No bloat. Ever.\n" +
         "• Crucial features only — easy to use.\n" +

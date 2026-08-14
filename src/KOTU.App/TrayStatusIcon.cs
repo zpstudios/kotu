@@ -11,42 +11,53 @@ namespace KOTU.App;
 ///
 /// 표시 규칙(사용자 확정):
 ///  · 유휴 = 1줄 중앙·저채도(모듈 3자 표기) / 열림 = 2줄·모듈 색.
-///  · 인스턴스가 2개 이상이면 A68 인스턴스 색 <b>테두리만</b> 덧그린다 —
-///    A68의 우하단 원형 번호 배지는 2줄 텍스트를 덮어 판독을 막으므로 트레이에서는 제거했다
-///    (창 아이콘 쪽 배지는 그대로 유지 — 거긴 텍스트가 없다. 번호는 제목 "[n]"(A56)이 알려 준다).
+///  · A102(v0.130.0): 테두리는 <b>모듈 색</b>이 되고 창 개수 조건이 사라졌다(구: 인스턴스 9색·
+///    2개 이상일 때만). 링 유무 판단은 <see cref="Branding.IconRing"/> 한 곳 —
+///    값 2줄을 채우는 정보(H/W) 모듈과 중립 화면은 링이 없다.
+///    번호 표시는 창 제목의 접두 숫자(A103)가 전담한다.
 ///
 /// 반환 HICON은 <b>호출자 소유</b>다 — 교체 후 반드시 DestroyIcon 할 것
-/// (창이 많을수록 곱해지는 GDI 핸들이라 A68의 프로세스 수명 캐시와 달리 즉시 회수한다).
+/// (창이 많을수록 곱해지는 GDI 핸들이라 InstanceIcon의 프로세스 수명 캐시와 달리 즉시 회수한다).
 /// UI 스레드 전용.
 /// </summary>
 internal static class TrayStatusIcon
 {
     private const int SmCxSmIcon = 49;
 
+    /// <summary>
+    /// 글자 크기 배수 (A102) — 값·3자 표기가 커서 테두리 링에 물리는 것을 줄인다.
+    /// 1줄(유휴)·2줄(열림) 공통이며, 폭 초과 시 줄이는 루프의 하한(5px)은 건드리지 않는다.
+    /// <b>실기기에서 눈으로 보고 미세 조정하는 단일 지점</b>이다.
+    /// </summary>
+    private const float FontScale = 0.85f;
+
     /// <summary>액센트 색이 없는 화면(설정·미지원 파일)에서 쓰는 중립 글자색.</summary>
     private static readonly GdiColor Neutral = GdiColor.FromArgb(0xD0, 0xD4, 0xDA);
 
     /// <summary>
     /// 재합성 판단용 키(A18 ComposeKey 방식) — 같으면 GDI 작업을 통째로 건너뛴다.
-    /// 아이콘 모양을 바꾸는 입력(내용·모듈 색·인스턴스 번호)을 전부 포함해야 한다.
+    /// 아이콘 모양을 바꾸는 입력(내용·모듈)을 전부 포함해야 한다. A102(v0.130.0)에서
+    /// 인스턴스 번호가 빠졌다 — 번호는 더 이상 아이콘 모양에 관여하지 않고,
+    /// 링 색·유무는 모듈 ID에서 나오므로 moduleId가 그 변화를 이미 대표한다.
     /// </summary>
-    public static string ComposeKey(TrayStatus? status, string? moduleId, int instanceNumber)
+    public static string ComposeKey(TrayStatus? status, string? moduleId)
     {
-        if (status is null) return $"ico|{moduleId}|{instanceNumber}";
+        if (status is null) return $"ico|{moduleId}";
         var bars = status.Line2Bars is { } list
             ? string.Join(',', list.Select(v => Math.Round(v, 2).ToString("0.00")))
             : string.Empty;
-        return $"{moduleId}|{instanceNumber}|{status.Line1}|{status.Line2}|{bars}";
+        return $"{moduleId}|{status.Line1}|{status.Line2}|{bars}";
     }
 
     /// <summary>
     /// 상태를 그린 HICON을 만든다(실패하면 IntPtr.Zero — 호출자는 아이콘을 그대로 두면 된다).
     /// </summary>
-    public static IntPtr Compose(TrayStatus status, Windows.UI.Color? accent, int instanceNumber)
+    /// <param name="ring">테두리 링 색(A102) — null이면 링 없음.</param>
+    public static IntPtr Compose(TrayStatus status, Windows.UI.Color? accent, Windows.UI.Color? ring)
     {
         try
         {
-            return Render(status, accent, instanceNumber);
+            return Render(status, accent, ring);
         }
         catch
         {
@@ -54,7 +65,7 @@ internal static class TrayStatusIcon
         }
     }
 
-    private static IntPtr Render(TrayStatus status, Windows.UI.Color? accent, int instanceNumber)
+    private static IntPtr Render(TrayStatus status, Windows.UI.Color? accent, Windows.UI.Color? ring)
     {
         var size = Math.Max(16, GetSystemMetrics(SmCxSmIcon));
         var baseColor = accent is { } c ? GdiColor.FromArgb(c.R, c.G, c.B) : Neutral;
@@ -74,33 +85,34 @@ internal static class TrayStatusIcon
                 g.FillPath(background, path);
 
             // ② 내용: 유휴 1줄(중앙) / 열림 2줄(위 텍스트 + 아래 텍스트 또는 막대)
-            var margin = instanceNumber > 0 ? 1f : 0f; // 테두리와 글자가 붙지 않게 좌우만 살짝 비운다
+            var margin = ring is null ? 0f : 1f; // 테두리와 글자가 붙지 않게 좌우만 살짝 비운다
             var textWidth = size - margin * 2;
             if (status.IsIdle)
             {
-                DrawTextLine(g, status.Line1, color, margin, 0, textWidth, size, size * 0.58f);
+                DrawTextLine(g, status.Line1, color, margin, 0, textWidth, size, size * 0.58f * FontScale);
             }
             else
             {
                 var lineHeight = size / 2f;
-                DrawTextLine(g, status.Line1, color, margin, 0, textWidth, lineHeight, lineHeight * 0.94f);
+                DrawTextLine(g, status.Line1, color, margin, 0, textWidth, lineHeight,
+                    lineHeight * 0.94f * FontScale);
                 if (status.Line2Bars is { Count: > 0 } bars)
                     DrawBars(g, bars, color, margin, lineHeight, textWidth, lineHeight);
                 else
                     DrawTextLine(g, status.Line2 ?? TrayStatus.Unknown, color,
-                        margin, lineHeight, textWidth, lineHeight, lineHeight * 0.94f);
+                        margin, lineHeight, textWidth, lineHeight, lineHeight * 0.94f * FontScale);
             }
 
-            // ③ 인스턴스 색 테두리(A68 — 번호 배지는 A54에서 제거, 테두리만 유지)
-            if (instanceNumber > 0)
+            // ③ 모듈 색 테두리(A102 — 구 인스턴스 색·창 2개 이상 조건 대체).
+            //    링 유무는 호출자가 Branding.IconRing으로 이미 판단해 넘긴다.
+            if (ring is { } ringColor)
             {
-                var instance = InstanceIcon.ColorFor(instanceNumber);
                 var thickness = Math.Max(1.5f, size / 8f);
                 using var pen = new System.Drawing.Pen(
-                    GdiColor.FromArgb(instance.R, instance.G, instance.B), thickness);
-                using var ring = RoundedRectPath(thickness / 2f, thickness / 2f,
+                    GdiColor.FromArgb(ringColor.R, ringColor.G, ringColor.B), thickness);
+                using var ringPath = RoundedRectPath(thickness / 2f, thickness / 2f,
                     size - thickness, size - thickness, Math.Max(2f, size * 56f / 256f));
-                g.DrawPath(pen, ring);
+                g.DrawPath(pen, ringPath);
             }
         }
         return bitmap.GetHicon();

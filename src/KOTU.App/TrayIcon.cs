@@ -117,19 +117,21 @@ internal sealed class TrayIcon : IDisposable
 
     /// <summary>
     /// 트레이 아이콘 교체 — 현재 모듈 색 아이콘 표시(v0.26.0). 로드 실패 시 기존 유지.
-    /// instanceNumber &gt; 0이면(창 2개 이상, A68) 인스턴스 색 테두리를 합성한 아이콘을 쓴다.
+    /// ring이 있으면(A102 — 모듈 색, 창 개수 무관) 그 색 테두리를 합성한 아이콘을 쓴다.
     /// 합성 핸들은 InstanceIcon의 프로세스 수명 캐시 소유(owns=false — 여기서 파괴하지 않음).
     /// 합성 실패 시 무테두리 원본으로 폴백.
-    /// ※ A54(v0.118.0): 원형 번호 배지는 <b>창 아이콘에만</b> 남긴다(withBadge: false).
-    ///   값 텍스트를 그리는 경로는 <see cref="SetRenderedIcon"/>이고, 이 경로는
-    ///   표시할 값이 없는 화면(설정·미지원 파일 안내)의 중립 아이콘 폴백으로만 쓴다.
-    /// ※ 센서 트레이(SensorTray, A18)는 값 표시가 우선이라 인스턴스 테두리를 적용하지 않는다.
-    /// ※ A79(v0.119.0): 브랜드 표식(BrandIcons)이 켜져 있으면 창이 하나뿐이어도 합성본을 쓴다.
+    /// ※ 이 경로는 표시할 값이 없는 화면(설정·미지원 파일 안내)의 중립 아이콘 폴백으로만 쓴다 —
+    ///   값 텍스트를 그리는 경로는 <see cref="SetRenderedIcon"/>이다.
+    /// ※ A102(v0.130.0): 원형 번호 배지는 창 아이콘에서도 사라졌다(렌더 코드째 제거) —
+    ///   번호는 창 제목의 접두 숫자(A103)가 전담한다.
+    /// ※ 센서 트레이(SensorTray, A18)는 값 표시가 우선이라 테두리를 적용하지 않는다.
+    /// ※ A79(v0.119.0): 브랜드 표식(BrandIcons)이 켜져 있으면 링이 없어도 합성본을 쓴다.
     ///   값 텍스트를 그리는 <see cref="SetRenderedIcon"/> 경로는 건드리지 않는다 —
     ///   ①(중립 발바닥)이 A54의 트레이 글자를 덮으면 안 되기 때문.
     /// </summary>
     /// <param name="accent">현재 아이콘의 모듈 색(중립 아이콘이면 null) — A79 표식 판단용.</param>
-    public void SetIcon(string? iconPath, Windows.UI.Color? accent = null, int instanceNumber = 0)
+    /// <param name="ring">테두리 링 색(A102, Branding.IconRing) — null이면 링 없음.</param>
+    public void SetIcon(string? iconPath, Windows.UI.Color? accent = null, Windows.UI.Color? ring = null)
     {
         if (_disposed) return;
         var icon = IntPtr.Zero;
@@ -137,8 +139,8 @@ internal sealed class TrayIcon : IDisposable
         var size = Math.Max(16, GetSystemMetrics(SmCxSmIcon));
         if (iconPath is not null)
         {
-            icon = instanceNumber > 0
-                ? InstanceIcon.GetComposed(iconPath, instanceNumber, size, accent, withBadge: false)
+            icon = ring is { } ringColor
+                ? InstanceIcon.GetComposed(iconPath, size, accent, ringColor)
                 : BrandIcons.GetBranded(iconPath, size, accent);
         }
         if (icon == IntPtr.Zero) (icon, owns) = LoadTrayIcon(iconPath);

@@ -662,7 +662,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,
             "Actual size (100%)", () => SetFitMode(FitMode.ActualSize));
         HotkeySupport.Bind(this, FitButton, VirtualKey.F,
-            "Auto-fit to window — long edge fits, nothing cropped", () => SetFitMode(FitMode.Fit));
+            "Auto-fit to window - long edge fits, nothing cropped", () => SetFitMode(FitMode.Fit));
     }
 
     // ---------- Ctrl 정보 오버레이 (v0.25.0) ----------
