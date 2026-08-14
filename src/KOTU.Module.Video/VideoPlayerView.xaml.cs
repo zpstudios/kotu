@@ -128,13 +128,16 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// A40: 좁은 하단 바에서 우선순위 낮은 요소를 숨겨 잘림을 막는다. 당시 실측: 고정 요소 합
     /// (버튼·콤보·볼륨 96 + 칸 간격)이 시간 텍스트가 길 때("1:23:45") 약 740px —
     /// 최소 창 폭 720(바 폭 약 656)에서는 시크 슬라이더가 0으로 밀리고 우측 ⛶가 잘린다.
-    /// 임계값 718 = A40의 760(실측 오차 여유 포함)에서 A99 열기 버튼 제거로 고정 요소 합이
-    /// 42px(버튼 36 + 간격 6) 줄어든 만큼을 뺀 값. 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거
-    /// 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
+    /// 임계값 이력: A40 760(실측 오차 여유 포함) → A99에서 열기 버튼 제거로 42px(버튼 36 + 간격 6)
+    /// 감소 → **718** → A106(v0.132.0)에서 1칸 버튼이 36→32가 되어 **698**.
+    /// A106분 −20의 근거(TransportBar 요소 직접 계수 — 칸 수·간격 6·2칸 폭 84·볼륨 96은 무변경):
+    ///   1칸 버튼 5개 × −4 = −20 (재생 c0 · 음소거 c4 · 자막 c7 · 1:1 c8 · 전체화면 c10).
+    ///   폭이 안 변한 것: 배속 콤보 c6(84) · Fit c9(84) · 볼륨 슬라이더 c5(96) · 시간 텍스트 c1/c3.
+    /// 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
     /// </summary>
     private void UpdateCompactTransport(double width)
     {
-        var visibility = width < 718 ? Visibility.Collapsed : Visibility.Visible;
+        var visibility = width < 698 ? Visibility.Collapsed : Visibility.Visible;
         VolumeSlider.Visibility = visibility;
         PositionText.Visibility = visibility;
         DurationText.Visibility = visibility;

@@ -325,12 +325,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     // ---------- 하단 바 표시 크기 S/M/L (A62, v0.111.0) ----------
 
     // M(1.0) 기준 치수. 실제 값은 ApplyBarScale이 이 창의 배수(_state.BarScale, A70)를 곱해 정한다.
-    private const double BaseCardHeight = 36;      // v0.64.2 컴팩트 카드 높이
-    // 카드 높이 상한. A97(v0.116.0)에서 40 → 36 — 하단 바 버튼이 36이 됐고 카드가 그보다
-    // 높으면 한 줄의 위아래 선이 어긋나 보인다. 44px 바(A40 불변) 안에도 그대로 들어간다.
-    // ※ 결과: 기준 높이(36)와 상한이 같아져 **L 단계에서도 카드 높이는 36**이다 —
-    //   A62의 L은 이제 글씨·선 굵기만 키운다(높이로 커지는 여지는 바 두께 44가 원래부터 막고 있었다).
-    private const double MaxCardHeight = 36;
+    private const double BaseCardHeight = 36;      // v0.64.2 컴팩트 카드 높이(M 단계 기준값 — 상한과 별개)
+    // 카드 높이 상한. A97(v0.116.0)에서 40 → 36, A106(v0.132.0)에서 36 → 32 — 하단 바 버튼이
+    // 32가 됐고 카드가 그보다 높으면 한 줄의 위아래 선이 어긋나 보인다(A97의 근거 그대로).
+    // 44px 바(A40 불변) 안에도 그대로 들어간다.
+    // ※ 결과: 상한(32)이 기준 높이(36)보다 작아져 **M·L 두 단계 모두 카드 높이는 32**로 잘린다
+    //   (S만 36 × 0.85 = 30.6으로 상한 아래). A62의 L은 이제 글씨·선 굵기만 키운다 —
+    //   높이로 커지는 여지는 바 두께 44가 원래부터 막고 있었다.
+    private const double MaxCardHeight = 32;
     private const double BaseTitleFontSize = 11;   // 카드 초단축 제목
     private const double BaseValueFontSize = 13;   // 카드 값
     private const double BaseSmallFontSize = 10;   // 트레이 핀 아이콘(A18) + 축 라벨(A74)
@@ -352,7 +354,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     /// <summary>
     /// 현재 단계를 하단 바 요소에 반영한다(A62). 바 두께 44는 불변(A40)이므로 **바 안 요소**의
-    /// 글씨 크기·선 굵기·카드 높이(최대 36 — A97)·카드 최소 폭만 바뀐다.
+    /// 글씨 크기·선 굵기·카드 높이(최대 32 — A97 → A106)·카드 최소 폭만 바뀐다.
     /// 폭 임계값(카드 수 축소·맥박 숨김·축 라벨 숨김)도 같이 스케일해야 글씨가 커졌을 때
     /// 더 이른 폭에서 축약된다 — 그래서 마지막에 배치·밀도·스파크라인을 다시 계산한다.
     /// 버튼 아이콘 크기도 단계를 따라 커져 툴팁 없이도 지금 단계가 보인다.
@@ -415,7 +417,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// SensorChannels 단일 소스(A18에서 트레이와 공용화) — 색은 대시보드 섹션 액센트 계열:
     /// CPU 주황 / GPU 보라 / RAM 초록 / 팬 황금 / SSD 파랑.
     /// 스케일: 온도·부하는 0~100 고정, 전력·클럭·팬은 자동(하한 있는 관찰 최댓값).
-    /// 카드는 하단 바 한 줄에 들어가는 36px 컴팩트형(v0.64.2 사용자 지시) — 그래프가 카드
+    /// 카드는 하단 바 한 줄에 들어가는 컴팩트형(v0.64.2 사용자 지시 36px → A106 상한 32px) — 그래프가 카드
     /// 전체를 채우고 제목·값이 그 위에 얹힌다. 배치는 항상 1줄(A40: 하단 바 두께 고정 44) —
     /// 폭이 모자라면 뒤 순서 카드부터 생략한다(LayoutSensorCards 참고).
     /// A74: 각 카드 모서리에 y 최대값·x 시간 범위 라벨이 얹힌다(폭이 좁으면 숨김).
@@ -443,16 +445,18 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     /// <summary>
     /// 하단 바(BarGrid)에서 센서 카드 칸(star)을 뺀 **고정 요소들의 폭 합**. A62 배수와 무관하다 —
-    /// 버튼 규격은 A27(→A97 개정)이 못 박아 두었고 배율은 카드 쪽에만 곱하기 때문.
-    /// A97(v0.116.0)에서 1칸 버튼 40→36 · 간격 10→6이 되어 **재산정**했다.
-    /// 이전 값 458은 v0.94.0(A40) 산정치 1240에서 역산한 근사치라 실제 합(424)보다 34 컸다 —
-    /// 이번에는 XAML 요소를 하나씩 세어 정확한 합으로 바꾼다:
-    ///   Copy 36 + Busy(ProgressRing) 20 + 맥박 90 + 주기(2칸) 84 + 크기 36 + 핀 36 + ⛶ 36 = 338
-    ///   + ColumnSpacing 6 × 7칸 사이 = 42  →  **380**
-    /// ⚠️ BarGrid.ActualWidth 기준이므로 셸의 ModuleBarHost Margin(48/12)은 여기 포함되지 않는다.
+    /// 버튼 규격은 A27(→A97·A106 개정)이 못 박아 두었고 배율은 카드 쪽에만 곱하기 때문.
+    /// A97(v0.116.0)에서 1칸 버튼 40→36 · 간격 10→6, A106(v0.132.0)에서 1칸 버튼 36→32가 되어
+    /// 그때마다 **재산정**했다. 값을 이월 계산하지 않는다 — A97 이전 값 458은 v0.94.0(A40)
+    /// 산정치 1240에서 역산한 근사치라 실제 합보다 34 컸던 전력이 있다.
+    /// A106 재계수(HardwareView.xaml의 BarGrid 8칸 중 star 칸인 SensorGrid c2만 제외):
+    ///   Copy c0 32 + Busy(ProgressRing) c1 20 + 맥박 c3 90 + 주기(2칸) c4 84
+    ///   + 크기 c5 32 + 핀 c6 32 + ⛶ c7 32 = 322
+    ///   + ColumnSpacing 6 × 7칸 사이 = 42  →  **364**  (A97 값은 338 + 42 = 380이었다)
+    /// ⚠️ BarGrid.ActualWidth 기준이므로 셸의 ModuleBarHost Margin(A106에서 82/12)은 여기 포함되지 않는다.
     /// HardwareView.xaml의 BarGrid 구성이 바뀌면 이 합도 함께 고칠 것.
     /// </summary>
-    private const double BarFixedWidth = 380;
+    private const double BarFixedWidth = 364;
 
     /// <summary>카드 10개가 최소 폭으로 다 들어가는 데 필요한 폭 — 단계(A62)에 따라 함께 커진다.</summary>
     private double CardsMinTotalWidth
@@ -461,8 +465,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// <summary>
     /// A40: 하단 바 폭이 좁으면 장식성 요소부터 내린다 — 맥박 그래프(A29)는 카드 10개가
     /// 전부 들어갈 폭이 안 되면 숨긴다(카드 = 정보, 맥박 = 장식이므로 카드가 우선).
-    /// 임계값 = 카드 전체 최소 폭 + 고정 요소·간격(M 단계에서 832 + 380 = **1212** —
-    /// A97/v0.116.0의 버튼 36·간격 6 재산정 반영. 이전 v0.111.0 값은 1290이었다).
+    /// 임계값 = 카드 전체 최소 폭 + 고정 요소·간격(M 단계에서 832 + 364 = **1196** —
+    /// A106/v0.132.0의 버튼 32 재산정 반영. A97 값은 832 + 380 = 1212, v0.111.0 값은 1290이었다).
     /// A62에서 글씨가 커지면 임계값도 같이 올라가 맥박이 더 이른 폭에서 사라진다 — 카드 우선 원칙은 그대로다.
     /// PulseHost 표시 여부는 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다.
     /// </summary>
@@ -597,7 +601,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(6, 2, 6, 2),
-            Height = BaseCardHeight, // 하단 바(A40 고정 44) 한 줄에 들어가는 높이 — A62 상한은 36(A97)
+            // 하단 바(A40 고정 44) 한 줄에 들어가는 높이. 여기 값은 M 기준값이고, 직후 ApplyBarScale이
+            // A62 상한(MaxCardHeight = 32 — A97 → A106)으로 잘라 실제 높이를 정한다.
+            Height = BaseCardHeight,
             Opacity = 0.45, // 값이 들어오면 1로
             Child = panel,
         };

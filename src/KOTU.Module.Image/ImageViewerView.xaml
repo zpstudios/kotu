@@ -75,7 +75,8 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <!-- A27(v0.107.0): 하단 바 버튼은 1칸(36×36)·2칸(84×36) 두 규격만 (A97/v0.116.0에서 40→36) —
+                <!-- A27(v0.107.0): 하단 바 버튼은 1칸(32×32)·2칸(84×32) 두 규격만
+                     (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
                      치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
                 <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
                 <!-- A9: 파일명 + 메타 요약(용량·종류·EXIF)이 남는 공간을 나눠 쓴다.
@@ -113,7 +114,7 @@
                     Grid.Column="1"
                     VerticalAlignment="Center" />
                 <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·1:1·전체화면 = 1칸,
-                     Auto-fit = 2칸 + 핏 옵션 전부 아이콘(A27에서 확정 → A97에서 84×36). -->
+                     Auto-fit = 2칸 + 핏 옵션 전부 아이콘(A27에서 확정 → A97에서 84×36 → A106에서 84×32). -->
                 <Button
                     x:Name="RotateButton"
                     Grid.Column="2"
@@ -130,12 +131,12 @@
                     Click="OnActualSizeClick" />
                 <!-- 기본 클릭 = 자동 맞춤(긴 변이 잘리지 않게). 화살표로 좌우/상하 채움 선택.
                      SplitButton은 WinUI가 키 있는 기본 스타일을 노출하지 않아(BasedOn 대상 없음)
-                     전역 스타일 대신 2칸 값(84×36)을 그대로 적는다 — A27(v0.107.0),
-                     높이는 A97(v0.116.0)에서 40→36. 폭 84는 유지. -->
+                     전역 스타일 대신 2칸 값(84×32)을 그대로 적는다 — A27(v0.107.0),
+                     높이는 A97(v0.116.0)에서 40→36, A106(v0.132.0)에서 36→32. 폭 84는 유지. -->
                 <SplitButton
                     x:Name="FitButton"
                     Grid.Column="4"
-                    Width="84" Height="36"
+                    Width="84" Height="32"
                     VerticalAlignment="Center" CornerRadius="4"
                     Click="OnFitClick">
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />

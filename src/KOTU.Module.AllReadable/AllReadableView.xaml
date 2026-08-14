@@ -56,7 +56,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <!-- A27(v0.107.0): 하단 바 버튼은 1칸 규격 — 앱 전역 스타일이 치수를 정한다
-                         (A97/v0.116.0에서 40×40 → 36×36). -->
+                         (A97/v0.116.0에서 40×40 → 36×36, A106/v0.132.0에서 36×36 → 32×32). -->
                     <TextBlock
                         x:Name="FileNameText"
                         Grid.Column="0"

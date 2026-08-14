@@ -98,7 +98,8 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!-- A27(v0.107.0): 하단 바 버튼은 1칸(36×36)·2칸(84×36) 두 규격만 (A97/v0.116.0에서 40→36) —
+            <!-- A27(v0.107.0): 하단 바 버튼은 1칸(32×32)·2칸(84×32) 두 규격만
+                 (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
                  치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
             <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
             <Button x:Name="PlayButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
@@ -117,7 +118,7 @@
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(v0.49.0 사용자 요청 — 공간 절약).
-                 A27(v0.107.0)에서 2칸 규격(A97에서 84×36) — "1.0×"가 1칸에 안 들어간다. -->
+                 A27(v0.107.0)에서 2칸 규격(A97에서 84×36 → A106에서 84×32) — "1.0×"가 1칸에 안 들어간다. -->
             <ComboBox x:Name="SpeedBox" Grid.Column="6" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
             <!-- 자막: 콤보 → 아이콘 버튼 + 라디오 플라이아웃 (v0.53.0 사용자 요청 — 공간 절약) -->
@@ -129,17 +130,18 @@
                 </Button.Flyout>
             </Button>
             <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): 1:1·전체화면 = 1칸, Auto-fit = 2칸 +
-                 핏 옵션 전부 아이콘. 이미지/문서 모듈과 동일 규격(A27에서 확정 → A97에서 84×36). -->
+                 핏 옵션 전부 아이콘. 이미지/문서 모듈과 동일 규격(A27에서 확정 → A97에서 84×36
+                 → A106에서 84×32). -->
             <Button x:Name="ActualSizeButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
                     Content="1:1" FontSize="13" Click="OnActualSizeClicked" />
             <!-- A30: 상태형 Fit 버튼 — 마지막으로 고른 옵션(A/좌우/상하)이 본체에 표시되고
                  본체 클릭 = 그 옵션 재적용, 화살표 = 3옵션 선택. 기억 안 함 — 재생 영상이
                  바뀌면 A(자동)로 회귀(사용자 확정). 본체 내용·툴팁은 UpdateFitButton()이 갱신. -->
             <!-- SplitButton은 WinUI가 키 있는 기본 스타일을 노출하지 않아(BasedOn 대상 없음)
-                 전역 스타일 대신 2칸 값(84×36)을 그대로 적는다 — A27(v0.107.0),
-                 높이는 A97(v0.116.0)에서 40→36. 폭 84는 유지. -->
+                 전역 스타일 대신 2칸 값(84×32)을 그대로 적는다 — A27(v0.107.0),
+                 높이는 A97(v0.116.0)에서 40→36, A106(v0.132.0)에서 36→32. 폭 84는 유지. -->
             <!-- 툴팁(키 표기 포함)은 UpdateFitButton()이 상태와 함께 갱신한다 — A34 -->
-            <SplitButton x:Name="FitButton" Grid.Column="9" Width="84" Height="36"
+            <SplitButton x:Name="FitButton" Grid.Column="9" Width="84" Height="32"
                          VerticalAlignment="Center" CornerRadius="4" Click="OnFitClicked">
                 <TextBlock Text="A" FontSize="13"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />

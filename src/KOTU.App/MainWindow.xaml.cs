@@ -785,14 +785,17 @@ public sealed partial class MainWindow : Window
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
             // A31(v0.66.0): 히트 영역 확대 — 상하 패딩 8→12 + 최소 높이 44 (터치 타깃 권장 크기).
-            // ⚠️ A96(v0.116.0)이 "항목 높이 −10%" 지시로 **44→40 · 상하 패딩 12→10**으로 조정했다.
-            //    A31의 44는 이제 유효하지 않다 — 되돌리지 말 것(아이콘 16 + 상하 패딩 20 = 36이라
-            //    실제 높이를 정하는 것은 MinHeight 쪽이다).
+            // ⚠️ 높이 이력: A31 44 → A96(v0.116.0) 40 → **A106(v0.132.0) 36**(둘 다 "항목 높이 −10%").
+            //    A31의 44도 A96의 40도 이제 유효하지 않다 — 되돌리지 말 것.
+            // ⚠️ **MinHeight와 상하 패딩은 반드시 같이 움직인다**(A96이 44→40과 12→10을 함께 바꾼 이유):
+            //    아이콘·라벨의 실제 줄 높이는 FontSize(16/14)보다 크므로(약 21) 항목 높이를 정하는 쪽은
+            //    MinHeight가 아니라 "내용 + 상하 패딩"이다. 패딩을 그대로 두고 MinHeight만 내리면
+            //    화면에서는 아무것도 줄지 않는다. A106은 40→36에 맞춰 상하 패딩 10→8(합 −4).
             // 좌우는 10 유지: 메뉴 폭 136(A96 — v0.35.0의 124에서 +10%) 안에서 라벨 말줄임을 늘리지 않기 위해.
             // A50(v0.92.0): 좌측 히트 영역은 플라이아웃 프레젠터 패딩 0(XAML)으로 확대 —
             // Stretch인 버튼이 메뉴 좌우 가장자리까지 닿아, 포인터가 라벨보다 왼쪽이어도 눌린다.
-            Padding = new Thickness(10, 10, 10, 10),
-            MinHeight = 40,
+            Padding = new Thickness(10, 8, 10, 8),
+            MinHeight = 36,
         };
         if (shortcutHint is not null)
             ToolTipService.SetToolTip(button, shortcutHint);
@@ -935,8 +938,8 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 시작 메뉴 그룹 구분선: 여백 + 1px 라인 (v0.26.0, 공백만으로는 정리가 안 보인다는 피드백).
     /// 상하 여백 8→3 (A50 항목 간격 축소, v0.92.0) — 항목 높이는 그대로 두고 사이 여백만 줄인다.
-    /// ※ A50 기록의 "항목 높이 44(A31)"는 A96(v0.116.0)에서 **40**으로 조정됐다.
-    /// 여백 3은 유지 — A96이 바꾼 것은 항목 높이·메뉴 폭이지 구분선 여백이 아니다.
+    /// ※ A50 기록의 "항목 높이 44(A31)"는 A96(v0.116.0) **40** → A106(v0.132.0) **36**으로 조정됐다.
+    /// 여백 3은 유지 — A96·A106이 바꾼 것은 항목 높이·메뉴 폭이지 구분선 여백이 아니다.
     /// </summary>
     private static Border Divider() => new()
     {

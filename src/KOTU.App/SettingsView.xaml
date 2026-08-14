@@ -41,7 +41,8 @@
                                  NavigateUri="https://www.patreon.com/zpstudios/"
                                  VerticalAlignment="Center" Padding="4,2"
                                  ToolTipService.ToolTip="www.patreon.com/zpstudios/" />
-                <!-- 1칸(36×36) 공통 규격 — A27(v0.107.0)에서 앱 전역 스타일로 이관, A97(v0.116.0)에서 40→36 -->
+                <!-- 1칸(32×32) 공통 규격 — A27(v0.107.0)에서 앱 전역 스타일로 이관,
+                     A97(v0.116.0)에서 40→36, A106(v0.132.0)에서 36→32 -->
                 <Button Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
                         ToolTipService.ToolTip="Full screen (F11)">
