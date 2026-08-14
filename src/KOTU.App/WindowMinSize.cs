@@ -24,7 +24,7 @@ internal static class WindowMinSize
     /// 창별 최소 높이 임시 오버라이드(DIP, A61) — 하단 바만 남기는 접힘 동안에만 540보다 낮은
     /// 하한을 허용한다. 이게 없으면 접힌 높이(타이틀바 + 44)가 540 하한에 걸려 기능이 통째로
     /// 무동작이 된다. **폭 하한 720은 접힘 중에도 그대로**다 — 하단 바가 그 폭을 전제로
-    /// 축약 설계돼 있다(A40 LayoutSensorCards/UpdateBarDensity).
+    /// 축약 설계돼 있다(A40 — A60 3차부터 HardwareView.UpdateBarDensity의 맥박 숨김).
     /// 값은 DIP로 들고 있어 모니터를 옮겨도 <see cref="MinPhysical"/>의 DPI 환산이 그대로 옳다.
     /// </summary>
     private static readonly Dictionary<IntPtr, double> s_minHeightOverrides = new();

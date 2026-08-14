@@ -20,26 +20,43 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 일반 모드: 라벨-값 리스트 (섹션·항목은 코드에서 채운다) -->
-        <ScrollViewer x:Name="ListScroller" Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel
-                x:Name="Root"
-                Spacing="2"
-                Padding="16,4,16,16"
-                MaxWidth="760"
-                HorizontalAlignment="Left" />
-        </ScrollViewer>
+        <!-- 3구획(A60 3차): 좌 대형 그래프 1* / 센터 그래프 그리드 2* / 우 스펙 텍스트 1*
+             (셸 사이드바 25:50:25와 동형). 전부 star라 창 크기·DPI와 무관하게 같은 비율로
+             늘어나고, A40 최소 720×540에서도 꽉 찬다. 전체화면(F11)도 같은 3구획이다 —
+             v0.42.0 섹션 카드 대시보드는 A60 3차에서 폐기(우측 텍스트가 상시 보여 중복). -->
+        <Grid Grid.Row="0" ColumnSpacing="10" Padding="12,8,12,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="1*" />
+            </Grid.ColumnDefinitions>
 
-        <!-- 전체화면 모드: 섹션 카드 대시보드 (v0.42.0 — 코드 RenderDashboard가 채운다) -->
-        <ScrollViewer x:Name="DashboardScroller" Grid.Row="0" Visibility="Collapsed"
-                      VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="DashboardRoot" MaxWidth="1500" Padding="32,24,32,32"
-                        Spacing="16" HorizontalAlignment="Center" />
-        </ScrollViewer>
+            <!-- 좌: 선택 그래프 확대(줄당 1개, 최대 2 = 센터에서 선택) — 시간 창 10초(A71·A72 흡수).
+                 행·내용은 코드 RebuildSelectionGraphs가 채우고, 선택 0개면 안내 1줄만 보인다. -->
+            <Grid Grid.Column="0">
+                <Grid x:Name="BigGraphPanel" RowSpacing="10" />
+                <TextBlock x:Name="BigGraphHint" Text="Select graphs in the grid"
+                           Opacity="0.55" FontSize="12" TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- 센터: 전 채널(10개) 그래프 타일 그리드 — 시간 창 30초. 클릭 = 선택 토글(최대 2),
+                 드래그 = 순서 변경(hardware.channelOrder). 열 수는 셸 사이드바 신호
+                 (ISidebarAwareView: 양쪽 열림 4 / 아니면 8 — A93 썸네일 패턴)를 따르며,
+                 타일은 코드 LayoutCenterTiles가 star 칸에 채운다. -->
+            <Grid x:Name="CenterGrid" Grid.Column="1" ColumnSpacing="8" RowSpacing="8" />
+
+            <!-- 우: 하드웨어 스펙 텍스트 리스트 — 구 일반 모드 리스트가 이 구획으로 이동(A60 3차).
+                 섹션·항목은 코드 Render()가 채운다(서명 생략 로직 그대로). -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="Root" Spacing="2" Padding="0,0,8,16" />
+            </ScrollViewer>
+        </Grid>
 
         <!-- 센서 스트립(A17→v0.64.2 개편): 평소엔 비어 있고(Collapsed), ① 비관리자 안내(AdminRow)가
-             필요할 때 ② 전체화면(하단 바가 숨는 동안 SensorGrid가 여기로 옮겨온다)일 때만 나타난다.
-             카드 자체는 코드(BuildSensorCards)가 만들어 하단 바 안 SensorGrid에 얹는다. -->
+             필요할 때 ② 전체화면(하단 바가 숨는 동안 SensorGrid의 긴 그래프 2개가 여기로 옮겨온다)일
+             때만 나타난다. 긴 그래프 자체는 코드(RebuildSelectionGraphs)가 만들어 SensorGrid에 얹는다. -->
         <Border x:Name="SensorStrip" Grid.Row="1" Padding="16,4,16,8" Visibility="Collapsed">
             <StackPanel x:Name="StripPanel" Spacing="6">
                 <Grid x:Name="AdminRow" Visibility="Collapsed" ColumnSpacing="10">
@@ -58,14 +75,14 @@
         </Border>
 
         <!-- 하단 바: 셸이 TakeBottomBar()로 떼어가 한 줄에 얹는다(v0.42.0).
-             센서 카드 10개는 이 줄의 가운데 공간(SensorGrid)에 산다(v0.64.2 사용자 지시,
-             별도 줄 금지). A40(하단 바 두께 고정 44): 항상 1줄 — 창이 좁으면 접히는 대신
-             맥박 그래프, 그다음 뒤 순서 카드부터 숨긴다(LayoutSensorCards/UpdateBarDensity).
+             가운데 공간(SensorGrid)에는 선택 긴 그래프 2개가 산다(A60 3차 — A17 카드 10개 대체,
+             각 폭 152 = 구 카드 최소 폭 76의 2배, 시간 창 5분, 가운데 정렬). A40(하단 바 두께
+             고정 44): 항상 1줄 — 창이 좁으면 맥박 그래프부터 숨긴다(UpdateBarDensity).
              우측 끝 ⛶ = 전체화면(전 모듈 공통 배치, 사용자 요청). -->
         <Border x:Name="ControlBar" Grid.Row="2" Padding="0,2,0,2">
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10) — A106에서도 무변경.
                  ⚠️ 이 값과 아래 요소 폭의 합이 코드의 BarFixedWidth 상수다(A106에서 380→364) — 함께 고칠 것.
-                 SensorGrid 안쪽 카드 간격 8(= CardSpacing 상수)은 별개라 그대로 둔다. -->
+                 SensorGrid 안쪽 그래프 간격 8(= CardSpacing 상수)은 별개라 그대로 둔다. -->
             <Grid x:Name="BarGrid" ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -80,8 +97,7 @@
                 <!-- Copy all(A75): 1칸 아이콘 버튼(A27 규격 — A97/v0.116.0에서 36×36,
                      A106/v0.132.0에서 32×32. ⛶·핀과 동일 계열).
                      기능 설명은 툴팁으로. 수동 Refresh 버튼은 A75에서 제거(주기 폴링이 있어 불필요).
-                     A27(v0.107.0): 이 줄의 버튼 치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다.
-                     A60·A71·A72에서 이 바가 크게 바뀔 예정이라 구성은 그대로 두고 규격만 맞췄다. -->
+                     A27(v0.107.0): 이 줄의 버튼 치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
                 <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
                 <Button x:Name="CopyButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnCopyClick">
@@ -90,12 +106,15 @@
                 <!-- Busy 링: 첫 로드에서 첫 스냅샷이 올 때까지만 돈다 (A75 이후 수동 Refresh 경로 없음) -->
                 <ProgressRing x:Name="Busy" Grid.Column="1" IsActive="False"
                               Width="20" Height="20" VerticalAlignment="Center" />
-                <Grid x:Name="SensorGrid" Grid.Column="2" ColumnSpacing="8" RowSpacing="4"
-                      VerticalAlignment="Center" />
+                <!-- 선택 긴 그래프 2개(A60 3차)의 자리 — star 칸 안에서 가운데 정렬.
+                     칸·내용은 코드 RebuildSelectionGraphs가 채우고, 크기는 ApplyBarScale(A62)이 정한다.
+                     전체화면 동안은 PlaceSensorGrid가 이 그리드를 통째로 SensorStrip으로 옮긴다. -->
+                <Grid x:Name="SensorGrid" Grid.Column="2" ColumnSpacing="8"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" />
                 <!-- 맥박(EKG) 그래프(A29): 폴링 스냅샷이 실제 도착한 타이밍마다 스파이크 —
-                     주기를 바꾸면 박동 간격이 눈에 보이게 달라진다. 센서 카드와 같은 32px 높이
-                     (A106/v0.132.0에서 36→32 — 카드 상한 MaxCardHeight를 따라간다).
-                     여기 값은 첫 배치용 초기값이고 실제 높이는 코드 ApplyBarScale이 카드와 같은 값으로 덮는다.
+                     주기를 바꾸면 박동 간격이 눈에 보이게 달라진다. 긴 그래프와 같은 32px 높이
+                     (A106/v0.132.0에서 36→32 — 높이 상한 MaxCardHeight를 따라간다).
+                     여기 값은 첫 배치용 초기값이고 실제 높이는 코드 ApplyBarScale이 긴 그래프와 같은 값으로 덮는다.
                      폭 90은 무변경 — BarFixedWidth 합계에 그대로 들어간다.
                      창 길이는 리프레시 주기 × 2 — 스파이크 1~2개만 보인다(A51). -->
                 <Grid x:Name="PulseHost" Grid.Column="3" Width="90" Height="32"
@@ -120,7 +139,8 @@
                     <FontIcon x:Name="BarScaleIcon" Glyph="&#xE71E;" FontSize="18" />
                 </Button>
                 <!-- Always on top 토글(A39) — ⛶ 바로 왼쪽, 켜짐 상태가 보이는 ToggleButton.
-                     A61(v0.111.0): 켜면 메인 영역을 접어 하단 바만 남는다(툴팁도 그 동작으로 갱신). -->
+                     A61(v0.111.0): 켜면 메인 영역을 접어 하단 바만 남는다(툴팁도 그 동작으로 갱신).
+                     접힌 바에도 선택 긴 그래프 2개가 남는 것이 A60 3차(A72 흡수)의 핵심 가치다. -->
                 <ToggleButton x:Name="TopToggle" Grid.Column="6"
                               Style="{StaticResource BottomBarToggleButtonStyle}"
                               Checked="OnTopToggleChanged" Unchecked="OnTopToggleChanged">
@@ -129,7 +149,7 @@
                 <!-- 1칸(32×32) = 다른 모듈 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일, A97에서 36, A106에서 32) -->
                 <Button Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen dashboard (F11)">
+                        ToolTipService.ToolTip="Full screen (F11)">
                     <FontIcon Glyph="&#xE740;" FontSize="18" />
                 </Button>
             </Grid>

@@ -1859,6 +1859,12 @@ public sealed partial class MainWindow : Window
         RightDockColumn.Width = new GridLength(right, GridUnitType.Star);
         CenterColumn.Width = new GridLength(10 - left - right, GridUnitType.Star);
 
+        // A60 3차: 사이드바 점유 상태를 모듈 뷰에도 민다(Core ISidebarAwareView — 정보 모듈의
+        // 센터 그래프 그리드가 열 수 4/8을 이 신호로 정한다. 판정은 아래 A93 썸네일과 동일:
+        // 불투명 도크 양쪽 = true). 이 메서드가 사이드바 상태 변경의 단일 종착점이라 여기 한 곳이면
+        // 되고, 미구현 뷰(다른 모듈·설정)는 캐스트 실패로 no-op이다.
+        (ModuleHost.Content as ISidebarAwareView)?.SetSidebarsState(left > 0 && right > 0);
+
         // A93: S1 중앙은 항상 썸네일 뷰다 — A81의 "좌 도크가 불투명이면 중앙 탐색기 숨김"
         // (중복 목록 제거)을 대체한다. 중앙이 리스트가 아니라 타일이라 중복으로 보이지 않는다.
         // 열 수 = 좌우 도크가 둘 다 (불투명으로) 열려 있으면 4, 하나라도 닫히면 8 (A63 대체 —
