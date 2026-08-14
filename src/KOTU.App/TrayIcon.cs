@@ -24,6 +24,16 @@ internal sealed class TrayIcon : IDisposable
     private const uint ImageIcon = 1, LrLoadFromFile = 0x10;
     private const int SmCxSmIcon = 49, SmCySmIcon = 50;
 
+    // A100: Win11은 guidItem 없는 아이콘의 식별을 exe 경로 + 창(클래스명 등) 정보로 해시해
+    // HKCU\Control Panel\NotifyIconSettings 항목을 만든다 — 식별이 실행마다 바뀌면 설정 항목이
+    // 증식하고 새 항목은 기본 '끔'이라 아이콘이 안 보인다. 그래서 클래스명·uID를 프로세스 내
+    // 단조 증가 슬롯 번호로 결정화한다(창 생성 순서 = 슬롯 — 실행이 달라도 같은 순서로 열면 같은 식별).
+    // 슬롯을 인스턴스 "번호"에 묶지 않는 이유: 번호는 창이 닫히면 재배정되지만(A2/A68) 클래스명은
+    // 생성 후 못 바꾸고, 번호 재사용 시점에 옛 창의 클래스가 아직 살아 있어 등록이 충돌한다.
+    // guidItem을 안 쓰는 이유: GUID가 exe 경로에 묶여 개발 빌드/설치본 병행 시 NIM_ADD가 실패한다.
+    private static int _slotSeq;
+
+    private readonly uint _uid;
     private readonly string _className;
     private readonly WndProcDelegate _wndProc; // 델리게이트 GC 방지 — 반드시 필드로 유지
     private readonly uint _taskbarCreatedMsg;
@@ -48,7 +58,11 @@ internal sealed class TrayIcon : IDisposable
     public TrayIcon(string? iconPath)
     {
         _taskbarCreatedMsg = RegisterWindowMessageW("TaskbarCreated");
-        _className = Branding.AppName + "Tray_" + Guid.NewGuid().ToString("N");
+        // A100: 결정적 식별 — 슬롯 번호 기반 클래스명 + uID(100번대 = SensorTray의 2와 대역 분리.
+        // 구 창 트레이가 쓰던 1도 피해서, 남아 있는 옛 NotifyIconSettings 항목과 섞이지 않는다).
+        var slot = System.Threading.Interlocked.Increment(ref _slotSeq);
+        _uid = (uint)(100 + slot);
+        _className = Branding.AppName + "TrayWnd_" + slot;
         _wndProc = WndProc;
 
         var hInstance = GetModuleHandleW(null);
@@ -58,7 +72,20 @@ internal sealed class TrayIcon : IDisposable
             hInstance = hInstance,
             lpszClassName = _className,
         };
-        RegisterClassW(ref wc);
+        // 클래스 등록은 프로세스 스코프 — 단조 증가 슬롯이라 같은 프로세스 안에서 충돌할 일은
+        // 없지만(재사용 없음), 만에 하나(이전 인스턴스의 해제 실패 잔재)를 위해 1회 지우고 재시도,
+        // 그래도 실패하면 구 방식(랜덤 접미사)으로 폴백한다 — 아이콘이 아예 안 뜨는 것보다
+        // 식별이 흔들리는 쪽이 낫다(A100 취지의 역순 폴백).
+        if (RegisterClassW(ref wc) == 0)
+        {
+            _ = UnregisterClassW(_className, hInstance);
+            if (RegisterClassW(ref wc) == 0)
+            {
+                _className = Branding.AppName + "TrayWnd_" + slot + "_" + Guid.NewGuid().ToString("N");
+                wc.lpszClassName = _className;
+                _ = RegisterClassW(ref wc);
+            }
+        }
         _hwnd = CreateWindowExW(0, _className, string.Empty, WsPopup,
             0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
 
@@ -200,7 +227,7 @@ internal sealed class TrayIcon : IDisposable
     {
         cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATAW>(),
         hWnd = _hwnd,
-        uID = 1,
+        uID = _uid, // A100: 슬롯 기반(100+n) — 구 고정값 1은 폐기
         uFlags = NifMessage | NifIcon | NifTip,
         uCallbackMessage = WmTrayCallback,
         hIcon = _hIcon,

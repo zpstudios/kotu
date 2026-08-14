@@ -60,7 +60,10 @@ internal sealed class SensorTray : IDisposable
         _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
 
         _taskbarCreatedMsg = RegisterWindowMessageW("TaskbarCreated");
-        _className = Branding.AppName + "SensorTray_" + Guid.NewGuid().ToString("N");
+        // A100: 결정적 식별 — 랜덤 접미사가 실행마다 새 NotifyIconSettings 항목(기본 '끔')을
+        // 만들던 원인이라 고정 이름으로 교체. 프로세스당 1개 싱글턴(_instance ??=)이라 충돌 없음.
+        // uID는 종전 2 유지(TrayIcon의 100번대와 대역 분리 — 그쪽 주석 참조).
+        _className = Branding.AppName + "SensorTrayWnd";
         _wndProc = WndProc;
         var hInstance = GetModuleHandleW(null);
         var wc = new WNDCLASSW
@@ -69,7 +72,17 @@ internal sealed class SensorTray : IDisposable
             hInstance = hInstance,
             lpszClassName = _className,
         };
-        RegisterClassW(ref wc);
+        // TrayIcon(A100)과 같은 방어: 등록 실패 시 잔재 해제 후 재시도 → 랜덤 접미사 폴백.
+        if (RegisterClassW(ref wc) == 0)
+        {
+            _ = UnregisterClassW(_className, hInstance);
+            if (RegisterClassW(ref wc) == 0)
+            {
+                _className = Branding.AppName + "SensorTrayWnd_" + Guid.NewGuid().ToString("N");
+                wc.lpszClassName = _className;
+                _ = RegisterClassW(ref wc);
+            }
+        }
         _hwnd = CreateWindowExW(0, _className, string.Empty, WsPopup,
             0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
 
@@ -251,7 +264,7 @@ internal sealed class SensorTray : IDisposable
     {
         cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATAW>(),
         hWnd = _hwnd,
-        uID = 2, // 창 트레이(uID 1)와 구분 — hwnd가 달라 실제로는 독립이지만 명시적으로
+        uID = 2, // 창 트레이(A100부터 100번대 슬롯)와 구분 — hwnd가 달라 실제로는 독립이지만 명시적으로
         uFlags = NifMessage | NifIcon | NifTip,
         uCallbackMessage = WmTrayCallback,
         hIcon = _hIcon,
