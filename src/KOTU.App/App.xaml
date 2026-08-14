@@ -11,18 +11,25 @@
                 <!-- A33: 오버레이 전용 아크릴 — 기본 인앱 아크릴보다 틴트를 크게 약화해
                      배경 콘텐츠가 또렷이 비친다. 아크릴 미지원 시 폴백도 반투명 단색.
                      A57 ②에서 MainWindow 로컬 리소스 → 앱 리소스로 이동: 공용 오버레이
-                     컨트롤(Overlays/*)이 창 밖(InitializeComponent 시점)에서도 찾을 수 있어야 한다. -->
+                     컨트롤(Overlays/*)이 창 밖(InitializeComponent 시점)에서도 찾을 수 있어야 한다.
+                     A108(v0.135.0): 불투명도를 종전의 약 60% 수준으로 한 단계 더 약화 —
+                     TintOpacity 0.1 → 0.06, TintLuminosityOpacity 0.4 → 0.24, 폴백 알파 B3 → 6B.
+                     오버레이(반투명 홀드·고정)가 사이드바(불투명 도크)와 한눈에 구분되게 하기 위함.
+                     ⚠️ 실기기에서 눈으로 보고 미세 조정하는 단일 지점 — 세 값을 같은 비율로 움직이고,
+                     Default(다크)/Light 두 딕셔너리를 반드시 같은 값으로 유지할 것(한쪽만 고치면
+                     테마 전환에서 원복된 것처럼 보인다). 좌우 패널·S4 중앙이 전부 이 브러시 하나를
+                     공유하므로 여기만 고치면 전 오버레이에 일괄 반영된다. -->
                 <ResourceDictionary x:Key="Default">
                     <AcrylicBrush x:Key="OverlayAcrylicBrush"
-                                  TintColor="#202020" TintOpacity="0.1"
-                                  TintLuminosityOpacity="0.4"
-                                  FallbackColor="#B3202020" />
+                                  TintColor="#202020" TintOpacity="0.06"
+                                  TintLuminosityOpacity="0.24"
+                                  FallbackColor="#6B202020" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
                     <AcrylicBrush x:Key="OverlayAcrylicBrush"
-                                  TintColor="#F9F9F9" TintOpacity="0.1"
-                                  TintLuminosityOpacity="0.4"
-                                  FallbackColor="#B3F9F9F9" />
+                                  TintColor="#F9F9F9" TintOpacity="0.06"
+                                  TintLuminosityOpacity="0.24"
+                                  FallbackColor="#6BF9F9F9" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

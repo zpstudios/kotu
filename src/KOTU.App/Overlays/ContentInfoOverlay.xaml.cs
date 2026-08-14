@@ -9,14 +9,16 @@ using KOTU.Core.Routing;
 namespace KOTU.App.Overlays;
 
 /// <summary>
-/// 콘텐츠 정보 오버레이 공용 컨트롤 (A57 ②) — 기존 MainWindow의 InfoOverlayRoot(좌측 30%,
-/// v0.25.0)를 추출해 우측으로 스왑(A57 ①)한 것. 패널 폭은 상태별(A93, SetPanelPercent):
-/// 콘텐츠 상태 30% / S1(빈 파일 모듈) 25%. 정보 로드 로직(v0.25.0의
+/// 콘텐츠 정보 패널 공용 컨트롤 (A57 ②) — 기존 MainWindow의 InfoOverlayRoot(좌측,
+/// v0.25.0)를 추출해 우측으로 스왑(A57 ①)한 것.
+/// 용어(A108): 사이드바 = 불투명(OpaqueDocked) / 오버레이 = 반투명(홀드·고정).
+/// 패널 폭은 전 상태 공통 25%(A116 — 종전 "콘텐츠 30% / S1 25%" 2값 폐지,
+/// SetPanelPercent). 정보 로드 로직(v0.25.0의
 /// LoadContentInfoAsync — 파일별 1회 캐시·경쟁 방지 시퀀스·기본 파일 정보 폴백)도 함께 이관.
 /// 정보 항목은 모듈이 주입한다: ShowFor()에 넘기는 IContentInfoProvider(모듈 뷰)가 내용을 만들고,
 /// 없거나 실패하면 파일 기본 정보로 대체한다. 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
 /// 애초에 ShowFor를 부르지 않는다(현행 동작 유지).
-/// 입력(A86 — A58의 Shift를 X로 대체: X 홀드 = 반투명 / 2초 = 고정 / 2연타 = 불투명 밀어내기 /
+/// 입력(A86 — A58의 Shift를 X로 대체: X 홀드 = 오버레이 / 2초 = 오버레이 고정 / 2연타 = 사이드바 /
 /// 열림 상태에서 X 1회 = 닫기)은 셸(MainWindow)의 상태 머신이 담당한다 —
 /// 이 컨트롤은 ShowFor/Hide/SetState만 받는다.
 /// </summary>
@@ -75,8 +77,10 @@ public sealed partial class ContentInfoOverlay : UserControl
     }
 
     /// <summary>
-    /// 패널 폭(전폭 대비 %) 지정 (A93): S1(빈 파일 모듈) = 25(3구획 25:50:25),
-    /// 콘텐츠 상태 = 30(A57/A58 그대로). FileListOverlay에도 같은 메서드가 있다.
+    /// 패널 폭(전폭 대비 %) 지정 — 셸이 전 상태 공통 SidebarPercent(25, A116)를 넘긴다.
+    /// 내부 별 분할이 셸 도크 컬럼과 같은 비율이어야 사이드바에서 픽셀 단위로 정렬되고,
+    /// 경계 버튼 옆 안내 문구(A108 — RestColumn 기준 배치)의 x도 이 분할이 정한다.
+    /// FileListOverlay에도 같은 메서드가 있다.
     /// </summary>
     public void SetPanelPercent(double percent)
     {
@@ -107,12 +111,14 @@ public sealed partial class ContentInfoOverlay : UserControl
     }
 
     /// <summary>
-    /// 표시 모드·고정 안내 반영 (A58). TranslucentOver = 아크릴 반투명(A33): 홀드 중이면
-    /// 문구 없음, pinned(2초 홀드 고정)면 unpin 안내. OpaqueDocked = 불투명 배경 + close 안내 —
+    /// 표시 모드·고정 안내 반영 (A58). TranslucentOver = 오버레이(아크릴 반투명, A33 — A108
+    /// 용어): 홀드 중이면 문구 없음, pinned(2초 홀드 고정)면 unpin 안내.
+    /// OpaqueDocked = 사이드바(불투명 배경) + close 안내 —
     /// 실제 폭 차지(메인 축소)는 셸의 도크 컬럼이 담당하고 여기서는 시각·문구만 바꾼다.
-    /// 상호작용(스크롤)은 고정·불투명에서만 허용 — 홀드 중에는 아래 콘텐츠 클릭을 막지 않는다
+    /// 상호작용(스크롤)은 고정·사이드바에서만 허용 — 홀드 중에는 아래 콘텐츠 클릭을 막지 않는다
     /// (기존 pinned 규칙 유지).
     /// A92(v0.115.0): 문구는 상시 표시가 아니라 잠깐 보였다 사라진다(아래 안내 문구 절 참고).
+    /// A108(v0.135.0): 문구 위치는 패널 안이 아니라 경계 버튼 옆(XAML PinnedText 배치 참고).
     /// </summary>
     public void SetState(OverlayMode mode, bool pinned)
     {
@@ -132,6 +138,8 @@ public sealed partial class ContentInfoOverlay : UserControl
     // ⚠️ FileListOverlay에 같은 이름의 상수·필드·메서드(표시 타이밍 장치)가 한 벌 더 있다.
     // 문구 문자열은 A107에서 OverlayHints로 모았지만 타이밍 장치는 여전히 두 벌 —
     // 한쪽을 고치면 반드시 다른 쪽도 맞출 것.
+    // A108(v0.135.0): 표시 위치가 패널 안 → 경계 버튼 옆(세로 중앙)으로 이동 — XAML만 바뀌었고
+    // 타이밍 장치는 그대로다.
 
     private const double HintOpacity = 0.6; // XAML PinnedText.Opacity와 같아야 한다(페이드 후 되돌릴 값)
     private static readonly TimeSpan HintHoldFor = TimeSpan.FromSeconds(2.5);      // 표시 시간(구현 시 결정)

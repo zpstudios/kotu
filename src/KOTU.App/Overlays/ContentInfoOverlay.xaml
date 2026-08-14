@@ -3,15 +3,16 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- 콘텐츠 정보 오버레이 (A57 ①②): 기존 MainWindow의 InfoOverlayRoot를 공용 컨트롤로 추출.
-         A57 ①에 따라 우측에 배치(기존 좌측에서 스왑). 폭은 코드(SetPanelPercent, A93)가 정한다:
-         콘텐츠 상태 = 30%(A33/A57 규칙 그대로) / S1(빈 파일 모듈) = 25%(3구획 25:50:25).
-         키 매핑(A86 — A58의 Shift를 X로 대체) = X: 홀드 = 반투명 덮기 / 2초 홀드 = 반투명 고정 /
-         2연타 = 불투명 밀어내기 / 열림 상태에서 1회 = 닫기. 입력 처리는 셸 담당 —
+    <!-- 콘텐츠 정보 패널 (A57 ①②): 기존 MainWindow의 InfoOverlayRoot를 공용 컨트롤로 추출.
+         용어(A108): 사이드바 = 불투명(OpaqueDocked) / 오버레이 = 반투명(홀드·고정).
+         A57 ①에 따라 우측에 배치(기존 좌측에서 스왑). 폭은 코드(SetPanelPercent)가 정한다:
+         전 상태 공통 25%(A116, v0.135.0 — 종전 "콘텐츠 30% / S1 25%" 2값 폐지, 3구획 25:50:25).
+         키 매핑(A86 — A58의 Shift를 X로 대체) = X: 홀드 = 오버레이 덮기 / 2초 홀드 = 오버레이 고정 /
+         2연타 = 사이드바 / 열림 상태에서 1회 = 닫기. 입력 처리는 셸 담당 —
          이 컨트롤은 SetState로 모드(TranslucentOver/OpaqueDocked)와 안내 문구만 받는다.
-         불투명일 때의 실제 폭 차지는 셸의 도크 컬럼 담당(내부 별 분할은 두 모드 공통).
+         사이드바일 때의 실제 폭 차지는 셸의 도크 컬럼 담당(내부 별 분할은 두 모드 공통).
          정보 항목은 모듈 뷰(IContentInfoProvider)가 주입하고, 없으면 파일 기본 정보로 대체.
-         기본 배경은 약한 틴트 아크릴(A33).
+         기본 배경은 약한 틴트 아크릴(A33 — A108에서 더 약화).
          패널 드랍(A93) = 그 파일 열기(FileDropped) — 홀드 반투명 중에는 IsHitTestVisible이
          false라 드랍이 아래 콘텐츠 영역 규칙으로 흘러간다(의도된 동작). -->
     <Grid>
@@ -28,11 +29,20 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="InfoText" TextWrapping="Wrap" FontSize="13" />
-                    <!-- 문구는 코드가 넣는다(OverlayHints 단일 출처, A107) — 표시 전 ShowHint가 항상 채운다. -->
-                    <TextBlock x:Name="PinnedText"
-                               Visibility="Collapsed" FontSize="11" Opacity="0.6" />
                 </StackPanel>
             </ScrollViewer>
         </Border>
+        <!-- 안내 문구 (A92 → A108에서 패널 안 → 경계 버튼 옆으로 이동): 우 경계 버튼의
+             왼쪽(화면 안쪽), 같은 세로 중앙에 뜬다. RestColumn 우측 정렬 = 패널 경계선 기준이라
+             별도 좌표 계산 없이 도크 폭·리사이즈를 따라온다. Margin 14 = 버튼 걸침 10 + 간격 4.
+             IsHitTestVisible=False: 메인 콘텐츠 위의 순수 표시. FileListOverlay 쪽과 대칭 —
+             한쪽을 고치면 반드시 다른 쪽도 맞출 것(A92 타이밍 장치 두 벌 규칙과 동일).
+             문구는 코드가 넣는다(OverlayHints 단일 출처, A107) — 표시 전 ShowHint가 항상 채운다.
+             Opacity 0.6은 코드 HintOpacity와 같아야 한다(페이드 후 되돌릴 값). -->
+        <TextBlock x:Name="PinnedText" Grid.Column="0"
+                   Visibility="Collapsed" FontSize="11" Opacity="0.6"
+                   IsHitTestVisible="False"
+                   HorizontalAlignment="Right" VerticalAlignment="Center"
+                   Margin="0,0,14,0" />
     </Grid>
 </UserControl>

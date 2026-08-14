@@ -35,8 +35,9 @@ public sealed partial class MainWindow : Window
     // 단독 Z/X는 폐지 — 문자 입력·리스트 첫 글자 점프에 양보한다(충돌 자체가 소멸, A107의 계기).
     // 사이드마다 4상태: Closed(닫힘) / Holding(키 홀드 — 반투명 덮기, 메인 크기 불변) /
     //   TranslucentPinned(2초 이상 홀드 — 키를 떼도 반투명 유지) /
-    //   OpaqueDocked(2연타 — 불투명 + 메인을 반대쪽 7*로 축소, 양쪽이면 3:4:3).
-    // 2연타 = 불투명 도크 고정/해제(A58 유지). A86 추가: **열림 상태(고정·도크)에서 해당 키 1회 = 그 쪽 닫기**
+    //   OpaqueDocked(2연타 — 불투명 + 메인을 반대쪽으로 축소. A108 용어로 "사이드바" —
+    //   반투명 두 상태(홀드·고정)가 "오버레이"다. 폭은 전 상태 공통 SidebarPercent(A116): 한쪽 25:75, 양쪽 25:50:25).
+    // 2연타 = 사이드바 고정/해제(A58 유지). A86 추가: **열림 상태(고정·사이드바)에서 해당 키 1회 = 그 쪽 닫기**
     //   (keymap S3 행 — 판정 충돌은 "첫 탭 이전 상태" 기준 2연타로 푼다, OnOverlaySideDown 참고.
     //   A107 재검토 결과 유지 — 폐지 확정이 없었다).
     // A107 신설: **Alt+Z+X 동시 누름 = 좌·우 동시 호출** — "다른 키 개입 = 홀드 취소"에서 Z↔X 상호만
@@ -83,7 +84,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private (OverlayState List, OverlayState Info)? _s4Restore;
 
-    /// <summary>A86 keymap의 구성 상태 판정. 홀드(반투명 덮기)도 "열림"으로 센다 — 표의 상태 기준.</summary>
+    /// <summary>A86 keymap의 구성 상태 판정. 홀드(오버레이 덮기)도 "열림"으로 센다 — 표의 상태 기준.</summary>
     private ShellState CurrentShellState
     {
         get
@@ -123,7 +124,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Enter 일괄 닫기 직전의 좌/우 구성 — "직전 구성 복원"(A86 keymap Q3)의 세션 한정 기억.
-    /// null = 아직 일괄 닫기를 안 했다 → 복원 시 A81 기본 세트(좌+우 불투명 도크). 저장하지 않는다.
+    /// null = 아직 일괄 닫기를 안 했다 → 복원 시 A81 기본 세트(좌+우 사이드바). 저장하지 않는다.
     /// </summary>
     private (OverlayState List, OverlayState Info)? _lastBatchStates;
 
@@ -1230,7 +1231,7 @@ public sealed partial class MainWindow : Window
         RememberLastFolder(); // 모듈별 마지막 폴더 저장 (v0.55.0)
         UpdateEmptyExplorer();
         UpdateDriveStrip(); // A22: 파일 유무가 바뀌면 드라이브 줄도 함께 켜고 끈다
-        // 홀드 판정만 리셋하고(A58), 반투명 고정·불투명 밀어내기 상태는 유지한 채
+        // 홀드 판정만 리셋하고(A58), 오버레이 고정·사이드바 상태는 유지한 채
         // 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 — 기존 "고정은 콘텐츠를 넘어 유지" 규칙.
         ResetOverlayInput();
         ApplyOverlayStates();
@@ -1479,11 +1480,11 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 사이드 키(A107: Alt+Z/X) 최초 down(오토리피트 제외)의 상태 전이 (A58 전이 + A86 keymap):
-    /// 닫힘에서 down = 홀드 세션 시작(반투명 덮기 + 2초 승격 타이머) — "닫힌 오버레이 꺼내기".
-    /// **열림(반투명 고정·불투명 도크)에서 down 1회 = 그 쪽 닫기** (A86 신설 — keymap S3 행:
+    /// 닫힘에서 down = 홀드 세션 시작(오버레이 덮기 + 2초 승격 타이머) — "닫힌 패널 꺼내기".
+    /// **열림(오버레이 고정·사이드바)에서 down 1회 = 그 쪽 닫기** (A86 신설 — keymap S3 행:
     /// S3L에서 Alt+Z = 좌 닫기. A58에서는 무동작이던 자리. A107 재검토 결과 유지).
-    /// 2연타 = 불투명 도크 고정/해제(A58 유지). 첫 탭이 이미 상태를 옮기므로 판정은
-    /// **첫 탭 이전 상태(TapStartState)** 기준이다: 닫힘에서 시작한 2연타 = 도크,
+    /// 2연타 = 사이드바 고정/해제(A58 유지). 첫 탭이 이미 상태를 옮기므로 판정은
+    /// **첫 탭 이전 상태(TapStartState)** 기준이다: 닫힘에서 시작한 2연타 = 사이드바,
     /// 열림에서 시작한 2연타 = 해제(첫 탭이 이미 닫았다 — 두 번째 탭은 그대로 둔다).
     /// 양쪽 사이드가 각자 이 전이를 독립적으로 탄다 — Alt+Z+X 동시 호출(A107)의 실행부.
     /// </summary>
@@ -1502,7 +1503,7 @@ public sealed partial class MainWindow : Window
             side.LastTapDown = DateTime.MinValue;
             CancelHoldCore(side); // 이번 누름은 홀드 세션이 아니다 — 계속 눌러도 승격 없음
             side.State = side.TapStartState == OverlayState.Closed
-                ? OverlayState.OpaqueDocked // 닫힘에서 시작한 2연타 = 불투명 밀어내기 (A58)
+                ? OverlayState.OpaqueDocked // 닫힘에서 시작한 2연타 = 사이드바 (A58 — 구 "불투명 밀어내기")
                 : OverlayState.Closed;      // 열림에서 시작한 2연타 = 해제 — 첫 탭이 이미 닫힌 상태 유지
         }
         else
@@ -1579,7 +1580,7 @@ public sealed partial class MainWindow : Window
     {
         if (e.KeyStatus.WasKeyDown) return; // 오토리피트 — 토글이 연사되면 안 된다
 
-        // 구성 스냅샷은 홀드 취소보다 먼저 뜬다: 홀드(반투명 덮기)도 keymap 기준 "열림"이고
+        // 구성 스냅샷은 홀드 취소보다 먼저 뜬다: 홀드(오버레이 덮기)도 keymap 기준 "열림"이고
         // 복원 구성(Q3)에도 들어가야 한다. 홀드는 키를 떼면 사라지는 과도 상태라 반투명 고정으로 기억.
         var state = CurrentShellState;
         var snapshot = (List: Sticky(_listSide.State), Info: Sticky(_infoSide.State));
@@ -1661,7 +1662,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Enter 일괄 토글 실행부: 하나라도 열려 있으면 전부 닫고(직전 구성을 세션 한정 기억 — Q3),
-    /// 전부 닫혀 있으면 기억한 구성으로, 기억이 없으면 A81 기본 세트(좌+우 불투명 도크)로 되살린다.
+    /// 전부 닫혀 있으면 기억한 구성으로, 기억이 없으면 A81 기본 세트(좌+우 사이드바)로 되살린다.
     /// </summary>
     private void BatchToggleOverlays((OverlayState List, OverlayState Info) snapshot)
     {
@@ -1727,7 +1728,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 홀드 판정 리셋(A58): 다른 키·포인터 개입, 창 비활성화(KeyUp 유실), 콘텐츠 전환에서
-    /// 부른다. 홀드 중(Holding)이던 오버레이만 즉시 내리고, 반투명 고정·불투명 밀어내기
+    /// 부른다. 홀드 중(Holding)이던 패널만 즉시 내리고, 오버레이 고정·사이드바
     /// 상태는 유지한다. 2연타 카운트도 함께 리셋한다.
     /// </summary>
     private void ResetOverlayInput()
@@ -1749,8 +1750,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 외부에서 좌/우 오버레이의 불투명 밀어내기 상태를 지정한다 — 시작 경로별 기본 표시
-    /// 상태(A81: 파일 인자 없이 모듈로 연 창은 양쪽 불투명, 부록 B 30번)용 공개 API.
+    /// 외부에서 좌/우 사이드바(불투명 도크 — A108 용어) 상태를 지정한다 — 시작 경로별 기본 표시
+    /// 상태(A81: 파일 인자 없이 모듈로 연 창은 양쪽 사이드바, 부록 B 30번)용 공개 API.
     /// WindowManager가 창 생성 진입에서 1회만 부른다 — 이후 모듈 전환·파일 열기는
     /// 사용자가 바꾼 상태를 그대로 유지(재적용 없음)하고, 세션 간 저장도 없다(A55 미포함).
     /// true = OpaqueDocked, false = 닫힘. 반투명 고정은 키 입력 전용이라 여기서 만들지 않는다.
@@ -1763,6 +1764,16 @@ public sealed partial class MainWindow : Window
         _infoSide.State = infoDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
         ApplyOverlayStates();
     }
+
+    /// <summary>
+    /// 사이드바(불투명 도크)가 차지하는 전폭 대비 % — 전 상태 공통 25 (양쪽이면 3구획 25:50:25).
+    /// A116(v0.135.0): 종전에는 "S1 = 25 / 콘텐츠 상태 = 30(A57의 3:4:3 유산)"의 상태별 2값이라,
+    /// 파일을 열거나 S4('오픈 파일')로 들어가면 같은 3구획 화면이 소리 없이 30:40:30이 됐다 —
+    /// 사용자에게 "리사이즈에 비율 재계산 안 됨"으로 관측된 실원인(폭 자체는 전부 star라 리사이즈
+    /// 추종은 원래 성립). 도크 컬럼·패널 내부 분할(SetPanelPercent)·S4 스페이서·경계 버튼 x가
+    /// 전부 이 상수 하나를 쓴다 — 비율을 바꿀 일이 있으면 여기 한 곳만 고칠 것.
+    /// </summary>
+    private const double SidebarPercent = 25.0;
 
     /// <summary>
     /// 상태 머신 → 화면 반영 (A58). 표시 여부·모드(반투명/불투명)·안내 문구·도크 컬럼을
@@ -1797,12 +1808,13 @@ public sealed partial class MainWindow : Window
                 ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
             pinned: _infoSide.State == OverlayState.TranslucentPinned);
 
-        // 불투명 밀어내기(OpaqueDocked)만 실제 공간을 차지한다: 도크 컬럼을 키워
+        // 사이드바(OpaqueDocked — A108 용어)만 실제 공간을 차지한다: 도크 컬럼을 키워
         // 메인(ModuleHost/ExplorerHost)을 반대쪽으로 축소한다.
-        // 도크 폭(A93): S1(빈 파일 모듈) = 25%씩 → 3구획 25:50:25 / 콘텐츠 상태 = 30%씩
-        // (A57/A58 그대로 — 한쪽 3:7, 양쪽 3:4:3). 오버레이 내부 별 분할(SetPanelPercent)을
-        // 같은 %로 맞춰야 불투명 밀어내기에서 도크 컬럼과 픽셀 단위로 정렬된다.
-        var dockPercent = emptyModule ? 25.0 : 30.0;
+        // 도크 폭 = 전 상태 공통 SidebarPercent(A116, v0.135.0 — 종전 "S1 25 / 콘텐츠 30"의
+        // 상태별 2값을 폐지: 같은 3구획 화면이 파일 열기·S4 진입에서 소리 없이 30:40:30으로
+        // 바뀌던 것이 A116 관측의 원인이었다). 패널 내부 별 분할(SetPanelPercent)을
+        // 같은 %로 맞춰야 사이드바에서 도크 컬럼과 픽셀 단위로 정렬된다.
+        var dockPercent = SidebarPercent;
         ListOverlay.SetPanelPercent(dockPercent);
         InfoOverlay.SetPanelPercent(dockPercent);
         var left = ListOverlay.IsOpen && _listSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
@@ -1854,9 +1866,13 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 경계 버튼 위치·글리프 갱신 (A86): 경계선 = 그 쪽 패널의 화면 폭.
-    /// 불투명 도크든 반투명(홀드·고정) 덮기든 열려 있으면 dockPercent%(25/30 — ApplyOverlayStates와
-    /// 같은 값), 닫혀 있으면 0 = 창 가장자리(닫힌 상태에서도 같은 자리에서 꺼낼 수 있어야 한다).
+    /// 사이드바(불투명 도크)든 오버레이(홀드·고정 반투명 — A108 용어)든 열려 있으면
+    /// SidebarPercent%(전 상태 공통 25 — A116), 닫혀 있으면 0 = 창 가장자리
+    /// (닫힌 상태에서도 같은 자리에서 꺼낼 수 있어야 한다).
     /// 버튼은 경계선에서 메인 쪽으로 절반(EdgeButtonOverlap) 걸친다 — "메인을 살짝 덮게"(A86 원문).
+    /// A108: 도크·고정 안내 문구(각 오버레이 컨트롤의 PinnedText)가 이 버튼의 화면 안쪽 옆
+    /// (좌 = 버튼 오른쪽 / 우 = 버튼 왼쪽, 세로 중앙 동일)에 뜬다 — 패널 내부 분할이 같은 %라
+    /// 별도 좌표 계산 없이 정렬된다.
     /// 표시 여부는 근접 판정(OnRootPointerMoved)이 정하고, 여기서는 컨텍스트가 사라졌을 때만 감춘다.
     /// </summary>
     private void UpdateEdgeButtons()
@@ -1870,12 +1886,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var dockPercent = IsEmptyFileModule ? 25.0 : 30.0; // ApplyOverlayStates의 상태별 폭과 동일(A93)
+        var dockPercent = SidebarPercent; // ApplyOverlayStates의 도크 폭과 동일 상수(A116 정합)
         _leftEdgeX = ListOverlay.IsOpen ? width * dockPercent / 100 : 0;
         _rightEdgeX = InfoOverlay.IsOpen ? width - width * dockPercent / 100 : width;
         LeftEdgeButton.Margin = new Thickness(Math.Max(0, _leftEdgeX - EdgeButtonOverlap), 0, 0, 0);
         RightEdgeButton.Margin = new Thickness(0, 0, Math.Max(0, width - _rightEdgeX - EdgeButtonOverlap), 0);
-        // 글리프 = 누르면 일어날 일의 방향: 도크가 아니면 "불투명 도크로 밀어내기"(안쪽), 도크면 닫기(바깥쪽).
+        // 글리프 = 누르면 일어날 일의 방향: 사이드바가 아니면 "사이드바로 세우기"(안쪽), 사이드바면 닫기(바깥쪽).
         LeftEdgeGlyph.Glyph = _listSide.State == OverlayState.OpaqueDocked ? "\uE76B" : "\uE76C";
         RightEdgeGlyph.Glyph = _infoSide.State == OverlayState.OpaqueDocked ? "\uE76C" : "\uE76B";
     }
@@ -1906,13 +1922,13 @@ public sealed partial class MainWindow : Window
         RightEdgeButton.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>경계 버튼 동작 = 불투명 도크 토글 (A86 keymap Q7 확정 — 좌).</summary>
+    /// <summary>경계 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 좌).</summary>
     private void OnLeftEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_listSide);
 
-    /// <summary>경계 버튼 동작 = 불투명 도크 토글 (A86 keymap Q7 확정 — 우).</summary>
+    /// <summary>경계 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 우).</summary>
     private void OnRightEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_infoSide);
 
-    /// <summary>불투명 도크면 닫고, 그 외(닫힘·홀드·반투명 고정)면 불투명 도크로 (Q7).</summary>
+    /// <summary>사이드바(불투명 도크)면 닫고, 그 외(닫힘·홀드·오버레이 고정)면 사이드바로 (Q7).</summary>
     private void ToggleOpaqueDock(OverlaySide side)
     {
         CancelHoldCore(side);
