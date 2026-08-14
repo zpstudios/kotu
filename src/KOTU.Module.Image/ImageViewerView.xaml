@@ -9,9 +9,10 @@
     <!-- 단축키: ←/→ 탐색, Delete 휴지통 삭제, F11 전체화면.
          Enter 전체화면(v0.29.0)은 A86(v0.121.0)에서 제거 — Enter는 셸의 오버레이 일괄 토글 키가
          됐고, keymap의 전체화면 예외는 영상 모듈뿐이다(전체화면은 F11로).
-         버튼에 걸린 단독 문자 키(R 회전 · A 1:1 · F Fit)는 A34에서 코드
+         버튼에 걸린 단독 문자 키(R 회전 · A 100% · F Fit)는 A34에서 코드
          (SetupHotkeys)로 옮겼다 — 툴팁 "(키)" 표기와 키를 한 값에서 만들고,
          텍스트 입력·파일 리스트 포커스에서는 통과시켜야 하기 때문.
+         A111(v0.133.0)에서 1:1 버튼이 사라져 A·F 둘 다 Fit 버튼에 걸린다(의미는 무변경).
          O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
          PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Left" 등) 툴팁을 화면 중앙에 띄운다. -->
     <UserControl.KeyboardAccelerators>
@@ -67,9 +68,9 @@
             <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <!-- 파일명·메타(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸.
-                         열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
+                         열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
+                         1:1 버튼 칸은 A111에서 제거 — 100%가 Fit 플라이아웃 4옵션에 들어갔다. -->
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -113,8 +114,9 @@
                     x:Name="InfoText"
                     Grid.Column="1"
                     VerticalAlignment="Center" />
-                <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·1:1·전체화면 = 1칸,
-                     Auto-fit = 2칸 + 핏 옵션 전부 아이콘(A27에서 확정 → A97에서 84×36 → A106에서 84×32). -->
+                <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·전체화면 = 1칸, Fit = 2칸 +
+                     핏 옵션 아이콘(A27에서 확정 → A97에서 84×36 → A106에서 84×32).
+                     1:1 별도 버튼은 A111에서 제거 — 100%가 Fit 플라이아웃 옵션이 됐다. -->
                 <Button
                     x:Name="RotateButton"
                     Grid.Column="2"
@@ -122,26 +124,29 @@
                     Click="OnRotateButtonClick">
                     <FontIcon Glyph="&#xE7AD;" FontSize="18" />
                 </Button>
-                <Button
-                    x:Name="ActualSizeButton"
-                    Grid.Column="3"
-                    Style="{StaticResource BottomBarButtonStyle}"
-                    Content="1:1"
-                    FontSize="13"
-                    Click="OnActualSizeClick" />
-                <!-- 기본 클릭 = 자동 맞춤(긴 변이 잘리지 않게). 화살표로 좌우/상하 채움 선택.
+                <!-- A111(v0.133.0): 이미지도 A30 상태형 SplitButton으로 통일 —
+                     본체 = 마지막으로 고른 옵션 표시(1:1 텍스트 / E9A6 / E8AB / E8CB) ·
+                     본체 클릭 = 그 옵션 재적용, 화살표 = A83 4옵션. 본체 내용·툴팁은
+                     UpdateFitButton()이 갱신하므로 아래 FontIcon은 초기값(Contain)일 뿐이다.
                      SplitButton은 WinUI가 키 있는 기본 스타일을 노출하지 않아(BasedOn 대상 없음)
                      전역 스타일 대신 2칸 값(84×32)을 그대로 적는다 — A27(v0.107.0),
                      높이는 A97(v0.116.0)에서 40→36, A106(v0.132.0)에서 36→32. 폭 84는 유지. -->
                 <SplitButton
                     x:Name="FitButton"
-                    Grid.Column="4"
+                    Grid.Column="3"
                     Width="84" Height="32"
                     VerticalAlignment="Center" CornerRadius="4"
                     Click="OnFitClick">
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     <SplitButton.Flyout>
                         <MenuFlyout Placement="Top">
+                            <!-- 100%는 아이콘 없이 글자만 — 검증된 글리프가 없다(A111 확정) -->
+                            <MenuFlyoutItem Text="100%" Click="OnFitActualSizeClick" />
+                            <MenuFlyoutItem Text="Contain" Click="OnFitContainClick">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE9A6;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                             <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClick">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE8AB;" />
@@ -156,7 +161,7 @@
                     </SplitButton.Flyout>
                 </SplitButton>
                 <Button
-                    Grid.Column="5"
+                    Grid.Column="4"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Click="OnFullScreenButtonClick"
                     ToolTipService.ToolTip="Full screen (F11)">

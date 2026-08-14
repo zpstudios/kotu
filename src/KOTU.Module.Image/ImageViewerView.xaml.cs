@@ -451,16 +451,25 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         UpdateFit();
     }
 
-    // ---------- 보기 모드 (v0.41.0: 1:1 / Fit / Fit width / Fit height) ----------
+    // ---------- 보기 모드 (A83: 100% / Contain / Fit width / Fit height — 3모듈 공통) ----------
 
     /// <summary>
-    /// Fit = 긴 변이 잘리지 않게 창에 맞춤(기본, 작은 이미지는 원본 유지).
-    /// FitWidth/FitHeight = 해당 축을 꽉 채움(반대 축은 스크롤). ActualSize = 실제 픽셀 1:1.
-    /// ←/→ 탐색 간에도 선택한 모드를 유지한다.
+    /// Contain = 긴 변이 잘리지 않게 창에 맞춤(기본). <b>축소만</b> 한다 — 뷰포트보다 클 때만
+    /// 줄이고 작은 이미지는 원본 크기 그대로다(A83 확정. MaxWidth/MaxHeight 제한이므로
+    /// 확대 경로가 애초에 없다 — 구 이름 Fit에서 의미 변화 없음).
+    /// FitWidth/FitHeight = 해당 축을 꽉 채움(반대 축은 스크롤, 확대·축소 양방향).
+    /// ActualSize = 실제 픽셀 1:1. ←/→ 탐색 간에도 선택한 모드를 유지한다.
     /// </summary>
-    private enum FitMode { Fit, FitWidth, FitHeight, ActualSize }
+    private enum FitMode { Contain, FitWidth, FitHeight, ActualSize }
 
-    private FitMode _fitMode = FitMode.Fit;
+    private FitMode _fitMode = FitMode.Contain;
+
+    /// <summary>
+    /// A30 규격(A111에서 이미지에도 도입): Fit 버튼 본체가 표시·재적용할 마지막 옵션.
+    /// A83 이후 100%도 플라이아웃 옵션이라 ActualSize까지 들어온다(1:1 별도 버튼은 없어졌다).
+    /// 영속화하지 않는다 — 이미지 모듈은 종전대로 세션 안에서만 유지한다(A83 5항: 현행 유지).
+    /// </summary>
+    private FitMode _lastFitOption = FitMode.Contain;
 
     /// <summary>현재 보기 모드를 이미지 레이아웃에 적용한다(창맞춤은 뷰포트 크기로 제한).</summary>
     private void UpdateFit()
@@ -479,7 +488,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
         switch (_fitMode)
         {
-            case FitMode.Fit:
+            case FitMode.Contain:
+                // 상한만 건다 = 큰 이미지는 줄고 작은 이미지는 그대로(A83 "축소만").
                 ImageControl.MaxWidth = swapped ? vh : vw;
                 ImageControl.MaxHeight = swapped ? vw : vh;
                 break;
@@ -511,13 +521,57 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         UpdateFit();
     }
 
-    private void OnActualSizeClick(object sender, RoutedEventArgs e) => SetFitMode(FitMode.ActualSize);
+    /// <summary>
+    /// A30 규격: Fit 버튼 본체 내용(1:1 텍스트 / Contain·좌우·상하 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
+    /// 100%는 검증된 글리프가 없어 기존 1:1 버튼의 표기(FontSize 13 텍스트)를 그대로 승계한다.
+    /// </summary>
+    private void UpdateFitButton()
+    {
+        (object content, string tip) = _lastFitOption switch
+        {
+            FitMode.FitWidth =>
+                ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
+            FitMode.FitHeight =>
+                (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
+            FitMode.ActualSize => (new TextBlock
+            {
+                Text = "1:1",
+                FontSize = 13,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            }, "Actual size"),
+            _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
+                "Contain - the whole image fits, never enlarged"),
+        };
+        FitButton.Content = content;
+        ToolTipService.SetToolTip(FitButton, FitTip(tip)); // A34: 표기는 키 상수에서
+    }
 
-    private void OnFitClick(SplitButton sender, SplitButtonClickEventArgs args) => SetFitMode(FitMode.Fit);
+    /// <summary>
+    /// 본체 툴팁 = "지금 표시 중인 옵션 (F) · 100% (A)" — 1:1 버튼이 사라져도 A 키 표기가
+    /// 남게 병합한다(A111). 두 표기 모두 키 상수에서 조립한다(A34 표기 규칙).
+    /// </summary>
+    private static string FitTip(string description) =>
+        $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
 
-    private void OnFitWidthClick(object sender, RoutedEventArgs e) => SetFitMode(FitMode.FitWidth);
+    /// <summary>A30 규격: 플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
+    private void SelectFitOption(FitMode option)
+    {
+        _lastFitOption = option;
+        SetFitMode(option);
+        UpdateFitButton();
+    }
 
-    private void OnFitHeightClick(object sender, RoutedEventArgs e) => SetFitMode(FitMode.FitHeight);
+    /// <summary>A30 규격: 본체 클릭 = 버튼에 표시된 마지막 옵션 재적용.</summary>
+    private void OnFitClick(SplitButton sender, SplitButtonClickEventArgs args) => SetFitMode(_lastFitOption);
+
+    private void OnFitActualSizeClick(object sender, RoutedEventArgs e) => SelectFitOption(FitMode.ActualSize);
+
+    private void OnFitContainClick(object sender, RoutedEventArgs e) => SelectFitOption(FitMode.Contain);
+
+    private void OnFitWidthClick(object sender, RoutedEventArgs e) => SelectFitOption(FitMode.FitWidth);
+
+    private void OnFitHeightClick(object sender, RoutedEventArgs e) => SelectFitOption(FitMode.FitHeight);
 
     private void OnScrollerSizeChanged(object sender, SizeChangedEventArgs e) => UpdateFit();
 
@@ -648,21 +702,32 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------
 
+    /// <summary>Fit 키 — 툴팁 표기(UpdateFitButton)와 액셀러레이터가 이 한 값을 함께 쓴다.</summary>
+    private const VirtualKey FitKey = VirtualKey.F;
+
+    /// <summary>
+    /// 100%(1:1) 키 — A111에서 1:1 버튼이 사라진 뒤로도 A는 그대로 100% 적용이다(A107 확정:
+    /// 문자 핫키 전부 유지). 대상만 Fit 버튼의 100% 옵션 적용 액션으로 옮겼다.
+    /// </summary>
+    private const VirtualKey ActualSizeKey = VirtualKey.A;
+
     /// <summary>
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다 —
     /// 키와 표기가 어긋날 수 없다. 텍스트 입력·탐색기 파일 리스트에 포커스가 있으면
     /// HotkeySupport가 키를 삼키지 않고 통과시킨다(A32/A84 통과 규칙 재사용).
     /// R(회전)은 v0.29.0부터 있던 키를 XAML 액셀러레이터에서 여기로 옮긴 것 — 의미는 그대로다.
-    /// A(1:1)·F(Fit)는 영상·문서 모듈과 같은 뜻으로 통일한 키.
+    /// A(100%)·F(Fit)는 영상·문서 모듈과 같은 뜻으로 통일한 키 — A111부터 둘 다 Fit 버튼에 건다
+    /// (버튼이 하나로 합쳐졌을 뿐, 키 동작은 무변경). 툴팁은 상태를 따라가므로 UpdateFitButton()이
+    /// 두 키 표기를 함께 만든다(Bind 대신 Register + 자체 툴팁).
     /// </summary>
     private void SetupHotkeys()
     {
         HotkeySupport.Bind(this, RotateButton, VirtualKey.R,
             "Rotate 90° clockwise", RotateClockwise);
-        HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,
-            "Actual size (100%)", () => SetFitMode(FitMode.ActualSize));
-        HotkeySupport.Bind(this, FitButton, VirtualKey.F,
-            "Auto-fit to window - long edge fits, nothing cropped", () => SetFitMode(FitMode.Fit));
+        HotkeySupport.Register(this, FitButton, ActualSizeKey,
+            () => SelectFitOption(FitMode.ActualSize));
+        HotkeySupport.Register(this, FitButton, FitKey, () => SetFitMode(_lastFitOption));
+        UpdateFitButton(); // Fit 툴팁은 표시 상태를 따라가므로 초기값도 여기서 만든다
     }
 
     // ---------- Ctrl 정보 오버레이 (v0.25.0) ----------

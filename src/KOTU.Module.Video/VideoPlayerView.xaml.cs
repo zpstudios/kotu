@@ -129,15 +129,17 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// (버튼·콤보·볼륨 96 + 칸 간격)이 시간 텍스트가 길 때("1:23:45") 약 740px —
     /// 최소 창 폭 720(바 폭 약 656)에서는 시크 슬라이더가 0으로 밀리고 우측 ⛶가 잘린다.
     /// 임계값 이력: A40 760(실측 오차 여유 포함) → A99에서 열기 버튼 제거로 42px(버튼 36 + 간격 6)
-    /// 감소 → **718** → A106(v0.132.0)에서 1칸 버튼이 36→32가 되어 **698**.
-    /// A106분 −20의 근거(TransportBar 요소 직접 계수 — 칸 수·간격 6·2칸 폭 84·볼륨 96은 무변경):
-    ///   1칸 버튼 5개 × −4 = −20 (재생 c0 · 음소거 c4 · 자막 c7 · 1:1 c8 · 전체화면 c10).
-    ///   폭이 안 변한 것: 배속 콤보 c6(84) · Fit c9(84) · 볼륨 슬라이더 c5(96) · 시간 텍스트 c1/c3.
+    /// 감소 → **718** → A106(v0.132.0)에서 1칸 버튼이 36→32가 되어 **698** →
+    /// A111(v0.133.0)에서 1:1 버튼이 사라져 **660**.
+    /// A111분 −38의 근거(TransportBar 요소 직접 계수 — 남은 요소의 폭은 무변경):
+    ///   1칸 버튼 1개 −32 (구 1:1 c8) + 칸 간격 1개 −6 (간격 10개 → 9개) = −38.
+    ///   지금 남은 고정 폭: 재생 c0(32) · 음소거 c4(32) · 볼륨 c5(96) · 배속 c6(84) · 자막 c7(32) ·
+    ///   Fit c8(84) · 전체화면 c9(32) + 시간 텍스트 c1/c3 + 간격 6×9.
     /// 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
     /// </summary>
     private void UpdateCompactTransport(double width)
     {
-        var visibility = width < 698 ? Visibility.Collapsed : Visibility.Visible;
+        var visibility = width < 660 ? Visibility.Collapsed : Visibility.Visible;
         VolumeSlider.Visibility = visibility;
         PositionText.Visibility = visibility;
         DurationText.Visibility = visibility;
@@ -210,10 +212,14 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         VideoSurface.AddHandler(PointerWheelChangedEvent,
             new PointerEventHandler(OnSurfaceWheel), handledEventsToo: true);
 
-        // Fit width/height는 표면 크기에 따라 배율이 달라지므로 크기 변화에 추종한다 (v0.41.0)
+        // Fit width/height는 표면 크기에 따라 배율이 달라지므로 크기 변화에 추종한다 (v0.41.0).
+        // A83: Contain도 추종 대상 — "축소만"이라 창 크기에 따라 Scale 1(원본)과 0(자동 축소)이
+        // 갈리므로, 재판정하지 않으면 작은 창에서 100%로 굳는다(전체화면 전환도 이 경로로 온다).
+        // Manual(수동 줌, A98)·ActualSize는 종전대로 추종하지 않는다.
         VideoSurface.SizeChanged += (_, _) =>
         {
-            if (_fitMode is VideoFitMode.FitWidth or VideoFitMode.FitHeight) ApplyFitMode();
+            if (_fitMode is VideoFitMode.Contain or VideoFitMode.FitWidth or VideoFitMode.FitHeight)
+                ApplyFitMode();
         };
 
         // A40: 바 폭이 좁으면 볼륨 슬라이더·시간 텍스트를 숨긴다(셸 하단 바로 옮겨진 뒤에도 유효)
@@ -372,13 +378,13 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         _filePath = path;
 
-        // A30: 재생 영상이 바뀌면 핏 옵션은 A(자동)로 회귀 — 이번 실행 내에서도 기억하지 않는다(사용자 확정).
-        // Manual(Ctrl+휠 줌, A98)도 같은 규칙으로 회귀한다 — 실제 Scale 리셋은 Playing 핸들러의
-        // ApplyFitMode() 재적용이 수행(Fit이면 p.Scale = 0).
-        if (_fitMode != VideoFitMode.Fit || _lastFitOption != VideoFitMode.Fit)
+        // A30: 재생 영상이 바뀌면 핏 옵션은 Contain으로 회귀 — 이번 실행 내에서도 기억하지 않는다
+        // (사용자 확정, A83에서 재확인). Manual(Ctrl+휠 줌, A98)·100%도 같은 규칙으로 회귀한다 —
+        // 실제 Scale 리셋은 Playing 핸들러의 ApplyFitMode() 재적용이 수행한다.
+        if (_fitMode != VideoFitMode.Contain || _lastFitOption != VideoFitMode.Contain)
         {
-            _lastFitOption = VideoFitMode.Fit;
-            _fitMode = VideoFitMode.Fit;
+            _lastFitOption = VideoFitMode.Contain;
+            _fitMode = VideoFitMode.Contain;
             UpdateFitButton();
         }
 
@@ -750,25 +756,31 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         ShowFeedback(_muted ? "Muted" : $"Volume {(int)VolumeSlider.Value}%"); // A13
     }
 
-    // ---------- 보기 모드 (v0.41.0: 1:1 / Fit / Fit width / Fit height) ----------
+    // ---------- 보기 모드 (A83: 100% / Contain / Fit width / Fit height — 3모듈 공통) ----------
 
     /// <summary>
-    /// Fit = libvlc 자동 맞춤(긴 변이 잘리지 않는 레터박스, 기본).
-    /// FitWidth/FitHeight = 표면의 해당 축을 꽉 채우는 배율(반대 축은 잘리거나 남는다).
+    /// Contain = 한 번에 다 보이는 레터박스, 단 <b>축소만</b> 한다(A83 확정) — 뷰포트보다 클 때만
+    /// 줄이고 작은 영상은 원본 크기(Scale 1)로 둔다. 구 Auto-fit(항상 libvlc Scale 0)에서
+    /// 바뀐 이 배치의 유일한 실동작 변경이다.
+    /// FitWidth/FitHeight = 표면의 해당 축을 꽉 채우는 배율(반대 축은 잘리거나 남는다. 확대·축소 양방향).
     /// ActualSize = 원본 픽셀 1:1. 파일을 바꿔도 선택은 유지된다.
     /// Manual = Ctrl+휠 수동 줌(A98)이 정한 명시 배율 — Fit 추종 없음(이미지·PDF의 A49 UX와 동일).
     /// </summary>
-    private enum VideoFitMode { Fit, FitWidth, FitHeight, ActualSize, Manual }
+    private enum VideoFitMode { Contain, FitWidth, FitHeight, ActualSize, Manual }
 
-    private VideoFitMode _fitMode = VideoFitMode.Fit;
+    private VideoFitMode _fitMode = VideoFitMode.Contain;
 
     /// <summary>
-    /// A30: Fit 버튼이 표시·실행할 마지막 핏 옵션(Fit/FitWidth/FitHeight — 1:1은 별도 버튼이라 제외).
-    /// 기억하지 않는다 — 재생 영상이 바뀌면 Fit(자동)으로 회귀(사용자 확정).
+    /// A30: Fit 버튼이 표시·실행할 마지막 핏 옵션. A83 이후 100%도 플라이아웃 옵션이라
+    /// ActualSize까지 들어온다(1:1 별도 버튼은 A111에서 없어졌다. Manual은 옵션이 아니라 제외).
+    /// 기억하지 않는다 — 재생 영상이 바뀌면 Contain으로 회귀(사용자 확정, A83에서 재확인).
     /// </summary>
-    private VideoFitMode _lastFitOption = VideoFitMode.Fit;
+    private VideoFitMode _lastFitOption = VideoFitMode.Contain;
 
-    /// <summary>A30: Fit 버튼 본체 내용(A 텍스트/좌우/상하 아이콘)과 툴팁을 마지막 옵션에 맞춘다.</summary>
+    /// <summary>
+    /// A30: Fit 버튼 본체 내용(1:1 텍스트 / Contain·좌우·상하 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
+    /// 100%는 검증된 글리프가 없어 구 1:1 버튼의 표기(FontSize 13 텍스트)를 그대로 승계한다.
+    /// </summary>
     private void UpdateFitButton()
     {
         (object content, string tip) = _lastFitOption switch
@@ -777,17 +789,26 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
                 ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
             VideoFitMode.FitHeight =>
                 (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
-            _ => (new TextBlock
+            VideoFitMode.ActualSize => (new TextBlock
             {
-                Text = "A",
+                Text = "1:1",
                 FontSize = 13,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-            }, "Auto-fit to window - long edge fits, nothing cropped"),
+            }, "Actual size"),
+            _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
+                "Contain - the whole video fits, never enlarged"),
         };
         FitButton.Content = content;
-        ToolTipService.SetToolTip(FitButton, HotkeySupport.Tip(tip, FitKey)); // A34: 표기는 키 상수에서
+        ToolTipService.SetToolTip(FitButton, FitTip(tip)); // A34: 표기는 키 상수에서
     }
+
+    /// <summary>
+    /// 본체 툴팁 = "지금 표시 중인 옵션 (F) · 100% (A)" — 1:1 버튼이 사라져도 A 키 표기가
+    /// 남게 병합한다(A111). 두 표기 모두 키 상수에서 조립한다(A34 표기 규칙).
+    /// </summary>
+    private static string FitTip(string description) =>
+        $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
 
     /// <summary>A30: 플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
     private void SelectFitOption(VideoFitMode option)
@@ -805,8 +826,13 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         switch (_fitMode)
         {
-            case VideoFitMode.Fit:
-                p.Scale = 0;
+            case VideoFitMode.Contain:
+                // A83 "축소만": 레터박스 유효 배율이 1 이상(= 영상이 표면보다 작다)이면 원본 크기로
+                // 고정하고, 1 미만일 때만 libvlc 자동 맞춤(Scale 0 = 딱 그 축소 배율)에 맡긴다.
+                // 트랙·표면 정보가 아직 없으면(파싱 전) 판정할 수 없으므로 종전대로 자동 맞춤 —
+                // 크기를 알게 되는 Playing·SizeChanged에서 이 경로가 다시 돈다(A98 주석과 같은 안전 규칙).
+                var contain = ContainScale();
+                p.Scale = contain >= 1 ? 1 : 0;
                 break;
             case VideoFitMode.ActualSize:
                 p.Scale = 1;
@@ -817,9 +843,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             case VideoFitMode.FitWidth:
             case VideoFitMode.FitHeight:
                 var (videoW, videoH) = VideoPixelSize();
-                var scale = XamlRoot?.RasterizationScale ?? 1.0;
-                var surfaceW = VideoSurface.ActualWidth * scale;
-                var surfaceH = VideoSurface.ActualHeight * scale;
+                var (surfaceW, surfaceH) = SurfacePixelSize();
                 if (videoW <= 0 || videoH <= 0 || surfaceW <= 0 || surfaceH <= 0)
                 {
                     p.Scale = 0; // 트랙 정보가 아직 없으면(파싱 전) 자동 맞춤으로 대체
@@ -830,6 +854,25 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
                     : surfaceH / videoH);
                 break;
         }
+    }
+
+    /// <summary>
+    /// 레터박스(Contain) 유효 배율 = 두 축 비율 중 작은 쪽. 트랙·표면 크기를 아직 모르면 0
+    /// (= 판정 불가 — 호출부가 자동 맞춤으로 안전하게 대체한다). A98의 계산식을 공유한다.
+    /// </summary>
+    private double ContainScale()
+    {
+        var (videoW, videoH) = VideoPixelSize();
+        var (surfaceW, surfaceH) = SurfacePixelSize();
+        if (videoW <= 0 || videoH <= 0 || surfaceW <= 0 || surfaceH <= 0) return 0;
+        return Math.Min(surfaceW / videoW, surfaceH / videoH);
+    }
+
+    /// <summary>표시 표면의 물리 픽셀 크기(모니터 배율 반영) — 트랙 해상도와 같은 단위로 맞춘다.</summary>
+    private (double W, double H) SurfacePixelSize()
+    {
+        var rs = XamlRoot?.RasterizationScale ?? 1.0;
+        return (VideoSurface.ActualWidth * rs, VideoSurface.ActualHeight * rs);
     }
 
     /// <summary>현재 미디어의 비디오 트랙 해상도. 없으면 (0, 0).</summary>
@@ -892,29 +935,19 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         }
 
         var (videoW, videoH) = VideoPixelSize();
-        var rs = XamlRoot?.RasterizationScale ?? 1.0;
-        var surfaceW = VideoSurface.ActualWidth * rs;
-        var surfaceH = VideoSurface.ActualHeight * rs;
+        var (surfaceW, surfaceH) = SurfacePixelSize();
         if (videoW <= 0 || videoH <= 0 || surfaceW <= 0 || surfaceH <= 0) return 0;
 
         return _fitMode switch
         {
             VideoFitMode.FitWidth => surfaceW / videoW,
             VideoFitMode.FitHeight => surfaceH / videoH,
-            _ => Math.Min(surfaceW / videoW, surfaceH / videoH), // Fit = 긴 변이 맞는 레터박스 배율
+            // Contain = 레터박스 배율, 단 축소만이라 1을 넘지 않는다(A83 — ApplyFitMode와 같은 판정)
+            _ => Math.Min(Math.Min(surfaceW / videoW, surfaceH / videoH), 1.0),
         };
     }
 
-    private void OnActualSizeClicked(object sender, RoutedEventArgs e) => ApplyActualSize();
-
-    /// <summary>1:1 버튼·A 키(A34) 공용 경로.</summary>
-    private void ApplyActualSize()
-    {
-        _fitMode = VideoFitMode.ActualSize;
-        ApplyFitMode();
-    }
-
-    /// <summary>A30: 본체 클릭 = 버튼에 표시된 마지막 옵션 적용(1:1에서 되돌아올 때도 이 경로).</summary>
+    /// <summary>A30: 본체 클릭 = 버튼에 표시된 마지막 옵션 적용.</summary>
     private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args) => ApplyLastFitOption();
 
     /// <summary>Fit 본체 클릭·F 키(A34) 공용 경로 — 플라이아웃이 아니라 마지막 옵션 재적용이다.</summary>
@@ -924,8 +957,12 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         ApplyFitMode();
     }
 
-    private void OnFitAutoClicked(object sender, RoutedEventArgs e) =>
-        SelectFitOption(VideoFitMode.Fit);
+    /// <summary>플라이아웃 100%·A 키(A34) 공용 경로 — 구 1:1 버튼 자리(A111).</summary>
+    private void OnFitActualSizeClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(VideoFitMode.ActualSize);
+
+    private void OnFitContainClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(VideoFitMode.Contain);
 
     private void OnFitWidthClicked(object sender, RoutedEventArgs e) =>
         SelectFitOption(VideoFitMode.FitWidth);
@@ -1100,10 +1137,18 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private const VirtualKey FitKey = VirtualKey.F;
 
     /// <summary>
+    /// 100%(1:1) 키 — A111에서 1:1 버튼이 사라진 뒤로도 A는 그대로 100% 적용이다(A107 확정:
+    /// 문자 핫키 전부 유지). 대상만 Fit 버튼의 100% 옵션 적용 액션으로 옮겼다.
+    /// </summary>
+    private const VirtualKey ActualSizeKey = VirtualKey.A;
+
+    /// <summary>
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// 텍스트 입력·탐색기 파일 리스트 포커스에서는 HotkeySupport가 키를 통과시킨다(A32/A84 규칙).
     /// M(음소거)은 v0.21.0부터 있던 키를 XAML 액셀러레이터에서 여기로 옮긴 것 — 의미는 그대로다.
-    /// 플라이아웃형(S 배속·C 자막)은 누르면 목록이 열리고, Fit(F)·1:1(A)은 본체 클릭과 같은 동작이다.
+    /// 플라이아웃형(S 배속·C 자막)은 누르면 목록이 열리고, Fit(F)·100%(A)는 즉시 적용이다.
+    /// A111부터 A·F 둘 다 Fit 버튼에 건다(1:1 버튼이 없어졌을 뿐, 키 동작은 무변경) —
+    /// 툴팁은 상태를 따라가므로 UpdateFitButton()이 두 키 표기를 함께 만든다.
     /// 자막이 S가 아니라 C인 것은 S를 배속(Speed)이 먼저 쓰기 때문 — 캡션 관습 키를 따랐다.
     /// </summary>
     private void SetupHotkeys()
@@ -1113,8 +1158,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             "Playback speed", () => SpeedBox.IsDropDownOpen = true);
         HotkeySupport.Bind(this, SubtitleButton, VirtualKey.C,
             "Subtitles", () => SubtitleFlyout.ShowAt(SubtitleButton));
-        HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,
-            "Actual size (100%)", ApplyActualSize);
+        HotkeySupport.Register(this, FitButton, ActualSizeKey,
+            () => SelectFitOption(VideoFitMode.ActualSize));
         HotkeySupport.Register(this, FitButton, FitKey, ApplyLastFitOption);
         UpdateFitButton(); // Fit 툴팁은 표시 상태를 따라가므로 초기값도 여기서 만든다
     }

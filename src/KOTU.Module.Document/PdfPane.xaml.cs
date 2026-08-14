@@ -10,10 +10,11 @@ using Windows.Storage.Streams;
 namespace KOTU.Module.Document;
 
 /// <summary>
-/// PDF 맞춤 보기 모드(A49 — A30 규격 준용). AutoFit = 페이지가 뷰포트보다 크면 전부 보이게
-/// 줄이고, 작으면 100%(원본 크기) — 비디오 A30의 Auto-fit과 같은 의미론.
+/// PDF 맞춤 보기 모드(A49 — A30 규격 준용). Contain = 페이지가 뷰포트보다 크면 전부 보이게
+/// 줄이고, 작으면 100%(원본 크기) = <b>축소만</b> — A83이 3모듈 공통으로 확정한 의미론이다
+/// (구 이름 AutoFit에서 계산식·동작 변화 없음. zoom = min(1:1 배율, 가로 맞춤, 세로 맞춤)).
 /// </summary>
-public enum PdfFitMode { AutoFit, FitWidth, FitHeight, ActualSize }
+public enum PdfFitMode { Contain, FitWidth, FitHeight, ActualSize }
 
 /// <summary>
 /// PDF 뷰어 패널(A16). OS 내장 Windows.Data.Pdf로 페이지를 비트맵 렌더한다 —
@@ -100,11 +101,11 @@ public sealed partial class PdfPane : UserControl
         PageList.ItemsSource = items;
         PageChanged?.Invoke(1, items.Count);
         HookScroll();
-        // A49: 파일이 바뀌면 Auto-fit으로 회귀(A30 규칙, 기억 안 함) — 이전 문서에서 쓰던
+        // A49: 파일이 바뀌면 Contain으로 회귀(A30 규칙, 기억 안 함) — 이전 문서에서 쓰던
         // 줌 배율이 남지 않게 즉시 적용한다. 새 문서는 1페이지 머리에 앵커(이전 문서의
         // 스크롤 오프셋이 남아 엉뚱한 페이지로 가는 것 방지). 뷰포트가 0이면 SizeChanged가 이어받는다.
         PageList.UpdateLayout();
-        ApplyFitAt(PdfFitMode.AutoFit, 0);
+        ApplyFitAt(PdfFitMode.Contain, 0);
         return true;
     }
 
@@ -238,7 +239,7 @@ public sealed partial class PdfPane : UserControl
     /// <summary>
     /// 현재 페이지 기준으로 배율을 계산해 적용한다(A49).
     /// FitHeight = 현재 페이지 전체가 세로로 보이는 배율(페이지 스냅 스크롤은 없다 — 연속 스크롤 유지).
-    /// AutoFit = 페이지가 뷰포트보다 크면 전부 보이게 줄이고, 작으면 100%(원본 크기).
+    /// Contain = 페이지가 뷰포트보다 크면 전부 보이게 줄이고, 작으면 100%(원본 크기 — 확대하지 않는다).
     /// 적용 후에는 뷰포트 크기 변화를 추종하고, 수동 줌이 들어오면 추종을 멈춘다.
     /// </summary>
     public void ApplyFit(PdfFitMode mode)
@@ -271,12 +272,13 @@ public sealed partial class PdfPane : UserControl
             PdfFitMode.FitWidth => fitWidth,
             PdfFitMode.FitHeight => fitHeight,
             PdfFitMode.ActualSize => actual,
-            _ => Math.Min(actual, Math.Min(fitWidth, fitHeight)), // AutoFit
+            // Contain = 축소만(A83): 1:1 배율(actual)을 상한으로 둬 작은 페이지는 확대하지 않는다
+            _ => Math.Min(actual, Math.Min(fitWidth, fitHeight)),
         };
         zoom = Math.Clamp(zoom, (double)_scroll.MinZoomFactor, (double)_scroll.MaxZoomFactor);
 
         // 세로: 페이지 전체가 보여야 하는 모드는 현재 페이지 머리로 스냅, 나머지는 보던 지점 유지.
-        var top = mode is PdfFitMode.FitHeight or PdfFitMode.AutoFit
+        var top = mode is PdfFitMode.FitHeight or PdfFitMode.Contain
             ? _pageOffsets[idx] * zoom
             : _scroll.VerticalOffset / Math.Max(0.1, _scroll.ZoomFactor) * zoom;
         // 가로: 확대로 콘텐츠가 뷰포트보다 넓어지면 중앙 정렬(페이지는 콘텐츠 가로 중앙에 있다).

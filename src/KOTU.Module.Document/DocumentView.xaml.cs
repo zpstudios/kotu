@@ -197,13 +197,12 @@ public sealed partial class DocumentView : UserControl,
         PageInfoText.Text = string.Empty;
         FileNameText.Text = Path.GetFileName(path);
 
-        // A49: 1:1·Fit 버튼은 PDF 모드에서만. 파일이 바뀌면 버튼 표시도 Auto-fit으로
+        // A49: Fit 버튼은 PDF 모드에서만. 파일이 바뀌면 버튼 표시도 Contain으로
         // 회귀(A30 규칙, 기억 안 함) — 실제 배율 적용은 PdfPane.LoadAsync가 한다.
-        ActualSizeButton.Visibility = Visibility.Visible;
         FitButton.Visibility = Visibility.Visible;
-        if (_lastFitOption != PdfFitMode.AutoFit)
+        if (_lastFitOption != PdfFitMode.Contain)
         {
-            _lastFitOption = PdfFitMode.AutoFit;
+            _lastFitOption = PdfFitMode.Contain;
             UpdateFitButton();
         }
 
@@ -231,19 +230,22 @@ public sealed partial class DocumentView : UserControl,
         _pdfPane.Clear();
         _pdfPane.Visibility = Visibility.Collapsed;
         PageInfoText.Visibility = Visibility.Collapsed;
-        ActualSizeButton.Visibility = Visibility.Collapsed; // A49: 텍스트 에디터 모드는 Fit 대상 아님
-        FitButton.Visibility = Visibility.Collapsed;
+        FitButton.Visibility = Visibility.Collapsed; // A49: 텍스트 에디터 모드는 Fit 대상 아님
     }
 
     // ---------- PDF 맞춤 보기 (A49 — A30 규격) ----------
 
     /// <summary>
-    /// A30 규격: Fit 버튼 본체가 표시·재적용할 마지막 핏 옵션(Auto/좌우/상하 — 1:1은 별도 버튼이라 제외).
-    /// 기억하지 않는다 — 파일이 바뀌면 Auto-fit으로 회귀(A30 규칙).
+    /// A30 규격: Fit 버튼 본체가 표시·재적용할 마지막 핏 옵션. A83 이후 100%도 플라이아웃
+    /// 옵션이라 ActualSize까지 들어온다(1:1 별도 버튼은 A111에서 없어졌다).
+    /// 기억하지 않는다 — 파일이 바뀌면 Contain으로 회귀(A30 규칙).
     /// </summary>
-    private PdfFitMode _lastFitOption = PdfFitMode.AutoFit;
+    private PdfFitMode _lastFitOption = PdfFitMode.Contain;
 
-    /// <summary>A30 규격: Fit 버튼 본체 내용(A 텍스트/좌우/상하 아이콘)과 툴팁을 마지막 옵션에 맞춘다.</summary>
+    /// <summary>
+    /// A30 규격: Fit 버튼 본체 내용(1:1 텍스트 / Contain·좌우·상하 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
+    /// 100%는 검증된 글리프가 없어 구 1:1 버튼의 표기(FontSize 13 텍스트)를 그대로 승계한다.
+    /// </summary>
     private void UpdateFitButton()
     {
         (object content, string tip) = _lastFitOption switch
@@ -252,17 +254,26 @@ public sealed partial class DocumentView : UserControl,
                 ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
             PdfFitMode.FitHeight =>
                 (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
-            _ => (new TextBlock
+            PdfFitMode.ActualSize => (new TextBlock
             {
-                Text = "A",
+                Text = "1:1",
                 FontSize = 13,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-            }, "Auto-fit to window - whole page fits, or actual size if smaller"),
+            }, "Actual size"),
+            _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
+                "Contain - the whole page fits, never enlarged"),
         };
         FitButton.Content = content;
-        ToolTipService.SetToolTip(FitButton, HotkeySupport.Tip(tip, FitKey)); // A34: 표기는 키 상수에서
+        ToolTipService.SetToolTip(FitButton, FitTip(tip)); // A34: 표기는 키 상수에서
     }
+
+    /// <summary>
+    /// 본체 툴팁 = "지금 표시 중인 옵션 (F) · 100% (A)" — 1:1 버튼이 사라져도 A 키 표기가
+    /// 남게 병합한다(A111). 두 표기 모두 키 상수에서 조립한다(A34 표기 규칙).
+    /// </summary>
+    private static string FitTip(string description) =>
+        $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
 
     /// <summary>플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
     private void SelectFitOption(PdfFitMode option)
@@ -272,15 +283,16 @@ public sealed partial class DocumentView : UserControl,
         _pdfPane?.ApplyFit(option);
     }
 
-    private void OnActualSizeClick(object sender, RoutedEventArgs e) =>
-        _pdfPane?.ApplyFit(PdfFitMode.ActualSize);
-
-    /// <summary>A30 규격: 본체 클릭 = 버튼에 표시된 마지막 옵션 재적용(1:1에서 되돌아올 때도 이 경로).</summary>
+    /// <summary>A30 규격: 본체 클릭 = 버튼에 표시된 마지막 옵션 재적용.</summary>
     private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args) =>
         _pdfPane?.ApplyFit(_lastFitOption);
 
-    private void OnFitAutoClicked(object sender, RoutedEventArgs e) =>
-        SelectFitOption(PdfFitMode.AutoFit);
+    /// <summary>플라이아웃 100%·A 키(A34) 공용 경로 — 구 1:1 버튼 자리(A111).</summary>
+    private void OnFitActualSizeClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(PdfFitMode.ActualSize);
+
+    private void OnFitContainClicked(object sender, RoutedEventArgs e) =>
+        SelectFitOption(PdfFitMode.Contain);
 
     private void OnFitWidthClicked(object sender, RoutedEventArgs e) =>
         SelectFitOption(PdfFitMode.FitWidth);
@@ -553,16 +565,24 @@ public sealed partial class DocumentView : UserControl,
     private const VirtualKey FitKey = VirtualKey.F;
 
     /// <summary>
+    /// 100%(1:1) 키 — A111에서 1:1 버튼이 사라진 뒤로도 A는 그대로 100% 적용이다(A107 확정:
+    /// 문자 핫키 전부 유지). 대상만 Fit 버튼의 100% 옵션 적용 액션으로 옮겼다.
+    /// </summary>
+    private const VirtualKey ActualSizeKey = VirtualKey.A;
+
+    /// <summary>
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// **이 모듈은 에디터(TextBox)가 본문**이라 통과 규칙이 특히 중요하다 — 타이핑 중에는
     /// HotkeySupport가 A·F를 삼키지 않고 글자를 그대로 흘려보낸다(A32/A84 규칙 재사용).
-    /// 1:1(A)·Fit(F)은 PDF에서만 보이는 버튼이라, 텍스트 모드(Collapsed)에서는 키도 동작하지 않는다.
+    /// 100%(A)·Fit(F)은 PDF에서만 보이는 Fit 버튼에 걸리므로, 텍스트 모드(Collapsed)에서는
+    /// 키도 동작하지 않는다 — A111에서 1:1 버튼이 사라져 A의 가늠자도 이 버튼이 됐다
+    /// (구 1:1 버튼도 같은 조건으로 숨던 자리라 동작 조건은 무변경).
     /// 저장은 Ctrl+S 그대로(A84의 유일한 Ctrl 예외) — XAML 액셀러레이터에 남겨 둔다.
     /// </summary>
     private void SetupHotkeys()
     {
-        HotkeySupport.Bind(this, ActualSizeButton, VirtualKey.A,
-            "Actual size (100%)", () => _pdfPane?.ApplyFit(PdfFitMode.ActualSize));
+        HotkeySupport.Register(this, FitButton, ActualSizeKey,
+            () => SelectFitOption(PdfFitMode.ActualSize));
         HotkeySupport.Register(this, FitButton, FitKey, () => _pdfPane?.ApplyFit(_lastFitOption));
         UpdateFitButton(); // Fit 툴팁은 표시 상태를 따라가므로 초기값도 여기서 만든다
     }
