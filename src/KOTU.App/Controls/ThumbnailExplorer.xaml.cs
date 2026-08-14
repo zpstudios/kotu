@@ -46,6 +46,7 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     private int _columns = 8; // 기본 = 도크 하나라도 닫힘(전폭) 기준 — 셸이 곧 SetColumns로 덮는다
     private (string Path, DateTime At)? _lastClick;
+    private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
 
     /// <summary>
     /// Ctrl+Shift+N(새 폴더) 직후의 편집 진입 예약 (A94 2차). 이 뷰의 재스캔은 좌 리스트 경유
@@ -324,6 +325,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         };
         AttachContextMenu(item, entry); // A24 — 좌 리스트와 같은 우클릭 메뉴
         AttachDragDrop(item, entry); // A94 — 드래그 아웃 + 폴더 타일 드랍
+        item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
+        item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
         return item;
     }
 
@@ -487,8 +490,9 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     /// <summary>
     /// 클릭 2회(500ms 내 같은 항목) = 더블클릭 — ExplorerPane.OnItemClick과 같은 판정.
-    /// 폴더 = FolderActivated(셸이 좌 리스트를 항해시켜 양쪽이 함께 이동),
-    /// 파일 = 열기(Shift면 새 창, A24).
+    /// ※ A85: 실기기 입력 스택은 더블클릭의 두 번째 클릭을 더블탭 제스처로 소비해 두 번째
+    /// ItemClick이 안 올 수 있다 — 그 경우는 OnItemDoubleTapped가 받는다. 이 판정은
+    /// ItemClick이 2회 오는 환경(키보드 Enter 연타 포함)의 보조 경로로 유지한다.
     /// </summary>
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
@@ -501,6 +505,37 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (!isDouble) return;
 
         _lastClick = null;
+        Activate(entry);
+    }
+
+    /// <summary>
+    /// 컨테이너 DoubleTapped = 더블클릭 열기 (A85). 실기기에서는 두 번째 클릭이 더블탭 제스처로
+    /// 소비되어 두 번째 ItemClick이 오지 않아, 클릭 쌍 판정(OnItemClick)만으로는 열기가 조용히
+    /// 무시됐다(압축 모듈 내부 리스트는 처음부터 DoubleTapped라 이 증상이 없었다 — 같은 배선).
+    /// </summary>
+    private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
+        if (sender is not GridViewItem { Tag: ExplorerListing.Entry entry }) return;
+        e.Handled = true;
+        _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게
+        Activate(entry);
+    }
+
+    /// <summary>
+    /// 더블클릭 열기 공통 종착점 (A85): 폴더 = 좌 리스트 항해(FolderActivated), 파일 = 열기
+    /// (Shift = 새 창, A24). ItemClick 쌍과 DoubleTapped가 같은 제스처에서 둘 다 발화하는
+    /// 환경이 있어, 같은 경로의 연속 발화를 판정 창(DoubleClickMs) 안에서 1회로 누른다 —
+    /// A24 "항상 새 창" 설정에서 창이 두 개 뜨는 이중 열기 방지.
+    /// </summary>
+    private void Activate(ExplorerListing.Entry entry)
+    {
+        var now = DateTime.UtcNow;
+        if (_lastActivation is { } last && last.Path == entry.Path &&
+            (now - last.At).TotalMilliseconds < DoubleClickMs)
+            return;
+        _lastActivation = (entry.Path, now);
+
         if (entry.IsFolder)
         {
             FolderActivated?.Invoke(entry.Path);

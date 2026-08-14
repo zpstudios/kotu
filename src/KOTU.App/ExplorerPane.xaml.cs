@@ -62,6 +62,7 @@ public sealed partial class ExplorerPane : UserControl
     private string _folder = string.Empty;
     private int _loadSeq;                     // 빠른 연속 탐색 시 늦은 결과 폐기
     private (string Path, DateTime At)? _lastClick;
+    private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
     private ModuleWorker? _worker;            // 스캔·썸네일 전용 — 페인별 분리(A42 정책)
     private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 정렬 변경 시 재스캔 없이 재배치(A5)
     private ExplorerListing.SortKey _sortKey = ExplorerListing.SortKey.Name;
@@ -374,6 +375,8 @@ public sealed partial class ExplorerPane : UserControl
         var item = new GridViewItem { Content = panel, Tag = entry };
         AttachContextMenu(item, entry, IconGrid); // A24 + A94 2차(Rename·Delete)
         AttachDragDrop(item, entry, IconGrid); // A94 — 드래그 아웃 + 폴더 항목 드랍
+        item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
+        item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
         return item;
     }
 
@@ -426,6 +429,8 @@ public sealed partial class ExplorerPane : UserControl
         var item = new ListViewItem { Content = row, Tag = entry };
         AttachContextMenu(item, entry, ListPane); // A24 + A94 2차(Rename·Delete)
         AttachDragDrop(item, entry, ListPane); // A94 — 드래그 아웃 + 폴더 항목 드랍
+        item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
+        item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
         return item;
     }
 
@@ -653,6 +658,7 @@ public sealed partial class ExplorerPane : UserControl
     /// 표면 키 (A94): Ctrl+C = 복사, Ctrl+X = 잘라내기(RequestedOperation=Move로 구분),
     /// Ctrl+V = 현재 폴더에 붙여넣기, Ctrl+A = 전체 선택. 2차(v0.125.0)가 얹은 것 —
     /// F2 = 이름변경(첫 선택 항목 1개), Del = 휴지통 삭제(선택 전부), Ctrl+Shift+N = 새 폴더.
+    /// A85가 얹은 것 — Enter = 선택 항목 열기(폴더 = 진입. ThumbnailExplorer와 동일).
     /// 이 표면(그리드/리스트)에 포커스가 있을 때만 온다 — 생성자 AddHandler 주석 참고.
     /// </summary>
     private async void OnSurfaceKeyDown(object sender, KeyRoutedEventArgs e)
@@ -665,6 +671,16 @@ public sealed partial class ExplorerPane : UserControl
 
         switch (e.Key)
         {
+            case Windows.System.VirtualKey.Enter: // A85 — 선택 항목 열기(원 기능 우선: 셸 OnShellEnter가
+                // "탐색기 리스트 포커스 = 선택 항목 열기 우선"으로 양보하는 표면 쪽 구현.
+                // ThumbnailExplorer.OnGridKeyDown의 Enter와 같은 구성): 폴더 = 진입, 파일 = 열기.
+                // 선택이 없으면 삼키지 않는다 — 셸(OnShellEnter)이 상태별로 받는다.
+                if (owner.SelectedItem is not SelectorItem { Tag: ExplorerListing.Entry entry }) return;
+                e.Handled = true;
+                _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
+                if (entry.IsFolder) NavigateTo(entry.Path, _extensions);
+                else FileActivated?.Invoke(entry.Path);
+                return;
             case Windows.System.VirtualKey.F2: // 이름변경 — 다중 선택이어도 첫 항목(SelectedItem)만
                 if (owner.SelectedItem is not SelectorItem selected) return;
                 e.Handled = true;
@@ -767,6 +783,9 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>
     /// 클릭 2회(500ms 내 같은 항목) = 더블클릭: 폴더 진입 또는 파일 열기.
     /// Shift를 누른 채 더블클릭하면 파일을 새 창으로(A24) — 폴더에는 효과 없음.
+    /// ※ A85: 실기기 입력 스택은 더블클릭의 두 번째 클릭을 더블탭 제스처로 소비해 두 번째
+    /// ItemClick이 안 올 수 있다 — 그 경우는 OnItemDoubleTapped가 받는다. 이 판정은
+    /// ItemClick이 2회 오는 환경(키보드 Enter 연타 포함)의 보조 경로로 유지한다.
     /// </summary>
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
@@ -779,6 +798,38 @@ public sealed partial class ExplorerPane : UserControl
         if (!isDouble) return;
 
         _lastClick = null;
+        Activate(entry);
+    }
+
+    /// <summary>
+    /// 항목 컨테이너 DoubleTapped = 더블클릭 열기 (A85). 실기기에서는 두 번째 클릭이 더블탭
+    /// 제스처로 소비되어 두 번째 ItemClick이 오지 않아, 클릭 쌍 판정(OnItemClick)만으로는
+    /// 열기가 조용히 무시됐다(압축 모듈 내부 리스트는 처음부터 DoubleTapped라 이 증상이 없었다).
+    /// 그리드·리스트 양쪽 컨테이너(SelectorItem) 공용 — ThumbnailExplorer와 같은 구성.
+    /// </summary>
+    private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
+        if (sender is not SelectorItem { Tag: ExplorerListing.Entry entry }) return;
+        e.Handled = true;
+        _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게
+        Activate(entry);
+    }
+
+    /// <summary>
+    /// 더블클릭 열기 공통 종착점 (A85): 폴더 = 진입(NavigateTo), 파일 = 열기(Shift = 새 창, A24).
+    /// ItemClick 쌍과 DoubleTapped가 같은 제스처에서 둘 다 발화하는 환경이 있어, 같은 경로의
+    /// 연속 발화를 판정 창(DoubleClickMs) 안에서 1회로 누른다 — A24 "항상 새 창" 설정에서
+    /// 창이 두 개 뜨는 이중 열기 방지.
+    /// </summary>
+    private void Activate(ExplorerListing.Entry entry)
+    {
+        var now = DateTime.UtcNow;
+        if (_lastActivation is { } last && last.Path == entry.Path &&
+            (now - last.At).TotalMilliseconds < DoubleClickMs)
+            return;
+        _lastActivation = (entry.Path, now);
+
         if (entry.IsFolder)
         {
             NavigateTo(entry.Path, _extensions);
