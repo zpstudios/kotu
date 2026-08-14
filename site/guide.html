@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KOTU — User Guide</title>
+<meta name="description" content="How to use KOTU: modules, the full shortcut list, sidebars and overlays, file associations, multiple windows, settings and the tray icon.">
+<meta name="theme-color" content="#0b1521">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+
+<meta property="og:type" content="article">
+<meta property="og:title" content="KOTU — User Guide">
+<meta property="og:description" content="Everything KOTU can do and how to drive it, including the full keyboard shortcut list.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   KOTU user guide — single file, no build step.
+   The source of truth for this page is docs/USER-GUIDE.md in
+   the repository; this is the published version of that file.
+   Tokens, nav and footer are kept identical to index.html so the
+   two pages stay one design — change them in both or in neither.
+   ============================================================ */
+:root{
+  --bg:          #0b1521;
+  --bg-deep:     #060d18;
+  --bg-card:     #121b28;
+  --line:        #1e2b3c;
+
+  --mint:        #86d3a5;
+  --mint-deep:   #5eb884;
+  --pink:        #ee8ca3;
+  --amber:       #f5c56b;
+  --blue:        #7bb8d6;
+  --violet:      #b39ae0;
+
+  --ink:         #f2e9e0;
+  --ink-dim:     #a8b8c6;
+  --ink-faint:   #7e91a4;
+
+  --maxw:        1240px;
+  --r:           18px;
+  --ease:        cubic-bezier(.22,.61,.36,1);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:96px;-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:17px;line-height:1.6;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4{font-family:'Archivo','Arial Black','Helvetica Neue',Arial,sans-serif;margin:0;line-height:1.05;letter-spacing:-.01em}
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 28px}
+
+/* ---------- nav (identical to index.html) ---------- */
+.nav{
+  position:sticky;top:0;z-index:60;
+  background:rgba(6,13,24,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid transparent;transition:border-color .3s var(--ease),background .3s var(--ease);
+}
+.nav.scrolled{border-bottom-color:var(--line);background:rgba(6,13,24,.9)}
+.nav-in{display:flex;align-items:center;gap:26px;height:76px}
+.brand{display:flex;align-items:center;gap:11px;flex-shrink:0}
+.brand img{width:40px;height:40px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+.brand-txt{display:flex;flex-direction:column;line-height:1}
+.brand-name{font-family:'Archivo',Arial,sans-serif;font-weight:900;font-size:25px;color:var(--mint);letter-spacing:.02em}
+.brand-sub{font-size:9.5px;font-weight:600;letter-spacing:.19em;color:var(--ink-faint);margin-top:4px}
+
+.nav-links{display:flex;gap:30px;margin-left:auto}
+.nav-links a{
+  font-size:13px;font-weight:600;letter-spacing:.11em;color:var(--ink-dim);
+  padding:6px 0;position:relative;transition:color .2s var(--ease);white-space:nowrap;
+}
+.nav-links a::after{
+  content:"";position:absolute;left:0;right:100%;bottom:0;height:2px;
+  background:var(--pink);transition:right .3s var(--ease);
+}
+.nav-links a:hover{color:var(--ink)}
+.nav-links a:hover::after,.nav-links a.active::after{right:0}
+.nav-links a.active{color:var(--ink)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  font-family:'Barlow',system-ui,sans-serif;font-weight:700;font-size:14px;letter-spacing:.09em;
+  padding:13px 26px;border-radius:999px;border:1px solid transparent;cursor:pointer;
+  transition:transform .2s var(--ease),box-shadow .25s var(--ease),background .2s var(--ease);
+  white-space:nowrap;
+}
+.btn svg{width:17px;height:17px;flex:0 0 auto}
+.btn-primary{background:linear-gradient(180deg,#9adfb5,#6fbf90);color:#08301d;box-shadow:0 6px 20px -8px rgba(134,211,165,.65)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 28px -10px rgba(134,211,165,.8)}
+.btn-ghost{background:rgba(255,255,255,.035);color:var(--ink);border-color:rgba(255,255,255,.16)}
+.btn-ghost:hover{background:rgba(255,255,255,.09);transform:translateY(-2px)}
+.nav .btn{padding:11px 22px;font-size:12.5px}
+
+.burger{display:none;margin-left:auto;background:none;border:0;color:var(--ink);padding:8px;cursor:pointer}
+.burger svg{width:26px;height:26px}
+
+/* ---------- page head ---------- */
+.ghead{background:linear-gradient(180deg,#060d18 0%,#0a1220 62%,#0b1521 100%);padding:66px 0 54px;border-bottom:1px solid var(--line)}
+.eyebrow{
+  display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.22em;color:var(--mint);
+  margin-bottom:16px;
+}
+.ghead h1{font-weight:900;font-size:clamp(32px,5vw,58px);letter-spacing:.005em}
+.ghead h1 .hl{color:var(--pink)}
+.ghead p{color:var(--ink-dim);margin:16px 0 0;font-size:16.5px;max-width:70ch}
+.asof{
+  display:inline-block;margin-top:22px;font-size:12px;font-weight:700;letter-spacing:.14em;
+  color:var(--mint);border:1px solid rgba(134,211,165,.32);border-radius:6px;padding:5px 11px;
+}
+
+/* ---------- layout: table of contents + article ---------- */
+.gbody{padding:52px 0 96px}
+.gcols{display:grid;grid-template-columns:230px minmax(0,1fr);gap:56px;align-items:start}
+@media (max-width:960px){.gcols{grid-template-columns:1fr;gap:34px}}
+
+.toc{position:sticky;top:100px}
+@media (max-width:960px){
+  .toc{position:static;border:1px solid var(--line);border-radius:14px;background:var(--bg-card);padding:20px 22px}
+}
+.toc h2{font-size:11.5px;font-weight:800;letter-spacing:.2em;color:var(--ink-faint);margin-bottom:14px}
+.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+.toc li{counter-increment:toc;margin-bottom:9px}
+.toc a{
+  display:block;font-size:14px;color:var(--ink-dim);padding-left:26px;position:relative;
+  transition:color .2s var(--ease);
+}
+.toc a::before{
+  content:counter(toc);position:absolute;left:0;top:0;width:18px;text-align:right;
+  font-size:11.5px;font-weight:700;color:var(--ink-faint);line-height:1.9;
+}
+.toc a:hover{color:var(--mint)}
+
+article h2{
+  font-size:clamp(22px,2.8vw,32px);font-weight:900;letter-spacing:.005em;
+  margin:0 0 18px;padding-top:8px;
+}
+article h2 .num{color:var(--pink);margin-right:12px}
+article h3{
+  font-size:18.5px;font-weight:800;letter-spacing:.03em;color:var(--mint);
+  margin:34px 0 12px;
+}
+article section + section{margin-top:64px;padding-top:44px;border-top:1px solid var(--line)}
+article p{margin:0 0 16px;color:#d3dde6}
+article ul{margin:0 0 18px;padding:0;list-style:none}
+article li{font-size:15.5px;color:#c7d3de;padding-left:17px;position:relative;margin-bottom:9px}
+article li::before{content:"";position:absolute;left:0;top:.66em;width:5px;height:5px;border-radius:50%;background:var(--mint-deep)}
+article strong{color:var(--ink);font-weight:700}
+article em{font-style:normal;color:var(--ink-dim)}
+article a.inl{color:var(--mint);border-bottom:1px solid rgba(134,211,165,.35)}
+article a.inl:hover{border-bottom-color:var(--mint)}
+
+.note{
+  border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:12px;
+  background:rgba(255,255,255,.017);padding:16px 20px;margin:0 0 22px;
+  font-size:15px;color:var(--ink-dim);
+}
+
+kbd{
+  font-family:'Barlow',system-ui,sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.03em;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-bottom-width:2px;
+  border-radius:6px;padding:2px 7px;color:var(--ink);white-space:nowrap;
+}
+code{
+  background:rgba(255,255,255,.06);padding:2px 7px;border-radius:5px;
+  font-size:13.5px;color:var(--mint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+.tbl{overflow-x:auto;margin:0 0 24px;border:1px solid var(--line);border-radius:14px;background:var(--bg-card)}
+table{border-collapse:collapse;width:100%;min-width:460px}
+th,td{text-align:left;padding:11px 16px;font-size:14.5px;border-bottom:1px solid var(--line);vertical-align:top}
+th{
+  font-family:'Archivo',Arial,sans-serif;font-weight:700;font-size:11.5px;letter-spacing:.14em;
+  color:var(--ink-faint);text-transform:uppercase;background:rgba(255,255,255,.02);
+}
+td{color:#c7d3de}
+td:first-child{color:var(--ink);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+
+/* ---------- footer (identical to index.html) ---------- */
+footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0 40px}
+.foot{display:flex;flex-wrap:wrap;gap:26px;align-items:center;justify-content:space-between}
+.foot-links{display:flex;flex-wrap:wrap;gap:24px}
+.foot-links a{font-size:13.5px;color:var(--ink-dim);transition:color .2s var(--ease)}
+.foot-links a:hover{color:var(--mint)}
+.foot-legal{font-size:12.5px;color:var(--ink-faint);margin-top:24px;line-height:1.7}
+
+/* ---------- responsive ---------- */
+@media (max-width:1080px){
+  .nav-links{gap:20px}
+  .nav-links a{font-size:12px;letter-spacing:.08em}
+}
+@media (max-width:900px){
+  .nav-links,.nav .btn{display:none}
+  .nav.open .nav-links{
+    display:flex;position:absolute;top:76px;left:0;right:0;flex-direction:column;gap:0;
+    background:rgba(6,13,24,.98);border-bottom:1px solid var(--line);padding:8px 28px 22px;
+  }
+  .nav.open .nav-links a{padding:14px 0;font-size:14px;border-bottom:1px solid rgba(255,255,255,.05)}
+  .burger{display:block}
+  .ghead{padding:52px 0 42px}
+}
+@media (max-width:520px){
+  body{font-size:16px}
+  .wrap{padding-left:20px;padding-right:20px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="index.html#home">
+      <img src="assets/logo-mark.svg" alt="" width="64" height="64">
+      <span class="brand-txt">
+        <span class="brand-name">KOTU</span>
+        <span class="brand-sub">KING OF THE UTILITIES</span>
+      </span>
+    </a>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <nav class="nav-links" id="navlinks">
+      <a href="index.html#home">HOME</a>
+      <a href="index.html#features">FEATURES</a>
+      <a href="index.html#inside">WHAT'S INSIDE</a>
+      <a href="index.html#screenshots">SCREENSHOTS</a>
+      <a class="active" href="guide.html">GUIDE</a>
+      <a href="index.html#faq">FAQ</a>
+      <a href="index.html#download">DOWNLOAD</a>
+    </nav>
+    <a class="btn btn-primary" href="index.html#download">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M3.5 17.5V19a2 2 0 002 2h13a2 2 0 002-2v-1.5"/></svg>
+      DOWNLOAD KOTU
+    </a>
+  </div>
+</header>
+
+<!-- ============ PAGE HEAD ============ -->
+<section class="ghead">
+  <div class="wrap">
+    <span class="eyebrow">USER GUIDE</span>
+    <h1>EVERYTHING IT DOES. <span class="hl">AND HOW TO DRIVE IT.</span></h1>
+    <p>KOTU opens photos, videos, music, documents, archives and hardware information in a single
+       window. Double-click a file and the matching module takes over the centre of the window and
+       the bottom bar. This page is the published version of
+       <code>docs/USER-GUIDE.md</code> in the repository.</p>
+    <span class="asof">AS OF v0.139.0</span>
+  </div>
+</section>
+
+<!-- ============ BODY ============ -->
+<div class="gbody">
+  <div class="wrap gcols">
+
+    <!-- ---- table of contents ---- -->
+    <aside class="toc">
+      <h2>CONTENTS</h2>
+      <ol>
+        <li><a href="#window">The window</a></li>
+        <li><a href="#modules">Modules</a></li>
+        <li><a href="#shortcuts">Keyboard shortcuts</a></li>
+        <li><a href="#panels">Sidebars and overlays</a></li>
+        <li><a href="#browser">The built-in file browser</a></li>
+        <li><a href="#associations">File types and the Start menu</a></li>
+        <li><a href="#windows">Several windows at once</a></li>
+        <li><a href="#settings">Settings</a></li>
+        <li><a href="#tray">The tray icon</a></li>
+      </ol>
+    </aside>
+
+    <article>
+
+      <!-- ================= 1. THE WINDOW ================= -->
+      <section id="window">
+        <h2><span class="num">1</span>The window</h2>
+        <p>Every KOTU window has the same three parts.</p>
+        <ul>
+          <li><strong>Centre</strong> — the module view: the photo, the video, the PDF, the archive listing.</li>
+          <li><strong>Bottom bar</strong> — one row. On the left the <strong>menu</strong> button and the
+              <strong>Open file</strong> button; the rest belongs to whichever module is open.</li>
+          <li><strong>Two side panels</strong> — a <strong>left</strong> panel (folder tree and file list) and a
+              <strong>right</strong> panel (information about the current file). Both stay hidden until you call them.</li>
+        </ul>
+        <p>Two words are used consistently for the side panels. A <strong>sidebar</strong> is opaque: it stands
+           beside the content and makes the centre narrower. An <strong>overlay</strong> is translucent: it lies
+           over the content and takes no space away from it. Either panel is 25% of the window width.</p>
+        <p>The title bar shows <code>KOTU</code>, or <code>KOTU - filename</code> once a file is open. When more
+           than one window is open, the window number is written directly in front, for example
+           <code>2KOTU - holiday.jpg</code>. A leading <code>●</code> means that window has unsaved changes.
+           The module is not named in the title — the window icon carries a coloured ring instead, one colour
+           per module.</p>
+        <p><strong>Opening a file.</strong> Double-click it in Windows Explorer (if you registered the file
+           type), drop it onto the KOTU window, or use the <strong>Open file</strong> button in the bottom bar.
+           Dropping a file whose type does not belong to the module you are looking at opens it in a new window.</p>
+      </section>
+
+      <!-- ================= 2. MODULES ================= -->
+      <section id="modules">
+        <h2><span class="num">2</span>Modules</h2>
+        <p>Seven modules. Switch between them with <kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>Alt</kbd>+<kbd>7</kbd>,
+           or from the menu at the bottom left.</p>
+        <div class="tbl"><table>
+          <tr><th>#</th><th>Module</th><th>Opens</th></tr>
+          <tr><td>1</td><td>All Readable</td><td>anything the other file modules can open</td></tr>
+          <tr><td>2</td><td>Image</td><td><code>.jpg .jpeg .png .gif .bmp .webp .tif .tiff .ico .psd</code></td></tr>
+          <tr><td>3</td><td>Video</td><td><code>.mp4 .mkv .avi .webm .mov .wmv .m4v .mpg .mpeg .ts .m2ts .flv .3gp .ogv</code></td></tr>
+          <tr><td>4</td><td>Audio</td><td><code>.mp3 .flac .wav .ogg .opus .m4a .aac .wma</code></td></tr>
+          <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .pdf</code></td></tr>
+          <tr><td>6</td><td>Archive</td><td><code>.zip .7z .rar .tar .gz .tgz .bz2 .xz</code></td></tr>
+          <tr><td>7</td><td>H/W Info</td><td>no files — live hardware information</td></tr>
+        </table></div>
+
+        <h3>Image</h3>
+        <ul>
+          <li>Move through the folder with <kbd>←</kbd> and <kbd>→</kbd>. Files are sorted naturally, so
+              <code>img2</code> comes before <code>img10</code>.</li>
+          <li><strong>Zoom</strong> with the mouse wheel, from 10% to 800%. The point under the pointer stays
+              put. Touch pinch-zoom works too. Scroll bars appear when the picture is bigger than the view.</li>
+          <li><strong>Rotate</strong> 90° clockwise with the rotate button or <kbd>R</kbd>. Rotation is not
+              saved to the file and resets on the next picture. Orientation stored in EXIF is applied automatically.</li>
+          <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. The Image module keeps
+              your choice while you browse the folder.</li>
+          <li><strong>Delete</strong> moves the current file to the Recycle Bin and shows the next picture.
+              There is no confirmation and no toolbar button — the <kbd>Delete</kbd> key is the only way in.</li>
+          <li>Animated GIFs play.</li>
+          <li>The bottom bar shows the file name, size, kind, an EXIF summary (date taken, camera, exposure,
+              aperture, ISO, focal length) where the format has one, and <code>width×height · position/total</code>.</li>
+          <li><kbd>F11</kbd> or a double-click goes full screen; <kbd>Esc</kbd> leaves it.</li>
+        </ul>
+
+        <h3>Video</h3>
+        <ul>
+          <li>Playback uses the bundled libvlc engine. No codec pack is needed.</li>
+          <li><strong>Play/pause</strong> with <kbd>Space</kbd>, with the ▶ button, or by clicking the picture.</li>
+          <li><strong>Seek</strong> ±5 seconds with <kbd>←</kbd> / <kbd>→</kbd>, or drag the seek slider.
+              Seeking happens once, when you let go.</li>
+          <li><strong>Volume</strong> ±5 with <kbd>↑</kbd> / <kbd>↓</kbd> or the mouse wheel. <kbd>M</kbd>
+              mutes. The volume is remembered.</li>
+          <li><strong>Speed</strong>: 0.5× · 0.75× · 1× · 1.25× · 1.5× · 2×.</li>
+          <li><strong>Subtitles</strong> are picked up automatically from the video's own folder —
+              <code>.srt .smi .ass .ssa .sub .vtt</code>. A file with exactly the video's name wins over a
+              suffixed one (<code>movie.srt</code> before <code>movie.ko.srt</code>). Subtitles that are not
+              UTF-8 are converted from CP949 before playback, so Korean <code>.srt</code> and <code>.smi</code>
+              files display correctly. Press <kbd>C</kbd> or the subtitle button to switch track or choose
+              <em>No subtitles</em>.</li>
+          <li><strong>Resume</strong>: watch more than 30 seconds and stop before the last 3%, and playback
+              continues from there next time.</li>
+          <li><strong>Zoom</strong> with <kbd>Ctrl</kbd>+wheel, from 10% to 800%.</li>
+          <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Each new file starts at
+              Contain again.</li>
+          <li><kbd>Enter</kbd>, <kbd>F11</kbd> or the ⛶ button goes full screen; <kbd>Esc</kbd> leaves it. In
+              full screen, play, pause, seek, volume, mute and zoom each flash a short caption in the middle.</li>
+          <li>Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.</li>
+        </ul>
+
+        <h3>Audio</h3>
+        <ul>
+          <li>Same transport as Video: <kbd>Space</kbd>, <kbd>←</kbd> / <kbd>→</kbd> (±5 s), <kbd>↑</kbd> /
+              <kbd>↓</kbd> and the wheel (volume ±5), <kbd>M</kbd> to mute, <kbd>S</kbd> for the same six
+              speeds. Clicking the surface also toggles play/pause.</li>
+          <li>A live waveform fills the window while a track plays, with the track name above it.</li>
+          <li><strong>Resume</strong> works exactly as in Video.</li>
+          <li><kbd>F11</kbd> or the ⛶ button goes full screen; <kbd>Esc</kbd> leaves it.</li>
+          <li>Press ▶ with nothing open to play a built-in 18-second sample tune.</li>
+        </ul>
+
+        <h3>Document — plain text</h3>
+        <ul>
+          <li><code>.txt .md .markdown .log .ini</code> open in an editable text box. Markdown is shown as
+              text; it is not rendered.</li>
+          <li>The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
+              as is the line ending style.</li>
+          <li><kbd>Ctrl</kbd>+<kbd>S</kbd> saves. The save button stays disabled until there is something to
+              save, and <em>● Unsaved</em> appears in the bottom bar while there is.</li>
+          <li>If your edits contain characters the file's original CP949 encoding cannot store, KOTU offers to
+              save the file as UTF-8 instead.</li>
+          <li>Closing or switching away with unsaved changes asks first: <em>Save</em> / <em>Don't save</em> /
+              <em>Cancel</em>.</li>
+          <li>Files larger than 4 MB open read-only, showing the first 4 MB.</li>
+          <li><kbd>Tab</kbd> inserts a tab character in the editor.</li>
+        </ul>
+
+        <h3>Document — PDF</h3>
+        <ul>
+          <li>Pages scroll continuously in one column. The bottom bar shows <code>current / total</code> as you
+              scroll. There are no page-forward or page-back buttons.</li>
+          <li>The wheel scrolls; <kbd>Ctrl</kbd>+wheel zooms around the pointer, about 10% per notch. Touch
+              pinch-zoom works.</li>
+          <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Zooming by hand releases
+              the fit.</li>
+        </ul>
+
+        <h3>Archive</h3>
+        <ul>
+          <li><strong>Browse without extracting</strong>: open an archive and its contents are listed with
+              <em>Name</em>, <em>Size</em> and <em>Modified</em>. Double-click a folder to go in, <kbd>U</kbd>
+              or the up button to come back out.</li>
+          <li>Double-click a file inside the archive to open it with your default Windows app. Only that one
+              file is extracted, to a temporary folder.</li>
+          <li><strong>Extract here</strong> (<kbd>E</kbd>) unpacks the whole archive next to itself, into a
+              folder named after it. If the archive already has a single top-level folder, no extra wrapper
+              folder is made. If the target name is taken, <code> (2)</code>, <code> (3)</code> … is appended.</li>
+          <li><strong>Extract...</strong> (<kbd>T</kbd>) asks for a destination folder and unpacks only the
+              selected rows — or everything, if nothing is selected.</li>
+          <li><strong>New archive</strong> (<kbd>C</kbd>) creates a ZIP or a 7z. A password is optional; 7z
+              also encrypts the file names inside, ZIP does not.</li>
+          <li>Drop files or folders onto the window to compress them — the same New archive dialog appears.</li>
+          <li>Archives that need a password ask for one when you list or extract them.</li>
+          <li>ZIP files with broken Korean file names are re-read as CP949 automatically.</li>
+          <li>Long operations show a progress bar and a <em>Cancel</em> button. When it finishes, the result is
+              revealed in Windows Explorer.</li>
+        </ul>
+        <div class="note">All eight listed formats can be extracted. Only ZIP and 7z can be created.</div>
+
+        <h3>H/W Info</h3>
+        <p>The window is split into three areas, with two more graphs in the bottom bar.</p>
+        <ul>
+          <li><strong>Left</strong> — up to two enlarged graphs, one per selected sensor, covering the last
+              10 seconds.</li>
+          <li><strong>Centre</strong> — a tile per sensor, ten of them, each covering the last 30 seconds:
+              CPU Temp, CPU Power, CPU Load, CPU Clock, GPU Temp, GPU Power, GPU Load, RAM, Fan, SSD Temp.
+              <strong>Click</strong> a tile to select it — up to two at a time; picking a third releases the
+              oldest. <strong>Drag</strong> a tile to reorder the grid.</li>
+          <li><strong>Right</strong> — the specification list, scrollable: CPU, GPU, RAM, Motherboard, Storage,
+              Network, System.</li>
+          <li><strong>Bottom bar</strong> — two long graphs of the same selected sensors, covering up to
+              5 minutes. At the fastest refresh settings the history is shorter than that.</li>
+        </ul>
+        <div class="tbl"><table>
+          <tr><th>Control</th><th>Key</th><th>What it does</th></tr>
+          <tr><td>Copy all</td><td><kbd>C</kbd></td><td>puts the whole specification list plus every current sensor value on the clipboard as text</td></tr>
+          <tr><td>Refresh interval</td><td><kbd>I</kbd></td><td>50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU</td></tr>
+          <tr><td>Bottom bar size</td><td><kbd>B</kbd></td><td>cycles Small → Medium → Large</td></tr>
+          <tr><td>Always on top</td><td><kbd>P</kbd></td><td>pins the window over other windows and collapses it down to just the bottom bar</td></tr>
+          <tr><td>Full screen</td><td><kbd>F11</kbd></td><td>full-screen dashboard; <kbd>Esc</kbd> leaves it</td></tr>
+        </table></div>
+        <p>The selected sensors are also what this window's tray icon displays. Selection, tile order and bar
+           size belong to each window separately; the most recent change is what a newly opened window starts
+           from.</p>
+        <div class="note">CPU temperature, CPU power, fan speed and drive temperature need administrator
+           rights. When they cannot be read, a <em>Restart as admin</em> button appears above the panes.</div>
+
+        <h3>All Readable</h3>
+        <p>One module that opens every file type the other modules handle. When you open a file, the centre
+           view and the bottom bar become that module's own; the window, the side panels and the tray icon stay
+           with All Readable. <kbd>Ctrl</kbd>+<kbd>S</kbd> in a text file, <kbd>E</kbd> in an archive and so on
+           all keep working.</p>
+        <p>All Readable deliberately does not register file associations — double-clicking a file in Windows
+           Explorer still opens its dedicated module.</p>
+
+        <h3 id="fit">The Fit button</h3>
+        <p>Image, Video and PDF share one Fit control with four options.</p>
+        <div class="tbl"><table>
+          <tr><th>Option</th><th>Result</th></tr>
+          <tr><td>100%</td><td>actual size, one image pixel per screen pixel. The button then reads <code>1:1</code></td></tr>
+          <tr><td>Contain</td><td>the whole thing fits in the view. Never enlarged — smaller files stay at their own size</td></tr>
+          <tr><td>Fit width</td><td>fills the width; the other axis scrolls</td></tr>
+          <tr><td>Fit height</td><td>fills the height</td></tr>
+        </table></div>
+        <p>Clicking the body of the button re-applies the option you last chose (<kbd>F</kbd>). Clicking the
+           arrow opens the list. <kbd>A</kbd> jumps straight to 100%. New files start at Contain.</p>
+      </section>
+
+      <!-- ================= 3. SHORTCUTS ================= -->
+      <section id="shortcuts">
+        <h2><span class="num">3</span>Keyboard shortcuts</h2>
+
+        <h3>Global</h3>
+        <p>These work in every module.</p>
+        <div class="tbl"><table>
+          <tr><th>Key</th><th>Action</th></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>`</kbd></td><td>open the menu (bottom left)</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>Alt</kbd>+<kbd>7</kbd></td><td>switch module — 1 All Readable · 2 Image · 3 Video · 4 Audio · 5 Document · 6 Archive · 7 H/W Info</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>0</kbd></td><td>Settings</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>left panel</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>X</kbd></td><td>right panel</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>open or close both panels at once</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>leave full screen, or leave the Open file browser</td></tr>
+          <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
+          <tr><td><kbd>F11</kbd></td><td>full screen</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
+        </table></div>
+        <p>The <kbd>Alt</kbd> combinations work even while you are typing in a text box, because they produce
+           no character of their own. <kbd>Shift</kbd>+<kbd>N</kbd> gives way to typing. Switching module
+           always arrives with both sidebars open; choosing the module you are already in changes nothing.</p>
+
+        <h3>Panels: how Alt+Z and Alt+X behave</h3>
+        <p><kbd>Alt</kbd>+<kbd>Z</kbd> drives the left panel, <kbd>Alt</kbd>+<kbd>X</kbd> the right one. Both
+           react to <em>how</em> you press them.</p>
+        <div class="tbl"><table>
+          <tr><th>Input</th><th>Result</th></tr>
+          <tr><td>Hold the key</td><td>the panel appears as a translucent <strong>overlay</strong> and stays while you hold it</td></tr>
+          <tr><td>Hold for 2 seconds</td><td>the overlay is pinned — it stays after you let go</td></tr>
+          <tr><td>Press twice quickly</td><td>the panel docks as an opaque <strong>sidebar</strong>, making the centre narrower</td></tr>
+          <tr><td>Press once while open</td><td>that panel closes</td></tr>
+          <tr><td>Press twice quickly while open</td><td>it stays closed</td></tr>
+          <tr><td>Both keys together</td><td>both sides do all of the above at once, in any press order</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>closes both if either is open; opens them again in the arrangement you last had</td></tr>
+        </table></div>
+        <p>When a panel is pinned or docked, a short hint appears next to it — <em>Pinned - press Alt+Z to
+           close</em>, <em>Sidebar - press Alt+Z to close</em> — and fades after a couple of seconds. Inside the
+           Open file browser, <kbd>Alt</kbd>+<kbd>Z</kbd> and <kbd>Alt</kbd>+<kbd>X</kbd> do nothing;
+           <kbd>Esc</kbd> gets you out.</p>
+
+        <h3>Letter keys, per module</h3>
+        <p>Only one module is on screen at a time, so the same letter can mean different things in different
+           modules. Letter keys give way to typing: they do nothing while the text cursor is in an editable box
+           or while you are typing to jump through the file list.</p>
+        <div class="tbl"><table>
+          <tr><th>Module</th><th>Key</th><th>Action</th></tr>
+          <tr><td>Image</td><td><kbd>R</kbd></td><td>rotate 90° clockwise</td></tr>
+          <tr><td>Image</td><td><kbd>A</kbd></td><td>100%</td></tr>
+          <tr><td>Image</td><td><kbd>F</kbd></td><td>re-apply the last Fit option</td></tr>
+          <tr><td>Image</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>previous / next file in the folder</td></tr>
+          <tr><td>Image</td><td><kbd>Delete</kbd></td><td>move to the Recycle Bin</td></tr>
+          <tr><td>Video</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
+          <tr><td>Video</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
+          <tr><td>Video</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>
+          <tr><td>Video</td><td><kbd>M</kbd></td><td>mute</td></tr>
+          <tr><td>Video</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
+          <tr><td>Video</td><td><kbd>C</kbd></td><td>subtitles</td></tr>
+          <tr><td>Video</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option</td></tr>
+          <tr><td>Video</td><td><kbd>Enter</kbd></td><td>full screen</td></tr>
+          <tr><td>Audio</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
+          <tr><td>Audio</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
+          <tr><td>Audio</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>
+          <tr><td>Audio</td><td><kbd>M</kbd></td><td>mute</td></tr>
+          <tr><td>Audio</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
+          <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save</td></tr>
+          <tr><td>Document</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option (PDF)</td></tr>
+          <tr><td>Archive</td><td><kbd>E</kbd></td><td>Extract here</td></tr>
+          <tr><td>Archive</td><td><kbd>T</kbd></td><td>Extract... (choose a folder)</td></tr>
+          <tr><td>Archive</td><td><kbd>C</kbd></td><td>New archive</td></tr>
+          <tr><td>Archive</td><td><kbd>U</kbd></td><td>up one level inside the archive</td></tr>
+          <tr><td>H/W Info</td><td><kbd>C</kbd></td><td>Copy all</td></tr>
+          <tr><td>H/W Info</td><td><kbd>I</kbd></td><td>sensor refresh interval</td></tr>
+          <tr><td>H/W Info</td><td><kbd>B</kbd></td><td>bottom bar size</td></tr>
+          <tr><td>H/W Info</td><td><kbd>P</kbd></td><td>always on top</td></tr>
+        </table></div>
+        <p><kbd>F11</kbd> and <kbd>Esc</kbd> behave the same in all seven modules.</p>
+
+        <h3>In the file browser</h3>
+        <div class="tbl"><table>
+          <tr><th>Key</th><th>Action</th></tr>
+          <tr><td><kbd>Enter</kbd></td><td>open the selected item</td></tr>
+          <tr><td><kbd>F2</kbd></td><td>rename</td></tr>
+          <tr><td><kbd>Delete</kbd></td><td>move to the Recycle Bin</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd></td><td>copy / cut / paste</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>select all</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></td><td>new folder</td></tr>
+        </table></div>
+
+        <h3>Mouse and wheel</h3>
+        <div class="tbl"><table>
+          <tr><th>Where</th><th>Input</th><th>Action</th></tr>
+          <tr><td>Image</td><td>wheel</td><td>zoom, 10%–800%</td></tr>
+          <tr><td>Image</td><td>double-click</td><td>full screen</td></tr>
+          <tr><td>Video</td><td>wheel</td><td>volume</td></tr>
+          <tr><td>Video</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom, 10%–800%</td></tr>
+          <tr><td>Video</td><td>click</td><td>play / pause</td></tr>
+          <tr><td>Audio</td><td>wheel</td><td>volume</td></tr>
+          <tr><td>Audio</td><td>click</td><td>play / pause</td></tr>
+          <tr><td>PDF</td><td>wheel</td><td>scroll</td></tr>
+          <tr><td>PDF</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom</td></tr>
+          <tr><td>Text editor</td><td>wheel</td><td>scroll</td></tr>
+          <tr><td>File browser, side panels</td><td>wheel</td><td>scroll</td></tr>
+          <tr><td>File browser</td><td>double-click</td><td>open (folders: go in)</td></tr>
+          <tr><td>File browser</td><td><kbd>Shift</kbd>+double-click</td><td>open in a new window</td></tr>
+          <tr><td>File browser</td><td>right-click</td><td>Open in new instance · Rename · Delete</td></tr>
+          <tr><td>File browser</td><td>drag</td><td>move within a drive, copy across drives. <kbd>Ctrl</kbd> forces copy, <kbd>Shift</kbd> forces move</td></tr>
+          <tr><td>Near the window edge</td><td>move the pointer</td><td>a narrow edge button appears; click it to dock or undock that sidebar</td></tr>
+        </table></div>
+        <p>The wheel never zooms thumbnails, and it never zooms while the pointer is over a side panel — it
+           scrolls there.</p>
+      </section>
+
+      <!-- ================= 4. PANELS ================= -->
+      <section id="panels">
+        <h2><span class="num">4</span>Sidebars and overlays</h2>
+        <p><strong>The left panel</strong> holds, from top to bottom:</p>
+        <ul>
+          <li>the path bar, with the <em>Up</em> button, the current folder, a <em>Filter</em> list and a
+              <em>Sort</em> list;</li>
+          <li>a tree of drives and folders, opened at the folder of the file you have open;</li>
+          <li>the file list for that folder.</li>
+        </ul>
+        <p><strong>The right panel</strong> describes the file you have open — whatever the module knows about
+           it, or otherwise its name, size, date and folder. You can drop a file onto this panel to open it.</p>
+        <p>Ways to bring a panel up: <kbd>Alt</kbd>+<kbd>Z</kbd> / <kbd>Alt</kbd>+<kbd>X</kbd> as described
+           above; <kbd>Enter</kbd> for both at once; or the <strong>edge button</strong> — move the pointer
+           close to the left or right edge of the window and a small button appears there. Clicking it docks or
+           undocks that sidebar.</p>
+        <p>Opening a module (rather than opening a file directly) starts with both sidebars docked. A file
+           opened straight from Windows Explorer starts with no panels, so nothing covers what you came to see.</p>
+      </section>
+
+      <!-- ================= 5. FILE BROWSER ================= -->
+      <section id="browser">
+        <h2><span class="num">5</span>The built-in file browser</h2>
+        <p>Open a module without a file and the window becomes a file browser: folder tree and file list on the
+           left, thumbnails in the centre, file information on the right.</p>
+        <ul>
+          <li><strong>Sort</strong> by <em>Name</em>, <em>Size</em>, <em>Date modified</em> or
+              <em>Date created</em>. Your choice is remembered.</li>
+          <li><strong>Filter</strong> by extension, or <em>Show all</em>. The Filter button says how many files
+              are hidden.</li>
+          <li><strong>Select</strong> several files with <kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+click or
+              <kbd>Ctrl</kbd>+<kbd>A</kbd>.</li>
+          <li><strong>Copy, cut and paste</strong> with <kbd>Ctrl</kbd>+<kbd>C</kbd> /
+              <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+          <li><strong>Drag</strong> files to another folder, another KOTU window or Windows Explorer. Within
+              one drive that moves them, across drives it copies; hold <kbd>Ctrl</kbd> to copy or
+              <kbd>Shift</kbd> to move regardless.</li>
+          <li><strong>Rename</strong> with <kbd>F2</kbd> or the right-click menu. <kbd>Enter</kbd> confirms,
+              <kbd>Esc</kbd> cancels.</li>
+          <li><strong>Delete</strong> with the <kbd>Delete</kbd> key or the right-click menu. Files go to the
+              Recycle Bin, without a confirmation prompt.</li>
+          <li><strong>New folder</strong> with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>. It is created and
+              put straight into rename mode.</li>
+          <li><strong>Open in a new window</strong> with <kbd>Shift</kbd>+double-click, or
+              <em>Open in new instance</em> from the right-click menu.</li>
+        </ul>
+
+        <h3>The Open file button</h3>
+        <p>The button beside the menu in the bottom bar — tooltip <em>Open file</em> — is how you open a file
+           without leaving what you are looking at. It does not open the Windows file dialog. Instead the file
+           browser appears translucently over the current view: whichever panels were already open stay as they
+           are, the missing ones are added as overlays, and the centre becomes a translucent thumbnail browser.</p>
+        <p>Press <kbd>Esc</kbd>, or the button again, to go back to exactly the arrangement you had. Choosing a
+           file also ends it. If the browser is already what you are looking at, the button flashes the centre
+           view instead of opening anything.</p>
+      </section>
+
+      <!-- ================= 6. ASSOCIATIONS ================= -->
+      <section id="associations">
+        <h2><span class="num">6</span>File types and the Start menu</h2>
+        <p>KOTU registers nothing until you ask. Everything happens under your own user account, so no
+           administrator rights are needed, and switching a toggle off removes the registration completely.</p>
+        <p>In <strong>Settings → Explorer integration</strong>:</p>
+        <ul>
+          <li>One switch per module — <em>Register KOTU-image file associations</em>, and the same for video,
+              audio, document and archive — with the extensions listed beside it. Turning a switch on also
+              tries to make KOTU the default app for those types. Windows protects a few types; for those, the
+              Windows default-apps page opens so you can confirm once, or you can use <em>Set default...</em>
+              for a single extension. The line under each switch tells you how many extensions KOTU is
+              currently the default for.</li>
+          <li>One switch for the Explorer right-click entries: <em>Extract here with KOTU-archive</em> on
+              archive files and <em>Compress with KOTU-archive</em> on everything. On Windows 11 both live
+              under <em>Show more options</em> (<kbd>Shift</kbd>+<kbd>F10</kbd>).</li>
+        </ul>
+        <p>If KOTU's own folder moves — after an update, or after you move a portable copy — the registrations
+           you turned on are repaired silently the next time it starts.</p>
+        <p><strong>The Start menu</strong> is the button at the bottom-left corner
+           (<kbd>Alt</kbd>+<kbd>`</kbd>). It rises from the bar and lists, from the bottom up: All Readable,
+           Image, Video, Audio, Document, Archive, H/W Info, then Settings. Each entry's tooltip shows its
+           shortcut. There is no Exit entry here — closing the last window ends the app, and the tray menu has
+           <em>Exit KOTU</em>.</p>
+      </section>
+
+      <!-- ================= 7. WINDOWS ================= -->
+      <section id="windows">
+        <h2><span class="num">7</span>Several windows at once</h2>
+        <p>KOTU runs as one program with as many windows as you like. Ways to get a new one:</p>
+        <ul>
+          <li><kbd>Shift</kbd>+<kbd>N</kbd> — a new, empty window of the module you are looking at;</li>
+          <li><kbd>Shift</kbd>+double-click a file in the built-in file browser;</li>
+          <li>right-click a file there and choose <em>Open in new instance</em>;</li>
+          <li>turn on <em>Always open files in a new instance</em> in Settings, and every file opens its own
+              window.</li>
+        </ul>
+        <p>With that setting off (the default), opening a file re-uses an existing window of the same module.</p>
+        <p>Each window is independent: its own module, its own file, its own side panels, its own tray icon,
+           its own H/W Info selection. From the second window onwards, the window number appears in the title
+           bar and as a small coloured badge over the menu button. A new window inherits the size and position
+           of the last window you closed.</p>
+        <p><strong>Minimising</strong> a window hides it from the taskbar and from <kbd>Alt</kbd>+<kbd>Tab</kbd>.
+           Its tray icon stays — click that to bring it back.</p>
+      </section>
+
+      <!-- ================= 8. SETTINGS ================= -->
+      <section id="settings">
+        <h2><span class="num">8</span>Settings</h2>
+        <p><kbd>Alt</kbd>+<kbd>0</kbd>, or the last entry in the menu.</p>
+
+        <h3>Display</h3>
+        <ul>
+          <li><strong>UI scale</strong> — <em>System default</em> (follow Windows), or a fixed 100% to 350%.
+              A fixed value applies to KOTU only, and takes effect in every open window immediately.</li>
+        </ul>
+
+        <h3>Windows</h3>
+        <ul>
+          <li><strong>Always open files in a new instance</strong> — off by default.</li>
+        </ul>
+
+        <h3>Explorer integration</h3>
+        <ul>
+          <li>The file-type and right-click switches described in section 6.</li>
+          <li><strong>Open settings.json</strong> — opens the settings file itself in a new KOTU window. It
+              lives in <code>%AppData%\KOTU\settings.json</code>. Changes you make by hand apply after a
+              restart; editing it incorrectly can break your settings.</li>
+        </ul>
+
+        <h3>Updates</h3>
+        <ul>
+          <li><strong>Current version</strong> and <strong>Latest version</strong>, plus when the last check ran.</li>
+          <li>KOTU checks for updates on its own every two minutes, once whenever you open Settings, and
+              whenever you press <em>Check now</em>. Nothing pops up when a new version is found — the Updates
+              section is the only place it is announced.</li>
+          <li>When there is one, an <em>Update to vX.Y.Z</em> button appears. It downloads with a progress
+              figure, then asks to close and restart. <em>Install and restart</em> applies it immediately;
+              <em>Later</em> keeps the download ready for the next time you press the button.</li>
+          <li>Updates need the Setup.exe installation or the portable build from the releases page. A build
+              unpacked by hand says so and leaves the section disabled.</li>
+        </ul>
+
+        <h3>About</h3>
+        <p>The version, a link to the repository, and the mission statement. The bottom bar of the Settings
+           screen has a link to the project's Patreon page and the full-screen button.</p>
+      </section>
+
+      <!-- ================= 9. TRAY ================= -->
+      <section id="tray">
+        <h2><span class="num">9</span>The tray icon</h2>
+        <p>Every open window puts one small icon in the notification area, and keeps it there for as long as
+           the window lives.</p>
+        <ul>
+          <li><strong>Idle</strong> — one line, in muted colour: <code>IMG</code>, <code>VID</code>,
+              <code>AUD</code>, <code>DOC</code>, <code>ARC</code>, <code>ALL</code> or <code>INF</code>,
+              according to the module.</li>
+          <li><strong>With a file open</strong> — two lines in the module's colour: what it is on top, a value
+              underneath. An image shows its format and size, a video its resolution and bitrate, an archive
+              its type and compression, and the Audio module shows a small level display. H/W Info shows the
+              sensors you selected in that window.</li>
+          <li>The icon's tooltip is the window's title.</li>
+          <li><strong>Left-click</strong> brings that window to the front.</li>
+          <li><strong>Right-click</strong> opens a menu: <em>Activate window</em> · <em>Close this window</em>
+              · <em>Exit KOTU</em>. The last one closes every window.</li>
+        </ul>
+      </section>
+
+    </article>
+  </div>
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="brand" href="index.html#home">
+        <img src="assets/logo-mark.svg" alt="" width="64" height="64" loading="lazy">
+        <span class="brand-txt">
+          <span class="brand-name" style="font-size:22px">KOTU</span>
+          <span class="brand-sub">KING OF THE UTILITIES</span>
+        </span>
+      </a>
+      <nav class="foot-links">
+        <a href="https://github.com/zpstudios/kotu" rel="noopener">GitHub</a>
+        <a href="https://github.com/zpstudios/kotu/releases" rel="noopener">Releases</a>
+        <a href="https://github.com/zpstudios/kotu/blob/master/ARCHITECTURE.md" rel="noopener">Architecture</a>
+        <a href="https://github.com/zpstudios/kotu/blob/master/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a>
+        <a href="https://github.com/zpstudios/kotu/issues" rel="noopener">Report a bug</a>
+      </nav>
+    </div>
+    <p class="foot-legal">
+      &copy; 2026 ZP Studios. KOTU is MIT-licensed. Bundled components keep their own licences — 7-Zip and libvlc (LGPL), LibreHardwareMonitor (MPL-2.0).<br>
+      Windows is a trademark of Microsoft Corporation. All other product names are trademarks of their respective owners and are referenced for comparison only.
+    </p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var nav=document.getElementById('nav'), burger=document.getElementById('burger');
+
+  /* nav shadow on scroll — same behaviour as index.html */
+  var onScroll=function(){ nav.classList.toggle('scrolled', window.scrollY>12); };
+  onScroll(); addEventListener('scroll',onScroll,{passive:true});
+
+  /* mobile menu */
+  burger.addEventListener('click',function(){
+    var open=nav.classList.toggle('open');
+    burger.setAttribute('aria-expanded',open?'true':'false');
+  });
+  document.querySelectorAll('#navlinks a').forEach(function(a){
+    a.addEventListener('click',function(){ nav.classList.remove('open'); burger.setAttribute('aria-expanded','false'); });
+  });
+})();
+</script>
+</body>
+</html>
