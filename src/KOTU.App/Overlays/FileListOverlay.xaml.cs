@@ -185,9 +185,9 @@ public sealed partial class FileListOverlay : UserControl
     }
 
     // ---------- 안내 문구 일시 표시 (A92, v0.115.0 — 문구·키 표기는 A107부터 OverlayHints가 단일 출처) ----------
-    // ⚠️ ContentInfoOverlay에 같은 이름의 상수·필드·메서드(표시 타이밍 장치)가 한 벌 더 있다.
-    // 문구 문자열은 A107에서 OverlayHints로 모았지만 타이밍 장치는 여전히 두 벌 —
-    // 한쪽을 고치면 반드시 다른 쪽도 맞출 것.
+    // ⚠️ ContentInfoOverlay·SidePanelHost(A119)에 같은 상수·필드·메서드(표시 타이밍 장치)가 한 벌씩
+    // 더 있다. 문구 문자열은 A107에서 OverlayHints로 모았지만 타이밍 장치는 세 벌 —
+    // 한쪽을 고치면 반드시 나머지도 맞출 것.
     // A108(v0.135.0): 표시 위치가 패널 하단 → 경계 버튼 옆(세로 중앙)으로 이동 — XAML만 바뀌었고
     // 타이밍 장치는 그대로다. PinnedText를 재사용하는 A94 실패 안내(ShowTransientNotice)도
     // 같은 자리에 뜬다(요소 하나 = 위치 하나 — A107 단일화 유지의 의도된 결과).

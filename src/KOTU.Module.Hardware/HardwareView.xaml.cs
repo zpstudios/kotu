@@ -16,9 +16,14 @@ namespace KOTU.Module.Hardware;
 /// <summary>
 /// 하드웨어 정보 화면. WMI 수집·센서 수집은 HardwareModule.Poller(프로세스 공유 폴링 워커,
 /// A42)가 전담하고, 뷰는 구독해서 스냅샷을 UI 스레드로 디스패치 받아 그리기만 한다.
-/// A60 3차(v0.138.0): 화면 = 3구획 그래프 중심 — 좌(선택 그래프 확대 ≤2, 10초 창) /
-/// 센터(전 채널 타일 그리드, 30초 창 — 클릭 = 선택 토글·드래그 = 순서 변경) /
-/// 우(스펙 텍스트 리스트). 전체화면(F11)도 같은 3구획이다 — v0.42.0 섹션 카드 대시보드는 폐기.
+/// A119(v0.145.0 — A60 3차의 자체 3구획을 셸 패널 체계로 편입): 뷰 본체 = 센터 정사각형 타일
+/// 그리드(전 채널 10, 30초 창 — 클릭 = 선택 토글·드래그 = 순서 변경, 세로 넘침은 스크롤).
+/// 구 좌(선택 그래프 확대 ≤2, 10초 창)·우(스펙 텍스트) 구획은 셸 좌/우 패널(사이드바/오버레이)
+/// 콘텐츠가 됐다 — 이 뷰가 요소를 분리 생성·소유하고(ISidePanelProvider) 셸(SidePanelHost)이
+/// 호스트한다. F1/F2·2연타·Enter·경계 버튼·힌트는 파일 모듈과 같은 셸 상태 머신 공통이고,
+/// 진입 기본 = 양쪽 사이드바(A109). 열 수 = 셸 도크 수 신호(ISidebarAwareView — A119 개정):
+/// 도크 2/1/0 → 2/3/4열, 좌 대형 그래프 한 변 = 패널 실폭(정사각형 적층). 전체화면(F11)도
+/// 같은 화면이다(패널은 셸 상태를 따른다).
 /// 하단 바 가운데엔 선택 긴 그래프 2개(5분 창)가 산다 — A17 카드 10개 대체. Copy·⛶·그래프를
 /// 담은 하단 바는 셸이 TakeBottomBar()로 떼어간다. 전체화면 동안(셸 하단 바 숨김)은
 /// SensorGrid가 SensorStrip으로 옮겨져 긴 그래프가 계속 보인다(v0.64.2 메커니즘 승계).
@@ -30,11 +35,9 @@ namespace KOTU.Module.Hardware;
 /// A101(v0.137.0): 창별 트레이 아이콘(A54)이 **이 창의 선택값**을 직접 표시한다 —
 /// ITrayStatusProvider 구현. 센터 타일 클릭 토글 하나로 핀 배지·좌 대형·하단 긴 그래프·트레이가
 /// 전부 같은 선택(HardwareInstanceState.Selection)을 따른다(선택 단일화).
-/// ISidebarAwareView(A60 3차 신설): 셸이 "좌·우 사이드바 둘 다 열림"을 밀어주면 센터 열 수를
-/// 4/8로 바꾼다(A93 썸네일 패턴).
 /// </summary>
 public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWindowCollapseSource,
-    ITrayStatusProvider, ISidebarAwareView
+    ITrayStatusProvider, ISidebarAwareView, ISidePanelProvider
 {
     private IReadOnlyList<HardwareSection> _sections = [];
     private AppWindow? _appWindow;
@@ -57,10 +60,50 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     // 전역 현재값(마지막 커밋 1벌)의 복사로 시작하고, 이 창의 조작은 즉시 전역 1벌로 커밋된다.
     private readonly HardwareInstanceState _state = HardwareInstanceState.CreateForView();
 
+    // ---------- 좌/우 패널 콘텐츠 (A119 — 셸 ISidePanelProvider 슬롯에 얹는 모듈 고유 요소) ----------
+    // 구 XAML 좌/우 구획을 **코드 분리 생성**으로 옮겼다: XAML에 두면 뷰 트리에 이미 부착돼 있어
+    // 셸 호스트로 옮길 때 reparent(옛 부모 Children 제거 — §3.4)가 필요해진다. 처음부터 분리
+    // 생성하면 부모가 셸 호스트 하나뿐이라 이중 Add 부류(v0.113.2 COMException)가 원천적으로 없다.
+    // x:Name이던 식별자(BigGraphPanel·BigGraphHint·Root)는 같은 이름의 코드 필드로 승계 —
+    // 기존 렌더 경로(RebuildSelectionGraphs·Render)는 손대지 않았다. 조립은 BuildSidePanels
+    // (필드 초기화식은 상호 참조가 불가해 — CS0236 — 트리 조립만 생성자 경유로 미룬다).
+    // 수명: 요소는 이 뷰가 소유하고 셸 호스트가 유일한 부모다. 모듈 전환 시 셸이 호스트를 비워
+    // (ClearModulePanels) 요소가 트리에서 빠지고, 뷰 Unloaded(구독 해제·A88 렌더 루프 해제)는
+    // ModuleHost.Content 교체로 종전대로 발화한다 — 패널 요소에는 이벤트 구독이 없다.
+
+    /// <summary>좌 패널 대형 그래프(선택 ≤2)의 컨테이너 — 구 XAML x:Name 승계(행은 A119부터 Auto).</summary>
+    private readonly Grid BigGraphPanel = new() { RowSpacing = 10 };
+
+    /// <summary>선택 0개일 때의 좌 패널 안내 1줄 — 구 XAML x:Name 승계.</summary>
+    private readonly TextBlock BigGraphHint = new()
+    {
+        Text = "Select graphs in the grid",
+        Opacity = 0.55,
+        FontSize = 12,
+        TextWrapping = TextWrapping.Wrap,
+        TextAlignment = TextAlignment.Center,
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>우 패널 스펙 텍스트 리스트(Render 대상) — 구 XAML x:Name 승계.</summary>
+    private readonly StackPanel Root = new() { Spacing = 2, Padding = new Thickness(0, 0, 8, 16) };
+
+    /// <summary>셸 좌 패널에 내주는 루트(스크롤 + 안내 겹침) — GetLeftPanel 반환값.</summary>
+    private readonly Grid _leftPanelRoot = new();
+
+    /// <summary>셸 우 패널에 내주는 루트(스펙 스크롤) — GetRightPanel 반환값.</summary>
+    private readonly ScrollViewer _rightPanelRoot = new()
+    {
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        Padding = new Thickness(12, 4, 12, 0),
+    };
+
     public HardwareView(OpenContext context)
     {
         _ = context; // 파일 컨텍스트 없음
         InitializeComponent();
+        BuildSidePanels();         // 좌/우 패널 루트 조립 (A119 — 셸 호스트에 얹힐 분리 요소)
         BuildCenterTiles();        // 센터 그리드 타일 10개 (A60 3차 — 구 하단 카드의 후신)
         RebuildSelectionGraphs();  // 좌 대형·하단 긴 그래프 = 현재 선택(저장 복원값, ≤2)
         BuildIntervalFlyout(); // 리프레시 주기 선택 (A29)
@@ -107,6 +150,39 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         RootGrid.Children.Remove(ControlBar);
         return ControlBar;
     }
+
+    // ---------- 셸 좌/우 패널 (A119 — ISidePanelProvider) ----------
+
+    /// <summary>
+    /// 좌/우 패널 루트를 조립한다(생성자 1회). 좌 = 세로 스크롤 안에 정사각형 대형 그래프
+    /// (선택 ≤2) 적층 + 선택 0개 안내 겹침 / 우 = 스펙 텍스트 리스트 스크롤(구 XAML 우 구획
+    /// 구성 승계 — 스크롤러가 여백을, StackPanel(Root)이 기존 패딩을 유지한다).
+    /// 가로 스크롤은 잠근다 — 콘텐츠 폭 = 뷰포트 폭이어야 정사각형 한 변 계산이 성립한다.
+    /// </summary>
+    private void BuildSidePanels()
+    {
+        var scroller = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Padding = new Thickness(10, 8, 10, 10),
+            Content = BigGraphPanel,
+        };
+        _leftPanelRoot.Children.Add(scroller);
+        _leftPanelRoot.Children.Add(BigGraphHint);
+        // 패널 실폭 추종(A119): 호스트 표시·창 리사이즈·도크 폭 변화가 전부 이 SizeChanged로
+        // 모인다 — 한 변 재계산은 값이 바뀔 때만 적용(ApplySquareBigSizes의 조기 반환).
+        BigGraphPanel.SizeChanged += (_, _) => ApplySquareBigSizes();
+
+        _rightPanelRoot.Content = Root;
+    }
+
+    /// <summary>셸 좌 패널 콘텐츠(A119) — 큰 그래프(현행 좌 구획의 후신). 매 호출 같은 인스턴스.</summary>
+    public object? GetLeftPanel() => _leftPanelRoot;
+
+    /// <summary>셸 우 패널 콘텐츠(A119) — 스펙 텍스트(현행 우 구획의 후신). 매 호출 같은 인스턴스.</summary>
+    public object? GetRightPanel() => _rightPanelRoot;
 
     // ---------- 갱신 (A42: 수집은 공유 폴러, 뷰는 스냅샷 구독) ----------
 
@@ -356,20 +432,21 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         => PulseHost.Visibility = width >= LongGraphsWidth + BarFixedWidth
             ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>센터 그리드 열 수 — 셸 사이드바 신호(ISidebarAwareView)가 4/8을 정한다.
-    /// 기본 8 = 도크 하나라도 닫힘(전폭) 기준 — ThumbnailExplorer(A93)와 같은 초기값.</summary>
-    private int _centerColumns = 8;
+    /// <summary>센터 그리드 열 수 — 셸 도크 수 신호(ISidebarAwareView, A119 개정)가 2/3/4를 정한다.
+    /// 초기값 4 = 도크 0(전폭) 기준. 정보 모듈 진입 기본(A109 양쪽 사이드바)은 뷰 교체 직후
+    /// 셸의 첫 푸시가 2열로 잡는다 — 초기값이 화면에 남는 구간은 없다.</summary>
+    private int _centerColumns = 4;
 
     /// <summary>
-    /// 셸 푸시(A60 3차 신설 계약): 좌·우 사이드바가 둘 다 열려 메인이 절반 폭이면 4열, 아니면 8열
-    /// (A93 썸네일과 같은 판정). 호출원은 셸 ApplyOverlayStates(사이드바 상태 변경의 단일 종착점).
-    /// 값이 그대로면 재배치하지 않는다.
-    /// ※ 현행 셸은 정보 모듈에 사이드바를 안 띄우므로(파일 컨텍스트 게이트) 지금은 항상 8열이다 —
-    /// 셸 정책이 바뀌면 이 배선으로 4열이 저절로 산다.
+    /// 셸 푸시(A60 3차 신설 → A119 개정 계약): 공간을 차지 중인 사이드바(불투명 도크) 수(0/1/2)를
+    /// 받아 열 수 4/3/2로 환산한다 — 구 bool "양쪽 열림"의 4/8 매핑 대체. 오버레이(반투명 홀드·
+    /// 고정)는 메인 폭을 안 줄이므로 셸이 세지 않는다. 호출원은 셸 ApplyOverlayStates(사이드바
+    /// 상태 변경의 단일 종착점 — F1/F2·2연타·Enter·경계 버튼·모듈 진입 기본(A109)이 전부 그리로
+    /// 모여 도크가 바뀔 때마다 재푸시된다). 값이 그대로면 재배치하지 않는다.
     /// </summary>
-    public void SetSidebarsState(bool bothOpen)
+    public void SetSidebarsState(int dockedCount)
     {
-        var columns = bothOpen ? 4 : 8;
+        var columns = 4 - Math.Clamp(dockedCount, 0, 2); // 도크 2/1/0 → 2/3/4열 (A119 확정 표)
         if (columns == _centerColumns) return;
         _centerColumns = columns;
         LayoutCenterTiles();
@@ -386,12 +463,16 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         foreach (var channel in SensorChannels.All)
             _tiles.Add(MakeTileGraph(channel));
         BarGrid.SizeChanged += (_, e) => UpdateBarDensity(e.NewSize.Width);
+        // A119: 정사각형 한 변은 실폭 파생 — 창 리사이즈·도크 개폐(열 수 변화와 별개로 폭도
+        // 변한다)를 이 SizeChanged 하나로 추종한다(A93 썸네일 열 수 재계산 선례).
+        CenterGrid.SizeChanged += (_, _) => ApplySquareTileSizes();
         LayoutCenterTiles();
     }
 
     /// <summary>
-    /// 센터 타일을 현재 순서(_state.Order)·열 수(4/8)대로 star 칸에 배치한다.
-    /// 행도 star라 그리드가 구획을 꽉 채운다(A60 3차: 최소 창 720×540 기준 꽉 참, DPI 무관).
+    /// 센터 타일을 현재 순서(_state.Order)·열 수(2/3/4 — A119)대로 배치한다.
+    /// A119: 행은 Auto다 — 타일이 정사각형(명시 크기)이라 세로 합이 뷰포트를 넘으면 XAML의
+    /// ScrollViewer가 스크롤한다(축소 없음). 구 "행도 star로 꽉 채움"(A60 3차)은 폐지.
     /// Children을 비우고 다시 얹으므로 중복 Add가 원천적으로 없다 — FrameworkElement.Parent를
     /// 가드로 쓰지 않는다(§3.4: 라이브 트리 부착 전엔 Add 뒤에도 null이라 못 쓴다 — v0.113.2 교훈).
     /// </summary>
@@ -407,7 +488,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         for (var c = 0; c < columns; c++)
             CenterGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var r = 0; r < rows; r++)
-            CenterGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            CenterGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // A119: 정사각형 유지
 
         var slot = 0;
         foreach (var id in order)
@@ -418,6 +499,63 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             CenterGrid.Children.Add(tile.Root);
             slot++;
         }
+        ApplySquareTileSizes(); // 열 수·순서 변경 직후 — 같은 한 변이면 내부 조기 반환
+    }
+
+    // ---------- 정사각형 계산 (A119) ----------
+
+    /// <summary>마지막으로 적용한 센터 타일 한 변(px) — 재계산 조기 반환 기준(레이아웃 사이클 방지).</summary>
+    private double _tileSide;
+
+    /// <summary>마지막으로 적용한 좌 대형 그래프 한 변(px) — 목적은 위와 동일.</summary>
+    private double _bigSide;
+
+    /// <summary>
+    /// 센터 타일 한 변 = (그리드 실폭 − 간격 × (열 − 1)) / 열, 내림(px) — 높이 = 한 변(A119).
+    /// 명시 픽셀 대입 + "같은 변이면 조기 반환"으로 SizeChanged 재계산이 무한 레이아웃으로
+    /// 번지지 않게 한다: 대입이 그리드 높이를 바꿔 SizeChanged가 또 와도(폭 불변) 같은 변이라
+    /// 즉시 종단된다. 패딩은 XAML ScrollViewer(12,8,12,10)가 바깥에서 제하므로 실폭에 이미
+    /// 반영돼 있다. 변이 실제로 바뀌면 새 크기를 동기 실체화(UpdateLayout)한 뒤 스파크라인을
+    /// 즉시 다시 그린다 — 다음 스냅샷(최대 5초, A73)까지 옛 배율 그래프가 남지 않게
+    /// (RebuildSelectionGraphs의 즉시 렌더와 같은 이유).
+    /// </summary>
+    private void ApplySquareTileSizes()
+    {
+        var columns = _centerColumns;
+        var width = CenterGrid.ActualWidth;
+        if (columns <= 0 || width <= 0) return; // 레이아웃 전 — SizeChanged가 다시 부른다
+        var side = Math.Floor((width - CenterGrid.ColumnSpacing * (columns - 1)) / columns);
+        if (side < 1) return; // 극단적으로 좁은 과도 상태 — 다음 SizeChanged에서 복구
+        if (Math.Abs(side - _tileSide) < 0.5) return; // 변화 없음 — 재귀 SizeChanged 종단
+        _tileSide = side;
+        foreach (var tile in _tiles)
+        {
+            tile.Root.Width = side;
+            tile.Root.Height = side;
+        }
+        CenterGrid.UpdateLayout();
+        RerenderSparklines();
+    }
+
+    /// <summary>
+    /// 좌 패널 대형 그래프 한 변 = 패널 실폭(스크롤러 뷰포트 폭) — 높이가 폭을 추종하는
+    /// 정사각형, 선택 2개면 세로 적층 + 넘침은 좌 패널 스크롤(A119). 조기 반환 규칙은 타일과
+    /// 동일. 표면 재생성(RebuildSelectionGraphs)은 생성 시점에 마지막 변(_bigSide)을 직접
+    /// 입히므로 이 조기 반환과 어긋나지 않는다(변이 그대로면 여기 올 일 자체가 없다).
+    /// </summary>
+    private void ApplySquareBigSizes()
+    {
+        var side = Math.Floor(BigGraphPanel.ActualWidth);
+        if (side < 1) return; // 호스트 미표시(폭 0) — 표시되면 SizeChanged가 다시 부른다
+        if (Math.Abs(side - _bigSide) < 0.5) return;
+        _bigSide = side;
+        foreach (var graph in _bigGraphs)
+        {
+            graph.Root.Width = side;
+            graph.Root.Height = side;
+        }
+        BigGraphPanel.UpdateLayout();
+        RerenderSparklines();
     }
 
     /// <summary>채널 ID로 센터 타일 찾기 — 타일은 전 채널 1:1이라 실패는 방어 경로뿐.</summary>
@@ -512,7 +650,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// </summary>
     private void RebuildSelectionGraphs()
     {
-        // 좌 대형(A72 흡수): 줄당 1개, 행 star — 선택 0개면 안내 1줄만 남긴다.
+        // 좌 대형(A72 흡수 → A119 셸 좌 패널): 줄당 1개, 행 Auto — 정사각형(한 변 = 패널 실폭)
+        // 적층이라 행이 내용 크기를 따르고 넘침은 좌 패널 스크롤 몫이다. 선택 0개면 안내 1줄만.
+        // 마지막 한 변(_bigSide)을 생성 시점에 직접 입힌다 — 폭이 안 변한 재생성(선택 토글)은
+        // SizeChanged가 안 오므로 여기서 입혀야 새 표면이 정사각형으로 나온다.
         BigGraphPanel.Children.Clear();
         BigGraphPanel.RowDefinitions.Clear();
         _bigGraphs.Clear();
@@ -521,7 +662,12 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             if (SensorChannels.ById(id) is not { } channel) continue; // 미지 ID 방어(구 관례)
             var graph = MakeGraph(channel, BigWindowMaxMs, inBar: false, withPin: false);
             ToolTipService.SetToolTip(graph.Root, channel.Title);
-            BigGraphPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            if (_bigSide >= 1)
+            {
+                graph.Root.Width = _bigSide;
+                graph.Root.Height = _bigSide;
+            }
+            BigGraphPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Grid.SetRow(graph.Root, _bigGraphs.Count);
             BigGraphPanel.Children.Add(graph.Root);
             _bigGraphs.Add(graph);
@@ -558,7 +704,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 그래프 표면 1개를 만든다 — 구 카드 생성 코드의 골격을 타일·좌 대형·하단 긴 그래프가
     /// 공용한다(A60 3차). 그래프가 표면 전체를 채우고 제목·값이 그 위에 얹힌다(v0.64.2 컴팩트형).
     /// 글씨·선 굵기는 M 기준값 — 하단 긴 그래프만 직후 ApplyScaleToLongGraph가 배수를 덮어쓴다(A62).
-    /// 타일·좌 대형은 크기를 지정하지 않는다 — star 칸이 늘려 채운다(꽉 참·DPI 무관).
+    /// 여기서는 크기를 지정하지 않는다 — 타일·좌 대형은 A119부터 정사각형 한 변을 바깥
+    /// (ApplySquareTileSizes/ApplySquareBigSizes)이 명시 픽셀로 입히고, 하단 긴 그래프는
+    /// ApplyScaleToLongGraph가 폭 152·높이 상한 32를 입힌다. 축 라벨·글꼴 축소 규칙(A74·A62)은
+    /// 표면 크기와 무관하게 기존 그대로다.
     /// </summary>
     private SensorGraph MakeGraph(SensorChannel channel, double windowMaxMs, bool inBar, bool withPin)
     {

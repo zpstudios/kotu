@@ -45,6 +45,9 @@ public sealed partial class MainWindow : Window
     //   F1↔F2 상호만 예외로, 한쪽 홀드 중 다른 쪽 down이면 그쪽도 독립적으로 같은 전이를 시작한다
     //   (타이머·2연타도 사이드별).
     // 셸 수준 구성 상태(S1~S4, ShellState)는 Enter 일괄 토글·경계 버튼의 분배 기준 — 아래 CurrentShellState.
+    // A119(v0.145.0): 패널 컨텍스트에 "패널 제공 뷰"(ISidePanelProvider — 정보 모듈)가 추가됐다.
+    //   그 뷰에서는 좌/우 패널 자리에 파일 리스트/정보 대신 모듈 고유 콘텐츠(SidePanelHost 호스트)가
+    //   뜨고, 키·전이·힌트·경계 버튼·Enter는 전부 같은 경로다. 설정·빈 셸·미지원 안내만 무소비로 남는다.
     // 홀드 판정은 다른 키·포인터(클릭·휠 — Ctrl+휠 줌 포함)가 함께 개입하면 취소된다(A58 안전장치 유지.
     // Alt 자체는 수식키라 "다른 키"에서 제외 — OnRootKeyDown 참고).
     // Alt 단독 OS 메뉴 모드 회피(A86 제거 → A107 재도입)는 A118 뒤에도 존치 — Alt+`·Alt+0~7
@@ -69,7 +72,9 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 셸 수준 "구성 상태" (A86 keymap): A58의 오버레이별 4상태를 대체하는 게 아니라 그 위에서
     /// "지금 화면 구성이 어떤 조합인가"를 요약한다 — Enter 일괄 토글·경계 버튼 분배의 기준.
-    /// None = 오버레이 컨텍스트 없음(빈 셸·설정·H/W·미지원 안내) — keymap 표 밖, 셸 키 무동작.
+    /// None = 오버레이 컨텍스트 없음(빈 셸·설정·미지원 안내) — keymap 표 밖, 셸 키 무동작.
+    /// A119(v0.145.0): 정보(H/W)는 None에서 빠졌다 — 패널 제공 뷰(ISidePanelProvider)는 파일이
+    /// 없어도 좌/우 조합으로 S2/S3*에 분류되어 Enter·경계 버튼이 파일 모듈과 같은 표를 탄다.
     /// S4('오픈 파일' 탐색 모드)의 진입/복귀는 A90(v0.122.0) — 아래 '오픈 파일' 버튼 절 참고.
     /// </summary>
     private enum ShellState { None, S1, S2, S3L, S3R, S3B, S4 }
@@ -86,14 +91,17 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private (OverlayState List, OverlayState Info)? _s4Restore;
 
-    /// <summary>A86 keymap의 구성 상태 판정. 홀드(오버레이 덮기)도 "열림"으로 센다 — 표의 상태 기준.</summary>
+    /// <summary>A86 keymap의 구성 상태 판정. 홀드(오버레이 덮기)도 "열림"으로 센다 — 표의 상태 기준.
+    /// A119: 패널 제공 뷰(정보 모듈)는 파일이 없어도 아래 좌/우 조합 분기로 떨어진다 —
+    /// Enter 일괄 토글(S2 되살리기·S3* 일괄 닫기)이 파일 모듈과 동일하게 성립한다.
+    /// ('오픈 파일' 버튼의 S2/S3* 분기는 EnterOpenFileBrowsing의 파일 가드가 무동작으로 거른다.)</summary>
     private ShellState CurrentShellState
     {
         get
         {
             if (IsOpenFileBrowsing) return ShellState.S4; // A90 — '오픈 파일' 탐색 진입 중
             if (IsEmptyFileModule) return ShellState.S1;
-            if (_currentFilePath is null) return ShellState.None;
+            if (_currentFilePath is null && PanelProviderView is null) return ShellState.None;
             var left = _listSide.State != OverlayState.Closed;
             var right = _infoSide.State != OverlayState.Closed;
             return (left, right) switch
@@ -161,6 +169,10 @@ public sealed partial class MainWindow : Window
         // A93 드랍 규칙: 우측 인포 영역 드랍 = 그 파일 열기 — 콘텐츠가 없으면 OpenFile의
         // 라우터(A59)가 담당 모듈로 전환한 뒤 여는 기존 경로를 그대로 쓴다.
         InfoOverlay.FileDropped += OpenFile;
+        // A119: 모듈 고유 패널(ISidePanelProvider — 정보 모듈) 호스트의 좌/우 방향 1회 조립.
+        // 배경·힌트·상태 규칙은 파일 오버레이와 동일하게 호스트가 재현한다(SidePanelHost 참조).
+        LeftPanelHost.Initialize(panelOnRight: false);
+        RightPanelHost.Initialize(panelOnRight: true);
 
         BuildStartMenu();
         RegisterShortcuts(); // `·숫자 단독 키(A32) + Shift+N 새 창(A84 — 기존 Ctrl+N 전환)
@@ -1020,6 +1032,7 @@ public sealed partial class MainWindow : Window
         ModuleHost.Content = settings;
         // 설정도 하단 바 제공(광고 + ⛶, v0.50.0) — 모듈들과 같은 통합 방식
         ModuleBarHost.Content = settings.TakeBottomBar() as UIElement;
+        ClearModulePanels(); // A119: 이전 모듈 패널(정보 모듈 그래프 등)이 설정 위에 남지 않게
         AttachDriveStrip(null); // 설정 바에는 드라이브 줄이 없다 — 이전 뷰 참조를 끊는다 (A22)
         CurrentModuleId = null;
         IsUntouched = false;
@@ -1077,6 +1090,7 @@ public sealed partial class MainWindow : Window
                 VerticalAlignment = VerticalAlignment.Center,
             };
             ModuleBarHost.Content = null;
+            ClearModulePanels(); // A119: 미지원 안내 화면에도 이전 모듈 패널이 남으면 안 된다
             AttachDriveStrip(null); // 미지원 파일 안내 화면 — 모듈 바와 함께 드라이브 줄도 내린다 (A22)
             CurrentModuleId = null;
             IsUntouched = false;
@@ -1159,6 +1173,9 @@ public sealed partial class MainWindow : Window
         ModuleHost.Content = view;
         // 모듈이 제공하는 하단 바 줄(동영상 트랜스포트 등)을 셸 하단 바에 통합 (v0.21.0)
         ModuleBarHost.Content = (view as IBottomBarProvider)?.TakeBottomBar() as UIElement;
+        // A119: 모듈 고유 패널 호스트를 비운다 — ModuleBarHost 교체와 같은 자리. 새 뷰가 패널
+        // 제공자면 아래 SetContentState → ApplyOverlayStates가 새 콘텐츠를 다시 얹는다.
+        ClearModulePanels();
         AttachDriveStrip(view as IDriveStripHost); // A22: 하단 바 드라이브 줄 주입(파일 없을 때만 표시)
         CurrentModuleId = module.Id;
         IsUntouched = false;
@@ -1342,6 +1359,27 @@ public sealed partial class MainWindow : Window
     /// (v0.25.0 탐색기 → A93)와 A81 빈 도크 오버레이가 공유하는 조건.
     /// </summary>
     private bool IsEmptyFileModule => _currentFilePath is null && IsFileModule(_currentModule);
+
+    /// <summary>
+    /// 현재 뷰가 좌/우 패널 콘텐츠를 직접 내주는 뷰(ISidePanelProvider — A119, 지금은 정보 모듈뿐)면
+    /// 그 계약, 아니면 null. 파일 오버레이 대신 SidePanelHost에 모듈 콘텐츠를 얹는 분기의 기준이다.
+    /// </summary>
+    private ISidePanelProvider? PanelProviderView => ModuleHost.Content as ISidePanelProvider;
+
+    /// <summary>
+    /// 좌/우 패널(오버레이/사이드바) 컨텍스트가 있는가 — 게이트 확장의 단일 판정(A119):
+    /// 파일 열림 · 빈 파일 모듈(A81) · 패널 제공 뷰(A119 — 정보 모듈). F1/F2 소비·상태 전이·
+    /// 경계 버튼이 전부 이걸 탄다. 남은 예외 = 설정·빈 셸·미지원 안내(종전대로 무소비·무동작).
+    /// </summary>
+    private bool HasPanelContext
+        => _currentFilePath is not null || IsEmptyFileModule || PanelProviderView is not null;
+
+    /// <summary>좌 패널이 화면에 떠 있는가 — 파일 컨텍스트는 ListOverlay, 패널 제공 뷰(A119)는
+    /// LeftPanelHost가 표면이다(도크 폭·경계 버튼 x 계산 공용 판정).</summary>
+    private bool LeftPanelIsOpen => PanelProviderView is not null ? LeftPanelHost.IsOpen : ListOverlay.IsOpen;
+
+    /// <summary>우 패널 판정 — 위와 대칭(ContentInfoOverlay/RightPanelHost).</summary>
+    private bool RightPanelIsOpen => PanelProviderView is not null ? RightPanelHost.IsOpen : InfoOverlay.IsOpen;
 
     /// <summary>
     /// 빈 상태의 시작 폴더: 그 모듈의 마지막 폴더(v0.55.0), 없으면 바탕화면.
@@ -1544,8 +1582,9 @@ public sealed partial class MainWindow : Window
             OnOverlaySideDown(side);
         }
         // 오버레이 컨텍스트가 있으면 소비한다(오토리피트 포함) — F1/F2는 시스템 조합이 아니고
-        // 다른 수신자도 없다. 컨텍스트 없음(설정·H/W·미지원 안내)은 종전대로 무소비(A119 전까지 현행 유지).
-        if (_currentFilePath is not null || IsEmptyFileModule) e.Handled = true;
+        // 다른 수신자도 없다. A119: 패널 제공 뷰(정보 모듈)도 컨텍스트다(HasPanelContext) —
+        // 컨텍스트 없음(설정·빈 셸·미지원 안내)만 종전대로 무소비.
+        if (HasPanelContext) e.Handled = true;
     }
 
     /// <summary>
@@ -1562,10 +1601,10 @@ public sealed partial class MainWindow : Window
     {
         if (IsOpenFileBrowsing) return; // A90 keymap S4: 좌/우 키 = 무동작 — OnRootKeyDown 가드의 이중 방어선
 
-        // 오버레이 컨텍스트가 없으면(설정·H/W·미지원 파일 안내) 판정도 없다. 파일 없이 연
-        // 파일 모듈(빈 모듈 상태)은 A81부터 컨텍스트에 포함 — 기본 도크를 키로 닫고
-        // 다시 여는 입력이 성립해야 한다.
-        if (_currentFilePath is null && !IsEmptyFileModule) return;
+        // 오버레이 컨텍스트가 없으면(설정·빈 셸·미지원 파일 안내) 판정도 없다. 파일 없이 연
+        // 파일 모듈(빈 모듈 상태)은 A81부터, 패널 제공 뷰(정보 모듈)는 A119부터 컨텍스트에
+        // 포함 — 기본 도크를 키로 닫고 다시 여는 입력이 성립해야 한다.
+        if (!HasPanelContext) return;
 
         var now = DateTime.UtcNow;
         if ((now - side.LastTapDown).TotalMilliseconds < OverlayDoubleTapMs)
@@ -1696,8 +1735,8 @@ public sealed partial class MainWindow : Window
                     ExitOpenFileBrowsing(restore: true);
                 }
                 return;
-            default:            // None — 오버레이 컨텍스트 없음(빈 셸·설정·H/W): 무동작, 삼키지도 않는다
-                return;
+            default:            // None — 오버레이 컨텍스트 없음(빈 셸·설정·미지원 안내): 무동작, 삼키지도 않는다
+                return;         // (정보 모듈은 A119부터 위 S2/S3* 분기로 일괄 토글이 성립한다)
         }
     }
 
@@ -1766,7 +1805,8 @@ public sealed partial class MainWindow : Window
     ///    S1 썸네일 탐색기(마지막 폴더 = 방금 닫은 파일의 폴더, v0.55.0)가 전부 그 경로 몫이다.
     ///    defaultSidebars는 기본 false — A109의 사이드바 기본 재적용을 타지 않아
     ///    좌/우 열림·닫힘 상태가 닫기 직전 그대로 보존된다(A112 요구).
-    /// ④ 콘텐츠 없음(S1·빈 셸·설정·H/W·미지원 안내) = 무동작, 소비도 안 한다.
+    /// ④ 콘텐츠 없음(S1·빈 셸·설정·정보 모듈·미지원 안내) = 무동작, 소비도 안 한다
+    ///    (정보 모듈은 A119부터 패널 컨텍스트지만 닫을 콘텐츠(파일)가 없는 점은 그대로다).
     /// </summary>
     private bool TryNavigateBack()
     {
@@ -1828,10 +1868,14 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnRootPointerIntervened(object sender, PointerRoutedEventArgs e)
     {
+        // A119: 모듈 패널 호스트 안의 클릭·스크롤도 "그 오버레이 자신 안"의 예외에 포함 —
+        // F1을 쥔 채 정보 모듈 좌 패널(그래프)을 만지는 흐름이 파일 리스트와 같은 규칙을 탄다.
         var origin = e.OriginalSource as DependencyObject;
         var changed = false;
-        if (!IsWithin(origin, ListOverlay)) changed |= CancelHoldCore(_listSide);
-        if (!IsWithin(origin, InfoOverlay)) changed |= CancelHoldCore(_infoSide);
+        if (!IsWithin(origin, ListOverlay) && !IsWithin(origin, LeftPanelHost))
+            changed |= CancelHoldCore(_listSide);
+        if (!IsWithin(origin, InfoOverlay) && !IsWithin(origin, RightPanelHost))
+            changed |= CancelHoldCore(_infoSide);
         _listSide.LastTapDown = DateTime.MinValue; // 2연타 카운트 리셋
         _infoSide.LastTapDown = DateTime.MinValue;
         if (changed) ApplyOverlayStates();
@@ -1919,6 +1963,18 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// A119: 모듈 고유 좌/우 패널 호스트를 비운다 — 모듈 뷰 교체 지점 3곳(ShowModule·설정 진입·
+    /// 미지원 안내)에서 ModuleBarHost.Content 교체와 같은 자리에서 부른다. 비우지 않으면 이전
+    /// 모듈의 패널 콘텐츠가 셸 호스트(트리)에 남아 다음 모듈 위에 뜨고(A59급 회귀), 이전 뷰의
+    /// 요소 수명도 샌다. 같은 모듈 재선택은 OpenModuleById의 no-op 가드로 여기 오지 않는다.
+    /// </summary>
+    private void ClearModulePanels()
+    {
+        LeftPanelHost.ClearContent();
+        RightPanelHost.ClearContent();
+    }
+
+    /// <summary>
     /// 사이드바(불투명 도크)가 차지하는 전폭 대비 % — 전 상태 공통 25 (양쪽이면 3구획 25:50:25).
     /// A116(v0.135.0): 종전에는 "S1 = 25 / 콘텐츠 상태 = 30(A57의 3:4:3 유산)"의 상태별 2값이라,
     /// 파일을 열거나 S4('오픈 파일')로 들어가면 같은 3구획 화면이 소리 없이 30:40:30이 됐다 —
@@ -1930,15 +1986,19 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 상태 머신 → 화면 반영 (A58). 표시 여부·모드(반투명/불투명)·안내 문구·도크 컬럼을
-    /// 한 곳에서 일괄 갱신한다. 오버레이 컨텍스트가 없으면(빈 셸·설정·H/W) 상태와 무관하게 숨긴다 —
-    /// 상태 자체는 남아 있어 다음 파일을 열면 같은 모드로 되살아난다(기존 고정 유지 규칙).
+    /// 한 곳에서 일괄 갱신한다. 오버레이 컨텍스트가 없으면(빈 셸·설정·미지원 안내) 상태와 무관하게
+    /// 숨긴다 — 상태 자체는 남아 있어 다음 파일을 열면 같은 모드로 되살아난다(기존 고정 유지 규칙).
     /// 파일 없이 연 파일 모듈(빈 모듈 상태)도 컨텍스트다(A81): 좌측 리스트는 모듈 시작 폴더,
     /// 우측 정보는 "No file open" 플레이스홀더를 보여준다.
+    /// A119: 패널 제공 뷰(ISidePanelProvider — 정보 모듈)도 컨텍스트다 — 같은 좌/우 상태를 파일
+    /// 오버레이 대신 모듈 콘텐츠 호스트(SidePanelHost)로 표시한다. 두 표면이 같은 화면에 동시에
+    /// 뜨는 조합은 없다(패널 제공 뷰 = 파일 없음 → 파일 오버레이 조건이 거짓).
     /// </summary>
     private void ApplyOverlayStates()
     {
         var hasFile = _currentFilePath is not null;
         var emptyModule = IsEmptyFileModule; // 파일 없이 연 파일 모듈 — A81부터 오버레이 컨텍스트
+        var panelView = PanelProviderView;   // A119: 모듈 고유 패널(정보 모듈) — 아래 호스트 절이 소비
         var listShow = (hasFile || emptyModule) && _listSide.State != OverlayState.Closed;
         var infoShow = (hasFile || emptyModule) && _infoSide.State != OverlayState.Closed;
 
@@ -1961,26 +2021,54 @@ public sealed partial class MainWindow : Window
                 ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
             pinned: _infoSide.State == OverlayState.TranslucentPinned);
 
+        // A119: 패널 제공 뷰(정보 모듈) — 같은 좌/우 상태를 모듈 콘텐츠 호스트로 표시한다.
+        // 콘텐츠(그래프·스펙)는 뷰가 생성·소유하고(같은 인스턴스 반복 반환) 셸은 얹기만 한다.
+        // 반투명/불투명 배경·힌트·홀드 클릭 통과는 SidePanelHost가 파일 오버레이와 같은 규칙으로
+        // 재현한다. SetState는 표시 여부와 무관하게 매번 민다(오버레이들과 같은 순서 관용구).
+        if (panelView is not null && _listSide.State != OverlayState.Closed)
+            LeftPanelHost.ShowContent(panelView.GetLeftPanel() as UIElement);
+        else
+            LeftPanelHost.Hide();
+        LeftPanelHost.SetState(
+            _listSide.State == OverlayState.OpaqueDocked
+                ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
+            pinned: _listSide.State == OverlayState.TranslucentPinned);
+        if (panelView is not null && _infoSide.State != OverlayState.Closed)
+            RightPanelHost.ShowContent(panelView.GetRightPanel() as UIElement);
+        else
+            RightPanelHost.Hide();
+        RightPanelHost.SetState(
+            _infoSide.State == OverlayState.OpaqueDocked
+                ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
+            pinned: _infoSide.State == OverlayState.TranslucentPinned);
+
         // 사이드바(OpaqueDocked — A108 용어)만 실제 공간을 차지한다: 도크 컬럼을 키워
         // 메인(ModuleHost/ExplorerHost)을 반대쪽으로 축소한다.
         // 도크 폭 = 전 상태 공통 SidebarPercent(A116, v0.135.0 — 종전 "S1 25 / 콘텐츠 30"의
         // 상태별 2값을 폐지: 같은 3구획 화면이 파일 열기·S4 진입에서 소리 없이 30:40:30으로
         // 바뀌던 것이 A116 관측의 원인이었다). 패널 내부 별 분할(SetPanelPercent)을
         // 같은 %로 맞춰야 사이드바에서 도크 컬럼과 픽셀 단위로 정렬된다.
+        // A119: 모듈 패널 호스트도 같은 % — 열림 판정은 지금 표면(파일 오버레이/호스트)을 따라간다
+        // (LeftPanelIsOpen·RightPanelIsOpen).
         var dockPercent = SidebarPercent;
         ListOverlay.SetPanelPercent(dockPercent);
         InfoOverlay.SetPanelPercent(dockPercent);
-        var left = ListOverlay.IsOpen && _listSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
-        var right = InfoOverlay.IsOpen && _infoSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
+        LeftPanelHost.SetPanelPercent(dockPercent);
+        RightPanelHost.SetPanelPercent(dockPercent);
+        var left = LeftPanelIsOpen && _listSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
+        var right = RightPanelIsOpen && _infoSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
         LeftDockColumn.Width = new GridLength(left, GridUnitType.Star);
         RightDockColumn.Width = new GridLength(right, GridUnitType.Star);
         CenterColumn.Width = new GridLength(10 - left - right, GridUnitType.Star);
 
-        // A60 3차: 사이드바 점유 상태를 모듈 뷰에도 민다(Core ISidebarAwareView — 정보 모듈의
-        // 센터 그래프 그리드가 열 수 4/8을 이 신호로 정한다. 판정은 아래 A93 썸네일과 동일:
-        // 불투명 도크 양쪽 = true). 이 메서드가 사이드바 상태 변경의 단일 종착점이라 여기 한 곳이면
-        // 되고, 미구현 뷰(다른 모듈·설정)는 캐스트 실패로 no-op이다.
-        (ModuleHost.Content as ISidebarAwareView)?.SetSidebarsState(left > 0 && right > 0);
+        // A60 3차 → A119 개정: 공간을 차지 중인 도크 수(0/1/2)를 모듈 뷰에 민다(Core
+        // ISidebarAwareView — 정보 모듈의 센터 타일 그리드가 열 수 4/3/2를 이 신호로 정한다.
+        // 구 bool "양쪽 열림"의 4/8 매핑은 폐지). 오버레이(반투명)는 메인 폭을 안 줄이므로 세지
+        // 않는다(도크만 — A93 썸네일과 같은 해석). 이 메서드가 사이드바 상태 변경의 단일
+        // 종착점이라(F1/F2·2연타·Enter·경계 버튼·모듈 진입 기본 전부 경유) 재푸시 누락이 없고,
+        // 미구현 뷰(다른 모듈·설정)는 캐스트 실패로 no-op이다.
+        var dockCount = (left > 0 ? 1 : 0) + (right > 0 ? 1 : 0);
+        (ModuleHost.Content as ISidebarAwareView)?.SetSidebarsState(dockCount);
 
         // A93: S1 중앙은 항상 썸네일 뷰다 — A81의 "좌 도크가 불투명이면 중앙 탐색기 숨김"
         // (중복 목록 제거)을 대체한다. 중앙이 리스트가 아니라 타일이라 중복으로 보이지 않는다.
@@ -2038,16 +2126,16 @@ public sealed partial class MainWindow : Window
     {
         var width = CenterArea.ActualWidth;
         if (width <= 0) return;
-        var context = _currentFilePath is not null || IsEmptyFileModule;
-        if (!context || IsOpenFileBrowsing) // S4에서는 표시 안 함(keymap) — A86 훅이 A90에서 살았다
+        // A119: 패널 제공 뷰(정보 모듈)도 컨텍스트(HasPanelContext) — 경계 버튼이 같은 규칙으로 뜬다.
+        if (!HasPanelContext || IsOpenFileBrowsing) // S4에서는 표시 안 함(keymap) — A86 훅이 A90에서 살았다
         {
             HideEdgeButtons();
             return;
         }
 
         var dockPercent = SidebarPercent; // ApplyOverlayStates의 도크 폭과 동일 상수(A116 정합)
-        _leftEdgeX = ListOverlay.IsOpen ? width * dockPercent / 100 : 0;
-        _rightEdgeX = InfoOverlay.IsOpen ? width - width * dockPercent / 100 : width;
+        _leftEdgeX = LeftPanelIsOpen ? width * dockPercent / 100 : 0;
+        _rightEdgeX = RightPanelIsOpen ? width - width * dockPercent / 100 : width;
         LeftEdgeButton.Margin = new Thickness(Math.Max(0, _leftEdgeX - EdgeButtonOverlap), 0, 0, 0);
         RightEdgeButton.Margin = new Thickness(0, 0, Math.Max(0, width - _rightEdgeX - EdgeButtonOverlap), 0);
         // 글리프 = 누르면 일어날 일의 방향: 사이드바가 아니면 "사이드바로 세우기"(안쪽), 사이드바면 닫기(바깥쪽).
@@ -2061,8 +2149,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnRootPointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        var context = _currentFilePath is not null || IsEmptyFileModule;
-        if (!context || IsOpenFileBrowsing)
+        if (!HasPanelContext || IsOpenFileBrowsing) // A119: 패널 제공 뷰 포함 — UpdateEdgeButtons와 동일 판정
         {
             HideEdgeButtons();
             return;
@@ -2129,7 +2216,9 @@ public sealed partial class MainWindow : Window
     /// 하단 바 '오픈 파일' 버튼 (A90 — 시작 메뉴 버튼 바로 옆): 네이티브 파일 대화상자를 띄우지 않고
     /// 자체 탐색기를 쓴다. 분배는 keymap '오픈 파일' 행 그대로 — S1 = "이미 열려 있음" 강조만(A90-b,
     /// 복귀 개념 없음) / S2·S3* = S4 진입 / S4 = 진입 전 상태로 복귀(재누름).
-    /// None(빈 셸·설정·H/W·미지원 안내)은 keymap 표 밖 — 띄울 탐색기 컨텍스트가 없어 무동작(구현 결정).
+    /// None(빈 셸·설정·미지원 안내)은 keymap 표 밖 — 띄울 탐색기 컨텍스트가 없어 무동작(구현 결정).
+    /// A119: 정보 모듈은 S2/S3*로 분류되지만 파일 컨텍스트가 없어 EnterOpenFileBrowsing의
+    /// 방어선이 걸러 준다 — 결과는 종전(None 시절)과 같은 무동작.
     /// 전체화면 중에는 하단 바가 통째로 숨어(AppWindow.Changed) 이 버튼 자체를 누를 수 없다 —
     /// 사양 밖이라 특별 처리하지 않는다(A90 확인 사항).
     /// </summary>
@@ -2167,7 +2256,9 @@ public sealed partial class MainWindow : Window
     private void EnterOpenFileBrowsing()
     {
         if (_openFileBrowsing) return;
-        if (_currentFilePath is null || _currentModule is null) return; // S2·S3* 전용 — 방어선
+        // 파일 컨텍스트 전용 — A119부터 정보 모듈도 S2/S3*로 분류되므로 이 가드가 실동작한다
+        // (파일이 없어 띄울 좌 리스트 폴더가 없다 — '오픈 파일'은 무동작).
+        if (_currentFilePath is null || _currentModule is null) return;
         ResetOverlayInput(); // Holding(키 홀드 과도 상태)이 스냅샷에 섞이지 않게 — 이후는 안정 상태 3종뿐
         _s4Restore = (_listSide.State, _infoSide.State);
         if (_listSide.State == OverlayState.Closed) _listSide.State = OverlayState.TranslucentPinned;

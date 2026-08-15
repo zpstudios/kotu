@@ -20,39 +20,23 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 3구획(A60 3차): 좌 대형 그래프 1* / 센터 그래프 그리드 2* / 우 스펙 텍스트 1*
-             (셸 사이드바 25:50:25와 동형). 전부 star라 창 크기·DPI와 무관하게 같은 비율로
-             늘어나고, A40 최소 720×540에서도 꽉 찬다. 전체화면(F11)도 같은 3구획이다 —
-             v0.42.0 섹션 카드 대시보드는 A60 3차에서 폐기(우측 텍스트가 상시 보여 중복). -->
-        <Grid Grid.Row="0" ColumnSpacing="10" Padding="12,8,12,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1*" />
-                <ColumnDefinition Width="2*" />
-                <ColumnDefinition Width="1*" />
-            </Grid.ColumnDefinitions>
-
-            <!-- 좌: 선택 그래프 확대(줄당 1개, 최대 2 = 센터에서 선택) — 시간 창 10초(A71·A72 흡수).
-                 행·내용은 코드 RebuildSelectionGraphs가 채우고, 선택 0개면 안내 1줄만 보인다. -->
-            <Grid Grid.Column="0">
-                <Grid x:Name="BigGraphPanel" RowSpacing="10" />
-                <TextBlock x:Name="BigGraphHint" Text="Select graphs in the grid"
-                           Opacity="0.55" FontSize="12" TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Grid>
-
-            <!-- 센터: 전 채널(10개) 그래프 타일 그리드 — 시간 창 30초. 클릭 = 선택 토글(최대 2),
-                 드래그 = 순서 변경(hardware.channelOrder). 열 수는 셸 사이드바 신호
-                 (ISidebarAwareView: 양쪽 열림 4 / 아니면 8 — A93 썸네일 패턴)를 따르며,
-                 타일은 코드 LayoutCenterTiles가 star 칸에 채운다. -->
-            <Grid x:Name="CenterGrid" Grid.Column="1" ColumnSpacing="8" RowSpacing="8" />
-
-            <!-- 우: 하드웨어 스펙 텍스트 리스트 — 구 일반 모드 리스트가 이 구획으로 이동(A60 3차).
-                 섹션·항목은 코드 Render()가 채운다(서명 생략 로직 그대로). -->
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="Root" Spacing="2" Padding="0,0,8,16" />
-            </ScrollViewer>
-        </Grid>
+        <!-- 센터(A119, v0.145.0 — A60 3차의 자체 3구획을 대체): 뷰 본체 = 전 채널(10) 정사각형
+             타일 그리드 하나뿐이다. 구 좌(선택 대형 그래프)·우(스펙 텍스트) 구획은 셸 좌/우
+             패널(사이드바/오버레이) 콘텐츠로 이사했다 — 코드가 분리 생성해 소유하고
+             ISidePanelProvider(GetLeftPanel/GetRightPanel)로 셸에 내준다(BuildSidePanels 참조.
+             XAML에 두면 셸 호스트로 옮길 때 reparent가 필요해져 처음부터 코드 생성으로 택했다).
+             타일 = 정사각형: 한 변은 코드 ApplySquareTileSizes가 실폭·열 수로 계산해 명시
+             대입한다. 열 수 = 셸 도크 수 신호(ISidebarAwareView: 도크 2 = 2열 / 1 = 3열 /
+             0 = 4열 — 반투명 오버레이는 계수 밖). 행이 Auto라 세로로 넘치면 이 ScrollViewer가
+             스크롤한다(정사각형 유지·축소 없음 — 2열 5줄 등). 가로 스크롤은 잠가 콘텐츠 폭이
+             뷰포트 폭을 따르게 한다(한 변 계산의 전제). 클릭 = 선택 토글(최대 2), 드래그 =
+             순서 변경(hardware.channelOrder)은 그대로. 전체화면(F11)도 같은 화면이다. -->
+        <ScrollViewer Grid.Row="0" Padding="12,8,12,10"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollMode="Disabled"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid x:Name="CenterGrid" ColumnSpacing="8" RowSpacing="8" />
+        </ScrollViewer>
 
         <!-- 센서 스트립(A17→v0.64.2 개편): 평소엔 비어 있고(Collapsed), ① 비관리자 안내(AdminRow)가
              필요할 때 ② 전체화면(하단 바가 숨는 동안 SensorGrid의 긴 그래프 2개가 여기로 옮겨온다)일
