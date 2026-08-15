@@ -250,6 +250,12 @@ public sealed partial class MainWindow : Window
         _tray.ExitAllRequested += _manager.CloseAll;
         Closed += (_, _) => _tray.Dispose();
 
+        // A105 ①: 인스턴스 고유 AppUserModelID — 태스크바 그룹을 창(인스턴스)별로 분리한다.
+        // 시퀀스는 A100 트레이 슬롯(창 생성 단조 증가·수명 불변)을 그대로 쓴다 — 표시 번호(A2)는
+        // 중간 창이 닫히면 재배정되어 그룹이 재편되므로 부적격. 창 표시(Activate) 전인 여기서
+        // 1회 지정하고, 실패는 TaskbarIdentity가 전부 조용히 무시한다(공유 AUMID로 후퇴).
+        Integration.TaskbarIdentity.Apply(this, _tray.Slot);
+
         // A69: 최소화 = 트레이로 숨김 (전 모듈). 감지는 AppWindow.Changed의 프레젠터 상태 검사 —
         // A55 TrackNormalBounds가 이미 실증한 이벤트 경로. WindowMinSize 서브클래스에
         // WM_SYSCOMMAND(SC_MINIMIZE)를 더하는 대안은 최소화 애니메이션 전에 개입하게 되는 데다
@@ -2287,6 +2293,15 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private Windows.UI.Color? _moduleIconRing;
 
+    /// <summary>
+    /// 창(태스크바) 아이콘 하단의 모듈 3자 표기 (A105 ②, v0.143.0) — 없으면 null.
+    /// 출처는 트레이 유휴 표기와 같은 <see cref="IdleTrayLabel"/> 단일 표다(중복 표 금지).
+    /// 액센트·링과 달리 <b>모듈 ID 기준</b>(아이콘 파일 폴백과 무관): 모듈 .ico가 없어 중립
+    /// 아이콘으로 폴백해도 "어느 모듈의 창인가"라는 사실은 그대로라, 모듈 ID로 그리는
+    /// 트레이(A54 UpdateTrayIcon)와 같은 축을 유지한다.
+    /// </summary>
+    private string? _moduleIconLabel;
+
     /// <summary>타이틀바·작업표시줄·트레이 아이콘을 현재 모듈 색 KOTU 아이콘으로 교체(v0.26.0).</summary>
     private void ApplyWindowIcon(string? moduleId)
     {
@@ -2309,6 +2324,7 @@ public sealed partial class MainWindow : Window
         _moduleIconPath = path;
         _moduleIconAccent = path == IconPath ? null : Branding.ModuleAccent(moduleId); // A79
         _moduleIconRing = path == IconPath ? null : Branding.IconRing(moduleId);       // A102
+        _moduleIconLabel = IdleTrayLabel(moduleId) is { Length: > 0 } code ? code : null; // A105 ②
         RefreshShellIcons();
     }
 
@@ -2327,7 +2343,8 @@ public sealed partial class MainWindow : Window
         if (_moduleIconPath is { } path && File.Exists(path))
         {
             AppWindow.SetIcon(path);
-            WindowIcon.Apply(this, path, _moduleIconAccent, _moduleIconRing);
+            // A105 ②: 32px 창 아이콘 하단에 모듈 3자 표기(_moduleIconLabel)까지 합성한다.
+            WindowIcon.Apply(this, path, _moduleIconAccent, _moduleIconRing, _moduleIconLabel);
         }
         UpdateTrayIcon();
     }
@@ -2379,6 +2396,8 @@ public sealed partial class MainWindow : Window
     /// 두 경로의 결과가 같아야 하니 표기를 바꾸면 뷰의 IdleLabel도 함께 바꿀 것
     /// (BrandName "KOTU-info"와 정합. 2자 "HW"는 3자 규칙에서 벗어나고 "HWM"은 조어라 채택 안 함).
     /// 표에 없는 화면(설정·미지원 파일 안내)은 빈 문자열 → 중립 모듈 아이콘 폴백.
+    /// A105 ②(v0.143.0): 창(태스크바) 아이콘 하단 3자 표기(<see cref="_moduleIconLabel"/>)도
+    /// 이 표를 단일 출처로 재사용한다 — 표기를 바꾸면 트레이·창 아이콘이 함께 바뀐다.
     /// </summary>
     private static string IdleTrayLabel(string? moduleId) => moduleId switch
     {

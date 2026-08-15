@@ -35,6 +35,12 @@ internal sealed class TrayIcon : IDisposable
 
     private readonly uint _uid;
     private readonly string _className;
+
+    /// <summary>
+    /// 이 아이콘의 A100 슬롯 번호(창 생성 단조 시퀀스·수명 불변). A105 ①이 창별
+    /// AppUserModelID의 시퀀스로 재사용한다 — 트레이 식별과 태스크바 식별이 한 시퀀스로 움직인다.
+    /// </summary>
+    internal int Slot { get; }
     private readonly WndProcDelegate _wndProc; // 델리게이트 GC 방지 — 반드시 필드로 유지
     private readonly uint _taskbarCreatedMsg;
     private readonly IntPtr _hwnd;
@@ -63,6 +69,7 @@ internal sealed class TrayIcon : IDisposable
         // A101에서 SensorTray가 폐지됐어도 100번대는 유지 — 사용자 기기에 남은 옛 항목과의
         // 분리라는 근거가 그대로다).
         var slot = System.Threading.Interlocked.Increment(ref _slotSeq);
+        Slot = slot;
         _uid = (uint)(100 + slot);
         _className = Branding.AppName + "TrayWnd_" + slot;
         _wndProc = WndProc;
@@ -142,8 +149,10 @@ internal sealed class TrayIcon : IDisposable
         var size = Math.Max(16, GetSystemMetrics(SmCxSmIcon));
         if (iconPath is not null)
         {
+            // label: null — 트레이 글자는 TrayStatusIcon(A54) 소관이라 이 폴백 경로는 무글자.
+            // A105 ②의 3자 표기는 창(태스크바) 아이콘 전용이다(트레이 무수정 — 구현 시 결정).
             icon = ring is { } ringColor
-                ? InstanceIcon.GetComposed(iconPath, size, accent, ringColor)
+                ? InstanceIcon.GetComposed(iconPath, size, accent, ringColor, label: null)
                 : BrandIcons.GetBranded(iconPath, size, accent);
         }
         if (icon == IntPtr.Zero) (icon, owns) = LoadTrayIcon(iconPath);
