@@ -38,6 +38,12 @@
             TextChanged="OnEditorTextChanged"
             KeyDown="OnEditorKeyDown" />
 
+        <!-- A115: 장식 레이어(라인 가이드·¶·EOF) — EditorBox 위(z)에 겹치되 IsHitTestVisible=False로
+             입력 불간섭. 그리기는 EditorDecor(코드)가 전담한다. 포커스된 TextBox는 템플릿 Focused
+             상태가 불투명 배경을 그려(A80 참고) 아래(z) 레이어는 가려진다 — 그래서 위에 얹고
+             아주 옅게 긋는다(색·불투명도 상수는 EditorDecor 상단 한 곳). -->
+        <Canvas x:Name="DecorLayer" IsHitTestVisible="False" />
+
         <!-- PDF 페이지 뷰(A16, PdfPane)는 코드에서 지연 생성해 RootGrid 맨 아래(z 순서상 뒤)에 꽂는다 -->
         <TextBlock
             x:Name="PlaceholderText"

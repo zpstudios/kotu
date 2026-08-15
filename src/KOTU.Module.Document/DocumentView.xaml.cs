@@ -86,6 +86,10 @@ public sealed partial class DocumentView : UserControl,
     private string _baselineText = string.Empty; // ⓒ: 더티 판정 기준(\n 정규화) — 저장 성공 시 재기준화
     private bool _saving;                  // 저장 흐름(대화상자 포함) 중복 진입 방지 — ContentDialog는 동시 1개
 
+    // A115: 라인 가이드·비가시 문자 장식. 자체 무효화(TextChanged/SizeChanged/ViewChanged)로 돌고
+    // 실패하면 스스로 꺼진다 — 이 뷰는 모드 전환(열기·PDF) 시점만 알려 주면 된다.
+    private readonly EditorDecor _decor;
+
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU document worker");
 
@@ -96,6 +100,7 @@ public sealed partial class DocumentView : UserControl,
     {
         InitializeComponent();
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
+        _decor = new EditorDecor(this, EditorBox, DecorLayer); // A115: 에디터 장식(가이드·¶·EOF)
 
         // A22(v0.108.0): A49의 "좁으면 드라이브 텍스트 숨김"(임계 760) 규칙은 제거했다 —
         // 드라이브 표시가 Auto 폭 텍스트에서 남는 폭(star 칸)을 쓰는 슬롯으로 바뀌어
@@ -194,6 +199,7 @@ public sealed partial class DocumentView : UserControl,
         SetDirty(false);
 
         EditorBox.Visibility = Visibility.Visible;
+        _decor.Invalidate(); // A115: 새 문서·표시 전환이 레이아웃에 반영된 뒤 장식을 다시 그린다
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
         _shownPath = path;
@@ -228,6 +234,7 @@ public sealed partial class DocumentView : UserControl,
         _dirtyTimer?.Stop();
         SetDirty(false);
         EditorBox.Visibility = Visibility.Collapsed;
+        _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다
         PlaceholderText.Visibility = Visibility.Collapsed;
         _pdfPane.Visibility = Visibility.Visible;
         PageInfoText.Visibility = Visibility.Visible;
