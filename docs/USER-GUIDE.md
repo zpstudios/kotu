@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.139.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.144.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -214,23 +214,23 @@ These work in every module.
 | ``Alt+` `` | open the menu (bottom left) |
 | `Alt+1` … `Alt+7` | switch module — 1 All Readable · 2 Image · 3 Video · 4 Audio · 5 Document · 6 Archive · 7 H/W Info |
 | `Alt+0` | Settings |
-| `Alt+Z` | left panel |
-| `Alt+X` | right panel |
+| `F1` | left panel |
+| `F2` | right panel |
 | `Enter` | open or close both panels at once |
 | `Esc` | leave full screen, or leave the Open file browser |
 | `Shift+N` | new window of the module you are looking at |
 | `F11` | full screen |
 | `Ctrl+S` | save (text document) |
 
-The `Alt` combinations work even while you are typing in a text box, because they produce no
-character of their own. `Shift+N` gives way to typing.
+The `Alt` combinations and `F1` / `F2` work even while you are typing in a text box, because they
+produce no character of their own. `Shift+N` gives way to typing.
 
 Switching module with `Alt+1` … `Alt+7` or from the menu always arrives with both sidebars open.
 Choosing the module you are already in changes nothing.
 
-### 3.2 Panels: how `Alt+Z` and `Alt+X` behave
+### 3.2 Panels: how `F1` and `F2` behave
 
-`Alt+Z` drives the left panel, `Alt+X` the right one. Both react to *how* you press them.
+`F1` drives the left panel, `F2` the right one. Both react to *how* you press them.
 
 | Input | Result |
 |---|---|
@@ -239,13 +239,16 @@ Choosing the module you are already in changes nothing.
 | Press twice quickly | the panel docks as an opaque **sidebar**, making the centre narrower |
 | Press once while it is open | that panel closes |
 | Press twice quickly while it is open | it stays closed |
-| `Alt+Z` and `Alt+X` together | both sides do all of the above at once, in any press order |
+| `F1` and `F2` together | both sides do all of the above at once, in any press order |
 | `Enter` | closes both if either is open; opens them again in the arrangement you last had |
 
-When a panel is pinned or docked, a short hint appears next to it — *Pinned - press Alt+Z to close*,
-*Sidebar - press Alt+Z to close* — and fades after a couple of seconds.
+When a panel is pinned or docked, a short hint appears next to it — *Pinned - press F1 to close*,
+*Sidebar - press F1 to close* — and fades after a couple of seconds.
 
-Inside the Open file browser, `Alt+Z` and `Alt+X` do nothing; `Esc` gets you out.
+One exception: while the file browser has the focus **and a file is selected**, `F2` renames that
+file instead of calling the right panel — renaming keeps its usual Windows key.
+
+Inside the Open file browser, `F1` and `F2` do nothing; `Esc` gets you out.
 
 ### 3.3 Letter keys, per module
 
@@ -293,7 +296,7 @@ box or while you are typing to jump through the file list.
 | Key | Action |
 |---|---|
 | `Enter` | open the selected item |
-| `F2` | rename |
+| `F2` | rename the selected item (with nothing selected, `F2` calls the right panel as usual) |
 | `Delete` | move to the Recycle Bin |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | copy / cut / paste |
 | `Ctrl+A` | select all |
@@ -338,7 +341,7 @@ otherwise its name, size, date and folder. You can drop a file onto this panel t
 
 Ways to bring a panel up:
 
-- `Alt+Z` / `Alt+X`, as described in [3.2](#32-panels-how-altz-and-altx-behave);
+- `F1` / `F2`, as described in [3.2](#32-panels-how-f1-and-f2-behave);
 - `Enter` for both at once;
 - the **edge button** — move the pointer close to the left or right edge of the window and a small
   button appears there. Clicking it docks or undocks that sidebar.
