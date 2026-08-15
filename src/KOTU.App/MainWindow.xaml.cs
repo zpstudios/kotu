@@ -194,6 +194,13 @@ public sealed partial class MainWindow : Window
             new PointerEventHandler(OnRootPointerIntervened), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.PointerWheelChangedEvent,
             new PointerEventHandler(OnRootPointerIntervened), handledEventsToo: true);
+        // A112: 마우스 뒤로가기(XButton1) = '뒤로'(전체화면 해제 → S4 복귀 → 콘텐츠 닫기 → S1).
+        // 위 OnRootPointerIntervened(홀드 취소 판정)와 같은 PointerPressed지만 역할이 달라
+        // 핸들러를 분리해 얹는다 — 등록 순서상 취소 판정이 먼저 돌고, 둘은 서로 독립이라 무해
+        // (XButton1 눌림도 "포인터 개입"으로 홀드를 취소하는 A58 규칙은 그대로 살아 있다).
+        // handledEventsToo: 리스트·뷰가 눌림을 소비해도 전역 '뒤로'는 셸이 받아야 한다.
+        RootLayout.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnRootPointerBack), handledEventsToo: true);
         // A86 경계 버튼: 마우스가 경계 근처에 왔을 때만 보이므로 이동·이탈을 창 루트에서 감시한다
         // (handledEventsToo — 오버레이·모듈 뷰가 이동 이벤트를 소비해도 근접 판정은 계속 돌아야 한다).
         RootLayout.AddHandler(UIElement.PointerMovedEvent,
@@ -1491,6 +1498,14 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (e.Key == VirtualKey.GoBack)
+        {
+            OnShellBack(e); // A112: Browser Back 키 = 마우스 XButton1과 같은 '뒤로' 분배
+            // 위 IsTextInputFocused 분기가 텍스트 입력 가드를 겸한다(타이핑 중 GoBack은 여기 안 온다).
+            MarkAltUseIfConsumed(e); // Esc·Enter와 같은 규칙 — Alt를 쥔 채 소비했으면 Alt up도 소비
+            return;
+        }
+
         // 다른 키가 함께 눌림 → 진행 중 홀드 세션 취소(이미 떠 있으면 즉시 내림) +
         // 2연타 카운트 리셋 (A58 공통 안전장치 유지 — Shift+더블클릭 새 인스턴스·Shift+N·
         // Alt+숫자 모듈 전환 등 조합 입력이 오버레이를 물지 않게. 단독 Z/X도 A107부터는
@@ -1669,6 +1684,74 @@ public sealed partial class MainWindow : Window
         if (!IsOpenFileBrowsing || e.KeyStatus.WasKeyDown || e.Handled) return;
         e.Handled = true;
         ExitOpenFileBrowsing(restore: true);
+    }
+
+    // ---------- '뒤로' 입력 (A112 — 마우스 XButton1 · 키보드 Browser Back) ----------
+
+    /// <summary>
+    /// Browser Back 키(GoBack) 분배(A112) — 마우스 XButton1과 같은 한 줄(TryNavigateBack)로 묶인다.
+    /// 오토리피트는 무시(홀드 연사로 여러 층을 한 번에 내려가지 않게), 이미 소비된 키도 존중한다.
+    /// 텍스트 입력 포커스 가드는 호출부(OnRootKeyDown의 IsTextInputFocused 분기)가 겸한다 —
+    /// 문서 에디터에 커서가 있는 동안 키 쪽 '뒤로'는 무동작이고, 마우스 XButton1은 그대로 동작한다.
+    /// </summary>
+    private void OnShellBack(KeyRoutedEventArgs e)
+    {
+        ResetOverlayInput(); // GoBack도 "다른 키 개입"이다 — 홀드 취소·2연타 리셋(A58 안전장치)
+        if (e.KeyStatus.WasKeyDown || e.Handled) return;
+        if (TryNavigateBack()) e.Handled = true;
+    }
+
+    /// <summary>
+    /// 마우스 뒤로가기 판정(A112): PointerUpdateKind가 XButton1Pressed인 눌림 전이만 태운다 —
+    /// 다른 버튼이 이미 눌린 채 겹쳐 온 눌림·뗌은 전이 종류가 달라 걸리지 않는다(press만, 구현 결정).
+    /// handledEventsToo 구독이라 리스트·뷰가 소비한 눌림도 받는다(전역 '뒤로'는 셸 몫 —
+    /// 어디를 가리키고 눌러도 같아야 한다). XButton2(앞으로 가기)는 이번 범위 밖 — 매핑 없음.
+    /// 동작했을 때만 소비한다(무동작이면 흘린다 — None 상태 셸 키들과 같은 무간섭 원칙).
+    /// </summary>
+    private void OnRootPointerBack(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.GetCurrentPoint(RootLayout).Properties.PointerUpdateKind
+            != Microsoft.UI.Input.PointerUpdateKind.XButton1Pressed) return;
+        if (TryNavigateBack()) e.Handled = true;
+    }
+
+    /// <summary>
+    /// '뒤로' 분배(A112 — XButton1·GoBack 공용): 한 번에 한 층씩 걷어낸다. 반환값 = 소비 여부.
+    /// ① 전체화면 = 해제만. Esc는 모듈 액셀러레이터가 먼저 소비해 "첫 Esc = 전체화면 해제,
+    ///    다음 Esc = S4 복귀"가 성립하는데(A90 확정 순서), XButton1/GoBack은 모듈이 안 들으므로
+    ///    셸이 같은 순서를 직접 시행한다 — 그래서 전체화면 검사가 S4보다 앞이다. 해제 API는
+    ///    모듈 ToggleFullScreen과 동일한 SetPresenter(Default) — 뷰들은 상태 플래그 없이 매번
+    ///    Presenter.Kind를 읽으므로(IsFullScreen) 셸이 바꿔도 어긋날 상태가 없고, 하단 바 복원은
+    ///    AppWindow.Changed 구독(생성자)이 프레젠터 전환을 보고 처리한다.
+    /// ② S4('오픈 파일' 탐색) = 진입 전 상태로 복귀만 — Esc와 동일(같은 '뒤로' 의미론).
+    /// ③ 콘텐츠 열림(S2·S3 부류 = _currentFilePath 있음) = 콘텐츠 닫기 → 그 모듈의 빈 상태(S1).
+    ///    새 해체 경로를 만들지 않고 모듈 전환과 같은 ShowModule(빈 컨텍스트) 재사용이다:
+    ///    미저장 가드(A37 — 취소하면 아무것도 안 바뀐다)·재생 정지·파일 핸들 해제(뷰 Unloaded —
+    ///    A59 검증 경로. All Readable은 호스트 Unloaded가 DetachChild로 자식까지 정리)·
+    ///    제목 복귀(A103 "KOTU")·트레이 유휴 1줄(A54)·하단 바·드라이브 줄 교체·
+    ///    S1 썸네일 탐색기(마지막 폴더 = 방금 닫은 파일의 폴더, v0.55.0)가 전부 그 경로 몫이다.
+    ///    defaultSidebars는 기본 false — A109의 사이드바 기본 재적용을 타지 않아
+    ///    좌/우 열림·닫힘 상태가 닫기 직전 그대로 보존된다(A112 요구).
+    /// ④ 콘텐츠 없음(S1·빈 셸·설정·H/W·미지원 안내) = 무동작, 소비도 안 한다.
+    /// </summary>
+    private bool TryNavigateBack()
+    {
+        if (AppWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
+        {
+            AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
+            return true;
+        }
+        if (IsOpenFileBrowsing)
+        {
+            ExitOpenFileBrowsing(restore: true);
+            return true;
+        }
+        if (_currentFilePath is not null && _currentModule is { } module)
+        {
+            ShowModule(module, OpenContext.Empty, Branding.AppName);
+            return true;
+        }
+        return false;
     }
 
     /// <summary>포커스 요소가 주어진 루트의 비주얼 트리 안에 있는지 (A90 — S4 그리드 포커스 판정).</summary>
