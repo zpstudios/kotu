@@ -486,30 +486,35 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var presenter = AppWindow.Presenter;
-            if (presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
-            {
-                SaveBounds(_lastNormalSize, _lastNormalPos, maximized: false);
-            }
-            else if (presenter is Microsoft.UI.Windowing.OverlappedPresenter p
-                && p.State != Microsoft.UI.Windowing.OverlappedPresenterState.Restored)
-            {
-                SaveBounds(_lastNormalSize, _lastNormalPos,
-                    maximized: p.State == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized);
-            }
-            else if (_barOnlyCollapsed)
-            {
-                SaveBounds(_lastNormalSize, _lastNormalPos, maximized: _preCollapseMaximized);
-            }
-            else
-            {
-                SaveBounds(AppWindow.Size, AppWindow.Position, maximized: false);
-            }
+            var (size, pos, maximized) = BoundsForPersist();
+            SaveBounds(size, pos, maximized);
         }
         catch
         {
             // 저장 실패가 종료를 막으면 안 된다.
         }
+    }
+
+    /// <summary>
+    /// 남길 기하의 선택 규칙(A55) — 전체화면·최대화·최소화·접힘(A61)이면 직전 일반 값, 아니면 현재 값.
+    /// A55 저장(SaveWindowBounds)과 A124 재시작 스냅샷(CaptureSessionSnapshot)이 같은 규칙을 쓴다
+    /// (같은 항목·같은 보정 — 두 소비자가 어긋나지 않게 여기 한 곳만 고칠 것).
+    /// </summary>
+    private (Windows.Graphics.SizeInt32? Size, Windows.Graphics.PointInt32? Pos, bool Maximized)
+        BoundsForPersist()
+    {
+        var presenter = AppWindow.Presenter;
+        if (presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen)
+            return (_lastNormalSize, _lastNormalPos, false);
+        if (presenter is Microsoft.UI.Windowing.OverlappedPresenter p
+            && p.State != Microsoft.UI.Windowing.OverlappedPresenterState.Restored)
+        {
+            return (_lastNormalSize, _lastNormalPos,
+                p.State == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized);
+        }
+        if (_barOnlyCollapsed)
+            return (_lastNormalSize, _lastNormalPos, _preCollapseMaximized);
+        return (AppWindow.Size, AppWindow.Position, false);
     }
 
     /// <summary>크기가 유효할 때만 크기·위치를 덮어쓴다 — 추적값이 없으면 기존 저장값 유지.</summary>
@@ -527,6 +532,72 @@ public sealed partial class MainWindow : Window
         }
         _settings.Set("window.maximized", maximized);
         _settings.Save();
+    }
+
+    // ---------- 관리자 재시작 창 세트 스냅샷/복원 (A124) ----------
+
+    /// <summary>
+    /// 관리자 재시작(A124)용 창 스냅샷. 모듈 ID가 없는 창(설정 화면·빈 셸·미지원 파일 안내)은
+    /// null을 돌려 복원 대상에서 뺀다. 항목은 A55 저장분 준용(모듈·파일 + 위치·크기·최대화) —
+    /// 휘발 상태(미저장 편집·재생 위치·오버레이)는 싣지 않는다. 기하는 A55와 같은 선택 규칙
+    /// (BoundsForPersist)이라 최대화·전체화면·접힘 중이어도 직전 일반 값이 실린다.
+    /// </summary>
+    internal Integration.RestartSessionFile.WindowSnapshot? CaptureSessionSnapshot()
+    {
+        if (CurrentModuleId is not { } moduleId) return null;
+        var (size, pos, maximized) = BoundsForPersist();
+        var snapshot = new Integration.RestartSessionFile.WindowSnapshot
+        {
+            ModuleId = moduleId,
+            FilePath = _currentFilePath,
+            Maximized = maximized,
+        };
+        // A55 SaveBounds와 같은 유효성(320×240) — 못 미치면 기하 없이(0) 남겨 A55 승계로 연다.
+        if (size is { Width: >= 320, Height: >= 240 } s && pos is { } p)
+        {
+            snapshot.X = p.X;
+            snapshot.Y = p.Y;
+            snapshot.Width = s.Width;
+            snapshot.Height = s.Height;
+        }
+        return snapshot;
+    }
+
+    /// <summary>
+    /// 관리자 재시작 복원(A124): 스냅샷의 위치·크기·최대화를 이 창에 적용한다.
+    /// 생성자(RestoreWindowBounds)가 이미 적용해 둔 A55 승계 기하·최대화를 스냅샷 값으로
+    /// 덮는 단계라, 창 표시(Activate) 전에 불러야 한다. 보정은 A55와 동일 —
+    /// A40 최소 크기 클램프 + 화면 밖 보정(ClampToWorkArea). 실패는 조용히 —
+    /// A55 승계 기하 그대로 열리는 것뿐이다.
+    /// </summary>
+    internal void ApplySessionBounds(int x, int y, int width, int height, bool maximized)
+    {
+        try
+        {
+            // 생성자가 A55의 window.maximized로 최대화해 뒀을 수 있다 — 최대화 중에는
+            // Resize가 먹지 않으므로(A61과 같은 관찰) 먼저 일반 상태로 내린다.
+            if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+                { State: Microsoft.UI.Windowing.OverlappedPresenterState.Maximized } max)
+            {
+                max.Restore();
+            }
+
+            var (minW, minH) = WindowMinSize.MinPhysical(
+                WinRT.Interop.WindowNative.GetWindowHandle(this));
+            var w = Math.Max(width, minW);
+            var h = Math.Max(height, minH);
+            AppWindow.MoveAndResize(ClampToWorkArea(new Windows.Graphics.RectInt32(x, y, w, h)));
+            // A55 추적 기준값도 지금 적용한 값으로 — RestoreWindowBounds와 같은 순서
+            // (최대화 직후 닫혀도 직전 일반 기하가 저장되게).
+            _lastNormalPos = AppWindow.Position;
+            _lastNormalSize = AppWindow.Size;
+            if (maximized && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter op)
+                op.Maximize();
+        }
+        catch
+        {
+            // 기하 적용 실패 — A55 승계 기하로라도 열리면 된다(A124 조용한 폴백).
+        }
     }
 
     // ---------- 하단 바만 남기는 접힘 (A61, v0.111.0) ----------

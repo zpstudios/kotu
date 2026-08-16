@@ -140,6 +140,107 @@ public sealed class WindowManager
             window.Close();
     }
 
+    // ---------- 관리자 재시작 창 세트 복원 (A124) ----------
+
+    /// <summary>
+    /// 관리자 재시작(A124) 직전: 열린 창 세트를 세션 파일로 기록한다. 대상은 모듈 ID가 있는
+    /// 창뿐이다(설정 화면·빈 셸·미지원 안내 창은 CurrentModuleId가 null → 자연 제외).
+    /// 순서는 생성 순서(_ordered) — 복원도 같은 순서로 열어 인스턴스 번호(A2)·트레이 슬롯
+    /// (A100)·AUMID(A105)가 재기동 전과 같은 순서로 다시 배정된다(전부 창 생성 경로의 자동
+    /// 배정 — 수동 개입 없음). 창 하나의 캡처 실패는 그 창만 빼고 계속하고, 캡처된 창이
+    /// 하나도 없으면 파일을 쓰지 않는다(승격 프로세스는 종전대로 기본 1창 시작).
+    /// </summary>
+    public void WriteRestartSession()
+    {
+        var snapshots = new List<Integration.RestartSessionFile.WindowSnapshot>();
+        foreach (var window in _ordered)
+        {
+            try
+            {
+                if (window.CaptureSessionSnapshot() is { } snapshot) snapshots.Add(snapshot);
+            }
+            catch
+            {
+                // 이 창만 건너뛴다 — 스냅샷 실패가 재시작을 막으면 안 된다(A124).
+            }
+        }
+        if (snapshots.Count > 0) Integration.RestartSessionFile.Write(snapshots);
+    }
+
+    /// <summary>
+    /// 앱 시작 시(A124): 유효한 재시작 세션 파일이 있으면 기본 1창 대신 창 세트를 재현한다.
+    /// true = 1창 이상 복원(호출자는 기본 시작 창을 만들지 않는다). 파일은 읽는 즉시
+    /// 삭제되고(정리 책임 = 읽는 쪽), 파싱 실패·기한(2분) 초과·전 창 복원 실패면 false —
+    /// 조용히 기본 시작으로 후퇴한다. 쓰는 쪽이 관리자 재시작(runas) 직전 한 곳뿐이라
+    /// 이 복원이 실질 발동하는 것도 승격 재기동뿐이다.
+    /// 창 연속 생성의 경합 없음 근거: 전 창이 단일 UI 스레드(A110)이고, 빈 새 창의 열기
+    /// 경로는 미저장 가드(ConfirmDiscardAsync)가 완료 태스크를 돌려 await가 동기 연속이다 —
+    /// 루프 한 바퀴 안에서 창 하나의 생성·라우팅이 끝난 뒤 다음 창으로 넘어간다.
+    /// </summary>
+    public bool TryRestoreSession()
+    {
+        IReadOnlyList<Integration.RestartSessionFile.WindowSnapshot>? snapshots;
+        try
+        {
+            snapshots = Integration.RestartSessionFile.TryConsume();
+        }
+        catch
+        {
+            return false; // 세션 파일 문제가 시작을 막으면 안 된다
+        }
+        if (snapshots is null) return false;
+
+        var restored = 0;
+        foreach (var snapshot in snapshots)
+        {
+            try
+            {
+                if (RestoreWindow(snapshot)) restored++;
+            }
+            catch
+            {
+                // 이 창만 건너뛰고 계속 — 전부 실패면 false = 기본 1창(호출자 폴백).
+            }
+        }
+        return restored > 0;
+    }
+
+    /// <summary>
+    /// 스냅샷 1건 → 창 1개 복원(A124). 새 병렬 경로 없이 기존 창 생성·라우팅 경로 재사용:
+    /// 파일이 있으면 OpenFileInNewWindow와 같은 순서(Create → OpenFile → Activate — 어느
+    /// 모듈로 열지는 확장자 라우팅이 다시 정한다), 없으면 OpenNewWindow와 같은 순서
+    /// (Create → OpenModuleById → A81 기본 도크 → Activate). 기록된 파일이 사라졌으면 그
+    /// 모듈의 빈 컨텍스트로 후퇴하고, 모듈 ID까지 못 찾으면 창을 만들지 않는다(건너뜀).
+    /// 기하는 창 표시 전에 적용(ApplySessionBounds — A55 화면 밖 보정 재사용).
+    /// 여러 창의 Activate 경합으로 마지막 창만 포커스가 남는 것은 수용(A124 확정).
+    /// </summary>
+    private bool RestoreWindow(Integration.RestartSessionFile.WindowSnapshot snapshot)
+    {
+        var file = snapshot.FilePath is { Length: > 0 } path && File.Exists(path) ? path : null;
+        var moduleId = snapshot.ModuleId is { Length: > 0 } id
+            && _router.Modules.Any(m => m.Id == id) ? id : null;
+        if (file is null && moduleId is null) return false;
+
+        var window = Create();
+        if (snapshot.Width >= 320 && snapshot.Height >= 240)
+        {
+            window.ApplySessionBounds(snapshot.X, snapshot.Y,
+                snapshot.Width, snapshot.Height, snapshot.Maximized);
+        }
+        if (file is not null)
+        {
+            window.OpenFile(file);
+        }
+        else
+        {
+            window.OpenModuleById(moduleId!);
+            // A81: 파일 없이 모듈로 여는 창의 기본 상태 — OpenNewWindow와 동일하게 명시한다.
+            window.SetDockedState(listDocked: true, infoDocked: true);
+        }
+        window.Activate();
+        return true;
+    }
+
     private MainWindow FindReusable(string? moduleId)
     {
         // 1) 같은 모듈 창 (여러 개면 가장 최근 활성화된 것).

@@ -69,10 +69,22 @@ public partial class App : Application
         _uiDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         _windowManager = Services.GetRequiredService<WindowManager>();
 
+        // A124: 관리자 재시작(runas) 창 세트 훅 배선 — 하드웨어 모듈은 Core에만 의존하므로
+        // (아키텍처 규칙) Core의 RestartSession 훅에 셸 구현을 꽂는다. Writer = runas 직전
+        // 창 세트 직렬화, Discarder = UAC 취소로 재시작이 무산됐을 때의 되지우기.
+        // 실패는 훅·파일 계층에서 전부 조용히 무시된다.
+        KOTU.Core.Integration.RestartSession.Writer = _windowManager.WriteRestartSession;
+        KOTU.Core.Integration.RestartSession.Discarder = Integration.RestartSessionFile.Delete;
+
         // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
         // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당
         var request = LaunchRequest.Parse(Environment.GetCommandLineArgs().Skip(1).ToList());
-        _windowManager.Dispatch(request);
+        // A124: 관리자 재시작 직전에 기록된 창 세트가 있으면(2분 유효) 기본 1창 대신 세트를
+        // 재현한다. 쓰는 쪽이 하드웨어 모듈 Restart as admin 한 곳뿐이라, 일반 시작(파일 인자·
+        // 바로가기)이 여기서 복원하게 되는 일은 실질적으로 승격 재기동뿐이다. 파일 인자가
+        // 함께 온 극단 케이스도 복원 뒤 기존 라우팅으로 마저 연다(창 재사용 규칙 A24 그대로).
+        if (!_windowManager.TryRestoreSession() || request.FilePath is not null)
+            _windowManager.Dispatch(request);
 
         // 선택 센서 트레이(A18 SensorTray)는 A101(v0.137.0)에서 폐지 — 창별 트레이 아이콘이
         // 그 창의 선택값을 표시한다(HardwareView의 ITrayStatusProvider). 상시 표시 축은 소멸.

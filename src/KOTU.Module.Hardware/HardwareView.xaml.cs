@@ -1083,11 +1083,18 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// <summary>
     /// 관리자 재시작(A17): 단일 인스턴스 키를 먼저 반납해야 새(관리자) 프로세스가
     /// 이 인스턴스로 리다이렉트되어 죽는 걸 막을 수 있다. UAC를 취소하면 키를 되찾고 계속.
+    /// A124: 재기동은 프로세스 단위라 전 창이 닫힌다 — 종료 직전 창 세트를 세션 파일로
+    /// 기록해 두면 승격 프로세스가 시작 시 기본 1창 대신 세트를 재현한다(셸이 배선한
+    /// Core 훅 경유, 실패는 조용히 = 종전 1창 시작). 세션 파일을 쓰는 곳은 여기 한 곳뿐이다.
     /// </summary>
     private void OnElevateClick(object sender, RoutedEventArgs e)
     {
         var exe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(exe)) return;
+
+        // A124: 창이 전부 살아 있는 지금(재시작 확정 전) 창 세트를 기록한다. 미저장 가드(A37)는
+        // 현행 그대로 타지 않는다 — 이 경로는 원래 묻지 않고 내려간다(Application.Exit).
+        KOTU.Core.Integration.RestartSession.TryWrite();
 
         Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().UnregisterKey();
         try
@@ -1101,7 +1108,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         }
         catch
         {
-            // UAC 취소 — 유일한 인스턴스이므로 키를 되찾는다 (Program.InstanceKey와 동일해야 함)
+            // UAC 취소 — 재시작 무산: 방금 쓴 세션 파일을 되지우고(A124),
+            // 유일한 인스턴스이므로 키를 되찾는다 (Program.InstanceKey와 동일해야 함)
+            KOTU.Core.Integration.RestartSession.TryDiscard();
             Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey("KOTU-Main");
             return;
         }
