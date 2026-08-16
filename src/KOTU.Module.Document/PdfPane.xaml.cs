@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Data.Pdf;
 using Windows.Storage;
 using Windows.Storage.Streams;
+using Windows.System;
 
 namespace KOTU.Module.Document;
 
@@ -25,6 +26,14 @@ public enum PdfFitMode { Contain, FitWidth, FitHeight, ActualSize }
 /// </summary>
 public sealed partial class PdfPane : UserControl
 {
+    // ---- A121 키보드 스크롤 비율(뷰포트 높이 대비) — 체감 조정은 이 두 상수만 고친다 ----
+
+    /// <summary>A121: ↑/↓ 한 번 = 뷰포트 높이의 이만큼. 읽던 줄을 잃지 않는 잔 스크롤 폭.</summary>
+    private const double ArrowScrollRatio = 0.125;
+
+    /// <summary>A121: PageUp/PageDown 한 번 = 뷰포트 높이의 이만큼. 10%를 남겨 읽던 줄이 겹치게 한다.</summary>
+    private const double PageScrollRatio = 0.9;
+
     /// <summary>스크롤 기준 현재 페이지/전체 (1-base). 문서를 내리면 (0, 0).</summary>
     public event Action<int, int>? PageChanged;
 
@@ -329,6 +338,50 @@ public sealed partial class PdfPane : UserControl
             (_scroll.HorizontalOffset + pt.X) * ratio - pt.X,
             (_scroll.VerticalOffset + pt.Y) * ratio - pt.Y,
             newZoom, disableAnimation: true);
+    }
+
+    // ---------- 키보드 스크롤 (A121) ----------
+
+    /// <summary>
+    /// PDF 모드 세로 스크롤 키를 처리한다(A121). 처리했으면 true — 호출부(DocumentView의 터널링
+    /// PreviewKeyDown)는 true일 때만 Handled를 세운다. 게이트(PDF 모드·텍스트 입력·리스트 포커스·
+    /// 수정키)는 전부 호출부가 본다 — 이 메서드는 "우리 키인가 + 스크롤할 대상이 있는가"만 판정한다.
+    ///
+    /// ↑/↓ = 뷰포트 높이 × <see cref="ArrowScrollRatio"/>, PageUp/PageDown = × <see cref="PageScrollRatio"/>,
+    /// Home/End = 문서 처음/끝. ←/→는 배정하지 않는다(수평 스크롤·파일 넘김과 의미가 겹친다 — A121 확정).
+    /// 수직 오프셋만 옮기고 배율(ZoomFactor)·가로 오프셋은 null = 무변경이라 Fit 추종 상태(A49)도
+    /// 건드리지 않는다(OnViewChanged의 줌 비교에 걸리지 않는다).
+    ///
+    /// 경계(최상단에서 ↑ 등)에서도 true다: ScrollViewer가 범위를 클램프하므로 무의미한 호출이 무해하고,
+    /// 여기서 false를 돌려주면 그 한 번만 ListView 내장 포커스 이동으로 새어 동작이 들쭉날쭉해진다.
+    /// </summary>
+    public bool TryHandleNavKey(VirtualKey key)
+    {
+        // 표시 직후처럼 아직 못 잡았으면 이때 한 번 더 시도한다(잡은 뒤에는 건너뛰므로 키마다
+        // 비주얼 트리를 훑지 않는다). 그래도 못 잡으면 무처리 — 호출부가 원 기능에 양보한다.
+        if (_scroll is null) HookScroll();
+        if (_scroll is null || _items.Count == 0) return false; // 스크롤러 미확보 · PDF 미로드
+
+        var viewport = _scroll.ViewportHeight;
+        var y = key switch
+        {
+            VirtualKey.Up => _scroll.VerticalOffset - viewport * ArrowScrollRatio,
+            VirtualKey.Down => _scroll.VerticalOffset + viewport * ArrowScrollRatio,
+            VirtualKey.PageUp => _scroll.VerticalOffset - viewport * PageScrollRatio,
+            VirtualKey.PageDown => _scroll.VerticalOffset + viewport * PageScrollRatio,
+            VirtualKey.Home => 0.0,
+            VirtualKey.End => _scroll.ScrollableHeight,
+            _ => double.NaN, // 우리 키가 아니다
+        };
+        if (double.IsNaN(y)) return false;
+
+        // disableAnimation: false(부드럽게) — 이 파일의 줌 경로(ApplyFitAt·ZoomAtPointer)가 쓰는
+        // true와 의도가 다르다. 줌은 배율과 오프셋이 한 프레임에 같이 확정돼야 포인터 고정점이
+        // 튀지 않아 애니메이션을 끄지만, 키 스크롤은 화면이 얼마나 어디로 움직였는지 눈이 따라가야
+        // 해서 관성 이동이 맞다. 오토리피트(꾹 누르기)로 연타되면 진행 중 애니메이션의 현재
+        // 오프셋에 다음 이동이 얹혀 연속 스크롤이 된다 — 이것이 A121이 의도한 홀드 동작이다.
+        _scroll.ChangeView(null, y, null, disableAnimation: false);
+        return true;
     }
 
     // ---------- 다이얼로그 ----------

@@ -18,13 +18,24 @@
 
     <Grid x:Name="RootGrid">
         <!-- A37: 뷰어 → 에디터 승격. TextBox 하나가 표시·편집을 겸한다.
-             A80(v0.91.0): 기존 MaxWidth 900 + HorizontalAlignment Left(v0.44.0 뷰어 유래)를
+             A80(v0.91.0): 구 "MaxWidth 900 + HorizontalAlignment Left"(v0.44.0 뷰어 유래)를
              제거 — 900px보다 넓은 창에서 포커스된 TextBox 배경이 좌측 900px에만 그려져
-             우측이 검게 비어 보였다(오버레이와 무관). 본문이 창 전체 폭을 쓴다.
+             우측이 검게 비어 보였다(오버레이와 무관). 그 뒤로 본문이 창 전체 폭을 썼다.
+             A120(v0.146.0): 본문 컬럼을 중앙으로 되돌린다 — 더하는 것은 MaxWidth 900 하나뿐이고
+             HorizontalAlignment는 기본값 Stretch를 그대로 둔다. 레이아웃 규약상 Stretch는 슬롯보다
+             좁게 제약되면 남는 폭을 좌우로 균등 배분한다(Stretch의 constrained fallback = 중앙 배치).
+             HorizontalAlignment="Center"를 명시하면 배치 폭이 콘텐츠 폭으로 접혀 900 컬럼 자체가
+             무너지므로 절대 쓰지 않는다.
+             A80이 걷어낸 것과 이번 것은 별개다: 그때 문제는 "MaxWidth 900 + Left"의 비대칭
+             (여백이 우측에만 몰려 포커스 배경이 한쪽만 빈 것)이었고, 이번은 Stretch+MaxWidth라
+             여백이 좌우 대칭이다. 900 이하 폭 창은 제약이 걸리지 않아 현행과 픽셀 동일하다.
+             아래 DecorLayer에도 같은 MaxWidth 900이 걸려 있어야 A115 장식 좌표계가 맞는다 —
+             둘은 반드시 함께 바꿀 것.
              4MB 초과 잘림 표시 파일은 IsReadOnly로 두어 잘린 채 저장되는 사고를 막는다. -->
         <TextBox
             x:Name="EditorBox"
             Padding="24,16,24,24"
+            MaxWidth="900"
             VerticalAlignment="Stretch"
             FontSize="14"
             AcceptsReturn="True"
@@ -41,8 +52,13 @@
         <!-- A115: 장식 레이어(라인 가이드·¶·EOF) — EditorBox 위(z)에 겹치되 IsHitTestVisible=False로
              입력 불간섭. 그리기는 EditorDecor(코드)가 전담한다. 포커스된 TextBox는 템플릿 Focused
              상태가 불투명 배경을 그려(A80 참고) 아래(z) 레이어는 가려진다 — 그래서 위에 얹고
-             아주 옅게 긋는다(색·불투명도 상수는 EditorDecor 상단 한 곳). -->
-        <Canvas x:Name="DecorLayer" IsHitTestVisible="False" />
+             아주 옅게 긋는다(색·불투명도 상수는 EditorDecor 상단 한 곳).
+             A120(v0.146.0): MaxWidth 900 = 위 EditorBox와 같은 값(같은 이유로 Center는 명시하지
+             않는다 — Stretch+MaxWidth의 중앙 배치를 그대로 받는다). EditorDecor는
+             GetRectFromCharacterIndex가 주는 EditorBox 로컬 좌표를 이 Canvas 로컬에 그대로 찍으므로,
+             두 요소의 레이아웃 제약(정렬·최대 폭)이 같아야 원점이 겹친다. 한쪽만 바꾸면 장식이
+             본문에서 통째로 어긋난다 — 그리기 산술에 오프셋 보정을 넣지 말고 이 값을 맞출 것. -->
+        <Canvas x:Name="DecorLayer" MaxWidth="900" IsHitTestVisible="False" />
 
         <!-- PDF 페이지 뷰(A16, PdfPane)는 코드에서 지연 생성해 RootGrid 맨 아래(z 순서상 뒤)에 꽂는다 -->
         <TextBlock

@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.144.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.146.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -127,6 +127,9 @@ Seven modules. Switch between them with `Alt+1` … `Alt+7`, or from the menu at
 - Pages scroll continuously in one column. The bottom bar shows `current / total` as you scroll.
   There are no page-forward or page-back buttons.
 - The wheel scrolls; `Ctrl`+wheel zooms around the pointer, about 10% per notch. Touch pinch-zoom works.
+- The keyboard scrolls too: `↑` `↓` move about an eighth of the view, `Page Up` `Page Down` move
+  about a full screen, and `Home` `End` jump to the start and the end of the document. Holding a key
+  keeps scrolling. The zoom level never changes, and `←` `→` are not used.
 - **Fit** — see [2.9](#29-the-fit-button). Zooming by hand releases the fit.
 
 ### 2.6 Archive
@@ -280,6 +283,9 @@ box or while you are typing to jump through the file list.
 | Document | `Ctrl+S` | save |
 | Document | `A` | 100% (PDF) |
 | Document | `F` | re-apply the last Fit option (PDF) |
+| Document | `↑` `↓` | scroll the PDF, about an eighth of the view |
+| Document | `Page Up` `Page Down` | scroll the PDF, about a full screen |
+| Document | `Home` `End` | start / end of the PDF |
 | Archive | `E` | Extract here |
 | Archive | `T` | Extract... (choose a folder) |
 | Archive | `C` | New archive |
