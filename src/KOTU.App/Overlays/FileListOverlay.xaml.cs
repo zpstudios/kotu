@@ -54,8 +54,19 @@ public sealed partial class FileListOverlay : UserControl
     /// <summary>
     /// 떠 있는 동안의 선택 파일 경로 (A86 — 셸 Enter의 "선택 파일 있으면 열기" 판정).
     /// 닫혀 있거나(보이지 않는 선택은 열지 않는다) 선택이 폴더·없음이면 null.
+    /// ※ A94 6차(v0.153.0)부터 셸 Enter는 <see cref="OpenSelectedFiles"/>(일괄 열기)를 쓴다 —
+    /// 이 속성은 "첫 선택 파일" 질의 API로만 남았다(A86 서술의 원형).
     /// </summary>
     public string? SelectedFilePath => IsOpen ? _list?.SelectedFilePath : null;
+
+    /// <summary>
+    /// 떠 있는 동안의 선택 파일 일괄 열기 (A94 6차 — 셸 Enter가 부른다). 종전 "SelectedFilePath
+    /// 하나를 OpenFileRouted"의 대체: 첫 파일은 재사용 규칙(A24) 경로, 나머지는 새 인스턴스
+    /// (상한 10 — ExplorerPane.OpenSelectedFiles). 닫혀 있으면 아무것도 하지 않는다 —
+    /// 보이지 않는 선택은 열지 않는다(SelectedFilePath와 같은 규칙).
+    /// 반환 = 하나라도 열었는지(false면 셸이 종전 폴백으로 간다).
+    /// </summary>
+    public bool OpenSelectedFiles() => IsOpen && _list is { } list && list.OpenSelectedFiles();
 
     public FileListOverlay()
     {

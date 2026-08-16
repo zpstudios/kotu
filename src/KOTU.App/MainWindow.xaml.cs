@@ -1780,10 +1780,11 @@ public sealed partial class MainWindow : Window
         {
             case ShellState.S1:
                 // 선택 파일 있으면 열기(keymap S1 행): 중앙 썸네일 우선, 다음 좌 리스트(떠 있을 때만).
-                var selected = _thumbnailExplorer?.SelectedFilePath ?? ListOverlay.SelectedFilePath;
+                // A94 6차: 표면이 스스로 연다 — 다중 선택이면 선택된 파일 전부(첫 파일만 재사용
+                // 규칙 A24, 나머지는 새 인스턴스. 상한 10). 열 파일이 없으면 종전대로 오버레이 토글.
                 e.Handled = true;
-                if (selected is not null) OpenFileRouted(selected);
-                else BatchToggleOverlays(snapshot);
+                if (_thumbnailExplorer?.OpenSelectedFiles() != true && !ListOverlay.OpenSelectedFiles())
+                    BatchToggleOverlays(snapshot);
                 return;
             case ShellState.S2:
             case ShellState.S3L:
@@ -1795,16 +1796,14 @@ public sealed partial class MainWindow : Window
                 return;
             case ShellState.S4: // A90 keymap S4 행: 선택 열기 우선, 없으면 복귀와 동일
                 e.Handled = true;
-                if (_s4Explorer?.SelectedEntry is { } s4Entry)
-                {
-                    // 폴더 = 좌 리스트 항해(A93 상태 공유의 되돌이 경로 — ViewChanged로 그리드도 이동)
-                    if (s4Entry.IsFolder) ListOverlay.NavigateList(s4Entry.Path);
-                    else OpenFileRouted(s4Entry.Path); // 열리면 SetContentState가 S4를 자동 종료한다
-                }
+                // A94 6차: 선택에 파일이 있으면 그 표면이 전부 연다(다중이면 일괄 — 상한 10.
+                // 열리면 SetContentState가 S4를 자동 종료한다). 파일이 없을 때만 아래 폴더·복귀 분기.
+                if (_s4Explorer?.OpenSelectedFiles() == true) return;
+                // 폴더 = 좌 리스트 항해(A93 상태 공유의 되돌이 경로 — ViewChanged로 그리드도 이동)
+                if (_s4Explorer?.SelectedEntry is { IsFolder: true } s4Entry)
+                    ListOverlay.NavigateList(s4Entry.Path);
                 else
-                {
                     ExitOpenFileBrowsing(restore: true);
-                }
                 return;
             default:            // None — 오버레이 컨텍스트 없음(빈 셸·설정·미지원 안내): 무동작, 삼키지도 않는다
                 return;         // (정보 모듈은 A119부터 위 S2/S3* 분기로 일괄 토글이 성립한다)

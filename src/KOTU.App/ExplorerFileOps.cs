@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.ApplicationModel.DataTransfer.DragDrop;
 using Windows.Storage;
+using Windows.Storage.Streams;
 
 namespace KOTU.App;
 
@@ -30,6 +31,11 @@ namespace KOTU.App;
 /// 4차(v0.151.0)가 얹은 것: Shift+Del 영구 삭제(확인 대화상자 필수 — 휴지통행과 달리),
 /// 잘라내기 원본 반투명 표시(프로세스 전역 1벌 경로 집합 + 표면 렌더 시 경로 매칭),
 /// 접근 거부(UAC 필요) 실패의 구분 집계와 관리자 재시작 제안(<see cref="ReportAsync"/>).
+///
+/// 6차(v0.153.0)가 얹은 것: OS 탐색기 클립보드 상호운용("Preferred DropEffect" 쓰기·읽기 —
+/// 탐색기는 이 형식으로만 잘라내기/복사를 가른다), 붙여넣기 메뉴 활성 판정
+/// (<see cref="CanPasteFromClipboard"/>), 다중 선택 일괄 열기 상한 적용
+/// (<see cref="TakeBatchOpen"/> — 표면이 여는 주체이고 여기서는 대상만 추린다).
 /// </summary>
 internal static class ExplorerFileOps
 {
@@ -93,6 +99,27 @@ internal static class ExplorerFileOps
     internal static bool IsShiftDown() => Microsoft.UI.Input.InputKeyboardSource
         .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
         .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    // ---------- 다중 선택 일괄 열기 (A94 6차, v0.153.0) ----------
+
+    /// <summary>
+    /// 한 번에 여는 파일 수 상한 (사양 확정 수치) — 초과분은 열지 않고 안내 문구로만 알린다.
+    /// 여는 주체는 표면(기존 FileActivated·FileActivatedNewWindow 이벤트)이고, 여기서는
+    /// 대상 목록만 추린다 — 창 생성 경로를 이 파일이 알 필요가 없다.
+    /// </summary>
+    internal const int BatchOpenLimit = 10;
+
+    /// <summary>
+    /// 일괄 열기 대상 추리기 (A94 6차): 상한을 넘으면 **앞 10개만** 돌려주고 나머지는
+    /// 기존 안내 채널(A92류 일시 문구)로 알린다 — 별도 대화상자를 만들지 않는다.
+    /// 목록은 호출부가 이미 "파일만"(폴더 제외)으로 걸러 넘긴다.
+    /// </summary>
+    internal static IReadOnlyList<string> TakeBatchOpen(IReadOnlyList<string> files, Action<string>? notice)
+    {
+        if (files.Count <= BatchOpenLimit) return files;
+        notice?.Invoke($"Opened first {BatchOpenLimit} of {files.Count} selected files");
+        return files.Take(BatchOpenLimit).ToList();
+    }
 
     // ---------- 잘라내기 원본 반투명 표시 (A94 4차, v0.151.0) ----------
 
@@ -293,13 +320,118 @@ internal static class ExplorerFileOps
         return await Task.Run(() => TransferAsync(paths, targetFolder, move, ui));
     }
 
+    // ---------- OS 탐색기 클립보드 상호운용: "Preferred DropEffect" (A94 6차, v0.153.0) ----------
+    // RequestedOperation(Copy/Move)은 WinRT 앱끼리만 통하는 축이라 1~5차에서는 KOTU↔KOTU만
+    // 잘라내기가 성립했다. 셸(OS 탐색기)은 이 문자열 형식의 4바이트 DWORD 하나로만 잘라내기를
+    // 가르므로, 양방향 정합을 위해 **쓸 때도 읽을 때도** 이 형식을 다룬다. 둘 다 실패는 무해 —
+    // 종전(복사로 떨어짐 / RequestedOperation 판정)으로 되돌아갈 뿐이다.
+
+    /// <summary>셸 클립보드 형식 이름(CFSTR_PREFERREDDROPEFFECT의 문자열 이름) — 값은 4바이트 DWORD.</summary>
+    private const string PreferredDropEffectFormat = "Preferred DropEffect";
+
+    /// <summary>DROPEFFECT_MOVE — 잘라내기. 탐색기는 Ctrl+X에 정확히 이 값을 싣는다.</summary>
+    private const uint DropEffectMove = 2;
+
+    /// <summary>DROPEFFECT_COPY|DROPEFFECT_LINK(1|4) — 탐색기가 Ctrl+C에 싣는 관례 값.</summary>
+    private const uint DropEffectCopy = 5;
+
+    /// <summary>
+    /// 클립보드 데이터에 "Preferred DropEffect"를 싣는다 (A94 6차): 잘라내기 = 2, 복사 = 5.
+    /// 값은 4바이트 리틀엔디언 DWORD 스트림이다(윈도우는 리틀엔디언 — BitConverter가 그대로 맞다).
+    /// SetData의 값은 스트림이어야 셸이 읽어 가므로 MemoryStream을 WinRT 스트림으로 감싼다
+    /// (<c>AsRandomAccessStream</c> — ExplorerPane.LoadThumbnailsAsync 선례와 같은 확장).
+    /// MemoryStream을 여기서 닫지 않는 것은 의도다 — 클립보드가 나중에 읽어 가고, 관리 메모리뿐이라
+    /// 해제할 자원이 없다. 실패해도 조용히 넘어간다(RequestedOperation만 남은 종전 동작).
+    /// </summary>
+    private static void SetPreferredDropEffect(DataPackage data, bool cut)
+    {
+        try
+        {
+            var bytes = BitConverter.GetBytes(cut ? DropEffectMove : DropEffectCopy);
+            data.SetData(PreferredDropEffectFormat, new MemoryStream(bytes).AsRandomAccessStream());
+        }
+        catch
+        {
+            // 이 형식을 못 실어도 앱 내부(KOTU↔KOTU) 동작은 RequestedOperation으로 종전과 같다
+        }
+    }
+
+    /// <summary>
+    /// 클립보드 데이터의 "Preferred DropEffect"로 이동 여부를 판정한다 (A94 6차) —
+    /// OS 탐색기에서 Ctrl+X 한 뒤 KOTU에 붙여넣는 경우의 유일한 근거다(탐색기는
+    /// RequestedOperation을 싣지 않는다). 반환 null = 형식 없음·판독 실패 → 호출부가 종전
+    /// 판정(RequestedOperation)을 그대로 쓴다. 값 형은 소스·런타임마다 다를 수 있어
+    /// (IRandomAccessStream / IBuffer / byte[]) 형 검사 후 안전 판독하고, 어긋나면 전부 null이다.
+    /// </summary>
+    private static async Task<bool?> PreferredDropEffectIsMoveAsync(DataPackageView view)
+    {
+        try
+        {
+            if (!view.Contains(PreferredDropEffectFormat)) return null;
+            var bytes = ReadFourBytes(await view.GetDataAsync(PreferredDropEffectFormat));
+            if (bytes is null) return null;
+            // 이동 비트만 본다 — 탐색기는 2를 싣지만 COPY|MOVE(3)처럼 겹쳐 싣는 소스도 있다.
+            return (BitConverter.ToUInt32(bytes, 0) & DropEffectMove) != 0;
+        }
+        catch
+        {
+            return null; // 판독 실패 = 현행 판정 유지(복사로 떨어져 원본이 남는 안전한 쪽)
+        }
+    }
+
+    /// <summary>
+    /// WinRT 클립보드 값에서 앞 4바이트를 꺼낸다 (A94 6차). 지원하지 않는 형이거나 길이가
+    /// 모자라면 null — 호출부가 종전 판정으로 떨어진다. 스트림은 읽고 즉시 닫는다
+    /// (클립보드 원본이 아니라 이번 읽기용 뷰 — 다음 붙여넣기가 다시 열 수 있다).
+    /// </summary>
+    private static byte[]? ReadFourBytes(object? value)
+    {
+        var bytes = new byte[4];
+        switch (value)
+        {
+            case byte[] raw:
+                return raw.Length >= bytes.Length ? raw : null;
+            case IRandomAccessStream stream:
+            {
+                using var reader = stream.AsStreamForRead();
+                return reader.Read(bytes, 0, bytes.Length) == bytes.Length ? bytes : null;
+            }
+            case IBuffer buffer:
+            {
+                using var reader = DataReader.FromBuffer(buffer);
+                if (reader.UnconsumedBufferLength < bytes.Length) return null;
+                reader.ReadBytes(bytes);
+                return bytes;
+            }
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// 붙여넣기 메뉴 항목을 활성화할지 (A94 6차 — 우클릭 메뉴가 열릴 때 판정).
+    /// 클립보드 접근이 실패하면(다른 앱이 잠근 순간 등) **활성으로 둔다** — 눌러도
+    /// <see cref="PasteFromClipboardAsync"/>가 조용한 무동작으로 떨어지므로 안전하다(사양 확정).
+    /// </summary>
+    internal static bool CanPasteFromClipboard()
+    {
+        try
+        {
+            return Clipboard.GetContent().Contains(StandardDataFormats.StorageItems);
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
     // ---------- 클립보드 (Ctrl+C/X/V) ----------
 
     /// <summary>
     /// 선택 항목을 클립보드에 복사(cut=false)/잘라내기(cut=true)로 싣는다.
     /// 잘라내기 구분은 RequestedOperation = Move — 앱 내(다른 KOTU 창 포함) 붙여넣기는 이걸로
-    /// 일관 동작한다. OS 탐색기의 "Preferred DropEffect" 형식까지는 싣지 않는다(1차 결정 —
-    /// 탐색기 쪽에 붙여넣으면 복사로 떨어질 수 있다. docs/A94-matrix.md에 명기).
+    /// 일관 동작한다. A94 6차부터는 OS 탐색기용 "Preferred DropEffect"(잘라내기 2 / 복사 5)도
+    /// 함께 싣는다 — 두 축을 같은 조작에서 한 번에 정하므로 서로 어긋날 수 없다.
     /// 반환 = 실패 안내 문구(없으면 null).
     /// A94 4차: 성공하면 잘라내기 표시를 갱신한다 — cut이면 이 경로들로 지정, 복사면 해제
     /// (새 클립보드 내용이 앞선 잘라내기를 무효화한다 — 탐색기 동등). 클립보드 적재가
@@ -317,6 +449,7 @@ internal static class ExplorerFileOps
         };
         data.Properties[SourcePathsKey] = string.Join('\n', paths);
         data.SetStorageItems(items, !cut); // 둘째 인자 readOnly — 잘라내기(cut)면 false(이동 허용)
+        SetPreferredDropEffect(data, cut); // A94 6차 — OS 탐색기가 읽는 잘라내기/복사 구분
         try
         {
             Clipboard.SetContent(data);
@@ -330,8 +463,10 @@ internal static class ExplorerFileOps
     }
 
     /// <summary>
-    /// 클립보드의 StorageItems를 대상 폴더로 붙여넣는다. RequestedOperation에 Move가 있으면
-    /// 이동(잘라내기), 아니면 복사. 이동이 전부 성공하면 클립보드를 비운다 — 두 번째 Ctrl+V가
+    /// 클립보드의 StorageItems를 대상 폴더로 붙여넣는다. 이동/복사 판정은 A94 6차부터 두 단계다:
+    /// **"Preferred DropEffect"가 있으면 그것이 우선**(OS 탐색기에서 잘라내기 → KOTU 붙여넣기 =
+    /// 이동이 성립하는 근거), 없거나 못 읽으면 종전대로 RequestedOperation에 Move가 있는지.
+    /// 이동이 전부 성공하면 클립보드를 비운다 — 두 번째 Ctrl+V가
     /// 사라진 원본을 다시 옮기려다 실패하는 것을 막는다(탐색기도 잘라내기는 1회성).
     /// 취소된 이동은 비우지 않는다(A94 3차 — 남은 항목을 다시 붙여넣을 수 있게).
     /// ui = 조작 시작 표면의 UI 문맥(A94 3차). 반환 = (조작을 시도했는지 — 갱신 필요 여부,
@@ -353,7 +488,10 @@ internal static class ExplorerFileOps
         }
         if (!view.Contains(StandardDataFormats.StorageItems)) return (false, OpResult.Empty, null);
 
-        var move = view.RequestedOperation.HasFlag(DataPackageOperation.Move);
+        // A94 6차 — 셸 형식 우선, 없으면 종전 판정. 이동으로 판정된 원본의 삭제 주체는 우리다
+        // (아래 TransferAsync가 System.IO로 옮긴다 — 탐색기 쪽에 알릴 것은 없다).
+        var move = await PreferredDropEffectIsMoveAsync(view)
+            ?? view.RequestedOperation.HasFlag(DataPackageOperation.Move);
         var result = await TransferDroppedAsync(view, targetFolder, move, ui);
         if (move && !result.Cancelled && result.Failed == 0 && result.Done > 0)
         {

@@ -63,7 +63,9 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     /// <summary>
     /// 선택된 파일 타일의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기").
-    /// A94(Extended)부터 다중 선택이 가능하지만 열기류 단일 대상 동작은 첫 선택(SelectedItem) 기준 유지.
+    /// A94(Extended)부터 다중 선택이 가능하지만 이 속성은 첫 선택(SelectedItem) 기준을 유지한다.
+    /// ※ A94 6차(v0.153.0)부터 셸 Enter는 <see cref="OpenSelectedFiles"/>(일괄 열기)를 쓴다 —
+    /// 이 속성은 "첫 선택 파일" 질의 API로만 남았다(A86 서술의 원형).
     /// </summary>
     public string? SelectedFilePath =>
         TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry }
@@ -95,6 +97,12 @@ public sealed partial class ThumbnailExplorer : UserControl
             ExplorerFileOps.CutMarksChanged += ApplyCutMarks;
         };
         Unloaded += (_, _) => ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
+        // A94 6차: 빈 영역(타일이 아닌 곳) 우클릭 메뉴 — New folder / Paste / Refresh.
+        // 타일 메뉴와의 이중 발화는 ContextFlyout 규칙이 원천 차단한다: 컨텍스트 요청은 원본
+        // 요소에서 위로 버블링하며 **가장 안쪽의 ContextFlyout 하나만** 뜨므로, 타일 위 우클릭은
+        // 타일 컨테이너(AttachContextMenu)가 받고 여기까지 오지 않는다. 배경이 있는 LayoutRoot에
+        // 거는 이유 = 그리드 자체 배경이 없어도 요청이 반드시 여기까지 올라오기 때문(히트 보장).
+        LayoutRoot.ContextFlyout = MakeSurfaceMenu();
     }
 
     /// <summary>
@@ -123,6 +131,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// Del = 휴지통 삭제, Ctrl+Shift+N = 새 폴더 — 이 그리드에 포커스가 있을 때만 온다
     /// (KeyDown 버블링이라 문서 에디터 등 텍스트 표면으로 새지 않고, A34 통과 규칙과도 겹치지 않는다).
     /// 4차(v0.151.0): Shift+Del = 영구 삭제(확인 대화상자 뒤), Esc = 잘라내기 표시 해제(비소비).
+    /// 6차(v0.153.0): Enter가 **다중 선택이면 선택된 파일 전부**를 연다(폴더 제외 — 아래 주석).
     /// </summary>
     private async void OnGridKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -136,6 +145,9 @@ public sealed partial class ThumbnailExplorer : UserControl
             if (SelectedEntry is not { } entry) return; // 선택 없음 — 셸(OnShellEnter)이 상태별로 받는다
             e.Handled = true; // 셸 루트 핸들러의 이중 처리 방지 — OnShellEnter는 Handled면 물러난다
             _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
+            // A94 6차: 다중 선택이면 선택된 '파일' 전부를 연다(폴더는 일괄 열기에서 제외).
+            // 선택에 파일이 하나도 없으면(폴더만 다중) 아래 현행 첫 항목 동작으로 떨어진다.
+            if (TileGrid.SelectedItems.Count > 1 && OpenFiles(SelectedFilePaths())) return;
             if (entry.IsFolder) FolderActivated?.Invoke(entry.Path);
             else FileActivated?.Invoke(entry.Path);
             return;
@@ -173,14 +185,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             case VirtualKey.N: // Ctrl+Shift+N = 새 폴더 (Shift 없는 Ctrl+N 아님 —
                 // 앱 전역 Shift+N 새 창(A84)과도 다른 조합. 판정 = Ctrl(위) && Shift && N)
-                if (!ExplorerFileOps.IsShiftDown() || CurrentFolder is not { Length: > 0 } parent) return;
+                if (!ExplorerFileOps.IsShiftDown() || CurrentFolder is not { Length: > 0 }) return;
                 e.Handled = true;
-                var (created, createNotice, createDenied) = ExplorerFileOps.CreateFolder(parent);
-                if (createNotice is not null)
-                    await ExplorerFileOps.ReportAsync(createNotice, createDenied ? 1 : 0, MakeOpUi());
-                if (created is null) return;
-                _pendingRenamePath = created; // 재스캔 결과(ShowEntries)가 돌아오면 그 타일로 편집 진입
-                FolderActivated?.Invoke(parent); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
+                await CreateFolderThenRenameAsync();
                 break;
             case VirtualKey.A:
                 e.Handled = true;
@@ -191,20 +198,53 @@ public sealed partial class ThumbnailExplorer : UserControl
                 var paths = SelectedPaths();
                 if (paths.Count == 0) return;
                 e.Handled = true;
-                if (await ExplorerFileOps.CopyToClipboardAsync(paths, cut: e.Key == VirtualKey.X)
-                    is { } copyNotice)
-                    ShowNotice(copyNotice);
+                await CopyWithNoticeAsync(paths, cut: e.Key == VirtualKey.X);
                 break;
             case VirtualKey.V:
                 if (CurrentFolder is not { Length: > 0 } folder) return;
                 e.Handled = true;
-                var pasteUi = MakeOpUi(); // A94 3차 — 충돌 대화상자·진행 문구, 4차 — 접근 거부 안내
-                var (didWork, pasteResult, pasteNotice) =
-                    await ExplorerFileOps.PasteFromClipboardAsync(folder, pasteUi);
-                if (didWork) FolderActivated?.Invoke(folder); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
-                await ExplorerFileOps.ReportAsync(pasteNotice, pasteResult.Denied, pasteUi);
+                await PasteIntoAsync(folder);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+N·빈 영역 메뉴 New folder (A94 2차 본문을 6차에서 메서드로 분리 — 동작 무변경):
+    /// "New folder" 생성(충돌 = "New folder (2)") 후 재스캔을 예약하고, 그 결과가 돌아오면
+    /// (ShowEntries) 그 타일로 이름변경 편집에 진입한다. 이 뷰의 재스캔은 좌 리스트 경유 비동기라
+    /// 완료를 직접 기다릴 수 없어 <see cref="_pendingRenamePath"/> 예약 방식이다.
+    /// </summary>
+    private async Task CreateFolderThenRenameAsync()
+    {
+        if (CurrentFolder is not { Length: > 0 } parent) return;
+        var (created, notice, denied) = ExplorerFileOps.CreateFolder(parent);
+        if (notice is not null) await ExplorerFileOps.ReportAsync(notice, denied ? 1 : 0, MakeOpUi());
+        if (created is null) return;
+        _pendingRenamePath = created; // 재스캔 결과(ShowEntries)가 돌아오면 그 타일로 편집 진입
+        FolderActivated?.Invoke(parent); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
+    }
+
+    /// <summary>
+    /// 클립보드 적재 공용 (A94 6차 — Ctrl+C/X와 우클릭 메뉴 Cut/Copy가 같은 경로).
+    /// 잘라내기 반투명 표시(4차)는 ExplorerFileOps가 적재 성공 시에만 갱신한다.
+    /// </summary>
+    private async Task CopyWithNoticeAsync(IReadOnlyList<string> paths, bool cut)
+    {
+        if (paths.Count == 0) return;
+        if (await ExplorerFileOps.CopyToClipboardAsync(paths, cut) is { } notice) ShowNotice(notice);
+    }
+
+    /// <summary>
+    /// 붙여넣기 공용 (A94 6차 — Ctrl+V·빈 영역 메뉴는 현재 폴더, 폴더 타일 메뉴는 그 폴더).
+    /// 갱신은 종전대로 단일 원본(좌 리스트) 경유 재스캔 1회 — A93 경로.
+    /// </summary>
+    private async Task PasteIntoAsync(string targetFolder)
+    {
+        if (targetFolder.Length == 0) return;
+        var ui = MakeOpUi(); // A94 3차 — 충돌 대화상자·진행 문구, 4차 — 접근 거부 안내
+        var (didWork, result, notice) = await ExplorerFileOps.PasteFromClipboardAsync(targetFolder, ui);
+        if (didWork) RefreshViaShell();
+        await ExplorerFileOps.ReportAsync(notice, result.Denied, ui);
     }
 
     /// <summary>선택 타일 경로 전부(폴더 포함) — 항목 = 컨테이너 직접 추가라 Tag에서 꺼낸다(A94).</summary>
@@ -215,6 +255,51 @@ public sealed partial class ThumbnailExplorer : UserControl
             .OfType<ExplorerListing.Entry>()
             .Select(e => e.Path)
             .ToList();
+
+    /// <summary>선택 타일 중 **파일**만의 경로 (A94 6차 — 일괄 열기 대상. 폴더는 제외한다).</summary>
+    private IReadOnlyList<string> SelectedFilePaths() =>
+        TileGrid.SelectedItems
+            .OfType<FrameworkElement>()
+            .Select(i => i.Tag)
+            .OfType<ExplorerListing.Entry>()
+            .Where(e => !e.IsFolder)
+            .Select(e => e.Path)
+            .ToList();
+
+    /// <summary>
+    /// 잡은 타일의 조작 대상 (A94: 드래그·삭제 규칙 — 그 타일이 선택에 포함돼 있으면 선택 전부,
+    /// 아니면 그 타일 하나). 6차에서 Cut·Copy도 같은 규칙을 쓰게 메서드로 뽑았다(동작 무변경).
+    /// </summary>
+    private IReadOnlyList<string> PathsFor(ExplorerListing.Entry entry)
+    {
+        var selected = SelectedPaths();
+        return selected.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) ? selected : [entry.Path];
+    }
+
+    /// <summary>
+    /// 셸(MainWindow)의 Enter 분배가 부르는 일괄 열기 (A94 6차) — 종전 "SelectedFilePath 하나를
+    /// OpenFileRouted"를 대체한다. 그리드 자체 Enter·더블클릭과 같은 규칙(아래 OpenFiles).
+    /// 반환 = 하나라도 열었는지(false면 셸이 종전 폴백으로 간다).
+    /// </summary>
+    public bool OpenSelectedFiles() => OpenFiles(SelectedFilePaths());
+
+    /// <summary>
+    /// 일괄 열기 실행 (A94 6차): 상한(10) 적용 뒤 **첫 파일 = 기존 단일 열기 경로**
+    /// (newWindowFirst면 Shift+더블클릭과 같은 새 인스턴스, 아니면 셸이 재사용 규칙 A24 적용),
+    /// **나머지 = 전부 새 인스턴스**. 창 생성은 기존 이벤트(FileActivated·FileActivatedNewWindow)로만
+    /// 나가므로 이 컨트롤은 창 규칙을 알지 않는다. 루프를 동기로 도는 근거 = 창 생성·파일 열기가
+    /// 단일 UI 스레드에서 동기 완결이라는 A124 복원 루프의 전례(WindowManager.TryRestoreSession).
+    /// 반환 = 하나라도 열었는지.
+    /// </summary>
+    private bool OpenFiles(IReadOnlyList<string> files, bool newWindowFirst = false)
+    {
+        if (files.Count == 0) return false;
+        var batch = ExplorerFileOps.TakeBatchOpen(files, ShowNotice);
+        if (newWindowFirst) FileActivatedNewWindow?.Invoke(batch[0]);
+        else FileActivated?.Invoke(batch[0]);
+        for (var i = 1; i < batch.Count; i++) FileActivatedNewWindow?.Invoke(batch[i]);
+        return true;
+    }
 
     /// <summary>열 수 지정(A93: 도크 둘 다 열림 4 / 하나라도 닫힘 8). 바뀌면 타일 크기 재계산.</summary>
     public void SetColumns(int columns)
@@ -494,11 +579,11 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 항목 우클릭 메뉴 — ExplorerPane.AttachContextMenu와 같은 구성(A94 2차):
-    /// 파일 = "Open in new instance"(A24) + Rename·Delete, 폴더 = Rename·Delete만
-    /// (종전에는 파일 전용 메뉴라 폴더 타일에 안 달았다. 빈 영역 메뉴는 원래 없어 이번에도
-    /// 안 만든다 — 새 폴더는 키만: docs/A94-matrix.md 명기). Delete 대상은 드래그와 같은 규칙 —
-    /// 그 타일이 선택에 포함돼 있으면 선택 전부, 아니면 그 타일 하나.
+    /// 항목 우클릭 메뉴 — ExplorerPane.AttachContextMenu와 같은 구성(A94 2차 신설 → 6차 확장).
+    /// 순서는 탐색기 관례 근사: 파일 = "Open in new instance"(A24) → 구분선 → Cut·Copy →
+    /// 구분선 → Rename·Delete, 폴더 = Cut·Copy·**Paste(대상 = 그 폴더)** → 구분선 → Rename·Delete.
+    /// Delete·Cut·Copy 대상은 드래그와 같은 규칙 — 그 타일이 선택에 포함돼 있으면 선택 전부,
+    /// 아니면 그 타일 하나(PathsFor).
     /// Rename은 플라이아웃이 닫히며 포커스를 되돌린 '뒤'에 진입해야 편집 상자가 곧장 LostFocus
     /// 커밋으로 닫혀 버리지 않는다 — 디스패처로 한 박자 미룬다.
     /// </summary>
@@ -516,6 +601,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             flyout.Items.Add(open);
             flyout.Items.Add(new MenuFlyoutSeparator());
         }
+        AddClipboardItems(flyout, entry); // A94 6차 — Cut·Copy·(폴더면 Paste) + 구분선
         var rename = new MenuFlyoutItem
         {
             Text = "Rename",
@@ -528,17 +614,91 @@ public sealed partial class ThumbnailExplorer : UserControl
             Text = "Delete",
             Icon = new FontIcon { Glyph = "\uE74D" }, // Delete
         };
-        delete.Click += async (_, _) =>
-        {
-            var selected = SelectedPaths();
-            IReadOnlyList<string> targets =
-                selected.Contains(entry.Path, StringComparer.OrdinalIgnoreCase)
-                    ? selected
-                    : [entry.Path];
-            await DeleteWithNoticeAsync(targets);
-        };
+        delete.Click += async (_, _) => await DeleteWithNoticeAsync(PathsFor(entry));
         flyout.Items.Add(delete);
         item.ContextFlyout = flyout;
+    }
+
+    /// <summary>
+    /// 타일 메뉴의 클립보드 묶음 (A94 6차): Cut · Copy · (폴더면) Paste + 뒤따르는 구분선.
+    /// 조작은 Ctrl+C/X/V와 **완전히 같은 경로**다(CopyWithNoticeAsync·PasteIntoAsync) —
+    /// 폴더 Paste만 대상이 현재 폴더가 아니라 그 폴더다(PasteFromClipboardAsync가 이미 대상
+    /// 폴더를 인자로 받으므로 넓힐 것이 없었다). Paste 활성 판정은 메뉴가 열릴 때 한다.
+    /// </summary>
+    private void AddClipboardItems(MenuFlyout flyout, ExplorerListing.Entry entry)
+    {
+        var cutItem = new MenuFlyoutItem
+        {
+            Text = "Cut",
+            Icon = new FontIcon { Glyph = "\uE8C6" }, // Cut
+        };
+        cutItem.Click += async (_, _) => await CopyWithNoticeAsync(PathsFor(entry), cut: true);
+        flyout.Items.Add(cutItem);
+
+        var copyItem = new MenuFlyoutItem
+        {
+            Text = "Copy",
+            Icon = new FontIcon { Glyph = "\uE8C8" }, // Copy
+        };
+        copyItem.Click += async (_, _) => await CopyWithNoticeAsync(PathsFor(entry), cut: false);
+        flyout.Items.Add(copyItem);
+
+        if (entry.IsFolder)
+        {
+            var pasteItem = new MenuFlyoutItem
+            {
+                Text = "Paste",
+                Icon = new FontIcon { Glyph = "\uE77F" }, // Paste
+            };
+            pasteItem.Click += async (_, _) => await PasteIntoAsync(entry.Path);
+            flyout.Items.Add(pasteItem);
+            flyout.Opening += (_, _) => pasteItem.IsEnabled = ExplorerFileOps.CanPasteFromClipboard();
+        }
+        flyout.Items.Add(new MenuFlyoutSeparator());
+    }
+
+    /// <summary>
+    /// 빈 영역 우클릭 메뉴 (A94 6차): New folder / Paste / Refresh — 셋 다 기존 경로 재사용이다
+    /// (Ctrl+Shift+N의 CreateFolderThenRenameAsync = 생성 후 이름 편집 진입까지 · 현재 폴더
+    /// 붙여넣기 · 단일 원본 경유 재스캔 RefreshViaShell). 이 뷰는 표면이 하나라 메뉴도 한 벌이다.
+    /// 활성 판정은 메뉴가 열릴 때: 아직 폴더가 정해지지 않았으면 셋 다 비활성, Paste는 클립보드에
+    /// 파일 항목이 있을 때만(판정 실패 시 활성 — CanPasteFromClipboard 주석).
+    /// </summary>
+    private MenuFlyout MakeSurfaceMenu()
+    {
+        var newFolder = new MenuFlyoutItem
+        {
+            Text = "New folder",
+            Icon = new FontIcon { Glyph = "\uE8F4" }, // NewFolder
+        };
+        newFolder.Click += async (_, _) => await CreateFolderThenRenameAsync();
+
+        var paste = new MenuFlyoutItem
+        {
+            Text = "Paste",
+            Icon = new FontIcon { Glyph = "\uE77F" }, // Paste
+        };
+        paste.Click += async (_, _) => await PasteIntoAsync(CurrentFolder ?? string.Empty);
+
+        var refresh = new MenuFlyoutItem
+        {
+            Text = "Refresh",
+            Icon = new FontIcon { Glyph = "\uE72C" }, // Refresh
+        };
+        refresh.Click += (_, _) => RefreshViaShell();
+
+        var flyout = new MenuFlyout();
+        flyout.Items.Add(newFolder);
+        flyout.Items.Add(paste);
+        flyout.Items.Add(refresh);
+        flyout.Opening += (_, _) =>
+        {
+            var ready = CurrentFolder is { Length: > 0 };
+            newFolder.IsEnabled = ready;
+            paste.IsEnabled = ready && ExplorerFileOps.CanPasteFromClipboard();
+            refresh.IsEnabled = ready;
+        };
+        return flyout;
     }
 
     // ---------- 입력 ----------
@@ -582,6 +742,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// (Shift = 새 창, A24). ItemClick 쌍과 DoubleTapped가 같은 제스처에서 둘 다 발화하는
     /// 환경이 있어, 같은 경로의 연속 발화를 판정 창(DoubleClickMs) 안에서 1회로 누른다 —
     /// A24 "항상 새 창" 설정에서 창이 두 개 뜨는 이중 열기 방지.
+    /// A94 6차: 활성화한 타일이 **다중 선택에 포함돼 있으면** 선택된 파일 전부를 연다(폴더 제외 —
+    /// 선택에 파일이 하나도 없으면 종전대로 그 타일 하나. Enter 규칙과 같다).
     /// </summary>
     private void Activate(ExplorerListing.Entry entry)
     {
@@ -591,15 +753,22 @@ public sealed partial class ThumbnailExplorer : UserControl
             return;
         _lastActivation = (entry.Path, now);
 
+        var shift = Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+        // A94 6차 — 다중 선택 일괄 열기(잡은 타일이 선택 밖이면 그 타일만: 드래그·삭제와 같은 규칙)
+        if (TileGrid.SelectedItems.Count > 1 &&
+            SelectedPaths().Contains(entry.Path, StringComparer.OrdinalIgnoreCase) &&
+            OpenFiles(SelectedFilePaths(), shift))
+            return;
+
         if (entry.IsFolder)
         {
             FolderActivated?.Invoke(entry.Path);
             return;
         }
 
-        var shift = Microsoft.UI.Input.InputKeyboardSource
-            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         if (shift) FileActivatedNewWindow?.Invoke(entry.Path);
         else FileActivated?.Invoke(entry.Path);
     }

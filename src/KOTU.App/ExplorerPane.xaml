@@ -60,16 +60,21 @@
 
             <!-- 좌: 썸네일 아이콘 그리드 (더블클릭 열기 — 판정은 코드).
                  A94(v0.124.0): Extended = 윈도우 관례 다중선택(Ctrl 토글·Shift 범위·Ctrl+A).
-                 드래그 아웃·폴더 항목 드랍은 코드가 항목 컨테이너에 건다(AttachDragDrop). -->
+                 드래그 아웃·폴더 항목 드랍은 코드가 항목 컨테이너에 건다(AttachDragDrop).
+                 A94 6차(v0.153.0): Background=Transparent — 항목이 없는 빈 영역도 히트 테스트가
+                 되어야 빈 영역 우클릭 메뉴(코드에서 ContextFlyout으로 건다)가 뜬다.
+                 투명은 화면상 종전과 같다(좌 패널 아크릴이 그대로 비친다). -->
             <GridView x:Name="IconGrid"
                       Padding="12,4"
+                      Background="Transparent"
                       SelectionMode="Extended"
                       IsItemClickEnabled="True"
                       ItemClick="OnItemClick" />
 
-            <!-- 우: 리스트 뷰 (다중선택·드래그·드랍은 그리드와 같은 규칙 — A94) -->
+            <!-- 우: 리스트 뷰 (다중선택·드래그·드랍·빈 영역 메뉴는 그리드와 같은 규칙 — A94) -->
             <ListView x:Name="ListPane" Grid.Column="1"
                       Padding="4"
+                      Background="Transparent"
                       SelectionMode="Extended"
                       IsItemClickEnabled="True"
                       ItemClick="OnItemClick"

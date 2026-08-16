@@ -108,6 +108,13 @@ public sealed partial class ExplorerPane : UserControl
         // 컨트롤이 먼저 Handled를 걸어도 받게 handledEventsToo (ThumbnailExplorer Enter와 같은 관용구).
         IconGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSurfaceKeyDown), true);
         ListPane.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSurfaceKeyDown), true);
+        // A94 6차: 빈 영역(항목이 아닌 곳) 우클릭 메뉴 — New folder / Paste / Refresh.
+        // 항목 메뉴와의 이중 발화는 ContextFlyout 규칙이 원천 차단한다: 컨텍스트 요청은 원본
+        // 요소에서 위로 버블링하며 **가장 안쪽의 ContextFlyout 하나만** 떠서 요청을 소비하므로,
+        // 항목 위 우클릭은 항목 컨테이너(AttachContextMenu)가 받고 여기까지 오지 않는다.
+        // 빈 영역이 히트 테스트되도록 XAML에서 Background=Transparent를 준 것과 한 쌍이다.
+        IconGrid.ContextFlyout = MakeSurfaceMenu(IconGrid);
+        ListPane.ContextFlyout = MakeSurfaceMenu(ListPane);
         // A94 4차: 잘라내기 표시(전역 1벌)가 바뀌면 이미 그려 둔 항목의 흐림만 다시 맞춘다.
         // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
         // (Unloaded로 워커를 정리하는 아래 관용구와 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
@@ -341,10 +348,11 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 항목 우클릭 메뉴: 파일 = "Open in new instance"(A24) + Rename·Delete, 폴더 = Rename·Delete만
-    /// (A94 2차 — 종전에는 파일 전용 메뉴라 폴더에 안 달았다. 빈 영역 메뉴는 원래 없어 이번에도
-    /// 안 만든다 — 새 폴더는 키만: docs/A94-matrix.md 명기). Delete 대상은 드래그와 같은 규칙 —
-    /// 그 항목이 선택에 포함돼 있으면 선택 전부, 아니면 그 항목 하나(PathsForDrag 재사용).
+    /// 항목 우클릭 메뉴 (A94 2차 신설 → 6차 확장). 순서는 탐색기 관례 근사:
+    /// 파일 = "Open in new instance"(A24) → 구분선 → Cut·Copy → 구분선 → Rename·Delete,
+    /// 폴더 = Cut·Copy·**Paste(대상 = 그 폴더)** → 구분선 → Rename·Delete.
+    /// Delete·Cut·Copy 대상은 드래그와 같은 규칙 — 그 항목이 선택에 포함돼 있으면 선택 전부,
+    /// 아니면 그 항목 하나(PathsForDrag 재사용).
     /// Rename은 플라이아웃이 닫히며 포커스를 되돌린 '뒤'에 진입해야 편집 상자가 곧장 LostFocus
     /// 커밋으로 닫혀 버리지 않는다 — 디스패처로 한 박자 미룬다(BeginRenameOf).
     /// </summary>
@@ -352,6 +360,7 @@ public sealed partial class ExplorerPane : UserControl
     {
         var flyout = new MenuFlyout();
         if (!entry.IsFolder) AddOpenInNewInstance(flyout, entry);
+        AddClipboardItems(flyout, entry, owner); // A94 6차 — Cut·Copy·(폴더면 Paste) + 구분선
         var rename = new MenuFlyoutItem
         {
             Text = "Rename",
@@ -380,6 +389,91 @@ public sealed partial class ExplorerPane : UserControl
         open.Click += (_, _) => FileActivatedNewWindow?.Invoke(entry.Path);
         flyout.Items.Add(open);
         flyout.Items.Add(new MenuFlyoutSeparator());
+    }
+
+    /// <summary>
+    /// 항목 메뉴의 클립보드 묶음 (A94 6차): Cut · Copy · (폴더면) Paste + 뒤따르는 구분선.
+    /// 조작 자체는 Ctrl+C/X/V와 **완전히 같은 경로**다(CopyWithNoticeAsync·PasteIntoAsync) —
+    /// 폴더 Paste만 대상이 현재 폴더가 아니라 그 폴더다(PasteFromClipboardAsync가 이미 대상
+    /// 폴더를 인자로 받으므로 넓힐 것이 없었다). Paste 활성 판정은 메뉴가 열릴 때 한다.
+    /// </summary>
+    private void AddClipboardItems(MenuFlyout flyout, ExplorerListing.Entry entry, ListViewBase owner)
+    {
+        var cutItem = new MenuFlyoutItem
+        {
+            Text = "Cut",
+            Icon = new FontIcon { Glyph = "\uE8C6" }, // Cut
+        };
+        cutItem.Click += async (_, _) => await CopyWithNoticeAsync(PathsForDrag(owner, entry), cut: true);
+        flyout.Items.Add(cutItem);
+
+        var copyItem = new MenuFlyoutItem
+        {
+            Text = "Copy",
+            Icon = new FontIcon { Glyph = "\uE8C8" }, // Copy
+        };
+        copyItem.Click += async (_, _) => await CopyWithNoticeAsync(PathsForDrag(owner, entry), cut: false);
+        flyout.Items.Add(copyItem);
+
+        if (entry.IsFolder)
+        {
+            var pasteItem = new MenuFlyoutItem
+            {
+                Text = "Paste",
+                Icon = new FontIcon { Glyph = "\uE77F" }, // Paste
+            };
+            pasteItem.Click += async (_, _) => await PasteIntoAsync(entry.Path);
+            flyout.Items.Add(pasteItem);
+            flyout.Opening += (_, _) => pasteItem.IsEnabled = ExplorerFileOps.CanPasteFromClipboard();
+        }
+        flyout.Items.Add(new MenuFlyoutSeparator());
+    }
+
+    /// <summary>
+    /// 빈 영역 우클릭 메뉴 (A94 6차): New folder / Paste / Refresh — 셋 다 기존 경로 재사용이다
+    /// (Ctrl+Shift+N의 CreateFolderThenRenameAsync = 생성 후 이름 편집 진입까지 · 현재 폴더
+    /// 붙여넣기 · 조작 후 재스캔 RefreshAfterFileOp). 표면(그리드·리스트)마다 한 벌씩 만든다 —
+    /// 새 폴더 편집 진입이 자기 owner의 컨테이너를 찾아야 하기 때문.
+    /// 활성 판정은 메뉴가 열릴 때: 아직 항해 전이면(폴더 미정) 셋 다 비활성, Paste는 클립보드에
+    /// 파일 항목이 있을 때만(판정 실패 시 활성 — CanPasteFromClipboard 주석).
+    /// </summary>
+    private MenuFlyout MakeSurfaceMenu(ListViewBase owner)
+    {
+        var newFolder = new MenuFlyoutItem
+        {
+            Text = "New folder",
+            Icon = new FontIcon { Glyph = "\uE8F4" }, // NewFolder
+        };
+        // 편집 진입 전에 재스캔 await가 한 번 끼므로 플라이아웃은 그때 이미 닫혀 있다
+        // (Rename처럼 디스패처로 미룰 필요가 없다 — 순서는 CreateFolderThenRenameAsync가 보장).
+        newFolder.Click += async (_, _) => await CreateFolderThenRenameAsync(owner);
+
+        var paste = new MenuFlyoutItem
+        {
+            Text = "Paste",
+            Icon = new FontIcon { Glyph = "\uE77F" }, // Paste
+        };
+        paste.Click += async (_, _) => await PasteIntoAsync(_folder);
+
+        var refresh = new MenuFlyoutItem
+        {
+            Text = "Refresh",
+            Icon = new FontIcon { Glyph = "\uE72C" }, // Refresh
+        };
+        refresh.Click += (_, _) => RefreshAfterFileOp();
+
+        var flyout = new MenuFlyout();
+        flyout.Items.Add(newFolder);
+        flyout.Items.Add(paste);
+        flyout.Items.Add(refresh);
+        flyout.Opening += (_, _) =>
+        {
+            var ready = _folder.Length > 0;
+            newFolder.IsEnabled = ready;
+            paste.IsEnabled = ready && ExplorerFileOps.CanPasteFromClipboard();
+            refresh.IsEnabled = ready;
+        };
+        return flyout;
     }
 
     /// <summary>그리드 타일: 썸네일 자리(우선 글리프, 이후 비동기 교체) + 이름 2줄.</summary>
@@ -617,6 +711,52 @@ public sealed partial class ExplorerPane : UserControl
     private static string? PathOfSelection(object? item) =>
         item is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry } ? entry.Path : null;
 
+    // ---------- 다중 선택 일괄 열기 (A94 6차, v0.153.0) ----------
+
+    /// <summary>
+    /// 셸(MainWindow)의 Enter 분배가 부르는 일괄 열기 (A94 6차) — 종전 "SelectedFilePath 하나를
+    /// OpenFileRouted"를 대체한다. 표면 자체 Enter·더블클릭과 **같은 규칙**(아래 OpenFiles):
+    /// 선택된 파일만(폴더 제외), 첫 파일은 재사용 규칙(A24) 경로, 나머지는 새 인스턴스.
+    /// 반환 = 하나라도 열었는지(false면 셸이 종전 폴백 — 오버레이 토글 등으로 간다).
+    /// 그리드·리스트 중 파일 선택이 있는 쪽을 쓴다(SelectedFilePath와 같은 우선순위).
+    /// </summary>
+    internal bool OpenSelectedFiles()
+    {
+        var files = SelectedFilePathsOf(IconGrid);
+        if (files.Count == 0) files = SelectedFilePathsOf(ListPane);
+        return OpenFiles(files);
+    }
+
+    /// <summary>
+    /// 일괄 열기 실행 (A94 6차): 상한(10) 적용 뒤 **첫 파일 = 기존 단일 열기 경로**
+    /// (newWindowFirst면 Shift+더블클릭과 같은 새 인스턴스, 아니면 재사용 규칙 A24를 셸이 적용),
+    /// **나머지 = 전부 새 인스턴스**. 창 생성은 셸의 기존 이벤트(FileActivated·
+    /// FileActivatedNewWindow)로만 나가므로 이 컨트롤은 창 규칙을 알지 않는다.
+    /// 루프를 동기로 도는 근거: 창 생성·파일 열기는 단일 UI 스레드에서 동기 완결이다
+    /// (A124 복원 루프가 같은 형태 — WindowManager.TryRestoreSession). 중간에 대화상자가 떠도
+    /// 그건 그 창의 XamlRoot 몫이라 창당 동시 1개 규칙(A113)을 깨지 않는다.
+    /// 반환 = 하나라도 열었는지.
+    /// </summary>
+    private bool OpenFiles(IReadOnlyList<string> files, bool newWindowFirst = false)
+    {
+        if (files.Count == 0) return false;
+        var batch = ExplorerFileOps.TakeBatchOpen(files, text => Notice?.Invoke(text));
+        if (newWindowFirst) FileActivatedNewWindow?.Invoke(batch[0]);
+        else FileActivated?.Invoke(batch[0]);
+        for (var i = 1; i < batch.Count; i++) FileActivatedNewWindow?.Invoke(batch[i]);
+        return true;
+    }
+
+    /// <summary>선택 항목 중 **파일**만의 경로 (A94 6차 — 일괄 열기 대상. 폴더는 제외한다).</summary>
+    private static IReadOnlyList<string> SelectedFilePathsOf(ListViewBase owner) =>
+        owner.SelectedItems
+            .OfType<FrameworkElement>()
+            .Select(i => i.Tag)
+            .OfType<ExplorerListing.Entry>()
+            .Where(entry => !entry.IsFolder)
+            .Select(entry => entry.Path)
+            .ToList();
+
     // ---------- 파일 조작: 드래그 아웃 · 드랍 이동/복사 · 클립보드 (A94 1차, v0.124.0) ----------
 
     /// <summary>
@@ -715,6 +855,7 @@ public sealed partial class ExplorerPane : UserControl
     /// F2 = 이름변경(첫 선택 항목 1개), Del = 휴지통 삭제(선택 전부), Ctrl+Shift+N = 새 폴더.
     /// A85가 얹은 것 — Enter = 선택 항목 열기(폴더 = 진입. ThumbnailExplorer와 동일).
     /// 4차(v0.151.0)가 얹은 것 — Shift+Del = 영구 삭제(확인 대화상자 뒤), Esc = 잘라내기 표시 해제.
+    /// 6차(v0.153.0)가 얹은 것 — Enter가 **다중 선택이면 선택된 파일 전부**를 연다(폴더 제외).
     /// 이 표면(그리드/리스트)에 포커스가 있을 때만 온다 — 생성자 AddHandler 주석 참고.
     /// </summary>
     private async void OnSurfaceKeyDown(object sender, KeyRoutedEventArgs e)
@@ -734,6 +875,9 @@ public sealed partial class ExplorerPane : UserControl
                 if (owner.SelectedItem is not SelectorItem { Tag: ExplorerListing.Entry entry }) return;
                 e.Handled = true;
                 _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
+                // A94 6차: 다중 선택이면 선택된 '파일' 전부를 연다(폴더는 일괄 열기에서 제외).
+                // 선택에 파일이 하나도 없으면(폴더만 다중) 아래 현행 첫 항목 동작으로 떨어진다.
+                if (owner.SelectedItems.Count > 1 && OpenFiles(SelectedFilePathsOf(owner))) return;
                 if (entry.IsFolder) NavigateTo(entry.Path, _extensions);
                 else FileActivated?.Invoke(entry.Path);
                 return;
@@ -773,23 +917,41 @@ public sealed partial class ExplorerPane : UserControl
                 break;
             case Windows.System.VirtualKey.C:
             case Windows.System.VirtualKey.X:
-                var cut = e.Key == Windows.System.VirtualKey.X;
                 var paths = SelectedPathsOf(owner);
                 if (paths.Count == 0) return;
                 e.Handled = true;
-                if (await ExplorerFileOps.CopyToClipboardAsync(paths, cut) is { } copyNotice)
-                    Notice?.Invoke(copyNotice);
+                await CopyWithNoticeAsync(paths, cut: e.Key == Windows.System.VirtualKey.X);
                 break;
             case Windows.System.VirtualKey.V:
                 if (_folder.Length == 0) return;
                 e.Handled = true;
-                var pasteUi = MakeOpUi(); // A94 3차 — 충돌 대화상자·진행 문구, 4차 — 접근 거부 안내
-                var (didWork, pasteResult, pasteNotice) =
-                    await ExplorerFileOps.PasteFromClipboardAsync(_folder, pasteUi);
-                if (didWork) RefreshAfterFileOp();
-                await ExplorerFileOps.ReportAsync(pasteNotice, pasteResult.Denied, pasteUi);
+                await PasteIntoAsync(_folder);
                 break;
         }
+    }
+
+    /// <summary>
+    /// 클립보드 적재 공용 (A94 6차 — Ctrl+C/X와 우클릭 메뉴 Cut/Copy가 같은 경로).
+    /// 잘라내기 반투명 표시(4차)는 ExplorerFileOps가 적재 성공 시에만 갱신한다.
+    /// </summary>
+    private async Task CopyWithNoticeAsync(IReadOnlyList<string> paths, bool cut)
+    {
+        if (paths.Count == 0) return;
+        if (await ExplorerFileOps.CopyToClipboardAsync(paths, cut) is { } notice) Notice?.Invoke(notice);
+    }
+
+    /// <summary>
+    /// 붙여넣기 공용 (A94 6차 — Ctrl+V·빈 영역 메뉴는 현재 폴더, 폴더 항목 메뉴는 그 폴더).
+    /// 대상이 현재 폴더가 아니어도 갱신은 현재 폴더 재스캔 하나면 된다(하위 폴더 내용 변화는
+    /// 목록에 보이지 않지만, 대상이 현재 폴더인 경우를 같은 줄이 덮는다).
+    /// </summary>
+    private async Task PasteIntoAsync(string targetFolder)
+    {
+        if (targetFolder.Length == 0) return;
+        var ui = MakeOpUi(); // A94 3차 — 충돌 대화상자·진행 문구, 4차 — 접근 거부 안내
+        var (didWork, result, notice) = await ExplorerFileOps.PasteFromClipboardAsync(targetFolder, ui);
+        if (didWork) RefreshAfterFileOp();
+        await ExplorerFileOps.ReportAsync(notice, result.Denied, ui);
     }
 
     // ---------- 이름변경 · 새 폴더 · 휴지통 삭제 (A94 2차, v0.125.0) ----------
@@ -877,7 +1039,7 @@ public sealed partial class ExplorerPane : UserControl
         if (!isDouble) return;
 
         _lastClick = null;
-        Activate(entry);
+        Activate(entry, sender as ListViewBase);
     }
 
     /// <summary>
@@ -889,10 +1051,12 @@ public sealed partial class ExplorerPane : UserControl
     private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
-        if (sender is not SelectorItem { Tag: ExplorerListing.Entry entry }) return;
+        if (sender is not SelectorItem { Tag: ExplorerListing.Entry entry } item) return;
         e.Handled = true;
         _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게
-        Activate(entry);
+        // 소속 표면 = 컨테이너 타입으로 결정된다(MakeGridItem = GridViewItem/IconGrid,
+        // MakeListItem = ListViewItem/ListPane) — 일괄 열기(A94 6차)가 그 표면의 선택을 본다.
+        Activate(entry, item is GridViewItem ? IconGrid : ListPane);
     }
 
     /// <summary>
@@ -900,8 +1064,10 @@ public sealed partial class ExplorerPane : UserControl
     /// ItemClick 쌍과 DoubleTapped가 같은 제스처에서 둘 다 발화하는 환경이 있어, 같은 경로의
     /// 연속 발화를 판정 창(DoubleClickMs) 안에서 1회로 누른다 — A24 "항상 새 창" 설정에서
     /// 창이 두 개 뜨는 이중 열기 방지.
+    /// A94 6차: 활성화한 항목이 **다중 선택에 포함돼 있으면** 선택된 파일 전부를 연다(폴더 제외 —
+    /// 선택에 파일이 하나도 없으면 종전대로 그 항목 하나. Enter 규칙과 같다).
     /// </summary>
-    private void Activate(ExplorerListing.Entry entry)
+    private void Activate(ExplorerListing.Entry entry, ListViewBase? owner)
     {
         var now = DateTime.UtcNow;
         if (_lastActivation is { } last && last.Path == entry.Path &&
@@ -909,15 +1075,22 @@ public sealed partial class ExplorerPane : UserControl
             return;
         _lastActivation = (entry.Path, now);
 
+        var shift = Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+        // A94 6차 — 다중 선택 일괄 열기(잡은 항목이 선택 밖이면 그 항목만: 드래그·삭제와 같은 규칙)
+        if (owner is not null && owner.SelectedItems.Count > 1 &&
+            SelectedPathsOf(owner).Contains(entry.Path, StringComparer.OrdinalIgnoreCase) &&
+            OpenFiles(SelectedFilePathsOf(owner), shift))
+            return;
+
         if (entry.IsFolder)
         {
             NavigateTo(entry.Path, _extensions);
             return;
         }
 
-        var shift = Microsoft.UI.Input.InputKeyboardSource
-            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         if (shift) FileActivatedNewWindow?.Invoke(entry.Path);
         else FileActivated?.Invoke(entry.Path);
     }
