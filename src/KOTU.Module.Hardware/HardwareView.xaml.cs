@@ -644,7 +644,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     /// <summary>
     /// 선택(≤2, 선택 순서 = 트레이 줄 순서와 동일)이 바뀔 때 좌 대형·하단 긴 그래프를 다시
-    /// 만든다. 표면은 매번 새로 만들고 옛것은 컨테이너 Clear로 버린다(표면에 이벤트 구독 없음 —
+    /// 만든다. 표면은 매번 새로 만들고 옛것은 컨테이너 Clear로 버린다(표면 밖으로 나가는 구독은
+    /// 없다 — A122가 건 header.SizeChanged는 같은 표면의 자식끼리라 표면과 함께 사라진다.
     /// 수명 문제 없음). 축 상태(ChannelScale)는 채널별 공유라 재선택해도 눈금이 이어진다(A74).
     /// 만들고 나서 이력으로 즉시 1회 그린다 — 다음 스냅샷(최대 5초, A73)을 기다리지 않는다.
     /// </summary>
@@ -803,6 +804,26 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         // 하단 바 표면의 y축 라벨은 상단 겹침 헤더와 겹칠 수 있어, 좁은 바 높이(32)에서는
         // 헤더를 수직 중앙으로 되돌린다 — 구 카드와 같은 배치.
         if (inBar) header.VerticalAlignment = VerticalAlignment.Center;
+        // A122: 비-바 표면(센터 타일·좌 대형)은 헤더가 상단에 겹친 채라 같은 좌상단을 쓰는
+        // y축 라벨(A74)과 z-겹침이 난다 — 라벨을 헤더 줄 "아래"로 내린다. 내리는 양은 실측
+        // (header.ActualHeight)이라 A62 배수·글꼴 크기 변화에도 자동 추종한다(수치 하드코딩 금지).
+        // 배선은 이 생성부 1회뿐이다 — 렌더 루프(RenderSparkline)는 축 라벨의 표시/숨김·글자만
+        // 만지고 Margin은 건드리지 않는다(매 틱 레이아웃 무효화 금지).
+        // 레이아웃 사이클 방지: 같은 값이면 재대입하지 않는다(0.5px 허용 오차 — A119
+        // ApplySquareTileSizes/ApplySquareBigSizes의 조기 반환과 같은 관례). 헤더 높이는 글꼴이
+        // 정하므로 폭만 바뀌는 리사이즈(A119 정사각형 한 변 재계산)에서는 첫 대입 뒤 전부
+        // 조기 반환이라 되먹임이 없다. 표면 크기는 A119가 명시 픽셀로 잡아 두므로 라벨이
+        // 내려가도 표면이 커지지 않는다(한 변 계산에 영향 없음).
+        // 구독 해제 불필요: header와 yAxisText는 같은 SensorGraph 표면의 자식이라 수명이
+        // 동일하고(표면을 버리면 이 핸들러도 함께 사라진다), static 이벤트가 아니라 인스턴스
+        // 이벤트다 — §3.4의 static 이벤트 누수 규칙(A88 CompositionTarget.Rendering) 대상이 아니다.
+        if (!inBar)
+            header.SizeChanged += (_, _) =>
+            {
+                var top = header.ActualHeight;
+                if (Math.Abs(yAxisText.Margin.Top - top) < 0.5) return; // 변화 없음 — 무효화 없이 종단
+                yAxisText.Margin = new Thickness(0, top, 0, 0);
+            };
 
         return new SensorGraph
         {
