@@ -140,7 +140,9 @@ public sealed partial class FileListOverlay : UserControl
         e.AcceptedOperation = operation; // 소스(OS 탐색기 등)에 확정 동작을 알린다
 
         var result = await ExplorerFileOps.TransferDroppedAsync(
-            e.DataView, folder, operation == DataPackageOperation.Move);
+            e.DataView, folder, operation == DataPackageOperation.Move,
+            // A94 3차 — 충돌 대화상자·진행 문구용 UI 문맥(조작 시작 시점의 이 창 기준 캡처)
+            new ExplorerFileOps.OpUi(DispatcherQueue, XamlRoot, ShowTransientNotice));
         NavigateList(folder); // 단일 원본(내부 리스트) 재스캔 — ViewChanged로 중앙 썸네일까지 갱신
         if (result.Notice(operation == DataPackageOperation.Move) is { } notice)
             ShowTransientNotice(notice);

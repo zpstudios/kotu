@@ -169,7 +169,8 @@ public sealed partial class ThumbnailExplorer : UserControl
             case VirtualKey.V:
                 if (CurrentFolder is not { Length: > 0 } folder) return;
                 e.Handled = true;
-                var (didWork, pasteNotice) = await ExplorerFileOps.PasteFromClipboardAsync(folder);
+                var (didWork, pasteNotice) =
+                    await ExplorerFileOps.PasteFromClipboardAsync(folder, MakeOpUi()); // A94 3차
                 if (didWork) FolderActivated?.Invoke(folder); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
                 if (pasteNotice is not null) ShowNotice(pasteNotice);
                 break;
@@ -248,6 +249,12 @@ public sealed partial class ThumbnailExplorer : UserControl
     {
         if (CurrentFolder is { Length: > 0 } folder) FolderActivated?.Invoke(folder);
     }
+
+    /// <summary>
+    /// 이동/복사/붙여넣기용 UI 문맥 (A94 3차) — 이 그리드 창의 DispatcherQueue·XamlRoot(충돌
+    /// 대화상자용)와 ShowNotice 채널(진행 문구 라이브 갱신용)을 조작 시작 시점에 캡처한다.
+    /// </summary>
+    private ExplorerFileOps.OpUi MakeOpUi() => new(DispatcherQueue, XamlRoot, ShowNotice);
 
     /// <summary>
     /// Del·우클릭 Delete (A94 2차): 휴지통 경유 삭제(StorageDeleteOption.Default —
@@ -582,7 +589,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         e.AcceptedOperation = operation; // 소스(OS 탐색기 등)에 확정 동작을 알린다
 
         var result = await ExplorerFileOps.TransferDroppedAsync(
-            e.DataView, targetFolder, operation == DataPackageOperation.Move);
+            e.DataView, targetFolder, operation == DataPackageOperation.Move,
+            MakeOpUi()); // A94 3차 — 충돌 대화상자·진행 문구용 UI 문맥(조작 시작 시점 캡처)
         FolderActivated?.Invoke(CurrentFolder is { Length: > 0 } current ? current : targetFolder);
         if (result.Notice(operation == DataPackageOperation.Move) is { } notice) ShowNotice(notice);
     }

@@ -648,7 +648,8 @@ public sealed partial class ExplorerPane : UserControl
         e.AcceptedOperation = operation; // 소스(OS 탐색기 등)에 확정 동작을 알린다
 
         var result = await ExplorerFileOps.TransferDroppedAsync(
-            e.DataView, targetFolder, operation == DataPackageOperation.Move);
+            e.DataView, targetFolder, operation == DataPackageOperation.Move,
+            MakeOpUi()); // A94 3차 — 충돌 대화상자·진행 문구용 UI 문맥(조작 시작 시점 캡처)
         RefreshAfterFileOp();
         if (result.Notice(operation == DataPackageOperation.Move) is { } notice) Notice?.Invoke(notice);
     }
@@ -658,6 +659,13 @@ public sealed partial class ExplorerPane : UserControl
     {
         if (_folder.Length > 0) NavigateTo(_folder, _extensions);
     }
+
+    /// <summary>
+    /// 이동/복사/붙여넣기용 UI 문맥 (A94 3차) — 이 표면 창의 DispatcherQueue·XamlRoot(충돌
+    /// 대화상자용)와 Notice 채널(진행 문구 라이브 갱신용)을 조작 시작 시점에 캡처한다.
+    /// </summary>
+    private ExplorerFileOps.OpUi MakeOpUi() =>
+        new(DispatcherQueue, XamlRoot, notice => Notice?.Invoke(notice));
 
     /// <summary>
     /// 표면 키 (A94): Ctrl+C = 복사, Ctrl+X = 잘라내기(RequestedOperation=Move로 구분),
@@ -726,7 +734,8 @@ public sealed partial class ExplorerPane : UserControl
             case Windows.System.VirtualKey.V:
                 if (_folder.Length == 0) return;
                 e.Handled = true;
-                var (didWork, pasteNotice) = await ExplorerFileOps.PasteFromClipboardAsync(_folder);
+                var (didWork, pasteNotice) =
+                    await ExplorerFileOps.PasteFromClipboardAsync(_folder, MakeOpUi()); // A94 3차
                 if (didWork) RefreshAfterFileOp();
                 if (pasteNotice is not null) Notice?.Invoke(pasteNotice);
                 break;

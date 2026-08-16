@@ -337,8 +337,17 @@
     **키만**) / Del = 휴지통 삭제(WinRT DeleteAsync StorageDeleteOption.Default — 확인 대화상자
     없음, Shift+Del은 비켜 감) / 항목 우클릭 메뉴에 Rename·Delete 추가(폴더 항목에도 메뉴가 생겼다 —
     종전 파일 전용).
-  - **남은 것**: 영구 삭제(Shift+Del)·권한 상승(UAC)·이동/복사 충돌 대화상자·폴더 감시
-    (FileSystemWatcher)·빈 영역 컨텍스트 메뉴 등 후속(사용자 결정 대기).
+  - **3차(v0.150.0) 반영**: 이름 충돌 대화상자(`ExplorerConflictDialog` 신규 — 코드 생성
+    ContentDialog. "Replace or skip files": Replace = 파일 덮어쓰기/폴더 **병합**(내부 파일 충돌도
+    같은 정책 흐름) · Skip · Keep both = 기존 "(2)" 재사용. 남은 충돌 2건 이상이면 "Do this for
+    all remaining conflicts" 체크박스 — 3버튼 전부, 이번 조작 한정. Esc = 취소(남은 작업 중단,
+    수행분 유지 + "n of m completed" 안내). 워커 유지 + 캡처한 XamlRoot/DispatcherQueue로 마셜,
+    TaskCompletionSource await, 창 단위 세마포어 직렬화 — ContentDialog 동시 1개(A113). F2
+    거부+원복·새 폴더 "New folder (2)" 규칙은 예외로 유지) / 대량 조작 진행 표시(기존 안내 채널
+    라이브 갱신 "Copying 3 of 12..." — 최상위 항목 기준, 100ms 스로틀·마지막 값 강제, 1~2개 생략.
+    별도 진행 창 없음).
+  - **남은 것**: 영구 삭제(Shift+Del)·권한 상승(UAC)·폴더 감시(FileSystemWatcher)·빈 영역
+    컨텍스트 메뉴 등 후속(사용자 결정 대기).
 - ※ A108(**'사이드바 vs 오버레이' 개념 확정 + 표시 정리**, v0.135.0) 완료 — 결번. 확정·구현 내역:
   - **용어 확정**: 사이드바 = 불투명·메인을 줄이며 옆에 섬(구 "불투명 도크/밀어내기") /
     오버레이 = 반투명·메인 위에 덮임(홀드/2초 고정). 소스 주석·UI 문구·`docs/A86-keymap.md`(용어 절
