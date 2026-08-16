@@ -75,6 +75,10 @@ public partial class App : Application
         // 실패는 훅·파일 계층에서 전부 조용히 무시된다.
         KOTU.Core.Integration.RestartSession.Writer = _windowManager.WriteRestartSession;
         KOTU.Core.Integration.RestartSession.Discarder = Integration.RestartSessionFile.Delete;
+        // A94 4차(v0.151.0): runas 재시작 흐름 자체도 셸로 모았다(Integration.AdminRelaunch) —
+        // 하드웨어 뷰 버튼과 탐색기의 접근 거부 안내가 같은 구현을 쓴다. 모듈 쪽 진입은 같은
+        // 이유(Core 의존 규칙)로 훅 경유다.
+        KOTU.Core.Integration.AdminRelaunchHook.Relauncher = Integration.AdminRelaunch.Relaunch;
 
         // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
         // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당

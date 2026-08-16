@@ -1,5 +1,6 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.ApplicationModel.DataTransfer.DragDrop;
 using Windows.Storage;
@@ -7,9 +8,9 @@ using Windows.Storage;
 namespace KOTU.App;
 
 /// <summary>
-/// 자체 탐색기 파일 조작 공용 로직 (A94 1차 v0.124.0 · 2차 v0.125.0 · 3차 v0.150.0) —
-/// 드래그 아웃 데이터 구성, 드랍 이동/복사, 클립보드 복사/잘라내기/붙여넣기, 휴지통 삭제·
-/// 이름변경·새 폴더가 한곳에 모인다.
+/// 자체 탐색기 파일 조작 공용 로직 (A94 1차 v0.124.0 · 2차 v0.125.0 · 3차 v0.150.0 · 4차 v0.151.0) —
+/// 드래그 아웃 데이터 구성, 드랍 이동/복사, 클립보드 복사/잘라내기/붙여넣기, 휴지통·영구 삭제·
+/// 이름변경·새 폴더와 잘라내기 표시 상태가 한곳에 모인다.
 /// 세 표면(ExplorerPane 리스트 · ThumbnailExplorer 타일 · FileListOverlay 패널)이 같은 규칙을 쓴다.
 ///
 /// 동작 결정(윈도우 관례): 같은 볼륨 = 이동, 다른 볼륨 = 복사. Ctrl 홀드 = 복사 강제,
@@ -25,6 +26,10 @@ namespace KOTU.App;
 /// 강제 복사(자기 자신과의 충돌)와 Keep both·새 폴더 경로에만 남았다. 예외(변경 금지 —
 /// docs/A94-matrix.md 명기): F2 이름변경 = 거부+원복, 새 폴더 = "New folder (2)".
 /// 대량 조작은 진행 문구("Copying 3 of 12...")를 조작 시작 표면의 안내 채널로 라이브 갱신한다.
+///
+/// 4차(v0.151.0)가 얹은 것: Shift+Del 영구 삭제(확인 대화상자 필수 — 휴지통행과 달리),
+/// 잘라내기 원본 반투명 표시(프로세스 전역 1벌 경로 집합 + 표면 렌더 시 경로 매칭),
+/// 접근 거부(UAC 필요) 실패의 구분 집계와 관리자 재시작 제안(<see cref="ReportAsync"/>).
 /// </summary>
 internal static class ExplorerFileOps
 {
@@ -39,9 +44,11 @@ internal static class ExplorerFileOps
     /// 조작 결과 집계. Skipped = 무동작 가드(같은 폴더로 이동 등)·소실 항목 + 3차부터
     /// 충돌 대화상자의 Skip 선택. Cancelled/Total = 3차 취소 안내("n of m completed")용 —
     /// 카운트는 전부 최상위 항목 기준(폴더 병합의 내부 파일은 폴더 1건에 묶인다).
+    /// Denied(4차) = Failed 중 권한 부족(UAC 필요)인 건수 — 부분집합이지 별도 축이 아니다.
+    /// 1 이상이면 <see cref="ReportAsync"/>가 완료 요약 대신 관리자 재시작을 제안한다.
     /// </summary>
     internal sealed record OpResult(int Done, int Skipped, int Failed, string? FirstError,
-        bool Cancelled = false, int Total = 0)
+        bool Cancelled = false, int Total = 0, int Denied = 0)
     {
         internal static OpResult Empty { get; } = new(0, 0, 0, null);
 
@@ -80,12 +87,127 @@ internal static class ExplorerFileOps
         .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     /// <summary>
-    /// Shift가 눌린 상태인지 (A94 2차) — Ctrl+Shift+N(새 폴더) 판정과 Del에서 Shift+Del(영구 삭제 —
-    /// 이번 범위 아님, 후속 등재)을 비켜 가는 판정용. IsCtrlDown과 같은 API.
+    /// Shift가 눌린 상태인지 (A94 2차) — Ctrl+Shift+N(새 폴더)과 Shift+Del(영구 삭제 — 4차부터
+    /// 실동작) 판정용. IsCtrlDown과 같은 API.
     /// </summary>
     internal static bool IsShiftDown() => Microsoft.UI.Input.InputKeyboardSource
         .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
         .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    // ---------- 잘라내기 원본 반투명 표시 (A94 4차, v0.151.0) ----------
+
+    /// <summary>잘라내기 표시 항목의 불투명도(윈도우 탐색기와 같은 절반 흐림) — 두 표면 공용 단일 값.</summary>
+    internal const double CutOpacity = 0.5;
+
+    /// <summary>
+    /// 잘라내기(Ctrl+X)로 표시 중인 경로 집합. **프로세스 전역 1벌** — 클립보드 자체가 전역이라
+    /// 모든 창·모든 표면이 같은 집합을 봐야 한다(A70의 전역 1벌 저장 깔때기와 같은 사고방식).
+    /// 접근은 단일 UI 스레드 전제(A110 확정) — 클립보드 조작도 표면 렌더도 전부 UI 스레드다.
+    /// 경로 비교는 대소문자 무시(NTFS 관례, 저장소의 다른 경로 비교와 동일).
+    /// </summary>
+    private static readonly HashSet<string> CutMarked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 잘라내기 표시 집합이 바뀌었다 — 두 표면(ExplorerPane·ThumbnailExplorer)이 구독해 이미
+    /// 그려 둔 항목의 흐림만 다시 맞춘다(재스캔이 아니다 — 선택·스크롤 보존).
+    /// 구독은 Loaded, 해지는 Unloaded — 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게 한다.
+    /// 신규 이벤트는 이 하나뿐이고, 그 밖의 갱신은 기존 재스캔/ViewChanged 경로가 처리한다
+    /// (새로 그려지는 항목은 생성 시점에 <see cref="ApplyCutMark"/>로 반영된다).
+    /// </summary>
+    internal static event Action? CutMarksChanged;
+
+    /// <summary>이 경로가 잘라내기 표시 대상인지 — 표면이 항목마다 묻는다(재스캔 뒤 재적용의 근거).</summary>
+    internal static bool IsCutMarked(string path) => CutMarked.Count > 0 && CutMarked.Contains(TrimSep(path));
+
+    /// <summary>
+    /// 항목 컨테이너 하나에 잘라내기 흐림을 반영한다 — 두 표면(리스트 행·그리드 타일) 공용.
+    /// 컨테이너가 아니라 '콘텐츠'의 Opacity를 건드린다: 선택 강조는 또렷한 채 아이콘·이름만
+    /// 흐려지는 탐색기 모양이 된다. 항목 = 컨테이너 직접 추가(Tag = Entry) 구조 전제.
+    /// </summary>
+    internal static void ApplyCutMark(object item)
+    {
+        // ExplorerListing은 KOTU.Core.Routing — 이 파일에 using을 새로 들이지 않으려 전체 이름으로 쓴다
+        // (Windows.Storage·DataTransfer 이름들과 섞을 이유가 없다).
+        if (item is SelectorItem { Content: UIElement content, Tag: KOTU.Core.Routing.ExplorerListing.Entry entry })
+            content.Opacity = IsCutMarked(entry.Path) ? CutOpacity : 1.0;
+    }
+
+    /// <summary>
+    /// 잘라내기 표시 지정(Ctrl+X 성공 직후). 이전 표시는 대체된다 — 새 잘라내기·새 복사가
+    /// 앞선 표시를 지우는 것이 탐색기 동작이다.
+    /// </summary>
+    private static void SetCutMarks(IReadOnlyList<string> paths)
+    {
+        CutMarked.Clear();
+        foreach (var path in paths) CutMarked.Add(TrimSep(path));
+        RaiseCutMarksChanged();
+    }
+
+    /// <summary>
+    /// 잘라내기 표시 해제 — 붙여넣기 소진(클립보드 비우기와 같은 조건)·Ctrl+C·Esc 공용.
+    /// 이미 비어 있으면 통지도 하지 않는다(무의미한 전 표면 재적용 방지).
+    /// </summary>
+    internal static void ClearCutMarks()
+    {
+        if (CutMarked.Count == 0) return;
+        CutMarked.Clear();
+        RaiseCutMarksChanged();
+    }
+
+    /// <summary>
+    /// 표면별 격리 통지 — 구독자 하나가 던져도(창이 그새 내려가 XAML 접근이 실패하는 등) 나머지
+    /// 표면은 계속 갱신한다. 조작 로직의 "항목별 실패 격리"와 같은 원칙이고, 여기서 예외가
+    /// 새어 나가면 Ctrl+X 핸들러(async void)가 그대로 죽는다. 놓친 표면도 다음 재스캔의
+    /// 생성 시점 반영(<see cref="ApplyCutMark"/>)으로 결국 맞춰진다.
+    /// </summary>
+    private static void RaiseCutMarksChanged()
+    {
+        if (CutMarksChanged is not { } handlers) return;
+        foreach (var handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((Action)handler)();
+            }
+            catch
+            {
+                // 내려간 창의 표면 — 무시하고 다음 표면으로
+            }
+        }
+    }
+
+    // ---------- 접근 거부(UAC 필요) 구분 안내 (A94 4차, v0.151.0) ----------
+
+    /// <summary>
+    /// 권한 부족(UAC 필요) 실패인지. System.IO 경로는 <see cref="UnauthorizedAccessException"/>으로
+    /// 던지고, WinRT 경로(DeleteAsync 등)는 HRESULT를 실은 예외(IOException·COMException 부류)로
+    /// 던져 타입만으로는 못 가른다 — 그래서 HResult까지 본다:
+    /// 0x80070005 = E_ACCESSDENIED(ERROR_ACCESS_DENIED), 0x80070522 = ERROR_PRIVILEGE_NOT_HELD.
+    /// 판정이 빗나가도 종전과 같은 일반 실패 안내로만 떨어진다(안전한 쪽).
+    /// </summary>
+    internal static bool IsAccessDenied(Exception ex)
+    {
+        if (ex is UnauthorizedAccessException) return true;
+        var code = unchecked((uint)ex.HResult);
+        return code == 0x80070005u || code == 0x80070522u;
+    }
+
+    /// <summary>
+    /// 조작 결과 보고의 단일 종착점 (A94 4차). 접근 거부가 1건 이상이면 완료·실패 요약 문구 대신
+    /// 관리자 재시작 제안 대화상자를 띄운다 — 권한 부족이 일반 실패에 뭉개지지 않게 한다.
+    /// 그 밖에는 종전대로 안내 문구 채널(문구가 null이면 조용 — 성공은 뷰 갱신이 피드백).
+    /// 띄울 창이 없으면(XamlRoot 부재) 안내 문구로 떨어진다.
+    /// 호출부는 이동/복사/붙여넣기/삭제(휴지통·영구)/이름변경/새 폴더 전부다.
+    /// </summary>
+    internal static async Task ReportAsync(string? notice, int denied, OpUi ui)
+    {
+        if (denied > 0 && ui.Root is { } root)
+        {
+            await ExplorerDialogs.PromptAccessDeniedAsync(ui.Dispatcher, root, denied);
+            return;
+        }
+        if (notice is not null) ui.Notice?.Invoke(notice);
+    }
 
     // ---------- 드래그 아웃 (앱 → OS 탐색기 · 다른 KOTU 창 · 앱 내 다른 표면) ----------
 
@@ -179,6 +301,9 @@ internal static class ExplorerFileOps
     /// 일관 동작한다. OS 탐색기의 "Preferred DropEffect" 형식까지는 싣지 않는다(1차 결정 —
     /// 탐색기 쪽에 붙여넣으면 복사로 떨어질 수 있다. docs/A94-matrix.md에 명기).
     /// 반환 = 실패 안내 문구(없으면 null).
+    /// A94 4차: 성공하면 잘라내기 표시를 갱신한다 — cut이면 이 경로들로 지정, 복사면 해제
+    /// (새 클립보드 내용이 앞선 잘라내기를 무효화한다 — 탐색기 동등). 클립보드 적재가
+    /// 실패했으면 표시는 건드리지 않는다(클립보드와 표시가 어긋나지 않게).
     /// </summary>
     internal static async Task<string?> CopyToClipboardAsync(IReadOnlyList<string> paths, bool cut)
     {
@@ -200,6 +325,7 @@ internal static class ExplorerFileOps
         {
             return "Clipboard error - " + ex.Message; // 다른 앱이 클립보드를 잠근 순간 등
         }
+        if (cut) SetCutMarks(paths); else ClearCutMarks(); // A94 4차 — 원본 반투명 표시 갱신
         return null;
     }
 
@@ -208,9 +334,12 @@ internal static class ExplorerFileOps
     /// 이동(잘라내기), 아니면 복사. 이동이 전부 성공하면 클립보드를 비운다 — 두 번째 Ctrl+V가
     /// 사라진 원본을 다시 옮기려다 실패하는 것을 막는다(탐색기도 잘라내기는 1회성).
     /// 취소된 이동은 비우지 않는다(A94 3차 — 남은 항목을 다시 붙여넣을 수 있게).
-    /// ui = 조작 시작 표면의 UI 문맥(A94 3차). 반환 = (조작을 시도했는지 — 갱신 필요 여부, 안내 문구).
+    /// ui = 조작 시작 표면의 UI 문맥(A94 3차). 반환 = (조작을 시도했는지 — 갱신 필요 여부,
+    /// 결과 집계 — 접근 거부 판정용(A94 4차), 안내 문구).
+    /// A94 4차: 잘라내기 표시 해제는 **클립보드를 비우는 것과 같은 조건**이다(1회성 소진) —
+    /// 표시와 클립보드가 어긋나지 않게 한 조건으로 묶었다.
     /// </summary>
-    internal static async Task<(bool DidWork, string? Notice)> PasteFromClipboardAsync(
+    internal static async Task<(bool DidWork, OpResult Result, string? Notice)> PasteFromClipboardAsync(
         string targetFolder, OpUi ui)
     {
         DataPackageView view;
@@ -220,108 +349,129 @@ internal static class ExplorerFileOps
         }
         catch
         {
-            return (false, null); // 클립보드 접근 실패 — 붙여넣을 것이 없는 것과 같게 취급
+            return (false, OpResult.Empty, null); // 클립보드 접근 실패 — 붙여넣을 것이 없는 것과 같게 취급
         }
-        if (!view.Contains(StandardDataFormats.StorageItems)) return (false, null);
+        if (!view.Contains(StandardDataFormats.StorageItems)) return (false, OpResult.Empty, null);
 
         var move = view.RequestedOperation.HasFlag(DataPackageOperation.Move);
         var result = await TransferDroppedAsync(view, targetFolder, move, ui);
         if (move && !result.Cancelled && result.Failed == 0 && result.Done > 0)
         {
             try { Clipboard.Clear(); } catch { /* 소유권 등 — 비우기 실패는 무해 */ }
+            ClearCutMarks(); // A94 4차 — 잘라내기 1회성 소진(원본은 이미 사라졌다)
         }
-        return (true, result.Notice(move));
+        return (true, result, result.Notice(move));
     }
 
-    // ---------- 삭제: Del = 휴지통 (A94 2차, v0.125.0) ----------
+    // ---------- 삭제: Del = 휴지통 (A94 2차) / Shift+Del = 영구 삭제 (A94 4차) ----------
 
     /// <summary>
     /// 선택 항목 전부(파일·폴더)를 휴지통으로 보낸다 — WinRT <c>IStorageItem.DeleteAsync</c>의
     /// StorageDeleteOption.Default가 휴지통 경유다(ImageViewerView.DeleteCurrentAsync 선례 —
     /// COM 인터롭(SHFileOperation류) 없이 성립한다). 확인 대화상자 없음(윈도우 탐색기도
-    /// 휴지통행은 기본 무확인). 영구 삭제(Shift+Del)는 이번 범위가 아니다(후속 등재 —
-    /// docs/A94-matrix.md). 항목별 실패 격리 — Skipped = 그새 사라져 수집조차 안 된 항목.
+    /// 휴지통행은 기본 무확인). 항목별 실패 격리 — Skipped = 그새 사라져 수집조차 안 된 항목.
     /// </summary>
-    internal static async Task<OpResult> DeleteToRecycleAsync(IReadOnlyList<string> paths)
+    internal static Task<OpResult> DeleteToRecycleAsync(IReadOnlyList<string> paths) =>
+        DeleteAsync(paths, StorageDeleteOption.Default);
+
+    /// <summary>
+    /// Shift+Del = 영구 삭제 (A94 4차): 휴지통을 거치지 않는다 — 같은 WinRT DeleteAsync의
+    /// StorageDeleteOption.PermanentDelete로, 2차 Default와 **같은 enum·같은 호출부 구조**다
+    /// (새 API 표면이 아니라 인자 하나 차이 — 저위험). 확인은 호출부가 이미 받아 온다
+    /// (ExplorerDialogs.ConfirmPermanentDeleteAsync — 탐색기도 영구 삭제만 확인창을 띄운다).
+    /// 대상 선택 규칙·실패 격리·완료 후 재스캔은 휴지통 삭제와 완전히 동일한 경로다.
+    /// </summary>
+    internal static Task<OpResult> DeletePermanentlyAsync(IReadOnlyList<string> paths) =>
+        DeleteAsync(paths, StorageDeleteOption.PermanentDelete);
+
+    /// <summary>
+    /// 삭제 공통 실행부 — 휴지통(Default)과 영구(PermanentDelete)가 옵션 하나만 다르다.
+    /// 항목별 실패 격리(하나 실패해도 나머지 계속) + 접근 거부 구분 집계(A94 4차).
+    /// </summary>
+    private static async Task<OpResult> DeleteAsync(IReadOnlyList<string> paths, StorageDeleteOption option)
     {
         if (paths.Count == 0) return OpResult.Empty;
         var items = await CollectStorageItemsAsync(paths);
-        int done = 0, failed = 0;
+        int done = 0, failed = 0, denied = 0;
         string? firstError = null;
         foreach (var item in items)
         {
             try
             {
-                await item.DeleteAsync(StorageDeleteOption.Default); // Default = 휴지통 경유
+                await item.DeleteAsync(option);
                 done++;
             }
             catch (Exception ex)
             {
                 failed++;
+                if (IsAccessDenied(ex)) denied++; // 권한 부족 = 관리자 재시작 제안 대상(A94 4차)
                 firstError ??= ex.Message;
             }
         }
-        return new OpResult(done, paths.Count - items.Count, failed, firstError);
+        return new OpResult(done, paths.Count - items.Count, failed, firstError, Denied: denied);
     }
 
     // ---------- 이름변경 · 새 폴더 (A94 2차, v0.125.0) ----------
 
     /// <summary>
-    /// 같은 폴더 안 이름변경 — File.Move/Directory.Move. 반환 = 실패 안내 문구(성공·무변경 = null).
+    /// 같은 폴더 안 이름변경 — File.Move/Directory.Move.
+    /// 반환 = (실패 안내 문구 — 성공·무변경이면 null, 그 실패가 권한 부족인지 — A94 4차).
     /// 검증 실패(빈 이름·잘못된 문자·충돌)면 아무것도 바꾸지 않는다 — 이동/복사와 달리 자동 "(2)"를
     /// 붙이지 않는다(이름변경 결과가 입력과 다른 이름이 되는 건 사용자 의도와 다른 결과다).
     /// 대소문자만 바꾸는 이름은 허용 — 같은 경로 취급(NTFS 대소문자 무시)이라 충돌 검사를 건너뛴다
     /// (Directory.Move의 대소문자 전용 이름변경은 .NET Core 3.0부터 허용).
     /// 단일 메타데이터 조작이라 워커를 태우지 않는다(즉시 반환 — Transfer류 대량 조작과 다르다).
     /// </summary>
-    internal static string? Rename(string path, string newName)
+    internal static (string? Notice, bool Denied) Rename(string path, string newName)
     {
         try
         {
             var name = newName.Trim();
-            if (name.Length == 0) return "Name cannot be empty";
+            if (name.Length == 0) return ("Name cannot be empty", false);
             if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-                return "Name contains characters that are not allowed";
+                return ("Name contains characters that are not allowed", false);
 
             var src = TrimSep(Path.GetFullPath(path));
             var oldName = Path.GetFileName(src);
-            if (oldName.Length == 0) return "Cannot rename a drive root";
-            if (string.Equals(oldName, name, StringComparison.Ordinal)) return null; // 무변경 = 무동작
+            if (oldName.Length == 0) return ("Cannot rename a drive root", false);
+            if (string.Equals(oldName, name, StringComparison.Ordinal)) return (null, false); // 무변경 = 무동작
             if (Path.GetDirectoryName(src) is not { Length: > 0 } parent)
-                return "Cannot rename this item";
+                return ("Cannot rename this item", false);
 
             var dest = Path.Combine(parent, name);
             if (!string.Equals(oldName, name, StringComparison.OrdinalIgnoreCase) &&
                 (File.Exists(dest) || Directory.Exists(dest)))
-                return $"\"{name}\" already exists here";
+                return ($"\"{name}\" already exists here", false);
 
             if (Directory.Exists(src)) Directory.Move(src, dest);
             else if (File.Exists(src)) File.Move(src, dest);
-            else return "The item no longer exists";
-            return null;
+            else return ("The item no longer exists", false);
+            return (null, false);
         }
         catch (Exception ex)
         {
-            return ex.Message; // 잠긴 파일·권한 부족 등 — 호출부가 안내 문구로 띄운다
+            // 잠긴 파일·권한 부족 등 — 호출부가 안내 문구로 띄운다(권한 부족이면 관리자 재시작 제안)
+            return (ex.Message, IsAccessDenied(ex));
         }
     }
 
     /// <summary>
     /// 현재 폴더에 "New folder"를 만든다 — 충돌 시 "New folder (2)"(UniqueDestination 재사용,
-    /// 탐색기 관례). 반환 = (생성된 전체 경로, 실패 안내 문구) — 성공이면 문구가 null이다.
+    /// 탐색기 관례). 반환 = (생성된 전체 경로, 실패 안내 문구, 권한 부족 실패인지 — A94 4차) —
+    /// 성공이면 문구가 null이다.
     /// 호출부는 재스캔 완료 후 이 경로의 항목을 찾아 곧바로 이름변경 편집에 진입시킨다.
     /// </summary>
-    internal static (string? Created, string? Notice) CreateFolder(string parentFolder)
+    internal static (string? Created, string? Notice, bool Denied) CreateFolder(string parentFolder)
     {
         try
         {
             var dest = UniqueDestination(Path.GetFullPath(parentFolder), "New folder");
             Directory.CreateDirectory(dest);
-            return (dest, null);
+            return (dest, null, false);
         }
         catch (Exception ex)
         {
-            return (null, "Could not create a folder - " + ex.Message);
+            return (null, "Could not create a folder - " + ex.Message, IsAccessDenied(ex));
         }
     }
 
@@ -397,7 +547,7 @@ internal static class ExplorerFileOps
         }
 
         var op = new TransferOp(ui, move, paths.Count);
-        int done = 0, skipped = 0, failed = 0;
+        int done = 0, skipped = 0, failed = 0, denied = 0; // denied = failed 중 권한 부족(A94 4차)
         string? firstError = null;
         for (var i = 0; i < paths.Count && !op.Cancelled; i++)
         {
@@ -456,12 +606,14 @@ internal static class ExplorerFileOps
                     case ConflictChoice.Replace when isFolder && Directory.Exists(dest):
                     {
                         // 폴더 충돌의 Replace = 병합(대상을 지우지 않는다 — 탐색기 동등)
-                        var (ok, mergeError) = await MergeDirectoryAsync(op, src, dest);
+                        var (ok, mergeError, mergeDenied) = await MergeDirectoryAsync(op, src, dest);
                         if (op.Cancelled) break; // 병합 중 취소 — 이 항목은 미완(카운트 제외)
                         if (ok) done++;
                         else
                         {
                             failed++;
+                            // 병합 내부의 권한 부족도 최상위 1건으로 센다(카운트는 최상위 기준 — 3차 규칙)
+                            if (mergeDenied) denied++;
                             firstError ??= mergeError ?? $"could not merge \"{name}\"";
                         }
                         break;
@@ -477,10 +629,11 @@ internal static class ExplorerFileOps
             catch (Exception ex)
             {
                 failed++;
+                if (IsAccessDenied(ex)) denied++; // 권한 부족 = 관리자 재시작 제안 대상(A94 4차)
                 firstError ??= ex.Message;
             }
         }
-        return new OpResult(done, skipped, failed, firstError, op.Cancelled, paths.Count);
+        return new OpResult(done, skipped, failed, firstError, op.Cancelled, paths.Count, denied);
     }
 
     /// <summary>
@@ -615,18 +768,22 @@ internal static class ExplorerFileOps
     /// 대화상자 — 체크박스는 항상 노출: 남은 내부 충돌 수는 미지수), 내부 "폴더" 충돌은 묻지
     /// 않고 자동 병합(하위로 계속). 이동 병합은 내용을 옮긴 뒤 "빈" 원본 폴더만 지운다 —
     /// Skip·실패로 항목이 남으면 원본 폴더 유지(탐색기 동등). 취소는 그 지점에서 멈춘다
-    /// (수행분 유지·원본 정리도 하지 않는다). 반환 = (내부 전체 성공 여부, 첫 오류).
+    /// (수행분 유지·원본 정리도 하지 않는다). 반환 = (내부 전체 성공 여부, 첫 오류,
+    /// 실패 중 권한 부족이 있었는지 — A94 4차: 호출부가 그 최상위 항목을 접근 거부 1건으로 센다).
     /// 순환 가드는 1차 가드 재사용 — 최상위에서 대상이 원본 하위면 애초에 오지 않고,
     /// 병합은 이미 있던 대상 폴더로만 내려가 새 순환을 만들 수 없다.
     /// </summary>
-    private static async Task<(bool Ok, string? FirstError)> MergeDirectoryAsync(
+    private static async Task<(bool Ok, string? FirstError, bool Denied)> MergeDirectoryAsync(
         TransferOp op, string src, string dest)
     {
         var ok = true;
+        var denied = false;
         string? firstError = null;
-        void Fail(string message)
+        void Fail(Exception ex) => FailWith(ex.Message, IsAccessDenied(ex));
+        void FailWith(string message, bool wasDenied)
         {
             ok = false;
+            denied |= wasDenied;
             firstError ??= message;
         }
 
@@ -639,12 +796,12 @@ internal static class ExplorerFileOps
         }
         catch (Exception ex)
         {
-            return (false, ex.Message);
+            return (false, ex.Message, IsAccessDenied(ex));
         }
 
         foreach (var file in files)
         {
-            if (op.Cancelled) return (ok, firstError);
+            if (op.Cancelled) return (ok, firstError, denied);
             try
             {
                 var name = Path.GetFileName(file);
@@ -652,7 +809,7 @@ internal static class ExplorerFileOps
                 if (File.Exists(destFile) || Directory.Exists(destFile))
                 {
                     var choice = await op.AskAsync(name, isFolder: false, dest, offerAll: true);
-                    if (choice is null) return (ok, firstError); // 취소 — 원본 정리 없이 중단
+                    if (choice is null) return (ok, firstError, denied); // 취소 — 원본 정리 없이 중단
                     if (choice == ConflictChoice.Skip) continue; // 이동이면 원본 파일·폴더 잔류
                     if (choice == ConflictChoice.KeepBoth)
                     {
@@ -666,24 +823,25 @@ internal static class ExplorerFileOps
             }
             catch (Exception ex)
             {
-                Fail(ex.Message);
+                Fail(ex);
             }
         }
         foreach (var dir in dirs)
         {
-            if (op.Cancelled) return (ok, firstError);
+            if (op.Cancelled) return (ok, firstError, denied);
             try
             {
                 var name = Path.GetFileName(dir);
                 var destDir = Path.Combine(dest, name);
                 if (Directory.Exists(destDir))
                 {
-                    var (subOk, subError) = await MergeDirectoryAsync(op, dir, destDir);
-                    if (!subOk) Fail(subError ?? $"could not merge \"{name}\"");
+                    var (subOk, subError, subDenied) = await MergeDirectoryAsync(op, dir, destDir);
+                    if (!subOk) FailWith(subError ?? $"could not merge \"{name}\"", subDenied);
                 }
                 else if (File.Exists(destDir))
                 {
-                    Fail($"a file named \"{name}\" is in the way"); // 폴더 자리의 동명 파일 — 탐색기도 오류
+                    // 폴더 자리의 동명 파일 — 탐색기도 오류(권한 문제가 아니다)
+                    FailWith($"a file named \"{name}\" is in the way", false);
                 }
                 else if (!op.Move)
                 {
@@ -701,7 +859,7 @@ internal static class ExplorerFileOps
             }
             catch (Exception ex)
             {
-                Fail(ex.Message);
+                Fail(ex);
             }
         }
 
@@ -714,10 +872,10 @@ internal static class ExplorerFileOps
             }
             catch (Exception ex)
             {
-                Fail(ex.Message);
+                Fail(ex);
             }
         }
-        return (ok, firstError);
+        return (ok, firstError, denied);
     }
 
     private static void CopyDirectory(string source, string destination)

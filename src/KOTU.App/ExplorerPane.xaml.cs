@@ -105,11 +105,31 @@ public sealed partial class ExplorerPane : UserControl
         // 컨트롤이 먼저 Handled를 걸어도 받게 handledEventsToo (ThumbnailExplorer Enter와 같은 관용구).
         IconGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSurfaceKeyDown), true);
         ListPane.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSurfaceKeyDown), true);
+        // A94 4차: 잘라내기 표시(전역 1벌)가 바뀌면 이미 그려 둔 항목의 흐림만 다시 맞춘다.
+        // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
+        // (Unloaded로 워커를 정리하는 아래 관용구와 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
+        Loaded += (_, _) =>
+        {
+            ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
+            ExplorerFileOps.CutMarksChanged += ApplyCutMarks;
+        };
         Unloaded += (_, _) =>
         {
+            ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
         };
+    }
+
+    /// <summary>
+    /// 잘라내기(Ctrl+X) 표시 반영 (A94 4차): 이미 그려 둔 항목의 콘텐츠 투명도를 경로 매칭으로
+    /// 다시 맞춘다 — 재스캔이 아니라 제자리 갱신이라 선택·스크롤이 보존된다. 새로 그려지는
+    /// 항목은 MakeGridItem·MakeListItem이 같은 규칙(ExplorerFileOps.ApplyCutMark)으로 처음부터 반영한다.
+    /// </summary>
+    private void ApplyCutMarks()
+    {
+        foreach (var item in IconGrid.Items) ExplorerFileOps.ApplyCutMark(item);
+        foreach (var item in ListPane.Items) ExplorerFileOps.ApplyCutMark(item);
     }
 
     // ---------- 정렬 (A5) ----------
@@ -378,6 +398,7 @@ public sealed partial class ExplorerPane : UserControl
         ToolTipService.SetToolTip(panel, entry.Name);
 
         var item = new GridViewItem { Content = panel, Tag = entry };
+        ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
         AttachContextMenu(item, entry, IconGrid); // A24 + A94 2차(Rename·Delete)
         AttachDragDrop(item, entry, IconGrid); // A94 — 드래그 아웃 + 폴더 항목 드랍
         item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
@@ -432,6 +453,7 @@ public sealed partial class ExplorerPane : UserControl
         ToolTipService.SetToolTip(row, entry.Name);
 
         var item = new ListViewItem { Content = row, Tag = entry };
+        ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
         AttachContextMenu(item, entry, ListPane); // A24 + A94 2차(Rename·Delete)
         AttachDragDrop(item, entry, ListPane); // A94 — 드래그 아웃 + 폴더 항목 드랍
         item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
@@ -647,11 +669,12 @@ public sealed partial class ExplorerPane : UserControl
             return;
         e.AcceptedOperation = operation; // 소스(OS 탐색기 등)에 확정 동작을 알린다
 
-        var result = await ExplorerFileOps.TransferDroppedAsync(
-            e.DataView, targetFolder, operation == DataPackageOperation.Move,
-            MakeOpUi()); // A94 3차 — 충돌 대화상자·진행 문구용 UI 문맥(조작 시작 시점 캡처)
+        // A94 3차 — 충돌 대화상자·진행 문구용 UI 문맥(조작 시작 시점 캡처). 4차 — 접근 거부 안내도 같은 문맥.
+        var ui = MakeOpUi();
+        var move = operation == DataPackageOperation.Move;
+        var result = await ExplorerFileOps.TransferDroppedAsync(e.DataView, targetFolder, move, ui);
         RefreshAfterFileOp();
-        if (result.Notice(operation == DataPackageOperation.Move) is { } notice) Notice?.Invoke(notice);
+        await ExplorerFileOps.ReportAsync(result.Notice(move), result.Denied, ui);
     }
 
     /// <summary>파일 조작 뒤 현재 폴더 재스캔 — FileSystemWatcher가 없어 명시 갱신이 유일한 경로.</summary>
@@ -661,8 +684,9 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 이동/복사/붙여넣기용 UI 문맥 (A94 3차) — 이 표면 창의 DispatcherQueue·XamlRoot(충돌
-    /// 대화상자용)와 Notice 채널(진행 문구 라이브 갱신용)을 조작 시작 시점에 캡처한다.
+    /// 파일 조작용 UI 문맥 (A94 3차) — 이 표면 창의 DispatcherQueue·XamlRoot(충돌 대화상자용)와
+    /// Notice 채널(진행 문구 라이브 갱신용)을 조작 시작 시점에 캡처한다. 4차부터는 영구 삭제 확인·
+    /// 접근 거부 안내(관리자 재시작 제안)와 이름변경·새 폴더 실패 보고까지 같은 문맥을 쓴다.
     /// </summary>
     private ExplorerFileOps.OpUi MakeOpUi() =>
         new(DispatcherQueue, XamlRoot, notice => Notice?.Invoke(notice));
@@ -672,6 +696,7 @@ public sealed partial class ExplorerPane : UserControl
     /// Ctrl+V = 현재 폴더에 붙여넣기, Ctrl+A = 전체 선택. 2차(v0.125.0)가 얹은 것 —
     /// F2 = 이름변경(첫 선택 항목 1개), Del = 휴지통 삭제(선택 전부), Ctrl+Shift+N = 새 폴더.
     /// A85가 얹은 것 — Enter = 선택 항목 열기(폴더 = 진입. ThumbnailExplorer와 동일).
+    /// 4차(v0.151.0)가 얹은 것 — Shift+Del = 영구 삭제(확인 대화상자 뒤), Esc = 잘라내기 표시 해제.
     /// 이 표면(그리드/리스트)에 포커스가 있을 때만 온다 — 생성자 AddHandler 주석 참고.
     /// </summary>
     private async void OnSurfaceKeyDown(object sender, KeyRoutedEventArgs e)
@@ -699,12 +724,18 @@ public sealed partial class ExplorerPane : UserControl
                 e.Handled = true;
                 BeginRenameOf(selected);
                 return;
-            case Windows.System.VirtualKey.Delete: // Del = 휴지통. Shift+Del(영구 삭제)은 후속 — 비켜 준다
-                if (ExplorerFileOps.IsShiftDown() || ExplorerFileOps.IsCtrlDown()) return;
+            case Windows.System.VirtualKey.Delete: // Del = 휴지통 / Shift+Del = 영구 삭제(A94 4차)
+                if (ExplorerFileOps.IsCtrlDown()) return; // Ctrl+Del은 우리 조합이 아니다 — 종전대로 비켜 준다
                 var targets = SelectedPathsOf(owner);
                 if (targets.Count == 0) return;
                 e.Handled = true;
-                await DeleteWithNoticeAsync(targets);
+                if (ExplorerFileOps.IsShiftDown()) await PermanentDeleteWithConfirmAsync(targets);
+                else await DeleteWithNoticeAsync(targets);
+                return;
+            case Windows.System.VirtualKey.Escape: // A94 4차 — 잘라내기 표시만 해제(탐색기 동등)
+                // 소비하지 않는다: 셸 Esc(S4 복귀 — OnShellEscape)가 이 표면 포커스에서도 성립해야 한다.
+                // 클립보드 자체는 건드리지 않는다(Ctrl+V로 다시 붙여넣을 수 있다 — 보고서 명기).
+                ExplorerFileOps.ClearCutMarks();
                 return;
         }
 
@@ -734,10 +765,11 @@ public sealed partial class ExplorerPane : UserControl
             case Windows.System.VirtualKey.V:
                 if (_folder.Length == 0) return;
                 e.Handled = true;
-                var (didWork, pasteNotice) =
-                    await ExplorerFileOps.PasteFromClipboardAsync(_folder, MakeOpUi()); // A94 3차
+                var pasteUi = MakeOpUi(); // A94 3차 — 충돌 대화상자·진행 문구, 4차 — 접근 거부 안내
+                var (didWork, pasteResult, pasteNotice) =
+                    await ExplorerFileOps.PasteFromClipboardAsync(_folder, pasteUi);
                 if (didWork) RefreshAfterFileOp();
-                if (pasteNotice is not null) Notice?.Invoke(pasteNotice);
+                await ExplorerFileOps.ReportAsync(pasteNotice, pasteResult.Denied, pasteUi);
                 break;
         }
     }
@@ -755,19 +787,34 @@ public sealed partial class ExplorerPane : UserControl
         if (item.Tag is not ExplorerListing.Entry entry) return;
         if (item.Content is not Panel { Children.Count: > 1 } panel ||
             panel.Children[1] is not TextBlock nameBlock) return;
-        ExplorerRenameBox.Begin(panel, nameBlock, entry.Path,
-            notice => Notice?.Invoke(notice), RefreshAfterFileOp);
+        ExplorerRenameBox.Begin(panel, nameBlock, entry.Path, MakeOpUi(), RefreshAfterFileOp);
     }
 
     /// <summary>
     /// Del·우클릭 Delete: 휴지통 경유 삭제(StorageDeleteOption.Default — ExplorerFileOps 주석).
-    /// 확인 대화상자 없음(윈도우 탐색기도 휴지통행은 기본 무확인) — 실패만 안내 문구.
+    /// 확인 대화상자 없음(윈도우 탐색기도 휴지통행은 기본 무확인) — 실패만 안내 문구,
+    /// 권한 부족은 관리자 재시작 제안(A94 4차 — ReportAsync).
     /// </summary>
     private async Task DeleteWithNoticeAsync(IReadOnlyList<string> paths)
     {
+        var ui = MakeOpUi();
         var result = await ExplorerFileOps.DeleteToRecycleAsync(paths);
         RefreshAfterFileOp();
-        if (result.Notice("deleted") is { } notice) Notice?.Invoke(notice);
+        await ExplorerFileOps.ReportAsync(result.Notice("deleted"), result.Denied, ui);
+    }
+
+    /// <summary>
+    /// Shift+Del = 영구 삭제 (A94 4차): 탐색기 동등으로 **영구 삭제만** 확인창을 띄우고(기본 버튼 =
+    /// Cancel), 확인하면 휴지통을 거치지 않고 지운다. 대상 선택 규칙·재스캔·실패 안내는 Del과
+    /// 같은 경로다. 취소하면 아무것도 하지 않는다(재스캔도 없음).
+    /// </summary>
+    private async Task PermanentDeleteWithConfirmAsync(IReadOnlyList<string> paths)
+    {
+        var ui = MakeOpUi();
+        if (!await ExplorerDialogs.ConfirmPermanentDeleteAsync(ui.Dispatcher, ui.Root, paths)) return;
+        var result = await ExplorerFileOps.DeletePermanentlyAsync(paths);
+        RefreshAfterFileOp();
+        await ExplorerFileOps.ReportAsync(result.Notice("deleted"), result.Denied, ui);
     }
 
     /// <summary>
@@ -777,8 +824,8 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private async Task CreateFolderThenRenameAsync(ListViewBase owner)
     {
-        var (created, notice) = ExplorerFileOps.CreateFolder(_folder);
-        if (notice is not null) Notice?.Invoke(notice);
+        var (created, notice, denied) = ExplorerFileOps.CreateFolder(_folder);
+        if (notice is not null) await ExplorerFileOps.ReportAsync(notice, denied ? 1 : 0, MakeOpUi());
         if (created is null) return;
         await NavigateToAsync(_folder, _extensions);
         if (FindItemByPath(owner, created) is not { } item) return; // 그새 사라짐 등 — 생성만으로 끝

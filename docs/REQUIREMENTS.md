@@ -346,8 +346,20 @@
     거부+원복·새 폴더 "New folder (2)" 규칙은 예외로 유지) / 대량 조작 진행 표시(기존 안내 채널
     라이브 갱신 "Copying 3 of 12..." — 최상위 항목 기준, 100ms 스로틀·마지막 값 강제, 1~2개 생략.
     별도 진행 창 없음).
-  - **남은 것**: 영구 삭제(Shift+Del)·권한 상승(UAC)·폴더 감시(FileSystemWatcher)·빈 영역
-    컨텍스트 메뉴 등 후속(사용자 결정 대기).
+  - **4차(v0.151.0) 반영**: Shift+Del 영구 삭제(WinRT DeleteAsync StorageDeleteOption.PermanentDelete —
+    **영구 삭제만 확인 대화상자**, 기본 버튼 = Cancel. 1건이면 이름 표기. 우클릭 메뉴에는 없다 —
+    키만) / 잘라내기 원본 반투명 표시(Opacity 0.5, 리스트·썸네일 공통. 상태 = 프로세스 전역
+    경로 집합 1벌 + 신규 정적 이벤트 하나 — 재스캔 없이 제자리 갱신이라 선택·스크롤 보존.
+    해제 = 붙여넣기 소진·새 Ctrl+C/X·Esc(표시만, 클립보드 유지)·재스캔 뒤 경로 재적용.
+    **한계**: 다른 앱이 클립보드를 바꿔도 표시는 남는다 — `Clipboard.ContentChanged` 선례가
+    없어 구독하지 않았다) / 접근 거부(UAC 필요) 구분 안내(UnauthorizedAccessException +
+    HRESULT 0x80070005·0x80070522를 별도 집계 — 1건 이상이면 완료 요약 대신 대화상자
+    "Access was denied for n item(s)...", Primary = Restart as admin. **승격 뒤 자동 재시도는
+    안 함**). runas 흐름은 하드웨어 뷰 구현을 공용 헬퍼(`KOTU.App.Integration.AdminRelaunch` +
+    Core 훅 `AdminRelaunchHook`)로 추출해 두 곳이 공유 — 하드웨어 뷰 동작은 불변.
+    대화상자 게이트(창당 동시 1개)도 `ExplorerDialogs`로 공용화(3차 충돌 대화상자 포함).
+  - **남은 것**: 폴더 감시(FileSystemWatcher)·빈 영역 컨텍스트 메뉴·승격 후 자동 재시도 등
+    후속(사용자 결정 대기).
 - ※ A108(**'사이드바 vs 오버레이' 개념 확정 + 표시 정리**, v0.135.0) 완료 — 결번. 확정·구현 내역:
   - **용어 확정**: 사이드바 = 불투명·메인을 줄이며 옆에 섬(구 "불투명 도크/밀어내기") /
     오버레이 = 반투명·메인 위에 덮임(홀드/2초 고정). 소스 주석·UI 문구·`docs/A86-keymap.md`(용어 절

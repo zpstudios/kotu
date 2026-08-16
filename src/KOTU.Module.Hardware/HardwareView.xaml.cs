@@ -1085,38 +1085,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 이 인스턴스로 리다이렉트되어 죽는 걸 막을 수 있다. UAC를 취소하면 키를 되찾고 계속.
     /// A124: 재기동은 프로세스 단위라 전 창이 닫힌다 — 종료 직전 창 세트를 세션 파일로
     /// 기록해 두면 승격 프로세스가 시작 시 기본 1창 대신 세트를 재현한다(셸이 배선한
-    /// Core 훅 경유, 실패는 조용히 = 종전 1창 시작). 세션 파일을 쓰는 곳은 여기 한 곳뿐이다.
+    /// Core 훅 경유, 실패는 조용히 = 종전 1창 시작).
+    /// A94 4차(v0.151.0): 그 흐름 전체가 셸의 공용 구현(KOTU.App.Integration.AdminRelaunch)으로
+    /// 옮겨졌다 — 탐색기의 접근 거부 안내도 같은 재시작을 쓴다. 단계·순서·복구는 전과 동일하고,
+    /// 이 뷰 고유의 마지막 정리(드라이버 핸들)만 콜백으로 넘긴다. 모듈은 Core에만 의존하므로
+    /// 진입은 훅(AdminRelaunchHook — App이 시작 시 배선) 경유다.
     /// </summary>
-    private void OnElevateClick(object sender, RoutedEventArgs e)
-    {
-        var exe = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(exe)) return;
-
-        // A124: 창이 전부 살아 있는 지금(재시작 확정 전) 창 세트를 기록한다. 미저장 가드(A37)는
-        // 현행 그대로 타지 않는다 — 이 경로는 원래 묻지 않고 내려간다(Application.Exit).
-        KOTU.Core.Integration.RestartSession.TryWrite();
-
-        Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().UnregisterKey();
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = exe,
-                UseShellExecute = true,
-                Verb = "runas",
-            });
-        }
-        catch
-        {
-            // UAC 취소 — 재시작 무산: 방금 쓴 세션 파일을 되지우고(A124),
-            // 유일한 인스턴스이므로 키를 되찾는다 (Program.InstanceKey와 동일해야 함)
-            KOTU.Core.Integration.RestartSession.TryDiscard();
-            Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey("KOTU-Main");
-            return;
-        }
-        SensorService.Shutdown(); // 드라이버 핸들을 먼저 정리하고 내려간다
-        Application.Current.Exit();
-    }
+    private void OnElevateClick(object sender, RoutedEventArgs e) =>
+        KOTU.Core.Integration.AdminRelaunchHook.Relaunch(SensorService.Shutdown);
 
     /// <summary>그래프 표면 하나의 구성 요소 — 센터 타일·좌 대형·하단 긴 그래프 공용(A60 3차).
     /// 채널 정의는 SensorChannels 공용(A18), 축 상태는 채널별 공유(ChannelScale).</summary>

@@ -86,6 +86,25 @@ public sealed partial class ThumbnailExplorer : UserControl
         // (MainWindow의 루트 KeyDown 구독과 같은 관용구).
         TileGrid.AddHandler(UIElement.KeyDownEvent,
             new KeyEventHandler(OnGridKeyDown), handledEventsToo: true);
+        // A94 4차: 잘라내기 표시(프로세스 전역 1벌)가 바뀌면 이미 그려 둔 타일의 흐림만 다시 맞춘다.
+        // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
+        // (ExplorerPane과 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
+        Loaded += (_, _) =>
+        {
+            ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
+            ExplorerFileOps.CutMarksChanged += ApplyCutMarks;
+        };
+        Unloaded += (_, _) => ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
+    }
+
+    /// <summary>
+    /// 잘라내기(Ctrl+X) 표시 반영 (A94 4차): 이미 그려 둔 타일의 콘텐츠 투명도를 경로 매칭으로
+    /// 다시 맞춘다 — 재스캔이 아니라 제자리 갱신이라 선택·스크롤이 보존된다. 새로 그려지는 타일은
+    /// MakeTile이 같은 규칙(ExplorerFileOps.ApplyCutMark)으로 처음부터 반영한다.
+    /// </summary>
+    private void ApplyCutMarks()
+    {
+        foreach (var item in TileGrid.Items) ExplorerFileOps.ApplyCutMark(item);
     }
 
     /// <summary>
@@ -103,6 +122,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 클립보드 키 (A94): Ctrl+C/X/V/A + 2차(v0.125.0): F2 = 이름변경(첫 선택 타일만),
     /// Del = 휴지통 삭제, Ctrl+Shift+N = 새 폴더 — 이 그리드에 포커스가 있을 때만 온다
     /// (KeyDown 버블링이라 문서 에디터 등 텍스트 표면으로 새지 않고, A34 통과 규칙과도 겹치지 않는다).
+    /// 4차(v0.151.0): Shift+Del = 영구 삭제(확인 대화상자 뒤), Esc = 잘라내기 표시 해제(비소비).
     /// </summary>
     private async void OnGridKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -131,12 +151,20 @@ public sealed partial class ThumbnailExplorer : UserControl
         }
         if (e.Key == VirtualKey.Delete)
         {
-            // Shift+Del(영구 삭제)은 이번 범위 아님(후속 등재) — 삼키지도 않고 비켜 준다.
-            if (ExplorerFileOps.IsShiftDown() || ExplorerFileOps.IsCtrlDown()) return;
+            // Del = 휴지통 / Shift+Del = 영구 삭제(A94 4차). Ctrl+Del은 우리 조합이 아니라 비켜 준다.
+            if (ExplorerFileOps.IsCtrlDown()) return;
             var targets = SelectedPaths();
             if (targets.Count == 0) return;
             e.Handled = true;
-            await DeleteWithNoticeAsync(targets);
+            if (ExplorerFileOps.IsShiftDown()) await PermanentDeleteWithConfirmAsync(targets);
+            else await DeleteWithNoticeAsync(targets);
+            return;
+        }
+        if (e.Key == VirtualKey.Escape)
+        {
+            // A94 4차 — 잘라내기 표시만 해제(탐색기 동등). 소비하지 않는다: 셸 Esc(S4 복귀)가
+            // 이 그리드 포커스에서도 성립해야 한다. 클립보드 자체는 건드리지 않는다.
+            ExplorerFileOps.ClearCutMarks();
             return;
         }
 
@@ -147,8 +175,9 @@ public sealed partial class ThumbnailExplorer : UserControl
                 // 앱 전역 Shift+N 새 창(A84)과도 다른 조합. 판정 = Ctrl(위) && Shift && N)
                 if (!ExplorerFileOps.IsShiftDown() || CurrentFolder is not { Length: > 0 } parent) return;
                 e.Handled = true;
-                var (created, createNotice) = ExplorerFileOps.CreateFolder(parent);
-                if (createNotice is not null) ShowNotice(createNotice);
+                var (created, createNotice, createDenied) = ExplorerFileOps.CreateFolder(parent);
+                if (createNotice is not null)
+                    await ExplorerFileOps.ReportAsync(createNotice, createDenied ? 1 : 0, MakeOpUi());
                 if (created is null) return;
                 _pendingRenamePath = created; // 재스캔 결과(ShowEntries)가 돌아오면 그 타일로 편집 진입
                 FolderActivated?.Invoke(parent); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
@@ -169,10 +198,11 @@ public sealed partial class ThumbnailExplorer : UserControl
             case VirtualKey.V:
                 if (CurrentFolder is not { Length: > 0 } folder) return;
                 e.Handled = true;
-                var (didWork, pasteNotice) =
-                    await ExplorerFileOps.PasteFromClipboardAsync(folder, MakeOpUi()); // A94 3차
+                var pasteUi = MakeOpUi(); // A94 3차 — 충돌 대화상자·진행 문구, 4차 — 접근 거부 안내
+                var (didWork, pasteResult, pasteNotice) =
+                    await ExplorerFileOps.PasteFromClipboardAsync(folder, pasteUi);
                 if (didWork) FolderActivated?.Invoke(folder); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
-                if (pasteNotice is not null) ShowNotice(pasteNotice);
+                await ExplorerFileOps.ReportAsync(pasteNotice, pasteResult.Denied, pasteUi);
                 break;
         }
     }
@@ -241,7 +271,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (item.Tag is not ExplorerListing.Entry entry) return;
         if (item.Content is not Grid { Children.Count: > 1 } tile ||
             tile.Children[1] is not TextBlock caption) return;
-        ExplorerRenameBox.Begin(tile, caption, entry.Path, ShowNotice, RefreshViaShell);
+        ExplorerRenameBox.Begin(tile, caption, entry.Path, MakeOpUi(), RefreshViaShell);
     }
 
     /// <summary>조작 후 갱신 — 폴더 상태의 단일 원본(좌 리스트)을 셸이 다시 항해시키는 A93 경로.</summary>
@@ -251,20 +281,37 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 이동/복사/붙여넣기용 UI 문맥 (A94 3차) — 이 그리드 창의 DispatcherQueue·XamlRoot(충돌
-    /// 대화상자용)와 ShowNotice 채널(진행 문구 라이브 갱신용)을 조작 시작 시점에 캡처한다.
+    /// 파일 조작용 UI 문맥 (A94 3차) — 이 그리드 창의 DispatcherQueue·XamlRoot(충돌 대화상자용)와
+    /// ShowNotice 채널(진행 문구 라이브 갱신용)을 조작 시작 시점에 캡처한다. 4차부터는 영구 삭제
+    /// 확인·접근 거부 안내(관리자 재시작 제안)와 이름변경·새 폴더 실패 보고까지 같은 문맥을 쓴다.
     /// </summary>
     private ExplorerFileOps.OpUi MakeOpUi() => new(DispatcherQueue, XamlRoot, ShowNotice);
 
     /// <summary>
     /// Del·우클릭 Delete (A94 2차): 휴지통 경유 삭제(StorageDeleteOption.Default —
-    /// ExplorerFileOps 주석). 확인 대화상자 없음(탐색기 관례) — 실패만 안내 문구.
+    /// ExplorerFileOps 주석). 확인 대화상자 없음(탐색기 관례) — 실패만 안내 문구,
+    /// 권한 부족은 관리자 재시작 제안(A94 4차 — ReportAsync).
     /// </summary>
     private async Task DeleteWithNoticeAsync(IReadOnlyList<string> paths)
     {
+        var ui = MakeOpUi();
         var result = await ExplorerFileOps.DeleteToRecycleAsync(paths);
         RefreshViaShell();
-        if (result.Notice("deleted") is { } notice) ShowNotice(notice);
+        await ExplorerFileOps.ReportAsync(result.Notice("deleted"), result.Denied, ui);
+    }
+
+    /// <summary>
+    /// Shift+Del = 영구 삭제 (A94 4차): 탐색기 동등으로 **영구 삭제만** 확인창을 띄우고(기본 버튼 =
+    /// Cancel), 확인하면 휴지통을 거치지 않고 지운다. 대상 선택 규칙·재스캔·실패 안내는 Del과
+    /// 같은 경로다(좌 리스트 단일 원본 경유 재스캔). 취소하면 아무것도 하지 않는다.
+    /// </summary>
+    private async Task PermanentDeleteWithConfirmAsync(IReadOnlyList<string> paths)
+    {
+        var ui = MakeOpUi();
+        if (!await ExplorerDialogs.ConfirmPermanentDeleteAsync(ui.Dispatcher, ui.Root, paths)) return;
+        var result = await ExplorerFileOps.DeletePermanentlyAsync(paths);
+        RefreshViaShell();
+        await ExplorerFileOps.ReportAsync(result.Notice("deleted"), result.Denied, ui);
     }
 
     /// <summary>
@@ -330,6 +377,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Stretch,
         };
+        ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
         AttachContextMenu(item, entry); // A24 — 좌 리스트와 같은 우클릭 메뉴
         AttachDragDrop(item, entry); // A94 — 드래그 아웃 + 폴더 타일 드랍
         item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
@@ -588,11 +636,12 @@ public sealed partial class ThumbnailExplorer : UserControl
             return;
         e.AcceptedOperation = operation; // 소스(OS 탐색기 등)에 확정 동작을 알린다
 
-        var result = await ExplorerFileOps.TransferDroppedAsync(
-            e.DataView, targetFolder, operation == DataPackageOperation.Move,
-            MakeOpUi()); // A94 3차 — 충돌 대화상자·진행 문구용 UI 문맥(조작 시작 시점 캡처)
+        // A94 3차 — 충돌 대화상자·진행 문구용 UI 문맥(조작 시작 시점 캡처). 4차 — 접근 거부 안내도 같은 문맥.
+        var ui = MakeOpUi();
+        var move = operation == DataPackageOperation.Move;
+        var result = await ExplorerFileOps.TransferDroppedAsync(e.DataView, targetFolder, move, ui);
         FolderActivated?.Invoke(CurrentFolder is { Length: > 0 } current ? current : targetFolder);
-        if (result.Notice(operation == DataPackageOperation.Move) is { } notice) ShowNotice(notice);
+        await ExplorerFileOps.ReportAsync(result.Notice(move), result.Denied, ui);
     }
 
     // ---------- 조작 실패 안내 (A94 — A92류 일시 문구) ----------

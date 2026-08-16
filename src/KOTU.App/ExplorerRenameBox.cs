@@ -27,11 +27,13 @@ internal static class ExplorerRenameBox
 {
     /// <summary>
     /// 편집 시작. host = 이름 TextBlock이 들어 있는 콘텐츠 패널(호출부가 생성 코드 구조로 찾은 것),
-    /// path = 항목 전체 경로. onNotice = 실패 안내(A92류 일시 문구), onRenamed = 커밋 성공 후 재스캔.
+    /// path = 항목 전체 경로. ui = 그 표면의 UI 문맥(A94 4차 — 실패 보고 채널: 안내 문구 + 권한
+    /// 부족이면 관리자 재시작 제안 대화상자. 종전 onNotice 콜백을 대체한다),
+    /// onRenamed = 커밋 성공 후 재스캔.
     /// 이미 편집 중(TextBlock이 Collapsed)이면 중복 진입하지 않는다.
     /// </summary>
     internal static void Begin(Panel host, TextBlock nameBlock, string path,
-        Action<string> onNotice, Action onRenamed)
+        ExplorerFileOps.OpUi ui, Action onRenamed)
     {
         if (nameBlock.Visibility == Visibility.Collapsed) return; // 이미 편집 중 — 중복 진입 방지
         var originalName = Path.GetFileName(path);
@@ -62,8 +64,11 @@ internal static class ExplorerRenameBox
             nameBlock.Visibility = Visibility.Visible; // 원복 — 성공해도 재스캔이 올 때까지는 옛 이름 표시
             if (!commit) return;
             if (string.Equals(typed.Trim(), originalName, StringComparison.Ordinal)) return; // 무변경 = 조용히 취소
-            if (ExplorerFileOps.Rename(path, typed) is { } error)
-                onNotice(error); // 커밋하지 않음 — 원복 유지 (충돌·빈 이름·잘못된 문자·잠김 등)
+            var (error, denied) = ExplorerFileOps.Rename(path, typed);
+            if (error is not null)
+                // 커밋하지 않음 — 원복 유지 (충돌·빈 이름·잘못된 문자·잠김 등). 발사 후 망각:
+                // 권한 부족이면 관리자 재시작 제안 대화상자가 뜨고, 그 대기가 편집 종료를 막지 않는다.
+                _ = ExplorerFileOps.ReportAsync(error, denied ? 1 : 0, ui);
             else
                 onRenamed();     // 성공 — 이제서야 재스캔(편집 중 재스캔 금지는 위 클래스 주석)
         }

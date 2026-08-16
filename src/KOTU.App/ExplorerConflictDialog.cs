@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -28,6 +27,8 @@ internal enum ConflictChoice
 /// XamlRoot 단위 SemaphoreSlim으로 직렬화한다 — 대화상자가 떠 있는 동안 두 번째 조작이
 /// 시작되어도 두 대화상자가 충돌하지 않고 차례로 뜬다. 표시 실패(창이 그새 닫힘 등)는
 /// 예외를 잡아 취소(null)로 돌려준다 — 호출부가 그 시점부터 남은 작업을 중단한다.
+/// A94 4차(v0.151.0): 그 게이트는 <see cref="ExplorerDialogs.GateFor"/>로 옮겨 영구 삭제 확인·
+/// 접근 거부 안내와 공유한다 — 종류가 다른 대화상자끼리도 한 창에서는 차례로 떠야 한다.
 ///
 /// 버튼 매핑(구현 시 결정): Primary=Replace, Secondary=Keep both, Close=Skip.
 /// 취소는 Esc — ContentDialog에는 제목 옆 X가 없고 3버튼이 전부라, Esc로 닫힌
@@ -37,13 +38,6 @@ internal enum ConflictChoice
 /// </summary>
 internal static class ExplorerConflictDialog
 {
-    /// <summary>
-    /// 창(XamlRoot) 단위 표시 직렬화 게이트 — ContentDialog는 창당 동시 1개(A113).
-    /// ConditionalWeakTable이라 닫힌 창의 항목은 XamlRoot가 수거될 때 함께 사라진다.
-    /// 모든 창이 단일 UI 스레드(A110 확정)지만 워커 완주 시점 정리가 없어 약참조 테이블을 쓴다.
-    /// </summary>
-    private static readonly ConditionalWeakTable<XamlRoot, SemaphoreSlim> Gates = new();
-
     /// <summary>
     /// 충돌 1건을 사용자에게 묻는다 — 아무 스레드에서나 호출 가능(워커 전제).
     /// name = 충돌 항목명, isFolder = 항목이 폴더인지(본문·병합 안내 분기),
@@ -73,7 +67,7 @@ internal static class ExplorerConflictDialog
     {
         try
         {
-            var gate = Gates.GetValue(root, static _ => new SemaphoreSlim(1, 1));
+            var gate = ExplorerDialogs.GateFor(root); // A94 4차 — 탐색기 대화상자 공용 게이트
             await gate.WaitAsync(); // 같은 창의 앞선 대화상자가 닫히기를 대기 (VideoPlayerView._playerGate 관용구)
             try
             {
