@@ -460,9 +460,9 @@ that to bring it back.
 **Updates**
 
 - **Current version** and **Latest version**, plus when the last check ran.
-- KOTU checks for updates on its own every two minutes, once whenever you open Settings, and
-  whenever you press **Check now**. Nothing pops up when a new version is found — the Updates
-  section is the only place it is announced.
+- KOTU checks for updates on its own every two minutes, and once whenever you open Settings.
+  There is no button to check by hand — opening this screen is the check. Nothing pops up when a
+  new version is found — the Updates section is the only place it is announced.
 - When there is one, an **Update to vX.Y.Z** button appears. It downloads with a progress figure,
   then asks: *KOTU will close and restart to finish installing.* **Install and restart** applies it
   immediately; **Later** keeps the download ready for the next time you press the button.
