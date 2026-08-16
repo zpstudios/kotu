@@ -625,7 +625,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>
     /// 드랍 실행(A94): 조작은 워커에서 비동기, 완료 후 FolderActivated로 현재 폴더를 다시 항해 —
     /// 폴더 상태의 단일 원본인 좌 리스트(ExplorerPane)를 셸이 항해시키고 결과가 ViewChanged로
-    /// 돌아와 이 그리드까지 갱신된다(A93 경로 그대로. FileSystemWatcher가 없어 명시 갱신).
+    /// 돌아와 이 그리드까지 갱신된다(A93 경로 그대로 — 5차의 폴더 감시가 같은 변경을 또 봐도
+    /// 디바운스가 흡수하므로 명시 재스캔은 유지한다).
     /// </summary>
     private async void HandleDrop(DragEventArgs e, string targetFolder)
     {

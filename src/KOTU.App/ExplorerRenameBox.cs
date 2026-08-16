@@ -22,9 +22,38 @@ namespace KOTU.App;
 ///
 /// 편집 도중 재스캔 금지: 갱신(onRenamed)은 커밋 성공 후에만 부른다. 같은 창의 다른 파일 조작은
 /// 클릭·키 입력이 먼저 포커스를 옮겨 LostFocus 커밋이 선행되므로 편집 UI가 재스캔에 지워질 일이 없다.
+///
+/// A94 5차: 폴더 감시(ExplorerPane)의 자동 재스캔도 같은 금지를 지켜야 해서 활성 편집을 여기서
+/// 정적으로 추적한다(IsEditing) — 감시는 편집 중 만료된 재스캔을 보류하고, 종료 알림(EditEnded)을
+/// 받아 소화한다. 종료 알림은 커밋·취소·검증 실패 어느 길이든 상자가 걷힌 뒤 1회 나간다.
 /// </summary>
 internal static class ExplorerRenameBox
 {
+    /// <summary>
+    /// 지금 열려 있는 편집 상자들 (A94 5차). 보통 동시 1개(편집은 포커스 기반 — 같은 창의 새 편집·
+    /// 클릭은 기존 편집의 LostFocus 커밋을 먼저 끝낸다)지만, 창이 여럿이면 창마다 1개씩 겹칠 수
+    /// 있어 집합으로 센다. 접근은 단일 UI 스레드 전제(A110 — ExplorerFileOps.CutMarked와 동일).
+    /// </summary>
+    private static readonly HashSet<TextBox> ActiveBoxes = [];
+
+    /// <summary>이름변경 편집이 진행 중인가 (A94 5차) — 폴더 감시(ExplorerPane)의 재스캔 보류 판정.</summary>
+    internal static bool IsEditing => ActiveBoxes.Count > 0;
+
+    /// <summary>
+    /// 편집 1개가 끝났다 (A94 5차) — 커밋·취소·검증 실패 어느 길이든 상자가 걷힌 뒤 1회 발생.
+    /// 폴더 감시(ExplorerPane)가 편집 중 보류한 재스캔을 소화하는 트리거. 다른 창의 편집이 아직
+    /// 남았을 수 있으므로 수신 쪽은 IsEditing을 다시 확인한다. 정적 이벤트 — 구독은 표면 Loaded,
+    /// 해지는 Unloaded(CutMarksChanged와 같은 수명 규칙).
+    /// </summary>
+    internal static event Action? EditEnded;
+
+    /// <summary>추적 해제 + 종료 알림 — Finish(정상 종료)와 상자 Unloaded(창 닫힘 안전망) 양쪽에서 온다.</summary>
+    private static void ClearActive(TextBox box)
+    {
+        if (!ActiveBoxes.Remove(box)) return; // 이미 한쪽이 처리했다 — 알림도 1회만
+        EditEnded?.Invoke();
+    }
+
     /// <summary>
     /// 편집 시작. host = 이름 TextBlock이 들어 있는 콘텐츠 패널(호출부가 생성 코드 구조로 찾은 것),
     /// path = 항목 전체 경로. ui = 그 표면의 UI 문맥(A94 4차 — 실패 보고 채널: 안내 문구 + 권한
@@ -53,6 +82,12 @@ internal static class ExplorerRenameBox
         Grid.SetColumn(box, Grid.GetColumn(nameBlock));
         host.Children.Insert(host.Children.IndexOf(nameBlock) + 1, box);
         nameBlock.Visibility = Visibility.Collapsed;
+        // A94 5차: 활성 편집 추적 — 폴더 감시의 재스캔 보류 판정(IsEditing). 해제는 Finish 맨 끝.
+        // Finish가 불리지 못한 채 트리에서 걷히는 경로(창 닫힘 등)는 상자 Unloaded가 안전망이다 —
+        // 추적이 영구히 걸린 채 남으면 모든 창의 감시 재스캔이 멎기 때문. 정상 종료 뒤의 Unloaded는
+        // ClearActive의 1회 가드(Remove 실패)로 무해하다.
+        ActiveBoxes.Add(box);
+        box.Unloaded += (_, _) => ClearActive(box);
 
         var done = false;
         void Finish(bool commit)
@@ -62,15 +97,20 @@ internal static class ExplorerRenameBox
             var typed = box.Text;
             host.Children.Remove(box);
             nameBlock.Visibility = Visibility.Visible; // 원복 — 성공해도 재스캔이 올 때까지는 옛 이름 표시
-            if (!commit) return;
-            if (string.Equals(typed.Trim(), originalName, StringComparison.Ordinal)) return; // 무변경 = 조용히 취소
-            var (error, denied) = ExplorerFileOps.Rename(path, typed);
-            if (error is not null)
-                // 커밋하지 않음 — 원복 유지 (충돌·빈 이름·잘못된 문자·잠김 등). 발사 후 망각:
-                // 권한 부족이면 관리자 재시작 제안 대화상자가 뜨고, 그 대기가 편집 종료를 막지 않는다.
-                _ = ExplorerFileOps.ReportAsync(error, denied ? 1 : 0, ui);
-            else
-                onRenamed();     // 성공 — 이제서야 재스캔(편집 중 재스캔 금지는 위 클래스 주석)
+            if (commit && !string.Equals(typed.Trim(), originalName, StringComparison.Ordinal)) // 무변경 = 조용히 취소
+            {
+                var (error, denied) = ExplorerFileOps.Rename(path, typed);
+                if (error is not null)
+                    // 커밋하지 않음 — 원복 유지 (충돌·빈 이름·잘못된 문자·잠김 등). 발사 후 망각:
+                    // 권한 부족이면 관리자 재시작 제안 대화상자가 뜨고, 그 대기가 편집 종료를 막지 않는다.
+                    _ = ExplorerFileOps.ReportAsync(error, denied ? 1 : 0, ui);
+                else
+                    onRenamed();     // 성공 — 이제서야 재스캔(편집 중 재스캔 금지는 위 클래스 주석)
+            }
+            // A94 5차: 종료 알림은 결과(커밋·취소·실패)와 무관하게 맨 끝에 1회 — 감시가 보류한
+            // 재스캔을 소화한다. 커밋 성공이면 onRenamed의 재스캔과 겹칠 수 있지만 그 재스캔이
+            // 보류 플래그를 먼저 걷어 가고(ExplorerPane.TearDownWatch) _loadSeq도 있어 채우기는 1회다.
+            ClearActive(box);
         }
 
         box.KeyDown += (_, e) =>
