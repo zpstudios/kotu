@@ -339,7 +339,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             $"Bottom bar size: {HardwareInstanceState.BarScaleSteps[_state.BarScaleIndex].Label}",
             BarScaleKey));
 
-        RerenderSparklines(); // 축 라벨 표시 임계값(A74)·선 굵기를 다음 스냅샷 전에 반영
+        RerenderSparklines(); // 바뀐 표면 높이·선 굵기를 다음 스냅샷 전에 반영
+                              // (A128 전에는 "축 라벨 표시 임계값(A74)에 곱한 배수"도 여기서 반영했다 —
+                              //  바 표면 축 라벨이 사라져 그 몫은 없어졌고, 비-바 임계는 배수를 안 탄다)
     }
 
     /// <summary>
@@ -355,6 +357,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         graph.Root.Width = LongCardWidth;
         graph.TitleText.FontSize = BaseTitleFontSize * scale;
         graph.ValueText.FontSize = BaseValueFontSize * scale;
+        // 축 라벨 두 개는 A128 이후 바 표면에서 늘 Collapsed다 — 표면 구성이 공용(MakeGraph)이라
+        // 배수만 계속 입혀 둔다(다시 보이게 할 일이 생겨도 크기가 어긋나지 않게).
         graph.YAxisText.FontSize = BaseSmallFontSize * scale;
         graph.XAxisText.FontSize = BaseSmallFontSize * scale;
         graph.Line.StrokeThickness = BaseStrokeThickness * scale;
@@ -380,15 +384,16 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         Math.Min(maxMs, (double)SensorService.HistoryCapacity * HardwareModule.RefreshMs));
 
     /// <summary>
-    /// 축 라벨(A74)을 표시하는 최소 그래프 폭(M 기준). 이보다 좁으면 라벨 두 개가 셀을 다 덮어
+    /// 축 라벨(A74)을 표시하는 최소 그래프 폭. 이보다 좁으면 라벨 두 개가 셀을 다 덮어
     /// 그래프가 안 읽힌다 — A40의 "좁으면 축약" 관례와 같은 방식으로 숨긴다.
-    /// A62: 하단 바 표면은 글씨가 커지면 같은 폭에서 더 많이 가리므로 임계값에도 배수를 곱한다
-    /// (AxisMinWidthNow). 센터 타일·좌 대형은 바 밖(배수 비적용)이라 이 기준값을 그대로 쓴다.
+    /// 이력: A62(+창별 인스턴스화 A70)는 "하단 바는 글씨가 커지면 같은 폭에서 더 많이 가린다"는
+    /// 이유로 바 표면에만 배수를 곱한 별도 임계(AxisMinWidthNow)를 뒀었다. **A128에서 바 표면이
+    /// 축 라벨을 아예 표시하지 않게 되면서 배수를 적용할 지점 자체가 소멸**해 그 프로퍼티를 걷었다 —
+    /// 남은 사용처는 배수 밖인 센터 타일·좌 대형뿐이라 이 상수 하나로 충분하다.
+    /// A127로 y축 라벨이 "max " 접두만큼 길어졌지만 임계는 유지한다(2열 타일 폭이 넉넉 —
+    /// 잘림이 보이면 임계 상향이 아니라 실기기 확인 후 판단, A127 함정 항목).
     /// </summary>
     private const double AxisMinWidth = 90;
-
-    /// <summary>현재 단계(A62)를 반영한 하단 바 표면의 축 라벨 임계 폭 — 단계가 창별이라(A70) 인스턴스 멤버다.</summary>
-    private double AxisMinWidthNow => AxisMinWidth * _state.BarScale;
 
     // ---------- 센터 그래프 그리드 (A60 3차 — 전 채널 타일·선택·드래그 순서) ----------
 
@@ -762,8 +767,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         var area = new Polygon { Fill = fill };
 
         // 축 스케일 라벨(A74): 눈금선·축선은 그리지 않는다(작은 셀이 지저분해진다).
-        // 좌상단 = y 최대값 + 단위("100°C"), 우하단 = x 시간 범위("30s"). y 하한 0은 자명해 생략.
-        // 값·표시 여부는 RenderSparkline이 채운다 — 여기선 빈 채로 만들어 둔다.
+        // 좌상단 = y 최대값 + 단위("max 100°C" — A127 접두), 우하단 = x 시간 범위("30s").
+        // y 하한 0은 자명해 생략. 값·표시 여부는 RenderSparkline이 채운다 — 여기선 빈 채로 만들어
+        // 둔다. A128 이후 하단 바 표면(inBar)에서는 끝까지 Collapsed로 남는다(표면 구성은 공용).
         var yAxisText = new TextBlock
         {
             FontSize = BaseSmallFontSize,
@@ -950,7 +956,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     }
 
     // A70: RenderSparkline이 인스턴스 배수(AxisMinWidthNow)를 읽게 되면서 이 호출 연쇄
-    // (UpdateSensors → UpdateGraph → RenderSparkline)는 인스턴스 메서드다.
+    // (UpdateSensors → UpdateGraph → RenderSparkline)가 인스턴스 메서드가 됐다.
+    // A128에서 그 배수 참조가 사라졌지만(바 표면 축 라벨 소멸 → AxisMinWidthNow 제거) 서명은
+    // 그대로 둔다 — 호출부를 흔들 이유가 없고, 이 연쇄는 뷰 인스턴스의 표면 목록을 도는 경로다.
     private void UpdateGraph(SensorGraph graph, SensorFrame frame, SensorFrame[] history)
     {
         var value = frame.Timestamp == DateTime.MinValue ? null : graph.Channel.Select(frame);
@@ -1027,13 +1035,18 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         graph.Line.Points = linePoints;
         graph.Area.Points = areaPoints;
 
-        // 축 라벨(A74): 좌상단 y 최대값 + 단위, 우하단 x 시간 범위. 표면이 좁으면(그래프 폭
-        // 임계 미만 — 하단 바 표면만 A62 배수 적용) 숨긴다. 값이 한 번도 없던 채널도 숨긴다
-        // (축만 떠 있으면 오히려 오해를 준다).
-        var showAxis = w >= (graph.InBar ? AxisMinWidthNow : AxisMinWidth) && scale.HasEverHadValue;
+        // 축 라벨(A74): 좌상단 y 최대값 + 단위, 우하단 x 시간 범위. 숨기는 조건 셋 —
+        // ① A128: 하단 바 표면(InBar)은 y·x축 라벨을 아예 그리지 않는다. 32px 바 높이에서 채널명·
+        //    현재값과 겹쳐 읽히지 않았고, 바는 흐름 확인용이라 최대치·시간축은 센터 타일·좌 대형이
+        //    담당한다(x축 "5m" 표기도 바에서는 함께 소멸 — 폭 임계는 이제 비-바 전용).
+        // ② 표면이 좁을 때(그래프 폭이 AxisMinWidth 미만).
+        // ③ 값이 한 번도 없던 채널(축만 떠 있으면 오히려 오해를 준다).
+        var showAxis = !graph.InBar && w >= AxisMinWidth && scale.HasEverHadValue;
         if (showAxis)
         {
-            graph.YAxisText.Text = $"{max:0}{graph.Channel.AxisUnit}";
+            // A127: 헤더 우측의 현재값과 형식이 같아 최대치가 현재값으로 오독됐다 — "max " 접두로
+            // 축 상한임을 못 박는다(예: "max 100%", "max 100°C"). 사용자 노출 문자열이라 영어.
+            graph.YAxisText.Text = $"max {max:0}{graph.Channel.AxisUnit}";
             graph.XAxisText.Text = FormatSpan(window);
         }
         graph.YAxisText.Visibility = showAxis ? Visibility.Visible : Visibility.Collapsed;
