@@ -48,6 +48,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     private int _columns = 8; // 기본 = 도크 하나라도 닫힘(전폭) 기준 — 셸이 곧 SetColumns로 덮는다
     private (string Path, DateTime At)? _lastClick;
     private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
+    private (string Path, DateTime At)? _lastPress;      // A131: 원시 눌림 쌍 — 항목 재구축을 건너 살아남는 최후 폴백
 
     /// <summary>
     /// Ctrl+Shift+N(새 폴더) 직후의 편집 진입 예약 (A94 2차). 이 뷰의 재스캔은 좌 리스트 경유
@@ -89,6 +90,16 @@ public sealed partial class ThumbnailExplorer : UserControl
         // (MainWindow의 루트 KeyDown 구독과 같은 관용구).
         TileGrid.AddHandler(UIElement.KeyDownEvent,
             new KeyEventHandler(OnGridKeyDown), handledEventsToo: true);
+        // A131: 원시 눌림 쌍 폴백 — 아래 두 더블클릭 판정(ItemClick 쌍·DoubleTapped)은 둘 다 항목
+        // 컨테이너 수명에 묶여 있어, 두 클릭 사이·클릭 도중에 목록 재구축(A94 5차 폴더 감시 재스캔
+        // 등 — ShowEntries가 타일을 전부 새로 만든다)이 끼면 눌림·뗌이 다른 요소가 되어 클릭이
+        // 성립하지 않고(ItemClick 침묵) 새 컨테이너에는 제스처 상태가 없어 DoubleTapped도 뜨지
+        // 않는다 — 열기 요청이 셸에 도달하지 못한 채 완전 침묵(압축 모듈 zip 무반응으로 관측).
+        // 눌림은 요소 교체와 무관하게 매번 도착하므로 경로 키 판정이 재구축을 건너 살아남는다.
+        // handledEventsToo = 리스트가 눌림을 소비해도 판정은 돌아야 한다(셸 A58 홀드 취소 구독과
+        // 같은 관용구). Handled는 건드리지 않는다 — 순수 관찰(선택·드래그·제스처 무간섭).
+        TileGrid.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
         // A94 4차: 잘라내기 표시(프로세스 전역 1벌)가 바뀌면 이미 그려 둔 타일의 흐림만 다시 맞춘다.
         // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
         // (ExplorerPane과 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
@@ -706,6 +717,49 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     // ---------- 입력 ----------
+
+    /// <summary>
+    /// 원시 눌림(PointerPressed) 쌍 = 더블클릭 최후 폴백 (A131 — 배선 근거는 생성자 주석).
+    /// 왼쪽 눌림 "전이"만 태운다(A112 XButton1 판정과 같은 관용구 — 다른 버튼이 눌린 채 겹쳐 온
+    /// 눌림은 전이 종류가 달라 걸리지 않는다). Ctrl 눌림은 다중 선택 토글 제스처라 쌍에서
+    /// 제외한다(Shift는 제외하지 않는다 — Shift+더블클릭 = 새 창(A24)은 Activate가 해석한다).
+    /// 정상 환경에서는 기존 두 판정과 같은 제스처에서 겹쳐 발화하지만 Activate의 _lastActivation
+    /// 억제(A85)가 1회로 누른다 — 두 번째 눌림 시점 발화는 탐색기 관례(WM_LBUTTONDBLCLK)와 같다.
+    /// </summary>
+    private void OnSurfacePointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.GetCurrentPoint(TileGrid).Properties.PointerUpdateKind
+            != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
+        if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
+        if (ExplorerFileOps.IsCtrlDown())
+        {
+            _lastPress = null; // Ctrl 토글 선택 — 진행 중이던 쌍 판정을 끊는다
+            return;
+        }
+        if (EntryFromSource(e.OriginalSource) is not { } entry)
+        {
+            _lastPress = null; // 빈 영역·스크롤바 — 항목 밖 눌림은 쌍을 끊는다
+            return;
+        }
+        var now = DateTime.UtcNow;
+        var isPair = _lastPress is { } last && last.Path == entry.Path &&
+                     (now - last.At).TotalMilliseconds < DoubleClickMs;
+        _lastPress = isPair ? null : (entry.Path, now);
+        if (isPair) Activate(entry);
+    }
+
+    /// <summary>눌림의 원본 요소에서 타일 컨테이너(Tag = Entry)를 찾는다 — 조상 상향 탐색
+    /// (깊이 상한 64 = HotkeySupport.MaxAncestorDepth와 같은 방어).</summary>
+    private static ExplorerListing.Entry? EntryFromSource(object source)
+    {
+        var node = source as DependencyObject;
+        for (var depth = 0; node is not null && depth < 64; depth++)
+        {
+            if (node is GridViewItem { Tag: ExplorerListing.Entry entry }) return entry;
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return null;
+    }
 
     /// <summary>
     /// 클릭 2회(500ms 내 같은 항목) = 더블클릭 — ExplorerPane.OnItemClick과 같은 판정.

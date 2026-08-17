@@ -68,6 +68,7 @@ public sealed partial class ExplorerPane : UserControl
     private int _loadSeq;                     // 빠른 연속 탐색 시 늦은 결과 폐기
     private (string Path, DateTime At)? _lastClick;
     private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
+    private (string Path, DateTime At)? _lastPress;      // A131: 원시 눌림 쌍 — 항목 재구축을 건너 살아남는 최후 폴백
     private ModuleWorker? _worker;            // 스캔·썸네일 전용 — 페인별 분리(A42 정책)
     private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 정렬 변경 시 재스캔 없이 재배치(A5)
     private ExplorerListing.SortKey _sortKey = ExplorerListing.SortKey.Name;
@@ -108,6 +109,17 @@ public sealed partial class ExplorerPane : UserControl
         // 컨트롤이 먼저 Handled를 걸어도 받게 handledEventsToo (ThumbnailExplorer Enter와 같은 관용구).
         IconGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSurfaceKeyDown), true);
         ListPane.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnSurfaceKeyDown), true);
+        // A131: 원시 눌림 쌍 폴백 — 두 더블클릭 판정(ItemClick 쌍·DoubleTapped)은 둘 다 항목
+        // 컨테이너 수명에 묶여 있어, 두 클릭 사이·클릭 도중에 목록 재구축(A94 5차 폴더 감시
+        // 재스캔 등 — Fill이 항목을 전부 새로 만든다)이 끼면 눌림·뗌이 다른 요소가 되어 클릭이
+        // 성립하지 않고(ItemClick 침묵) 새 컨테이너에는 제스처 상태가 없어 DoubleTapped도 뜨지
+        // 않는다 — 열기 요청이 셸에 도달하지 못한 채 완전 침묵(압축 모듈 zip 무반응으로 관측).
+        // 눌림은 요소 교체와 무관하게 매번 도착하므로 경로 키 판정이 재구축을 건너 살아남는다.
+        // handledEventsToo = 순수 관찰(Handled 불변 — 선택·드래그·제스처 무간섭. ThumbnailExplorer와 동일 한 벌).
+        IconGrid.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
+        ListPane.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
         // A94 6차: 빈 영역(항목이 아닌 곳) 우클릭 메뉴 — New folder / Paste / Refresh.
         // 항목 메뉴와의 이중 발화는 ContextFlyout 규칙이 원천 차단한다: 컨텍스트 요청은 원본
         // 요소에서 위로 버블링하며 **가장 안쪽의 ContextFlyout 하나만** 떠서 요청을 소비하므로,
@@ -1020,6 +1032,50 @@ public sealed partial class ExplorerPane : UserControl
         owner.Items.OfType<SelectorItem>().FirstOrDefault(i =>
             i.Tag is ExplorerListing.Entry entry &&
             string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 원시 눌림(PointerPressed) 쌍 = 더블클릭 최후 폴백 (A131 — 배선 근거는 생성자 주석).
+    /// 왼쪽 눌림 "전이"만 태운다(A112 XButton1 판정과 같은 관용구). Ctrl 눌림은 다중 선택 토글
+    /// 제스처라 쌍에서 제외한다(Shift는 제외하지 않는다 — Shift+더블클릭 = 새 창(A24)은
+    /// Activate가 해석한다). 쌍 상태는 페인 1벌 — _lastClick과 같은 스코프(그리드·리스트 공유).
+    /// 정상 환경에서는 기존 두 판정과 같은 제스처에서 겹쳐 발화하지만 Activate의 _lastActivation
+    /// 억제(A85)가 1회로 누른다 — 두 번째 눌림 시점 발화는 탐색기 관례(WM_LBUTTONDBLCLK)와 같다.
+    /// </summary>
+    private void OnSurfacePointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not ListViewBase owner) return;
+        if (e.GetCurrentPoint(owner).Properties.PointerUpdateKind
+            != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
+        if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
+        if (ExplorerFileOps.IsCtrlDown())
+        {
+            _lastPress = null; // Ctrl 토글 선택 — 진행 중이던 쌍 판정을 끊는다
+            return;
+        }
+        if (ItemFromSource(e.OriginalSource) is not { Tag: ExplorerListing.Entry entry })
+        {
+            _lastPress = null; // 빈 영역·스크롤바 — 항목 밖 눌림은 쌍을 끊는다
+            return;
+        }
+        var now = DateTime.UtcNow;
+        var isPair = _lastPress is { } last && last.Path == entry.Path &&
+                     (now - last.At).TotalMilliseconds < DoubleClickMs;
+        _lastPress = isPair ? null : (entry.Path, now);
+        if (isPair) Activate(entry, owner);
+    }
+
+    /// <summary>눌림의 원본 요소에서 항목 컨테이너(SelectorItem)를 찾는다 — 조상 상향 탐색
+    /// (깊이 상한 64 = HotkeySupport.MaxAncestorDepth와 같은 방어).</summary>
+    private static SelectorItem? ItemFromSource(object source)
+    {
+        var node = source as DependencyObject;
+        for (var depth = 0; node is not null && depth < 64; depth++)
+        {
+            if (node is SelectorItem item) return item;
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return null;
+    }
 
     /// <summary>
     /// 클릭 2회(500ms 내 같은 항목) = 더블클릭: 폴더 진입 또는 파일 열기.
