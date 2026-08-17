@@ -183,12 +183,13 @@ public sealed partial class FileListOverlay : UserControl
     /// 문구는 실제 표시 상태(IsOpen) 기준 — 폴더 부재 등으로 Show가 못 떴으면 숨긴 채 둔다.
     /// A92(v0.115.0): 문구는 상시 표시가 아니라 잠깐 보였다 사라진다(아래 안내 문구 절 참고).
     /// A108(v0.135.0): 문구 위치는 패널 하단이 아니라 경계 버튼 옆(XAML PinnedText 배치 참고).
+    /// A129(v0.156.0): overSwapChain = 중앙이 스왑체인(비디오·오디오) — 반투명이 아크릴 대신
+    /// 반투명 단색 폴백이 된다(선택은 OverlayBackdrop.Pick 한 곳). 셸이 ApplyOverlayStates에서 매번 민다.
     /// </summary>
-    public void SetState(OverlayMode mode, bool pinned)
+    public void SetState(OverlayMode mode, bool pinned, bool overSwapChain)
     {
         var docked = mode == OverlayMode.OpaqueDocked;
-        PanelBorder.Background = (Brush)Application.Current.Resources[
-            docked ? "SolidBackgroundFillColorBaseBrush" : "OverlayAcrylicBrush"];
+        PanelBorder.Background = OverlayBackdrop.Pick(docked, overSwapChain);
         if (IsOpen && (docked || pinned))
             ShowHint(docked
                 ? OverlayHints.Docked(OverlayHints.ListKey)

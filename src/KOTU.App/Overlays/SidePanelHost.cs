@@ -85,9 +85,9 @@ public sealed partial class SidePanelHost : UserControl
         root.ColumnDefinitions.Add(panelOnRight ? _restColumn : _panelColumn);
         root.ColumnDefinitions.Add(panelOnRight ? _panelColumn : _restColumn);
 
-        // 배경·경계선은 파일 오버레이의 XAML 기본값과 동일 구성 — 브러시 키 조회는
-        // ContentInfoOverlay.SetState·MainWindow.Divider와 같은 저장소 관용구다.
-        _border.Background = (Brush)Application.Current.Resources["OverlayAcrylicBrush"];
+        // 배경·경계선은 파일 오버레이의 XAML 기본값과 동일 구성 — 초기값은 반투명(비스왑체인).
+        // A129: 브러시 선택은 OverlayBackdrop.Pick 한 곳 — 실제 값은 매 SetState가 다시 민다.
+        _border.Background = OverlayBackdrop.Pick(docked: false, overSwapChain: false);
         _border.BorderBrush = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"];
         _border.BorderThickness = panelOnRight ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
         _border.Child = _content;
@@ -153,12 +153,14 @@ public sealed partial class SidePanelHost : UserControl
     /// 표시 모드·고정 안내 반영 — ContentInfoOverlay.SetState와 같은 규칙(A58/A108):
     /// TranslucentOver = 오버레이(아크릴 반투명, 홀드 중 문구 없음·클릭 통과, pinned면 안내) /
     /// OpaqueDocked = 사이드바(불투명 배경 + 안내). 실제 폭 차지는 셸 도크 컬럼 담당.
+    /// A129(v0.156.0): overSwapChain = 중앙이 스왑체인(비디오·오디오) — 반투명이 반투명 단색
+    /// 폴백이 된다. 이 호스트가 뜨는 뷰(정보 모듈)는 파일이 없어 실제로는 항상 false가 오지만,
+    /// 네 표면의 SetState 계약을 같게 유지한다(셸 ApplyOverlayStates가 한 신호를 일괄로 민다).
     /// </summary>
-    public void SetState(OverlayMode mode, bool pinned)
+    public void SetState(OverlayMode mode, bool pinned, bool overSwapChain)
     {
         var docked = mode == OverlayMode.OpaqueDocked;
-        _border.Background = (Brush)Application.Current.Resources[
-            docked ? "SolidBackgroundFillColorBaseBrush" : "OverlayAcrylicBrush"];
+        _border.Background = OverlayBackdrop.Pick(docked, overSwapChain);
         _border.IsHitTestVisible = IsOpen && (docked || pinned);
         if (IsOpen && (docked || pinned))
             ShowHint(docked ? OverlayHints.Docked(_key) : OverlayHints.Pinned(_key));

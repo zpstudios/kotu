@@ -24,12 +24,28 @@
                                   TintColor="#202020" TintOpacity="0.06"
                                   TintLuminosityOpacity="0.24"
                                   FallbackColor="#6B202020" />
+                    <!-- A129(v0.156.0): 스왑체인(libvlc VideoView — 비디오 화면·오디오 파형) 위
+                         전용 반투명 단색 폴백.
+                         인앱 아크릴(위 OverlayAcrylicBrush)은 같은 XAML 렌더 결과만 배경 샘플하므로,
+                         별도 비주얼로 합성되는 D3D 스왑체인의 프레임은 샘플에 안 들어간다.
+                         아크릴 출력은 그 샘플의 불투명 합성이라 비디오 위에서 "불투명 판"으로
+                         보였다(A129 실기기 보고 — 이미지 모듈은 XAML이 그리므로 정상 반투명).
+                         이 브러시는 진짜 알파 합성이라 스왑체인 위에서도 투과가 성립한다
+                         (블러는 포기 — 반투명 통일이 기준, A129 사용자 확정).
+                         색·알파 = 위 아크릴 FallbackColor와 동일한 #6B + 테마 바탕색(A108의 6B) —
+                         아크릴 미지원 폴백과 같은 농도로 보이게 잡은 값이다.
+                         브러시 선택은 코드 한 곳(Overlays/OverlayBackdrop.Pick)만 한다.
+                         Default/Light 두 딕셔너리의 알파(6B)를 반드시 같게 유지할 것. -->
+                    <SolidColorBrush x:Key="OverlayTranslucentFallbackBrush" Color="#6B202020" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
                     <AcrylicBrush x:Key="OverlayAcrylicBrush"
                                   TintColor="#F9F9F9" TintOpacity="0.06"
                                   TintLuminosityOpacity="0.24"
                                   FallbackColor="#6BF9F9F9" />
+                    <!-- A129: 스왑체인 위 반투명 폴백의 라이트 쌍 — 근거는 Default 쪽 주석.
+                         알파(6B)는 두 테마 동일 유지(한쪽만 고치면 테마 전환에서 어긋난다). -->
+                    <SolidColorBrush x:Key="OverlayTranslucentFallbackBrush" Color="#6BF9F9F9" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

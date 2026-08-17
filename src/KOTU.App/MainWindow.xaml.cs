@@ -1432,6 +1432,34 @@ public sealed partial class MainWindow : Window
     private bool IsEmptyFileModule => _currentFilePath is null && IsFileModule(_currentModule);
 
     /// <summary>
+    /// 스왑체인(libvlc VideoView) 위에 중앙 콘텐츠를 그리는 모듈인지 (A129).
+    /// 비디오만이 아니다 — 오디오 모듈도 같은 VideoView에 libvlc 파형 시각화를 상시로 그린다
+    /// (AudioPlayerView.xaml의 AudioSurface). A129 등재문은 "스왑체인 = 비디오"를 전제했지만
+    /// 코드상 스왑체인 표면은 두 모듈이라 코드를 따른다(같은 원인 — 아크릴이 파형도 못 비춘다).
+    /// </summary>
+    private static bool IsSwapChainModule(string? moduleId) => moduleId is "video" or "audio";
+
+    /// <summary>
+    /// 지금 중앙에 스왑체인 콘텐츠(libvlc VideoView의 D3D 스왑체인 — 비디오 화면·오디오 파형)가
+    /// 실재하는지 (A129). 인앱 아크릴이 배경 샘플에 실패하는 표면이라, 오버레이·S4의 반투명
+    /// 배경을 반투명 단색 폴백으로 바꾸는 신호다(OverlayBackdrop.Pick — ApplyOverlayStates가 매번 민다).
+    /// 판별은 새 계약 없이 셸이 이미 아는 신호만 조합한다(A129 구현 결정):
+    /// ① 스왑체인 모듈 + 파일 열림 — 영상 Enter 이중 방어(OnRootKeyDown)와 같은 꼴.
+    ///   파일이 없으면(빈 모듈) 중앙은 불투명 ExplorerHost(A93)라 아크릴 샘플이 정상이다.
+    /// ② All Readable(A59)이 스왑체인 자식 뷰를 얹은 경우 — 자식 선택(AllReadableRouting.
+    ///   ResolveChild)은 셸 라우터와 같은 우선순위 규칙이라(그 파일 주석의 확정 사항)
+    ///   _router.Resolve로 같은 답을 얻는다(S4 타일 액센트 ModuleIdForFile과 같은 관용구).
+    ///   ※ 확장자 재정의(SetOverride)는 ResolveChild가 안 보므로 이론상 어긋날 수 있으나,
+    ///   현행 재정의는 ".json → document"뿐이고 미디어 확장자 재정의가 생기면 최악도
+    ///   "아크릴/폴백이 뒤바뀌는" 표시 문제다 — 새 계약(뷰 인터페이스) 신설보다 기존 신호 우선.
+    /// </summary>
+    private bool IsSwapChainContent =>
+        _currentFilePath is not null && _currentModule is { } module
+        && (IsSwapChainModule(module.Id)
+            || (module.Id == KOTU.Module.AllReadable.AllReadableModule.ModuleId
+                && IsSwapChainModule(_router.Resolve(_currentFilePath)?.Id)));
+
+    /// <summary>
     /// 현재 뷰가 좌/우 패널 콘텐츠를 직접 내주는 뷰(ISidePanelProvider — A119, 지금은 정보 모듈뿐)면
     /// 그 계약, 아니면 null. 파일 오버레이 대신 SidePanelHost에 모듈 콘텐츠를 얹는 분기의 기준이다.
     /// </summary>
@@ -2069,6 +2097,10 @@ public sealed partial class MainWindow : Window
         var hasFile = _currentFilePath is not null;
         var emptyModule = IsEmptyFileModule; // 파일 없이 연 파일 모듈 — A81부터 오버레이 컨텍스트
         var panelView = PanelProviderView;   // A119: 모듈 고유 패널(정보 모듈) — 아래 호스트 절이 소비
+        // A129: 중앙이 스왑체인(비디오·오디오)이면 반투명 배경을 아크릴 대신 반투명 단색 폴백으로.
+        // 여기(상태 변경 단일 종착점)서 한 번 계산해 네 표면 + S4 중앙에 일괄로 민다 —
+        // 모듈 전환·파일 닫기(SetContentState)도 같은 경로라 아크릴 원복 재푸시가 누락될 수 없다.
+        var overSwapChain = IsSwapChainContent;
         var listShow = (hasFile || emptyModule) && _listSide.State != OverlayState.Closed;
         var infoShow = (hasFile || emptyModule) && _infoSide.State != OverlayState.Closed;
 
@@ -2078,7 +2110,8 @@ public sealed partial class MainWindow : Window
         ListOverlay.SetState(
             _listSide.State == OverlayState.OpaqueDocked
                 ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
-            pinned: _listSide.State == OverlayState.TranslucentPinned);
+            pinned: _listSide.State == OverlayState.TranslucentPinned,
+            overSwapChain: overSwapChain);
 
         if (infoShow && hasFile)
             InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider);
@@ -2089,7 +2122,8 @@ public sealed partial class MainWindow : Window
         InfoOverlay.SetState(
             _infoSide.State == OverlayState.OpaqueDocked
                 ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
-            pinned: _infoSide.State == OverlayState.TranslucentPinned);
+            pinned: _infoSide.State == OverlayState.TranslucentPinned,
+            overSwapChain: overSwapChain);
 
         // A119: 패널 제공 뷰(정보 모듈) — 같은 좌/우 상태를 모듈 콘텐츠 호스트로 표시한다.
         // 콘텐츠(그래프·스펙)는 뷰가 생성·소유하고(같은 인스턴스 반복 반환) 셸은 얹기만 한다.
@@ -2102,7 +2136,8 @@ public sealed partial class MainWindow : Window
         LeftPanelHost.SetState(
             _listSide.State == OverlayState.OpaqueDocked
                 ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
-            pinned: _listSide.State == OverlayState.TranslucentPinned);
+            pinned: _listSide.State == OverlayState.TranslucentPinned,
+            overSwapChain: overSwapChain);
         if (panelView is not null && _infoSide.State != OverlayState.Closed)
             RightPanelHost.ShowContent(panelView.GetRightPanel() as UIElement);
         else
@@ -2110,7 +2145,8 @@ public sealed partial class MainWindow : Window
         RightPanelHost.SetState(
             _infoSide.State == OverlayState.OpaqueDocked
                 ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
-            pinned: _infoSide.State == OverlayState.TranslucentPinned);
+            pinned: _infoSide.State == OverlayState.TranslucentPinned,
+            overSwapChain: overSwapChain);
 
         // 사이드바(OpaqueDocked — A108 용어)만 실제 공간을 차지한다: 도크 컬럼을 키워
         // 메인(ModuleHost/ExplorerHost)을 반대쪽으로 축소한다.
@@ -2162,6 +2198,10 @@ public sealed partial class MainWindow : Window
             S4RightSpacer.Width = new GridLength(s4Right, GridUnitType.Star);
             S4CenterColumn.Width = new GridLength(100 - s4Left - s4Right, GridUnitType.Star);
             _s4Explorer?.SetColumns(s4Left > 0 && s4Right > 0 ? 4 : 8);
+            // A129: S4 중앙 반투명도 같은 신호로 매번 재푸시 — S4 인스턴스는 재사용되므로
+            // (EnsureS4Explorer 지연 생성 1회) 비디오에서 진입했다 다른 모듈에서 다시 진입해도
+            // 여기서 아크릴/폴백이 맞게 덮인다(생성 시 1회 대입에 못 박지 않는다).
+            _s4Explorer?.UseTranslucentBackground(overSwapChain);
         }
 
         UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다 (S4에서는 숨김 — A90)
@@ -2381,7 +2421,9 @@ public sealed partial class MainWindow : Window
         {
             ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
         };
-        _s4Explorer.UseTranslucentBackground(); // 중앙을 "반투명으로 덮는다"(A90 원문 — A33 아크릴)
+        // 중앙을 "반투명으로 덮는다"(A90 원문) — A129: 아크릴/스왑체인 폴백은 현재 콘텐츠 기준.
+        // 이후 재푸시는 ApplyOverlayStates의 S4 절이 담당한다(모듈 전환 원복 포함).
+        _s4Explorer.UseTranslucentBackground(IsSwapChainContent);
         _s4Explorer.FolderActivated += folder => ListOverlay.NavigateList(folder);
         _s4Explorer.FileActivated += OpenFileRouted; // 열리면 SetContentState가 S4를 자동 종료한다
         // 새 창 열기(Shift+더블클릭·우클릭)는 이 창의 콘텐츠가 안 바뀌므로 S4를 유지한다(구현 결정 —

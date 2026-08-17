@@ -119,12 +119,13 @@ public sealed partial class ContentInfoOverlay : UserControl
     /// (기존 pinned 규칙 유지).
     /// A92(v0.115.0): 문구는 상시 표시가 아니라 잠깐 보였다 사라진다(아래 안내 문구 절 참고).
     /// A108(v0.135.0): 문구 위치는 패널 안이 아니라 경계 버튼 옆(XAML PinnedText 배치 참고).
+    /// A129(v0.156.0): overSwapChain = 중앙이 스왑체인(비디오·오디오) — 반투명이 아크릴 대신
+    /// 반투명 단색 폴백이 된다(선택은 OverlayBackdrop.Pick 한 곳). 셸이 ApplyOverlayStates에서 매번 민다.
     /// </summary>
-    public void SetState(OverlayMode mode, bool pinned)
+    public void SetState(OverlayMode mode, bool pinned, bool overSwapChain)
     {
         var docked = mode == OverlayMode.OpaqueDocked;
-        OverlayBorder.Background = (Brush)Application.Current.Resources[
-            docked ? "SolidBackgroundFillColorBaseBrush" : "OverlayAcrylicBrush"];
+        OverlayBorder.Background = OverlayBackdrop.Pick(docked, overSwapChain);
         OverlayBorder.IsHitTestVisible = IsOpen && (docked || pinned);
         if (IsOpen && (docked || pinned))
             ShowHint(docked
