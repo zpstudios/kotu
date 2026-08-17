@@ -216,10 +216,14 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         // A83: Contain도 추종 대상 — "축소만"이라 창 크기에 따라 Scale 1(원본)과 0(자동 축소)이
         // 갈리므로, 재판정하지 않으면 작은 창에서 100%로 굳는다(전체화면 전환도 이 경로로 온다).
         // Manual(수동 줌, A98)·ActualSize는 종전대로 추종하지 않는다.
+        // A130: EOF(Ended)에서는 이 재적용이 화면에 닿지 않으므로(원인은 ClearEndedFrameOnResize
+        // 주석 참조) 잔상 프레임을 지우는 것으로 갈음한다 — 최대화 전용이 아니라 경계 드래그·복원·
+        // 창 스냅(Win+화살표)·전체화면 전환까지 모든 크기 변경 공통.
         VideoSurface.SizeChanged += (_, _) =>
         {
             if (_fitMode is VideoFitMode.Contain or VideoFitMode.FitWidth or VideoFitMode.FitHeight)
                 ApplyFitMode();
+            ClearEndedFrameOnResize();
         };
 
         // A40: 바 폭이 좁으면 볼륨 슬라이더·시간 텍스트를 숨긴다(셸 하단 바로 옮겨진 뒤에도 유효)
@@ -535,6 +539,9 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private void OnPlayerEndReached(object? sender, EventArgs e)
     {
         // 끝까지 봤으면 이어보기 기록을 지운다. (이 콜백 안에서 Stop()을 부르면 교착 — 금지)
+        // A11 승계 메모: 루프 옵션이 EOF 동작을 재정의하면(목록/현재 영상 루프) 다음 재생을 잇는
+        // 자리가 이 핸들러다. A130의 잔상 정리는 여기가 아니라 "Ended 상태 + 크기 변경" 조건에
+        // 걸려 있어(ClearEndedFrameOnResize), 루프가 Ended에 머물지 않게 되면 자연히 비활성이다.
         if (_filePath is not null && !IsTestClip(_filePath) && _durationMs > 0)
             _resumeStore.Report(_filePath, _durationMs, _durationMs);
 
@@ -546,6 +553,26 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             SeekSlider.Value = SeekSlider.Maximum;
             _suppressSeekEvent = false;
         });
+    }
+
+    /// <summary>
+    /// A130: EOF(Ended) 상태에서 뷰포트 크기가 바뀌면 마지막 프레임 잔상을 지운다(검정 Present).
+    /// 원인(libvlc 3.0 소스 판독으로 확정): 재생이 끝나면 libvlc는 vout을 재사용 대비로 살려 두되
+    /// flush가 재표시 시계를 무효화해(video_output.c ThreadFlush에서 displayed.date 무효) 80ms
+    /// 재표시 펌프가 멎고, Scale/zoom 쓰기도 활성 vout 목록이 비어(resource.c에서 제거) 어떤
+    /// vout에도 닿지 않는다. 즉 EOF에서는 무엇을 재적용해도 화면이 다시 그려질 수 없다 —
+    /// SizeChanged의 ApplyFitMode 재적용이 EOF에서만 무력했던 이유이자, 재생·수동 일시정지
+    /// 중에는 같은 펌프가 살아 있어 경계 드래그든 최대화든 정상 추종하는 이유다.
+    /// 그래서 유일하게 일관된 표시인 잔상 제거를 택한다: VideoView.Clear()(LibVLCSharp 3.10.0,
+    /// vlc 이슈 23667 공식 워크어라운드)가 백버퍼를 검정으로 칠해 Present한다. 표면 배경도
+    /// 검정(XAML)이라 어떤 크기에서도 이음새가 없고, 종료 상태는 하단 바(▶·끝 위치)가 알린다.
+    /// 재생을 되살리면(TogglePlayPause의 Ended 분기 → PlayCurrent) Playing 핸들러의
+    /// ApplyFitMode가 새 크기로 다시 그리므로 별도 재적용은 필요 없다.
+    /// </summary>
+    private void ClearEndedFrameOnResize()
+    {
+        if (_player is { } p && p.State == VLCState.Ended)
+            Vlc.Clear();
     }
 
     private void OnPlayerError(object? sender, EventArgs e) =>
