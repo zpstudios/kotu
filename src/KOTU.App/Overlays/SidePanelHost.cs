@@ -35,14 +35,32 @@ public sealed partial class SidePanelHost : UserControl
     /// <summary>패널 배경·경계선 — 파일 오버레이의 OverlayBorder/PanelBorder에 해당.</summary>
     private readonly Border _border = new() { IsHitTestVisible = false };
 
-    /// <summary>안내 문구 — 파일 오버레이의 PinnedText에 해당(경계 버튼 옆, A108 배치 규칙).</summary>
+    /// <summary>안내 문구 — 파일 오버레이의 PinnedText에 해당(A133부터 판 안에 든다: 문구 대입 전용).</summary>
     private readonly TextBlock _pinnedText = new()
     {
-        Visibility = Visibility.Collapsed,
         FontSize = 11,
+        // 다크 판 위라 테마와 무관하게 밝은 글씨 고정 — 파일 오버레이 XAML의 Foreground="White"와 같은 값.
+        Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+    };
+
+    /// <summary>
+    /// 안내 문구의 다크 반투명 판 — 파일 오버레이 XAML의 PinnedPlate에 해당(A133, v0.155.0).
+    /// 규격은 A12 비디오 시작 오버레이 칩과 같은 값(출처 = KOTU.Module.Video/VideoPlayerView.xaml의
+    /// StartOverlay): Background #CC202020 · CornerRadius 4 · Padding 10,6. 요소 자체는 불투명
+    /// (Opacity = HintOpacity = 1) — 반투명은 배경 브러시 알파(CC)가 담당한다.
+    /// 표시·숨김·페이드 대상이 이 판이다(경계 버튼 옆이라는 A108 배치 규칙도 판이 물려받는다).
+    /// 좌/우 방향 정렬·Margin·컬럼과 Child 연결은 Initialize가 1회 조립한다 — 필드 초기화자는
+    /// 다른 인스턴스 필드(_pinnedText)를 참조할 수 없다(CS0236).
+    /// </summary>
+    private readonly Border _pinnedPlate = new()
+    {
+        Visibility = Visibility.Collapsed,
         Opacity = HintOpacity,
         IsHitTestVisible = false,
         VerticalAlignment = VerticalAlignment.Center,
+        Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0x20, 0x20, 0x20)),
+        CornerRadius = new CornerRadius(4),
+        Padding = new Thickness(10, 6, 10, 6),
     };
 
     private string _key = OverlayHints.ListKey; // 힌트 키 표기 — Initialize가 좌/우로 확정
@@ -76,10 +94,13 @@ public sealed partial class SidePanelHost : UserControl
         Grid.SetColumn(_border, panelOnRight ? 1 : 0);
         root.Children.Add(_border);
 
-        _pinnedText.HorizontalAlignment = panelOnRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-        _pinnedText.Margin = panelOnRight ? new Thickness(0, 0, 14, 0) : new Thickness(14, 0, 0, 0);
-        Grid.SetColumn(_pinnedText, panelOnRight ? 0 : 1);
-        root.Children.Add(_pinnedText);
+        // A133: 위치 규칙(정렬·Margin·컬럼)은 판이 그대로 물려받는다 — Margin 14는 판의 바깥
+        // 모서리 기준이고 글자는 칩 패딩만큼 안쪽에 앉는다(두 오버레이 XAML과 같은 배치).
+        _pinnedPlate.Child = _pinnedText;
+        _pinnedPlate.HorizontalAlignment = panelOnRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        _pinnedPlate.Margin = panelOnRight ? new Thickness(0, 0, 14, 0) : new Thickness(14, 0, 0, 0);
+        Grid.SetColumn(_pinnedPlate, panelOnRight ? 0 : 1);
+        root.Children.Add(_pinnedPlate);
 
         Content = root;
     }
@@ -148,8 +169,15 @@ public sealed partial class SidePanelHost : UserControl
     // ---------- 안내 문구 일시 표시 (A92 — 문구·키 표기는 OverlayHints 단일 출처) ----------
     // ⚠️ FileListOverlay·ContentInfoOverlay에 같은 타이밍 장치가 있다(A119부터 세 벌) —
     // 한쪽을 고치면 반드시 나머지도 맞출 것. 상수·흐름은 두 오버레이와 동일해야 한다.
+    // A133(v0.155.0)부터는 **판(다크 반투명 Border) 규격**도 세 벌 공통이다:
+    // Background #CC202020 · CornerRadius 4 · Padding 10,6 · 글씨 White · 요소 Opacity 1
+    // (A12 칩과 같은 값 — 출처 VideoPlayerView.xaml StartOverlay). 표시·숨김·페이드 대상은
+    // 문구가 아니라 판(_pinnedPlate)이고, _pinnedText는 문구 대입만 받는다. Opacity 애니메이션은
+    // UIElement 공통 속성이라 대상이 TextBlock이든 Border든 같은 경로("Opacity")로 성립한다
+    // (실기기 확인 포인트 — CI 검증 불가). 판을 되돌려야 하면 _pinnedPlate 참조를 _pinnedText로
+    // 되돌리고 판 필드를 지우면 A92 원형 동작이다 — 타이밍 장치는 손대지 않는다.
 
-    private const double HintOpacity = 0.6; // 필드 초기값과 같아야 한다(페이드 후 되돌릴 값)
+    private const double HintOpacity = 1; // _pinnedPlate 초기값과 같아야 한다(페이드 후 되돌릴 값 — A133에서 0.6 → 1)
     private static readonly TimeSpan HintHoldFor = TimeSpan.FromSeconds(2.5);      // 표시 시간(A92)
     private static readonly TimeSpan HintFadeFor = TimeSpan.FromMilliseconds(300); // 페이드아웃 시간
 
@@ -166,9 +194,9 @@ public sealed partial class SidePanelHost : UserControl
         _hintText = text;
 
         StopHint(); // 돌던 타이머·페이드를 먼저 정리해야 아래 Opacity 대입이 애니메이션에 눌리지 않는다
-        _pinnedText.Text = text;
-        _pinnedText.Opacity = HintOpacity; // 직전 페이드로 0이 된 채 남아 있을 수 있다
-        _pinnedText.Visibility = Visibility.Visible;
+        _pinnedText.Text = text;                // 문구는 판 안의 TextBlock이 받는다(A133)
+        _pinnedPlate.Opacity = HintOpacity;     // 직전 페이드로 0이 된 채 남아 있을 수 있다
+        _pinnedPlate.Visibility = Visibility.Visible;
 
         _hintTimer ??= CreateHintTimer();
         _hintTimer.Stop();  // DispatcherTimer는 반복 타이머 — Stop 후 Start로 확실히 되감는다
@@ -181,7 +209,7 @@ public sealed partial class SidePanelHost : UserControl
         _hintVisible = false;
         _hintText = null;
         StopHint();
-        _pinnedText.Visibility = Visibility.Collapsed;
+        _pinnedPlate.Visibility = Visibility.Collapsed; // 판째로 감춘다(A133)
     }
 
     private DispatcherTimer CreateHintTimer()
@@ -195,7 +223,10 @@ public sealed partial class SidePanelHost : UserControl
         return timer;
     }
 
-    /// <summary>Storyboard + DoubleAnimation(Opacity) — 두 오버레이·DriveStrip 마퀴와 같은 관용구.</summary>
+    /// <summary>
+    /// Storyboard + DoubleAnimation(Opacity) — 두 오버레이·DriveStrip 마퀴와 같은 관용구.
+    /// A133: 대상이 판(_pinnedPlate)이라 문구와 배경이 한 덩어리로 사라진다(같은 "Opacity" 경로).
+    /// </summary>
     private void FadeOutHint()
     {
         var animation = new DoubleAnimation
@@ -205,7 +236,7 @@ public sealed partial class SidePanelHost : UserControl
             Duration = new Duration(HintFadeFor),
             EnableDependentAnimation = true,
         };
-        Storyboard.SetTarget(animation, _pinnedText);
+        Storyboard.SetTarget(animation, _pinnedPlate);
         Storyboard.SetTargetProperty(animation, "Opacity");
 
         var fade = new Storyboard();
@@ -213,7 +244,7 @@ public sealed partial class SidePanelHost : UserControl
         fade.Completed += (_, _) =>
         {
             if (!ReferenceEquals(_hintFade, fade)) return; // 그새 다시 띄워졌다 — 감추면 안 된다
-            _pinnedText.Visibility = Visibility.Collapsed;
+            _pinnedPlate.Visibility = Visibility.Collapsed;
         };
         _hintFade = fade;
         fade.Begin();

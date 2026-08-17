@@ -137,11 +137,16 @@ public sealed partial class ContentInfoOverlay : UserControl
     // ---------- 안내 문구 일시 표시 (A92, v0.115.0 — 문구·키 표기는 A107부터 OverlayHints가 단일 출처) ----------
     // ⚠️ FileListOverlay·SidePanelHost(A119)에 같은 상수·필드·메서드(표시 타이밍 장치)가 한 벌씩
     // 더 있다. 문구 문자열은 A107에서 OverlayHints로 모았지만 타이밍 장치는 세 벌 —
-    // 한쪽을 고치면 반드시 나머지도 맞출 것.
+    // 한쪽을 고치면 반드시 나머지도 맞출 것. A133(v0.155.0)부터는 **판(다크 반투명 Border) 규격**도
+    // 세 벌 공통이다: Background #CC202020 · CornerRadius 4 · Padding 10,6 · 글씨 White ·
+    // 요소 Opacity 1(A12 칩과 같은 값 — 출처 VideoPlayerView.xaml StartOverlay).
     // A108(v0.135.0): 표시 위치가 패널 안 → 경계 버튼 옆(세로 중앙)으로 이동 — XAML만 바뀌었고
     // 타이밍 장치는 그대로다.
+    // A133: 표시·숨김·페이드의 대상 요소가 PinnedText → PinnedPlate(감싼 판)로 올라갔다.
+    // 문구 대입만 PinnedText가 받는다. Opacity 애니메이션은 UIElement 공통 속성이라 대상이
+    // TextBlock이든 Border든 같은 경로("Opacity")로 성립한다(실기기 확인 포인트 — CI 검증 불가).
 
-    private const double HintOpacity = 0.6; // XAML PinnedText.Opacity와 같아야 한다(페이드 후 되돌릴 값)
+    private const double HintOpacity = 1; // XAML PinnedPlate.Opacity와 같아야 한다(페이드 후 되돌릴 값 — A133에서 0.6 → 1)
     private static readonly TimeSpan HintHoldFor = TimeSpan.FromSeconds(2.5);      // 표시 시간(구현 시 결정)
     private static readonly TimeSpan HintFadeFor = TimeSpan.FromMilliseconds(300); // 페이드아웃 시간
 
@@ -162,9 +167,9 @@ public sealed partial class ContentInfoOverlay : UserControl
         _hintText = text;
 
         StopHint(); // 돌던 타이머·페이드를 먼저 정리해야 아래 Opacity 대입이 애니메이션에 눌리지 않는다
-        PinnedText.Text = text;
-        PinnedText.Opacity = HintOpacity; // 직전 페이드로 0이 된 채 남아 있을 수 있다
-        PinnedText.Visibility = Visibility.Visible;
+        PinnedText.Text = text;                 // 문구는 판 안의 TextBlock이 받는다(A133)
+        PinnedPlate.Opacity = HintOpacity;      // 직전 페이드로 0이 된 채 남아 있을 수 있다
+        PinnedPlate.Visibility = Visibility.Visible;
 
         _hintTimer ??= CreateHintTimer();
         _hintTimer.Stop();  // DispatcherTimer는 반복 타이머 — Stop 후 Start로 확실히 되감는다
@@ -177,7 +182,7 @@ public sealed partial class ContentInfoOverlay : UserControl
         _hintVisible = false;
         _hintText = null;
         StopHint();
-        PinnedText.Visibility = Visibility.Collapsed;
+        PinnedPlate.Visibility = Visibility.Collapsed; // 판째로 감춘다(A133)
     }
 
     private DispatcherTimer CreateHintTimer()
@@ -191,7 +196,10 @@ public sealed partial class ContentInfoOverlay : UserControl
         return timer;
     }
 
-    /// <summary>Storyboard + DoubleAnimation(Opacity) — DriveStrip 마퀴와 같은 관용구.</summary>
+    /// <summary>
+    /// Storyboard + DoubleAnimation(Opacity) — DriveStrip 마퀴와 같은 관용구.
+    /// A133: 대상이 판(PinnedPlate)이라 문구와 배경이 한 덩어리로 사라진다(같은 "Opacity" 경로).
+    /// </summary>
     private void FadeOutHint()
     {
         var animation = new DoubleAnimation
@@ -201,7 +209,7 @@ public sealed partial class ContentInfoOverlay : UserControl
             Duration = new Duration(HintFadeFor),
             EnableDependentAnimation = true,
         };
-        Storyboard.SetTarget(animation, PinnedText);
+        Storyboard.SetTarget(animation, PinnedPlate);
         Storyboard.SetTargetProperty(animation, "Opacity");
 
         var fade = new Storyboard();
@@ -209,7 +217,7 @@ public sealed partial class ContentInfoOverlay : UserControl
         fade.Completed += (_, _) =>
         {
             if (!ReferenceEquals(_hintFade, fade)) return; // 그새 다시 띄워졌다 — 감추면 안 된다
-            PinnedText.Visibility = Visibility.Collapsed;
+            PinnedPlate.Visibility = Visibility.Collapsed;
         };
         _hintFade = fade;
         fade.Begin();

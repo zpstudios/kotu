@@ -11,7 +11,8 @@ namespace KOTU.App.Overlays;
 /// **오버레이** = 반투명, 메인 위에 덮인다(홀드·2초 홀드 고정 = TranslucentOver/Pinned).
 /// 사용자 노출 문구도 이 구분을 따른다: 도크 안내 = "Sidebar", 고정 안내 = "Pinned"(유지).
 /// 표시 타이밍(2.5초 + 페이드)은 각 오버레이의 A92 절이, 표시 위치(경계 버튼 옆 — A108)는
-/// 각 XAML의 PinnedText 배치가 담당한다.
+/// 각 XAML의 PinnedText 배치가 담당한다 — A133(v0.155.0)부터 그 문구는 다크 반투명 판
+/// (PinnedPlate / SidePanelHost._pinnedPlate) 안에 들고, 표시·페이드 대상도 판이다.
 /// </summary>
 internal static class OverlayHints
 {

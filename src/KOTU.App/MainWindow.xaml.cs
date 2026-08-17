@@ -2190,6 +2190,8 @@ public sealed partial class MainWindow : Window
     /// A108: 도크·고정 안내 문구(각 오버레이 컨트롤의 PinnedText)가 이 버튼의 화면 안쪽 옆
     /// (좌 = 버튼 오른쪽 / 우 = 버튼 왼쪽, 세로 중앙 동일)에 뜬다 — 패널 내부 분할이 같은 %라
     /// 별도 좌표 계산 없이 정렬된다.
+    /// A133(v0.155.0): 문구는 다크 반투명 판(PinnedPlate) 안에 들어갔다 — 자리 계산은 무변경
+    /// (판이 그 자리를 차지하고, Margin 14는 판의 바깥 모서리 기준).
     /// 표시 여부는 근접 판정(OnRootPointerMoved)이 정하고, 여기서는 컨텍스트가 사라졌을 때만 감춘다.
     /// </summary>
     private void UpdateEdgeButtons()

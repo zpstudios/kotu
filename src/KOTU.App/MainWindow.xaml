@@ -93,7 +93,9 @@
                  z순서라, 반투명 홀드 중(IsHitTestVisible=false인 패널) 위에서도 눌린다.
                  A108: 도크·고정 안내 문구(각 패널 컨트롤의 PinnedText)가 이 버튼의 화면 안쪽 옆에
                  뜬다(좌 = 버튼 오른쪽 / 우 = 버튼 왼쪽, 세로 중앙 동일 — 버튼이 근접 표시로 숨어
-                 있어도 문구만 그 자리에 뜨면 된다는 A108 확정). -->
+                 있어도 문구만 그 자리에 뜨면 된다는 A108 확정).
+                 A133(v0.155.0): 그 문구는 다크 반투명 판(PinnedPlate) 안에 든다 — 자리·정렬 규칙은
+                 그대로고 판이 그 자리를 차지한다(가독성 목적, A12 칩 규격). -->
             <Button x:Name="LeftEdgeButton" Grid.ColumnSpan="3"
                     Width="20" Height="44" Padding="0"
                     HorizontalAlignment="Left" VerticalAlignment="Center"
