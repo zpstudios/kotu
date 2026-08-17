@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.146.0</span>
+    <span class="asof">AS OF v0.159.0</span>
   </div>
 </section>
 
@@ -302,7 +302,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            than one window is open, the window number is written directly in front, for example
            <code>2KOTU - holiday.jpg</code>. A leading <code>●</code> means that window has unsaved changes.
            The module is not named in the title — the window icon carries a coloured ring instead, one colour
-           per module.</p>
+           per module, and at the larger size Windows uses for <kbd>Alt</kbd>+<kbd>Tab</kbd> it also carries
+           the module's three letters.</p>
         <p><strong>Opening a file.</strong> Double-click it in Windows Explorer (if you registered the file
            type), drop it onto the KOTU window, or use the <strong>Open file</strong> button in the bottom bar.
            Dropping a file whose type does not belong to the module you are looking at opens it in a new window.</p>
@@ -365,6 +366,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><kbd>Enter</kbd>, <kbd>F11</kbd> or the ⛶ button goes full screen; <kbd>Esc</kbd> leaves it. In
               full screen, play, pause, seek, volume, mute and zoom each flash a short caption in the middle.</li>
           <li>Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.</li>
+          <li>Once a video has played to the end, resizing the window clears the picture to black instead of
+              rescaling the last frame. Press play to start it again and the picture returns at the new size.</li>
         </ul>
 
         <h3>Audio</h3>
@@ -386,13 +389,30 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               as is the line ending style.</li>
           <li><kbd>Ctrl</kbd>+<kbd>S</kbd> saves. The save button stays disabled until there is something to
               save, and <em>● Unsaved</em> appears in the bottom bar while there is.</li>
-          <li>If your edits contain characters the file's original CP949 encoding cannot store, KOTU offers to
-              save the file as UTF-8 instead.</li>
           <li>Closing or switching away with unsaved changes asks first: <em>Save</em> / <em>Don't save</em> /
               <em>Cancel</em>.</li>
           <li>Files larger than 4 MB open read-only, showing the first 4 MB.</li>
           <li><kbd>Tab</kbd> inserts a tab character in the editor.</li>
+          <li>The text sits in a centre column at most 900 pixels wide. In a wider window the empty space is
+              split evenly on both sides; a narrower window is unaffected.</li>
+          <li>Very faint guide lines mark the top and bottom of each line of text, <code>¶</code> marks a line
+              break and <code>·EOF</code> marks the end of the file. They are drawn over the text and never
+              become part of it.</li>
         </ul>
+        <p><strong>Before it writes.</strong> When there is anything to be careful about, saving stops and
+           asks first:</p>
+        <ul>
+          <li>the file changed on disk after you opened it — <em>File changed on disk</em>, with
+              <em>Overwrite</em> or <em>Cancel</em> (Cancel is the default);</li>
+          <li>saving cannot reproduce the original bytes exactly, because the file mixes CRLF and LF line
+              endings or contained bytes that could not be decoded — <em>Saving will normalize this file</em>,
+              with <em>Save anyway</em> or <em>Cancel</em>;</li>
+          <li>your text no longer fits the file's original CP949 encoding — <em>Encoding change required</em>,
+              with <em>Save as UTF-8</em> or <em>Cancel</em>.</li>
+        </ul>
+        <p>After writing, KOTU reads the file back and compares it. If the copy on disk does not match,
+           <em>Save verification failed</em> offers <em>Retry</em>, <em>Save as...</em> or <em>Cancel</em> —
+           your text stays in the editor either way.</p>
 
         <h3>Document — PDF</h3>
         <ul>
@@ -431,19 +451,28 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <div class="note">All eight listed formats can be extracted. Only ZIP and 7z can be created.</div>
 
         <h3>H/W Info</h3>
-        <p>The window is split into three areas, with two more graphs in the bottom bar.</p>
+        <p>The centre of the window is the sensor grid; the two side panels carry the rest.</p>
         <ul>
-          <li><strong>Left</strong> — up to two enlarged graphs, one per selected sensor, covering the last
-              10 seconds.</li>
           <li><strong>Centre</strong> — a tile per sensor, ten of them, each covering the last 30 seconds:
               CPU Temp, CPU Power, CPU Load, CPU Clock, GPU Temp, GPU Power, GPU Load, RAM, Fan, SSD Temp.
               <strong>Click</strong> a tile to select it — up to two at a time; picking a third releases the
-              oldest. <strong>Drag</strong> a tile to reorder the grid.</li>
-          <li><strong>Right</strong> — the specification list, scrollable: CPU, GPU, RAM, Motherboard, Storage,
-              Network, System.</li>
+              oldest. <strong>Drag</strong> a tile to reorder the grid. The tiles are square, and the grid is
+              2 columns wide with both sidebars docked, 3 with one and 4 with none.</li>
+          <li><strong>Left panel</strong> — up to two enlarged graphs, one per selected sensor, covering the
+              last 10 seconds.</li>
+          <li><strong>Right panel</strong> — the specification list, scrollable: CPU, GPU, RAM, Motherboard,
+              Storage, Network, System.</li>
           <li><strong>Bottom bar</strong> — two long graphs of the same selected sensors, covering up to
               5 minutes. At the fastest refresh settings the history is shorter than that.</li>
         </ul>
+        <p>The two panels are the ordinary side panels: <kbd>F1</kbd>, <kbd>F2</kbd>, <kbd>Enter</kbd> and the
+           edge buttons drive them exactly as in the file modules, and the module opens with both docked.
+           Close them and the sensor grid takes the whole window.</p>
+        <p>Every graph writes its channel name and its current value along the top. Where there is room for
+           them, the tiles and the enlarged graphs also label the top of the scale, prefixed so it cannot be
+           misread as the current value — <code>max 100%</code>, <code>max 100°C</code>,
+           <code>max 5000MHz</code> — and the length of the time window in the bottom right corner. The two
+           graphs in the bottom bar are too shallow for axis labels and show only the name and the value.</p>
         <div class="tbl"><table>
           <tr><th>Control</th><th>Key</th><th>What it does</th></tr>
           <tr><td>Copy all</td><td><kbd>C</kbd></td><td>puts the whole specification list plus every current sensor value on the clipboard as text</td></tr>
@@ -456,7 +485,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            size belong to each window separately; the most recent change is what a newly opened window starts
            from.</p>
         <div class="note">CPU temperature, CPU power, fan speed and drive temperature need administrator
-           rights. When they cannot be read, a <em>Restart as admin</em> button appears above the panes.</div>
+           rights. When they cannot be read, a line saying so and a <em>Restart as admin</em> button appear
+           just above the bottom bar. Restarting is a whole-program affair — every KOTU window closes and the
+           program starts again with administrator rights — so KOTU notes which windows were open and brings
+           the same set back: same modules, same files, same positions and sizes. Cancelling the Windows
+           prompt changes nothing.</div>
 
         <h3>All Readable</h3>
         <p>One module that opens every file type the other modules handle. When you open a file, the centre
@@ -497,6 +530,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
           <tr><td><kbd>F11</kbd></td><td>full screen</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
+          <tr><td><kbd>Browser Back</kbd></td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
         </table></div>
         <p>The <kbd>Alt</kbd> combinations and <kbd>F1</kbd> / <kbd>F2</kbd> work even while you are typing
            in a text box, because they produce no character of their own. <kbd>Shift</kbd>+<kbd>N</kbd> gives
@@ -516,8 +550,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Both keys together</td><td>both sides do all of the above at once, in any press order</td></tr>
           <tr><td><kbd>Enter</kbd></td><td>closes both if either is open; opens them again in the arrangement you last had</td></tr>
         </table></div>
-        <p>When a panel is pinned or docked, a short hint appears next to it — <em>Pinned - press F1 to
-           close</em>, <em>Sidebar - press F1 to close</em> — and fades after a couple of seconds. One
+        <p>When a panel is pinned or docked, a short hint appears next to it on a small dark plate, so it
+           stays readable over whatever is behind it — <em>Pinned - press F1 to close</em>,
+           <em>Sidebar - press F1 to close</em> — and fades after a couple of seconds. One
            exception: while the file browser has the focus <strong>and a file is selected</strong>,
            <kbd>F2</kbd> renames that file instead of calling the right panel — renaming keeps its usual
            Windows key. Inside the Open file browser, <kbd>F1</kbd> and <kbd>F2</kbd> do nothing;
@@ -566,12 +601,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <h3>In the file browser</h3>
         <div class="tbl"><table>
           <tr><th>Key</th><th>Action</th></tr>
-          <tr><td><kbd>Enter</kbd></td><td>open the selected item</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>open the selected item — with several files selected, all of them</td></tr>
           <tr><td><kbd>F2</kbd></td><td>rename the selected item (with nothing selected, <kbd>F2</kbd> calls the right panel as usual)</td></tr>
           <tr><td><kbd>Delete</kbd></td><td>move to the Recycle Bin</td></tr>
+          <tr><td><kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>delete for good, after a confirmation</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd></td><td>copy / cut / paste</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>select all</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></td><td>new folder</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>clear the dimming left by <kbd>Ctrl</kbd>+<kbd>X</kbd> (the clipboard keeps its contents)</td></tr>
         </table></div>
 
         <h3>Mouse and wheel</h3>
@@ -590,12 +627,22 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>File browser, side panels</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>File browser</td><td>double-click</td><td>open (folders: go in)</td></tr>
           <tr><td>File browser</td><td><kbd>Shift</kbd>+double-click</td><td>open in a new window</td></tr>
-          <tr><td>File browser</td><td>right-click</td><td>Open in new instance · Rename · Delete</td></tr>
+          <tr><td>File browser</td><td>right-click a file</td><td>Open in new instance · Cut · Copy · Rename · Delete</td></tr>
+          <tr><td>File browser</td><td>right-click a folder</td><td>Cut · Copy · Paste · Rename · Delete</td></tr>
+          <tr><td>File browser</td><td>right-click empty space</td><td>New folder · Paste · Refresh</td></tr>
           <tr><td>File browser</td><td>drag</td><td>move within a drive, copy across drives. <kbd>Ctrl</kbd> forces copy, <kbd>Shift</kbd> forces move</td></tr>
+          <tr><td>Anywhere</td><td>back button (the thumb button)</td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
           <tr><td>Near the window edge</td><td>move the pointer</td><td>a narrow edge button appears; click it to dock or undock that sidebar</td></tr>
         </table></div>
         <p>The wheel never zooms thumbnails, and it never zooms while the pointer is over a side panel — it
            scrolls there.</p>
+
+        <h3 id="back">Going back</h3>
+        <p>The mouse back button, and the <kbd>Browser Back</kbd> key on keyboards that have one, undo one
+           step at a time, in this order: leave full screen, then leave the Open file browser (returning to
+           the arrangement you had), then close the file and go back to the module's own browser with the
+           side panels as they were. With nothing left to undo they do nothing. The mouse button works
+           everywhere; the key gives way to typing, like the letter keys.</p>
       </section>
 
       <!-- ================= 4. PANELS ================= -->
@@ -610,12 +657,17 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         </ul>
         <p><strong>The right panel</strong> describes the file you have open — whatever the module knows about
            it, or otherwise its name, size, date and folder. You can drop a file onto this panel to open it.</p>
+        <p>In H/W Info the same two panels carry that module's own content instead — the enlarged graphs on
+           the left, the specification list on the right. Everything below applies there unchanged.</p>
         <p>Ways to bring a panel up: <kbd>F1</kbd> / <kbd>F2</kbd> as described
            above; <kbd>Enter</kbd> for both at once; or the <strong>edge button</strong> — move the pointer
            close to the left or right edge of the window and a small button appears there. Clicking it docks or
            undocks that sidebar.</p>
         <p>Opening a module (rather than opening a file directly) starts with both sidebars docked. A file
            opened straight from Windows Explorer starts with no panels, so nothing covers what you came to see.</p>
+        <p>Translucent panels normally blur what is behind them. Over the Video and Audio modules they are a
+           plain tinted layer instead, with no blur: those two draw their picture outside the layer the blur
+           can read. They are just as see-through, only less frosted.</p>
       </section>
 
       <!-- ================= 5. FILE BROWSER ================= -->
@@ -631,19 +683,72 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Select</strong> several files with <kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+click or
               <kbd>Ctrl</kbd>+<kbd>A</kbd>.</li>
           <li><strong>Copy, cut and paste</strong> with <kbd>Ctrl</kbd>+<kbd>C</kbd> /
-              <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+              <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd>. Cut items go half-transparent in
+              every KOTU window until you paste them; <kbd>Esc</kbd> clears that mark without emptying the
+              clipboard.</li>
           <li><strong>Drag</strong> files to another folder, another KOTU window or Windows Explorer. Within
               one drive that moves them, across drives it copies; hold <kbd>Ctrl</kbd> to copy or
               <kbd>Shift</kbd> to move regardless.</li>
           <li><strong>Rename</strong> with <kbd>F2</kbd> or the right-click menu. <kbd>Enter</kbd> confirms,
-              <kbd>Esc</kbd> cancels.</li>
+              <kbd>Esc</kbd> cancels. A name that is empty, already taken or contains characters Windows
+              refuses is not committed — the old name comes back and a short message says why.</li>
           <li><strong>Delete</strong> with the <kbd>Delete</kbd> key or the right-click menu. Files go to the
               Recycle Bin, without a confirmation prompt.</li>
-          <li><strong>New folder</strong> with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>. It is created and
-              put straight into rename mode.</li>
+          <li><strong>Delete for good</strong> with <kbd>Shift</kbd>+<kbd>Delete</kbd>. This one does ask —
+              <em>Permanently delete this item?</em>, or <em>these n items?</em> — with <em>Delete</em> and
+              <em>Cancel</em>, and Cancel is the button <kbd>Enter</kbd> presses. It is not in the right-click
+              menu; the key is the only way in.</li>
+          <li><strong>New folder</strong> with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> or the right-click
+              menu on empty space. It is created and put straight into rename mode.</li>
           <li><strong>Open in a new window</strong> with <kbd>Shift</kbd>+double-click, or
               <em>Open in new instance</em> from the right-click menu.</li>
+          <li><strong>Open several at once</strong>: select a few files and press <kbd>Enter</kbd>, or
+              double-click one of them. The first opens the way a single file would; the rest each get their
+              own window. Ten at a time is the limit — beyond that KOTU opens the first ten and says so.
+              Folders are left out of this; a selection of folders alone behaves as before.</li>
         </ul>
+
+        <h3>Copying, moving and clashing names</h3>
+        <p>Everything below applies to dragging, to <kbd>Ctrl</kbd>+<kbd>V</kbd> and to the <em>Paste</em>
+           entries alike.</p>
+        <ul>
+          <li>When the destination already holds something of the same name, KOTU asks — <em>Replace or skip
+              files</em>, with <em>Replace</em>, <em>Keep both</em> and <em>Skip</em>. <kbd>Enter</kbd> picks
+              Replace. For folders, Replace merges the contents in rather than wiping the folder first, and
+              files inside get the same three choices. Keep both appends <code> (2)</code>,
+              <code> (3)</code> … as usual.</li>
+          <li>With more clashes still to come, <em>Do this for all remaining conflicts</em> appears. It applies
+              to whichever of the three buttons you press, and only for that one operation.</li>
+          <li><kbd>Esc</kbd> cancels. Whatever was already moved or copied stays where it went, and a short
+              message says how far it got — <em>Move cancelled - 3 of 12 completed</em>.</li>
+          <li>From three items up, a live message counts the work off — <em>Copying 3 of 12...</em>. One or
+              two items finish too quickly to bother.</li>
+          <li>If something cannot be done because Windows refuses permission, KOTU says <em>Access denied</em>
+              and offers <em>Restart as admin</em>, which restarts the program with administrator rights and
+              brings your windows back. Nothing is retried automatically — repeat the operation yourself
+              afterwards.</li>
+          <li>Anything else that fails is reported as a short message with the number of items and the first
+              error. One failure never stops the rest.</li>
+          <li>Cutting and copying carry over to Windows Explorer. Cut something there and paste it in KOTU
+              and the files move rather than copy; KOTU marks its own cuts the same way, so Explorer reads
+              them as a move too.</li>
+        </ul>
+
+        <h3>The right-click menus</h3>
+        <ul>
+          <li><strong>On a file</strong> — Open in new instance · Cut · Copy · Rename · Delete.</li>
+          <li><strong>On a folder</strong> — Cut · Copy · Paste · Rename · Delete. Paste goes into that
+              folder, not the one you are looking at.</li>
+          <li><strong>On empty space</strong> — New folder · Paste · Refresh. Paste is greyed out when there
+              is nothing to paste.</li>
+        </ul>
+        <p>Cut, Copy and Delete follow the same rule as dragging: if you right-clicked something that is part
+           of the selection, they act on the whole selection; if not, on that one item alone.</p>
+
+        <h3>Keeping up with the folder</h3>
+        <p>KOTU watches the folder it is showing. Files added, removed or renamed by other programs appear
+           within about half a second, without a Refresh. If the folder itself is deleted or unplugged, the
+           view moves up to the nearest folder that still exists.</p>
 
         <h3>The Open file button</h3>
         <p>The button beside the menu in the bottom bar — tooltip <em>Open file</em> — is how you open a file
@@ -694,9 +799,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         </ul>
         <p>With that setting off (the default), opening a file re-uses an existing window of the same module.</p>
         <p>Each window is independent: its own module, its own file, its own side panels, its own tray icon,
-           its own H/W Info selection. From the second window onwards, the window number appears in the title
-           bar and as a small coloured badge over the menu button. A new window inherits the size and position
-           of the last window you closed.</p>
+           its own taskbar button, its own H/W Info selection. From the second window onwards, the window
+           number appears in the title bar and as a small coloured badge over the menu button. A new window
+           inherits the size and position of the last window you closed.</p>
         <p><strong>Minimising</strong> a window hides it from the taskbar and from <kbd>Alt</kbd>+<kbd>Tab</kbd>.
            Its tray icon stays — click that to bring it back.</p>
       </section>

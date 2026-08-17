@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.146.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.159.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -43,7 +43,8 @@ Either panel is 25% of the window width.
 The title bar shows `KOTU`, or `KOTU - filename` once a file is open. When more than one window is
 open, the window number is written directly in front, for example `2KOTU - holiday.jpg`. A leading
 `●` means the document in that window has unsaved changes. The module is not named in the title —
-the window icon carries a coloured ring instead, one colour per module.
+the window icon carries a coloured ring instead, one colour per module, and at the larger size
+Windows uses for `Alt`+`Tab` it also carries the module's three letters.
 
 **Opening a file.** Double-click it in Windows Explorer (if you registered the file type), drop it
 onto the KOTU window, or use the **Open file** button in the bottom bar. Dropping a file whose type
@@ -98,6 +99,8 @@ Seven modules. Switch between them with `Alt+1` … `Alt+7`, or from the menu at
 - `Enter`, `F11` or the ⛶ button goes full screen; `Esc` leaves it. In full screen, play, pause,
   seek, volume, mute and zoom each flash a short caption in the middle of the picture.
 - Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.
+- Once a video has played to the end, resizing the window clears the picture to black instead of
+  rescaling the last frame. Press play to start it again and the picture returns at the new size.
 
 ### 2.3 Audio
 
@@ -116,11 +119,27 @@ Seven modules. Switch between them with `Alt+1` … `Alt+7`, or from the menu at
   as is the line ending style (CRLF or LF).
 - `Ctrl+S` saves. The save button stays disabled until there is something to save, and
   **● Unsaved** appears in the bottom bar while there is.
-- If your edits contain characters the file's original CP949 encoding cannot store, KOTU offers to
-  save the file as UTF-8 instead.
 - Closing or switching away with unsaved changes asks first: **Save** / **Don't save** / **Cancel**.
 - Files larger than 4 MB open read-only, showing the first 4 MB.
 - `Tab` inserts a tab character in the editor.
+- The text sits in a centre column at most 900 pixels wide. In a wider window the empty space is
+  split evenly on both sides; a narrower window is unaffected.
+- Very faint guide lines mark the top and bottom of each line of text, `¶` marks a line break and
+  `·EOF` marks the end of the file. They are drawn over the text and never become part of it.
+
+**Before it writes.** When there is anything to be careful about, saving stops and asks first:
+
+- the file changed on disk after you opened it — *File changed on disk*, with **Overwrite** or
+  **Cancel** (Cancel is the default);
+- saving cannot reproduce the original bytes exactly, because the file mixes CRLF and LF line
+  endings or contained bytes that could not be decoded — *Saving will normalize this file*, with
+  **Save anyway** or **Cancel**;
+- your text no longer fits the file's original CP949 encoding — *Encoding change required*, with
+  **Save as UTF-8** or **Cancel**.
+
+After writing, KOTU reads the file back and compares it. If the copy on disk does not match,
+*Save verification failed* offers **Retry**, **Save as...** or **Cancel** — your text stays in the
+editor either way.
 
 ### 2.5 Document — PDF
 
@@ -154,16 +173,28 @@ Seven modules. Switch between them with `Alt+1` … `Alt+7`, or from the menu at
 
 ### 2.7 H/W Info
 
-The window is split into three areas, with two more graphs in the bottom bar.
+The centre of the window is the sensor grid; the two side panels carry the rest.
 
-- **Left** — up to two enlarged graphs, one per selected sensor, covering the last 10 seconds.
 - **Centre** — a tile per sensor, ten of them, each covering the last 30 seconds:
   CPU Temp, CPU Power, CPU Load, CPU Clock, GPU Temp, GPU Power, GPU Load, RAM, Fan, SSD Temp.
   **Click** a tile to select it — up to two at a time; picking a third releases the oldest.
-  **Drag** a tile to reorder the grid.
-- **Right** — the specification list, scrollable: CPU, GPU, RAM, Motherboard, Storage, Network, System.
+  **Drag** a tile to reorder the grid. The tiles are square, and the grid is 2 columns wide with
+  both sidebars docked, 3 with one and 4 with none.
+- **Left panel** — up to two enlarged graphs, one per selected sensor, covering the last 10 seconds.
+- **Right panel** — the specification list, scrollable: CPU, GPU, RAM, Motherboard, Storage,
+  Network, System.
 - **Bottom bar** — two long graphs of the same selected sensors, covering up to 5 minutes.
   (At the fastest refresh settings the history is shorter than 5 minutes.)
+
+The two panels are the ordinary side panels: `F1`, `F2`, `Enter` and the edge buttons drive them
+exactly as in the file modules, and the module opens with both docked. Close them and the sensor
+grid takes the whole window.
+
+Every graph writes its channel name and its current value along the top. Where there is room for
+them, the tiles and the enlarged graphs also label the top of the scale, prefixed so it cannot be
+misread as the current value — `max 100%`, `max 100°C`, `max 5000MHz` — and the length of the time
+window in the bottom right corner. The two graphs in the bottom bar are too shallow for axis labels
+and show only the name and the value.
 
 Controls:
 
@@ -179,7 +210,10 @@ The selected sensors are also what this window's tray icon displays. Selection, 
 size belong to each window separately; the most recent change is what a newly opened window starts from.
 
 CPU temperature, CPU power, fan speed and drive temperature need administrator rights. When they
-cannot be read, a **Restart as admin** button appears above the panes.
+cannot be read, a line saying so and a **Restart as admin** button appear just above the bottom bar.
+Restarting is a whole-program affair — every KOTU window closes and the program starts again with
+administrator rights — so KOTU notes which windows were open and brings the same set back: same
+modules, same files, same positions and sizes. Cancelling the Windows prompt changes nothing.
 
 ### 2.8 All Readable
 
@@ -224,6 +258,7 @@ These work in every module.
 | `Shift+N` | new window of the module you are looking at |
 | `F11` | full screen |
 | `Ctrl+S` | save (text document) |
+| `Browser Back` | go back one step — see [3.6](#36-going-back) |
 
 The `Alt` combinations and `F1` / `F2` work even while you are typing in a text box, because they
 produce no character of their own. `Shift+N` gives way to typing.
@@ -245,7 +280,8 @@ Choosing the module you are already in changes nothing.
 | `F1` and `F2` together | both sides do all of the above at once, in any press order |
 | `Enter` | closes both if either is open; opens them again in the arrangement you last had |
 
-When a panel is pinned or docked, a short hint appears next to it — *Pinned - press F1 to close*,
+When a panel is pinned or docked, a short hint appears next to it on a small dark plate, so it
+stays readable over whatever is behind it — *Pinned - press F1 to close*,
 *Sidebar - press F1 to close* — and fades after a couple of seconds.
 
 One exception: while the file browser has the focus **and a file is selected**, `F2` renames that
@@ -301,12 +337,14 @@ box or while you are typing to jump through the file list.
 
 | Key | Action |
 |---|---|
-| `Enter` | open the selected item |
+| `Enter` | open the selected item — with several files selected, all of them |
 | `F2` | rename the selected item (with nothing selected, `F2` calls the right panel as usual) |
 | `Delete` | move to the Recycle Bin |
+| `Shift+Delete` | delete for good, after a confirmation |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | copy / cut / paste |
 | `Ctrl+A` | select all |
 | `Ctrl+Shift+N` | new folder |
+| `Esc` | clear the dimming left by `Ctrl+X` (the clipboard keeps its contents) |
 
 ### 3.5 Mouse and wheel
 
@@ -325,12 +363,27 @@ box or while you are typing to jump through the file list.
 | File browser, side panels | wheel | scroll |
 | File browser | double-click | open (folders: go in) |
 | File browser | `Shift`+double-click | open in a new window |
-| File browser | right-click | Open in new instance · Rename · Delete |
+| File browser | right-click a file | Open in new instance · Cut · Copy · Rename · Delete |
+| File browser | right-click a folder | Cut · Copy · Paste · Rename · Delete |
+| File browser | right-click empty space | New folder · Paste · Refresh |
 | File browser | drag | move within a drive, copy across drives. `Ctrl` forces copy, `Shift` forces move |
+| Anywhere | back button (the thumb button) | go back one step — see [3.6](#36-going-back) |
 | Near the left or right window edge | move the pointer | a narrow edge button appears; click it to dock or undock that sidebar |
 
 The wheel never zooms thumbnails, and it never zooms while the pointer is over a side panel — it
 scrolls there.
+
+### 3.6 Going back
+
+The mouse back button, and the `Browser Back` key on keyboards that have one, undo one step at a
+time, in this order:
+
+1. leave full screen;
+2. leave the Open file browser, returning to the arrangement you had;
+3. close the file and go back to the module's own browser, keeping the side panels as they were.
+
+With nothing left to undo they do nothing. The mouse button works everywhere; the key gives way to
+typing, like the letter keys.
 
 ---
 
@@ -345,6 +398,9 @@ scrolls there.
 **The right panel** describes the file you have open — whatever the module knows about it, or
 otherwise its name, size, date and folder. You can drop a file onto this panel to open it.
 
+In H/W Info the same two panels carry that module's own content instead — the enlarged graphs on
+the left, the specification list on the right. Everything below applies there unchanged.
+
 Ways to bring a panel up:
 
 - `F1` / `F2`, as described in [3.2](#32-panels-how-f1-and-f2-behave);
@@ -354,6 +410,10 @@ Ways to bring a panel up:
 
 Opening a module (rather than opening a file directly) starts with both sidebars docked. A file
 opened straight from Windows Explorer starts with no panels, so nothing covers what you came to see.
+
+Translucent panels normally blur what is behind them. Over the Video and Audio modules they are a
+plain tinted layer instead, with no blur: those two draw their picture outside the layer the blur
+can read. They are just as see-through, only less frosted.
 
 ---
 
@@ -365,15 +425,66 @@ left, thumbnails in the centre, file information on the right.
 - **Sort** by **Name**, **Size**, **Date modified** or **Date created**. Your choice is remembered.
 - **Filter** by extension, or **Show all**. The Filter button says how many files are hidden.
 - **Select** several files with `Ctrl`+click, `Shift`+click or `Ctrl+A`.
-- **Copy, cut and paste** with `Ctrl+C` / `Ctrl+X` / `Ctrl+V`.
+- **Copy, cut and paste** with `Ctrl+C` / `Ctrl+X` / `Ctrl+V`. Cut items go half-transparent in
+  every KOTU window until you paste them; `Esc` clears that mark without emptying the clipboard.
 - **Drag** files to another folder, another KOTU window or Windows Explorer. Within one drive that
   moves them, across drives it copies; hold `Ctrl` to copy or `Shift` to move regardless.
-- **Rename** with `F2` or the right-click menu. `Enter` confirms, `Esc` cancels.
+- **Rename** with `F2` or the right-click menu. `Enter` confirms, `Esc` cancels. A name that is
+  empty, already taken or contains characters Windows refuses is not committed — the old name comes
+  back and a short message says why.
 - **Delete** with the `Delete` key or the right-click menu. Files go to the Recycle Bin, without a
   confirmation prompt.
-- **New folder** with `Ctrl+Shift+N`. It is created and put straight into rename mode.
+- **Delete for good** with `Shift+Delete`. This one does ask — *Permanently delete this item?*, or
+  *these n items?* — with **Delete** and **Cancel**, and Cancel is the button `Enter` presses. It is
+  not in the right-click menu; the key is the only way in.
+- **New folder** with `Ctrl+Shift+N` or the right-click menu on empty space. It is created and put
+  straight into rename mode.
 - **Open in a new window** with `Shift`+double-click, or **Open in new instance** from the
   right-click menu.
+- **Open several at once**: select a few files and press `Enter`, or double-click one of them. The
+  first opens the way a single file would; the rest each get their own window. Ten at a time is the
+  limit — beyond that KOTU opens the first ten and says so. Folders are left out of this; a
+  selection of folders alone behaves as before.
+
+### Copying, moving and clashing names
+
+Everything below applies to dragging, to `Ctrl+V` and to the **Paste** entries alike.
+
+- When the destination already holds something of the same name, KOTU asks — *Replace or skip
+  files*, with **Replace**, **Keep both** and **Skip**. `Enter` picks Replace. For folders, Replace
+  merges the contents in rather than wiping the folder first, and files inside get the same three
+  choices. Keep both appends ` (2)`, ` (3)` … as usual.
+- With more clashes still to come, **Do this for all remaining conflicts** appears. It applies to
+  whichever of the three buttons you press, and only for that one operation.
+- `Esc` cancels. Whatever was already moved or copied stays where it went, and a short message says
+  how far it got — *Move cancelled - 3 of 12 completed*.
+- From three items up, a live message counts the work off — *Copying 3 of 12...*. One or two items
+  finish too quickly to bother.
+- If something cannot be done because Windows refuses permission, KOTU says *Access denied* and
+  offers **Restart as admin**, which restarts the program with administrator rights and brings your
+  windows back. Nothing is retried automatically — repeat the operation yourself afterwards.
+- Anything else that fails is reported as a short message with the number of items and the first
+  error. One failure never stops the rest.
+- Cutting and copying carry over to Windows Explorer. Cut something there and paste it in KOTU and
+  the files move rather than copy; KOTU marks its own cuts the same way, so Explorer reads them as
+  a move too.
+
+### The right-click menus
+
+- **On a file** — Open in new instance · Cut · Copy · Rename · Delete.
+- **On a folder** — Cut · Copy · Paste · Rename · Delete. Paste goes into that folder, not the one
+  you are looking at.
+- **On empty space** — New folder · Paste · Refresh. Paste is greyed out when there is nothing to
+  paste.
+
+Cut, Copy and Delete follow the same rule as dragging: if you right-clicked something that is part
+of the selection, they act on the whole selection; if not, on that one item alone.
+
+### Keeping up with the folder
+
+KOTU watches the folder it is showing. Files added, removed or renamed by other programs appear
+within about half a second, without a Refresh. If the folder itself is deleted or unplugged, the
+view moves up to the nearest folder that still exists.
 
 ### The Open file button
 
@@ -428,8 +539,8 @@ Ways to get a new one:
 With that setting off (the default), opening a file re-uses an existing window of the same module.
 
 Each window is independent: its own module, its own file, its own side panels, its own tray icon,
-its own H/W Info selection. From the second window onwards, the window number appears in the title
-bar and as a small coloured badge over the menu button.
+its own taskbar button, its own H/W Info selection. From the second window onwards, the window
+number appears in the title bar and as a small coloured badge over the menu button.
 
 A new window inherits the size and position of the last window you closed.
 
