@@ -2205,6 +2205,23 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다 (S4에서는 숨김 — A90)
+
+        // A135 2차(방어 수리): 표시 반영이 끝난 뒤의 포커스 후처리. 포커스가 방금 화면에서 내려간
+        // 좌/우 패널(파일 오버레이·모듈 패널 호스트 4표면) 안에 남아 있으면 모듈 뷰(중앙 콘텐츠)로
+        // 되돌린다. 닫힘 경로 전부(F1/F2 열림 1회 닫기·2연타 해제·Enter 일괄 닫기·경계 버튼·홀드
+        // 해제·컨텍스트 소멸)가 이 메서드를 지나므로 여기 한 곳이면 충분하다(상태 변경 단일 종착점).
+        // 가설(포커스 고아 — collapse된 요소에 포커스가 남으면 셸 KeyDown이 아예 안 올 수 있다)은
+        // 실기기 확정 전이다: 이 수리는 방어적이며, 실기기에서 증상이 남으면 가설 기각·재조사
+        // (docs/A135-audit.md §4-①·말미 "2차 방어 수리" 참고). 열려 있는 패널 안 포커스는 건드리지
+        // 않는다(리스트 타이핑 탐색 유지). 재포커스 관용구·대상은 S4 종료(ExitOpenFileBrowsing 끝)와
+        // 동일 — 실패(반환값 false·Content가 Control 아님)는 조용히 무시한다(포커스만 표류).
+        var focusOrphaned =
+            (!ListOverlay.IsOpen && IsFocusWithin(ListOverlay)) ||
+            (!InfoOverlay.IsOpen && IsFocusWithin(InfoOverlay)) ||
+            (!LeftPanelHost.IsOpen && IsFocusWithin(LeftPanelHost)) ||
+            (!RightPanelHost.IsOpen && IsFocusWithin(RightPanelHost));
+        if (focusOrphaned)
+            (ModuleHost.Content as Control)?.Focus(FocusState.Programmatic);
     }
 
     // ---------- 경계 버튼 (A86 keymap Q7) ----------
