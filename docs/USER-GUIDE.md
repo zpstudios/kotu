@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.159.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.163.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -54,7 +54,7 @@ does not belong to the module you are looking at opens it in a new window.
 
 ## 2. Modules
 
-Seven modules. Switch between them with `Alt+1` … `Alt+7`, or from the menu at the bottom left.
+Seven modules. Switch between them from the menu at the bottom left.
 
 | # | Module | Opens |
 |---|---|---|
@@ -249,8 +249,6 @@ These work in every module.
 | Key | Action |
 |---|---|
 | ``Alt+` `` | open the menu (bottom left) |
-| `Alt+1` … `Alt+7` | switch module — 1 All Readable · 2 Image · 3 Video · 4 Audio · 5 Document · 6 Archive · 7 H/W Info |
-| `Alt+0` | Settings |
 | `F1` | left panel |
 | `F2` | right panel |
 | `Enter` | open or close both panels at once |
@@ -260,11 +258,12 @@ These work in every module.
 | `Ctrl+S` | save (text document) |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
 
-The `Alt` combinations and `F1` / `F2` work even while you are typing in a text box, because they
-produce no character of their own. `Shift+N` gives way to typing.
+``Alt+` `` and `F1` / `F2` work even while you are typing in a text box, because they produce no
+character of their own. `Shift+N` gives way to typing.
 
-Switching module with `Alt+1` … `Alt+7` or from the menu always arrives with both sidebars open.
-Choosing the module you are already in changes nothing.
+There is no keyboard shortcut for switching module or for opening Settings — both live in the menu
+at the bottom left. Switching module from the menu always arrives with both sidebars open. Choosing
+the module you are already in changes nothing.
 
 ### 3.2 Panels: how `F1` and `F2` behave
 
@@ -520,8 +519,8 @@ you turned on are repaired silently the next time it starts.
 
 **The Start menu** is the button at the bottom-left corner (``Alt+` ``). It rises from the bar and
 lists, from the bottom up: All Readable, Image, Video, Audio, Document, Archive, H/W Info, then
-Settings. Each entry's tooltip shows its shortcut, `Alt+1` through `Alt+7` and `Alt+0`. There is no
-Exit entry here — closing the last window ends the app, and the tray menu has **Exit KOTU**.
+Settings. There is no Exit entry here — closing the last window ends the app, and the tray menu has
+**Exit KOTU**.
 
 ---
 
@@ -551,7 +550,7 @@ that to bring it back.
 
 ## 8. Settings
 
-`Alt+0`, or the last entry in the menu.
+The last entry in the menu at the bottom left.
 
 **Display**
 

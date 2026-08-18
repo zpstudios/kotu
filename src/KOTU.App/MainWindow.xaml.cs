@@ -50,8 +50,10 @@ public sealed partial class MainWindow : Window
     //   뜨고, 키·전이·힌트·경계 버튼·Enter는 전부 같은 경로다. 설정·빈 셸·미지원 안내만 무소비로 남는다.
     // 홀드 판정은 다른 키·포인터(클릭·휠 — Ctrl+휠 줌 포함)가 함께 개입하면 취소된다(A58 안전장치 유지.
     // Alt 자체는 수식키라 "다른 키"에서 제외 — OnRootKeyDown 참고).
-    // Alt 단독 OS 메뉴 모드 회피(A86 제거 → A107 재도입)는 A118 뒤에도 존치 — Alt+`·Alt+0~7
-    // 액셀러레이터가 여전히 쓴다. 우리 조합에 쓰인 Alt의 단독 up만 조건 소비(_altComboUsed, OnRootKeyUp).
+    // Alt 단독 OS 메뉴 모드 회피(A86 제거 → A107 재도입)는 A118 뒤에도 존치 — A147(v0.163.0)이
+    // Alt+숫자·Alt+0을 폐지한 뒤에도 **Alt+` 액셀러레이터 하나가 여전히 쓴다**(지우면 Alt를 눌렀다
+    // 뗄 때마다 창 메뉴 모드로 빠진다). 우리 조합에 쓰인 Alt의 단독 up만 조건 소비
+    // (_altComboUsed, OnRootKeyUp).
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
     private ThumbnailExplorer? _thumbnailExplorer; // S1 중앙 썸네일 뷰 (A93, 지연 생성 — 구 ExplorerPane 대체)
@@ -709,41 +711,27 @@ public sealed partial class MainWindow : Window
 
     // ---------- 단축키 (v0.45.0 사용자 지정) ----------
 
-    /// <summary>
-    /// 모듈 번호(메뉴 아래→위 순서): 1=All Readable, 2=이미지, 3=영상, 4=오디오, 5=문서,
-    /// 6=압축, 7=하드웨어.
-    /// A96(v0.116.0, 2026-08-13 사용자 확정): All Readable을 **1번**으로 올리고 나머지는
-    /// **기존 순서 그대로 한 칸씩 밀었다**. A59(v0.113.0)의 "1~6 근육기억 유지, 신설은 7"을 대체한다.
-    /// A10: 오디오 모듈이 영상 다음에 삽입되며 문서 이후가 한 칸씩 밀림(사용자 확정).
-    /// A32: Ctrl 없이 숫자 단독(사용자 확정) — Ctrl은 정보 오버레이로 회귀.
-    /// A107(v0.134.0): 단독 숫자 → **Alt+숫자**(전역 키 전체가 Alt 조합으로 — A32 키 대체.
-    /// 배열·번호는 그대로, RegisterShortcuts가 Menu 수식자를 얹는다).
-    /// 힌트 문자열은 시작 메뉴 항목 마우스 오버 시 툴팁으로 보조 표시된다.
-    /// ⚠️ 번호를 또 바꾸면 <see cref="BuildStartMenu"/> 항목 순서 · A34 키 맵 표
-    /// (docs/REQUIREMENTS.md) · docs/A86-keymap.md 를 **한 번에** 고쳐야 한다(번호가 사방에 박혀 있다).
-    /// </summary>
-    private static readonly (string Id, VirtualKey Key, string Hint)[] ModuleShortcuts =
-    [
-        (KOTU.Module.AllReadable.AllReadableModule.ModuleId, VirtualKey.Number1, "Alt+1"),
-        ("image", VirtualKey.Number2, "Alt+2"),
-        ("video", VirtualKey.Number3, "Alt+3"),
-        ("audio", VirtualKey.Number4, "Alt+4"),
-        ("document", VirtualKey.Number5, "Alt+5"),
-        ("archive", VirtualKey.Number6, "Alt+6"),
-        ("hardware", VirtualKey.Number7, "Alt+7"),
-    ];
-
-    private const string SettingsShortcutHint = "Alt+0";
+    // A147(v0.163.0): **Alt+숫자(모듈 전환)·Alt+0(Settings) 폐지** — 셸에 남는 Alt 조합은 Alt+` 하나뿐.
+    // 그에 따라 (모듈 Id, 키, 툴팁 힌트)를 묶던 ModuleShortcuts 배열과 SettingsShortcutHint 상수도
+    // 함께 사라졌다: 소비처가 ① RegisterShortcuts 등록 루프 ② 시작 메뉴 툴팁 힌트 둘뿐이었고
+    // 둘 다 소멸했기 때문이다(둘 다 지운 채 배열만 남기면 읽는 곳이 없어 CS0414로 빌드가 깨진다).
+    // ⚠️ 시작 메뉴의 항목 순서는 이 배열이 아니라 BuildStartMenu가 직접 나열한다 — 배열 소멸과 무관.
+    // 모듈 번호(메뉴 아래→위 1~7, A96/v0.116.0)는 표기·순서용 개념으로만 남는다(BuildStartMenu 주석).
+    // 정책 이력(같은 주제 세 번째 변경): 숫자 단독(A32/v0.66.0) → Alt+숫자(A107/v0.134.0) →
+    // **폐지**(A147/v0.163.0). 숫자 키를 어떤 형태로도 되살리지 말 것.
 
     /// <summary>시작 메뉴 키 = Alt+`(숫자 1 왼쪽, VK_OEM_3 — A107). 툴팁 표기(A34)도 이 값으로 조립한다.</summary>
     private const string MenuShortcutHint = "Alt+`";
 
     /// <summary>
-    /// Alt+`(1 왼쪽 키) = 시작 메뉴, Alt+숫자 = 모듈 전환, Alt+0 = Settings — A107(v0.134.0)이
-    /// A32의 단독 키에 Menu 수식자를 얹은 것(키 배열·동작은 그대로).
+    /// 셸 액셀러레이터 등록. A147(v0.163.0) 이후 남는 것은 **Alt+`(1 왼쪽 키) = 시작 메뉴**와
+    /// **Shift+N = 새 창** 둘뿐이다 — Alt+숫자(모듈 전환)·Alt+0(Settings)은 폐지됐고, 모듈 전환·설정
+    /// 진입은 **시작 메뉴가 유일한 키보드 경로**다(A34 문자 핫키는 모듈 바 버튼 전용 — 전환과 무관).
     /// Shift+N = 새 창(A24 — A84에서 Ctrl+N을 Shift 계열로 전환, A107 무변경. 앱에 남는 Ctrl 조합은
-    /// 문서 Ctrl+S 하나뿐). 텍스트 입력 통과 예외(A32)는 이제 Shift+N에만 남는다 —
+    /// 문서 Ctrl+S 하나뿐). 텍스트 입력 통과 예외(A32)는 Shift+N에만 적용된다 —
     /// Alt 조합은 문자를 만들지 않아 뺏을 입력이 없으므로 어디서나 동작한다(A107 전환의 목적).
+    /// ⚠️ Alt+`도 <see cref="AddShortcut"/>의 `_altComboUsed` 부기를 그대로 탄다 — 그 분기를 지우면
+    /// Alt 단독 up 조건 소비(OS 창 메뉴 모드 회피, OnRootKeyUp)가 깨진다.
     /// </summary>
     private void RegisterShortcuts()
     {
@@ -755,10 +743,7 @@ public sealed partial class MainWindow : Window
             Windows.System.VirtualKeyModifiers.Menu); // VK_OEM_3 = `(~) — A107: Alt+`
         // A34: 하단 바 메뉴 버튼도 툴팁에 키를 표기한다(문자열은 여기서만 만든다).
         ToolTipService.SetToolTip(StartButton, $"Menu ({MenuShortcutHint})");
-        foreach (var (id, key, _) in ModuleShortcuts)
-            AddShortcut(key, () => OpenModuleById(id), Windows.System.VirtualKeyModifiers.Menu);
-        AddShortcut(VirtualKey.Number0, () => OnSettingsClick(StartButton, new RoutedEventArgs()),
-            Windows.System.VirtualKeyModifiers.Menu);
+        // A147(v0.163.0): 여기 있던 Alt+1~7(모듈 전환)·Alt+0(Settings) 등록을 제거했다.
         // 새 창 = 지금 보는 모듈의 빈 인스턴스(A24 사용자 확정). 설정 화면 등 모듈 없는 창은 기본 화면으로.
         AddShortcut(VirtualKey.N, () => _manager.OpenNewWindow(CurrentModuleId),
             Windows.System.VirtualKeyModifiers.Shift); // A84: Ctrl+N → Shift+N
@@ -815,7 +800,10 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 시작 메뉴 구성. 패널은 **위→아래**로 채우는데 **번호는 아래에서 위로** 올라간다
-    /// (1번이 메뉴 최하단) — 그래서 <see cref="ModuleShortcuts"/> 순서를 뒤집어 넣는다.
+    /// (1번이 메뉴 최하단) — 그래서 아래 AddModuleItem 호출은 7 → 1 역순으로 늘어놓는다.
+    /// 번호(1=All Readable · 2=이미지 · 3=영상 · 4=오디오 · 5=문서 · 6=압축 · 7=하드웨어 —
+    /// A96/v0.116.0 배정, A10 오디오 삽입 승계)는 A147(v0.163.0)이 Alt+숫자를 폐지한 뒤로
+    /// **표기·순서용 개념**일 뿐 어떤 키와도 연결되지 않는다.
     /// A96(v0.116.0) 이후 배치(위→아래):
     /// 광고 · 구분선 · Settings(0) · **구분선** · 하드웨어(7) · 구분선 · 압축(6) · 구분선 ·
     /// 문서(5) · 오디오(4) · 영상(3) · 사진(2) · **구분선** · All Readable(1).
@@ -866,8 +854,9 @@ public sealed partial class MainWindow : Window
         var module = _router.Modules.FirstOrDefault(m => m.Id == moduleId);
         if (module is null) return;
 
-        var hint = ModuleShortcuts.FirstOrDefault(s => s.Id == moduleId).Hint;
-        var item = MakeMenuItem(module.IconGlyph, module.DisplayName, hint);
+        // A147(v0.163.0): Alt+숫자 폐지로 표시할 키가 없어 툴팁을 아예 붙이지 않는다
+        // (MakeMenuItem은 hint가 null이면 SetToolTip을 건너뛴다).
+        var item = MakeMenuItem(module.IconGlyph, module.DisplayName);
         item.Click += (_, _) =>
         {
             StartFlyout.Hide();
@@ -879,7 +868,7 @@ public sealed partial class MainWindow : Window
     /// <summary>시작 메뉴의 Settings 항목 — 하단 바 우측 아이콘과 같은 동작.</summary>
     private void AddSettingsItem()
     {
-        var item = MakeMenuItem("\uE713", "Settings", SettingsShortcutHint);
+        var item = MakeMenuItem("\uE713", "Settings"); // A147: Alt+0 폐지 — 키 표기 없음
         item.Click += (_, _) =>
         {
             StartFlyout.Hide();
@@ -889,9 +878,11 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 시작 메뉴 항목. shortcutHint("1" 등)가 있으면 표준 툴팁으로 단다 —
+    /// 시작 메뉴 항목. shortcutHint가 있으면 표준 툴팁으로 단다 —
     /// 다른 버튼들과 같은 지연(약 1초)·모양으로 표시된다(A1, v0.57.0 —
     /// v0.45.0의 즉시 인라인 힌트를 사용자 지시로 교체).
+    /// ※ A147(v0.163.0)에서 전역 키가 Alt+`만 남아 **hint를 넘기는 호출부가 없어졌다**(모두 null) —
+    /// 파라미터·null 분기는 존치한다(키가 다시 생기면 여기로 돌아온다).
     /// </summary>
     private static Button MakeMenuItem(string glyph, string label, string? shortcutHint = null)
     {
@@ -1560,8 +1551,8 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Alt(Menu)가 지금 눌려 있는지 — Alt 단독 up 조건 소비 판정(MarkAltUseIfConsumed)에 쓴다.
-    /// A107의 Z/X 게이트 용도는 A118(F1/F2 단독 키)로 소멸했지만 부기 자체는 Alt+`·Alt+0~7이
-    /// 여전히 필요로 한다. 판정 API는 저장소 선례(ExplorerFileOps.IsCtrlDown/IsShiftDown —
+    /// A107의 Z/X 게이트 용도는 A118(F1/F2 단독 키)로 소멸했지만 부기 자체는 Alt+`가
+    /// 여전히 필요로 한다(A147/v0.163.0에서 Alt+숫자·Alt+0이 폐지돼 남은 조합은 그 하나다). 판정 API는 저장소 선례(ExplorerFileOps.IsCtrlDown/IsShiftDown —
     /// Ctrl+X 잘라내기와 같은 층)와 동일하다.
     /// </summary>
     private static bool IsAltDown() => Microsoft.UI.Input.InputKeyboardSource
@@ -1569,7 +1560,7 @@ public sealed partial class MainWindow : Window
         .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     /// <summary>
-    /// 이번 Alt 세션(누름~뗌)에서 우리 조합(Alt+`/숫자/0 액셀러레이터, Alt 홀드 중 셸이 소비한
+    /// 이번 Alt 세션(누름~뗌)에서 우리 조합(Alt+` 액셀러레이터, Alt 홀드 중 셸이 소비한
     /// Esc/Enter/GoBack/F1/F2 포함)이 발화했는지 — Alt 단독 up의 조건 소비(OS 메뉴 모드 회피,
     /// A107이 A58 방식을 개작해 재도입 — A118 뒤에도 Alt 액셀러레이터용으로 존치)의 근거.
     /// A58은 Alt 자체가 오버레이 키라 "down을 본 Alt의 up"을 전부 소비했지만, A107 이후의 Alt는
@@ -1650,8 +1641,8 @@ public sealed partial class MainWindow : Window
 
         // 다른 키가 함께 눌림 → 진행 중 홀드 세션 취소(이미 떠 있으면 즉시 내림) +
         // 2연타 카운트 리셋 (A58 공통 안전장치 유지 — Shift+더블클릭 새 인스턴스·Shift+N·
-        // Alt+숫자 모듈 전환 등 조합 입력이 오버레이를 물지 않게. 단독 Z/X는 A118부터
-        // 아무 역할 없는 일반 키다 — 같은 취소 트리거일 뿐, 소비하지 않는다).
+        // Alt+`(시작 메뉴) 등 조합 입력이 오버레이를 물지 않게 — A147 전에는 Alt+숫자도 같은 예였다.
+        // 단독 Z/X는 A118부터 아무 역할 없는 일반 키다 — 같은 취소 트리거일 뿐, 소비하지 않는다).
         // 비수정자 키를 먼저 누르고 있던 조합은 그 키의 반복 입력이 곧 도착해 같은 경로로 취소된다.
         ResetOverlayInput();
     }
