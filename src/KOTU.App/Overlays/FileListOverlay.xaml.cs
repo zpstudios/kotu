@@ -110,7 +110,11 @@ public sealed partial class FileListOverlay : UserControl
             PathBarHost.Child ??= _list.DetachPathBar();
             _list.FileActivated += path => FileActivated?.Invoke(path);
             _list.FileActivatedNewWindow += path => FileActivatedNewWindow?.Invoke(path);
-            _list.ViewChanged += (folder, entries) => ViewChanged?.Invoke(folder, entries); // A93 — 중앙 썸네일 동기화
+            _list.ViewChanged += (folder, entries) =>
+            {
+                ViewChanged?.Invoke(folder, entries); // A93 — 중앙 썸네일 동기화
+                SyncTreeToFolder(folder);             // A134 — 상단 트리 동기
+            };
             _list.Notice += ShowTransientNotice; // A94 — 리스트 항목 드랍·클립보드 실패 안내
             ListHost.Content = _list;
         }
@@ -442,6 +446,29 @@ public sealed partial class FileListOverlay : UserControl
 
         FolderTree.SelectedNode = node;
         ScrollTreeTo(node);
+    }
+
+    /// <summary>
+    /// 리스트가 다른 폴더로 옮겨갔을 때 상단 트리를 따라오게 한다 (A134 — 종전에는 Show()만
+    /// ExpandToFolderAsync를 불러, 하단 리스트·중앙 썸네일에서 폴더로 들어가도 트리가 그대로였다).
+    /// 배선은 NavigateList의 ViewChanged 람다 하나 — 리스트 항해의 모든 경로가 그리로 모인다.
+    /// 닫혀 있으면 하지 않는다: 보이지 않는 트리를 펼칠 이유가 없고, 다시 열릴 때 Show()가
+    /// 어차피 그 폴더로 ExpandToFolderAsync를 부른다(EnsureDriveRoots도 Show() 몫 — 여기서는
+    /// IsOpen이므로 루트가 이미 만들어져 있다).
+    /// 같은 폴더면 조기 반환한다 — ViewChanged는 폴더 변경 통지가 아니라 "표시 목록 재작성" 통지라
+    /// 감시 재스캔(A94 5차)·정렬(A5)·필터(A7) 변경으로도 같은 폴더가 계속 돌아온다. 거르지 않으면
+    /// ScrollTreeTo가 반복돼 트리가 튄다.
+    /// 재진입(펼치는 도중 다른 폴더로 항해)은 기존 _expandSeq가 막는다.
+    /// 트리 선택 재대입이 항해를 되부르지 않는지: 트리의 항해 트리거는 ItemInvoked
+    /// (OnTreeItemInvoked) 하나이고 SelectionChanged 구독이 없다 — 루프가 성립하지 않는다.
+    /// </summary>
+    private void SyncTreeToFolder(string folder)
+    {
+        if (!IsOpen) return;
+        if (FolderTree.SelectedNode?.Content is FolderNode selected &&
+            string.Equals(TrimSep(selected.Path), TrimSep(folder), StringComparison.OrdinalIgnoreCase))
+            return;
+        _ = ExpandToFolderAsync(folder);
     }
 
     private static string TrimSep(string path) =>
