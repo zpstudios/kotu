@@ -851,10 +851,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>Every open window puts one small icon in the notification area, and keeps it there for as long as
            the window lives.</p>
         <ul>
-          <li><strong>Idle</strong> — one line, in muted colour: <code>IMG</code>, <code>VID</code>,
-              <code>AUD</code>, <code>DOC</code>, <code>ARC</code>, <code>ALL</code> or <code>INF</code>,
-              according to the module.</li>
-          <li><strong>With a file open</strong> — two lines in the module's colour: what it is on top, a value
+          <li><strong>Idle</strong> — the whole icon is filled with the module's colour and carries one line
+              in white: <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>DOC</code>,
+              <code>ARC</code> or <code>ALL</code>. H/W Info is the exception: it has no open-or-closed state,
+              so it keeps its own muted <code>INF</code> on a dark badge.</li>
+          <li><strong>With a file open</strong> — a dark badge with a thin border in the module's colour, and
+              two lines in that colour: what it is on top, a value
               underneath. An image shows its format and size, a video its resolution and bitrate, an archive
               its type and compression, and the Audio module shows a small level display. H/W Info shows the
               sensors you selected in that window.</li>

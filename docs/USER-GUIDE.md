@@ -591,9 +591,11 @@ button.
 Every open window puts one small icon in the notification area, and keeps it there for as long as
 the window lives.
 
-- **Idle** — one line, in muted colour: `IMG`, `VID`, `AUD`, `DOC`, `ARC`, `ALL` or `INF`, according
-  to the module.
-- **With a file open** — two lines in the module's colour: what it is on top, a value underneath.
+- **Idle** — the whole icon is filled with the module's colour and carries one line in white:
+  `IMG`, `VID`, `AUD`, `DOC`, `ARC` or `ALL`. H/W Info is the exception: it has no open-or-closed
+  state, so it keeps its own muted `INF` on a dark badge.
+- **With a file open** — a dark badge with a thin border in the module's colour, and two lines in
+  that colour: what it is on top, a value underneath.
   An image shows its format and size, a video its resolution and bitrate, an archive its type and
   compression, and the Audio module shows a small level display. H/W Info shows the sensors you
   selected in that window.

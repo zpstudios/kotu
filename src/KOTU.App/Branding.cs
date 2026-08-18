@@ -43,6 +43,21 @@ internal static class Branding
     public static Windows.UI.Color? IconRing(string? moduleId)
         => moduleId == "hardware" ? null : ModuleAccent(moduleId);
 
+    /// <summary>
+    /// 콘텐츠를 안 연 상태(유휴)의 트레이 아이콘을 전면으로 채울 색 (A140, v0.164.0).
+    /// null = 채우지 않는다 = 종전 모습(반투명 다크 판 + 저채도 글자)을 그대로 쓴다.
+    /// 값은 <b>모듈 액센트 원색</b>이다(Lighten/Darken 없음 — 사용자 확정).
+    ///
+    /// null이 되는 두 경우는 결과적으로 <see cref="IconRing"/>과 같지만 <b>판단 근거가 다르므로
+    /// 일부러 별도 메서드로 둔다</b>(한쪽 규칙이 바뀌어도 다른 쪽이 딸려 가지 않게 — A169가
+    /// 트레이 색 축을 늘릴 예정이다):
+    ///  · 정보(하드웨어) 모듈 — "콘텐츠 열림·닫힘 구분이 없는 모듈"이라 이 색 규칙의 적용 대상이
+    ///    아니다(부록 B 67 사용자 확정). 하드웨어는 전용 색 글자 + 링 없음 그대로다.
+    ///  · 액센트가 없는 화면(설정·미지원 파일 = 중립 아이콘) — 채울 모듈 색 자체가 없다.
+    /// </summary>
+    public static Windows.UI.Color? IdleFill(string? moduleId)
+        => moduleId == "hardware" ? null : ModuleAccent(moduleId);
+
     public const string MissionStatement =
         "• No bloat. Ever.\n" +
         "• Crucial features only — easy to use.\n" +

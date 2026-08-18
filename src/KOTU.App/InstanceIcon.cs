@@ -14,6 +14,11 @@ namespace KOTU.App;
 /// ③ A105 ②(v0.143.0): 창(태스크바) 32px 아이콘 하단에 모듈 3자 표기를 얹을 수 있다(label).
 /// ④ A126(v0.148.0): <b>링이 있는 합성은 본체를 링 두께만큼 안쪽으로 줄여 그린다</b> —
 ///    링이 본체 글리프 가장자리를 덮던 문제(2026-08-14 실기기 보고)의 해결. 링 없는 합성은 전폭.
+/// ⑤ A139(v0.164.0): 링 두께·모서리 반경이 <b>100% 배율 1px 비례</b>로 줄었다
+///    (<see cref="EdgeUnit"/> — 32px에서 종전 4.0·7.0 → 2·2). ④의 inset이 그만큼 얕아져
+///    본체가 커지고, A105 라벨 띠도 넓어진다.
+/// ※ A140(v0.164.0)의 색 규칙(열림 = 테두리만 모듈 색 / 유휴 = 전면 모듈 색)은 <b>트레이에만</b>
+///    적용됐다 — 창 아이콘에는 "콘텐츠 열림·닫힘" 정보가 아직 흐르지 않는다. 그 배선은 A137 몫이다.
 /// 링은 창 개수와 무관하게 항상 그린다(모듈 식별이 목적이라 "2개 이상일 때만" 조건이 사라졌다).
 /// A105부터 링 없는 호출도 허용된다 — 정보(H/W) 모듈이 링 없이 3자 표기(INF)만 얹는 경우.
 /// 링도 글자도 없는 화면(설정·빈 셸 = 중립 아이콘)만 이 클래스를 부르지 않고
@@ -103,8 +108,12 @@ internal static class InstanceIcon
 
             // 본체·링·글자 공통 기하 — 3자 표기 자리(A105)와 본체 inset(A126)이 모두 링 상수에서
             // 파생되므로 한 곳에서 계산한다(그래서 링보다 먼저 나온다).
-            var thickness = Math.Max(1.5f, size / 8f);
-            var radius = Math.Max(2f, size * 56f / 256f);
+            // A139(v0.164.0): 두께·반경을 100% 배율 1px 기준(EdgeUnit)으로 통일했다 —
+            // 종전 식은 두께 Max(1.5f, size/8f)·반경 Max(2f, size*56f/256f)라 16px에서 2.0·3.5,
+            // 32px에서 4.0·7.0이었다. 아래 파생 2종(A126 본체 inset·A105 라벨 자리)은 식을 그대로
+            // 두므로 두께가 얇아진 만큼 본체와 글자가 자동으로 커진다(의도된 부수 효과).
+            var thickness = EdgeUnit(size);
+            var radius = thickness;
 
             // ① 본체: 모듈 색 아이콘 그대로 (A3 유지 — .ico는 16/24/32… 프레임을 다 가짐).
             //    A79(v0.119.0): 브랜드 레벨이 켜져 있으면 여기서 발바닥 표식까지 함께 그려진다 —
@@ -192,7 +201,12 @@ internal static class InstanceIcon
 
         // 대비판은 링(또는 본체) 라운드 안쪽으로 클립 — 모서리 곡선 밖으로 판이 새지 않게.
         // 링 안쪽 모서리 반경 = 링 반경에서 스트로크 절반을 뺀 값(스트로크 중심이 링 반경 위치).
-        var clipRadius = hasRing ? Math.Max(0f, ringRadius - ringThickness / 2f) : ringRadius;
+        // 링이 없으면 클립의 기준은 링이 아니라 .ico 본체 자체의 라운드다 — 그래서 A139로
+        // 링 반경이 1px 기준으로 줄어든 뒤에도 여기만은 생성 스크립트 값(56/256)을 직접 쓴다
+        // (종전에는 링 반경이 우연히 같은 식이라 ringRadius를 그대로 썼다 — A139에서 갈렸다).
+        var clipRadius = hasRing
+            ? Math.Max(0f, ringRadius - ringThickness / 2f)
+            : size * 56f / 256f;
         using (var clip = RoundedRectPath(inset, inset, width, size - inset * 2f, clipRadius))
         {
             g.SetClip(clip);
@@ -239,6 +253,15 @@ internal static class InstanceIcon
         c.R + (int)((255 - c.R) * amount),
         c.G + (int)((255 - c.G) * amount),
         c.B + (int)((255 - c.B) * amount));
+
+    /// <summary>
+    /// 테두리 두께 겸 모서리 반경 (A139, v0.164.0) — <c>TrayStatusIcon.EdgeUnit</c>과 같은 식이다
+    /// (두 파일이 같은 아이콘 규격을 공유하지만 서로 private이라 관용구를 복제한다 —
+    /// MakeFont·Lighten·RoundedRectPath와 같은 방식). 100% 배율 16px에서 1px이 되게 비례:
+    /// 16px→1 · 24px(150%)→2 · 32px→2 · 48px→3. 값을 바꿀 때는 <b>두 파일을 함께</b> 고칠 것.
+    /// MathF는 이 저장소에 선례가 0건이라 <c>(float)Math.Round</c>를 쓴다.
+    /// </summary>
+    private static float EdgeUnit(int size) => Math.Max(1f, (float)Math.Round(size / 16f));
 
     /// <summary>라운드 사각 외곽선 경로(float 좌표 — 펜 두께 절반 안쪽으로 그릴 때 쓴다).</summary>
     private static System.Drawing.Drawing2D.GraphicsPath RoundedRectPath(

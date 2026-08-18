@@ -2625,8 +2625,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // A140(v0.164.0): 유휴 전면 채움 색은 링과 별도 축(Branding.IdleFill) — 하드웨어(규칙 밖)와
+        // 중립 화면을 링만 보고는 구분할 수 없어(둘 다 null) 모듈 ID로 판단하는 메서드를 따로 둔다.
         var icon = TrayStatusIcon.Compose(status, Branding.ModuleAccent(CurrentModuleId),
-            Branding.IconRing(CurrentModuleId));
+            Branding.IconRing(CurrentModuleId), Branding.IdleFill(CurrentModuleId));
         if (icon == IntPtr.Zero)
         {
             _trayIconKey = string.Empty; // 합성 실패(GDI 고갈 등) — 다음 갱신 때 다시 시도
