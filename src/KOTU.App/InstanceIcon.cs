@@ -3,7 +3,9 @@ using GdiColor = System.Drawing.Color;
 namespace KOTU.App;
 
 /// <summary>
-/// 아이콘 런타임 합성 (A68 시작 → A102/v0.130.0에서 의미 개편) + 인스턴스 색 팔레트.
+/// 아이콘 런타임 합성 (A68 시작 → A102/v0.130.0에서 의미 개편).
+/// 이름에 남은 "Instance"는 이력일 뿐 — A102 이후 이 클래스는 인스턴스 번호를 전혀 모른다
+/// (인스턴스 9색 팔레트도 A141/v0.162.0에서 소비처와 함께 사라졌다).
 ///
 /// A102 전에는 이 합성이 "몇 번째 창인가"를 알리는 장치였다(인스턴스 9색 링 + 우하단 원형
 /// 번호 배지). 지금은 <b>어느 모듈의 창인가</b>를 알리는 장치다:
@@ -25,33 +27,10 @@ namespace KOTU.App;
 /// </summary>
 internal static class InstanceIcon
 {
-    /// <summary>
-    /// 인스턴스 색 팔레트 (A2, v0.58.0 — MainWindow에서 이동). 번호 1~9의 기준색.
-    /// A102(v0.130.0)부터 유일한 사용처는 타이틀바 원형 번호 배지(A2)다 —
-    /// 아이콘 링은 모듈 색으로 넘어갔고 아이콘 번호 배지는 사라졌다.
-    /// </summary>
-    private static readonly (byte R, byte G, byte B)[] Palette =
-    [
-        (0xE8, 0x11, 0x23), // 1 red
-        (0x00, 0x78, 0xD7), // 2 blue
-        (0x10, 0x7C, 0x10), // 3 green
-        (0xF7, 0x63, 0x0C), // 4 orange
-        (0x8E, 0x24, 0xAA), // 5 purple
-        (0x00, 0x99, 0xBC), // 6 teal
-        (0xC3, 0x00, 0x52), // 7 magenta
-        (0x76, 0x76, 0x76), // 8 gray
-        (0x4A, 0x37, 0x8C), // 9 indigo
-    ];
-
-    /// <summary>번호의 인스턴스 색(XAML용). 10번째부터 1번 색부터 순환(부록 B 32번).</summary>
-    public static Windows.UI.Color ColorFor(int number)
-    {
-        var (r, g, b) = Rgb(number);
-        return Windows.UI.Color.FromArgb(255, r, g, b);
-    }
-
-    private static (byte R, byte G, byte B) Rgb(int number)
-        => Palette[(Math.Max(1, number) - 1) % Palette.Length];
+    // 인스턴스 9색 팔레트(A2, v0.58.0 — MainWindow에서 이동)와 그 접근자 ColorFor는
+    // A141(v0.162.0)에서 제거했다. A102(v0.130.0) 이후 유일한 소비처가 하단 바 원형 번호
+    // 배지였는데 그 배지가 사라졌고(번호 표기는 창 제목 접두 하나로 통합 — A103/A136),
+    // 미사용 심볼은 TreatWarningsAsErrors에 걸린다. 색이 다시 필요해지면 부록 B 32번 참조.
 
     /// <summary>
     /// 합성 결과 캐시 — "경로|크기|표식 색|링 색|3자" → HICON(프로세스 수명, 파괴 금지).

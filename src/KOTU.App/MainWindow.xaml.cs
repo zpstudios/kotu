@@ -327,10 +327,10 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 창 제목과 트레이 툴팁을 함께 갱신한다.
-    /// 최종 형태(A103, v0.130.0): "● 2KOTU - sample.pdf"
-    /// — ● = 미저장 변경(A37), 2 = 인스턴스 번호(창이 2개 이상일 때만, 브래킷 없이 KOTU에 붙인다).
+    /// 최종 형태(A103, v0.130.0 → A136, v0.162.0): "● 2-KOTU - sample.pdf"
+    /// — ● = 미저장 변경(A37), 2 = 인스턴스 번호(창이 하나여도 표시, 하이픈으로 KOTU에 붙인다).
     /// 모듈명 단어(Document·Image…)는 A103에서 전부 뺐다: 모듈은 아이콘 색·테두리(A102)가 알려 주고,
-    /// 제목은 "몇 번 창의 어떤 파일인가"만 남긴다. 파일이 없으면 "KOTU"(또는 "2KOTU")뿐이다.
+    /// 제목은 "몇 번 창의 어떤 파일인가"만 남긴다. 파일이 없으면 "1-KOTU"뿐이다.
     /// 구분자는 ASCII 하이픈 — 옛 em-dash는 폭이 넓어 좁은 작업표시줄 버튼에서 손해였다.
     /// <paramref name="title"/>은 이 규칙으로 만든 문자열이어야 한다(조립 지점은 아래 SetTitle 호출부).
     /// </summary>
@@ -345,14 +345,19 @@ public sealed partial class MainWindow : Window
 
     private string _baseTitle = Branding.AppName;
     private bool _titleDirtyMark; // 현재 뷰의 미저장 표시(A37 — ICloseGuard.UnsavedChanged)
-    private int _instanceNumber;  // 0 = 창이 하나뿐 → 번호 표시 안 함 (A56/A103)
+    // 창 생성 순서 번호(1부터). A136(v0.162.0)부터 창이 하나뿐이어도 1이 들어온다 —
+    // 0은 WindowManager가 번호를 주기 전(생성 직후) 잠깐뿐이고, 그때는 번호 없는 제목이다.
+    private int _instanceNumber;
 
     private void ApplyTitle()
     {
         // 순서: 상태(●) → 인스턴스 번호 → 내용. 작업표시줄·Alt+Tab에서 잘려도
         // 앞쪽 두 표식이 남도록 상태와 번호를 앞에 둔다.
-        // A103: 번호는 브래킷·공백 없이 앞에 붙는다 — _baseTitle이 늘 "KOTU"로 시작하므로 "2KOTU"가 된다.
-        var title = _instanceNumber > 0 ? $"{_instanceNumber}{_baseTitle}" : _baseTitle;
+        // A103: 번호는 브래킷·공백 없이 앞에 붙는다.
+        // A136(v0.162.0): 번호와 앱 이름 사이에 ASCII 하이픈을 넣어 "1-KOTU"가 된다 —
+        // 파일이 열려 있으면 "1-KOTU - sample.txt"처럼 하이픈이 두 번 나오는데, 이는
+        // 사용자가 인지하고 수용한 사양이다(부록 B 67). 구분자를 바꾸지 말 것.
+        var title = _instanceNumber > 0 ? $"{_instanceNumber}-{_baseTitle}" : _baseTitle;
         if (_titleDirtyMark) title = "● " + title;
         Title = title;
         _tray.SetTooltip(title);
@@ -2718,31 +2723,22 @@ public sealed partial class MainWindow : Window
         Activate();
     }
 
-    // ---------- 인스턴스 번호 배지 (A2, v0.58.0) ----------
-    // 색 팔레트는 InstanceIcon.ColorFor에 있다 — A102(v0.130.0)부터는 이 배지만 쓴다
-    // (아이콘 테두리는 모듈 색, 아이콘 번호 배지는 제거).
+    // ---------- 인스턴스 번호 (A2, v0.58.0 → A141, v0.162.0에서 배지 제거) ----------
+    // 소비처는 창 제목 접두 숫자(A103/A136) 하나뿐이다. 하단 바 색상 배지와 그 9색 팔레트
+    // (구 InstanceIcon.ColorFor)는 A141에서 함께 사라졌다.
 
     /// <summary>
-    /// 인스턴스 번호 설정. 0 = 창이 하나뿐 → 배지·제목 번호 모두 숨김.
-    /// 창이 2개가 되는 순간 1번 창에도 생기고, 중간 창이 닫히면
-    /// WindowManager가 번호를 당겨서 다시 부른다.
-    /// 표시는 두 곳: 타이틀바 원형 색상 배지(A2 — 색이 9개뿐이라 1~9만),
-    /// 제목 문자열 접두 숫자(A103 — 개수 제한 없음, 작업표시줄·Alt+Tab에서도 구분되게).
-    /// A102(v0.130.0)부터 아이콘은 번호와 무관하다(링 = 모듈 색·번호 배지 제거) —
-    /// 그래서 번호가 바뀌어도 아이콘을 다시 합성하지 않는다.
+    /// 인스턴스 번호 설정. 값은 <see cref="WindowManager"/>가 생성 순서대로 준다 —
+    /// A136(v0.162.0)부터 창이 하나뿐이어도 1이 들어온다(0은 더 이상 오지 않지만
+    /// 방어적으로 0 이하를 0으로 접어 둔다 = 번호 없는 제목).
+    /// 중간 창이 닫히면 WindowManager가 번호를 당겨서 다시 부른다.
+    /// 표시는 창 제목 접두 숫자 한 곳뿐(A103/A136 "1-KOTU" — 개수 제한 없음,
+    /// 작업표시줄·Alt+Tab에서도 구분되게). A102(v0.130.0)부터 아이콘은 번호와 무관하다
+    /// (링 = 모듈 색·번호 배지 제거) — 그래서 번호가 바뀌어도 아이콘을 다시 합성하지 않는다.
     /// </summary>
     public void SetInstanceNumber(int number)
     {
         _instanceNumber = number > 0 ? number : 0;
         ApplyTitle();
-
-        if (number is <= 0 or > 9)
-        {
-            InstanceBadge.Visibility = Visibility.Collapsed;
-            return;
-        }
-        InstanceBadge.Visibility = Visibility.Visible;
-        InstanceBadge.Background = new SolidColorBrush(InstanceIcon.ColorFor(number));
-        InstanceBadgeText.Text = number.ToString();
     }
 }

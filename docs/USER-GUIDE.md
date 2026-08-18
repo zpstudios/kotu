@@ -40,8 +40,8 @@ Two words are used consistently for the side panels:
 
 Either panel is 25% of the window width.
 
-The title bar shows `KOTU`, or `KOTU - filename` once a file is open. When more than one window is
-open, the window number is written directly in front, for example `2KOTU - holiday.jpg`. A leading
+The title bar shows `1-KOTU`, or `1-KOTU - filename` once a file is open. The number in front is the
+window number: the first window is `1-KOTU`, the second `2-KOTU - holiday.jpg`, and so on. A leading
 `●` means the document in that window has unsaved changes. The module is not named in the title —
 the window icon carries a coloured ring instead, one colour per module, and at the larger size
 Windows uses for `Alt`+`Tab` it also carries the module's three letters.
@@ -539,8 +539,8 @@ Ways to get a new one:
 With that setting off (the default), opening a file re-uses an existing window of the same module.
 
 Each window is independent: its own module, its own file, its own side panels, its own tray icon,
-its own taskbar button, its own H/W Info selection. From the second window onwards, the window
-number appears in the title bar and as a small coloured badge over the menu button.
+its own taskbar button, its own H/W Info selection. Every window carries its number at the front of
+the title bar, so you can tell them apart in the taskbar and in `Alt`+`Tab`.
 
 A new window inherits the size and position of the last window you closed.
 

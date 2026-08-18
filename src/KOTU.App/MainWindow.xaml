@@ -223,21 +223,9 @@
                 <FontIcon Glyph="&#xE8E5;" FontSize="16" />
             </Button>
 
-            <!-- 인스턴스 번호 배지 (A2, v0.58.0): 창이 2개 이상일 때만, 생성 순서 1~9 + 색 구분.
-                 메뉴 버튼 우상단에 겹쳐 표시. 값은 WindowManager가 SetInstanceNumber로 준다.
-                 제목표시줄 문자열에도 접두 숫자로 함께 표시된다("2KOTU" 형식, A103).
-                 Margin은 메뉴 버튼 크기에 묶여 있다: 24 = 좌측 여백 6 + 버튼 32 − 배지 16 + 우측 돌출 2,
-                 6 = 44px 바에서 32px 버튼의 윗변((44 − 32) / 2). 이력: 40→36(A97)에 맞춰 32,2 → 28,4,
-                 36→32(A106, v0.132.0)에 맞춰 28,4 → 24,6. -->
-            <Border x:Name="InstanceBadge"
-                    Width="16" Height="16" CornerRadius="8"
-                    HorizontalAlignment="Left" VerticalAlignment="Top"
-                    Margin="24,6,0,0"
-                    Visibility="Collapsed" IsHitTestVisible="False">
-                <TextBlock x:Name="InstanceBadgeText"
-                           FontSize="10" FontWeight="Bold" Foreground="White"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
+            <!-- 인스턴스 번호 배지(A2, v0.58.0 — 메뉴 버튼 위에 겹친 16×16 색상 원)는
+                 A141(v0.162.0)에서 제거했다. 번호 표기는 창 제목 접두(A103/A136 "1-KOTU") 한 곳만
+                 남는다 — 9색 팔레트(구 InstanceIcon.ColorFor)도 소비처가 사라져 함께 지웠다. -->
         </Grid>
     </Grid>
     </Grid>
