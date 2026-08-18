@@ -456,13 +456,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               CPU Temp, CPU Power, CPU Load, CPU Clock, GPU Temp, GPU Power, GPU Load, RAM, Fan, SSD Temp.
               <strong>Click</strong> a tile to select it — up to two at a time; picking a third releases the
               oldest. <strong>Drag</strong> a tile to reorder the grid. The tiles are square, and the grid is
-              2 columns wide with both sidebars docked, 3 with one and 4 with none.</li>
+              4 columns wide with both sidebars docked, 6 with one and 8 with none.</li>
           <li><strong>Left panel</strong> — up to two enlarged graphs, one per selected sensor, covering the
               last 10 seconds.</li>
           <li><strong>Right panel</strong> — the specification list, scrollable: CPU, GPU, RAM, Motherboard,
               Storage, Network, System.</li>
-          <li><strong>Bottom bar</strong> — two long graphs of the same selected sensors, covering up to
-              5 minutes. At the fastest refresh settings the history is shorter than that.</li>
+          <li><strong>Bottom bar</strong> — two long graphs of the same selected sensors, covering the last
+              5 minutes at every refresh setting. The length of that window is written once at the
+              right-hand end of the two graphs.</li>
         </ul>
         <p>The two panels are the ordinary side panels: <kbd>F1</kbd>, <kbd>F2</kbd>, <kbd>Enter</kbd> and the
            edge buttons drive them exactly as in the file modules, and the module opens with both docked.
@@ -471,7 +472,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            them, the tiles and the enlarged graphs also label the top of the scale, prefixed so it cannot be
            misread as the current value — <code>max 100%</code>, <code>max 100°C</code>,
            <code>max 5000MHz</code> — and the length of the time window in the bottom right corner. The two
-           graphs in the bottom bar are too shallow for axis labels and show only the name and the value.</p>
+           graphs in the bottom bar are too shallow to carry labels of their own: they show the name and the
+           value, and the shared window length sits beside them.</p>
         <div class="tbl"><table>
           <tr><th>Control</th><th>Key</th><th>What it does</th></tr>
           <tr><td>Copy all</td><td><kbd>C</kbd></td><td>puts the whole specification list plus every current sensor value on the clipboard as text</td></tr>

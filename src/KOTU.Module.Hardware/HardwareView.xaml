@@ -26,9 +26,10 @@
              ISidePanelProvider(GetLeftPanel/GetRightPanel)로 셸에 내준다(BuildSidePanels 참조.
              XAML에 두면 셸 호스트로 옮길 때 reparent가 필요해져 처음부터 코드 생성으로 택했다).
              타일 = 정사각형: 한 변은 코드 ApplySquareTileSizes가 실폭·열 수로 계산해 명시
-             대입한다. 열 수 = 셸 도크 수 신호(ISidebarAwareView: 도크 2 = 2열 / 1 = 3열 /
-             0 = 4열 — 반투명 오버레이는 계수 밖). 행이 Auto라 세로로 넘치면 이 ScrollViewer가
-             스크롤한다(정사각형 유지·축소 없음 — 2열 5줄 등). 가로 스크롤은 잠가 콘텐츠 폭이
+             대입한다. 열 수 = 셸 도크 수 신호(ISidebarAwareView: 도크 2 = 4열 / 1 = 6열 /
+             0 = 8열 — A168/v0.165.0이 A119의 2/3/4열을 개정. 반투명 오버레이는 계수 밖).
+             행이 Auto라 세로로 넘치면 이 ScrollViewer가
+             스크롤한다(정사각형 유지·축소 없음 — 4열 3줄 등). 가로 스크롤은 잠가 콘텐츠 폭이
              뷰포트 폭을 따르게 한다(한 변 계산의 전제). 클릭 = 선택 토글(최대 2), 드래그 =
              순서 변경(hardware.channelOrder)은 그대로. 전체화면(F11)도 같은 화면이다. -->
         <ScrollViewer Grid.Row="0" Padding="12,8,12,10"

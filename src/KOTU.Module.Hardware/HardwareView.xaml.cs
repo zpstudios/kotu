@@ -22,9 +22,10 @@ namespace KOTU.Module.Hardware;
 /// 콘텐츠가 됐다 — 이 뷰가 요소를 분리 생성·소유하고(ISidePanelProvider) 셸(SidePanelHost)이
 /// 호스트한다. F1/F2·2연타·Enter·경계 버튼·힌트는 파일 모듈과 같은 셸 상태 머신 공통이고,
 /// 진입 기본 = 양쪽 사이드바(A109). 열 수 = 셸 도크 수 신호(ISidebarAwareView — A119 개정):
-/// 도크 2/1/0 → 2/3/4열, 좌 대형 그래프 한 변 = 패널 실폭(정사각형 적층). 전체화면(F11)도
-/// 같은 화면이다(패널은 셸 상태를 따른다).
-/// 하단 바 가운데엔 선택 긴 그래프 2개(5분 창)가 산다 — A17 카드 10개 대체. Copy·⛶·그래프를
+/// 도크 2/1/0 → **4/6/8열**(A168/v0.165.0이 A119의 2/3/4열을 개정), 좌 대형 그래프 한 변 =
+/// 패널 실폭(정사각형 적층). 전체화면(F11)도 같은 화면이다(패널은 셸 상태를 따른다).
+/// 하단 바 가운데엔 선택 긴 그래프 2개(5분 창 — A146으로 주기 무관 고정)가 산다 — A17 카드
+/// 10개 대체. 그 그래프 오른쪽 끝에 표시 기간 공통 1개(A146). Copy·⛶·그래프를
 /// 담은 하단 바는 셸이 TakeBottomBar()로 떼어간다. 전체화면 동안(셸 하단 바 숨김)은
 /// SensorGrid가 SensorStrip으로 옮겨져 긴 그래프가 계속 보인다(v0.64.2 메커니즘 승계).
 /// A61(v0.111.0): 핀(A39)을 켜면 셸에 접기를 요청해 하단 바만 남는 상시 표시 바가 된다
@@ -106,6 +107,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         BuildSidePanels();         // 좌/우 패널 루트 조립 (A119 — 셸 호스트에 얹힐 분리 요소)
         BuildCenterTiles();        // 센터 그리드 타일 10개 (A60 3차 — 구 하단 카드의 후신)
         RebuildSelectionGraphs();  // 좌 대형·하단 긴 그래프 = 현재 선택(저장 복원값, ≤2)
+        // A146: 표시 기간 표기의 툴팁은 고정 문구라 여기서 1회만 붙인다(글자·표시 여부는
+        // RerenderSparklines·UpdateBarDensity가 갱신한다). 사용자 노출 문자열이라 영어.
+        ToolTipService.SetToolTip(SpanText, "History window");
         BuildIntervalFlyout(); // 리프레시 주기 선택 (A29)
         SetupHotkeys();        // A34: 하단 바 버튼 핫키 + 툴팁 표기
         ApplyBarScale();       // 하단 바 표시 크기 복원값 반영 (A62 — 바 크기 툴팁도 여기서)
@@ -239,6 +243,18 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     // ---------- 우측 구획: 스펙 라벨-값 리스트 (A60 3차 — 구 일반 모드 리스트가 이동) ----------
 
+    // A172(v0.165.0): 우 패널 스펙 텍스트를 종전의 80%로 줄인다 — **명시값 대입**이다.
+    // ScaleTransform(1지점) 안을 기각한 이유: 라벨 고정폭·Margin까지 함께 줄어 레이아웃이
+    // 미묘하게 달라지고, 저장소에 패널 단위 배율 선례가 없다.
+    // 라벨·값은 A172 전까지 크기를 대입하지 않아 테마 기본을 쓰고 있었다 — 저장소에 근거가 되는
+    // 기본값 리소스 선언이 없으므로 WinUI 기본 14를 기준으로 잡았다(14 × 0.8 = 11.2 → 11).
+    // ※ **A172 실기기 미세조정 지점** — 세 폰트 값과 라벨 열 폭이 전부 이 네 상수에 모여 있다.
+    //   A62 바 배수·셸 전역 UiScale은 여기 안 걸린다(각각 하단 바 요소 전용·별개 축).
+    private const double SpecTitleFontSize = 14;  // 섹션 제목: 18 → 14
+    private const double SpecLabelFontSize = 11;  // 항목 라벨: 테마 기본(14) → 11
+    private const double SpecValueFontSize = 11;  // 항목 값:  테마 기본(14) → 11
+    private const double SpecLabelWidth = 96;     // 라벨 열 고정폭: 120 → 96 (폰트와 같은 80%)
+
     private void Render()
     {
         Root.Children.Clear();
@@ -247,15 +263,16 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             Root.Children.Add(new TextBlock
             {
                 Text = section.Title,
-                FontSize = 18,
+                FontSize = SpecTitleFontSize,
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 16, 0, 6),
             });
 
-            // 라벨 폭 120: 우측 구획이 전폭의 25%라(최소 창 720에서 약 170px) 구 값 170이면
-            // 값 칸이 사라진다 — 라벨은 말줄임되므로 값이 안 잘리는 쪽을 우선했다(A60 3차).
+            // 라벨 폭: 우측 구획이 전폭의 25%라(최소 창 720에서 약 170px) 구 값 170이면 값 칸이
+            // 사라진다 — 라벨은 말줄임되므로 값이 안 잘리는 쪽을 우선했다(A60 3차 = 120).
+            // A172에서 폰트가 80%가 되어 120은 여백이 남으므로 같은 비율로 96까지 줄였다.
             foreach (var item in section.Items)
-                Root.Children.Add(MakeItemRow(item, labelWidth: 120));
+                Root.Children.Add(MakeItemRow(item, labelWidth: SpecLabelWidth));
         }
     }
 
@@ -269,6 +286,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         var label = new TextBlock
         {
             Text = item.Label,
+            FontSize = SpecLabelFontSize, // A172: 종전엔 미지정(테마 기본)이었다
             Opacity = 0.65,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 2, 12, 2),
@@ -276,6 +294,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         var value = new TextBlock
         {
             Text = item.Value,
+            FontSize = SpecValueFontSize, // A172: 종전엔 미지정(테마 기본)이었다
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
             Margin = new Thickness(0, 2, 0, 2),
@@ -331,6 +350,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         var scale = _state.BarScale;
         foreach (var graph in _longGraphs)
             ApplyScaleToLongGraph(graph, scale);
+        SpanText.FontSize = BaseSmallFontSize * scale; // A146 기간 표기도 바 안 요소 — 같은 배수(폭 32는 고정)
         PulseHost.Height = Math.Min(MaxCardHeight, BaseCardHeight * scale); // 맥박도 같은 높이 유지 (v0.64.2 규격)
         PulseLine.StrokeThickness = BaseStrokeThickness * scale;
         BarScaleIcon.FontSize = BaseBarIconFontSize * scale;
@@ -359,6 +379,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         graph.ValueText.FontSize = BaseValueFontSize * scale;
         // 축 라벨 두 개는 A128 이후 바 표면에서 늘 Collapsed다 — 표면 구성이 공용(MakeGraph)이라
         // 배수만 계속 입혀 둔다(다시 보이게 할 일이 생겨도 크기가 어긋나지 않게).
+        // ※ A146의 기간 표기는 이 둘이 아니다 — 표면 밖(바 레이아웃)의 SpanText이고 배수는
+        //   ApplyBarScale이 직접 입힌다(표면당 1개가 아니라 바에 공통 1개라서).
         graph.YAxisText.FontSize = BaseSmallFontSize * scale;
         graph.XAxisText.FontSize = BaseSmallFontSize * scale;
         graph.Line.StrokeThickness = BaseStrokeThickness * scale;
@@ -372,13 +394,17 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// <summary>센터 타일 시간 창 상한(ms) — 사양 30초.</summary>
     private const double TileWindowMaxMs = 30_000;
 
-    /// <summary>하단 긴 그래프 시간 창 상한(ms) — 사양 5분(기본 주기 500ms에서 링 600개 = 정확히 5분).</summary>
+    /// <summary>하단 긴 그래프 시간 창 상한(ms) — 사양 5분. A146(v0.165.0)에서 링이 6000개로
+    /// 커져 **주기 50~5000ms 전 구간에서 실효 창이 정확히 5분**이 됐다(전에는 50ms에서 30초).</summary>
     private const double LongWindowMaxMs = 300_000;
 
     /// <summary>
     /// 표면별 실제 시간 창 = min(사양 창, 이력 링(<see cref="SensorService.HistoryCapacity"/>) × 주기)
-    /// — A74 ③ 원칙 그대로: 최단 주기 50ms에서는 링이 30초뿐이라 하단 5분 창도 30초로 줄고,
-    /// x축 표기(A74)도 이 계산값을 그대로 쓴다(하드코딩 금지).
+    /// — A74 ③ 원칙 그대로이고, 표기(A74 x축·A146 바 기간)도 이 계산값을 그대로 쓴다(하드코딩 금지).
+    /// A146(v0.165.0)에서 링이 600 → 6000이 되어 **링 쪽 항이 더 이상 이기지 않는다**: 최단 주기
+    /// 50ms에서도 6000 × 50ms = 300초라 세 사양 창(10초·30초·300초)이 전부 그대로 성립한다
+    /// (좌 대형·센터 타일은 확대 전에도 이미 사양 창이 이기고 있어 **변화 없음**).
+    /// 식을 남겨 두는 이유 = 주기 목록·용량이 다시 바뀌어도 표기가 실제 창과 어긋나지 않게.
     /// </summary>
     private static TimeSpan WindowFor(double maxMs) => TimeSpan.FromMilliseconds(
         Math.Min(maxMs, (double)SensorService.HistoryCapacity * HardwareModule.RefreshMs));
@@ -390,8 +416,13 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 이유로 바 표면에만 배수를 곱한 별도 임계(AxisMinWidthNow)를 뒀었다. **A128에서 바 표면이
     /// 축 라벨을 아예 표시하지 않게 되면서 배수를 적용할 지점 자체가 소멸**해 그 프로퍼티를 걷었다 —
     /// 남은 사용처는 배수 밖인 센터 타일·좌 대형뿐이라 이 상수 하나로 충분하다.
-    /// A127로 y축 라벨이 "max " 접두만큼 길어졌지만 임계는 유지한다(2열 타일 폭이 넉넉 —
-    /// 잘림이 보이면 임계 상향이 아니라 실기기 확인 후 판단, A127 함정 항목).
+    /// A127로 y축 라벨이 "max " 접두만큼 길어졌지만 임계는 유지한다
+    /// (잘림이 보이면 임계 상향이 아니라 실기기 확인 후 판단, A127 함정 항목).
+    /// A168(v0.165.0)로 최대 열 수가 8이 됐어도 임계는 그대로다 — 사이드바가 각 25%를 먹는 구조라
+    /// 한 변이 도크 수와 거의 무관하게 나오고(1920 창 예: 8열 230 / 6열 229 / 4열 228px), 90은
+    /// 그 어느 값보다 한참 아래다. 창을 최소(720)까지 줄이면 4열에서 한 변이 약 78로 임계 아래가
+    /// 되어 축 라벨이 스스로 숨는다 — 설계된 동작(A40의 "좁으면 축약")이고, 구 2열에서는 약 164라
+    /// 보이던 자리다(A168의 파생 변화 — 실기기 확인 포인트).
     /// </summary>
     private const double AxisMinWidth = 90;
 
@@ -407,6 +438,41 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     private const double CardSpacing = 8;
 
     /// <summary>
+    /// 표시 기간 표기(A146)의 고정 폭. 내용은 "5m" 2글자(FormatSpan)이고 글꼴은 A62 배수를 타
+    /// 최대 12.5px(L 단계)라 실측 폭은 20px 남짓이다 — 32로 잡아 "2.5m" 급 4글자에도 여유를 두면서
+    /// 폭 회계(<see cref="LongGraphsWidth"/>)를 상수로 확정한다(Auto 폭이면 회계가 불가).
+    /// </summary>
+    private const double SpanLabelWidth = 32;
+
+    /// <summary>
+    /// 맥박 칸(HardwareView.xaml PulseHost Width 90)이 <see cref="BarFixedWidth"/>에서 차지하는 몫 —
+    /// 숨기면 이만큼이 star 칸으로 돌아온다. **간격 6은 안 돌아온다**: Grid.ColumnSpacing은 폭 0인
+    /// 칸 사이에도 그대로 들어가므로 회수액은 96이 아니라 90이다(구 주석의 96은 과대 추정).
+    /// </summary>
+    private const double PulseSlotWidth = 90;
+
+    /// <summary>
+    /// 하단 바 긴 그래프의 **표시 기간 공통 표기 1개**(A146, v0.165.0 — 긴 그래프 2개가 같은 창이라
+    /// 하나로 족하다). 소속은 **바 레이아웃(SensorGrid의 마지막 칸)**이고 그래프 표면(MakeGraph)
+    /// 밖이다 — A128이 바 표면의 축 라벨을 걷은 이유가 32px 바에서 채널명·현재값과 겹쳐 안 읽힌
+    /// 것이라, 같은 자리(표면 우하단)로 되돌리면 그 문제가 그대로 재발한다.
+    /// 값은 <see cref="RenderSparkline"/>과 같은 계산(FormatSpan(WindowFor(LongWindowMaxMs)))이라
+    /// 하드코딩이 없다 — 주기가 바뀌면 갱신 경로(<see cref="RerenderSparklines"/>)가 다시 채운다.
+    /// 표시 여부는 <see cref="UpdateBarDensity"/>가 정한다(선택 0개 또는 바가 너무 좁을 때 숨김).
+    /// SensorGrid 안에 두었으므로 전체화면 동안 SensorStrip으로 옮겨질 때도 그래프와 함께 간다
+    /// (PlaceSensorGrid는 SensorGrid를 통째로 옮긴다).
+    /// </summary>
+    private readonly TextBlock SpanText = new()
+    {
+        Width = SpanLabelWidth,
+        FontSize = BaseSmallFontSize,
+        Opacity = 0.55,
+        TextAlignment = TextAlignment.Right,
+        VerticalAlignment = VerticalAlignment.Bottom,
+        Visibility = Visibility.Collapsed, // UpdateBarDensity가 첫 배치에서 정한다
+    };
+
+    /// <summary>
     /// 하단 바(BarGrid)에서 긴 그래프 칸(star)을 뺀 **고정 요소들의 폭 합**. A62 배수와 무관하다 —
     /// 버튼 규격은 A27(→A97·A106 개정)이 못 박아 두었고 배율은 그래프 쪽에만 곱하기 때문.
     /// A97(v0.116.0)에서 1칸 버튼 40→36 · 간격 10→6, A106(v0.132.0)에서 1칸 버튼 36→32가 되어
@@ -416,42 +482,64 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     ///   Copy c0 32 + Busy(ProgressRing) c1 20 + 맥박 c3 90 + 주기(2칸) c4 84
     ///   + 크기 c5 32 + 핀 c6 32 + ⛶ c7 32 = 322
     ///   + ColumnSpacing 6 × 7칸 사이 = 42  →  **364**  (A97 값은 338 + 42 = 380이었다)
+    /// A146(v0.165.0) 재계수 결과 = **변화 없음**: 표시 기간 표기는 BarGrid에 칸을 새로 만들지 않고
+    ///   star 칸(SensorGrid) 안 마지막 열로 들어갔다 — 늘어난 몫은 <see cref="LongGraphsWidth"/>에 있다
+    ///   (전체화면에서 SensorGrid가 SensorStrip으로 옮겨질 때 표기도 함께 가야 해서 이 소속을 택했다).
     /// ⚠️ BarGrid.ActualWidth 기준이므로 셸의 ModuleBarHost Margin(A106에서 82/12)은 여기 포함되지 않는다.
     /// HardwareView.xaml의 BarGrid 구성이 바뀌면 이 합도 함께 고칠 것.
     /// </summary>
     private const double BarFixedWidth = 364;
 
-    /// <summary>하단 긴 그래프(≤2)가 차지하는 폭 합 — 폭 고정(배수 비적용)이라 개수에만 비례한다.</summary>
+    /// <summary>
+    /// 하단 바 star 칸(SensorGrid)이 요구하는 폭 — 긴 그래프(≤2, 폭 고정·배수 비적용)와
+    /// **표시 기간 표기 1개**(A146)의 합이다. 선택 0개면 그래프도 표기도 없으므로 0.
+    /// 예: 2개 = 152×2 + 간격 8 + (간격 8 + 표기 32) = **352**(구 312).
+    /// </summary>
     private double LongGraphsWidth
-        => LongCardWidth * _longGraphs.Count + CardSpacing * Math.Max(0, _longGraphs.Count - 1);
+        => _longGraphs.Count == 0
+            ? 0
+            : LongCardWidth * _longGraphs.Count + CardSpacing * (_longGraphs.Count - 1)
+                + CardSpacing + SpanLabelWidth;
 
     /// <summary>
-    /// A40: 하단 바 폭이 좁으면 장식성 요소부터 내린다 — 맥박 그래프(A29)는 긴 그래프(≤2, A60 3차)가
-    /// 전부 들어갈 폭이 안 되면 숨긴다(그래프 = 정보, 맥박 = 장식이므로 그래프가 우선).
-    /// 임계값 = 긴 그래프 폭 합(2개 = 312, 배수 무관) + 고정 요소 합(BarFixedWidth 364) = 676 —
-    /// 최소 창 720(BarGrid 약 626)에서는 맥박이 내려가고, 맥박 폭 96이 비면 긴 그래프 2개가 들어간다.
+    /// A40: 하단 바 폭이 좁으면 정보 가치가 낮은 것부터 내린다. 순서(A146에서 2단으로 확장) —
+    /// ① 맥박 그래프(A29 = 장식) ② 표시 기간 표기(A146 = 보조 정보) ③ 긴 그래프는 끝까지 남긴다.
+    /// · 맥박 임계 = star 칸 요구 폭(2개 = 352) + 고정 요소 합(BarFixedWidth 364) = **716**(구 676 —
+    ///   기간 표기 40이 늘었다). 최소 창 720(BarGrid 약 626)에서는 맥박이 내려간다.
+    /// · 기간 표기 임계 = 그보다 맥박 몫(PulseSlotWidth 90)만큼 낮은 **626** — 맥박을 내려 되찾은
+    ///   폭으로 그래프 2개 + 표기가 들어가는지 보는 값이다. 여기서도 모자라면 표기를 내려
+    ///   그래프 2개(312 + 표기 칸의 간격 8)를 지킨다 — 320은 BarGrid 626에서 맥박을 내린 뒤의
+    ///   star 폭(626 − 274 = 352)에 넉넉히 들어간다.
     /// 구 카드 10개의 "뒤 순서부터 숨김" 수 축소 로직은 소멸 — 긴 그래프는 2개 고정이라 접을 것이 없다.
-    /// PulseHost 표시 여부는 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다(기존 그대로).
+    /// 두 판정 모두 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다(기존 그대로) — 숨김·표시가
+    /// SensorGrid의 요구 폭을 바꿔도 star 칸이 흡수하고 BarGrid 폭은 셸이 정한다.
     /// </summary>
     private void UpdateBarDensity(double width)
-        => PulseHost.Visibility = width >= LongGraphsWidth + BarFixedWidth
+    {
+        var needed = LongGraphsWidth + BarFixedWidth;
+        PulseHost.Visibility = width >= needed ? Visibility.Visible : Visibility.Collapsed;
+        SpanText.Visibility = _longGraphs.Count > 0 && width >= needed - PulseSlotWidth
             ? Visibility.Visible : Visibility.Collapsed;
+    }
 
-    /// <summary>센터 그리드 열 수 — 셸 도크 수 신호(ISidebarAwareView, A119 개정)가 2/3/4를 정한다.
-    /// 초기값 4 = 도크 0(전폭) 기준. 정보 모듈 진입 기본(A109 양쪽 사이드바)은 뷰 교체 직후
-    /// 셸의 첫 푸시가 2열로 잡는다 — 초기값이 화면에 남는 구간은 없다.</summary>
-    private int _centerColumns = 4;
+    /// <summary>센터 그리드 열 수 — 셸 도크 수 신호(ISidebarAwareView, A119 개정)가 정한다.
+    /// A168(v0.165.0): 도크 2/1/0 → **4/6/8열**(A119의 2/3/4열 개정 — 사용자 확정).
+    /// 초기값 8 = 도크 0(전폭) 기준. 정보 모듈 진입 기본(A109 양쪽 사이드바)은 뷰 교체 직후
+    /// 셸의 첫 푸시가 4열로 잡는다 — 초기값이 화면에 남는 구간은 없다.</summary>
+    private int _centerColumns = 8;
 
     /// <summary>
     /// 셸 푸시(A60 3차 신설 → A119 개정 계약): 공간을 차지 중인 사이드바(불투명 도크) 수(0/1/2)를
-    /// 받아 열 수 4/3/2로 환산한다 — 구 bool "양쪽 열림"의 4/8 매핑 대체. 오버레이(반투명 홀드·
+    /// 받아 열 수로 환산한다 — A168(v0.165.0)에서 **8/6/4**(구 4/3/2). 오버레이(반투명 홀드·
     /// 고정)는 메인 폭을 안 줄이므로 셸이 세지 않는다. 호출원은 셸 ApplyOverlayStates(사이드바
     /// 상태 변경의 단일 종착점 — F1/F2·2연타·Enter·경계 버튼·모듈 진입 기본(A109)이 전부 그리로
     /// 모여 도크가 바뀔 때마다 재푸시된다). 값이 그대로면 재배치하지 않는다.
+    /// ※ 셸 썸네일(A93)의 4/8 규칙과는 **한쪽 열림에서 갈린다**(썸네일 8 vs 여기 6) — 의도된
+    /// 차이이므로 썸네일 쪽은 건드리지 않는다(A168 확정).
     /// </summary>
     public void SetSidebarsState(int dockedCount)
     {
-        var columns = 4 - Math.Clamp(dockedCount, 0, 2); // 도크 2/1/0 → 2/3/4열 (A119 확정 표)
+        var columns = 8 - 2 * Math.Clamp(dockedCount, 0, 2); // 도크 2/1/0 → 4/6/8열 (A168 확정 표)
         if (columns == _centerColumns) return;
         _centerColumns = columns;
         LayoutCenterTiles();
@@ -475,7 +563,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     }
 
     /// <summary>
-    /// 센터 타일을 현재 순서(_state.Order)·열 수(2/3/4 — A119)대로 배치한다.
+    /// 센터 타일을 현재 순서(_state.Order)·열 수(4/6/8 — A119 → A168 개정)대로 배치한다.
+    /// 행 수는 열 수에서 파생된다(타일 10개 고정: 8열·6열 = 2행 / 4열 = 3행) — 마지막 행이
+    /// 덜 차는 것은 정상이고, Grid.SetColumn 인자는 `slot % columns`라 열 범위를 넘지 않는다.
     /// A119: 행은 Auto다 — 타일이 정사각형(명시 크기)이라 세로 합이 뷰포트를 넘으면 XAML의
     /// ScrollViewer가 스크롤한다(축소 없음). 구 "행도 star로 꽉 채움"(A60 3차)은 폐지.
     /// Children을 비우고 다시 얹으므로 중복 Add가 원천적으로 없다 — FrameworkElement.Parent를
@@ -517,6 +607,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     /// <summary>
     /// 센터 타일 한 변 = (그리드 실폭 − 간격 × (열 − 1)) / 열, 내림(px) — 높이 = 한 변(A119).
+    /// A168(v0.165.0)로 열 수가 4/6/8이 되어 **같은 폭에서 한 변이 절반쯤으로 작아진다**(사양 —
+    /// 식은 그대로다). 사이드바가 각 25%를 먹는 구조라 도크 0/1/2 어디서나 한 변이 비슷하게
+    /// 나온다(1920 창 예: 230 / 229 / 228px). 타일 안 글씨 잘림은 실기기 확인 사항이고
+    /// **폰트를 임의로 줄이지 않는다**(A168 확정).
     /// 명시 픽셀 대입 + "같은 변이면 조기 반환"으로 SizeChanged 재계산이 무한 레이아웃으로
     /// 번지지 않게 한다: 대입이 그리드 높이를 바꿔 SizeChanged가 또 와도(폭 불변) 같은 변이라
     /// 즉시 종단된다. 패딩은 XAML ScrollViewer(12,8,12,10)가 바깥에서 제하므로 실폭에 이미
@@ -696,7 +790,16 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             SensorGrid.Children.Add(graph.Root);
             _longGraphs.Add(graph);
         }
-        UpdateBarDensity(BarGrid.ActualWidth); // 그래프 개수(0~2)에 따라 맥박 임계가 달라진다
+        // A146: 표시 기간 표기는 긴 그래프 오른쪽 끝에 공통 1개 — 그래프가 있을 때만 칸을 만든다.
+        // 위 Clear로 이미 부모에서 빠져 있으므로 재-Add에 이중 Add 문제가 없다(§3.4: 필드 참조는
+        // 부모에서 떼어도 유효하다 — SensorGrid 자체의 reparent와 같은 관례).
+        if (_longGraphs.Count > 0)
+        {
+            SensorGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(SpanText, _longGraphs.Count);
+            SensorGrid.Children.Add(SpanText);
+        }
+        UpdateBarDensity(BarGrid.ActualWidth); // 그래프 개수(0~2)에 따라 맥박·기간 표기 임계가 달라진다
         // 새 표면은 레이아웃 전이라 ActualWidth가 0이다 — 동기로 한 번 실체화해야 아래의 즉시
         // 렌더가 헛돌지 않는다(ThumbnailExplorer.ShowEntries의 UpdateLayout 선례. 5000ms 주기에서
         // 다음 스냅샷까지 최대 5초를 빈 그래프로 기다리지 않기 위해서다). 뷰가 트리 밖(생성자)이면
@@ -1038,7 +1141,13 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         // 축 라벨(A74): 좌상단 y 최대값 + 단위, 우하단 x 시간 범위. 숨기는 조건 셋 —
         // ① A128: 하단 바 표면(InBar)은 y·x축 라벨을 아예 그리지 않는다. 32px 바 높이에서 채널명·
         //    현재값과 겹쳐 읽히지 않았고, 바는 흐름 확인용이라 최대치·시간축은 센터 타일·좌 대형이
-        //    담당한다(x축 "5m" 표기도 바에서는 함께 소멸 — 폭 임계는 이제 비-바 전용).
+        //    담당한다(폭 임계는 이제 비-바 전용).
+        //    ※ A146(v0.165.0) 정정 — A128 당시 이 자리에 "x축 5m 표기도 바에서는 함께 소멸"이라고
+        //      적었지만, **기간 표기는 되살아났다**. 단 이 표면(MakeGraph가 만드는 그래프 안)이
+        //      아니라 **바 레이아웃 소속 TextBlock(SpanText — SensorGrid 마지막 칸)**으로 옮겨졌다:
+        //      긴 그래프 2개가 같은 창이라 공통 1개면 되고, 표면 우하단으로 되돌리면 A128의 겹침이
+        //      그대로 재발한다. y축("max …")은 바에서 계속 숨김이므로 아래 판정은 무변경이다 —
+        //      **이 줄에 InBar 예외를 다시 넣지 말 것.**
         // ② 표면이 좁을 때(그래프 폭이 AxisMinWidth 미만).
         // ③ 값이 한 번도 없던 채널(축만 떠 있으면 오히려 오해를 준다).
         var showAxis = !graph.InBar && w >= AxisMinWidth && scale.HasEverHadValue;
@@ -1256,9 +1365,13 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 기다리지 않고 다시 그린다 — 5000ms를 고르면 최대 5초 동안 옛 x축 표기가 남기 때문.
     /// A51의 RerenderPulse와 같은 계열. A60 3차: 세 표면(타일·좌 대형·하단 긴) 전부를 돈다 —
     /// 선택 변경(RebuildSelectionGraphs)·크기 변경(ApplyBarScale)의 즉시 반영도 이 경로를 쓴다.
+    /// A146: 하단 바의 표시 기간 표기도 같은 이유로 여기서 다시 계산한다 — 주기 변경·바 크기
+    /// 변경·선택 변경·타일 리사이즈가 전부 이 한 경로로 모이므로 배선이 이 한 줄로 끝난다
+    /// (스냅샷 도착 경로에는 넣지 않는다 — 창 길이는 주기가 바뀔 때만 달라진다).
     /// </summary>
     private void RerenderSparklines()
     {
+        SpanText.Text = FormatSpan(WindowFor(LongWindowMaxMs)); // A146: 값은 계산값(하드코딩 금지)
         var history = SensorService.History();
         foreach (var graph in _tiles) RenderSparkline(graph, history);
         foreach (var graph in _bigGraphs) RenderSparkline(graph, history);

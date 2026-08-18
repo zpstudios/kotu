@@ -178,13 +178,14 @@ The centre of the window is the sensor grid; the two side panels carry the rest.
 - **Centre** — a tile per sensor, ten of them, each covering the last 30 seconds:
   CPU Temp, CPU Power, CPU Load, CPU Clock, GPU Temp, GPU Power, GPU Load, RAM, Fan, SSD Temp.
   **Click** a tile to select it — up to two at a time; picking a third releases the oldest.
-  **Drag** a tile to reorder the grid. The tiles are square, and the grid is 2 columns wide with
-  both sidebars docked, 3 with one and 4 with none.
+  **Drag** a tile to reorder the grid. The tiles are square, and the grid is 4 columns wide with
+  both sidebars docked, 6 with one and 8 with none.
 - **Left panel** — up to two enlarged graphs, one per selected sensor, covering the last 10 seconds.
 - **Right panel** — the specification list, scrollable: CPU, GPU, RAM, Motherboard, Storage,
   Network, System.
-- **Bottom bar** — two long graphs of the same selected sensors, covering up to 5 minutes.
-  (At the fastest refresh settings the history is shorter than 5 minutes.)
+- **Bottom bar** — two long graphs of the same selected sensors, covering the last 5 minutes at
+  every refresh setting. The length of that window is written once at the right-hand end of the
+  two graphs.
 
 The two panels are the ordinary side panels: `F1`, `F2`, `Enter` and the edge buttons drive them
 exactly as in the file modules, and the module opens with both docked. Close them and the sensor
@@ -193,8 +194,8 @@ grid takes the whole window.
 Every graph writes its channel name and its current value along the top. Where there is room for
 them, the tiles and the enlarged graphs also label the top of the scale, prefixed so it cannot be
 misread as the current value — `max 100%`, `max 100°C`, `max 5000MHz` — and the length of the time
-window in the bottom right corner. The two graphs in the bottom bar are too shallow for axis labels
-and show only the name and the value.
+window in the bottom right corner. The two graphs in the bottom bar are too shallow to carry labels
+of their own: they show the name and the value, and the shared window length sits beside them.
 
 Controls:
 
