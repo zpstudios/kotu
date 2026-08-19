@@ -43,7 +43,8 @@ public partial class App : Application
                 sp.GetRequiredService<ISettingsService>()));
             router.Register(new KOTU.Module.Audio.AudioModule(
                 sp.GetRequiredService<ISettingsService>())); // 음악 재생 분리 (A10, v0.75.0)
-            router.Register(new KOTU.Module.Document.DocumentModule()); // v0.44.0
+            router.Register(new KOTU.Module.Document.DocumentModule(
+                sp.GetRequiredService<ISettingsService>())); // v0.44.0 (A171에서 설정 주입)
             router.Register(new KOTU.Module.Hardware.HardwareModule(
                 sp.GetRequiredService<ISettingsService>())); // 트레이 센서 선택 복원 (A18)
             // A59(v0.113.0): All Readable 통합 모듈은 **맨 마지막**에 등록한다 —

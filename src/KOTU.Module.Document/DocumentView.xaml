@@ -31,6 +31,10 @@
              여백이 좌우 대칭이다. 900 이하 폭 창은 제약이 걸리지 않아 현행과 픽셀 동일하다.
              아래 DecorLayer에도 같은 MaxWidth 900이 걸려 있어야 A115 장식 좌표계가 맞는다 —
              둘은 반드시 함께 바꿀 것.
+             A171(v0.173.0): 아래 MaxWidth 900은 이제 기본값일 뿐이고 실값은 코드가 설정에서 정한다
+             (DocumentView.ApplyEditorMaxWidth — 설정 키 document.editorMaxWidth, 0 = 제한 없음).
+             그래도 지우지 않는다: 코드가 못 도는 경로(디자이너 · 생성 실패)에서도 현행 모양이 남고,
+             기본값 이원화를 막으려고 DocumentModule.DefaultEditorMaxWidth와 같은 값을 유지한다.
              4MB 초과 잘림 표시 파일은 IsReadOnly로 두어 잘린 채 저장되는 사고를 막는다. -->
         <TextBox
             x:Name="EditorBox"
@@ -57,7 +61,9 @@
              않는다 — Stretch+MaxWidth의 중앙 배치를 그대로 받는다). EditorDecor는
              GetRectFromCharacterIndex가 주는 EditorBox 로컬 좌표를 이 Canvas 로컬에 그대로 찍으므로,
              두 요소의 레이아웃 제약(정렬·최대 폭)이 같아야 원점이 겹친다. 한쪽만 바꾸면 장식이
-             본문에서 통째로 어긋난다 — 그리기 산술에 오프셋 보정을 넣지 말고 이 값을 맞출 것. -->
+             본문에서 통째로 어긋난다 — 그리기 산술에 오프셋 보정을 넣지 말고 이 값을 맞출 것.
+             A171(v0.173.0): 위 EditorBox와 마찬가지로 여기 900도 기본값이고 실값은 코드가 설정에서
+             정한다 — 두 요소에 같은 값을 넣는 지점은 ApplyEditorMaxWidth() 한 곳뿐이다. -->
         <Canvas x:Name="DecorLayer" MaxWidth="900" IsHitTestVisible="False" />
 
         <!-- PDF 페이지 뷰(A16, PdfPane)는 코드에서 지연 생성해 RootGrid 맨 아래(z 순서상 뒤)에 꽂는다 -->

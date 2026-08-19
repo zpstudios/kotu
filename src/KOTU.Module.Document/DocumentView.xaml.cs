@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Core.Settings;
 using KOTU.Core.Threading;
 using KOTU.Input;
 
@@ -91,17 +92,22 @@ public sealed partial class DocumentView : UserControl,
     // 실패하면 스스로 꺼진다 — 이 뷰는 모드 전환(열기·PDF) 시점만 알려 주면 된다.
     private readonly EditorDecor _decor;
 
+    /// <summary>A171: 본문 컬럼 최대 폭 설정을 읽는다(선례 = AudioPlayerView의 _settings).</summary>
+    private readonly ISettingsService _settings;
+
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU document worker");
 
     static DocumentView() =>
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // CP949 사용 전 1회 등록
 
-    public DocumentView(OpenContext context)
+    public DocumentView(OpenContext context, ISettingsService settings)
     {
         InitializeComponent();
+        _settings = settings;
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
         _decor = new EditorDecor(this, EditorBox, DecorLayer); // A115: 에디터 장식(가이드·¶·EOF)
+        ApplyEditorMaxWidth(); // A171: XAML 초기값(900) 위에 설정값을 얹는다
 
         // A121: PDF 키보드 스크롤의 키 수신 지점. **터널링**(PreviewKeyDown)이라 PdfPane 안쪽
         // ListView·ScrollViewer의 내장 키 내비게이션보다 먼저 온다 — 버블링 KeyDown이면 그것들이
@@ -118,7 +124,11 @@ public sealed partial class DocumentView : UserControl,
         // 더는 버튼들을 밀어내지 않는다(넘치면 줄 자체가 스크롤한다). 게다가 이제는
         // 파일이 열려 있지 않을 때만 뜨는데, 그때는 페이지·Fit 표시가 아예 없어 자리도 넉넉하다.
 
-        Loaded += (_, _) => Focus(FocusState.Programmatic);
+        Loaded += (_, _) =>
+        {
+            Focus(FocusState.Programmatic);
+            ApplyEditorMaxWidth(); // A171: 생성 시 1회 + 여기 1회 (아래 메서드 주석 참고)
+        };
         Unloaded += (_, _) =>
         {
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
@@ -130,6 +140,36 @@ public sealed partial class DocumentView : UserControl,
             OpenAny(path);
         else
             PlaceholderText.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// A171(v0.173.0): 본문 컬럼 최대 폭을 설정(<see cref="DocumentModule.EditorMaxWidthSettingKey"/>)에서
+    /// 읽어 적용한다. 저장값 0 = 제한 없음 → <c>double.PositiveInfinity</c>
+    /// (WinUI의 "상한 없음" 표현. 선례 = ImageViewerView.xaml.cs:624-625).
+    ///
+    /// <b>이 메서드가 두 요소에 같은 값을 넣는 유일한 지점이다</b>(A120 제약 ⓐ) —
+    /// EditorBox와 DecorLayer의 레이아웃 제약이 어긋나면 A115 장식이 본문에서 통째로 밀린다.
+    /// 폭을 바꾸는 코드를 더 만들지 말고 반드시 여기를 거칠 것. 정렬(HorizontalAlignment)은
+    /// 건드리지 않는다 — Stretch의 constrained fallback이 중앙 배치를 만들고,
+    /// Center는 컬럼을 접고(A120) Left는 우측 검은 띠를 되살린다(A80).
+    ///
+    /// <b>실시간 전파를 만들지 않은 이유</b>(구현 시 결정): 설정 화면은 별도 뷰이고, 문서 모듈로
+    /// 돌아오는 길은 항상 뷰 재생성(IModule.CreateView)이라 값이 자연히 반영된다. 창마다 살아
+    /// 있는 뷰에 즉시 밀어 넣으려면 UiScale.Changed 같은 전역 이벤트 + 뷰별 구독 해제가 필요한데,
+    /// 이 값은 세션 중 몇 번 바꾸지 않는 취향 설정이라 그 배선을 하지 않는다.
+    ///
+    /// PDF 모드에는 <b>아무 영향이 없다</b> — PdfPane은 별도 요소이고 표시 폭은 자체 상한(1100)과
+    /// Fit 모드가 정한다(PdfPane.xaml.cs:89).
+    /// </summary>
+    private void ApplyEditorMaxWidth()
+    {
+        var stored = _settings.Get(
+            DocumentModule.EditorMaxWidthSettingKey, DocumentModule.DefaultEditorMaxWidth);
+        // 손으로 고친 settings.json이 음수·0을 넣으면 "제한 없음"으로 읽는다(0이 그 뜻이다).
+        // 삼항의 공통 타입을 추론에 맡기지 않고 못 박는다(int와 double이 섞인다 — CI가 유일한 컴파일러라 여지를 남기지 않는다).
+        double width = stored <= 0 ? double.PositiveInfinity : (double)stored;
+        EditorBox.MaxWidth = width;
+        DecorLayer.MaxWidth = width;
     }
 
     /// <summary>확장자로 텍스트/PDF 경로를 나눈다(A16).</summary>

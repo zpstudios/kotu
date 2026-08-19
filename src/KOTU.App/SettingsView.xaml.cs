@@ -6,6 +6,9 @@ using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
+// A171: 문서 편집기 폭 설정의 키·기본값·선택지는 문서 모듈이 소유한다. 이름이 길어 별칭을 둔다
+// (별칭 선례 = InstanceIcon.cs의 GdiColor). 셸이 모듈 public static을 참조하는 선례 = ExplorerPane.
+using DocModule = KOTU.Module.Document.DocumentModule;
 
 namespace KOTU.App;
 
@@ -404,8 +407,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     }
 
     /// <summary>
-    /// Display 섹션: 앱 UI 스케일. 옵션은 윈도우 디스플레이 설정과 같은 배율 목록(UiScale.Percents),
+    /// Display 섹션: ① 앱 UI 스케일 — 옵션은 윈도우 디스플레이 설정과 같은 배율 목록(UiScale.Percents),
     /// 바꾸면 저장 후 열린 모든 창에 즉시 적용된다(UiScale.Changed → MainWindow.ApplyUiScale).
+    /// ② 문서 편집기 폭(A171) — 저장만 하고 즉시 전파는 하지 않는다(문서 뷰 재생성 때 반영).
     /// </summary>
     private void BuildDisplaySection()
     {
@@ -474,6 +478,45 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         };
         Root.Children.Add(scaleBox);
         Root.Children.Add(offListNote);
+
+        // A171(v0.173.0): 문서 편집기 본문 컬럼 최대 폭. 배율 콤보와 같은 관용구(Tag에 값 · 무변화
+        // 가드 · Set/Save)를 쓰되 알림 이벤트는 없다 — 문서 뷰는 모듈 전환 때마다 새로 만들어지므로
+        // 다음에 문서를 열 때 자연히 반영된다(근거는 DocumentView.ApplyEditorMaxWidth 주석).
+        // 키·기본값·선택지는 전부 문서 모듈이 소유한다(위 DocModule 별칭).
+        var editorWidthBox = new ComboBox { Header = "Document editor width", MinWidth = 200 };
+        foreach (var px in DocModule.EditorMaxWidths)
+            editorWidthBox.Items.Add(new ComboBoxItem { Content = $"{px} px", Tag = px });
+        editorWidthBox.Items.Add(new ComboBoxItem { Content = "Unlimited", Tag = 0 }); // 저장값 0
+
+        var storedWidth = _settings.Get(
+            DocModule.EditorMaxWidthSettingKey, DocModule.DefaultEditorMaxWidth);
+        var storedIndex = Array.IndexOf(DocModule.EditorMaxWidths, storedWidth);
+        // 0 이하 = Unlimited(마지막 항목). 목록에 없는 값(손으로 고친 settings.json)은 기본값 자리로.
+        editorWidthBox.SelectedIndex = storedWidth <= 0
+            ? DocModule.EditorMaxWidths.Length
+            : storedIndex >= 0
+                ? storedIndex
+                : Array.IndexOf(DocModule.EditorMaxWidths, DocModule.DefaultEditorMaxWidth);
+
+        editorWidthBox.SelectionChanged += (_, _) =>
+        {
+            var value = editorWidthBox.SelectedItem is ComboBoxItem { Tag: int chosen }
+                ? chosen
+                : DocModule.DefaultEditorMaxWidth;
+            if (value == _settings.Get(
+                DocModule.EditorMaxWidthSettingKey, DocModule.DefaultEditorMaxWidth)) return;
+            _settings.Set(DocModule.EditorMaxWidthSettingKey, value);
+            _settings.Save();
+        };
+        Root.Children.Add(editorWidthBox);
+        Root.Children.Add(new TextBlock
+        {
+            Text = "Maximum width of the text column. Plain text documents only (not PDF); "
+                 + "applies the next time a document is opened.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
     }
 
     /// <summary>
