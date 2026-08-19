@@ -84,7 +84,8 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 ### 4.2 이미지 뷰어 (Image)
 
 - 필수: jpg·png·gif(애니)·bmp·webp 표시 / ←→ 키로 폴더 내 이전·다음 / 확대·축소(휠)·패닝·창맞춤 / 회전 / 전체화면 / 삭제(휴지통) / EXIF 회전 반영
-- 옵션: heic·psd·raw(Magick.NET), 슬라이드쇼, EXIF 정보 패널, 간단 편집(크롭·리사이즈), 배경화면 설정
+- 옵션: heic·psd·raw(Magick.NET), 슬라이드쇼, EXIF 정보 패널, 간단 편집(크롭·리사이즈)
+  · ~~배경화면 설정~~ = A161(v0.174.0)에서 구현(우클릭 "Set as desktop background")
 
 ### 4.3 동영상 플레이어 (Video)
 

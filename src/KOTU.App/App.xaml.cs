@@ -80,6 +80,11 @@ public partial class App : Application
         // 하드웨어 뷰 버튼과 탐색기의 접근 거부 안내가 같은 구현을 쓴다. 모듈 쪽 진입은 같은
         // 이유(Core 의존 규칙)로 훅 경유다.
         KOTU.Core.Integration.AdminRelaunchHook.Relauncher = Integration.AdminRelaunch.Relaunch;
+        // A161(v0.174.0): 이미지 모듈 "Set as desktop background" 훅 배선 — 같은 이유(모듈은
+        // Core에만 의존 + 모듈 프로젝트에 DllImport 0)로 P/Invoke·레지스트리 쓰기는 셸에만 둔다.
+        // 이 훅만은 모듈의 뷰 전용 워커 스레드에서 불린다(PNG 변환·파일 쓰기를 끝낸 그 워커에서
+        // 이어서). 배선이 창 생성보다 앞서므로 모듈이 미배선 상태를 만나는 일은 없다.
+        KOTU.Core.Integration.DesktopWallpaperHook.Setter = Integration.DesktopWallpaper.TrySet;
 
         // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
         // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당

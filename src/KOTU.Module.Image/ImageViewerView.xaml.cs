@@ -116,6 +116,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         // "직전 표시 문자열과 같으면 조기 반환"으로 과다 대입을 막는다.
         Scroller.ViewChanged += OnScrollerViewChanged;
 
+        // A161(v0.174.0): 이미지 표면 우클릭 메뉴("Set as desktop background") — 메뉴를 코드에서
+        // 만들어 거는 것은 저장소 관례다(ExplorerPane.MakeSurfaceMenu·ThumbnailExplorer 동일).
+        Scroller.ContextFlyout = MakeSurfaceMenu();
+
         if (context.FilePath is { } path && File.Exists(path))
         {
             OpenPath(path);
@@ -332,6 +336,102 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// <summary>방금 팬으로 끝난 제스처인가 — 시간 비교는 A131(ExplorerPane.xaml.cs:1060-1062) 관용구 그대로.</summary>
     private bool IsPanSuppressingDoubleTap() =>
         (DateTime.UtcNow - _panEndedAt).TotalMilliseconds < PanDoubleTapSuppressMs;
+
+    // ---------- 표면 우클릭 메뉴 / 바탕화면 배경 지정 (A161) ----------
+
+    /// <summary>
+    /// 이미지 표면 우클릭 메뉴. 항목은 하나뿐이고, 파일이 열려 있을 때만 활성이다 —
+    /// 활성 판정을 Opening 한 곳에 모으는 것은 ExplorerPane·ThumbnailExplorer의 MakeSurfaceMenu 관용구다.
+    /// <para>
+    /// 배선 지점이 <c>Scroller</c>인 이유: 휠 줌·팬(A148)을 건 콘텐츠 프레젠터에는
+    /// ContextFlyout이 없어 컨텍스트 요청이 여기까지 올라온다 = "뷰어 콘텐츠 표면 위에서만"
+    /// 규칙이 그대로 성립한다(플레이스홀더 텍스트는 형제 요소라 조상이 아니다 = 파일 없을 때
+    /// 그 위 우클릭은 메뉴 자체가 뜨지 않는다 — 등재문 ⓑ의 두 허용 동작 중 하나).
+    /// </para>
+    /// <para>
+    /// A148 팬과 충돌하지 않는다: 팬은 <b>좌버튼 눌림 전이</b>만 태우므로(OnContentPointerPressed의
+    /// PointerUpdateKind 검사) 캡처 중에 우버튼 눌림이 프레젠터로 와도 그냥 흘러간다. 더블탭
+    /// 전체화면(OnDoubleTapped)도 좌버튼 경로라 무관하고, 셸의 마우스 뒤로가기(A112)는 XButton1이라 겹치지 않는다.
+    /// </para>
+    /// </summary>
+    private MenuFlyout MakeSurfaceMenu()
+    {
+        var setWallpaper = new MenuFlyoutItem
+        {
+            Text = "Set as desktop background",
+            Icon = new FontIcon { Glyph = "\uE8B9" }, // Picture — ImageModule.IconGlyph와 같은 값
+        };
+        setWallpaper.Click += async (_, _) => await SetAsWallpaperAsync();
+
+        var flyout = new MenuFlyout();
+        flyout.Items.Add(setWallpaper);
+        // 훅 배선 여부는 보지 않는다(A124 선례와 같다): 셸이 첫 창보다 먼저 배선하므로 미배선은
+        // 이론상 도달 불가이고, 만약 비어 있어도 TrySet이 false를 돌려 실패 문구로 접힌다.
+        flyout.Opening += (_, _) => setWallpaper.IsEnabled = _navigator?.Current is not null;
+        return flyout;
+    }
+
+    /// <summary>
+    /// 현재 이미지를 바탕화면 배경으로 건다(A161).
+    /// <para>
+    /// 변환은 <b>항상 PNG</b>다 — SPI_SETDESKWALLPAPER가 못 읽는 형식(psd·webp·ico 등)이 있어
+    /// 원본을 그대로 넘길 수 없다. 변환기는 이 모듈이 이미 쓰는 Magick.NET(LoadViaMagickAsync와
+    /// 같은 MagickFormat.Png)이라 형식을 가리지 않는다.
+    /// </para>
+    /// <para>
+    /// 화면에서 보고 있는 <b>회전(R 키)·EXIF 회전·줌은 반영하지 않는다 — 원본 그대로</b> 건다
+    /// (A161 확정). 그 값들은 뷰의 표시 변환일 뿐 파일 내용이 아니기 때문이다.
+    /// </para>
+    /// 변환·파일 쓰기는 뷰 전용 워커(A42)에서 돌고, 셸 훅이 하는 레지스트리 쓰기·P/Invoke도
+    /// 같은 워커에서 이어진다 — UI 스레드는 결과 문구만 대입받는다.
+    /// 안내는 이 모듈의 기존 관용구인 하단 바 파일명 칸(DeleteCurrentAsync의 실패 표기와 같다).
+    /// 다음 열기·탐색에서 UpdateStatusBar가 파일명으로 되돌린다.
+    /// </summary>
+    private async Task SetAsWallpaperAsync()
+    {
+        if (_navigator?.Current is not { } path) return;
+
+        bool applied;
+        try
+        {
+            applied = await Worker.Run(_ =>
+                KOTU.Core.Integration.DesktopWallpaperHook.TrySet(WriteWallpaperPng(path)));
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 뷰가 내려가며 워커가 닫혔다 — 안내할 화면도 없다
+        }
+        catch (Exception ex)
+        {
+            // 훅은 던지지 않으므로 여기 오는 것은 변환·파일 쓰기 실패뿐이다(손상 파일·디스크·권한).
+            FileNameText.Text =
+                $"Failed to set as desktop background: {Path.GetFileName(path)} ({ex.Message})";
+            return;
+        }
+
+        FileNameText.Text = applied
+            ? $"Set as desktop background: {Path.GetFileName(path)}"
+            : $"Failed to set as desktop background: {Path.GetFileName(path)}";
+    }
+
+    /// <summary>
+    /// 워커 스레드: 원본을 PNG로 변환해 <c>%AppData%\KOTU\wallpaper.png</c>에 덮어쓰고 그 경로를 돌려준다.
+    /// 파일명이 고정이라 누적되지 않는다 — Windows가 지정 시점에 자체 캐시로 복사해 두므로
+    /// 다음 지정에서 이 파일을 다시 써도 현재 배경이 깨지지 않는다.
+    /// 경로 조립은 설정 파일(KOTU.Core.Settings.JsonSettingsService.DefaultPath)과 같은 관용구이고,
+    /// 폴더명은 <b>현재 브랜드 "KOTU"만</b> 쓴다(구 브랜드 폴더는 청소 대상일 뿐 쓰기 대상이 아니다).
+    /// 바이트 변환은 LoadViaMagickAsync가 이미 쓰는 ToByteArray(MagickFormat.Png) 그대로다.
+    /// </summary>
+    private static string WriteWallpaperPng(string sourcePath)
+    {
+        var target = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "KOTU", "wallpaper.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        using var magick = new ImageMagick.MagickImage(sourcePath);
+        File.WriteAllBytes(target, magick.ToByteArray(ImageMagick.MagickFormat.Png));
+        return target;
+    }
 
     // ---------- 이미지 로드 ----------
 
