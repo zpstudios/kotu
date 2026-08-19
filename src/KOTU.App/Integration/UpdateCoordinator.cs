@@ -82,6 +82,19 @@ internal static class UpdateCoordinator
     /// <summary>마지막 확인 시각(UTC). 한 번도 없으면 null.</summary>
     public static DateTimeOffset? LastCheckedAt { get; private set; }
 
+    /// <summary>
+    /// 다음 <b>자동</b> 확인 예정 시각(UTC) — A167(v0.171.0). 타이머가 없으면(업데이트 불가 빌드)
+    /// null이고, 설정 화면이 남은 시간을 카운트다운으로 보여 준다.
+    ///
+    /// 값을 찍는 곳은 <b>타이머를 돌리는 두 지점뿐</b>이다: <see cref="StartAutoCheckTimer"/>의 Start
+    /// 직후와 매 Tick. <see cref="CheckNowAsync"/>에서는 건드리지 않는다 —
+    /// 설정 화면 진입 1회 확인(경로 ②)은 타이머를 재시작하지 않으므로 다음 틱 시각도 밀리지 않기 때문이다.
+    /// 같은 이유로 <c>LastCheckedAt + 2분</c>으로 계산하면 틀린다(그 계산은 ②가 돌 때마다 어긋난다).
+    ///
+    /// <see cref="LastCheckedAt"/>과 같은 규약: UI 스레드에서만 쓰고 UTC로 담는다.
+    /// </summary>
+    public static DateTimeOffset? NextCheckAt { get; private set; }
+
     /// <summary>마지막 확인의 실패 사유 요약. 빈 문자열 = 성공.</summary>
     public static string LastCheckError { get; private set; } = string.Empty;
 
@@ -123,8 +136,15 @@ internal static class UpdateCoordinator
     {
         if (_timer is not null) return; // 프로세스당 1개 — 재진입해도 새로 만들지 않는다
         _timer = new DispatcherTimer { Interval = AutoCheckInterval };
-        _timer.Tick += async (_, _) => await CheckNowAsync();
+        _timer.Tick += async (_, _) =>
+        {
+            // A167: 다음 예정 시각은 Tick 시점에 다시 찍는다. DispatcherTimer는 반복 타이머라
+            // 확인이 얼마나 걸리든 Interval마다 오므로, 확인이 끝난 뒤가 아니라 여기서 재는 게 맞다.
+            NextCheckAt = DateTimeOffset.UtcNow + AutoCheckInterval;
+            await CheckNowAsync();
+        };
         _timer.Start();
+        NextCheckAt = DateTimeOffset.UtcNow + AutoCheckInterval; // 첫 틱도 Interval 뒤다(A114)
     }
 
     /// <summary>

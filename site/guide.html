@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.163.0</span>
+    <span class="asof">AS OF v0.171.0</span>
   </div>
 </section>
 
@@ -805,33 +805,63 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            Its tray icon stays — click that to bring it back.</p>
       </section>
 
-      <!-- ================= 8. SETTINGS ================= -->
+      <!-- ================= 8. SETTINGS =================
+           The h3 ids below are the anchors the app's own "Learn more" links point at.
+           They must stay identical to the heading slugs of section 8 in docs/USER-GUIDE.md. -->
       <section id="settings">
         <h2><span class="num">8</span>Settings</h2>
-        <p>The last entry in the menu at the bottom left.</p>
+        <p>The last entry in the menu at the bottom left. Each setting on that screen carries a one-line
+           description and a <strong>Learn more</strong> link; this is what those links point at.</p>
 
-        <h3>Display</h3>
+        <h3 id="ui-scale">UI scale</h3>
+        <p>Under <strong>Display</strong>. <em>System default</em> follows the Windows display scaling for
+           this monitor, and the list marks which entry that currently is. Picking a fixed value — 100% to
+           350% — overrides Windows for KOTU only, and nothing else on the desktop changes.</p>
+        <p>A change takes effect in every open KOTU window immediately; there is nothing to restart. If the
+           Windows scaling on your monitor is a value the list does not offer, a note under the list says so.</p>
+
+        <h3 id="always-open-files-in-a-new-instance">Always open files in a new instance</h3>
+        <p>Under <strong>Windows</strong>. Off by default.</p>
         <ul>
-          <li><strong>UI scale</strong> — <em>System default</em> (follow Windows), or a fixed 100% to 350%.
-              A fixed value applies to KOTU only, and takes effect in every open window immediately.</li>
+          <li><strong>Off</strong> — a file opens in the existing window of the same module, replacing what
+              was there.</li>
+          <li><strong>On</strong> — every file opens its own new window.</li>
+        </ul>
+        <p>Either way, the explicit "new instance" actions always open a new window and ignore this setting:
+           <kbd>Shift</kbd>+<kbd>N</kbd>, <kbd>Shift</kbd>+double-click in the file browser, and
+           <em>Open in new instance</em> in the right-click menu. See
+           <a class="inl" href="#windows">several windows at once</a>.</p>
+
+        <h3 id="explorer-integration">Explorer integration</h3>
+        <p>The file-type switches and the right-click-menu switch, described in full in
+           <a class="inl" href="#associations">file types and the Start menu</a>. In short:</p>
+        <ul>
+          <li>Everything is registered under <strong>your own user account only</strong>, so no administrator
+              rights are needed, and turning a switch off removes the registration completely — nothing is
+              left behind.</li>
+          <li>Turning a switch on also tries to make KOTU the <strong>default app</strong> for those file
+              types, so double-clicking one in Windows Explorer opens KOTU.</li>
+          <li>Windows protects a few file types and can refuse that last step. When it does, the Windows
+              default-apps page opens so you can confirm the change once by hand. You can also set a single
+              extension at a time with <em>Set default...</em> beside each switch. The line under each switch
+              says how many of that module's extensions KOTU is currently the default for.</li>
         </ul>
 
-        <h3>Windows</h3>
+        <h3 id="the-settings-file">The settings file</h3>
+        <p><strong>Open settings.json</strong> opens the settings file itself in a new KOTU window, so you
+           can read or edit it with the built-in text editor.</p>
         <ul>
-          <li><strong>Always open files in a new instance</strong> — off by default.</li>
+          <li>It lives in <code>%AppData%\KOTU\settings.json</code>.</li>
+          <li>Changes you make by hand apply after a restart — KOTU does not re-read the file while it runs.</li>
+          <li>Editing it incorrectly can break your settings. Nothing validates what you type; a malformed
+              file is the one way to lose your preferences.</li>
         </ul>
 
-        <h3>Explorer integration</h3>
+        <h3 id="updates">Updates</h3>
         <ul>
-          <li>The file-type and right-click switches described in section 6.</li>
-          <li><strong>Open settings.json</strong> — opens the settings file itself in a new KOTU window. It
-              lives in <code>%AppData%\KOTU\settings.json</code>. Changes you make by hand apply after a
-              restart; editing it incorrectly can break your settings.</li>
-        </ul>
-
-        <h3>Updates</h3>
-        <ul>
-          <li><strong>Current version</strong> and <strong>Latest version</strong>, plus when the last check ran.</li>
+          <li><strong>Current version</strong> and <strong>Latest version</strong>, plus when the last check
+              ran and how long it is until the next one — <em>Next check in 1:23</em>, counting down. While a
+              check is running the line says so instead.</li>
           <li>KOTU checks for updates on its own every two minutes, and once whenever you open Settings.
               There is no button to check by hand — opening this screen is the check. Nothing pops up when a
               new version is found — the Updates section is the only place it is announced.</li>
@@ -839,10 +869,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               figure, then asks to close and restart. <em>Install and restart</em> applies it immediately;
               <em>Later</em> keeps the download ready for the next time you press the button.</li>
           <li>Updates need the Setup.exe installation or the portable build from the releases page. A build
-              unpacked by hand says so and leaves the section disabled.</li>
+              unpacked by hand says so, leaves the section disabled, and shows no countdown.</li>
         </ul>
 
-        <h3>About</h3>
+        <h3 id="about">About</h3>
         <p>The version, a link to the repository, and the mission statement. The bottom bar of the Settings
            screen has a link to the project's Patreon page and the full-screen button.</p>
       </section>

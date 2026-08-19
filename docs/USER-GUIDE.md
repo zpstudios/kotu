@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.163.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.171.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -551,26 +551,58 @@ that to bring it back.
 
 ## 8. Settings
 
-The last entry in the menu at the bottom left.
+The last entry in the menu at the bottom left. Each setting on that screen carries a one-line
+description and a **Learn more** link; this is what those links point at.
 
-**Display**
+### UI scale
 
-- **UI scale** — *System default* (follow Windows), or a fixed 100% to 350%. A fixed value applies
-  to KOTU only, and takes effect in every open window immediately.
+Under **Display**. *System default* follows the Windows display scaling for this monitor, and the
+list marks which entry that currently is. Picking a fixed value — 100% to 350% — overrides Windows
+for KOTU only, and nothing else on the desktop changes.
 
-**Windows**
+A change takes effect in every open KOTU window immediately; there is nothing to restart. If the
+Windows scaling on your monitor is a value the list does not offer, a note under the list says so.
 
-- **Always open files in a new instance** — off by default. See [7](#7-several-windows-at-once).
+### Always open files in a new instance
 
-**Explorer integration** — see [6](#6-file-associations-and-the-start-menu).
+Under **Windows**. Off by default.
 
-- **Open settings.json** — opens the settings file itself in a new KOTU window. It lives in
-  `%AppData%\KOTU\settings.json`. Changes you make by hand apply after a restart; editing it
-  incorrectly can break your settings.
+- **Off** — a file opens in the existing window of the same module, replacing what was there.
+- **On** — every file opens its own new window.
 
-**Updates**
+Either way, the explicit "new instance" actions always open a new window and ignore this setting:
+`Shift+N`, `Shift`+double-click in the file browser, and **Open in new instance** in the
+right-click menu. See [7](#7-several-windows-at-once).
 
-- **Current version** and **Latest version**, plus when the last check ran.
+### Explorer integration
+
+The file-type switches and the right-click-menu switch, described in full in
+[6](#6-file-associations-and-the-start-menu). In short:
+
+- Everything is registered under **your own user account only**, so no administrator rights are
+  needed, and turning a switch off removes the registration completely — nothing is left behind.
+- Turning a switch on also tries to make KOTU the **default app** for those file types, so
+  double-clicking one in Windows Explorer opens KOTU.
+- Windows protects a few file types and can refuse that last step. When it does, the Windows
+  default-apps page opens so you can confirm the change once by hand. You can also set a single
+  extension at a time with **Set default...** beside each switch. The line under each switch says
+  how many of that module's extensions KOTU is currently the default for.
+
+### The settings file
+
+**Open settings.json** opens the settings file itself in a new KOTU window, so you can read or edit
+it with the built-in text editor.
+
+- It lives in `%AppData%\KOTU\settings.json`.
+- Changes you make by hand apply after a restart — KOTU does not re-read the file while it runs.
+- Editing it incorrectly can break your settings. Nothing validates what you type; a malformed file
+  is the one way to lose your preferences.
+
+### Updates
+
+- **Current version** and **Latest version**, plus when the last check ran and how long it is until
+  the next one — *Next check in 1:23*, counting down. While a check is running the line says so
+  instead.
 - KOTU checks for updates on its own every two minutes, and once whenever you open Settings.
   There is no button to check by hand — opening this screen is the check. Nothing pops up when a
   new version is found — the Updates section is the only place it is announced.
@@ -578,9 +610,11 @@ The last entry in the menu at the bottom left.
   then asks: *KOTU will close and restart to finish installing.* **Install and restart** applies it
   immediately; **Later** keeps the download ready for the next time you press the button.
 - Updates need the Setup.exe installation or the Velopack portable build. A build unpacked by hand
-  says so and leaves the section disabled.
+  says so, leaves the section disabled, and shows no countdown.
 
-**About** — the version, a link to the repository, and the mission statement.
+### About
+
+The version, a link to the repository, and the mission statement.
 
 The bottom bar of the Settings screen has a link to the project's Patreon page and the full-screen
 button.

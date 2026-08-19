@@ -11,6 +11,27 @@ internal static class Branding
     public const string AppName = "KOTU";
 
     /// <summary>
+    /// 저장소 주소 — 설정 About 줄의 링크가 쓴다. 링크용 주소를 코드 여기저기에 흩뿌리지 않으려고
+    /// 브랜드 상수로 모아 둔 단일 소스다(A162).
+    /// ※ <c>Integration.UpdateService</c>의 동명 상수는 <b>Velopack 업데이트 피드</b> 주소로
+    ///   목적이 달라 일부러 합치지 않았다 — 피드를 다른 호스트로 옮겨도 이 링크는 그대로여야 한다.
+    /// </summary>
+    public const string RepoUrl = "https://github.com/zpstudios/kotu";
+
+    /// <summary>
+    /// 사용자 가이드 주소(A162) — 설정 화면의 "Learn more" 링크 목적지.
+    /// 가이드는 같은 내용의 문서 <b>두 벌</b>로 존재한다: 원본 <c>docs/USER-GUIDE.md</c>와
+    /// 웹 게시본 <c>site/guide.html</c>. 사이트는 아직 어디에도 게시돼 있지 않으므로
+    /// (<c>site/README.md</c> "배포" 절 — 워크플로 없음) 앱이 여는 주소는 GitHub가 렌더링해 주는
+    /// 마크다운 원본이다. 두 문서의 절 앵커 이름은 같게 맞춰 두었으므로
+    /// (guide.html의 <c>id</c> = 마크다운 제목 슬러그) 사이트가 게시되면 이 상수 한 줄만 바꾸면 된다.
+    /// </summary>
+    public const string UserGuideUrl = RepoUrl + "/blob/master/docs/USER-GUIDE.md";
+
+    /// <summary>가이드의 절 앵커로 바로 가는 주소. 앵커 이름은 소문자와 하이픈만 쓴다.</summary>
+    public static Uri GuideLink(string anchor) => new($"{UserGuideUrl}#{anchor}");
+
+    /// <summary>
     /// 모듈별 액센트 색. v0.26.0부터 하단 바 스트립/칩 색 대신 창·트레이의 모듈 색
     /// KOTU 아이콘(packaging/gen_app_icon.py — 색을 여기와 동일하게 유지할 것)이 모드를 구분한다.
     /// 이 메서드는 색의 단일 소스 정의로 유지. 미등록 ID는 null(중립).

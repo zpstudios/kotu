@@ -27,6 +27,14 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     private bool _suppressToggle;
 
     /// <summary>
+    /// A167(v0.171.0): Updates 섹션의 "다음 확인까지 남은 시간"을 1초마다 다시 그리는 타이머.
+    /// <b>뷰 하나당 하나</b>다 — 필드 초기화로 만들어 두고 다시 만드는 곳이 없다.
+    /// Tick 배선·Start·Stop은 전부 <see cref="BuildUpdatesSection"/> 한 곳에 모아 두었고,
+    /// Loaded에서 시작해 Unloaded에서 멈춘다(화면 밖에서는 돌지 않는다).
+    /// </summary>
+    private readonly DispatcherTimer _countdownTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+
+    /// <summary>
     /// 설정 화면 전용 직렬 워커(A42 계약, A77에서 도입). 레지스트리 등록·해제·UserChoice 쓰기·
     /// 기본 앱 개수 조회가 전부 여기서 돈다. 모듈별로 나누지 않고 하나로 둔 이유 —
     /// 모듈들이 Capabilities 키 하나를 공유해 동시 쓰기가 서로를 지울 수 있다.
@@ -118,15 +126,16 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         BuildWindowsSection(); // 창 재사용 규칙 (A24)
 
         AddHeader("Explorer integration");
+        // A162(v0.171.0): 4문장 374자였던 설명을 한 줄로 줄이고 상세(관리자 권한 불필요·해제 시 완전 삭제·
+        // Windows가 막는 보호 확장자와 그 대처)는 사용자 가이드 "Explorer integration" 절로 옮겼다.
+        // 같은 작업에서 문구 끝에 노출돼 있던 내부 요구사항 번호도 걷어냈다 — 사용자 문구에 A번호는 없다.
         Root.Children.Add(new TextBlock
         {
-            Text = "Applies to the current user account only (no admin rights needed); turning a switch off removes the registration completely. "
-                 + $"Turning a switch on also makes {Branding.AppName} the default app for those file types automatically. "
-                 + "Windows may block this for a few protected types - those open the Windows default-apps page so you can confirm once, "
-                 + "or use \"Set default...\" per extension. (A38)",
+            Text = $"Registers file types for this user account only, and makes {Branding.AppName} the default app for them.",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
+        Root.Children.Add(LearnMore("explorer-integration"));
 
         // 토글 순서(A35, 사용자 확정 2026-08-10): 이미지 → 비디오 → 오디오 → 문서 → 압축.
         // 시작 메뉴 번호 순서(1이미지 2영상 3오디오 4문서 5압축)와 일치시킨 것 —
@@ -346,6 +355,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             });
         Root.Children.Add(menuToggle);
 
+        // A162: 다섯 문구 중 유일하게 링크를 붙이지 않은 줄이다 — 이미 한 줄(65자)이고 내용도
+        // "어디에 나타나는가" 한 가지뿐이라 옮길 상세가 없다. 같은 사실은 가이드 6장에도 적혀 있다.
         Root.Children.Add(new TextBlock
         {
             Text = "On Windows 11 these appear under \"Show more options\" (Shift+F10).",
@@ -373,7 +384,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         aboutLine.Children.Add(new HyperlinkButton
         {
             Content = "github.com/zpstudios/kotu",
-            NavigateUri = new Uri("https://github.com/zpstudios/kotu"),
+            NavigateUri = new Uri(Branding.RepoUrl), // A162: 주소 리터럴은 Branding 한 곳에만 둔다
             Padding = new Thickness(0),
         });
         Root.Children.Add(aboutLine);
@@ -399,13 +410,14 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     private void BuildDisplaySection()
     {
         AddHeader("Display");
+        // A162(v0.171.0): "System default"의 뜻과 적용 범위 설명은 가이드 "UI scale" 절로 옮겼다.
         Root.Children.Add(new TextBlock
         {
-            Text = $"Scale of the {Branding.AppName} interface. \"System default\" follows the Windows display scaling; "
-                 + "picking a value overrides it for this app only, applied to all open windows immediately.",
+            Text = $"Scale of the {Branding.AppName} interface, applied to all open windows immediately.",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
+        Root.Children.Add(LearnMore("ui-scale"));
 
         // A44(A21 보강): 현재 윈도우 배율을 별도 줄이 아니라 배율 목록 항목 옆에 표기한다.
         // XamlRoot.RasterizationScale = 이 창이 떠 있는 모니터의 시스템 배율(앱 자체 배율과 무관).
@@ -484,15 +496,17 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             _settings.Save();
         };
         Root.Children.Add(toggle);
+        // A162(v0.171.0): 명시적 "새 인스턴스" 조작(Shift+N 등)이 이 설정과 무관하다는 단서는
+        // 가이드 "Always open files in a new instance" 절로 옮겼다.
         Root.Children.Add(new TextBlock
         {
-            Text = "Off: a file opens in the existing instance of the same module (default). "
-                 + "On: every file opens a new instance. Explicit \"new instance\" actions "
-                 + "(Shift+N, Shift+double-click, right-click menu) always open a new instance either way.",
+            Text = "Off: files re-use the existing instance of the same module. "
+                 + "On: every file opens a new instance.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
+        Root.Children.Add(LearnMore("always-open-files-in-a-new-instance"));
     }
 
     /// <summary>
@@ -513,15 +527,17 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         };
         Root.Children.Add(openButton);
 
+        // A162(v0.171.0): "직접 편집하면 설정이 깨질 수 있다"는 경고는 가이드 "The settings file" 절로
+        // 옮겼다. 경로는 화면에 남긴다 — 복사해 가는 것이 이 줄의 본래 용도다.
         Root.Children.Add(new TextBlock
         {
-            Text = $"{_settings.FilePath} - changes apply after restart. "
-                 + "Editing this file directly can break your settings.",
+            Text = $"{_settings.FilePath} - changes apply after restart.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true, // 경로를 그대로 복사해 갈 수 있게
         });
+        Root.Children.Add(LearnMore("the-settings-file"));
 
         // 실패 사유 전용 줄(성공하면 보이지 않는다) — 공용 _status는 연결 토글 결과가 쓴다.
         var status = new TextBlock
@@ -560,7 +576,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
     /// <summary>
     /// Updates 섹션(A95, v0.117.0 — 확인 정책은 A114, v0.136.0). 구성은 위에서부터
-    /// <b>현재 버전 · 최신 버전 · 마지막 확인 시각 · [Update to vX] · 안내 문구</b>.
+    /// <b>현재 버전 · 최신 버전 · 마지막 확인 시각 · 다음 확인까지 남은 시간 · [Update to vX] · 안내 문구</b>
+    /// (남은 시간 줄은 A167, v0.171.0에서 추가 — 확인 중에는 진행을 말하고, 예정 시각이 없으면 접힌다).
     /// 확인은 <b>이 섹션을 만들 때(설정 진입) 1회</b> · 2분 주기 타이머 둘 다 돌지만
     /// 새 버전 알림은 여기 표시가 전부다 — <b>토스트·팝업은 금지</b>(A114 알림 방식 b).
     /// A125(v0.148.0): 수동 확인 버튼을 없앴다 — 이 화면은 이제 <b>확인을 시키는 손잡이가 없고</b>
@@ -582,6 +599,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var dim = available ? 0.7 : 0.4;
         var latest = new TextBlock { FontSize = 12, Opacity = dim };
         var lastChecked = new TextBlock { FontSize = 12, Opacity = dim };
+        // A167(v0.171.0): 다음 자동 확인까지 남은 시간. 마지막 확인 줄 바로 아래, 같은 규격
+        // (FontSize 12 · 같은 Opacity)이다. 보여 줄 값이 없을 때는 줄 자체를 접는다.
+        var nextCheck = new TextBlock { FontSize = 12, Opacity = dim, Visibility = Visibility.Collapsed };
         var status = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
         // A125(v0.148.0): 버튼이 적용 하나만 남아 가로 StackPanel(구 buttonRow)을 없애고 Root에 직접 넣는다 —
         // 숨겨진 버튼만 담은 빈 줄이 남으면 Root의 Spacing이 위아래로 두 번 붙어 헛간격이 생긴다.
@@ -596,15 +616,49 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(new TextBlock { Text = $"Current version: v{currentVersion}", Opacity = 0.8 });
         Root.Children.Add(latest);
         Root.Children.Add(lastChecked);
+        Root.Children.Add(nextCheck); // A167 — 마지막 확인 줄 바로 아래
         Root.Children.Add(updateButton);
         Root.Children.Add(status); // 안내 문구는 적용 버튼 '밑'이다(A95 — 순서 유지).
 
         // 다운로드·설치 중에는 그 진행 문구를 전역 상태 갱신이 덮어쓰지 않게 한다.
         var installing = false;
 
+        // A167(v0.171.0): 남은 시간 한 줄. 1초 타이머와 Render 양쪽에서 부른다.
+        //  · 확인 중이면 남은 시간 대신 진행을 말한다.
+        //  · 예정 시각이 없거나(불가 빌드 = 타이머 없음) 이미 지났으면 줄을 접는다 —
+        //    "0:00"을 오래 띄우지 않는다(틱과 틱 사이의 짧은 공백은 아무 말도 하지 않는 게 낫다).
+        void RenderCountdown()
+        {
+            if (UpdateCoordinator.IsChecking)
+            {
+                nextCheck.Text = "Checking for updates...";
+                nextCheck.Visibility = Visibility.Visible;
+                return;
+            }
+
+            if (UpdateCoordinator.NextCheckAt is not { } at)
+            {
+                nextCheck.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var left = at - DateTimeOffset.UtcNow;
+            if (left <= TimeSpan.Zero)
+            {
+                nextCheck.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            // 올림으로 세어 1초 미만이 "0:00"이 되지 않게 한다(0:01에서 바로 접힌다).
+            var seconds = (int)Math.Ceiling(left.TotalSeconds);
+            nextCheck.Text = $"Next check in {seconds / 60}:{seconds % 60:00}";
+            nextCheck.Visibility = Visibility.Visible;
+        }
+
         void Render()
         {
             lastChecked.Text = UpdateCoordinator.DescribeLastCheck();
+            RenderCountdown();
 
             // 한 번 찾은 업데이트는 뒤이은 확인이 실패해도 적용 버튼을 유지한다.
             if (UpdateCoordinator.PendingUpdate is { } pending)
@@ -634,7 +688,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             }
             else if (UpdateCoordinator.IsChecking)
             {
-                status.Text = "Checking for updates...";
+                // A167(v0.171.0): "Checking for updates..."는 이제 위 카운트다운 줄이 말한다 —
+                // 같은 문장을 두 줄에 겹쳐 띄우지 않으려고 여기서는 비운다(전달되는 정보는 그대로).
+                status.Text = string.Empty;
             }
             else if (UpdateCoordinator.LastCheckError.Length > 0)
             {
@@ -661,8 +717,28 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             installing = false;
         };
 
+        // A167(v0.171.0): 카운트다운 전용 1초 타이머. Changed는 2분에 한 번(확인 시작·종료)뿐이라
+        // 초 단위 표시를 그것만으로는 못 만든다.
+        // 수명 규칙 — 이 뷰 하나당 타이머 하나이고, 화면에 붙어 있는 동안에만 돈다:
+        //  · 생성: 필드 초기화 한 곳뿐(_countdownTimer). 여기서는 Tick만 매단다 —
+        //    이 메서드 자체가 생성자 → Build()에서 딱 한 번 불리므로 Tick 구독도 한 번뿐이다.
+        //  · 시작: Loaded. 반복 로드돼도 같은 인스턴스를 다시 Start할 뿐 새로 만들지 않는다.
+        //  · 정지: Unloaded. 설정 화면을 닫으면 멈추고, 멈춘 DispatcherTimer는 디스패처가 붙들지
+        //    않으므로 뷰와 함께 수거된다. 설정을 열 때마다 새 SettingsView가 만들어지지만
+        //    (MainWindow.ShowSettingsAsync) 앞 뷰의 타이머는 그 뷰의 Unloaded에서 이미 멈춰 있다.
+        _countdownTimer.Tick += (_, _) => RenderCountdown();
+
         UpdateCoordinator.Changed += Render;
-        Unloaded += (_, _) => UpdateCoordinator.Changed -= Render;
+        Loaded += (_, _) =>
+        {
+            RenderCountdown();          // 화면에 붙는 즉시 한 번 — 첫 1초를 빈 줄로 두지 않는다
+            _countdownTimer.Start();
+        };
+        Unloaded += (_, _) =>
+        {
+            UpdateCoordinator.Changed -= Render;
+            _countdownTimer.Stop();
+        };
         Render();
 
         // A114(v0.136.0): 설정 화면 진입마다 즉시 1회 확인. 이 뷰는 설정을 열 때마다 새로 만들어지므로
@@ -709,6 +785,24 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             updateButton.IsEnabled = true;
         }
     }
+
+    /// <summary>
+    /// A162(v0.171.0): 축약한 설명 줄 바로 아래 붙는 "Learn more" 링크.
+    /// 형태는 이 화면의 기존 선례(About 줄의 저장소 링크·하단 바 Patreon 링크)와 같은
+    /// <see cref="HyperlinkButton"/>이다 — 문장 안에 인라인 Hyperlink를 넣은 선례는 저장소에 없다.
+    /// <paramref name="anchor"/>는 사용자 가이드 두 벌(docs/USER-GUIDE.md · site/guide.html)이
+    /// 공유하는 소문자-하이픈 절 앵커. 위쪽 여백을 음수로 준 이유는 Root의 Spacing 12를 상쇄해
+    /// 설명 줄에 딸린 링크로 보이게 하기 위함이다(A25 defaults 줄과 같은 처리).
+    /// </summary>
+    private static HyperlinkButton LearnMore(string anchor) => new()
+    {
+        Content = "Learn more",
+        NavigateUri = Branding.GuideLink(anchor),
+        FontSize = 12,
+        Padding = new Thickness(0),
+        Margin = new Thickness(0, -8, 0, 0),
+        HorizontalAlignment = HorizontalAlignment.Left,
+    };
 
     /// <summary>섹션 머리글 추가.</summary>
     private void AddHeader(string text)
