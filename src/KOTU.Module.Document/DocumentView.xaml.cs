@@ -330,14 +330,11 @@ public sealed partial class DocumentView : UserControl,
         PageInfoText.Text = string.Empty;
         FileNameText.Text = Path.GetFileName(path);
 
-        // A49: Fit 버튼은 PDF 모드에서만. 파일이 바뀌면 버튼 표시도 Contain으로
-        // 회귀(A30 규칙, 기억 안 함) — 실제 배율 적용은 PdfPane.LoadAsync가 한다.
-        FitButton.Visibility = Visibility.Visible;
-        if (_lastFitOption != PdfFitMode.Contain)
-        {
-            _lastFitOption = PdfFitMode.Contain;
-            UpdateFitButton();
-        }
+        // A49→A145: Fit 조절기는 이제 항상 보이고(텍스트 모드는 비활성 "1/1") PDF에서 4옵션이
+        // 활성화된다. 파일이 바뀌면 버튼 표시도 Contain으로 회귀(A30 규칙, 기억 안 함) —
+        // 실제 배율 적용은 PdfPane.LoadAsync가 한다.
+        _lastFitOption = PdfFitMode.Contain;
+        ShowPdfFitState();
 
         var ok = await _pdfPane.LoadAsync(path); // 실패 다이얼로그는 패널이 띄운다
         if (seq != _openSeq) return;             // 그새 다른 파일이 열렸다
@@ -363,7 +360,7 @@ public sealed partial class DocumentView : UserControl,
         _pdfPane.Clear();
         _pdfPane.Visibility = Visibility.Collapsed;
         PageInfoText.Visibility = Visibility.Collapsed;
-        FitButton.Visibility = Visibility.Collapsed; // A49: 텍스트 에디터 모드는 Fit 대상 아님
+        ShowTextFitState(); // A145: 숨기지 않고 비활성 "1/1"로 (구 A49의 Collapsed를 대체)
     }
 
     // ---------- PDF 키보드 스크롤 (A121) ----------
@@ -424,7 +421,41 @@ public sealed partial class DocumentView : UserControl,
     private PdfFitMode _lastFitOption = PdfFitMode.Contain;
 
     /// <summary>
+    /// A145: PDF 모드 진입 — Fit 조절기(본체 + 화살표) 활성. 본체 내용·툴팁은 UpdateFitButton()이
+    /// 마지막 옵션으로 맞춘다. 짝은 아래 ShowTextFitState() — 활성/비활성 전환은 이 한 쌍만 한다.
+    /// </summary>
+    private void ShowPdfFitState()
+    {
+        FitButton.IsEnabled = true;
+        FitOptionsButton.IsEnabled = true;
+        ToolTipService.SetToolTip(FitOptionsButton, "Fit options"); // 형제 모듈 XAML 고정값과 동일
+        UpdateFitButton();
+    }
+
+    /// <summary>
+    /// A145: 텍스트 에디터·빈 화면 — 표시만 하는 비활성 "1/1"(텍스트는 확대/축소 대상이 없어
+    /// 옵션이 무의미하다 — 부록 B 67, 1차는 표시만). 구 A49의 Collapsed 분기를 대체한다 —
+    /// 조절기가 항상 보여 문서 바 폭이 모드 전환에 출렁이지 않는다.
+    /// 비활성이라 A·F 키도 HotkeySupport의 IsEnabled 게이트에서 통과된다(타이핑 우선 —
+    /// 종전 Visibility 게이트와 같은 효과). 표기 "1/1"은 트레이(A138)의 텍스트 문서 표기와
+    /// 같은 값이다(페이지 1/1 — Fit 모드 아이콘이 아니라 고정 상태 표기).
+    /// 실기기 확인 포인트: WinUI는 비활성 컨트롤 위에서 툴팁이 안 뜰 수 있다 — 안 뜨면
+    /// 표기("1/1")만으로 충분한지 사용자 판단을 받는다.
+    /// </summary>
+    private void ShowTextFitState()
+    {
+        FitButton.IsEnabled = false;
+        FitOptionsButton.IsEnabled = false;
+        FitButton.Content = new TextBlock { Text = "1/1", FontSize = 13 };
+        ToolTipService.SetToolTip(FitButton, "Text documents are always 1:1");
+        ToolTipService.SetToolTip(FitOptionsButton, "Text documents are always 1:1");
+    }
+
+    /// <summary>
     /// A30 규격: Fit 버튼 본체 내용(4옵션 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
+    /// A144: 본체가 SplitButton에서 일반 Button(32×32)이 됐다 — 화살표는 별도
+    /// DropDownButton(FitOptionsButton, 플라이아웃 전담·A34 키 없음)이라 이 메서드는
+    /// 종전대로 본체(FitButton)만 만진다. PDF 모드에서만 불린다(텍스트 모드는 ShowTextFitState).
     /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
     /// ⚠️ v0.174.1: PathIcon 인스턴스(UIElement)만이 아니라 **Geometry도 공유 금지** — WinUI
     /// Geometry는 부모가 하나뿐이라 공유 인스턴스를 PathIcon.Data에 걸면 XamlParseException
@@ -497,8 +528,10 @@ public sealed partial class DocumentView : UserControl,
         _pdfPane?.ApplyFit(option);
     }
 
-    /// <summary>A30 규격: 본체 클릭 = 버튼에 표시된 마지막 옵션 재적용.</summary>
-    private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args) =>
+    /// <summary>A30 규격: 본체 클릭 = 버튼에 표시된 마지막 옵션 재적용
+    /// (A144: SplitButton 본체 → 일반 Button — 시그니처만 RoutedEventArgs로 바뀌었다).
+    /// 텍스트 모드에서는 버튼이 비활성(A145)이라 이 핸들러에 못 온다.</summary>
+    private void OnFitClicked(object sender, RoutedEventArgs e) =>
         _pdfPane?.ApplyFit(_lastFitOption);
 
     /// <summary>플라이아웃 100%·A 키(A34) 공용 경로 — 구 1:1 버튼 자리(A111).</summary>
@@ -1102,9 +1135,9 @@ public sealed partial class DocumentView : UserControl,
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// **이 모듈은 에디터(TextBox)가 본문**이라 통과 규칙이 특히 중요하다 — 타이핑 중에는
     /// HotkeySupport가 A·F를 삼키지 않고 글자를 그대로 흘려보낸다(A32/A84 규칙 재사용).
-    /// 100%(A)·Fit(F)은 PDF에서만 보이는 Fit 버튼에 걸리므로, 텍스트 모드(Collapsed)에서는
-    /// 키도 동작하지 않는다 — A111에서 1:1 버튼이 사라져 A의 가늠자도 이 버튼이 됐다
-    /// (구 1:1 버튼도 같은 조건으로 숨던 자리라 동작 조건은 무변경).
+    /// 100%(A)·Fit(F)은 PDF에서만 활성인 Fit 본체(FitButton)에 걸리므로, 텍스트 모드
+    /// (A145에서 Collapsed → 비활성 "1/1"로 바뀌었다)에서는 키도 동작하지 않는다 —
+    /// HotkeySupport.Register의 IsEnabled 게이트가 종전 Visibility 게이트와 같은 효과를 낸다.
     /// 저장은 Ctrl+S 그대로(A84의 유일한 Ctrl 예외) — XAML 액셀러레이터에 남겨 둔다.
     /// </summary>
     private void SetupHotkeys()
@@ -1112,6 +1145,6 @@ public sealed partial class DocumentView : UserControl,
         HotkeySupport.Register(this, FitButton, ActualSizeKey,
             () => SelectFitOption(PdfFitMode.ActualSize));
         HotkeySupport.Register(this, FitButton, FitKey, () => _pdfPane?.ApplyFit(_lastFitOption));
-        UpdateFitButton(); // Fit 툴팁은 표시 상태를 따라가므로 초기값도 여기서 만든다
+        ShowTextFitState(); // A145: 초기 상태(파일 없음)도 텍스트 상태와 같은 비활성 "1/1"
     }
 }

@@ -132,16 +132,19 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// 최소 창 폭 720(바 폭 약 656)에서는 시크 슬라이더가 0으로 밀리고 우측 ⛶가 잘린다.
     /// 임계값 이력: A40 760(실측 오차 여유 포함) → A99에서 열기 버튼 제거로 42px(버튼 36 + 간격 6)
     /// 감소 → **718** → A106(v0.132.0)에서 1칸 버튼이 36→32가 되어 **698** →
-    /// A111(v0.133.0)에서 1:1 버튼이 사라져 **660**.
-    /// A111분 −38의 근거(TransportBar 요소 직접 계수 — 남은 요소의 폭은 무변경):
-    ///   1칸 버튼 1개 −32 (구 1:1 c8) + 칸 간격 1개 −6 (간격 10개 → 9개) = −38.
+    /// A111(v0.133.0)에서 1:1 버튼이 사라져 **660** → A144에서 Fit이 84→64가 되어 **640**.
+    /// A144분 −20의 근거(TransportBar 요소 직접 계수 — 다른 요소의 폭은 무변경):
+    ///   Fit 칸 c8이 SplitButton 84 → 본체 32 + 화살표 32(같은 칸의 StackPanel, 간격 0) = 64.
     ///   지금 남은 고정 폭: 재생 c0(32) · 음소거 c4(32) · 볼륨 c5(96) · 배속 c6(84) · 자막 c7(32) ·
-    ///   Fit c8(84) · 전체화면 c9(32) + 시간 텍스트 c1/c3 + 간격 6×9.
+    ///   Fit c8(64) + 시간 텍스트 c1/c3 + 간격 6×8.
+    /// ⚠️ A151이 전체화면 c9(버튼 32 + 간격 6 = 38)를 제거했을 때 이 임계는 내리지 않았다
+    ///   (660 유지 — 그 38은 지금도 여유분으로 남아 있다). 이번 A144는 자기 몫 −20만 반영한다 —
+    ///   추가 인하(−38)는 별도 판단 대상(등재 후보)으로 보고만 해 둔다.
     /// 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
     /// </summary>
     private void UpdateCompactTransport(double width)
     {
-        var visibility = width < 660 ? Visibility.Collapsed : Visibility.Visible;
+        var visibility = width < 640 ? Visibility.Collapsed : Visibility.Visible;
         VolumeSlider.Visibility = visibility;
         PositionText.Visibility = visibility;
         DurationText.Visibility = visibility;
@@ -808,6 +811,9 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     /// <summary>
     /// A30: Fit 버튼 본체 내용(4옵션 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
+    /// A144: 본체가 SplitButton에서 일반 Button(32×32)이 됐다 — 화살표는 별도
+    /// DropDownButton(FitOptionsButton, 플라이아웃 전담·A34 키 없음·툴팁은 XAML 고정)이라
+    /// 이 메서드는 종전대로 본체(FitButton)만 만진다.
     /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
     /// ⚠️ v0.174.1: PathIcon 인스턴스(UIElement)만이 아니라 **Geometry도 공유 금지** — WinUI
     /// Geometry는 부모가 하나뿐이라 공유 인스턴스를 PathIcon.Data에 걸면 XamlParseException
@@ -1010,7 +1016,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     }
 
     /// <summary>A30: 본체 클릭 = 버튼에 표시된 마지막 옵션 적용.</summary>
-    private void OnFitClicked(SplitButton sender, SplitButtonClickEventArgs args) => ApplyLastFitOption();
+    private void OnFitClicked(object sender, RoutedEventArgs e) => ApplyLastFitOption();
 
     /// <summary>Fit 본체 클릭·F 키(A34) 공용 경로 — 플라이아웃이 아니라 마지막 옵션 재적용이다.</summary>
     private void ApplyLastFitOption()

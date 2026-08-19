@@ -75,11 +75,13 @@
                  CI는 컴파일만 하므로 이 오류를 못 잡는다 — 런타임 리소스 키 참조 주의.
                  BasedOn이 없어도 기본 ControlTemplate은 유지된다: WinUI는 명시 스타일에
                  Template setter가 없으면 컨트롤의 기본 스타일 템플릿을 그대로 쓴다
-                 (SplitButton 3곳이 인라인 값만으로 정상 동작하는 것과 같은 원리).
+                 (구 Fit SplitButton 3곳이 인라인 값만으로 정상 동작했던 것과 같은 원리).
                  Button·ToggleButton의 DefaultButtonStyle·DefaultToggleButtonStyle은
                  파싱 순서상 실기기에서 해석 성공이 확인돼 그대로 둔다 — 이후 같은
                  예외가 이 키들로 나오면 여기와 똑같이 BasedOn만 제거하면 된다.
-                 SplitButton(Fit)만 예외: 같은 값(84×32)을 뷰에서 직접 지정한다(3곳). -->
+                 Fit 조절기(A144에서 SplitButton → 본체 Button + 화살표 DropDownButton 32×32
+                 2개로 재구성, 3모듈)의 화살표만 예외: CornerRadius 좌/우 분리가 필요해
+                 전역 스타일 대신 뷰에서 인라인 값으로 지정한다(위 BasedOn 금지 사유와 동일 계열). -->
             <Style x:Key="BottomBarButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="Width" Value="32" />
                 <Setter Property="Height" Value="32" />
