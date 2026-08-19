@@ -148,8 +148,15 @@
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     <SplitButton.Flyout>
                         <MenuFlyout Placement="Top">
-                            <!-- 100%는 아이콘 없이 글자만 — 검증된 글리프가 없다(A111 확정) -->
-                            <MenuFlyoutItem Text="100%" Click="OnFitActualSizeClick" />
+                            <!-- A143: 100% 아이콘 = App.xaml의 ActualSizeIconGeometry(직접 그린 벡터).
+                                 A111 때는 "검증된 글리프가 없다"는 이유로 이 항목만 글자뿐이었는데,
+                                 형제 3개와 시각 언어를 맞추려고 PathIcon으로 해소했다
+                                 (형제는 Segoe 글리프, 여기만 PathIcon인 이유가 이것이다). -->
+                            <MenuFlyoutItem Text="100%" Click="OnFitActualSizeClick">
+                                <MenuFlyoutItem.Icon>
+                                    <PathIcon Data="{StaticResource ActualSizeIconGeometry}" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                             <MenuFlyoutItem Text="Contain" Click="OnFitContainClick">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE9A6;" />

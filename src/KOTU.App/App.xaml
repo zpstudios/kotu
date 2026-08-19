@@ -131,6 +131,14 @@
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
             </Style>
+            <!-- A143: Fit "100%"(원본 크기) 아이콘. Segoe에 쓸 만한 글리프가 없다는 것이 A111 판정이라
+                 벡터로 직접 그린다. 형태 = 본체 표기로 쓰던 "1:1"을 그대로 도형화한 것(의미 인지 보존).
+                 16x16 좌표계 기준 — PathIcon은 도형을 스케일하지 않고 그대로 그리므로 이 크기가 곧 표시 크기다.
+                 3곳(이미지·문서·영상 플라이아웃)과 본체 3벌이 이 한 벌을 참조한다. 모양을 바꾸려면 여기만 고친다.
+                 ⚠️ Figures는 한 줄로 유지할 것 — 줄바꿈·들여쓰기가 path 미니언어 파서에 그대로 들어간다.
+                 Geometry는 여러 PathIcon이 공유해도 되지만 PathIcon 인스턴스(UIElement)는 공유 불가다. -->
+            <PathGeometry x:Key="ActualSizeIconGeometry"
+                          Figures="M 2.3,5.0 L 4.2,3.0 L 5.0,3.0 L 5.0,11.4 L 3.5,11.4 L 3.5,5.0 Z M 1.8,11.4 L 6.7,11.4 L 6.7,13.0 L 1.8,13.0 Z M 7.4,6.0 L 8.8,6.0 L 8.8,7.4 L 7.4,7.4 Z M 7.4,9.6 L 8.8,9.6 L 8.8,11.0 L 7.4,11.0 Z M 10.5,5.0 L 12.4,3.0 L 13.2,3.0 L 13.2,11.4 L 11.7,11.4 L 11.7,5.0 Z M 10.0,11.4 L 14.9,11.4 L 14.9,13.0 L 10.0,13.0 Z" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

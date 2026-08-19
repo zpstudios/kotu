@@ -231,7 +231,7 @@ Image, Video and PDF share one Fit control with four options:
 
 | Option | Result |
 |---|---|
-| **100%** | actual size, one image pixel per screen pixel. The button then reads `1:1` |
+| **100%** | actual size, one image pixel per screen pixel. The button then shows the 1:1 icon |
 | **Contain** | the whole thing fits in the view. Never enlarged — smaller files stay at their own size |
 | **Fit width** | fills the width; the other axis scrolls |
 | **Fit height** | fills the height |

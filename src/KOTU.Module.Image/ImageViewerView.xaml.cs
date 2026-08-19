@@ -2,6 +2,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
@@ -664,8 +665,12 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     }
 
     /// <summary>
-    /// A30 규격: Fit 버튼 본체 내용(1:1 텍스트 / Contain·좌우·상하 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
-    /// 100%는 검증된 글리프가 없어 기존 1:1 버튼의 표기(FontSize 13 텍스트)를 그대로 승계한다.
+    /// A30 규격: Fit 버튼 본체 내용(4옵션 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
+    /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 App.xaml의
+    /// ActualSizeIconGeometry를 쓰는 PathIcon(부록 B 69 — 4옵션 시각 언어 통일).
+    /// ⚠️ PathIcon 인스턴스는 UIElement라 공유할 수 없다(두 번째 부모에 붙이는 순간 터진다).
+    /// 캐시 필드 하나로 돌려쓰지 말고 호출마다 새로 만들 것 — 공유해도 되는 것은 Geometry뿐이고,
+    /// 그 한 벌이 App.xaml 리소스다(플라이아웃의 100% 항목도 같은 키를 StaticResource로 본다).
     /// </summary>
     private void UpdateFitButton()
     {
@@ -675,12 +680,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
                 ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
             FitMode.FitHeight =>
                 (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
-            FitMode.ActualSize => (new TextBlock
+            FitMode.ActualSize => (new PathIcon
             {
-                Text = "1:1",
-                FontSize = 13,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
+                Data = (Geometry)Application.Current.Resources["ActualSizeIconGeometry"],
             }, "Actual size"),
             _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
                 "Contain - the whole image fits, never enlarged"),
