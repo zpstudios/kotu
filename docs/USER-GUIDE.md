@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.188.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.192.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -143,8 +143,10 @@ Seven modules. Switch between them from the menu at the bottom left.
 - Closing or switching away with unsaved changes asks first: **Save** / **Don't save** / **Cancel**.
 - Files larger than 4 MB open read-only, showing the first 4 MB.
 - `Tab` inserts a tab character in the editor.
-- The text sits in a centre column at most 900 pixels wide. In a wider window the empty space is
-  split evenly on both sides; a narrower window is unaffected.
+- The text fills the full width of the window. To make it larger or smaller, zoom with
+  `Ctrl`+wheel — 50% to 300% of the normal size, 10% per notch. The current level shows in the
+  bottom bar, and one level applies everywhere: it is remembered across files, windows and
+  restarts. Zooming never touches the file itself.
 - Very faint guide lines mark the top and bottom of each line of text, `¶` marks a line break and
   `·EOF` marks the end of the file. They are drawn over the text and never become part of it.
 
@@ -382,6 +384,7 @@ file list and in the thumbnails it selects the focused item instead.
 | PDF | `Ctrl`+wheel | zoom |
 | PDF | left-button drag | push the pages around |
 | Text editor | wheel | scroll |
+| Text editor | `Ctrl`+wheel | zoom the text, 50%–300% |
 | File browser, side panels | wheel | scroll |
 | File browser | double-click | open (folders: go in) |
 | File browser | `Shift`+double-click | open in a new window |

@@ -21,9 +21,11 @@ namespace KOTU.Module.Document;
 /// <b>A142 추가분</b>: ①ⓐ 스크롤 중간(IsIntermediate) 이벤트는 50ms 간격으로 합쳐 그리고 최종
 /// 이벤트만 즉시 그린다(마지막 상태 렌더 보장) · ①ⓑ 전문 텍스트는 소유자(DocumentView)의
 /// 편집당 1회 스냅샷(_textProvider)을 함께 써서 Text 게터의 전문 마샬링 복사를 늘리지 않는다.
-/// ③ 행 번호 거터를 본문 컬럼 <b>왼쪽 여백(캔버스 음수 x)</b>에 그린다 — 레이아웃(MaxWidth·정렬)은
-/// 일절 건드리지 않으므로 A115/A120/A171의 "EditorBox·DecorLayer 같은 제약 = 같은 원점" 계약이
-/// 그대로다(여백이 모자라면 거터만 숨긴다). ⑤ 가이드는 글자 상·하에서 GuideGap만큼 띄우고,
+/// ③ 행 번호 거터를 본문 텍스트 왼끝(pad.Left)의 왼쪽에 그린다 — 레이아웃(정렬·폭)은
+/// 일절 건드리지 않으므로 A115의 "EditorBox·DecorLayer 같은 제약 = 같은 원점" 계약이
+/// 그대로다(자리가 모자라면 거터만 숨긴다. A181: 폭 제한 폐지로 그 자리는 컬럼 왼쪽 여백이
+/// 아니라 소유자가 왼쪽 패딩에 예약한 구간이 됐다 — GutterReserveWidth 주석 참고).
+/// ⑤ 가이드는 글자 상·하에서 GuideGap만큼 띄우고,
 /// 인접 줄과 겹침·역전이면 두 줄 경계의 중점에 한 선으로 병합한다.
 ///
 /// <b>실패 안전(설계 의무)</b>: 내부 ScrollViewer(템플릿 ContentElement) 취득은 기본 템플릿
@@ -51,10 +53,20 @@ internal sealed class EditorDecor
 
     // A142 ③: 행 번호 거터. 불투명도는 본문(1.0)보다 옅고 가이드(0.08)보다 진한 중간값(0.4 확정).
     // 폭 = 최대 줄 번호 자릿수 × GutterDigitWidth(우측 정렬 고정 폭이라 별도 측정이 필요 없다).
+    // A181: 아래 세 치수(폰트·자릿폭·간격)는 100% 기준값이다 — 실값은 전부 × _scale(본문과 같은
+    // 배율로 함께 커지고 작아진다). GuideGap·GuideOpacity 등 나머지는 배율과 무관하다(헤어라인
+    // 미학 — 가이드 위치·높이는 어차피 실측 rect가 배율을 반영한다).
     private const double GutterOpacity = 0.4;
     private const double GutterFontSize = 12;
     private const double GutterDigitWidth = 8;  // 자릿수당 예약 폭(px) — 12px 폰트 숫자에 여유 포함
     private const double GutterTextGap = 12;    // 번호 오른끝과 본문 텍스트 왼끝(pad.Left) 사이 간격(px)
+
+    /// <summary>
+    /// A181: 소유자(DocumentView)가 거터 자리를 왼쪽 패딩에 예약할 때 쓰는 산식 — 렌더의 거터
+    /// 지오메트리(RenderCore)와 같은 치수 상수에서 나와야 예약과 실그림이 어긋나지 않는다.
+    /// </summary>
+    internal static double GutterReserveWidth(int digits, double scale) =>
+        (GutterTextGap + digits * GutterDigitWidth) * scale;
 
     // A142 ①ⓐ: 스크롤 중간 이벤트의 렌더 상한(초당 ~20회). 최종(IsIntermediate=false) 이벤트는
     // 이 스로틀을 거치지 않고 즉시 그린다 — 스크롤이 멈춘 화면에 옛 장식이 남지 않게(함정 3).
@@ -70,6 +82,10 @@ internal sealed class EditorDecor
     // A142 ①ⓑ: 전문 텍스트 공급원 — DocumentView의 편집당 1회 스냅샷(EditorText)을 넘겨받는다.
     // 종전의 자체 _text 캐시를 대체한다(더티 판정과 렌더가 같은 복사본을 나눠 쓴다).
     private readonly Func<string> _textProvider;
+
+    // A181: 본문 줌 배율(1.0 = 100%). 거터·마커 폰트와 거터 지오메트리에만 곱한다 — 가이드
+    // 위치·높이는 실측 rect가 이미 배율(FontSize)을 반영하므로 여기서 더 곱할 것이 없다.
+    private double _scale = 1.0;
 
     private ScrollViewer? _scroll; // 템플릿 내부 ContentElement — 표시 후 지연 취득(PdfPane 선례)
     private bool _disabled;        // 폴백: 한 번 끄면 뷰 수명 동안 유지(예외·크래시 금지)
@@ -114,9 +130,9 @@ internal sealed class EditorDecor
         // 플래그만 — 무게 금지(A113). 전문 스냅샷 무효화는 소유자(DocumentView)가 한다(A142 ①ⓑ).
         _editor.TextChanged += (_, _) => Invalidate();
         _editor.SizeChanged += (_, _) => { UpdateClip(); Invalidate(); };
-        // A142 ③: 창(뷰) 폭이 바뀌어도 에디터는 MaxWidth에 걸려 SizeChanged가 안 오는 구간이
-        // 있다(900 초과 폭) — 좌우 여백은 그때도 변하므로 뷰 쪽 크기 변화를 따로 받아야
-        // 거터 표시 여부·클립 좌변이 따라간다.
+        // A142 ③: 창(뷰) 폭이 바뀌어도 에디터 쪽 SizeChanged가 안 오는 구간(당시 MaxWidth 초과
+        // 폭)을 메우던 구독이다. A181에서 폭 제한이 사라져 둘은 함께 리사이즈되지만, 렌더 산술이
+        // 뷰 폭(margin)을 읽는 이상 방어 구독으로 유지한다(플래그 검사뿐이라 비용 없음).
         _themeSource.SizeChanged += (_, _) => { UpdateClip(); Invalidate(); };
         // 트리 레이아웃마다 불리지만 플래그 검사뿐이라 상시 구독 비용이 없다. 텍스트·크기 변경은
         // 새 레이아웃이 반영된 뒤에 재야 해서(rect가 그 레이아웃을 읽는다) 이 시점으로 미룬다.
@@ -145,6 +161,20 @@ internal sealed class EditorDecor
     public void Invalidate()
     {
         if (!_disabled) _pending = true;
+    }
+
+    /// <summary>
+    /// A181: 본문 줌 배율 — 거터·마커(¶·EOF) 폰트가 본문과 같은 배율로 따라온다. 풀에 이미 만들어
+    /// 둔 요소의 FontSize도 함께 갱신한다(풀은 뷰 수명 동안 재사용된다 — TakeMarker/TakeNumber).
+    /// 위치·폭 재계산은 Invalidate로 다음 레이아웃에 미룬다(렌더 경로가 _scale을 읽는다).
+    /// </summary>
+    public void SetScale(double scale)
+    {
+        if (_disabled || Math.Abs(scale - _scale) < 0.0001) return;
+        _scale = scale;
+        foreach (var marker in _markers) marker.FontSize = MarkerFontSize * scale;
+        foreach (var number in _numbers) number.FontSize = GutterFontSize * scale;
+        Invalidate();
     }
 
     /// <summary>
@@ -223,16 +253,19 @@ internal sealed class EditorDecor
         var len = text.Length;
         var pad = _editor.Padding;
 
-        // A142 ③: 거터 지오메트리. 번호는 본문 컬럼 왼쪽(음수 x = A120 중앙 배치의 좌측 여백,
-        // 24px 패딩이 남으면 그 안쪽도)에 우측 정렬로 얹는다 — 레이아웃은 무변경이라 A115/A120/
-        // A171 계약(두 요소 같은 MaxWidth = 같은 원점)은 그대로다. 여백이 폭만큼 안 나오는
-        // 좁은 창에서는 본문을 덮는 대신 거터를 통째로 숨긴다(경계 조건 처리 — 보고됨).
+        // A142 ③: 거터 지오메트리. 번호는 본문 텍스트 왼끝(pad.Left)의 왼쪽에 우측 정렬로 얹는다 —
+        // 레이아웃은 무변경이라 A115 계약(두 요소 같은 제약 = 같은 원점)은 그대로다.
+        // A181: 폭 제한(A120/A171 MaxWidth) 폐지로 컬럼 왼쪽 여백(음수 x)은 보통 0이다 — 대신
+        // 소유자가 거터 자리를 왼쪽 패딩에 예약해(DocumentView.UpdateEditorPadding, 산식은 위
+        // GutterReserveWidth 공유) 거터는 패딩 안쪽(x ≥ 0)에 그려진다. 자리가 안 나오면(예약보다
+        // 자릿수가 커졌다) 본문을 덮는 대신 거터를 통째로 숨긴다(경계 조건 처리 — 종전과 동일).
+        // 치수 × _scale = 본문과 같은 배율(A181 — 상수 블록 주석 참고).
         EnsureLineStarts(text);
         var digits = 1;
         for (var n = _lineStarts.Length; n >= 10; n /= 10) digits++;
-        var gutterWidth = digits * GutterDigitWidth;
-        var margin = Math.Max(0, (_themeSource.ActualWidth - vw) / 2); // 컬럼 왼쪽의 가용 여백
-        var gutterX = pad.Left - GutterTextGap - gutterWidth;
+        var gutterWidth = digits * GutterDigitWidth * _scale;
+        var margin = Math.Max(0, (_themeSource.ActualWidth - vw) / 2); // 컬럼 왼쪽의 가용 여백(보통 0)
+        var gutterX = pad.Left - GutterTextGap * _scale - gutterWidth;
         var gutterVisible = gutterX >= -margin; // 클립 좌변(-margin)과 같은 기준
 
         var idx = FirstVisibleIndex(len);
@@ -479,7 +512,7 @@ internal sealed class EditorDecor
         }
         var made = new TextBlock
         {
-            FontSize = MarkerFontSize,
+            FontSize = MarkerFontSize * _scale, // A181: 본문과 같은 배율(변경은 SetScale이 일괄 갱신)
             Opacity = MarkerOpacity,
             Foreground = _brush,
             IsHitTestVisible = false,
@@ -500,7 +533,7 @@ internal sealed class EditorDecor
         }
         var made = new TextBlock
         {
-            FontSize = GutterFontSize,
+            FontSize = GutterFontSize * _scale, // A181: 본문과 같은 배율(변경은 SetScale이 일괄 갱신)
             Opacity = GutterOpacity,
             Foreground = _brush,
             TextAlignment = TextAlignment.Right, // 우측 정렬 선례 = HardwareView.xaml.cs:470

@@ -132,7 +132,8 @@ public sealed partial class DocumentView : UserControl,
     // 실패하면 스스로 꺼진다 — 이 뷰는 모드 전환(열기·PDF) 시점만 알려 주면 된다.
     private readonly EditorDecor _decor;
 
-    /// <summary>A171: 본문 컬럼 최대 폭 설정을 읽는다(선례 = AudioPlayerView의 _settings).</summary>
+    /// <summary>A171→A181: 줌 배율(document.zoom)을 읽고 쓴다(선례 = AudioPlayerView의 _settings).
+    /// A171의 폭 설정은 A181에서 사라졌지만 주입 배선은 이 줌 저장이 그대로 재사용한다.</summary>
     private readonly ISettingsService _settings;
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
@@ -148,7 +149,19 @@ public sealed partial class DocumentView : UserControl,
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
         // A115: 에디터 장식(가이드·¶·EOF·A142 행 번호). 전문 텍스트는 공유 스냅샷으로 공급한다(A142 ①ⓑ).
         _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText);
-        ApplyEditorMaxWidth(); // A171: XAML 초기값(900) 위에 설정값을 얹는다
+
+        // A181: 저장된 줌 배율(전역 1벌)을 XAML 기본값(FontSize 14 = 100%) 위에 얹는다.
+        // 파일을 열기 전에 적용해야 대용량 텍스트의 랩 계산이 최종 폰트로 한 번에 끝난다(A177).
+        // 손으로 고친 settings.json의 범위 밖 값은 조용히 범위로 접는다(A171 음수 방어와 같은 태도).
+        _zoomPercent = Math.Clamp(
+            settings.Get(DocumentModule.ZoomSettingKey, DefaultZoomPercent),
+            MinZoomPercent, MaxZoomPercent);
+        ApplyZoom();
+        // A181: Ctrl+휠 배선 지점(TextBox 내장 ScrollViewer의 콘텐츠 프레젠터)은 템플릿 전개 후에야
+        // 존재하고, EditorBox는 Collapsed로 시작해 Loaded 시점에도 템플릿이 없다 — EditorDecor의
+        // ScrollViewer 훅과 같은 사정이라 같은 방식(레이아웃마다 재시도·상한 후 조용히 포기)을 쓴다.
+        // 플래그 검사뿐이라 상시 구독 비용은 없다(EnsureZoomWheelHook 주석 참고).
+        EditorBox.LayoutUpdated += (_, _) => EnsureZoomWheelHook();
 
         // A121: PDF 키보드 스크롤의 키 수신 지점. **터널링**(PreviewKeyDown)이라 PdfPane 안쪽
         // ListView·ScrollViewer의 내장 키 내비게이션보다 먼저 온다 — 버블링 KeyDown이면 그것들이
@@ -165,11 +178,7 @@ public sealed partial class DocumentView : UserControl,
         // 더는 버튼들을 밀어내지 않는다(넘치면 줄 자체가 스크롤한다). 게다가 이제는
         // 파일이 열려 있지 않을 때만 뜨는데, 그때는 페이지·Fit 표시가 아예 없어 자리도 넉넉하다.
 
-        Loaded += (_, _) =>
-        {
-            Focus(FocusState.Programmatic);
-            ApplyEditorMaxWidth(); // A171: 생성 시 1회 + 여기 1회 (아래 메서드 주석 참고)
-        };
+        Loaded += (_, _) => Focus(FocusState.Programmatic);
         Unloaded += (_, _) =>
         {
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
@@ -190,34 +199,171 @@ public sealed partial class DocumentView : UserControl,
             PlaceholderText.Visibility = Visibility.Visible;
     }
 
+    // ---------- 본문 줌 (A181 — A171 폭 설정 대체) ----------
+
     /// <summary>
-    /// A171(v0.173.0): 본문 컬럼 최대 폭을 설정(<see cref="DocumentModule.EditorMaxWidthSettingKey"/>)에서
-    /// 읽어 적용한다. 저장값 0 = 제한 없음 → <c>double.PositiveInfinity</c>
-    /// (WinUI의 "상한 없음" 표현. 선례 = ImageViewerView.xaml.cs:624-625).
-    ///
-    /// <b>이 메서드가 두 요소에 같은 값을 넣는 유일한 지점이다</b>(A120 제약 ⓐ) —
-    /// EditorBox와 DecorLayer의 레이아웃 제약이 어긋나면 A115 장식이 본문에서 통째로 밀린다.
-    /// 폭을 바꾸는 코드를 더 만들지 말고 반드시 여기를 거칠 것. 정렬(HorizontalAlignment)은
-    /// 건드리지 않는다 — Stretch의 constrained fallback이 중앙 배치를 만들고,
-    /// Center는 컬럼을 접고(A120) Left는 우측 검은 띠를 되살린다(A80).
-    ///
-    /// <b>실시간 전파를 만들지 않은 이유</b>(구현 시 결정): 설정 화면은 별도 뷰이고, 문서 모듈로
-    /// 돌아오는 길은 항상 뷰 재생성(IModule.CreateView)이라 값이 자연히 반영된다. 창마다 살아
-    /// 있는 뷰에 즉시 밀어 넣으려면 UiScale.Changed 같은 전역 이벤트 + 뷰별 구독 해제가 필요한데,
-    /// 이 값은 세션 중 몇 번 바꾸지 않는 취향 설정이라 그 배선을 하지 않는다.
-    ///
-    /// PDF 모드에는 <b>아무 영향이 없다</b> — PdfPane은 별도 요소이고 표시 폭은 자체 상한(1100)과
-    /// Fit 모드가 정한다(PdfPane.xaml.cs:89).
+    /// A181 기본 폰트 크기(= 100%). <b>XAML의 FontSize="14"와 반드시 같은 값</b> — 코드가 못 도는
+    /// 경로(디자이너)에서도 100% 모양이 남게 XAML 값을 지우지 않는 A171 관용구를 따른다.
     /// </summary>
-    private void ApplyEditorMaxWidth()
+    private const double BaseEditorFontSize = 14;
+
+    /// <summary>A181 기본 왼쪽 패딩. <b>XAML Padding="24,16,24,68"의 왼쪽 값과 반드시 같은 값</b> —
+    /// 거터 예약(UpdateEditorPadding)이 이 위에 얹힌다(위·오른쪽·아래는 건드리지 않는다).</summary>
+    private const double BaseEditorPaddingLeft = 24;
+
+    private const int DefaultZoomPercent = 100;
+    private const int MinZoomPercent = 50;   // A181 사양 범위 50~300, 단계 10
+    private const int MaxZoomPercent = 300;
+    private const int ZoomStepPercent = 10;
+
+    /// <summary>현재 줌(%) — 표시(ZoomText)·적용(FontSize)·저장(document.zoom)의 단일 출처.</summary>
+    private int _zoomPercent = DefaultZoomPercent;
+
+    /// <summary>정밀 휠(노치 120 미만 delta) 누적 — 한 노치가 될 때까지 모아 한 단계씩 스텝.</summary>
+    private int _wheelDeltaAccum;
+
+    /// <summary>거터 예약 자릿수(0 = 예약 없음 — 파일 없음·대용량(A177 장식 오프)·PDF).</summary>
+    private int _gutterDigits;
+
+    private int _zoomHookAttempts;
+    private bool _zoomHookDone; // 성공 또는 포기 — 이후 LayoutUpdated 검사는 즉시 반환
+
+    /// <summary>
+    /// A181: 현재 배율을 에디터에 적용한다 — ⓐ 본문 FontSize(랩 재계산 — ScaleTransform이 아니라
+    /// 실측 계열(A115 장식·A142 거터)과 정합하는 유일한 방식), ⓑ 장식 배율(거터·마커 폰트 —
+    /// EditorDecor.SetScale), ⓒ 거터 예약 패딩(배율에 비례), ⓓ 하단 바 % 표기.
+    /// EditorBox·DecorLayer의 레이아웃 제약(정렬·폭)은 일절 건드리지 않는다 — A115 좌표계 계약은
+    /// "두 요소 같은 제약"이고, FontSize·Padding은 EditorBox 내부 값이라 장식이 실측(rect·Padding
+    /// 실시간 읽기)으로 자연히 따라온다.
+    /// PDF 모드에는 아무 영향이 없다 — PdfPane은 별개 줌 체계(ZoomFactor·Fit)다.
+    /// </summary>
+    private void ApplyZoom()
     {
-        var stored = _settings.Get(
-            DocumentModule.EditorMaxWidthSettingKey, DocumentModule.DefaultEditorMaxWidth);
-        // 손으로 고친 settings.json이 음수·0을 넣으면 "제한 없음"으로 읽는다(0이 그 뜻이다).
-        // 삼항의 공통 타입을 추론에 맡기지 않고 못 박는다(int와 double이 섞인다 — CI가 유일한 컴파일러라 여지를 남기지 않는다).
-        double width = stored <= 0 ? double.PositiveInfinity : (double)stored;
-        EditorBox.MaxWidth = width;
-        DecorLayer.MaxWidth = width;
+        var scale = _zoomPercent / 100.0;
+        EditorBox.FontSize = BaseEditorFontSize * scale;
+        _decor.SetScale(scale);
+        UpdateEditorPadding();
+        UpdateZoomText();
+    }
+
+    /// <summary>
+    /// A181: 왼쪽 패딩 = 기본 24 + 거터 예약 폭. 폭 제한(A120/A171 MaxWidth) 폐지로 본문이 창
+    /// 전체를 쓰면서 거터(A142 ③)가 살던 컬럼 왼쪽 여백(캔버스 음수 x)이 사라졌다 — 대신
+    /// 에디터 자신의 왼쪽 패딩에 자리를 상시 확보한다. EditorDecor는 Padding을 실시간으로 읽어
+    /// (A152 주석) 그 안쪽(x ≥ 0, 클립 안)에 번호를 그리므로 별도 좌표 보정이 없다.
+    /// 예약 폭은 파일의 자릿수 + 1(편집으로 줄 수가 한 자릿수 늘어도 바로 안 숨게)이고 배율에
+    /// 비례한다(거터 폰트도 같은 배율 — 산식은 EditorDecor.GutterReserveWidth 한 곳).
+    /// </summary>
+    private void UpdateEditorPadding()
+    {
+        var reserve = _gutterDigits > 0
+            ? EditorDecor.GutterReserveWidth(_gutterDigits, _zoomPercent / 100.0)
+            : 0.0;
+        var pad = EditorBox.Padding;
+        EditorBox.Padding = new Thickness(BaseEditorPaddingLeft + reserve, pad.Top, pad.Right, pad.Bottom);
+    }
+
+    /// <summary>
+    /// A181: 하단 바 % 표기(이미지 ZoomText/A149 관용구 — 같은 값이면 대입하지 않는다).
+    /// 텍스트 문서가 열려 있는 동안 항상 표시(100% 포함), PDF·빈 화면·대용량 지연 대입 대기
+    /// (A177 — 그동안 _path는 null)는 빈 문자열.
+    /// </summary>
+    private void UpdateZoomText()
+    {
+        var text = _path is not null ? $"{_zoomPercent}%" : string.Empty;
+        if (ZoomText.Text == text) return;
+        ZoomText.Text = text;
+    }
+
+    /// <summary>
+    /// A181: 배율 변경의 단일 경로 — 범위로 접고, 적용(ApplyZoom)하고, 즉시 저장한다
+    /// (전역 1벌 — 다음에 여는 문서·창부터 자연 반영. 살아 있는 다른 창에 밀어 넣는 전파는
+    /// 만들지 않는다 — A171의 "실시간 전파 없음" 결정과 같은 이유).
+    /// </summary>
+    private void SetZoom(int percent)
+    {
+        var clamped = Math.Clamp(percent, MinZoomPercent, MaxZoomPercent);
+        if (clamped == _zoomPercent) return;
+        _zoomPercent = clamped;
+        ApplyZoom();
+        _settings.Set(DocumentModule.ZoomSettingKey, clamped);
+        _settings.Save(); // 즉시 저장(사양) — 설정 화면의 Set/Save 쌍과 같은 관용구
+    }
+
+    /// <summary>
+    /// A181: Ctrl+휠 배선 — TextBox 내장 ScrollViewer의 콘텐츠 프레젠터에 건다(버블 순서상
+    /// ScrollViewer보다 먼저 받아 기본 스크롤을 대체할 수 있는 지점 — A98/PdfPane.HookScroll과
+    /// 같은 이유·같은 방식). 템플릿 구조 의존이라 취득 실패는 EditorDecor.EnsureScrollHook과
+    /// 같은 폴백을 쓴다: 표시 후 레이아웃 3회까지 재시도하고 그래도 없으면 조용히 포기
+    /// (휠 줌만 비활성 — 편집 본기능 무영향).
+    /// </summary>
+    private void EnsureZoomWheelHook()
+    {
+        if (_zoomHookDone || EditorBox.Visibility != Visibility.Visible) return;
+        if (FindDescendant<ScrollContentPresenter>(EditorBox) is { } presenter)
+        {
+            // 참조는 보관하지 않는다 — 해제 경로가 없고(뷰와 함께 내려간다) 재탐색도 없다.
+            presenter.PointerWheelChanged += OnEditorWheel;
+            _zoomHookDone = true;
+            return;
+        }
+        if (EditorBox.ActualWidth > 0 && ++_zoomHookAttempts >= 3) _zoomHookDone = true;
+    }
+
+    /// <summary>
+    /// A181: 에디터 본문 위 Ctrl+휠 = 줌(노치당 10%p). 휠 단독은 손대지 않는다 — 문서는 스크롤이
+    /// 본분이라(이미지의 "휠 단독 = 줌" 사진 특례와 다르고, PDF의 Ctrl 게이트와 같다 —
+    /// PdfPane.OnPresenterWheel 관용구). Shift 등 다른 수정키 조합도 기본 처리에 양보한다.
+    /// 정밀 터치패드(120 미만 delta)는 한 노치만큼 모일 때까지 누적한다 — 부호만 보면 미세
+    /// 이벤트마다 10%씩 튀어 과속한다.
+    /// </summary>
+    private void OnEditorWheel(object sender, PointerRoutedEventArgs e)
+    {
+        if (!e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control)) return; // 휠 단독 = 스크롤(기본 처리)
+        e.Handled = true; // 내장 처리(Ctrl+휠 스크롤)보다 먼저 소비 — A98 관용구
+        var delta = e.GetCurrentPoint(EditorBox).Properties.MouseWheelDelta;
+        if (delta == 0) return;
+        _wheelDeltaAccum += delta;
+        var notches = _wheelDeltaAccum / 120; // 0을 향해 자르는 정수 나눗셈 — 잔여분은 다음 이벤트로
+        if (notches == 0) return;
+        _wheelDeltaAccum -= notches * 120;
+        SetZoom(_zoomPercent + notches * ZoomStepPercent);
+    }
+
+    /// <summary>
+    /// A181: 거터 예약용 논리 줄 수 — EditorDecor.EnsureLineStarts와 같은 셈법(CRLF는 한 개행,
+    /// 끝 개행 뒤의 빈 마지막 줄도 한 줄). 대용량(A177)은 부르지 않으므로 상한 1M 문자 1패스다.
+    /// </summary>
+    private static int CountLines(string text)
+    {
+        var lines = 1;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c != '\r' && c != '\n') continue;
+            if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n') i++;
+            lines++;
+        }
+        return lines;
+    }
+
+    private static int DigitCount(int value)
+    {
+        var digits = 1;
+        for (var n = value; n >= 10; n /= 10) digits++;
+        return digits;
+    }
+
+    /// <summary>EditorDecor.FindDescendant와 동일(모듈 파일 간 복제 선례 = PdfPane도 자체 보유).</summary>
+    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) return match;
+            if (FindDescendant<T>(child) is { } nested) return nested;
+        }
+        return null;
     }
 
     /// <summary>확장자로 텍스트/PDF 경로를 나눈다(A16).</summary>
@@ -345,6 +491,14 @@ public sealed partial class DocumentView : UserControl,
         _diskWriteTimeUtc = loaded.WriteTimeUtc; // A113 ⓓ: 외부 변경 판정의 기준 스탬프
         _diskLength = loaded.Length;
 
+        // A181: 거터(A142 ③) 자리 예약 — 자릿수+1을 왼쪽 패딩으로 확보한다(UpdateEditorPadding
+        // 주석 참고). Text 대입보다 먼저 잡아야 랩 계산이 최종 패딩으로 한 번에 끝난다.
+        // 대용량(A177)은 장식 자체가 꺼져 있어 예약하지 않는다(0 = 기본 패딩).
+        _gutterDigits = loaded.Text.Length > LargeDocumentChars
+            ? 0
+            : DigitCount(CountLines(loaded.Text)) + 1;
+        UpdateEditorPadding();
+
         _loadingText = true; // 프로그램적 설정 — dirty 아님
         EditorBox.Text = loaded.Text;
         _loadingText = false;
@@ -362,6 +516,7 @@ public sealed partial class DocumentView : UserControl,
         _decor.Invalidate(); // A115: 새 문서·표시 전환이 레이아웃에 반영된 뒤 장식을 다시 그린다
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
+        UpdateZoomText(); // A181: _path가 잡혔다 — 하단 바에 현재 배율 표시(항상, 100% 포함)
         _shownPath = path;
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
@@ -411,6 +566,7 @@ public sealed partial class DocumentView : UserControl,
         SetDirty(false);
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다
+        UpdateZoomText(); // A181: PDF는 별개 줌 체계 — 텍스트 배율 표기를 비운다(_path=null)
         PlaceholderText.Visibility = Visibility.Collapsed;
         _pdfPane.Visibility = Visibility.Visible;
         PageInfoText.Visibility = Visibility.Visible;

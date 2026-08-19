@@ -6,9 +6,6 @@ using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
-// A171: 문서 편집기 폭 설정의 키·기본값·선택지는 문서 모듈이 소유한다. 이름이 길어 별칭을 둔다
-// (별칭 선례 = InstanceIcon.cs의 GdiColor). 셸이 모듈 public static을 참조하는 선례 = ExplorerPane.
-using DocModule = KOTU.Module.Document.DocumentModule;
 
 namespace KOTU.App;
 
@@ -461,44 +458,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(scaleBox);
         Root.Children.Add(offListNote);
 
-        // A171(v0.173.0): 문서 편집기 본문 컬럼 최대 폭. 배율 콤보와 같은 관용구(Tag에 값 · 무변화
-        // 가드 · Set/Save)를 쓰되 알림 이벤트는 없다 — 문서 뷰는 모듈 전환 때마다 새로 만들어지므로
-        // 다음에 문서를 열 때 자연히 반영된다(근거는 DocumentView.ApplyEditorMaxWidth 주석).
-        // 키·기본값·선택지는 전부 문서 모듈이 소유한다(위 DocModule 별칭).
-        var editorWidthBox = new ComboBox { Header = "Document editor width", MinWidth = 200 };
-        foreach (var px in DocModule.EditorMaxWidths)
-            editorWidthBox.Items.Add(new ComboBoxItem { Content = $"{px} px", Tag = px });
-        editorWidthBox.Items.Add(new ComboBoxItem { Content = "Unlimited", Tag = 0 }); // 저장값 0
-
-        var storedWidth = _settings.Get(
-            DocModule.EditorMaxWidthSettingKey, DocModule.DefaultEditorMaxWidth);
-        var storedIndex = Array.IndexOf(DocModule.EditorMaxWidths, storedWidth);
-        // 0 이하 = Unlimited(마지막 항목). 목록에 없는 값(손으로 고친 settings.json)은 기본값 자리로.
-        editorWidthBox.SelectedIndex = storedWidth <= 0
-            ? DocModule.EditorMaxWidths.Length
-            : storedIndex >= 0
-                ? storedIndex
-                : Array.IndexOf(DocModule.EditorMaxWidths, DocModule.DefaultEditorMaxWidth);
-
-        editorWidthBox.SelectionChanged += (_, _) =>
-        {
-            var value = editorWidthBox.SelectedItem is ComboBoxItem { Tag: int chosen }
-                ? chosen
-                : DocModule.DefaultEditorMaxWidth;
-            if (value == _settings.Get(
-                DocModule.EditorMaxWidthSettingKey, DocModule.DefaultEditorMaxWidth)) return;
-            _settings.Set(DocModule.EditorMaxWidthSettingKey, value);
-            _settings.Save();
-        };
-        Root.Children.Add(editorWidthBox);
-        Root.Children.Add(new TextBlock
-        {
-            Text = "Maximum width of the text column. Plain text documents only (not PDF); "
-                 + "applies the next time a document is opened.",
-            FontSize = 12,
-            Opacity = 0.7,
-            TextWrapping = TextWrapping.Wrap,
-        });
+        // A171의 "Document editor width" 콤보는 A181에서 제거 — 본문은 항상 창 폭을 꽉 채우고,
+        // 크기 조절은 문서 편집기 안의 Ctrl+휠 줌(document.zoom, 즉시 저장)이 대신한다.
+        // 설정 화면 UI는 두지 않는다(뷰에서 직접 조작·표시하는 값이라 여기 둘 게 없다).
     }
 
     /// <summary>

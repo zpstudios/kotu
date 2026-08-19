@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.188.0</span>
+    <span class="asof">AS OF v0.192.0</span>
   </div>
 </section>
 
@@ -419,8 +419,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <em>Cancel</em>.</li>
           <li>Files larger than 4 MB open read-only, showing the first 4 MB.</li>
           <li><kbd>Tab</kbd> inserts a tab character in the editor.</li>
-          <li>The text sits in a centre column at most 900 pixels wide. In a wider window the empty space is
-              split evenly on both sides; a narrower window is unaffected.</li>
+          <li>The text fills the full width of the window. To make it larger or smaller, zoom with
+              <kbd>Ctrl</kbd>+wheel — 50% to 300% of the normal size, 10% per notch. The current level shows
+              in the bottom bar, and one level applies everywhere: it is remembered across files, windows and
+              restarts. Zooming never touches the file itself.</li>
           <li>Very faint guide lines mark the top and bottom of each line of text, <code>¶</code> marks a line
               break and <code>·EOF</code> marks the end of the file. They are drawn over the text and never
               become part of it.</li>
@@ -649,6 +651,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>PDF</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom</td></tr>
           <tr><td>PDF</td><td>left-button drag</td><td>push the pages around</td></tr>
           <tr><td>Text editor</td><td>wheel</td><td>scroll</td></tr>
+          <tr><td>Text editor</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom the text, 50%&ndash;300%</td></tr>
           <tr><td>File browser, side panels</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>File browser</td><td>double-click</td><td>open (folders: go in)</td></tr>
           <tr><td>File browser</td><td><kbd>Shift</kbd>+double-click</td><td>open in a new window</td></tr>
