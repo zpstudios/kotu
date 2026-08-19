@@ -1227,11 +1227,16 @@ public sealed partial class MainWindow : Window
             .FirstOrDefault(p => !string.IsNullOrEmpty(p));
         if (path is null) return;
 
-        // A93: 콘텐츠가 열려 있을 때 콘텐츠 영역 드랍 — 같은 종류(현재 모듈 담당 확장자)면
-        // 그 자리에서 새로 열고, 다른 종류면 담당 모듈의 새 인스턴스를 만들어 거기서 연다
-        // (WindowManager의 "파일로 새 창" 경로 재사용 — 담당 모듈이 없는 확장자도 그 경로에서
-        // 기존 "Unsupported file type" 안내로 떨어진다). 콘텐츠가 없으면 종전대로 현재 창 라우팅.
-        if (_currentFilePath is not null && _currentModule is { } module
+        // A187(A93의 완결): 판정 기준은 **현재 모듈뿐**이다 — 콘텐츠가 열려 있는지는 보지 않는다.
+        // 파일 모듈(빈 상태 S1 포함)에서 같은 종류(그 모듈 담당 확장자)면 그 자리에서 열고,
+        // 다른 종류면 담당 모듈의 새 인스턴스를 만들어 거기서 연다(WindowManager의 "파일로 새 창"
+        // 경로 재사용 — 담당 모듈이 없는 확장자도 그 경로에서 기존 "Unsupported file type" 안내로
+        // 떨어진다). A93 시절의 `_currentFilePath is not null` 조건이 빠지면서, 빈 이미지 모듈에
+        // 동영상을 떨어뜨리면 이 창을 갈아엎지 않고 새 인스턴스가 뜬다.
+        // 파일 모듈이 아닌 화면(H/W·설정·미지원 안내·시작 직후 기본 화면)은 담당 확장자라는 개념이
+        // 없으므로 IsFileModule 게이트로 걸러 **현행대로 이 창에서 연다** — 특히 시작 직후 화면은
+        // 기본 모듈(H/W)이라, 여기서 새 창을 띄우면 빈 셸을 두고 창이 하나 더 생긴다.
+        if (IsFileModule(_currentModule) && _currentModule is { } module
             && !ExplorerListing.MatchesExtension(path, module.SupportedExtensions))
         {
             _manager.OpenFileInNewWindow(path);
