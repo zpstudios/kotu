@@ -85,6 +85,11 @@ public partial class App : Application
         // 이 훅만은 모듈의 뷰 전용 워커 스레드에서 불린다(PNG 변환·파일 쓰기를 끝낸 그 워커에서
         // 이어서). 배선이 창 생성보다 앞서므로 모듈이 미배선 상태를 만나는 일은 없다.
         KOTU.Core.Integration.DesktopWallpaperHook.Setter = Integration.DesktopWallpaper.TrySet;
+        // A164: 오디오 모듈 "Input device" 훅 배선 — 같은 이유(모듈은 Core에만 의존 + COM
+        // interop은 셸에 격리, A105 TaskbarIdentity와 같은 격리 파일)로 비공개 IPolicyConfig
+        // 호출은 셸에만 둔다. UI 스레드(플라이아웃 클릭)에서 불리고 실패는 전부 false로
+        // 접힌다 — 안내 문구는 모듈이 띄운다.
+        KOTU.Core.Integration.DefaultAudioInputHook.Setter = Integration.DefaultAudioInput.TrySetDefault;
 
         // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
         // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당

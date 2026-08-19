@@ -65,11 +65,17 @@
              ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
         <Grid x:Name="TransportBar" Grid.Row="1" Padding="0,2" ColumnSpacing="6">
             <!-- 열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
-                 전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다. -->
+                 전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다.
+                 c7 EQ·c8 장치 칸은 A163·A164에서 신설(비디오 자막 버튼+플라이아웃 규격).
+                 폭 재계수(A40 방식): 고정 폭 합 = 1칸 버튼 4개(재생·음소거·EQ·장치) 128 +
+                 볼륨 96 + 배속 84 + 간격 6×8 = 356 — 비디오 임계 640의 계수(388)보다 32 작아
+                 최소 창 폭 720(바 약 656)에서도 시크 슬라이더가 눌리지 않는다 → 축약 로직 불요. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -98,6 +104,25 @@
             <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸, A97에서 84×36, A106에서 84×32) -->
             <ComboBox x:Name="SpeedBox" Grid.Column="6" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
+            <!-- A163: 이퀄라이저 — libvlc 내장 프리셋 라디오 플라이아웃(비디오 자막 버튼 규격).
+                 항목은 코드(FillEqualizerFlyout)가 채운다 — 프리셋 열거가 libvlc 네이티브 호출이라
+                 플레이어 생성(EnsurePlayerAsync) 뒤에만 가능해서 그때까지 비활성이다. -->
+            <Button x:Name="EqButton" Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
+                    IsEnabled="False" ToolTipService.ToolTip="Equalizer">
+                <FontIcon Glyph="&#xE9E9;" FontSize="18" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="EqFlyout" Placement="Top" />
+                </Button.Flyout>
+            </Button>
+            <!-- A164: 오디오 장치 — 서브메뉴 2개(출력 / Windows 기본 입력)는 코드가 만들고
+                 목록은 열 때마다 새로 채운다(장치 꽂힘·뽑힘 추종 — 생성자 주석 참고). -->
+            <Button x:Name="DevicesButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
+                    ToolTipService.ToolTip="Audio devices">
+                <FontIcon Glyph="&#xE7F5;" FontSize="18" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="DevicesFlyout" Placement="Top" />
+                </Button.Flyout>
+            </Button>
         </Grid>
     </Grid>
 </UserControl>

@@ -4,8 +4,11 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Windows.Devices.Enumeration;
+using Windows.Media.Devices;
 using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Core.Integration;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -14,7 +17,7 @@ namespace KOTU.Module.Audio;
 
 /// <summary>
 /// 음악 플레이어 화면 (A10 — 비디오 모듈에서 분리). 재생/일시정지, 시킹(슬라이더·←/→ 5초),
-/// 볼륨(↑/↓)·음소거(M), 배속, 이어듣기를 제공한다. 전체화면은 A151부터 셸의 3단 모드 체계
+/// 볼륨(↑/↓)·음소거(M), 배속, 이어듣기, 이퀄라이저 프리셋(A163)·오디오 장치 선택(A164)을 제공한다. 전체화면은 A151부터 셸의 3단 모드 체계
 /// (Enter 순환·Alt+Enter) 몫이다 — 이 뷰에는 진입 코드가 없다.
 /// 표면은 libvlc 파형 시각화(scope)가 채우고 상단에 ♪ + 파일명 오버레이를 띄운다.
 /// 파형 시각화는 인스턴스 옵션으로만 동작하므로(v0.12.0 실기기 확인) 항상 켠 인스턴스를
@@ -177,6 +180,16 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     private bool _suppressVolumeEvent;
     private bool _muted; // A28: 음소거 상태 로컬 소유 — libvlc Mute 게터의 스테일 값 회피
     private bool _tornDown;
+
+    // ---------- 이퀄라이저 · 오디오 장치 상태 (A163 · A164) ----------
+    // 저장 키는 전역 1벌(설정 화면 노출 없음): audio.equalizer = 프리셋 이름("" = Off),
+    // audio.outputDevice = libvlc 장치 ID("" = 시스템 기본 — 이름이 아니라 ID인 이유는
+    // 장치 이름이 OS 로캘 문자열이라 재부팅·언어 변경으로 바뀔 수 있어서다).
+    private string[] _eqPresetNames = []; // libvlc 내장 프리셋 이름 — 플레이어 생성 워커에서 1회 열거
+    private string _eqPreset;             // 현재 프리셋 이름("" = Off) — 상태는 로컬 소유(_muted와 동일 규칙)
+    private string _outputDeviceId;       // 현재 출력 장치 ID("" = 시스템 기본)
+    private readonly MenuFlyoutSubItem _outputMenu = new() { Text = "Output device" };
+    private readonly MenuFlyoutSubItem _inputMenu = new() { Text = "Input device" };
     private ModuleWorker? _worker; // libvlc 생성·해제 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
@@ -193,6 +206,23 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             SpeedBox.Items.Add($"{s:0.##}×");
         SpeedBox.SelectedIndex = Array.IndexOf(Speeds, 1.0f);
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
+
+        _eqPreset = _settings.Get("audio.equalizer", string.Empty);
+        _outputDeviceId = _settings.Get("audio.outputDevice", string.Empty);
+
+        // A164: 장치 플라이아웃 뼈대 — 서브메뉴 2개(출력 / Windows 기본 입력)는 코드로 만든다
+        // (MenuFlyoutSubItem은 XAML 선례가 없어 코드 구성만 쓴다 — 탐색기 우클릭 메뉴와 같은 방식).
+        // 목록은 열 때마다 새로 채운다: 오디오 장치는 꽂힘·뽑힘이 잦아 시점 캐시가 무의미하다
+        // (Opening 재구성은 이미지 모듈 우클릭 플라이아웃 선례). 입력 변경은 앱 밖(시스템 전역)에
+        // 영향을 주므로 툴팁으로 병기한다(부록 B 70 확정 문구).
+        ToolTipService.SetToolTip(_inputMenu, "Sets the Windows default input device");
+        DevicesFlyout.Items.Add(_outputMenu);
+        DevicesFlyout.Items.Add(_inputMenu);
+        DevicesFlyout.Opening += (_, _) =>
+        {
+            FillOutputDeviceMenu();
+            FillInputDeviceMenu();
+        };
 
         _suppressVolumeEvent = true;
         VolumeSlider.Value = Math.Clamp(_settings.Get("audio.volume", 80), 0, 100);
@@ -260,13 +290,32 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             string[] options =
                 [.. swapOptions, "--no-video-title-show", "--audio-visual=visual", "--effect-list=scope"];
 
-            var (libVlc, player) = await Worker.Run(_ =>
+            var (libVlc, player, presetNames) = await Worker.Run(_ =>
             {
                 // libvlc 네이티브 dll은 libvlc\win-x64\ 하위에 배포되므로 검색 경로 등록이 선행돼야 한다.
                 // 주의: 그냥 Core라고 쓰면 KOTU.Core 네임스페이스로 해석된다(상위 네임스페이스 우선).
                 LibVLCSharp.Shared.Core.Initialize();
                 var lib = new LibVLC(options);
-                return (lib, new MediaPlayer(lib));
+                var mp = new MediaPlayer(lib);
+
+                // A163: 내장 프리셋 이름 열거 — LibVLCSharp 3.x의 PresetCount·PresetName은
+                // 인스턴스 멤버라(4.x 문서와 다름) 빈 인스턴스를 하나 만들어 읽고 바로 해제한다.
+                // libvlc 네이티브 호출이므로 Core.Initialize 이후 이 워커에서 함께 처리한다.
+                var names = Array.Empty<string>();
+                try
+                {
+                    using var eq = new Equalizer();
+                    var count = eq.PresetCount;
+                    names = new string[count];
+                    for (var i = 0u; i < count; i++)
+                        names[i] = eq.PresetName(i) ?? string.Empty;
+                }
+                catch
+                {
+                    // 프리셋 열거 실패 — EQ 버튼만 비활성으로 남고 재생은 정상 진행한다.
+                }
+
+                return (lib, mp, names);
             });
 
             if (_tornDown)
@@ -289,6 +338,16 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             _muted = false; // 새 인스턴스는 음소거 해제 상태 (A28: 로컬 상태도 동기)
             MuteButton.Content = "🔊";
             HookPlayerEvents(player);
+
+            // A163: 프리셋 목록 확정 + 저장값 적용(볼륨과 같은 UI 스레드 적용 경로).
+            // 이퀄라이저는 한 번 걸면 이후 미디어에도 유지되므로(libvlc 문서) 이 1회가
+            // "재생 시작 시 재적용"을 충족한다. 출력 장치는 aout이 생겨야 걸리는 값이라
+            // Playing 이벤트에서 재적용한다(OnPlayerPlaying 주석 참고).
+            _eqPresetNames = presetNames;
+            if (_eqPreset.Length > 0 && Array.IndexOf(_eqPresetNames, _eqPreset) < 0)
+                _eqPreset = string.Empty; // 저장 이름이 이 libvlc 목록에 없다 — Off 폴백(설정 파일은 유지)
+            FillEqualizerFlyout();
+            ApplyEqualizer(player);
         }
         catch (Exception ex)
         {
@@ -456,6 +515,16 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             player.SetRate(Speeds[i]);
         }
 
+        // A164: 저장된 출력 장치 재적용. libvlc 3의 장치 지정(module=NULL)은 살아 있는
+        // aout에만 걸리므로(재생 전 호출은 무동작) 재생이 실제로 시작된 이 시점이 가장 이른
+        // 유효 적용점이다. 같은 플레이어로 다음 곡을 이어 재생해도 같은 값 재적용은 무해하다
+        // (배속과 동일 규칙). 빈 값 = 시스템 기본 — 새 aout의 기본 동작이므로 아예 부르지 않는다.
+        if (_outputDeviceId.Length > 0 && _player is { } dp)
+        {
+            try { dp.SetOutputDevice(_outputDeviceId); }
+            catch { /* 장치 유실(분리 등) — 시스템 기본으로 재생은 계속된다 */ }
+        }
+
         SetTrayTimer(true); // A54: 재생 중에만 1초마다 트레이(시간·이퀄라이저)를 갱신한다
         TrayStatusChanged?.Invoke();
     });
@@ -552,6 +621,197 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
     // A151: 전체화면 토글(ToggleFullScreen·⛶ 버튼·F11/Esc 액셀러레이터)은 전부 제거 —
     // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
+
+    // ---------- 이퀄라이저 (A163) ----------
+
+    /// <summary>
+    /// EQ 플라이아웃을 Off + libvlc 내장 프리셋 목록으로 채운다(자막 플라이아웃과 같은
+    /// 라디오 구성). 프리셋 목록은 libvlc 수명 동안 불변이라 플레이어 생성 후 1회면 된다.
+    /// </summary>
+    private void FillEqualizerFlyout()
+    {
+        EqFlyout.Items.Clear();
+        AddEqualizerChoice("Off", string.Empty);
+        foreach (var name in _eqPresetNames)
+            AddEqualizerChoice(name, name);
+        EqButton.IsEnabled = _eqPresetNames.Length > 0;
+    }
+
+    private void AddEqualizerChoice(string label, string presetName)
+    {
+        var item = new RadioMenuFlyoutItem
+        {
+            Text = label,
+            GroupName = "equalizer",
+            IsChecked = string.Equals(presetName, _eqPreset, StringComparison.Ordinal),
+        };
+        item.Click += (_, _) => SelectEqualizerPreset(presetName);
+        EqFlyout.Items.Add(item);
+    }
+
+    /// <summary>프리셋 선택: 로컬 상태 갱신 + 즉시 저장(이어듣기 Report와 같은 즉시 기록) + 적용.</summary>
+    private void SelectEqualizerPreset(string presetName)
+    {
+        _eqPreset = presetName;
+        _settings.Set("audio.equalizer", presetName);
+        _settings.Save();
+        if (_player is { } p) ApplyEqualizer(p);
+    }
+
+    /// <summary>
+    /// 현재 프리셋(_eqPreset)을 플레이어에 적용한다. 재생 중이든 아니든 즉시 적용되고
+    /// 이후 미디어에도 유지된다(libvlc 문서). 이름이 목록에 없으면 Off로 폴백.
+    /// </summary>
+    private void ApplyEqualizer(MediaPlayer p)
+    {
+        try
+        {
+            var index = Array.IndexOf(_eqPresetNames, _eqPreset);
+            if (_eqPreset.Length == 0 || index < 0)
+            {
+                p.UnsetEqualizer();
+                return;
+            }
+            // 플레이어가 값을 복사하므로 핸들은 바로 해제해도 안전하다(libvlc 문서).
+            using var eq = new Equalizer((uint)index);
+            p.SetEqualizer(eq);
+        }
+        catch
+        {
+            // EQ 적용 실패가 재생을 막으면 안 된다 — 소리는 프리셋 없이 계속 나온다.
+        }
+    }
+
+    // ---------- 오디오 장치 (A164) ----------
+
+    /// <summary>
+    /// 출력 장치 서브메뉴를 "System default" + libvlc 열거 목록으로 다시 채운다.
+    /// 열거는 MediaPlayer 단위(libvlc 3) — 플레이어가 아직 없으면 System default 한 줄만 남는다.
+    /// </summary>
+    private void FillOutputDeviceMenu()
+    {
+        _outputMenu.Items.Clear();
+        AddOutputChoice("System default", string.Empty);
+        if (_player is not { } p) return;
+        try
+        {
+            foreach (var device in p.AudioOutputDeviceEnum)
+                AddOutputChoice(device.Description, device.DeviceIdentifier);
+        }
+        catch
+        {
+            // 열거 실패 — System default만 남는다(재생에는 영향 없음).
+        }
+    }
+
+    private void AddOutputChoice(string label, string deviceId)
+    {
+        var item = new RadioMenuFlyoutItem
+        {
+            Text = label,
+            GroupName = "audio-output",
+            IsChecked = string.Equals(deviceId, _outputDeviceId, StringComparison.Ordinal),
+        };
+        item.Click += (_, _) => SelectOutputDevice(deviceId);
+        _outputMenu.Items.Add(item);
+    }
+
+    /// <summary>출력 장치 선택: 로컬 상태 갱신 + 즉시 저장 + 재생 중이면 무재시작 이동.</summary>
+    private void SelectOutputDevice(string deviceId)
+    {
+        _outputDeviceId = deviceId;
+        _settings.Set("audio.outputDevice", deviceId);
+        _settings.Save();
+        if (_player is not { } p) return;
+        try
+        {
+            // 재생 중 무재시작 이동: module=NULL 지정(기본 오버로드)은 살아 있는 aout을 즉시
+            // 새 장치로 옮긴다(libvlc 3 권장 사용법 — 재시작 불요). aout이 아직 없으면(재생 전)
+            // 무동작이지만 Playing 재적용이 잇는다. System default(빈 문자열) 복귀의 즉시 이동
+            // 여부는 실기기 확인 포인트 — 무동작이어도 다음 재생부터는 지정을 생략해 기본 장치다.
+            p.SetOutputDevice(deviceId);
+        }
+        catch
+        {
+            // 장치 유실 등 — 재생은 기존 장치로 계속된다.
+        }
+    }
+
+    /// <summary>
+    /// 입력(캡처) 장치 목록을 서브메뉴에 채운다 — 여기서의 "선택"은 Windows 기본 입력 장치
+    /// 변경이다(A164, 부록 B 70 ⓒ 확정 — 출력과 대칭인 단일 선택 UI). 열거는 WinRT
+    /// DeviceInformation(AudioCapture), 현재 기본 표시는 MediaDevice의 기본 캡처 ID.
+    /// 비동기 결과가 열린 메뉴에 늦게 꽂혀도 무해하고, 다음 열기에서 항상 새로 채운다.
+    /// </summary>
+    private async void FillInputDeviceMenu()
+    {
+        try
+        {
+            _inputMenu.Items.Clear();
+
+            var devices = await DeviceInformation.FindAllAsync(DeviceClass.AudioCapture);
+            if (_tornDown) return;
+
+            string? defaultId = null;
+            try { defaultId = MediaDevice.GetDefaultAudioCaptureId(AudioDeviceRole.Default); }
+            catch { /* 기본 장치 없음(장치 0개 등) — 체크 표시만 빠진다 */ }
+
+            foreach (var device in devices)
+            {
+                var id = device.Id; // 클로저 캡처용 — WinRT 장치 인터페이스 ID
+                var item = new RadioMenuFlyoutItem
+                {
+                    Text = device.Name,
+                    GroupName = "audio-input",
+                    IsChecked = string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase),
+                };
+                item.Click += (_, _) => SetDefaultInputDevice(id);
+                _inputMenu.Items.Add(item);
+            }
+        }
+        catch
+        {
+            // 열거 실패 — 빈 서브메뉴는 아래에서 비활성으로 접는다.
+        }
+        _inputMenu.IsEnabled = _inputMenu.Items.Count > 0;
+    }
+
+    /// <summary>
+    /// 선택 장치를 Windows 기본 입력으로 지정한다(앱 밖 전역 변경 — 서브메뉴 툴팁에 병기).
+    /// WinRT 장치 ID(SWD#MMDEVAPI 경로)에서 IPolicyConfig가 받는 MMDevice 엔드포인트 ID
+    /// ("{0.0.1.00000000}.{guid}" 꼴)를 잘라 셸 훅에 넘긴다. 실패는 조용히 접고 플라이아웃
+    /// 안내만 띄운다(부록 B 70 확정 폴백 — 훅·셸 계층은 예외를 새지 않는다).
+    /// </summary>
+    private void SetDefaultInputDevice(string deviceInterfaceId)
+    {
+        var endpointId = ExtractEndpointId(deviceInterfaceId);
+        if (endpointId is null || !DefaultAudioInputHook.TrySetDefault(endpointId))
+            ShowDeviceNotice("Could not change the default device");
+    }
+
+    /// <summary>
+    /// WinRT 장치 인터페이스 ID에서 MMDevice 엔드포인트 ID를 추출한다.
+    /// 캡처 엔드포인트는 "{0.0.1.00000000}.{guid}" 꼴이 ID 중간에 '#' 구분자로 끼어 있다.
+    /// 형태가 예상과 다르면 null — 호출부가 안내 폴백으로 접는다.
+    /// </summary>
+    private static string? ExtractEndpointId(string deviceInterfaceId)
+    {
+        var start = deviceInterfaceId.IndexOf("{0.0.", StringComparison.Ordinal);
+        if (start < 0) return null;
+        var end = deviceInterfaceId.IndexOf('#', start);
+        return end < 0 ? deviceInterfaceId[start..] : deviceInterfaceId[start..end];
+    }
+
+    /// <summary>장치 조작 실패 안내 — 장치 버튼 위에 작은 플라이아웃으로 띄운다(자동 닫힘).</summary>
+    private void ShowDeviceNotice(string text)
+    {
+        var flyout = new Flyout
+        {
+            Content = new TextBlock { Text = text },
+            Placement = FlyoutPlacementMode.Top,
+        };
+        flyout.ShowAt(DevicesButton);
+    }
 
     // ---------- 입력 핸들러 ----------
 
