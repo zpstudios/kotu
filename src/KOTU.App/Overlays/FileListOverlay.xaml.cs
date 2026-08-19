@@ -52,6 +52,13 @@ public sealed partial class FileListOverlay : UserControl
     public bool IsOpen => Visibility == Visibility.Visible;
 
     /// <summary>
+    /// 내부 리스트가 지금 보고 있는 폴더 — 리스트 미생성·항해 전이면 null (A174).
+    /// 셸이 "모듈 전환에도 현재 위치 유지"의 세션 위치 원본으로 읽는다(ExplorerStartFolder).
+    /// 표시 여부와 무관하다: 도크가 닫혀 있어도 이 리스트가 폴더 상태의 단일 원본(A93)이다.
+    /// </summary>
+    public string? CurrentFolder => _list?.CurrentFolder is { Length: > 0 } folder ? folder : null;
+
+    /// <summary>
     /// 떠 있는 동안의 선택 파일 경로 (A86 — 셸 Enter의 "선택 파일 있으면 열기" 판정).
     /// 닫혀 있거나(보이지 않는 선택은 열지 않는다) 선택이 폴더·없음이면 null.
     /// ※ A94 6차(v0.153.0)부터 일괄 열기는 <see cref="OpenSelectedFiles"/> —

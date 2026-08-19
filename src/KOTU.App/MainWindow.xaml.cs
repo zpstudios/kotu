@@ -199,6 +199,7 @@ public sealed partial class MainWindow : Window
         // (S1과 S4는 동시에 성립하지 않는다: S1에서는 S4 진입 자체가 없음 — 강조만).
         ListOverlay.ViewChanged += (folder, entries) =>
         {
+            RememberBrowsedFolder(folder); // A174 — 브라우징 위치도 전역 마지막 폴더로(같은 값이면 무동작)
             if (_openFileBrowsing) _s4Explorer?.ShowEntries(folder, entries);
             else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(folder, entries);
         };
@@ -1418,7 +1419,7 @@ public sealed partial class MainWindow : Window
         _currentModule = module;
         _currentFilePath = filePath;
         InfoOverlay.InvalidateCache();
-        RememberLastFolder(); // 모듈별 마지막 폴더 저장 (v0.55.0)
+        RememberLastFolder(); // 전역 마지막 폴더 저장 (v0.55.0 모듈별 → A174 전역 1벌)
         UpdateEmptyExplorer();
         UpdateDriveStrip(); // A22: 파일 유무가 바뀌면 드라이브 줄도 함께 켜고 끈다
         // 홀드 판정만 리셋하고(A58), 오버레이 고정·사이드바 상태는 유지한 채
@@ -1431,13 +1432,41 @@ public sealed partial class MainWindow : Window
         RefreshShellIcons();
     }
 
-    /// <summary>현재 파일의 폴더를 모듈별 설정("lastFolder.{id}")에 기억한다 (v0.55.0).</summary>
+    /// <summary>
+    /// 전역 마지막 폴더 설정 키 (A174, 부록 B 71 ① — v0.55.0 모듈별 "lastFolder.{id}"의 대체).
+    /// 구 모듈별 키는 마이그레이션·청소 없이 설정 파일에 무해하게 잔존한다(코드 소비처만 제거).
+    /// </summary>
+    private const string LastFolderKey = "explorer.lastFolder";
+
+    /// <summary>현재 파일의 폴더를 전역 마지막 폴더에 기억한다 (v0.55.0 모듈별 → A174 전역 1벌).</summary>
     private void RememberLastFolder()
     {
         if (_currentModule is null || _currentFilePath is null) return;
         if (Path.GetDirectoryName(_currentFilePath) is not { Length: > 0 } folder) return;
-        if (_settings.Get($"lastFolder.{_currentModule.Id}", string.Empty) == folder) return;
-        _settings.Set($"lastFolder.{_currentModule.Id}", folder);
+        RememberBrowsedFolder(folder);
+    }
+
+    /// <summary>
+    /// 이 창이 마지막으로 전역 키에 알린 폴더 — 아래 RememberBrowsedFolder의 "실제 항해" 가드.
+    /// 설정값 비교만으로는 부족하다: 설정은 창 간 공유라, 다른 창이 키를 새 폴더로 바꾼 뒤
+    /// 이 창의 정렬 변경·감시 재스캔(폴더 불변 재발화)이 옛 폴더로 키를 되밟을 수 있다.
+    /// </summary>
+    private string _lastBrowsedFolder = "";
+
+    /// <summary>
+    /// 브라우징 항해도 전역 마지막 폴더에 기억한다 (A174 — 종전에는 파일을 열 때만 기억됐다).
+    /// 배선은 생성자 ListOverlay.ViewChanged 한 곳 — 리스트 항해의 모든 경로(트리 선택·폴더
+    /// 더블클릭·상위 이동·소실 폴더 상위 폴백)가 그리로 모인다. ViewChanged는 폴더 변경 통지가
+    /// 아니라 "표시 목록 재작성" 통지라 정렬(A5)·필터(A7)·감시 재스캔(A94 5차)에도 같은 폴더로
+    /// 반복 발화한다 — 이 창 기준으로 폴더가 실제로 바뀐 항해만 저장이 돌고(_lastBrowsedFolder),
+    /// 같은 설정값 조기 반환(종전 RememberLastFolder 관용구)이 중복 Save를 한 번 더 거른다.
+    /// </summary>
+    private void RememberBrowsedFolder(string folder)
+    {
+        if (folder.Length == 0 || folder == _lastBrowsedFolder) return;
+        _lastBrowsedFolder = folder;
+        if (_settings.Get(LastFolderKey, string.Empty) == folder) return;
+        _settings.Set(LastFolderKey, folder);
         _settings.Save();
     }
 
@@ -1553,21 +1582,26 @@ public sealed partial class MainWindow : Window
     private bool RightPanelIsOpen => PanelProviderView is not null ? RightPanelHost.IsOpen : InfoOverlay.IsOpen;
 
     /// <summary>
-    /// 빈 상태의 시작 폴더: 그 모듈의 마지막 폴더(v0.55.0), 없으면 바탕화면.
-    /// 중앙 탐색기와 A81 빈 도크의 리스트 오버레이가 같은 규칙을 공유한다.
+    /// 빈 상태의 시작 폴더 (A174 — v0.55.0 "그 모듈의 마지막 폴더" 규칙의 개정, 모듈 무관):
+    /// ① 세션 안에서는 좌 리스트가 지금 보고 있는 폴더(현재 위치 유지 — 모듈 전환에도 리셋 없음),
+    /// ② 리스트가 아직 없으면(앱 재시작·새 창) 전역 마지막 폴더, ③ 둘 다 없거나 사라졌으면 바탕화면.
+    /// 세션 위치를 설정 키보다 먼저 보는 이유: 설정은 창 간 공유라, 다른 창의 브라우징이 이 창의
+    /// 리스트를 끌고 가면 안 된다 — 전역 키는 새 리스트의 초기값으로만 쓴다(브라우징 갱신은
+    /// RememberBrowsedFolder가 하므로 한 창에서는 두 값이 사실상 일치한다).
+    /// 중앙 탐색기(A93)와 A81 빈 도크의 리스트 오버레이가 같은 규칙을 공유한다.
     /// </summary>
-    private string ModuleStartFolder(IModule module)
+    private string ExplorerStartFolder()
     {
-        var start = _settings.Get($"lastFolder.{module.Id}", string.Empty);
-        if (string.IsNullOrEmpty(start) || !Directory.Exists(start))
-            start = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-        return start;
+        if (ListOverlay.CurrentFolder is { } current && Directory.Exists(current)) return current;
+        var saved = _settings.Get(LastFolderKey, string.Empty);
+        if (saved.Length > 0 && Directory.Exists(saved)) return saved;
+        return Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
     }
 
     /// <summary>
     /// 빈 상태(파일 없이 연 압축/이미지/동영상/오디오/문서 모듈)면 중앙에 썸네일 뷰를 띄운다
     /// (A93 — 구 ExplorerPane 중앙 탐색기 대체. A81의 "좌 도크 열림 시 숨김"도 대체 — 항상 표시).
-    /// 시작 위치는 그 모듈의 마지막 폴더(v0.55.0, 없으면 바탕화면), 파일은 담당 확장자만.
+    /// 시작 위치는 좌 리스트의 현재 위치(A174 — 없으면 전역 마지막 폴더/바탕화면), 파일은 담당 확장자만.
     /// Hardware/Settings에는 띄우지 않는다.
     /// 목록의 원본은 좌 도크의 리스트(ExplorerPane) 하나다: 도크가 닫혀 있어도 NavigateList로
     /// 그 리스트를 항해시키면 ViewChanged가 돌아와 썸네일 뷰까지 같은 목록으로 채워진다.
@@ -1589,7 +1623,10 @@ public sealed partial class MainWindow : Window
                 _thumbnailExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow;
                 ExplorerHost.Children.Add(_thumbnailExplorer);
             }
-            ListOverlay.NavigateList(ModuleStartFolder(module), module.SupportedExtensions);
+            // A174: 빈 모듈 전환은 좌 리스트의 현재 위치를 리셋하지 않는다 — ExplorerStartFolder가
+            // 세션 현재 폴더를 그대로 돌려주고, 필터만 새 모듈 것으로 바뀐다(A57 ③ 모듈 필터 유지).
+            // 현재 폴더에 이 모듈의 확장자가 0건이면 빈 목록이 된다 — 사양상 허용(등재문 ⓑ).
+            ListOverlay.NavigateList(ExplorerStartFolder(), module.SupportedExtensions);
             ExplorerHost.Visibility = Visibility.Visible;
         }
         else
@@ -2609,8 +2646,10 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 좌측 리스트 오버레이 표시: 현재 파일이 있는 폴더 + 현재 모듈의 담당 확장자(A57 ③)를
     /// 주입한다 — A7 드롭다운은 리스트 안에서 그 목록을 추가로 좁힌다.
-    /// 파일이 없으면(빈 모듈 상태 — A81) 모듈 시작 폴더(마지막 폴더/바탕화면)를 대신 쓴다 —
-    /// 중앙 빈 상태 탐색기와 같은 규칙.
+    /// 파일이 없으면(빈 모듈 상태 — A81) 탐색기 시작 폴더(A174 — 세션 현재 위치/전역 마지막
+    /// 폴더/바탕화면)를 대신 쓴다 — 중앙 빈 상태 탐색기와 같은 규칙.
+    /// 파일이 있으면 종전대로 그 파일의 폴더 — 파일을 여는 전환의 "파일 폴더로 항해"는
+    /// A174에서도 유지다(부록 B 71 ② — 유지 대상은 빈 모듈 전환만).
     /// 폴더가 사라졌으면(이동식 드라이브 탈착 등) 띄우지 않는다 — 문구·도크는 IsOpen 기준으로 따라온다.
     /// </summary>
     private void ShowListOverlay()
@@ -2622,7 +2661,7 @@ public sealed partial class MainWindow : Window
         }
         var folder = _currentFilePath is not null
             ? Path.GetDirectoryName(_currentFilePath)
-            : ModuleStartFolder(_currentModule);
+            : ExplorerStartFolder();
         if (folder is not { Length: > 0 } || !Directory.Exists(folder))
         {
             ListOverlay.Hide();
@@ -2688,8 +2727,8 @@ public sealed partial class MainWindow : Window
         EnsureS4Explorer();
         S4Host.Visibility = Visibility.Visible;
         ApplyOverlayStates(); // ShowListOverlay가 현재 파일의 폴더로 Show → ViewChanged → S4 그리드 채움
-        if (!ListOverlay.IsOpen) // 파일 폴더 소실(드라이브 탈착 등) — 모듈 시작 폴더로라도 목록을 만든다
-            ListOverlay.NavigateList(ModuleStartFolder(_currentModule), _currentModule.SupportedExtensions);
+        if (!ListOverlay.IsOpen) // 파일 폴더 소실(드라이브 탈착 등) — 시작 폴더(A174)로라도 목록을 만든다
+            ListOverlay.NavigateList(ExplorerStartFolder(), _currentModule.SupportedExtensions);
         _s4Explorer?.FocusGrid();
     }
 
