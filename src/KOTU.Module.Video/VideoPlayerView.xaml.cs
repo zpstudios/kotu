@@ -1097,8 +1097,19 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             p.SetRate(Speeds[i]);
     }
 
+    /// <summary>
+    /// Space = 재생/일시정지. A157(v0.168.0)에서 탐색기 표면의 Space(선택 토글)와 충돌하므로,
+    /// 포커스가 통과 표면(탐색기 리스트·트리·썸네일)이나 텍스트 입력에 있으면 삼키지 않는다 —
+    /// 액셀러레이터는 표면 KeyDown보다 먼저 돌아 여기서 흘려 주지 않으면 표면이 받을 방법이 없다.
+    /// 같은 파일 OnFullScreenEnterInvoked(Enter)의 가드를 그대로 복제한 것이다.
+    /// </summary>
     private void OnTogglePlayInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (HotkeySupport.ShouldPassThrough(this))
+        {
+            args.Handled = false;
+            return;
+        }
         args.Handled = true;
         TogglePlayPause();
     }

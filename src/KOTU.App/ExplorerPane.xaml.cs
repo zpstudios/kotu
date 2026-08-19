@@ -120,6 +120,12 @@ public sealed partial class ExplorerPane : UserControl
             new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
         ListPane.AddHandler(UIElement.PointerPressedEvent,
             new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
+        // A157: 선택 → 체크 동기. 체크는 선택의 시각화일 뿐이라 집합은 ListView 선택 하나뿐이고,
+        // 동기도 이 한 방향만 필요하다(반대 방향 = 체크박스 Click이 선택을 토글한다).
+        // 리스트에만 건다 — 체크박스는 리스트 행(MakeListItem)에만 있다.
+        // 해제 구독을 두지 않는 이유: 자기 자식 컨트롤의 인스턴스 이벤트라 페인과 수명이 같다
+        // (Loaded/Unloaded 해제 규칙은 ExplorerFileOps 같은 '정적' 이벤트에만 적용된다).
+        ListPane.SelectionChanged += OnListSelectionChanged;
         // A94 6차: 빈 영역(항목이 아닌 곳) 우클릭 메뉴 — New folder / Paste / Refresh.
         // 항목 메뉴와의 이중 발화는 ContextFlyout 규칙이 원천 차단한다: 컨텍스트 요청은 원본
         // 요소에서 위로 버블링하며 **가장 안쪽의 ContextFlyout 하나만** 떠서 요청을 소비하므로,
@@ -343,6 +349,12 @@ public sealed partial class ExplorerPane : UserControl
         RefreshView();
     }
 
+    /// <summary>
+    /// 표시 목록을 항목 컨테이너로 다시 만들어 채운다(ItemsSource·DataTemplate 없음 — 구조 규칙).
+    /// A157 유의: 체크는 선택의 시각화라 별도 저장소가 없다 — 이 재생성(폴더 감시 400ms 재스캔
+    /// 포함)이 돌면 선택과 함께 체크도 사라진다. 재스캔 후 선택 복원은 별도 설계가 필요해
+    /// 이 배치의 범위 밖이다(등재 후보).
+    /// </summary>
     private void Fill(IReadOnlyList<ExplorerListing.Entry> entries)
     {
         IconGrid.Items.Clear();
@@ -503,6 +515,10 @@ public sealed partial class ExplorerPane : UserControl
 
         var name = new TextBlock
         {
+            // A156: 이름변경 진입(BeginRenameOf)은 두 표면 공용이라 조회 키도 공용이다 —
+            // 리스트 행 구조가 바뀌며 인덱스 계약을 버렸으므로 타일 쪽도 같은 이름을 붙여 둔다.
+            // (타일 레이아웃 자체는 이 배치의 범위 밖 — 이름 부여 한 줄만 더한다.)
+            Name = ItemNameBlockName,
             Text = entry.Name,
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
@@ -526,14 +542,106 @@ public sealed partial class ExplorerPane : UserControl
         return item;
     }
 
-    /// <summary>리스트 행: 아이콘 + 이름 + 길이(미디어만, 지연 로드 — A6) + 크기(파일만).</summary>
+    // ---------- 항목 자식 조회: 이름 기반 (A156, v0.168.0) ----------
+    // 종전에는 콘텐츠 패널의 Children[n] 인덱스가 계약이었다(이름 = [1], 길이 = [2]). A156이
+    // 리스트 행을 1행 4열에서 2행 3열로 바꾸면서 그 인덱스가 전부 밀렸고, 인덱스 계약은 어긋나도
+    // 예외 없이 조용한 return이라(길이 미표시·F2 무반응) 컴파일에도 정적 검사에도 걸리지 않았다.
+    // 그래서 조회 키를 코드에서 지정한 Name으로 옮긴다 — 조회 지점이 아래 두 헬퍼로 모여 있어
+    // 항목 구조를 또 바꿔도 고칠 곳이 한 군데다.
+
+    /// <summary>이름 TextBlock의 조회 키 (A156). MakeListItem·MakeGridItem이 같은 이름을 붙인다.</summary>
+    private const string ItemNameBlockName = "ExplorerItemName";
+
+    /// <summary>2줄째 상세 TextBlock의 조회 키 (A156) — 크기·길이·날짜를 한 줄로 합쳐 담는다.</summary>
+    private const string ItemDetailBlockName = "ExplorerItemDetail";
+
+    /// <summary>선택 체크박스의 조회 키 (A157) — 선택 동기가 항목마다 이 이름으로 찾는다.</summary>
+    private const string ItemCheckBoxName = "ExplorerItemCheck";
+
+    /// <summary>
+    /// 항목 콘텐츠 패널에서 이름으로 TextBlock을 찾는다 (A156).
+    /// 항목 루트는 평평한 패널 하나(중첩 없음)라 한 레벨 탐색으로 충분하다 — 시각 트리 상향
+    /// 탐색(ItemFromSource)과 달리 여기는 우리가 만든 구조만 본다.
+    /// </summary>
+    private static TextBlock? FindItemBlock(object item, string name) =>
+        item is ContentControl { Content: Panel panel }
+            ? panel.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == name)
+            : null;
+
+    /// <summary>항목 콘텐츠 패널의 선택 체크박스 (A157) — FindItemBlock과 같은 이름 기반 규칙.</summary>
+    private static CheckBox? FindItemCheckBox(object item) =>
+        item is ContentControl { Content: Panel panel }
+            ? panel.Children.OfType<CheckBox>().FirstOrDefault(c => c.Name == ItemCheckBoxName)
+            : null;
+
+    /// <summary>
+    /// 리스트 행 2줄째 텍스트 (A156). 순서 확정: 크기 · [길이] · Created · Modified.
+    /// 구분자는 저장소 관용구 "  ·  "(ImageViewerView.BuildMetaText와 같은 조립)이고,
+    /// 빈 조각은 건너뛴다 = 구분자만 남는 "  ·    ·  " 모양이 생기지 않는다.
+    /// 폴더는 크기 조각을 넣지 않는다(종전 리스트 행의 규칙 승계).
+    /// 날짜는 시각 없이 yyyy-MM-dd — 이 줄이 폭 25% 사이드바에 두 날짜를 담아야 한다.
+    /// 문화권 인자 없이 쓰는 것은 저장소 표시 관용구 그대로다(ImageViewerView·ArchiveView 동일).
+    /// 크기·날짜는 빈 문자열이 될 수 없어(FormatSize는 최소 "0 B") 조각 가드가 필요 없고,
+    /// 길이만 비어 올 수 있어 그것만 가드한다.
+    /// ※ 길이(duration) 조각은 A155가 해상도 표기로 확장할 자리다 — 뒤 배치는 이 헬퍼의 조각
+    /// 목록에 한 줄을 더하는 것으로 끝나야 한다(호출부는 이미 이 헬퍼만 부른다).
+    /// </summary>
+    private static string BuildDetailText(ExplorerListing.Entry entry, string duration)
+    {
+        var parts = new List<string>();
+        if (!entry.IsFolder) parts.Add(ExplorerListing.FormatSize(entry.Size));
+        if (duration.Length > 0) parts.Add(duration);
+        parts.Add(entry.Created.ToString("yyyy-MM-dd"));
+        parts.Add(entry.Modified.ToString("yyyy-MM-dd"));
+        return string.Join("  ·  ", parts);
+    }
+
+    /// <summary>
+    /// 리스트 행 툴팁 (A156): 파일명 + 라벨 붙은 상세를 줄 단위로 쌓는다.
+    /// 2줄 레이아웃의 상세 줄에는 라벨이 없어 Created와 Modified를 눈으로 구분할 수 없다 —
+    /// 그 구분을 툴팁이 맡는다(조각 선택 규칙은 BuildDetailText와 같다).
+    /// </summary>
+    private static string BuildTooltipText(ExplorerListing.Entry entry, string duration)
+    {
+        var lines = new List<string> { entry.Name };
+        if (!entry.IsFolder) lines.Add("Size: " + ExplorerListing.FormatSize(entry.Size));
+        if (duration.Length > 0) lines.Add("Length: " + duration);
+        lines.Add("Created: " + entry.Created.ToString("yyyy-MM-dd"));
+        lines.Add("Modified: " + entry.Modified.ToString("yyyy-MM-dd"));
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// 상세 줄과 툴팁을 한 벌로 (다시) 채운다 (A156) — 생성 시점(MakeListItem)과 길이 지연 로드
+    /// 도착 시점(LoadDurationsAsync)이 같은 조립을 쓰게 하는 단일 깔때기.
+    /// </summary>
+    private static void ApplyDetail(ListViewItem item, ExplorerListing.Entry entry, string duration)
+    {
+        if (FindItemBlock(item, ItemDetailBlockName) is { } detail)
+            detail.Text = BuildDetailText(entry, duration);
+        if (item.Content is UIElement row)
+            ToolTipService.SetToolTip(row, BuildTooltipText(entry, duration));
+    }
+
+    /// <summary>
+    /// 리스트 행 (A156 — 2줄): 1줄 = 아이콘 + 이름, 2줄 = 크기·[길이]·Created·Modified 한 줄,
+    /// 우측 끝 = 선택 체크박스(A157). 길이는 지연 로드(A6)라 처음에는 빠진 채 조립되고,
+    /// 도착하면 상세 줄을 통째로 다시 만든다.
+    /// 루트는 **평평한 Grid 하나**다(중첩 패널 금지) — 이름변경(ExplorerRenameBox.Begin)이
+    /// host 패널에 편집 상자를 끼우고 Grid.SetRow/SetColumn으로 이름 자리에 앉히기 때문.
+    /// 행 높이는 지정하지 않는다: 2줄 콘텐츠(12px + 11px 약 31px)가 WinUI 기본
+    /// ListViewItemMinHeight 안에 들어갈 것으로 보고 명시 Height/MinHeight 없이 간다.
+    /// 실기기에서 행이 커지면 복구 지점은 이 컨테이너에 MinHeight 한 줄을 주는 것이다
+    /// (LineHeight/LineStackingStrategy는 쓰지 않는다 — 저장소 선례 0건이고 기본 전략상 무효).
+    /// </summary>
     private ListViewItem MakeListItem(ExplorerListing.Entry entry)
     {
-        var row = new Grid { ColumnSpacing = 8 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var row = new Grid { ColumnSpacing = 8, RowSpacing = 0 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                      // 0 아이콘
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // 1 이름·상세
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                      // 2 체크박스
+        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                           // 0 이름
+        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                           // 1 상세
 
         var icon = new FontIcon
         {
@@ -541,38 +649,56 @@ public sealed partial class ExplorerPane : UserControl
             FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        Grid.SetRowSpan(icon, 2); // 두 줄 높이 가운데 정렬
+
         var name = new TextBlock
         {
+            Name = ItemNameBlockName,
             Text = entry.Name,
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         Grid.SetColumn(name, 1);
-        // Children[2] = 길이 자리 — LoadDurationsAsync가 나중에 채운다(A6). 인덱스 수동 동기.
-        var duration = new TextBlock
+
+        var detail = new TextBlock
         {
+            Name = ItemDetailBlockName,
             FontSize = 11,
             Opacity = 0.6,
             VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        Grid.SetColumn(duration, 2);
-        var size = new TextBlock
+        Grid.SetColumn(detail, 1);
+        Grid.SetRow(detail, 1);
+
+        // A157: 체크 = 선택의 시각화(집합은 ListView 선택 하나뿐 — SelectionMode는 Extended 그대로다.
+        // Multiple로 바꾸면 A94의 Ctrl/Shift 관례와 PathsForDrag 계약이 그 위에 서 있어 깨진다).
+        // 콘텐츠 '안'에 두는 이유 = 잘라내기 흐림(ExplorerFileOps.ApplyCutMark)이 SelectorItem.Content
+        // 루트의 Opacity를 만지므로, 밖에 두면 잘라낸 항목에서 체크만 또렷하게 남는다. 잘라내기 중
+        // 체크도 함께 0.5로 흐려지는 것은 수용한다(항목 전체가 흐려지는 탐색기 모양).
+        // 기본 치수(MinWidth·Padding·Margin)를 0으로 눌러야 2줄 행 높이를 체크박스가 먹지 않는다.
+        var check = new CheckBox
         {
-            Text = entry.IsFolder ? string.Empty : ExplorerListing.FormatSize(entry.Size),
-            FontSize = 11,
-            Opacity = 0.6,
+            Name = ItemCheckBoxName,
+            Content = null,
+            IsChecked = false, // 생성 시점은 항상 미선택 — Fill이 항목을 새로 만들면 선택도 비어 있다(일관)
+            MinWidth = 0,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        Grid.SetColumn(size, 3);
+        Grid.SetColumn(check, 2);
+        Grid.SetRowSpan(check, 2);
+        check.Click += OnItemCheckClick; // Checked/Unchecked는 구독 금지 — 근거는 OnItemCheckClick 주석
 
         row.Children.Add(icon);
         row.Children.Add(name);
-        row.Children.Add(duration);
-        row.Children.Add(size);
-        ToolTipService.SetToolTip(row, entry.Name);
+        row.Children.Add(detail);
+        row.Children.Add(check);
 
         var item = new ListViewItem { Content = row, Tag = entry };
+        ApplyDetail(item, entry, string.Empty); // 상세 줄 + 툴팁 초판(길이는 아직 도착 전)
         ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
         AttachContextMenu(item, entry, ListPane); // A24 + A94 2차(Rename·Delete)
         AttachDragDrop(item, entry, ListPane); // A94 — 드래그 아웃 + 폴더 항목 드랍
@@ -591,7 +717,7 @@ public sealed partial class ExplorerPane : UserControl
         ExplorerListing.MatchesExtension(name, KOTU.Module.Audio.AudioModule.Extensions);
 
     /// <summary>
-    /// 미디어 파일의 재생 길이를 리스트 행 셋째 칸에 채운다(A6).
+    /// 미디어 파일의 재생 길이를 리스트 행 2줄째 상세 줄에 합쳐 넣는다(A6 → A156).
     /// 셸 속성(System.Media.Duration) 읽기는 워커에서, UI는 텍스트 반영만.
     /// 정렬·필터 재그리기는 캐시가 흡수한다(수정시각 일치 시 재조회 없음).
     /// </summary>
@@ -632,9 +758,9 @@ public sealed partial class ExplorerPane : UserControl
             }
 
             if (text.Length == 0) continue;
-            // MakeListItem의 Children[2] = 길이 TextBlock (인덱스 수동 동기)
-            if (item.Content is Grid row && row.Children.Count > 3 && row.Children[2] is TextBlock tb)
-                tb.Text = text;
+            // A156: 길이는 더 이상 독립 칸이 아니라 2줄째 상세 줄의 한 조각이다 — 대입이 아니라
+            // 그 항목의 상세 줄과 툴팁을 통째로 다시 조립한다(조각 순서는 BuildDetailText가 쥔다).
+            ApplyDetail(item, entry, text);
         }
     }
 
@@ -868,6 +994,7 @@ public sealed partial class ExplorerPane : UserControl
     /// A85가 얹은 것 — Enter = 선택 항목 열기(폴더 = 진입. ThumbnailExplorer와 동일).
     /// 4차(v0.151.0)가 얹은 것 — Shift+Del = 영구 삭제(확인 대화상자 뒤), Esc = 잘라내기 표시 해제.
     /// 6차(v0.153.0)가 얹은 것 — Enter가 **다중 선택이면 선택된 파일 전부**를 연다(폴더 제외).
+    /// A157(v0.168.0)이 얹은 것 — Space = 포커스 항목의 선택 토글(체크박스 클릭과 같은 동작).
     /// 이 표면(그리드/리스트)에 포커스가 있을 때만 온다 — 생성자 AddHandler 주석 참고.
     /// </summary>
     private async void OnSurfaceKeyDown(object sender, KeyRoutedEventArgs e)
@@ -905,6 +1032,18 @@ public sealed partial class ExplorerPane : UserControl
                 e.Handled = true;
                 if (ExplorerFileOps.IsShiftDown()) await PermanentDeleteWithConfirmAsync(targets);
                 else await DeleteWithNoticeAsync(targets);
+                return;
+            case Windows.System.VirtualKey.Space: // A157 — 포커스 항목의 선택 토글(체크박스 클릭과 같은 동작)
+                // 포커스 항목 = 키 이벤트의 원천(포커스된 항목 컨테이너)에서 상향 탐색으로 찾는다.
+                // 못 찾으면 무동작·무소비 — 표면 자체(빈 영역)에 포커스가 있을 때 Space를 삼키면
+                // 스크롤 등 기본 동작을 잃는다. 편집 중에는 위의 TextBox 가드가 이미 막았다.
+                if (ItemFromSource(e.OriginalSource) is not { } focused) return;
+                e.Handled = true;
+                // 두 표면 모두 IsItemClickEnabled=True라 키보드 조작이 ItemClick을 낳을 수 있다 —
+                // Space 연타가 클릭 쌍(OnItemClick)으로 읽혀 파일이 열리는 것을 막는다.
+                // 위 Enter 분기가 같은 이유로 두는 한 줄과 같은 방어(A85 관례).
+                _lastClick = null;
+                focused.IsSelected = !focused.IsSelected;
                 return;
             case Windows.System.VirtualKey.Escape: // A94 4차 — 잘라내기 표시만 해제(탐색기 동등)
                 // 소비하지 않는다: 셸 Esc(S4 복귀 — OnShellEscape)가 이 표면 포커스에서도 성립해야 한다.
@@ -970,15 +1109,19 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>
     /// F2·우클릭 Rename 진입: 항목의 이름 TextBlock을 찾아 인라인 편집(ExplorerRenameBox)으로 바꾼다.
-    /// 이름 TextBlock 위치 = MakeGridItem(StackPanel의 Children[1])·MakeListItem(Grid 행의 Children[1]) —
-    /// 두 생성 코드 모두 콘텐츠 패널 둘째 자식이 이름이다(인덱스 수동 동기 — LoadDurationsAsync 관례).
+    /// 이름 TextBlock 조회 = 이름 기반(FindItemBlock, A156) — 종전의 "콘텐츠 패널 둘째 자식"
+    /// 인덱스 계약은 A156의 2줄 레이아웃에서 자리가 밀려 폐기했다(어긋나도 예외 없이 조용한
+    /// return이라 F2가 무반응으로만 보였다). 두 표면 공용이라 MakeGridItem 타일의 이름
+    /// TextBlock에도 같은 이름을 붙여 뒀다.
+    /// 편집 상자는 ExplorerRenameBox가 이름 TextBlock과 같은 행·같은 칸에 앉힌다 — 새 리스트
+    /// 구조에서는 row 0 · column 1(이름 자리)이고, 상세 줄(row 1)은 편집 중에도 그대로 보인다.
     /// 커밋 성공 갱신 = RefreshAfterFileOp(편집이 끝난 뒤에만 — 편집 중 재스캔은 편집 UI를 지운다).
     /// </summary>
     private void BeginRenameOf(SelectorItem item)
     {
         if (item.Tag is not ExplorerListing.Entry entry) return;
-        if (item.Content is not Panel { Children.Count: > 1 } panel ||
-            panel.Children[1] is not TextBlock nameBlock) return;
+        if (item.Content is not Panel panel) return; // 편집 상자를 끼울 host
+        if (FindItemBlock(item, ItemNameBlockName) is not { } nameBlock) return;
         ExplorerRenameBox.Begin(panel, nameBlock, entry.Path, MakeOpUi(), RefreshAfterFileOp);
     }
 
@@ -1047,6 +1190,11 @@ public sealed partial class ExplorerPane : UserControl
         if (e.GetCurrentPoint(owner).Properties.PointerUpdateKind
             != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
+        if (IsInCheckBox(e.OriginalSource))
+        {
+            _lastPress = null; // A157: 체크박스 눌림은 선택 토글 몫 — 쌍 판정에서 빼고 끊는다
+            return;            // (이 핸들러는 handledEventsToo라 체크박스가 Handled를 걸어도 도착한다)
+        }
         if (ExplorerFileOps.IsCtrlDown())
         {
             _lastPress = null; // Ctrl 토글 선택 — 진행 중이던 쌍 판정을 끊는다
@@ -1075,6 +1223,63 @@ public sealed partial class ExplorerPane : UserControl
             node = VisualTreeHelper.GetParent(node);
         }
         return null;
+    }
+
+    // ---------- 선택 체크박스 (A157, v0.168.0) ----------
+
+    /// <summary>
+    /// 체크박스 클릭 = 그 항목의 선택 토글 (A157). 체크 상태 자체를 진실로 삼지 않는다 —
+    /// 선택을 토글하면 SelectionChanged가 돌아와 체크를 맞춘다(집합은 ListView 선택 하나뿐이다).
+    /// <para>
+    /// **Checked/Unchecked를 구독하지 않는 이유**: 그 둘은 프로그램적 IsChecked 대입에도 발화해
+    /// "선택 → 체크 → 선택" 되먹임 루프가 생긴다. Click은 사용자 입력에서만 발화하므로 루프가
+    /// 구조적으로 성립하지 않는다 — 그래서 배선은 Click 하나뿐이다.
+    /// </para>
+    /// <para>
+    /// ButtonBase.Click의 인자(RoutedEventArgs)에는 Handled가 없다(WinUI — 저장소의 e.Handled
+    /// 사용처는 전부 Pointer/Key/Tapped 파생 인자다). 클릭이 더블클릭 열기로 새는 것은
+    /// 체크박스가 포인터 이벤트를 스스로 소비하는 것 + IsInCheckBox 가드 두 벌이 막는다.
+    /// </para>
+    /// </summary>
+    private void OnItemCheckClick(object sender, RoutedEventArgs e)
+    {
+        if (ItemFromSource(sender) is not { } item) return;
+        item.IsSelected = !item.IsSelected;
+    }
+
+    /// <summary>
+    /// 선택 → 체크 동기 (A157). 바뀐 항목만 훑는다 — 전량 순회면 Ctrl+A 한 번에 N번 돈다.
+    /// 이 핸들러는 IsChecked 대입만 한다: 체크박스 쪽은 Click(사용자 입력 전용)만 듣기 때문에
+    /// 이 대입이 다시 선택을 건드릴 경로가 없다(루프 부재의 근거 — OnItemCheckClick 주석).
+    /// Fill의 Items.Clear()가 옛 컨테이너를 RemovedItems로 실어 보내지만, 트리에서 떨어진
+    /// 체크박스에 false를 쓰는 것은 무해하다(그 항목은 그대로 버려진다).
+    /// </summary>
+    private void OnListSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        foreach (var removed in e.RemovedItems)
+            if (FindItemCheckBox(removed) is { } box) box.IsChecked = false;
+        foreach (var added in e.AddedItems)
+            if (FindItemCheckBox(added) is { } box) box.IsChecked = true;
+    }
+
+    /// <summary>
+    /// 이벤트 원본이 항목 체크박스(A157) 안에서 왔는지 — 조상 상향 탐색(깊이 상한 64 =
+    /// ItemFromSource와 같은 방어). CheckBox는 자기 템플릿 내부 요소를 OriginalSource로 실어
+    /// 보내므로 `is CheckBox` 한 줄로는 걸러지지 않는다. 항목 컨테이너(SelectorItem)까지
+    /// 올라오면 체크박스 밖이 확정이라 거기서 멈춘다 — 바깥쪽 무관한 CheckBox 오탐 방지.
+    /// 필요한 이유: A85/A131 더블클릭 판정이 PointerPressed를 handledEventsToo로 관찰해
+    /// 체크박스가 Handled를 걸어도 그대로 받는다 — 막지 않으면 체크박스 빠른 2연타가 파일 열기가 된다.
+    /// </summary>
+    private static bool IsInCheckBox(object source)
+    {
+        var node = source as DependencyObject;
+        for (var depth = 0; node is not null && depth < 64; depth++)
+        {
+            if (node is CheckBox) return true;
+            if (node is SelectorItem) return false; // 항목 컨테이너까지 왔다 = 체크박스 밖
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return false;
     }
 
     /// <summary>
@@ -1107,6 +1312,7 @@ public sealed partial class ExplorerPane : UserControl
     private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
+        if (IsInCheckBox(e.OriginalSource)) return; // A157: 체크박스 2연타 = 선택 토글 두 번(열기 아님)
         if (sender is not SelectorItem { Tag: ExplorerListing.Entry entry } item) return;
         e.Handled = true;
         _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게

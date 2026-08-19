@@ -640,8 +640,20 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             p.SetRate(Speeds[i]);
     }
 
+    /// <summary>
+    /// Space = 재생/일시정지. A157(v0.168.0)에서 탐색기 표면의 Space(선택 토글)와 충돌하므로,
+    /// 포커스가 통과 표면(탐색기 리스트·트리·썸네일)이나 텍스트 입력에 있으면 삼키지 않는다 —
+    /// 액셀러레이터는 표면 KeyDown보다 먼저 돌아 여기서 흘려 주지 않으면 표면이 받을 방법이 없다.
+    /// 가드 형태는 영상 모듈의 Enter 선례(VideoPlayerView.OnFullScreenEnterInvoked)와 같은 한 벌 —
+    /// 이 파일에는 Enter 액셀러레이터가 없어(음악에는 전체화면이 없다) 그쪽 형태를 옮겨 왔다.
+    /// </summary>
     private void OnTogglePlayInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (HotkeySupport.ShouldPassThrough(this))
+        {
+            args.Handled = false;
+            return;
+        }
         args.Handled = true;
         TogglePlayPause();
     }
