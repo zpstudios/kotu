@@ -288,14 +288,28 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 else
                 {
                     // 부분 실패는 토글을 되돌리지 않는다(A77 확정) — 결과를 행에 남겨 다음 조작 전까지 유지한다.
-                    progressText.Text = $"Registered {total - failed.Count}/{total} ({failed.Count} failed)";
+                    progressText.Text = $"Registered {total - failed.Count}/{total} ({failed.Count} need confirmation)";
 
-                    // 실패 확장자는 A25 폴백 — 설정 딥링크를 한 번 열어 사용자가 확정하게 한다
-                    // (확장자별 대화상자는 "Set default..." 버튼으로 여전히 가능).
-                    _status.Text = $"{module.BrandName}: set {total - failed.Count}/{total} automatically. "
-                                 + $"Windows blocks the rest ({string.Join(" ", failed)}) - confirm them on the "
-                                 + "page that just opened, or use \"Set default...\".";
-                    ExplorerIntegration.OpenDefaultAppsSettings();
+                    // A166: 실패를 두 갈래로 나눈다. UCPD 보호 확장자(.pdf 등)는 Windows가 커널에서
+                    // 자동 지정을 막으므로 "확인 필요"로만 안내하고 딥링크를 매번 자동으로 띄우지 않는다
+                    // (매번 뜨는 불편 억제 + 딥링크 페이지의 빈 화면 이슈 우회). 일반(비보호) 실패만
+                    // 종전대로 설정 딥링크를 한 번 열어 사용자가 확정하게 한다.
+                    var protectedExts = failed.Where(ExplorerIntegration.IsProtectedExtension).ToList();
+                    var otherExts = failed.Where(e => !ExplorerIntegration.IsProtectedExtension(e)).ToList();
+
+                    if (otherExts.Count > 0)
+                    {
+                        _status.Text = $"{module.BrandName}: set {total - failed.Count}/{total} automatically. "
+                                     + $"Windows blocks the rest ({string.Join(" ", failed)}) - confirm them on the "
+                                     + "page that just opened, or use \"Set default...\".";
+                        ExplorerIntegration.OpenDefaultAppsSettings();
+                    }
+                    else
+                    {
+                        _status.Text = "Windows requires confirmation for these file types "
+                                     + $"({string.Join(" ", protectedExts)}). Use \"Set default...\" and choose "
+                                     + $"{module.BrandName}, or pick it in Windows Settings.";
+                    }
                 }
             };
         }

@@ -200,6 +200,26 @@ public static class ExplorerIntegration
         @"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts";
 
     /// <summary>
+    /// Win10/Win11의 UserChoice Protection Driver(UCPD.sys)가 커널 레지스트리 콜백(CmRegisterCallbackEx)으로
+    /// 보호하는 확장자·프로토콜 (A166 조사). 이 목록의 UserChoice/UserChoiceLatest 키는 Microsoft 서명
+    /// 신뢰 프로세스만 쓰기/삭제/이름변경/ACL 변경이 허용되고, 제3자 미서명 앱(KOTU)이 강행하면 커널이
+    /// ACCESS_DENIED로 되돌린다. 게다가 진단 데이터가 켜져 있으면 시도 자체(수정 종류·바이너리 이름)가
+    /// Microsoft 텔레메트리로 보고된다. 그래서 이 확장자는 A38 강행을 아예 건너뛰고 곧바로 폴백으로 안내한다.
+    /// 목록 근거: kolbicz UCPD 분석(2024·2025) + binary.ninja 리버싱(2025). 목록은 커널 드라이버가
+    /// 정하는 고정 집합이라 런타임 실패 기억 없이 하드코딩으로 충분하다.
+    /// </summary>
+    private static readonly HashSet<string> UcpdProtectedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".pdf", ".htm", ".html", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    };
+
+    /// <summary>
+    /// ext가 UCPD가 커널에서 보호하는 확장자인지 — true면 UserChoice 강행이 반드시 실패하므로
+    /// 시도하지 않고 사용자 확인 폴백(설정 페이지·'연결 프로그램' 대화상자)으로 안내한다.
+    /// </summary>
+    public static bool IsProtectedExtension(string ext) => UcpdProtectedExtensions.Contains(ext);
+
+    /// <summary>
     /// 모듈의 모든 확장자를 KOTU 기본 앱으로 강제 지정 시도.
     /// 반드시 <see cref="RegisterAssociation"/> 이후 호출(ProgID 클래스 키가 있어야 UserChoice가 유효).
     /// </summary>
@@ -220,7 +240,10 @@ public static class ExplorerIntegration
         var done = 0;
         foreach (var ext in module.SupportedExtensions)
         {
-            if (!TrySetDefaultForExtension(ext, ExtProgId(module, ext), sid))
+            // UCPD 보호 확장자(.pdf 등)는 강행해도 커널이 되돌리므로 시도하지 않는다 — 무익한
+            // 재시도·텔레메트리를 피하고 폴백으로만 안내한다(A166). 호출 측은 실패 목록에서
+            // IsProtectedExtension으로 이들을 가려 "확인 필요" 안내와 일반 실패를 구분한다.
+            if (IsProtectedExtension(ext) || !TrySetDefaultForExtension(ext, ExtProgId(module, ext), sid))
                 failed.Add(ext);
             progress?.Report(new AssociationProgress(++done, total, AssociationProgress.SettingDefault));
         }
