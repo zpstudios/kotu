@@ -14,12 +14,12 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 경로 바: 위로 이동 + 현재 경로(우측 정렬 — 리스트 쪽, A8) + 필터(A7) + 정렬(A5) -->
+        <!-- 경로 바: 위로 이동 + 현재 경로(우측 정렬 — 리스트 쪽, A8) + 필터(A7).
+             정렬(A5)은 A155에서 드롭다운(SortButton)을 리스트 컬럼 헤더로 대체해 이 줄에서 빠졌다 -->
         <Grid x:Name="PathBar" Grid.Row="0" ColumnSpacing="8" Padding="10,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Button x:Name="UpButton" Click="OnUpClicked" ToolTipService.ToolTip="Up one folder">
@@ -32,23 +32,6 @@
             <DropDownButton x:Name="FilterButton" Grid.Column="2" Padding="8,5"
                             ToolTipService.ToolTip="Filter file types">
                 <FontIcon x:Name="FilterIcon" Glyph="&#xE71C;" FontSize="13" />
-            </DropDownButton>
-            <DropDownButton x:Name="SortButton" Grid.Column="3" Padding="8,5"
-                            ToolTipService.ToolTip="Sort by">
-                <FontIcon Glyph="&#xE8CB;" FontSize="13" />
-                <DropDownButton.Flyout>
-                    <MenuFlyout Placement="BottomEdgeAlignedRight">
-                        <RadioMenuFlyoutItem x:Name="SortByName" Text="Name"
-                                             GroupName="kotu-explorer-sort" Click="OnSortChanged" />
-                        <RadioMenuFlyoutItem x:Name="SortBySize" Text="Size"
-                                             GroupName="kotu-explorer-sort" Click="OnSortChanged" />
-                        <RadioMenuFlyoutItem x:Name="SortByModified" Text="Date modified"
-                                             GroupName="kotu-explorer-sort" Click="OnSortChanged" />
-                        <!-- A117(v0.136.0): 만든 날짜 - date modified와 같은 방식으로 병존 -->
-                        <RadioMenuFlyoutItem x:Name="SortByCreated" Text="Date created"
-                                             GroupName="kotu-explorer-sort" Click="OnSortChanged" />
-                    </MenuFlyout>
-                </DropDownButton.Flyout>
             </DropDownButton>
         </Grid>
 
@@ -75,16 +58,33 @@
                       IsItemClickEnabled="True"
                       ItemClick="OnItemClick" />
 
-            <!-- 우: 리스트 뷰 (다중선택·드래그·드랍·빈 영역 메뉴는 그리드와 같은 규칙 — A94) -->
-            <!-- A152: 아래 패딩 48 = 종전 4 + 하단 바 44 (위 IconGrid와 같은 보정) -->
-            <ListView x:Name="ListPane" Grid.Column="1"
-                      Padding="4,4,4,48"
-                      Background="Transparent"
-                      SelectionMode="Extended"
-                      IsItemClickEnabled="True"
-                      ItemClick="OnItemClick"
-                      BorderThickness="1,0,0,0"
-                      BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" />
+            <!-- 우: 컬럼 헤더(A155) + 리스트 뷰. 헤더는 이 리스트에만 있다 — 중앙 썸네일
+                 (ThumbnailExplorer)은 헤더 없음(현행 유지). 정렬 설정은 전역 1벌이라 두 표면에
+                 같은 순서가 반영된다(RefreshView가 ViewChanged로 같은 목록을 흘린다). -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <!-- A155: 헤더 6종(Name/Type/Size/Created/Modified/Info) — 정렬 버튼이 본체다
+                     (값 표시는 A156의 2줄 행이 담당). 버튼·컬럼 정의는 코드에서 채운다
+                     (BuildListHeader — EnsureFilterFlyout처럼 조립 지점 1곳).
+                     아래 구분선은 FileListOverlay의 PathBarHost와 같은 Border 관용구. -->
+                <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="0,0,0,1">
+                    <Grid x:Name="ListHeader" ColumnSpacing="4" Padding="8,2,8,2" />
+                </Border>
+                <!-- 다중선택·드래그·드랍·빈 영역 메뉴는 그리드와 같은 규칙 — A94 -->
+                <!-- A152: 아래 패딩 48 = 종전 4 + 하단 바 44 (위 IconGrid와 같은 보정) -->
+                <ListView x:Name="ListPane" Grid.Row="1"
+                          Padding="4,4,4,48"
+                          Background="Transparent"
+                          SelectionMode="Extended"
+                          IsItemClickEnabled="True"
+                          ItemClick="OnItemClick"
+                          BorderThickness="1,0,0,0"
+                          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" />
+            </Grid>
 
             <TextBlock x:Name="EmptyText" Grid.ColumnSpan="2"
                        Visibility="Collapsed" Opacity="0.6"

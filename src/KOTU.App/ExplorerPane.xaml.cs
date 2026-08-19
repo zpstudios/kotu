@@ -66,9 +66,14 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>현재 폴더 경로 (A94 — 호스트의 패널 드랍·붙여넣기 대상). 항해 전이면 빈 문자열.</summary>
     internal string CurrentFolder => _folder;
 
-    // "name"/"size"/"modified"/"created"(A117, v0.136.0) — SortKey.ToString().ToLowerInvariant()와 수동 동기.
-    // 모르는 값(구 버전·손편집)은 이름순으로 폴백한다(아래 switch의 _ 분기).
+    // "name"/"size"/"modified"/"created"(A117)/"type"(A155) — SortKey.ToString().ToLowerInvariant()와
+    // 수동 동기. 모르는 값(구 버전·손편집)은 이름순으로 폴백한다(아래 switch의 _ 분기).
     private const string SortSettingKey = "explorer.sort";
+
+    // 정렬 방향 (A155, 부록 B 69 ①) — true = 내림차순. explorer.sort와 같은 층·같은 왕복(전역 1벌).
+    // 키가 없으면(구 버전 설정) 현재 정렬 키의 종전 고정 방향(DefaultDescending)으로 폴백해
+    // 업데이트 전과 같은 화면을 유지한다 — 마이그레이션 없음.
+    private const string SortDescSettingKey = "explorer.sortDesc";
 
     /// <summary>
     /// 숨김·시스템 파일 표시 여부 (A160, v0.169.0) — explorer.sort와 같은 층의 탐색기 설정이라
@@ -87,6 +92,7 @@ public sealed partial class ExplorerPane : UserControl
     private ModuleWorker? _worker;            // 스캔·썸네일 전용 — 페인별 분리(A42 정책)
     private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 정렬 변경 시 재스캔 없이 재배치(A5)
     private ExplorerListing.SortKey _sortKey = ExplorerListing.SortKey.Name;
+    private bool _sortDesc; // A155 — 초기값 false = Name의 기본 방향(DefaultDescending(Name))과 일치
     private bool _showHidden; // A160 — explorer.showHidden(기본 false = 숨김·시스템 감춤)
     private ISettingsService? _settings;
 
@@ -105,10 +111,14 @@ public sealed partial class ExplorerPane : UserControl
                 "size" => ExplorerListing.SortKey.Size,
                 "modified" => ExplorerListing.SortKey.Modified,
                 "created" => ExplorerListing.SortKey.Created, // A117
+                "type" => ExplorerListing.SortKey.Type, // A155
                 _ => ExplorerListing.SortKey.Name,
             };
+            // A155: 방향은 키 다음에 읽는다 — 저장값이 없으면 그 키의 종전 고정 방향으로 폴백.
+            _sortDesc = value?.Get(SortDescSettingKey, DefaultDescending(_sortKey))
+                ?? DefaultDescending(_sortKey);
             _showHidden = value?.Get(ShowHiddenSettingKey, false) ?? false; // A160 — 정렬과 같은 왕복
-            SyncSortChecks();
+            SyncSortHeaders();
             SyncShowHiddenCheck(); // A160 — 필터 메뉴가 이미 만들어져 있으면 체크도 새 값에 맞춘다
         }
     }
@@ -119,7 +129,7 @@ public sealed partial class ExplorerPane : UserControl
     public ExplorerPane()
     {
         InitializeComponent();
-        SyncSortChecks();
+        BuildListHeader(); // A155 — 컬럼 헤더(정렬 버튼) 조립 + 초기 정렬 지표 동기
         // A34: 파일 리스트에 포커스가 있는 동안에는 모듈 버튼 핫키를 삼키지 않는다 —
         // 리스트의 타이핑 탐색(첫 글자 점프)이 우선(빈 모듈 탐색기·좌측 오버레이 공통).
         IconGrid.Tag = HotkeySupport.PassThroughTag;
@@ -191,29 +201,135 @@ public sealed partial class ExplorerPane : UserControl
         foreach (var item in ListPane.Items) ExplorerFileOps.ApplyCutMark(item);
     }
 
-    // ---------- 정렬 (A5) ----------
+    // ---------- 정렬 (A5 → A155 컬럼 헤더) ----------
+    // A155: 종전 SortButton 드롭다운(4옵션·방향 토글 없음)을 리스트 위 컬럼 헤더 6종으로 대체.
+    // 헤더 클릭 = 그 속성으로 정렬, 같은 헤더 재클릭 = 방향 토글(부록 B 69 ①). 필터(A7)는 존치.
 
-    /// <summary>정렬 플라이아웃의 체크 상태를 _sortKey에 맞춘다.</summary>
-    private void SyncSortChecks()
+    /// <summary>정렬 방향 지표 글리프 — 오름차순(ChevronUp). 활성 헤더에만 보인다.</summary>
+    private const string SortAscGlyph = "\uE70E";
+
+    /// <summary>정렬 방향 지표 글리프 — 내림차순(ChevronDown).</summary>
+    private const string SortDescGlyph = "\uE70D";
+
+    /// <summary>키별 방향 지표 아이콘 — SyncSortHeaders가 활성 헤더 하나만 켠다.</summary>
+    private readonly Dictionary<ExplorerListing.SortKey, FontIcon> _sortHeaderArrows = new();
+
+    /// <summary>
+    /// 키의 기본(첫 클릭) 정렬 방향 (A155) — Arrange가 방향 인자화되기 전의 종류별 고정 방향과
+    /// 같은 값이다(Size = 큰 것부터, Modified/Created = 최신부터, Name/Type = 오름차순).
+    /// 저장값 없는 구 설정의 폴백(Settings 세터)과 헤더 전환 첫 클릭이 같은 표를 쓴다.
+    /// </summary>
+    private static bool DefaultDescending(ExplorerListing.SortKey key) =>
+        key is ExplorerListing.SortKey.Size
+            or ExplorerListing.SortKey.Modified
+            or ExplorerListing.SortKey.Created;
+
+    /// <summary>
+    /// 리스트 컬럼 헤더 조립 (A155) — XAML의 빈 ListHeader 그리드에 6칸을 채운다(생성자에서 1회).
+    /// 헤더는 정렬 버튼이 본체다: 값 표시는 A156의 2줄 행이 담당하므로 열 정렬(칸 맞춤)은 없고,
+    /// 25% 사이드바 폭에 맞춰 축약 라벨 + 잘림 허용(TextTrimming)으로 간다.
+    /// 버튼 모양은 MainWindow.MakeMenuItem의 투명 평면 버튼 관용구(배경 투명·테두리 0).
+    /// </summary>
+    private void BuildListHeader()
     {
-        SortByName.IsChecked = _sortKey == ExplorerListing.SortKey.Name;
-        SortBySize.IsChecked = _sortKey == ExplorerListing.SortKey.Size;
-        SortByModified.IsChecked = _sortKey == ExplorerListing.SortKey.Modified;
-        SortByCreated.IsChecked = _sortKey == ExplorerListing.SortKey.Created; // A117
+        // Name만 2* — 나머지 5칸은 1*(약어 라벨 기준. 좁으면 라벨이 잘리는 것을 허용한다).
+        ListHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        for (var i = 0; i < 5; i++)
+            ListHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        AddSortHeader(0, "Name", "Sort by name", ExplorerListing.SortKey.Name);
+        AddSortHeader(1, "Type", "Sort by type", ExplorerListing.SortKey.Type);
+        AddSortHeader(2, "Size", "Sort by size", ExplorerListing.SortKey.Size);
+        AddSortHeader(3, "Created", "Sort by date created", ExplorerListing.SortKey.Created);
+        AddSortHeader(4, "Modified", "Sort by date modified", ExplorerListing.SortKey.Modified);
+
+        // Info(모듈별 정보 — 부록 B 69 ④)는 정렬 비대상: 값(해상도·페이지 수·압축률)이 지연
+        // 로드(LoadDetailInfoAsync)라 정렬 시점에는 아직 없다. Entry에 넣어 동기 열거로 채우는
+        // 것은 폴더 진입을 늦춰 금지(A156 결정)라, 이 헤더는 표시 전용(버튼 아님·흐림)으로 확정.
+        var info = new TextBlock
+        {
+            Text = "Info",
+            FontSize = 11,
+            Opacity = 0.5,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        Grid.SetColumn(info, 5);
+        ListHeader.Children.Add(info);
+
+        SyncSortHeaders();
     }
 
-    private void OnSortChanged(object sender, RoutedEventArgs e)
+    /// <summary>정렬 헤더 버튼 1개 — 라벨 + (활성일 때만) 방향 지표 아이콘.</summary>
+    private void AddSortHeader(int column, string label, string tooltip, ExplorerListing.SortKey key)
     {
-        var key = ReferenceEquals(sender, SortBySize) ? ExplorerListing.SortKey.Size
-                : ReferenceEquals(sender, SortByModified) ? ExplorerListing.SortKey.Modified
-                : ReferenceEquals(sender, SortByCreated) ? ExplorerListing.SortKey.Created // A117
-                : ExplorerListing.SortKey.Name;
-        if (key == _sortKey) return;
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        content.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontSize = 11,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        var arrow = new FontIcon
+        {
+            Glyph = SortAscGlyph,
+            FontSize = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Visibility.Collapsed,
+        };
+        content.Children.Add(arrow);
+        _sortHeaderArrows[key] = arrow;
 
-        _sortKey = key;
-        SyncSortChecks();
-        _settings?.Set(SortSettingKey, key.ToString().ToLowerInvariant());
+        var button = new Button
+        {
+            Content = content,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(4, 2, 4, 2),
+            MinWidth = 0,
+            MinHeight = 0, // 기본 MinHeight(32)가 헤더 한 줄 높이를 먹지 않게(A157 체크박스와 같은 이유)
+        };
+        ToolTipService.SetToolTip(button, tooltip); // 라벨이 잘려도 전체 뜻 확인 가능(PathText 관용구)
+        button.Click += (_, _) => OnSortHeaderClick(key);
+        Grid.SetColumn(button, column);
+        ListHeader.Children.Add(button);
+    }
+
+    /// <summary>헤더의 정렬 지표를 _sortKey·_sortDesc에 맞춘다 (종전 SyncSortChecks의 자리).</summary>
+    private void SyncSortHeaders()
+    {
+        foreach (var (key, arrow) in _sortHeaderArrows)
+        {
+            var active = key == _sortKey;
+            arrow.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+            if (active) arrow.Glyph = _sortDesc ? SortDescGlyph : SortAscGlyph;
+        }
+    }
+
+    /// <summary>
+    /// 헤더 클릭 (A155): 같은 헤더 = 방향 토글, 다른 헤더 = 그 키로 전환(방향은 키의 기본값으로
+    /// 리셋 — 탐색기 관례). 저장은 종전 OnSortChanged와 같은 즉시 Set + Save(전역 1벌).
+    /// 재그리기는 RefreshView(재스캔 없음) — ViewChanged로 중앙 썸네일까지 같은 순서가 흐르고,
+    /// 트리 동기(A134 SyncTreeToFolder)는 같은 폴더 조기 반환으로 걸러진다(재통지 무해).
+    /// </summary>
+    private void OnSortHeaderClick(ExplorerListing.SortKey key)
+    {
+        if (key == _sortKey)
+        {
+            _sortDesc = !_sortDesc;
+        }
+        else
+        {
+            _sortKey = key;
+            _sortDesc = DefaultDescending(key);
+            _settings?.Set(SortSettingKey, key.ToString().ToLowerInvariant());
+        }
+        _settings?.Set(SortDescSettingKey, _sortDesc);
         _settings?.Save();
+        SyncSortHeaders();
         RefreshView();
     }
 
@@ -224,7 +340,7 @@ public sealed partial class ExplorerPane : UserControl
     private void RefreshView()
     {
         var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
-        var arranged = ExplorerListing.Arrange(_entries, _sortKey, _hiddenExts);
+        var arranged = ExplorerListing.Arrange(_entries, _sortKey, _sortDesc, _hiddenExts);
         Fill(arranged);
         ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
         _ = LoadDetailsAsync(seq);
@@ -312,8 +428,9 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 필터 메뉴의 숨김 표시 토글 체크를 _showHidden에 맞춘다 (A160 — SyncSortChecks와 같은 역할).
-    /// 정렬 항목은 XAML 선언이라 늘 존재하지만 이 항목은 첫 항해(EnsureFilterFlyout) 때 만들어지므로,
+    /// 필터 메뉴의 숨김 표시 토글 체크를 _showHidden에 맞춘다 (A160 — SyncSortHeaders와 같은 역할).
+    /// 정렬 헤더는 생성자(BuildListHeader)에서 만들어져 늘 존재하지만 이 항목은 첫 항해
+    /// (EnsureFilterFlyout) 때 만들어지므로,
     /// 그전에는 맞출 대상이 없다(null이면 조용히 넘어간다 — 만들어질 때 현재 값으로 초기화된다).
     /// </summary>
     private void SyncShowHiddenCheck()
@@ -334,10 +451,11 @@ public sealed partial class ExplorerPane : UserControl
             : "Filter file types");
     }
 
-    /// <summary>가벼운 길이 텍스트를 먼저 채우고, 무거운 썸네일을 이어서 채운다(같은 워커 직렬 큐).</summary>
+    /// <summary>가벼운 상세 텍스트(길이·모듈별 정보 — A6·A155)를 먼저 채우고,
+    /// 무거운 썸네일을 이어서 채운다(같은 워커 직렬 큐).</summary>
     private async Task LoadDetailsAsync(int seq)
     {
-        await LoadDurationsAsync(seq);
+        await LoadDetailInfoAsync(seq);
         await LoadThumbnailsAsync(seq);
     }
 
@@ -358,7 +476,7 @@ public sealed partial class ExplorerPane : UserControl
     /// 이미 떼어 간 뒤면 null을 돌려준다(멱등) — 같은 UIElement는 부모를 둘 가질 수 없으므로
     /// 호출이 반복돼도 두 번 붙지 않게 컬렉션 멤버십으로 직접 판정한다(FrameworkElement.Parent는
     /// 라이브 트리 부착 전에 null이라 가드로 못 쓴다 — HardwareView.EnsureCards 주석 참고).
-    /// x:Name 필드(UpButton·PathText·FilterButton·SortButton…)는 부모에서 떼어도 그대로
+    /// x:Name 필드(UpButton·PathText·FilterButton…)는 부모에서 떼어도 그대로
     /// 살아 있어 NavigateTo·EnsureFilterFlyout 등 기존 코드는 손댈 필요가 없다
     /// (ImageViewerView.TakeBottomBar와 같은 관용구).
     /// </summary>
@@ -645,22 +763,33 @@ public sealed partial class ExplorerPane : UserControl
             : null;
 
     /// <summary>
-    /// 리스트 행 2줄째 텍스트 (A156). 순서 확정: 크기 · [길이] · Created · Modified.
+    /// 지연 로드로 채우는 상세 조각 한 벌 (A6 길이 → A155 모듈별 정보 확장).
+    /// Duration = 재생 길이(미디어만), Info = 상세 줄 조각(해상도 "1920x1080" · 페이지 "12 pages" ·
+    /// 압축률 "42%"), InfoTip = 툴팁용 라벨 포함 한 줄("Resolution: …" 등 — 라벨 선택이 종류마다
+    /// 달라 조립 시점이 아니라 취득 시점(FetchDetailInfo)에 확정한다).
+    /// Entry에 싣지 않는 이유(A156 결정 승계): 폴더 스캔이 동기 열거라 진입이 느려진다.
+    /// </summary>
+    private sealed record DetailInfo(string Duration, string Info, string InfoTip)
+    {
+        public static readonly DetailInfo Empty = new(string.Empty, string.Empty, string.Empty);
+    }
+
+    /// <summary>
+    /// 리스트 행 2줄째 텍스트 (A156). 순서 확정: 크기 · [길이] · [모듈별 정보(A155)] · Created · Modified.
     /// 구분자는 저장소 관용구 "  ·  "(ImageViewerView.BuildMetaText와 같은 조립)이고,
     /// 빈 조각은 건너뛴다 = 구분자만 남는 "  ·    ·  " 모양이 생기지 않는다.
     /// 폴더는 크기 조각을 넣지 않는다(종전 리스트 행의 규칙 승계).
     /// 날짜는 시각 없이 yyyy-MM-dd — 이 줄이 폭 25% 사이드바에 두 날짜를 담아야 한다.
     /// 문화권 인자 없이 쓰는 것은 저장소 표시 관용구 그대로다(ImageViewerView·ArchiveView 동일).
     /// 크기·날짜는 빈 문자열이 될 수 없어(FormatSize는 최소 "0 B") 조각 가드가 필요 없고,
-    /// 길이만 비어 올 수 있어 그것만 가드한다.
-    /// ※ 길이(duration) 조각은 A155가 해상도 표기로 확장할 자리다 — 뒤 배치는 이 헬퍼의 조각
-    /// 목록에 한 줄을 더하는 것으로 끝나야 한다(호출부는 이미 이 헬퍼만 부른다).
+    /// 길이·정보만 비어 올 수 있어 그것만 가드한다.
     /// </summary>
-    private static string BuildDetailText(ExplorerListing.Entry entry, string duration)
+    private static string BuildDetailText(ExplorerListing.Entry entry, DetailInfo details)
     {
         var parts = new List<string>();
         if (!entry.IsFolder) parts.Add(ExplorerListing.FormatSize(entry.Size));
-        if (duration.Length > 0) parts.Add(duration);
+        if (details.Duration.Length > 0) parts.Add(details.Duration);
+        if (details.Info.Length > 0) parts.Add(details.Info); // A155 — 길이 옆이 예약된 자리(A156 훅)
         parts.Add(entry.Created.ToString("yyyy-MM-dd"));
         parts.Add(entry.Modified.ToString("yyyy-MM-dd"));
         return string.Join("  ·  ", parts);
@@ -670,27 +799,29 @@ public sealed partial class ExplorerPane : UserControl
     /// 리스트 행 툴팁 (A156): 파일명 + 라벨 붙은 상세를 줄 단위로 쌓는다.
     /// 2줄 레이아웃의 상세 줄에는 라벨이 없어 Created와 Modified를 눈으로 구분할 수 없다 —
     /// 그 구분을 툴팁이 맡는다(조각 선택 규칙은 BuildDetailText와 같다).
+    /// 모듈별 정보(A155)의 라벨은 InfoTip이 이미 담고 있어 그대로 한 줄을 얹는다.
     /// </summary>
-    private static string BuildTooltipText(ExplorerListing.Entry entry, string duration)
+    private static string BuildTooltipText(ExplorerListing.Entry entry, DetailInfo details)
     {
         var lines = new List<string> { entry.Name };
         if (!entry.IsFolder) lines.Add("Size: " + ExplorerListing.FormatSize(entry.Size));
-        if (duration.Length > 0) lines.Add("Length: " + duration);
+        if (details.Duration.Length > 0) lines.Add("Length: " + details.Duration);
+        if (details.InfoTip.Length > 0) lines.Add(details.InfoTip); // A155
         lines.Add("Created: " + entry.Created.ToString("yyyy-MM-dd"));
         lines.Add("Modified: " + entry.Modified.ToString("yyyy-MM-dd"));
         return string.Join("\n", lines);
     }
 
     /// <summary>
-    /// 상세 줄과 툴팁을 한 벌로 (다시) 채운다 (A156) — 생성 시점(MakeListItem)과 길이 지연 로드
-    /// 도착 시점(LoadDurationsAsync)이 같은 조립을 쓰게 하는 단일 깔때기.
+    /// 상세 줄과 툴팁을 한 벌로 (다시) 채운다 (A156) — 생성 시점(MakeListItem)과 지연 로드
+    /// 도착 시점(LoadDetailInfoAsync)이 같은 조립을 쓰게 하는 단일 깔때기.
     /// </summary>
-    private static void ApplyDetail(ListViewItem item, ExplorerListing.Entry entry, string duration)
+    private static void ApplyDetail(ListViewItem item, ExplorerListing.Entry entry, DetailInfo details)
     {
         if (FindItemBlock(item, ItemDetailBlockName) is { } detail)
-            detail.Text = BuildDetailText(entry, duration);
+            detail.Text = BuildDetailText(entry, details);
         if (item.Content is UIElement row)
-            ToolTipService.SetToolTip(row, BuildTooltipText(entry, duration));
+            ToolTipService.SetToolTip(row, BuildTooltipText(entry, details));
     }
 
     /// <summary>
@@ -768,7 +899,7 @@ public sealed partial class ExplorerPane : UserControl
         row.Children.Add(check);
 
         var item = new ListViewItem { Content = row, Tag = entry };
-        ApplyDetail(item, entry, string.Empty); // 상세 줄 + 툴팁 초판(길이는 아직 도착 전)
+        ApplyDetail(item, entry, DetailInfo.Empty); // 상세 줄 + 툴팁 초판(길이·정보는 아직 도착 전)
         ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
         AttachContextMenu(item, entry, ListPane); // A24 + A94 2차(Rename·Delete)
         AttachDragDrop(item, entry, ListPane); // A94 — 드래그 아웃 + 폴더 항목 드랍
@@ -777,43 +908,60 @@ public sealed partial class ExplorerPane : UserControl
         return item;
     }
 
-    /// <summary>재생 길이 캐시(A6): 경로→(수정시각, 표시 텍스트). 수정시각이 다르면 무효.</summary>
-    private readonly Dictionary<string, (DateTime Modified, string Text)> _durationCache =
+    /// <summary>상세 조각 캐시(A6 → A155 확장): 경로→(수정시각, 조각 한 벌). 수정시각이 다르면 무효.</summary>
+    private readonly Dictionary<string, (DateTime Modified, DetailInfo Details)> _infoCache =
         new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>재생 길이를 물어볼 파일인지 — 비디오(영상)·오디오(음악) 모듈 담당 확장자 기준(A6, A10 분리 반영).</summary>
-    private static bool IsMediaFile(string name) =>
-        ExplorerListing.MatchesExtension(name, KOTU.Module.Video.VideoModule.Extensions) ||
-        ExplorerListing.MatchesExtension(name, KOTU.Module.Audio.AudioModule.Extensions);
+    /// <summary>지연 로드할 상세 조각의 종류 (A155) — 확장자로 결정한다(InfoKindOf).</summary>
+    private enum InfoKind
+    {
+        None,
+        Video, // 길이 + 해상도
+        Audio, // 길이만 (A6 종전 동작)
+        Pdf,   // 페이지 수 — 문서 모듈 확장자 중 PDF만(비PDF 텍스트는 페이지 개념이 없다)
+        Zip,   // 압축률 — 압축 모듈 확장자 중 zip만(그 외 포맷은 헤더 읽기가 값싸지 않아 생략)
+    }
 
     /// <summary>
-    /// 미디어 파일의 재생 길이를 리스트 행 2줄째 상세 줄에 합쳐 넣는다(A6 → A156).
-    /// 셸 속성(System.Media.Duration) 읽기는 워커에서, UI는 텍스트 반영만.
+    /// 어떤 상세 조각을 물어볼 파일인지 (A155 — 종전 IsMediaFile의 확장).
+    /// 미디어 판정은 비디오·오디오 모듈 담당 확장자 기준(A6, A10 분리 반영).
+    /// </summary>
+    private static InfoKind InfoKindOf(string name) =>
+        ExplorerListing.MatchesExtension(name, KOTU.Module.Video.VideoModule.Extensions) ? InfoKind.Video
+        : ExplorerListing.MatchesExtension(name, KOTU.Module.Audio.AudioModule.Extensions) ? InfoKind.Audio
+        : string.Equals(System.IO.Path.GetExtension(name), ".pdf", StringComparison.OrdinalIgnoreCase)
+            ? InfoKind.Pdf
+        : string.Equals(System.IO.Path.GetExtension(name), ".zip", StringComparison.OrdinalIgnoreCase)
+            ? InfoKind.Zip
+        : InfoKind.None;
+
+    /// <summary>
+    /// 파일별 상세 조각(길이·해상도·페이지 수·압축률 — A6 → A155)을 리스트 행 2줄째 상세 줄에
+    /// 합쳐 넣는다. 취득은 전부 워커에서(폴더 진입 체감 불변 — 동기 열거에 안 싣는 A156 결정),
+    /// UI는 텍스트 반영만. 재진입은 _loadSeq 가드(썸네일 루프와 같은 관용구).
     /// 정렬·필터 재그리기는 캐시가 흡수한다(수정시각 일치 시 재조회 없음).
     /// </summary>
-    private async Task LoadDurationsAsync(int seq)
+    private async Task LoadDetailInfoAsync(int seq)
     {
         var items = ListPane.Items.ToList(); // 스냅샷 — await 중 컬렉션 변경 대비
         foreach (var obj in items)
         {
             if (seq != _loadSeq) return;
             if (obj is not ListViewItem { Tag: ExplorerListing.Entry { IsFolder: false } entry } item) continue;
-            if (!IsMediaFile(entry.Name)) continue;
+            var kind = InfoKindOf(entry.Name);
+            if (kind == InfoKind.None) continue;
 
-            string text;
-            if (_durationCache.TryGetValue(entry.Path, out var hit) && hit.Modified == entry.Modified)
+            DetailInfo details;
+            if (_infoCache.TryGetValue(entry.Path, out var hit) && hit.Modified == entry.Modified)
             {
-                text = hit.Text;
+                details = hit.Details;
             }
             else
             {
                 try
                 {
-                    var ticks = await Worker.Run(_ => FetchDurationTicks(entry.Path));
+                    details = await Worker.Run(_ => FetchDetailInfo(kind, entry.Path));
                     if (seq != _loadSeq) return;
-                    text = ticks > 0
-                        ? ExplorerListing.FormatDuration(TimeSpan.FromTicks(ticks))
-                        : string.Empty;
                 }
                 catch (OperationCanceledException)
                 {
@@ -821,26 +969,80 @@ public sealed partial class ExplorerPane : UserControl
                 }
                 catch
                 {
-                    continue; // 속성을 못 읽는 파일은 빈 칸 유지
+                    continue; // 속성·헤더를 못 읽는 파일은 빈 칸 유지
                 }
-                if (_durationCache.Count > 4000) _durationCache.Clear(); // 장시간 세션 폭주 방지
-                _durationCache[entry.Path] = (entry.Modified, text);
+                if (_infoCache.Count > 4000) _infoCache.Clear(); // 장시간 세션 폭주 방지
+                _infoCache[entry.Path] = (entry.Modified, details);
             }
 
-            if (text.Length == 0) continue;
-            // A156: 길이는 더 이상 독립 칸이 아니라 2줄째 상세 줄의 한 조각이다 — 대입이 아니라
-            // 그 항목의 상세 줄과 툴팁을 통째로 다시 조립한다(조각 순서는 BuildDetailText가 쥔다).
-            ApplyDetail(item, entry, text);
+            if (details.Duration.Length == 0 && details.Info.Length == 0) continue;
+            // A156: 대입이 아니라 그 항목의 상세 줄과 툴팁을 통째로 다시 조립한다
+            // (조각 순서는 BuildDetailText가 쥔다).
+            ApplyDetail(item, entry, details);
         }
     }
 
-    /// <summary>워커 스레드: 셸 미디어 길이 속성(100ns 단위 = TimeSpan 틱)을 읽는다. 없으면 0.</summary>
-    private static long FetchDurationTicks(string path)
+    /// <summary>
+    /// 워커 스레드: 종류별 상세 조각 취득 (A155). 표시 문자열까지 여기서 확정한다 —
+    /// 캐시가 완성형을 담아 재그리기에서 재조립이 없다. 실패는 호출부 catch가 빈 칸으로 삼킨다.
+    /// </summary>
+    private static DetailInfo FetchDetailInfo(InfoKind kind, string path)
+    {
+        switch (kind)
+        {
+            case InfoKind.Video:
+            {
+                var (ticks, width, height) = FetchMediaProperties(path);
+                var duration = ticks > 0
+                    ? ExplorerListing.FormatDuration(TimeSpan.FromTicks(ticks))
+                    : string.Empty;
+                // 해상도(부록 B 69 ④) — 속성이 없는 파일(손상·비표준 컨테이너)은 길이만 남는다.
+                var res = width > 0 && height > 0 ? $"{width}x{height}" : string.Empty;
+                return new DetailInfo(duration, res, res.Length > 0 ? "Resolution: " + res : string.Empty);
+            }
+            case InfoKind.Audio:
+            {
+                var (ticks, _, _) = FetchMediaProperties(path);
+                var duration = ticks > 0
+                    ? ExplorerListing.FormatDuration(TimeSpan.FromTicks(ticks))
+                    : string.Empty;
+                return new DetailInfo(duration, string.Empty, string.Empty);
+            }
+            case InfoKind.Pdf:
+            {
+                // 문서를 실제로 여는 비용(암호 PDF는 예외 → 빈 칸)이지만 워커 + 캐시라 수용 —
+                // PdfPane.LoadDocumentAsync와 같은 API를 동기 대기(FetchThumbnail 관용구)로 쓴다.
+                var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
+                var doc = Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file)
+                    .AsTask().GetAwaiter().GetResult();
+                if (doc.PageCount == 0) return DetailInfo.Empty;
+                var pages = doc.PageCount == 1 ? "1 page" : $"{doc.PageCount} pages";
+                return new DetailInfo(string.Empty, pages, "Pages: " + doc.PageCount);
+            }
+            case InfoKind.Zip:
+            {
+                // 압축률 = 파일 크기 ÷ 원본 합(중앙 디렉터리만 읽는다 — 해제 없음). zip 한정.
+                var percent = KOTU.Module.Archive.ArchiveQuickInfo.TryGetZipCompressionPercent(path);
+                if (percent < 0) return DetailInfo.Empty;
+                return new DetailInfo(string.Empty, percent + "%", "Compression ratio: " + percent + "%");
+            }
+            default:
+                return DetailInfo.Empty;
+        }
+    }
+
+    /// <summary>워커 스레드: 셸 미디어 속성 — 길이(100ns 단위 = TimeSpan 틱)와 비디오 해상도를
+    /// 한 왕복으로 읽는다(A6 FetchDurationTicks의 확장 — 속성 목록만 늘었다). 없으면 0.</summary>
+    private static (long DurationTicks, int Width, int Height) FetchMediaProperties(string path)
     {
         var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
-        var props = file.Properties.RetrievePropertiesAsync(["System.Media.Duration"])
+        var props = file.Properties.RetrievePropertiesAsync(
+                ["System.Media.Duration", "System.Video.FrameWidth", "System.Video.FrameHeight"])
             .AsTask().GetAwaiter().GetResult();
-        return props.TryGetValue("System.Media.Duration", out var v) && v is ulong u ? (long)u : 0L;
+        var ticks = props.TryGetValue("System.Media.Duration", out var d) && d is ulong u ? (long)u : 0L;
+        var width = props.TryGetValue("System.Video.FrameWidth", out var w) && w is uint uw ? (int)uw : 0;
+        var height = props.TryGetValue("System.Video.FrameHeight", out var h) && h is uint uh ? (int)uh : 0;
+        return (ticks, width, height);
     }
 
     /// <summary>

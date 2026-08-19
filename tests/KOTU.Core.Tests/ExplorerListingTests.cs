@@ -127,23 +127,66 @@ public class ExplorerListingTests : IDisposable
     }
 
     [Fact]
-    public void Arrange_크기순_파일은_큰_것부터_폴더는_이름순()
+    public void Arrange_크기순_내림이면_파일은_큰_것부터_폴더는_이름순()
     {
+        // descending: true = 종전 Size 고정 방향(큰 것부터) — UI의 DefaultDescending(Size)이 넘기는 값.
         var entries = new[] { AFolder("z", 1), AFolder("a", 2), AFile("small.jpg", 10, 1), AFile("big.jpg", 999, 1) };
 
-        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Size);
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Size, descending: true);
 
         Assert.Equal(["a", "z", "big.jpg", "small.jpg"], result.Select(e => e.Name).ToArray());
     }
 
     [Fact]
-    public void Arrange_수정일순_최신부터_폴더도_수정일순()
+    public void Arrange_크기순_오름이면_작은_것부터_폴더는_그대로_이름순()
+    {
+        // A155: 방향 인자화 — 1차 키만 뒤집히고 폴더(크기 개념 없음)는 방향과 무관하게 이름순.
+        var entries = new[] { AFolder("z", 1), AFolder("a", 2), AFile("small.jpg", 10, 1), AFile("big.jpg", 999, 1) };
+
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Size);
+
+        Assert.Equal(["a", "z", "small.jpg", "big.jpg"], result.Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void Arrange_수정일순_내림이면_최신부터_폴더도_수정일순()
     {
         var entries = new[] { AFolder("old", 1), AFolder("new", 9), AFile("old.jpg", 1, 2), AFile("new.jpg", 1, 8) };
 
-        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Modified);
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Modified, descending: true);
 
         Assert.Equal(["new", "old", "new.jpg", "old.jpg"], result.Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void Arrange_이름순_내림이면_폴더도_파일도_역순()
+    {
+        // A155: Name은 폴더에도 파일에도 같은 키라 방향이 둘 다에 적용된다(폴더 먼저 규칙은 유지).
+        var entries = new[] { AFile("b.jpg", 1, 1), AFolder("z", 1), AFile("A.jpg", 2, 2), AFolder("a", 2) };
+
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Name, descending: true);
+
+        Assert.Equal(["z", "a", "b.jpg", "A.jpg"], result.Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void Arrange_타입순_확장자로_묶고_같은_확장자는_이름순_폴더는_이름순()
+    {
+        // A155: Type = Name에서 파생한 확장자 키(대소문자 무시). 2차 키 = 이름(늘 오름차순).
+        var entries = new[]
+        {
+            AFolder("sub", 1),
+            AFile("b.png", 1, 1),
+            AFile("a.PNG", 1, 1),
+            AFile("z.jpg", 1, 1),
+        };
+
+        var asc = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Type);
+        Assert.Equal(["sub", "z.jpg", "a.PNG", "b.png"], asc.Select(e => e.Name).ToArray());
+
+        // 내림 = 확장자만 역순 — 같은 확장자 안 이름순과 폴더 이름순은 그대로다.
+        var desc = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Type, descending: true);
+        Assert.Equal(["sub", "a.PNG", "b.png", "z.jpg"], desc.Select(e => e.Name).ToArray());
     }
 
     [Fact]
@@ -158,7 +201,7 @@ public class ExplorerListingTests : IDisposable
             AFile("new.jpg", 1, day: 2, createdDay: 8),
         };
 
-        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Created);
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Created, descending: true);
 
         Assert.Equal(["new", "old", "new.jpg", "old.jpg"], result.Select(e => e.Name).ToArray());
     }
@@ -168,7 +211,7 @@ public class ExplorerListingTests : IDisposable
     {
         var entries = new[] { AFolder("sub", 1), AFile("a.jpg", 1, 1), AFile("b.png", 1, 1), AFile("c.JPG", 1, 1) };
 
-        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Name, [".jpg"]);
+        var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Name, hiddenExtensions: [".jpg"]);
 
         Assert.Equal(["sub", "b.png"], result.Select(e => e.Name).ToArray());
     }

@@ -55,6 +55,7 @@ public static class ExplorerListing
     /// <summary>
     /// 우측 리스트 정렬 키 (A5). 설정 저장 문자열은 소문자 이름과 수동 동기.
     /// Created는 A117(v0.136.0) 신설 — Modified와 같은 방식으로 병존한다(날짜 범위 필터 아님).
+    /// Type은 A155 신설 — 확장자 파생 키(Entry 확장 없이 Name에서 파생: 동기 열거를 무겁게 하지 않는다).
     /// </summary>
     public enum SortKey
     {
@@ -62,16 +63,23 @@ public static class ExplorerListing
         Size,
         Modified,
         Created,
+        Type,
     }
 
     /// <summary>
-    /// 정렬·필터를 적용한 표시용 목록을 만든다 (A5·A7). 폴더 먼저 규칙은 유지.
-    /// Name=이름 오름차순, Size=큰 것부터(폴더는 크기가 없어 이름순), Modified=최신부터,
-    /// Created=만든 날짜 최신부터(A117 — Modified 규칙 그대로 복제: 폴더도 날짜순). 동률은 이름순.
+    /// 정렬·필터를 적용한 표시용 목록을 만든다 (A5·A7·A155). 폴더 먼저 규칙은 유지.
+    /// A155: 종류별 고정 방향(Size/Modified/Created = 내림 고정)을 descending 인자로 바꿨다 —
+    /// 기본 false = 오름차순이고, 종전과 같은 화면을 원하는 호출부는 종류별 기본 방향을 스스로 넘긴다
+    /// (UI 쪽 ExplorerPane.DefaultDescending — Core는 방향 정책을 알지 않는다).
+    /// 오름차순 기준: Name=이름, Size=작은 것부터, Modified/Created=오래된 것부터,
+    /// Type=확장자(점 포함, 대소문자 무시). descending은 1차 키만 뒤집고 동률 이름순은 늘 오름차순이다
+    /// (종전 ThenBy 규칙 보존). 폴더: Name/Modified/Created는 파일과 같은 키·방향으로,
+    /// Size/Type은 폴더에 그 개념이 없어 항상 이름 오름차순(종전 Size 규칙 승계).
     /// hiddenExtensions(소문자, 점 포함)에 있는 확장자의 파일은 뺀다 — 폴더는 항상 남긴다.
     /// </summary>
     public static IReadOnlyList<Entry> Arrange(
-        IReadOnlyList<Entry> entries, SortKey key, IReadOnlyCollection<string>? hiddenExtensions = null)
+        IReadOnlyList<Entry> entries, SortKey key, bool descending = false,
+        IReadOnlyCollection<string>? hiddenExtensions = null)
     {
         var folders = entries.Where(e => e.IsFolder);
         var files = entries.Where(e => !e.IsFolder);
@@ -84,20 +92,31 @@ public static class ExplorerListing
         {
             SortKey.Size => (
                 folders.OrderBy(e => e.Name, byName),
-                files.OrderByDescending(e => e.Size).ThenBy(e => e.Name, byName)),
-            SortKey.Modified => (
-                folders.OrderByDescending(e => e.Modified).ThenBy(e => e.Name, byName),
-                files.OrderByDescending(e => e.Modified).ThenBy(e => e.Name, byName)),
-            // A117: 만든 날짜 — 위 Modified 분기와 같은 모양(폴더도 파일도 최신부터, 동률은 이름순).
-            SortKey.Created => (
-                folders.OrderByDescending(e => e.Created).ThenBy(e => e.Name, byName),
-                files.OrderByDescending(e => e.Created).ThenBy(e => e.Name, byName)),
-            _ => (
+                OrderByDirection(files, e => e.Size, descending).ThenBy(e => e.Name, byName)),
+            // A155: 확장자 정렬 — 키는 Name에서 파생(점 포함). 같은 확장자 안은 이름순(2차 키).
+            SortKey.Type => (
                 folders.OrderBy(e => e.Name, byName),
-                files.OrderBy(e => e.Name, byName)),
+                OrderByDirection(files, e => System.IO.Path.GetExtension(e.Name), descending, byName)
+                    .ThenBy(e => e.Name, byName)),
+            SortKey.Modified => (
+                OrderByDirection(folders, e => e.Modified, descending).ThenBy(e => e.Name, byName),
+                OrderByDirection(files, e => e.Modified, descending).ThenBy(e => e.Name, byName)),
+            // A117: 만든 날짜 — 위 Modified 분기와 같은 모양(폴더도 파일도 같은 방향, 동률은 이름순).
+            SortKey.Created => (
+                OrderByDirection(folders, e => e.Created, descending).ThenBy(e => e.Name, byName),
+                OrderByDirection(files, e => e.Created, descending).ThenBy(e => e.Name, byName)),
+            _ => (
+                OrderByDirection(folders, e => e.Name, descending, byName),
+                OrderByDirection(files, e => e.Name, descending, byName)),
         };
         return [.. folders, .. files];
     }
+
+    /// <summary>방향 인자 한 곳 처리 (A155) — Arrange의 분기마다 3항이 반복되는 것을 막는다.</summary>
+    private static IOrderedEnumerable<Entry> OrderByDirection<TKey>(
+        IEnumerable<Entry> source, Func<Entry, TKey> selector, bool descending,
+        IComparer<TKey>? comparer = null) =>
+        descending ? source.OrderByDescending(selector, comparer) : source.OrderBy(selector, comparer);
 
     /// <summary>재생 길이 표시용 텍스트 (A6): 1시간 미만 m:ss, 이상 h:mm:ss. 1초 미만은 빈 문자열.</summary>
     public static string FormatDuration(TimeSpan duration) => duration.TotalSeconds < 1
