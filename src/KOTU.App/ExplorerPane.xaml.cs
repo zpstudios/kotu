@@ -151,12 +151,10 @@ public sealed partial class ExplorerPane : UserControl
             new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
         ListPane.AddHandler(UIElement.PointerPressedEvent,
             new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
-        // A157: 선택 → 체크 동기. 체크는 선택의 시각화일 뿐이라 집합은 ListView 선택 하나뿐이고,
-        // 동기도 이 한 방향만 필요하다(반대 방향 = 체크박스 Click이 선택을 토글한다).
-        // 리스트에만 건다 — 체크박스는 리스트 행(MakeListItem)에만 있다.
-        // 해제 구독을 두지 않는 이유: 자기 자식 컨트롤의 인스턴스 이벤트라 페인과 수명이 같다
-        // (Loaded/Unloaded 해제 규칙은 ExplorerFileOps 같은 '정적' 이벤트에만 적용된다).
-        ListPane.SelectionChanged += OnListSelectionChanged;
+        // A179: 체크는 선택과 분리된 작업 집합(_checkedPaths)이 단일 원본이다 — 종전 A157의
+        // "선택 → 체크 동기"(SelectionChanged 거울)는 철거했다. 행 클릭 = 선택(하이라이트)만,
+        // 체크 토글 = 체크박스 클릭(OnItemCheckClick) 또는 Space(OnSurfaceKeyDown)뿐이다.
+        // 시각 규칙: 하이라이트 = 선택 / 체크 = 파일 조작 작업 집합(체크 0개면 선택이 대신한다).
         // A94 6차: 빈 영역(항목이 아닌 곳) 우클릭 메뉴 — New folder / Paste / Refresh.
         // 항목 메뉴와의 이중 발화는 ContextFlyout 규칙이 원천 차단한다: 컨텍스트 요청은 원본
         // 요소에서 위로 버블링하며 **가장 안쪽의 ContextFlyout 하나만** 떠서 요청을 소비하므로,
@@ -500,6 +498,10 @@ public sealed partial class ExplorerPane : UserControl
     {
         _extensions = extensions;
         EnsureFilterFlyout(); // A7 — 확장자 목록이 바뀌었으면 필터 재구성
+        // A179: 폴더가 바뀌면 체크 집합을 비운다 — 다른 폴더의 체크가 보이지 않는 채 작업 집합에
+        // 남으면 삭제·복사 대상이 화면 밖 항목이 된다(위험). 같은 폴더 재스캔(폴더 감시·조작 후
+        // 갱신)은 여기 걸리지 않아 체크가 생존한다.
+        if (!string.Equals(folder, _folder, StringComparison.OrdinalIgnoreCase)) _checkedPaths.Clear();
         _folder = folder;
         PathText.Text = folder;
         ToolTipService.SetToolTip(PathText, folder); // 잘려도 전체 경로 확인 가능(A8)
@@ -534,14 +536,24 @@ public sealed partial class ExplorerPane : UserControl
         if (seq != _loadSeq) return; // 그새 다른 폴더로 이동함
 
         _entries = entries;
+        // A179: 체크 집합 정리 — 재스캔 결과에 없는 경로(삭제·이동·이름변경·숨김 전환으로 소실)는
+        // 걷어낸다. 세션 한정 확장자 필터(A7)는 열거가 아니라 표시 단계(Arrange)라 여기 안 걸린다 —
+        // 필터로 가려진 체크는 집합에 남고, 소비 시점의 "화면에 있는 것만" 교집합(CheckedPathsInView)이
+        // 조작 대상에서 뺀다(WYSIWYG — 필터를 풀면 체크가 복원돼 보인다).
+        if (_checkedPaths.Count > 0)
+        {
+            var alive = new HashSet<string>(entries.Select(e => e.Path), StringComparer.OrdinalIgnoreCase);
+            _checkedPaths.RemoveWhere(p => !alive.Contains(p));
+        }
         RefreshView();
     }
 
     /// <summary>
     /// 표시 목록을 항목 컨테이너로 다시 만들어 채운다(ItemsSource·DataTemplate 없음 — 구조 규칙).
-    /// A157 유의: 체크는 선택의 시각화라 별도 저장소가 없다 — 이 재생성(폴더 감시 400ms 재스캔
-    /// 포함)이 돌면 선택과 함께 체크도 사라진다. 재스캔 후 선택 복원은 별도 설계가 필요해
-    /// 이 배치의 범위 밖이다(등재 후보).
+    /// A179 유의: 체크(작업 집합)는 경로 키 집합(_checkedPaths)이 진실이라 이 재생성(폴더 감시
+    /// 400ms 재스캔 포함)이 돌아도 MakeListItem이 집합에서 복원한다 — 종전 A157의 "재스캔 후
+    /// 체크 소실" 낙수는 이것으로 해소. **선택**(하이라이트)은 여전히 재생성과 함께 사라진다 —
+    /// 선택 복원은 별도 설계가 필요해 범위 밖(등재 후보 유지).
     /// </summary>
     private void Fill(IReadOnlyList<ExplorerListing.Entry> entries)
     {
@@ -563,8 +575,8 @@ public sealed partial class ExplorerPane : UserControl
     /// 항목 우클릭 메뉴 (A94 2차 신설 → 6차 확장). 순서는 탐색기 관례 근사:
     /// 파일 = "Open in new instance"(A24) → 구분선 → Cut·Copy → 구분선 → Rename·Delete,
     /// 폴더 = Cut·Copy·**Paste(대상 = 그 폴더)** → 구분선 → Rename·Delete.
-    /// Delete·Cut·Copy 대상은 드래그와 같은 규칙 — 그 항목이 선택에 포함돼 있으면 선택 전부,
-    /// 아니면 그 항목 하나(PathsForDrag 재사용).
+    /// Delete·Cut·Copy 대상은 드래그와 같은 규칙 — 그 항목이 작업 집합(A179: 체크 우선,
+    /// 체크 0개면 선택)에 포함돼 있으면 집합 전부, 아니면 그 항목 하나(PathsForDrag 재사용).
     /// Rename은 플라이아웃이 닫히며 포커스를 되돌린 '뒤'에 진입해야 편집 상자가 곧장 LostFocus
     /// 커밋으로 닫혀 버리지 않는다 — 디스패처로 한 박자 미룬다(BeginRenameOf).
     /// </summary>
@@ -743,7 +755,7 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>2줄째 상세 TextBlock의 조회 키 (A156) — 크기·길이·날짜를 한 줄로 합쳐 담는다.</summary>
     private const string ItemDetailBlockName = "ExplorerItemDetail";
 
-    /// <summary>선택 체크박스의 조회 키 (A157) — 선택 동기가 항목마다 이 이름으로 찾는다.</summary>
+    /// <summary>체크박스의 조회 키 (A157 → A179) — Space 체크 토글의 시각 동기가 이 이름으로 찾는다.</summary>
     private const string ItemCheckBoxName = "ExplorerItemCheck";
 
     /// <summary>
@@ -756,7 +768,7 @@ public sealed partial class ExplorerPane : UserControl
             ? panel.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == name)
             : null;
 
-    /// <summary>항목 콘텐츠 패널의 선택 체크박스 (A157) — FindItemBlock과 같은 이름 기반 규칙.</summary>
+    /// <summary>항목 콘텐츠 패널의 작업 집합 체크박스 (A157 → A179) — FindItemBlock과 같은 이름 기반 규칙.</summary>
     private static CheckBox? FindItemCheckBox(object item) =>
         item is ContentControl { Content: Panel panel }
             ? panel.Children.OfType<CheckBox>().FirstOrDefault(c => c.Name == ItemCheckBoxName)
@@ -826,7 +838,7 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>
     /// 리스트 행 (A156 — 2줄): 1줄 = 아이콘 + 이름, 2줄 = 크기·[길이]·Created·Modified 한 줄,
-    /// 우측 끝 = 선택 체크박스(A157). 길이는 지연 로드(A6)라 처음에는 빠진 채 조립되고,
+    /// 우측 끝 = 작업 집합 체크박스(A157 → A179). 길이는 지연 로드(A6)라 처음에는 빠진 채 조립되고,
     /// 도착하면 상세 줄을 통째로 다시 만든다.
     /// 루트는 **평평한 Grid 하나**다(중첩 패널 금지) — 이름변경(ExplorerRenameBox.Begin)이
     /// host 패널에 편집 상자를 끼우고 Grid.SetRow/SetColumn으로 이름 자리에 앉히기 때문.
@@ -873,8 +885,10 @@ public sealed partial class ExplorerPane : UserControl
         Grid.SetColumn(detail, 1);
         Grid.SetRow(detail, 1);
 
-        // A157: 체크 = 선택의 시각화(집합은 ListView 선택 하나뿐 — SelectionMode는 Extended 그대로다.
-        // Multiple로 바꾸면 A94의 Ctrl/Shift 관례와 PathsForDrag 계약이 그 위에 서 있어 깨진다).
+        // A179(종전 A157 반전): 체크 = 선택과 분리된 **작업 집합**의 시각화 — 진실은 경로 키 집합
+        // _checkedPaths다. 행 클릭 선택(하이라이트)은 체크에 손대지 않고, 체크는 이 체크박스
+        // 클릭(또는 Space)으로만 토글된다. SelectionMode는 Extended 그대로다 — Multiple로 바꾸면
+        // A94의 Ctrl/Shift 관례와 PathsForDrag 계약이 그 위에 서 있어 깨진다.
         // 콘텐츠 '안'에 두는 이유 = 잘라내기 흐림(ExplorerFileOps.ApplyCutMark)이 SelectorItem.Content
         // 루트의 Opacity를 만지므로, 밖에 두면 잘라낸 항목에서 체크만 또렷하게 남는다. 잘라내기 중
         // 체크도 함께 0.5로 흐려지는 것은 수용한다(항목 전체가 흐려지는 탐색기 모양).
@@ -883,7 +897,8 @@ public sealed partial class ExplorerPane : UserControl
         {
             Name = ItemCheckBoxName,
             Content = null,
-            IsChecked = false, // 생성 시점은 항상 미선택 — Fill이 항목을 새로 만들면 선택도 비어 있다(일관)
+            // A179: 경로 키 집합에서 복원 — Fill 전량 재생성(재스캔)을 건너 체크가 생존한다.
+            IsChecked = _checkedPaths.Contains(entry.Path),
             MinWidth = 0,
             Padding = new Thickness(0),
             Margin = new Thickness(0),
@@ -891,6 +906,9 @@ public sealed partial class ExplorerPane : UserControl
         };
         Grid.SetColumn(check, 2);
         Grid.SetRowSpan(check, 2);
+        // A179 시각 규칙 안내(하이라이트 = 선택 / 체크 = 작업 집합)를 툴팁으로 — UI 문자열 영어.
+        ToolTipService.SetToolTip(check,
+            "Check to target file operations (copy, cut, delete, drag, open). No checks = selection.");
         check.Click += OnItemCheckClick; // Checked/Unchecked는 구독 금지 — 근거는 OnItemCheckClick 주석
 
         row.Children.Add(icon);
@@ -1126,6 +1144,8 @@ public sealed partial class ExplorerPane : UserControl
     /// 선택된 **파일** 항목의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기" 판정).
     /// 그리드·리스트 중 선택이 있는 쪽을 쓴다. A94(Extended)부터 다중 선택이 가능하지만
     /// 열기·인포류 단일 대상 동작은 종전대로 첫 선택 항목(SelectedItem) 기준을 유지한다.
+    /// A179: 단일 대상 판정은 체크와 무관하게 **선택** 기준 그대로다 — 체크(작업 집합)는
+    /// 다중 조작(드래그·복사/잘라내기/삭제·다중 열기)에만 관여한다(확정 규칙의 적용 범위).
     /// </summary>
     internal string? SelectedFilePath =>
         PathOfSelection(IconGrid.SelectedItem) ?? PathOfSelection(ListPane.SelectedItem);
@@ -1140,10 +1160,12 @@ public sealed partial class ExplorerPane : UserControl
     /// OpenFileRouted"를 대체한다. 표면 자체 Enter·더블클릭과 **같은 규칙**(아래 OpenFiles):
     /// 선택된 파일만(폴더 제외), 첫 파일은 재사용 규칙(A24) 경로, 나머지는 새 인스턴스.
     /// 반환 = 하나라도 열었는지(false면 셸이 종전 폴백 — 오버레이 토글 등으로 간다).
-    /// 그리드·리스트 중 파일 선택이 있는 쪽을 쓴다(SelectedFilePath와 같은 우선순위).
+    /// A179: 체크가 있으면 체크된 파일이 우선(작업 집합 규칙 — 전부 폴더면 빈 목록 = false 폴백).
+    /// 체크가 없으면 종전대로 그리드·리스트 중 파일 선택이 있는 쪽(SelectedFilePath와 같은 우선순위).
     /// </summary>
     internal bool OpenSelectedFiles()
     {
+        if (CheckedPathsInView().Count > 0) return OpenFiles(CheckedPathsInView(filesOnly: true));
         var files = SelectedFilePathsOf(IconGrid);
         if (files.Count == 0) files = SelectedFilePathsOf(ListPane);
         return OpenFiles(files);
@@ -1213,13 +1235,14 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 드래그에 실을 경로들: 잡은 항목이 현재 선택에 포함돼 있으면 선택 전부(다중 드래그 —
-    /// 윈도우 관례), 아니면 그 항목 하나만.
+    /// 드래그·우클릭 조작에 실을 경로들 (A179): 잡은 항목이 작업 집합(체크 우선 — WorkingPathsOf)에
+    /// 포함돼 있으면 집합 전부(다중 드래그 — 윈도우 관례), 아니면 그 항목 하나만.
+    /// 체크 집합을 읽어야 해 static이 아니다(종전 선택 전용 시절과 다른 점).
     /// </summary>
-    private static IReadOnlyList<string> PathsForDrag(ListViewBase owner, ExplorerListing.Entry entry)
+    private IReadOnlyList<string> PathsForDrag(ListViewBase owner, ExplorerListing.Entry entry)
     {
-        var selected = SelectedPathsOf(owner);
-        return selected.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) ? selected : [entry.Path];
+        var working = WorkingPathsOf(owner);
+        return working.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) ? working : [entry.Path];
     }
 
     /// <summary>표면의 선택 항목 경로 전부(폴더 포함) — 항목 = 컨테이너 직접 추가라 Tag에서 꺼낸다.</summary>
@@ -1278,7 +1301,9 @@ public sealed partial class ExplorerPane : UserControl
     /// A85가 얹은 것 — Enter = 선택 항목 열기(폴더 = 진입. ThumbnailExplorer와 동일).
     /// 4차(v0.151.0)가 얹은 것 — Shift+Del = 영구 삭제(확인 대화상자 뒤), Esc = 잘라내기 표시 해제.
     /// 6차(v0.153.0)가 얹은 것 — Enter가 **다중 선택이면 선택된 파일 전부**를 연다(폴더 제외).
-    /// A157(v0.168.0)이 얹은 것 — Space = 포커스 항목의 선택 토글(체크박스 클릭과 같은 동작).
+    /// A157(v0.168.0)이 얹은 것 — Space = 포커스 항목 토글 → A179부터 **체크 토글**(체크박스
+    /// 클릭과 같은 동작 — 선택은 건드리지 않는다). A179가 바꾼 것 — Del·Ctrl+C/X·Enter 다중
+    /// 열기의 대상이 선택 집합에서 작업 집합(체크 우선)으로.
     /// 이 표면(그리드/리스트)에 포커스가 있을 때만 온다 — 생성자 AddHandler 주석 참고.
     /// </summary>
     private async void OnSurfaceKeyDown(object sender, KeyRoutedEventArgs e)
@@ -1298,6 +1323,11 @@ public sealed partial class ExplorerPane : UserControl
                 if (owner.SelectedItem is not SelectorItem { Tag: ExplorerListing.Entry entry }) return;
                 e.Handled = true;
                 _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
+                // A179: 체크가 있으면 체크된 파일 전부가 우선(작업 집합 규칙 — 전부 폴더면 빈
+                // 목록 = false라 아래 첫 항목 동작으로 떨어진다. 체크 없이 선택이 없으면 애초에
+                // 위 SelectedItem 가드에서 셸로 양보 — 셸 경로(OpenSelectedFiles)도 체크 우선이다).
+                if (CheckedPathsInView().Count > 0 &&
+                    OpenFiles(CheckedPathsInView(filesOnly: true))) return;
                 // A94 6차: 다중 선택이면 선택된 '파일' 전부를 연다(폴더는 일괄 열기에서 제외).
                 // 선택에 파일이 하나도 없으면(폴더만 다중) 아래 현행 첫 항목 동작으로 떨어진다.
                 if (owner.SelectedItems.Count > 1 && OpenFiles(SelectedFilePathsOf(owner))) return;
@@ -1313,13 +1343,13 @@ public sealed partial class ExplorerPane : UserControl
                 return;
             case Windows.System.VirtualKey.Delete: // Del = 휴지통 / Shift+Del = 영구 삭제(A94 4차)
                 if (ExplorerFileOps.IsCtrlDown()) return; // Ctrl+Del은 우리 조합이 아니다 — 종전대로 비켜 준다
-                var targets = SelectedPathsOf(owner);
+                var targets = WorkingPathsOf(owner); // A179 — 체크 우선, 체크 0개면 선택
                 if (targets.Count == 0) return;
                 e.Handled = true;
                 if (ExplorerFileOps.IsShiftDown()) await PermanentDeleteWithConfirmAsync(targets);
                 else await DeleteWithNoticeAsync(targets);
                 return;
-            case Windows.System.VirtualKey.Space: // A157 — 포커스 항목의 선택 토글(체크박스 클릭과 같은 동작)
+            case Windows.System.VirtualKey.Space: // A157 → A179 — 포커스 항목의 **체크** 토글(체크박스 클릭과 같은 동작)
                 // 포커스 항목 = 키 이벤트의 원천(포커스된 항목 컨테이너)에서 상향 탐색으로 찾는다.
                 // 못 찾으면 무동작·무소비 — 표면 자체(빈 영역)에 포커스가 있을 때 Space를 삼키면
                 // 스크롤 등 기본 동작을 잃는다. 편집 중에는 위의 TextBox 가드가 이미 막았다.
@@ -1329,7 +1359,7 @@ public sealed partial class ExplorerPane : UserControl
                 // Space 연타가 클릭 쌍(OnItemClick)으로 읽혀 파일이 열리는 것을 막는다.
                 // 위 Enter 분기가 같은 이유로 두는 한 줄과 같은 방어(A85 관례).
                 _lastClick = null;
-                focused.IsSelected = !focused.IsSelected;
+                ToggleCheckOf(focused); // A179 — 선택(IsSelected)은 건드리지 않는다
                 return;
             case Windows.System.VirtualKey.Escape: // A94 4차 — 잘라내기 표시만 해제(탐색기 동등)
                 // 소비하지 않는다: 셸 Esc(S4 복귀 — OnShellEscape)가 이 표면 포커스에서도 성립해야 한다.
@@ -1354,7 +1384,7 @@ public sealed partial class ExplorerPane : UserControl
                 break;
             case Windows.System.VirtualKey.C:
             case Windows.System.VirtualKey.X:
-                var paths = SelectedPathsOf(owner);
+                var paths = WorkingPathsOf(owner); // A179 — 체크 우선, 체크 0개면 선택
                 if (paths.Count == 0) return;
                 e.Handled = true;
                 await CopyWithNoticeAsync(paths, cut: e.Key == Windows.System.VirtualKey.X);
@@ -1478,7 +1508,7 @@ public sealed partial class ExplorerPane : UserControl
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
         if (IsInCheckBox(e.OriginalSource))
         {
-            _lastPress = null; // A157: 체크박스 눌림은 선택 토글 몫 — 쌍 판정에서 빼고 끊는다
+            _lastPress = null; // A157 → A179: 체크박스 눌림은 체크 토글 몫 — 쌍 판정에서 빼고 끊는다
             return;            // (이 핸들러는 handledEventsToo라 체크박스가 Handled를 걸어도 도착한다)
         }
         if (ExplorerFileOps.IsCtrlDown())
@@ -1511,15 +1541,26 @@ public sealed partial class ExplorerPane : UserControl
         return null;
     }
 
-    // ---------- 선택 체크박스 (A157, v0.168.0) ----------
+    // ---------- 작업 집합 체크박스 (A157, v0.168.0 → A179 반전) ----------
 
     /// <summary>
-    /// 체크박스 클릭 = 그 항목의 선택 토글 (A157). 체크 상태 자체를 진실로 삼지 않는다 —
-    /// 선택을 토글하면 SelectionChanged가 돌아와 체크를 맞춘다(집합은 ListView 선택 하나뿐이다).
+    /// 체크 집합 (A179) — 파일 조작 작업 집합의 **단일 원본**. 체크박스 클릭(OnItemCheckClick)과
+    /// Space(OnSurfaceKeyDown)로만 늘고 준다 — 행 클릭 선택은 여기 손대지 않는다.
+    /// 경로 키인 이유 = Fill 전량 재생성(폴더 감시 400ms 재스캔 포함)을 건너 생존해야 해서
+    /// (ExplorerFileOps.ApplyCutMark의 경로 집합 관용구). 폴더가 바뀌면 비우고, 재스캔 결과에
+    /// 없는 경로는 걷어낸다 — 둘 다 NavigateToAsync가 한다.
+    /// </summary>
+    private readonly HashSet<string> _checkedPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 체크박스 클릭 = 그 항목의 체크 토글 (A179 — 종전 A157의 "선택 토글"에서 반전).
+    /// 컨트롤의 IsChecked는 Click 시점에 이미 뒤집혀 있으므로(EnsureFilterFlyout의
+    /// ToggleMenuFlyoutItem과 같은 성질) 그 값을 집합에 반영만 한다 — 선택은 건드리지 않는다.
     /// <para>
-    /// **Checked/Unchecked를 구독하지 않는 이유**: 그 둘은 프로그램적 IsChecked 대입에도 발화해
-    /// "선택 → 체크 → 선택" 되먹임 루프가 생긴다. Click은 사용자 입력에서만 발화하므로 루프가
-    /// 구조적으로 성립하지 않는다 — 그래서 배선은 Click 하나뿐이다.
+    /// **Checked/Unchecked를 구독하지 않는 이유(A179 재평가)**: 종전 근거였던 "선택 → 체크 → 선택"
+    /// 되먹임 루프는 거울 철거로 사라졌지만, 그 둘은 프로그램적 IsChecked 대입(MakeListItem의
+    /// 재스캔 복원·Space 토글의 시각 동기)에도 발화해 집합 갱신이 복원 경로에서 또 돈다 —
+    /// 사용자 입력에서만 발화하는 Click 하나가 여전히 맞다(배선 불변).
     /// </para>
     /// <para>
     /// ButtonBase.Click의 인자(RoutedEventArgs)에는 Handled가 없다(WinUI — 저장소의 e.Handled
@@ -1529,24 +1570,61 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private void OnItemCheckClick(object sender, RoutedEventArgs e)
     {
-        if (ItemFromSource(sender) is not { } item) return;
-        item.IsSelected = !item.IsSelected;
+        if (sender is not CheckBox box) return;
+        if (ItemFromSource(box) is not { Tag: ExplorerListing.Entry entry }) return;
+        if (box.IsChecked == true) _checkedPaths.Add(entry.Path);
+        else _checkedPaths.Remove(entry.Path);
     }
 
     /// <summary>
-    /// 선택 → 체크 동기 (A157). 바뀐 항목만 훑는다 — 전량 순회면 Ctrl+A 한 번에 N번 돈다.
-    /// 이 핸들러는 IsChecked 대입만 한다: 체크박스 쪽은 Click(사용자 입력 전용)만 듣기 때문에
-    /// 이 대입이 다시 선택을 건드릴 경로가 없다(루프 부재의 근거 — OnItemCheckClick 주석).
-    /// Fill의 Items.Clear()가 옛 컨테이너를 RemovedItems로 실어 보내지만, 트리에서 떨어진
-    /// 체크박스에 false를 쓰는 것은 무해하다(그 항목은 그대로 버려진다).
+    /// 포커스 항목의 체크 토글 (A179 — Space 경로. 종전 A157은 IsSelected 토글이었다).
+    /// 집합을 먼저 뒤집고 체크박스 시각을 맞춘다 — 그리드 타일(MakeGridItem)에는 체크박스가
+    /// 없어 시각 동기가 조용히 생략되지만, 그 경로는 휴면이다(리스트 전용 모드 — 클래스 주석.
+    /// 전체 페인 사용처가 되살아나면 타일에도 체크박스를 다는 것이 복구 지점이다).
     /// </summary>
-    private void OnListSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void ToggleCheckOf(SelectorItem item)
     {
-        foreach (var removed in e.RemovedItems)
-            if (FindItemCheckBox(removed) is { } box) box.IsChecked = false;
-        foreach (var added in e.AddedItems)
-            if (FindItemCheckBox(added) is { } box) box.IsChecked = true;
+        if (item.Tag is not ExplorerListing.Entry entry) return;
+        var nowChecked = !_checkedPaths.Contains(entry.Path);
+        if (nowChecked) _checkedPaths.Add(entry.Path);
+        else _checkedPaths.Remove(entry.Path);
+        if (FindItemCheckBox(item) is { } box) box.IsChecked = nowChecked;
     }
+
+    /// <summary>
+    /// 체크 집합 중 **현재 화면(리스트)에 있는** 경로만 (A179 — 작업 집합의 소비형).
+    /// 집합이 아니라 리스트 항목을 기준으로 거르는 이유 = WYSIWYG: 세션 필터(A7)로 가려진
+    /// 체크가 조작 대상에 섞이면 화면 밖 항목이 지워지는 사고가 된다. 항목 순서 = 표시 순서라
+    /// 일괄 열기(OpenFiles)의 상한 절단도 화면 순서를 따른다.
+    /// 리스트(ListPane)만 보는 근거 = 체크박스가 리스트 행에만 있고, 리스트는 그리드와 같은
+    /// 폴더·같은 목록을 항상 담는다(Fill이 두 표면을 한 번에 채운다).
+    /// </summary>
+    private IReadOnlyList<string> CheckedPathsInView(bool filesOnly = false) =>
+        ListPane.Items
+            .OfType<SelectorItem>()
+            .Select(i => i.Tag)
+            .OfType<ExplorerListing.Entry>()
+            .Where(entry => (!filesOnly || !entry.IsFolder) && _checkedPaths.Contains(entry.Path))
+            .Select(entry => entry.Path)
+            .ToList();
+
+    /// <summary>
+    /// 작업 집합 (A179 확정 규칙): 화면에 보이는 체크가 1개 이상이면 체크 집합, 0개면 선택 집합
+    /// (탐색기류 다중 선택 도구의 관례). 드래그·복사/잘라내기/삭제·다중 열기가 이 하나를 쓴다.
+    /// </summary>
+    private IReadOnlyList<string> WorkingPathsOf(ListViewBase owner)
+    {
+        var check = CheckedPathsInView();
+        return check.Count > 0 ? check : SelectedPathsOf(owner);
+    }
+
+    /// <summary>작업 집합의 파일 한정형 (A179) — 다중 열기(A94 6차)용. 규칙은 WorkingPathsOf와
+    /// 같다: 체크가 1개 이상이면 **체크 집합이 관할**이라, 체크가 전부 폴더면 선택으로 넘어가지
+    /// 않고 빈 목록이 되어 호출부(OpenFiles)가 false → 단일 항목 폴백으로 떨어진다.</summary>
+    private IReadOnlyList<string> WorkingFilePathsOf(ListViewBase owner) =>
+        CheckedPathsInView().Count > 0
+            ? CheckedPathsInView(filesOnly: true)
+            : SelectedFilePathsOf(owner);
 
     /// <summary>
     /// 이벤트 원본이 항목 체크박스(A157) 안에서 왔는지 — 조상 상향 탐색(깊이 상한 64 =
@@ -1598,7 +1676,7 @@ public sealed partial class ExplorerPane : UserControl
     private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
-        if (IsInCheckBox(e.OriginalSource)) return; // A157: 체크박스 2연타 = 선택 토글 두 번(열기 아님)
+        if (IsInCheckBox(e.OriginalSource)) return; // A157 → A179: 체크박스 2연타 = 체크 토글 두 번(열기 아님)
         if (sender is not SelectorItem { Tag: ExplorerListing.Entry entry } item) return;
         e.Handled = true;
         _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게
@@ -1612,8 +1690,9 @@ public sealed partial class ExplorerPane : UserControl
     /// ItemClick 쌍과 DoubleTapped가 같은 제스처에서 둘 다 발화하는 환경이 있어, 같은 경로의
     /// 연속 발화를 판정 창(DoubleClickMs) 안에서 1회로 누른다 — A24 "항상 새 창" 설정에서
     /// 창이 두 개 뜨는 이중 열기 방지.
-    /// A94 6차: 활성화한 항목이 **다중 선택에 포함돼 있으면** 선택된 파일 전부를 연다(폴더 제외 —
-    /// 선택에 파일이 하나도 없으면 종전대로 그 항목 하나. Enter 규칙과 같다).
+    /// A94 6차 → A179: 활성화한 항목이 **작업 집합(체크 우선, 체크 0개면 선택)에 포함돼 있으면**
+    /// 집합의 파일 전부를 연다(폴더 제외 — 집합에 파일이 하나도 없으면 종전대로 그 항목 하나.
+    /// Enter 규칙과 같다).
     /// </summary>
     private void Activate(ExplorerListing.Entry entry, ListViewBase? owner)
     {
@@ -1627,10 +1706,11 @@ public sealed partial class ExplorerPane : UserControl
             .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
-        // A94 6차 — 다중 선택 일괄 열기(잡은 항목이 선택 밖이면 그 항목만: 드래그·삭제와 같은 규칙)
-        if (owner is not null && owner.SelectedItems.Count > 1 &&
-            SelectedPathsOf(owner).Contains(entry.Path, StringComparer.OrdinalIgnoreCase) &&
-            OpenFiles(SelectedFilePathsOf(owner), shift))
+        // A94 6차 → A179 — 작업 집합(체크 우선) 일괄 열기. 잡은 항목이 집합 밖이면 그 항목만
+        // (드래그·삭제와 같은 규칙 — PathsForDrag의 멤버십 판정과 동일).
+        if (owner is not null && WorkingPathsOf(owner) is { Count: > 1 } working &&
+            working.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) &&
+            OpenFiles(WorkingFilePathsOf(owner), shift))
             return;
 
         if (entry.IsFolder)
