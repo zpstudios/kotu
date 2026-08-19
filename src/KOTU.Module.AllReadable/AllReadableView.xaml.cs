@@ -58,7 +58,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>
     /// 트레이 아이콘 내용(A54): <b>지금 자식의 것을 그대로</b> 쓴다 — 자식이 영상이면 해상도·비트레이트,
-    /// 사진이면 확장자·용량이 그대로 올라간다. 자식이 없으면 유휴 "ALL".
+    /// 사진이면 해상도 2줄(가로/세로 — A191)이 그대로 올라간다. 자식이 없으면 유휴 "ALL".
     /// 자식이 계약을 구현하지 않는 경우(방어)는 파일 기본 표기(확장자 · 용량)로 대신한다.
     /// </summary>
     public TrayStatus GetTrayStatus()

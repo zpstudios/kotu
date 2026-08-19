@@ -22,26 +22,28 @@ namespace KOTU.Module.Image;
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ITrayStatusProvider
 {
-    /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패 시점.</summary>
+    /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패, 회전(A191) 시점.</summary>
     public event Action? TrayStatusChanged;
 
     /// <summary>
-    /// 트레이 아이콘 내용(A54): 열림 = 확장자 · 용량, 유휴 = "IMG".
-    /// 용량은 표시 중인 파일에서 그때그때 읽는다 — 이벤트 기반 호출이라 빈도가 낮다.
+    /// 트레이 아이콘 내용: 열림 = <b>해상도 2줄</b>(위 = 가로 px, 아래 = 세로 px — 예 "4032"/"3024"),
+    /// 유휴 = "IMG".
+    /// <para>
+    /// A191(A54 원안 교체): 원안의 확장자 · 용량은 A137 ②가 작업표시줄 32px 아이콘에 같은 값을
+    /// 그리게 되면서 중복이 됐다. 32px 값은 셸이 경로에서 직접 계산하므로(MainWindow.OpenFileIconInfo)
+    /// 이 메서드를 바꿔도 그쪽은 종전 그대로다 — 중복만 사라진다.
+    /// </para>
+    /// 값은 <b>지금 화면에 보이는 축</b> 기준이다: EXIF 회전과 R 키 누적 회전이 90°/270°면
+    /// 가로·세로를 맞바꾼다(<see cref="RotationSwapsAxes"/> — 레이아웃 판정과 같은 축).
+    /// 아직 해상도를 못 구했으면(로드 실패·메타데이터 미지원) 그 줄이 "—"가 된다.
     /// </summary>
     public TrayStatus GetTrayStatus()
     {
-        if (_navigator?.Current is not { } path) return TrayStatus.Idle("IMG");
-        long bytes = -1;
-        try
-        {
-            bytes = new FileInfo(path).Length;
-        }
-        catch
-        {
-            // 크기를 못 읽으면 그 줄만 "—"가 된다.
-        }
-        return TrayStatus.Open(TrayFormat.Extension(path), TrayFormat.Size(bytes));
+        if (_navigator?.Current is null) return TrayStatus.Idle("IMG");
+        var (width, height) = RotationSwapsAxes
+            ? (_pixelHeight, _pixelWidth)
+            : (_pixelWidth, _pixelHeight);
+        return TrayStatus.Open(TrayFormat.Pixels(width), TrayFormat.Pixels(height));
     }
 
     /// <summary>
@@ -478,7 +480,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true); // 줌 초기화(창맞춤)
             UpdateStatusBar();
             ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
-            TrayStatusChanged?.Invoke(); // A54: 트레이 = 확장자 · 용량
+            // A54 → A191: 트레이 = 해상도 2줄. 이 발화는 _pixelWidth/_pixelHeight와 _exifRotation이
+            // 모두 확정된 뒤라야 한다(위 대입 순서 유지 — 앞서 쏘면 직전 파일 해상도가 그려진다).
+            TrayStatusChanged?.Invoke();
         }
         catch (Exception ex)
         {
@@ -539,7 +543,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true);
         UpdateStatusBar();
         ContentOpened?.Invoke(path);
-        TrayStatusChanged?.Invoke(); // A54
+        TrayStatusChanged?.Invoke(); // A54 → A191: 트레이 = 해상도 2줄(Magick 경로도 크기를 먼저 대입했다)
     }
 
     /// <summary>
@@ -689,6 +693,13 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         UpdateFit();
     }
 
+    /// <summary>
+    /// 표시 축이 원본 디코드 축과 뒤바뀐 상태인가 = 총 회전(EXIF + R 키 누적)이 90°/270°인가.
+    /// 레이아웃 제한(<see cref="UpdateFit"/>)과 트레이 해상도 2줄(A191)이 <b>같은 한 판정</b>을
+    /// 봐야 "보이는 모양"과 "표기"가 어긋나지 않는다.
+    /// </summary>
+    private bool RotationSwapsAxes => (_exifRotation + _userRotation) % 180 != 0;
+
     // ---------- 보기 모드 (A83: 100% / Contain / Fit width / Fit height — 3모듈 공통) ----------
 
     /// <summary>
@@ -717,7 +728,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         var vw = Scroller.ViewportWidth;
         var vh = Scroller.ViewportHeight;
         // 90°/270° 회전 시 레이아웃 축이 바뀌므로 가로·세로 제한을 맞바꿔 적용한다.
-        var swapped = (_exifRotation + _userRotation) % 180 != 0;
+        var swapped = RotationSwapsAxes;
 
         ImageControl.ClearValue(FrameworkElement.WidthProperty);
         ImageControl.ClearValue(FrameworkElement.HeightProperty);
@@ -868,6 +879,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         _userRotation = (_userRotation + 90) % 360;
         ApplyRotation();
+        // A191: 한 번 돌 때마다 트레이의 가로·세로 표기가 뒤바뀐다(총 회전 90°/270° ↔ 0°/180°).
+        // 두 번 눌러 180°가 된 경우처럼 표기가 그대로면 셸의 ComposeKey 선비교가 재합성을 막는다 —
+        // 여기서 조건을 따지지 않는 이유다(정사각 이미지도 같은 방어에 걸린다).
+        TrayStatusChanged?.Invoke();
     }
 
     // ---------- 탐색 / 삭제 ----------

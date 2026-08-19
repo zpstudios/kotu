@@ -71,6 +71,20 @@ public static class TrayFormat
         return heightPx.ToString(Inv) + "p";
     }
 
+    /// <summary>
+    /// 픽셀 수 한 축 → 자릿수 그대로("4032"·"3024" — A191, 이미지 트레이의 가로/세로 2줄).
+    /// <see cref="Resolution"/>(세로 픽셀 → "1080p" 등급 축약)과 쓰임이 다르다: 이쪽은 두 줄이
+    /// 각각 한 축의 <b>실측 픽셀</b>이라 등급으로 뭉개면 안 된다(사진은 표준 등급에 안 걸린다).
+    /// 단위 글자도 붙이지 않는다 — 두 줄이 나란히 있는 것만으로 해상도임이 읽힌다.
+    /// 0(아직 못 구함)은 "—". 다섯 자리 이상은 "12k"처럼 천 단위 축약(A138 "999+" 상한 관례의
+    /// 동형) — 폰트 축소 루프(TrayStatusIcon.DrawTextLine)의 하한 5px에서도 16px 아이콘 폭에
+    /// 5자리는 안 들어가 3자로 잘려 틀린 값이 되기 때문(A191 구현 시 산정: 4자리는 여유 통과).
+    /// </summary>
+    public static string Pixels(uint value) =>
+        value == 0 ? TrayStatus.Unknown
+        : value >= 10_000 ? (value / 1_000).ToString(Inv) + "k"
+        : value.ToString(Inv);
+
     /// <summary>확장자 → 점 없는 대문자 3~4자("PNG"·"JPEG"). 더 길면 4자로 자른다.</summary>
     public static string Extension(string? path)
     {
