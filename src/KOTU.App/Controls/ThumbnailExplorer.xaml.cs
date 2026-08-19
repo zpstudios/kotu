@@ -66,7 +66,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>
     /// 선택된 파일 타일의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기").
     /// A94(Extended)부터 다중 선택이 가능하지만 이 속성은 첫 선택(SelectedItem) 기준을 유지한다.
-    /// ※ A94 6차(v0.153.0)부터 셸 Enter는 <see cref="OpenSelectedFiles"/>(일괄 열기)를 쓴다 —
+    /// ※ A94 6차(v0.153.0)부터 일괄 열기는 <see cref="OpenSelectedFiles"/> —
     /// 이 속성은 "첫 선택 파일" 질의 API로만 남았다(A86 서술의 원형).
     /// </summary>
     public string? SelectedFilePath =>
@@ -157,7 +157,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (e.OriginalSource is TextBox) return;
         if (e.Key == VirtualKey.Enter)
         {
-            if (SelectedEntry is not { } entry) return; // 선택 없음 — 셸(OnShellEnter)이 상태별로 받는다
+            if (SelectedEntry is not { } entry) return; // 선택 없음 — 비소비(A151: 탐색기 표면 포커스의 Enter는 셸도 양보라 무동작)
             e.Handled = true; // 셸 루트 핸들러의 이중 처리 방지 — OnShellEnter는 Handled면 물러난다
             _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
             // A94 6차: 다중 선택이면 선택된 '파일' 전부를 연다(폴더는 일괄 열기에서 제외).
@@ -292,9 +292,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 셸(MainWindow)의 Enter 분배가 부르는 일괄 열기 (A94 6차) — 종전 "SelectedFilePath 하나를
-    /// OpenFileRouted"를 대체한다. 그리드 자체 Enter·더블클릭과 같은 규칙(아래 OpenFiles).
-    /// 반환 = 하나라도 열었는지(false면 셸이 종전 폴백으로 간다).
+    /// 선택 파일 일괄 열기 (A94 6차) — 종전 "SelectedFilePath 하나를 OpenFileRouted"를 대체한다.
+    /// 그리드 자체 Enter·더블클릭과 같은 규칙(아래 OpenFiles).
+    /// ※ A151: 셸 Enter가 모드 순환이 되면서 셸 호출부는 사라졌다 — 그리드 자체 Enter 처리와
+    /// 대칭인 공개 실행 API로 남긴다(외부 소비자 0인 상태 유지 무해).
     /// </summary>
     public bool OpenSelectedFiles() => OpenFiles(SelectedFilePaths());
 

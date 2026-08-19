@@ -5,14 +5,14 @@
     IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (전 모듈 공통 배치), Ctrl+S 저장 (A37).
+    <!-- Ctrl+S 저장 (A37). 전체화면 계열(F11·Esc 액셀러레이터)은 A151에서 제거 —
+         전체화면은 셸의 3단 모드 체계(Enter 순환·Alt+Enter·Esc·하단 바 모드 버튼)가 담당한다
+         (편집 중 Enter는 줄바꿈이 우선이라 순환하지 않고, Alt+Enter·Esc가 진입·탈출로다).
          버튼에 걸린 단독 문자 키(A 100% · F Fit)는 A34에서 코드(SetupHotkeys)에 있다 —
          에디터(TextBox)에 포커스가 있으면 통과시켜야 해서 공용 통과 규칙을 거친다.
          A111(v0.133.0)에서 1:1 버튼이 사라져 A·F 둘 다 Fit 버튼에 걸린다(의미는 무변경).
          O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
     <UserControl.KeyboardAccelerators>
-        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
-        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
         <KeyboardAccelerator Key="S" Modifiers="Control" Invoked="OnSaveInvoked" />
     </UserControl.KeyboardAccelerators>
 
@@ -75,10 +75,11 @@
             VerticalAlignment="Center"
             Opacity="0.6" />
 
-        <!-- 하단 상태바: 저장 · 파일명 · 수정됨 · 페이지 · 드라이브 · Fit · 전체화면.
+        <!-- 하단 상태바: 저장 · 파일명 · 수정됨 · 페이지 · 드라이브 · Fit.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(이미지 v0.27.0과 동일 패턴).
              열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
-             1:1 버튼 칸은 A111에서 제거 — 100%가 Fit 플라이아웃 4옵션에 들어갔다. -->
+             1:1 버튼 칸은 A111에서 제거 — 100%가 Fit 플라이아웃 4옵션에 들어갔다.
+             전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다. -->
         <Border x:Name="StatusBar" VerticalAlignment="Bottom" Padding="0,2,0,2">
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
             <Grid ColumnSpacing="6">
@@ -86,7 +87,6 @@
                     <ColumnDefinition Width="Auto" />
                     <!-- 파일명(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 -->
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -161,12 +161,6 @@
                         </MenuFlyout>
                     </SplitButton.Flyout>
                 </SplitButton>
-                <!-- 1칸(32×32) = 이미지/영상 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일, A97에서 36, A106에서 32) -->
-                <Button Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
-                        Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen (F11)">
-                    <FontIcon Glyph="&#xE740;" FontSize="18" />
-                </Button>
             </Grid>
         </Border>
     </Grid>

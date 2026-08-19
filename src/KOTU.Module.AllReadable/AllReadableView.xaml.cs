@@ -1,7 +1,5 @@
-using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 
@@ -227,43 +225,6 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     // ---------- 자체 바 동작 (빈 상태 전용) ----------
     // A99: 빈 상태 바의 열기 버튼·파일 대화상자(PickAndOpenAsync)는 제거 — 파일 열기는
     // 셸 S4 'Open file'(A90)로 일원화됐다(자식 라우팅은 TryOpenFile이 종전대로 담당).
-
-    private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
-
-    private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
-    /// <summary>Escape는 전체화면일 때만 소비한다 — 아니면 흘려보낸다(자식·셸이 쓸 수 있게).</summary>
-    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        if (!IsFullScreen())
-        {
-            args.Handled = false;
-            return;
-        }
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
-    private void ToggleFullScreen()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        appWindow.SetPresenter(appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen
-            ? AppWindowPresenterKind.Default
-            : AppWindowPresenterKind.FullScreen);
-    }
-
-    private bool IsFullScreen()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return false;
-        return AppWindow.GetFromWindowId(environment.AppWindowId).Presenter.Kind
-            == AppWindowPresenterKind.FullScreen;
-    }
+    // A151: 전체화면 토글(⛶ 버튼·F11/Esc 액셀러레이터)도 제거 — 전체화면은 셸의 3단 모드
+    // 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
 }

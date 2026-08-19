@@ -170,7 +170,8 @@
                     IsHitTestVisible="False" Visibility="Collapsed" />
         </Grid>
 
-        <!-- 하단 바 (작업표시줄 느낌). 전체화면에서는 코드에서 통째로 숨긴다(v0.21.0) -->
+        <!-- 하단 바 (작업표시줄 느낌). 모드2/3(A151)에서는 코드(UpdateShellChrome)가 통째로 숨긴다
+             (v0.21.0의 "전체화면이면 숨김"을 3단 모드 체계가 대체). -->
         <Grid x:Name="BottomBar" Grid.Row="1" Height="44"
               Background="{ThemeResource LayerFillColorDefaultBrush}">
             <!-- 현재 모드 칩: 모듈 글리프 + 브랜드명(중립색). 색 구분은 창·트레이 아이콘이 담당(v0.26.0).
@@ -183,14 +184,16 @@
                            FontSize="12" FontWeight="SemiBold" />
             </StackPanel>
 
-            <!-- 모듈 제공 하단 바(동영상 트랜스포트 등) — 메뉴 버튼과 우측 아이콘 사이 (v0.21.0) -->
+            <!-- 모듈 제공 하단 바(동영상 트랜스포트 등) — 메뉴 버튼과 우측 모드 버튼 사이 (v0.21.0) -->
             <!-- 좌측 Margin 82 = 바 좌측 가장자리 여백 6 + 메뉴 버튼 32(A106) + 간격 6
                  + '오픈 파일' 버튼 32(A90) + 간격 6. 이력: A97(v0.116.0)에서 52→48,
                  A90이 버튼 하나를 더해 48→90, A106(v0.132.0)에서 버튼 36→32라 90→82.
-                 가장자리 여백 6·우측 12는 유지. -->
+                 우측 Margin 82 = A151에서 12→82: 셸 모드 버튼 2개(Full window/Full screen,
+                 각 32) + 간격 6 + 버튼 사이 6 + 가장자리 여백 6이 좌측과 대칭으로 자리를 차지한다
+                 (모듈 바에서 ⛶ 전체화면 버튼 8벌을 걷어낸 자리의 셸 통합 — 진입점 일원화). -->
             <ContentControl x:Name="ModuleBarHost"
                             IsTabStop="False"
-                            Margin="82,0,12,0"
+                            Margin="82,0,82,0"
                             HorizontalAlignment="Stretch" VerticalAlignment="Center"
                             HorizontalContentAlignment="Stretch" />
 
@@ -258,6 +261,30 @@
             <!-- 인스턴스 번호 배지(A2, v0.58.0 — 메뉴 버튼 위에 겹친 16×16 색상 원)는
                  A141(v0.162.0)에서 제거했다. 번호 표기는 창 제목 접두(A103/A136 "1-KOTU") 한 곳만
                  남는다 — 9색 팔레트(구 InstanceIcon.ColorFor)도 소비처가 사라져 함께 지웠다. -->
+
+            <!-- A151 셸 모드 버튼 2개 — 종전 모듈 바 우측 ⛶(8벌)의 자리를 셸이 한 벌로 대체.
+                 좌 = Full window(모드2 직행: 하단 바·좌/우 패널 숨김, 창 유지) /
+                 우 = Full screen(모드3 직행: Alt+Enter와 동일 의미론 — 복귀 스냅샷 기억).
+                 규격 = 기존 ⛶와 같은 1칸 32×32(BottomBarButtonStyle)·간격 6·우측 여백 6.
+                 글리프: E740 = 종전 전체화면 ⛶ 그대로, E73F(BackToWindow)는 이 저장소 첫 사용 —
+                 렌더 모양은 실기기 확인 포인트(빌드에는 영향 없음). 모드2/3에서는 바와 함께 숨는다
+                 (복귀는 Enter 순환·Esc·Alt+Enter 몫). -->
+            <StackPanel x:Name="ViewModeButtons" Orientation="Horizontal" Spacing="6"
+                        Margin="0,0,6,0"
+                        HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button x:Name="FullWindowButton"
+                        Style="{StaticResource BottomBarButtonStyle}"
+                        ToolTipService.ToolTip="Full window"
+                        Click="OnFullWindowClick">
+                    <FontIcon Glyph="&#xE73F;" FontSize="16" />
+                </Button>
+                <Button x:Name="FullScreenButton"
+                        Style="{StaticResource BottomBarButtonStyle}"
+                        ToolTipService.ToolTip="Full screen"
+                        Click="OnFullScreenClick">
+                    <FontIcon Glyph="&#xE740;" FontSize="16" />
+                </Button>
+            </StackPanel>
         </Grid>
     </Grid>
     </Grid>

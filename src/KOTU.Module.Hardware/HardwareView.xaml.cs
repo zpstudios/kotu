@@ -20,12 +20,12 @@ namespace KOTU.Module.Hardware;
 /// 그리드(전 채널 10, 30초 창 — 클릭 = 선택 토글·드래그 = 순서 변경, 세로 넘침은 스크롤).
 /// 구 좌(선택 그래프 확대 ≤2, 10초 창)·우(스펙 텍스트) 구획은 셸 좌/우 패널(사이드바/오버레이)
 /// 콘텐츠가 됐다 — 이 뷰가 요소를 분리 생성·소유하고(ISidePanelProvider) 셸(SidePanelHost)이
-/// 호스트한다. F1/F2·2연타·Enter·경계 버튼·힌트는 파일 모듈과 같은 셸 상태 머신 공통이고,
+/// 호스트한다. F1/F2·2연타·경계 버튼·힌트는 파일 모듈과 같은 셸 상태 머신 공통이고,
 /// 진입 기본 = 양쪽 사이드바(A109). 열 수 = 셸 도크 수 신호(ISidebarAwareView — A119 개정):
 /// 도크 2/1/0 → **4/6/8열**(A168/v0.165.0이 A119의 2/3/4열을 개정), 좌 대형 그래프 한 변 =
-/// 패널 실폭(정사각형 적층). 전체화면(F11)도 같은 화면이다(패널은 셸 상태를 따른다).
+/// 패널 실폭(정사각형 적층). 전체화면(A151 — 셸 모드3)도 같은 화면이다(패널은 셸 상태를 따른다).
 /// 하단 바 가운데엔 선택 긴 그래프 2개(5분 창 — A146으로 주기 무관 고정)가 산다 — A17 카드
-/// 10개 대체. 그 그래프 오른쪽 끝에 표시 기간 공통 1개(A146). Copy·⛶·그래프를
+/// 10개 대체. 그 그래프 오른쪽 끝에 표시 기간 공통 1개(A146). Copy·그래프를
 /// 담은 하단 바는 셸이 TakeBottomBar()로 떼어간다. 전체화면 동안(셸 하단 바 숨김)은
 /// SensorGrid가 SensorStrip으로 옮겨져 긴 그래프가 계속 보인다(v0.64.2 메커니즘 승계).
 /// A61(v0.111.0): 핀(A39)을 켜면 셸에 접기를 요청해 하단 바만 남는 상시 표시 바가 된다
@@ -116,7 +116,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         Loaded += (_, _) =>
         {
             HookPresenterChanged();
-            Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
+            Focus(FocusState.Programmatic); // A34 문자 핫키·셸 키(Enter 순환 등)가 바로 듣게
             if (_dataSignature.Length == 0) ShowBusy(); // 첫 데이터가 올 때까지 링 표시(A75에서 첫 로드 용도만 유지)
             // 뷰 구독(스펙+센서, A18에서 API 분리) — 구독 즉시 1회 폴링됨
             _subscription ??= HardwareModule.SubscribeSnapshots(OnSnapshot);
@@ -148,7 +148,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         };
     }
 
-    /// <summary>하단 바(Copy·긴 그래프·⛶ 등)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.42.0).</summary>
+    /// <summary>하단 바(Copy·긴 그래프 등)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.42.0).</summary>
     public object? TakeBottomBar()
     {
         RootGrid.Children.Remove(ControlBar);
@@ -478,17 +478,19 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// A97(v0.116.0)에서 1칸 버튼 40→36 · 간격 10→6, A106(v0.132.0)에서 1칸 버튼 36→32가 되어
     /// 그때마다 **재산정**했다. 값을 이월 계산하지 않는다 — A97 이전 값 458은 v0.94.0(A40)
     /// 산정치 1240에서 역산한 근사치라 실제 합보다 34 컸던 전력이 있다.
-    /// A106 재계수(HardwareView.xaml의 BarGrid 8칸 중 star 칸인 SensorGrid c2만 제외):
+    /// A151 재계수(⛶ 칸 제거 — BarGrid 7칸 중 star 칸인 SensorGrid c2만 제외):
     ///   Copy c0 32 + Busy(ProgressRing) c1 20 + 맥박 c3 90 + 주기(2칸) c4 84
-    ///   + 크기 c5 32 + 핀 c6 32 + ⛶ c7 32 = 322
-    ///   + ColumnSpacing 6 × 7칸 사이 = 42  →  **364**  (A97 값은 338 + 42 = 380이었다)
+    ///   + 크기 c5 32 + 핀 c6 32 = 290
+    ///   + ColumnSpacing 6 × 6칸 사이 = 36  →  **326**
+    ///   (이력: A97 = 380, A106 = 364 — 그때의 산식은 ⛶ 32 + 간격 6이 더 있었다.)
     /// A146(v0.165.0) 재계수 결과 = **변화 없음**: 표시 기간 표기는 BarGrid에 칸을 새로 만들지 않고
     ///   star 칸(SensorGrid) 안 마지막 열로 들어갔다 — 늘어난 몫은 <see cref="LongGraphsWidth"/>에 있다
     ///   (전체화면에서 SensorGrid가 SensorStrip으로 옮겨질 때 표기도 함께 가야 해서 이 소속을 택했다).
-    /// ⚠️ BarGrid.ActualWidth 기준이므로 셸의 ModuleBarHost Margin(A106에서 82/12)은 여기 포함되지 않는다.
+    /// ⚠️ BarGrid.ActualWidth 기준이므로 셸의 ModuleBarHost Margin(A151에서 82/82 — 우측이 셸 모드
+    ///   버튼 2개 몫으로 12→82)은 여기 포함되지 않는다.
     /// HardwareView.xaml의 BarGrid 구성이 바뀌면 이 합도 함께 고칠 것.
     /// </summary>
-    private const double BarFixedWidth = 364;
+    private const double BarFixedWidth = 326;
 
     /// <summary>
     /// 하단 바 star 칸(SensorGrid)이 요구하는 폭 — 긴 그래프(≤2, 폭 고정·배수 비적용)와
@@ -504,12 +506,13 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// <summary>
     /// A40: 하단 바 폭이 좁으면 정보 가치가 낮은 것부터 내린다. 순서(A146에서 2단으로 확장) —
     /// ① 맥박 그래프(A29 = 장식) ② 표시 기간 표기(A146 = 보조 정보) ③ 긴 그래프는 끝까지 남긴다.
-    /// · 맥박 임계 = star 칸 요구 폭(2개 = 352) + 고정 요소 합(BarFixedWidth 364) = **716**(구 676 —
-    ///   기간 표기 40이 늘었다). 최소 창 720(BarGrid 약 626)에서는 맥박이 내려간다.
-    /// · 기간 표기 임계 = 그보다 맥박 몫(PulseSlotWidth 90)만큼 낮은 **626** — 맥박을 내려 되찾은
+    /// · 맥박 임계 = star 칸 요구 폭(2개 = 352) + 고정 요소 합(BarFixedWidth 326) = **678**
+    ///   (이력: A146 = 716, A151 = ⛶ 38 감소 + 셸 모드 버튼 몫으로 BarGrid 자체도 70 좁아짐 —
+    ///   최소 창 720에서 BarGrid는 약 556이라 맥박이 내려간다).
+    /// · 기간 표기 임계 = 그보다 맥박 몫(PulseSlotWidth 90)만큼 낮은 **588** — 맥박을 내려 되찾은
     ///   폭으로 그래프 2개 + 표기가 들어가는지 보는 값이다. 여기서도 모자라면 표기를 내려
-    ///   그래프 2개(312 + 표기 칸의 간격 8)를 지킨다 — 320은 BarGrid 626에서 맥박을 내린 뒤의
-    ///   star 폭(626 − 274 = 352)에 넉넉히 들어간다.
+    ///   그래프 2개(312 + 표기 칸의 간격 8)를 지킨다 — 최소 창(BarGrid 약 556)에서는 맥박·표기가
+    ///   둘 다 내려가고 긴 그래프 2개(312)는 맥박 몫을 되찾은 star 폭(약 320)에 들어간다.
     /// 구 카드 10개의 "뒤 순서부터 숨김" 수 축소 로직은 소멸 — 긴 그래프는 2개 고정이라 접을 것이 없다.
     /// 두 판정 모두 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다(기존 그대로) — 숨김·표시가
     /// SensorGrid의 요구 폭을 바꿔도 star 칸이 흡수하고 BarGrid 폭은 셸이 정한다.
@@ -1273,7 +1276,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     // ---------- 전체화면 전환 (v0.42.0 → A60 3차: 대시보드 폐기, 3구획 유지) ----------
 
-    /// <summary>프레젠터 변화 감지 — 어떤 경로(F11/⛶/Esc)로 바뀌어도 뷰 모드를 맞춘다.</summary>
+    /// <summary>프레젠터 변화 감지 — 어떤 경로(셸 Enter 순환·Alt+Enter·Esc·모드 버튼)로 바뀌어도 뷰 모드를 맞춘다.</summary>
     private void HookPresenterChanged()
     {
         if (_appWindow is not null) return;
@@ -1329,23 +1332,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         => SensorStrip.Visibility = _fullScreen || AdminRow.Visibility == Visibility.Visible
             ? Visibility.Visible : Visibility.Collapsed;
 
-    private void ToggleFullScreen()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        var entering = appWindow.Presenter.Kind != AppWindowPresenterKind.FullScreen;
-        // A61: 접힌 채로 전체화면에 들어가지 않는다 — 먼저 펼쳐서 창을 원래 크기로 돌려놓고
-        // 전환한다(전체화면에서 빠져나올 때 복원되는 크기가 접힌 높이가 되지 않게).
-        // 나올 때는 UpdateViewMode가 파생 상태를 다시 계산해 (핀이 켜져 있으면) 다시 접는다.
-        if (entering) SendCollapse(false);
-        appWindow.SetPresenter(entering
-            ? AppWindowPresenterKind.FullScreen
-            : AppWindowPresenterKind.Default);
-    }
-
-    private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
+    // A151: ToggleFullScreen(⛶ 버튼·F11/Esc 액셀러레이터)은 제거 — 전체화면은 셸의 3단 모드
+    // 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다. 종전 토글이 하던
+    // "접힌 채 전체화면 금지 = 먼저 펼치기(A61)"도 셸 SetViewMode가 SetPresenter 앞에서 수행한다.
+    // 이 뷰는 프레젠터 변화 감시(OnAppWindowChanged → UpdateViewMode)로만 따라간다.
 
     // ---------- 리프레시 주기 선택 + 맥박(EKG) 그래프 (A29) ----------
 
@@ -1520,19 +1510,6 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         if (collapse == _collapseSent) return;
         _collapseSent = collapse;
         CollapseRequested?.Invoke(collapse);
-    }
-
-    private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
-    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        if (_appWindow?.Presenter.Kind != AppWindowPresenterKind.FullScreen) return;
-        args.Handled = true;
-        _appWindow.SetPresenter(AppWindowPresenterKind.Default);
     }
 
     // ---------- 조작 ----------

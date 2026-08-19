@@ -15,7 +15,7 @@ namespace KOTU.Module.Image;
 
 /// <summary>
 /// 이미지 뷰어 화면. 폴더 내 ←/→ 탐색, 줌/팬(A148 마우스 드래그), 회전(R), 휴지통 삭제(Delete),
-/// 전체화면(F11/더블클릭), 하단 상태바를 제공한다.
+/// 전체화면 더블클릭 토글, 하단 상태바를 제공한다(F11·⛶ 버튼은 A151에서 셸 모드 체계로 이관).
 /// 폴더 스캔·파일 읽기·디코드(WIC 메타데이터/Magick)는 뷰 전용 워커(A42)에서 직렬로 돌고
 /// UI 스레드는 비트맵 표시만 한다 — 직렬이라 빠른 ←/→ 연타에도 적용 순서가 요청 순서와 같다.
 /// </summary>
@@ -45,8 +45,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     }
 
     /// <summary>
-    /// 전체화면은 F11/더블클릭/⛶ 버튼(v0.29.0 — Enter는 A86/v0.121.0에서 셸 오버레이 일괄 토글로 이관).
-/// 상태바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.27.0 — 동영상 v0.21.0과 같은 통합).
+    /// 전체화면은 더블클릭 토글(뷰 고유)과 셸 모드 체계(A151 — F11·⛶ 버튼 대체)가 담당한다.
+    /// 상태바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.27.0 — 동영상 v0.21.0과 같은 통합).
     /// 셸 바가 배경·여백을 제공하므로 자체 배경과 패딩은 걷어낸다. 컨트롤 필드 참조는 유효 유지.
     /// </summary>
     public object? TakeBottomBar()
@@ -885,6 +885,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     }
 
     // ---------- 전체화면 ----------
+    // A151: F11/Esc 액셀러레이터·⛶ 버튼은 제거 — 전체화면은 셸의 3단 모드 체계
+    // (Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다. 이 뷰에는 더블클릭 토글만 남는다
+    // (뷰 고유 입력 — 셸이 AppWindow.Changed로 프레젠터 변화를 보고 모드를 동기화한다).
 
     private void ToggleFullScreen()
     {
@@ -989,12 +992,6 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         await DeleteCurrentAsync();
     }
 
-    private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
     /// <summary>
     /// 더블클릭 = 전체화면 토글. 이 핸들러는 UserControl <b>루트</b>에 걸려 있어(XAML) 팬을
     /// 배선한 콘텐츠 프레젠터와 층이 다르다 — 프레젠터에서 Handled를 세워도 여기까지 오므로
@@ -1008,24 +1005,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         ToggleFullScreen();
     }
 
-    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        if (!IsFullScreen()) return; // 전체화면이 아닐 땐 Esc에 개입하지 않는다
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
-    private bool IsFullScreen()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return false;
-        return AppWindow.GetFromWindowId(environment.AppWindowId).Presenter.Kind
-            == AppWindowPresenterKind.FullScreen;
-    }
-
     private void OnRotateButtonClick(object sender, RoutedEventArgs e) => RotateClockwise();
-
-    private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------
 

@@ -6,9 +6,10 @@
     KeyboardAcceleratorPlacementMode="Hidden"
     DoubleTapped="OnDoubleTapped">
 
-    <!-- 단축키: ←/→ 탐색, Delete 휴지통 삭제, F11 전체화면.
-         Enter 전체화면(v0.29.0)은 A86(v0.121.0)에서 제거 — Enter는 셸의 오버레이 일괄 토글 키가
-         됐고, keymap의 전체화면 예외는 영상 모듈뿐이다(전체화면은 F11로).
+    <!-- 단축키: ←/→ 탐색, Delete 휴지통 삭제.
+         전체화면 계열(F11·Esc 액셀러레이터)은 A151에서 제거 — 전체화면은 셸의 3단 모드 체계
+         (Enter 순환·Alt+Enter·Esc·하단 바 모드 버튼)가 담당한다. 이 뷰의 더블클릭 전체화면
+         토글(OnDoubleTapped)만 뷰 고유 입력으로 남는다(셸이 프레젠터 변화로 모드를 동기화).
          버튼에 걸린 단독 문자 키(R 회전 · A 100% · F Fit)는 A34에서 코드
          (SetupHotkeys)로 옮겼다 — 툴팁 "(키)" 표기와 키를 한 값에서 만들고,
          텍스트 입력·파일 리스트 포커스에서는 통과시켜야 하기 때문.
@@ -19,8 +20,6 @@
         <KeyboardAccelerator Key="Left" Invoked="OnPreviousInvoked" />
         <KeyboardAccelerator Key="Right" Invoked="OnNextInvoked" />
         <KeyboardAccelerator Key="Delete" Invoked="OnDeleteInvoked" />
-        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
-        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
     </UserControl.KeyboardAccelerators>
 
     <Grid x:Name="RootGrid">
@@ -77,7 +76,6 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <!-- A27(v0.107.0): 하단 바 버튼은 1칸(32×32)·2칸(84×32) 두 규격만
                      (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
@@ -122,9 +120,10 @@
                     x:Name="ZoomText"
                     Grid.Column="1"
                     VerticalAlignment="Center" />
-                <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·전체화면 = 1칸, Fit = 2칸 +
+                <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate = 1칸, Fit = 2칸 +
                      핏 옵션 아이콘(A27에서 확정 → A97에서 84×36 → A106에서 84×32).
-                     1:1 별도 버튼은 A111에서 제거 — 100%가 Fit 플라이아웃 옵션이 됐다. -->
+                     1:1 별도 버튼은 A111에서 제거 — 100%가 Fit 플라이아웃 옵션이 됐다.
+                     전체화면 ⛶은 A151에서 셸 하단 바 우측 모드 버튼 2개로 이관. -->
                 <Button
                     x:Name="RotateButton"
                     Grid.Column="2"
@@ -178,13 +177,6 @@
                         </MenuFlyout>
                     </SplitButton.Flyout>
                 </SplitButton>
-                <Button
-                    Grid.Column="4"
-                    Style="{StaticResource BottomBarButtonStyle}"
-                    Click="OnFullScreenButtonClick"
-                    ToolTipService.ToolTip="Full screen (F11)">
-                    <FontIcon Glyph="&#xE740;" FontSize="18" />
-                </Button>
             </Grid>
         </Border>
     </Grid>

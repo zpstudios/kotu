@@ -8,14 +8,11 @@
     Drop="OnDrop"
     KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (v0.40.0 — 전 모듈 전체화면 지원).
+    <!-- 전체화면 계열(F11·Esc 액셀러레이터, v0.40.0)은 A151에서 제거 — 전체화면은 셸의
+         3단 모드 체계(Enter 순환·Alt+Enter·Esc·하단 바 모드 버튼)가 담당한다.
          버튼 단독 문자 키(E 여기에 풀기 · T 폴더 지정 풀기 · C 새 압축 · U 상위 폴더)는
          A34에서 코드(SetupHotkeys)가 건다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들기 위해서다.
          O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
-    <UserControl.KeyboardAccelerators>
-        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
-        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
-    </UserControl.KeyboardAccelerators>
 
     <Grid x:Name="RootGrid" Padding="12" RowSpacing="8">
         <Grid.RowDefinitions>
@@ -105,9 +102,10 @@
                 Opacity="0.6" />
         </Grid>
 
-        <!-- 하단 상태바: 상태 · 진행/취소 · 전체화면.
+        <!-- 하단 상태바: 상태 · 진행/취소.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(v0.40.0, 이미지 v0.27.0과 동일 통합).
-             열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
+             열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
+             전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다. -->
         <Border x:Name="StatusBar" Grid.Row="4" Padding="0,2,0,2">
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10).
                  상단 툴바(ColumnSpacing 12)는 본문이라 대상이 아니다. -->
@@ -115,7 +113,6 @@
                 <Grid.ColumnDefinitions>
                     <!-- 상태 텍스트(작업 중·파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 -->
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
@@ -138,12 +135,6 @@
                 <Button x:Name="CancelButton" Grid.Column="2" Style="{StaticResource BottomBarWideButtonStyle}"
                         Content="Cancel"
                         Click="OnCancelClick" Visibility="Collapsed" />
-                <!-- 1칸(32×32) = 이미지/영상 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일, A97에서 36, A106에서 32) -->
-                <Button Grid.Column="3" Style="{StaticResource BottomBarButtonStyle}"
-                        Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen (F11)">
-                    <FontIcon Glyph="&#xE740;" FontSize="18" />
-                </Button>
             </Grid>
         </Border>
     </Grid>

@@ -1,6 +1,5 @@
 using System.Text;
 using Microsoft.UI;
-using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -1022,37 +1021,9 @@ public sealed partial class DocumentView : UserControl,
     // 셸 S4 'Open file'(A90)로 일원화됐다(미저장 가드는 셸이 열기 전에 통과시킨다 — A37).
     // 드래그&드롭은 종전대로 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
-    // ---------- 전체화면 (전 모듈 공통 패턴) ----------
-
-    private void ToggleFullScreen()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        appWindow.SetPresenter(appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen
-            ? AppWindowPresenterKind.Default
-            : AppWindowPresenterKind.FullScreen);
-    }
-
-    private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
-
-    private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
-    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        if (appWindow.Presenter.Kind != AppWindowPresenterKind.FullScreen) return;
-
-        args.Handled = true;
-        appWindow.SetPresenter(AppWindowPresenterKind.Default);
-    }
+    // A151: 전체화면 토글(ToggleFullScreen·⛶ 버튼·F11/Esc 액셀러레이터)은 전부 제거 —
+    // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
+    // 편집 중 Enter는 줄바꿈이 우선이라 순환하지 않는다(셸의 텍스트 입력 통과 — A151 ④ⓐ).
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------
 

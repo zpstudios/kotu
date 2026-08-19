@@ -646,37 +646,8 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         return Win32Interop.GetWindowFromWindowId(environment.AppWindowId);
     }
 
-    // ---------- 전체화면 (v0.40.0 — 이미지·동영상과 동일 패턴) ----------
-
-    private void ToggleFullScreen()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-
-        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(environment.AppWindowId);
-        appWindow.SetPresenter(appWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen
-            ? Microsoft.UI.Windowing.AppWindowPresenterKind.Default
-            : Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
-    }
-
-    private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
-
-    private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
-    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(environment.AppWindowId);
-        if (appWindow.Presenter.Kind != Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) return;
-
-        args.Handled = true;
-        appWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
-    }
+    // A151: 전체화면 토글(ToggleFullScreen·⛶ 버튼·F11/Esc 액셀러레이터, v0.40.0)은 전부 제거 —
+    // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
 
     // ---------- 툴바·하단 바 버튼 핫키 (A34) ----------
 

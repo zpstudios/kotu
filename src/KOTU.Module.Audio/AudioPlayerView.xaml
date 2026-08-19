@@ -6,9 +6,9 @@
     IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨, F11 전체화면.
-         Enter 전체화면은 A86(v0.121.0)에서 제거 — Enter는 셸의 오버레이 일괄 토글 키가 됐고,
-         keymap의 전체화면 예외는 영상 모듈뿐이다(전체화면은 F11로).
+    <!-- 단축키: Space 재생/일시정지, ←/→ 5초 점프, ↑/↓ 볼륨.
+         전체화면 계열(F11·Esc 액셀러레이터)은 A151에서 제거 — 전체화면은 셸의 3단 모드 체계
+         (Enter 순환·Alt+Enter·Esc·하단 바 모드 버튼)가 담당한다.
          버튼에 걸린 단독 문자 키(M 음소거 · S 배속)는 A34에서 코드(SetupHotkeys)로
          옮겼다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들고, 텍스트 입력·파일 리스트
          포커스에서는 통과시켜야 하기 때문. 비디오 플레이어와 동일 배치(A10 분리 — 자막·핏 계열만 없음).
@@ -20,8 +20,6 @@
         <KeyboardAccelerator Key="Right" Invoked="OnSeekForwardInvoked" />
         <KeyboardAccelerator Key="Up" Invoked="OnVolumeUpInvoked" />
         <KeyboardAccelerator Key="Down" Invoked="OnVolumeDownInvoked" />
-        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
-        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
     </UserControl.KeyboardAccelerators>
 
     <Grid x:Name="RootGrid">
@@ -66,12 +64,12 @@
         <!-- 트랜스포트 바 — 셸이 TakeBottomBar()로 떼어가 하단 바(44px) 한 줄에 얹는다(비디오와 동일).
              ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
         <Grid x:Name="TransportBar" Grid.Row="1" Padding="0,2" ColumnSpacing="6">
-            <!-- 열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
+            <!-- 열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
+                 전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -100,10 +98,6 @@
             <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸, A97에서 84×36, A106에서 84×32) -->
             <ComboBox x:Name="SpeedBox" Grid.Column="6" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
-            <Button Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
-                    ToolTipService.ToolTip="Full screen (F11)" Click="OnFullScreenClicked">
-                <FontIcon Glyph="&#xE740;" FontSize="18" />
-            </Button>
         </Grid>
     </Grid>
 </UserControl>

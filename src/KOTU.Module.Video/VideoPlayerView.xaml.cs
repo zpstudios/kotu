@@ -16,7 +16,8 @@ namespace KOTU.Module.Video;
 
 /// <summary>
 /// 동영상 플레이어 화면. 재생/일시정지, 시킹(슬라이더·←/→ 5초), 볼륨(↑/↓)·음소거(M),
-/// 배속, 자막(자동 탐지 + CP949 자동 변환), 이어보기, 전체화면(Enter/F11)을 제공한다.
+/// 배속, 자막(자동 탐지 + CP949 자동 변환), 이어보기를 제공한다. 전체화면은 A151부터
+/// 셸의 3단 모드 체계(Enter 순환·Alt+Enter) 몫이다 — 이 뷰에는 진입 코드가 없다.
 /// 더블클릭 전체화면은 제거(v0.23.0) — 클릭(재생/일시정지)과 겹쳐 의도치 않은 전환이 잦았다.
 /// 음악 재생은 오디오 모듈(KOTU-audio)로 분리(A10, v0.75.0) — 파형 시각화 인스턴스 교체 로직도 함께 이관.
 /// 스레드 모델(A42): libvlc 생성·해제와 자막 탐지·변환은 뷰 전용 워커에서 직렬로 —
@@ -1031,25 +1032,16 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private void OnFitHeightClicked(object sender, RoutedEventArgs e) =>
         SelectFitOption(VideoFitMode.FitHeight);
 
-    private void ToggleFullScreen()
-    {
-        // Window 객체 없이 XamlRoot 경유로 AppWindow에 접근한다 (이미지 뷰어와 동일 패턴).
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        appWindow.SetPresenter(appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen
-            ? AppWindowPresenterKind.Default
-            : AppWindowPresenterKind.FullScreen);
-    }
+    // A151: 전체화면 토글(ToggleFullScreen·⛶ 버튼·F11/Enter/Esc 액셀러레이터)은 전부 제거 —
+    // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
+    // 이 뷰는 상태 플래그 없이 매번 Presenter.Kind를 읽으므로(IsFullScreen — 피드백 칩 판정)
+    // 셸이 프레젠터를 바꿔도 어긋날 상태가 없다.
 
     // ---------- 입력 핸들러 ----------
 
     private void OnPlayClicked(object sender, RoutedEventArgs e) => TogglePlayPause();
 
     private void OnMuteClicked(object sender, RoutedEventArgs e) => ToggleMute();
-
-    private void OnFullScreenClicked(object sender, RoutedEventArgs e) => ToggleFullScreen();
 
     /// <summary>영상 클릭 = 재생/일시정지 (플레이어 관례).</summary>
     private void OnSurfaceTapped(object sender, TappedRoutedEventArgs e)
@@ -1068,17 +1060,6 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             ZoomBy(delta); // 트랙 정보 전이면 무동작 — 볼륨으로 새지 않는다
         else
             ChangeVolume(delta > 0 ? VolumeStep : -VolumeStep);
-    }
-
-    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        if (appWindow.Presenter.Kind != AppWindowPresenterKind.FullScreen) return;
-
-        args.Handled = true;
-        appWindow.SetPresenter(AppWindowPresenterKind.Default);
     }
 
     private bool _isScrubbing;
@@ -1133,7 +1114,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// Space = 재생/일시정지. A157(v0.168.0)에서 탐색기 표면의 Space(선택 토글)와 충돌하므로,
     /// 포커스가 통과 표면(탐색기 리스트·트리·썸네일)이나 텍스트 입력에 있으면 삼키지 않는다 —
     /// 액셀러레이터는 표면 KeyDown보다 먼저 돌아 여기서 흘려 주지 않으면 표면이 받을 방법이 없다.
-    /// 같은 파일 OnFullScreenEnterInvoked(Enter)의 가드를 그대로 복제한 것이다.
+    /// 가드 형태는 구 Enter 액셀러레이터(A151에서 제거)의 것을 승계한 공용 통과 판정 한 벌이다.
     /// </summary>
     private void OnTogglePlayInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
@@ -1168,39 +1149,6 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     {
         args.Handled = true;
         ChangeVolume(-VolumeStep);
-    }
-
-    private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        // A86: 파일이 없으면(빈 영상 모듈 = 셸 S1) 삼키지 않는다 — Enter는 셸의 일괄 토글 몫이고
-        // (keymap의 전체화면 예외는 "영상 콘텐츠 열림"뿐), 빈 화면 전체화면 자체도 의미가 없다.
-        // A90 전까지는 F11·Enter가 이 핸들러 하나를 공유했다 — 지금 F11은 여기 직결이고
-        // Enter는 아래 OnFullScreenEnterInvoked(통과 표면 예외)를 거쳐 들어온다.
-        if (_filePath is null)
-        {
-            args.Handled = false;
-            return;
-        }
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
-    /// <summary>
-    /// Enter = 전체화면 (A90에서 F11과 핸들러 분리): 포커스가 통과 표면(탐색기 리스트·트리·썸네일 —
-    /// 셸 S4 '오픈 파일' 그리드 포함)이나 텍스트 입력에 있으면 삼키지 않는다.
-    /// 근거 = A86 keymap 포커스 예외("탐색기 포커스에서 Enter = 선택 항목 열기 우선")와
-    /// A90 keymap S4 행("Enter = 선택 열기 우선") — 액셀러레이터는 셸 루트 핸들러보다 먼저 돌아
-    /// 여기서 흘려 주지 않으면 셸이 받을 방법이 없다. F11은 이 예외 없이 종전대로
-    /// (OnFullScreenInvoked 직결) — 탐색기 포커스에서도 전체화면 키로 남는다.
-    /// </summary>
-    private void OnFullScreenEnterInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        if (HotkeySupport.ShouldPassThrough(this))
-        {
-            args.Handled = false;
-            return;
-        }
-        OnFullScreenInvoked(sender, args);
     }
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------

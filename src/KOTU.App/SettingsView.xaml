@@ -5,11 +5,8 @@
     IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (v0.50.0 — 전 화면 공통 배치) -->
-    <UserControl.KeyboardAccelerators>
-        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
-        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
-    </UserControl.KeyboardAccelerators>
+    <!-- 전체화면 계열(F11·Esc 액셀러레이터, v0.50.0)은 A151에서 제거 — 전체화면은 셸의
+         3단 모드 체계(Enter 순환·Alt+Enter·Esc·하단 바 모드 버튼)가 담당한다. -->
 
     <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
@@ -27,7 +24,8 @@
                 HorizontalAlignment="Left" />
         </ScrollViewer>
 
-        <!-- 하단 바: 좌측 Patreon 후원 문구(v0.52.0 — 광고 배너는 사용자 정정으로 철회) + 우측 ⛶.
+        <!-- 하단 바: 좌측 Patreon 후원 문구(v0.52.0 — 광고 배너는 사용자 정정으로 철회).
+             우측 ⛶(전체화면)은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다. -->
         <Border x:Name="ControlBar" Grid.Row="1" Padding="0,2,0,2">
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
@@ -35,19 +33,11 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <HyperlinkButton Grid.Column="0" Content="Kindly support us on Patreon !"
                                  NavigateUri="https://www.patreon.com/zpstudios/"
                                  VerticalAlignment="Center" Padding="4,2"
                                  ToolTipService.ToolTip="www.patreon.com/zpstudios/" />
-                <!-- 1칸(32×32) 공통 규격 — A27(v0.107.0)에서 앱 전역 스타일로 이관,
-                     A97(v0.116.0)에서 40→36, A106(v0.132.0)에서 36→32 -->
-                <Button Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
-                        Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen (F11)">
-                    <FontIcon Glyph="&#xE740;" FontSize="18" />
-                </Button>
             </Grid>
         </Border>
     </Grid>

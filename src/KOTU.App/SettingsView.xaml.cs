@@ -15,7 +15,7 @@ namespace KOTU.App;
 /// <summary>
 /// 설정 페이지. UI 스케일(v0.24.0), 탐색기 통합(파일 연결·우클릭 메뉴)을 관리한다.
 /// 탐색기 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
-/// 하단 바(광고 + ⛶ 전체화면)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
+/// 하단 바(후원 문구 — ⛶ 전체화면은 A151에서 셸 모드 버튼으로 이관)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
 /// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시만 하고, 확인은
 /// <b>이 화면 진입 1회</b> · 2분 주기 타이머의 두 경로가 코디네이터에서 돈다
 /// (A114, v0.136.0 — A95의 "수동 전용"을 대체. A125/v0.148.0에서 수동 버튼만 걷어내
@@ -62,7 +62,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Loaded += (_, _) =>
         {
             _uiAlive = true;
-            Focus(FocusState.Programmatic); // F11/Esc 액셀러레이터가 바로 듣게
+            Focus(FocusState.Programmatic); // 셸 키(Enter 순환·Esc 등)가 바로 듣게
         };
         Unloaded += (_, _) =>
         {
@@ -74,47 +74,15 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         };
     }
 
-    /// <summary>하단 바(광고·⛶)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.50.0).</summary>
+    /// <summary>하단 바(후원 문구)를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(v0.50.0).</summary>
     public object? TakeBottomBar()
     {
         RootGrid.Children.Remove(ControlBar);
         return ControlBar;
     }
 
-    // ---------- 전체화면 (전 모듈 공통 패턴, v0.50.0) ----------
-
-    private void ToggleFullScreen()
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-
-        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(environment.AppWindowId);
-        appWindow.SetPresenter(
-            appWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen
-                ? Microsoft.UI.Windowing.AppWindowPresenterKind.Default
-                : Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
-    }
-
-    private void OnFullScreenButtonClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
-
-    private void OnFullScreenInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
-        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleFullScreen();
-    }
-
-    private void OnEscapeInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
-        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(environment.AppWindowId);
-        if (appWindow.Presenter.Kind != Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen) return;
-
-        args.Handled = true;
-        appWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
-    }
+    // A151: 전체화면 토글(⛶ 버튼·F11/Esc 액셀러레이터, v0.50.0)은 전부 제거 —
+    // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
 
     private void Build(FileTypeRouter router)
     {

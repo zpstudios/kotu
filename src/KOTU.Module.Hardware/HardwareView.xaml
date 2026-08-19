@@ -5,13 +5,10 @@
     IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden">
 
-    <!-- F11 전체화면 토글, Esc는 전체화면일 때만 복귀 (v0.42.0 — 전 모듈 전체화면 지원).
+    <!-- 전체화면 계열(F11·Esc 액셀러레이터, v0.42.0)은 A151에서 제거 — 전체화면은 셸의
+         3단 모드 체계(Enter 순환·Alt+Enter·Esc·하단 바 모드 버튼)가 담당한다.
          하단 바 버튼의 단독 문자 키(C 복사 · I 주기 · B 바 크기 · P 핀)는 A34에서
          코드(SetupHotkeys)가 건다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들기 위해서다. -->
-    <UserControl.KeyboardAccelerators>
-        <KeyboardAccelerator Key="F11" Invoked="OnFullScreenInvoked" />
-        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
-    </UserControl.KeyboardAccelerators>
 
     <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
@@ -31,7 +28,7 @@
              행이 Auto라 세로로 넘치면 이 ScrollViewer가
              스크롤한다(정사각형 유지·축소 없음 — 4열 3줄 등). 가로 스크롤은 잠가 콘텐츠 폭이
              뷰포트 폭을 따르게 한다(한 변 계산의 전제). 클릭 = 선택 토글(최대 2), 드래그 =
-             순서 변경(hardware.channelOrder)은 그대로. 전체화면(F11)도 같은 화면이다. -->
+             순서 변경(hardware.channelOrder)은 그대로. 전체화면(A151 — 셸 모드3)도 같은 화면이다. -->
         <ScrollViewer Grid.Row="0" Padding="12,8,12,10"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollMode="Disabled"
@@ -63,17 +60,17 @@
              가운데 공간(SensorGrid)에는 선택 긴 그래프 2개가 산다(A60 3차 — A17 카드 10개 대체,
              각 폭 152 = 구 카드 최소 폭 76의 2배, 시간 창 5분, 가운데 정렬). A40(하단 바 두께
              고정 44): 항상 1줄 — 창이 좁으면 맥박 그래프부터 숨긴다(UpdateBarDensity).
-             우측 끝 ⛶ = 전체화면(전 모듈 공통 배치, 사용자 요청). -->
+             우측 끝 ⛶(전체화면)은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다. -->
         <Border x:Name="ControlBar" Grid.Row="2" Padding="0,2,0,2">
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10) — A106에서도 무변경.
-                 ⚠️ 이 값과 아래 요소 폭의 합이 코드의 BarFixedWidth 상수다(A106에서 380→364) — 함께 고칠 것.
+                 ⚠️ 이 값과 아래 요소 폭의 합이 코드의 BarFixedWidth 상수다(A106에서 380→364,
+                 A151에서 ⛶ 칸 제거로 364→326) — 함께 고칠 것.
                  SensorGrid 안쪽 그래프 간격 8(= CardSpacing 상수)은 별개라 그대로 둔다. -->
             <Grid x:Name="BarGrid" ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -131,12 +128,6 @@
                               Checked="OnTopToggleChanged" Unchecked="OnTopToggleChanged">
                     <FontIcon Glyph="&#xE718;" FontSize="18" />
                 </ToggleButton>
-                <!-- 1칸(32×32) = 다른 모듈 ⛶와 통일 (v0.53.0 → A27에서 전역 스타일, A97에서 36, A106에서 32) -->
-                <Button Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
-                        Click="OnFullScreenButtonClick"
-                        ToolTipService.ToolTip="Full screen (F11)">
-                    <FontIcon Glyph="&#xE740;" FontSize="18" />
-                </Button>
             </Grid>
         </Border>
     </Grid>

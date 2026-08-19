@@ -1,6 +1,5 @@
 using LibVLCSharp.Platforms.Windows;
 using LibVLCSharp.Shared;
-using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -15,7 +14,8 @@ namespace KOTU.Module.Audio;
 
 /// <summary>
 /// 음악 플레이어 화면 (A10 — 비디오 모듈에서 분리). 재생/일시정지, 시킹(슬라이더·←/→ 5초),
-/// 볼륨(↑/↓)·음소거(M), 배속, 이어듣기, 전체화면(F11 — Enter는 A86에서 셸 일괄 토글로 이관)을 제공한다.
+/// 볼륨(↑/↓)·음소거(M), 배속, 이어듣기를 제공한다. 전체화면은 A151부터 셸의 3단 모드 체계
+/// (Enter 순환·Alt+Enter) 몫이다 — 이 뷰에는 진입 코드가 없다.
 /// 표면은 libvlc 파형 시각화(scope)가 채우고 상단에 ♪ + 파일명 오버레이를 띄운다.
 /// 파형 시각화는 인스턴스 옵션으로만 동작하므로(v0.12.0 실기기 확인) 항상 켠 인스턴스를
 /// 1회 생성해 재사용한다 — 비디오처럼 음악↔영상 교체 재생성이 필요 없다.
@@ -545,25 +545,14 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         MuteButton.Content = _muted ? "🔇" : "🔊";
     }
 
-    private void ToggleFullScreen()
-    {
-        // Window 객체 없이 XamlRoot 경유로 AppWindow에 접근한다 (이미지 뷰어와 동일 패턴).
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        appWindow.SetPresenter(appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen
-            ? AppWindowPresenterKind.Default
-            : AppWindowPresenterKind.FullScreen);
-    }
+    // A151: 전체화면 토글(ToggleFullScreen·⛶ 버튼·F11/Esc 액셀러레이터)은 전부 제거 —
+    // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
 
     // ---------- 입력 핸들러 ----------
 
     private void OnPlayClicked(object sender, RoutedEventArgs e) => TogglePlayPause();
 
     private void OnMuteClicked(object sender, RoutedEventArgs e) => ToggleMute();
-
-    private void OnFullScreenClicked(object sender, RoutedEventArgs e) => ToggleFullScreen();
 
     /// <summary>표면 클릭 = 재생/일시정지 (플레이어 관례).</summary>
     private void OnSurfaceTapped(object sender, TappedRoutedEventArgs e)
@@ -579,17 +568,6 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (delta == 0) return;
         e.Handled = true;
         ChangeVolume(delta > 0 ? VolumeStep : -VolumeStep);
-    }
-
-    private void OnEscapeInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        if (appWindow.Presenter.Kind != AppWindowPresenterKind.FullScreen) return;
-
-        args.Handled = true;
-        appWindow.SetPresenter(AppWindowPresenterKind.Default);
     }
 
     private bool _isScrubbing;
@@ -644,8 +622,8 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// Space = 재생/일시정지. A157(v0.168.0)에서 탐색기 표면의 Space(선택 토글)와 충돌하므로,
     /// 포커스가 통과 표면(탐색기 리스트·트리·썸네일)이나 텍스트 입력에 있으면 삼키지 않는다 —
     /// 액셀러레이터는 표면 KeyDown보다 먼저 돌아 여기서 흘려 주지 않으면 표면이 받을 방법이 없다.
-    /// 가드 형태는 영상 모듈의 Enter 선례(VideoPlayerView.OnFullScreenEnterInvoked)와 같은 한 벌 —
-    /// 이 파일에는 Enter 액셀러레이터가 없어(음악에는 전체화면이 없다) 그쪽 형태를 옮겨 왔다.
+    /// 가드 형태는 영상 모듈 Space(OnTogglePlayInvoked)와 같은 공용 통과 판정 한 벌이다
+    /// (원형이던 영상 Enter 액셀러레이터는 A151에서 제거됐다).
     /// </summary>
     private void OnTogglePlayInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
@@ -680,12 +658,6 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         args.Handled = true;
         ChangeVolume(-VolumeStep);
-    }
-
-    private void OnFullScreenInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
-    {
-        args.Handled = true;
-        ToggleFullScreen();
     }
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------
