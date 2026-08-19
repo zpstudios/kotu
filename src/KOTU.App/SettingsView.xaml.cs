@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using KOTU.App.Integration;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
@@ -19,6 +20,8 @@ namespace KOTU.App;
 /// 자동 두 경로가 남았다. 토스트·오토체크 토글은 계속 없다).
 /// 연결 토글의 레지스트리 작업·기본 앱 개수 조회는 전부 <see cref="Worker"/>에서 돌고
 /// UI에는 진행률과 결과만 흘러온다(A77, v0.106.0).
+/// A183: Explorer integration 절의 스위치들은 스위치 하나당 카드 하나(<see cref="NewCard"/>)로 묶였다 —
+/// 제목은 카드 헤더 좌측, 스위치는 그 행의 <b>우측 끝</b>(Windows 설정 앱 관례)이다.
 /// </summary>
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
@@ -133,20 +136,28 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         foreach (var module in associationModules)
         {
+            // A183: 모듈 하나 = 카드 하나. 종전에는 토글 행과 "Default app for..." 줄이 Root
+            // (Spacing 12)에 평평하게 쌓여 어느 스위치가 어느 줄에 속하는지 알아볼 수 없었다
+            // (사용자 보고 2026-08-19). 실원인은 스위치 위치가 아니라 구획 컨테이너 부재였다.
             var toggle = new ToggleSwitch
             {
-                Header = $"Register {module.BrandName} file associations  ({string.Join(" ", module.SupportedExtensions)})",
+                // Header(구 "Register ... file associations (확장자들)")는 카드 제목·확장자 줄로
+                // 올라갔다 — 스위치에는 기본 On/Off 문구만 남는다(Windows 설정 앱도 상태 문구를
+                // 표시한다). MinWidth 0 = ToggleSwitch 기본값 154를 풀어 스위치가 카드 오른쪽 끝에
+                // 붙게 한다(풀지 않으면 스위치 오른쪽에 빈 자리가 남는다).
+                MinWidth = 0,
                 IsOn = Safe(() => ExplorerIntegration.IsAssociationRegistered(module)),
                 VerticalAlignment = VerticalAlignment.Center,
             };
 
-            // A77(v0.106.0): 토글 행 우측에 진행 링 + 진행/결과 텍스트.
-            // StackPanel이 아니라 Grid를 쓰는 이유 — 헤더 문구가 길어도(확장자 나열) 링·텍스트가
-            // MaxWidth 680 밖으로 밀려나 잘리지 않게 오른쪽에 고정하기 위함.
+            // A77(v0.106.0): 진행 링 + 진행/결과 텍스트.
             // A79 ⑤(v0.119.0): 앱에서 가장 오래 도는 인디케이터라 발바닥 스피너를 여기 하나에만 붙였다.
             // 브랜드 레벨이 낮으면 지금까지의 ProgressRing 그대로다.
+            // A183: 링은 카드 헤더 행(스위치 왼쪽)에, 텍스트는 아래 defaults 줄 끝으로 나뉘었다 —
+            // 진행 문구가 길어져도 제목·스위치를 밀지 않는다.
             var busySpinner = BrandSpinner.Create(16);
             busySpinner.Element.Visibility = Visibility.Collapsed;
+            busySpinner.Element.VerticalAlignment = VerticalAlignment.Center;
             var progressText = new TextBlock
             {
                 FontSize = 12,
@@ -154,17 +165,36 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
             };
-            var toggleRow = new Grid { ColumnSpacing = 8 };
-            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            toggleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(toggle, 0);
+
+            // A183 카드 헤더 행: 제목(가변 폭) · 진행 링 · 스위치(우측 끝).
+            // Grid를 쓰는 이유는 종전 toggleRow와 같다 — 제목이 길어져도 링·스위치가
+            // MaxWidth 680 밖으로 밀려나 잘리지 않게 오른쪽에 고정한다.
+            var headerRow = new Grid { ColumnSpacing = 8 };
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var title = new TextBlock
+            {
+                Text = $"Register {module.BrandName} file associations",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(title, 0);
             Grid.SetColumn(busySpinner.Element, 1);
-            Grid.SetColumn(progressText, 2);
-            toggleRow.Children.Add(toggle);
-            toggleRow.Children.Add(busySpinner.Element);
-            toggleRow.Children.Add(progressText);
-            Root.Children.Add(toggleRow);
+            Grid.SetColumn(toggle, 2);
+            headerRow.Children.Add(title);
+            headerRow.Children.Add(busySpinner.Element);
+            headerRow.Children.Add(toggle);
+
+            // 종전 ToggleSwitch.Header 괄호 안에 붙어 있던 확장자 목록 — 제목에서 떼어 제 줄로.
+            var extensionsText = new TextBlock
+            {
+                Text = string.Join(" ", module.SupportedExtensions),
+                FontSize = 12,
+                Opacity = 0.7,
+                TextWrapping = TextWrapping.Wrap,
+            };
 
             // A25(v0.61.0): 현재 기본 앱 현황(n/m) + 확장자별 '연결 프로그램' 대화상자 진입
             var defaultsText = new TextBlock
@@ -200,6 +230,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 Content = "Set default...",
                 FontSize = 12,
                 Padding = new Thickness(8, 2, 8, 2),
+                // A183: 같은 줄의 진행 문구가 두 줄로 접히면 Grid 행이 높아진다 — 버튼은 중앙에.
+                VerticalAlignment = VerticalAlignment.Center,
             };
             var flyout = new MenuFlyout();
             foreach (var ext in module.SupportedExtensions)
@@ -214,15 +246,26 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             }
             setDefaultButton.Flyout = flyout;
 
-            var defaultsRow = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 12,
-                Margin = new Thickness(0, -8, 0, 0),
-            };
+            // A183: 상태 줄 = 현황 · Set default · 진행/결과 문구 한 줄.
+            // Root의 Spacing 12를 상쇄하던 음수 여백(-8)은 카드 내부 배치(Spacing 6)로 흡수했다.
+            // 가로 StackPanel이 아니라 Grid인 이유 — 마지막 칸을 Star로 두어야 진행 문구가
+            // 카드 폭 안에서 접힌다(StackPanel은 무한 폭으로 재어 카드 밖으로 흘러넘친다).
+            var defaultsRow = new Grid { ColumnSpacing = 12 };
+            defaultsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            defaultsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            defaultsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(defaultsText, 0);
+            Grid.SetColumn(setDefaultButton, 1);
+            Grid.SetColumn(progressText, 2);
             defaultsRow.Children.Add(defaultsText);
             defaultsRow.Children.Add(setDefaultButton);
-            Root.Children.Add(defaultsRow);
+            defaultsRow.Children.Add(progressText);
+
+            var cardBody = new StackPanel { Spacing = 6 };
+            cardBody.Children.Add(headerRow);
+            cardBody.Children.Add(extensionsText);
+            cardBody.Children.Add(defaultsRow);
+            Root.Children.Add(NewCard(cardBody));
 
             // 같은 모듈의 재진입 방지 플래그(A77). 작업 중에는 토글도 비활성이라 사람 조작으로는
             // 도달하지 않지만, 실패 되돌리기(IsOn 재설정)나 프로그램적 변경까지 막아 준다.
@@ -328,11 +371,15 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         // 우클릭 메뉴 토글 통합(v0.30.0 사용자 요청): "여기에 풀기"(압축 파일)와
         // "압축하기"(모든 파일)를 하나의 스위치로 함께 등록/해제한다.
+        // A183: 이 토글도 같은 절에 있으므로 위 모듈 카드들과 같은 카드 체계에 편입한다
+        // (한 절 안에 카드와 맨 토글이 섞이면 구획이 다시 흐려진다). Header였던 긴 문구는
+        // 제목 + 설명 줄로 나뉘고, 아래 "Show more options" 안내도 이 카드 안으로 들어온다.
         var menuToggle = new ToggleSwitch
         {
-            Header = $"Explorer right-click menu: \"Extract here with {archiveBrand}\" (archives) · \"Compress with {archiveBrand}\" (all files)",
+            MinWidth = 0,
             IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)
                            || ExplorerIntegration.IsCompressMenuRegistered()),
+            VerticalAlignment = VerticalAlignment.Center,
         };
         menuToggle.Toggled += (_, _) => Apply(menuToggle,
             () =>
@@ -345,17 +392,45 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 ExplorerIntegration.UnregisterExtractHereMenu(archiveExts);
                 ExplorerIntegration.UnregisterCompressMenu();
             });
-        Root.Children.Add(menuToggle);
 
+        var menuHeaderRow = new Grid { ColumnSpacing = 8 };
+        menuHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        menuHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var menuTitle = new TextBlock
+        {
+            Text = "Explorer right-click menu",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(menuTitle, 0);
+        Grid.SetColumn(menuToggle, 1);
+        menuHeaderRow.Children.Add(menuTitle);
+        menuHeaderRow.Children.Add(menuToggle);
+
+        var menuCardBody = new StackPanel { Spacing = 6 };
+        menuCardBody.Children.Add(menuHeaderRow);
+        menuCardBody.Children.Add(new TextBlock
+        {
+            Text = $"\"Extract here with {archiveBrand}\" (archives) · \"Compress with {archiveBrand}\" (all files)",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
         // A162: 다섯 문구 중 유일하게 링크를 붙이지 않은 줄이다 — 이미 한 줄(65자)이고 내용도
         // "어디에 나타나는가" 한 가지뿐이라 옮길 상세가 없다. 같은 사실은 가이드 6장에도 적혀 있다.
-        Root.Children.Add(new TextBlock
+        // A183: 이 줄이 설명하는 대상이 위 스위치뿐이라 같은 카드 안으로 들여놓았다.
+        menuCardBody.Children.Add(new TextBlock
         {
             Text = "On Windows 11 these appear under \"Show more options\" (Shift+F10).",
+            FontSize = 12,
             Opacity = 0.6,
             TextWrapping = TextWrapping.Wrap,
         });
+        Root.Children.Add(NewCard(menuCardBody));
 
+        // 공용 상태 줄은 카드 밖에 남는다 — 모듈 토글과 이 메뉴 토글이 함께 쓰는 한 줄이라
+        // 어느 카드에도 속하지 않는다(모듈별 진행·결과는 각 카드의 progressText가 말한다).
         Root.Children.Add(_status);
 
         BuildSettingsFileSection(); // A36: 연결 섹션 아래 "Open settings.json"
@@ -844,6 +919,29 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         group.Children.Add(body);
         return group;
     }
+
+    /// <summary>
+    /// A183: 인티그레이션 절의 구획 카드. 스위치 하나와 그에 딸린 줄들을 한 상자에 담아
+    /// "어느 스위치가 어느 줄에 속하는가"를 눈으로 구분하게 한다(사용자 보고 2026-08-19).
+    /// <para>
+    /// 형태는 <b>저장소에 이미 쓰이고 있는 카드</b>와 같은 조합이다 — HardwareView의 센서 그래프
+    /// 표면(CardBackgroundFillColorDefaultBrush + CardStrokeColorDefaultBrush + 1px 테두리 +
+    /// 모서리 8). 새 시스템 브러시는 끌어오지 않았다.
+    /// </para>
+    /// <para>
+    /// 카드 사이 간격은 Root의 Spacing 12가 이미 준다 — 테두리가 곧 구획선이라
+    /// <b>별도 구분선은 두지 않는다</b>(선을 더하면 테두리와 이중선이 된다).
+    /// </para>
+    /// </summary>
+    private static Border NewCard(UIElement content) => new()
+    {
+        Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+        BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(8),
+        Padding = new Thickness(12),
+        Child = content,
+    };
 
     /// <summary>섹션 머리글 추가.</summary>
     private void AddHeader(string text)
