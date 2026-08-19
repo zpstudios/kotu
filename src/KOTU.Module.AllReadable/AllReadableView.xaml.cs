@@ -17,6 +17,8 @@ namespace KOTU.Module.AllReadable;
 ///  · <see cref="ICloseGuard"/> — 문서 자식의 미저장 가드(A37)가 셸까지 이어진다.
 ///  · <see cref="IBottomBarProvider"/>·<see cref="IDriveStripHost"/> — 하단 바 한 줄과 드라이브 줄(A22).
 ///  · <see cref="ITrayStatusProvider"/> — 트레이 아이콘 표시 내용(A54)도 자식 것을 그대로 중계.
+///  · <see cref="IPlaybackStateSource"/> — 영상 자식의 재생 상태(A186 하단 바 자동 숨김)를 중계.
+///    자식이 계약을 구현할 때만 HasPlaybackSurface가 참이 된다(문서·사진 자식이면 거짓).
 ///  · <see cref="IFileOpenTarget"/> — 셸이 "이 파일 네가 열래?"를 먼저 물어보는 지점(A24 유지).
 ///
 /// <b>워커 수명(A42)</b>: 자식 뷰의 워커·재생·구독은 자식이 <c>Unloaded</c>에서 스스로 정리한다.
@@ -25,7 +27,8 @@ namespace KOTU.Module.AllReadable;
 /// 사라지지 않는다) 그다음 센터를 비운다. 이 뷰가 내려갈 때(Unloaded)도 같은 정리를 한 번 더 한다.
 /// </summary>
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
-    IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider
+    IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
+    IPlaybackStateSource
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -43,6 +46,15 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>자식의 트레이 표시 값 변화를 그대로 중계한다(A54). 자식 교체 자체도 이 이벤트를 쏜다.</summary>
     public event Action? TrayStatusChanged;
+
+    /// <summary>영상 자식의 재생 상태 변화를 그대로 중계한다(A186). 자식 교체 자체도 이 이벤트를 쏜다.</summary>
+    public event Action? PlaybackStateChanged;
+
+    /// <summary>재생 표면(영상 자식)이 전면인가(A186) — 문서·사진 자식·빈 상태면 false.</summary>
+    public bool HasPlaybackSurface => _childView is IPlaybackStateSource { HasPlaybackSurface: true };
+
+    /// <summary>영상 자식이 지금 재생 중인가(A186) — 자식이 계약 미구현이면 false.</summary>
+    public bool IsPlaying => _childView is IPlaybackStateSource { IsPlaying: true };
 
     /// <summary>
     /// 트레이 아이콘 내용(A54): <b>지금 자식의 것을 그대로</b> 쓴다 — 자식이 영상이면 해상도·비트레이트,
@@ -116,8 +128,10 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         if (view is IContentStateSource source) source.ContentOpened += OnChildContentOpened;
         if (view is ICloseGuard guard) guard.UnsavedChanged += OnChildUnsavedChanged;
         if (view is ITrayStatusProvider tray) tray.TrayStatusChanged += OnChildTrayStatusChanged;
+        if (view is IPlaybackStateSource playback) playback.PlaybackStateChanged += OnChildPlaybackStateChanged;
         UpdateBars();
         TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
+        PlaybackStateChanged?.Invoke(); // A186: 자식 교체도 재생 상태 재평가 대상이다(트레이와 같은 이유)
     }
 
     /// <summary>
@@ -131,6 +145,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         if (_childView is IContentStateSource source) source.ContentOpened -= OnChildContentOpened;
         if (_childView is ICloseGuard guard) guard.UnsavedChanged -= OnChildUnsavedChanged;
         if (_childView is ITrayStatusProvider tray) tray.TrayStatusChanged -= OnChildTrayStatusChanged;
+        if (_childView is IPlaybackStateSource playback) playback.PlaybackStateChanged -= OnChildPlaybackStateChanged;
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
@@ -145,6 +160,9 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>자식의 트레이 값 변화를 그대로 셸로 올린다(A54 — 중계만, 판단은 자식이).</summary>
     private void OnChildTrayStatusChanged() => TrayStatusChanged?.Invoke();
+
+    /// <summary>영상 자식의 재생 상태 변화를 그대로 셸로 올린다(A186 — 중계만, 판단은 셸이).</summary>
+    private void OnChildPlaybackStateChanged() => PlaybackStateChanged?.Invoke();
 
     /// <summary>자식이 파일을 열었다(첫 로드·자식 내부 탐색). 셸에 중계해 오버레이·탐색기를 맞춘다.</summary>
     private void OnChildContentOpened(string path)

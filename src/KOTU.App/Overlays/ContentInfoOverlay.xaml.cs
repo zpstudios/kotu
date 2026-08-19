@@ -11,16 +11,16 @@ namespace KOTU.App.Overlays;
 /// <summary>
 /// 콘텐츠 정보 패널 공용 컨트롤 (A57 ②) — 기존 MainWindow의 InfoOverlayRoot(좌측,
 /// v0.25.0)를 추출해 우측으로 스왑(A57 ①)한 것.
-/// 용어(A108): 사이드바 = 불투명(OpaqueDocked) / 오버레이 = 반투명(홀드·고정).
+/// A176: 반투명(오버레이) 축 폐지 — 열림 상태는 사이드바(불투명 도크) 하나뿐이다.
 /// 패널 폭은 전 상태 공통 25%(A116 — 종전 "콘텐츠 30% / S1 25%" 2값 폐지,
 /// SetPanelPercent). 정보 로드 로직(v0.25.0의
 /// LoadContentInfoAsync — 파일별 1회 캐시·경쟁 방지 시퀀스·기본 파일 정보 폴백)도 함께 이관.
 /// 정보 항목은 모듈이 주입한다: ShowFor()에 넘기는 IContentInfoProvider(모듈 뷰)가 내용을 만들고,
 /// 없거나 실패하면 파일 기본 정보로 대체한다. 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
 /// 애초에 ShowFor를 부르지 않는다(현행 동작 유지).
-/// 입력(A86 — A58의 Shift를 X로 대체: X 홀드 = 오버레이 / 2초 = 오버레이 고정 / 2연타 = 사이드바 /
-/// 열림 상태에서 X 1회 = 닫기)은 셸(MainWindow)의 상태 머신이 담당한다 —
-/// 이 컨트롤은 ShowFor/Hide/SetState만 받는다.
+/// 입력(A176: F12 단타 = 열기/닫기 토글, 핀 버튼 동일)은 셸(MainWindow)이 담당한다 —
+/// 이 컨트롤은 ShowFor/ShowPlaceholder/Hide/SetPanelPercent만 받는다(구 SetState는 반투명 축과
+/// 함께 폐지 — 사이드바 안내·히트테스트는 표시 메서드가 직접 켠다).
 /// </summary>
 public sealed partial class ContentInfoOverlay : UserControl
 {
@@ -46,11 +46,14 @@ public sealed partial class ContentInfoOverlay : UserControl
     /// <summary>
     /// 모듈 컨텍스트를 주입받아 표시한다: path = 현재 콘텐츠 파일,
     /// provider = 모듈 뷰의 정보 계약(IContentInfoProvider, null이면 파일 기본 정보).
-    /// 모드·고정 안내는 SetState가 별도로 반영한다(A58 — 기존 pinned 인자 대체).
+    /// A176: 사이드바가 유일한 열림 상태 — 히트테스트·안내를 여기서 함께 켠다(구 SetState의 자리.
+    /// ShowHint의 동일 문구 중복 억제가 반복 호출(ApplyOverlayStates 경유)을 걸러 준다).
     /// </summary>
     public void ShowFor(string path, IContentInfoProvider? provider)
     {
         Visibility = Visibility.Visible;
+        OverlayBorder.IsHitTestVisible = true;
+        ShowHint(OverlayHints.Docked(OverlayHints.InfoKey));
         _ = LoadAsync(path, provider);
     }
 
@@ -67,12 +70,14 @@ public sealed partial class ContentInfoOverlay : UserControl
     /// A93: 드랍 안내(Drop a file here...)는 인포에 아무것도 표시 중이 아닐 때만 —
     /// 이 플레이스홀더가 정확히 그 상태라 여기서만 문구를 낸다(파일 정보 표시 중에는 없음).
     /// 진행 중이던 로드가 늦게 도착해 문구를 덮지 않게 캐시·시퀀스를 함께 무효화한다.
-    /// 모드·안내 문구는 ShowFor와 동일하게 SetState가 별도로 반영한다.
+    /// 히트테스트·사이드바 안내는 ShowFor와 같은 규칙(A176)으로 여기서 켠다.
     /// </summary>
     public void ShowPlaceholder()
     {
         InvalidateCache();
         Visibility = Visibility.Visible;
+        OverlayBorder.IsHitTestVisible = true;
+        ShowHint(OverlayHints.Docked(OverlayHints.InfoKey));
         ShowMessage("No file open\nDrop a file here to open it");
     }
 
@@ -90,7 +95,7 @@ public sealed partial class ContentInfoOverlay : UserControl
 
     /// <summary>
     /// 인포 영역 드랍 = 그 파일 열기 (A93 드랍 규칙). 좌·중(탐색기 영역)의 무동작과 달리
-    /// 여기만 실제 동작이 있다. 홀드 반투명 중에는 IsHitTestVisible=false라 여기로 안 온다.
+    /// 여기만 실제 동작이 있다. A176: 떠 있는 동안은 항상 히트테스트 가능(홀드 반투명 소멸).
     /// </summary>
     private void OnPanelDragOver(object sender, DragEventArgs e)
     {
@@ -110,32 +115,8 @@ public sealed partial class ContentInfoOverlay : UserControl
         if (path is not null) FileDropped?.Invoke(path);
     }
 
-    /// <summary>
-    /// 표시 모드·고정 안내 반영 (A58). TranslucentOver = 오버레이(아크릴 반투명, A33 — A108
-    /// 용어): 홀드 중이면 문구 없음, pinned(2초 홀드 고정)면 unpin 안내.
-    /// OpaqueDocked = 사이드바(불투명 배경) + close 안내 —
-    /// 실제 폭 차지(메인 축소)는 셸의 도크 컬럼이 담당하고 여기서는 시각·문구만 바꾼다.
-    /// 상호작용(스크롤)은 고정·사이드바에서만 허용 — 홀드 중에는 아래 콘텐츠 클릭을 막지 않는다
-    /// (기존 pinned 규칙 유지).
-    /// A92(v0.115.0): 문구는 상시 표시가 아니라 잠깐 보였다 사라진다(아래 안내 문구 절 참고).
-    /// A108(v0.135.0): 문구 위치는 패널 안이 아니라 경계 버튼 옆(XAML PinnedText 배치 참고).
-    /// A129(v0.156.0): overSwapChain = 중앙이 스왑체인(비디오·오디오) — 반투명이 아크릴 대신
-    /// 반투명 단색 폴백이 된다(선택은 OverlayBackdrop.Pick 한 곳). 셸이 ApplyOverlayStates에서 매번 민다.
-    /// </summary>
-    public void SetState(OverlayMode mode, bool pinned, bool overSwapChain)
-    {
-        var docked = mode == OverlayMode.OpaqueDocked;
-        OverlayBorder.Background = OverlayBackdrop.Pick(docked, overSwapChain);
-        OverlayBorder.IsHitTestVisible = IsOpen && (docked || pinned);
-        if (IsOpen && (docked || pinned))
-            ShowHint(docked
-                ? OverlayHints.Docked(OverlayHints.InfoKey)
-                : OverlayHints.Pinned(OverlayHints.InfoKey));
-        else
-            HideHint();
-    }
-
     // ---------- 안내 문구 일시 표시 (A92, v0.115.0 — 문구·키 표기는 A107부터 OverlayHints가 단일 출처) ----------
+    // A176: 구 SetState(모드·고정 반영)는 반투명 축과 함께 폐지 — 호출원은 ShowFor/ShowPlaceholder뿐.
     // ⚠️ FileListOverlay·SidePanelHost(A119)에 같은 상수·필드·메서드(표시 타이밍 장치)가 한 벌씩
     // 더 있다. 문구 문자열은 A107에서 OverlayHints로 모았지만 타이밍 장치는 세 벌 —
     // 한쪽을 고치면 반드시 나머지도 맞출 것. A133(v0.155.0)부터는 **판(다크 반투명 Border) 규격**도
@@ -151,14 +132,14 @@ public sealed partial class ContentInfoOverlay : UserControl
     private static readonly TimeSpan HintHoldFor = TimeSpan.FromSeconds(2.5);      // 표시 시간(구현 시 결정)
     private static readonly TimeSpan HintFadeFor = TimeSpan.FromMilliseconds(300); // 페이드아웃 시간
 
-    private DispatcherTimer? _hintTimer; // UI 스레드 타이머 (MainWindow.MakePinTimer·DriveStrip과 같은 방식)
+    private DispatcherTimer? _hintTimer; // UI 스레드 타이머 (MainWindow.MakeS1FlashTimer·DriveStrip과 같은 방식)
     private Storyboard? _hintFade;
-    private bool _hintVisible;    // 지금 "보여야 하는 상태"인가 — 매 SetState마다 되감지 않기 위한 기억
+    private bool _hintVisible;    // 지금 "보여야 하는 상태"인가 — 반복 표시 호출마다 되감지 않기 위한 기억
     private string? _hintText;    // 마지막으로 띄운 문구 — 내용이 바뀔 때만 다시 띄운다
 
     /// <summary>
     /// 안내를 잠깐 띄운다: 2.5초 표시 → 300ms 페이드아웃 → Collapsed.
-    /// SetState는 상태 머신이 움직일 때마다 여러 번 불리므로, **표시 상태로 새로 진입했거나
+    /// 표시 메서드는 ApplyOverlayStates 경유로 여러 번 불리므로, **표시 상태로 새로 진입했거나
     /// 문구가 바뀐 경우에만** 다시 띄우고 타이머를 되감는다(매번 재시작하면 영영 안 사라진다).
     /// </summary>
     private void ShowHint(string text)
@@ -177,7 +158,7 @@ public sealed partial class ContentInfoOverlay : UserControl
         _hintTimer.Start();
     }
 
-    /// <summary>숨겨야 하는 상태(닫힘·도크도 고정도 아님) — 타이머·페이드를 즉시 멈추고 감춘다.</summary>
+    /// <summary>숨겨야 하는 상태(패널 닫힘) — 타이머·페이드를 즉시 멈추고 감춘다.</summary>
     private void HideHint()
     {
         _hintVisible = false;
@@ -191,7 +172,7 @@ public sealed partial class ContentInfoOverlay : UserControl
         var timer = new DispatcherTimer { Interval = HintHoldFor };
         timer.Tick += (_, _) =>
         {
-            timer.Stop(); // 반복 타이머라 Tick 안에서 반드시 멈춘다(MainWindow.MakePinTimer와 같은 관용구)
+            timer.Stop(); // 반복 타이머라 Tick 안에서 반드시 멈춘다(MainWindow.MakeS1FlashTimer와 같은 관용구)
             FadeOutHint();
         };
         return timer;

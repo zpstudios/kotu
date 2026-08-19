@@ -4,24 +4,24 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- 콘텐츠 정보 패널 (A57 ①②): 기존 MainWindow의 InfoOverlayRoot를 공용 컨트롤로 추출.
-         용어(A108): 사이드바 = 불투명(OpaqueDocked) / 오버레이 = 반투명(홀드·고정).
+         A176: 반투명(오버레이) 축 폐지 — 열림 상태는 사이드바(불투명 도크) 하나다.
+         F12 단타 토글·핀 버튼이 그 상태를 오간다(구 홀드/2초 고정/2연타 전이는 전부 폐지).
          A57 ①에 따라 우측에 배치(기존 좌측에서 스왑). 폭은 코드(SetPanelPercent)가 정한다:
          전 상태 공통 25%(A116, v0.135.0 — 종전 "콘텐츠 30% / S1 25%" 2값 폐지, 3구획 25:50:25).
-         키 매핑(A86 — A58의 Shift를 X로 대체) = X: 홀드 = 오버레이 덮기 / 2초 홀드 = 오버레이 고정 /
-         2연타 = 사이드바 / 열림 상태에서 1회 = 닫기. 입력 처리는 셸 담당 —
-         이 컨트롤은 SetState로 모드(TranslucentOver/OpaqueDocked)와 안내 문구만 받는다.
-         사이드바일 때의 실제 폭 차지는 셸의 도크 컬럼 담당(내부 별 분할은 두 모드 공통).
+         입력 처리는 셸 담당 — 이 컨트롤은 ShowFor/ShowPlaceholder/Hide/SetPanelPercent만 받는다.
+         실제 폭 차지는 셸의 도크 컬럼 담당(내부 별 분할은 전폭 기준 같은 %라 도크와 정렬).
          정보 항목은 모듈 뷰(IContentInfoProvider)가 주입하고, 없으면 파일 기본 정보로 대체.
-         기본 배경은 약한 틴트 아크릴(A33 — A108에서 더 약화).
-         패널 드랍(A93) = 그 파일 열기(FileDropped) — 홀드 반투명 중에는 IsHitTestVisible이
-         false라 드랍이 아래 콘텐츠 영역 규칙으로 흘러간다(의도된 동작). -->
+         배경 = 불투명(SolidBackgroundFillColorBase — A176에서 아크릴(A33)·스왑체인 폴백(A129)
+         일습을 철거한 자리의 기존 사이드바 배경 관용구).
+         IsHitTestVisible은 코드가 표시와 함께 켠다(ShowFor/ShowPlaceholder) — 구 홀드 반투명의
+         클릭 통과가 사라져, 떠 있는 동안은 항상 스크롤·드랍(FileDropped = 그 파일 열기)이 된다. -->
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="RestColumn" Width="70*" />
             <ColumnDefinition x:Name="PanelColumn" Width="30*" />
         </Grid.ColumnDefinitions>
         <Border x:Name="OverlayBorder" Grid.Column="1"
-                Background="{ThemeResource OverlayAcrylicBrush}"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="1,0,0,0"
                 Padding="16" IsHitTestVisible="False"

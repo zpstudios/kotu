@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.176.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.188.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -14,7 +14,7 @@ Everything below is written as "what you can do and how", not "why it works that
 1. [The window](#1-the-window)
 2. [Modules](#2-modules)
 3. [Keyboard shortcuts](#3-keyboard-shortcuts)
-4. [Sidebars and overlays](#4-sidebars-and-overlays)
+4. [Side panels](#4-side-panels)
 5. [The built-in file browser](#5-the-built-in-file-browser)
 6. [File associations and the Start menu](#6-file-associations-and-the-start-menu)
 7. [Several windows at once](#7-several-windows-at-once)
@@ -29,31 +29,22 @@ Every KOTU window has the same three parts.
 
 - **Centre** — the module view: the photo, the video, the PDF, the archive listing.
 - **Bottom bar** — one row, 44 px tall. On the left the **menu** button and the **Open file** button;
-  at the right end two view-mode buttons, **Full window** and **Full screen**; the rest belongs to
-  whichever module is open.
+  at the right end the **Full screen** button; the rest belongs to whichever module is open.
 - **Two side panels** — a **left** panel (folder tree and file list) and a **right** panel
   (information about the current file). Both are hidden until you call them.
 
-Two words are used consistently for the side panels:
+The side panels are opaque **sidebars**: an open panel stands beside the content and makes the
+centre narrower. Either panel is 25% of the window width.
 
-- A **sidebar** is opaque. It stands beside the content and makes the centre narrower.
-- An **overlay** is translucent. It lies over the content and takes no space away from it.
+**Full screen.** `Enter` and `Alt`+`Enter` both toggle full screen: the window fills the screen,
+taskbar included, and the bottom bar goes away. Leaving full screen — with `Enter`, `Alt`+`Enter`
+or `Esc` — brings back the window, the bottom bar and the panel arrangement you had when you went
+in. The **Full screen** button at the right end of the bottom bar does the same as the keys.
 
-Either panel is 25% of the window width.
+While a video is playing the bottom bar hides itself after a few seconds and the full-screen rule
+above bends a little — see [2.2](#22-video).
 
-**View modes.** The window has three of them, and `Enter` steps through them in one direction:
-
-1. **Window** — the ordinary state: title bar, bottom bar, side panels as you left them.
-2. **Full window** — the bottom bar and both side panels go away; the window itself does not change.
-3. **Full screen** — the window fills the screen, taskbar included.
-
-`Alt`+`Enter` jumps straight to full screen from wherever you are, and pressing it again returns you
-to the mode and the panel arrangement you came from. `Esc` goes back one step: out of full screen to
-where you came from, out of full window back to the window. The two buttons at the right end of the
-bottom bar do the same as steps 2 and 3. `Enter` from full screen returns to the plain window, but it
-does not bring the panels back — only `Esc` and `Alt`+`Enter` restore the arrangement you had.
-
-Opening a file, or switching module, always puts the window back into mode 1.
+Opening a file, or switching module, always leaves full screen.
 
 The title bar shows `1-KOTU`, or `1-KOTU - filename` once a file is open. The number in front is the
 window number: the first window is `1-KOTU`, the second `2-KOTU - holiday.jpg`, and so on. A leading
@@ -101,7 +92,7 @@ Seven modules. Switch between them from the menu at the bottom left.
   in a tooltip, since a narrow window trims it.
 - To the right of that run sits the current zoom level — `100%`. The Fit options resize the picture
   without touching that figure, so it stays at 100% until you zoom with the wheel or a pinch.
-- A double-click on the picture goes full screen, and `Alt`+`Enter` does the same from the keyboard; `Esc` leaves it.
+- A double-click on the picture goes full screen, and `Enter` or `Alt`+`Enter` does the same from the keyboard; `Esc` leaves it.
 
 ### 2.2 Video
 
@@ -118,9 +109,15 @@ Seven modules. Switch between them from the menu at the bottom left.
   remembered and playback continues there next time.
 - **Zoom** with `Ctrl`+wheel, from 10% to 800%.
 - **Fit** — see [2.9](#29-the-fit-button). Each new file starts at Contain again.
-- `Alt`+`Enter` goes full screen, `Enter` steps there through Full window, and `Esc` leaves it.
+- `Enter` or `Alt`+`Enter` toggles full screen, and `Esc` leaves it.
   In full screen, play, pause, seek, volume, mute and zoom each flash a short caption in the middle
   of the picture.
+- **The bottom bar keeps out of the way while you watch.** Once a video has been playing for
+  3 seconds without any mouse or touch input, the whole bar — seek slider included — slides out of
+  sight. Move the pointer, tap the screen, or bring the pointer near the bottom edge and it comes
+  back; pause or let the video end and it stays visible. The same rule applies in full screen,
+  which also means full screen is no longer bar-less for video: move the mouse and the controls
+  appear, hold still and they hide again. The mouse pointer itself is never hidden.
 - Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.
 - Once a video has played to the end, resizing the window clears the picture to black instead of
   rescaling the last frame. Press play to start it again and the picture returns at the new size.
@@ -131,7 +128,8 @@ Seven modules. Switch between them from the menu at the bottom left.
   mute, `S` for the same six speeds. Clicking the surface also toggles play/pause.
 - A live waveform fills the window while a track plays, with the track name above it.
 - **Resume** works exactly as in Video (over 30 seconds played, stopped before the last 3%).
-- `Alt`+`Enter` goes full screen, `Enter` steps there through Full window, and `Esc` leaves it.
+- `Enter` or `Alt`+`Enter` toggles full screen, and `Esc` leaves it. The bottom bar stays put —
+  the auto-hide above is a Video-module behaviour.
 - Press ▶ with nothing open to play a built-in 18-second sample tune.
 
 ### 2.4 Document — plain text
@@ -230,7 +228,7 @@ Controls:
 | Sensor refresh interval | `I` | 50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU |
 | Bottom bar size | `B` | cycles Small → Medium → Large |
 | Always on top | `P` | pins the window over other windows and collapses it down to just the bottom bar |
-| Full screen | `Alt`+`Enter` | full-screen dashboard, like every other module; `Esc` leaves it |
+| Full screen | `Enter` / `Alt`+`Enter` | full-screen dashboard, like every other module; `Esc` leaves it |
 
 The selected sensors are also what this window's tray icon displays. Selection, tile order and bar
 size belong to each window separately; the most recent change is what a newly opened window starts from.
@@ -275,11 +273,11 @@ These work in every module.
 | Key | Action |
 |---|---|
 | ``Alt+` `` | open the menu (bottom left) |
-| `F11` | left panel |
-| `F12` | right panel |
-| `Enter` | next view mode: window → full window → full screen → window |
-| `Alt`+`Enter` | full screen and back again |
-| `Esc` | one step back: out of full screen, out of full window, or out of the Open file browser |
+| `F11` | left panel open / closed |
+| `F12` | right panel open / closed |
+| `Enter` | full screen and back again |
+| `Alt`+`Enter` | full screen and back again — the same toggle, typing-proof (see below) |
+| `Esc` | one step back: out of full screen, or out of the Open file browser |
 | `Shift+N` | new window of the module you are looking at |
 | `Ctrl+S` | save (text document) |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
@@ -294,21 +292,13 @@ the module you are already in changes nothing.
 
 ### 3.2 Panels: how `F11` and `F12` behave
 
-`F11` drives the left panel, `F12` the right one. Both react to *how* you press them.
+`F11` drives the left panel, `F12` the right one. One press opens the panel as a sidebar; the next
+press closes it. That is the whole story — there is no hold, double-press or translucent variant.
+Press both keys and both sides toggle, in any order.
 
-| Input | Result |
-|---|---|
-| Hold the key | the panel appears as a translucent **overlay** and stays while you hold it |
-| Hold for 2 seconds | the overlay is pinned — it stays after you let go |
-| Press twice quickly | the panel docks as an opaque **sidebar**, making the centre narrower |
-| Press once while it is open | that panel closes |
-| Press twice quickly while it is open | it stays closed |
-| `F11` and `F12` together | both sides do all of the above at once, in any press order |
-| `Enter` | closes whatever is open on the way to Full window; it never opens a panel |
-
-When a panel is pinned or docked, a short hint appears next to it on a small dark plate, so it
-stays readable over whatever is behind it — *Pinned - press F11 to close, or the pin button to dock*,
-*Sidebar - press F11 or the pin button to close* — and fades after a couple of seconds.
+When a panel opens, a short hint appears next to it on a small dark plate, so it stays readable
+over whatever is behind it — *Sidebar - press F11 or the pin button to close* — and fades after a
+couple of seconds.
 
 The panels answer these keys in every view mode, full screen included.
 
@@ -400,7 +390,7 @@ file list and in the thumbnails it selects the focused item instead.
 | File browser | right-click empty space | New folder · Paste · Refresh |
 | File browser | drag | move within a drive, copy across drives. `Ctrl` forces copy, `Shift` forces move |
 | Anywhere | back button (the thumb button) | go back one step — see [3.6](#36-going-back) |
-| Near the bottom of the left or right window edge | move the pointer | two narrow edge buttons appear, one above the other — see [4](#4-sidebars-and-overlays) |
+| Near the bottom of the left or right window edge | move the pointer | a narrow edge button appears — see [4](#4-side-panels) |
 
 The wheel never zooms thumbnails, and it never zooms while the pointer is over a side panel — it
 scrolls there.
@@ -410,7 +400,7 @@ scrolls there.
 The mouse back button, and the `Browser Back` key on keyboards that have one, undo one step at a
 time, in this order:
 
-1. step back out of full screen or full window;
+1. step back out of full screen;
 2. leave the Open file browser, returning to the arrangement you had;
 3. close the file and go back to the module's own browser, keeping the side panels as they were.
 
@@ -419,7 +409,7 @@ typing, like the letter keys.
 
 ---
 
-## 4. Sidebars and overlays
+## 4. Side panels
 
 **The left panel** holds, from top to bottom:
 
@@ -436,18 +426,12 @@ the left, the specification list on the right. Everything below applies there un
 Ways to bring a panel up:
 
 - `F11` / `F12`, as described in [3.2](#32-panels-how-f11-and-f12-behave);
-- the **edge buttons** — move the pointer close to the left or right edge of the window, near the
-  bottom, and two small buttons appear one above the other, just over the bottom bar. **Hold** the
-  upper one and that panel comes up as a translucent overlay for as long as you hold it, then goes
-  back to whatever it was. The lower one is the **pin**: it docks that side as a sidebar, and closes
-  it again if it already is one.
+- the **edge button** — move the pointer close to the left or right edge of the window, near the
+  bottom, and a small **pin** button appears just over the bottom bar. It opens that side as a
+  sidebar, and closes it again if it already is one — the same toggle as the key.
 
-Opening a module (rather than opening a file directly) starts with both sidebars docked. A file
+Opening a module (rather than opening a file directly) starts with both sidebars open. A file
 opened straight from Windows Explorer starts with no panels, so nothing covers what you came to see.
-
-Translucent panels normally blur what is behind them. Over the Video and Audio modules they are a
-plain tinted layer instead, with no blur: those two draw their picture outside the layer the blur
-can read. They are just as see-through, only less frosted.
 
 ---
 
@@ -535,8 +519,8 @@ view moves up to the nearest folder that still exists.
 
 The button beside the menu in the bottom bar — tooltip **Open file** — is how you open a file
 without leaving what you are looking at. It does not open the Windows file dialog. Instead the file
-browser appears translucently over the current view: whichever panels were already open stay as they
-are, the missing ones are added as overlays, and the centre becomes a translucent thumbnail browser.
+browser takes over the window: whichever panels were already open stay as they are, the missing
+ones are added, and the centre becomes a thumbnail browser.
 
 Press `Esc`, or the button again, to go back to exactly the arrangement you had. Choosing a file
 also ends it. If the browser is already what you are looking at, the button flashes the centre view

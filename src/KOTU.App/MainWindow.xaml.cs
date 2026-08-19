@@ -31,32 +31,25 @@ public sealed partial class MainWindow : Window
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
 
-    // ---- 내장 탐색기 + 좌/우 오버레이 입력 상태 머신 (A58 상태 전이 + A158 키 + A151 모드 순환) ----
+    // ---- 내장 탐색기 + 좌/우 패널 입력 (A176 단타 토글 — 구 A58 상태 머신 폐지) ----
     // 키 할당(A158 — A118의 F1/F2를 대체): **F11** = 좌측 파일 리스트 / **F12** = 우측 정보.
-    // 계보: A58 Alt/Shift → A86 Z/X → A107 Alt+Z/X → A118 F1/F2 → A158 F11/F12. Alt+Z/X는 폐지
-    // (병행 없음). 단독 F키는 문자를 만들지 않아 문자 입력·리스트 첫 글자 점프와
+    // 계보: A58 Alt/Shift → A86 Z/X → A107 Alt+Z/X → A118 F1/F2 → A158 F11/F12.
+    // 단독 F키는 문자를 만들지 않아 문자 입력·리스트 첫 글자 점프와
     // 원천 무충돌 — 텍스트 입력 중에도 동작한다. 키 정본 = SideForKey 위 LeftPanelKey/RightPanelKey.
-    // A158로 탐색기 표면의 F2(이름변경) 충돌은 소멸했다 — 양보 코드는 무해하게 남는다(아래 참고).
-    // 사이드마다 4상태: Closed(닫힘) / Holding(키 홀드 — 반투명 덮기, 메인 크기 불변) /
-    //   TranslucentPinned(2초 이상 홀드 — 키를 떼도 반투명 유지) /
-    //   OpaqueDocked(2연타 — 불투명 + 메인을 반대쪽으로 축소. A108 용어로 "사이드바" —
-    //   반투명 두 상태(홀드·고정)가 "오버레이"다. 폭은 전 상태 공통 SidebarPercent(A116): 한쪽 25:75, 양쪽 25:50:25).
-    // 2연타 = 사이드바 고정/해제(A58 유지). A86 추가: **열림 상태(고정·사이드바)에서 해당 키 1회 = 그 쪽 닫기**
-    //   (keymap S3 행 — 판정 충돌은 "첫 탭 이전 상태" 기준 2연타로 푼다, OnOverlaySideDown 참고.
-    //   A107 재검토 결과 유지 — 폐지 확정이 없었다).
-    // A107 신설(A118·A158 승계): **F11+F12 동시 누름 = 좌·우 동시 호출** — "다른 키 개입 = 홀드 취소"에서
-    //   F11↔F12 상호만 예외로, 한쪽 홀드 중 다른 쪽 down이면 그쪽도 독립적으로 같은 전이를 시작한다
-    //   (타이머·2연타도 사이드별).
+    // **A176(반투명 오버레이 폐지)**: 사이드마다 2상태 — Closed(닫힘) /
+    //   OpaqueDocked(사이드바 — 불투명 + 메인을 반대쪽으로 축소. 폭은 전 상태 공통
+    //   SidebarPercent(A116): 한쪽 25:75, 양쪽 25:50:25). **키 단타 = 그 쪽 토글**이 전부다.
+    //   A58 계보의 홀드(반투명 덮기)/2초 홀드(반투명 피닝)/2연타(불투명) 판정 기계 — PinTimer·
+    //   2연타 창·TapStartState·홀드 취소 안전장치(다른 키·포인터 개입)·A154 peek — 는 통째로
+    //   철거됐다(반투명 표시 축 자체가 소멸). F11+F12를 이어 누르면 각 down이 독립 토글이라
+    //   구 "동시 호출"도 자연 성립한다(특례 코드 불요).
     // 셸 수준 구성 상태(S1~S4, ShellState)는 '오픈 파일' 버튼·경계 버튼의 분배 기준 — 아래 CurrentShellState.
-    // A151(전체화면 3단): Enter는 A86의 "좌/우 일괄 토글"에서 셸 표시 모드 순환(모드1→2→3→1)으로
-    // 대체됐다 — 아래 ShellViewMode/_viewMode 절 참고. A151이 F11을 전체화면 매핑에서 뺀 덕에
-    // A158이 그 F11/F12를 패널 키로 가져왔다(전이 체계는 무변경).
+    // A186(모드2 폐지): Enter는 A151의 3단 순환에서 **Alt+Enter와 동일한 전체화면 토글**로
+    // 단순화됐다 — 아래 ShellViewMode/_viewMode 절 참고.
     // A119(v0.145.0): 패널 컨텍스트에 "패널 제공 뷰"(ISidePanelProvider — 정보 모듈)가 추가됐다.
     //   그 뷰에서는 좌/우 패널 자리에 파일 리스트/정보 대신 모듈 고유 콘텐츠(SidePanelHost 호스트)가
-    //   뜨고, 키·전이·힌트·경계 버튼·Enter는 전부 같은 경로다. 설정·빈 셸·미지원 안내만 무소비로 남는다.
-    // 홀드 판정은 다른 키·포인터(클릭·휠 — Ctrl+휠 줌 포함)가 함께 개입하면 취소된다(A58 안전장치 유지.
-    // Alt 자체는 수식키라 "다른 키"에서 제외 — OnRootKeyDown 참고).
-    // Alt 단독 OS 메뉴 모드 회피(A86 제거 → A107 재도입)는 A118 뒤에도 존치 — A147(v0.163.0)이
+    //   뜨고, 키·힌트·경계 버튼은 전부 같은 경로다. 설정·빈 셸·미지원 안내만 무소비로 남는다.
+    // Alt 단독 OS 메뉴 모드 회피(A86 제거 → A107 재도입)는 A176 뒤에도 존치 — A147(v0.163.0)이
     // Alt+숫자·Alt+0을 폐지한 뒤에도 **Alt+` 액셀러레이터 하나가 여전히 쓴다**(지우면 Alt를 눌렀다
     // 뗄 때마다 창 메뉴 모드로 빠진다). 우리 조합에 쓰인 Alt의 단독 up만 조건 소비
     // (_altComboUsed, OnRootKeyUp).
@@ -75,13 +68,16 @@ public sealed partial class MainWindow : Window
     private DriveStrip? _driveStrip;          // 지금 모듈 바에 끼워둔 줄 (뷰마다 새로 만든다)
     private IDriveStripHost? _driveStripHost; // 그 줄을 받은 모듈 뷰
 
-    private enum OverlayState { Closed, Holding, TranslucentPinned, OpaqueDocked }
+    /// <summary>좌/우 패널 상태 (A176 — 구 4상태(Holding·TranslucentPinned 포함)에서 반투명 축
+    /// 제거): Closed = 닫힘 / OpaqueDocked = 사이드바(불투명 도크 — 유일한 열림 상태.
+    /// 값 이름은 A108 이전 그대로 유지 — 식별자 보존 규칙).</summary>
+    private enum OverlayState { Closed, OpaqueDocked }
 
     /// <summary>
-    /// 셸 수준 "구성 상태" (A86 keymap): A58의 오버레이별 4상태를 대체하는 게 아니라 그 위에서
+    /// 셸 수준 "구성 상태" (A86 keymap): 패널별 상태를 대체하는 게 아니라 그 위에서
     /// "지금 화면 구성이 어떤 조합인가"를 요약한다 — '오픈 파일' 버튼·경계 버튼 분배의 기준.
-    /// (A151: Enter 일괄 토글은 폐지 — Enter는 이제 이 상태와 무관한 셸 표시 모드 순환이다.)
-    /// None = 오버레이 컨텍스트 없음(빈 셸·설정·미지원 안내) — keymap 표 밖.
+    /// (A186: Enter는 이 상태와 무관한 전체화면 토글이다 — A151의 순환도, A86의 일괄 토글도 폐지.)
+    /// None = 패널 컨텍스트 없음(빈 셸·설정·미지원 안내) — keymap 표 밖.
     /// A119(v0.145.0): 정보(H/W)는 None에서 빠졌다 — 패널 제공 뷰(ISidePanelProvider)는 파일이
     /// 없어도 좌/우 조합으로 S2/S3*에 분류되어 경계 버튼이 파일 모듈과 같은 표를 탄다.
     /// S4('오픈 파일' 탐색 모드)의 진입/복귀는 A90(v0.122.0) — 아래 '오픈 파일' 버튼 절 참고.
@@ -94,13 +90,13 @@ public sealed partial class MainWindow : Window
     private bool _openFileBrowsing;
 
     /// <summary>
-    /// S4 진입 직전의 좌/우 오버레이 상태 스냅샷(A90) — Esc/'오픈 파일' 재누름 복귀의 원본.
+    /// S4 진입 직전의 좌/우 패널 상태 스냅샷(A90) — Esc/'오픈 파일' 재누름 복귀의 원본(A176: 2상태).
     /// A151 <see cref="_fullScreenRestore"/>(모드3 복귀 스냅샷)와는 별개 개념이라 섞지 않는다.
     /// 파일이 열려 S4가 자동 종료되면 버린다(복귀 없음 — 새 콘텐츠가 화면을 차지).
     /// </summary>
     private (OverlayState List, OverlayState Info)? _s4Restore;
 
-    /// <summary>A86 keymap의 구성 상태 판정. 홀드(오버레이 덮기)도 "열림"으로 센다 — 표의 상태 기준.
+    /// <summary>A86 keymap의 구성 상태 판정 (A176: 열림 = 사이드바 하나 — 반투명 축 소멸).
     /// A119: 패널 제공 뷰(정보 모듈)는 파일이 없어도 아래 좌/우 조합 분기로 떨어진다.
     /// ('오픈 파일' 버튼의 S2/S3* 분기는 EnterOpenFileBrowsing의 파일 가드가 무동작으로 거른다.)</summary>
     private ShellState CurrentShellState
@@ -122,57 +118,41 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>오버레이 한쪽(좌 = F11 리스트 / 우 = F12 정보 — A118·A158)의 입력·표시 상태.</summary>
+    /// <summary>패널 한쪽(좌 = F11 리스트 / 우 = F12 정보 — A118·A158)의 표시 상태.
+    /// A176: 홀드 세션·2연타 판정·PinTimer·peek 스냅샷 필드는 반투명 축과 함께 철거 —
+    /// 남는 것은 상태 하나다(클래스 틀은 좌/우 공용 참조 관용구 유지).</summary>
     private sealed class OverlaySide
     {
-        // KeyIsDown 필드는 A107에서 제거 — Z+X 상호 취소(조합 감지)용이었는데, A107이 동시 누름을
-        // 정식 지원(사이드별 독립 전이)하면서 읽는 곳이 사라졌다(CS0414 예방).
         public OverlayState State;
-        public bool HoldSessionActive;  // 이번 누름이 홀드 판정 세션인지 (2연타·취소면 아님)
-        public DateTime LastTapDown = DateTime.MinValue; // 2연타 판정 (down→down)
-        public OverlayState TapStartState;               // 첫 탭 "이전" 상태 — A86 2연타 판정 기준
-        public DispatcherTimer? PinTimer; // 2초 홀드 → 반투명 고정 승격 (생성자에서 배선)
-
-        /// <summary>
-        /// A154 순간 표시(peek) 버튼의 "누르기 직전 상태" 스냅샷 — null = 지금 순간 표시 중이 아님.
-        /// 떼면 이 값으로 되돌린다(닫혀 있었으면 닫힘, 피닝/사이드바였으면 그대로 복귀).
-        /// 창별 상태라 정적 필드로 두지 않는다(A110 규칙) — OverlaySide 인스턴스가 창마다 둘이다.
-        /// 수명은 키 홀드 세션과 같은 안전장치에 묶는다: <see cref="CancelHoldCore"/>가 함께 비운다.
-        /// </summary>
-        public OverlayState? PeekRestore;
     }
-
-    private const double OverlayDoubleTapMs = 450;  // 2연타 판정 창 (v0.32.0 값 유지)
-    private const double OverlayPinHoldMs = 2000;   // 홀드 → 반투명 고정 승격 시간 (A58)
 
     private readonly OverlaySide _listSide = new(); // 좌측 파일 리스트 (F11)
     private readonly OverlaySide _infoSide = new(); // 우측 정보 (F12)
 
     /// <summary>
-    /// 셸 표시 모드(A151 — 전체화면 3단 체계):
-    /// Windowed(모드1) = 창 + 하단 바 / FullWindow(모드2) = 하단 바·좌/우 패널 없음(창·타이틀바는
-    /// 그대로) / FullScreen(모드3) = 전체화면(작업표시줄까지 없음).
-    /// Enter가 1→2→3→1 한 방향으로 순환하고(1→2 전이가 열린 패널을 닫는 역할 겸임),
-    /// Alt+Enter는 어느 상황에서든 모드3 직행 + 복귀 스냅샷이다. A86의 "Enter = 좌/우 일괄
-    /// 토글"은 이 체계가 폐지·대체했다(부록 B 67 — 같은 주제 세 번째 지시).
+    /// 셸 표시 모드(A151 3단 → **A186 2단**): Windowed = 창 + 하단 바 / FullScreen = 전체화면
+    /// (작업표시줄까지 없음). A151의 FullWindow(모드2 — 바·패널만 숨김)는 A186에서 폐지됐고,
+    /// Enter·Alt+Enter·Full screen 버튼이 전부 같은 전체화면 토글(ToggleFullScreen — 진입 시
+    /// 복귀 스냅샷 기억)이다. A86의 "Enter = 좌/우 일괄 토글"은 A151이 폐지했다(부록 B 67).
     /// </summary>
-    private enum ShellViewMode { Windowed, FullWindow, FullScreen }
+    private enum ShellViewMode { Windowed, FullScreen }
 
     /// <summary>
     /// 현재 셸 표시 모드 — 창별 상태·저장하지 않는다(A151 ⑥, A110 상태 소유 규칙 정합).
-    /// 하단 바 가시성의 단일 원본이다: 바를 켜고 끄는 코드는 <see cref="UpdateShellChrome"/> 하나뿐이고,
-    /// 프레젠터 변화(생성자 AppWindow.Changed 구독)는 이 값을 동기화한 뒤 같은 함수를 부른다 —
-    /// 모드2의 바 숨김과 프레젠터 핸들러가 서로를 되밟지 않게 하기 위한 구조다.
+    /// 하단 바 가시성의 두 입력 축(모드, A186 자동 숨김) 중 하나다: 바를 켜고 끄는 코드는
+    /// <see cref="UpdateShellChrome"/> 하나뿐이고, 프레젠터 변화(생성자 AppWindow.Changed 구독)는
+    /// 이 값을 동기화한 뒤 같은 함수를 부른다(외부 경로 전체화면과 되밟지 않게).
     /// </summary>
     private ShellViewMode _viewMode = ShellViewMode.Windowed;
 
     /// <summary>
-    /// 모드3 복귀 스냅샷(A151 — Alt+Enter/Esc 공용): 진입 직전의 모드 + 좌/우 패널 상태
-    /// (닫힘·반투명 피닝·불투명 — 홀드는 Sticky로 피닝 승격해 기억). A90 <see cref="_s4Restore"/>
-    /// 관용구의 확장(담는 항목이 하나 더 많다). Enter 3→1 복귀·외부 경로 전체화면 해제·
-    /// 모드 리셋(모듈 전환·파일 열기)이 버린다. null이면 Esc/Alt+Enter 복귀는 모드1로 폴백.
+    /// 전체화면 복귀 스냅샷(A151 — Enter/Alt+Enter/Esc/버튼 공용): 진입 직전의 좌/우 패널 상태.
+    /// A186: 모드 축이 2단이 되어 스냅샷의 모드 항목은 제거(복귀 = 항상 창 모드) —
+    /// A176: 패널 축도 2상태(닫힘/도크)로 축소. A90 <see cref="_s4Restore"/>와 같은 관용구.
+    /// 외부 경로 전체화면 해제·모드 리셋(모듈 전환·파일 열기)이 버린다.
+    /// null이면(외부 경로 진입) 복귀는 패널 무변경으로 창 모드 폴백.
     /// </summary>
-    private (ShellViewMode Mode, OverlayState List, OverlayState Info)? _fullScreenRestore;
+    private (OverlayState List, OverlayState Info)? _fullScreenRestore;
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
@@ -233,58 +213,33 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
-        // F11/F12 오버레이 입력 감지(A58 전이 + A158 키 — v0.25.0 Alt/Ctrl 홀드 → A58 Alt/Shift →
-        // A86 단독 Z/X → A107 Alt+Z/X의 계보): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.
+        // F11/F12 패널 키 감지(A176 단타 토글 — v0.25.0 Alt/Ctrl 홀드 → A58 → A86 → A107 →
+        // A118 → A158 계보의 홀드/2연타 판정 기계는 A176에서 철거):
+        // 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.
         // Alt(Menu) down/up도 같은 KeyDown/KeyUp 층으로 온다(A58 실증 — SystemKey도 이 핸들러가 받는다).
-        // 포인터 개입(클릭·휠)도 홀드 판정 취소 트리거(A58 안전장치 유지 — 휠은 A84에서 추가,
-        // Ctrl+휠 줌 개입도 같은 경로로 취소된다: A86 확정. 줌 재정의 자체는 A98 몫).
-        // 창 비활성화로 KeyUp을 놓치면 홀드 판정·키 상태를 초기화(고정·불투명 상태는 유지).
         RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
-        RootLayout.AddHandler(UIElement.PointerPressedEvent,
-            new PointerEventHandler(OnRootPointerIntervened), handledEventsToo: true);
-        RootLayout.AddHandler(UIElement.PointerWheelChangedEvent,
-            new PointerEventHandler(OnRootPointerIntervened), handledEventsToo: true);
         // A112: 마우스 뒤로가기(XButton1) = '뒤로'(전체화면 해제 → S4 복귀 → 콘텐츠 닫기 → S1).
-        // 위 OnRootPointerIntervened(홀드 취소 판정)와 같은 PointerPressed지만 역할이 달라
-        // 핸들러를 분리해 얹는다 — 등록 순서상 취소 판정이 먼저 돌고, 둘은 서로 독립이라 무해
-        // (XButton1 눌림도 "포인터 개입"으로 홀드를 취소하는 A58 규칙은 그대로 살아 있다).
         // handledEventsToo: 리스트·뷰가 눌림을 소비해도 전역 '뒤로'는 셸이 받아야 한다.
         RootLayout.AddHandler(UIElement.PointerPressedEvent,
             new PointerEventHandler(OnRootPointerBack), handledEventsToo: true);
+        // A186: 클릭·터치 탭 = 영상 하단 바 자동 숨김의 "입력"(재표시·재대기). '뒤로'와 역할이
+        // 달라 핸들러를 분리해 얹는다 — 둘은 서로 독립이라 무해.
+        RootLayout.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnRootPointerInput), handledEventsToo: true);
         // A86 경계 버튼: 마우스가 경계 근처에 왔을 때만 보이므로 이동·이탈을 창 루트에서 감시한다
-        // (handledEventsToo — 오버레이·모듈 뷰가 이동 이벤트를 소비해도 근접 판정은 계속 돌아야 한다).
+        // (handledEventsToo — 패널·모듈 뷰가 이동 이벤트를 소비해도 근접 판정은 계속 돌아야 한다).
+        // A186: 같은 이동 이벤트가 하단 바 자동 숨김의 입력이기도 하다(OnRootPointerMoved 안).
         RootLayout.AddHandler(UIElement.PointerMovedEvent,
             new PointerEventHandler(OnRootPointerMoved), handledEventsToo: true);
         RootLayout.PointerExited += (_, _) => HideEdgeButtons();
         CenterArea.SizeChanged += (_, _) => UpdateEdgeButtons(); // 경계 x 좌표는 실폭 기준
-        // A154 순간 표시(peek) 버튼: 누르는 동안만 반투명 오버레이(키 홀드와 같은 Holding 상태 —
-        // 새 상태를 만들지 않는다), 떼면 직전 상태로 복귀. XAML 이벤트 속성으로는 안 된다 —
-        // ButtonBase가 PointerPressed를 클래스 핸들러에서 소비하므로 handledEventsToo 구독이 필수다
-        // (같은 이유의 선례: VideoPlayerView.xaml.cs:236-241 시크 슬라이더).
-        // **떼기를 놓치면 오버레이가 영구히 열린 채 남는다** — 그래서 Released와 CaptureLost를
-        // 같은 핸들러에 매핑한다(AudioPlayerView.xaml.cs:212-215와 동일 관용구).
-        LeftPeekButton.AddHandler(UIElement.PointerPressedEvent,
-            new PointerEventHandler(OnLeftPeekPressed), handledEventsToo: true);
-        LeftPeekButton.AddHandler(UIElement.PointerReleasedEvent,
-            new PointerEventHandler(OnLeftPeekEnded), handledEventsToo: true);
-        LeftPeekButton.AddHandler(UIElement.PointerCaptureLostEvent,
-            new PointerEventHandler(OnLeftPeekEnded), handledEventsToo: true);
-        RightPeekButton.AddHandler(UIElement.PointerPressedEvent,
-            new PointerEventHandler(OnRightPeekPressed), handledEventsToo: true);
-        RightPeekButton.AddHandler(UIElement.PointerReleasedEvent,
-            new PointerEventHandler(OnRightPeekEnded), handledEventsToo: true);
-        RightPeekButton.AddHandler(UIElement.PointerCaptureLostEvent,
-            new PointerEventHandler(OnRightPeekEnded), handledEventsToo: true);
-        _listSide.PinTimer = MakePinTimer(_listSide);
-        _infoSide.PinTimer = MakePinTimer(_infoSide);
         Activated += (_, e) =>
         {
             if (e.WindowActivationState == WindowActivationState.Deactivated)
             {
                 // Alt up을 못 본 채 비활성화(Alt+Tab 등) — 다음 활성 세션에 소비가 새면 안 된다(A107)
                 _altComboUsed = false;
-                ResetOverlayInput();
             }
         };
 
@@ -300,22 +255,22 @@ public sealed partial class MainWindow : Window
         TitleBarTheming.Apply(AppWindow.TitleBar);
 
         // A151: 프레젠터 변화 → 모드 동기화. 하단 바 가시성은 여기서 직접 만지지 않는다 —
-        // 단일 원본은 _viewMode고, 표시는 UpdateShellChrome 한 함수만 정한다(구 v0.21.0의
-        // "전체화면이면 바 숨김" 직접 대입을 대체 — 모드2의 바 숨김과 되밟지 않게).
-        // 셸 밖 경로(이미지 더블클릭 토글 등)로 프레젠터가 바뀌어도 모드가 따라온다.
+        // 표시는 UpdateShellChrome 한 함수만 정한다(구 v0.21.0의 "전체화면이면 바 숨김"
+        // 직접 대입을 대체). 셸 밖 경로(이미지 더블클릭 토글 등)로 프레젠터가 바뀌어도 모드가 따라온다.
         AppWindow.Changed += (sender, args) =>
         {
             if (!args.DidPresenterChange) return;
             var full = sender.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
             if (full && _viewMode != ShellViewMode.FullScreen)
             {
-                _viewMode = ShellViewMode.FullScreen; // 외부 진입 — 스냅샷 없음(Esc 복귀는 모드1 폴백)
+                _viewMode = ShellViewMode.FullScreen; // 외부 진입 — 스냅샷 없음(복귀는 창 모드 폴백)
             }
             else if (!full && _viewMode == ShellViewMode.FullScreen)
             {
-                _viewMode = ShellViewMode.Windowed; // 외부 해제 — 3→1과 동일(하단 바만 복귀)
+                _viewMode = ShellViewMode.Windowed; // 외부 해제 — 패널 복원 없이 창 모드로
                 _fullScreenRestore = null;
             }
+            ReevaluateBarAutoHide(); // A186: 전체화면 진입/해제 = 자동 숨김 재평가(표시 상태에서 재대기)
             UpdateShellChrome();
         };
 
@@ -1314,6 +1269,14 @@ public sealed partial class MainWindow : Window
         // 뷰 내부 열기(열기 버튼·◀/▶ 탐색·테스트 클립)도 셸과 동기화 (v0.25.0)
         if (view is IContentStateSource source)
             source.ContentOpened += path => DispatcherQueue.TryEnqueue(() => OnContentOpened(path));
+        // A186: 재생 상태 변화(재생/일시정지/정지) → 하단 바 자동 숨김 재평가.
+        // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(A37과 같은 가드).
+        if (view is IPlaybackStateSource playback)
+            playback.PlaybackStateChanged += () => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                OnPlaybackStateChanged();
+            });
         // 하단 바만 남기는 접힘(A61): 판단은 뷰(핀 ON && 전체화면 아님), 실행은 셸.
         // 접기는 지금 보이는 뷰의 요청만 받고, 펼치기는 뷰가 내려간 뒤(Unloaded)에도 받아준다 —
         // 그래야 "모듈을 바꾸면 접힘도 함께 풀린다"(A39 자동 해제와 같은 규칙)가 성립한다.
@@ -1405,10 +1368,13 @@ public sealed partial class MainWindow : Window
     private void SetContentState(IModule? module, string? filePath)
     {
         // A151 ⑤: 모드 리셋 — 모듈 전환·파일 열기(설정 진입·미지원 안내 포함, 전부 이 경로)는
-        // 모드1로 돌아간다. 새 창은 인스턴스 필드 초기값이 이미 모드1이다. 복귀 스냅샷도 버린다.
+        // 창 모드로 돌아간다. 새 창은 인스턴스 필드 초기값이 이미 창 모드다. 복귀 스냅샷도 버린다.
         // 뷰 내부 탐색(◀/▶ 다음 파일 등 — OnContentOpened)은 같은 콘텐츠 세션의 연속으로 보고
         // 리셋하지 않는다(전체화면 슬라이드쇼가 화살표마다 풀리면 안 된다 — 구현 결정).
+        // A186: 자동 숨김도 리셋 — 타이머 정지·바 복원(모듈 전환과의 경합 방지. 새 뷰의 재생이
+        // 시작되면 PlaybackStateChanged가 다시 카운트를 연다).
         _fullScreenRestore = null;
+        ResetBarAutoHide();
         if (_viewMode != ShellViewMode.Windowed) SetViewMode(ShellViewMode.Windowed);
         // A90: 콘텐츠·모듈이 바뀌면 S4('오픈 파일' 탐색)는 자동 종료 — 파일 열기(더블클릭·Enter·인포
         // 드랍)는 물론 숫자 키 모듈 전환·설정 진입도 같은 경로로 닫힌다. 새 콘텐츠가 화면을 차지하므로
@@ -1422,9 +1388,8 @@ public sealed partial class MainWindow : Window
         RememberLastFolder(); // 전역 마지막 폴더 저장 (v0.55.0 모듈별 → A174 전역 1벌)
         UpdateEmptyExplorer();
         UpdateDriveStrip(); // A22: 파일 유무가 바뀌면 드라이브 줄도 함께 켜고 끈다
-        // 홀드 판정만 리셋하고(A58), 오버레이 고정·사이드바 상태는 유지한 채
-        // 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 — 기존 "고정은 콘텐츠를 넘어 유지" 규칙.
-        ResetOverlayInput();
+        // 사이드바 상태는 유지한 채 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 —
+        // 기존 "상태는 콘텐츠를 넘어 유지" 규칙(A176: 홀드 판정 리셋은 상태 머신과 함께 소멸).
         ApplyOverlayStates();
         // A54: 모듈 전환·설정 전환·A59 안에서의 파일 교체까지 이 한 지점으로 모인다.
         // A137: 파일 열기/닫기가 창 아이콘(32px 확장자/용량)도 바꾸므로 트레이만이 아니라
@@ -1475,6 +1440,7 @@ public sealed partial class MainWindow : Window
     {
         // A90: 뷰 내부 열기도 "새 콘텐츠가 화면을 차지"이므로 S4 자동 종료(SetContentState와 동일 규칙).
         ExitOpenFileBrowsing(restore: false, refresh: false);
+        ResetBarAutoHide(); // A186: 콘텐츠 교체 = 타이머 정지·바 복원(새 재생이 다시 연다)
         _currentFilePath = path;
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // v0.55.0
@@ -1531,34 +1497,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private bool IsEmptyFileModule => _currentFilePath is null && IsFileModule(_currentModule);
 
-    /// <summary>
-    /// 스왑체인(libvlc VideoView) 위에 중앙 콘텐츠를 그리는 모듈인지 (A129).
-    /// 비디오만이 아니다 — 오디오 모듈도 같은 VideoView에 libvlc 파형 시각화를 상시로 그린다
-    /// (AudioPlayerView.xaml의 AudioSurface). A129 등재문은 "스왑체인 = 비디오"를 전제했지만
-    /// 코드상 스왑체인 표면은 두 모듈이라 코드를 따른다(같은 원인 — 아크릴이 파형도 못 비춘다).
-    /// </summary>
-    private static bool IsSwapChainModule(string? moduleId) => moduleId is "video" or "audio";
-
-    /// <summary>
-    /// 지금 중앙에 스왑체인 콘텐츠(libvlc VideoView의 D3D 스왑체인 — 비디오 화면·오디오 파형)가
-    /// 실재하는지 (A129). 인앱 아크릴이 배경 샘플에 실패하는 표면이라, 오버레이·S4의 반투명
-    /// 배경을 반투명 단색 폴백으로 바꾸는 신호다(OverlayBackdrop.Pick — ApplyOverlayStates가 매번 민다).
-    /// 판별은 새 계약 없이 셸이 이미 아는 신호만 조합한다(A129 구현 결정):
-    /// ① 스왑체인 모듈 + 파일 열림("모듈 ID + 파일 유무" 신호 조합 — A129 당시 영상 Enter
-    ///   이중 방어와 같은 꼴이었고, 그 방어가 A151에서 사라진 뒤에도 이 판별은 독립이다).
-    ///   파일이 없으면(빈 모듈) 중앙은 불투명 ExplorerHost(A93)라 아크릴 샘플이 정상이다.
-    /// ② All Readable(A59)이 스왑체인 자식 뷰를 얹은 경우 — 자식 선택(AllReadableRouting.
-    ///   ResolveChild)은 셸 라우터와 같은 우선순위 규칙이라(그 파일 주석의 확정 사항)
-    ///   _router.Resolve로 같은 답을 얻는다(S4 타일 액센트 ModuleIdForFile과 같은 관용구).
-    ///   ※ 확장자 재정의(SetOverride)는 ResolveChild가 안 보므로 이론상 어긋날 수 있으나,
-    ///   현행 재정의는 ".json → document"뿐이고 미디어 확장자 재정의가 생기면 최악도
-    ///   "아크릴/폴백이 뒤바뀌는" 표시 문제다 — 새 계약(뷰 인터페이스) 신설보다 기존 신호 우선.
-    /// </summary>
-    private bool IsSwapChainContent =>
-        _currentFilePath is not null && _currentModule is { } module
-        && (IsSwapChainModule(module.Id)
-            || (module.Id == KOTU.Module.AllReadable.AllReadableModule.ModuleId
-                && IsSwapChainModule(_router.Resolve(_currentFilePath)?.Id)));
+    // A176: 스왑체인 반투명 폴백 판별(A129 — IsSwapChainModule/IsSwapChainContent)은 반투명
+    // 표시 축과 함께 철거 — 패널·S4 배경이 전부 불투명이라 아크릴 배경 샘플 문제 자체가 없다.
 
     /// <summary>
     /// 현재 뷰가 좌/우 패널 콘텐츠를 직접 내주는 뷰(ISidePanelProvider — A119, 지금은 정보 모듈뿐)면
@@ -1635,7 +1575,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ---------- 좌/우 오버레이 입력 상태 머신 (A58 전이 + A158 F11/F12) ----------
+    // ---------- 좌/우 패널 키 입력 (A176 단타 토글 + A158 F11/F12) ----------
 
     /// <summary>
     /// 좌/우 패널 키 정본 — 되돌리기·재배정 지점을 이 두 상수 한 곳으로 모았다: 키를 바꾸려면
@@ -1648,11 +1588,11 @@ public sealed partial class MainWindow : Window
     private const VirtualKey RightPanelKey = VirtualKey.F12; // 우측 정보
 
     /// <summary>
-    /// 키 → 오버레이 사이드 매핑 (A118이 A107의 Alt+Z/X를 단독 F키로 대체하며 Alt 게이트 폐지,
+    /// 키 → 패널 사이드 매핑 (A118이 A107의 Alt+Z/X를 단독 F키로 대체하며 Alt 게이트 폐지,
     /// A158이 그 F키를 F11/F12로 재배정): F11 = 좌측 파일 리스트, F12 = 우측 정보. 그 밖의 키는
-    /// null — 홀드 취소 트리거(다른 키 개입)로만 쓰인다. 탐색기 표면의 F2 = 이름변경(A94)과의
-    /// "원 기능 우선" 공존은 **A158에서 충돌 자체가 소멸**했다(패널 키가 F12로 옮겨갔다) — 양보
-    /// 경로(OnOverlaySideKey의 Handled 검사)는 일반 규칙으로 그대로 남는다. Z·X는 미배정이다.
+    /// null. 탐색기 표면의 F2 = 이름변경(A94)과의 "원 기능 우선" 공존은 **A158에서 충돌 자체가
+    /// 소멸**했다(패널 키가 F12로 옮겨갔다) — 양보 경로(OnOverlaySideKey의 Handled 검사)는
+    /// 일반 규칙으로 그대로 남는다. Z·X는 미배정이다.
     /// </summary>
     private OverlaySide? SideForKey(VirtualKey key) => key switch
     {
@@ -1706,11 +1646,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // A107(A118 뒤에도 존치): Alt(Menu) 자체는 "다른 키 개입"에서 제외 — 수식키가 진행 중
-        // 홀드를 즉사시키면 안 된다(취소 트리거는 비수식 키·포인터만). 새 물리 누름마다 조합 사용
-        // 플래그만 초기화한다(깨끗한 단독 탭 = OS 기본 통과). down은 소비하지 않는다 — OS 메뉴
-        // 모드는 Alt "up"에서 발동하므로 소비는 OnRootKeyUp의 조건 소비 하나로 충분하고, down
-        // 시점에는 조합이 될지 아직 몰라 무조건 소비하면 시스템 조합까지 건드리는 반대 함정이 있다.
+        // A107(A176 뒤에도 존치): Alt(Menu)는 새 물리 누름마다 조합 사용 플래그만 초기화한다
+        // (깨끗한 단독 탭 = OS 기본 통과). down은 소비하지 않는다 — OS 메뉴 모드는 Alt "up"에서
+        // 발동하므로 소비는 OnRootKeyUp의 조건 소비 하나로 충분하고, down 시점에는 조합이 될지
+        // 아직 몰라 무조건 소비하면 시스템 조합까지 건드리는 반대 함정이 있다.
         if (IsAltKey(e.Key))
         {
             if (!e.KeyStatus.WasKeyDown) _altComboUsed = false;
@@ -1728,8 +1667,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // A151: Alt+Enter = 상황 무관 모드3 직행/복귀. 텍스트 입력 판정보다 **앞**이다 —
-        // 문서 편집 중(Enter = 줄바꿈이라 순환 불가)에도 전체화면 진입로가 있어야 한다.
+        // A151(A186 승계): Alt+Enter = 상황 무관 전체화면 토글. 텍스트 입력 판정보다 **앞**이다 —
+        // 문서 편집 중(Enter = 줄바꿈이라 토글 불가)에도 전체화면 진입로가 있어야 한다.
         // Alt 조합 키가 이 핸들러로 오는 것은 A58 실증(위 구독 주석)·MarkAltUseIfConsumed의
         // 전제 그대로다. 소비하면 Alt 단독 up도 조건 소비된다(OS 메뉴 모드 회피, A107).
         if (e.Key == VirtualKey.Enter && IsAltDown())
@@ -1741,17 +1680,12 @@ public sealed partial class MainWindow : Window
 
         // A86 포커스 예외 ①(A32 통과 규칙 재사용): 텍스트 입력 컨트롤에 포커스가 있으면
         // Enter 등 입력이 우선이다(문서 에디터의 Enter 줄바꿈을 뺏으면 안 된다 — A151 ④ⓐ 재확인).
-        // Esc는 위에서 따로 처리했다(모드3·모드2·S4는 텍스트 입력 중에도 Esc가 통해야 한다).
-        // 어떤 키든 홀드 판정·2연타 카운트만 리셋하고 흘려보낸다.
-        if (IsTextInputFocused())
-        {
-            ResetOverlayInput();
-            return;
-        }
+        // Esc는 위에서 따로 처리했다(전체화면·S4는 텍스트 입력 중에도 Esc가 통해야 한다).
+        if (IsTextInputFocused()) return;
 
         if (e.Key == VirtualKey.Enter)
         {
-            OnShellEnter(e); // A151 모드 순환 — 원 기능 우선 판정 포함
+            OnShellEnter(e); // A186: Alt+Enter와 동일한 전체화면 토글 — 원 기능 우선 판정 포함
             // A107: Alt를 쥔 채 Enter를 셸이 소비하면 OS는 "Alt 중 눌린 키"를 못 본다
             // — Alt 액셀러레이터와 같은 이유로 이 Alt의 단독 up도 소비 대상이다.
             MarkAltUseIfConsumed(e);
@@ -1763,95 +1697,53 @@ public sealed partial class MainWindow : Window
             OnShellBack(e); // A112: Browser Back 키 = 마우스 XButton1과 같은 '뒤로' 분배
             // 위 IsTextInputFocused 분기가 텍스트 입력 가드를 겸한다(타이핑 중 GoBack은 여기 안 온다).
             MarkAltUseIfConsumed(e); // Esc·Enter와 같은 규칙 — Alt를 쥔 채 소비했으면 Alt up도 소비
-            return;
         }
-
-        // 다른 키가 함께 눌림 → 진행 중 홀드 세션 취소(이미 떠 있으면 즉시 내림) +
-        // 2연타 카운트 리셋 (A58 공통 안전장치 유지 — Shift+더블클릭 새 인스턴스·Shift+N·
-        // Alt+`(시작 메뉴) 등 조합 입력이 오버레이를 물지 않게 — A147 전에는 Alt+숫자도 같은 예였다.
-        // 단독 Z/X는 A118부터 아무 역할 없는 일반 키다 — 같은 취소 트리거일 뿐, 소비하지 않는다).
-        // 비수정자 키를 먼저 누르고 있던 조합은 그 키의 반복 입력이 곧 도착해 같은 경로로 취소된다.
-        ResetOverlayInput();
+        // 그 밖의 키는 셸 몫이 없다 — A176: 구 "다른 키 개입 = 홀드 취소" 안전장치는
+        // 홀드 판정 기계와 함께 철거됐다(단타 토글에는 취소할 진행 상태가 없다).
     }
 
     /// <summary>
     /// 좌/우 패널 키(A158: F11/F12) down 분배 — 호출부(OnRootKeyDown)가 텍스트 입력 판정보다
-    /// 앞에서 부른다. 순서: ① 원 기능 우선 ② S4 무동작 소비 ③ 첫 down만 전이 ④ 컨텍스트 소비.
+    /// 앞에서 부른다. 순서: ① 원 기능 우선 ② S4 무동작 소비 ③ 첫 down만 토글 ④ 컨텍스트 소비.
     /// ①은 A118 시절 탐색기 표면(ExplorerPane·ThumbnailExplorer)의 F2 = 이름변경(A94 2차)과
     /// 겹치던 자리인데, **A158에서 패널 키가 F12로 옮겨가 그 충돌은 소멸했다**(이름변경은 F2 그대로
-    /// 유지 — 표면 코드 무변경). ①은 이제 실제 사례가 없는 일반 규칙으로 남는다: 누가 먼저
-    /// 소비(Handled)했으면 그 F키는 패널 키가 아니라 "다른 키 개입"이므로 — 종전에도 소비된 일반
-    /// 키는 ResetOverlayInput 경로였다 — 같은 리셋만 하고 물러난다(A58 안전장치 유지).
+    /// 유지 — 표면 코드 무변경). ①은 이제 실제 사례가 없는 일반 규칙으로 남는다.
+    /// A176: 홀드/2초/2연타 판정은 폐지 — **단타 = 그 쪽 토글** 하나다. 오토리피트를 거르는
+    /// 이유도 "2연타 오염 방지"에서 "꾹 누르면 토글이 연사되는 것 방지"로 바뀌었다.
     /// </summary>
     private void OnOverlaySideKey(OverlaySide side, KeyRoutedEventArgs e)
     {
-        if (e.Handled)
-        {
-            ResetOverlayInput();
-            return;
-        }
-        // A90 keymap S4 행: 좌/우 키·2연타 = 무동작 (Q5 확정) — 판정에 태우지 않고 소비만 한다.
+        if (e.Handled) return; // 원 기능 우선 — 먼저 소비한 쪽에 양보(일반 규칙)
+        // A90 keymap S4 행: 좌/우 키 = 무동작 (Q5 확정) — 토글에 태우지 않고 소비만 한다.
         if (IsOpenFileBrowsing)
         {
             e.Handled = true;
             return;
         }
-        if (!e.KeyStatus.WasKeyDown) // 오토리피트(홀드 중 반복 down)는 전이에 안 태운다 — 2연타 판정 오염 방지
-        {
-            // F11↔F12 상호는 "다른 키 개입" 취소의 예외(A107의 Z↔X 규칙 승계) — 한쪽 홀드 중
-            // 다른 쪽 down이면 그쪽도 독립적으로 같은 전이를 시작한다(F11+F12 동시 호출.
-            // 타이머·2연타 판정은 원래 사이드별 분리라 추가 작업 없음).
-            OnOverlaySideDown(side);
-        }
-        // 오버레이 컨텍스트가 있으면 소비한다(오토리피트 포함) — F11/F12는 시스템 조합이 아니고
+        if (!e.KeyStatus.WasKeyDown) OnOverlaySideDown(side); // 오토리피트 제외 — 토글 연사 방지
+        // 패널 컨텍스트가 있으면 소비한다(오토리피트 포함) — F11/F12는 시스템 조합이 아니고
         // 다른 수신자도 없다. A119: 패널 제공 뷰(정보 모듈)도 컨텍스트다(HasPanelContext) —
         // 컨텍스트 없음(설정·빈 셸·미지원 안내)만 종전대로 무소비.
         if (HasPanelContext) e.Handled = true;
     }
 
     /// <summary>
-    /// 사이드 키(A158: F11/F12) 최초 down(오토리피트 제외)의 상태 전이 (A58 전이 + A86 keymap):
-    /// 닫힘에서 down = 홀드 세션 시작(오버레이 덮기 + 2초 승격 타이머) — "닫힌 패널 꺼내기".
-    /// **열림(오버레이 고정·사이드바)에서 down 1회 = 그 쪽 닫기** (A86 신설 — keymap S3 행:
-    /// S3L에서 F11 = 좌 닫기. A58에서는 무동작이던 자리. A107 재검토 결과 유지).
-    /// 2연타 = 사이드바 고정/해제(A58 유지). 첫 탭이 이미 상태를 옮기므로 판정은
-    /// **첫 탭 이전 상태(TapStartState)** 기준이다: 닫힘에서 시작한 2연타 = 사이드바,
-    /// 열림에서 시작한 2연타 = 해제(첫 탭이 이미 닫았다 — 두 번째 탭은 그대로 둔다).
-    /// 양쪽 사이드가 각자 이 전이를 독립적으로 탄다 — F11+F12 동시 호출(A107 규칙 승계)의 실행부.
+    /// 사이드 키(A158: F11/F12) 최초 down(오토리피트 제외) = **그 쪽 사이드바 토글**
+    /// (A176 확정, 부록 B 72 — A58 계보의 홀드/2초 승격/2연타 전이 전면 폐지).
+    /// 양쪽 사이드가 각자 독립 토글이라 F11+F12를 이어 눌러도 자연히 동시 호출이 성립한다.
     /// </summary>
     private void OnOverlaySideDown(OverlaySide side)
     {
         if (IsOpenFileBrowsing) return; // A90 keymap S4: 좌/우 키 = 무동작 — OnRootKeyDown 가드의 이중 방어선
 
-        // 오버레이 컨텍스트가 없으면(설정·빈 셸·미지원 파일 안내) 판정도 없다. 파일 없이 연
+        // 패널 컨텍스트가 없으면(설정·빈 셸·미지원 파일 안내) 무동작. 파일 없이 연
         // 파일 모듈(빈 모듈 상태)은 A81부터, 패널 제공 뷰(정보 모듈)는 A119부터 컨텍스트에
         // 포함 — 기본 도크를 키로 닫고 다시 여는 입력이 성립해야 한다.
         if (!HasPanelContext) return;
 
-        var now = DateTime.UtcNow;
-        if ((now - side.LastTapDown).TotalMilliseconds < OverlayDoubleTapMs)
-        {
-            side.LastTapDown = DateTime.MinValue;
-            CancelHoldCore(side); // 이번 누름은 홀드 세션이 아니다 — 계속 눌러도 승격 없음
-            side.State = side.TapStartState == OverlayState.Closed
-                ? OverlayState.OpaqueDocked // 닫힘에서 시작한 2연타 = 사이드바 (A58 — 구 "불투명 밀어내기")
-                : OverlayState.Closed;      // 열림에서 시작한 2연타 = 해제 — 첫 탭이 이미 닫힌 상태 유지
-        }
-        else
-        {
-            side.LastTapDown = now;
-            side.TapStartState = side.State; // 다음 탭이 2연타가 되면 이 값이 판정 기준
-            if (side.State == OverlayState.Closed)
-            {
-                side.State = OverlayState.Holding;
-                side.HoldSessionActive = true;
-                side.PinTimer?.Start(); // 2초 경과 시 TranslucentPinned로 승격
-            }
-            else if (side.State is OverlayState.TranslucentPinned or OverlayState.OpaqueDocked)
-            {
-                side.State = OverlayState.Closed; // A86: 열림 상태에서 해당 키 1회 = 그 쪽 닫기
-            }
-        }
+        side.State = side.State == OverlayState.OpaqueDocked
+            ? OverlayState.Closed
+            : OverlayState.OpaqueDocked;
         ApplyOverlayStates();
     }
 
@@ -1863,124 +1755,76 @@ public sealed partial class MainWindow : Window
         // — 그 up을 여기서 대신 소비해 막는다. 반대로 조합 미사용(깨끗한 Alt 탭)은 통과 = OS 기본
         // 동작 유지. Alt+Tab(비활성화로 up이 우리에게 안 온다)·Alt+F4/Alt+Space(발동은 그 키의
         // down이고 우리는 그 down을 소비하지 않는다)는 이 조건에 걸리지 않아 무영향이다.
-        if (IsAltKey(e.Key))
+        // A176: F11/F12 up의 홀드 세션 종료 판정은 홀드 기계와 함께 철거 — up은 어느 키든
+        // 소비하지 않는다(A86 이래의 "패널 키 up 무소비" 유지).
+        if (IsAltKey(e.Key) && _altComboUsed)
         {
-            if (_altComboUsed)
-            {
-                _altComboUsed = false;
-                e.Handled = true;
-            }
-            return;
+            _altComboUsed = false;
+            e.Handled = true;
         }
-
-        var side = SideForKey(e.Key);
-        if (side is null) return;
-
-        // F11/F12 up = 홀드 세션 종료 판정(A118·A158 — 단독 키라 A107의 "Alt를 먼저 뗀 잔여 홀드" 특례는
-        // 소멸). 키를 놓으면 진행 중 홀드 세션이 반드시 끝나야 한다(고아 세션 방지).
-        if (side.HoldSessionActive)
-        {
-            side.HoldSessionActive = false;
-            side.PinTimer?.Stop();
-            if (side.State == OverlayState.Holding)
-            {
-                side.State = OverlayState.Closed; // 2초 미만 홀드 — 키를 떼면 내려간다
-                ApplyOverlayStates();
-            }
-            // 타이머가 이미 TranslucentPinned로 승격했다면 그대로 유지 —
-            // "2초 넘겨 뗐을 때 = 고정 유지" (A58 확정 해석)
-        }
-        // F11/F12 자체의 up은 소비하지 않는다(A86 이래 유지) — Alt 액셀러레이터 조합의 up 소비는
-        // 위 Menu 분기가 담당(A118 뒤에도 존치).
     }
 
-    // ---------- 셸 표시 모드 순환 (A151 — A86 Enter 일괄 토글 폐지·대체) ----------
+    // ---------- 셸 표시 모드 토글 (A151 3단 순환 → A186 전체화면 토글로 단순화) ----------
 
     /// <summary>
-    /// Enter = 셸 표시 모드 순환(A151): 모드1 → 2 → 3 → 1 한 방향. 1→2 전이가 열려 있던
-    /// 좌/우 패널을 닫는 역할을 겸하고(Enter는 패널을 여는 역할은 하지 않는다 — A86 일괄 토글
-    /// 폐지의 요지), 2→3은 복귀 스냅샷을 남기며(Esc/Alt+Enter 공용), 3→1은 전체화면만 풀려
-    /// 하단 바만 나온다(패널 복원 없음 — 스냅샷 폐기).
-    /// 원 기능 우선 예외(A151 ④ — 현행 양보 코드가 그대로 규칙):
-    /// ① 텍스트 입력(문서 에디터 줄바꿈)은 호출 전에 걸러진다(OnRootKeyDown의 IsTextInputFocused —
-    ///    PDF·4MB 잘림 읽기 전용 문서는 텍스트 포커스가 아니라 순환 대상이다)
-    /// ② 탐색기 표면 포커스(중앙 썸네일·좌 트리·좌 리스트·S4 그리드) = 선택 열기 우선 —
+    /// Enter = **Alt+Enter와 동일한 전체화면 토글**(A186 ① — A151의 3단 순환 폐지).
+    /// 원 기능 우선 예외(A151 ④ 그대로 — 3종 세트):
+    /// ① 오토리피트 무시(꾹 누르면 왕복 연사되면 안 된다)
+    /// ② 텍스트 입력(문서 에디터 줄바꿈)은 호출 전에 걸러진다(OnRootKeyDown의 IsTextInputFocused —
+    ///    PDF·4MB 잘림 읽기 전용 문서는 텍스트 포커스가 아니라 토글 대상이다)
+    /// ③ 탐색기 표면 포커스(중앙 썸네일·좌 트리·좌 리스트·S4 그리드) = 선택 열기 우선 —
     ///    표면이 선택을 직접 열어 소비하면 위 Handled에서 끝나고, 선택이 없어 안 삼킨 Enter도
-    ///    통과 표면 판정(ShouldPassThrough)으로 양보한다.
-    /// 영상 모듈은 순환 대상이다 — 영상 전용 Enter=전체화면 액셀러레이터와 셸의 영상 이중 방어는
-    /// A151에서 제거했다(전체화면은 순환·Alt+Enter가 담당).
+    ///    통과 표면 판정(ShouldPassThrough — PassThroughTag)으로 양보한다.
+    /// 영상 모듈도 이 경로다 — 영상 전용 Enter=전체화면 액셀러레이터는 A151에서 제거된 그대로다.
     /// </summary>
     private void OnShellEnter(KeyRoutedEventArgs e)
     {
-        if (e.KeyStatus.WasKeyDown) return; // 오토리피트 — 순환이 연사되면 안 된다
-        ResetOverlayInput(); // Enter도 "다른 키 개입"이다 — 홀드 취소·2연타 리셋(A58 안전장치 유지)
+        if (e.KeyStatus.WasKeyDown) return; // 오토리피트 — 토글이 연사되면 안 된다
         if (e.Handled) return; // 탐색기 그리드(Enter = 선택 항목 열기)가 이미 소비 — 원 기능 우선
         if (HotkeySupport.ShouldPassThrough(RootLayout)) return; // 탐색기 표면 포커스 — 선택 열기 우선
         e.Handled = true;
-        CycleViewMode();
+        ToggleFullScreen();
     }
 
     /// <summary>
-    /// Alt+Enter(A151 ②): 어느 모드·상황이든 곧장 모드3 + 복귀 지점 기억, 모드3에서 다시 누르면
-    /// 그 지점으로 복귀. 텍스트 입력·탐색기 표면 양보 없이 동작한다(직행 단축키 — 호출부가
-    /// 텍스트 입력 판정보다 앞에서 부른다). 오토리피트는 무시(연사로 왕복하지 않게).
+    /// Alt+Enter(A151 ② — A186에서 Enter와 한 실행부로 수렴): 전체화면 토글 + 복귀 지점 기억.
+    /// 텍스트 입력·탐색기 표면 양보 없이 동작한다(직행 단축키 — 호출부가 텍스트 입력 판정보다
+    /// 앞에서 부른다). 오토리피트는 무시(연사로 왕복하지 않게).
     /// </summary>
     private void OnShellAltEnter(KeyRoutedEventArgs e)
     {
-        ResetOverlayInput(); // Alt+Enter도 "다른 키 개입"(A58) — 홀드 취소·2연타 리셋
         if (e.KeyStatus.WasKeyDown || e.Handled) return;
         e.Handled = true;
+        ToggleFullScreen();
+    }
+
+    /// <summary>
+    /// 전체화면 토글의 단일 실행부(A186): Enter·Alt+Enter·하단 바 "Full screen" 버튼이 전부
+    /// 이 한 함수로 수렴한다 — 창 모드면 진입(복귀 스냅샷 기억), 전체화면이면 스냅샷 복귀.
+    /// </summary>
+    private void ToggleFullScreen()
+    {
         if (_viewMode == ShellViewMode.FullScreen) RestoreFromFullScreen();
         else EnterFullScreenRemembering();
     }
 
-    /// <summary>Enter 순환의 실행부(A151) — 전이별 패널 처리는 각 진입 함수가 담당한다.</summary>
-    private void CycleViewMode()
-    {
-        switch (_viewMode)
-        {
-            case ShellViewMode.Windowed:
-                EnterFullWindow(); // 1→2 — 열려 있던 좌/우 패널을 닫는 역할 겸임
-                break;
-            case ShellViewMode.FullWindow:
-                EnterFullScreenRemembering(); // 2→3 — 복귀 스냅샷(Esc/Alt+Enter 공용)
-                break;
-            default: // FullScreen: 3→1 — 하단 바만 복귀(패널 복원 없음), 스냅샷 폐기
-                _fullScreenRestore = null;
-                SetViewMode(ShellViewMode.Windowed);
-                break;
-        }
-    }
-
     /// <summary>
-    /// 모드2(Full window) 진입(A151): 좌/우 패널을 닫고 하단 바를 숨긴다 — 프레젠터는 바꾸지
-    /// 않는다(창·타이틀바 유지). 패널 닫기는 SetDockedState(단일 종착점 ApplyOverlayStates 경유)
-    /// 재사용 — 이미 닫혀 있으면 다시 그리지 않는다(A109 가드 승계).
-    /// 하단 바 우측 "Full window" 버튼(OnFullWindowClick)도 이 직행 경로다.
-    /// </summary>
-    private void EnterFullWindow()
-    {
-        SetDockedState(listDocked: false, infoDocked: false);
-        SetViewMode(ShellViewMode.FullWindow);
-    }
-
-    /// <summary>
-    /// 모드3(전체화면) 진입 + 복귀 스냅샷(A151 ②③): 스냅샷 = 지금 모드 + 좌/우 패널 상태
-    /// (홀드는 Sticky로 반투명 피닝 승격 — A86 스냅샷 관용구 승계). 패널은 건드리지 않는다 —
-    /// 진입 후 F11/F12로 바꾼 구성을 Esc/Alt+Enter가 이 스냅샷으로 되돌린다(A153: 모드3에서도
-    /// 패널 전이는 그대로 살아 있다). Enter 2→3·Alt+Enter·"Full screen" 버튼이 모두 이 경로다.
+    /// 전체화면 진입 + 복귀 스냅샷(A151 ②③): 스냅샷 = 지금 좌/우 패널 상태(A176: 닫힘/도크
+    /// 2상태 — A186: 모드 항목은 2단화로 소멸, 복귀는 항상 창 모드). 패널은 건드리지 않는다 —
+    /// 진입 후 F11/F12로 바꾼 구성을 Esc/Alt+Enter가 이 스냅샷으로 되돌린다(A153: 전체화면에서도
+    /// 패널 조작은 그대로 살아 있다).
     /// </summary>
     private void EnterFullScreenRemembering()
     {
         if (_viewMode == ShellViewMode.FullScreen) return; // 버튼 연타 등 재진입 방어
-        _fullScreenRestore = (_viewMode, Sticky(_listSide.State), Sticky(_infoSide.State));
+        _fullScreenRestore = (_listSide.State, _infoSide.State);
         SetViewMode(ShellViewMode.FullScreen);
     }
 
     /// <summary>
-    /// 모드3에서 복귀(A151 — Esc·Alt+Enter 재누름·'뒤로' 공용): 스냅샷의 모드와 좌/우 패널
-    /// 구성을 함께 되돌린다. 스냅샷이 없으면(외부 경로로 전체화면에 들어온 경우) 모드1로.
-    /// 패널 상태 적용은 반드시 ApplyOverlayStates(단일 종착점)를 거친다.
+    /// 전체화면에서 복귀(A151 — Esc·Enter/Alt+Enter 재누름·'뒤로'·버튼 공용): 창 모드로 돌아가며
+    /// 스냅샷의 좌/우 패널 구성을 되돌린다. 스냅샷이 없으면(외부 경로로 전체화면에 들어온 경우)
+    /// 패널 무변경으로 창 모드만. 패널 상태 적용은 반드시 ApplyOverlayStates(단일 종착점)를 거친다.
     /// </summary>
     private void RestoreFromFullScreen()
     {
@@ -1988,11 +1832,9 @@ public sealed partial class MainWindow : Window
         _fullScreenRestore = null;
         if (restore is { } r)
         {
-            CancelHoldCore(_listSide); // 방어 — 호출부(Esc·Alt+Enter)가 이미 리셋했지만 관용구 유지
-            CancelHoldCore(_infoSide);
             _listSide.State = r.List;
             _infoSide.State = r.Info;
-            SetViewMode(r.Mode);
+            SetViewMode(ShellViewMode.Windowed);
             ApplyOverlayStates();
         }
         else
@@ -2002,11 +1844,12 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 모드 전이의 단일 실행점(A151): 프레젠터(모드3 = FullScreen, 그 외 = Default)와 셸 크롬
+    /// 모드 전이의 단일 실행점(A151): 프레젠터(전체화면 = FullScreen, 창 = Default)와 셸 크롬
     /// (하단 바·경계 버튼 여백)을 함께 맞춘다. 프레젠터는 실제로 다를 때만 만진다 — 최대화 등
     /// OverlappedPresenter 상태를 불필요하게 건드리지 않는다(기존 토글들과 같은 판단).
     /// 전체화면 진입 전에 A61 접힘을 먼저 펼친다 — 접힌 높이가 전체화면의 복원 크기로 굳지
     /// 않게(구 HardwareView.ToggleFullScreen의 "먼저 펼치기" 순서를 셸이 승계).
+    /// A186: 모드가 바뀌면 영상 하단 바 자동 숨김도 재평가한다(표시 상태에서 카운트 재시작).
     /// </summary>
     private void SetViewMode(ShellViewMode mode)
     {
@@ -2022,55 +1865,164 @@ public sealed partial class MainWindow : Window
         {
             AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
         }
+        ReevaluateBarAutoHide(); // A186: 전체화면 진입/해제 = 자동 숨김 상태 재평가
         UpdateShellChrome();
     }
 
     /// <summary>
-    /// 하단 바 가시성의 단일 결정 지점(A151): 모드1에서만 보인다(모드2·3 = 숨김).
+    /// 하단 바 가시성의 단일 결정 지점(A151 — A186 개정): 입력 축 = (모드, 영상 자동 숨김).
+    /// 실제 판정은 <see cref="BarVisible"/> 하나 — 영상 재생 표면이면 자동 숨김 축이,
+    /// 아니면 모드 축(창 모드에서만 표시)이 정한다.
     /// A152: 바가 콘텐츠 위 오버레이가 되면서(행 분할 폐지) 종전의 행 높이 0 조작
     /// (BottomBarRow.Height)은 소멸했다 — 콘텐츠 영역(CenterArea)은 모드와 무관하게 창 전체라
     /// 바를 숨겨도 콘텐츠 중앙이 움직이지 않는다(A152의 목적). Visibility 토글 하나만 남는다.
-    /// 경계 버튼 스택의 하단 여백도 바 가시성을 따라온다(A154 훅 — UpdateEdgeButtons가
+    /// 경계 버튼 스택의 하단 여백도 바 실표시를 따라온다(UpdateEdgeButtons가
     /// <see cref="EdgeButtonsBottomInset"/>을 읽는다).
     /// </summary>
     private void UpdateShellChrome()
     {
-        var barVisible = _viewMode == ShellViewMode.Windowed;
-        BottomBar.Visibility = barVisible ? Visibility.Visible : Visibility.Collapsed;
+        BottomBar.Visibility = BarVisible ? Visibility.Visible : Visibility.Collapsed;
         UpdateEdgeButtons();
     }
 
-    /// <summary>하단 바 우측 "Full window" 버튼(A151) = 모드2 직행 — Enter 1→2와 같은 의미론.</summary>
-    private void OnFullWindowClick(object sender, RoutedEventArgs e) => EnterFullWindow();
+    /// <summary>하단 바 우측 "Full screen" 버튼 = Enter/Alt+Enter와 같은 전체화면 토글(A186 —
+    /// 영상 자동 숨김 축에서는 전체화면에서도 바가 보일 수 있어 직행이 아니라 토글이어야 한다).</summary>
+    private void OnFullScreenClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
 
-    /// <summary>하단 바 우측 "Full screen" 버튼(A151) = 모드3 직행 — Alt+Enter와 같은 의미론(스냅샷 기억).</summary>
-    private void OnFullScreenClick(object sender, RoutedEventArgs e) => EnterFullScreenRemembering();
+    // ---------- 영상 하단 바 자동 숨김 (A186 ②) ----------
+    // 신호원 = IPlaybackStateSource(영상 뷰·All Readable 중계 — ShowModule 배선), 판단·타이머 =
+    // 셸. 규칙: 재생 표면 + 재생 중 + 무입력 3초 = 숨김 / 재표시 = 포인터 이동·터치(클릭)·
+    // 하단 가장자리 근접(틱 시점 유예)·일시정지·정지. 전체화면에서도 동일(플레이어 UX) —
+    // 반대로 말하면 영상 재생 표면에서는 전체화면에서도 입력이 오면 바가 나타난다.
+    // 커서 숨김은 하지 않는다(등재 후보 — A186 구현 시 결정).
 
-    // ---------- Esc (A151 모드 복귀 → A90 S4 복귀) ----------
+    /// <summary>자동 숨김까지의 무입력 시간(ms) — 사양 상수 한 곳(A186, 제안값 3s 채택).</summary>
+    private const int BarAutoHideIdleMs = 3000;
+
+    private DispatcherTimer? _barAutoHideTimer;
+    private bool _barAutoHidden; // 자동 숨김으로 바가 내려가 있는지 — BarVisible의 한 축
+
+    /// <summary>마지막 포인터 y(CenterArea 기준) — 타이머 틱의 하단 근접 판정 입력.
+    /// 이동이 없으면 틱 시점에 위치를 얻을 길이 없어 이동·눌림 핸들러가 기록해 둔다.</summary>
+    private double _lastPointerY = double.NaN;
+
+    /// <summary>현재 뷰의 재생 상태 계약 — 영상 뷰(직접)·All Readable(자식 중계)만 구현한다.</summary>
+    private IPlaybackStateSource? PlaybackView => ModuleHost.Content as IPlaybackStateSource;
+
+    /// <summary>영상 재생 표면이 전면인가(A186) — 자동 숨김 축이 바 가시성을 지배하는 조건.
+    /// 파일 열림 + 재생 표면(All Readable은 영상 자식일 때만 참 — HasPlaybackSurface).</summary>
+    private bool VideoBarContext => _currentFilePath is not null
+        && PlaybackView is { HasPlaybackSurface: true };
 
     /// <summary>
-    /// Esc 분배(A151 — "한 단계 되돌리기" 일관, 부록 B 70): ① 모드3 = 복귀 스냅샷으로
-    /// (모드 + 좌/우 패널 구성) ② 모드2 = 모드1로(패널은 건드리지 않는다 — 문서 모듈의 모드2
-    /// 탈출 경로) ③ S4 = 진입 전 상태로 복귀. 검사 순서는 A112 '뒤로' 선례 그대로 —
-    /// 전체화면(모드) 검사가 S4보다 앞이라 "첫 Esc = 전체화면 해제, 다음 Esc = S4 복귀"가 성립한다.
+    /// 하단 바 실표시(A186 — UpdateShellChrome·EdgeButtonsBottomInset 공용 판정):
+    /// 영상 재생 표면이면 자동 숨김 축(재생 중 무입력이면 숨김, 일시정지·정지면 상시 표시 —
+    /// 전체화면에서도 동일), 아니면 모드 축(창 모드에서만 표시 — A151 승계).
+    /// </summary>
+    private bool BarVisible => VideoBarContext ? !_barAutoHidden : _viewMode == ShellViewMode.Windowed;
+
+    /// <summary>포인터가 하단 가장자리 띠(바 44 + 근접 여유 EdgeProximity) 안에 있는가 —
+    /// 시크바를 노리고 내려온 손 밑에서 바가 꺼지지 않게 틱 시점에 유예한다(경계 버튼 근접
+    /// 판정 관용구 재사용 — 같은 EdgeProximity 상수).</summary>
+    private bool PointerNearBottomEdge => !double.IsNaN(_lastPointerY)
+        && _lastPointerY >= CenterArea.ActualHeight - BottomBarHeight - EdgeProximity;
+
+    /// <summary>
+    /// 자동 숨김 리셋: 타이머 정지 + 숨겨져 있었으면 바 복원. 호출 = 콘텐츠·모듈 전환
+    /// (SetContentState·OnContentOpened — 경합 방지)과 재생 상태 전이(OnPlaybackStateChanged).
+    /// </summary>
+    private void ResetBarAutoHide()
+    {
+        _barAutoHideTimer?.Stop();
+        if (!_barAutoHidden) return;
+        _barAutoHidden = false;
+        UpdateShellChrome();
+    }
+
+    /// <summary>재생 중이면 무입력 카운트를 (재)시작한다 — 아니면 무동작(타이머는 정지 상태 유지).</summary>
+    private void ArmBarAutoHide()
+    {
+        if (!VideoBarContext || PlaybackView is not { IsPlaying: true }) return;
+        _barAutoHideTimer ??= MakeBarAutoHideTimer();
+        _barAutoHideTimer.Stop(); // DispatcherTimer 되감기 관용구(Stop 후 Start)
+        _barAutoHideTimer.Start();
+    }
+
+    /// <summary>모드 전환·외부 프레젠터 변화의 재평가: 표시 상태로 되돌리고 재생 중이면 재대기.
+    /// UpdateShellChrome은 호출부가 곧 잇는다(중복 갱신 방지 — SetViewMode·AppWindow.Changed).</summary>
+    private void ReevaluateBarAutoHide()
+    {
+        _barAutoHideTimer?.Stop();
+        _barAutoHidden = false;
+        ArmBarAutoHide();
+    }
+
+    /// <summary>재생 상태 전이(재생/일시정지/정지 — ShowModule 배선의 디스패치 종착점):
+    /// 어느 쪽이든 일단 바를 되살리고, 재생 중이면 카운트를 다시 연다.</summary>
+    private void OnPlaybackStateChanged()
+    {
+        ResetBarAutoHide();
+        ArmBarAutoHide();
+    }
+
+    /// <summary>포인터 이동·눌림(터치 탭 포함) = "입력" — 숨겨져 있으면 재표시하고 카운트를 되감는다.
+    /// 키보드는 재표시 트리거가 아니다(A186 확정 목록 밖 — F11/F12 패널 조작은 바와 무관하게
+    /// 정상 동작한다, A153).</summary>
+    private void NotifyBarAutoHideInput()
+    {
+        if (!VideoBarContext) return;
+        if (_barAutoHidden)
+        {
+            _barAutoHidden = false;
+            UpdateShellChrome();
+        }
+        ArmBarAutoHide();
+    }
+
+    private DispatcherTimer MakeBarAutoHideTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(BarAutoHideIdleMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop(); // 반복 타이머 — Tick에서 반드시 멈춘다(MakeS1FlashTimer 관용구)
+            if (!VideoBarContext || PlaybackView is not { IsPlaying: true }) return; // 그새 정지·전환
+            if (PointerNearBottomEdge)
+            {
+                timer.Start(); // 바 근처에 손이 있다 — 숨기지 않고 재대기
+                return;
+            }
+            _barAutoHidden = true;
+            UpdateShellChrome();
+        };
+        return timer;
+    }
+
+    /// <summary>클릭·터치 탭의 자동 숨김 입력 훅(A186) — '뒤로'(OnRootPointerBack)와 분리된
+    /// 독립 핸들러다(생성자 handledEventsToo 구독).</summary>
+    private void OnRootPointerInput(object sender, PointerRoutedEventArgs e)
+    {
+        _lastPointerY = e.GetCurrentPoint(CenterArea).Position.Y;
+        NotifyBarAutoHideInput();
+    }
+
+    // ---------- Esc (A151 전체화면 복귀 → A90 S4 복귀) ----------
+
+    /// <summary>
+    /// Esc 분배(A151 — "한 단계 되돌리기" 일관. A186: 모드2 분기는 모드2 소멸로 자동 소진):
+    /// ① 전체화면 = 복귀 스냅샷으로(창 모드 + 좌/우 패널 구성) ② S4 = 진입 전 상태로 복귀.
+    /// 검사 순서는 A112 '뒤로' 선례 그대로 — 전체화면 검사가 S4보다 앞이라
+    /// "첫 Esc = 전체화면 해제, 다음 Esc = S4 복귀"가 성립한다.
     /// 모듈별 Esc=전체화면 해제 액셀러레이터 8벌은 A151에서 제거 — 전체화면 해제는 셸의
     /// 이 경로 하나다(뷰가 남긴 다른 Esc 소비는 e.Handled 존중으로 종전대로 양보).
-    /// 그 외(모드1·S4 아님)는 종전대로 건드리지 않는다.
+    /// 그 외(창 모드·S4 아님)는 종전대로 건드리지 않는다.
     /// </summary>
     private void OnShellEscape(KeyRoutedEventArgs e)
     {
-        ResetOverlayInput(); // 종전에도 Esc는 "다른 키 개입"으로 홀드 취소·2연타 리셋만 했다(A58 유지)
         if (e.KeyStatus.WasKeyDown || e.Handled) return;
         if (_viewMode == ShellViewMode.FullScreen)
         {
             e.Handled = true;
             RestoreFromFullScreen();
-            return;
-        }
-        if (_viewMode == ShellViewMode.FullWindow)
-        {
-            e.Handled = true;
-            SetViewMode(ShellViewMode.Windowed);
             return;
         }
         if (!IsOpenFileBrowsing) return;
@@ -2088,7 +2040,6 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnShellBack(KeyRoutedEventArgs e)
     {
-        ResetOverlayInput(); // GoBack도 "다른 키 개입"이다 — 홀드 취소·2연타 리셋(A58 안전장치)
         if (e.KeyStatus.WasKeyDown || e.Handled) return;
         if (TryNavigateBack()) e.Handled = true;
     }
@@ -2109,9 +2060,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// '뒤로' 분배(A112 — XButton1·GoBack 공용): 한 번에 한 층씩 걷어낸다. 반환값 = 소비 여부.
-    /// ① 표시 모드(A151) = Esc와 같은 한 단계 — 모드3이면 복귀 스냅샷으로(RestoreFromFullScreen),
-    ///    모드2면 모드1로. 전체화면(모드) 검사가 S4보다 앞인 순서는 A90/A112 확정 그대로다
-    ///    ("첫 층 = 전체화면 해제, 다음 층 = S4 복귀"). 하단 바 복원은 UpdateShellChrome
+    /// ① 표시 모드(A151 — A186: 모드2 층은 소멸) = Esc와 같은 한 단계 — 전체화면이면 복귀
+    ///    스냅샷으로(RestoreFromFullScreen). 전체화면 검사가 S4보다 앞인 순서는 A90/A112 확정
+    ///    그대로다("첫 층 = 전체화면 해제, 다음 층 = S4 복귀"). 하단 바 복원은 UpdateShellChrome
     ///    (모드 전이의 단일 크롬 지점)이 처리한다.
     /// ② S4('오픈 파일' 탐색) = 진입 전 상태로 복귀만 — Esc와 동일(같은 '뒤로' 의미론).
     /// ③ 콘텐츠 열림(S2·S3 부류 = _currentFilePath 있음) = 콘텐츠 닫기 → 그 모듈의 빈 상태(S1).
@@ -2127,10 +2078,9 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private bool TryNavigateBack()
     {
-        if (_viewMode != ShellViewMode.Windowed)
+        if (_viewMode == ShellViewMode.FullScreen)
         {
-            if (_viewMode == ShellViewMode.FullScreen) RestoreFromFullScreen();
-            else SetViewMode(ShellViewMode.Windowed); // 모드2 → 모드1 (Esc와 동일 — A151 파생)
+            RestoreFromFullScreen(); // Esc와 동일 — A151 파생(A186: 모드2 층 소멸)
             return true;
         }
         if (IsOpenFileBrowsing)
@@ -2152,39 +2102,8 @@ public sealed partial class MainWindow : Window
            && FocusManager.GetFocusedElement(xr) is DependencyObject focused
            && IsWithin(focused, root);
 
-    /// <summary>복원 기억용 상태 정규화(모드3 복귀 스냅샷 — A151, A86 관용구 승계):
-    /// 홀드(키 홀드 중)는 반투명 고정으로 승격해 기억한다.</summary>
-    private static OverlayState Sticky(OverlayState state) =>
-        state == OverlayState.Holding ? OverlayState.TranslucentPinned : state;
-
-    /// <summary>
-    /// 포인터 개입(클릭·휠 — Ctrl+휠 줌 포함, A86 확정)도 홀드 판정을 취소한다(A58 안전장치,
-    /// 휠은 A84에서 추가) — 클릭 다중 선택·더블클릭 새 인스턴스(A24)·휠 줌이
-    /// 오버레이를 물고 있지 않게. 단, 그 오버레이 자신 안에서의 클릭·스크롤은 예외 —
-    /// F11을 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
-    /// 기존 흐름(v0.25.0)을 끊으면 안 된다.
-    /// A154: **그 쪽 경계 버튼 스택 안의 눌림도 같은 예외**다. 이 핸들러는 RootLayout에
-    /// handledEventsToo로 걸려 있어 버튼 눌림이 BeginPeek 뒤에 여기까지 올라오는데, 예외가 없으면
-    /// 방금 만든 순간 표시(Holding)를 같은 이벤트에서 CancelHoldCore가 도로 닫아 버린다.
-    /// 핀 버튼도 같은 스택이지만 ToggleOpaqueDock이 스스로 CancelHoldCore를 부르므로 손해가 없다.
-    /// 반대쪽 사이드는 종전대로 취소된다(좌 버튼 클릭 = 우 홀드 취소).
-    /// </summary>
-    private void OnRootPointerIntervened(object sender, PointerRoutedEventArgs e)
-    {
-        // A119: 모듈 패널 호스트 안의 클릭·스크롤도 "그 오버레이 자신 안"의 예외에 포함 —
-        // F11을 쥔 채 정보 모듈 좌 패널(그래프)을 만지는 흐름이 파일 리스트와 같은 규칙을 탄다.
-        var origin = e.OriginalSource as DependencyObject;
-        var changed = false;
-        if (!IsWithin(origin, ListOverlay) && !IsWithin(origin, LeftPanelHost)
-            && !IsWithin(origin, LeftEdgeButtons))
-            changed |= CancelHoldCore(_listSide);
-        if (!IsWithin(origin, InfoOverlay) && !IsWithin(origin, RightPanelHost)
-            && !IsWithin(origin, RightEdgeButtons))
-            changed |= CancelHoldCore(_infoSide);
-        _listSide.LastTapDown = DateTime.MinValue; // 2연타 카운트 리셋
-        _infoSide.LastTapDown = DateTime.MinValue;
-        if (changed) ApplyOverlayStates();
-    }
+    // A176: 구 Sticky(홀드 → 반투명 피닝 승격 정규화)·OnRootPointerIntervened(포인터 개입 =
+    // 홀드 취소 안전장치)는 홀드 판정 기계와 함께 철거 — 단타 토글에는 취소할 진행 상태가 없다.
 
     /// <summary>element가 root의 비주얼 트리 안에 있는지 (팝업 등 별도 트리는 false).</summary>
     private static bool IsWithin(DependencyObject? element, UIElement root)
@@ -2197,48 +2116,8 @@ public sealed partial class MainWindow : Window
         return false;
     }
 
-    /// <summary>2초 홀드 승격 타이머(A58): 홀드 세션이 아직 살아 있으면 반투명 고정으로 승격.</summary>
-    private DispatcherTimer MakePinTimer(OverlaySide side)
-    {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(OverlayPinHoldMs) };
-        timer.Tick += (_, _) =>
-        {
-            timer.Stop();
-            if (side.HoldSessionActive && side.State == OverlayState.Holding)
-            {
-                side.State = OverlayState.TranslucentPinned; // 이제 키를 떼도 유지된다
-                ApplyOverlayStates(); // 안내 문구(Pinned)가 이 시점부터 보인다
-            }
-        };
-        return timer;
-    }
-
-    /// <summary>
-    /// 홀드 판정 리셋(A58): 다른 키·포인터 개입, 창 비활성화(KeyUp 유실), 콘텐츠 전환에서
-    /// 부른다. 홀드 중(Holding)이던 패널만 즉시 내리고, 오버레이 고정·사이드바
-    /// 상태는 유지한다. 2연타 카운트도 함께 리셋한다.
-    /// </summary>
-    private void ResetOverlayInput()
-    {
-        var changed = CancelHoldCore(_listSide) | CancelHoldCore(_infoSide);
-        _listSide.LastTapDown = DateTime.MinValue;
-        _infoSide.LastTapDown = DateTime.MinValue;
-        if (changed) ApplyOverlayStates();
-    }
-
-    /// <summary>홀드 세션만 종료한다. 반환값 = 표시가 바뀌어야 하는지(Holding을 닫았는지).
-    /// A154: 순간 표시(peek) 세션도 같은 안전장치에 묶는다 — 스냅샷을 여기서 함께 비워야
-    /// 창 비활성화·콘텐츠 전환으로 뗌을 놓쳐도 스냅샷이 남아 다음 순간 표시를 막지 않는다
-    /// (BeginPeek은 이 호출 **뒤에** 스냅샷을 채우므로 자기 세션을 지우지 않는다).</summary>
-    private static bool CancelHoldCore(OverlaySide side)
-    {
-        side.PinTimer?.Stop();
-        side.HoldSessionActive = false;
-        side.PeekRestore = null;
-        if (side.State != OverlayState.Holding) return false;
-        side.State = OverlayState.Closed;
-        return true;
-    }
+    // A176: 구 MakePinTimer(2초 홀드 → 반투명 고정 승격)·ResetOverlayInput(홀드 취소·2연타
+    // 리셋)·CancelHoldCore(홀드 세션 종료 — peek 스냅샷 정리 포함)는 A58 상태 머신과 함께 철거.
 
     /// <summary>
     /// 외부에서 좌/우 사이드바(불투명 도크 — A108 용어) 상태를 지정한다 — 시작 경로별 기본 표시
@@ -2247,25 +2126,18 @@ public sealed partial class MainWindow : Window
     /// ShowModule의 defaultSidebars). A109가 A81의 "창 생성 뒤에는 사용자가 바꾼 상태를 그대로
     /// 유지(재적용 없음)"를 **모듈 전환에 한해 대체**한다 — 파일 열기는 여전히 재적용하지 않고,
     /// 세션 간 저장도 없다(A55 미포함).
-    /// true = OpaqueDocked, false = 닫힘. 반투명 고정은 키 입력 전용이라 여기서 만들지 않는다.
+    /// true = OpaqueDocked, false = 닫힘.
     /// ⚠️ 이미 요청과 같은 상태면 <b>다시 그리지 않는다</b>(A109에서 추가한 가드):
     /// <see cref="ApplyOverlayStates"/>는 좌 리스트를 매번 Show → 폴더 재스캔까지 시키므로,
     /// A109의 재적용이 모듈 전환마다 같은 폴더를 두 번 훑는 낭비를 막는다
     /// (SetContentState가 방금 같은 상태로 그려 놓은 직후에 불리는 자리라 결과는 동일하다).
+    /// A176: 구 "홀드 세션 정리" 조건·CancelHoldCore 호출은 상태 머신과 함께 철거.
     /// </summary>
     public void SetDockedState(bool listDocked, bool infoDocked)
     {
         var list = listDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
         var info = infoDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
-        // 홀드 세션이 살아 있으면(키를 쥔 채) 상태가 같아도 정리하고 다시 그려야 한다 —
-        // 아래 CancelHoldCore가 그 정리이므로, 건너뛰는 조건에 "홀드 없음"까지 넣는다.
-        if (_listSide.State == list && _infoSide.State == info
-            && !_listSide.HoldSessionActive && !_infoSide.HoldSessionActive)
-        {
-            return;
-        }
-        CancelHoldCore(_listSide);
-        CancelHoldCore(_infoSide);
+        if (_listSide.State == list && _infoSide.State == info) return;
         _listSide.State = list;
         _infoSide.State = info;
         ApplyOverlayStates();
@@ -2294,35 +2166,28 @@ public sealed partial class MainWindow : Window
     private const double SidebarPercent = 25.0;
 
     /// <summary>
-    /// 상태 머신 → 화면 반영 (A58). 표시 여부·모드(반투명/불투명)·안내 문구·도크 컬럼을
-    /// 한 곳에서 일괄 갱신한다. 오버레이 컨텍스트가 없으면(빈 셸·설정·미지원 안내) 상태와 무관하게
-    /// 숨긴다 — 상태 자체는 남아 있어 다음 파일을 열면 같은 모드로 되살아난다(기존 고정 유지 규칙).
+    /// 상태 → 화면 반영의 단일 종착점 (A58 계보 — A176에서 단순화: 상태 축 = 닫힘/사이드바).
+    /// 표시 여부·안내 문구·도크 컬럼을 한 곳에서 일괄 갱신한다. 패널 컨텍스트가 없으면
+    /// (빈 셸·설정·미지원 안내) 상태와 무관하게 숨긴다 — 상태 자체는 남아 있어 다음 파일을 열면
+    /// 같은 구성으로 되살아난다(기존 유지 규칙).
     /// 파일 없이 연 파일 모듈(빈 모듈 상태)도 컨텍스트다(A81): 좌측 리스트는 모듈 시작 폴더,
     /// 우측 정보는 "No file open" 플레이스홀더를 보여준다.
     /// A119: 패널 제공 뷰(ISidePanelProvider — 정보 모듈)도 컨텍스트다 — 같은 좌/우 상태를 파일
-    /// 오버레이 대신 모듈 콘텐츠 호스트(SidePanelHost)로 표시한다. 두 표면이 같은 화면에 동시에
-    /// 뜨는 조합은 없다(패널 제공 뷰 = 파일 없음 → 파일 오버레이 조건이 거짓).
+    /// 패널 대신 모듈 콘텐츠 호스트(SidePanelHost)로 표시한다. 두 표면이 같은 화면에 동시에
+    /// 뜨는 조합은 없다(패널 제공 뷰 = 파일 없음 → 파일 패널 조건이 거짓).
+    /// A176: 구 SetState 일괄 푸시(모드/pinned/overSwapChain — A129 스왑체인 폴백 포함)는
+    /// 반투명 축과 함께 철거 — 배경은 불투명 고정이고 안내는 각 표면의 표시 메서드가 낸다.
     /// </summary>
     private void ApplyOverlayStates()
     {
         var hasFile = _currentFilePath is not null;
-        var emptyModule = IsEmptyFileModule; // 파일 없이 연 파일 모듈 — A81부터 오버레이 컨텍스트
+        var emptyModule = IsEmptyFileModule; // 파일 없이 연 파일 모듈 — A81부터 패널 컨텍스트
         var panelView = PanelProviderView;   // A119: 모듈 고유 패널(정보 모듈) — 아래 호스트 절이 소비
-        // A129: 중앙이 스왑체인(비디오·오디오)이면 반투명 배경을 아크릴 대신 반투명 단색 폴백으로.
-        // 여기(상태 변경 단일 종착점)서 한 번 계산해 네 표면 + S4 중앙에 일괄로 민다 —
-        // 모듈 전환·파일 닫기(SetContentState)도 같은 경로라 아크릴 원복 재푸시가 누락될 수 없다.
-        var overSwapChain = IsSwapChainContent;
-        var listShow = (hasFile || emptyModule) && _listSide.State != OverlayState.Closed;
-        var infoShow = (hasFile || emptyModule) && _infoSide.State != OverlayState.Closed;
+        var listShow = (hasFile || emptyModule) && _listSide.State == OverlayState.OpaqueDocked;
+        var infoShow = (hasFile || emptyModule) && _infoSide.State == OverlayState.OpaqueDocked;
 
         if (listShow) ShowListOverlay();
         else ListOverlay.Hide();
-        // ShowListOverlay가 폴더 부재 등으로 못 띄웠을 수 있다 — 문구는 컨트롤이 IsOpen 기준으로 판단
-        ListOverlay.SetState(
-            _listSide.State == OverlayState.OpaqueDocked
-                ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
-            pinned: _listSide.State == OverlayState.TranslucentPinned,
-            overSwapChain: overSwapChain);
 
         if (infoShow && hasFile)
             InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider);
@@ -2330,50 +2195,33 @@ public sealed partial class MainWindow : Window
             InfoOverlay.ShowPlaceholder(); // 빈 모듈 상태 — 보여줄 파일 정보가 없다 (A81)
         else
             InfoOverlay.Hide();
-        InfoOverlay.SetState(
-            _infoSide.State == OverlayState.OpaqueDocked
-                ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
-            pinned: _infoSide.State == OverlayState.TranslucentPinned,
-            overSwapChain: overSwapChain);
 
         // A119: 패널 제공 뷰(정보 모듈) — 같은 좌/우 상태를 모듈 콘텐츠 호스트로 표시한다.
         // 콘텐츠(그래프·스펙)는 뷰가 생성·소유하고(같은 인스턴스 반복 반환) 셸은 얹기만 한다.
-        // 반투명/불투명 배경·힌트·홀드 클릭 통과는 SidePanelHost가 파일 오버레이와 같은 규칙으로
-        // 재현한다. SetState는 표시 여부와 무관하게 매번 민다(오버레이들과 같은 순서 관용구).
-        if (panelView is not null && _listSide.State != OverlayState.Closed)
+        if (panelView is not null && _listSide.State == OverlayState.OpaqueDocked)
             LeftPanelHost.ShowContent(panelView.GetLeftPanel() as UIElement);
         else
             LeftPanelHost.Hide();
-        LeftPanelHost.SetState(
-            _listSide.State == OverlayState.OpaqueDocked
-                ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
-            pinned: _listSide.State == OverlayState.TranslucentPinned,
-            overSwapChain: overSwapChain);
-        if (panelView is not null && _infoSide.State != OverlayState.Closed)
+        if (panelView is not null && _infoSide.State == OverlayState.OpaqueDocked)
             RightPanelHost.ShowContent(panelView.GetRightPanel() as UIElement);
         else
             RightPanelHost.Hide();
-        RightPanelHost.SetState(
-            _infoSide.State == OverlayState.OpaqueDocked
-                ? OverlayMode.OpaqueDocked : OverlayMode.TranslucentOver,
-            pinned: _infoSide.State == OverlayState.TranslucentPinned,
-            overSwapChain: overSwapChain);
 
-        // 사이드바(OpaqueDocked — A108 용어)만 실제 공간을 차지한다: 도크 컬럼을 키워
+        // 사이드바(OpaqueDocked)는 실제 공간을 차지한다: 도크 컬럼을 키워
         // 메인(ModuleHost/ExplorerHost)을 반대쪽으로 축소한다.
         // 도크 폭 = 전 상태 공통 SidebarPercent(A116, v0.135.0 — 종전 "S1 25 / 콘텐츠 30"의
         // 상태별 2값을 폐지: 같은 3구획 화면이 파일 열기·S4 진입에서 소리 없이 30:40:30으로
         // 바뀌던 것이 A116 관측의 원인이었다). 패널 내부 별 분할(SetPanelPercent)을
         // 같은 %로 맞춰야 사이드바에서 도크 컬럼과 픽셀 단위로 정렬된다.
-        // A119: 모듈 패널 호스트도 같은 % — 열림 판정은 지금 표면(파일 오버레이/호스트)을 따라간다
-        // (LeftPanelIsOpen·RightPanelIsOpen).
+        // A119: 모듈 패널 호스트도 같은 % — 열림 판정은 지금 표면(파일 패널/호스트)을 따라간다
+        // (LeftPanelIsOpen·RightPanelIsOpen — A176부터 "열림 = 사이드바"라 표시가 곧 도크다).
         var dockPercent = SidebarPercent;
         ListOverlay.SetPanelPercent(dockPercent);
         InfoOverlay.SetPanelPercent(dockPercent);
         LeftPanelHost.SetPanelPercent(dockPercent);
         RightPanelHost.SetPanelPercent(dockPercent);
-        var left = LeftPanelIsOpen && _listSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
-        var right = RightPanelIsOpen && _infoSide.State == OverlayState.OpaqueDocked ? dockPercent / 10 : 0;
+        var left = LeftPanelIsOpen ? dockPercent / 10 : 0;
+        var right = RightPanelIsOpen ? dockPercent / 10 : 0;
         LeftDockColumn.Width = new GridLength(left, GridUnitType.Star);
         RightDockColumn.Width = new GridLength(right, GridUnitType.Star);
         CenterColumn.Width = new GridLength(10 - left - right, GridUnitType.Star);
@@ -2389,18 +2237,16 @@ public sealed partial class MainWindow : Window
 
         // A93: S1 중앙은 항상 썸네일 뷰다 — A81의 "좌 도크가 불투명이면 중앙 탐색기 숨김"
         // (중복 목록 제거)을 대체한다. 중앙이 리스트가 아니라 타일이라 중복으로 보이지 않는다.
-        // 열 수 = 좌우 도크가 둘 다 (불투명으로) 열려 있으면 4, 하나라도 닫히면 8 (A63 대체 —
-        // 타일 크기는 SizeChanged에서 floor(실폭/열수)로 따라온다). 반투명(홀드·고정)은
-        // 공간을 차지하지 않으므로 "닫힘"과 같게 센다 — 덮인 동안에도 뒤 타일은 전폭 기준.
+        // 열 수 = 좌우 사이드바가 둘 다 열려 있으면 4, 하나라도 닫히면 8 (A63 대체 —
+        // 타일 크기는 SizeChanged에서 floor(실폭/열수)로 따라온다).
         if (emptyModule)
             _thumbnailExplorer?.SetColumns(left > 0 && right > 0 ? 4 : 8);
 
-        // A90 S4: 중앙 오버레이 썸네일 영역을 좌/우 패널이 덮는 폭만큼 비켜 세운다.
-        // 반투명(TranslucentPinned) 패널은 도크 컬럼을 차지하지 않으므로(위 left/right 계산은
-        // OpaqueDocked만 — S4의 반투명 추가가 도크 폭·경계 버튼 계산을 오염시키지 않는 근거)
-        // S4 호스트가 스스로 같은 %의 스페이서를 잡아야 패널과 픽셀 정렬된다(SetPanelPercent 산식).
-        // 열 수는 A93 규칙 준용(좌우 모두 떠 있으면 4, 아니면 8) — S4는 양쪽을 항상 채우므로 통상 4,
-        // 폴더 소실로 리스트가 못 뜬 경우(IsOpen=false)만 8이 된다.
+        // A90 S4: 중앙 썸네일 영역을 좌/우 패널 폭만큼 비켜 세운다. S4 호스트는 ColumnSpan=3
+        // 전폭이라 도크 컬럼과 별개로 같은 %의 스페이서를 스스로 잡아야 패널과 픽셀 정렬된다
+        // (SetPanelPercent 산식). A176: S4가 추가하는 패널도 사이드바(도크)라 스페이서와 도크
+        // 컬럼이 같은 25%로 일치한다. 열 수는 A93 규칙 준용(좌우 모두 떠 있으면 4, 아니면 8) —
+        // S4는 양쪽을 항상 채우므로 통상 4, 폴더 소실로 리스트가 못 뜬 경우(IsOpen=false)만 8이다.
         if (_openFileBrowsing)
         {
             var s4Left = ListOverlay.IsOpen ? dockPercent : 0;
@@ -2409,18 +2255,15 @@ public sealed partial class MainWindow : Window
             S4RightSpacer.Width = new GridLength(s4Right, GridUnitType.Star);
             S4CenterColumn.Width = new GridLength(100 - s4Left - s4Right, GridUnitType.Star);
             _s4Explorer?.SetColumns(s4Left > 0 && s4Right > 0 ? 4 : 8);
-            // A129: S4 중앙 반투명도 같은 신호로 매번 재푸시 — S4 인스턴스는 재사용되므로
-            // (EnsureS4Explorer 지연 생성 1회) 비디오에서 진입했다 다른 모듈에서 다시 진입해도
-            // 여기서 아크릴/폴백이 맞게 덮인다(생성 시 1회 대입에 못 박지 않는다).
-            _s4Explorer?.UseTranslucentBackground(overSwapChain);
         }
 
         UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다 (S4에서는 숨김 — A90)
 
         // A135 2차(방어 수리): 표시 반영이 끝난 뒤의 포커스 후처리. 포커스가 방금 화면에서 내려간
-        // 좌/우 패널(파일 오버레이·모듈 패널 호스트 4표면) 안에 남아 있으면 모듈 뷰(중앙 콘텐츠)로
-        // 되돌린다. 닫힘 경로 전부(F11/F12 열림 1회 닫기·2연타 해제·모드2 진입 일괄 닫기·경계 버튼·홀드
-        // 해제·컨텍스트 소멸)가 이 메서드를 지나므로 여기 한 곳이면 충분하다(상태 변경 단일 종착점).
+        // 좌/우 패널(파일 패널·모듈 패널 호스트 4표면) 안에 남아 있으면 모듈 뷰(중앙 콘텐츠)로
+        // 되돌린다. 닫힘 경로 전부(F11/F12 단타 닫기·경계 핀 버튼·컨텍스트 소멸 — A176에서
+        // 홀드 해제·2연타·모드2 갈래는 기계 철거로 소멸)가 이 메서드를 지나므로 여기 한 곳이면
+        // 충분하다(상태 변경 단일 종착점).
         // 가설(포커스 고아 — collapse된 요소에 포커스가 남으면 셸 KeyDown이 아예 안 올 수 있다)은
         // 실기기 확정 전이다: 이 수리는 방어적이며, 실기기에서 증상이 남으면 가설 기각·재조사
         // (docs/A135-audit.md §4-①·말미 "2차 방어 수리" 참고). 열려 있는 패널 안 포커스는 건드리지
@@ -2451,43 +2294,40 @@ public sealed partial class MainWindow : Window
     /// 경계 버튼 스택의 하단 여백(A154, v0.170.0) = 하단 바 44(<see cref="BottomBarHeight"/>) + 여유 8.
     /// 스택이 VerticalAlignment=Bottom이라 이 값만큼 콘텐츠 영역 바닥에서 띄워야 하단 바와 겹치지 않는다.
     /// XAML에 두지 않는 이유: <see cref="UpdateEdgeButtons"/>가 Margin을 통째로 덮어쓴다.
-    /// A151에서 바 가시성 연동 완료(A154가 명기해 둔 다음 수리 지점): 실효 여백은
-    /// <see cref="EdgeButtonsBottomInset"/>이 모드에 따라 정한다 — 이 상수는 "바가 보일 때" 값.
+    /// 실효 여백은 <see cref="EdgeButtonsBottomInset"/>이 바 실표시에 따라 정한다 —
+    /// 이 상수는 "바가 보일 때" 값.
     /// </summary>
     private const double EdgeButtonBottomMargin = 52;
 
     /// <summary>
-    /// 경계 버튼 스택 하단 여백의 실효값(A151): 하단 바가 보이는 모드1 = 52(바 44 + 여유 8),
-    /// 바가 숨는 모드2·3 = 여유 8만 남겨 바닥에 내려 붙인다(52 − 44).
-    /// A152: 콘텐츠 영역(CenterArea)이 창 전체가 되고 바가 그 위 오버레이라, "바닥" = 창
-    /// 바닥이고 모드1의 52는 문자 그대로 "바 44 위 + 여유 8"이다 — 구 행 분할에서는
-    /// CenterArea 바닥이 바 위 모서리여서 모드1의 버튼이 바 위 모서리에서 52 더 떠
-    /// 있었는데(주석과 실배치의 어긋남), 이제 어느 모드든 "바닥(바 또는 창 바닥)에서 8"이다.
+    /// 경계 버튼 스택 하단 여백의 실효값(A151 — A186 개정: 모드가 아니라 **바 실표시** 연동):
+    /// 바가 보이면 52(바 44 + 여유 8), 숨으면(전체화면·영상 자동 숨김) 여유 8만 남겨 바닥에
+    /// 내려 붙인다(52 − 44). 판정은 <see cref="BarVisible"/> — UpdateShellChrome과 같은 축이라
+    /// 영상 자동 숨김으로 바가 내려가면 버튼도 함께 바닥으로 온다.
+    /// A152: 콘텐츠 영역(CenterArea)이 창 전체가 되고 바가 그 위 오버레이라, "바닥" = 창 바닥이다.
     /// UpdateEdgeButtons(Margin)와 OnRootPointerMoved(근접 y 띠)가 같은 값을 읽는다 —
-    /// 모드 전이는 UpdateShellChrome이 UpdateEdgeButtons를 다시 불러 즉시 반영된다.
+    /// 바 가시성 변화는 UpdateShellChrome이 UpdateEdgeButtons를 다시 불러 즉시 반영된다.
     /// </summary>
     private double EdgeButtonsBottomInset
-        => _viewMode == ShellViewMode.Windowed
-            ? EdgeButtonBottomMargin
-            : EdgeButtonBottomMargin - BottomBarHeight;
+        => BarVisible ? EdgeButtonBottomMargin : EdgeButtonBottomMargin - BottomBarHeight;
 
     /// <summary>
-    /// 경계 버튼 스택의 높이(A154) = XAML 버튼 32 둘 + Spacing 2. 근접 y 판정의 입력이라
-    /// XAML 값과 같아야 한다(BottomBarHeight가 XAML BottomBar Height와 짝인 것과 같은 규칙).
+    /// 경계 버튼 스택의 높이 = XAML 핀 버튼 32 하나(A176 — A154의 66 = 32×2 + Spacing 2에서
+    /// peek 버튼 삭제로 재계수). 근접 y 판정의 입력이라 XAML 값과 같아야 한다
+    /// (BottomBarHeight가 XAML BottomBar Height와 짝인 것과 같은 규칙).
     /// </summary>
-    private const double EdgeButtonsHeight = 66;
+    private const double EdgeButtonsHeight = 32;
 
     private double _leftEdgeX;   // 좌 경계선 x (CenterArea 기준) — 닫힘이면 0(창 가장자리)
     private double _rightEdgeX;  // 우 경계선 x — 닫힘이면 실폭(창 가장자리)
 
     /// <summary>
     /// 경계 버튼 위치·글리프 갱신 (A86): 경계선 = 그 쪽 패널의 화면 폭.
-    /// 사이드바(불투명 도크)든 오버레이(홀드·고정 반투명 — A108 용어)든 열려 있으면
-    /// SidebarPercent%(전 상태 공통 25 — A116), 닫혀 있으면 0 = 창 가장자리
-    /// (닫힌 상태에서도 같은 자리에서 꺼낼 수 있어야 한다).
+    /// 사이드바가 열려 있으면 SidebarPercent%(전 상태 공통 25 — A116), 닫혀 있으면 0 = 창
+    /// 가장자리(닫힌 상태에서도 같은 자리에서 꺼낼 수 있어야 한다).
     /// 버튼은 경계선에서 메인 쪽으로 절반(EdgeButtonOverlap) 걸친다 — "메인을 살짝 덮게"(A86 원문).
-    /// A108: 도크·고정 안내 문구(각 오버레이 컨트롤의 PinnedText)가 이 버튼의 화면 안쪽 옆
-    /// (좌 = 버튼 오른쪽 / 우 = 버튼 왼쪽, 세로 중앙 동일)에 뜬다 — 패널 내부 분할이 같은 %라
+    /// A108: 사이드바 안내 문구(각 패널 컨트롤의 PinnedText)가 이 버튼의 화면 안쪽 옆
+    /// (좌 = 버튼 오른쪽 / 우 = 버튼 왼쪽, 세로 중앙)에 뜬다 — 패널 내부 분할이 같은 %라
     /// 별도 좌표 계산 없이 정렬된다.
     /// A133(v0.155.0): 문구는 다크 반투명 판(PinnedPlate) 안에 들어갔다 — 자리 계산은 무변경
     /// (판이 그 자리를 차지하고, Margin 14는 판의 바깥 모서리 기준).
@@ -2507,9 +2347,9 @@ public sealed partial class MainWindow : Window
         var dockPercent = SidebarPercent; // ApplyOverlayStates의 도크 폭과 동일 상수(A116 정합)
         _leftEdgeX = LeftPanelIsOpen ? width * dockPercent / 100 : 0;
         _rightEdgeX = RightPanelIsOpen ? width - width * dockPercent / 100 : width;
-        // A154: 자리를 잡는 대상이 버튼 하나에서 **세로 스택**으로 바뀌었다(위 = 순간 표시 / 아래 = 핀).
-        // 아래 여백은 여기서 함께 준다 — 이 대입이 XAML Margin을 덮어쓴다.
-        // A151: 여백은 바 가시성 연동 실효값(EdgeButtonsBottomInset — 모드2/3은 8)이다.
+        // A154(A176에서 핀 1개로 축소): 자리를 잡는 대상은 스택 — 아래 여백은 여기서 함께 준다
+        // (이 대입이 XAML Margin을 덮어쓴다). 여백은 바 실표시 연동 실효값(EdgeButtonsBottomInset —
+        // 바가 숨으면 8)이다.
         var bottomInset = EdgeButtonsBottomInset;
         LeftEdgeButtons.Margin =
             new Thickness(Math.Max(0, _leftEdgeX - EdgeButtonOverlap), 0, 0, bottomInset);
@@ -2526,27 +2366,29 @@ public sealed partial class MainWindow : Window
     /// A154: 종전 세로 조건은 "콘텐츠 영역 안(0 ~ 실높이)" = 사실상 y 무시였는데, 버튼이 세로
     /// 중앙에서 하단으로 내려가면서 그대로 두면 화면 맨 위에서도 반응해 버린다. 새 띠 =
     /// [스택 위 모서리 - EdgeProximity, 콘텐츠 영역 바닥]. 스택 위 모서리 =
-    /// 실높이 - EdgeButtonsBottomInset(A151: 바 가시성 연동) - EdgeButtonsHeight. 아래쪽은
+    /// 실높이 - EdgeButtonsBottomInset(바 실표시 연동) - EdgeButtonsHeight. 아래쪽은
     /// 하단 여백뿐이라 별도 여유 없이 바닥까지 열어 둔다(하단 바 위를 스치는 이동도 잡힌다).
-    /// **순간 표시(peek) 중인 쪽은 숨기지 않는다** — 누르면 패널이 열리면서 경계선 x가 25%로
-    /// 옮겨가 버튼이 커서 밑에서 빠져나가는데(UpdateEdgeButtons), 그 상태로 근접 판정을 그대로
-    /// 적용하면 손이 조금만 떨려도 스택이 접히고 → 포인터 캡처 상실 → 순간 표시가 끊긴다.
+    /// A176: 순간 표시(peek) 중 강제 표시 특례는 peek와 함께 소멸.
+    /// A186: 같은 이동 이벤트가 영상 하단 바 자동 숨김의 "입력"이기도 하다 — 근접 판정의
+    /// 컨텍스트 가드보다 먼저 기록·통지한다(S4·설정 화면 여부와 무관한 별개 축).
     /// </summary>
     private void OnRootPointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        var p = e.GetCurrentPoint(CenterArea).Position;
+        _lastPointerY = p.Y;      // A186 — 타이머 틱의 하단 근접 판정 입력
+        NotifyBarAutoHideInput(); // A186 — 포인터 이동 = 재표시·카운트 되감기
         if (!HasPanelContext || IsOpenFileBrowsing) // A119: 패널 제공 뷰 포함 — UpdateEdgeButtons와 동일 판정
         {
             HideEdgeButtons();
             return;
         }
-        var p = e.GetCurrentPoint(CenterArea).Position;
-        var stackTop = CenterArea.ActualHeight - EdgeButtonsBottomInset - EdgeButtonsHeight; // A151: 바 가시성 연동 여백
+        var stackTop = CenterArea.ActualHeight - EdgeButtonsBottomInset - EdgeButtonsHeight;
         var insideY = p.Y >= stackTop - EdgeProximity && p.Y <= CenterArea.ActualHeight;
         LeftEdgeButtons.Visibility =
-            _listSide.PeekRestore is not null || (insideY && Math.Abs(p.X - _leftEdgeX) <= EdgeProximity)
+            insideY && Math.Abs(p.X - _leftEdgeX) <= EdgeProximity
                 ? Visibility.Visible : Visibility.Collapsed;
         RightEdgeButtons.Visibility =
-            _infoSide.PeekRestore is not null || (insideY && Math.Abs(p.X - _rightEdgeX) <= EdgeProximity)
+            insideY && Math.Abs(p.X - _rightEdgeX) <= EdgeProximity
                 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -2557,86 +2399,21 @@ public sealed partial class MainWindow : Window
         RightEdgeButtons.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>핀 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 좌.
-    /// A154에서도 동작 그대로: 기존 토글을 핀 버튼이 겸한다, 부록 B 69).</summary>
+    /// <summary>핀 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 좌).
+    /// A176: 경계 버튼은 이 핀 하나뿐이다 — A154의 위 버튼(순간 표시 peek)은 반투명 축과 함께
+    /// 삭제됐다(기능 소멸·대체 없음, 부록 B 72). F11 단타와 같은 토글이라 키와 버튼이 늘 같은
+    /// 결과를 낸다.</summary>
     private void OnLeftEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_listSide);
 
     /// <summary>핀 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 우).</summary>
     private void OnRightEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_infoSide);
 
-    // ---------- 순간 표시(peek) 버튼 (A154, v0.170.0) ----------
-    // 키 홀드(F11/F12)의 포인터 판이다: 누르는 동안만 반투명 오버레이가 열리고 떼면 원상 복귀.
-    // 새 상태를 만들지 않고 키 홀드와 같은 OverlayState.Holding으로 전이하며, 상태 변경은 전부
-    // ApplyOverlayStates(단일 종착점)를 거친다. 2초 승격 타이머는 붙이지 않는다(핀은 클릭 겸임).
+    // A176: 순간 표시(peek) 버튼 일습(A154 — BeginPeek/EndPeek·PeekRestore·Peek 버튼 핸들러 4종)은
+    // 반투명 축과 함께 철거 — 경계 버튼 스택에는 핀 하나만 남는다.
 
-    private void OnLeftPeekPressed(object sender, PointerRoutedEventArgs e)
-        => BeginPeek(_listSide, LeftPeekButton, e);
-
-    private void OnLeftPeekEnded(object sender, PointerRoutedEventArgs e)
-        => EndPeek(_listSide, LeftPeekButton, e);
-
-    private void OnRightPeekPressed(object sender, PointerRoutedEventArgs e)
-        => BeginPeek(_infoSide, RightPeekButton, e);
-
-    private void OnRightPeekEnded(object sender, PointerRoutedEventArgs e)
-        => EndPeek(_infoSide, RightPeekButton, e);
-
-    /// <summary>
-    /// 순간 표시 시작: 지금 상태를 스냅샷해 두고 반투명(Holding)으로 전이한다.
-    /// 왼쪽 눌림 "전이"만 태운다 — A112(OnRootPointerBack)·A131·A148과 같은 관용구.
-    /// 포인터 캡처를 걸어 **버튼 밖에서 떼도 뗌이 이 버튼에 오게** 한다(캡처가 없으면 떼기를
-    /// 놓쳐 오버레이가 영구히 열린 채 남는다). ButtonBase가 눌림에서 이미 캡처를 잡으므로 이
-    /// 호출은 보통 같은 요소의 재확인(true)이고, 그래도 실패하면 상태를 만들지 않는다
-    /// (ImageViewerView.xaml.cs:279 "캡처 실패 = 상태를 만들지 않는다"와 같은 판단).
-    /// 키 홀드 세션이 살아 있으면 A58 규칙대로 먼저 정리한다(포인터 개입 = 홀드 취소) —
-    /// 그래서 스냅샷은 취소 **뒤** 상태다(2초 승격 타이머가 순간 표시 중에 끼어들지도 않는다).
-    /// </summary>
-    private void BeginPeek(OverlaySide side, Button button, PointerRoutedEventArgs e)
-    {
-        if (e.GetCurrentPoint(RootLayout).Properties.PointerUpdateKind
-            != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
-        if (!HasPanelContext || IsOpenFileBrowsing) return; // 버튼이 뜨지 않는 상황의 이중 방어선
-        if (side.PeekRestore is not null) return;           // 이미 순간 표시 중(뗌 유실 방어)
-        if (!button.CapturePointer(e.Pointer)) return;
-        CancelHoldCore(side);                 // 키 홀드 세션·승격 타이머 정리 (PeekRestore도 함께 비운다)
-        side.PeekRestore = side.State;        // 되돌릴 자리 = 정리 뒤 상태
-        side.State = OverlayState.Holding;    // 키 홀드와 같은 반투명 상태 — 새 상태 없음
-        ApplyOverlayStates();
-    }
-
-    /// <summary>
-    /// 순간 표시 종료(뗌·캡처 상실 공용 — 둘 다 같은 핸들러). 스냅샷이 없으면(다른 경로가
-    /// 이미 세션을 걷어갔다 — CancelHoldCore) 아무것도 되돌리지 않는다.
-    /// 순간 표시 중에 다른 입력이 상태를 옮겼으면(예: 키 2연타로 사이드바) 그 결정을 존중해
-    /// **여전히 Holding일 때만** 복귀시킨다.
-    /// 스냅샷이 Holding일 수는 없다 — BeginPeek이 CancelHoldCore로 키 홀드를 먼저 정리한 뒤 찍으므로
-    /// 4상태 중 닫힘·오버레이 고정·사이드바 셋뿐이다(키를 쥔 채 눌렀다면 그 홀드는 A58 규칙대로
-    /// 취소돼 스냅샷이 "닫힘"이 된다). 덕분에 "키를 뗐는데 반투명이 남는" 경로가 원천적으로 없다.
-    /// 캡처가 이미 풀린 뒤라면 ReleasePointerCapture는 무동작이다(ImageViewerView.xaml.cs:328-329).
-    /// 스냅샷을 **먼저** 비우고 캡처 해제를 나중에 하는 이유: 해제가 곧바로 PointerCaptureLost를
-    /// 불러 이 메서드로 재진입할 수 있는데, 그때는 스냅샷이 이미 없어 순수 무동작이 된다
-    /// (뗌 + 캡처 상실이 겹쳐도 복귀는 정확히 한 번).
-    /// </summary>
-    private void EndPeek(OverlaySide side, Button button, PointerRoutedEventArgs e)
-    {
-        if (side.PeekRestore is { } snapshot)
-        {
-            side.PeekRestore = null;
-            // 순간 표시 중에 다른 입력이 상태를 옮겼으면 그 결정을 존중한다(여전히 반투명일 때만 복귀).
-            if (side.State == OverlayState.Holding)
-            {
-                side.State = snapshot;
-                ApplyOverlayStates();
-            }
-        }
-        button.ReleasePointerCapture(e.Pointer);
-    }
-
-    /// <summary>사이드바(불투명 도크)면 닫고, 그 외(닫힘·홀드·오버레이 고정)면 사이드바로 (Q7).</summary>
+    /// <summary>사이드바(불투명 도크) 토글 (Q7) — F11/F12 단타(OnOverlaySideDown)와 동일 전이.</summary>
     private void ToggleOpaqueDock(OverlaySide side)
     {
-        CancelHoldCore(side);
-        side.LastTapDown = DateTime.MinValue; // 버튼 클릭이 키 2연타 판정에 섞이지 않게
         side.State = side.State == OverlayState.OpaqueDocked
             ? OverlayState.Closed
             : OverlayState.OpaqueDocked;
@@ -2679,8 +2456,9 @@ public sealed partial class MainWindow : Window
     /// None(빈 셸·설정·미지원 안내)은 keymap 표 밖 — 띄울 탐색기 컨텍스트가 없어 무동작(구현 결정).
     /// A119: 정보 모듈은 S2/S3*로 분류되지만 파일 컨텍스트가 없어 EnterOpenFileBrowsing의
     /// 방어선이 걸러 준다 — 결과는 종전(None 시절)과 같은 무동작.
-    /// 모드2·3(A151)에서는 하단 바가 통째로 숨어(UpdateShellChrome) 이 버튼 자체를 누를 수 없다 —
-    /// 사양 밖이라 특별 처리하지 않는다(A90 확인 사항).
+    /// 바가 숨은 동안(전체화면·영상 자동 숨김)은 이 버튼 자체를 누를 수 없고, 영상 자동 숨김
+    /// 축에서 전체화면 중 바가 나타나 눌리면 S4가 전체화면 위에 뜬다 — Esc 순서는 종전 규칙
+    /// 그대로(첫 Esc = 전체화면 해제, 다음 Esc = S4 복귀)라 특별 처리하지 않는다.
     /// </summary>
     private void OnOpenFileClick(object sender, RoutedEventArgs e)
     {
@@ -2704,10 +2482,10 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// S4 진입 (A90, keymap "S4 구성 규칙"): 이미 떠 있는 구획은 그대로 두고(다시 얹지 않음),
-    /// 없는 구획만 반투명 고정(A58 TranslucentPinned 재사용 — 새 표시 모드를 만들지 않는다.
-    /// 덮기 표시라 공간을 차지하지 않아 도크 폭·썸네일 열 수 계산도 오염시키지 않는다)으로 추가하고,
-    /// 중앙 콘텐츠는 반투명 썸네일 탐색기(S4 전용 인스턴스)로 덮는다. 포커스는 썸네일 그리드로.
+    /// S4 진입 (A90, keymap "S4 구성 규칙" — A176 개정): 이미 떠 있는 구획은 그대로 두고
+    /// (다시 얹지 않음), 없는 구획만 **사이드바(OpaqueDocked)**로 추가하고(구 반투명 고정
+    /// 추가는 반투명 축 폐지로 소멸 — 남은 유일한 표시 상태 재사용), 중앙 콘텐츠는 썸네일
+    /// 탐색기(S4 전용 인스턴스 — A176부터 불투명)로 덮는다. 포커스는 썸네일 그리드로.
     /// 좌 리스트는 **현재 콘텐츠 파일의 폴더**로 항해한다(ApplyOverlayStates → ShowListOverlay가
     /// 파일 폴더 기준 — "보던 파일 근처에서 다음 파일을 고른다"가 자연스러워서다. S2·S3*에서만
     /// 진입하므로 파일은 항상 있고, 폴더가 사라진 경우만 모듈 시작 폴더로 폴백).
@@ -2719,10 +2497,9 @@ public sealed partial class MainWindow : Window
         // 파일 컨텍스트 전용 — A119부터 정보 모듈도 S2/S3*로 분류되므로 이 가드가 실동작한다
         // (파일이 없어 띄울 좌 리스트 폴더가 없다 — '오픈 파일'은 무동작).
         if (_currentFilePath is null || _currentModule is null) return;
-        ResetOverlayInput(); // Holding(키 홀드 과도 상태)이 스냅샷에 섞이지 않게 — 이후는 안정 상태 3종뿐
-        _s4Restore = (_listSide.State, _infoSide.State);
-        if (_listSide.State == OverlayState.Closed) _listSide.State = OverlayState.TranslucentPinned;
-        if (_infoSide.State == OverlayState.Closed) _infoSide.State = OverlayState.TranslucentPinned;
+        _s4Restore = (_listSide.State, _infoSide.State); // A176: 안정 상태 2종뿐이라 그대로 스냅샷
+        if (_listSide.State == OverlayState.Closed) _listSide.State = OverlayState.OpaqueDocked;
+        if (_infoSide.State == OverlayState.Closed) _infoSide.State = OverlayState.OpaqueDocked;
         _openFileBrowsing = true;
         EnsureS4Explorer();
         S4Host.Visibility = Visibility.Visible;
@@ -2769,9 +2546,8 @@ public sealed partial class MainWindow : Window
         {
             ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
         };
-        // 중앙을 "반투명으로 덮는다"(A90 원문) — A129: 아크릴/스왑체인 폴백은 현재 콘텐츠 기준.
-        // 이후 재푸시는 ApplyOverlayStates의 S4 절이 담당한다(모듈 전환 원복 포함).
-        _s4Explorer.UseTranslucentBackground(IsSwapChainContent);
+        // A176: 구 "중앙을 반투명으로 덮는다"(A90 원문)의 반투명 배경 교체(A129 폴백 포함)는
+        // 반투명 축과 함께 철거 — S4도 S1과 같은 불투명 기본 배경으로 덮는다.
         _s4Explorer.FolderActivated += folder => ListOverlay.NavigateList(folder);
         _s4Explorer.FileActivated += OpenFileRouted; // 열리면 SetContentState가 S4를 자동 종료한다
         // 새 창 열기(Shift+더블클릭·우클릭)는 이 창의 콘텐츠가 안 바뀌므로 S4를 유지한다(구현 결정 —
@@ -2811,7 +2587,7 @@ public sealed partial class MainWindow : Window
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(S1FlashMs) };
         timer.Tick += (_, _) =>
         {
-            timer.Stop(); // 반복 타이머 — Tick에서 반드시 멈춘다(MakePinTimer와 같은 관용구)
+            timer.Stop(); // 반복 타이머 — Tick에서 반드시 멈춘다(반복 타이머 공통 관용구)
             S1FlashBorder.Visibility = Visibility.Collapsed;
         };
         return timer;

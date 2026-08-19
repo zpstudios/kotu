@@ -25,10 +25,22 @@ namespace KOTU.Module.Video;
 /// 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
 public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
-    IContentStateSource, IContentInfoProvider, ITrayStatusProvider
+    IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IPlaybackStateSource
 {
     /// <summary>파일 재생을 시작하면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>재생/일시정지/종료 전이를 셸에 알린다(A186 — 하단 바 자동 숨김의 입력).</summary>
+    public event Action? PlaybackStateChanged;
+
+    /// <summary>영상 뷰 자신이 곧 재생 표면이다(A186 — IPlaybackStateSource).</summary>
+    public bool HasPlaybackSurface => true;
+
+    /// <summary>
+    /// 지금 재생 중인가(A186). libvlc의 IsPlaying을 그대로 쓴다 — 발화 시점
+    /// (Playing/Paused/EndReached 디스패치 뒤)에는 상태가 반영돼 있다.
+    /// </summary>
+    public bool IsPlaying => _player is { IsPlaying: true };
 
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 재생 시작·길이 확정·트랙 파싱 시점.</summary>
     public event Action? TrayStatusChanged;
@@ -514,6 +526,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private void OnPlayerPlaying(object? sender, EventArgs e) => Dispatch(() =>
     {
         PlayButton.Content = "❚❚";
+        PlaybackStateChanged?.Invoke(); // A186: 재생 시작 — 셸이 자동 숨김 카운트를 시작한다
 
         // A12: 새 미디어의 첫 Playing에서만 (일시정지 해제 Playing 제외)
         if (_pendingStartOverlay)
@@ -547,7 +560,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     });
 
     private void OnPlayerPaused(object? sender, EventArgs e) =>
-        Dispatch(() => PlayButton.Content = "▶");
+        Dispatch(() =>
+        {
+            PlayButton.Content = "▶";
+            PlaybackStateChanged?.Invoke(); // A186: 일시정지 = 바 상시 표시
+        });
 
     private void OnPlayerEndReached(object? sender, EventArgs e)
     {
@@ -565,6 +582,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             _suppressSeekEvent = true;
             SeekSlider.Value = SeekSlider.Maximum;
             _suppressSeekEvent = false;
+            PlaybackStateChanged?.Invoke(); // A186: 재생 종료(Ended) = 바 상시 표시
         });
     }
 
@@ -588,8 +606,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             Vlc.Clear();
     }
 
-    private void OnPlayerError(object? sender, EventArgs e) =>
+    private void OnPlayerError(object? sender, EventArgs e)
+    {
         ShowMessage($"Playback failed: {Path.GetFileName(_filePath ?? string.Empty)}");
+        Dispatch(() => PlaybackStateChanged?.Invoke()); // A186: 재생 실패 = 정지와 동일(바 상시 표시)
+    }
 
     private void Dispatch(Action action)
     {

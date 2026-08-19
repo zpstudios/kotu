@@ -18,8 +18,8 @@
          걸고 역수 크기를 줘서 창 전체가 선택 배율로 그려지게 한다(ApplyUiScale). -->
     <Grid x:Name="ScaleHost">
     <Grid x:Name="RootLayout" AllowDrop="True" DragOver="OnWindowDragOver" Drop="OnWindowDrop">
-        <!-- 오버레이 전용 아크릴(OverlayAcrylicBrush, A33)은 A57 ②에서 App.xaml로 이동 —
-             공용 오버레이 컨트롤(Overlays/*)도 같은 브러시를 쓰기 때문. -->
+        <!-- A176: 오버레이 전용 아크릴(A33)·스왑체인 폴백(A129)은 반투명 축과 함께 철거 —
+             패널 배경은 각 컨트롤의 불투명 SolidBackgroundFillColorBase다. -->
         <!-- A152: 행 분할(콘텐츠 * / BottomBarRow 44) 폐지 — 콘텐츠 영역(CenterArea)이 항상
              창 전체를 차지하고, 하단 바(BottomBar)는 그 위에 겹치는 오버레이다(아래 선언 =
              위 z순서). 종전 구조는 바가 사라질 때 콘텐츠 영역이 44px 커져 중앙이 아래로
@@ -29,9 +29,8 @@
              탐색기 리스트의 스크롤 끝 여백 44가 보정한다). -->
 
         <!-- 중앙 영역 (A58 사이드바 레이아웃): 좌 도크 / 메인 / 우 도크 3컬럼.
-             용어(A108): 사이드바 = 불투명, 메인을 줄이며 옆에 선다(OpaqueDocked) /
-             오버레이 = 반투명, 메인 위에 덮인다(홀드·고정 — 도크 컬럼을 차지하지 않는다).
-             평소에는 도크 폭 0 = 메인이 전폭. 사이드바(OpaqueDocked)면
+             A176: 반투명(오버레이) 축 폐지 — 패널의 열림 상태는 사이드바(불투명, 메인을 줄이며
+             옆에 선다 = OpaqueDocked) 하나다. 닫힘이면 도크 폭 0 = 메인이 전폭, 열림이면
              코드(ApplyOverlayStates)가 도크 컬럼을 키워 메인(ModuleHost/ExplorerHost)을 축소한다.
              도크 폭은 전 상태 공통 SidebarPercent 25%(A116, v0.135.0 — 종전 "S1 25% / 콘텐츠 30%"
              상태별 2값 폐지: 같은 3구획 화면이 상태에 따라 30:40:30으로 바뀌던 원인).
@@ -61,62 +60,44 @@
                   Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
 
             <!-- 좌측 파일 리스트 패널 (v0.25.0 → A57 ②에서 공용 컨트롤로 추출).
-                 입력 매핑(A86 — A58의 Alt를 Z로 대체): Z 홀드 = 오버레이 덮기 / 2초 홀드 = 오버레이 고정 /
-                 Z 2연타 = 사이드바(A108 용어 — 구 불투명 밀어내기), 열림 상태에서 Z 1회 = 닫기(A86 신설). -->
+                 입력 매핑(A176): F11 단타 = 열기/닫기 토글(구 홀드/2초 고정/2연타 전이 폐지). -->
             <overlays:FileListOverlay x:Name="ListOverlay" Grid.ColumnSpan="3" Visibility="Collapsed" />
 
-            <!-- 우측 정보 패널 (A57 ②에서 공용 컨트롤로 추출. 키는 v0.45.0 Ctrl→Shift,
-                 A32 Ctrl 회귀 → A58 Shift → A86(v0.121.0) X로 확정.
+            <!-- 우측 정보 패널 (A57 ②에서 공용 컨트롤로 추출.
                  정보 항목은 모듈 뷰(IContentInfoProvider)가 주입).
-                 입력 매핑(A86): X 홀드 = 오버레이 덮기 / 2초 홀드 = 오버레이 고정 /
-                 X 2연타 = 사이드바(A108 용어 — 구 불투명 밀어내기), 열림 상태에서 X 1회 = 닫기(A86 신설). -->
+                 입력 매핑(A176): F12 단타 = 열기/닫기 토글(구 홀드/2초 고정/2연타 전이 폐지). -->
             <overlays:ContentInfoOverlay x:Name="InfoOverlay" Grid.ColumnSpan="3" Visibility="Collapsed" />
 
             <!-- A119 모듈 고유 좌/우 패널 호스트(ISidePanelProvider — 정보 모듈의 큰 그래프/스펙 텍스트).
-                 파일 오버레이(위 두 컨트롤)와 같은 층·같은 상태 규칙(반투명/불투명 배경·안내 문구·
-                 홀드 중 클릭 통과)을 SidePanelHost가 재현한다. 어느 쪽이 뜰지는 현재 뷰의 계약 구현
-                 여부로 코드(ApplyOverlayStates)가 가른다 — 파일 컨텍스트면 위 오버레이, 패널 제공
+                 파일 패널(위 두 컨트롤)과 같은 층·같은 상태 규칙(불투명 배경·안내 문구 — A176부터
+                 사이드바 단일 상태)을 SidePanelHost가 재현한다. 어느 쪽이 뜰지는 현재 뷰의 계약 구현
+                 여부로 코드(ApplyOverlayStates)가 가른다 — 파일 컨텍스트면 위 패널, 패널 제공
                  뷰면 이 호스트. 좌/우 방향 조립은 코드 Initialize(생성자 1회)가 한다(자체 XAML 없는
-                 코드 전용 컨트롤). 경계 버튼보다 먼저 선언 = 버튼이 위 z순서(파일 오버레이와 동일 —
-                 반투명 홀드 중에도 버튼이 눌린다). 모듈 전환 시 코드 ClearModulePanels가 비운다. -->
+                 코드 전용 컨트롤). 경계 버튼보다 먼저 선언 = 버튼이 위 z순서.
+                 모듈 전환 시 코드 ClearModulePanels가 비운다. -->
             <overlays:SidePanelHost x:Name="LeftPanelHost" Grid.ColumnSpan="3" Visibility="Collapsed" />
             <overlays:SidePanelHost x:Name="RightPanelHost" Grid.ColumnSpan="3" Visibility="Collapsed" />
 
-            <!-- A86 경계 버튼(keymap Q7): 좌/우 각각 패널(사이드바/오버레이)과 메인의 경계선에
+            <!-- A86 경계 버튼(keymap Q7): 좌/우 각각 패널(사이드바)과 메인의 경계선에
                  반씩 걸친다(메인을 살짝 덮음). 마우스가 경계 근처에 왔을 때만 표시
                  (코드 OnRootPointerMoved), 닫힌 상태에서는 창 가장자리가 그 자리.
-                 A154(v0.170.0)에서 **한 변에 버튼 2개짜리 세로 스택**으로 개편:
-                 위 = 순간 표시(peek — 누르는 동안만 반투명 오버레이, 떼면 원상 복귀) /
-                 아래 = 핀(기존 사이드바 토글을 그대로 겸한다. 세 번째 버튼은 만들지 않는다,
-                 부록 B 69). 정렬도 세로 중앙에서 **하단**으로 내려왔다 — 하단 여백은 코드 상수
-                 EdgeButtonBottomMargin(하단 바 44 + 여유 8)이 Margin으로 준다(XAML에 값을 두지
-                 않는 이유: UpdateEdgeButtons가 Margin을 통째로 덮어쓴다).
-                 크기 20x32 둘 + Spacing 2 = 66 (종전 20x44 하나). 폭 20 = 하단 바 버튼 32의
+                 A176: A154(v0.170.0)의 2버튼 스택에서 **위 순간 표시(peek) 버튼을 삭제** —
+                 반투명 축 폐지로 peek 기능 자체가 소멸했다(대체 없음, 부록 B 72). 남는 것은
+                 핀(사이드바 토글) 1개. 정렬은 A154대로 하단 — 하단 여백은 코드
+                 EdgeButtonsBottomInset(바 실표시 연동: 바가 보이면 52 = 바 44 + 여유 8,
+                 숨으면 8)이 Margin으로 준다(XAML에 값을 두지 않는 이유: UpdateEdgeButtons가
+                 Margin을 통째로 덮어쓴다). 크기 20x32 하나 = 코드 상수 EdgeButtonsHeight 32와
+                 짝(A154의 66 = 32x2 + Spacing 2에서 재계수). 폭 20 = 하단 바 버튼 32의
                  절반 근처로 좁혀 콘텐츠 가림 최소화. 위치(Margin)와 핀 글리프는 코드
-                 UpdateEdgeButtons가 도크 폭 계산과 함께 정하고, 표시/숨김 단위도 스택이다.
-                 패널들보다 나중 선언 = 위 z순서라, 반투명 홀드 중(IsHitTestVisible=false인 패널)
-                 위에서도 눌린다.
-                 A108: 도크·고정 안내 문구(각 패널 컨트롤의 PinnedText)가 이 버튼의 화면 안쪽 옆에
-                 뜬다(좌 = 버튼 오른쪽 / 우 = 버튼 왼쪽). A133(v0.155.0): 그 문구는 다크 반투명 판
-                 (PinnedPlate) 안에 든다(가독성 목적, A12 칩 규격).
-                 ⚠️ A154 이후 그 판은 **세로 중앙에 그대로 남는다** — 버튼만 내려갔다. "버튼이 근접
-                 표시로 숨어 있어도 문구만 그 자리에 뜨면 된다"는 A108 확정이 유효해 기능은 온전하나,
-                 문구를 버튼 옆으로 다시 붙이려면 세 표면(FileListOverlay·ContentInfoOverlay·
-                 SidePanelHost)의 판 세로 정렬을 함께 Bottom으로 내려야 한다(다음 수리 지점). -->
+                 UpdateEdgeButtons가 도크 폭 계산과 함께 정하고, 표시/숨김 단위는 스택 유지
+                 (버튼이 하나여도 좌표·가시성 코드가 스택을 대상으로 남는다 — diff 최소).
+                 패널들보다 나중 선언 = 위 z순서.
+                 A108: 사이드바 안내 문구(각 패널 컨트롤의 PinnedText)가 이 버튼의 화면 안쪽 옆에
+                 뜬다(좌 = 버튼 오른쪽 / 우 = 버튼 왼쪽, 세로 중앙 — A133의 다크 반투명 판 안). -->
             <StackPanel x:Name="LeftEdgeButtons" Grid.ColumnSpan="3"
                         Orientation="Vertical" Spacing="2"
                         HorizontalAlignment="Left" VerticalAlignment="Bottom"
                         Visibility="Collapsed">
-                <!-- 순간 표시(peek): 누르는 동안만 반투명 오버레이(키 홀드와 같은 상태)로 열고
-                     떼면 직전 상태로 되돌린다 — 배선은 코드(생성자 AddHandler + BeginPeek/EndPeek).
-                     Click은 안 쓴다(눌림/뗌 쌍이 동작 본체). 글리프 E890 = "View"(장식 — 다른
-                     글리프로 바꿔도 동작 무관). -->
-                <Button x:Name="LeftPeekButton"
-                        Width="20" Height="32" Padding="0"
-                        IsTabStop="False"
-                        ToolTipService.ToolTip="Hold to peek at the left panel">
-                    <FontIcon Glyph="&#xE890;" FontSize="10" />
-                </Button>
                 <Button x:Name="LeftEdgeButton"
                         Width="20" Height="32" Padding="0"
                         IsTabStop="False"
@@ -129,12 +110,6 @@
                         Orientation="Vertical" Spacing="2"
                         HorizontalAlignment="Right" VerticalAlignment="Bottom"
                         Visibility="Collapsed">
-                <Button x:Name="RightPeekButton"
-                        Width="20" Height="32" Padding="0"
-                        IsTabStop="False"
-                        ToolTipService.ToolTip="Hold to peek at the right panel">
-                    <FontIcon Glyph="&#xE890;" FontSize="10" />
-                </Button>
                 <Button x:Name="RightEdgeButton"
                         Width="20" Height="32" Padding="0"
                         IsTabStop="False"
@@ -144,11 +119,11 @@
                 </Button>
             </StackPanel>
 
-            <!-- A90 S4('오픈 파일' 탐색 모드) 중앙 오버레이: 반투명 썸네일 탐색기(S4 전용 인스턴스,
+            <!-- A90 S4('오픈 파일' 탐색 모드) 중앙 썸네일 탐색기(S4 전용 인스턴스,
                  코드 EnsureS4Explorer)가 가운데 스페이서 컬럼(S4CenterHost)에 얹힌다.
-                 좌/우 스페이서는 그때 떠 있는 좌/우 패널 폭(%)과 같은 별 값으로
-                 코드(ApplyOverlayStates)가 맞춘다 — 반투명 패널(TranslucentPinned)은 도크 컬럼을
-                 차지하지 않으므로 이 호스트가 스스로 비켜야 패널과 겹치지 않는다.
+                 A176: 중앙도 불투명(반투명 배경 철거) — 좌/우 스페이서는 그때 떠 있는 좌/우
+                 패널 폭(%)과 같은 별 값으로 코드(ApplyOverlayStates)가 맞춘다(이 호스트는
+                 ColumnSpan=3 전폭이라 도크 컬럼과 별개로 스스로 비켜야 패널과 픽셀 정렬된다).
                  경계 버튼보다 나중 선언이지만 S4에서 경계 버튼은 표시 안 함(keymap)이라 z순서 무관. -->
             <Grid x:Name="S4Host" Grid.ColumnSpan="3" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
@@ -169,8 +144,10 @@
                     IsHitTestVisible="False" Visibility="Collapsed" />
         </Grid>
 
-        <!-- 하단 바 (작업표시줄 느낌). 모드2/3(A151)에서는 코드(UpdateShellChrome)가 통째로 숨긴다
-             (v0.21.0의 "전체화면이면 숨김"을 3단 모드 체계가 대체).
+        <!-- 하단 바 (작업표시줄 느낌). 가시성은 코드(UpdateShellChrome — 단일 원본)가 정한다:
+             A186부터 입력 축 = (모드, 영상 자동 숨김). 영상 재생 표면이 아니면 창 모드에서만
+             보이고(전체화면 = 숨김 — A151 승계), 영상 재생 표면이면 모드 무관하게
+             "재생 중 무입력 3초 = 숨김 / 그 외 = 표시"다(전체화면에서도 동일 — 플레이어 UX).
              A152: 자체 행(구 BottomBarRow 44)을 없애고 콘텐츠 위에 겹치는 오버레이가 됐다 —
              VerticalAlignment=Bottom + 고정 두께 44(A40: 창 크기·모듈 바 내용과 무관하게 일정.
              v0.64.2의 Auto+MinHeight "내용에 따라 자람"을 대체. H/W 센서 그래프도 접히는 대신
@@ -198,12 +175,11 @@
             <!-- 좌측 Margin 82 = 바 좌측 가장자리 여백 6 + 메뉴 버튼 32(A106) + 간격 6
                  + '오픈 파일' 버튼 32(A90) + 간격 6. 이력: A97(v0.116.0)에서 52→48,
                  A90이 버튼 하나를 더해 48→90, A106(v0.132.0)에서 버튼 36→32라 90→82.
-                 우측 Margin 82 = A151에서 12→82: 셸 모드 버튼 2개(Full window/Full screen,
-                 각 32) + 간격 6 + 버튼 사이 6 + 가장자리 여백 6이 좌측과 대칭으로 자리를 차지한다
-                 (모듈 바에서 ⛶ 전체화면 버튼 8벌을 걷어낸 자리의 셸 통합 — 진입점 일원화). -->
+                 우측 Margin 44 = 셸 모드 버튼 1개(Full screen 32) + 간격 6 + 가장자리 여백 6.
+                 이력: A151에서 12→82(버튼 2개), A186에서 Full window 버튼 삭제로 82→44. -->
             <ContentControl x:Name="ModuleBarHost"
                             IsTabStop="False"
-                            Margin="82,0,82,0"
+                            Margin="82,0,44,0"
                             HorizontalAlignment="Stretch" VerticalAlignment="Center"
                             HorizontalContentAlignment="Stretch" />
 
@@ -272,22 +248,16 @@
                  A141(v0.162.0)에서 제거했다. 번호 표기는 창 제목 접두(A103/A136 "1-KOTU") 한 곳만
                  남는다 — 9색 팔레트(구 InstanceIcon.ColorFor)도 소비처가 사라져 함께 지웠다. -->
 
-            <!-- A151 셸 모드 버튼 2개 — 종전 모듈 바 우측 ⛶(8벌)의 자리를 셸이 한 벌로 대체.
-                 좌 = Full window(모드2 직행: 하단 바·좌/우 패널 숨김, 창 유지) /
-                 우 = Full screen(모드3 직행: Alt+Enter와 동일 의미론 — 복귀 스냅샷 기억).
-                 규격 = 기존 ⛶와 같은 1칸 32×32(BottomBarButtonStyle)·간격 6·우측 여백 6.
-                 글리프: E740 = 종전 전체화면 ⛶ 그대로, E73F(BackToWindow)는 이 저장소 첫 사용 —
-                 렌더 모양은 실기기 확인 포인트(빌드에는 영향 없음). 모드2/3에서는 바와 함께 숨는다
-                 (복귀는 Enter 순환·Esc·Alt+Enter 몫). -->
+            <!-- A186 셸 모드 버튼 1개 — A151의 2개(Full window/Full screen)에서 모드2 폐지로
+                 Full window 버튼(E73F)을 삭제했다. 남은 Full screen 버튼 = Enter/Alt+Enter와
+                 동일 의미론(전체화면 토글 — 복귀 스냅샷 기억, OnFullScreenClick).
+                 규격 = 기존 ⛶와 같은 1칸 32×32(BottomBarButtonStyle)·우측 여백 6.
+                 전체화면에서 바가 숨으면 함께 숨지만, 영상 재생 표면(A186 자동 숨김 축)에서는
+                 전체화면에서도 바와 함께 나타난다 — 그때는 이 버튼이 전체화면 해제 경로가 된다
+                 (그래서 직행이 아니라 토글이다). -->
             <StackPanel x:Name="ViewModeButtons" Orientation="Horizontal" Spacing="6"
                         Margin="0,0,6,0"
                         HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button x:Name="FullWindowButton"
-                        Style="{StaticResource BottomBarButtonStyle}"
-                        ToolTipService.ToolTip="Full window"
-                        Click="OnFullWindowClick">
-                    <FontIcon Glyph="&#xE73F;" FontSize="16" />
-                </Button>
                 <Button x:Name="FullScreenButton"
                         Style="{StaticResource BottomBarButtonStyle}"
                         ToolTipService.ToolTip="Full screen"

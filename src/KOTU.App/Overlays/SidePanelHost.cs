@@ -7,13 +7,14 @@ namespace KOTU.App.Overlays;
 
 /// <summary>
 /// 모듈 고유 좌/우 패널 콘텐츠(ISidePanelProvider — A119, v0.145.0)의 셸 쪽 호스트.
-/// 파일 오버레이(FileListOverlay·ContentInfoOverlay)가 담당하는 패널 자리에, 계약을 구현한 뷰
-/// (지금은 정보 모듈뿐)의 요소를 대신 얹는다 — 배경(반투명 아크릴/불투명)·홀드 중 클릭 통과·
-/// 안내 문구(2.5초 + 페이드, OverlayHints 단일 출처)·내부 별 분할(SetPanelPercent)을 파일
-/// 오버레이와 <b>같은 규칙으로 재현</b>한다. 배경·상태 적용이 두 오버레이 컨트롤 내부에 있어
-/// 셸 층으로 뽑는 대신 이 호스트에 재현하는 쪽을 택했다(A119 구현 결정 — diff 최소).
-/// 입력(F11/F12·2연타·Enter·경계 버튼)은 종전대로 셸(MainWindow) 상태 머신이 담당하고,
-/// 이 컨트롤은 ShowContent/Hide/SetState/SetPanelPercent만 받는다.
+/// 파일 패널(FileListOverlay·ContentInfoOverlay)이 담당하는 자리에, 계약을 구현한 뷰
+/// (지금은 정보 모듈뿐)의 요소를 대신 얹는다 — 불투명 배경(A176)·안내 문구(2.5초 + 페이드,
+/// OverlayHints 단일 출처)·내부 별 분할(SetPanelPercent)을 파일 패널과 <b>같은 규칙으로
+/// 재현</b>한다. A176: 반투명(오버레이) 축이 폐지되어 열림 상태는 사이드바(불투명 도크)
+/// 하나 — 구 SetState(모드·고정·스왑체인 폴백 반영)는 사라졌고, 표시·히트테스트·안내는
+/// ShowContent가 직접 켠다.
+/// 입력(F11/F12 단타 토글·경계 핀 버튼)은 종전대로 셸(MainWindow)이 담당하고,
+/// 이 컨트롤은 ShowContent/Hide/ClearContent/SetPanelPercent만 받는다.
 /// 좌/우 방향(패널이 어느 가장자리인가·문구 키 표기)은 Initialize가 정한다 — XAML에는
 /// 속성 없이 선언하고 MainWindow 생성자가 1회 조립한다(코드 전용 컨트롤 — 자체 XAML 없음).
 /// 콘텐츠 요소의 소유·갱신은 모듈 뷰 몫이다. 셸은 모듈 전환 시 ClearContent로 반드시 비운다
@@ -85,9 +86,10 @@ public sealed partial class SidePanelHost : UserControl
         root.ColumnDefinitions.Add(panelOnRight ? _restColumn : _panelColumn);
         root.ColumnDefinitions.Add(panelOnRight ? _panelColumn : _restColumn);
 
-        // 배경·경계선은 파일 오버레이의 XAML 기본값과 동일 구성 — 초기값은 반투명(비스왑체인).
-        // A129: 브러시 선택은 OverlayBackdrop.Pick 한 곳 — 실제 값은 매 SetState가 다시 민다.
-        _border.Background = OverlayBackdrop.Pick(docked: false, overSwapChain: false);
+        // 배경·경계선은 파일 패널의 XAML 값과 동일 구성 — A176: 불투명 사이드바 배경 고정
+        // (SolidBackgroundFillColorBase — ExplorerHost·셸 하단 바와 같은 관용구. 조회는
+        // Application.Current.Resources — ThemeDictionaries 키라 현재 테마 값이 나온다).
+        _border.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
         _border.BorderBrush = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"];
         _border.BorderThickness = panelOnRight ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
         _border.Child = _content;
@@ -109,6 +111,8 @@ public sealed partial class SidePanelHost : UserControl
     /// 모듈 콘텐츠를 얹고 표시한다. 같은 참조면 슬롯을 건드리지 않는다(뷰가 매번 같은 인스턴스를
     /// 돌려주는 계약 전제 — 재대입 자체가 없어 reparent류 문제가 원천적으로 없다).
     /// content가 null이면(그 쪽 패널을 안 내주는 뷰) 띄우지 않는다.
+    /// A176: 사이드바가 유일한 열림 상태 — 히트테스트·안내를 여기서 함께 켠다(구 SetState의 자리.
+    /// ShowHint의 동일 문구 중복 억제가 반복 호출(ApplyOverlayStates 경유)을 걸러 준다).
     /// </summary>
     public void ShowContent(UIElement? content)
     {
@@ -119,6 +123,8 @@ public sealed partial class SidePanelHost : UserControl
         }
         if (!ReferenceEquals(_content.Content, content)) _content.Content = content;
         Visibility = Visibility.Visible;
+        _border.IsHitTestVisible = true;
+        ShowHint(OverlayHints.Docked(_key));
     }
 
     public void Hide()
@@ -149,26 +155,9 @@ public sealed partial class SidePanelHost : UserControl
         _restColumn.Width = new GridLength(100 - percent, GridUnitType.Star);
     }
 
-    /// <summary>
-    /// 표시 모드·고정 안내 반영 — ContentInfoOverlay.SetState와 같은 규칙(A58/A108):
-    /// TranslucentOver = 오버레이(아크릴 반투명, 홀드 중 문구 없음·클릭 통과, pinned면 안내) /
-    /// OpaqueDocked = 사이드바(불투명 배경 + 안내). 실제 폭 차지는 셸 도크 컬럼 담당.
-    /// A129(v0.156.0): overSwapChain = 중앙이 스왑체인(비디오·오디오) — 반투명이 반투명 단색
-    /// 폴백이 된다. 이 호스트가 뜨는 뷰(정보 모듈)는 파일이 없어 실제로는 항상 false가 오지만,
-    /// 네 표면의 SetState 계약을 같게 유지한다(셸 ApplyOverlayStates가 한 신호를 일괄로 민다).
-    /// </summary>
-    public void SetState(OverlayMode mode, bool pinned, bool overSwapChain)
-    {
-        var docked = mode == OverlayMode.OpaqueDocked;
-        _border.Background = OverlayBackdrop.Pick(docked, overSwapChain);
-        _border.IsHitTestVisible = IsOpen && (docked || pinned);
-        if (IsOpen && (docked || pinned))
-            ShowHint(docked ? OverlayHints.Docked(_key) : OverlayHints.Pinned(_key));
-        else
-            HideHint();
-    }
-
     // ---------- 안내 문구 일시 표시 (A92 — 문구·키 표기는 OverlayHints 단일 출처) ----------
+    // A176: 구 SetState(모드·고정·스왑체인 폴백 반영)는 반투명 축과 함께 폐지 —
+    // 호출원은 ShowContent(사이드바 안내)뿐이다. 타이밍 장치는 무변경.
     // ⚠️ FileListOverlay·ContentInfoOverlay에 같은 타이밍 장치가 있다(A119부터 세 벌) —
     // 한쪽을 고치면 반드시 나머지도 맞출 것. 상수·흐름은 두 오버레이와 동일해야 한다.
     // A133(v0.155.0)부터는 **판(다크 반투명 Border) 규격**도 세 벌 공통이다:
@@ -185,7 +174,7 @@ public sealed partial class SidePanelHost : UserControl
 
     private DispatcherTimer? _hintTimer;
     private Storyboard? _hintFade;
-    private bool _hintVisible;    // 지금 "보여야 하는 상태"인가 — 매 SetState마다 되감지 않기 위한 기억
+    private bool _hintVisible;    // 지금 "보여야 하는 상태"인가 — 반복 표시 호출마다 되감지 않기 위한 기억
     private string? _hintText;    // 마지막으로 띄운 문구 — 내용이 바뀔 때만 다시 띄운다
 
     /// <summary>안내를 잠깐 띄운다: 2.5초 표시 → 300ms 페이드아웃 → Collapsed (오버레이들과 동일 규칙).</summary>
@@ -205,7 +194,7 @@ public sealed partial class SidePanelHost : UserControl
         _hintTimer.Start();
     }
 
-    /// <summary>숨겨야 하는 상태(닫힘·도크도 고정도 아님) — 타이머·페이드를 즉시 멈추고 감춘다.</summary>
+    /// <summary>숨겨야 하는 상태(패널 닫힘) — 타이머·페이드를 즉시 멈추고 감춘다.</summary>
     private void HideHint()
     {
         _hintVisible = false;
@@ -219,7 +208,7 @@ public sealed partial class SidePanelHost : UserControl
         var timer = new DispatcherTimer { Interval = HintHoldFor };
         timer.Tick += (_, _) =>
         {
-            timer.Stop(); // 반복 타이머라 Tick 안에서 반드시 멈춘다(MainWindow.MakePinTimer 관용구)
+            timer.Stop(); // 반복 타이머라 Tick 안에서 반드시 멈춘다(MainWindow.MakeS1FlashTimer 관용구)
             FadeOutHint();
         };
         return timer;

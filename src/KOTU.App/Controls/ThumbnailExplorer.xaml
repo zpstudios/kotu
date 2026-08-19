@@ -15,9 +15,8 @@
          타일 컨테이너에 건다). 루트 Grid가 AllowDrop을 받는 구조는 MainWindow.RootLayout과
          같다(GridView 자체는 AllowDrop 기본 false). SelectionMode=Extended = 다중선택(A94).
          NoticeText = 조작 실패 일시 안내(A92류 — 타이머+Visibility, Storyboard 없음: A90 선례). -->
-    <!-- LayoutRoot 이름은 A90용: S4('오픈 파일' 탐색) 인스턴스가 배경을 오버레이 반투명
-         (아크릴 또는 A129 스왑체인 폴백 — OverlayBackdrop.Pick)으로 바꾼다
-         (UseTranslucentBackground). S1 인스턴스는 이 불투명 기본값 그대로다. -->
+    <!-- A176: S4('오픈 파일' 탐색) 인스턴스의 반투명 배경 교체(구 UseTranslucentBackground)는
+         반투명 축과 함께 철거 — S1·S4 모두 이 불투명 기본 배경 그대로다. -->
     <Grid x:Name="LayoutRoot" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
           Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
         <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 콘텐츠 영역이 창 전체가 되면서(행 분할 폐지)

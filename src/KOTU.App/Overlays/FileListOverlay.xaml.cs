@@ -12,7 +12,7 @@ namespace KOTU.App.Overlays;
 /// <summary>
 /// 파일 리스트 패널 공용 컨트롤 (A57 ②) — 기존 MainWindow의 AltOverlayRoot(우측,
 /// v0.25.0)를 추출해 좌측으로 스왑(A57 ①)한 것. 내부는 ExplorerPane 리스트 전용 모드 재사용.
-/// 용어(A108): 사이드바 = 불투명(OpaqueDocked) / 오버레이 = 반투명(홀드·고정).
+/// A176: 반투명(오버레이) 축 폐지 — 열림 상태는 사이드바(불투명 도크) 하나뿐이다.
 /// 패널 폭은 전 상태 공통 25%(A116 — 종전 "콘텐츠 30% / S1 25%" 2값 폐지, SetPanelPercent).
 /// 컨텍스트는 모듈이 주입한다: Show(folder, extensions)의 확장자 목록이 모듈별 필터(A57 ③)가 되고,
 /// ExplorerPane의 A7 드롭다운은 그 안에서 추가로 좁힌다. 적용 대상은 파일 모듈
@@ -21,9 +21,9 @@ namespace KOTU.App.Overlays;
 /// 상단 25%는 디스크 계층 트리(A57 ④): 폴더만 표시, 노드 펼침 시점 지연 로드,
 /// Show() 시 현재 폴더까지 자동 펼침·선택·스크롤. 트리 선택은 하단 리스트를 그 폴더로 옮긴다
 /// (NavigateTo 재사용이라 A5 정렬·A7 필터·A8 경로 표시가 그대로 따라온다).
-/// 입력(A86 — A58의 Alt를 Z로 대체: Z 홀드 = 오버레이 / 2초 = 오버레이 고정 / 2연타 = 사이드바 /
-/// 열림 상태에서 Z 1회 = 닫기)은 셸(MainWindow)의 상태 머신이 담당한다 —
-/// 이 컨트롤은 Show/Hide/SetState만 받는다.
+/// 입력(A176: F11 단타 = 열기/닫기 토글, 핀 버튼 동일)은 셸(MainWindow)이 담당한다 —
+/// 이 컨트롤은 Show/Hide/SetPanelPercent만 받는다(구 SetState는 반투명 축과 함께 폐지 —
+/// 사이드바 안내 문구는 Show가 직접 띄운다).
 /// </summary>
 public sealed partial class FileListOverlay : UserControl
 {
@@ -93,6 +93,9 @@ public sealed partial class FileListOverlay : UserControl
     {
         NavigateList(folder, extensions);
         Visibility = Visibility.Visible;
+        // A176: 사이드바(유일한 열림 상태) 안내 — 구 SetState의 자리. ShowHint의 동일 문구
+        // 중복 억제(_hintVisible)가 반복 Show(ApplyOverlayStates 경유 다회 호출)를 걸러 준다.
+        ShowHint(OverlayHints.Docked(OverlayHints.ListKey));
 
         EnsureDriveRoots(); // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
         _ = ExpandToFolderAsync(folder);
@@ -188,35 +191,14 @@ public sealed partial class FileListOverlay : UserControl
         HideHint(); // A92 — 다시 열릴 때 안내가 처음부터 다시 보이게 상태를 비운다
     }
 
-    /// <summary>
-    /// 표시 모드·고정 안내 반영 (A58 — v0.32.0 SetPinned 대체).
-    /// TranslucentOver = 오버레이(아크릴 반투명, A33 — A108 용어): 홀드 중이면 문구 없음,
-    /// pinned(2초 홀드 고정)면 unpin 안내. OpaqueDocked = 사이드바(불투명 배경) + close 안내 —
-    /// 실제 폭 차지(메인 축소)는 셸의 도크 컬럼이 담당하고 여기서는 시각·문구만 바꾼다.
-    /// 문구는 실제 표시 상태(IsOpen) 기준 — 폴더 부재 등으로 Show가 못 떴으면 숨긴 채 둔다.
-    /// A92(v0.115.0): 문구는 상시 표시가 아니라 잠깐 보였다 사라진다(아래 안내 문구 절 참고).
-    /// A108(v0.135.0): 문구 위치는 패널 하단이 아니라 경계 버튼 옆(XAML PinnedText 배치 참고).
-    /// A129(v0.156.0): overSwapChain = 중앙이 스왑체인(비디오·오디오) — 반투명이 아크릴 대신
-    /// 반투명 단색 폴백이 된다(선택은 OverlayBackdrop.Pick 한 곳). 셸이 ApplyOverlayStates에서 매번 민다.
-    /// </summary>
-    public void SetState(OverlayMode mode, bool pinned, bool overSwapChain)
-    {
-        var docked = mode == OverlayMode.OpaqueDocked;
-        PanelBorder.Background = OverlayBackdrop.Pick(docked, overSwapChain);
-        if (IsOpen && (docked || pinned))
-            ShowHint(docked
-                ? OverlayHints.Docked(OverlayHints.ListKey)
-                : OverlayHints.Pinned(OverlayHints.ListKey));
-        else
-            HideHint();
-    }
-
     // ---------- 안내 문구 일시 표시 (A92, v0.115.0 — 문구·키 표기는 A107부터 OverlayHints가 단일 출처) ----------
     // ⚠️ ContentInfoOverlay·SidePanelHost(A119)에 같은 상수·필드·메서드(표시 타이밍 장치)가 한 벌씩
     // 더 있다. 문구 문자열은 A107에서 OverlayHints로 모았지만 타이밍 장치는 세 벌 —
     // 한쪽을 고치면 반드시 나머지도 맞출 것. A133(v0.155.0)부터는 **판(다크 반투명 Border) 규격**도
     // 세 벌 공통이다: Background #CC202020 · CornerRadius 4 · Padding 10,6 · 글씨 White ·
     // 요소 Opacity 1(A12 칩과 같은 값 — 출처 VideoPlayerView.xaml StartOverlay).
+    // A176: 구 SetState(모드·고정 반영)가 폐지되면서 호출원은 Show(사이드바 안내)와
+    // ShowTransientNotice(A94 실패 안내)만 남았다 — 타이밍 장치는 무변경.
     // A108(v0.135.0): 표시 위치가 패널 하단 → 경계 버튼 옆(세로 중앙)으로 이동 — XAML만 바뀌었고
     // 타이밍 장치는 그대로다. PinnedText를 재사용하는 A94 실패 안내(ShowTransientNotice)도
     // 같은 자리에 뜬다(요소 하나 = 위치 하나 — A107 단일화 유지의 의도된 결과).
@@ -229,14 +211,14 @@ public sealed partial class FileListOverlay : UserControl
     private static readonly TimeSpan HintHoldFor = TimeSpan.FromSeconds(2.5);      // 표시 시간(구현 시 결정)
     private static readonly TimeSpan HintFadeFor = TimeSpan.FromMilliseconds(300); // 페이드아웃 시간
 
-    private DispatcherTimer? _hintTimer; // UI 스레드 타이머 (MainWindow.MakePinTimer·DriveStrip과 같은 방식)
+    private DispatcherTimer? _hintTimer; // UI 스레드 타이머 (MainWindow.MakeS1FlashTimer·DriveStrip과 같은 방식)
     private Storyboard? _hintFade;
-    private bool _hintVisible;    // 지금 "보여야 하는 상태"인가 — 매 SetState마다 되감지 않기 위한 기억
+    private bool _hintVisible;    // 지금 "보여야 하는 상태"인가 — 반복 표시 호출마다 되감지 않기 위한 기억
     private string? _hintText;    // 마지막으로 띄운 문구 — 내용이 바뀔 때만 다시 띄운다
 
     /// <summary>
     /// 안내를 잠깐 띄운다: 2.5초 표시 → 300ms 페이드아웃 → Collapsed.
-    /// SetState는 상태 머신이 움직일 때마다 여러 번 불리므로, **표시 상태로 새로 진입했거나
+    /// 표시 메서드는 ApplyOverlayStates 경유로 여러 번 불리므로, **표시 상태로 새로 진입했거나
     /// 문구가 바뀐 경우에만** 다시 띄우고 타이머를 되감는다(매번 재시작하면 영영 안 사라진다).
     /// </summary>
     private void ShowHint(string text)
@@ -255,7 +237,7 @@ public sealed partial class FileListOverlay : UserControl
         _hintTimer.Start();
     }
 
-    /// <summary>숨겨야 하는 상태(닫힘·도크도 고정도 아님) — 타이머·페이드를 즉시 멈추고 감춘다.</summary>
+    /// <summary>숨겨야 하는 상태(패널 닫힘) — 타이머·페이드를 즉시 멈추고 감춘다.</summary>
     private void HideHint()
     {
         _hintVisible = false;
@@ -269,7 +251,7 @@ public sealed partial class FileListOverlay : UserControl
         var timer = new DispatcherTimer { Interval = HintHoldFor };
         timer.Tick += (_, _) =>
         {
-            timer.Stop(); // 반복 타이머라 Tick 안에서 반드시 멈춘다(MainWindow.MakePinTimer와 같은 관용구)
+            timer.Stop(); // 반복 타이머라 Tick 안에서 반드시 멈춘다(MainWindow.MakeS1FlashTimer와 같은 관용구)
             FadeOutHint();
         };
         return timer;

@@ -7,47 +7,11 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
-            <ResourceDictionary.ThemeDictionaries>
-                <!-- A33: 오버레이 전용 아크릴 — 기본 인앱 아크릴보다 틴트를 크게 약화해
-                     배경 콘텐츠가 또렷이 비친다. 아크릴 미지원 시 폴백도 반투명 단색.
-                     A57 ②에서 MainWindow 로컬 리소스 → 앱 리소스로 이동: 공용 오버레이
-                     컨트롤(Overlays/*)이 창 밖(InitializeComponent 시점)에서도 찾을 수 있어야 한다.
-                     A108(v0.135.0): 불투명도를 종전의 약 60% 수준으로 한 단계 더 약화 —
-                     TintOpacity 0.1 → 0.06, TintLuminosityOpacity 0.4 → 0.24, 폴백 알파 B3 → 6B.
-                     오버레이(반투명 홀드·고정)가 사이드바(불투명 도크)와 한눈에 구분되게 하기 위함.
-                     ⚠️ 실기기에서 눈으로 보고 미세 조정하는 단일 지점 — 세 값을 같은 비율로 움직이고,
-                     Default(다크)/Light 두 딕셔너리를 반드시 같은 값으로 유지할 것(한쪽만 고치면
-                     테마 전환에서 원복된 것처럼 보인다). 좌우 패널·S4 중앙이 전부 이 브러시 하나를
-                     공유하므로 여기만 고치면 전 오버레이에 일괄 반영된다. -->
-                <ResourceDictionary x:Key="Default">
-                    <AcrylicBrush x:Key="OverlayAcrylicBrush"
-                                  TintColor="#202020" TintOpacity="0.06"
-                                  TintLuminosityOpacity="0.24"
-                                  FallbackColor="#6B202020" />
-                    <!-- A129(v0.156.0): 스왑체인(libvlc VideoView — 비디오 화면·오디오 파형) 위
-                         전용 반투명 단색 폴백.
-                         인앱 아크릴(위 OverlayAcrylicBrush)은 같은 XAML 렌더 결과만 배경 샘플하므로,
-                         별도 비주얼로 합성되는 D3D 스왑체인의 프레임은 샘플에 안 들어간다.
-                         아크릴 출력은 그 샘플의 불투명 합성이라 비디오 위에서 "불투명 판"으로
-                         보였다(A129 실기기 보고 — 이미지 모듈은 XAML이 그리므로 정상 반투명).
-                         이 브러시는 진짜 알파 합성이라 스왑체인 위에서도 투과가 성립한다
-                         (블러는 포기 — 반투명 통일이 기준, A129 사용자 확정).
-                         색·알파 = 위 아크릴 FallbackColor와 동일한 #6B + 테마 바탕색(A108의 6B) —
-                         아크릴 미지원 폴백과 같은 농도로 보이게 잡은 값이다.
-                         브러시 선택은 코드 한 곳(Overlays/OverlayBackdrop.Pick)만 한다.
-                         Default/Light 두 딕셔너리의 알파(6B)를 반드시 같게 유지할 것. -->
-                    <SolidColorBrush x:Key="OverlayTranslucentFallbackBrush" Color="#6B202020" />
-                </ResourceDictionary>
-                <ResourceDictionary x:Key="Light">
-                    <AcrylicBrush x:Key="OverlayAcrylicBrush"
-                                  TintColor="#F9F9F9" TintOpacity="0.06"
-                                  TintLuminosityOpacity="0.24"
-                                  FallbackColor="#6BF9F9F9" />
-                    <!-- A129: 스왑체인 위 반투명 폴백의 라이트 쌍 — 근거는 Default 쪽 주석.
-                         알파(6B)는 두 테마 동일 유지(한쪽만 고치면 테마 전환에서 어긋난다). -->
-                    <SolidColorBrush x:Key="OverlayTranslucentFallbackBrush" Color="#6BF9F9F9" />
-                </ResourceDictionary>
-            </ResourceDictionary.ThemeDictionaries>
+            <!-- A176: 오버레이 전용 아크릴(A33 OverlayAcrylicBrush)·스왑체인 반투명 폴백
+                 (A129 OverlayTranslucentFallbackBrush)의 ThemeDictionaries 2벌을 통째로 철거 —
+                 반투명 표시 축 자체가 폐지되어 소비처(OverlayBackdrop.Pick)가 사라졌다.
+                 패널 배경은 각 컨트롤이 불투명 SolidBackgroundFillColorBaseBrush(시스템 테마
+                 리소스)를 직접 쓴다. -->
 
             <!-- A27(v0.107.0): 하단 바 버튼 규격을 앱 전역 스타일 2종으로 못 박는다.
                  ⚠️ 치수 이력: A27 40 → A97(v0.116.0) 36 → **A106(v0.132.0) 32**

@@ -2,34 +2,25 @@ namespace KOTU.App.Overlays;
 
 /// <summary>
 /// A92 안내 문구의 단일 출처 (A107, v0.134.0 신설). 같은 문구가 좌(FileListOverlay)·우
-/// (ContentInfoOverlay) 두 파일과 XAML 기본값까지 흩어져 있어 키 체계가 바뀔 때마다
-/// (A86 Z/X → A107 Alt+Z/X → A118 F1/F2 → A158 F11/F12) 한쪽만 고치는 사고 위험이 있었다 — 이제 키 표기·문구
-/// 틀은 여기서만 바꾼다(XAML의 Text 기본값은 제거 — 표시 전 ShowHint가 항상 여기 문구를 넣는다).
+/// (ContentInfoOverlay)·모듈 패널 호스트(SidePanelHost) 세 표면에 흩어져 있어 키 체계가
+/// 바뀔 때마다(A86 Z/X → A107 Alt+Z/X → A118 F1/F2 → A158 F11/F12) 한쪽만 고치는 사고
+/// 위험이 있었다 — 키 표기·문구 틀은 여기서만 바꾼다.
 /// 키 자체의 정본은 MainWindow.LeftPanelKey/RightPanelKey — 키를 바꾸면 여기 표기도 함께 바꾼다.
-/// A108(v0.135.0) 용어 확정: **사이드바** = 불투명, 메인 영역을 줄이며 옆에 선다
-/// (구 "불투명 도크/밀어내기" — 코드 식별자 OpaqueDocked는 유지) /
-/// **오버레이** = 반투명, 메인 위에 덮인다(홀드·2초 홀드 고정 = TranslucentOver/Pinned).
-/// 사용자 노출 문구도 이 구분을 따른다: 도크 안내 = "Sidebar", 고정 안내 = "Pinned"(유지).
-/// 표시 타이밍(2.5초 + 페이드)은 각 오버레이의 A92 절이, 표시 위치(경계 버튼 옆 — A108)는
-/// 각 XAML의 PinnedText 배치가 담당한다 — A133(v0.155.0)부터 그 문구는 다크 반투명 판
-/// (PinnedPlate / SidePanelHost._pinnedPlate) 안에 들고, 표시·페이드 대상도 판이다.
+/// A176: 반투명 축(홀드·2초 홀드 고정) 폐지로 Pinned 안내는 사라졌다 — 남는 문구는
+/// 사이드바(불투명 도크) 안내 하나다(F11/F12 단타 토글·핀 버튼이 같은 상태를 오간다).
+/// 표시 타이밍(2.5초 + 페이드)은 각 표면의 A92 절이, 다크 반투명 판(A133 — PinnedPlate)은
+/// 각 표면의 XAML/조립 코드가 담당한다.
 /// </summary>
 internal static class OverlayHints
 {
-    /// <summary>좌(파일 리스트) 오버레이 키 표기 — A158: F11(구 A118 F1, 구 A107 Alt+Z).</summary>
+    /// <summary>좌(파일 리스트) 패널 키 표기 — A158: F11(구 A118 F1, 구 A107 Alt+Z).</summary>
     internal const string ListKey = "F11";
 
-    /// <summary>우(정보) 오버레이 키 표기 — A158: F12(구 A118 F2, 구 A107 Alt+X).</summary>
+    /// <summary>우(정보) 패널 키 표기 — A158: F12(구 A118 F2, 구 A107 Alt+X).</summary>
     internal const string InfoKey = "F12";
 
-    /// <summary>오버레이 고정(2초 홀드 승격) 안내 — A92 문구 틀에 키 표기만 끼운다.
-    /// A154(v0.170.0): 경계 버튼이 2종(위 = 순간 표시 / 아래 = 핀)이 되면서 핀 버튼 몫을 덧붙였다.
-    /// 이 상태에서 핀 버튼은 "닫기"가 아니라 사이드바로의 승격이다(ToggleOpaqueDock: 고정 → 사이드바)
-    /// — 문구도 실제 동작 그대로 적는다.</summary>
-    internal static string Pinned(string key) => $"Pinned - press {key} to close, or the pin button to dock";
-
     /// <summary>사이드바(불투명 도크) 안내 — A108에서 표기를 "Docked"에서 "Sidebar"로 교체
-    /// (메서드명 Docked는 OverlayMode.OpaqueDocked와 짝이라 유지 — A108 식별자 보존 규칙).
-    /// A154: 사이드바 상태에서 핀 버튼을 누르면 닫힌다 — 그 경로를 문구에 함께 적는다.</summary>
+    /// (메서드명 Docked는 구 OverlayMode.OpaqueDocked와 짝이던 이름 — A108 식별자 보존 규칙 유지).
+    /// A176: 사이드바가 유일한 열림 상태라 이 안내 하나만 남는다.</summary>
     internal static string Docked(string key) => $"Sidebar - press {key} or the pin button to close";
 }

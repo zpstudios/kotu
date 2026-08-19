@@ -8,7 +8,6 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
 using Windows.System;
-using KOTU.App.Overlays;
 using KOTU.Core.Routing;
 using KOTU.Input;
 
@@ -129,15 +128,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         foreach (var item in TileGrid.Items) ExplorerFileOps.ApplyCutMark(item);
     }
 
-    /// <summary>
-    /// 배경을 오버레이 반투명(A33 아크릴 또는 A129 스왑체인 폴백 — OverlayBackdrop.Pick)으로
-    /// 바꾼다 — S4('오픈 파일' 탐색, A90)의 중앙 오버레이 인스턴스 전용. S1 중앙(불투명 기본
-    /// 배경)에서는 부르지 않는다. A129(v0.156.0): overSwapChain = 중앙 콘텐츠가 스왑체인
-    /// 계열(비디오·오디오)이라는 셸 신호 — 생성 시 1회(EnsureS4Explorer) 외에 S4가 떠 있는 동안
-    /// ApplyOverlayStates가 매번 다시 밀어 모듈 전환 시 아크릴 원복이 누락되지 않는다.
-    /// </summary>
-    public void UseTranslucentBackground(bool overSwapChain) =>
-        LayoutRoot.Background = OverlayBackdrop.Pick(docked: false, overSwapChain: overSwapChain);
+    // A176: 구 UseTranslucentBackground(S4 중앙 반투명 — A33 아크릴/A129 스왑체인 폴백)는
+    // 반투명 축과 함께 철거 — S4 인스턴스도 S1과 같은 불투명 기본 배경(XAML LayoutRoot)을 쓴다.
 
     /// <summary>썸네일 그리드로 포커스 이동 (A90: S4 진입 시) — 실패해도 무해(포커스만 안 옮겨진다).</summary>
     public void FocusGrid() => TileGrid.Focus(FocusState.Programmatic);
