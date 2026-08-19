@@ -766,11 +766,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     /// <summary>
     /// A30 규격: Fit 버튼 본체 내용(4옵션 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
-    /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 App.xaml의
-    /// ActualSizeIconGeometry를 쓰는 PathIcon(부록 B 69 — 4옵션 시각 언어 통일).
-    /// ⚠️ PathIcon 인스턴스는 UIElement라 공유할 수 없다(두 번째 부모에 붙이는 순간 터진다).
-    /// 캐시 필드 하나로 돌려쓰지 말고 호출마다 새로 만들 것 — 공유해도 되는 것은 Geometry뿐이고,
-    /// 그 한 벌이 App.xaml 리소스다(플라이아웃의 100% 항목도 같은 키를 StaticResource로 본다).
+    /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
+    /// ⚠️ v0.174.1: PathIcon 인스턴스(UIElement)만이 아니라 **Geometry도 공유 금지** — WinUI
+    /// Geometry는 부모가 하나뿐이라 공유 인스턴스를 PathIcon.Data에 걸면 XamlParseException
+    /// ("Failed to assign to property")으로 앱이 죽는다(실기기 크래시 실사례 — 종전엔 App.xaml
+    /// 공유 리소스를 봤다). 호출마다 BuildActualSizeIconGeometry()로 새로 만든다.
     /// </summary>
     private void UpdateFitButton()
     {
@@ -782,13 +782,45 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
                 (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
             FitMode.ActualSize => (new PathIcon
             {
-                Data = (Geometry)Application.Current.Resources["ActualSizeIconGeometry"],
+                Data = BuildActualSizeIconGeometry(),
             }, "Actual size"),
             _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
                 "Contain - the whole image fits, never enlarged"),
         };
         FitButton.Content = content;
         ToolTipService.SetToolTip(FitButton, FitTip(tip)); // A34: 표기는 키 상수에서
+    }
+
+    /// <summary>
+    /// A143/v0.174.1: 100% 아이콘 도형(16x16 좌표계 — PathIcon은 스케일하지 않는다). 도형 6개 =
+    /// 왼쪽 1(깃발+기둥/밑변)·콜론 점 2개·오른쪽 1(깃발+기둥/밑변). 호출마다 새 인스턴스를 만든다
+    /// (Geometry 공유 금지 — 위 UpdateFitButton 주석). 좌표를 바꾸면 이 파일 XAML의 인라인 Data
+    /// 문자열과 형제 두 모듈(문서·영상)의 같은 두 곳까지 총 6곳을 함께 고칠 것.
+    /// </summary>
+    private static Geometry BuildActualSizeIconGeometry()
+    {
+        static PathFigure Fig(double sx, double sy, params (double X, double Y)[] points)
+        {
+            var figure = new PathFigure
+            {
+                StartPoint = new Windows.Foundation.Point(sx, sy),
+                IsClosed = true,
+                IsFilled = true,
+                Segments = new PathSegmentCollection(),
+            };
+            foreach ((double x, double y) in points)
+                figure.Segments.Add(new LineSegment { Point = new Windows.Foundation.Point(x, y) });
+            return figure;
+        }
+
+        var geometry = new PathGeometry { Figures = new PathFigureCollection() };
+        geometry.Figures.Add(Fig(2.3, 5.0, (4.2, 3.0), (5.0, 3.0), (5.0, 11.4), (3.5, 11.4), (3.5, 5.0)));
+        geometry.Figures.Add(Fig(1.8, 11.4, (6.7, 11.4), (6.7, 13.0), (1.8, 13.0)));
+        geometry.Figures.Add(Fig(7.4, 6.0, (8.8, 6.0), (8.8, 7.4), (7.4, 7.4)));
+        geometry.Figures.Add(Fig(7.4, 9.6, (8.8, 9.6), (8.8, 11.0), (7.4, 11.0)));
+        geometry.Figures.Add(Fig(10.5, 5.0, (12.4, 3.0), (13.2, 3.0), (13.2, 11.4), (11.7, 11.4), (11.7, 5.0)));
+        geometry.Figures.Add(Fig(10.0, 11.4, (14.9, 11.4), (14.9, 13.0), (10.0, 13.0)));
+        return geometry;
     }
 
     /// <summary>

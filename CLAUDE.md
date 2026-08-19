@@ -54,7 +54,10 @@
   못 잡는다** — 유사 파일과 대조 검사할 것.
 - **WPF에서 되는 XAML 문법이 WinUI에서 된다고 가정하지 말 것**(v0.169.1 실사례: `PathGeometry.Figures`에
   path 미니언어 문자열 → `XamlCompiler error WMC0055`. `Data="M ..."`처럼 **Geometry 타입 속성**에 거는
-  문자열 변환만 성립한다). 규칙: **저장소 안에 실제로 쓰이고 있는 형태만 복제한다.** 선례가 0건이면
+  문자열 변환만 성립한다. **v0.174.1 실사례 추가: WinUI Geometry는 부모가 하나뿐이라 공유 리소스를
+  PathIcon.Data에 걸면 런타임 XamlParseException으로 앱이 죽는다 — CI는 컴파일만 하므로 런타임
+  XAML 파스·할당 실패 부류를 못 잡는다. 도형은 사용처마다 인라인 문자열 또는 코드 빌더로 새
+  인스턴스를 만들 것**). 규칙: **저장소 안에 실제로 쓰이고 있는 형태만 복제한다.** 선례가 0건이면
   "CI 1순위 위험 후보 + 최소 복구법"으로 반드시 보고하게 할 것.
 - **master push만으로 태그+릴리스 자동**(release.yml이 `Directory.Build.props`의 Version을 읽어
   멱등 발행). 작업 완료 = 버전 올린 커밋 + push 1회.

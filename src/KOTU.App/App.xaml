@@ -131,68 +131,10 @@
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
             </Style>
-            <!-- A143: Fit "100%"(원본 크기) 아이콘. Segoe에 쓸 만한 글리프가 없다는 것이 A111 판정이라
-                 벡터로 직접 그린다. 형태 = 본체 표기로 쓰던 "1:1"을 그대로 도형화한 것(의미 인지 보존).
-                 16x16 좌표계 기준 — PathIcon은 도형을 스케일하지 않고 그대로 그리므로 이 크기가 곧 표시 크기다.
-                 3곳(이미지·문서·영상 플라이아웃)과 본체 3벌이 이 한 벌을 참조한다. 모양을 바꾸려면 여기만 고친다.
-                 도형 6개 = 왼쪽 1(깃발+기둥 / 밑변) · 콜론 점 2개 · 오른쪽 1(깃발+기둥 / 밑변).
-
-                 ⚠️ v0.169.1 실패 교훈: WinUI XAML 컴파일러는 Figures에 path 미니언어 문자열을 못 받는다
-                 (WMC0055 "Cannot assign text value into property Figures of type PathFigureCollection" —
-                 WPF와 다르다. Data="M ..."처럼 Geometry 타입 속성에 거는 문자열 변환만 성립한다).
-                 그래서 요소 구문(PathFigure + LineSegment)으로 쓴다. Point 문자열 변환("x,y")은
-                 RenderTransformOrigin 등으로 이미 실증된 것이라 안전하다.
-                 Geometry는 여러 PathIcon이 공유해도 되지만 PathIcon 인스턴스(UIElement)는 공유 불가다. -->
-            <PathGeometry x:Key="ActualSizeIconGeometry">
-                <PathGeometry.Figures>
-                    <PathFigure StartPoint="2.3,5.0" IsClosed="True" IsFilled="True">
-                        <PathFigure.Segments>
-                            <LineSegment Point="4.2,3.0" />
-                            <LineSegment Point="5.0,3.0" />
-                            <LineSegment Point="5.0,11.4" />
-                            <LineSegment Point="3.5,11.4" />
-                            <LineSegment Point="3.5,5.0" />
-                        </PathFigure.Segments>
-                    </PathFigure>
-                    <PathFigure StartPoint="1.8,11.4" IsClosed="True" IsFilled="True">
-                        <PathFigure.Segments>
-                            <LineSegment Point="6.7,11.4" />
-                            <LineSegment Point="6.7,13.0" />
-                            <LineSegment Point="1.8,13.0" />
-                        </PathFigure.Segments>
-                    </PathFigure>
-                    <PathFigure StartPoint="7.4,6.0" IsClosed="True" IsFilled="True">
-                        <PathFigure.Segments>
-                            <LineSegment Point="8.8,6.0" />
-                            <LineSegment Point="8.8,7.4" />
-                            <LineSegment Point="7.4,7.4" />
-                        </PathFigure.Segments>
-                    </PathFigure>
-                    <PathFigure StartPoint="7.4,9.6" IsClosed="True" IsFilled="True">
-                        <PathFigure.Segments>
-                            <LineSegment Point="8.8,9.6" />
-                            <LineSegment Point="8.8,11.0" />
-                            <LineSegment Point="7.4,11.0" />
-                        </PathFigure.Segments>
-                    </PathFigure>
-                    <PathFigure StartPoint="10.5,5.0" IsClosed="True" IsFilled="True">
-                        <PathFigure.Segments>
-                            <LineSegment Point="12.4,3.0" />
-                            <LineSegment Point="13.2,3.0" />
-                            <LineSegment Point="13.2,11.4" />
-                            <LineSegment Point="11.7,11.4" />
-                            <LineSegment Point="11.7,5.0" />
-                        </PathFigure.Segments>
-                    </PathFigure>
-                    <PathFigure StartPoint="10.0,11.4" IsClosed="True" IsFilled="True">
-                        <PathFigure.Segments>
-                            <LineSegment Point="14.9,11.4" />
-                            <LineSegment Point="14.9,13.0" />
-                            <LineSegment Point="10.0,13.0" />
-                        </PathFigure.Segments>
-                    </PathFigure>
-                </PathGeometry.Figures>
-            </PathGeometry>
+            <!-- A143 주의(v0.174.1): 100% 아이콘 Geometry를 여기(전역 리소스)에 두고 StaticResource로
+                 공유하면 안 된다 — WinUI Geometry는 부모가 하나뿐이라 PathIcon.Data 할당이 런타임
+                 XamlParseException으로 죽는다(실기기 크래시 실사례. CI는 컴파일만 하므로 못 잡는다).
+                 도형은 각 모듈 뷰(이미지·문서·영상)에 인라인 Data 문자열 + 코드 빌더로 산다. -->
         </ResourceDictionary>
     </Application.Resources>
 </Application>
