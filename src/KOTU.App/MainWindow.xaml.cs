@@ -291,9 +291,11 @@ public sealed partial class MainWindow : Window
         Integration.TaskbarIdentity.Apply(this, _tray.Slot);
 
         // A69: 최소화 = 트레이로 숨김 (전 모듈). 감지는 AppWindow.Changed의 프레젠터 상태 검사 —
-        // A55 TrackNormalBounds가 이미 실증한 이벤트 경로. WindowMinSize 서브클래스에
-        // WM_SYSCOMMAND(SC_MINIMIZE)를 더하는 대안은 최소화 애니메이션 전에 개입하게 되는 데다
-        // wParam 하위 4비트 마스킹 등 판정 부담이 있어 채택하지 않았다.
+        // A55 TrackNormalBounds가 이미 실증한 이벤트 경로. WM_SYSCOMMAND(SC_MINIMIZE)를 "대체
+        // 감지 경로"로 쓰는 안은 당시 기각했지만(애니메이션 전 개입·마스킹 부담), A185에서
+        // **관찰 전용**으로 부분 채택됐다: 상태 전이 감지는 여전히 이 이벤트가 하고, WindowMinSize의
+        // SC_MINIMIZE 관찰은 "그 최소화가 사용자 명령이었는가"라는 원인 구분만 보탠다 —
+        // Win+D(바탕화면 보기)의 셸 일괄 최소화까지 트레이로 숨던 과잉을 걷어내기 위함이다.
         AppWindow.Changed += OnMinimizeStateChanged;
     }
 
@@ -2841,6 +2843,11 @@ public sealed partial class MainWindow : Window
         if (_hiddenInTray) return;
         if (sender.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter
             { State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized }) return;
+
+        // A185: 사용자 최소화(타이틀바 버튼·시스템 메뉴 등 SC_MINIMIZE 경유)일 때만 트레이로.
+        // Win+D 등 SC_MINIMIZE 없는 최소화는 여기서 끝 — 창은 일반 최소화로 작업표시줄에 남고,
+        // 이후 연쇄 Changed가 와도 관찰이 이미 없으므로(1회 소비·타임아웃) 계속 조용하다.
+        if (!WindowMinSize.ConsumeUserMinimize(this)) return;
 
         _hiddenInTray = true; // 연쇄 Changed(위치·크기·Z순서)로 중복 큐잉되지 않게 먼저 표시
         DispatcherQueue.TryEnqueue(() =>

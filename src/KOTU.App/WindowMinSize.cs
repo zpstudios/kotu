@@ -13,6 +13,8 @@ namespace KOTU.App;
 /// DPI는 메시지가 올 때마다 GetDpiForWindow(PerMonitorV2 — app.manifest)로 읽으므로
 /// 모니터 이동·배율 변경에 항상 옳고, HWND 서브클래스는 프레젠터 교체와 무관하게 유지된다.
 /// UI 스레드에서만 부른다(WndProc도 같은 스레드로 온다 — WindowManager 스레드 규칙과 동일).
+/// 이 서브클래스는 HWND당 1회 규칙이라, 창 메시지 관찰이 필요한 다른 기능도 여기 얹는다 —
+/// 현재 동승자: A185 사용자 최소화 관찰(WM_SYSCOMMAND의 SC_MINIMIZE, 아래 s_userMinimizeTicks).
 /// </summary>
 internal static class WindowMinSize
 {
@@ -31,7 +33,30 @@ internal static class WindowMinSize
 
     private const uint WmGetMinMaxInfo = 0x0024;
     private const uint WmNcDestroy = 0x0082;
+    private const uint WmSysCommand = 0x0112;
+    /// <summary>WM_SYSCOMMAND wParam의 하위 4비트는 시스템 내부용 — 판정 전 반드시 이 마스크를 적용.</summary>
+    private const long ScCommandMask = 0xFFF0;
+    private const long ScMinimize = 0xF020;
     private const int GwlpWndProc = -4;
+
+    /// <summary>
+    /// A185: HWND별 "직전 SC_MINIMIZE 관찰 시각"(Environment.TickCount64, ms).
+    /// 타이틀바 최소화 버튼·시스템 메뉴 Minimize 등 사용자 최소화 명령은 WM_SYSCOMMAND(SC_MINIMIZE)를
+    /// 거치지만, Win+D(바탕화면 보기)의 셸 일괄 최소화는 이 메시지 없이 창을 내린다 —
+    /// 그래서 "SC_MINIMIZE 수신 = 사용자 의도" 판별의 원료가 된다. 소비는
+    /// <see cref="ConsumeUserMinimize"/>(1회성 + <see cref="UserMinimizeTimeoutMs"/> 타임아웃).
+    /// 이 클래스에 얹은 이유: 서브클래스는 HWND당 1회 규칙(이중 서브클래싱 금지)이라 기존 훅에
+    /// 케이스만 추가하는 것이 유일한 안전 경로고, WM_NCDESTROY 정리 흐름도 그대로 공유한다.
+    /// </summary>
+    private static readonly Dictionary<IntPtr, long> s_userMinimizeTicks = new();
+
+    /// <summary>
+    /// SC_MINIMIZE 관찰이 유효한 시간(ms). SC_MINIMIZE → AppWindow.Changed(Minimized) 도착은
+    /// 같은 최소화 시퀀스 안(애니메이션 포함 수백 ms 내)이므로 500ms면 충분히 덮고,
+    /// 최소화가 실제로 일어나지 않아 Changed가 오지 않는 경로(명령 거부 등)에서 남은
+    /// 낡은 관찰이 다음 무관한 최소화를 오판시키는 것을 막는다.
+    /// </summary>
+    private const int UserMinimizeTimeoutMs = 500;
 
     private delegate IntPtr WndProcDelegate(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -65,6 +90,21 @@ internal static class WindowMinSize
         else s_minHeightOverrides.Remove(hwnd);
     }
 
+    /// <summary>
+    /// A185: 이 창의 최소화가 "사용자 최소화 명령"(SC_MINIMIZE 관찰)이었는지를 1회성으로 소비한다.
+    /// true = 타임아웃(500ms) 내 SC_MINIMIZE가 있었다(트레이 숨김 대상). 호출 즉시 관찰을 지우므로
+    /// 연쇄 Changed 이벤트가 같은 관찰을 두 번 쓰는 일은 없다. Win+D처럼 SC_MINIMIZE 없이
+    /// 최소화된 경우는 false — 호출부(OnMinimizeStateChanged)는 일반 최소화로 둔다.
+    /// UI 스레드에서만 부른다(WndProc과 같은 스레드 — 이 클래스 전체 규칙).
+    /// </summary>
+    public static bool ConsumeUserMinimize(Microsoft.UI.Xaml.Window window)
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        if (!s_userMinimizeTicks.TryGetValue(hwnd, out var ticks)) return false;
+        s_userMinimizeTicks.Remove(hwnd); // 소비 후 즉시 해제 — 결과와 무관하게 1회성
+        return Environment.TickCount64 - ticks <= UserMinimizeTimeoutMs;
+    }
+
     /// <summary>현재 모니터 배율 기준 최소 물리 픽셀. 창 크기 복원(v0.55.0)의 하한에도 쓴다.</summary>
     public static (int Width, int Height) MinPhysical(IntPtr hwnd)
     {
@@ -79,6 +119,16 @@ internal static class WindowMinSize
     {
         if (!s_prevProcs.TryGetValue(hwnd, out var prev))
             return DefWindowProcW(hwnd, msg, wParam, lParam); // 정상 경로에선 오지 않는 방어선
+
+        // A185: 사용자 최소화 명령 관찰 — 개입은 없다(메시지는 아래에서 그대로 체인에 태운다).
+        // A69 당시 이 방식을 기각한 근거 2개의 재평가: ① "최소화 애니메이션 전 개입"은 메시지를
+        // 삼키거나 결과를 바꿀 때의 부담인데 이번 용도는 시각 기록뿐이라 해당 없음. ② "wParam
+        // 하위 4비트 마스킹 판정 부담"은 아래 & ScCommandMask 한 줄이 전부다.
+        // 체인 호출 **앞**에서 기록하는 이유: DefWindowProc가 CallWindowProcW 안에서 최소화를
+        // 동기 수행하며 중첩 메시지(WM_WINDOWPOSCHANGED 등)로 AppWindow.Changed가 복귀 전에
+        // 발화할 수 있다 — 소비자(OnMinimizeStateChanged)보다 기록이 반드시 먼저여야 한다.
+        if (msg == WmSysCommand && (wParam.ToInt64() & ScCommandMask) == ScMinimize)
+            s_userMinimizeTicks[hwnd] = Environment.TickCount64;
 
         // 원래 프로시저(XAML/AppWindow 체인)를 먼저 태우고 나서 하한을 덮어쓴다 —
         // 프레젠터도 이 메시지로 최소/최대를 쓸 수 있으므로 나중에 쓰는 쪽이 이긴다.
@@ -96,6 +146,7 @@ internal static class WindowMinSize
         {
             s_prevProcs.Remove(hwnd); // 창 소멸 — 이후 이 HWND로 메시지는 오지 않는다
             s_minHeightOverrides.Remove(hwnd); // 접힌 채 닫힌 창의 오버라이드도 함께 정리 (A61)
+            s_userMinimizeTicks.Remove(hwnd); // 미소비 SC_MINIMIZE 관찰도 정리 — HWND 재사용 오염 방지 (A185)
         }
         return result;
     }
