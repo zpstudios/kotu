@@ -613,6 +613,28 @@ internal static class ExplorerFileOps
         }
     }
 
+    /// <summary>
+    /// A189: 현재 폴더에 빈 "New file.txt"를 만든다 — 충돌 시 "New file (2).txt"(UniqueDestination
+    /// 재사용 — 번호는 확장자 앞, 탐색기 관례). 반환 계약·호출부 흐름(생성 후 재스캔 → 이름변경
+    /// 편집 진입)은 위 CreateFolder와 대칭이다. 문서 모듈로 열지는 않는다 — New folder와 대칭인
+    /// "파일 생성"뿐이다(무제 에디터 진입은 문서 모듈 하단 바의 New text file — 별개 진입점).
+    /// </summary>
+    internal static (string? Created, string? Notice, bool Denied) CreateFile(string parentFolder)
+    {
+        try
+        {
+            var dest = UniqueDestination(Path.GetFullPath(parentFolder), "New file.txt");
+            // CreateNew = UniqueDestination 판정과 실제 생성 사이의 경합 방어(그새 생겼으면 예외 →
+            // 아래 실패 안내). 0바이트로 만들고 곧바로 닫는다 — 감시(A94 5차)가 재스캔을 돌린다.
+            using (File.Open(dest, FileMode.CreateNew)) { }
+            return (dest, null, false);
+        }
+        catch (Exception ex)
+        {
+            return (null, "Could not create a file - " + ex.Message, IsAccessDenied(ex));
+        }
+    }
+
     // ---------- 내부: 경로 판정 ----------
 
     private static IReadOnlyList<string>? SourcePathsOf(DataPackageView view)

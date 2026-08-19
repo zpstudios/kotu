@@ -89,7 +89,7 @@
             VerticalAlignment="Center"
             Opacity="0.6" />
 
-        <!-- 하단 상태바: 저장 · 파일명 · 수정됨 · 줌(A181) · 페이지 · 드라이브 · Fit.
+        <!-- 하단 상태바: 새 파일(A189) · 저장 · 파일명 · 수정됨 · 줌(A181) · 페이지 · 드라이브 · Fit.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(이미지 v0.27.0과 동일 패턴).
              열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
              1:1 버튼 칸은 A111에서 제거 — 100%가 Fit 플라이아웃 4옵션에 들어갔다.
@@ -98,6 +98,8 @@
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
             <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
+                    <!-- A189: New text file 버튼 칸 -->
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <!-- 파일명(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 -->
                     <ColumnDefinition Width="*" />
@@ -110,33 +112,43 @@
                      (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
                      치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
                 <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
+                <!-- A189: 새 텍스트 문서(무제) 시작. 빈 상태에서만 활성(파일이 열리면 비활성 —
+                     A145 Fit 조절기의 "항상 보이되 비활성" 관용구, 판정은 UpdateNewFileButton).
+                     빈 상태의 중앙은 셸 썸네일 탐색기(A93)가 차지해 이 뷰의 안내 문구가 안 보이므로
+                     진입점은 안내 링크가 아니라 하단 바 버튼이다. 글리프 E7C3 = 문서(빈 파일) —
+                     탐색기 파일 타일과 같은 글리프. 핫키 없음(A34 등록 없음 — 툴팁 고정값). -->
+                <Button x:Name="NewFileButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
+                        Click="OnNewFileClick"
+                        ToolTipService.ToolTip="New text file">
+                    <FontIcon Glyph="&#xE7C3;" FontSize="14" />
+                </Button>
                 <!-- 저장 버튼(A37): 편집 가능한 텍스트가 열려 있고 변경이 있을 때만 활성 -->
-                <Button x:Name="SaveButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
+                <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
                         IsEnabled="False"
                         Click="OnSaveButtonClick"
                         ToolTipService.ToolTip="Save (Ctrl+S)">
                     <FontIcon Glyph="&#xE74E;" FontSize="14" />
                 </Button>
-                <TextBlock x:Name="FileNameText" Grid.Column="1" VerticalAlignment="Center"
+                <TextBlock x:Name="FileNameText" Grid.Column="2" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Text="No file open" />
                 <!-- A22(v0.108.0): 파일이 열려 있지 않을 때만 뜨는 공용 드라이브 줄(셸이 주입).
                      v0.47.0의 "현재 문서가 있는 드라이브" 텍스트를 대체한다 —
                      파일명 칸과 같은 자리를 쓰고 둘은 서로 배타적으로 표시된다. -->
-                <ContentPresenter x:Name="DriveStripHost" Grid.Column="1"
+                <ContentPresenter x:Name="DriveStripHost" Grid.Column="2"
                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                   VerticalAlignment="Center" Visibility="Collapsed" />
                 <!-- 수정됨 표시(A37) — 창 제목의 ●는 셸이 UnsavedChanged로 단다 -->
-                <TextBlock x:Name="ModifiedText" Grid.Column="2" VerticalAlignment="Center"
+                <TextBlock x:Name="ModifiedText" Grid.Column="3" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed"
                            Text="● Unsaved" />
                 <!-- A181: 현재 줌 배율(document.zoom을 퍼센트로) — 텍스트 문서가 열려 있는 동안
                      항상 표시(100%도 표시 — 이미지 ZoomText/A149 관용구). PDF·빈 화면은 빈 문자열
                      (PDF 줌은 별개 체계 — PdfPane의 ZoomFactor·Fit이 지배한다).
                      갱신은 DocumentView.UpdateZoomText 한 곳. -->
-                <TextBlock x:Name="ZoomText" Grid.Column="3" VerticalAlignment="Center"
+                <TextBlock x:Name="ZoomText" Grid.Column="4" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" />
                 <!-- PDF 현재 페이지/전체 (A16) — PDF가 열려 있을 때만 -->
-                <TextBlock x:Name="PageInfoText" Grid.Column="4" VerticalAlignment="Center"
+                <TextBlock x:Name="PageInfoText" Grid.Column="5" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed" />
                 <!-- A30 상태형 Fit — 본체 = 마지막 옵션 표시·클릭 시 재적용, 화살표 = A83 4옵션.
                      내용·툴팁은 코드(ShowPdfFitState/ShowTextFitState/UpdateFitButton)가 갱신하므로
@@ -152,7 +164,7 @@
                      조절기는 항상 보이고, 텍스트·빈 화면에서는 비활성 "1/1" 표시(옵션 무의미 —
                      1차는 표시만, 부록 B 67), PDF에서만 4옵션 활성. 초기 IsEnabled=False가 그
                      기본 상태다(활성/비활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍). -->
-                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
                             CornerRadius="4,0,0,4" IsEnabled="False" Click="OnFitClicked">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />

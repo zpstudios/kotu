@@ -23,6 +23,8 @@ namespace KOTU.Module.Document;
 /// <b>편집 범위(A113 ② 명문화)</b>: 편집·저장은 <b>플레인 텍스트 계열만</b>이다 — PDF는 뷰 전용
 /// (<c>_path</c>가 null이라 저장 경로 자체가 없다), 4MB 잘림 텍스트는 IsReadOnly(잘린 채 저장 방지),
 /// 비텍스트 포맷(HWP 등)은 뷰어가 생겨도 편집 대상이 아니다.
+/// A189: 무제 문서(New text file)는 <c>_path</c>가 null이어도 편집 대상이다 — 구분 표지는
+/// <c>_untitled</c>(필드 주석 참고), 첫 저장이 Save as 피커로 경로를 확정한다.
 /// <b>런타임 정합성 체크(A113 ⓐ~ⓓ)</b> — 강행 금지, 항상 사용자에게 선택권을 준다:
 /// ⓐ 저장 직후 파일을 다시 읽어 쓴 바이트와 대조(실패 = Retry/Save as.../Cancel),
 /// ⓑ 로드 시 라운드트립 판정(무수정 저장이 원본 바이트를 재현 못 하면 저장 전에 예고),
@@ -30,10 +32,15 @@ namespace KOTU.Module.Document;
 /// ⓓ 저장 직전 디스크 스탬프(수정 시각·크기) 대조로 외부 변경 검출. 전부 잘림·PDF에는 비적용.
 /// </summary>
 public sealed partial class DocumentView : UserControl,
-    IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider
+    IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
+    IUntitledContentSource
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>A189: 무제 문서로 에디터에 진입했다(IUntitledContentSource) — 경로가 없어
+    /// ContentOpened를 못 쓴다. 셸은 이걸로 빈 상태 탐색기를 내리고 제목을 무제 표기로 바꾼다.</summary>
+    public event Action? UntitledOpened;
 
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 텍스트·PDF 열기와 닫기,
     /// 페이지 이동(A138), 저장 성공(A137 — 셸의 작업표시줄 용량 갱신 훅) 시점.</summary>
@@ -95,6 +102,20 @@ public sealed partial class DocumentView : UserControl,
 
     // ---- 편집 상태 (A37) ----
     private string? _path;                 // 지금 편집 중인 파일
+
+    /// <summary>
+    /// A189: 무제 문서 표지. <c>_path == null</c>은 종전부터 "PDF 뷰 전용/빈 화면"(저장 경로
+    /// 자체가 없다 — A113 편집 범위 주석)의 표지로도 쓰여서, "경로는 없지만 편집 가능"인 상태는
+    /// 이 플래그가 유일하게 구분한다(상태 enum 대신 bool — <c>_truncated</c>류의 기존 표지 관용구.
+    /// 두 축의 조합: _path 있음 = 파일 편집 / _path 없음+_untitled = 무제 편집 /
+    /// _path 없음+!_untitled = PDF·빈 화면). 세우는 곳 = StartUntitled 하나,
+    /// 내리는 곳 = 첫 저장 성공(CommitSave)·파일/PDF 열기(ApplyLoadedText·OpenPdf).
+    /// </summary>
+    private bool _untitled;
+
+    /// <summary>A189: 무제 문서 표시명 — 하단 바 파일명·저장 확인 대화상자·피커 제안 파일명이
+    /// 같은 값을 쓴다. 셸의 창 제목 "KOTU - Untitled"(MainWindow.OnUntitledOpened)와 표기 동기.</summary>
+    private const string UntitledDisplayName = "Untitled";
     private TextEncodingKind _encoding;    // 열 때 감지한 인코딩 — 저장 시 보존
     private string _newLine = "\r\n";      // 원본 줄바꿈 스타일 — 저장 시 보존
     private bool _truncated;               // 4MB 잘림 → 읽기 전용
@@ -266,11 +287,11 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>
     /// A181: 하단 바 % 표기(이미지 ZoomText/A149 관용구 — 같은 값이면 대입하지 않는다).
     /// 텍스트 문서가 열려 있는 동안 항상 표시(100% 포함), PDF·빈 화면·대용량 지연 대입 대기
-    /// (A177 — 그동안 _path는 null)는 빈 문자열.
+    /// (A177 — 그동안 _path는 null)는 빈 문자열. A189: 무제 문서도 텍스트 편집이라 표시한다.
     /// </summary>
     private void UpdateZoomText()
     {
-        var text = _path is not null ? $"{_zoomPercent}%" : string.Empty;
+        var text = _path is not null || _untitled ? $"{_zoomPercent}%" : string.Empty;
         if (ZoomText.Text == text) return;
         ZoomText.Text = text;
     }
@@ -482,6 +503,7 @@ public sealed partial class DocumentView : UserControl,
     {
         HidePdf(); // PDF → 텍스트 전환 (A16)
         _path = path;
+        _untitled = false; // A189: 실경로 열기 — 무제 표지를 걷는다(방어 — 현행 라우팅상 무제 중 열기는 새 뷰다)
         _encoding = loaded.Encoding;
         _newLine = loaded.NewLine;
         _truncated = loaded.Truncated;
@@ -518,8 +540,73 @@ public sealed partial class DocumentView : UserControl,
         FileNameText.Text = Path.GetFileName(path);
         UpdateZoomText(); // A181: _path가 잡혔다 — 하단 바에 현재 배율 표시(항상, 100% 포함)
         _shownPath = path;
+        UpdateNewFileButton(); // A189: 콘텐츠가 열렸다 — New text file 비활성
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
+    }
+
+    // ---------- 무제 문서 (A189) ----------
+
+    /// <summary>A189: 하단 바 'New text file' 클릭 — 무제 문서로 에디터 진입.</summary>
+    private void OnNewFileClick(object sender, RoutedEventArgs e) => StartUntitled();
+
+    /// <summary>
+    /// A189: 'New text file' 버튼 활성 판정 — 빈 상태(아무 콘텐츠도 표시 전)에서만 켠다.
+    /// 콘텐츠가 있으면 비활성(A145 Fit 조절기의 "항상 보이되 비활성" 관용구) — 눌리면 현재
+    /// 문서를 대체해야 해서 뷰 내부 미저장 가드가 필요해지는 경로 자체를 만들지 않는다.
+    /// 로딩 중(_shownPath 확정 전)에는 아직 활성인데, 그때의 클릭은 StartUntitled의
+    /// _openSeq 증가가 진행 중 읽기·지연 대입(A177)을 자연 무산시킨다(경합 없음).
+    /// </summary>
+    private void UpdateNewFileButton() =>
+        NewFileButton.IsEnabled = _shownPath is null && !_untitled;
+
+    /// <summary>
+    /// A189: 무제 문서로 에디터 진입 — ApplyLoadedText와 같은 순서 계약(상태 세팅 → Text 대입 →
+    /// 기준 텍스트 수립 → 더티 해제 → 표시 전환 → 장식 무효화 → 셸 통지)을 빈 텍스트로 밟는다.
+    /// 더티 기준 텍스트 = 빈 문자열(사양)이라 첫 입력부터 A113 ⓒ 판정이 성립하고, 저장은
+    /// 경로가 없어 첫 Ctrl+S가 Save as 피커로 간다(SaveCoreAsync). 새 파일 기본값 =
+    /// UTF-8(BOM 없음)·CRLF(줄바꿈 없는 기존 파일의 감지 폴백과 같은 Windows 기본).
+    /// 트레이·작업표시줄 32px는 경로 없음 폴백 그대로다(_shownPath=null → 유휴 "DOC" /
+    /// 셸 OpenFileIconInfo의 File.Exists 가드 → 유휴 이니셜) — 값 무변경이라 TrayStatusChanged도
+    /// 쏘지 않는다(셸 갱신은 UntitledOpened 쪽 RefreshShellIcons가 겸한다). 첫 저장이 경로를
+    /// 확정하면 CommitSave의 기존 배선(ContentOpened·TrayStatusChanged)이 전부 되살린다.
+    /// </summary>
+    private void StartUntitled()
+    {
+        ++_openSeq; // 진행 중 읽기(OpenPath)·지연 대입(A177)이 이 상태를 덮지 않게
+        HidePdf();
+        _path = null;
+        _untitled = true;
+        _shownPath = null;
+        _encoding = TextEncodingKind.Utf8;
+        _newLine = "\r\n";
+        _truncated = false;
+        _originalBytes = null;
+        _lossyAtLoad = false;
+        _lossyReason = RoundTripLoss.None;
+        _diskWriteTimeUtc = default; // ⓓ 스탬프는 첫 저장(CommitSave)이 잡는다
+        _diskLength = 0;
+
+        _gutterDigits = DigitCount(1) + 1; // 빈 문서 = 1줄 — ApplyLoadedText와 같은 산식
+        UpdateEditorPadding();
+
+        _loadingText = true; // 프로그램적 설정 — dirty 아님(ApplyLoadedText 관용구)
+        EditorBox.Text = string.Empty;
+        _loadingText = false;
+        _textSnapshot = null;
+        _baselineText = string.Empty; // A113 ⓒ: 무제의 더티 기준 = 빈 문자열
+        _dirtyTimer?.Stop();
+        EditorBox.IsReadOnly = false;
+        SetDirty(false);
+
+        EditorBox.Visibility = Visibility.Visible;
+        _decor.Invalidate(); // A115: 표시 전환이 레이아웃에 반영된 뒤 장식을 다시 그린다
+        PlaceholderText.Visibility = Visibility.Collapsed;
+        FileNameText.Text = UntitledDisplayName;
+        UpdateZoomText(); // A181: 무제도 텍스트 편집 — 배율 표시
+        UpdateNewFileButton();
+        UntitledOpened?.Invoke(); // 셸 동기화 — 탐색기 내림·드라이브 줄 숨김·제목 "KOTU - Untitled"
+        EditorBox.Focus(FocusState.Programmatic); // 곧바로 타이핑 가능하게
     }
 
     // ---------- PDF (A16) ----------
@@ -557,6 +644,7 @@ public sealed partial class DocumentView : UserControl,
         // 화면 전환: 에디터 내리고 PDF 패널 표시. PDF는 편집 대상이 아니다 — 저장 상태 초기화
         // (A113 ⓐ~ⓓ 상태도 함께 비운다 — PDF에는 어떤 런타임 체크도 적용되지 않는다).
         _path = null;
+        _untitled = false; // A189: PDF 뷰 — 무제 표지도 함께 걷는다(경로 없음 = 뷰 전용의 종전 의미)
         _truncated = false;
         _originalBytes = null;
         _lossyAtLoad = false;
@@ -587,11 +675,13 @@ public sealed partial class DocumentView : UserControl,
             FileNameText.Text = "No file open";
             PlaceholderText.Visibility = Visibility.Visible;
             _shownPath = null;
+            UpdateNewFileButton(); // A189: 빈 상태로 복귀 — New text file 재활성
             TrayStatusChanged?.Invoke(); // A54: 열기 실패 → 유휴("DOC")
             return;
         }
 
         _shownPath = path;
+        UpdateNewFileButton(); // A189: 콘텐츠가 열렸다 — New text file 비활성
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = 현재/전체 페이지(LoadAsync가 (1, 전체)를 이미 쐈다)
     }
@@ -966,7 +1056,8 @@ public sealed partial class DocumentView : UserControl,
         timer.Tick += (_, _) =>
         {
             timer.Stop(); // 반복 타이머 — 1회 판정용이라 즉시 멈춘다
-            if (_loadingText || _path is null || _truncated) return; // 판정 대상이 아니다
+            // A189: 무제(_untitled)는 경로가 없어도 판정 대상이다 — 편집 계열 가드 공통 형태.
+            if (_loadingText || (_path is null && !_untitled) || _truncated) return; // 판정 대상이 아니다
             SetDirty(!EditorMatchesBaseline());
         };
         return timer;
@@ -982,7 +1073,7 @@ public sealed partial class DocumentView : UserControl,
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
     {
         _textSnapshot = null; // A142 ①ⓑ: 어떤 편집이든 스냅샷부터 무효화 — 조기 반환보다 먼저
-        if (_loadingText || _path is null || _truncated) return;
+        if (_loadingText || (_path is null && !_untitled) || _truncated) return; // A189: 무제도 더티 추적
         if (EditorText.Length != _baselineText.Length)
         {
             _dirtyTimer?.Stop(); // 보류 중 판정 불필요 — 결과가 이미 확정이다
@@ -1045,7 +1136,9 @@ public sealed partial class DocumentView : UserControl,
     private async Task<bool> SaveAsync()
     {
         if (_saving) return false; // 저장 흐름이 이미 진행 중(대화상자 포함) — 완료를 주장하지 않는다
-        if (_path is null || _truncated) return true; // 잘림·PDF·빈 화면 — 저장 대상이 없다(ⓐ~ⓓ 비적용)
+        // 잘림·PDF·빈 화면 — 저장 대상이 없다(ⓐ~ⓓ 비적용). A189: 무제는 저장 대상이다 —
+        // 경로 확정(Save as 피커)은 SaveCoreAsync 몫.
+        if ((_path is null && !_untitled) || _truncated) return true;
         SettlePendingDirtyCheck(); // 250ms 창 안의 치환 편집이 "저장할 것 없음"으로 새지 않게
         if (!_dirty) return true;
 
@@ -1062,7 +1155,27 @@ public sealed partial class DocumentView : UserControl,
 
     private async Task<bool> SaveCoreAsync()
     {
-        if (_path is not { } originalPath) return true; // SaveAsync가 걸렀다 — 방어
+        // A189: 무제 문서는 저장 대상 경로가 아직 없다 — 먼저 Save as 피커로 경로를 확정한다
+        // (A113 ⓐ의 "Save as..." 피커 재사용). 취소 = 저장 전체 취소(더티 유지 — ConfirmCloseAsync
+        // 경유면 닫기도 함께 취소). ⓓ 외부 변경·ⓑ 라운드트립 예고는 원본 디스크 파일이 없어
+        // 자연히 건너뛴다(_path=null → DiskChangedSinceLoad=false, _originalBytes=null).
+        // 피커가 기존 파일을 골랐으면 덮어쓰기 확인은 피커 자신이 했다(기존 Save as 흐름과 동일).
+        string originalPath;
+        var savedAs = false;
+        if (_path is { } existing)
+        {
+            originalPath = existing;
+        }
+        else if (_untitled)
+        {
+            if (await PickSaveAsPathAsync() is not { } picked) return false; // 피커 취소 = 저장 취소
+            originalPath = picked;
+            savedAs = true; // CommitSave가 경로 확정 연쇄(_path·제목·트레이·셸 통지)를 탄다
+        }
+        else
+        {
+            return true; // SaveAsync가 걸렀다 — 방어
+        }
 
         // WinUI TextBox는 줄바꿈을 '\r'로 정규화한다 — 기준(\n)으로 맞춘 뒤 원본 스타일로 되돌린다.
         var normalized = NormalizeNewlines(EditorText); // A142 ①ⓑ: 마지막 편집 후 스냅샷 재사용
@@ -1089,7 +1202,6 @@ public sealed partial class DocumentView : UserControl,
 
         // 쓰기 + ⓐ 재검증. 실패하면 같은 경로 재시도(Retry) 또는 새 경로(Save as...)로 반복한다.
         var path = originalPath;
-        var savedAs = false;
         while (true)
         {
             SaveStamp stamp;
@@ -1156,9 +1268,13 @@ public sealed partial class DocumentView : UserControl,
 
         if (path != _path)
         {
-            _path = path;      // Save as... — 이후 편집·저장은 새 파일이 대상
+            _path = path;      // Save as...·무제 첫 저장(A189) — 이후 편집·저장은 새 파일이 대상
+            _untitled = false; // A189: 경로가 확정됐다 — 무제 표지를 걷는다(이하 통지는 기존 배선)
             _shownPath = path; // 트레이 표기(A54)도 새 파일 기준
             FileNameText.Text = Path.GetFileName(path);
+            UpdateNewFileButton(); // A189: 무제 → 파일 전이 — 버튼은 계속 비활성(콘텐츠 있음)
+            // 창 제목 갱신은 셸 몫 — OnContentOpened가 무제 전이(A189)에 한해 새 경로로 바꾼다
+            // (기존 파일 Save as의 제목 미갱신은 A113 알려진 한계 그대로 — 이번 범위 밖).
             ContentOpened?.Invoke(path); // 셸 동기화 — 기준 경로·드라이브 줄·오버레이(기존 배선)
         }
 
@@ -1260,17 +1376,19 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>
     /// ⓐ의 "Save as..." — FileSavePicker(ArchiveView 피커와 같은 InitializeWithWindow+GetHwnd 패턴).
     /// 확장자 목록은 현재 파일의 확장자 1개, 제안 파일명은 현재 파일명(확장자는 피커가 붙인다).
+    /// A189: 무제 문서(_path=null)는 확장자 .txt(새 텍스트 파일)·제안 파일명 Untitled.
     /// null = 사용자 취소(저장 전체 취소).
     /// </summary>
     private async Task<string?> PickSaveAsPathAsync()
     {
-        if (_path is null) return null;
-        var ext = Path.GetExtension(_path);
+        var ext = _path is { } current ? Path.GetExtension(current) : ".txt"; // 무제(A189) = .txt
         if (string.IsNullOrEmpty(ext)) ext = ".txt"; // 확장자 없는 경로 방어(현행 라우팅상 오지 않는다)
         var picker = new FileSavePicker
         {
             SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-            SuggestedFileName = Path.GetFileNameWithoutExtension(_path),
+            SuggestedFileName = _path is { } named
+                ? Path.GetFileNameWithoutExtension(named)
+                : UntitledDisplayName,
         };
         picker.FileTypeChoices.Add(ext.TrimStart('.').ToUpperInvariant() + " file", new List<string> { ext });
         WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
@@ -1349,7 +1467,8 @@ public sealed partial class DocumentView : UserControl,
         var dialog = new ContentDialog
         {
             Title = "Unsaved changes",
-            Content = $"Save changes to {Path.GetFileName(_path)}?",
+            // A189: 무제 문서(_path=null인데 더티 — 무제뿐이다)는 표시명으로 묻는다.
+            Content = $"Save changes to {(_path is { } p ? Path.GetFileName(p) : UntitledDisplayName)}?",
             PrimaryButtonText = "Save",
             SecondaryButtonText = "Don't save",
             CloseButtonText = "Cancel",

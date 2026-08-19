@@ -654,11 +654,12 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 빈 영역 우클릭 메뉴 (A94 6차): New folder / Paste / Refresh — 셋 다 기존 경로 재사용이다
-    /// (Ctrl+Shift+N의 CreateFolderThenRenameAsync = 생성 후 이름 편집 진입까지 · 현재 폴더
+    /// 빈 영역 우클릭 메뉴 (A94 6차 → A189에서 New file 추가): New folder / New file / Paste /
+    /// Refresh — 전부 기존 경로 재사용이다(Ctrl+Shift+N의 CreateFolderThenRenameAsync와 그 파일
+    /// 판본 CreateFileThenRenameAsync = 생성 후 이름 편집 진입까지 · 현재 폴더
     /// 붙여넣기 · 조작 후 재스캔 RefreshAfterFileOp). 표면(그리드·리스트)마다 한 벌씩 만든다 —
     /// 새 폴더 편집 진입이 자기 owner의 컨테이너를 찾아야 하기 때문.
-    /// 활성 판정은 메뉴가 열릴 때: 아직 항해 전이면(폴더 미정) 셋 다 비활성, Paste는 클립보드에
+    /// 활성 판정은 메뉴가 열릴 때: 아직 항해 전이면(폴더 미정) 전부 비활성, Paste는 클립보드에
     /// 파일 항목이 있을 때만(판정 실패 시 활성 — CanPasteFromClipboard 주석).
     /// </summary>
     private MenuFlyout MakeSurfaceMenu(ListViewBase owner)
@@ -671,6 +672,14 @@ public sealed partial class ExplorerPane : UserControl
         // 편집 진입 전에 재스캔 await가 한 번 끼므로 플라이아웃은 그때 이미 닫혀 있다
         // (Rename처럼 디스패처로 미룰 필요가 없다 — 순서는 CreateFolderThenRenameAsync가 보장).
         newFolder.Click += async (_, _) => await CreateFolderThenRenameAsync(owner);
+
+        // A189: New file — New folder 옆, 같은 흐름(생성 후 이름변경 편집 진입)의 파일 판본.
+        var newFile = new MenuFlyoutItem
+        {
+            Text = "New file",
+            Icon = new FontIcon { Glyph = "\uE7C3" }, // 문서(파일) — 항목 타일과 같은 글리프
+        };
+        newFile.Click += async (_, _) => await CreateFileThenRenameAsync(owner);
 
         var paste = new MenuFlyoutItem
         {
@@ -1531,6 +1540,27 @@ public sealed partial class ExplorerPane : UserControl
         if (created is null) return;
         await NavigateToAsync(_folder, _extensions);
         if (FindItemByPath(owner, created) is not { } item) return; // 그새 사라짐 등 — 생성만으로 끝
+        owner.SelectedItem = item;
+        owner.ScrollIntoView(item);
+        owner.UpdateLayout(); // 컨테이너 실체화 — 편집 상자 삽입·포커스가 성립하게
+        BeginRenameOf(item);
+    }
+
+    /// <summary>
+    /// 빈 영역 메뉴 New file (A189 — 위 CreateFolderThenRenameAsync의 파일 판본, 흐름 동일):
+    /// "New file.txt" 생성(충돌 = "New file (2).txt") 후 재스캔 완료를 기다려 그 항목으로
+    /// 이름변경 편집에 진입한다. 감시(A94 5차) 재스캔·편집 중 보류(EditEnded)는 New folder와
+    /// 같은 경로를 그대로 탄다. 현재 목록이 모듈 확장자로 필터돼 .txt가 안 보이는 모듈에서는
+    /// 파일만 만들어지고 편집 진입은 조용히 생략된다(FindItemByPath 미매칭 — 위 "그새 사라짐"
+    /// 폴백과 같은 무해 경로).
+    /// </summary>
+    private async Task CreateFileThenRenameAsync(ListViewBase owner)
+    {
+        var (created, notice, denied) = ExplorerFileOps.CreateFile(_folder);
+        if (notice is not null) await ExplorerFileOps.ReportAsync(notice, denied ? 1 : 0, MakeOpUi());
+        if (created is null) return;
+        await NavigateToAsync(_folder, _extensions);
+        if (FindItemByPath(owner, created) is not { } item) return; // 필터 밖·그새 사라짐 — 생성만으로 끝
         owner.SelectedItem = item;
         owner.ScrollIntoView(item);
         owner.UpdateLayout(); // 컨테이너 실체화 — 편집 상자 삽입·포커스가 성립하게

@@ -55,6 +55,17 @@ public sealed partial class MainWindow : Window
     // (_altComboUsed, OnRootKeyUp).
     private IModule? _currentModule;      // 지금 보여주는 모듈 (탐색기 필터·리스트 오버레이에 사용)
     private string? _currentFilePath;     // 현재 콘텐츠 파일 (null = 빈 상태 → 탐색기 표시)
+
+    /// <summary>
+    /// A189: 무제 문서(경로 없는 콘텐츠 — IUntitledContentSource, 문서 모듈 'New text file')가
+    /// 중앙을 차지 중인지. <c>_currentFilePath</c>가 null이어도 빈 상태(S1 탐색기·드라이브 줄)로
+    /// 취급하면 안 되는 상태 축이다 — 소비처는 IsEmptyFileModule·UpdateDriveStrip·TryNavigateBack
+    /// 세 곳뿐이고, 경로 기반 축(정보 오버레이·패널 컨텍스트·S4·32px 아이콘·마지막 폴더)은 전부
+    /// 종전 null 경로 폴백 그대로 둔다(무제는 보여줄 파일 정보가 없다 — 구현 결정).
+    /// 세우는 곳 = OnUntitledOpened, 내리는 곳 = SetContentState(모듈 전환·실경로 열기)와
+    /// OnContentOpened(무제 첫 저장 → 경로 확정).
+    /// </summary>
+    private bool _untitledContent;
     private ThumbnailExplorer? _thumbnailExplorer; // S1 중앙 썸네일 뷰 (A93, 지연 생성 — 구 ExplorerPane 대체)
     // S4('오픈 파일' 탐색, A90) 중앙 반투명 썸네일 — S1 인스턴스와 공유하지 않는 별도 인스턴스.
     // 두 그리드가 동시에 뜨는 상태는 없지만(S1에서는 S4 진입 자체가 없음 — 강조만), 공유하면
@@ -1276,6 +1287,14 @@ public sealed partial class MainWindow : Window
         // 뷰 내부 열기(열기 버튼·◀/▶ 탐색·테스트 클립)도 셸과 동기화 (v0.25.0)
         if (view is IContentStateSource source)
             source.ContentOpened += path => DispatcherQueue.TryEnqueue(() => OnContentOpened(path));
+        // A189: 무제 문서 진입(경로 없는 콘텐츠 — 문서 모듈 'New text file')도 셸과 동기화.
+        // 뷰가 이미 교체됐으면 무시한다(아래 이벤트들과 같은 가드).
+        if (view is IUntitledContentSource untitledSource)
+            untitledSource.UntitledOpened += () => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                OnUntitledOpened();
+            });
         // A186: 재생 상태 변화(재생/일시정지/정지) → 하단 바 자동 숨김 재평가.
         // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(A37과 같은 가드).
         if (view is IPlaybackStateSource playback)
@@ -1391,6 +1410,7 @@ public sealed partial class MainWindow : Window
         HideS1Flash(); // A90-b 강조가 콘텐츠 전환 뒤까지 남지 않게
         _currentModule = module;
         _currentFilePath = filePath;
+        _untitledContent = false; // A189: 모듈 전환·실경로 열기·설정 진입은 무제 상태를 걷는다
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // 전역 마지막 폴더 저장 (v0.55.0 모듈별 → A174 전역 1벌)
         UpdateEmptyExplorer();
@@ -1448,15 +1468,48 @@ public sealed partial class MainWindow : Window
         // A90: 뷰 내부 열기도 "새 콘텐츠가 화면을 차지"이므로 S4 자동 종료(SetContentState와 동일 규칙).
         ExitOpenFileBrowsing(restore: false, refresh: false);
         ResetBarAutoHide(); // A186: 콘텐츠 교체 = 타이머 정지·바 복원(새 재생이 다시 연다)
+        var wasUntitled = _untitledContent; // A189: 무제 → 첫 저장(Save as)의 경로 확정 전이인지
+        _untitledContent = false;
         _currentFilePath = path;
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // v0.55.0
         UpdateEmptyExplorer();
         UpdateDriveStrip();   // A22: 뷰가 파일을 열었다 → 드라이브 줄을 숨긴다
         ApplyOverlayStates(); // 폴더·정보가 바뀌었을 수 있다 — 떠 있는 오버레이·도크 갱신
+        // A189: 무제 → 저장 전이는 창 제목도 새 경로로("KOTU - Untitled" → "KOTU - 파일명").
+        // 기존 파일 Save as의 제목 미갱신(A113 알려진 한계)은 그대로다 — 이번 수리는 무제 경로만.
+        // ● 표시는 건드리지 않는다: 저장 성공의 더티 해제(UnsavedChanged)가 같은 디스패처 큐에서
+        // 이 호출 직후 도착해 끈다(DocumentView.CommitSave의 통지 순서).
+        if (wasUntitled) SetTitle(FileTitle(path));
         // A54: 유휴(3자) → 열림(2줄) 전환도 이 경로로 걸린다.
         // A137: 뷰 내부 열기(◀/▶ 등)도 창 32px의 확장자/용량을 바꾸므로 셸 아이콘 전체 갱신.
         RefreshShellIcons();
+    }
+
+    /// <summary>
+    /// A189: 뷰가 무제 문서(경로 없는 콘텐츠)로 에디터에 진입했다는 알림(IUntitledContentSource) —
+    /// <see cref="OnContentOpened"/>의 경로 없는 판본. 탐색기(S1)를 내리고 드라이브 줄을 숨기고
+    /// 제목을 "KOTU - Untitled"(A103 연장 — FileTitle과 같은 하이픈 구분자, 표기는
+    /// DocumentView.UntitledDisplayName과 동기)로 바꾼다. 경로 기반 축은 전부 폴백 그대로다:
+    /// 정보 오버레이·패널 컨텍스트 없음(HasPanelContext=false → F11/F12·S4 무동작 — 정보 모듈의
+    /// None 취급과 같은 층), 트레이·32px 아이콘 유휴(OpenFileIconInfo의 File.Exists 가드),
+    /// 마지막 폴더 무변경(RememberLastFolder의 null 가드). 첫 저장이 경로를 확정하면
+    /// ContentOpened가 정상 콘텐츠로 승격시킨다.
+    /// </summary>
+    private void OnUntitledOpened()
+    {
+        // S1에서 S4는 성립하지 않지만 OnContentOpened와 같은 순서를 지킨다(방어 — 무해한 무동작).
+        ExitOpenFileBrowsing(restore: false, refresh: false);
+        ResetBarAutoHide();
+        _currentFilePath = null;
+        _untitledContent = true;
+        InfoOverlay.InvalidateCache();
+        UpdateEmptyExplorer(); // IsEmptyFileModule=false → 중앙 썸네일 탐색기를 내린다(에디터가 중앙)
+        UpdateDriveStrip();    // 무제도 "콘텐츠 열림" — 드라이브 줄 대신 파일명(Untitled) 칸
+        ApplyOverlayStates();
+        _titleDirtyMark = false; // 진입 직후는 무변경(더티 기준 = 빈 문자열 — DocumentView)
+        SetTitle($"{Branding.AppName} - Untitled");
+        RefreshShellIcons(); // 경로 없음 = 유휴 폴백으로 회귀(파일을 보다 무제로 오는 경로는 없지만 일관 갱신)
     }
 
     // ---------- 하단 바 드라이브 줄 (A22, v0.108.0) ----------
@@ -1485,7 +1538,8 @@ public sealed partial class MainWindow : Window
     private void UpdateDriveStrip()
     {
         if (_driveStrip is null || _driveStripHost is null) return;
-        var show = _currentFilePath is null;
+        // A189: 무제 문서도 "열려 있음" — 드라이브 줄 대신 파일명 칸(Untitled)이 보여야 한다.
+        var show = _currentFilePath is null && !_untitledContent;
         _driveStrip.SetActive(show);
         _driveStripHost.ShowDriveStrip(show);
     }
@@ -1501,8 +1555,10 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 파일 없이 연 파일 모듈(빈 모듈 상태 = A86 표의 S1)인지 — 중앙 썸네일 뷰
     /// (v0.25.0 탐색기 → A93)와 A81 빈 도크 오버레이가 공유하는 조건.
+    /// A189: 무제 문서는 경로가 없어도 콘텐츠다 — S1이 아니다(탐색기를 다시 띄우면 에디터를 덮는다).
     /// </summary>
-    private bool IsEmptyFileModule => _currentFilePath is null && IsFileModule(_currentModule);
+    private bool IsEmptyFileModule =>
+        _currentFilePath is null && !_untitledContent && IsFileModule(_currentModule);
 
     // A176: 스왑체인 반투명 폴백 판별(A129 — IsSwapChainModule/IsSwapChainContent)은 반투명
     // 표시 축과 함께 철거 — 패널·S4 배경이 전부 불투명이라 아크릴 배경 샘플 문제 자체가 없다.
@@ -2095,7 +2151,9 @@ public sealed partial class MainWindow : Window
             ExitOpenFileBrowsing(restore: true);
             return true;
         }
-        if (_currentFilePath is not null && _currentModule is { } module)
+        // A189: 무제 문서도 닫을 콘텐츠다 — 경로는 없지만 ③과 같은 "콘텐츠 닫기 → S1" 층.
+        // 미저장 가드는 종전대로 ShowModule 안의 ConfirmDiscardAsync가 담당한다(취소 = 무변경).
+        if ((_currentFilePath is not null || _untitledContent) && _currentModule is { } module)
         {
             ShowModule(module, OpenContext.Empty, Branding.AppName);
             return true;

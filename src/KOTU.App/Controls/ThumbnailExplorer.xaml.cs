@@ -236,6 +236,24 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
+    /// 빈 영역 메뉴 New file (A189 — 위 CreateFolderThenRenameAsync의 파일 판본, 흐름 동일):
+    /// "New file.txt" 생성(충돌 = "New file (2).txt") 후 재스캔을 예약하고, 그 결과가 돌아오면
+    /// 그 타일로 이름변경 편집에 진입한다. 감시(A94 5차) 재스캔·편집 중 보류(EditEnded)는
+    /// New folder와 같은 경로를 그대로 타므로 별도 처리가 없다. 현재 목록이 모듈 확장자로
+    /// 필터돼 .txt가 안 보이는 모듈에서는 파일만 만들어지고 편집 진입은 조용히 생략된다
+    /// (_pendingRenamePath 미매칭 — New folder의 "그새 사라짐" 폴백과 같은 무해 경로).
+    /// </summary>
+    private async Task CreateFileThenRenameAsync()
+    {
+        if (CurrentFolder is not { Length: > 0 } parent) return;
+        var (created, notice, denied) = ExplorerFileOps.CreateFile(parent);
+        if (notice is not null) await ExplorerFileOps.ReportAsync(notice, denied ? 1 : 0, MakeOpUi());
+        if (created is null) return;
+        _pendingRenamePath = created; // 재스캔 결과(ShowEntries)가 돌아오면 그 타일로 편집 진입
+        FolderActivated?.Invoke(parent); // 단일 원본(좌 리스트) 경유 재스캔 — A93 경로
+    }
+
+    /// <summary>
     /// 클립보드 적재 공용 (A94 6차 — Ctrl+C/X와 우클릭 메뉴 Cut/Copy가 같은 경로).
     /// 잘라내기 반투명 표시(4차)는 ExplorerFileOps가 적재 성공 시에만 갱신한다.
     /// </summary>
@@ -725,10 +743,11 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 빈 영역 우클릭 메뉴 (A94 6차): New folder / Paste / Refresh — 셋 다 기존 경로 재사용이다
-    /// (Ctrl+Shift+N의 CreateFolderThenRenameAsync = 생성 후 이름 편집 진입까지 · 현재 폴더
-    /// 붙여넣기 · 단일 원본 경유 재스캔 RefreshViaShell). 이 뷰는 표면이 하나라 메뉴도 한 벌이다.
-    /// 활성 판정은 메뉴가 열릴 때: 아직 폴더가 정해지지 않았으면 셋 다 비활성, Paste는 클립보드에
+    /// 빈 영역 우클릭 메뉴 (A94 6차 → A189에서 New file 추가): New folder / New file / Paste /
+    /// Refresh — 전부 기존 경로 재사용이다(Ctrl+Shift+N의 CreateFolderThenRenameAsync와 그 파일
+    /// 판본 CreateFileThenRenameAsync = 생성 후 이름 편집 진입까지 · 현재 폴더 붙여넣기 ·
+    /// 단일 원본 경유 재스캔 RefreshViaShell). 이 뷰는 표면이 하나라 메뉴도 한 벌이다.
+    /// 활성 판정은 메뉴가 열릴 때: 아직 폴더가 정해지지 않았으면 전부 비활성, Paste는 클립보드에
     /// 파일 항목이 있을 때만(판정 실패 시 활성 — CanPasteFromClipboard 주석).
     /// </summary>
     private MenuFlyout MakeSurfaceMenu()
@@ -739,6 +758,14 @@ public sealed partial class ThumbnailExplorer : UserControl
             Icon = new FontIcon { Glyph = "\uE8F4" }, // NewFolder
         };
         newFolder.Click += async (_, _) => await CreateFolderThenRenameAsync();
+
+        // A189: New file - New folder 옆, 같은 흐름(생성 후 이름변경 편집 진입)의 파일 판본.
+        var newFile = new MenuFlyoutItem
+        {
+            Text = "New file",
+            Icon = new FontIcon { Glyph = "\uE7C3" }, // 문서(파일) — 탐색기 파일 타일과 같은 글리프
+        };
+        newFile.Click += async (_, _) => await CreateFileThenRenameAsync();
 
         var paste = new MenuFlyoutItem
         {
@@ -756,12 +783,14 @@ public sealed partial class ThumbnailExplorer : UserControl
 
         var flyout = new MenuFlyout();
         flyout.Items.Add(newFolder);
+        flyout.Items.Add(newFile);
         flyout.Items.Add(paste);
         flyout.Items.Add(refresh);
         flyout.Opening += (_, _) =>
         {
             var ready = CurrentFolder is { Length: > 0 };
             newFolder.IsEnabled = ready;
+            newFile.IsEnabled = ready; // A189: 새 폴더와 같은 판정(폴더 확정 전 비활성)
             paste.IsEnabled = ready && ExplorerFileOps.CanPasteFromClipboard();
             refresh.IsEnabled = ready;
         };
