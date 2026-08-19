@@ -27,8 +27,13 @@
                 Padding="16" IsHitTestVisible="False"
                 AllowDrop="True" DragOver="OnPanelDragOver" Drop="OnPanelDrop">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <!-- A150 2단 표시: InfoText = 문구 전용(플레이스홀더·Loading·실패 안내),
+                     InfoRows = 라벨·값 행 컨테이너(행 Grid는 코드 MakeItemRow가 만든다 —
+                     하드웨어 우 패널 스펙 리스트(HardwareView.Render)와 같은 코드 생성 관용구).
+                     둘은 배타로 토글된다(RenderItems/ShowMessage). -->
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="InfoText" TextWrapping="Wrap" FontSize="13" />
+                    <StackPanel x:Name="InfoRows" Visibility="Collapsed" />
                 </StackPanel>
             </ScrollViewer>
         </Border>

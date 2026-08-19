@@ -1043,13 +1043,17 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     // ---------- Ctrl 정보 오버레이 (v0.25.0) ----------
 
-    /// <summary>파일·해상도 + EXIF(촬영일·카메라·노출·조리개·ISO·초점거리). 미지원 포맷은 기본 정보만.</summary>
-    public async Task<string?> GetContentInfoAsync()
+    /// <summary>
+    /// 파일·해상도 + EXIF. A150에서 라벨·값 행 목록으로 이식하고 항목을 확장했다
+    /// (렌즈·프로그램·측광·플래시·화이트밸런스·색공간 — 기존과 같은 BitmapProperties 키 추가).
+    /// 값이 없는 행은 생략한다. 미지원 포맷은 기본 정보만.
+    /// </summary>
+    public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
     {
         var path = _navigator?.Current;
         if (path is null) return null;
 
-        // 파일 크기·EXIF 조회는 파일 I/O — 워커에서 만들어 결과 문자열만 받는다(A42).
+        // 파일 크기·EXIF 조회는 파일 I/O — 워커에서 만들어 결과 목록만 받는다(A42).
         var (width, height) = (_pixelWidth, _pixelHeight);
         try
         {
@@ -1061,42 +1065,53 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
     }
 
-    /// <summary>워커 스레드: 정보 오버레이 텍스트 구성(WinRT 비동기는 동기 대기 — 전용 스레드).</summary>
-    private static string BuildContentInfo(string path, uint pixelWidth, uint pixelHeight)
+    /// <summary>워커 스레드: 정보 오버레이 행 목록 구성(WinRT 비동기는 동기 대기 — 전용 스레드).</summary>
+    private static IReadOnlyList<ContentInfoItem> BuildContentInfo(string path, uint pixelWidth, uint pixelHeight)
     {
-        var lines = new List<string> { Path.GetFileName(path) };
+        var rows = new List<ContentInfoItem> { new("File", Path.GetFileName(path)) };
         try
         {
             var info = new FileInfo(path);
-            lines.Add($"{info.Length / 1024.0 / 1024.0:0.##} MB · {info.LastWriteTime:yyyy-MM-dd HH:mm}");
+            rows.Add(new ContentInfoItem("Size", $"{info.Length / 1024.0 / 1024.0:0.##} MB"));
+            rows.Add(new ContentInfoItem("Modified", $"{info.LastWriteTime:yyyy-MM-dd HH:mm}"));
         }
         catch
         {
             // 크기·날짜는 없어도 된다.
         }
         if (pixelWidth > 0)
-            lines.Add($"{pixelWidth}×{pixelHeight} px");
+            rows.Add(new ContentInfoItem("Dimensions", $"{pixelWidth}×{pixelHeight} px"));
 
+        var exif = new List<ContentInfoItem>();
         try
         {
             var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
             using var stream = file.OpenAsync(FileAccessMode.Read).AsTask().GetAwaiter().GetResult();
             var decoder = BitmapDecoder.CreateAsync(stream).AsTask().GetAwaiter().GetResult();
+            // ⚠️ GPS 키(System.GPS.*)는 넣지 않는다 — 위치는 개인정보라 기본 숨김이 확정됐고
+            // (부록 B 69), 표시 토글이 생기기 전에는 수집 자체를 하지 않는 게 가장 안전하다.
             var props = decoder.BitmapProperties.GetPropertiesAsync(new[]
             {
                 "System.Photo.DateTaken", "System.Photo.CameraManufacturer",
-                "System.Photo.CameraModel", "System.Photo.ExposureTime",
-                "System.Photo.FNumber", "System.Photo.ISOSpeed", "System.Photo.FocalLength",
+                "System.Photo.CameraModel", "System.Photo.LensModel",
+                "System.Photo.ExposureTime", "System.Photo.FNumber",
+                "System.Photo.ISOSpeed", "System.Photo.FocalLength",
+                "System.Photo.ExposureProgram", "System.Photo.MeteringMode",
+                "System.Photo.Flash", "System.Photo.WhiteBalance", "System.Image.ColorSpace",
             }).AsTask().GetAwaiter().GetResult();
 
             if (Get(props, "System.Photo.DateTaken") is DateTimeOffset taken)
-                lines.Add($"Taken {taken.LocalDateTime:yyyy-MM-dd HH:mm}");
+                exif.Add(new ContentInfoItem("Taken", $"{taken.LocalDateTime:yyyy-MM-dd HH:mm}"));
 
             var maker = Get(props, "System.Photo.CameraManufacturer") as string;
             var model = Get(props, "System.Photo.CameraModel") as string;
             if (!string.IsNullOrWhiteSpace(maker) || !string.IsNullOrWhiteSpace(model))
-                lines.Add($"{maker} {model}".Trim());
+                exif.Add(new ContentInfoItem("Camera", $"{maker} {model}".Trim()));
 
+            if (Get(props, "System.Photo.LensModel") is string lens && !string.IsNullOrWhiteSpace(lens))
+                exif.Add(new ContentInfoItem("Lens", lens.Trim()));
+
+            // 노출 4요소는 종전과 같은 합성 값 한 행(1/125 s · f/2.8 · ISO 400 · 50 mm).
             var exposure = new List<string>();
             if (Get(props, "System.Photo.ExposureTime") is double sec and > 0)
                 exposure.Add(sec >= 1 ? $"{sec:0.#} s" : $"1/{Math.Round(1 / sec)} s");
@@ -1107,16 +1122,90 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             if (Get(props, "System.Photo.FocalLength") is double mm and > 0)
                 exposure.Add($"{mm:0.#} mm");
             if (exposure.Count > 0)
-                lines.Add(string.Join(" · ", exposure));
+                exif.Add(new ContentInfoItem("Exposure", string.Join(" · ", exposure)));
+
+            // enum류는 영어 문구로 매핑, 미정의 값은 행 생략(수치 노출보다 생략이 안전).
+            if (ExposureProgramText(GetUInt(props, "System.Photo.ExposureProgram")) is { } program)
+                exif.Add(new ContentInfoItem("Program", program));
+            if (MeteringModeText(GetUInt(props, "System.Photo.MeteringMode")) is { } metering)
+                exif.Add(new ContentInfoItem("Metering", metering));
+            if (GetUInt(props, "System.Photo.Flash") is { } flash)
+                exif.Add(new ContentInfoItem("Flash", (flash & 1) != 0 ? "Fired" : "Did not fire"));
+            if (WhiteBalanceText(GetUInt(props, "System.Photo.WhiteBalance")) is { } wb)
+                exif.Add(new ContentInfoItem("White balance", wb));
+            if (ColorSpaceText(GetUInt(props, "System.Image.ColorSpace")) is { } cs)
+                exif.Add(new ContentInfoItem("Color space", cs));
         }
         catch
         {
             // EXIF 미지원 포맷(BMP/GIF 등)·손상 파일은 기본 정보만.
         }
 
-        return string.Join("\n", lines);
+        if (exif.Count > 0)
+        {
+            rows.Add(ContentInfoItem.Separator); // 파일 정보 / 촬영 정보 그룹 구분
+            rows.AddRange(exif);
+        }
+        return rows;
     }
 
     private static object? Get(IDictionary<string, Windows.Graphics.Imaging.BitmapTypedValue> props, string key) =>
         props.TryGetValue(key, out var v) ? v.Value : null;
+
+    /// <summary>
+    /// EXIF 정수 값 안전 변환 — WIC이 키에 따라 Byte/UInt16/UInt32 등으로 boxing하는 폭을
+    /// 흡수한다(정확한 폭을 못 박으면 포맷·코덱에 따라 행이 통째로 사라진다).
+    /// </summary>
+    private static uint? GetUInt(IDictionary<string, Windows.Graphics.Imaging.BitmapTypedValue> props, string key) =>
+        Get(props, key) switch
+        {
+            byte b => b,
+            ushort us => us,
+            uint u => u,
+            short s when s >= 0 => (uint)s,
+            int i when i >= 0 => (uint)i,
+            _ => null,
+        };
+
+    /// <summary>EXIF ExposureProgram → 영어 문구. 미정의 값은 null(행 생략).</summary>
+    private static string? ExposureProgramText(uint? v) => v switch
+    {
+        1 => "Manual",
+        2 => "Program",
+        3 => "Aperture priority",
+        4 => "Shutter priority",
+        5 => "Creative",
+        6 => "Action",
+        7 => "Portrait",
+        8 => "Landscape",
+        _ => null,
+    };
+
+    /// <summary>EXIF MeteringMode → 영어 문구. 미정의 값은 null(행 생략).</summary>
+    private static string? MeteringModeText(uint? v) => v switch
+    {
+        1 => "Average",
+        2 => "Center-weighted",
+        3 => "Spot",
+        4 => "Multi-spot",
+        5 => "Pattern",
+        6 => "Partial",
+        _ => null,
+    };
+
+    /// <summary>EXIF WhiteBalance → 영어 문구. 미정의 값은 null(행 생략).</summary>
+    private static string? WhiteBalanceText(uint? v) => v switch
+    {
+        0 => "Auto",
+        1 => "Manual",
+        _ => null,
+    };
+
+    /// <summary>EXIF ColorSpace → 영어 문구. Uncalibrated(0xFFFF)·미정의 값은 행 생략.</summary>
+    private static string? ColorSpaceText(uint? v) => v switch
+    {
+        1 => "sRGB",
+        2 => "Adobe RGB",
+        _ => null,
+    };
 }

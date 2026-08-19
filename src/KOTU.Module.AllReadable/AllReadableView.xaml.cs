@@ -212,7 +212,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     /// 우측 정보 오버레이 내용은 지금 자식의 것을 그대로 쓴다(영상=미디어 정보, 사진=EXIF …).
     /// 자식이 없거나 정보를 내놓지 않으면 null — 셸이 파일 기본 정보로 대신한다.
     /// </summary>
-    public async Task<string?> GetContentInfoAsync() =>
+    public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync() =>
         _childView is IContentInfoProvider provider ? await provider.GetContentInfoAsync() : null;
 
     // ---------- 셸 계약: 미저장 가드 (A37) ----------

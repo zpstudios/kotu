@@ -56,16 +56,21 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         return TrayStatus.Open(TrayFormat.Resolution((int)height), TrayFormat.BitrateOf(bytes, _durationMs));
     }
 
-    /// <summary>Ctrl 정보 오버레이(v0.25.0)용 미디어 정보: 파일·시간·비디오/오디오 트랙.</summary>
-    public Task<string?> GetContentInfoAsync()
+    /// <summary>
+    /// 정보 오버레이(v0.25.0)용 미디어 정보: 파일·시간·비디오/오디오 트랙. A150에서 라벨·값
+    /// 행 목록으로 이식 — 비디오 한 줄을 Resolution/Frame rate/Video codec으로 분해했다
+    /// (값 포맷은 유지). 값이 없는 행은 생략한다.
+    /// </summary>
+    public Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
     {
-        if (_filePath is not { } path) return Task.FromResult<string?>(null);
+        if (_filePath is not { } path) return Task.FromResult<IReadOnlyList<ContentInfoItem>?>(null);
 
-        var lines = new List<string> { Path.GetFileName(path) };
+        var rows = new List<ContentInfoItem> { new("File", Path.GetFileName(path)) };
         try
         {
             var info = new FileInfo(path);
-            lines.Add($"{info.Length / 1024.0 / 1024.0:0.##} MB · {info.LastWriteTime:yyyy-MM-dd HH:mm}");
+            rows.Add(new ContentInfoItem("Size", $"{info.Length / 1024.0 / 1024.0:0.##} MB"));
+            rows.Add(new ContentInfoItem("Modified", $"{info.LastWriteTime:yyyy-MM-dd HH:mm}"));
         }
         catch
         {
@@ -73,7 +78,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         }
 
         if (_durationMs > 0)
-            lines.Add("Duration " + TimeText.Format(_durationMs));
+            rows.Add(new ContentInfoItem("Duration", TimeText.Format(_durationMs)));
 
         try
         {
@@ -85,14 +90,17 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
                 if (track.TrackType == TrackType.Video)
                 {
                     var v = track.Data.Video;
-                    var fps = v.FrameRateDen > 0
-                        ? $" @ {(double)v.FrameRateNum / v.FrameRateDen:0.##} fps" : string.Empty;
-                    lines.Add($"Video {v.Width}×{v.Height}{fps} · {FourCc(track.Codec)}");
+                    rows.Add(new ContentInfoItem("Resolution", $"{v.Width}×{v.Height}"));
+                    if (v.FrameRateDen > 0)
+                        rows.Add(new ContentInfoItem("Frame rate",
+                            $"{(double)v.FrameRateNum / v.FrameRateDen:0.##} fps"));
+                    rows.Add(new ContentInfoItem("Video codec", FourCc(track.Codec)));
                 }
                 else if (track.TrackType == TrackType.Audio)
                 {
                     var a = track.Data.Audio;
-                    lines.Add($"Audio {a.Channels} ch · {a.Rate:N0} Hz · {FourCc(track.Codec)}");
+                    rows.Add(new ContentInfoItem("Audio",
+                        $"{a.Channels} ch · {a.Rate:N0} Hz · {FourCc(track.Codec)}"));
                 }
             }
         }
@@ -101,7 +109,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             // 트랙 정보 실패는 기본 정보만 보여준다.
         }
 
-        return Task.FromResult<string?>(string.Join("\n", lines));
+        return Task.FromResult<IReadOnlyList<ContentInfoItem>?>(rows);
     }
 
     /// <summary>libvlc 코덱 FourCC(uint) → 사람이 읽는 문자열.</summary>

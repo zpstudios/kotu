@@ -27,7 +27,7 @@ public sealed partial class ContentInfoOverlay : UserControl
     private int _seq;             // 정보 로드 경쟁 방지 (기존 MainWindow._infoSeq)
     private string? _activePath;  // 마지막으로 요청된 파일 — 늦게 도착한 결과 폐기 판단
     private string? _cachePath;   // 정보 캐시 (파일별 1회 로드 — 기존 _infoPath/_infoText)
-    private string? _cacheText;
+    private IReadOnlyList<ContentInfoItem>? _cacheItems; // A150: 문자열 → 라벨·값 행 목록
 
     /// <summary>오버레이가 화면에 떠 있는지 — 셸의 표시 갱신 판단에 쓴다.</summary>
     public bool IsOpen => Visibility == Visibility.Visible;
@@ -73,7 +73,7 @@ public sealed partial class ContentInfoOverlay : UserControl
     {
         InvalidateCache();
         Visibility = Visibility.Visible;
-        InfoText.Text = "No file open\nDrop a file here to open it";
+        ShowMessage("No file open\nDrop a file here to open it");
     }
 
     /// <summary>
@@ -238,7 +238,7 @@ public sealed partial class ContentInfoOverlay : UserControl
     public void InvalidateCache()
     {
         _cachePath = null;
-        _cacheText = null;
+        _cacheItems = null;
         _activePath = null;
         _seq++;
     }
@@ -246,45 +246,118 @@ public sealed partial class ContentInfoOverlay : UserControl
     /// <summary>모듈 제공 정보(IContentInfoProvider) 우선, 없으면 파일 기본 정보. 파일별 1회 캐시.</summary>
     private async Task LoadAsync(string path, IContentInfoProvider? provider)
     {
-        if (_cachePath == path && _cacheText is not null)
+        if (_cachePath == path && _cacheItems is not null)
         {
-            InfoText.Text = _cacheText;
+            RenderItems(_cacheItems);
             return;
         }
 
         var seq = ++_seq;
         _activePath = path;
-        InfoText.Text = "Loading info...";
+        ShowMessage("Loading info...");
 
-        string? text = null;
+        IReadOnlyList<ContentInfoItem>? items = null;
         try
         {
             if (provider is not null)
-                text = await provider.GetContentInfoAsync();
+                items = await provider.GetContentInfoAsync();
         }
         catch
         {
             // 모듈 정보 실패 → 아래 파일 기본 정보로 대체
         }
-        text ??= BuildBasicFileInfo(path);
+        items ??= BuildBasicFileInfo(path);
 
         if (seq != _seq || _activePath != path) return; // 그새 파일이 바뀜
         _cachePath = path;
-        _cacheText = text;
-        InfoText.Text = text;
+        _cacheItems = items;
+        RenderItems(items);
     }
 
-    private static string BuildBasicFileInfo(string path)
+    /// <summary>
+    /// 셸 폴백(문서·압축 등 미구현 모듈·모듈 정보 실패) — A150에서 개행 문자열을 라벨·값 행으로
+    /// 이식했다. 표시 항목(이름·크기·수정일·폴더)과 값 포맷은 종전 그대로다.
+    /// </summary>
+    private static IReadOnlyList<ContentInfoItem> BuildBasicFileInfo(string path)
     {
         try
         {
             var info = new FileInfo(path);
-            return $"{info.Name}\n{ExplorerListing.FormatSize(info.Length)}\n"
-                 + $"{info.LastWriteTime:yyyy-MM-dd HH:mm}\n{info.DirectoryName}";
+            return new[]
+            {
+                new ContentInfoItem("File", info.Name),
+                new ContentInfoItem("Size", ExplorerListing.FormatSize(info.Length)),
+                new ContentInfoItem("Modified", $"{info.LastWriteTime:yyyy-MM-dd HH:mm}"),
+                new ContentInfoItem("Folder", info.DirectoryName ?? string.Empty),
+            };
         }
         catch (Exception ex)
         {
-            return Path.GetFileName(path) + "\nInfo unavailable: " + ex.Message;
+            return new[]
+            {
+                new ContentInfoItem("File", Path.GetFileName(path)),
+                new ContentInfoItem("Info", "Unavailable: " + ex.Message),
+            };
         }
+    }
+
+    // ---------- 정보 행 렌더 (A150 — 하드웨어 우 패널 라벨·값 2열 관용구 준용) ----------
+
+    // 치수 출처 = HardwareView의 A172(v0.165.0) 상수(SpecLabelFontSize·SpecValueFontSize·
+    // SpecLabelWidth) — 같은 25% 우측 구획이라 같은 값을 쓴다. 저쪽이 바뀌면 여기도 맞출 것.
+    // 그룹 제목 행(하드웨어의 섹션 Title)은 두지 않는다 — 정보 패널은 행이 십수 개뿐이라
+    // Separator(빈 행)의 여백만으로 그룹이 구분된다(계약 주석의 A150 구현 시 결정).
+    private const double ItemLabelFontSize = 11;
+    private const double ItemValueFontSize = 11;
+    private const double ItemLabelWidth = 96;
+    private const double SeparatorHeight = 8; // 그룹 사이 빈 행 높이(구현 시 결정)
+
+    /// <summary>문구 전용 표시(플레이스홀더·Loading·실패 안내) — 행 목록과 배타 토글.</summary>
+    private void ShowMessage(string text)
+    {
+        InfoText.Text = text;
+        InfoText.Visibility = Visibility.Visible;
+        InfoRows.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>라벨·값 행 목록 표시 — 문구와 배타 토글. 행 Grid는 코드가 만든다(하드웨어 Render 관용구).</summary>
+    private void RenderItems(IReadOnlyList<ContentInfoItem> items)
+    {
+        InfoRows.Children.Clear();
+        foreach (var item in items)
+            InfoRows.Children.Add(item.IsSeparator
+                ? new Grid { Height = SeparatorHeight }
+                : MakeItemRow(item));
+        InfoText.Visibility = Visibility.Collapsed;
+        InfoRows.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>라벨(고정폭·흐리게) + 값(줄바꿈·선택 가능) 한 줄 — HardwareView.MakeItemRow와 같은 꼴.</summary>
+    private static Grid MakeItemRow(ContentInfoItem item)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ItemLabelWidth) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var label = new TextBlock
+        {
+            Text = item.Label,
+            FontSize = ItemLabelFontSize,
+            Opacity = 0.65,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 2, 12, 2),
+        };
+        var value = new TextBlock
+        {
+            Text = item.Value,
+            FontSize = ItemValueFontSize,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+            Margin = new Thickness(0, 2, 0, 2),
+        };
+        Grid.SetColumn(value, 1);
+        grid.Children.Add(label);
+        grid.Children.Add(value);
+        return grid;
     }
 }
