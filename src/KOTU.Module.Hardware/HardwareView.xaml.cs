@@ -996,28 +996,55 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// UI 스레드에서 호출된다(계약) — _lastFrame(UI 스레드 대입)과 _state.Selection(불변 스냅샷)만
     /// 읽으므로 경합이 없다. 구 SensorTray 관례 승계: 값을 못 구한 줄은 "—"(Open이 null을 채운다).
     /// 선택 1개면 아래 줄이 "—"다 — 계약상 열림은 2줄 고정(단줄 열림 없음)이고, A60 3차에서도
-    /// 확장이 필요 없었다(선택 축은 그대로 두고 화면 축만 새로 얹었다). 같은 이유로 줄별 채널
-    /// 색·툴팁도 싣지 않는다 — TrayStatus에 색·툴팁 자리가 없어 글자는 모듈 액센트 1색(셸 합성).
+    /// 확장이 필요 없었다(선택 축은 그대로 두고 화면 축만 새로 얹었다).
+    /// A169(v0.172.0): <b>줄별 채널 색</b>을 함께 싣는다 — A101에서 계약에 색 자리가 없어
+    /// 소실됐던 구 SensorTray의 채널 색 표기를 되돌린 것이다(그래프 카드·트레이가 같은
+    /// <see cref="SensorChannel.Accent"/>를 쓴다). 값이 없는 줄("—")에는 색도 싣지 않아
+    /// 종전처럼 모듈 액센트로 그려진다. 툴팁은 여전히 계약에 자리가 없다.
     /// </summary>
     public TrayStatus GetTrayStatus()
     {
         string? line1 = null, line2 = null;
+        uint? color1 = null, color2 = null;
         var count = 0;
         foreach (var id in _state.Selection)
         {
             if (SensorChannels.ById(id) is not { } channel) continue; // 미지 ID 방어(구 관례)
             var value = _lastFrame.Timestamp == DateTime.MinValue ? null : channel.Select(_lastFrame);
             var text = value is { } v ? channel.FormatCompact(v) : null;
-            if (count == 0) line1 = text ?? TrayStatus.Unknown;
-            else line2 = text ?? TrayStatus.Unknown;
+            if (count == 0)
+            {
+                line1 = text ?? TrayStatus.Unknown;
+                color1 = TrayColor(channel);
+            }
+            else
+            {
+                line2 = text ?? TrayStatus.Unknown;
+                color2 = TrayColor(channel);
+            }
             if (++count == HardwareInstanceState.MaxSelected) break;
         }
-        return count == 0 ? TrayStatus.Idle(IdleLabel) : TrayStatus.Open(line1, line2);
+        return count == 0 ? TrayStatus.Idle(IdleLabel) : TrayStatus.Open(line1, line2, color1, color2);
+    }
+
+    /// <summary>
+    /// 채널 색 → 트레이 계약이 받는 ARGB 32비트(0xAARRGGBB) (A169, v0.172.0).
+    /// Core 계약은 UI 프레임워크 비의존이라 <c>Windows.UI.Color</c>를 쓸 수 없어 정수로 넘긴다 —
+    /// <b>변환은 이 한 곳에서만</b> 한다(셸이 같은 배치로 되돌린다).
+    /// 바이트 순서는 InstanceIcon 캐시 키의 A·R·G·B 표기 관례와 같다.
+    /// </summary>
+    private static uint TrayColor(SensorChannel channel)
+    {
+        var c = channel.Accent;
+        return ((uint)c.A << 24) | ((uint)c.R << 16) | ((uint)c.G << 8) | (uint)c.B;
     }
 
     /// <summary>
     /// 표기 키를 다시 계산해 바뀌었을 때만 셸에 알린다(A101). 키에 채널 ID를 포함해
     /// "표기는 같은데 채널이 바뀐" 토글도 잡는다(구 SensorTray.ComposeKey와 같은 구성).
+    /// A169(v0.172.0): 이제 그 토글이 <b>색까지</b> 바꾸므로 채널 색도 키에 명시로 적는다 —
+    /// 채널 ID가 색을 이미 유일하게 결정하지만(1:1), 색이 아이콘 모양의 입력이 된 이상
+    /// 프록시에 기대지 않고 값 자체를 적어 둔다(셸 <c>ComposeKey</c>와 같은 축 구성).
     /// 두 갱신원(스냅샷 도착·선택 토글) 모두 **UI 스레드의 이 깔때기 하나**로 모은다 —
     /// 계약상 이벤트는 스레드 무보장이지만 GetTrayStatus는 UI 스레드 호출이라, 워커 단계
     /// (OnSnapshot 디스패치 전)에서 쏘면 셸이 읽는 시점과 값이 어긋날 수 있기 때문.
@@ -1030,7 +1057,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         {
             if (SensorChannels.ById(id) is not { } channel) continue;
             var value = _lastFrame.Timestamp == DateTime.MinValue ? null : channel.Select(_lastFrame);
-            parts.Add($"{id}={(value is { } v ? channel.FormatCompact(v) : TrayStatus.Unknown)}");
+            parts.Add($"{id}={(value is { } v ? channel.FormatCompact(v) : TrayStatus.Unknown)}"
+                      + $"@{TrayColor(channel):X8}");
         }
         var key = string.Join('|', parts);
         if (key == _trayKey) return;

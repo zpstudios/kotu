@@ -7,7 +7,8 @@ namespace KOTU.App;
 /// <summary>
 /// 창별 트레이 아이콘의 내용 합성 (A54, v0.118.0) — 모듈이 내준 <see cref="TrayStatus"/>를
 /// 16px 아이콘에 그린다. 도구·관용구는 구 A18 SensorTray(A101에서 폐지)의 2값 세로 표기 그대로
-/// (System.Drawing/GDI+ → <c>GetHicon</c>), 색만 모듈 액센트(<see cref="Branding.ModuleAccent"/>)를 쓴다.
+/// (System.Drawing/GDI+ → <c>GetHicon</c>), 색은 모듈 액센트(<see cref="Branding.ModuleAccent"/>)가
+/// 기본이고 모듈이 줄별 색을 실어 보내면 그 색이 이긴다(A169 — 아래 규칙 참조).
 ///
 /// 표시 규칙(사용자 확정):
 ///  · 유휴 = 1줄 중앙(모듈 3자 표기) / 열림 = 2줄·모듈 색.
@@ -20,6 +21,10 @@ namespace KOTU.App;
 ///  · A140(v0.164.0): <b>열림 = 테두리만 모듈 색</b>(배경은 다크 판 유지) /
 ///    <b>유휴 = 아이콘 전면을 모듈 색으로 채우고 글자는 흰색</b>. 규칙 밖(하드웨어·중립)은
 ///    호출자가 <see cref="Branding.IdleFill"/>로 null을 줘서 종전 모습이 유지된다.
+///  · A169(v0.172.0): <b>열림의 글자색만</b> 줄별로 갈릴 수 있다 — 모듈이
+///    <c>TrayStatus.Line1Color</c>·<c>Line2Color</c>(ARGB)를 실으면 그 색을 액센트와 같은 방식
+///    (<see cref="Lighten"/> 0.30)으로 밝혀 쓴다(하드웨어의 센서 채널 색 복원). 안 실으면 종전 그대로.
+///    유휴 경로·막대(<c>Line2Bars</c>)·테두리 링은 이 축과 무관하다.
 ///
 /// 반환 HICON은 <b>호출자 소유</b>다 — 교체 후 반드시 DestroyIcon 할 것
 /// (창이 많을수록 곱해지는 GDI 핸들이라 InstanceIcon의 프로세스 수명 캐시와 달리 즉시 회수한다).
@@ -56,9 +61,15 @@ internal static class TrayStatusIcon
 
     /// <summary>
     /// 재합성 판단용 키(A18 ComposeKey 방식) — 같으면 GDI 작업을 통째로 건너뛴다.
-    /// 아이콘 모양을 바꾸는 입력(내용·모듈)을 전부 포함해야 한다. A102(v0.130.0)에서
+    /// 아이콘 모양을 바꾸는 입력(내용·모듈·<b>줄 색</b>)을 전부 포함해야 한다. A102(v0.130.0)에서
     /// 인스턴스 번호가 빠졌다 — 번호는 더 이상 아이콘 모양에 관여하지 않고,
     /// 링 색·유무는 모듈 ID에서 나오므로 moduleId가 그 변화를 이미 대표한다.
+    ///
+    /// A169(v0.172.0)에서 <b>줄 색 두 축이 들어왔다</b>. A139/A140 때는 색을 정하는 입력이
+    /// 전부 (moduleId, IsIdle)뿐이라 키 무수정이 안전했지만, 줄 색이 생기면서 그 전제가 깨진다 —
+    /// 같은 값을 내는 다른 채널로 갈아타면(예: 62% CPU → 62% GPU) 문자열은 같고 색만 달라지므로
+    /// 색을 키에 안 넣으면 아이콘이 갱신되지 않는다. "없음"도 값으로 적어(<c>none</c>)
+    /// null과 실색이 절대 안 섞이게 한다(InstanceIcon 키의 <c>ring:none</c>과 같은 관례).
     /// </summary>
     public static string ComposeKey(TrayStatus? status, string? moduleId)
     {
@@ -66,8 +77,12 @@ internal static class TrayStatusIcon
         var bars = status.Line2Bars is { } list
             ? string.Join(',', list.Select(v => Math.Round(v, 2).ToString("0.00")))
             : string.Empty;
-        return $"{moduleId}|{status.Line1}|{status.Line2}|{bars}";
+        return $"{moduleId}|{status.Line1}|{status.Line2}|{bars}"
+             + $"|c1:{KeyColor(status.Line1Color)}|c2:{KeyColor(status.Line2Color)}";
     }
+
+    /// <summary>키에 적는 줄 색 표기(A169) — 없으면 "none".</summary>
+    private static string KeyColor(uint? argb) => argb is { } v ? v.ToString("X8") : "none";
 
     /// <summary>
     /// 상태를 그린 HICON을 만든다(실패하면 IntPtr.Zero — 호출자는 아이콘을 그대로 두면 된다).
@@ -101,7 +116,8 @@ internal static class TrayStatusIcon
         // A140(v0.164.0) 색 규칙 — 배경과 글자색을 한 쌍으로 정한다.
         //  · 유휴 + 규칙 안 모듈(idleFill 있음) = 모듈 액센트 원색으로 전면 불투명 채움 + 흰 글자.
         //  · 유휴 + 규칙 밖(idleFill null: 하드웨어·중립) = 종전 다크 판 + 저채도 글자(IdleColor).
-        //  · 열림 = 상태 무관하게 다크 판 + 액센트 Lighten 0.30 글자(현행 유지). 모듈 색은 링만 진다.
+        //  · 열림 = 상태 무관하게 다크 판 + 액센트 Lighten 0.30 글자. 모듈 색은 링만 진다.
+        //    (A169: 모듈이 줄 색을 실었으면 그 줄만 자기 색을 같은 방식으로 밝혀 쓴다 — 아래 ②)
         var fill = status.IsIdle && idleFill is { } f
             ? GdiColor.FromArgb(0xFF, f.R, f.G, f.B)
             : Plate;
@@ -135,13 +151,14 @@ internal static class TrayStatusIcon
             }
             else
             {
+                // A169: 열림 두 줄만 줄별 색을 받는다(막대는 범위 밖 — 종전대로 공용 color).
                 var lineHeight = size / 2f;
-                DrawTextLine(g, status.Line1, color, margin, 0, textWidth, lineHeight,
-                    lineHeight * 0.94f * FontScale);
+                DrawTextLine(g, status.Line1, LineColor(status.Line1Color, color),
+                    margin, 0, textWidth, lineHeight, lineHeight * 0.94f * FontScale);
                 if (status.Line2Bars is { Count: > 0 } bars)
                     DrawBars(g, bars, color, margin, lineHeight, textWidth, lineHeight);
                 else
-                    DrawTextLine(g, status.Line2 ?? TrayStatus.Unknown, color,
+                    DrawTextLine(g, status.Line2 ?? TrayStatus.Unknown, LineColor(status.Line2Color, color),
                         margin, lineHeight, textWidth, lineHeight, lineHeight * 0.94f * FontScale);
             }
 
@@ -217,6 +234,19 @@ internal static class TrayStatusIcon
 
     private static System.Drawing.Font MakeFont(float px)
         => new("Segoe UI", px, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+
+    /// <summary>
+    /// 열림 한 줄의 글자색 (A169, v0.172.0) — 모듈이 줄 색(ARGB)을 실었으면 그 색을,
+    /// 안 실었으면 액센트에서 이미 계산해 둔 기본색(<paramref name="fallback"/>)을 쓴다.
+    /// 밝히는 계산은 두 경로가 같다(Lighten 0.30) — 어두운 판 위 가독성 규칙이 색 출처와 무관해야
+    /// 하기 때문. 알파는 버린다: 계약이 담는 알파에 의미를 두지 않는다(글자는 늘 불투명).
+    /// </summary>
+    private static GdiColor LineColor(uint? argb, GdiColor fallback)
+    {
+        if (argb is not { } v) return fallback;
+        return Lighten(GdiColor.FromArgb(
+            (int)((v >> 16) & 0xFF), (int)((v >> 8) & 0xFF), (int)(v & 0xFF)), 0.30);
+    }
 
     /// <summary>어두운 배지 위에서 읽히도록 밝힌다(구 A18 SensorTray.Lighten에서 온 계산).</summary>
     private static GdiColor Lighten(GdiColor c, double amount) => GdiColor.FromArgb(

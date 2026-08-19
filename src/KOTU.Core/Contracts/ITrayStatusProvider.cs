@@ -10,6 +10,11 @@ namespace KOTU.Core.Contracts;
 ///
 /// 값 문자열은 모듈이 <see cref="TrayFormat"/>으로 만들어 넘긴다 —
 /// 셸은 받은 문자열을 그리기만 한다(UI 프레임워크 비의존 유지).
+///
+/// A169(v0.172.0): 열림 상태의 <b>줄별 글자색</b>을 모듈이 실을 수 있다
+/// (<see cref="Line1Color"/>·<see cref="Line2Color"/>). 하드웨어 모듈이 두 줄에
+/// 서로 다른 센서 채널을 표시하는데 A101에서 채널 색이 소실됐던 것을 되돌리기 위한 자리다.
+/// 색 타입 대신 ARGB 정수를 쓰는 이유도 위와 같다 — 이 계약은 UI 프레임워크에 기대지 않는다.
 /// </summary>
 public sealed record TrayStatus
 {
@@ -28,15 +33,40 @@ public sealed record TrayStatus
     /// </summary>
     public IReadOnlyList<double>? Line2Bars { get; init; }
 
+    /// <summary>
+    /// 위 줄 글자색 (A169, v0.172.0) — <b>0xAARRGGBB 형식의 ARGB 32비트</b>.
+    /// null이면 셸이 종전대로 모듈 액센트 1색을 쓴다(색을 안 싣는 모듈은 동작이 그대로다).
+    /// 알파는 셸이 무시한다 — 글자는 늘 불투명이다.
+    /// <b>유휴(1줄) 상태에서는 무시된다</b>: 유휴 색 규칙(A140 전면 채움 + 흰 글자 / 규칙 밖
+    /// 저채도 글자)은 모듈 축이라 줄 색이 끼어들 자리가 없다.
+    /// </summary>
+    public uint? Line1Color { get; init; }
+
+    /// <summary>
+    /// 아래 줄 글자색 (A169, v0.172.0) — 형식·의미는 <see cref="Line1Color"/>와 같다.
+    /// <see cref="Line2Bars"/>(막대)에는 적용되지 않는다(막대 색은 종전대로 모듈 액센트).
+    /// </summary>
+    public uint? Line2Color { get; init; }
+
     /// <summary>콘텐츠를 안 열고 있는 상태(1줄·저채도)인지.</summary>
     public bool IsIdle => Line2 is null && Line2Bars is null;
 
     /// <summary>유휴 — 모듈 3자 표기 한 줄.</summary>
     public static TrayStatus Idle(string label) => new() { Line1 = label };
 
-    /// <summary>열림 — 두 줄. 못 구한 값은 자동으로 "—"가 된다.</summary>
-    public static TrayStatus Open(string? line1, string? line2) =>
-        new() { Line1 = Or(line1), Line2 = Or(line2) };
+    /// <summary>
+    /// 열림 — 두 줄. 못 구한 값은 자동으로 "—"가 된다.
+    /// 색 두 개는 선택 인자다(A169) — 안 주면 종전과 완전히 같은 결과이므로 기존 호출부는 무수정이다.
+    /// </summary>
+    public static TrayStatus Open(string? line1, string? line2,
+        uint? line1Color = null, uint? line2Color = null) =>
+        new()
+        {
+            Line1 = Or(line1),
+            Line2 = Or(line2),
+            Line1Color = line1Color,
+            Line2Color = line2Color,
+        };
 
     /// <summary>열림 — 위 줄 텍스트 + 아래 줄 막대(오디오).</summary>
     public static TrayStatus OpenWithBars(string? line1, IReadOnlyList<double> bars) =>
