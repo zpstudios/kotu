@@ -81,6 +81,18 @@ public static class TrayFormat
         return ext.Length <= 4 ? ext : ext[..4];
     }
 
+    /// <summary>
+    /// 페이지 번호 → "128" (A138). 현재·전체 각각 <b>독립</b>으로 이 함수를 거친다 —
+    /// 3자리까지 그대로, 4자리 이상은 "999+"로 축약(부록 B 69 확정. 폰트 축소 루프의 하한 5px과
+    /// 병용되는 표기 상한이다). 0 이하는 "—"(값 없음 — 문서를 안 연 상태는 애초에 유휴로 가므로
+    /// 정상 경로에서는 나오지 않는 방어값).
+    /// </summary>
+    public static string PageNumber(int value)
+    {
+        if (value <= 0) return TrayStatus.Unknown;
+        return value > 999 ? "999+" : value.ToString(Inv);
+    }
+
     /// <summary>압축률(압축 후 / 원본) → "0.42". 원본 크기를 모르면 "—".</summary>
     public static string Ratio(long packedBytes, long rawBytes)
     {

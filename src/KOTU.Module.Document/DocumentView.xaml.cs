@@ -35,7 +35,8 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
 
-    /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 텍스트·PDF 열기와 닫기 시점.</summary>
+    /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 텍스트·PDF 열기와 닫기,
+    /// 페이지 이동(A138), 저장 성공(A137 — 셸의 작업표시줄 용량 갱신 훅) 시점.</summary>
     public event Action? TrayStatusChanged;
 
     /// <summary>
@@ -44,20 +45,28 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private string? _shownPath;
 
-    /// <summary>트레이 아이콘 내용(A54): 열림 = 확장자 · 용량, 유휴 = "DOC".</summary>
+    /// <summary>
+    /// A138: 트레이 표기용 PDF 페이지 위치(1-base). 유일한 공급원 = PdfPane.PageChanged
+    /// (OpenPdf의 구독 — 하단 바 텍스트와 같은 이벤트). 0 = PDF가 아니다(텍스트 모드는
+    /// HidePdf → Clear가 (0,0)으로 되돌린다) — 그때 트레이는 "1/1"로 나간다.
+    /// </summary>
+    private int _pdfCurrentPage;
+    private int _pdfTotalPages;
+
+    /// <summary>
+    /// 트레이 아이콘 내용(A54 → A138 개편): 열림 = <b>페이지 위치 대각 표기</b>(좌상 = 현재,
+    /// 우하 = 전체 — PDF는 실제 페이지, 텍스트는 페이지 개념이 없어 "1/1", 부록 B 67),
+    /// 유휴 = "DOC"(현행 유지). 자릿수는 현재·전체 각각 3자리까지, 4자리 이상 "999+"
+    /// (TrayFormat.PageNumber — 부록 B 69). 종전의 확장자·용량 2줄은 A137 ②가 작업표시줄
+    /// 32px 아이콘으로 가져갔다(셸이 경로에서 직접 계산 — 중복 표시가 아니라 이관이다).
+    /// </summary>
     public TrayStatus GetTrayStatus()
     {
-        if (_shownPath is not { } path) return TrayStatus.Idle("DOC");
-        long bytes = -1;
-        try
-        {
-            bytes = new FileInfo(path).Length;
-        }
-        catch
-        {
-            // 크기를 못 읽으면 그 줄만 "—"가 된다.
-        }
-        return TrayStatus.Open(TrayFormat.Extension(path), TrayFormat.Size(bytes));
+        if (_shownPath is null) return TrayStatus.Idle("DOC");
+        return _pdfTotalPages > 0
+            ? TrayStatus.OpenDiagonal(
+                TrayFormat.PageNumber(_pdfCurrentPage), TrayFormat.PageNumber(_pdfTotalPages))
+            : TrayStatus.OpenDiagonal(TrayFormat.PageNumber(1), TrayFormat.PageNumber(1));
     }
 
     /// <summary>미저장 상태 변화(A37) — 셸이 창 제목 ● 표시에 쓴다.</summary>
@@ -254,7 +263,7 @@ public sealed partial class DocumentView : UserControl,
         FileNameText.Text = Path.GetFileName(path);
         _shownPath = path;
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
-        TrayStatusChanged?.Invoke(); // A54: 트레이 = 확장자 · 용량
+        TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
     }
 
     // ---------- PDF (A16) ----------
@@ -270,6 +279,16 @@ public sealed partial class DocumentView : UserControl,
             _pdfPane = new PdfPane();
             _pdfPane.PageChanged += (current, total) =>
             {
+                // A138: 트레이 = 페이지 위치. 스크롤·팬마다 오는 이벤트라 같은 값이면 쏘지 않는다
+                // (1차 방어 — 셸 쪽 ComposeKey 선비교가 2차로 재합성을 걸러 주지만, 디스패치 큐잉
+                // 자체를 여기서 끊는 쪽이 싸다). 하단 바 텍스트 갱신보다 먼저 둔다 — 아래
+                // 같은 문자열 조기 반환이 트레이 갱신까지 삼키면 안 되기 때문.
+                if (_pdfCurrentPage != current || _pdfTotalPages != total)
+                {
+                    _pdfCurrentPage = current;
+                    _pdfTotalPages = total;
+                    TrayStatusChanged?.Invoke();
+                }
                 // A148: 드래그 팬은 매 프레임 ViewChanged → PageChanged를 부른다. 페이지 번호가
                 // 그대로면 대입하지 않는다(같은 값이어도 TextBlock 대입은 측정·배치를 유발한다).
                 var text = total > 0 ? $"{current} / {total}" : string.Empty;
@@ -320,7 +339,7 @@ public sealed partial class DocumentView : UserControl,
 
         _shownPath = path;
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
-        TrayStatusChanged?.Invoke(); // A54: 트레이 = 확장자 · 용량
+        TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = 현재/전체 페이지(LoadAsync가 (1, 전체)를 이미 쐈다)
     }
 
     /// <summary>PDF 패널을 내린다(텍스트로 전환·열기 실패 시). 비트맵·문서 참조 해제.</summary>
@@ -819,7 +838,6 @@ public sealed partial class DocumentView : UserControl,
             _shownPath = path; // 트레이 표기(A54)도 새 파일 기준
             FileNameText.Text = Path.GetFileName(path);
             ContentOpened?.Invoke(path); // 셸 동기화 — 기준 경로·드라이브 줄·오버레이(기존 배선)
-            TrayStatusChanged?.Invoke(); // A54: 트레이 = 확장자 · 용량 갱신
         }
 
         _originalBytes = bytes;         // ⓑ: 이제 디스크의 원본 = 방금 쓴 바이트
@@ -832,6 +850,13 @@ public sealed partial class DocumentView : UserControl,
         // ⓒ: 쓰는 동안 새 입력이 있었으면 기준과 다르다 — 무조건 끄지 않고 내용 비교로 재판정한다
         // (종전에는 저장 완료가 무조건 더티 해제였다 — 그 사이 입력이 ● 없이 새는 창이 있었다).
         RecomputeDirty();
+
+        // A137: 저장 성공 1회 통지 — 저장으로 파일 크기가 바뀌면 셸이 작업표시줄 32px 아이콘의
+        // 용량 표기를 다시 그린다(타이핑 중 실시간 갱신은 하지 않는다 — 부록 B 69 확정. 여기는
+        // A113 재기준화 지점이라 "저장 성공 시 1회"가 정확히 성립하는 자리다). Save as...(경로
+        // 변경)도 이 한 번으로 충분하고, 트레이 값(A138 페이지)은 저장으로 안 변하므로 셸의
+        // ComposeKey 선비교가 트레이 재합성을 걸러 준다 — 종전의 savedAs 한정 발화를 대체한다.
+        TrayStatusChanged?.Invoke();
     }
 
     /// <summary>

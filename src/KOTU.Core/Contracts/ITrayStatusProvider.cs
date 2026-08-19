@@ -48,6 +48,14 @@ public sealed record TrayStatus
     /// </summary>
     public uint? Line2Color { get; init; }
 
+    /// <summary>
+    /// 열림 상태를 위/아래 2줄 대신 <b>우상단→좌하단 대각선 분할</b>로 그린다 (A138 — 문서 모듈의
+    /// 페이지 위치: 좌상 = 현재, 우하 = 전체). 열림 2줄 자리를 대체하는 표기라 유휴 전면 채움
+    /// (A140)과는 구조적으로 배타다 — 이 값이 true인 상태는 Line2가 있어 <see cref="IsIdle"/>이
+    /// 항상 false다(<see cref="OpenDiagonal"/>만 이 값을 세운다 — 막대와의 조합은 만들지 않는다).
+    /// </summary>
+    public bool Diagonal { get; init; }
+
     /// <summary>콘텐츠를 안 열고 있는 상태(1줄·저채도)인지.</summary>
     public bool IsIdle => Line2 is null && Line2Bars is null;
 
@@ -71,6 +79,14 @@ public sealed record TrayStatus
     /// <summary>열림 — 위 줄 텍스트 + 아래 줄 막대(오디오).</summary>
     public static TrayStatus OpenWithBars(string? line1, IReadOnlyList<double> bars) =>
         new() { Line1 = Or(line1), Line2Bars = bars };
+
+    /// <summary>
+    /// 열림 — 대각 분할 2값 (A138, 문서 전용: 좌상 = line1 = 현재 페이지, 우하 = line2 = 전체).
+    /// 줄 색 축(A169)은 실을 수 없다 — 대각 표기는 두 값이 한 쌍(페이지 위치)이라 색을 가를 이유가
+    /// 없고, 셸도 공용 색 하나로 그린다.
+    /// </summary>
+    public static TrayStatus OpenDiagonal(string? line1, string? line2) =>
+        new() { Line1 = Or(line1), Line2 = Or(line2), Diagonal = true };
 
     private static string Or(string? text) => string.IsNullOrEmpty(text) ? Unknown : text;
 }

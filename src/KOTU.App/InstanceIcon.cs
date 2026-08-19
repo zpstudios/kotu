@@ -3,9 +3,10 @@ using GdiColor = System.Drawing.Color;
 namespace KOTU.App;
 
 /// <summary>
-/// 아이콘 런타임 합성 (A68 시작 → A102/v0.130.0에서 의미 개편).
-/// 이름에 남은 "Instance"는 이력일 뿐 — A102 이후 이 클래스는 인스턴스 번호를 전혀 모른다
-/// (인스턴스 9색 팔레트도 A141/v0.162.0에서 소비처와 함께 사라졌다).
+/// 아이콘 런타임 합성 (A68 시작 → A102/v0.130.0에서 의미 개편 → A137에서 번호 부분 부활).
+/// 이름에 남은 "Instance"는 A102~A136 동안 이력일 뿐이었으나, A137의 16px 번호 타일
+/// (<see cref="GetNumberTile"/>)로 이 클래스가 다시 인스턴스 번호를 그린다
+/// (인스턴스 9색 팔레트는 A141/v0.162.0에서 사라진 그대로 — 색은 모듈 축이다).
 ///
 /// A102 전에는 이 합성이 "몇 번째 창인가"를 알리는 장치였다(인스턴스 9색 링 + 우하단 원형
 /// 번호 배지). 지금은 <b>어느 모듈의 창인가</b>를 알리는 장치다:
@@ -17,8 +18,12 @@ namespace KOTU.App;
 /// ⑤ A139(v0.164.0): 링 두께·모서리 반경이 <b>100% 배율 1px 비례</b>로 줄었다
 ///    (<see cref="EdgeUnit"/> — 32px에서 종전 4.0·7.0 → 2·2). ④의 inset이 그만큼 얕아져
 ///    본체가 커지고, A105 라벨 띠도 넓어진다.
-/// ※ A140(v0.164.0)의 색 규칙(열림 = 테두리만 모듈 색 / 유휴 = 전면 모듈 색)은 <b>트레이에만</b>
-///    적용됐다 — 창 아이콘에는 "콘텐츠 열림·닫힘" 정보가 아직 흐르지 않는다. 그 배선은 A137 몫이다.
+/// ⑥ A137: 창 아이콘 2종이 <b>서로 다른 실시간 정보 타일</b>이 됐다 — 16px = 인스턴스 번호
+///    (<see cref="GetNumberTile"/>), 32px = 열림이면 확장자/용량 2줄(<see cref="ComposeOpenTile"/>),
+///    유휴면 모듈 3자 전면 채움(<see cref="GetIdleTile"/>). 색은 A140 트레이 규칙을 창에 배선한 것.
+///    <b>규칙 밖(하드웨어·중립)의 32px만</b> 종전 .ico 본체 합성(<see cref="GetComposed"/>) 경로로 남는다.
+/// ※ A140(v0.164.0)의 색 규칙(열림 = 테두리만 모듈 색 / 유휴 = 전면 모듈 색)은 처음엔
+///    <b>트레이에만</b> 적용됐다 — 창 아이콘 배선(⑥)은 A137이 정보 배선과 함께 넣었다.
 /// 링은 창 개수와 무관하게 항상 그린다(모듈 식별이 목적이라 "2개 이상일 때만" 조건이 사라졌다).
 /// A105부터 링 없는 호출도 허용된다 — 정보(H/W) 모듈이 링 없이 3자 표기(INF)만 얹는 경우.
 /// 링도 글자도 없는 화면(설정·빈 셸 = 중립 아이콘)만 이 클래스를 부르지 않고
@@ -28,7 +33,8 @@ namespace KOTU.App;
 ///
 /// 반환 HICON은 (경로, 크기, 표식 색, 링 색, 3자 표기)별로 캐시되어 프로세스 수명 동안 유효하다.
 /// WM_SETICON은 핸들을 복사하지 않으므로(WindowIcon.cs와 같은 이유) 호출자는
-/// 절대 DestroyIcon 하지 말 것.
+/// 절대 DestroyIcon 하지 말 것. <b>유일한 예외 = <see cref="ComposeOpenTile"/></b> —
+/// 파일별 값이 들어가 캐시할 수 없어 호출자 소유로 돌려준다(해당 메서드 주석 참고).
 /// </summary>
 internal static class InstanceIcon
 {
@@ -46,6 +52,9 @@ internal static class InstanceIcon
     /// A105(v0.143.0): <b>3자 표기</b>도 키에 명시로 들어간다 — 아래 GetComposed 주석 참고.
     /// 키 조성이 전부 모듈 축(경로×크기×액센트×링×3자)이라 항목 수는 유계다 —
     /// 인스턴스(창) 수와 무관(A104 상한 점검에서 확인한 성질을 유지할 것).
+    /// A137: 타일 키("tile:" 접두 — GetNumberTile·GetIdleTile)가 추가됐다. 번호 축은 창별 값이지만
+    /// 상한이 "최대 동시 창 수"라 유계가 유지된다(GetNumberTile 주석의 근거). <b>파일별 값(용량)이
+    /// 들어가는 열림 타일(ComposeOpenTile)만은 이 캐시에 절대 넣지 않는다</b> — 유일한 비유계 축이다.
     /// </summary>
     private static readonly Dictionary<string, IntPtr> s_cache = new();
 
@@ -241,6 +250,198 @@ internal static class InstanceIcon
         {
             g.DrawString(label, font, brush,
                 new System.Drawing.RectangleF(inset, top, width, bandHeight), format);
+        }
+    }
+
+    // ---------- A137: 창 아이콘 실시간 정보 타일 (색 규칙 = A140 트레이 규칙의 창 배선) ----------
+
+    /// <summary>
+    /// 16px 번호 타일의 글자 크기 배수 — 1~2자 숫자가 아이콘에 꽉 차게 트레이 유휴(0.58)보다 크다.
+    /// 두 자리 이상은 아래 DrawTextLine의 폭 축소 루프(하한 5px — A54 실증)가 자동으로 줄인다.
+    /// <b>실기기에서 눈으로 보고 미세 조정하는 단일 지점</b>(FontScale·LabelFontScale과 같은 관행).
+    /// </summary>
+    private const float NumberFontScale = 0.72f;
+
+    /// <summary>
+    /// 타이틀바 16px = 인스턴스 번호 타일 (A137 ①).
+    /// 같은 주제 세 번째 변경의 이력: A68 "창 아이콘에 번호 배지 존치" → A102 "번호 렌더 코드째
+    /// 제거"(우하단 원형 배지 — 위 Compose ③ 주석) → A137 "번호를 아이콘 전면으로 부활"
+    /// (<b>부분 반전</b> — 구 배지 형태가 아니라 아이콘에 꽉 차는 전면 타일이다. 부록 B 67 재확인).
+    /// 색은 트레이 A140 규칙과 같은 축: 유휴 = 모듈 색(<paramref name="fill"/> =
+    /// Branding.IdleFill) 전면 채움 + 흰 숫자 / 열림 = 다크 판 + 모듈 색 Lighten 0.30 숫자.
+    /// 규칙 밖(fill null = 하드웨어·중립)은 다크 판 + 흰 숫자·링 없음(구현 시 결정 — 트레이의
+    /// 저채도 IdleColor와 달리 숫자는 항상 밝게 유지한다).
+    /// 링은 fill 색 그대로다 — 타일에는 .ico 바탕이 없어 "모듈 .ico 부재 → 링 없음"(A102)이
+    /// 성립하지 않고, 규칙 안에서 IconRing == IdleFill == ModuleAccent(같은 값)이라 트레이가
+    /// 모듈 축으로 긋는 것과 같은 결과가 된다.
+    /// 캐시 유계 근거(A104 전제 유지): 키 축 = 크기 × 번호 × fill × 열림. 번호는 창별 값이지만
+    /// 상한이 "동시에 연 창의 최대 개수"다 — WindowManager가 1..N을 연속 재배정하므로 창을
+    /// 아무리 여닫아도 번호 집합은 1..최대 동시 창 수를 넘지 않는다. 나머지 축은 전부 모듈 축.
+    /// 키 접두 "tile:"은 경로 기반 GetComposed 키와의 충돌 방지(경로는 드라이브 문자로 시작).
+    /// </summary>
+    public static IntPtr GetNumberTile(int size, int number, Windows.UI.Color? fill, bool open)
+    {
+        if (size < 8 || number <= 0) return IntPtr.Zero;
+        var key = $"tile:num|{size}|{number}"
+                  + $"|fill:{(fill is { } f ? $"{f.A:X2}{f.R:X2}{f.G:X2}{f.B:X2}" : "none")}"
+                  + $"|open:{(open ? 1 : 0)}";
+        if (s_cache.TryGetValue(key, out var cached)) return cached;
+
+        var background = open || fill is null
+            ? LabelPlate
+            : GdiColor.FromArgb(0xFF, fill.Value.R, fill.Value.G, fill.Value.B);
+        var text = open && fill is { } a
+            ? Lighten(GdiColor.FromArgb(a.R, a.G, a.B), 0.30)
+            : GdiColor.White;
+
+        IntPtr icon;
+        try
+        {
+            icon = RenderTile(size, background, text, TileRing(fill), number.ToString(),
+                null /* line2 없음 = 1줄 */, size * NumberFontScale);
+        }
+        catch
+        {
+            return IntPtr.Zero; // GDI 일시 실패 — 다음 갱신 때 다시 시도(GetComposed와 동일)
+        }
+        s_cache[key] = icon;
+        return icon;
+    }
+
+    /// <summary>
+    /// 작업표시줄 32px 유휴 타일 (A137 ② 유휴) — 모듈 3자 이니셜(내용은 A105 ② 유지, 색은 A140
+    /// 유휴 규칙: 모듈 색 전면 불투명 채움 + 흰 글자). 트레이 유휴(TrayStatusIcon.Render의 전면
+    /// 채움 경로)와 같은 모양을 창 크기로 그린 것 — 글자 식도 트레이 유휴(0.58 × 0.85)와 같다.
+    /// 규칙 밖(하드웨어·중립)은 이 메서드에 오지 않고 종전 GetComposed/브랜드 경로다(호출자 분기).
+    /// 키 축이 전부 모듈 축(크기 × fill × 3자)이라 캐시 유계(A104 전제 유지).
+    /// </summary>
+    public static IntPtr GetIdleTile(int size, Windows.UI.Color fill, string label)
+    {
+        if (size < 8 || string.IsNullOrEmpty(label)) return IntPtr.Zero;
+        var key = $"tile:idle|{size}|fill:{fill.A:X2}{fill.R:X2}{fill.G:X2}{fill.B:X2}|{label}";
+        if (s_cache.TryGetValue(key, out var cached)) return cached;
+
+        IntPtr icon;
+        try
+        {
+            icon = RenderTile(size, GdiColor.FromArgb(0xFF, fill.R, fill.G, fill.B),
+                GdiColor.White, TileRing(fill), label, null /* line2 없음 = 1줄 */,
+                size * 0.58f * LabelFontScale);
+        }
+        catch
+        {
+            return IntPtr.Zero;
+        }
+        s_cache[key] = icon;
+        return icon;
+    }
+
+    /// <summary>
+    /// 작업표시줄 32px 열림 타일 (A137 ② — "TXT / 40K" 2줄). 색은 A140 열림 규칙(다크 판 +
+    /// 모듈 색 Lighten 0.30 글자 + 모듈 색 링 — 트레이 열림과 동일).
+    /// <b>캐시하지 않는다</b>: 아래 줄(용량)은 파일별 값이라 s_cache에 넣으면 "키 축이 전부
+    /// 모듈 축이라 항목 수 유계"라는 캐시 불변조건(A104 무제한 증빙의 전제)이 깨진다 —
+    /// 트레이(TrayStatusIcon.Compose)처럼 즉시 합성하고, 반환 HICON은 <b>호출자(WindowIcon)
+    /// 소유</b>로 넘긴다. 단 트레이(Shell_NotifyIcon은 아이콘을 복사한다)와 달리 WM_SETICON은
+    /// 핸들을 복사하지 않으므로 <b>즉시 파괴가 아니라 다음 교체가 창에 걸린 뒤 지연 회수</b>다
+    /// (WindowIcon.ReplaceDynamicBig — 이 클래스의 다른 반환값과 소유가 다르니 절대 캐시에 넣지
+    /// 말 것). 실패는 IntPtr.Zero.
+    /// </summary>
+    public static IntPtr ComposeOpenTile(int size, Windows.UI.Color accent, string line1, string line2)
+    {
+        if (size < 8) return IntPtr.Zero;
+        try
+        {
+            var lineHeight = size / 2f;
+            return RenderTile(size, LabelPlate,
+                Lighten(GdiColor.FromArgb(accent.R, accent.G, accent.B), 0.30),
+                TileRing(accent), line1, line2, lineHeight * 0.94f * LabelFontScale);
+        }
+        catch
+        {
+            return IntPtr.Zero; // GDI 일시 실패 — 호출자가 키를 비워 다음 갱신 때 재시도
+        }
+    }
+
+    /// <summary>타일 링 색 = 채움/액센트 색 그대로(위 GetNumberTile 주석의 등가 근거). null = 링 없음.</summary>
+    private static GdiColor? TileRing(Windows.UI.Color? fill)
+        => fill is { } f ? GdiColor.FromArgb(f.R, f.G, f.B) : null;
+
+    /// <summary>
+    /// 타일 공통 렌더 (A137) — 전면 라운드 판(반경 = EdgeUnit, A139) + 글자 1줄(중앙) 또는
+    /// 2줄(상/하 반씩) + 링 스트로크. 배치·완충(margin)·줄 산정은 TrayStatusIcon.Render(A54/A140)의
+    /// 관용구 복제다(두 파일이 같은 아이콘 규격을 공유하지만 서로 private — EdgeUnit과 같은 관행).
+    /// <paramref name="fontPx"/>는 1줄일 때의 글자 크기, 2줄이면 두 줄 모두 같은 값을 쓴다
+    /// (호출자가 줄 높이 기준 식으로 만들어 넘긴다).
+    /// </summary>
+    private static IntPtr RenderTile(int size, GdiColor fill, GdiColor text, GdiColor? ring,
+        string line1, string? line2, float fontPx)
+    {
+        var edge = EdgeUnit(size);
+        using var bitmap = new System.Drawing.Bitmap(size, size,
+            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var g = System.Drawing.Graphics.FromImage(bitmap))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+            using (var path = RoundedRectPath(0f, 0f, size, size, edge))
+            using (var background = new System.Drawing.SolidBrush(fill))
+                g.FillPath(background, path);
+
+            var margin = ring is null ? 0f : 1f; // 링과 글자의 완충 — TrayStatusIcon.Render와 동일
+            var textWidth = size - margin * 2;
+            if (line2 is null)
+            {
+                DrawTextLine(g, line1, text, margin, 0, textWidth, size, fontPx);
+            }
+            else
+            {
+                var lineHeight = size / 2f;
+                DrawTextLine(g, line1, text, margin, 0, textWidth, lineHeight, fontPx);
+                DrawTextLine(g, line2, text, margin, lineHeight, textWidth, lineHeight, fontPx);
+            }
+
+            // 유휴 전면 채움과 링이 같은 모듈 색이라 이음매가 보이지 않는 것도 트레이(A140)와 같다.
+            if (ring is { } ringColor)
+            {
+                using var pen = new System.Drawing.Pen(ringColor, edge);
+                using var ringPath = RoundedRectPath(edge / 2f, edge / 2f,
+                    size - edge, size - edge, edge);
+                g.DrawPath(pen, ringPath);
+            }
+        }
+        return bitmap.GetHicon();
+    }
+
+    /// <summary>
+    /// 한 줄을 폭에 맞춰 그린다 — TrayStatusIcon.DrawTextLine(A54)의 관용구 복제(하한 5px 축소
+    /// 루프 + 최후의 3자 자르기). DrawLabel의 인라인 루프와 달리 타일 2줄·번호가 함께 쓰는 공용이다.
+    /// </summary>
+    private static void DrawTextLine(System.Drawing.Graphics g, string text, GdiColor color,
+        float x, float y, float width, float height, float fontPx)
+    {
+        using var format = new System.Drawing.StringFormat(System.Drawing.StringFormat.GenericTypographic)
+        {
+            Alignment = System.Drawing.StringAlignment.Center,
+            LineAlignment = System.Drawing.StringAlignment.Center,
+            FormatFlags = System.Drawing.StringFormatFlags.NoWrap,
+        };
+
+        var font = MakeFont(fontPx);
+        while (fontPx > 5f && g.MeasureString(text, font, int.MaxValue, format).Width > width)
+        {
+            font.Dispose();
+            fontPx -= 0.5f;
+            font = MakeFont(fontPx);
+        }
+        if (text.Length > 3 && g.MeasureString(text, font, int.MaxValue, format).Width > width)
+            text = text[..3];
+
+        using (font)
+        using (var brush = new System.Drawing.SolidBrush(color))
+        {
+            g.DrawString(text, font, brush, new System.Drawing.RectangleF(x, y, width, height), format);
         }
     }
 

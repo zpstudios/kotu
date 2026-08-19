@@ -25,6 +25,9 @@ namespace KOTU.App;
 ///    <c>TrayStatus.Line1Color</c>·<c>Line2Color</c>(ARGB)를 실으면 그 색을 액센트와 같은 방식
 ///    (<see cref="Lighten"/> 0.30)으로 밝혀 쓴다(하드웨어의 센서 채널 색 복원). 안 실으면 종전 그대로.
 ///    유휴 경로·막대(<c>Line2Bars</c>)·테두리 링은 이 축과 무관하다.
+///  · A138: 문서 모듈의 열림은 위/아래 2줄 대신 <b>대각 분할</b>(우상단→좌하단 대각선,
+///    좌상 = 현재 페이지·우하 = 전체 페이지 — <c>TrayStatus.Diagonal</c>)로 그린다.
+///    열림 2줄 자리의 대체라 유휴 전면 채움(A140)과는 배타다(<see cref="DrawDiagonal"/>).
 ///
 /// 반환 HICON은 <b>호출자 소유</b>다 — 교체 후 반드시 DestroyIcon 할 것
 /// (창이 많을수록 곱해지는 GDI 핸들이라 InstanceIcon의 프로세스 수명 캐시와 달리 즉시 회수한다).
@@ -70,6 +73,10 @@ internal static class TrayStatusIcon
     /// 같은 값을 내는 다른 채널로 갈아타면(예: 62% CPU → 62% GPU) 문자열은 같고 색만 달라지므로
     /// 색을 키에 안 넣으면 아이콘이 갱신되지 않는다. "없음"도 값으로 적어(<c>none</c>)
     /// null과 실색이 절대 안 섞이게 한다(InstanceIcon 키의 <c>ring:none</c>과 같은 관례).
+    ///
+    /// A138: <b>대각 분할 축(<see cref="TrayStatus.Diagonal"/>)도 키에 넣는다</b> — 같은 두 문자열을
+    /// 2줄로 그리던 상태에서 대각 표기로 바뀌는 전환(또는 그 역)이 값 무변경으로 오인되면
+    /// 아이콘이 옛 모양에 머문다(A169와 같은 유형의 키 누락 함정 — CI가 못 잡는다).
     /// </summary>
     public static string ComposeKey(TrayStatus? status, string? moduleId)
     {
@@ -78,7 +85,8 @@ internal static class TrayStatusIcon
             ? string.Join(',', list.Select(v => Math.Round(v, 2).ToString("0.00")))
             : string.Empty;
         return $"{moduleId}|{status.Line1}|{status.Line2}|{bars}"
-             + $"|c1:{KeyColor(status.Line1Color)}|c2:{KeyColor(status.Line2Color)}";
+             + $"|c1:{KeyColor(status.Line1Color)}|c2:{KeyColor(status.Line2Color)}"
+             + $"|d:{(status.Diagonal ? "1" : "0")}";
     }
 
     /// <summary>키에 적는 줄 색 표기(A169) — 없으면 "none".</summary>
@@ -149,6 +157,13 @@ internal static class TrayStatusIcon
             {
                 DrawTextLine(g, status.Line1, color, margin, 0, textWidth, size, size * 0.58f * FontScale);
             }
+            else if (status.Diagonal)
+            {
+                // A138: 문서 페이지 위치 — 대각 분할이 열림 2줄 자리를 대체한다(유휴 전면 채움과는
+                // IsIdle 분기 자체가 갈라 놓아 섞일 수 없다). 색은 열림 공용 색 하나(줄 색 축 없음).
+                DrawDiagonal(g, status.Line1, status.Line2 ?? TrayStatus.Unknown,
+                    color, margin, size, edge);
+            }
             else
             {
                 // A169: 열림 두 줄만 줄별 색을 받는다(막대는 범위 밖 — 종전대로 공용 color).
@@ -207,6 +222,29 @@ internal static class TrayStatusIcon
         {
             g.DrawString(text, font, brush, new System.Drawing.RectangleF(x, y, width, height), format);
         }
+    }
+
+    /// <summary>
+    /// 대각 분할 렌더 (A138 — 문서 페이지 위치): 우상단→좌하단 대각선으로 나눠
+    /// 좌상 = <paramref name="line1"/>(현재 페이지), 우하 = <paramref name="line2"/>(전체 페이지).
+    /// 대각선 두께 = <see cref="EdgeUnit"/>(A139 규격 — 링·판 반경과 같은 한 값), 색 = 글자와 공용.
+    /// 글자 상자 기하: 대각선이 모서리(우상↔좌하)를 잇는 기울기 -1 직선이라, 위 반 높이의 세로
+    /// 중앙(y = size/4)에서 좌상 삼각형의 안쪽 폭이 정확히 size×3/4이다 — 상자 폭을 그보다 약간
+    /// 넉넉한 0.78로 잡아 "999+"(축약 상한 4자)가 5px 하한에서 3자로 잘리는 일이 없게 하고,
+    /// 중앙 정렬이 실제 글자를 상자보다 안쪽에 앉혀 대각선 침범이 시각적으로 남지 않게 한다.
+    /// 아래 상자는 같은 폭을 우하단 기준으로 대칭 배치.
+    /// </summary>
+    private static void DrawDiagonal(System.Drawing.Graphics g, string line1, string line2,
+        GdiColor color, float margin, int size, float edge)
+    {
+        using (var pen = new System.Drawing.Pen(color, edge))
+            g.DrawLine(pen, size, 0f, 0f, size);
+
+        var lineHeight = size / 2f;
+        var boxWidth = size * 0.78f - margin;
+        var fontPx = lineHeight * 0.94f * FontScale;
+        DrawTextLine(g, line1, color, margin, 0, boxWidth, lineHeight, fontPx);
+        DrawTextLine(g, line2, color, size - margin - boxWidth, lineHeight, boxWidth, lineHeight, fontPx);
     }
 
     /// <summary>

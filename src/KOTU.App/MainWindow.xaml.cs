@@ -1342,7 +1342,10 @@ public sealed partial class MainWindow : Window
             trayStatus.TrayStatusChanged += () => DispatcherQueue.TryEnqueue(() =>
             {
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                UpdateTrayIcon();
+                // A137: 저장 성공(A113 재기준화 — DocumentView.CommitSave의 1회 통지)의 용량 변화가
+                // 이 경로로 창 32px 아이콘에 닿는다. 오디오의 1초 주기 발화 같은 잦은 호출은
+                // _windowIconKey 선비교가 창 쪽 재합성을 걸러 낸다(트레이는 종전 ComposeKey 방어).
+                RefreshShellIcons();
             });
         SetContentState(module, context.FilePath);
         // A109(v0.136.0): 모듈 전환의 기본 화면 = 좌·우 사이드바.
@@ -1422,7 +1425,10 @@ public sealed partial class MainWindow : Window
         // 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 — 기존 "고정은 콘텐츠를 넘어 유지" 규칙.
         ResetOverlayInput();
         ApplyOverlayStates();
-        UpdateTrayIcon(); // A54: 모듈 전환·설정 전환·A59 안에서의 파일 교체까지 이 한 지점으로 모인다
+        // A54: 모듈 전환·설정 전환·A59 안에서의 파일 교체까지 이 한 지점으로 모인다.
+        // A137: 파일 열기/닫기가 창 아이콘(32px 확장자/용량)도 바꾸므로 트레이만이 아니라
+        // 셸 아이콘 전체를 갱신한다 — 창 쪽은 _windowIconKey 선비교로 무변경이면 무동작.
+        RefreshShellIcons();
     }
 
     /// <summary>현재 파일의 폴더를 모듈별 설정("lastFolder.{id}")에 기억한다 (v0.55.0).</summary>
@@ -1446,7 +1452,9 @@ public sealed partial class MainWindow : Window
         UpdateEmptyExplorer();
         UpdateDriveStrip();   // A22: 뷰가 파일을 열었다 → 드라이브 줄을 숨긴다
         ApplyOverlayStates(); // 폴더·정보가 바뀌었을 수 있다 — 떠 있는 오버레이·도크 갱신
-        UpdateTrayIcon();     // A54: 유휴(3자) → 열림(2줄) 전환도 이 경로로 걸린다
+        // A54: 유휴(3자) → 열림(2줄) 전환도 이 경로로 걸린다.
+        // A137: 뷰 내부 열기(◀/▶ 등)도 창 32px의 확장자/용량을 바꾸므로 셸 아이콘 전체 갱신.
+        RefreshShellIcons();
     }
 
     // ---------- 하단 바 드라이브 줄 (A22, v0.108.0) ----------
@@ -2828,7 +2836,10 @@ public sealed partial class MainWindow : Window
     private Windows.UI.Color? _moduleIconRing;
 
     /// <summary>
-    /// 창(태스크바) 아이콘 하단의 모듈 3자 표기 (A105 ②, v0.143.0) — 없으면 null.
+    /// 창(태스크바) 아이콘의 모듈 3자 표기 (A105 ②, v0.143.0) — 없으면 null.
+    /// A137부터 쓰임이 갈린다: 규칙 안 모듈의 유휴 32px에서는 전면 채움 타일의 글자
+    /// (InstanceIcon.GetIdleTile — 트레이 유휴와 같은 모양), 규칙 밖(하드웨어)에서는 종전대로
+    /// .ico 본체 하단 띠(GetComposed)다.
     /// 출처는 트레이 유휴 표기와 같은 <see cref="IdleTrayLabel"/> 단일 표다(중복 표 금지).
     /// 액센트·링과 달리 <b>모듈 ID 기준</b>(아이콘 파일 폴백과 무관): 모듈 .ico가 없어 중립
     /// 아이콘으로 폴백해도 "어느 모듈의 창인가"라는 사실은 그대로라, 모듈 ID로 그리는
@@ -2863,24 +2874,71 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 창·트레이 아이콘을 현재 모듈 색으로 다시 지정한다(A68 → A102에서 의미 개편).
-    /// 창 아이콘은 모듈 색 테두리 링을 합성한 것 — 창이 몇 개든 같다(A102: 링의 목적이
-    /// 인스턴스 구분에서 모듈 식별로 바뀌어 "2개 이상일 때만" 조건이 사라졌다).
-    /// 링이 없는 화면(중립 아이콘·정보 모듈)은 _moduleIconRing이 null이라 무테두리로 간다.
-    /// 모듈 전환(ApplyWindowIcon)에서 불린다 — 번호 변경은 더 이상 아이콘을 바꾸지 않는다.
+    /// 마지막으로 보낸 창 아이콘 합성 입력의 키(A137) — 같으면 WM_SETICON 왕복과 32px 캐시 밖
+    /// 재합성을 통째로 건너뛴다. 트레이 <see cref="_trayIconKey"/>(A18 방식)와 같은 장치인데,
+    /// 창 쪽 내용 축은 (경로·액센트·링·라벨·전면 채움 색·인스턴스 번호·열린 파일 확장자/용량)이다 —
+    /// <b>새 정보 축을 더하면 반드시 이 키에도 넣을 것</b>(A169 교훈: 키 누락 = 값이 바뀌어도
+    /// 아이콘이 갱신되지 않고, CI는 그것을 못 잡는다).
+    /// </summary>
+    private string _windowIconKey = string.Empty;
+
+    /// <summary>
+    /// 창·트레이 아이콘을 현재 상태로 다시 지정한다(A68 → A102 의미 개편 → A137 실시간 정보).
+    /// A137: 창 아이콘 2종이 서로 다른 정보를 담는다 — 16px = 인스턴스 번호, 32px = 열린 파일의
+    /// 확장자/용량(유휴면 3자 이니셜). 그래서 호출 지점도 모듈 전환(ApplyWindowIcon)만이 아니라
+    /// 파일 열기/닫기(SetContentState·OnContentOpened)·저장 성공(TrayStatusChanged 경유)·
+    /// 인스턴스 번호 변경(SetInstanceNumber)으로 늘었다 — 전부 이 한 지점으로 모이고,
+    /// 재합성 여부는 _windowIconKey 선비교가 정한다(무변경 호출은 문자열 비교 비용뿐).
+    /// 색 규칙(A140)의 판정 축은 트레이와 같은 Branding.IdleFill(모듈 ID 기준 — 하드웨어는
+    /// moduleId == "hardware" 명시 조건으로 규칙 밖 = 전용 색·링 없음, 종전 .ico 합성 유지).
     /// AppWindow.SetIcon은 원본 경로 유지 — 실제 표시는 직후 WM_SETICON(WindowIcon)이 덮는다.
-    /// ※ A54(v0.118.0): 트레이 아이콘은 더 이상 모듈 .ico가 아니라 값 텍스트를 그린다
-    ///   (<see cref="UpdateTrayIcon"/>). 그쪽도 테두리 규칙은 여기와 같다.
+    /// ※ A54(v0.118.0): 트레이 아이콘은 값 텍스트를 그린다(<see cref="UpdateTrayIcon"/>).
     /// </summary>
     private void RefreshShellIcons()
     {
         if (_moduleIconPath is { } path && File.Exists(path))
         {
-            AppWindow.SetIcon(path);
-            // A105 ②: 32px 창 아이콘 하단에 모듈 3자 표기(_moduleIconLabel)까지 합성한다.
-            WindowIcon.Apply(this, path, _moduleIconAccent, _moduleIconRing, _moduleIconLabel);
+            var idleFill = Branding.IdleFill(CurrentModuleId);
+            var (line1, line2) = OpenFileIconInfo(idleFill);
+            var key = $"{path}|{_moduleIconAccent?.ToString() ?? "n"}|{_moduleIconRing?.ToString() ?? "n"}"
+                + $"|{_moduleIconLabel ?? "n"}|{idleFill?.ToString() ?? "n"}|{_instanceNumber}"
+                + $"|{line1 ?? "n"}|{line2 ?? "n"}";
+            if (key != _windowIconKey)
+            {
+                AppWindow.SetIcon(path);
+                // A105 ②/A137: 합성 실패(통째 폴백)면 키를 비워 다음 갱신 때 다시 시도한다
+                // (트레이 UpdateTrayIcon의 실패 처리와 같은 규칙).
+                var ok = WindowIcon.Apply(this, path, _moduleIconAccent, _moduleIconRing,
+                    _moduleIconLabel, idleFill, _instanceNumber, line1, line2);
+                _windowIconKey = ok ? key : string.Empty;
+            }
         }
         UpdateTrayIcon();
+    }
+
+    /// <summary>
+    /// 작업표시줄 32px 아이콘의 열림 2줄 값(A137 ② — 예: "TXT" / "40K"). 값은 트레이 계약이 아니라
+    /// <b>셸이 현재 경로에서 직접 계산</b>한다 — 계약의 TrayStatus는 모듈마다 의미가 다르지만
+    /// (문서=페이지(A138)·영상=해상도/비트레이트·오디오=시간/막대 — 부록 B 52) 확장자+용량은
+    /// 전 모듈 공통이라 경로 계산이 계약 확장보다 싸다(구현 시 결정 — REQUIREMENTS A137 ②).
+    /// 표기는 트레이와 같은 규격(TrayFormat.Extension·Size — 단일 소스).
+    /// (null, null) = 열림 표기 없음 → 유휴(3자 이니셜)로 후퇴: 규칙 밖 화면(하드웨어·중립),
+    /// 파일 없음, 실경로가 아닌 화면(압축 내부 항목처럼 디스크에 없는 경로).
+    /// </summary>
+    private (string? Line1, string? Line2) OpenFileIconInfo(Windows.UI.Color? idleFill)
+    {
+        if (idleFill is null) return (null, null);
+        if (_currentFilePath is not { } file || !File.Exists(file)) return (null, null);
+        long bytes = -1;
+        try
+        {
+            bytes = new FileInfo(file).Length;
+        }
+        catch
+        {
+            // 크기를 못 읽으면 그 줄만 "—"가 된다(TrayFormat.Size(-1) — DocumentView의 종전 처리와 동일).
+        }
+        return (TrayFormat.Extension(file), TrayFormat.Size(bytes));
     }
 
     // ---------- 트레이 아이콘 내용 (A54, v0.118.0) ----------
@@ -3004,22 +3062,25 @@ public sealed partial class MainWindow : Window
         Activate();
     }
 
-    // ---------- 인스턴스 번호 (A2, v0.58.0 → A141, v0.162.0에서 배지 제거) ----------
-    // 소비처는 창 제목 접두 숫자(A103/A136) 하나뿐이다. 하단 바 색상 배지와 그 9색 팔레트
-    // (구 InstanceIcon.ColorFor)는 A141에서 함께 사라졌다.
+    // ---------- 인스턴스 번호 (A2, v0.58.0 → A141 배지 제거 → A137 아이콘 부분 부활) ----------
+    // 소비처 2곳: 창 제목 접두 숫자(A103/A136) + 16px 타이틀바 아이콘 타일(A137 ①).
+    // 하단 바 색상 배지와 그 9색 팔레트(구 InstanceIcon.ColorFor)는 A141에서 사라진 그대로다.
 
     /// <summary>
     /// 인스턴스 번호 설정. 값은 <see cref="WindowManager"/>가 생성 순서대로 준다 —
     /// A136(v0.162.0)부터 창이 하나뿐이어도 1이 들어온다(0은 더 이상 오지 않지만
     /// 방어적으로 0 이하를 0으로 접어 둔다 = 번호 없는 제목).
     /// 중간 창이 닫히면 WindowManager가 번호를 당겨서 다시 부른다.
-    /// 표시는 창 제목 접두 숫자 한 곳뿐(A103/A136 "1-KOTU" — 개수 제한 없음,
-    /// 작업표시줄·Alt+Tab에서도 구분되게). A102(v0.130.0)부터 아이콘은 번호와 무관하다
-    /// (링 = 모듈 색·번호 배지 제거) — 그래서 번호가 바뀌어도 아이콘을 다시 합성하지 않는다.
+    /// 표시 2곳: 창 제목 접두 숫자(A103/A136 "1-KOTU" — 개수 제한 없음) +
+    /// 16px 타이틀바 아이콘의 번호 타일(A137 ① — A102가 없앤 번호 렌더의 부분 반전.
+    /// 이력 A68→A102→A137은 InstanceIcon.GetNumberTile 주석 참고). 그래서 번호가 바뀌면
+    /// 아이콘도 다시 지정한다 — 창 여닫이마다 전 창이 이 호출을 받지만 번호가 실제로 변한
+    /// 창만 _windowIconKey 선비교를 통과해 재합성된다.
     /// </summary>
     public void SetInstanceNumber(int number)
     {
         _instanceNumber = number > 0 ? number : 0;
         ApplyTitle();
+        RefreshShellIcons(); // A137 ①: 16px = 인스턴스 번호 — 번호가 다시 아이콘의 정보 축이 됐다
     }
 }
