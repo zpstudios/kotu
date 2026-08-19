@@ -211,6 +211,20 @@ public sealed partial class PdfPane : UserControl
         {
             _presenter = presenter;
             presenter.PointerWheelChanged += OnPresenterWheel;
+            // A148: 드래그 팬도 같은 요소에 — 페이지 위에서만 동작한다는 규칙을 배선 지점이 보장한다.
+            // 여기는 이미지 모듈과 달리 눌림·이동이 ListViewItem 컨테이너를 먼저 지나므로
+            // handledEventsToo가 필수다(VideoPlayerView.xaml.cs:235-240의 Slider와 같은 사정 —
+            // 항목이 시각 상태 때문에 포인터를 소비하면 += 구독은 아예 호출되지 않는다).
+            // 휠(A98)은 항목이 소비하지 않아 종전대로 +=를 유지한다.
+            presenter.AddHandler(PointerPressedEvent,
+                new PointerEventHandler(OnPresenterPointerPressed), handledEventsToo: true);
+            presenter.AddHandler(PointerMovedEvent,
+                new PointerEventHandler(OnPresenterPointerMoved), handledEventsToo: true);
+            // 놓기와 캡처 상실은 같은 종료 처리로(VideoPlayerView.xaml.cs:237-240 선례).
+            presenter.AddHandler(PointerReleasedEvent,
+                new PointerEventHandler(OnPresenterPointerReleased), handledEventsToo: true);
+            presenter.AddHandler(PointerCaptureLostEvent,
+                new PointerEventHandler(OnPresenterPointerReleased), handledEventsToo: true);
         }
     }
 
@@ -220,9 +234,13 @@ public sealed partial class PdfPane : UserControl
 
         // A49: 수동 줌(Ctrl+휠(A98)·핀치, A16)이 들어오면 Fit "적용 중" 상태를 해제한다(크기 추종 중단).
         // ApplyFit이 건 ChangeView는 _appliedZoom과 일치하므로 여기 걸리지 않는다.
+        // A148 팬도 마찬가지다 — 오프셋만 옮기고 배율은 null(무변경)이라 ZoomFactor가 _appliedZoom
+        // 그대로여서 이 비교에 걸리지 않는다. 그래서 팬 중 억제 플래그가 따로 필요 없다.
         if (_appliedFit is not null && Math.Abs(_scroll.ZoomFactor - _appliedZoom) > 0.01)
             _appliedFit = null;
 
+        // A148: 팬은 매 프레임 ChangeView를 걸어 이 이벤트가 폭주한다 — 페이지 번호가 그대로면
+        // 표시를 건드리지 않도록 소비처(DocumentView)가 같은 값 조기 반환으로 받는다.
         PageChanged?.Invoke(CurrentPageIndex() + 1, _items.Count);
     }
 
@@ -338,6 +356,82 @@ public sealed partial class PdfPane : UserControl
             (_scroll.HorizontalOffset + pt.X) * ratio - pt.X,
             (_scroll.VerticalOffset + pt.Y) * ratio - pt.Y,
             newZoom, disableAnimation: true);
+    }
+
+    // ---------- 드래그 투 스크롤 / 팬 (A148) ----------
+
+    /// <summary>이만큼(px) 넘게 움직이기 전에는 클릭 취급 — 이미지 모듈과 같은 값·같은 의미.</summary>
+    private const double PanThresholdPixels = 4;
+
+    private bool _panTracking; // 좌버튼 눌림으로 캡처를 잡았다
+    private bool _panActive;   // 임계를 넘겨 실제로 팬 중이다
+    private double _panOriginX; // 눌림 시점 포인터 좌표(_scroll 기준)
+    private double _panOriginY;
+    private double _panStartHorizontal;
+    private double _panStartVertical;
+
+    /// <summary>
+    /// 좌버튼 드래그로 페이지를 밀어서 본다(A148). 마우스 전용 — 터치·펜은 ScrollViewer 내장
+    /// 패닝이 이미 처리하므로 뺏지 않는다. PageList는 SelectionMode=None·IsItemClickEnabled=False라
+    /// 항목 선택과 충돌하지 않고, PDF는 비트맵 렌더라 텍스트 선택 드래그도 없다.
+    /// 문서 모듈에는 DoubleTapped 소비자가 없어 이미지 모듈 같은 더블탭 억제 창은 두지 않는다.
+    /// 커서 변경(grab/grabbing)을 하지 않는 이유는 이미지 모듈 쪽 주석과 같다(후속 등재 후보).
+    /// </summary>
+    private void OnPresenterPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_scroll is null || _presenter is null) return;
+        if (e.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Mouse) return;
+        // 왼쪽 눌림 "전이"만 태운다 — A112·A131과 같은 관용구.
+        var point = e.GetCurrentPoint(_scroll);
+        if (point.Properties.PointerUpdateKind
+            != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
+        if (_scroll.ScrollableWidth <= 0 && _scroll.ScrollableHeight <= 0) return; // 밀 여지 없음
+        if (!_presenter.CapturePointer(e.Pointer)) return;
+
+        _panTracking = true;
+        _panActive = false;
+        _panOriginX = point.Position.X;
+        _panOriginY = point.Position.Y;
+        _panStartHorizontal = _scroll.HorizontalOffset;
+        _panStartVertical = _scroll.VerticalOffset;
+    }
+
+    /// <summary>
+    /// 콘텐츠가 손을 따라오게 오프셋을 반대로 민다. 배율은 null = 무변경이라 Fit 추종 상태(A49)를
+    /// 건드리지 않는다 — OnViewChanged의 줌 비교(ZoomFactor vs _appliedZoom)에 걸리지 않기 때문으로,
+    /// 키 스크롤(TryHandleNavKey)이 기대는 성질과 같다. 임계를 넘긴 뒤에만 Handled를 세운다.
+    /// </summary>
+    private void OnPresenterPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_panTracking || _scroll is null) return;
+        var position = e.GetCurrentPoint(_scroll).Position;
+        var dx = position.X - _panOriginX;
+        var dy = position.Y - _panOriginY;
+        if (!_panActive)
+        {
+            // 맨해튼 거리 — 이미지 모듈과 같은 판정식.
+            if (Math.Abs(dx) + Math.Abs(dy) <= PanThresholdPixels) return;
+            _panActive = true;
+        }
+
+        e.Handled = true;
+        // 줌 경로와 같은 이유로 애니메이션을 끈다 — 손보다 늦게 따라오면 미끄러진다.
+        _scroll.ChangeView(_panStartHorizontal - dx, _panStartVertical - dy, null,
+            disableAnimation: true);
+    }
+
+    /// <summary>놓기·캡처 상실 공용 종료. Handled는 세우지 않는다(셸 경로 보존).</summary>
+    private void OnPresenterPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_panTracking) return;
+        _panTracking = false;
+        _panActive = false;
+        _panOriginX = 0;
+        _panOriginY = 0;
+        _panStartHorizontal = 0;
+        _panStartVertical = 0;
+        // 캡처가 이미 풀린 뒤(PointerCaptureLost)라면 무동작 — 두 경로를 나눌 필요가 없다.
+        _presenter?.ReleasePointerCapture(e.Pointer);
     }
 
     // ---------- 키보드 스크롤 (A121) ----------

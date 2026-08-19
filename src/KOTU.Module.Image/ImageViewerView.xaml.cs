@@ -13,7 +13,7 @@ using KOTU.Input;
 namespace KOTU.Module.Image;
 
 /// <summary>
-/// 이미지 뷰어 화면. 폴더 내 ←/→ 탐색, 줌/팬, 회전(R), 휴지통 삭제(Delete),
+/// 이미지 뷰어 화면. 폴더 내 ←/→ 탐색, 줌/팬(A148 마우스 드래그), 회전(R), 휴지통 삭제(Delete),
 /// 전체화면(F11/더블클릭), 하단 상태바를 제공한다.
 /// 폴더 스캔·파일 읽기·디코드(WIC 메타데이터/Magick)는 뷰 전용 워커(A42)에서 직렬로 돌고
 /// UI 스레드는 비트맵 표시만 한다 — 직렬이라 빠른 ←/→ 연타에도 적용 순서가 요청 순서와 같다.
@@ -80,7 +80,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private int _exifRotation;   // EXIF orientation에서 읽은 회전
     private uint _pixelWidth;
     private uint _pixelHeight;
-    private string _metaText = string.Empty; // A9: 용량 · 종류(확장자·비트뎁스) · EXIF 요약
+    // A149: A9의 미리 조립된 한 덩어리(_metaText)를 조각으로 쪼갰다 — 표시 순서(해상도·확장자·용량·
+    // 순번·EXIF)가 조립 순서와 달라졌고, 순번은 탐색 때마다 바뀌어 조립 시점에 확정할 수 없다.
+    private string _sizeText = string.Empty; // 용량 (예: "2.41 MB")
+    private string _kindText = string.Empty; // 종류 = 확장자 + 비트뎁스 (예: "JPG 24-bit")
+    private string _exifText = string.Empty; // A9 EXIF 요약 — 순번 뒤에 이어 붙인다(정보 손실 금지)
     private ModuleWorker? _worker; // 폴더 스캔·파일 읽기·디코드 전용(A42) — 뷰별 분리
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
@@ -104,6 +108,12 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         // 가로채야 막고 대체할 수 있다 — 프레젠터는 템플릿 적용 후에야 존재하므로 Loaded에서 배선한다.
         // 구 휠 이전/다음 탐색(v0.41.0)은 휠 단독=줌이 대체 — 탐색은 ←/→ 키·하단 바 버튼으로 유지.
         Scroller.Loaded += (_, _) => HookZoomWheel();
+
+        // A149: 줌 레벨 표시(ZoomText)의 단일 출처는 Scroller.ZoomFactor다 — 휠 줌·Fit·핀치·
+        // ChangeView 어느 경로로 바뀌든 여기서 한 번에 받는다(모듈 최초의 ViewChanged 구독).
+        // 팬(A148)은 매 프레임 ChangeView를 걸어 이 이벤트가 폭주하므로 UpdateZoomText가
+        // "직전 표시 문자열과 같으면 조기 반환"으로 과다 대입을 막는다.
+        Scroller.ViewChanged += OnScrollerViewChanged;
 
         if (context.FilePath is { } path && File.Exists(path))
         {
@@ -150,7 +160,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     // ---------- 휠 줌 (A98 — 휠 단독·Ctrl+휠, A84 Shift+휠 대체) ----------
 
-    private ScrollContentPresenter? _zoomPresenter; // 휠 가로채기 지점 (Scroller 템플릿 로드 후 탐색)
+    private ScrollContentPresenter? _zoomPresenter; // 휠·팬 가로채기 지점 (Scroller 템플릿 로드 후 탐색)
 
     /// <summary>
     /// ScrollViewer 콘텐츠 프레젠터에 휠 핸들러를 단다. 버블 순서상 프레젠터가
@@ -158,13 +168,21 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// 우리 수동 줌(노치당 10%)이 일관되게 적용된다. 핀치 줌은 ZoomMode=Enabled 그대로 유지된다.
     /// 뷰어 콘텐츠 위에서만 동작한다는 규칙(리스트/그리드 무동작 — A84에서 확립,
     /// A98도 유지)은 배선 지점 자체가 보장한다.
+    /// A148: 드래그 팬도 같은 요소에 건다 — 배선 지점이 같아야 "콘텐츠 위에서만" 규칙이
+    /// 두 제스처에 똑같이 적용되고, 캡처 대상과 좌표 기준이 흩어지지 않는다.
     /// </summary>
     private void HookZoomWheel()
     {
         if (_zoomPresenter is not null) return; // Loaded 재진입(전체화면 왕복 등) 중복 배선 방지
         _zoomPresenter = FindPresenter(Scroller);
-        if (_zoomPresenter is not null)
-            _zoomPresenter.PointerWheelChanged += OnContentWheel;
+        if (_zoomPresenter is null) return;
+        _zoomPresenter.PointerWheelChanged += OnContentWheel;
+        _zoomPresenter.PointerPressed += OnContentPointerPressed;
+        _zoomPresenter.PointerMoved += OnContentPointerMoved;
+        // 놓기와 캡처 상실은 같은 종료 처리로 모은다(VideoPlayerView.xaml.cs:237-240 선례) —
+        // 창 비활성화·다른 요소의 캡처 탈취 등으로 Released가 아예 안 오는 경로가 있다.
+        _zoomPresenter.PointerReleased += OnContentPointerReleased;
+        _zoomPresenter.PointerCaptureLost += OnContentPointerReleased;
     }
 
     /// <summary>
@@ -209,6 +227,111 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         return null;
     }
 
+    // ---------- 드래그 투 스크롤 / 팬 (A148) ----------
+
+    /// <summary>
+    /// 이만큼(px) 넘게 움직이기 전에는 "클릭"으로 본다 — 더블클릭 전체화면(OnDoubleTapped)을
+    /// 손떨림으로 잃지 않게 하는 임계. 넘는 순간부터 팬이 활성화된다.
+    /// </summary>
+    private const double PanThresholdPixels = 4;
+
+    /// <summary>
+    /// 팬이 끝난 뒤 이 시간(ms) 안에 오는 더블탭은 삼킨다. 팬 중에는 Pressed/Released를
+    /// Handled 처리하지 않으므로(셸 경로 보존) 제스처 인식기가 더블탭을 만들어 낼 수 있는데,
+    /// 밀어서 보다가 손을 뗀 직후의 전체화면 전환은 사고에 가깝다. 값은 A131 더블클릭 창(500ms)
+    /// 보다 약간 짧게 잡아 "드래그 후 곧바로 의도한 더블클릭"까지 막지는 않는다.
+    /// </summary>
+    private const int PanDoubleTapSuppressMs = 400;
+
+    private bool _panTracking;  // 좌버튼 눌림으로 캡처를 잡았다(임계 미만이면 아직 클릭 취급)
+    private bool _panActive;    // 임계를 넘겨 실제로 팬 중이다
+    private double _panOriginX; // 눌림 시점 포인터 좌표(Scroller 기준)
+    private double _panOriginY;
+    private double _panStartHorizontal; // 눌림 시점 오프셋 — 이동량은 여기에 더해 계산한다
+    private double _panStartVertical;
+    private DateTime _panEndedAt = DateTime.MinValue; // 실제 팬이 끝난 시각(억제 창 기준, A131 관용구)
+
+    /// <summary>
+    /// 좌버튼 드래그로 확대된 이미지를 밀어서 본다(A148). 마우스 전용 —
+    /// 터치·펜은 ScrollViewer 내장 패닝이 이미 처리하므로 뺏지 않는다.
+    /// 스크롤 여지가 없으면(축소·창맞춤 상태) 캡처조차 하지 않고 빠져 더블클릭 전체화면 경로를
+    /// 원형 그대로 남긴다. Handled는 세우지 않는다 — 셸의 마우스 뒤로가기(A112)·홀드 취소(A58)·
+    /// 경계 버튼 이동(A86)이 handledEventsToo로 살아 있긴 하지만, 더블탭 제스처 인식은
+    /// Pressed/Released를 보므로 여기서 소비하면 예측이 어려워진다.
+    /// <para>
+    /// 커서를 grab/grabbing으로 바꾸는 것은 이번 배치에서 하지 않는다(후속 등재 후보):
+    /// ProtectedCursor가 protected라 컨트롤 상속이 필요하고(MainWindow.xaml.cs:1013-1014 주석 —
+    /// SponsorCard가 그래서 Grid를 상속한다), 저장소에 grab 계열 InputSystemCursorShape 선례가
+    /// 없다. 여기서는 프레젠터가 ScrollViewer 템플릿 요소라 상속으로 감쌀 수도 없다.
+    /// </para>
+    /// </summary>
+    private void OnContentPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_zoomPresenter is null) return;
+        if (e.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Mouse) return;
+        // 왼쪽 눌림 "전이"만 태운다 — A112(MainWindow.xaml.cs:1880-1881)·A131(ExplorerPane.xaml.cs:1047-1048)과 같은 관용구.
+        var point = e.GetCurrentPoint(Scroller);
+        if (point.Properties.PointerUpdateKind
+            != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
+        // 밀 여지가 없으면 무동작(등재문 ⓒ) — 창맞춤·축소 상태에서 클릭이 팬으로 오인되지 않는다.
+        if (Scroller.ScrollableWidth <= 0 && Scroller.ScrollableHeight <= 0) return;
+        if (!_zoomPresenter.CapturePointer(e.Pointer)) return; // 캡처 실패 = 상태를 만들지 않는다
+
+        _panTracking = true;
+        _panActive = false;
+        _panOriginX = point.Position.X;
+        _panOriginY = point.Position.Y;
+        _panStartHorizontal = Scroller.HorizontalOffset;
+        _panStartVertical = Scroller.VerticalOffset;
+    }
+
+    /// <summary>
+    /// 콘텐츠가 손을 따라오게 오프셋을 반대로 민다. 임계를 넘긴 뒤에만 Handled를 세운다 —
+    /// 그 전엔 아직 "클릭"이라 아무 것도 소비하지 않는다.
+    /// 좌표 기준은 Scroller(뷰포트) — 팬 중에도 위치가 변하지 않는 요소여야 이동량이 누적되지 않는다.
+    /// </summary>
+    private void OnContentPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_panTracking) return;
+        var position = e.GetCurrentPoint(Scroller).Position;
+        var dx = position.X - _panOriginX;
+        var dy = position.Y - _panOriginY;
+        if (!_panActive)
+        {
+            // 맨해튼 거리 — 임계 판정에 제곱근을 쓸 이유가 없다(4px는 손떨림 상한일 뿐).
+            if (Math.Abs(dx) + Math.Abs(dy) <= PanThresholdPixels) return;
+            _panActive = true;
+        }
+
+        e.Handled = true;
+        // 배율은 null = 무변경. 애니메이션을 끄지 않으면 이동이 손보다 늦게 따라와 미끄러진다.
+        Scroller.ChangeView(_panStartHorizontal - dx, _panStartVertical - dy, null,
+            disableAnimation: true);
+    }
+
+    /// <summary>
+    /// 놓기·캡처 상실 공용 종료. 실제로 팬이 일어났을 때만 더블탭 억제 창을 켠다 —
+    /// 임계 미만의 단순 클릭은 종전대로 더블클릭 전체화면이 그대로 성립해야 한다.
+    /// Handled는 세우지 않는다(셸 경로 보존).
+    /// </summary>
+    private void OnContentPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_panTracking) return;
+        if (_panActive) _panEndedAt = DateTime.UtcNow;
+        _panTracking = false;
+        _panActive = false;
+        _panOriginX = 0;
+        _panOriginY = 0;
+        _panStartHorizontal = 0;
+        _panStartVertical = 0;
+        // 캡처가 이미 풀린 뒤(PointerCaptureLost)라면 무동작이다 — 두 경로를 나눌 필요가 없다.
+        _zoomPresenter?.ReleasePointerCapture(e.Pointer);
+    }
+
+    /// <summary>방금 팬으로 끝난 제스처인가 — 시간 비교는 A131(ExplorerPane.xaml.cs:1060-1062) 관용구 그대로.</summary>
+    private bool IsPanSuppressingDoubleTap() =>
+        (DateTime.UtcNow - _panEndedAt).TotalMilliseconds < PanDoubleTapSuppressMs;
+
     // ---------- 이미지 로드 ----------
 
     private async Task LoadCurrentAsync()
@@ -233,12 +356,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
             // 파일 읽기와 메타데이터 디코드(해상도·EXIF orientation·A9 메타 요약)는 워커에서(A42).
             // BitmapImage는 EXIF 회전을 자동 반영하지 않으므로 여기서 읽어 RotateTransform에 합산한다.
-            var (data, width, height, exifRotation, meta) = await Worker.Run(_ => ReadImageFile(path));
+            var (data, width, height, exifRotation, size, kind, exif) =
+                await Worker.Run(_ => ReadImageFile(path));
 
             _pixelWidth = width;
             _pixelHeight = height;
             _exifRotation = exifRotation;
-            _metaText = meta;
+            _sizeText = size;
+            _kindText = kind;
+            _exifText = exif;
 
             var bitmap = new BitmapImage(); // GIF 애니메이션은 BitmapImage 기본 지원
             using (var stream = new MemoryStream(data))
@@ -257,10 +383,17 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         {
             ImageControl.Source = null;
             FileNameText.Text = $"Failed to load: {Path.GetFileName(path)} ({ex.Message})";
-            InfoText.Text = PositionText();
-            _metaText = string.Empty; // 이전 이미지 메타가 남지 않게
-            MetaText.Text = string.Empty;
-            ToolTipService.SetToolTip(MetaText, null);
+            // 이전 이미지 메타가 남지 않게 조각을 전부 비운다. A149에서 해상도가 MetaText로
+            // 옮겨졌으므로 픽셀 크기도 함께 비워야 실패한 파일에 직전 파일의 해상도가 붙지 않는다.
+            _sizeText = string.Empty;
+            _kindText = string.Empty;
+            _exifText = string.Empty;
+            _pixelWidth = 0;
+            _pixelHeight = 0;
+            var failedMeta = BuildMetaText(); // 남는 건 순번뿐 — 실패해도 "몇 번째"는 유효하다
+            MetaText.Text = failedMeta;
+            ToolTipService.SetToolTip(MetaText, failedMeta.Length > 0 ? failedMeta : null);
+            UpdateZoomText(); // A149: 보여 줄 이미지가 없으니 배율 표기도 비운다(위에서 Source=null)
             TrayStatusChanged?.Invoke();
         }
     }
@@ -277,15 +410,13 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// </summary>
     private async Task LoadViaMagickAsync(string path)
     {
-        var (png, width, height, meta) = await Worker.Run(_ =>
+        var (png, width, height, size, kind) = await Worker.Run(_ =>
         {
             using var magick = new ImageMagick.MagickImage(path);
             // A9: 비트뎁스 = 채널당 비트 × 채널 수 (Q8 빌드라 채널당 8비트 상한 — 근사값)
             var bitDepth = (uint)(magick.Depth * magick.ChannelCount);
-            var metaText = string.Join("  ·  ",
-                FormatSize(new FileInfo(path).Length),
-                FormatKind(path, bitDepth));
-            return (magick.ToByteArray(ImageMagick.MagickFormat.Png), magick.Width, magick.Height, metaText);
+            return (magick.ToByteArray(ImageMagick.MagickFormat.Png), magick.Width, magick.Height,
+                FormatSize(new FileInfo(path).Length), FormatKind(path, bitDepth));
         });
 
         if (_navigator?.Current != path) return; // 그새 다른 파일로 이동함
@@ -293,7 +424,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         _pixelWidth = width;
         _pixelHeight = height;
         _exifRotation = 0; // Magick 디코드 경로에서는 EXIF 회전을 별도 적용하지 않는다
-        _metaText = meta;
+        _sizeText = size;
+        _kindText = kind;
+        _exifText = string.Empty; // 이 경로는 EXIF를 읽지 않는다(psd 등) — 이전 파일 것이 남지 않게 비운다
         using var stream = new MemoryStream(png);
         var bitmap = new BitmapImage();
         await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
@@ -309,16 +442,21 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     }
 
     /// <summary>
-    /// 워커 스레드: 파일 전체를 읽고 WIC로 해상도·EXIF 회전과 하단 바 메타 요약(A9 —
+    /// 워커 스레드: 파일 전체를 읽고 WIC로 해상도·EXIF 회전과 하단 바 메타 조각(A9 —
     /// 용량·종류(확장자·비트뎁스)·EXIF 요약)을 뽑는다. WinRT 비동기는
     /// 전용 스레드라 동기 대기해도 UI 교착이 없다. 메타데이터 실패는 0으로 두고 표시는 계속.
+    /// A149: 조립된 한 줄 대신 조각으로 돌려준다 — 표시 순서에 순번이 끼어들고(탐색마다 변한다)
+    /// 해상도는 이미 별도 필드라, 조립은 표시 시점(BuildMetaText)에서만 한다.
     /// </summary>
-    private static (byte[] Data, uint Width, uint Height, int ExifRotation, string Meta) ReadImageFile(string path)
+    private static (byte[] Data, uint Width, uint Height, int ExifRotation,
+        string Size, string Kind, string Exif) ReadImageFile(string path)
     {
         var data = File.ReadAllBytes(path);
         uint width = 0, height = 0;
         var exifRotation = 0;
-        var meta = new List<string> { FormatSize(data.LongLength) };
+        var size = FormatSize(data.LongLength);
+        string kind;
+        var exifSummary = string.Empty;
         try
         {
             using var stream = new MemoryStream(data).AsRandomAccessStream();
@@ -326,16 +464,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             width = decoder.PixelWidth;
             height = decoder.PixelHeight;
             exifRotation = ReadExifRotation(decoder);
-            meta.Add(FormatKind(path, ReadBitDepth(decoder)));
-            if (ReadExifSummary(decoder) is { Length: > 0 } exif)
-                meta.Add(exif);
+            kind = FormatKind(path, ReadBitDepth(decoder));
+            exifSummary = ReadExifSummary(decoder);
         }
         catch
         {
             // 메타데이터를 못 읽어도 표시는 계속 시도한다 — 용량·확장자만이라도 보여준다.
-            meta.Add(FormatKind(path, 0));
+            kind = FormatKind(path, 0);
         }
-        return (data, width, height, exifRotation, string.Join("  ·  ", meta));
+        return (data, width, height, exifRotation, size, kind, exifSummary);
     }
 
     // ---------- 하단 바 메타 요약 구성 (A9) ----------
@@ -514,6 +651,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
     }
 
+    /// <summary>
+    /// 보기 모드를 바꾼다. Fit은 ZoomFactor가 아니라 이미지의 Width/MaxWidth로 구현되므로
+    /// 여기서 배율을 1.0으로 되돌린다 — 그래서 A149 줌 표시(ZoomText)는 어떤 Fit 모드에서든
+    /// 100%가 정상이다(자세한 이유는 UpdateZoomText 주석).
+    /// </summary>
     private void SetFitMode(FitMode mode)
     {
         _fitMode = mode;
@@ -630,21 +772,65 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         if (path is null)
         {
             FileNameText.Text = "No file open";
-            InfoText.Text = string.Empty;
+            ZoomText.Text = string.Empty;
             MetaText.Text = string.Empty;
             ToolTipService.SetToolTip(MetaText, null);
             return;
         }
 
         FileNameText.Text = Path.GetFileName(path);
-        // A9: 용량·종류(확장자·비트뎁스)·EXIF 요약. 좁으면 말줄임되므로 전체는 툴팁으로.
-        MetaText.Text = _metaText;
-        ToolTipService.SetToolTip(MetaText, _metaText.Length > 0 ? _metaText : null);
-        var resolution = _pixelWidth > 0 ? $"{_pixelWidth}×{_pixelHeight}  ·  " : string.Empty;
-        InfoText.Text = resolution + PositionText();
+        // A149: 파일명 오른쪽에 나머지 정보를 한 덩어리로. 좁으면 말줄임되므로 전체는 툴팁으로.
+        var meta = BuildMetaText();
+        MetaText.Text = meta;
+        ToolTipService.SetToolTip(MetaText, meta.Length > 0 ? meta : null);
+        // ChangeView가 실제 변화를 만들지 않으면(이미 100%였다) ViewChanged가 안 올 수 있어
+        // 파일이 바뀔 때는 여기서도 한 번 맞춘다.
+        UpdateZoomText();
         // A22(v0.108.0): 드라이브 표시는 파일이 열려 있을 때가 아니라 없을 때만 —
         // 여기서 조회하던 v0.47.0 텍스트는 셸이 주입하는 공용 드라이브 줄로 대체됐다.
     }
+
+    /// <summary>
+    /// A149 확정 순서: 해상도 · 확장자(비트뎁스) · 용량 · 순번, 그 뒤에 A9의 EXIF 요약.
+    /// 파일명은 별도 TextBlock(FileNameText)이라 여기 들어오지 않는다 — 좁은 폭에서 파일명이
+    /// 먼저 살아남아야 하기 때문(XAML의 Auto/* 배분).
+    /// 빈 조각은 건너뛴다 = 구분자만 남는 "  ·    ·  " 같은 모양이 생기지 않는다.
+    /// </summary>
+    private string BuildMetaText()
+    {
+        var parts = new List<string>();
+        if (_pixelWidth > 0) parts.Add($"{_pixelWidth}×{_pixelHeight}");
+        if (_kindText.Length > 0) parts.Add(_kindText);
+        if (_sizeText.Length > 0) parts.Add(_sizeText);
+        if (PositionText() is { Length: > 0 } position) parts.Add(position);
+        if (_exifText.Length > 0) parts.Add(_exifText);
+        return string.Join("  ·  ", parts);
+    }
+
+    /// <summary>
+    /// A149: 현재 배율 표시. 출처는 Scroller.ZoomFactor 하나뿐이다(전용 필드를 두지 않는다).
+    /// <para>
+    /// Fit 버튼 본체 표기와 겹쳐 보이지만 역할이 다르다 — 버튼은 <b>모드</b>(1:1 / Contain /
+    /// Fit width / Fit height), 여기는 <b>실제 배율</b>이다. Fit이 ZoomFactor가 아니라
+    /// Width/MaxWidth로 구현돼 있어(UpdateFit) SetFitMode가 배율을 1.0으로 되돌리므로
+    /// "Fit width인데 100%"가 정상이다 — 모순이 아니니 뒤집지 말 것.
+    /// </para>
+    /// 팬(A148)·휠 줌은 매 프레임 ViewChanged를 부르므로 값이 같으면 대입하지 않는다.
+    /// </summary>
+    private void UpdateZoomText()
+    {
+        // 판정 기준은 "표시 중인 비트맵이 있는가" — 파일 없음(경로 null)과 로드 실패를 한 조건으로
+        // 덮는다(둘 다 Source를 null로 만든다). 실패 뒤 창 크기 변경 같은 늦은 ViewChanged가
+        // 배율을 되살리지 않게 하려면 경로가 아니라 이 상태를 봐야 한다.
+        var text = ImageControl.Source is null
+            ? string.Empty
+            : $"{Scroller.ZoomFactor * 100:0}%";
+        if (ZoomText.Text == text) return;
+        ZoomText.Text = text;
+    }
+
+    private void OnScrollerViewChanged(object? sender, ScrollViewerViewChangedEventArgs e) =>
+        UpdateZoomText();
 
     private string PositionText() =>
         _navigator is { Count: > 0 } nav ? $"{nav.CurrentIndex + 1}/{nav.Count}" : string.Empty;
@@ -675,9 +861,16 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         ToggleFullScreen();
     }
 
+    /// <summary>
+    /// 더블클릭 = 전체화면 토글. 이 핸들러는 UserControl <b>루트</b>에 걸려 있어(XAML) 팬을
+    /// 배선한 콘텐츠 프레젠터와 층이 다르다 — 프레젠터에서 Handled를 세워도 여기까지 오므로
+    /// 방금 팬이 있었으면 시간 창으로 막는다(A148). 삼킬 때도 Handled는 세운다:
+    /// 여기서 통과시키면 상위(셸)의 다른 더블탭 해석이 뒤늦게 붙을 수 있다.
+    /// </summary>
     private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         e.Handled = true;
+        if (IsPanSuppressingDoubleTap()) return; // 밀어서 보다 손 뗀 직후 — 전체화면 전환은 사고다
         ToggleFullScreen();
     }
 

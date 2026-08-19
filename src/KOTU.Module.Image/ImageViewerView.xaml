@@ -24,7 +24,9 @@
     </UserControl.KeyboardAccelerators>
 
     <Grid x:Name="RootGrid">
-        <!-- 줌(휠 단독·Ctrl+휠 10%~800% — A98, 핀치는 내장 유지)/팬. 기본은 창맞춤(코드에서 MaxWidth/MaxHeight로 제한) -->
+        <!-- 줌(휠 단독·Ctrl+휠 10%~800% — A98, 핀치는 내장 유지). 기본은 창맞춤(코드에서 MaxWidth/MaxHeight로 제한).
+             팬: 스크롤바·터치/펜 패닝은 ScrollViewer 내장, 마우스 좌버튼 드래그는 A148이 코드에서
+             (HookZoomWheel이 잡아 둔 콘텐츠 프레젠터에 포인터 캡처) 얹는다. -->
         <ScrollViewer
             x:Name="Scroller"
             ZoomMode="Enabled"
@@ -56,7 +58,8 @@
             VerticalAlignment="Center"
             Visibility="Collapsed" />
 
-        <!-- 하단 상태바: 파일명 · 해상도 · 몇 번째/전체.
+        <!-- 하단 상태바(A149): 좌측 한 덩어리 = 파일명 · 해상도 · 확장자(비트뎁스) · 용량 · 순번 · EXIF 요약,
+             그 오른쪽에 줌 레벨(ZoomText) + 전 모듈 공통 버튼.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(v0.27.0, 동영상 v0.21.0과 동일) -->
         <Border
             x:Name="StatusBar"
@@ -80,8 +83,10 @@
                      (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
                      치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
                 <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
-                <!-- A9: 파일명 + 메타 요약(용량·종류·EXIF)이 남는 공간을 나눠 쓴다.
-                     파일명이 우선(Auto), 메타는 남는 폭에서 말줄임(전체 텍스트는 툴팁). -->
+                <!-- A9 → A149: 파일명 + 메타 요약이 남는 공간을 나눠 쓴다. 파일명이 우선(Auto),
+                     메타는 남는 폭에서 말줄임(전체 텍스트는 툴팁 — 폭 임계 축약 로직은 두지 않는다).
+                     A149 메타 순서 = 해상도 · 확장자(비트뎁스) · 용량 · 순번 · EXIF 요약
+                     (A9의 용량·종류·EXIF 순서를 사용자 확정 순서로 재조립. 조립은 BuildMetaText). -->
                 <Grid x:Name="FileInfoPanel" Grid.Column="0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -110,8 +115,11 @@
                     HorizontalContentAlignment="Stretch"
                     VerticalAlignment="Center"
                     Visibility="Collapsed" />
+                <!-- A149: 현재 줌 레벨(Scroller.ZoomFactor를 퍼센트로). 칸 번호는 그대로 1 —
+                     이름만 InfoText에서 바꿨다(셸 ContentInfoOverlay.xaml에도 InfoText가 있어 grep이 오염된다).
+                     Fit 버튼 본체는 "모드"(1:1/Contain/Fit width/Fit height), 여기는 "실제 배율"이라 역할이 다르다. -->
                 <TextBlock
-                    x:Name="InfoText"
+                    x:Name="ZoomText"
                     Grid.Column="1"
                     VerticalAlignment="Center" />
                 <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate·전체화면 = 1칸, Fit = 2칸 +

@@ -229,7 +229,13 @@ public sealed partial class DocumentView : UserControl,
         {
             _pdfPane = new PdfPane();
             _pdfPane.PageChanged += (current, total) =>
-                PageInfoText.Text = total > 0 ? $"{current} / {total}" : string.Empty;
+            {
+                // A148: 드래그 팬은 매 프레임 ViewChanged → PageChanged를 부른다. 페이지 번호가
+                // 그대로면 대입하지 않는다(같은 값이어도 TextBlock 대입은 측정·배치를 유발한다).
+                var text = total > 0 ? $"{current} / {total}" : string.Empty;
+                if (PageInfoText.Text == text) return;
+                PageInfoText.Text = text;
+            };
             RootGrid.Children.Insert(0, _pdfPane); // 상태바·플레이스홀더보다 뒤(z 순서)
         }
 
