@@ -19,17 +19,20 @@ internal static class Branding
     public const string RepoUrl = "https://github.com/zpstudios/kotu";
 
     /// <summary>
-    /// 사용자 가이드 주소(A162) — 설정 화면의 "Learn more" 링크 목적지.
-    /// 가이드는 같은 내용의 문서 <b>두 벌</b>로 존재한다: 원본 <c>docs/USER-GUIDE.md</c>와
-    /// 웹 게시본 <c>site/guide.html</c>. 사이트는 아직 어디에도 게시돼 있지 않으므로
-    /// (<c>site/README.md</c> "배포" 절 — 워크플로 없음) 앱이 여는 주소는 GitHub가 렌더링해 주는
-    /// 마크다운 원본이다. 두 문서의 절 앵커 이름은 같게 맞춰 두었으므로
+    /// 사용자 가이드 주소(A162). 가이드는 같은 내용의 문서 <b>두 벌</b>로 존재한다:
+    /// 원본 <c>docs/USER-GUIDE.md</c>와 웹 게시본 <c>site/guide.html</c>. 사이트는 아직 어디에도
+    /// 게시돼 있지 않으므로(<c>site/README.md</c> "배포" 절 — 워크플로 없음) 여기 주소는 GitHub가
+    /// 렌더링해 주는 마크다운 원본이다. 두 문서의 절 앵커 이름은 같게 맞춰 두었으므로
     /// (guide.html의 <c>id</c> = 마크다운 제목 슬러그) 사이트가 게시되면 이 상수 한 줄만 바꾸면 된다.
+    /// <para>
+    /// <b>A182 이후 앱 안에 이 주소를 여는 곳은 없다</b> — 설정 화면의 "Learn more"가 외부 링크에서
+    /// 앱 내 펼침으로 바뀌면서 유일한 소비처가 사라졌고, 앵커를 붙여 주던 <c>GuideLink(anchor)</c>도
+    /// 고아가 되어 함께 지웠다. 상수 자체는 <b>일부러 남긴다</b> — 위에 적어 둔 "사이트가 게시되면
+    /// 한 줄 교체" 훅이자 가이드 두 벌의 위치를 가리키는 단일 소스이고, 앱 안에 가이드 링크를
+    /// 다시 붙이는 날 이 줄부터 쓰면 된다. (const라 쓰이지 않아도 빌드 경고가 나지 않는다.)
+    /// </para>
     /// </summary>
     public const string UserGuideUrl = RepoUrl + "/blob/master/docs/USER-GUIDE.md";
-
-    /// <summary>가이드의 절 앵커로 바로 가는 주소. 앵커 이름은 소문자와 하이픈만 쓴다.</summary>
-    public static Uri GuideLink(string anchor) => new($"{UserGuideUrl}#{anchor}");
 
     /// <summary>
     /// 모듈별 액센트 색. v0.26.0부터 하단 바 스트립/칩 색 대신 창·트레이의 모듈 색

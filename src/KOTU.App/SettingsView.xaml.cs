@@ -97,13 +97,23 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // A162(v0.171.0): 4문장 374자였던 설명을 한 줄로 줄이고 상세(관리자 권한 불필요·해제 시 완전 삭제·
         // Windows가 막는 보호 확장자와 그 대처)는 사용자 가이드 "Explorer integration" 절로 옮겼다.
         // 같은 작업에서 문구 끝에 노출돼 있던 내부 요구사항 번호도 걷어냈다 — 사용자 문구에 A번호는 없다.
+        // A182: 그 상세를 다시 앱 안으로 데려왔다(펼치면 보인다). 아래 문장은 축약 직전 원문
+        // (b80c437^)에서 위 한 줄이 이미 말한 부분을 뺀 나머지다.
+        // ⚠️ 보호 확장자 문장만 원문 그대로 두지 않았다 — A166(v0.184.0)이 UCPD 보호 확장자에서는
+        // 딥링크 자동 열기를 억제하도록 동작을 바꿨으므로, 원문("보호 확장자는 기본 앱 페이지가 열린다")을
+        // 그대로 복원하면 코드와 어긋난 안내가 된다. 정보량은 유지하고 사실만 현행 동작에 맞췄다.
         Root.Children.Add(new TextBlock
         {
             Text = $"Registers file types for this user account only, and makes {Branding.AppName} the default app for them.",
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
-        Root.Children.Add(LearnMore("explorer-integration"));
+        Root.Children.Add(LearnMore(
+            "No administrator rights are needed, and turning a switch off removes the registration "
+            + "completely - nothing is left behind. Windows protects a few file types and can refuse "
+            + "that last step: for those, use \"Set default...\" beside the switch and pick "
+            + $"{Branding.AppName}. If Windows blocks any other type, the Windows default-apps page "
+            + "opens so you can confirm it once."));
 
         // 토글 순서(A35, 사용자 확정 2026-08-10): 이미지 → 비디오 → 오디오 → 문서 → 압축.
         // 시작 메뉴 번호 순서(1이미지 2영상 3오디오 4문서 5압축)와 일치시킨 것 —
@@ -400,7 +410,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
-        Root.Children.Add(LearnMore("ui-scale"));
+        // A182: 축약 때 가이드로 옮겼던 문장을 앱 안 펼침으로 되돌린다(원문 = b80c437^).
+        Root.Children.Add(LearnMore(
+            "\"System default\" follows the Windows display scaling; picking a value overrides it "
+            + "for this app only."));
 
         // A44(A21 보강): 현재 윈도우 배율을 별도 줄이 아니라 배율 목록 항목 옆에 표기한다.
         // XamlRoot.RasterizationScale = 이 창이 떠 있는 모니터의 시스템 배율(앱 자체 배율과 무관).
@@ -493,7 +506,11 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
-        Root.Children.Add(LearnMore("always-open-files-in-a-new-instance"));
+        // A182: 명시적 "새 인스턴스" 조작이 이 설정과 무관하다는 단서를 다시 앱 안에서 펼쳐 본다
+        // (원문 = b80c437^ 그대로).
+        Root.Children.Add(LearnMore(
+            "Explicit \"new instance\" actions (Shift+N, Shift+double-click, right-click menu) "
+            + "always open a new instance either way."));
     }
 
     /// <summary>
@@ -524,7 +541,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = true, // 경로를 그대로 복사해 갈 수 있게
         });
-        Root.Children.Add(LearnMore("the-settings-file"));
+        // A182: 직접 편집 경고를 다시 앱 안에서 펼쳐 본다(원문 = b80c437^ 그대로).
+        Root.Children.Add(LearnMore("Editing this file directly can break your settings."));
 
         // 실패 사유 전용 줄(성공하면 보이지 않는다) — 공용 _status는 연결 토글 결과가 쓴다.
         var status = new TextBlock
@@ -774,22 +792,58 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     }
 
     /// <summary>
-    /// A162(v0.171.0): 축약한 설명 줄 바로 아래 붙는 "Learn more" 링크.
-    /// 형태는 이 화면의 기존 선례(About 줄의 저장소 링크·하단 바 Patreon 링크)와 같은
-    /// <see cref="HyperlinkButton"/>이다 — 문장 안에 인라인 Hyperlink를 넣은 선례는 저장소에 없다.
-    /// <paramref name="anchor"/>는 사용자 가이드 두 벌(docs/USER-GUIDE.md · site/guide.html)이
-    /// 공유하는 소문자-하이픈 절 앵커. 위쪽 여백을 음수로 준 이유는 Root의 Spacing 12를 상쇄해
-    /// 설명 줄에 딸린 링크로 보이게 하기 위함이다(A25 defaults 줄과 같은 처리).
+    /// 축약한 설명 줄 바로 아래 붙는 "Learn more" 접기/펼치기 (A182 — A162의 부분 반전).
+    /// A162(v0.171.0)에서는 같은 자리가 사용자 가이드로 나가는 <see cref="HyperlinkButton"/>
+    /// 링크였지만, 지금은 <b>앱 밖으로 나가지 않고</b> 그 자리 아래에 상세 문장을 펼친다
+    /// (사용자 지시 2026-08-19: "축약 전에 앱 안에서 모든 문장이 보이던 것처럼").
+    /// <para>
+    /// 형태는 저장소에 이미 있는 것만 조합했다 — WinUI <c>Expander</c> 사용 선례가 0건이라
+    /// 쓰지 않고, 종전 Learn more 버튼(About 줄 링크와 같은 규격의 HyperlinkButton)에
+    /// Click을 매달아 상세 <see cref="TextBlock"/>의 Visibility만 토글한다. 라벨은
+    /// "Learn more"와 "Show less"를 오간다.
+    /// </para>
+    /// <para>
+    /// 버튼과 상세를 <b>StackPanel 하나로 묶어</b> Root에 넣는 이유: Root의 Spacing 12를 상쇄하는
+    /// 음수 여백(-8)을 종전처럼 <b>한 군데</b>만 두기 위함이다(A25 defaults 줄과 같은 처리).
+    /// 요소 둘을 Root에 따로 넣으면 그 12가 펼침 문장 위에도 붙어 설명에서 떨어져 보이고,
+    /// 접었을 때는 빈 자리가 남는다. 묶음 안쪽 간격은 상세 쪽 위 여백 4로만 준다.
+    /// </para>
     /// </summary>
-    private static HyperlinkButton LearnMore(string anchor) => new()
+    /// <param name="detail">
+    /// 축약 직전 원문(커밋 b80c437^)에서 <b>위 축약 줄이 이미 말한 부분을 뺀 나머지</b>.
+    /// 축약 줄 + 이 문장 = 원문 정보량이다. 문구는 영어만 쓴다.
+    /// </param>
+    private static StackPanel LearnMore(string detail)
     {
-        Content = "Learn more",
-        NavigateUri = Branding.GuideLink(anchor),
-        FontSize = 12,
-        Padding = new Thickness(0),
-        Margin = new Thickness(0, -8, 0, 0),
-        HorizontalAlignment = HorizontalAlignment.Left,
-    };
+        var body = new TextBlock
+        {
+            Text = detail,
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+            Visibility = Visibility.Collapsed, // 접힌 상태로 시작 — 축약의 목적이 첫 화면을 짧게 두는 것
+        };
+
+        var toggle = new HyperlinkButton
+        {
+            Content = "Learn more",
+            FontSize = 12,
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        toggle.Click += (_, _) =>
+        {
+            var expanding = body.Visibility == Visibility.Collapsed;
+            body.Visibility = expanding ? Visibility.Visible : Visibility.Collapsed;
+            toggle.Content = expanding ? "Show less" : "Learn more";
+        };
+
+        var group = new StackPanel { Margin = new Thickness(0, -8, 0, 0) };
+        group.Children.Add(toggle);
+        group.Children.Add(body);
+        return group;
+    }
 
     /// <summary>섹션 머리글 추가.</summary>
     private void AddHeader(string text)
