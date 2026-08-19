@@ -494,9 +494,10 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>
-    /// 읽기 결과를 에디터에 반영하는 종착점 — A177 이전 OpenPath의 후반부 그대로다(순서 계약
-    /// 무변경: 상태 세팅 → Text 대입 → 기준 텍스트 수립 → 더티 해제 → 표시 전환 → 장식 무효화 →
-    /// ContentOpened → 트레이). 소용량은 읽기 완료 즉시, 대용량(A177)은 로딩 표시 프레임이
+    /// 읽기 결과를 에디터에 반영하는 종착점 — A177 이전 OpenPath의 후반부 그대로다(순서 계약:
+    /// 상태 세팅 → Text 대입 → 기준 텍스트 수립 → 더티 해제 → 표시 전환 → 장식 무효화 →
+    /// 렌더 축 판정(A190 — 마크다운이면 기본 렌더 뷰로 재전환) → ContentOpened → 트레이).
+    /// 소용량은 읽기 완료 즉시, 대용량(A177)은 로딩 표시 프레임이
     /// 제출된 뒤에 이 메서드로 들어온다 — 두 경로의 차이는 진입 시점뿐이다.
     /// </summary>
     private void ApplyLoadedText(string path, LoadedText loaded)
@@ -541,6 +542,15 @@ public sealed partial class DocumentView : UserControl,
         UpdateZoomText(); // A181: _path가 잡혔다 — 하단 바에 현재 배율 표시(항상, 100% 포함)
         _shownPath = path;
         UpdateNewFileButton(); // A189: 콘텐츠가 열렸다 — New text file 비활성
+
+        // A190: 마크다운이면 기본 = 렌더 뷰(사양). 자격 = md 확장자 + 비잘림 + A177 임계 이하
+        // (대용량 md는 렌더 생략·에디터만 — A178 성능 원칙. 4MB 잘림은 항상 임계 초과지만 명시
+        // 이중 게이트). 빈 파일은 그릴 게 없어 편집으로 시작한다(토글은 활성 — 타이핑 후 미리보기).
+        var renderEligible = IsMarkdownPath(path) && !loaded.Truncated
+            && loaded.Text.Length <= LargeDocumentChars;
+        ResetRenderState(renderEligible);
+        if (renderEligible && loaded.Text.Length > 0) EnterRenderMode();
+
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
     }
@@ -575,6 +585,7 @@ public sealed partial class DocumentView : UserControl,
     {
         ++_openSeq; // 진행 중 읽기(OpenPath)·지연 대입(A177)이 이 상태를 덮지 않게
         HidePdf();
+        ResetRenderState(false); // A190: 렌더 축 리셋 — 무제는 .txt 계열(무제 md는 범위 밖)
         _path = null;
         _untitled = true;
         _shownPath = null;
@@ -607,6 +618,152 @@ public sealed partial class DocumentView : UserControl,
         UpdateNewFileButton();
         UntitledOpened?.Invoke(); // 셸 동기화 — 탐색기 내림·드라이브 줄 숨김·제목 "KOTU - Untitled"
         EditorBox.Focus(FocusState.Programmatic); // 곧바로 타이핑 가능하게
+    }
+
+    // ---------- 마크다운 렌더 뷰 (A190) ----------
+    //
+    // 상태 전이표(함정 1 — 문서 모듈 상태 축 정본. 종전 3축: 파일 편집(_path)/무제(_untitled)/
+    // PDF·빈 화면(_path=null, !_untitled)에 렌더 축(_renderMode — 파일 편집의 하위 모드)이 얹혔다):
+    //
+    //   이벤트                        | 결과 상태
+    //   ------------------------------+------------------------------------------------------------
+    //   열기 .txt/.log/.ini           | 편집(렌더 축 리셋 — _renderEligible=false, 토글 비활성)
+    //   열기 .md/.markdown (소용량)   | 렌더(기본 — 사양. 빈 파일은 편집으로 시작, 토글은 활성)
+    //   열기 .md (A177 대용량·4MB 잘림)| 편집만(_renderEligible=false — 렌더 생략, A178 성능 원칙)
+    //   열기 .pdf                     | PDF 뷰(렌더 축 리셋)
+    //   New text file (A189 무제)     | 무제 편집(렌더 축 리셋 — 무제 md는 범위 밖)
+    //   토글 클릭 (렌더 중)           | 편집(에디터 표시·포커스 — 보류 중 파싱은 시퀀스로 무산)
+    //   토글 클릭 (편집 중)           | 렌더(현재 에디터 버퍼를 그 시점에 재파싱 — 사양: 재렌더는
+    //                                 | 토글 시점. 미저장 변경도 렌더에 보인다)
+    //   저장 (Ctrl+S·버튼)            | 모드 불변 — 저장은 EditorText 기준이라 렌더 중에도 동작
+    //   Save as로 경로 변경(검증 실패)| 모드 불변 — 확장자는 피커가 동일하게 유지, 자격만 재판정
+    //   무제 첫 저장 (.txt 고정)      | 편집 유지(자격 재판정 — .txt라 계속 비활성)
+    //   닫기·모듈 전환               | ICloseGuard(HasUnsavedChanges) — 모드 무관, 버퍼 기준
+    //   Esc·전체화면                  | 셸의 3단 모드 축(A151) — 이 모듈 상태 불변
+    //
+    // 불변식: _renderMode이면 반드시 _renderEligible이고 _path는 md 파일이다. 렌더 모드에서
+    // 에디터는 Collapsed일 뿐 내용은 그대로다(렌더는 읽기 전용 표시일 뿐 — 더티·저장·A113 체계
+    // 전부 에디터 버퍼가 정본). 줌(A181)·Fit(A145)은 에디터 모드 기준 그대로다(렌더 모드 줌은
+    // 범위 밖 — 등재 후보).
+
+    /// <summary>렌더 가능 판정(md 파일 + 비잘림 + A177 임계 이하) — 토글 버튼 활성의 단일 출처.</summary>
+    private bool _renderEligible;
+
+    /// <summary>true = 렌더 뷰 표시 중(에디터 Collapsed). 세우고 걷는 곳 = EnterRenderMode/
+    /// ExitRenderMode/ResetRenderState 셋뿐이다.</summary>
+    private bool _renderMode;
+
+    /// <summary>느린 파싱이 모드 전환·파일 전환 뒤에 낡은 결과를 그리지 않게(_openSeq 관용구).</summary>
+    private int _renderSeq;
+
+    private static bool IsMarkdownPath(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".md", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".markdown", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A190: 하단 바 토글 클릭 — 편집 ↔ 렌더. 비활성 게이트(XAML IsEnabled)가 1차지만 방어 재확인.</summary>
+    private void OnViewToggleClick(object sender, RoutedEventArgs e)
+    {
+        if (!_renderEligible) return;
+        if (_renderMode) ExitRenderMode();
+        else EnterRenderMode();
+    }
+
+    /// <summary>
+    /// A190: 토글 버튼 표시 갱신의 단일 지점 — 활성(_renderEligible) + 글리프·툴팁(누르면 갈 모드:
+    /// 편집 중 E890 View / 렌더 중 E70F Edit). UpdateFitButton과 같은 "코드가 내용을 정한다" 관용구.
+    /// </summary>
+    private void UpdateViewToggle()
+    {
+        ViewToggleButton.IsEnabled = _renderEligible;
+        ViewToggleIcon.Glyph = _renderMode ? "\uE70F" : "\uE890"; // Edit / View
+        ToolTipService.SetToolTip(ViewToggleButton, _renderMode ? "Edit" : "Preview (Markdown only)");
+    }
+
+    /// <summary>
+    /// A190: 렌더 모드 진입 — 표시 전환은 즉시, 내용은 워커 파싱(A42: 파싱 = 워커, 요소 조립 = UI)
+    /// 완료 후 채운다(소용량 한정이라 순간이다 — 그동안 이전 내용 또는 빈 판이 보인다).
+    /// 파싱·조립 어느 쪽이 실패해도 원문 TextBlock 폴백으로 대체한다(함정 3 — 앱 다운 금지).
+    /// 포커스는 뷰 루트로 옮긴다(Collapsed 에디터에 남기지 않는다 — 셸 키 처리 관례).
+    /// </summary>
+    private async void EnterRenderMode()
+    {
+        _renderMode = true;
+        UpdateViewToggle();
+        EditorBox.Visibility = Visibility.Collapsed;
+        _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(OpenPdf 관용구)
+        RenderPane.Visibility = Visibility.Visible;
+        Focus(FocusState.Programmatic);
+
+        var seq = ++_renderSeq;
+        var text = EditorText; // A142 ①ⓑ: UI 스레드에서 스냅샷 확보 — 워커는 이 복사본만 읽는다
+        IReadOnlyList<MdBlock> blocks;
+        try
+        {
+            blocks = await Worker.Run(_ => MarkdownParser.Parse(text));
+        }
+        catch (OperationCanceledException)
+        {
+            return; // 뷰가 내려가며 워커가 닫힘
+        }
+        catch (Exception)
+        {
+            blocks = MarkdownParser.Fallback(text); // Parse 자체 폴백의 이중 방어
+        }
+        if (seq != _renderSeq) return; // 그새 토글·파일 전환이 있었다 — 낡은 결과 폐기
+
+        try
+        {
+            MarkdownRenderer.Render(RenderStack, blocks);
+        }
+        catch (Exception)
+        {
+            // 조립 실패 — 원문 그대로(고정폭)가 합격선이다. 이것마저 실패하면 빈 판(최후 방어).
+            try
+            {
+                RenderStack.Children.Clear();
+                RenderStack.Children.Add(new TextBlock
+                {
+                    Text = text,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = BaseEditorFontSize,
+                    FontFamily = new FontFamily("Consolas"),
+                });
+            }
+            catch (Exception)
+            {
+                RenderStack.Children.Clear();
+            }
+        }
+    }
+
+    /// <summary>A190: 편집 모드 복귀 — 렌더 내용은 남겨 둔다(다음 진입 시 통째 교체 — 재렌더는 토글 시점, 사양).</summary>
+    private void ExitRenderMode()
+    {
+        _renderSeq++; // 보류 중 파싱 무산
+        _renderMode = false;
+        UpdateViewToggle();
+        RenderPane.Visibility = Visibility.Collapsed;
+        EditorBox.Visibility = Visibility.Visible;
+        _decor.Invalidate(); // A115: 에디터 복귀 — 다음 레이아웃에서 장식 재개
+        EditorBox.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// A190: 렌더 축 리셋 — 파일·PDF·무제 열기의 공통 선행 단계(상태 전이표의 "렌더 축 리셋").
+    /// 판(RenderPane)을 내리고 조립물을 비워 이전 문서의 잔상이 새 문서에 비치지 않게 한다.
+    /// 에디터 Visibility는 만지지 않는다 — 각 열기 경로가 자기 표시 전환을 그대로 수행한다.
+    /// </summary>
+    private void ResetRenderState(bool eligible)
+    {
+        _renderSeq++; // 보류 중 파싱 무산
+        _renderMode = false;
+        _renderEligible = eligible;
+        RenderPane.Visibility = Visibility.Collapsed;
+        RenderStack.Children.Clear();
+        UpdateViewToggle();
     }
 
     // ---------- PDF (A16) ----------
@@ -652,6 +809,7 @@ public sealed partial class DocumentView : UserControl,
         _baselineText = string.Empty;
         _dirtyTimer?.Stop();
         SetDirty(false);
+        ResetRenderState(false); // A190: 렌더 축 리셋 — PDF 뷰에는 토글이 없다(비활성)
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다
         UpdateZoomText(); // A181: PDF는 별개 줌 체계 — 텍스트 배율 표기를 비운다(_path=null)
@@ -1273,6 +1431,12 @@ public sealed partial class DocumentView : UserControl,
             _shownPath = path; // 트레이 표기(A54)도 새 파일 기준
             FileNameText.Text = Path.GetFileName(path);
             UpdateNewFileButton(); // A189: 무제 → 파일 전이 — 버튼은 계속 비활성(콘텐츠 있음)
+            // A190: 경로가 바뀌었다 — 렌더 자격만 재판정(모드는 편집 유지 — 상태 전이표).
+            // 현행 피커는 무제=.txt 고정·검증 실패 Save as=같은 확장자라 값이 바뀌는 경로는
+            // 없지만, 자격의 단일 출처를 지키는 방어다(_truncated는 저장 가능이므로 항상 false).
+            _renderEligible = IsMarkdownPath(path) && !_truncated
+                && EditorText.Length <= LargeDocumentChars;
+            UpdateViewToggle();
             // 창 제목 갱신은 셸 몫 — OnContentOpened가 무제 전이(A189)에 한해 새 경로로 바꾼다
             // (기존 파일 Save as의 제목 미갱신은 A113 알려진 한계 그대로 — 이번 범위 밖).
             ContentOpened?.Invoke(path); // 셸 동기화 — 기준 경로·드라이브 줄·오버레이(기존 배선)

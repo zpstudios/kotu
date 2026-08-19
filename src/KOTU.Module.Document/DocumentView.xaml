@@ -80,6 +80,18 @@
              숨긴다(본문을 덮지 않는다 — 종전과 같은 폴백). -->
         <Canvas x:Name="DecorLayer" IsHitTestVisible="False" />
 
+        <!-- A190: 마크다운 렌더 뷰 — .md/.markdown이 열리면 기본으로 이 판이 보이고(에디터는
+             Collapsed) 하단 바 토글로 편집과 오간다. 내용은 코드(MarkdownRenderer)가 파싱 모델
+             (워커 — A42)로부터 조립해 RenderStack에 쌓는다. 패딩은 EditorBox와 같은 값 —
+             특히 아래 68은 A152(하단 바 44 오버레이) 스크롤 끝 보정의 복제다.
+             대용량(A177 임계 초과)·4MB 잘림 md는 렌더를 생략하고 에디터만 쓴다(A178 성능 원칙).
+             장식(DecorLayer)은 에디터 전용이라 이 판 위에는 아무것도 그리지 않는다
+             (EditorDecor.RenderCore의 에디터 Visibility 게이트가 걷어 준다). -->
+        <ScrollViewer x:Name="RenderPane" Visibility="Collapsed"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="RenderStack" Padding="24,16,24,68" />
+        </ScrollViewer>
+
         <!-- PDF 페이지 뷰(A16, PdfPane)는 코드에서 지연 생성해 RootGrid 맨 아래(z 순서상 뒤)에 꽂는다 -->
         <TextBlock
             x:Name="PlaceholderText"
@@ -89,7 +101,7 @@
             VerticalAlignment="Center"
             Opacity="0.6" />
 
-        <!-- 하단 상태바: 새 파일(A189) · 저장 · 파일명 · 수정됨 · 줌(A181) · 페이지 · 드라이브 · Fit.
+        <!-- 하단 상태바: 새 파일(A189) · 저장 · 보기 토글(A190) · 파일명 · 수정됨 · 줌(A181) · 페이지 · 드라이브 · Fit.
              셸이 TakeBottomBar()로 떼어가 하단 바 한 줄에 얹는다(이미지 v0.27.0과 동일 패턴).
              열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
              1:1 버튼 칸은 A111에서 제거 — 100%가 Fit 플라이아웃 4옵션에 들어갔다.
@@ -100,6 +112,8 @@
                 <Grid.ColumnDefinitions>
                     <!-- A189: New text file 버튼 칸 -->
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <!-- A190: 마크다운 편집/렌더 토글 버튼 칸(1칸 32px — A27 규격) -->
                     <ColumnDefinition Width="Auto" />
                     <!-- 파일명(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 -->
                     <ColumnDefinition Width="*" />
@@ -129,26 +143,36 @@
                         ToolTipService.ToolTip="Save (Ctrl+S)">
                     <FontIcon Glyph="&#xE74E;" FontSize="14" />
                 </Button>
-                <TextBlock x:Name="FileNameText" Grid.Column="2" VerticalAlignment="Center"
+                <!-- A190: 편집 ↔ 렌더 토글. 마크다운 텍스트가 열려 있고 렌더 가능(비대용량·비잘림)일
+                     때만 활성 — A145 "항상 보이되 비활성" 관용구(판정·글리프·툴팁은 UpdateViewToggle).
+                     글리프는 누르면 갈 모드: 편집 중 E890(View — 렌더로) / 렌더 중 E70F(Edit — 편집으로).
+                     핫키 없음(A34 등록 없음 — New 버튼과 같은 부류, 초기 툴팁은 고정값). -->
+                <Button x:Name="ViewToggleButton" Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
+                        IsEnabled="False"
+                        Click="OnViewToggleClick"
+                        ToolTipService.ToolTip="Preview (Markdown only)">
+                    <FontIcon x:Name="ViewToggleIcon" Glyph="&#xE890;" FontSize="14" />
+                </Button>
+                <TextBlock x:Name="FileNameText" Grid.Column="3" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Text="No file open" />
                 <!-- A22(v0.108.0): 파일이 열려 있지 않을 때만 뜨는 공용 드라이브 줄(셸이 주입).
                      v0.47.0의 "현재 문서가 있는 드라이브" 텍스트를 대체한다 —
                      파일명 칸과 같은 자리를 쓰고 둘은 서로 배타적으로 표시된다. -->
-                <ContentPresenter x:Name="DriveStripHost" Grid.Column="2"
+                <ContentPresenter x:Name="DriveStripHost" Grid.Column="3"
                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                   VerticalAlignment="Center" Visibility="Collapsed" />
                 <!-- 수정됨 표시(A37) — 창 제목의 ●는 셸이 UnsavedChanged로 단다 -->
-                <TextBlock x:Name="ModifiedText" Grid.Column="3" VerticalAlignment="Center"
+                <TextBlock x:Name="ModifiedText" Grid.Column="4" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed"
                            Text="● Unsaved" />
                 <!-- A181: 현재 줌 배율(document.zoom을 퍼센트로) — 텍스트 문서가 열려 있는 동안
                      항상 표시(100%도 표시 — 이미지 ZoomText/A149 관용구). PDF·빈 화면은 빈 문자열
                      (PDF 줌은 별개 체계 — PdfPane의 ZoomFactor·Fit이 지배한다).
                      갱신은 DocumentView.UpdateZoomText 한 곳. -->
-                <TextBlock x:Name="ZoomText" Grid.Column="4" VerticalAlignment="Center"
+                <TextBlock x:Name="ZoomText" Grid.Column="5" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" />
                 <!-- PDF 현재 페이지/전체 (A16) — PDF가 열려 있을 때만 -->
-                <TextBlock x:Name="PageInfoText" Grid.Column="5" VerticalAlignment="Center"
+                <TextBlock x:Name="PageInfoText" Grid.Column="6" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed" />
                 <!-- A30 상태형 Fit — 본체 = 마지막 옵션 표시·클릭 시 재적용, 화살표 = A83 4옵션.
                      내용·툴팁은 코드(ShowPdfFitState/ShowTextFitState/UpdateFitButton)가 갱신하므로
@@ -164,7 +188,7 @@
                      조절기는 항상 보이고, 텍스트·빈 화면에서는 비활성 "1/1" 표시(옵션 무의미 —
                      1차는 표시만, 부록 B 67), PDF에서만 4옵션 활성. 초기 IsEnabled=False가 그
                      기본 상태다(활성/비활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍). -->
-                <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
                             CornerRadius="4,0,0,4" IsEnabled="False" Click="OnFitClicked">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />

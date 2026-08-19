@@ -4,9 +4,10 @@ using KOTU.Core.Settings;
 namespace KOTU.Module.Document;
 
 /// <summary>
-/// 문서 모듈(v0.44.0 뷰어 → A37 편집·저장 승격 → A16 PDF 뷰어).
+/// 문서 모듈(v0.44.0 뷰어 → A37 편집·저장 승격 → A16 PDF 뷰어 → A190 마크다운 렌더 뷰).
 /// 플레인 텍스트(txt·md·log·ini)는 편집·저장, PDF는 보기(Windows.Data.Pdf 렌더).
-/// HWP·오픈오피스는 뷰어가 생기면 확장.
+/// 마크다운(md·markdown)은 편집에 더해 렌더 뷰(자체 최소 렌더러 — MarkdownParser/Renderer)를
+/// 하단 바 토글로 오간다. HWP·오픈오피스는 뷰어가 생기면 확장.
 /// </summary>
 public sealed class DocumentModule : IModule
 {
