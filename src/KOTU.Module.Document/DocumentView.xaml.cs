@@ -75,6 +75,20 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>4MB 초과 텍스트는 앞부분만 표시(TextBox 성능 보호) — 이때는 편집 불가.</summary>
     private const int MaxBytes = 4 * 1024 * 1024;
 
+    /// <summary>
+    /// A177: "대용량 문서" 판정 임계(문자 수 — TextBox의 대입·랩 측정 비용은 바이트가 아니라
+    /// 문자 수에 비례한다). 이 임계를 넘으면 두 가지가 걸린다:
+    /// ⓐ Text 대입을 "로딩 표시가 담긴 첫 프레임이 제출된 뒤"로 미룬다(DeferApplyAfterRender) —
+    ///    종전에는 파일 인자 시작 시 대입(수 초 UI 점유)이 첫 표시보다 먼저 와 "창 프레임만 뜨고
+    ///    내부가 안 그려지는" 기동 블로킹이 있었다(A178 매끄러움 원칙의 1호 적용).
+    /// ⓑ 장식(A115 가이드·A142 거터·¶/EOF)을 뷰 수명 동안 끈다(EditorDecor.DisableForLargeDocument) —
+    ///    스크롤 렌더 패스마다 도는 GetRectFromCharacterIndex 실측과 편집마다 도는 줄 색인
+    ///    전수 스캔(EnsureLineStarts)이 대용량 스크롤 지연의 잔여 원인이었다.
+    /// 값 근거: A177 사양의 제안 임계 1MB 그대로(ASCII/UTF-8에서 1M 문자 ≈ 1MB). 잘림 상한
+    /// (MaxBytes 4MB)의 1/4 지점이라 잘림 직전의 최악 구간 전체가 보호권에 들어온다.
+    /// </summary>
+    private const int LargeDocumentChars = 1024 * 1024;
+
     private int _openSeq; // 느린 읽기가 최신 열기를 덮지 않게
     private ModuleWorker? _worker; // 파일 읽기·쓰기 전용(A42) — 뷰별 분리
                                    // (드라이브 조회는 A22에서 셸의 드라이브 줄 워커로 옮겼다)
@@ -106,6 +120,13 @@ public sealed partial class DocumentView : UserControl,
 
     /// <summary>스냅샷 경유 전문 접근 — 에디터 텍스트를 읽는 모든 경로가 이걸 쓴다(A142 ①ⓑ).</summary>
     private string EditorText => _textSnapshot ??= EditorBox.Text;
+
+    /// <summary>
+    /// A177 ⓐ: 지연 대입을 기다리는 CompositionTarget.Rendering 핸들러(null = 대기 없음).
+    /// static 이벤트라 Unloaded에서 반드시 해제한다(A88 규칙 — 남기면 뷰·창이 통째로 누수되고
+    /// UI 스레드를 매 프레임 깨운다). 해제되면 보류 중이던 대입은 조용히 무산된다(뷰가 내려갔다).
+    /// </summary>
+    private EventHandler<object>? _pendingApplyHandler;
 
     // A115: 라인 가이드·비가시 문자 장식. 자체 무효화(TextChanged/SizeChanged/ViewChanged)로 돌고
     // 실패하면 스스로 꺼진다 — 이 뷰는 모드 전환(열기·PDF) 시점만 알려 주면 된다.
@@ -154,6 +175,13 @@ public sealed partial class DocumentView : UserControl,
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
             _dirtyTimer?.Stop(); // A113 ⓒ: 뷰가 내려간 뒤 디바운스 판정이 발화하지 않게
+            // A177 ⓐ: 보류 중 지연 대입 해제 — CompositionTarget.Rendering은 static 이벤트라
+            // 남기면 뷰가 누수된다(A88 규칙, HardwareView의 맥박 루프 해제와 같은 의무).
+            if (_pendingApplyHandler is { } pendingApply)
+            {
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= pendingApply;
+                _pendingApplyHandler = null;
+            }
         };
 
         if (context.FilePath is { } path && File.Exists(path))
@@ -229,6 +257,14 @@ public sealed partial class DocumentView : UserControl,
     private async void OpenPath(string path)
     {
         var seq = ++_openSeq;
+        // A177 ⓐ: 워커 읽기·(대용량이면) 대입 지연 동안 첫 프레임에 보일 로딩 표시. 새 UI 없이
+        // 기존 플레이스홀더를 문구만 바꿔 재사용한다(문구 관용구 = ContentInfoOverlay의
+        // "Loading info..."). 종전에는 읽기 동안 빈 화면이었다 — 작은 파일은 읽기가 프레임보다
+        // 빨리 끝나 이 표시가 화면에 오르기 전에 내려가는 게 보통이다(깜빡임 아님).
+        // 파일 인자 시작과 모듈 내 열기(탐색기 더블클릭) 모두 뷰 생성자 → 이 메서드 한 경로라
+        // 두 진입이 자동으로 같은 동작이다.
+        PlaceholderText.Text = $"Loading {Path.GetFileName(path)}...";
+        PlaceholderText.Visibility = Visibility.Visible;
         LoadedText loaded;
         try
         {
@@ -247,6 +283,57 @@ public sealed partial class DocumentView : UserControl,
 
         if (seq != _openSeq) return; // 그새 다른 파일이 열렸다
 
+        if (loaded.Text.Length > LargeDocumentChars)
+        {
+            // A177 ⓑ: 장식 오프는 대입보다 먼저 — 대입이 쏘는 TextChanged→Invalidate부터 전부
+            // 무동작이 되고, 스크롤 훅(ViewChanged)은 아예 걸리지도 않는다.
+            _decor.DisableForLargeDocument();
+            // A177 ⓐ: 대입(수 초 UI 점유)은 로딩 표시 프레임이 제출된 뒤로 미룬다. 미루는 동안
+            // 이 뷰는 "파일 없음" 상태 그대로다 — _path=null이라 Ctrl+S는 무동작(SaveAsync 첫
+            // 가드), 더티=false라 닫기·모듈 전환 가드(ICloseGuard)는 그냥 통과, 에디터는
+            // Collapsed라 편집 입력 자체가 불가. 대입 전 상태에서 저장·닫기·편집이 새지 않는다.
+            DeferApplyAfterRender(seq, path, loaded);
+            return;
+        }
+        ApplyLoadedText(path, loaded); // 소용량: 종전 그대로 즉시 대입(지연 프레임을 끼우지 않는다)
+    }
+
+    /// <summary>
+    /// A177 ⓐ: 대용량 Text 대입을 "로딩 표시가 담긴 프레임이 제출된 뒤"로 미룬다.
+    /// CompositionTarget.Rendering은 매 프레임 렌더 직전에 온다(구독 자체가 프레임 틱을
+    /// 보장한다 — A88 맥박 루프에서 확인된 성질). 1틱째는 로딩 표시가 담길 프레임의 렌더
+    /// 직전이므로 건너뛰고, 2틱째에 오면 그 프레임은 이미 제출돼 있다 — 그때 대입하면 수 초가
+    /// 걸려도 사용자는 로딩 표시를 보고 있다. 창이 최소화돼 틱이 멈추면 대입도 함께 미뤄질 수
+    /// 있으나, 보이지 않는 창은 그려질 필요도 없고 복원되면 틱과 함께 이어진다.
+    /// 뷰가 내려가면(창 닫기·모듈 전환) Unloaded가 핸들러를 해제해 대입은 조용히 무산된다.
+    /// </summary>
+    private void DeferApplyAfterRender(int seq, string path, LoadedText loaded)
+    {
+        // 방어: 직전 보류분이 남아 있으면 먼저 해제(현 라우팅상 열기는 뷰당 1회라 오지 않는 경로).
+        if (_pendingApplyHandler is { } previous)
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= previous;
+
+        var ticks = 0;
+        void OnRendering(object? sender, object? e)
+        {
+            if (++ticks < 2) return; // 1틱째 = 로딩 표시 프레임 렌더 직전 — 그 프레임을 막지 않는다
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
+            _pendingApplyHandler = null;
+            if (seq != _openSeq) return; // 그새 다른 파일이 열렸다(방어 — OpenPath와 같은 시퀀스)
+            ApplyLoadedText(path, loaded);
+        }
+        _pendingApplyHandler = OnRendering;
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnRendering;
+    }
+
+    /// <summary>
+    /// 읽기 결과를 에디터에 반영하는 종착점 — A177 이전 OpenPath의 후반부 그대로다(순서 계약
+    /// 무변경: 상태 세팅 → Text 대입 → 기준 텍스트 수립 → 더티 해제 → 표시 전환 → 장식 무효화 →
+    /// ContentOpened → 트레이). 소용량은 읽기 완료 즉시, 대용량(A177)은 로딩 표시 프레임이
+    /// 제출된 뒤에 이 메서드로 들어온다 — 두 경로의 차이는 진입 시점뿐이다.
+    /// </summary>
+    private void ApplyLoadedText(string path, LoadedText loaded)
+    {
         HidePdf(); // PDF → 텍스트 전환 (A16)
         _path = path;
         _encoding = loaded.Encoding;

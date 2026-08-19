@@ -147,6 +147,16 @@ internal sealed class EditorDecor
         if (!_disabled) _pending = true;
     }
 
+    /// <summary>
+    /// A177 ⓑ: 대용량 문서(임계 = DocumentView.LargeDocumentChars) — 장식(가이드·거터·¶/EOF)을
+    /// 뷰 수명 동안 통째로 끈다. 실패 폴백(Disable)과 같은 기계의 재사용이다: 이후 Invalidate·
+    /// Render는 전부 무동작이고, Text 대입 전에 불리면 스크롤 훅(ViewChanged)을 걸기도 전이라
+    /// 스크롤마다 도는 실측(GetRectFromCharacterIndex)·편집마다 도는 줄 색인 전수 스캔
+    /// (EnsureLineStarts) 비용이 0이 된다. 켜는 길은 없다(폴백과 같은 일방향) — 파일 열기마다
+    /// 뷰(와 이 장식기)가 새로 만들어지므로 작은 파일은 자연히 켜진 채 시작한다.
+    /// </summary>
+    public void DisableForLargeDocument() => Disable();
+
     /// <summary>즉시 렌더(스크롤·테마 경로). 어떤 예외든 장식만 끈다 — 에디터 본기능 무영향.</summary>
     private void Render()
     {
