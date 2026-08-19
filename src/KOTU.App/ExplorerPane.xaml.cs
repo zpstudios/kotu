@@ -791,7 +791,8 @@ public sealed partial class ExplorerPane : UserControl
     /// 구분자는 저장소 관용구 "  ·  "(ImageViewerView.BuildMetaText와 같은 조립)이고,
     /// 빈 조각은 건너뛴다 = 구분자만 남는 "  ·    ·  " 모양이 생기지 않는다.
     /// 폴더는 크기 조각을 넣지 않는다(종전 리스트 행의 규칙 승계).
-    /// 날짜는 시각 없이 yyyy-MM-dd — 이 줄이 폭 25% 사이드바에 두 날짜를 담아야 한다.
+    /// 날짜 축약(A180, 부록 B 73): Created = yy-MM-dd / Modified = 순수 상대 표기(FormatRelativeAge)
+    /// — 이 줄이 폭 25% 사이드바에 두 날짜를 담아야 한다. 정확한 날짜·시각은 툴팁(BuildTooltipText) 몫.
     /// 문화권 인자 없이 쓰는 것은 저장소 표시 관용구 그대로다(ImageViewerView·ArchiveView 동일).
     /// 크기·날짜는 빈 문자열이 될 수 없어(FormatSize는 최소 "0 B") 조각 가드가 필요 없고,
     /// 길이·정보만 비어 올 수 있어 그것만 가드한다.
@@ -802,15 +803,39 @@ public sealed partial class ExplorerPane : UserControl
         if (!entry.IsFolder) parts.Add(ExplorerListing.FormatSize(entry.Size));
         if (details.Duration.Length > 0) parts.Add(details.Duration);
         if (details.Info.Length > 0) parts.Add(details.Info); // A155 — 길이 옆이 예약된 자리(A156 훅)
-        parts.Add(entry.Created.ToString("yyyy-MM-dd"));
-        parts.Add(entry.Modified.ToString("yyyy-MM-dd"));
+        parts.Add(entry.Created.ToString("yy-MM-dd"));
+        parts.Add(FormatRelativeAge(entry.Modified));
         return string.Join("  ·  ", parts);
     }
 
     /// <summary>
+    /// Modified의 순수 상대 표기 (A180, 부록 B 73 확정). UI 영어 규칙에 따라 today·{n}d·{n}w·{n}mo·{n}y.
+    /// 단위 승급 임계와 반올림: 24시간 미만 = "today", 이후 일수 기준 &lt;7 = {n}d / &lt;30 = {n}w /
+    /// &lt;365 = {n}mo / 그 이상 = {n}y — 각 단위 안에서 내림(floor)이다(13일 = "1w", 45일 = "1mo":
+    /// "지난 지 얼마나 됐나"는 관례상 채워진 단위만 센다). 주 = 7일·월 = 30일·년 = 365일의 근사 나눗셈
+    /// (달력 계산 아님 — 상세 줄 요약에는 이 정밀도로 충분하고 정확한 시각은 툴팁이 담당).
+    /// 미래 시각(시계 왜곡·타임스탬프 조작)은 음수 경과로 오지만 "today"로 뭉갠다 — 요약 줄에서
+    /// 미래 표기를 발명하지 않는다.
+    /// ⚠️ 상대 표기는 시간이 지나면 낡는다 — 갱신 트리거는 재스캔(Fill 재조립)과 지연 로드 도착
+    /// (ApplyDetail) 뿐이고, 시계 타이머 등 추가 트리거는 만들지 않는다(표시 오차 허용 — A180 확정).
+    /// </summary>
+    private static string FormatRelativeAge(DateTime modified)
+    {
+        var age = DateTime.Now - modified; // Entry.Modified는 FileInfo.LastWriteTime(로컬)이라 Now와 짝
+        if (age < TimeSpan.FromHours(24)) return "today";
+        var days = (int)age.TotalDays; // 내림 — TotalDays는 이 지점에서 항상 양수
+        return days < 7 ? days + "d"
+            : days < 30 ? (days / 7) + "w"
+            : days < 365 ? (days / 30) + "mo"
+            : (days / 365) + "y";
+    }
+
+    /// <summary>
     /// 리스트 행 툴팁 (A156): 파일명 + 라벨 붙은 상세를 줄 단위로 쌓는다.
-    /// 2줄 레이아웃의 상세 줄에는 라벨이 없어 Created와 Modified를 눈으로 구분할 수 없다 —
-    /// 그 구분을 툴팁이 맡는다(조각 선택 규칙은 BuildDetailText와 같다).
+    /// 2줄 레이아웃의 상세 줄에는 라벨이 없어 Created와 Modified를 눈으로 구분할 수 없고,
+    /// A180부터는 Modified가 상대 표기로 축약된다 — 정확한 날짜·시각의 정본이 이 툴팁이다
+    /// (yyyy-MM-dd HH:mm — 인포 오버레이·플레이어 정보 행과 같은 저장소 관용구.
+    /// 조각 선택 규칙은 BuildDetailText와 같다).
     /// 모듈별 정보(A155)의 라벨은 InfoTip이 이미 담고 있어 그대로 한 줄을 얹는다.
     /// </summary>
     private static string BuildTooltipText(ExplorerListing.Entry entry, DetailInfo details)
@@ -819,8 +844,8 @@ public sealed partial class ExplorerPane : UserControl
         if (!entry.IsFolder) lines.Add("Size: " + ExplorerListing.FormatSize(entry.Size));
         if (details.Duration.Length > 0) lines.Add("Length: " + details.Duration);
         if (details.InfoTip.Length > 0) lines.Add(details.InfoTip); // A155
-        lines.Add("Created: " + entry.Created.ToString("yyyy-MM-dd"));
-        lines.Add("Modified: " + entry.Modified.ToString("yyyy-MM-dd"));
+        lines.Add("Created: " + entry.Created.ToString("yyyy-MM-dd HH:mm"));
+        lines.Add("Modified: " + entry.Modified.ToString("yyyy-MM-dd HH:mm"));
         return string.Join("\n", lines);
     }
 
@@ -936,6 +961,7 @@ public sealed partial class ExplorerPane : UserControl
         None,
         Video, // 길이 + 해상도
         Audio, // 길이만 (A6 종전 동작)
+        Image, // 해상도 (A180 — A155 확정 때 누락된 원 서술 "해상도(이미지 기준)"의 수리)
         Pdf,   // 페이지 수 — 문서 모듈 확장자 중 PDF만(비PDF 텍스트는 페이지 개념이 없다)
         Zip,   // 압축률 — 압축 모듈 확장자 중 zip만(그 외 포맷은 헤더 읽기가 값싸지 않아 생략)
     }
@@ -947,6 +973,9 @@ public sealed partial class ExplorerPane : UserControl
     private static InfoKind InfoKindOf(string name) =>
         ExplorerListing.MatchesExtension(name, KOTU.Module.Video.VideoModule.Extensions) ? InfoKind.Video
         : ExplorerListing.MatchesExtension(name, KOTU.Module.Audio.AudioModule.Extensions) ? InfoKind.Audio
+        // A180: 이미지 판정도 담당 모듈 목록 재사용(ThumbnailExplorer의 A93 관용구와 동일 소스).
+        : ExplorerListing.MatchesExtension(
+              name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions) ? InfoKind.Image
         : string.Equals(System.IO.Path.GetExtension(name), ".pdf", StringComparison.OrdinalIgnoreCase)
             ? InfoKind.Pdf
         : string.Equals(System.IO.Path.GetExtension(name), ".zip", StringComparison.OrdinalIgnoreCase)
@@ -969,8 +998,8 @@ public sealed partial class ExplorerPane : UserControl
             var kind = InfoKindOf(entry.Name);
             if (kind == InfoKind.None) continue;
             // A175: 클라우드 전용(placeholder) 파일은 상세 조각 취득 자체가 하이드레이션이다 —
-            // 길이·해상도(속성 핸들러가 파일을 연다)·PDF 페이지 수(전체 로드)·zip 압축률(아카이브
-            // 열기) 전부 생략하고 상세 줄은 초판(크기·날짜)대로 둔다. 캐시에도 넣지 않는다 —
+            // 길이·영상/이미지 해상도(속성 핸들러가 파일을 연다 — A180의 이미지 축 포함)·PDF 페이지 수
+            // (전체 로드)·zip 압축률(아카이브 열기) 전부 생략하고 상세 줄은 초판(크기·날짜)대로 둔다. 캐시에도 넣지 않는다 —
             // 사용자가 열어 로컬화되면 다음 재스캔에서 정상 조회된다.
             if (entry.IsPlaceholder) continue;
 
@@ -1031,6 +1060,15 @@ public sealed partial class ExplorerPane : UserControl
                     : string.Empty;
                 return new DetailInfo(duration, string.Empty, string.Empty);
             }
+            case InfoKind.Image:
+            {
+                // A180: 이미지 해상도 — 표기는 영상 해상도와 동일한 "1920x1080".
+                // 속성이 없는 파일(손상·비지원 코덱)은 조각 없이 빈 벌로 남는다(Video 갈래와 같은 규칙).
+                var (width, height) = FetchImageSize(path);
+                var res = width > 0 && height > 0 ? $"{width}x{height}" : string.Empty;
+                return new DetailInfo(
+                    string.Empty, res, res.Length > 0 ? "Resolution: " + res : string.Empty);
+            }
             case InfoKind.Pdf:
             {
                 // 문서를 실제로 여는 비용(암호 PDF는 예외 → 빈 칸)이지만 워커 + 캐시라 수용 —
@@ -1066,6 +1104,19 @@ public sealed partial class ExplorerPane : UserControl
         var width = props.TryGetValue("System.Video.FrameWidth", out var w) && w is uint uw ? (int)uw : 0;
         var height = props.TryGetValue("System.Video.FrameHeight", out var h) && h is uint uh ? (int)uh : 0;
         return (ticks, width, height);
+    }
+
+    /// <summary>워커 스레드: 이미지 픽셀 치수 (A180 — FetchMediaProperties와 같은 셸 속성 관용구,
+    /// 키만 이미지용 System.Image.*다. ImageViewerView의 System.Image.BitDepth 조회와 같은 계열). 없으면 0.</summary>
+    private static (int Width, int Height) FetchImageSize(string path)
+    {
+        var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
+        var props = file.Properties.RetrievePropertiesAsync(
+                ["System.Image.HorizontalSize", "System.Image.VerticalSize"])
+            .AsTask().GetAwaiter().GetResult();
+        var width = props.TryGetValue("System.Image.HorizontalSize", out var w) && w is uint uw ? (int)uw : 0;
+        var height = props.TryGetValue("System.Image.VerticalSize", out var h) && h is uint uh ? (int)uh : 0;
+        return (width, height);
     }
 
     /// <summary>
