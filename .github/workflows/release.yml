@@ -78,11 +78,42 @@ jobs:
           }
           Write-Host "resources.pri OK: $publishDir\resources.pri"
 
+      # A173: vpk pack은 출력 폴더에 직전 릴리스의 풀 패키지가 있어야 델타(*-delta.nupkg)를 만든다.
+      # 그래서 pack 전에 GitHub Releases에서 최신 풀 패키지를 내려받아 둔다(프라이빗 저장소이므로 토큰 필수).
+      # 이 단계가 실패하면 릴리스는 계속하되 "델타 없이 풀 패키지만" 나간다 — 조용한 후퇴이므로
+      # 첫 도입·직전 릴리스 부재가 아닌데도 델타가 안 나오면 이 단계 로그부터 볼 것.
+      - name: 직전 릴리스 취득 (델타 생성용, A173)
+        if: steps.ver.outputs.skip != 'true'
+        # 최후 방어선: 아래 스크립트가 예기치 못한 예외로 죽어도 릴리스 자체는 진행한다(델타만 포기).
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # permissions.contents=write 에 릴리스 자산 읽기가 포함된다
+        run: |
+          dotnet tool install --global vpk --version 1.2.0
+          if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
+            Write-Warning "vpk 설치 실패 — 델타 없이 계속한다(패키징 단계에서 설치를 재시도)."
+            exit 0
+          }
+          # 채널(win)·outputDir 모두 pack 단계와 동일해야 pack이 베이스를 찾는다.
+          vpk download github --repoUrl https://github.com/zpstudios/kotu --token $env:GH_TOKEN --outputDir vpk_out
+          if ($LASTEXITCODE -ne 0) {
+            # 릴리스가 하나도 없거나(첫 릴리스) 자산에 releases.win.json이 없으면 여기로 온다.
+            # 불완전하게 받힌 파일이 pack의 델타 베이스로 잡히면 pack 자체가 깨질 수 있으므로 비운다.
+            Write-Warning "직전 릴리스 취득 실패 — 이번 릴리스는 델타 없이 풀 패키지만 발행된다."
+            Remove-Item vpk_out -Recurse -Force -ErrorAction SilentlyContinue
+            exit 0
+          }
+          Get-ChildItem vpk_out | ForEach-Object { Write-Host ("취득됨: " + $_.Name) }
+
       - name: Velopack 패키징 (Setup.exe + 자동 업데이트 피드)
         if: steps.ver.outputs.skip != 'true'
         shell: pwsh
         run: |
-          dotnet tool install --global vpk --version 1.2.0
+          # A173: 직전 릴리스 취득 단계가 이미 설치했을 수 있다 — 중복 설치는 실패하므로 있으면 건너뛴다.
+          if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
+            dotnet tool install --global vpk --version 1.2.0
+          }
           $publishDir = (Get-ChildItem -Path src/KOTU.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1).FullName
           # mainExe는 KOTU.exe — A64(v0.88.0)에서 AssemblyName을 KOTU로 바꿨다(구: WinUtil.App.exe).
           # packId = KOTU (A46/v0.86.0 리브랜딩). packId가 바뀌면 구 packId(ZP·WinUtil) 설치본은
@@ -93,6 +124,13 @@ jobs:
                    --packTitle KOTU --packAuthors "ZP Studios" --outputDir vpk_out `
                    --splashImage packaging/splash.png --icon src/KOTU.App/Assets/app.ico
           if ($LASTEXITCODE -ne 0) { Write-Error "vpk pack 실패"; exit 1 }
+          # A173: 델타 베이스로 쓴 "직전 버전" 패키지는 업로드 대상에서 제거한다 — 남기면
+          # files: vpk_out/* 가 구 버전 nupkg(약 100MB)를 새 릴리스에 또 첨부한다.
+          # 업데이터는 각 자산을 "그 자산이 든 릴리스"에서 받으므로 여기서 지워도 무해하다.
+          $ver = "${{ steps.ver.outputs.version }}"
+          Get-ChildItem vpk_out -Filter *.nupkg |
+            Where-Object { $_.Name -notlike "*$ver*" } |
+            ForEach-Object { Write-Host ("업로드 제외(직전 버전): " + $_.Name); Remove-Item $_.FullName -Force }
           Get-ChildItem vpk_out | ForEach-Object { Write-Host ("생성됨: " + $_.Name) }
 
       - name: 태그 생성 + GitHub Release 업로드
@@ -121,4 +159,4 @@ jobs:
             > 작업표시줄 고정·바로가기는 다시 만들어 주세요.**
 
             둘 다 압축·이미지·동영상 엔진(7z.dll·libvlc, 각 LGPL — THIRD-PARTY-NOTICES.md 참고)이 동봉되어 바로 동작합니다.
-            _그 외 파일(`*.nupkg`, `*.json`, `RELEASES`)은 자동 업데이트 시스템이 읽는 내부 파일입니다 — 받지 마세요._
+            _그 외 파일(`*.nupkg` — 델타 `*-delta.nupkg` 포함, `*.json`, `RELEASES`)은 자동 업데이트 시스템이 읽는 내부 파일입니다 — 받지 마세요._
