@@ -12,9 +12,15 @@ public static class ExplorerListing
     /// 탐색기 한 항목. 폴더면 Size는 0.
     /// Created(A117, v0.136.0) = 만든 날짜 — 폴더도 파일과 같은 방식으로 채운다
     /// (DirectoryInfo.CreationTime / FileInfo.CreationTime). Modified와 병존하는 별도 정렬 키의 원본.
+    /// IsPlaceholder(A175) = 클라우드 전용(OneDrive placeholder 등) 파일인지 — List가 열거 시점에
+    /// 이미 읽는 Attributes로 판정해 담는다(추가 IO 0). 소비처(썸네일·상세 지연 로드)는 이 값이
+    /// 참이면 파일 내용을 여는 자동 조회를 생략한다(내용을 여는 순간 클라우드 필터 드라이버가
+    /// 전체를 내려받는 하이드레이션이 일어나기 때문). 폴더는 항상 false — 폴더 내용을 여는
+    /// 소비처가 없고, 열거 자체는 하이드레이션을 유발하지 않는다.
     /// </summary>
     public sealed record Entry(
-        string Path, string Name, bool IsFolder, long Size, DateTime Modified, DateTime Created);
+        string Path, string Name, bool IsFolder, long Size, DateTime Modified, DateTime Created,
+        bool IsPlaceholder = false);
 
     /// <summary>파일명이 확장자 목록(소문자, 점 포함)에 해당하는지. 대소문자 무시.</summary>
     public static bool MatchesExtension(string fileName, IReadOnlyList<string> extensions) =>
@@ -46,7 +52,8 @@ public static class ExplorerListing
                      .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
         {
             if (result.Count >= maxItems) return result;
-            result.Add(new Entry(f.FullName, f.Name, false, f.Length, f.LastWriteTime, f.CreationTime));
+            result.Add(new Entry(f.FullName, f.Name, false, f.Length, f.LastWriteTime, f.CreationTime,
+                IsCloudPlaceholder(f.Attributes))); // A175 — Where가 이미 읽은 Attributes 재사용
         }
 
         return result;
@@ -149,4 +156,21 @@ public static class ExplorerListing
     /// <summary>숨김·시스템 속성 판정. 부르는 곳은 ShouldShow 하나 — 판정식은 여기 한 벌뿐이다.</summary>
     private static bool IsHiddenOrSystem(FileAttributes attributes) =>
         (attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0;
+
+    /// <summary>
+    /// 클라우드 전용(placeholder) 파일 판정 (A175) — 판정식의 <b>단일 원본</b>.
+    /// OneDrive 등 클라우드 필터 드라이버가 온라인 전용 파일에 다는 속성 3축:
+    /// Offline(0x1000) · RecallOnDataAccess(0x400000) · RecallOnOpen(0x40000).
+    /// 하나라도 켜져 있으면 내용을 여는 순간 전체 다운로드(하이드레이션)가 일어난다.
+    /// 속성 읽기·열거 자체는 하이드레이션을 유발하지 않으므로 판정 비용은 0이다.
+    /// </summary>
+    public static bool IsCloudPlaceholder(FileAttributes attributes) =>
+        (attributes & (FileAttributes.Offline | RecallOnDataAccess | RecallOnOpen)) != 0;
+
+    /// <summary>Win32 FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS — .NET 8 BCL FileAttributes에는
+    /// 이 이름이 없어(Offline까지만 정의) 캐스트 상수로 둔다. 값은 Windows SDK 헤더 확정치.</summary>
+    private const FileAttributes RecallOnDataAccess = (FileAttributes)0x400000;
+
+    /// <summary>Win32 FILE_ATTRIBUTE_RECALL_ON_OPEN — 위와 같은 사유의 캐스트 상수.</summary>
+    private const FileAttributes RecallOnOpen = (FileAttributes)0x40000;
 }

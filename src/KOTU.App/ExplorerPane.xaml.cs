@@ -950,6 +950,11 @@ public sealed partial class ExplorerPane : UserControl
             if (obj is not ListViewItem { Tag: ExplorerListing.Entry { IsFolder: false } entry } item) continue;
             var kind = InfoKindOf(entry.Name);
             if (kind == InfoKind.None) continue;
+            // A175: 클라우드 전용(placeholder) 파일은 상세 조각 취득 자체가 하이드레이션이다 —
+            // 길이·해상도(속성 핸들러가 파일을 연다)·PDF 페이지 수(전체 로드)·zip 압축률(아카이브
+            // 열기) 전부 생략하고 상세 줄은 초판(크기·날짜)대로 둔다. 캐시에도 넣지 않는다 —
+            // 사용자가 열어 로컬화되면 다음 재스캔에서 정상 조회된다.
+            if (entry.IsPlaceholder) continue;
 
             DetailInfo details;
             if (_infoCache.TryGetValue(entry.Path, out var hit) && hit.Modified == entry.Modified)
@@ -1062,7 +1067,7 @@ public sealed partial class ExplorerPane : UserControl
 
             try
             {
-                var png = await Worker.Run(_ => FetchThumbnail(entry.Path));
+                var png = await Worker.Run(_ => FetchThumbnail(entry.Path, entry.IsPlaceholder));
                 if (seq != _loadSeq) return;
                 if (png is null) continue;
 
@@ -1095,11 +1100,18 @@ public sealed partial class ExplorerPane : UserControl
     /// 워커 스레드: 셸 썸네일을 PNG/JPG 바이트로 추출한다. 없으면 null.
     /// StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는 여기서 동기 대기한다
     /// (전용 스레드라 UI 교착 없음).
+    /// cachedOnly(A175) = 클라우드 전용(placeholder) 파일 — 캐시·클라우드 제공 썸네일만 요청
+    /// (ReturnOnlyIfCached). 옵션 없는 호출은 캐시가 비면 시스템이 원본을 열어 생성하므로
+    /// placeholder에서는 하이드레이션(전체 다운로드)이 된다. 캐시에 없으면 null → 글리프 유지.
+    /// 일반 파일은 종전과 같은 2인자 호출을 유지한다(회귀 방지).
     /// </summary>
-    private static byte[]? FetchThumbnail(string path)
+    private static byte[]? FetchThumbnail(string path, bool cachedOnly)
     {
         var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
-        using var thumb = file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96).AsTask().GetAwaiter().GetResult();
+        using var thumb = (cachedOnly
+                ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96, ThumbnailOptions.ReturnOnlyIfCached)
+                : file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96))
+            .AsTask().GetAwaiter().GetResult();
         if (thumb is null || thumb.Size == 0) return null;
 
         using var stream = thumb.AsStreamForRead();

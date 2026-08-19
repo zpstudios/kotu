@@ -5,6 +5,8 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.FileProperties;
 using Windows.System;
 using KOTU.App.Overlays;
 using KOTU.Core.Routing;
@@ -540,6 +542,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private UIElement MakeImagePreview(ExplorerListing.Entry entry)
     {
+        // A175: 클라우드 전용(placeholder) 파일은 원본 디코드가 하이드레이션(전체 다운로드)을
+        // 일으킨다 — 원본은 절대 열지 않고, 캐시·클라우드 제공 썸네일만 비동기로 시도한다.
+        if (entry.IsPlaceholder) return MakePlaceholderPreview(entry);
+
         var host = new Grid();
         try
         {
@@ -563,6 +569,57 @@ public sealed partial class ThumbnailExplorer : UserControl
             host.Children.Add(MakeExtensionTile(entry)); // 경로가 Uri가 못 되는 극단 케이스
         }
         return host;
+    }
+
+    /// <summary>
+    /// 클라우드 전용(placeholder) 이미지 타일 (A175): 즉시 확장자 타일을 그려 두고, 캐시된
+    /// 썸네일(ReturnOnlyIfCached — 원본을 열지 않는다)이 있으면 비동기로 바꿔 끼운다.
+    /// 없으면 확장자 타일 그대로 — 어떤 경우에도 하이드레이션은 일어나지 않는다.
+    /// </summary>
+    private UIElement MakePlaceholderPreview(ExplorerListing.Entry entry)
+    {
+        var host = new Grid();
+        host.Children.Add(MakeExtensionTile(entry));
+        _ = FillCachedThumbnailAsync(host, entry.Path);
+        return host;
+    }
+
+    /// <summary>
+    /// 캐시·클라우드 제공 썸네일을 UI 스레드 비동기로 받아 host에 채운다 (A175).
+    /// ReturnOnlyIfCached라 원본 파일은 열리지 않는다(캐시에 없으면 실패 → 확장자 타일 유지).
+    /// 폴더 이동으로 host가 트리에서 떨어져도(ShowEntries가 타일을 전부 새로 만든다)
+    /// 고아 Grid 갱신일 뿐이라 무해하다 — 재진입 가드가 필요 없는 이유.
+    /// </summary>
+    private static async Task FillCachedThumbnailAsync(Grid host, string path)
+    {
+        try
+        {
+            var file = await StorageFile.GetFileFromPathAsync(path);
+            using var thumb = await file.GetThumbnailAsync(
+                ThumbnailMode.SingleItem, PreviewDecodeWidth, ThumbnailOptions.ReturnOnlyIfCached);
+            if (thumb is null || thumb.Size == 0) return;
+
+            // 스트림 → 바이트 → BitmapImage: ExplorerPane.FetchThumbnail과 같은 변환 관용구
+            // (검증된 형태만 복제 — thumb를 SetSourceAsync에 직접 넘기는 선례가 저장소에 없다).
+            using var stream = thumb.AsStreamForRead();
+            using var buffer = new MemoryStream((int)thumb.Size);
+            await stream.CopyToAsync(buffer);
+            buffer.Position = 0;
+            var bitmap = new BitmapImage();
+            await bitmap.SetSourceAsync(buffer.AsRandomAccessStream());
+
+            host.Children.Clear();
+            host.Children.Add(new Image
+            {
+                Source = bitmap,
+                Stretch = Stretch.Uniform,
+                Margin = new Thickness(4),
+            });
+        }
+        catch
+        {
+            // 캐시 썸네일 없음·읽기 실패 — 확장자 타일 유지. 원본은 어떤 폴백에서도 열지 않는다.
+        }
     }
 
     /// <summary>

@@ -104,6 +104,25 @@ public class ExplorerListingTests : IDisposable
         Assert.True(ExplorerListing.ShouldShow(FileAttributes.System, includeHidden: true));
     }
 
+    // ---------- IsCloudPlaceholder (A175) ----------
+
+    [Fact]
+    public void IsCloudPlaceholder_클라우드_속성_3축만_참()
+    {
+        // 3축: Offline(0x1000) · RecallOnDataAccess(0x400000) · RecallOnOpen(0x40000).
+        // 뒤 둘은 .NET 8 BCL에 이름이 없어 캐스트 값으로 검증한다(판정식과 독립된 원시값 대조).
+        Assert.True(ExplorerListing.IsCloudPlaceholder(FileAttributes.Offline));
+        Assert.True(ExplorerListing.IsCloudPlaceholder((FileAttributes)0x400000));
+        Assert.True(ExplorerListing.IsCloudPlaceholder((FileAttributes)0x40000));
+        Assert.True(ExplorerListing.IsCloudPlaceholder(
+            FileAttributes.Archive | FileAttributes.ReparsePoint | (FileAttributes)0x400000));
+
+        Assert.False(ExplorerListing.IsCloudPlaceholder(FileAttributes.Normal));
+        // OneDrive 로컬 파일의 흔한 조합 — ReparsePoint만으로는 placeholder가 아니다.
+        Assert.False(ExplorerListing.IsCloudPlaceholder(
+            FileAttributes.Archive | FileAttributes.ReparsePoint));
+    }
+
     // ---------- Arrange (A5·A7) ----------
 
     // day = 수정일(1월 n일), createdDay = 만든 날짜(A117 — 생략하면 수정일과 같은 날).
