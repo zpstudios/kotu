@@ -60,6 +60,9 @@ public sealed partial class PdfPane : UserControl
         SizeChanged += (_, _) =>
         {
             if (_appliedFit is { } mode) ApplyFit(mode);
+            // A188: 수동 줌 상태(Fit 추종 해제)에서도 창 크기가 바뀌면 콘텐츠 최소 폭을
+            // 새 뷰포트로 따라잡아야 페이지가 계속 수평 중앙에 온다(배율은 그대로 둔다).
+            else if (_scroll is not null) EnsureContentMinWidth(_scroll.ZoomFactor);
         };
     }
 
@@ -127,6 +130,7 @@ public sealed partial class PdfPane : UserControl
         _pageOffsets = [];
         _doc = null;
         _appliedFit = null; // A49: 문서가 없으면 추종할 Fit도 없다
+        if (_itemsPanel is not null) _itemsPanel.MinWidth = 0; // A188 보정 원복(다음 문서가 다시 계산)
         PageChanged?.Invoke(0, 0);
     }
 
@@ -239,6 +243,12 @@ public sealed partial class PdfPane : UserControl
         if (_appliedFit is not null && Math.Abs(_scroll.ZoomFactor - _appliedZoom) > 0.01)
             _appliedFit = null;
 
+        // A188: 내장 핀치 줌은 우리 코드(ApplyFitAt·ZoomAtPointer)를 거치지 않는다 — 제스처가
+        // 끝난 최종 이벤트에서 최소 폭을 현재 배율로 따라잡는다. 중간 이벤트마다 레이아웃을
+        // 흔들지 않게 최종만 본다(EditorDecor.cs의 IsIntermediate 구분과 같은 관용구). 팬(A148)의
+        // ChangeView 폭주는 배율이 그대로라 EnsureContentMinWidth의 변화 없음 조기 반환에 걸린다.
+        if (!e.IsIntermediate) EnsureContentMinWidth(_scroll.ZoomFactor);
+
         // A148: 팬은 매 프레임 ChangeView를 걸어 이 이벤트가 폭주한다 — 페이지 번호가 그대로면
         // 표시를 건드리지 않도록 소비처(DocumentView)가 같은 값 조기 반환으로 받는다.
         PageChanged?.Invoke(CurrentPageIndex() + 1, _items.Count);
@@ -308,12 +318,50 @@ public sealed partial class PdfPane : UserControl
         var top = mode is PdfFitMode.FitHeight or PdfFitMode.Contain
             ? _pageOffsets[idx] * zoom
             : _scroll.VerticalOffset / Math.Max(0.1, _scroll.ZoomFactor) * zoom;
+        // A188: 배율을 걸기 전에 콘텐츠 최소 폭부터 새 배율로 맞추고 레이아웃을 확정한다 —
+        // 축소 배율에서 콘텐츠 폭이 뷰포트 아래로 내려가면 ZoomMode ScrollViewer가 줌 콘텐츠를
+        // 좌상단 기준으로 놓아 ItemContainerStyle의 Center가 무력화되기 때문(원인 상세는
+        // EnsureContentMinWidth 주석). UpdateLayout으로 반영한 뒤의 ExtentWidth라야 아래
+        // 중앙 계산(baseWidth)이 이번 배율의 실제 패널 폭을 읽는다(낡은 값 방지).
+        EnsureContentMinWidth(zoom);
+        PageList.UpdateLayout();
         // 가로: 확대로 콘텐츠가 뷰포트보다 넓어지면 중앙 정렬(페이지는 콘텐츠 가로 중앙에 있다).
+        // 페이지가 뷰포트에 들어오는 배율이면 left = 0 — EnsureContentMinWidth가 채운 폭 안에서
+        // Center 정렬이 페이지를 뷰포트 중앙에 놓는다.
         var baseWidth = _scroll.ExtentWidth / Math.Max(0.1, _scroll.ZoomFactor);
         var left = Math.Max(0, (baseWidth * zoom - viewportW) / 2);
 
         _appliedZoom = (float)zoom;
         _scroll.ChangeView(left, top, (float)zoom, disableAnimation: true);
+    }
+
+    // ---------- 수평 중앙 정렬 보정 (A188) ----------
+
+    /// <summary>A188: 최소 폭을 거는 콘텐츠 패널(ItemsStackPanel) — 템플릿 적용 후 지연 확보.</summary>
+    private Panel? _itemsPanel;
+
+    /// <summary>
+    /// 콘텐츠 패널의 MinWidth를 "뷰포트 폭 ÷ 배율"로 유지한다(A188). ZoomMode가 켜진
+    /// ScrollViewer는 배율이 걸린 콘텐츠를 좌상단 앵커로 놓는다 — 축소 배율(Contain 등)로
+    /// 콘텐츠 폭 × 배율이 뷰포트보다 좁아지면 스크롤 여지도 없어 되돌릴 방법이 없고,
+    /// ItemContainerStyle의 HorizontalContentAlignment=Center는 (왼쪽으로 쏠린) 콘텐츠 폭
+    /// 기준이라 페이지가 왼쪽에 붙는다. 패널 폭을 "배율을 곱하면 항상 뷰포트 이상"으로
+    /// 유지하면 이 퇴화 자체가 생기지 않는다 — 페이지가 뷰포트에 들어오는 배율에서는 Center
+    /// 정렬이 뷰포트 중앙과 일치하고, 넘치는 배율에서는 종전대로 스크롤 오프셋(ApplyFitAt의
+    /// left·팬)이 담당한다. 뷰포트 폭 ÷ 배율은 배율 1에서 뷰포트 폭과 만나므로 페이지 실측
+    /// 폭과의 max 전환이 연속적이고, 세로 좌표(_pageOffsets·A121 키 스크롤·A152 아래 여백
+    /// 44)는 가로 최소 폭과 무관해 건드리지 않는다.
+    /// </summary>
+    private void EnsureContentMinWidth(double zoom)
+    {
+        if (_scroll is null || zoom <= 0) return;
+        _itemsPanel ??= PageList.ItemsPanelRoot; // ThumbnailExplorer.xaml.cs의 ItemsPanelRoot과 같은 접근
+        if (_itemsPanel is null) return;
+        var viewportW = _scroll.ViewportWidth;
+        if (viewportW <= 0) return;
+        var min = viewportW / zoom;
+        // 반 픽셀 이하 차이로는 레이아웃을 다시 돌리지 않는다(팬 중 ViewChanged 폭주 대비).
+        if (Math.Abs(_itemsPanel.MinWidth - min) > 0.5) _itemsPanel.MinWidth = min;
     }
 
     private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
@@ -349,6 +397,9 @@ public sealed partial class PdfPane : UserControl
         if (Math.Abs(newZoom - oldZoom) < 0.0001f) return;
 
         _appliedFit = null; // OnViewChanged의 0.01 임계값에 기대지 않고 명시적으로 해제
+        // A188: 축소로 페이지가 뷰포트에 들어오면 좌상단으로 붙지 않게 최소 폭이 배율을 따라간다.
+        // 콘텐츠 폭이 뷰포트로 클램프되면 오프셋도 0으로 클램프돼 페이지가 수평 중앙에 남는다.
+        EnsureContentMinWidth(newZoom);
         // 포인터 아래 콘텐츠 지점이 화면에서 움직이지 않게 오프셋을 배율 변화만큼 이동
         var pt = e.GetCurrentPoint(_scroll).Position;
         var ratio = newZoom / oldZoom;
