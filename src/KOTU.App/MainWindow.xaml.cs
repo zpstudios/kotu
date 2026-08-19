@@ -20,7 +20,8 @@ public sealed partial class MainWindow : Window
     private static readonly string IconPath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
 
-    /// <summary>하단 바 고정 두께(A40) — XAML BottomBarRow 기본값 44와 같아야 한다.</summary>
+    /// <summary>하단 바 고정 두께(A40) — XAML BottomBar의 Height 44와 같아야 한다
+    /// (A152: 구 BottomBarRow 행 분할은 폐지 — 바는 콘텐츠 위 오버레이).</summary>
     private const double BottomBarHeight = 44;
 
     private readonly FileTypeRouter _router;
@@ -1980,7 +1981,10 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 하단 바 가시성의 단일 결정 지점(A151): 모드1에서만 보인다(모드2·3 = 숨김 + 행 높이 0).
+    /// 하단 바 가시성의 단일 결정 지점(A151): 모드1에서만 보인다(모드2·3 = 숨김).
+    /// A152: 바가 콘텐츠 위 오버레이가 되면서(행 분할 폐지) 종전의 행 높이 0 조작
+    /// (BottomBarRow.Height)은 소멸했다 — 콘텐츠 영역(CenterArea)은 모드와 무관하게 창 전체라
+    /// 바를 숨겨도 콘텐츠 중앙이 움직이지 않는다(A152의 목적). Visibility 토글 하나만 남는다.
     /// 경계 버튼 스택의 하단 여백도 바 가시성을 따라온다(A154 훅 — UpdateEdgeButtons가
     /// <see cref="EdgeButtonsBottomInset"/>을 읽는다).
     /// </summary>
@@ -1988,7 +1992,6 @@ public sealed partial class MainWindow : Window
     {
         var barVisible = _viewMode == ShellViewMode.Windowed;
         BottomBar.Visibility = barVisible ? Visibility.Visible : Visibility.Collapsed;
-        BottomBarRow.Height = barVisible ? new GridLength(BottomBarHeight) : new GridLength(0); // 평소 고정 44 (A40)
         UpdateEdgeButtons();
     }
 
@@ -2411,6 +2414,10 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 경계 버튼 스택 하단 여백의 실효값(A151): 하단 바가 보이는 모드1 = 52(바 44 + 여유 8),
     /// 바가 숨는 모드2·3 = 여유 8만 남겨 바닥에 내려 붙인다(52 − 44).
+    /// A152: 콘텐츠 영역(CenterArea)이 창 전체가 되고 바가 그 위 오버레이라, "바닥" = 창
+    /// 바닥이고 모드1의 52는 문자 그대로 "바 44 위 + 여유 8"이다 — 구 행 분할에서는
+    /// CenterArea 바닥이 바 위 모서리여서 모드1의 버튼이 바 위 모서리에서 52 더 떠
+    /// 있었는데(주석과 실배치의 어긋남), 이제 어느 모드든 "바닥(바 또는 창 바닥)에서 8"이다.
     /// UpdateEdgeButtons(Margin)와 OnRootPointerMoved(근접 y 띠)가 같은 값을 읽는다 —
     /// 모드 전이는 UpdateShellChrome이 UpdateEdgeButtons를 다시 불러 즉시 반영된다.
     /// </summary>
@@ -2421,7 +2428,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 경계 버튼 스택의 높이(A154) = XAML 버튼 32 둘 + Spacing 2. 근접 y 판정의 입력이라
-    /// XAML 값과 같아야 한다(BottomBarHeight가 XAML BottomBarRow와 짝인 것과 같은 규칙).
+    /// XAML 값과 같아야 한다(BottomBarHeight가 XAML BottomBar Height와 짝인 것과 같은 규칙).
     /// </summary>
     private const double EdgeButtonsHeight = 66;
 

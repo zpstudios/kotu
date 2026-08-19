@@ -64,16 +64,21 @@
                  A94 6차(v0.153.0): Background=Transparent — 항목이 없는 빈 영역도 히트 테스트가
                  되어야 빈 영역 우클릭 메뉴(코드에서 ContextFlyout으로 건다)가 뜬다.
                  투명은 화면상 종전과 같다(좌 패널 아크릴이 그대로 비친다). -->
+            <!-- A152: 아래 패딩 48 = 종전 4 + 셸 하단 바 두께 44. 좌 패널이 콘텐츠 영역
+                 (= 창 전체 — 행 분할 폐지) 바닥까지 내려가 모드1에서는 하단 44px가 바에 덮인다.
+                 마지막 항목이 바 뒤에 숨지 않게 스크롤 끝 여백으로 보정한다(모드 불변 상수).
+                 좌우 패딩은 종전 그대로 — 타일 폭 계산(ApplyTileSize류)·정렬에 영향 없다. -->
             <GridView x:Name="IconGrid"
-                      Padding="12,4"
+                      Padding="12,4,12,48"
                       Background="Transparent"
                       SelectionMode="Extended"
                       IsItemClickEnabled="True"
                       ItemClick="OnItemClick" />
 
             <!-- 우: 리스트 뷰 (다중선택·드래그·드랍·빈 영역 메뉴는 그리드와 같은 규칙 — A94) -->
+            <!-- A152: 아래 패딩 48 = 종전 4 + 하단 바 44 (위 IconGrid와 같은 보정) -->
             <ListView x:Name="ListPane" Grid.Column="1"
-                      Padding="4"
+                      Padding="4,4,4,48"
                       Background="Transparent"
                       SelectionMode="Extended"
                       IsItemClickEnabled="True"

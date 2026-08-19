@@ -5,8 +5,14 @@
 
     <!-- A16: 세로 연속 스크롤 PDF 뷰어. ListView 가상화로 보이는 페이지만 렌더하고,
          줌은 Ctrl+휠(A98 — 내장 줌 대신 코드의 수동 줌)·내장 핀치(비트맵 확대 — 재렌더 없음). -->
+    <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 바가 콘텐츠 위 오버레이가 되면서(행 분할 폐지)
+         모드1에서는 콘텐츠 하단 44px가 바에 덮인다 — 마지막 페이지 끝이 바 뒤에 숨지 않게
+         스크롤 끝 여백으로 보정한다(모드 불변 상수 — 문서 에디터 EditorBox와 같은 규칙).
+         페이지 앵커(_pageOffsets)는 위 기준 누적이라 아래 패딩과 무관하고, Fit 계산은
+         뷰포트 크기 입력이라 영향 없다. 줌 배율이 걸리면 이 여백도 함께 스케일된다(허용). -->
     <ListView
         x:Name="PageList"
+        Padding="0,0,0,44"
         SelectionMode="None"
         IsItemClickEnabled="False"
         ScrollViewer.ZoomMode="Enabled"

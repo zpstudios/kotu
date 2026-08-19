@@ -20,8 +20,12 @@
          (UseTranslucentBackground). S1 인스턴스는 이 불투명 기본값 그대로다. -->
     <Grid x:Name="LayoutRoot" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
           Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+        <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 콘텐츠 영역이 창 전체가 되면서(행 분할 폐지)
+             모드1에서는 이 그리드의 하단 44px가 바에 덮인다 — 마지막 타일 줄이 바 뒤에 숨지
+             않게 스크롤 끝 여백으로 보정한다(모드 불변 상수 — ExplorerPane과 같은 규칙).
+             좌우 패딩은 0 그대로 — 타일 폭 계산 floor(실폭/열수)(ApplyTileSize)에 영향 없다. -->
         <GridView x:Name="TileGrid"
-                  Padding="0"
+                  Padding="0,0,0,44"
                   SelectionMode="Extended"
                   IsItemClickEnabled="True"
                   ItemClick="OnItemClick"
@@ -29,10 +33,12 @@
         <TextBlock x:Name="EmptyText" Text="No matching files here"
                    Visibility="Collapsed" Opacity="0.6"
                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <!-- A152: 하단 여백 54 = 종전 10 + 하단 바 44 — 바닥 정렬 일시 안내가 모드1에서
+             오버레이 바에 가려지지 않게 띄운다(위 TileGrid 패딩과 같은 보정) -->
         <TextBlock x:Name="NoticeText"
                    Visibility="Collapsed" FontSize="12" Opacity="0.8"
                    TextTrimming="CharacterEllipsis"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                   Margin="12,0,12,10" />
+                   Margin="12,0,12,54" />
     </Grid>
 </UserControl>

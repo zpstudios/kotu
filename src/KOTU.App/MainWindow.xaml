@@ -20,14 +20,13 @@
     <Grid x:Name="RootLayout" AllowDrop="True" DragOver="OnWindowDragOver" Drop="OnWindowDrop">
         <!-- 오버레이 전용 아크릴(OverlayAcrylicBrush, A33)은 A57 ②에서 App.xaml로 이동 —
              공용 오버레이 컨트롤(Overlays/*)도 같은 브러시를 쓰기 때문. -->
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <!-- 고정 44px 한 줄(A40): 창 크기·모듈 바 내용과 무관하게 두께 일정.
-                 v0.64.2의 "내용에 따라 세로로 자람"(Auto+MinHeight)을 대체. H/W 센서 그래프도
-                 접히는 대신 1줄 유지다(A60 3차부터 긴 그래프 2개 고정 — 좁으면 맥박만 숨긴다,
-                 HardwareView.UpdateBarDensity). 전체화면에서 0으로 만드는 건 코드(AppWindow.Changed) 담당. -->
-            <RowDefinition x:Name="BottomBarRow" Height="44" />
-        </Grid.RowDefinitions>
+        <!-- A152: 행 분할(콘텐츠 * / BottomBarRow 44) 폐지 — 콘텐츠 영역(CenterArea)이 항상
+             창 전체를 차지하고, 하단 바(BottomBar)는 그 위에 겹치는 오버레이다(아래 선언 =
+             위 z순서). 종전 구조는 바가 사라질 때 콘텐츠 영역이 44px 커져 중앙이 아래로
+             내려갔다(모드 전환 시 콘텐츠 출렁임 — A152가 없앤 증상). 이제 콘텐츠의 좌/우·상/하
+             중앙 기준 = 바 없는 상태로 모드 무관 동일하고, 모드1에서는 바가 콘텐츠 하단 44px를
+             덮는다(사용자 수용 트레이드오프 — 스크롤 표면의 마지막 줄 가림은 문서 에디터·PDF·
+             탐색기 리스트의 스크롤 끝 여백 44가 보정한다). -->
 
         <!-- 중앙 영역 (A58 사이드바 레이아웃): 좌 도크 / 메인 / 우 도크 3컬럼.
              용어(A108): 사이드바 = 불투명, 메인을 줄이며 옆에 선다(OpaqueDocked) /
@@ -38,7 +37,7 @@
              상태별 2값 폐지: 같은 3구획 화면이 상태에 따라 30:40:30으로 바뀌던 원인).
              패널 컨트롤은 항상 전폭으로 겹치고(ColumnSpan=3) 내부 별 분할(SetPanelPercent)을
              같은 %로 맞춰서 도크 컬럼과 픽셀 단위로 정렬된다. -->
-        <Grid x:Name="CenterArea" Grid.Row="0">
+        <Grid x:Name="CenterArea">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="LeftDockColumn" Width="0" />
                 <ColumnDefinition x:Name="CenterColumn" Width="10*" />
@@ -171,9 +170,20 @@
         </Grid>
 
         <!-- 하단 바 (작업표시줄 느낌). 모드2/3(A151)에서는 코드(UpdateShellChrome)가 통째로 숨긴다
-             (v0.21.0의 "전체화면이면 숨김"을 3단 모드 체계가 대체). -->
-        <Grid x:Name="BottomBar" Grid.Row="1" Height="44"
-              Background="{ThemeResource LayerFillColorDefaultBrush}">
+             (v0.21.0의 "전체화면이면 숨김"을 3단 모드 체계가 대체).
+             A152: 자체 행(구 BottomBarRow 44)을 없애고 콘텐츠 위에 겹치는 오버레이가 됐다 —
+             VerticalAlignment=Bottom + 고정 두께 44(A40: 창 크기·모듈 바 내용과 무관하게 일정.
+             v0.64.2의 Auto+MinHeight "내용에 따라 자람"을 대체. H/W 센서 그래프도 접히는 대신
+             1줄 유지, HardwareView.UpdateBarDensity). 코드 상수 BottomBarHeight 44와 짝이다.
+             CenterArea보다 나중 선언 = 위 z순서: 바 영역(44px 띠)의 입력은 바가 온전히 가져가
+             모듈 바 슬라이더 드래그가 아래 콘텐츠(영상 Tapped 등)로 새지 않는다.
+             배경 2겹: 종전에는 바가 자체 행이라 뒤가 창 배경이었지만, 오버레이가 되면 반투명
+             LayerFill 뒤로 콘텐츠가 비쳐 읽기 어렵다 — 불투명 바탕(SolidBackgroundFillColorBase,
+             ExplorerHost와 같은 브러시)을 Grid 배경으로 깔고 그 위에 종전 틴트(LayerFill)를
+             첫 자식 Border로 겹쳐 종전과 같은 모양을 만든다. -->
+        <Grid x:Name="BottomBar" Height="44" VerticalAlignment="Bottom"
+              Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+            <Border Background="{ThemeResource LayerFillColorDefaultBrush}" />
             <!-- 현재 모드 칩: 모듈 글리프 + 브랜드명(중립색). 색 구분은 창·트레이 아이콘이 담당(v0.26.0).
                  모듈이 하단 바 줄(ModuleBarHost)을 제공하면 칩은 숨긴다 -->
             <StackPanel x:Name="ModeChip" Orientation="Horizontal" Spacing="8"
