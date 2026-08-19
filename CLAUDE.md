@@ -52,6 +52,10 @@
 - 샌드박스(Linux)에 dotnet 없음 — 정적 검사(tree-sitter·grep·XML 검증)까지만 가능,
   실빌드는 push 후 GitHub Actions(windows-latest). **tree-sitter는 using 누락·catch 타입 순서를
   못 잡는다** — 유사 파일과 대조 검사할 것.
+- **WPF에서 되는 XAML 문법이 WinUI에서 된다고 가정하지 말 것**(v0.169.1 실사례: `PathGeometry.Figures`에
+  path 미니언어 문자열 → `XamlCompiler error WMC0055`. `Data="M ..."`처럼 **Geometry 타입 속성**에 거는
+  문자열 변환만 성립한다). 규칙: **저장소 안에 실제로 쓰이고 있는 형태만 복제한다.** 선례가 0건이면
+  "CI 1순위 위험 후보 + 최소 복구법"으로 반드시 보고하게 할 것.
 - **master push만으로 태그+릴리스 자동**(release.yml이 `Directory.Build.props`의 Version을 읽어
   멱등 발행). 작업 완료 = 버전 올린 커밋 + push 1회.
 - push 인증은 저장소 로컬 git 설정에 이미 구성돼 있음(비밀 값은 저장소에 없음). 401이 나면
