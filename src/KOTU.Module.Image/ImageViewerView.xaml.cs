@@ -770,6 +770,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// DropDownButton(FitOptionsButton, 플라이아웃 전담·A34 키 없음·툴팁은 XAML 고정)이라
     /// 이 메서드는 종전대로 본체(FitButton)만 만진다.
     /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
+    /// A184: 그 PathIcon 도형을 글자 "1:1" 형상에서 꺾쇠 프레임으로 바꿨다
+    /// (BuildActualSizeIconGeometry 주석 참조 — 툴팁·키·동작은 무변경).
     /// ⚠️ v0.174.1: PathIcon 인스턴스(UIElement)만이 아니라 **Geometry도 공유 금지** — WinUI
     /// Geometry는 부모가 하나뿐이라 공유 인스턴스를 PathIcon.Data에 걸면 XamlParseException
     /// ("Failed to assign to property")으로 앱이 죽는다(실기기 크래시 실사례 — 종전엔 App.xaml
@@ -795,8 +797,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     }
 
     /// <summary>
-    /// A143/v0.174.1: 100% 아이콘 도형(16x16 좌표계 — PathIcon은 스케일하지 않는다). 도형 6개 =
-    /// 왼쪽 1(깃발+기둥/밑변)·콜론 점 2개·오른쪽 1(깃발+기둥/밑변). 호출마다 새 인스턴스를 만든다
+    /// A143/v0.174.1: 100% 아이콘 도형(16x16 좌표계 — PathIcon은 스케일하지 않는다).
+    /// A184: 도형 5개 = 바깥 네 모서리 꺾쇠 4개(각 변 4·획 1.5·모서리 여백 2) + 가운데 채움
+    /// 사각형 4x4(6,6~10,10). "원본 크기 프레임 그대로"라는 뜻이고 확대/축소 화살표가 없어
+    /// Contain류와 구분된다. 종전 A143 도형(글자 "1:1" 형상 — 깃발+기둥 2개와 콜론 점 2개)은
+    /// 어색하다는 사용자 보고로 폐기했다. 호출마다 새 인스턴스를 만든다
     /// (Geometry 공유 금지 — 위 UpdateFitButton 주석). 좌표를 바꾸면 이 파일 XAML의 인라인 Data
     /// 문자열과 형제 두 모듈(문서·영상)의 같은 두 곳까지 총 6곳을 함께 고칠 것.
     /// </summary>
@@ -817,12 +822,16 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
 
         var geometry = new PathGeometry { Figures = new PathFigureCollection() };
-        geometry.Figures.Add(Fig(2.3, 5.0, (4.2, 3.0), (5.0, 3.0), (5.0, 11.4), (3.5, 11.4), (3.5, 5.0)));
-        geometry.Figures.Add(Fig(1.8, 11.4, (6.7, 11.4), (6.7, 13.0), (1.8, 13.0)));
-        geometry.Figures.Add(Fig(7.4, 6.0, (8.8, 6.0), (8.8, 7.4), (7.4, 7.4)));
-        geometry.Figures.Add(Fig(7.4, 9.6, (8.8, 9.6), (8.8, 11.0), (7.4, 11.0)));
-        geometry.Figures.Add(Fig(10.5, 5.0, (12.4, 3.0), (13.2, 3.0), (13.2, 11.4), (11.7, 11.4), (11.7, 5.0)));
-        geometry.Figures.Add(Fig(10.0, 11.4, (14.9, 11.4), (14.9, 13.0), (10.0, 13.0)));
+        // 좌상 꺾쇠
+        geometry.Figures.Add(Fig(2.0, 2.0, (6.0, 2.0), (6.0, 3.5), (3.5, 3.5), (3.5, 6.0), (2.0, 6.0)));
+        // 우상 꺾쇠
+        geometry.Figures.Add(Fig(14.0, 2.0, (10.0, 2.0), (10.0, 3.5), (12.5, 3.5), (12.5, 6.0), (14.0, 6.0)));
+        // 우하 꺾쇠
+        geometry.Figures.Add(Fig(14.0, 14.0, (10.0, 14.0), (10.0, 12.5), (12.5, 12.5), (12.5, 10.0), (14.0, 10.0)));
+        // 좌하 꺾쇠
+        geometry.Figures.Add(Fig(2.0, 14.0, (6.0, 14.0), (6.0, 12.5), (3.5, 12.5), (3.5, 10.0), (2.0, 10.0)));
+        // 가운데 채움 사각형
+        geometry.Figures.Add(Fig(6.0, 6.0, (10.0, 6.0), (10.0, 10.0), (6.0, 10.0)));
         return geometry;
     }
 

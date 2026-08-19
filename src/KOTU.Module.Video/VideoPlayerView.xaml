@@ -164,10 +164,14 @@
                                  (WinUI Geometry는 부모 1개뿐 — 공유 불가. CI는 컴파일만 하므로 못 잡는다).
                                  좌표 정본 = 이 문자열 + 코드 비하인드 BuildActualSizeIconGeometry().
                                  모양 수정 시 세 모듈(이미지·문서·영상) × 2곳 = 6곳을 함께 고칠 것.
-                                 형제는 Segoe 글리프, 여기만 PathIcon(A111 판정 — 맞는 글리프가 없다). -->
+                                 형제는 Segoe 글리프, 여기만 PathIcon(A111 판정 — 맞는 글리프가 없다.
+                                 A184에서 재탐색했지만 뒤집을 글리프를 못 찾아 판정 유지).
+                                 A184 도형 = 바깥 네 모서리 꺾쇠 4개(획 1.5) + 가운데 채움 사각형 4x4.
+                                 "원본 크기 프레임 그대로"라는 뜻이고, 확대/축소 화살표가 없어 Contain류와
+                                 구분된다(종전 "1:1" 글자 형상은 어색하다는 사용자 보고로 폐기). -->
                             <MenuFlyoutItem Text="100%" Click="OnFitActualSizeClicked">
                                 <MenuFlyoutItem.Icon>
-                                    <PathIcon Data="M 2.3,5 L 4.2,3 5,3 5,11.4 3.5,11.4 3.5,5 Z M 1.8,11.4 L 6.7,11.4 6.7,13 1.8,13 Z M 7.4,6 L 8.8,6 8.8,7.4 7.4,7.4 Z M 7.4,9.6 L 8.8,9.6 8.8,11 7.4,11 Z M 10.5,5 L 12.4,3 13.2,3 13.2,11.4 11.7,11.4 11.7,5 Z M 10,11.4 L 14.9,11.4 14.9,13 10,13 Z" />
+                                    <PathIcon Data="M 2,2 L 6,2 6,3.5 3.5,3.5 3.5,6 2,6 Z M 14,2 L 10,2 10,3.5 12.5,3.5 12.5,6 14,6 Z M 14,14 L 10,14 10,12.5 12.5,12.5 12.5,10 14,10 Z M 2,14 L 6,14 6,12.5 3.5,12.5 3.5,10 2,10 Z M 6,6 L 10,6 10,10 6,10 Z" />
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutItem Text="Contain" Click="OnFitContainClicked">
