@@ -126,6 +126,14 @@ public sealed partial class MainWindow : Window
         public DateTime LastTapDown = DateTime.MinValue; // 2연타 판정 (down→down)
         public OverlayState TapStartState;               // 첫 탭 "이전" 상태 — A86 2연타 판정 기준
         public DispatcherTimer? PinTimer; // 2초 홀드 → 반투명 고정 승격 (생성자에서 배선)
+
+        /// <summary>
+        /// A154 순간 표시(peek) 버튼의 "누르기 직전 상태" 스냅샷 — null = 지금 순간 표시 중이 아님.
+        /// 떼면 이 값으로 되돌린다(닫혀 있었으면 닫힘, 피닝/사이드바였으면 그대로 복귀).
+        /// 창별 상태라 정적 필드로 두지 않는다(A110 규칙) — OverlaySide 인스턴스가 창마다 둘이다.
+        /// 수명은 키 홀드 세션과 같은 안전장치에 묶는다: <see cref="CancelHoldCore"/>가 함께 비운다.
+        /// </summary>
+        public OverlayState? PeekRestore;
     }
 
     private const double OverlayDoubleTapMs = 450;  // 2연타 판정 창 (v0.32.0 값 유지)
@@ -223,6 +231,24 @@ public sealed partial class MainWindow : Window
             new PointerEventHandler(OnRootPointerMoved), handledEventsToo: true);
         RootLayout.PointerExited += (_, _) => HideEdgeButtons();
         CenterArea.SizeChanged += (_, _) => UpdateEdgeButtons(); // 경계 x 좌표는 실폭 기준
+        // A154 순간 표시(peek) 버튼: 누르는 동안만 반투명 오버레이(키 홀드와 같은 Holding 상태 —
+        // 새 상태를 만들지 않는다), 떼면 직전 상태로 복귀. XAML 이벤트 속성으로는 안 된다 —
+        // ButtonBase가 PointerPressed를 클래스 핸들러에서 소비하므로 handledEventsToo 구독이 필수다
+        // (같은 이유의 선례: VideoPlayerView.xaml.cs:236-241 시크 슬라이더).
+        // **떼기를 놓치면 오버레이가 영구히 열린 채 남는다** — 그래서 Released와 CaptureLost를
+        // 같은 핸들러에 매핑한다(AudioPlayerView.xaml.cs:212-215와 동일 관용구).
+        LeftPeekButton.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnLeftPeekPressed), handledEventsToo: true);
+        LeftPeekButton.AddHandler(UIElement.PointerReleasedEvent,
+            new PointerEventHandler(OnLeftPeekEnded), handledEventsToo: true);
+        LeftPeekButton.AddHandler(UIElement.PointerCaptureLostEvent,
+            new PointerEventHandler(OnLeftPeekEnded), handledEventsToo: true);
+        RightPeekButton.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnRightPeekPressed), handledEventsToo: true);
+        RightPeekButton.AddHandler(UIElement.PointerReleasedEvent,
+            new PointerEventHandler(OnRightPeekEnded), handledEventsToo: true);
+        RightPeekButton.AddHandler(UIElement.PointerCaptureLostEvent,
+            new PointerEventHandler(OnRightPeekEnded), handledEventsToo: true);
         _listSide.PinTimer = MakePinTimer(_listSide);
         _infoSide.PinTimer = MakePinTimer(_infoSide);
         Activated += (_, e) =>
@@ -1959,6 +1985,11 @@ public sealed partial class MainWindow : Window
     /// 오버레이를 물고 있지 않게. 단, 그 오버레이 자신 안에서의 클릭·스크롤은 예외 —
     /// F1을 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
     /// 기존 흐름(v0.25.0)을 끊으면 안 된다.
+    /// A154: **그 쪽 경계 버튼 스택 안의 눌림도 같은 예외**다. 이 핸들러는 RootLayout에
+    /// handledEventsToo로 걸려 있어 버튼 눌림이 BeginPeek 뒤에 여기까지 올라오는데, 예외가 없으면
+    /// 방금 만든 순간 표시(Holding)를 같은 이벤트에서 CancelHoldCore가 도로 닫아 버린다.
+    /// 핀 버튼도 같은 스택이지만 ToggleOpaqueDock이 스스로 CancelHoldCore를 부르므로 손해가 없다.
+    /// 반대쪽 사이드는 종전대로 취소된다(좌 버튼 클릭 = 우 홀드 취소).
     /// </summary>
     private void OnRootPointerIntervened(object sender, PointerRoutedEventArgs e)
     {
@@ -1966,9 +1997,11 @@ public sealed partial class MainWindow : Window
         // F1을 쥔 채 정보 모듈 좌 패널(그래프)을 만지는 흐름이 파일 리스트와 같은 규칙을 탄다.
         var origin = e.OriginalSource as DependencyObject;
         var changed = false;
-        if (!IsWithin(origin, ListOverlay) && !IsWithin(origin, LeftPanelHost))
+        if (!IsWithin(origin, ListOverlay) && !IsWithin(origin, LeftPanelHost)
+            && !IsWithin(origin, LeftEdgeButtons))
             changed |= CancelHoldCore(_listSide);
-        if (!IsWithin(origin, InfoOverlay) && !IsWithin(origin, RightPanelHost))
+        if (!IsWithin(origin, InfoOverlay) && !IsWithin(origin, RightPanelHost)
+            && !IsWithin(origin, RightEdgeButtons))
             changed |= CancelHoldCore(_infoSide);
         _listSide.LastTapDown = DateTime.MinValue; // 2연타 카운트 리셋
         _infoSide.LastTapDown = DateTime.MinValue;
@@ -2015,11 +2048,15 @@ public sealed partial class MainWindow : Window
         if (changed) ApplyOverlayStates();
     }
 
-    /// <summary>홀드 세션만 종료한다. 반환값 = 표시가 바뀌어야 하는지(Holding을 닫았는지).</summary>
+    /// <summary>홀드 세션만 종료한다. 반환값 = 표시가 바뀌어야 하는지(Holding을 닫았는지).
+    /// A154: 순간 표시(peek) 세션도 같은 안전장치에 묶는다 — 스냅샷을 여기서 함께 비워야
+    /// 창 비활성화·콘텐츠 전환으로 뗌을 놓쳐도 스냅샷이 남아 다음 순간 표시를 막지 않는다
+    /// (BeginPeek은 이 호출 **뒤에** 스냅샷을 채우므로 자기 세션을 지우지 않는다).</summary>
     private static bool CancelHoldCore(OverlaySide side)
     {
         side.PinTimer?.Stop();
         side.HoldSessionActive = false;
+        side.PeekRestore = null;
         if (side.State != OverlayState.Holding) return false;
         side.State = OverlayState.Closed;
         return true;
@@ -2228,8 +2265,24 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 근접 판정 반경(경계선 좌우 각각): 터치 타깃 관례 44px보다 약간 넓은 48 — 버튼(20px)을
     /// 노리고 다가가면 확실히 뜨되, 화면을 가로지르는 이동에 스치기만 해도 뜰 만큼 넓지는 않게.
+    /// A154부터 세로 판정(스택 위쪽 여유)에도 같은 값을 쓴다 — OnRootPointerMoved 참고.
     /// </summary>
     private const double EdgeProximity = 48;
+
+    /// <summary>
+    /// 경계 버튼 스택의 하단 여백(A154, v0.170.0) = 하단 바 44(<see cref="BottomBarHeight"/>) + 여유 8.
+    /// 스택이 VerticalAlignment=Bottom이라 이 값만큼 콘텐츠 영역 바닥에서 띄워야 하단 바와 겹치지 않는다.
+    /// XAML에 두지 않는 이유: <see cref="UpdateEdgeButtons"/>가 Margin을 통째로 덮어쓴다.
+    /// ⚠️ 훅: **하단 바가 숨는 상태(A151 모드2/3 예정)에서는 살짝 떠 보인다 — 그때 이 상수를
+    /// 바 가시성에 연동하는 것이 다음 수리 지점이다**(지금은 고정값 하나).
+    /// </summary>
+    private const double EdgeButtonBottomMargin = 52;
+
+    /// <summary>
+    /// 경계 버튼 스택의 높이(A154) = XAML 버튼 32 둘 + Spacing 2. 근접 y 판정의 입력이라
+    /// XAML 값과 같아야 한다(BottomBarHeight가 XAML BottomBarRow와 짝인 것과 같은 규칙).
+    /// </summary>
+    private const double EdgeButtonsHeight = 66;
 
     private double _leftEdgeX;   // 좌 경계선 x (CenterArea 기준) — 닫힘이면 0(창 가장자리)
     private double _rightEdgeX;  // 우 경계선 x — 닫힘이면 실폭(창 가장자리)
@@ -2261,8 +2314,12 @@ public sealed partial class MainWindow : Window
         var dockPercent = SidebarPercent; // ApplyOverlayStates의 도크 폭과 동일 상수(A116 정합)
         _leftEdgeX = LeftPanelIsOpen ? width * dockPercent / 100 : 0;
         _rightEdgeX = RightPanelIsOpen ? width - width * dockPercent / 100 : width;
-        LeftEdgeButton.Margin = new Thickness(Math.Max(0, _leftEdgeX - EdgeButtonOverlap), 0, 0, 0);
-        RightEdgeButton.Margin = new Thickness(0, 0, Math.Max(0, width - _rightEdgeX - EdgeButtonOverlap), 0);
+        // A154: 자리를 잡는 대상이 버튼 하나에서 **세로 스택**으로 바뀌었다(위 = 순간 표시 / 아래 = 핀).
+        // 아래 여백(EdgeButtonBottomMargin)은 여기서 함께 준다 — 이 대입이 XAML Margin을 덮어쓴다.
+        LeftEdgeButtons.Margin =
+            new Thickness(Math.Max(0, _leftEdgeX - EdgeButtonOverlap), 0, 0, EdgeButtonBottomMargin);
+        RightEdgeButtons.Margin =
+            new Thickness(0, 0, Math.Max(0, width - _rightEdgeX - EdgeButtonOverlap), EdgeButtonBottomMargin);
         // 글리프 = 누르면 일어날 일의 방향: 사이드바가 아니면 "사이드바로 세우기"(안쪽), 사이드바면 닫기(바깥쪽).
         LeftEdgeGlyph.Glyph = _listSide.State == OverlayState.OpaqueDocked ? "\uE76B" : "\uE76C";
         RightEdgeGlyph.Glyph = _infoSide.State == OverlayState.OpaqueDocked ? "\uE76C" : "\uE76B";
@@ -2270,7 +2327,15 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 마우스 근접 시에만 경계 버튼 표시 (A86 원문: "마우스가 근처에 갔을 때만").
-    /// 경계선 x에서 EdgeProximity 이내이고 콘텐츠 영역 세로 범위 안일 때만 보인다.
+    /// 경계선 x에서 EdgeProximity 이내이고 **스택이 실제로 있는 세로 띠** 안일 때만 보인다.
+    /// A154: 종전 세로 조건은 "콘텐츠 영역 안(0 ~ 실높이)" = 사실상 y 무시였는데, 버튼이 세로
+    /// 중앙에서 하단으로 내려가면서 그대로 두면 화면 맨 위에서도 반응해 버린다. 새 띠 =
+    /// [스택 위 모서리 - EdgeProximity, 콘텐츠 영역 바닥]. 스택 위 모서리 =
+    /// 실높이 - EdgeButtonBottomMargin - EdgeButtonsHeight. 아래쪽은 하단 여백(52)뿐이라
+    /// 별도 여유 없이 바닥까지 열어 둔다(하단 바 위를 스치며 다가오는 이동도 그대로 잡힌다).
+    /// **순간 표시(peek) 중인 쪽은 숨기지 않는다** — 누르면 패널이 열리면서 경계선 x가 25%로
+    /// 옮겨가 버튼이 커서 밑에서 빠져나가는데(UpdateEdgeButtons), 그 상태로 근접 판정을 그대로
+    /// 적용하면 손이 조금만 떨려도 스택이 접히고 → 포인터 캡처 상실 → 순간 표시가 끊긴다.
     /// </summary>
     private void OnRootPointerMoved(object sender, PointerRoutedEventArgs e)
     {
@@ -2280,24 +2345,97 @@ public sealed partial class MainWindow : Window
             return;
         }
         var p = e.GetCurrentPoint(CenterArea).Position;
-        var insideY = p.Y >= 0 && p.Y <= CenterArea.ActualHeight;
-        LeftEdgeButton.Visibility = insideY && Math.Abs(p.X - _leftEdgeX) <= EdgeProximity
-            ? Visibility.Visible : Visibility.Collapsed;
-        RightEdgeButton.Visibility = insideY && Math.Abs(p.X - _rightEdgeX) <= EdgeProximity
-            ? Visibility.Visible : Visibility.Collapsed;
+        var stackTop = CenterArea.ActualHeight - EdgeButtonBottomMargin - EdgeButtonsHeight;
+        var insideY = p.Y >= stackTop - EdgeProximity && p.Y <= CenterArea.ActualHeight;
+        LeftEdgeButtons.Visibility =
+            _listSide.PeekRestore is not null || (insideY && Math.Abs(p.X - _leftEdgeX) <= EdgeProximity)
+                ? Visibility.Visible : Visibility.Collapsed;
+        RightEdgeButtons.Visibility =
+            _infoSide.PeekRestore is not null || (insideY && Math.Abs(p.X - _rightEdgeX) <= EdgeProximity)
+                ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>경계 버튼 감추기 — 대상은 버튼 개별이 아니라 스택 단위다(A154).</summary>
     private void HideEdgeButtons()
     {
-        LeftEdgeButton.Visibility = Visibility.Collapsed;
-        RightEdgeButton.Visibility = Visibility.Collapsed;
+        LeftEdgeButtons.Visibility = Visibility.Collapsed;
+        RightEdgeButtons.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>경계 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 좌).</summary>
+    /// <summary>핀 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 좌.
+    /// A154에서도 동작 그대로: 기존 토글을 핀 버튼이 겸한다, 부록 B 69).</summary>
     private void OnLeftEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_listSide);
 
-    /// <summary>경계 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 우).</summary>
+    /// <summary>핀 버튼 동작 = 사이드바(불투명 도크) 토글 (A86 keymap Q7 확정 — 우).</summary>
     private void OnRightEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_infoSide);
+
+    // ---------- 순간 표시(peek) 버튼 (A154, v0.170.0) ----------
+    // 키 홀드(F1/F2)의 포인터 판이다: 누르는 동안만 반투명 오버레이가 열리고 떼면 원상 복귀.
+    // 새 상태를 만들지 않고 키 홀드와 같은 OverlayState.Holding으로 전이하며, 상태 변경은 전부
+    // ApplyOverlayStates(단일 종착점)를 거친다. 2초 승격 타이머는 붙이지 않는다(핀은 클릭 겸임).
+
+    private void OnLeftPeekPressed(object sender, PointerRoutedEventArgs e)
+        => BeginPeek(_listSide, LeftPeekButton, e);
+
+    private void OnLeftPeekEnded(object sender, PointerRoutedEventArgs e)
+        => EndPeek(_listSide, LeftPeekButton, e);
+
+    private void OnRightPeekPressed(object sender, PointerRoutedEventArgs e)
+        => BeginPeek(_infoSide, RightPeekButton, e);
+
+    private void OnRightPeekEnded(object sender, PointerRoutedEventArgs e)
+        => EndPeek(_infoSide, RightPeekButton, e);
+
+    /// <summary>
+    /// 순간 표시 시작: 지금 상태를 스냅샷해 두고 반투명(Holding)으로 전이한다.
+    /// 왼쪽 눌림 "전이"만 태운다 — A112(OnRootPointerBack)·A131·A148과 같은 관용구.
+    /// 포인터 캡처를 걸어 **버튼 밖에서 떼도 뗌이 이 버튼에 오게** 한다(캡처가 없으면 떼기를
+    /// 놓쳐 오버레이가 영구히 열린 채 남는다). ButtonBase가 눌림에서 이미 캡처를 잡으므로 이
+    /// 호출은 보통 같은 요소의 재확인(true)이고, 그래도 실패하면 상태를 만들지 않는다
+    /// (ImageViewerView.xaml.cs:279 "캡처 실패 = 상태를 만들지 않는다"와 같은 판단).
+    /// 키 홀드 세션이 살아 있으면 A58 규칙대로 먼저 정리한다(포인터 개입 = 홀드 취소) —
+    /// 그래서 스냅샷은 취소 **뒤** 상태다(2초 승격 타이머가 순간 표시 중에 끼어들지도 않는다).
+    /// </summary>
+    private void BeginPeek(OverlaySide side, Button button, PointerRoutedEventArgs e)
+    {
+        if (e.GetCurrentPoint(RootLayout).Properties.PointerUpdateKind
+            != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
+        if (!HasPanelContext || IsOpenFileBrowsing) return; // 버튼이 뜨지 않는 상황의 이중 방어선
+        if (side.PeekRestore is not null) return;           // 이미 순간 표시 중(뗌 유실 방어)
+        if (!button.CapturePointer(e.Pointer)) return;
+        CancelHoldCore(side);                 // 키 홀드 세션·승격 타이머 정리 (PeekRestore도 함께 비운다)
+        side.PeekRestore = side.State;        // 되돌릴 자리 = 정리 뒤 상태
+        side.State = OverlayState.Holding;    // 키 홀드와 같은 반투명 상태 — 새 상태 없음
+        ApplyOverlayStates();
+    }
+
+    /// <summary>
+    /// 순간 표시 종료(뗌·캡처 상실 공용 — 둘 다 같은 핸들러). 스냅샷이 없으면(다른 경로가
+    /// 이미 세션을 걷어갔다 — CancelHoldCore) 아무것도 되돌리지 않는다.
+    /// 순간 표시 중에 다른 입력이 상태를 옮겼으면(예: 키 2연타로 사이드바) 그 결정을 존중해
+    /// **여전히 Holding일 때만** 복귀시킨다.
+    /// 스냅샷이 Holding일 수는 없다 — BeginPeek이 CancelHoldCore로 키 홀드를 먼저 정리한 뒤 찍으므로
+    /// 4상태 중 닫힘·오버레이 고정·사이드바 셋뿐이다(키를 쥔 채 눌렀다면 그 홀드는 A58 규칙대로
+    /// 취소돼 스냅샷이 "닫힘"이 된다). 덕분에 "키를 뗐는데 반투명이 남는" 경로가 원천적으로 없다.
+    /// 캡처가 이미 풀린 뒤라면 ReleasePointerCapture는 무동작이다(ImageViewerView.xaml.cs:328-329).
+    /// 스냅샷을 **먼저** 비우고 캡처 해제를 나중에 하는 이유: 해제가 곧바로 PointerCaptureLost를
+    /// 불러 이 메서드로 재진입할 수 있는데, 그때는 스냅샷이 이미 없어 순수 무동작이 된다
+    /// (뗌 + 캡처 상실이 겹쳐도 복귀는 정확히 한 번).
+    /// </summary>
+    private void EndPeek(OverlaySide side, Button button, PointerRoutedEventArgs e)
+    {
+        if (side.PeekRestore is { } snapshot)
+        {
+            side.PeekRestore = null;
+            // 순간 표시 중에 다른 입력이 상태를 옮겼으면 그 결정을 존중한다(여전히 반투명일 때만 복귀).
+            if (side.State == OverlayState.Holding)
+            {
+                side.State = snapshot;
+                ApplyOverlayStates();
+            }
+        }
+        button.ReleasePointerCapture(e.Pointer);
+    }
 
     /// <summary>사이드바(불투명 도크)면 닫고, 그 외(닫힘·홀드·오버레이 고정)면 사이드바로 (Q7).</summary>
     private void ToggleOpaqueDock(OverlaySide side)

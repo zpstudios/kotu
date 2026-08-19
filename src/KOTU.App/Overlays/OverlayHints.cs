@@ -22,10 +22,14 @@ internal static class OverlayHints
     /// <summary>우(정보) 오버레이 키 표기 — A118: F2(구 A107 Alt+X).</summary>
     internal const string InfoKey = "F2";
 
-    /// <summary>오버레이 고정(2초 홀드 승격) 안내 — A92 문구 틀에 키 표기만 끼운다.</summary>
-    internal static string Pinned(string key) => $"Pinned - press {key} to close";
+    /// <summary>오버레이 고정(2초 홀드 승격) 안내 — A92 문구 틀에 키 표기만 끼운다.
+    /// A154(v0.170.0): 경계 버튼이 2종(위 = 순간 표시 / 아래 = 핀)이 되면서 핀 버튼 몫을 덧붙였다.
+    /// 이 상태에서 핀 버튼은 "닫기"가 아니라 사이드바로의 승격이다(ToggleOpaqueDock: 고정 → 사이드바)
+    /// — 문구도 실제 동작 그대로 적는다.</summary>
+    internal static string Pinned(string key) => $"Pinned - press {key} to close, or the pin button to dock";
 
     /// <summary>사이드바(불투명 도크) 안내 — A108에서 표기를 "Docked"에서 "Sidebar"로 교체
-    /// (메서드명 Docked는 OverlayMode.OpaqueDocked와 짝이라 유지 — A108 식별자 보존 규칙).</summary>
-    internal static string Docked(string key) => $"Sidebar - press {key} to close";
+    /// (메서드명 Docked는 OverlayMode.OpaqueDocked와 짝이라 유지 — A108 식별자 보존 규칙).
+    /// A154: 사이드바 상태에서 핀 버튼을 누르면 닫힌다 — 그 경로를 문구에 함께 적는다.</summary>
+    internal static string Docked(string key) => $"Sidebar - press {key} or the pin button to close";
 }
