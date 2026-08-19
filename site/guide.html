@@ -330,6 +330,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <code>img2</code> comes before <code>img10</code>.</li>
           <li><strong>Zoom</strong> with the mouse wheel, from 10% to 800%. The point under the pointer stays
               put. Touch pinch-zoom works too. Scroll bars appear when the picture is bigger than the view.</li>
+          <li><strong>Push the picture around</strong> by dragging it with the left mouse button. It starts
+              only when the picture is bigger than the view and only once the pointer has really moved, so
+              double-clicking for full screen still works. Mouse only — touch and pen pan the way they
+              always did.</li>
           <li><strong>Rotate</strong> 90° clockwise with the rotate button or <kbd>R</kbd>. Rotation is not
               saved to the file and resets on the next picture. Orientation stored in EXIF is applied automatically.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. The Image module keeps
@@ -337,8 +341,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Delete</strong> moves the current file to the Recycle Bin and shows the next picture.
               There is no confirmation and no toolbar button — the <kbd>Delete</kbd> key is the only way in.</li>
           <li>Animated GIFs play.</li>
-          <li>The bottom bar shows the file name, size, kind, an EXIF summary (date taken, camera, exposure,
-              aperture, ISO, focal length) where the format has one, and <code>width×height · position/total</code>.</li>
+          <li>The bottom bar carries one run of text on the left: the file name, then
+              <code>width×height</code>, the kind (<code>JPG 24-bit</code>), the size,
+              <code>position/total</code>, and an EXIF summary (date taken, camera, exposure, aperture, ISO,
+              focal length) where the format has one. Everything after the file name is repeated in a
+              tooltip, since a narrow window trims it.</li>
+          <li>To the right of that run sits the current zoom level — <code>100%</code>. The Fit options
+              resize the picture without touching that figure, so it stays at 100% until you zoom with the
+              wheel or a pinch.</li>
           <li><kbd>F11</kbd> or a double-click goes full screen; <kbd>Esc</kbd> leaves it.</li>
         </ul>
 
@@ -419,6 +429,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               scroll. There are no page-forward or page-back buttons.</li>
           <li>The wheel scrolls; <kbd>Ctrl</kbd>+wheel zooms around the pointer, about 10% per notch. Touch
               pinch-zoom works.</li>
+          <li><strong>Push the pages around</strong> by dragging with the left mouse button, whenever there
+              is anything to scroll to. Mouse only — touch and pen pan the way they always did.</li>
           <li>The keyboard scrolls too: <kbd>↑</kbd> <kbd>↓</kbd> move about an eighth of the view,
               <kbd>Page Up</kbd> <kbd>Page Down</kbd> move about a full screen, and <kbd>Home</kbd>
               <kbd>End</kbd> jump to the start and the end of the document. Holding a key keeps scrolling.
@@ -551,9 +563,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Enter</kbd></td><td>closes both if either is open; opens them again in the arrangement you last had</td></tr>
         </table></div>
         <p>When a panel is pinned or docked, a short hint appears next to it on a small dark plate, so it
-           stays readable over whatever is behind it — <em>Pinned - press F1 to close</em>,
-           <em>Sidebar - press F1 to close</em> — and fades after a couple of seconds. One
-           exception: while the file browser has the focus <strong>and a file is selected</strong>,
+           stays readable over whatever is behind it — <em>Pinned - press F1 to close, or the pin button
+           to dock</em>, <em>Sidebar - press F1 or the pin button to close</em> — and fades after a couple
+           of seconds. One exception: while the file browser has the focus <strong>and a file is selected</strong>,
            <kbd>F2</kbd> renames that file instead of calling the right panel — renaming keeps its usual
            Windows key. Inside the Open file browser, <kbd>F1</kbd> and <kbd>F2</kbd> do nothing;
            <kbd>Esc</kbd> gets you out.</p>
@@ -597,11 +609,15 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>H/W Info</td><td><kbd>P</kbd></td><td>always on top</td></tr>
         </table></div>
         <p><kbd>F11</kbd> and <kbd>Esc</kbd> behave the same in all seven modules.</p>
+        <p><kbd>Space</kbd> gives way in the same manner as the letter keys. While the file list, the folder
+           tree or the centre thumbnails have the focus it no longer starts or stops playback in Video and
+           Audio; in the file list and in the thumbnails it selects the focused item instead.</p>
 
         <h3>In the file browser</h3>
         <div class="tbl"><table>
           <tr><th>Key</th><th>Action</th></tr>
           <tr><td><kbd>Enter</kbd></td><td>open the selected item — with several files selected, all of them</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>select or deselect the item that has the focus</td></tr>
           <tr><td><kbd>F2</kbd></td><td>rename the selected item (with nothing selected, <kbd>F2</kbd> calls the right panel as usual)</td></tr>
           <tr><td><kbd>Delete</kbd></td><td>move to the Recycle Bin</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>delete for good, after a confirmation</td></tr>
@@ -615,6 +631,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <div class="tbl"><table>
           <tr><th>Where</th><th>Input</th><th>Action</th></tr>
           <tr><td>Image</td><td>wheel</td><td>zoom, 10%–800%</td></tr>
+          <tr><td>Image</td><td>left-button drag</td><td>push an enlarged picture around</td></tr>
           <tr><td>Image</td><td>double-click</td><td>full screen</td></tr>
           <tr><td>Video</td><td>wheel</td><td>volume</td></tr>
           <tr><td>Video</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom, 10%–800%</td></tr>
@@ -623,6 +640,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Audio</td><td>click</td><td>play / pause</td></tr>
           <tr><td>PDF</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>PDF</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom</td></tr>
+          <tr><td>PDF</td><td>left-button drag</td><td>push the pages around</td></tr>
           <tr><td>Text editor</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>File browser, side panels</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>File browser</td><td>double-click</td><td>open (folders: go in)</td></tr>
@@ -632,7 +650,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>File browser</td><td>right-click empty space</td><td>New folder · Paste · Refresh</td></tr>
           <tr><td>File browser</td><td>drag</td><td>move within a drive, copy across drives. <kbd>Ctrl</kbd> forces copy, <kbd>Shift</kbd> forces move</td></tr>
           <tr><td>Anywhere</td><td>back button (the thumb button)</td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
-          <tr><td>Near the window edge</td><td>move the pointer</td><td>a narrow edge button appears; click it to dock or undock that sidebar</td></tr>
+          <tr><td>Near the bottom of the window edge</td><td>move the pointer</td><td>two narrow edge buttons appear, one above the other — see <a class="inl" href="#panels">Sidebars and overlays</a></td></tr>
         </table></div>
         <p>The wheel never zooms thumbnails, and it never zooms while the pointer is over a side panel — it
            scrolls there.</p>
@@ -660,9 +678,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>In H/W Info the same two panels carry that module's own content instead — the enlarged graphs on
            the left, the specification list on the right. Everything below applies there unchanged.</p>
         <p>Ways to bring a panel up: <kbd>F1</kbd> / <kbd>F2</kbd> as described
-           above; <kbd>Enter</kbd> for both at once; or the <strong>edge button</strong> — move the pointer
-           close to the left or right edge of the window and a small button appears there. Clicking it docks or
-           undocks that sidebar.</p>
+           above; <kbd>Enter</kbd> for both at once; or the <strong>edge buttons</strong> — move the pointer
+           close to the left or right edge of the window, near the bottom, and two small buttons appear one
+           above the other, just over the bottom bar. <strong>Hold</strong> the upper one and that panel
+           comes up as a translucent overlay for as long as you hold it, then goes back to whatever it was.
+           The lower one is the <strong>pin</strong>: it docks that side as a sidebar, and closes it again if
+           it already is one.</p>
         <p>Opening a module (rather than opening a file directly) starts with both sidebars docked. A file
            opened straight from Windows Explorer starts with no panels, so nothing covers what you came to see.</p>
         <p>Translucent panels normally blur what is behind them. Over the Video and Audio modules they are a
@@ -676,10 +697,22 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>Open a module without a file and the window becomes a file browser: folder tree and file list on the
            left, thumbnails in the centre, file information on the right.</p>
         <ul>
+          <li><strong>Each row in the left panel is two lines</strong> — the file name on the first, and on
+              the second its size, its playing length for video and audio, the date it was created and the
+              date it was last modified, written as <code>2026-08-19</code>. Point at a row and the tooltip
+              repeats the same values with <em>Size:</em>, <em>Length:</em>, <em>Created:</em> and
+              <em>Modified:</em> in front of them, so the two dates cannot be mistaken for one another.</li>
+          <li><strong>A checkbox at the right-hand end of each row</strong> shows whether that file is
+              selected. Ticking or unticking it selects or deselects the file, and <kbd>Space</kbd> does the
+              same to whichever item has the focus. It is one selection, not two — the boxes only make it
+              visible.</li>
           <li><strong>Sort</strong> by <em>Name</em>, <em>Size</em>, <em>Date modified</em> or
               <em>Date created</em>. Your choice is remembered.</li>
           <li><strong>Filter</strong> by extension, or <em>Show all</em>. The Filter button says how many files
               are hidden.</li>
+          <li><strong>Show hidden and system files</strong> sits at the bottom of the same Filter menu, below
+              a separator. It is off to start with, it is remembered, and it applies to the file list and to
+              the folder tree alike.</li>
           <li><strong>Select</strong> several files with <kbd>Ctrl</kbd>+click, <kbd>Shift</kbd>+click or
               <kbd>Ctrl</kbd>+<kbd>A</kbd>.</li>
           <li><strong>Copy, cut and paste</strong> with <kbd>Ctrl</kbd>+<kbd>C</kbd> /

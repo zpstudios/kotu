@@ -71,14 +71,21 @@ Seven modules. Switch between them from the menu at the bottom left.
 - Move through the folder with `←` and `→`. Files are sorted naturally, so `img2` comes before `img10`.
 - **Zoom** with the mouse wheel, from 10% to 800%. The point under the pointer stays put.
   Touch pinch-zoom works too. Scroll bars appear when the picture is bigger than the view.
+- **Push the picture around** by dragging it with the left mouse button. It starts only when the
+  picture is bigger than the view and only once the pointer has really moved, so double-clicking for
+  full screen still works. Mouse only — touch and pen pan the way they always did.
 - **Rotate** 90° clockwise with the rotate button or `R`. Rotation is not saved to the file and
   resets when you move to the next picture. Orientation stored in EXIF is applied automatically.
 - **Fit** — see [2.9](#29-the-fit-button). The Image module keeps your choice while you browse the folder.
 - **Delete** removes the current file to the Recycle Bin and shows the next picture. There is no
   confirmation dialog and no toolbar button — the `Delete` key is the only way in.
 - Animated GIFs play.
-- The bottom bar shows the file name, size, kind, an EXIF summary (date taken, camera, exposure,
-  aperture, ISO, focal length) where the format has one, and `width×height · position/total`.
+- The bottom bar carries one run of text on the left: the file name, then `width×height`, the kind
+  (`JPG 24-bit`), the size, `position/total`, and an EXIF summary (date taken, camera, exposure,
+  aperture, ISO, focal length) where the format has one. Everything after the file name is repeated
+  in a tooltip, since a narrow window trims it.
+- To the right of that run sits the current zoom level — `100%`. The Fit options resize the picture
+  without touching that figure, so it stays at 100% until you zoom with the wheel or a pinch.
 - `F11` or a double-click on the picture goes full screen; `Esc` leaves it.
 
 ### 2.2 Video
@@ -146,6 +153,8 @@ editor either way.
 - Pages scroll continuously in one column. The bottom bar shows `current / total` as you scroll.
   There are no page-forward or page-back buttons.
 - The wheel scrolls; `Ctrl`+wheel zooms around the pointer, about 10% per notch. Touch pinch-zoom works.
+- **Push the pages around** by dragging with the left mouse button, whenever there is anything to
+  scroll to. Mouse only — touch and pen pan the way they always did.
 - The keyboard scrolls too: `↑` `↓` move about an eighth of the view, `Page Up` `Page Down` move
   about a full screen, and `Home` `End` jump to the start and the end of the document. Holding a key
   keeps scrolling. The zoom level never changes, and `←` `→` are not used.
@@ -281,8 +290,8 @@ the module you are already in changes nothing.
 | `Enter` | closes both if either is open; opens them again in the arrangement you last had |
 
 When a panel is pinned or docked, a short hint appears next to it on a small dark plate, so it
-stays readable over whatever is behind it — *Pinned - press F1 to close*,
-*Sidebar - press F1 to close* — and fades after a couple of seconds.
+stays readable over whatever is behind it — *Pinned - press F1 to close, or the pin button to dock*,
+*Sidebar - press F1 or the pin button to close* — and fades after a couple of seconds.
 
 One exception: while the file browser has the focus **and a file is selected**, `F2` renames that
 file instead of calling the right panel — renaming keeps its usual Windows key.
@@ -333,11 +342,16 @@ box or while you are typing to jump through the file list.
 
 `F11` and `Esc` behave the same in all seven modules.
 
+`Space` gives way in the same manner as the letter keys. While the file list, the folder tree or the
+centre thumbnails have the focus it no longer starts or stops playback in Video and Audio; in the
+file list and in the thumbnails it selects the focused item instead.
+
 ### 3.4 In the file browser
 
 | Key | Action |
 |---|---|
 | `Enter` | open the selected item — with several files selected, all of them |
+| `Space` | select or deselect the item that has the focus |
 | `F2` | rename the selected item (with nothing selected, `F2` calls the right panel as usual) |
 | `Delete` | move to the Recycle Bin |
 | `Shift+Delete` | delete for good, after a confirmation |
@@ -351,6 +365,7 @@ box or while you are typing to jump through the file list.
 | Where | Input | Action |
 |---|---|---|
 | Image | wheel | zoom, 10%–800% |
+| Image | left-button drag | push an enlarged picture around |
 | Image | double-click | full screen |
 | Video | wheel | volume |
 | Video | `Ctrl`+wheel | zoom, 10%–800% |
@@ -359,6 +374,7 @@ box or while you are typing to jump through the file list.
 | Audio | click | play / pause |
 | PDF | wheel | scroll |
 | PDF | `Ctrl`+wheel | zoom |
+| PDF | left-button drag | push the pages around |
 | Text editor | wheel | scroll |
 | File browser, side panels | wheel | scroll |
 | File browser | double-click | open (folders: go in) |
@@ -368,7 +384,7 @@ box or while you are typing to jump through the file list.
 | File browser | right-click empty space | New folder · Paste · Refresh |
 | File browser | drag | move within a drive, copy across drives. `Ctrl` forces copy, `Shift` forces move |
 | Anywhere | back button (the thumb button) | go back one step — see [3.6](#36-going-back) |
-| Near the left or right window edge | move the pointer | a narrow edge button appears; click it to dock or undock that sidebar |
+| Near the bottom of the left or right window edge | move the pointer | two narrow edge buttons appear, one above the other — see [4](#4-sidebars-and-overlays) |
 
 The wheel never zooms thumbnails, and it never zooms while the pointer is over a side panel — it
 scrolls there.
@@ -405,8 +421,11 @@ Ways to bring a panel up:
 
 - `F1` / `F2`, as described in [3.2](#32-panels-how-f1-and-f2-behave);
 - `Enter` for both at once;
-- the **edge button** — move the pointer close to the left or right edge of the window and a small
-  button appears there. Clicking it docks or undocks that sidebar.
+- the **edge buttons** — move the pointer close to the left or right edge of the window, near the
+  bottom, and two small buttons appear one above the other, just over the bottom bar. **Hold** the
+  upper one and that panel comes up as a translucent overlay for as long as you hold it, then goes
+  back to whatever it was. The lower one is the **pin**: it docks that side as a sidebar, and closes
+  it again if it already is one.
 
 Opening a module (rather than opening a file directly) starts with both sidebars docked. A file
 opened straight from Windows Explorer starts with no panels, so nothing covers what you came to see.
@@ -422,8 +441,19 @@ can read. They are just as see-through, only less frosted.
 Open a module without a file and the window becomes a file browser: folder tree and file list on the
 left, thumbnails in the centre, file information on the right.
 
+- **Each row in the left panel is two lines** — the file name on the first, and on the second its
+  size, its playing length for video and audio, the date it was created and the date it was last
+  modified, written as `2026-08-19`. Point at a row and the tooltip repeats the same values with
+  **Size:**, **Length:**, **Created:** and **Modified:** in front of them, so the two dates cannot be
+  mistaken for one another.
+- **A checkbox at the right-hand end of each row** shows whether that file is selected. Ticking or
+  unticking it selects or deselects the file, and `Space` does the same to whichever item has the
+  focus. It is one selection, not two — the boxes only make it visible.
 - **Sort** by **Name**, **Size**, **Date modified** or **Date created**. Your choice is remembered.
 - **Filter** by extension, or **Show all**. The Filter button says how many files are hidden.
+- **Show hidden and system files** sits at the bottom of the same Filter menu, below a separator.
+  It is off to start with, it is remembered, and it applies to the file list and to the folder tree
+  alike.
 - **Select** several files with `Ctrl`+click, `Shift`+click or `Ctrl+A`.
 - **Copy, cut and paste** with `Ctrl+C` / `Ctrl+X` / `Ctrl+V`. Cut items go half-transparent in
   every KOTU window until you paste them; `Esc` clears that mark without emptying the clipboard.
