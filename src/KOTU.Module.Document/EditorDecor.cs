@@ -18,6 +18,14 @@ namespace KOTU.Module.Document;
 /// LineHeight·LineStackingStrategy가 없어(TextBlock 전용) 균일 줄 높이를 강제할 수 없고,
 /// 실측이 유일한 정합 경로다(A115 조사 확정).
 ///
+/// <b>A142 추가분</b>: ①ⓐ 스크롤 중간(IsIntermediate) 이벤트는 50ms 간격으로 합쳐 그리고 최종
+/// 이벤트만 즉시 그린다(마지막 상태 렌더 보장) · ①ⓑ 전문 텍스트는 소유자(DocumentView)의
+/// 편집당 1회 스냅샷(_textProvider)을 함께 써서 Text 게터의 전문 마샬링 복사를 늘리지 않는다.
+/// ③ 행 번호 거터를 본문 컬럼 <b>왼쪽 여백(캔버스 음수 x)</b>에 그린다 — 레이아웃(MaxWidth·정렬)은
+/// 일절 건드리지 않으므로 A115/A120/A171의 "EditorBox·DecorLayer 같은 제약 = 같은 원점" 계약이
+/// 그대로다(여백이 모자라면 거터만 숨긴다). ⑤ 가이드는 글자 상·하에서 GuideGap만큼 띄우고,
+/// 인접 줄과 겹침·역전이면 두 줄 경계의 중점에 한 선으로 병합한다.
+///
 /// <b>실패 안전(설계 의무)</b>: 내부 ScrollViewer(템플릿 ContentElement) 취득은 기본 템플릿
 /// 구조 의존이라 WinAppSDK 업데이트에 깨질 수 있는 부류다(v0.113.1 지연 로딩 스타일 사례와
 /// 같은 급) — 취득 실패·렌더 중 예외는 장식만 조용히 끄고(Disable) 편집 본기능은 그대로 둔다.
@@ -34,6 +42,24 @@ internal sealed class EditorDecor
     private const string NewlineGlyph = "¶";
     private const string EofGlyph = "·EOF";
 
+    // A142 ⑤(부록 B 69 확정): 가이드를 글자 상·하에서 이만큼(px) 띄운다 — 윗변 −gap / 밑변 +gap.
+    // 실기기에서 1px로 낮추기 쉽게 한 곳 상수다. gap을 적용하면 인접 줄에서 윗줄 밑변+gap이
+    // 아랫줄 윗변−gap보다 아래로 "역전"되므로, 병합 판정은 gap 적용 후 좌표로 다시 하고(아래
+    // AddTopGuide) 겹침·역전이면 두 줄 경계의 중점에 한 선만 긋는다.
+    private const double GuideGap = 2;
+    private const double GuideMergeEpsilon = 0.75; // gap 적용 후에도 이 이내로 맞닿으면 같은 선
+
+    // A142 ③: 행 번호 거터. 불투명도는 본문(1.0)보다 옅고 가이드(0.08)보다 진한 중간값(0.4 확정).
+    // 폭 = 최대 줄 번호 자릿수 × GutterDigitWidth(우측 정렬 고정 폭이라 별도 측정이 필요 없다).
+    private const double GutterOpacity = 0.4;
+    private const double GutterFontSize = 12;
+    private const double GutterDigitWidth = 8;  // 자릿수당 예약 폭(px) — 12px 폰트 숫자에 여유 포함
+    private const double GutterTextGap = 12;    // 번호 오른끝과 본문 텍스트 왼끝(pad.Left) 사이 간격(px)
+
+    // A142 ①ⓐ: 스크롤 중간 이벤트의 렌더 상한(초당 ~20회). 최종(IsIntermediate=false) 이벤트는
+    // 이 스로틀을 거치지 않고 즉시 그린다 — 스크롤이 멈춘 화면에 옛 장식이 남지 않게(함정 3).
+    private const int ScrollRenderThrottleMs = 50;
+
     private const int MaxLines = 600;    // 방어: 4K 세로 화면도 수백 줄이 상한 — 그 이상은 비정상
     private const double YEpsilon = 0.5; // 같은 시각적 줄 판정의 y 허용 오차(px)
 
@@ -41,12 +67,17 @@ internal sealed class EditorDecor
     private readonly TextBox _editor;
     private readonly Canvas _canvas;
 
+    // A142 ①ⓑ: 전문 텍스트 공급원 — DocumentView의 편집당 1회 스냅샷(EditorText)을 넘겨받는다.
+    // 종전의 자체 _text 캐시를 대체한다(더티 판정과 렌더가 같은 복사본을 나눠 쓴다).
+    private readonly Func<string> _textProvider;
+
     private ScrollViewer? _scroll; // 템플릿 내부 ContentElement — 표시 후 지연 취득(PdfPane 선례)
     private bool _disabled;        // 폴백: 한 번 끄면 뷰 수명 동안 유지(예외·크래시 금지)
     private int _hookAttempts;     // 레이아웃이 끝났는데도 ScrollViewer가 없으면 포기하는 카운터
     private bool _pending;         // "다음 레이아웃 반영 후 렌더" 예약 — LayoutUpdated가 소비
-    private string? _text;         // Text 게터는 호출마다 문자열을 마샬링한다 — 4MB 재복사 방지 캐시
     private SolidColorBrush _brush;
+
+    private DispatcherTimer? _scrollTimer; // A142 ①ⓐ: 스크롤 중간 이벤트 코얼레싱(1회 예약형)
 
     // 좌표 기준 자가 확인: 공식 예제상 Rect는 뷰포트 기준이지만, 만에 하나 콘텐츠(문서) 기준으로
     // 나오는 환경이면 세로 오프셋을 빼서 맞춘다. 충분히 스크롤된 첫 순간 1회 판별하고 고정한다.
@@ -54,20 +85,39 @@ internal sealed class EditorDecor
     private bool _contentRelative;
     private double _yShift; // 이번 패스의 y 보정값(뷰포트 기준이면 0)
 
+    // A142 ⑤: 아직 긋지 않고 보류 중인 직전 줄 밑변 가이드 — 다음 줄 윗변과의 병합 판정을 위해
+    // 그리기를 한 박자 미룬다(AddTopGuide가 소비, 패스 끝은 FlushPendingGuide가 마감).
+    private double _pendingGuideY = double.NaN; // gap 적용 후 y
+    private double _pendingGuideRawY;           // 원좌표(줄 박스 밑변) — 병합 시 경계 중점 계산용
+
+    // A142 ③: 논리 줄 시작 인덱스(0 포함, 오름차순) — 텍스트 버전당 1회 스캔 캐시.
+    // 스냅샷(_textProvider)이 편집당 1회 새 인스턴스를 주므로 참조 비교로 재빌드를 판정한다.
+    private int[] _lineStarts = [];
+    private string? _lineStartsSource;
+
     private readonly List<Rectangle> _guides = [];  // 수평선 풀 — 패스마다 재사용
     private readonly List<TextBlock> _markers = []; // ¶·EOF 풀
+    private readonly List<TextBlock> _numbers = []; // A142 ③: 행 번호 풀
     private int _guidesUsed;
     private int _markersUsed;
+    private int _numbersUsed;
 
-    public EditorDecor(FrameworkElement themeSource, TextBox editor, Canvas canvas)
+    public EditorDecor(FrameworkElement themeSource, TextBox editor, Canvas canvas,
+        Func<string> textProvider)
     {
         _themeSource = themeSource;
         _editor = editor;
         _canvas = canvas;
+        _textProvider = textProvider;
         _brush = MakeBrush();
 
-        _editor.TextChanged += (_, _) => { _text = null; Invalidate(); }; // 플래그만 — 무게 금지(A113)
+        // 플래그만 — 무게 금지(A113). 전문 스냅샷 무효화는 소유자(DocumentView)가 한다(A142 ①ⓑ).
+        _editor.TextChanged += (_, _) => Invalidate();
         _editor.SizeChanged += (_, _) => { UpdateClip(); Invalidate(); };
+        // A142 ③: 창(뷰) 폭이 바뀌어도 에디터는 MaxWidth에 걸려 SizeChanged가 안 오는 구간이
+        // 있다(900 초과 폭) — 좌우 여백은 그때도 변하므로 뷰 쪽 크기 변화를 따로 받아야
+        // 거터 표시 여부·클립 좌변이 따라간다.
+        _themeSource.SizeChanged += (_, _) => { UpdateClip(); Invalidate(); };
         // 트리 레이아웃마다 불리지만 플래그 검사뿐이라 상시 구독 비용이 없다. 텍스트·크기 변경은
         // 새 레이아웃이 반영된 뒤에 재야 해서(rect가 그 레이아웃을 읽는다) 이 시점으로 미룬다.
         _editor.LayoutUpdated += (_, _) =>
@@ -82,6 +132,7 @@ internal sealed class EditorDecor
             _brush = MakeBrush();
             foreach (var guide in _guides) guide.Fill = _brush;
             foreach (var marker in _markers) marker.Foreground = _brush;
+            foreach (var number in _numbers) number.Foreground = _brush;
             Render();
         };
     }
@@ -114,6 +165,7 @@ internal sealed class EditorDecor
     {
         _disabled = true;
         _pending = false;
+        _scrollTimer?.Stop(); // 예약된 스로틀 렌더도 함께 무른다(A142 ①ⓐ)
         try
         {
             ClearVisual();
@@ -133,7 +185,7 @@ internal sealed class EditorDecor
         }
         var vw = _editor.ActualWidth;
         var vh = _editor.ActualHeight;
-        var text = _text ??= _editor.Text;
+        var text = _textProvider(); // A142 ①ⓑ: 편집당 1회 스냅샷 — 여기서 전문 재복사가 일어나지 않는다
         if (text.Length == 0 || vw <= 0 || vh <= 0)
         {
             ClearVisual(); // 0바이트 파일은 잴 문자가 없어 EOF 표지도 못 그린다(한계 — 보고됨)
@@ -160,31 +212,56 @@ internal sealed class EditorDecor
         BeginPass();
         var len = text.Length;
         var pad = _editor.Padding;
+
+        // A142 ③: 거터 지오메트리. 번호는 본문 컬럼 왼쪽(음수 x = A120 중앙 배치의 좌측 여백,
+        // 24px 패딩이 남으면 그 안쪽도)에 우측 정렬로 얹는다 — 레이아웃은 무변경이라 A115/A120/
+        // A171 계약(두 요소 같은 MaxWidth = 같은 원점)은 그대로다. 여백이 폭만큼 안 나오는
+        // 좁은 창에서는 본문을 덮는 대신 거터를 통째로 숨긴다(경계 조건 처리 — 보고됨).
+        EnsureLineStarts(text);
+        var digits = 1;
+        for (var n = _lineStarts.Length; n >= 10; n /= 10) digits++;
+        var gutterWidth = digits * GutterDigitWidth;
+        var margin = Math.Max(0, (_themeSource.ActualWidth - vw) / 2); // 컬럼 왼쪽의 가용 여백
+        var gutterX = pad.Left - GutterTextGap - gutterWidth;
+        var gutterVisible = gutterX >= -margin; // 클립 좌변(-margin)과 같은 기준
+
         var idx = FirstVisibleIndex(len);
-        var prevY = double.NaN; // 직전에 그은 선 y — 밑변과 다음 줄 윗변이 맞닿으면 한 선으로 병합
+        var line = idx >= 0 ? LineIndexOf(idx) : 0; // 첫 표시 줄이 속한 논리 줄(0-base)
         for (var lines = 0; idx >= 0 && lines < MaxLines; lines++)
         {
             var rect = RectOf(idx);
             if (rect.Height <= 0 || rect.Height > vh * 2) break; // 이상값 방어 — 이번 패스 중단
             if (rect.Y >= vh) break;                             // 뷰포트 아래 — 끝
-            DrawGuide(rect.Y, vw, vh, pad, ref prevY);
-            DrawGuide(rect.Y + rect.Height, vw, vh, pad, ref prevY);
+            // A142 ③: 번호는 논리 줄의 첫 시각적 줄에만 — 자동 줄바꿈 연속 줄은 비워 둔다.
+            if (gutterVisible && idx == _lineStarts[line])
+                DrawLineNumber(line + 1, gutterX, gutterWidth, rect.Y, vh);
+            AddTopGuide(rect.Y, vw, vh, pad);
+            AddBottomGuide(rect.Y + rect.Height);
 
             var next = NextLineStart(idx, rect.Y + rect.Height, len);
             if (next < 0)
             {
-                DrawEnd(text, len, rect, vw, vh, pad, ref prevY); // 문서 마지막 줄 — 끝 개행 ¶·EOF
+                DrawEnd(text, len, rect, vw, vh, pad); // 문서 마지막 줄 — 끝 개행 ¶·EOF
+                // A142 ③: 파일이 개행으로 끝나면 캐럿이 갈 수 있는 빈 마지막 줄이 하나 더 있다
+                // (DrawEnd가 가이드를 긋는 그 줄) — 번호도 단다. 윗변 산술은 DrawEnd와 같다.
+                if (gutterVisible && IsNewline(text[len - 1]))
+                    DrawLineNumber(line + 2, gutterX, gutterWidth, rect.Y + rect.Height, vh);
                 break;
             }
             // 다음 줄 직전 문자가 개행이면 하드 개행(¶), 아니면 자동 줄바꿈(표시 없음 — 실제 바이트가 아니다)
-            if (IsNewline(text[next - 1])) DrawNewlineGlyph(RectOf(next - 1), vh);
+            if (IsNewline(text[next - 1]))
+            {
+                DrawNewlineGlyph(RectOf(next - 1), vh);
+                line++; // 하드 개행 = 다음 논리 줄(자동 줄바꿈은 같은 줄이라 번호가 늘지 않는다)
+            }
             idx = next;
         }
+        FlushPendingGuide(vw, vh, pad); // A142 ⑤: 마지막 줄 밑변 가이드 마감
         EndPass();
     }
 
     /// <summary>문서 마지막 시각적 줄: 끝 개행의 ¶ + (개행으로 끝나면) 빈 마지막 줄 가이드 + EOF 표지.</summary>
-    private void DrawEnd(string text, int len, Rect lastLine, double vw, double vh, Thickness pad, ref double prevY)
+    private void DrawEnd(string text, int len, Rect lastLine, double vw, double vh, Thickness pad)
     {
         if (IsNewline(text[len - 1]))
         {
@@ -194,7 +271,8 @@ internal sealed class EditorDecor
             DrawNewlineGlyph(newlineRect, vh);
             var top = lastLine.Y + lastLine.Height;
             var height = newlineRect.Height > 0 ? newlineRect.Height : lastLine.Height;
-            DrawGuide(top + height, vw, vh, pad, ref prevY); // 빈 줄 밑변(윗변 = 직전 줄 밑변, 이미 그었다)
+            AddTopGuide(top, vw, vh, pad); // 빈 줄 윗변 — 직전 줄 밑변과 역전이라 경계 한 선으로 병합(A142 ⑤)
+            AddBottomGuide(top + height);  // 빈 줄 밑변 — 패스 끝 FlushPendingGuide가 긋는다
             DrawMarker(EofGlyph, pad.Left + 2, top, vh);
         }
         else
@@ -263,18 +341,75 @@ internal sealed class EditorDecor
         return high;
     }
 
+    // ---------- 논리 줄 색인 (A142 ③ — 텍스트 버전당 1회 스캔) ----------
+
+    /// <summary>
+    /// 논리 줄(하드 개행 기준) 시작 인덱스 표를 스냅샷 버전당 1회만 만든다 — 렌더 패스는
+    /// 이진 탐색·배열 조회만 한다. WinUI TextBox는 개행을 '\r'로 정규화하지만(A113) CRLF도
+    /// 방어적으로 한 개행으로 센다(IsNewline과 같은 겸용 방침).
+    /// </summary>
+    private void EnsureLineStarts(string text)
+    {
+        if (ReferenceEquals(_lineStartsSource, text)) return;
+        var starts = new List<int> { 0 };
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (!IsNewline(text[i])) continue;
+            if (text[i] == '\r' && i + 1 < text.Length && text[i + 1] == '\n') i++; // CRLF는 한 개행
+            starts.Add(i + 1);
+        }
+        _lineStarts = [.. starts];
+        _lineStartsSource = text;
+    }
+
+    /// <summary>index가 속한 논리 줄(0-base) — PdfPane.CurrentPageIndex와 같은 이진 탐색 관용구.</summary>
+    private int LineIndexOf(int index)
+    {
+        var pos = Array.BinarySearch(_lineStarts, index);
+        return pos >= 0 ? pos : ~pos - 1;
+    }
+
     // ---------- 그리기(요소 풀 재사용) ----------
 
-    private void DrawGuide(double y, double vw, double vh, Thickness pad, ref double prevY)
+    /// <summary>
+    /// A142 ⑤: 줄 윗변 가이드(원좌표 −GuideGap). 보류 중인 직전 줄 밑변 가이드(+GuideGap)와
+    /// 겹치거나 역전되면 — 인접 줄에서는 항상 그렇다 — 두 선 대신 두 줄 경계의 중점(인접 줄이면
+    /// 곧 경계선)에 한 선만 긋는다. gap 적용 "후" 좌표로 판정하는 것이 핵심이다.
+    /// </summary>
+    private void AddTopGuide(double rawTop, double vw, double vh, Thickness pad)
     {
-        if (y < -1 || y > vh + 1) return; // 뷰포트 밖(클립도 있지만 요소 자체를 아낀다)
-        var rounded = Math.Round(y);
-        if (!double.IsNaN(prevY) && Math.Abs(rounded - prevY) < 0.75) return; // 맞닿은 밑변·윗변 병합
-        prevY = rounded;
+        var y = rawTop - GuideGap;
+        if (!double.IsNaN(_pendingGuideY) && y <= _pendingGuideY + GuideMergeEpsilon)
+        {
+            EmitGuide((_pendingGuideRawY + rawTop) / 2, vw, vh, pad);
+            _pendingGuideY = double.NaN;
+            return;
+        }
+        FlushPendingGuide(vw, vh, pad);
+        EmitGuide(y, vw, vh, pad);
+    }
+
+    /// <summary>A142 ⑤: 줄 밑변 가이드는 즉시 긋지 않고 보류한다 — 다음 줄 윗변과의 병합 판정용.</summary>
+    private void AddBottomGuide(double rawBottom)
+    {
+        _pendingGuideY = rawBottom + GuideGap;
+        _pendingGuideRawY = rawBottom;
+    }
+
+    private void FlushPendingGuide(double vw, double vh, Thickness pad)
+    {
+        if (double.IsNaN(_pendingGuideY)) return;
+        EmitGuide(_pendingGuideY, vw, vh, pad);
+        _pendingGuideY = double.NaN;
+    }
+
+    private void EmitGuide(double y, double vw, double vh, Thickness pad)
+    {
+        if (y < -1 - GuideGap || y > vh + 1 + GuideGap) return; // 뷰포트 밖(클립도 있지만 요소를 아낀다)
         var guide = TakeGuide();
         guide.Width = Math.Max(0, vw - pad.Left - pad.Right);
         Canvas.SetLeft(guide, pad.Left);
-        Canvas.SetTop(guide, rounded);
+        Canvas.SetTop(guide, Math.Round(y));
     }
 
     private void DrawNewlineGlyph(Rect rect, double vh)
@@ -290,6 +425,17 @@ internal sealed class EditorDecor
         marker.Text = glyph;
         Canvas.SetLeft(marker, Math.Round(x));
         Canvas.SetTop(marker, Math.Round(y));
+    }
+
+    /// <summary>A142 ③: 행 번호 — 고정 폭 + 우측 정렬이라 자릿수가 달라도 오른끝이 맞는다(측정 불요).</summary>
+    private void DrawLineNumber(int number, double x, double width, double y, double vh)
+    {
+        if (y > vh || y < -30) return; // 마커(DrawMarker)와 같은 상·하 여유
+        var block = TakeNumber();
+        block.Text = number.ToString();
+        block.Width = width;
+        Canvas.SetLeft(block, Math.Round(x));
+        Canvas.SetTop(block, Math.Round(y));
     }
 
     private Rectangle TakeGuide()
@@ -334,16 +480,41 @@ internal sealed class EditorDecor
         return made;
     }
 
+    private TextBlock TakeNumber()
+    {
+        if (_numbersUsed < _numbers.Count)
+        {
+            var reused = _numbers[_numbersUsed++];
+            reused.Visibility = Visibility.Visible;
+            return reused;
+        }
+        var made = new TextBlock
+        {
+            FontSize = GutterFontSize,
+            Opacity = GutterOpacity,
+            Foreground = _brush,
+            TextAlignment = TextAlignment.Right, // 우측 정렬 선례 = HardwareView.xaml.cs:470
+            IsHitTestVisible = false,
+        };
+        _numbers.Add(made);
+        _canvas.Children.Add(made);
+        _numbersUsed++;
+        return made;
+    }
+
     private void BeginPass()
     {
         _guidesUsed = 0;
         _markersUsed = 0;
+        _numbersUsed = 0;
+        _pendingGuideY = double.NaN; // 직전 패스가 중단됐어도 보류분이 새지 않게(A142 ⑤)
     }
 
     private void EndPass()
     {
         for (var i = _guidesUsed; i < _guides.Count; i++) _guides[i].Visibility = Visibility.Collapsed;
         for (var i = _markersUsed; i < _markers.Count; i++) _markers[i].Visibility = Visibility.Collapsed;
+        for (var i = _numbersUsed; i < _numbers.Count; i++) _numbers[i].Visibility = Visibility.Collapsed;
     }
 
     private void ClearVisual()
@@ -352,7 +523,7 @@ internal sealed class EditorDecor
         EndPass();
     }
 
-    // ---------- 내부 ScrollViewer 훅·클립·rect 헬퍼 ----------
+    // ---------- 내부 ScrollViewer 훅·스로틀·클립·rect 헬퍼 ----------
 
     /// <summary>
     /// EditorBox 템플릿 내부 ScrollViewer(ContentElement)를 얻어 ViewChanged를 건다.
@@ -365,7 +536,7 @@ internal sealed class EditorDecor
         if (FindDescendant<ScrollViewer>(_editor) is { } found)
         {
             _scroll = found;
-            found.ViewChanged += (_, _) => Render(); // 컴포지션 스크롤은 레이아웃 이벤트가 없다 — 즉시 렌더
+            found.ViewChanged += OnScrollViewChanged; // 컴포지션 스크롤은 레이아웃 이벤트가 없다 — 스로틀 렌더(A142 ①ⓐ)
             return true;
         }
         if (_editor.ActualWidth > 0 && ++_hookAttempts >= 3)
@@ -377,17 +548,52 @@ internal sealed class EditorDecor
         return false;
     }
 
-    /// <summary>장식을 텍스트와 같은 영역(Padding 안쪽)으로 클립 — 스크롤로 잘리는 줄과 일치시킨다.</summary>
+    /// <summary>
+    /// A142 ①ⓐ: 종전의 "ViewChanged마다 즉시 렌더"를 스로틀로 바꾼다. 중간(IsIntermediate)
+    /// 이벤트는 50ms 타이머로 합쳐 그리고(드래그·관성 중 초당 ~20회 상한), 최종 이벤트는
+    /// 즉시 그린다 — 스크롤이 멈춘 뒤 장식이 옛 위치에 남는 일이 없다(함정 3). 최종 이벤트가
+    /// 오지 않는 비정상 경로라도 마지막 중간 이벤트가 걸어 둔 타이머가 1회 렌더를 보장한다.
+    /// </summary>
+    private void OnScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (!e.IsIntermediate)
+        {
+            _scrollTimer?.Stop(); // 예약분은 이 최종 렌더가 대체한다
+            Render();
+            return;
+        }
+        if (_scrollTimer is { IsEnabled: true }) return; // 이번 간격의 렌더는 이미 예약돼 있다
+        (_scrollTimer ??= CreateScrollTimer()).Start();
+    }
+
+    /// <summary>1회 예약형 타이머(A113 디바운스와 같은 DispatcherTimer 관용구) — Tick에서 스스로 멈춘다.</summary>
+    private DispatcherTimer CreateScrollTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ScrollRenderThrottleMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop(); // 다음 중간 이벤트가 다시 시작한다
+            Render();
+        };
+        return timer;
+    }
+
+    /// <summary>
+    /// 장식을 텍스트와 같은 영역(Padding 안쪽)으로 클립 — 스크롤로 잘리는 줄과 일치시킨다.
+    /// A142 ③: 좌변만 컬럼 왼쪽 여백(-margin)까지 내어 거터를 덮는다 — 세로 클립은 종전 그대로다.
+    /// 종전 좌변(pad.Left)과 달라져도 기존 장식은 전부 x ≥ pad.Left에 그려져 보이는 결과가 같다.
+    /// </summary>
     private void UpdateClip()
     {
         var w = _editor.ActualWidth;
         var h = _editor.ActualHeight;
         var pad = _editor.Padding;
+        var margin = Math.Max(0, (_themeSource.ActualWidth - w) / 2);
         _canvas.Clip = w > 0 && h > 0
             ? new RectangleGeometry
             {
-                Rect = new Rect(pad.Left, pad.Top,
-                    Math.Max(0, w - pad.Left - pad.Right),
+                Rect = new Rect(-margin, pad.Top,
+                    Math.Max(0, w - pad.Right) + margin,
                     Math.Max(0, h - pad.Top - pad.Bottom)),
             }
             : null;

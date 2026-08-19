@@ -41,12 +41,20 @@
              덮인다 — 스크롤 끝의 마지막 줄·캐럿이 바 뒤에 숨지 않게 스크롤 끝 여백으로 보정한다.
              모드 불변 상수다(모드2/3에서는 스크롤 끝 여분 공간일 뿐) — 모듈이 셸 모드를 알게
              하지 않는다. EditorDecor는 _editor.Padding을 실시간으로 읽으므로 별도 수정 불요. -->
+        <!-- A142 ②: FontFamily = Consolas(고정폭, Windows 동봉 폰트라 폴백 걱정 없음).
+             TextBox에는 LineHeight·LineStackingStrategy가 없어(TextBlock 전용) 줄 간격을
+             속성으로 강제할 수 없다는 A115 조사 판정을 재확인한다 — 고정폭 폰트로 글리프 셀을
+             균일화하는 것이 현재 가능한 대응이다. 한글처럼 Consolas에 없는 글자는 시스템 폴백
+             글꼴로 그려져 그 줄만 높이가 달라질 수 있으나, 장식(A115)은 줄마다 실측(rect)이라
+             정합은 깨지지 않는다. 컨트롤 교체(RichEditBox)는 하지 않는다 — 캐럿 색 한계가
+             동일해(A115 ④ 판정) 회귀 위험만 크다. -->
         <TextBox
             x:Name="EditorBox"
             Padding="24,16,24,68"
             MaxWidth="900"
             VerticalAlignment="Stretch"
             FontSize="14"
+            FontFamily="Consolas"
             AcceptsReturn="True"
             TextWrapping="Wrap"
             IsSpellCheckEnabled="False"
@@ -68,7 +76,10 @@
              두 요소의 레이아웃 제약(정렬·최대 폭)이 같아야 원점이 겹친다. 한쪽만 바꾸면 장식이
              본문에서 통째로 어긋난다 — 그리기 산술에 오프셋 보정을 넣지 말고 이 값을 맞출 것.
              A171(v0.173.0): 위 EditorBox와 마찬가지로 여기 900도 기본값이고 실값은 코드가 설정에서
-             정한다 — 두 요소에 같은 값을 넣는 지점은 ApplyEditorMaxWidth() 한 곳뿐이다. -->
+             정한다 — 두 요소에 같은 값을 넣는 지점은 ApplyEditorMaxWidth() 한 곳뿐이다.
+             A142 ③: 행 번호 거터도 이 Canvas가 그린다 — 본문 컬럼 왼쪽 여백(캔버스 음수 x)에
+             얹힐 뿐 레이아웃(MaxWidth·정렬)은 그대로라 위 계약은 무변경이다. 여백이 거터 폭만큼
+             안 나오는 좁은 창에서는 EditorDecor가 거터를 통째로 숨긴다(본문을 덮지 않는다). -->
         <Canvas x:Name="DecorLayer" MaxWidth="900" IsHitTestVisible="False" />
 
         <!-- PDF 페이지 뷰(A16, PdfPane)는 코드에서 지연 생성해 RootGrid 맨 아래(z 순서상 뒤)에 꽂는다 -->

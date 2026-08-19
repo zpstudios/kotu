@@ -96,6 +96,17 @@ public sealed partial class DocumentView : UserControl,
     private string _baselineText = string.Empty; // ⓒ: 더티 판정 기준(\n 정규화) — 저장 성공 시 재기준화
     private bool _saving;                  // 저장 흐름(대화상자 포함) 중복 진입 방지 — ContentDialog는 동시 1개
 
+    /// <summary>
+    /// A142 ①ⓑ: <c>TextBox.Text</c> 게터는 호출마다 전문을 마샬링 복사한다(4MB급에서 지배적 비용) —
+    /// 편집(TextChanged)당 1회만 뜨는 공유 스냅샷. 더티 판정(길이·내용 비교)과 장식 렌더(EditorDecor)가
+    /// 같은 인스턴스를 재사용한다. A113 ⓒ의 비교 계약(길이 우선 + 250ms 디바운스 + 전문 비교)은
+    /// 무변경이다 — 비교를 없애는 게 아니라 복사 횟수만 줄인다.
+    /// </summary>
+    private string? _textSnapshot;
+
+    /// <summary>스냅샷 경유 전문 접근 — 에디터 텍스트를 읽는 모든 경로가 이걸 쓴다(A142 ①ⓑ).</summary>
+    private string EditorText => _textSnapshot ??= EditorBox.Text;
+
     // A115: 라인 가이드·비가시 문자 장식. 자체 무효화(TextChanged/SizeChanged/ViewChanged)로 돌고
     // 실패하면 스스로 꺼진다 — 이 뷰는 모드 전환(열기·PDF) 시점만 알려 주면 된다.
     private readonly EditorDecor _decor;
@@ -114,7 +125,8 @@ public sealed partial class DocumentView : UserControl,
         InitializeComponent();
         _settings = settings;
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
-        _decor = new EditorDecor(this, EditorBox, DecorLayer); // A115: 에디터 장식(가이드·¶·EOF)
+        // A115: 에디터 장식(가이드·¶·EOF·A142 행 번호). 전문 텍스트는 공유 스냅샷으로 공급한다(A142 ①ⓑ).
+        _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText);
         ApplyEditorMaxWidth(); // A171: XAML 초기값(900) 위에 설정값을 얹는다
 
         // A121: PDF 키보드 스크롤의 키 수신 지점. **터널링**(PreviewKeyDown)이라 PdfPane 안쪽
@@ -249,10 +261,12 @@ public sealed partial class DocumentView : UserControl,
         _loadingText = true; // 프로그램적 설정 — dirty 아님
         EditorBox.Text = loaded.Text;
         _loadingText = false;
+        _textSnapshot = null; // A142 ①ⓑ: TextChanged 무효화와 중복이어도 무해한 방어 — 옛 파일 잔상 금지
         // A113 ⓒ: 더티 판정 기준은 "TextBox가 실제로 보유한 텍스트"의 정규화본이다 — 로드 문자열
         // 대신 셋 직후 값을 쓰는 이유는, TextBox가 줄바꿈('\r') 외에 무언가를 더 손봐도 열자마자
         // 더티가 되는 오탐이 없게 하기 위함(undo 원복 판정의 기준점과도 일치한다).
-        _baselineText = NormalizeNewlines(EditorBox.Text);
+        // 이 접근이 스냅샷을 새로 띄워 첫 장식 렌더(A115)까지 같은 복사본을 쓴다(A142 ①ⓑ).
+        _baselineText = NormalizeNewlines(EditorText);
         _dirtyTimer?.Stop(); // 이전 파일의 보류 중 판정이 새 파일 상태를 건드리지 않게
         EditorBox.IsReadOnly = loaded.Truncated; // 잘린 채 저장되는 사고 방지
         SetDirty(false);
@@ -626,9 +640,30 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>
     /// 비교·저장의 공통 기준(\n)으로 줄바꿈 정규화(A113). WinUI TextBox는 줄바꿈을 '\r'로
     /// 정규화하므로, 에디터 텍스트·로드 텍스트 어느 쪽이든 이걸 거치면 같은 기준에서 만난다.
+    /// A142 ①ⓒ: 결과는 종전 <c>Replace("\r\n","\n").Replace('\r','\n')</c>과 동일하되 단일
+    /// 패스로 처리한다 — 4MB급에서 중간 문자열 복사 2회 → 최대 1회('\r'가 없으면 0회).
+    /// A113 ⓒ의 비교 계약 자체는 무변경이다(복사 횟수만 줄인다).
     /// </summary>
-    private static string NormalizeNewlines(string text) =>
-        text.Replace("\r\n", "\n").Replace('\r', '\n');
+    private static string NormalizeNewlines(string text)
+    {
+        if (!text.Contains('\r')) return text; // 로드 텍스트(\n 전용)·개행 없는 파일의 흔한 빠른 경로
+        var chars = new char[text.Length];
+        var n = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '\r')
+            {
+                chars[n++] = '\n';
+                if (i + 1 < text.Length && text[i + 1] == '\n') i++; // CRLF는 한 줄바꿈
+            }
+            else
+            {
+                chars[n++] = c;
+            }
+        }
+        return new string(chars, 0, n);
+    }
 
     // ---------- 편집·저장 (A37) ----------
 
@@ -661,8 +696,9 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
     {
+        _textSnapshot = null; // A142 ①ⓑ: 어떤 편집이든 스냅샷부터 무효화 — 조기 반환보다 먼저
         if (_loadingText || _path is null || _truncated) return;
-        if (EditorBox.Text.Length != _baselineText.Length)
+        if (EditorText.Length != _baselineText.Length)
         {
             _dirtyTimer?.Stop(); // 보류 중 판정 불필요 — 결과가 이미 확정이다
             SetDirty(true);
@@ -673,7 +709,7 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>ⓒ 판정 본체: 에디터 내용을 \n 정규화해 기준 텍스트와 비교한다.</summary>
-    private bool EditorMatchesBaseline() => NormalizeNewlines(EditorBox.Text) == _baselineText;
+    private bool EditorMatchesBaseline() => NormalizeNewlines(EditorText) == _baselineText;
 
     /// <summary>ⓒ 즉시 재판정(디바운스 없이) — 저장 성공 재기준화 직후에 쓴다.</summary>
     private void RecomputeDirty()
@@ -744,7 +780,8 @@ public sealed partial class DocumentView : UserControl,
         if (_path is not { } originalPath) return true; // SaveAsync가 걸렀다 — 방어
 
         // WinUI TextBox는 줄바꿈을 '\r'로 정규화한다 — 기준(\n)으로 맞춘 뒤 원본 스타일로 되돌린다.
-        var normalized = NormalizeNewlines(EditorBox.Text);
+        var normalized = NormalizeNewlines(EditorText); // A142 ①ⓑ: 마지막 편집 후 스냅샷 재사용
+
         var text = _newLine == "\n" ? normalized : normalized.Replace("\n", _newLine);
 
         // ⓓ 외부 변경 감지: 열 때(또는 직전 저장 때) 기록한 스탬프와 다르면 덮어쓸지 먼저 묻는다.
