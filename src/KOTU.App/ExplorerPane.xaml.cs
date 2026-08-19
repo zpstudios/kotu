@@ -56,12 +56,27 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     internal event Action<string>? Notice;
 
+    /// <summary>
+    /// 숨김·시스템 표시(A160, v0.169.0)가 토글됐을 때. 호스트(FileListOverlay)의 폴더 트리는
+    /// 이 페인의 리스트와 <b>별개로</b> 폴더를 열거하므로, 같은 설정을 다시 읽어 트리를 새로
+    /// 만들라는 신호다. 리스트 쪽 재열거는 이 페인이 스스로 한다(EnsureFilterFlyout의 토글 참고).
+    /// </summary>
+    internal event Action? ShowHiddenChanged;
+
     /// <summary>현재 폴더 경로 (A94 — 호스트의 패널 드랍·붙여넣기 대상). 항해 전이면 빈 문자열.</summary>
     internal string CurrentFolder => _folder;
 
     // "name"/"size"/"modified"/"created"(A117, v0.136.0) — SortKey.ToString().ToLowerInvariant()와 수동 동기.
     // 모르는 값(구 버전·손편집)은 이름순으로 폴백한다(아래 switch의 _ 분기).
     private const string SortSettingKey = "explorer.sort";
+
+    /// <summary>
+    /// 숨김·시스템 파일 표시 여부 (A160, v0.169.0) — explorer.sort와 같은 층의 탐색기 설정이라
+    /// 같은 자리·같은 모양(const 문자열 키 + 즉시 Set/Save)으로 둔다. 값은 전역 1벌(A110 결론).
+    /// private이 아니라 internal인 이유: 좌 패널 폴더 트리(FileListOverlay)가 같은 값을 읽어야
+    /// 리스트와 트리가 같은 집합을 보인다 — 키 문자열을 복제하지 않으려고 여기를 단일 출처로 쓴다.
+    /// </summary>
+    internal const string ShowHiddenSettingKey = "explorer.showHidden";
 
     private IReadOnlyList<string> _extensions = [];
     private string _folder = string.Empty;
@@ -72,9 +87,13 @@ public sealed partial class ExplorerPane : UserControl
     private ModuleWorker? _worker;            // 스캔·썸네일 전용 — 페인별 분리(A42 정책)
     private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 정렬 변경 시 재스캔 없이 재배치(A5)
     private ExplorerListing.SortKey _sortKey = ExplorerListing.SortKey.Name;
+    private bool _showHidden; // A160 — explorer.showHidden(기본 false = 숨김·시스템 감춤)
     private ISettingsService? _settings;
 
-    /// <summary>정렬 키 저장용(A5). 셸(MainWindow)이 페인 생성 직후 주입한다 — 없어도 동작(기본 이름순).</summary>
+    /// <summary>
+    /// 정렬 키(A5)·숨김 표시(A160) 저장용. 셸(MainWindow)이 페인 생성 직후 주입한다 —
+    /// 없어도 동작한다(기본 이름순 · 숨김 감춤).
+    /// </summary>
     public ISettingsService? Settings
     {
         get => _settings;
@@ -88,7 +107,9 @@ public sealed partial class ExplorerPane : UserControl
                 "created" => ExplorerListing.SortKey.Created, // A117
                 _ => ExplorerListing.SortKey.Name,
             };
+            _showHidden = value?.Get(ShowHiddenSettingKey, false) ?? false; // A160 — 정렬과 같은 왕복
             SyncSortChecks();
+            SyncShowHiddenCheck(); // A160 — 필터 메뉴가 이미 만들어져 있으면 체크도 새 값에 맞춘다
         }
     }
 
@@ -214,10 +235,15 @@ public sealed partial class ExplorerPane : UserControl
     private readonly HashSet<string> _hiddenExts = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<string> _filterBuiltFor = []; // 마지막으로 플라이아웃을 만든 확장자 목록
     private Brush? _filterDefaultBrush;                 // 아이콘 원래 색 (활성 표시 해제용)
+    private ToggleMenuFlyoutItem? _showHiddenItem;      // A160 — 같은 메뉴 안의 숨김 표시 토글(체크 동기용)
 
     /// <summary>
     /// 담당 확장자 목록으로 필터 플라이아웃을 만든다. 목록이 그대로면 재사용(체크 상태 유지),
     /// 모듈 전환 등으로 바뀌면 새로 만들고 필터를 초기화한다. 필터는 저장하지 않는다(세션 한정).
+    /// A160(v0.169.0): 같은 메뉴 아래쪽에 구분선 + "숨김·시스템 표시" 토글이 붙는다. 그쪽은
+    /// 세션 한정이 아니라 저장되는 설정(explorer.showHidden)이라 여기서 초기화하지 않고
+    /// 현재 값으로 체크만 맞춘다. 메뉴 조립 지점은 이 함수 하나뿐이라(확장자 목록이 폴더·모듈마다
+    /// 달라 재생성돼도 여기로만 온다) 구분선·토글이 빠진 채 다시 만들어질 경로가 없다.
     /// </summary>
     private void EnsureFilterFlyout()
     {
@@ -226,6 +252,8 @@ public sealed partial class ExplorerPane : UserControl
         _hiddenExts.Clear();
 
         var flyout = new MenuFlyout { Placement = FlyoutPlacementMode.BottomEdgeAlignedRight };
+        // "Show all"이 되돌릴 대상 목록 — A160의 숨김 토글은 여기 담지 않는다(아래 주석).
+        var extensionToggles = new List<ToggleMenuFlyoutItem>();
         foreach (var ext in _extensions)
         {
             var toggle = new ToggleMenuFlyoutItem { Text = ext, IsChecked = true };
@@ -236,6 +264,7 @@ public sealed partial class ExplorerPane : UserControl
                 UpdateFilterVisual();
                 RefreshView();
             };
+            extensionToggles.Add(toggle);
             flyout.Items.Add(toggle);
         }
         flyout.Items.Add(new MenuFlyoutSeparator());
@@ -244,15 +273,52 @@ public sealed partial class ExplorerPane : UserControl
         {
             if (_hiddenExts.Count == 0) return;
             _hiddenExts.Clear();
-            foreach (var i in flyout.Items)
-                if (i is ToggleMenuFlyoutItem t) t.IsChecked = true;
+            // A160: 확장자 토글만 되돌린다. 종전처럼 flyout.Items를 타입(ToggleMenuFlyoutItem)으로
+            // 훑으면 아래 숨김 표시 토글까지 체크돼, 설정은 그대로인 채 메뉴만 거짓말을 한다.
+            foreach (var t in extensionToggles) t.IsChecked = true;
             UpdateFilterVisual();
             RefreshView();
         };
         flyout.Items.Add(showAll);
 
+        // A160: 확장자 필터(세션 한정)와 표시 정책(저장·전역 1벌)은 다른 층이라 구분선으로 나눈다.
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        var showHidden = new ToggleMenuFlyoutItem
+        {
+            Text = "Show hidden and system files",
+            // Settings 주입이 첫 NavigateTo(=이 메뉴의 첫 조립)보다 앞서므로 여기서 이미 실값이다.
+            // 주입이 뒤로 밀리는 경로가 생겨도 Settings 세터의 SyncShowHiddenCheck가 다시 맞춘다.
+            IsChecked = _showHidden,
+        };
+        showHidden.Click += (_, _) =>
+        {
+            // ToggleMenuFlyoutItem은 Click 시점에 IsChecked가 이미 뒤집혀 있다(위 확장자 토글이
+            // 기대는 것과 같은 성질). 저장은 A5 정렬과 같은 관용구 — 즉시 Set + Save.
+            _showHidden = showHidden.IsChecked;
+            _settings?.Set(ShowHiddenSettingKey, _showHidden);
+            _settings?.Save();
+            // 좌 패널 폴더 트리는 자기 열거를 따로 한다 — 같은 설정으로 다시 만들라고 알린다.
+            ShowHiddenChanged?.Invoke();
+            // ⚠️ RefreshView가 아니라 **재열거**여야 한다: RefreshView는 마지막 스캔 결과(_entries)를
+            // 다시 배열할 뿐인데 숨김 항목은 애초에 그 목록에 없다(거르기가 열거 시점에 일어난다).
+            // RefreshAfterFileOp = 현재 폴더 NavigateTo(재스캔) — 빈 영역 메뉴의 Refresh와 같은 경로다.
+            RefreshAfterFileOp();
+        };
+        flyout.Items.Add(showHidden);
+        _showHiddenItem = showHidden;
+
         FilterButton.Flyout = flyout;
         UpdateFilterVisual();
+    }
+
+    /// <summary>
+    /// 필터 메뉴의 숨김 표시 토글 체크를 _showHidden에 맞춘다 (A160 — SyncSortChecks와 같은 역할).
+    /// 정렬 항목은 XAML 선언이라 늘 존재하지만 이 항목은 첫 항해(EnsureFilterFlyout) 때 만들어지므로,
+    /// 그전에는 맞출 대상이 없다(null이면 조용히 넘어간다 — 만들어질 때 현재 값으로 초기화된다).
+    /// </summary>
+    private void SyncShowHiddenCheck()
+    {
+        if (_showHiddenItem is { } item) item.IsChecked = _showHidden;
     }
 
     /// <summary>필터가 걸려 있으면 아이콘을 강조색으로 — 걸린 걸 잊지 않게.</summary>
@@ -323,10 +389,14 @@ public sealed partial class ExplorerPane : UserControl
         EnsureWatch(folder); // A94 5차 — 폴더 전환 즉시 재대상(스캔 완료 전의 변경도 디바운스로 잡힌다)
 
         var seq = ++_loadSeq;
+        // A160: 표시 정책은 스캔 시작 시점에 스냅샷해 워커로 넘긴다 — 워커 스레드에서 UI 필드를
+        // 읽지 않는다(스캔 도중 토글이 바뀌면 그 토글이 자기 재스캔을 다시 건다).
+        var includeHidden = _showHidden;
         IReadOnlyList<ExplorerListing.Entry> entries;
         try
         {
-            entries = await Worker.Run(_ => ExplorerListing.List(folder, extensions));
+            entries = await Worker.Run(_ =>
+                ExplorerListing.List(folder, extensions, includeHidden: includeHidden));
         }
         catch (OperationCanceledException)
         {

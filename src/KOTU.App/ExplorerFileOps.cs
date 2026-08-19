@@ -928,7 +928,10 @@ internal static class ExplorerFileOps
         List<string> files, dirs;
         try
         {
-            // 스냅샷 — 이동 병합은 순회 중 원본에서 항목을 빼내므로 라이브 열거가 깨진다
+            // 스냅샷 — 이동 병합은 순회 중 원본에서 항목을 빼내므로 라이브 열거가 깨진다.
+            // ※ A160(v0.169.0) 확인 사항: 표시는 숨김/시스템을 거르지만(ExplorerListing.ShouldShow)
+            // 조작은 거르지 않는다 — 이 열거도 아래 CopyDirectory도 속성 필터가 없어, 감춰진 항목까지
+            // 함께 복사·이동·삭제된다(탐색기 동등 동작이라 A160 범위에서 고치지 않았다. 되짚지 말 것).
             files = Directory.EnumerateFiles(src).ToList();
             dirs = Directory.EnumerateDirectories(src).ToList();
         }

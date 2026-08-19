@@ -116,6 +116,7 @@ public sealed partial class FileListOverlay : UserControl
                 SyncTreeToFolder(folder);             // A134 — 상단 트리 동기
             };
             _list.Notice += ShowTransientNotice; // A94 — 리스트 항목 드랍·클립보드 실패 안내
+            _list.ShowHiddenChanged += RebuildTree; // A160 — 트리도 같은 표시 정책으로 다시 만든다
             ListHost.Content = _list;
         }
         _list.NavigateTo(folder, _extensions);
@@ -373,8 +374,10 @@ public sealed partial class FileListOverlay : UserControl
     }
 
     /// <summary>
-    /// 하위 폴더 노드를 한 단계 채운다. 숨김/시스템 폴더는 탐색기 리스트와 같은 기준으로 제외
-    /// (ExplorerListing.List와 동일), 접근 불가 폴더(권한·미준비 드라이브)는 조용히 생략.
+    /// 하위 폴더 노드를 한 단계 채운다. 숨김/시스템 폴더 판정은 탐색기 리스트와 <b>같은 한 벌</b>
+    /// (ExplorerListing.ShouldShow) — A160(v0.169.0)에서 여기 있던 인라인 복제(속성 마스크 직접
+    /// 비교)를 없앴다. 트리와 리스트가 서로 다른 집합을 보이면 안 되기 때문이다.
+    /// 접근 불가 폴더(권한·미준비 드라이브)는 조용히 생략.
     /// HasUnrealizedChildren을 먼저 내려 재진입(자동 펼침과 Expanding 이벤트 중복)을 막는다.
     /// </summary>
     private async Task LoadChildrenAsync(TreeViewNode node)
@@ -382,12 +385,15 @@ public sealed partial class FileListOverlay : UserControl
         if (!node.HasUnrealizedChildren || node.Content is not FolderNode folder) return;
         node.HasUnrealizedChildren = false;
 
+        // A160: 설정은 UI 스레드에서 한 번 읽어 스냅샷 — 아래 Task.Run 안에서 다시 읽지 않는다.
+        // 리스트 쪽(ExplorerPane.NavigateToAsync)과 같은 키·같은 기본값이라 두 표면이 늘 일치한다.
+        var includeHidden = Settings?.Get(ExplorerPane.ShowHiddenSettingKey, false) ?? false;
         string[] children;
         try
         {
             children = await Task.Run(() =>
                 new DirectoryInfo(folder.Path).EnumerateDirectories()
-                    .Where(d => (d.Attributes & (FileAttributes.Hidden | FileAttributes.System)) == 0)
+                    .Where(d => ExplorerListing.ShouldShow(d.Attributes, includeHidden))
                     .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
                     .Take(TreeChildLimit)
                     .Select(d => d.FullName)
@@ -469,6 +475,24 @@ public sealed partial class FileListOverlay : UserControl
             string.Equals(TrimSep(selected.Path), TrimSep(folder), StringComparison.OrdinalIgnoreCase))
             return;
         _ = ExpandToFolderAsync(folder);
+    }
+
+    /// <summary>
+    /// 숨김·시스템 표시(A160)가 바뀌면 트리를 루트부터 다시 만든다 — 내부 리스트의
+    /// ShowHiddenChanged가 부른다(배선은 NavigateList의 리스트 생성 블록 한 곳).
+    /// 제자리 갱신이 불가능해서 통째로 다시 만든다: 이미 펼쳐 둔 노드는 HasUnrealizedChildren이
+    /// 내려가 있어 LoadChildrenAsync가 조기 반환하므로, 루트를 비우는 것 말고는 재열거를
+    /// 강제할 방법이 없다. 비우면 EnsureDriveRoots가 드라이브 구성 비교에서 불일치를 보고 새로
+    /// 만들고(0개 ≠ 실제 드라이브 수), 이어서 리스트와 같은 폴더까지 다시 펼친다.
+    /// 닫혀 있어도 한다: 다시 열릴 때의 Show()는 루트가 그대로면 EnsureDriveRoots가 조기 반환하고
+    /// ExpandToFolderAsync도 이미 로드된 노드를 다시 열거하지 않아 옛 집합이 그대로 남는다.
+    /// 재진입(펼치는 도중 다시 토글)은 ExpandToFolderAsync의 _expandSeq가 막는다.
+    /// </summary>
+    private void RebuildTree()
+    {
+        FolderTree.RootNodes.Clear();
+        EnsureDriveRoots();
+        if (_list?.CurrentFolder is { Length: > 0 } folder) _ = ExpandToFolderAsync(folder);
     }
 
     private static string TrimSep(string path) =>

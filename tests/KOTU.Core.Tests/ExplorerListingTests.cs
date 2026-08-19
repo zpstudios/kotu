@@ -71,6 +71,39 @@ public class ExplorerListingTests : IDisposable
         Assert.Equal(3, ExplorerListing.List(_dir, [".jpg"], maxItems: 3).Count);
     }
 
+    // ---------- 숨김·시스템 표시 (A160) ----------
+    // 숨김/시스템 속성은 윈도우 전용이고 CI(build.yml)가 windows-latest에서 dotnet test를 돌린다.
+
+    [Fact]
+    public void List_숨김과_시스템은_기본으로_빼고_includeHidden이면_함께_보인다()
+    {
+        Make("plain.jpg");
+        var hiddenFile = Make("secret.jpg");
+        File.SetAttributes(hiddenFile, File.GetAttributes(hiddenFile) | FileAttributes.Hidden);
+        var systemFolder = Make("sysdir", folder: true);
+        File.SetAttributes(systemFolder, File.GetAttributes(systemFolder) | FileAttributes.System);
+
+        // 기본(false) = 종전 동작 — 숨김 파일도 시스템 폴더도 없다.
+        Assert.Equal(
+            ["plain.jpg"],
+            ExplorerListing.List(_dir, [".jpg"]).Select(e => e.Name).ToArray());
+
+        // 켜면 둘 다 보인다(한 옵션으로 묶는다는 결정). 폴더 먼저·각각 이름순 규칙은 그대로.
+        Assert.Equal(
+            ["sysdir", "plain.jpg", "secret.jpg"],
+            ExplorerListing.List(_dir, [".jpg"], includeHidden: true).Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void ShouldShow_숨김이든_시스템이든_한_옵션이_결정한다()
+    {
+        Assert.True(ExplorerListing.ShouldShow(FileAttributes.Normal, includeHidden: false));
+        Assert.False(ExplorerListing.ShouldShow(FileAttributes.Hidden, includeHidden: false));
+        Assert.False(ExplorerListing.ShouldShow(FileAttributes.System, includeHidden: false));
+        Assert.True(ExplorerListing.ShouldShow(FileAttributes.Hidden, includeHidden: true));
+        Assert.True(ExplorerListing.ShouldShow(FileAttributes.System, includeHidden: true));
+    }
+
     // ---------- Arrange (A5·A7) ----------
 
     // day = 수정일(1월 n일), createdDay = 만든 날짜(A117 — 생략하면 수정일과 같은 날).

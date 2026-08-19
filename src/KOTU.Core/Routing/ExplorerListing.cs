@@ -2,7 +2,9 @@ namespace KOTU.Core.Routing;
 
 /// <summary>
 /// 내장 탐색기(v0.25.0)의 폴더 목록 로직. UI 비의존 — 폴더는 전부, 파일은 담당 확장자만
-/// (사용자 확정: "폴더 + 담당 확장자만"). 숨김/시스템 항목은 제외한다.
+/// (사용자 확정: "폴더 + 담당 확장자만"). 숨김/시스템 항목은 기본으로 제외하되,
+/// A160(v0.169.0)부터 includeHidden 인자로 포함시킬 수 있다(설정 키 explorer.showHidden —
+/// 값을 읽는 곳은 UI 쪽 ExplorerPane.ShowHiddenSettingKey 한 곳이고 여기는 인자만 받는다).
 /// </summary>
 public static class ExplorerListing
 {
@@ -21,14 +23,18 @@ public static class ExplorerListing
     /// <summary>
     /// 폴더 내용을 나열한다: 폴더 먼저, 그다음 확장자 일치 파일, 각각 이름순.
     /// maxItems로 초대형 폴더의 UI 폭주를 막는다.
+    /// includeHidden(A160) = 숨김·시스템 항목도 포함할지. 기본 false = 종전 동작 그대로.
+    /// 호출부(ExplorerPane)가 설정값을 스캔 시작 시점에 스냅샷해 넘긴다 — 여기서 설정을 읽지 않는다
+    /// (KOTU.Core는 UI·설정 주입에 비의존).
     /// </summary>
-    public static IReadOnlyList<Entry> List(string folder, IReadOnlyList<string> extensions, int maxItems = 2000)
+    public static IReadOnlyList<Entry> List(
+        string folder, IReadOnlyList<string> extensions, int maxItems = 2000, bool includeHidden = false)
     {
         var info = new DirectoryInfo(folder);
         var result = new List<Entry>();
 
         foreach (var d in info.EnumerateDirectories()
-                     .Where(d => !IsHiddenOrSystem(d.Attributes))
+                     .Where(d => ShouldShow(d.Attributes, includeHidden))
                      .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
         {
             if (result.Count >= maxItems) return result;
@@ -36,7 +42,7 @@ public static class ExplorerListing
         }
 
         foreach (var f in info.EnumerateFiles()
-                     .Where(f => !IsHiddenOrSystem(f.Attributes) && MatchesExtension(f.Name, extensions))
+                     .Where(f => ShouldShow(f.Attributes, includeHidden) && MatchesExtension(f.Name, extensions))
                      .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
         {
             if (result.Count >= maxItems) return result;
@@ -109,6 +115,19 @@ public static class ExplorerListing
         _ => $"{bytes / 1024.0 / 1024.0 / 1024.0:0.##} GB",
     };
 
+    /// <summary>
+    /// 표시 대상인지 (A160, v0.169.0) — 숨김/시스템 표시 정책의 <b>단일 원본</b>.
+    /// 열거 지점 전부가 이 한 줄을 통과한다: 위 List의 폴더·파일 두 곳 +
+    /// 좌 패널 폴더 트리(KOTU.App.Overlays.FileListOverlay.LoadChildrenAsync).
+    /// 트리에 있던 인라인 복제(속성 마스크 직접 비교)를 없앤 자리다 — 리스트와 트리가 서로
+    /// 다른 집합을 보이는 것이 이 항목의 최악 회귀라, 새 열거 지점도 반드시 여기를 거칠 것.
+    /// includeHidden = true면 숨김·시스템을 함께 보여 준다(OS 탐색기는 2개 옵션이지만
+    /// KOTU는 1단계에서 하나로 묶는다 — 사용자 확정).
+    /// </summary>
+    public static bool ShouldShow(FileAttributes attributes, bool includeHidden) =>
+        includeHidden || !IsHiddenOrSystem(attributes);
+
+    /// <summary>숨김·시스템 속성 판정. 부르는 곳은 ShouldShow 하나 — 판정식은 여기 한 벌뿐이다.</summary>
     private static bool IsHiddenOrSystem(FileAttributes attributes) =>
         (attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0;
 }
