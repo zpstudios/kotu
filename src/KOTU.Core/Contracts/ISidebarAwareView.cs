@@ -13,7 +13,7 @@ namespace KOTU.Core.Contracts;
 /// (사이드바 상태)이 셸에만 있어 방향은 <b>셸 → 뷰 푸시</b>다 — <see cref="ITrayStatusProvider"/>·
 /// <see cref="IWindowCollapseSource"/>(뷰 → 셸)와 같은 이유에서 나온 반대 방향.
 /// 호출 지점은 사이드바 상태 변경의 단일 종착점(MainWindow.ApplyOverlayStates) 한 곳이고
-/// (F1/F2·2연타·Enter·경계 버튼·모듈 진입 기본(A109)이 전부 그리로 모여 재푸시된다),
+/// (F11/F12·2연타·Enter·경계 버튼·모듈 진입 기본(A109)이 전부 그리로 모여 재푸시된다),
 /// 미구현 뷰(다른 모듈·설정)는 셸 쪽 캐스트 실패로 no-op이다. UI 스레드에서 호출된다.
 /// ※ A119부터 셸이 정보 모듈에도 좌/우 패널(ISidePanelProvider 호스트)을 띄우므로 이 값이
 /// 실제로 0~2를 오간다 — A60 3차 당시의 "지금은 항상 8열(상시 false)" 각주는 소멸했다.

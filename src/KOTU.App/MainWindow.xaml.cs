@@ -30,10 +30,12 @@ public sealed partial class MainWindow : Window
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
 
-    // ---- 내장 탐색기 + 좌/우 오버레이 입력 상태 머신 (A58 상태 전이 + A118 키 + A151 모드 순환) ----
-    // 키 할당(A118, v0.144.0 — A107의 Alt+Z/X를 대체): **F1** = 좌측 파일 리스트 / **F2** = 우측 정보.
-    // Alt+Z/X는 폐지(병행 없음). 단독 F키는 문자를 만들지 않아 문자 입력·리스트 첫 글자 점프와
+    // ---- 내장 탐색기 + 좌/우 오버레이 입력 상태 머신 (A58 상태 전이 + A158 키 + A151 모드 순환) ----
+    // 키 할당(A158 — A118의 F1/F2를 대체): **F11** = 좌측 파일 리스트 / **F12** = 우측 정보.
+    // 계보: A58 Alt/Shift → A86 Z/X → A107 Alt+Z/X → A118 F1/F2 → A158 F11/F12. Alt+Z/X는 폐지
+    // (병행 없음). 단독 F키는 문자를 만들지 않아 문자 입력·리스트 첫 글자 점프와
     // 원천 무충돌 — 텍스트 입력 중에도 동작한다. 키 정본 = SideForKey 위 LeftPanelKey/RightPanelKey.
+    // A158로 탐색기 표면의 F2(이름변경) 충돌은 소멸했다 — 양보 코드는 무해하게 남는다(아래 참고).
     // 사이드마다 4상태: Closed(닫힘) / Holding(키 홀드 — 반투명 덮기, 메인 크기 불변) /
     //   TranslucentPinned(2초 이상 홀드 — 키를 떼도 반투명 유지) /
     //   OpaqueDocked(2연타 — 불투명 + 메인을 반대쪽으로 축소. A108 용어로 "사이드바" —
@@ -41,12 +43,13 @@ public sealed partial class MainWindow : Window
     // 2연타 = 사이드바 고정/해제(A58 유지). A86 추가: **열림 상태(고정·사이드바)에서 해당 키 1회 = 그 쪽 닫기**
     //   (keymap S3 행 — 판정 충돌은 "첫 탭 이전 상태" 기준 2연타로 푼다, OnOverlaySideDown 참고.
     //   A107 재검토 결과 유지 — 폐지 확정이 없었다).
-    // A107 신설(A118 승계): **F1+F2 동시 누름 = 좌·우 동시 호출** — "다른 키 개입 = 홀드 취소"에서
-    //   F1↔F2 상호만 예외로, 한쪽 홀드 중 다른 쪽 down이면 그쪽도 독립적으로 같은 전이를 시작한다
+    // A107 신설(A118·A158 승계): **F11+F12 동시 누름 = 좌·우 동시 호출** — "다른 키 개입 = 홀드 취소"에서
+    //   F11↔F12 상호만 예외로, 한쪽 홀드 중 다른 쪽 down이면 그쪽도 독립적으로 같은 전이를 시작한다
     //   (타이머·2연타도 사이드별).
     // 셸 수준 구성 상태(S1~S4, ShellState)는 '오픈 파일' 버튼·경계 버튼의 분배 기준 — 아래 CurrentShellState.
     // A151(전체화면 3단): Enter는 A86의 "좌/우 일괄 토글"에서 셸 표시 모드 순환(모드1→2→3→1)으로
-    // 대체됐다 — 아래 ShellViewMode/_viewMode 절 참고. 패널 키는 F1/F2 그대로다.
+    // 대체됐다 — 아래 ShellViewMode/_viewMode 절 참고. A151이 F11을 전체화면 매핑에서 뺀 덕에
+    // A158이 그 F11/F12를 패널 키로 가져왔다(전이 체계는 무변경).
     // A119(v0.145.0): 패널 컨텍스트에 "패널 제공 뷰"(ISidePanelProvider — 정보 모듈)가 추가됐다.
     //   그 뷰에서는 좌/우 패널 자리에 파일 리스트/정보 대신 모듈 고유 콘텐츠(SidePanelHost 호스트)가
     //   뜨고, 키·전이·힌트·경계 버튼·Enter는 전부 같은 경로다. 설정·빈 셸·미지원 안내만 무소비로 남는다.
@@ -118,7 +121,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>오버레이 한쪽(좌 = F1 리스트 / 우 = F2 정보 — A118)의 입력·표시 상태.</summary>
+    /// <summary>오버레이 한쪽(좌 = F11 리스트 / 우 = F12 정보 — A118·A158)의 입력·표시 상태.</summary>
     private sealed class OverlaySide
     {
         // KeyIsDown 필드는 A107에서 제거 — Z+X 상호 취소(조합 감지)용이었는데, A107이 동시 누름을
@@ -141,8 +144,8 @@ public sealed partial class MainWindow : Window
     private const double OverlayDoubleTapMs = 450;  // 2연타 판정 창 (v0.32.0 값 유지)
     private const double OverlayPinHoldMs = 2000;   // 홀드 → 반투명 고정 승격 시간 (A58)
 
-    private readonly OverlaySide _listSide = new(); // 좌측 파일 리스트 (F1)
-    private readonly OverlaySide _infoSide = new(); // 우측 정보 (F2)
+    private readonly OverlaySide _listSide = new(); // 좌측 파일 리스트 (F11)
+    private readonly OverlaySide _infoSide = new(); // 우측 정보 (F12)
 
     /// <summary>
     /// 셸 표시 모드(A151 — 전체화면 3단 체계):
@@ -228,7 +231,7 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
-        // F1/F2 오버레이 입력 감지(A58 전이 + A118 키 — v0.25.0 Alt/Ctrl 홀드 → A58 Alt/Shift →
+        // F11/F12 오버레이 입력 감지(A58 전이 + A158 키 — v0.25.0 Alt/Ctrl 홀드 → A58 Alt/Shift →
         // A86 단독 Z/X → A107 Alt+Z/X의 계보): 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.
         // Alt(Menu) down/up도 같은 KeyDown/KeyUp 층으로 온다(A58 실증 — SystemKey도 이 핸들러가 받는다).
         // 포인터 개입(클릭·휠)도 홀드 판정 취소 트리거(A58 안전장치 유지 — 휠은 A84에서 추가,
@@ -1527,7 +1530,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 좌/우 패널(오버레이/사이드바) 컨텍스트가 있는가 — 게이트 확장의 단일 판정(A119):
-    /// 파일 열림 · 빈 파일 모듈(A81) · 패널 제공 뷰(A119 — 정보 모듈). F1/F2 소비·상태 전이·
+    /// 파일 열림 · 빈 파일 모듈(A81) · 패널 제공 뷰(A119 — 정보 모듈). F11/F12 소비·상태 전이·
     /// 경계 버튼이 전부 이걸 탄다. 남은 예외 = 설정·빈 셸·미지원 안내(종전대로 무소비·무동작).
     /// </summary>
     private bool HasPanelContext
@@ -1586,21 +1589,24 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // ---------- 좌/우 오버레이 입력 상태 머신 (A58 전이 + A118 F1/F2) ----------
+    // ---------- 좌/우 오버레이 입력 상태 머신 (A58 전이 + A158 F11/F12) ----------
 
     /// <summary>
-    /// 좌/우 패널 키 정본(A118, v0.144.0) — 시험적 변경이라 되돌리기 지점을 이 두 상수 한 곳으로
-    /// 모았다: 키를 바꾸려면 여기만 고친다(KeyDown/KeyUp·S4 게이트가 전부 SideForKey 경유).
+    /// 좌/우 패널 키 정본 — 되돌리기·재배정 지점을 이 두 상수 한 곳으로 모았다: 키를 바꾸려면
+    /// 여기만 고친다(KeyDown/KeyUp·S4 게이트가 전부 SideForKey 경유).
+    /// 이력: A107(v0.134.0) Alt+Z/X → A118(v0.144.0) F1/F2 → **A158 F11/F12**(A151이 F11을
+    /// 전체화면 매핑에서 뺀 뒤라야 성립하는 순서 의존이었다).
     /// 힌트 문구의 키 표기는 OverlayHints.ListKey/InfoKey — 함께 고칠 것.
     /// </summary>
-    private const VirtualKey LeftPanelKey = VirtualKey.F1;  // 좌측 파일 리스트
-    private const VirtualKey RightPanelKey = VirtualKey.F2; // 우측 정보
+    private const VirtualKey LeftPanelKey = VirtualKey.F11;  // 좌측 파일 리스트
+    private const VirtualKey RightPanelKey = VirtualKey.F12; // 우측 정보
 
     /// <summary>
-    /// 키 → 오버레이 사이드 매핑 (A118 — A107의 Alt+Z/X를 단독 F키로 대체, Alt 게이트 폐지):
-    /// F1 = 좌측 파일 리스트, F2 = 우측 정보. 그 밖의 키는 null — 홀드 취소 트리거(다른 키
-    /// 개입)로만 쓰인다. 탐색기 표면의 F2 = 이름변경(A94)과는 "원 기능 우선"으로 공존한다 —
-    /// 표면이 Handled로 소비하면 셸이 양보(OnOverlaySideKey). Z·X는 다시 미배정 상태로 돌아갔다.
+    /// 키 → 오버레이 사이드 매핑 (A118이 A107의 Alt+Z/X를 단독 F키로 대체하며 Alt 게이트 폐지,
+    /// A158이 그 F키를 F11/F12로 재배정): F11 = 좌측 파일 리스트, F12 = 우측 정보. 그 밖의 키는
+    /// null — 홀드 취소 트리거(다른 키 개입)로만 쓰인다. 탐색기 표면의 F2 = 이름변경(A94)과의
+    /// "원 기능 우선" 공존은 **A158에서 충돌 자체가 소멸**했다(패널 키가 F12로 옮겨갔다) — 양보
+    /// 경로(OnOverlaySideKey의 Handled 검사)는 일반 규칙으로 그대로 남는다. Z·X는 미배정이다.
     /// </summary>
     private OverlaySide? SideForKey(VirtualKey key) => key switch
     {
@@ -1615,7 +1621,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Alt(Menu)가 지금 눌려 있는지 — Alt 단독 up 조건 소비 판정(MarkAltUseIfConsumed)에 쓴다.
-    /// A107의 Z/X 게이트 용도는 A118(F1/F2 단독 키)로 소멸했지만 부기 자체는 Alt+`가
+    /// A107의 Z/X 게이트 용도는 A118(단독 F키 — A158에서 F11/F12로 재배정)로 소멸했지만 부기 자체는 Alt+`가
     /// 여전히 필요로 한다(A147/v0.163.0에서 Alt+숫자·Alt+0이 폐지돼 남은 조합은 그 하나다). 판정 API는 저장소 선례(ExplorerFileOps.IsCtrlDown/IsShiftDown —
     /// Ctrl+X 잘라내기와 같은 층)와 동일하다.
     /// </summary>
@@ -1625,7 +1631,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 이번 Alt 세션(누름~뗌)에서 우리 조합(Alt+` 액셀러레이터, Alt 홀드 중 셸이 소비한
-    /// Esc/Enter/GoBack/F1/F2 포함)이 발화했는지 — Alt 단독 up의 조건 소비(OS 메뉴 모드 회피,
+    /// Esc/Enter/GoBack/F11/F12 포함)이 발화했는지 — Alt 단독 up의 조건 소비(OS 메뉴 모드 회피,
     /// A107이 A58 방식을 개작해 재도입 — A118 뒤에도 Alt 액셀러레이터용으로 존치)의 근거.
     /// A58은 Alt 자체가 오버레이 키라 "down을 본 Alt의 up"을 전부 소비했지만, A107 이후의 Alt는
     /// 수식키라 깨끗한 단독 탭(조합 미사용)은 통과시켜 OS 기본 동작을 보존한다.
@@ -1665,7 +1671,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // A118: F1/F2는 단독 패널 키 — A107의 Alt+Z/X를 전면 대체(Alt 게이트 폐지).
+        // A118(A158 재배정): F11/F12는 단독 패널 키 — A107의 Alt+Z/X를 전면 대체(Alt 게이트 폐지).
         // 분기 위치는 텍스트 입력 판정보다 앞: F키는 문자를 만들지 않아 뺏을 입력이 없고(A32
         // 예외·Q4 예외의 근거 없음), 문서 에디터 편집 중에도 패널 호출이 성립해야 한다 —
         // "에디터·리스트 포커스가 키를 삼킨다"(A107의 계기)를 조합 없이 해소하는 것이 A118의 목적.
@@ -1723,13 +1729,13 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 좌/우 패널 키(A118: F1/F2) down 분배 — 호출부(OnRootKeyDown)가 텍스트 입력 판정보다
+    /// 좌/우 패널 키(A158: F11/F12) down 분배 — 호출부(OnRootKeyDown)가 텍스트 입력 판정보다
     /// 앞에서 부른다. 순서: ① 원 기능 우선 ② S4 무동작 소비 ③ 첫 down만 전이 ④ 컨텍스트 소비.
-    /// ①의 실체는 탐색기 표면(ExplorerPane·ThumbnailExplorer)의 F2 = 이름변경(A94 2차) —
-    /// 표면이 선택 항목으로 소비(Handled)하면 셸이 양보한다(A86 Enter의 원 기능 우선과 동일 규칙,
-    /// 선택이 없으면 표면이 안 삼켜 패널 키로 동작). 소비된 F키는 패널 키가 아니라 "다른 키
-    /// 개입"이다 — 종전에도 소비된 일반 키는 ResetOverlayInput 경로였으므로 같은 리셋만 하고
-    /// 물러난다(A58 안전장치 유지).
+    /// ①은 A118 시절 탐색기 표면(ExplorerPane·ThumbnailExplorer)의 F2 = 이름변경(A94 2차)과
+    /// 겹치던 자리인데, **A158에서 패널 키가 F12로 옮겨가 그 충돌은 소멸했다**(이름변경은 F2 그대로
+    /// 유지 — 표면 코드 무변경). ①은 이제 실제 사례가 없는 일반 규칙으로 남는다: 누가 먼저
+    /// 소비(Handled)했으면 그 F키는 패널 키가 아니라 "다른 키 개입"이므로 — 종전에도 소비된 일반
+    /// 키는 ResetOverlayInput 경로였다 — 같은 리셋만 하고 물러난다(A58 안전장치 유지).
     /// </summary>
     private void OnOverlaySideKey(OverlaySide side, KeyRoutedEventArgs e)
     {
@@ -1746,26 +1752,26 @@ public sealed partial class MainWindow : Window
         }
         if (!e.KeyStatus.WasKeyDown) // 오토리피트(홀드 중 반복 down)는 전이에 안 태운다 — 2연타 판정 오염 방지
         {
-            // F1↔F2 상호는 "다른 키 개입" 취소의 예외(A107의 Z↔X 규칙 승계) — 한쪽 홀드 중
-            // 다른 쪽 down이면 그쪽도 독립적으로 같은 전이를 시작한다(F1+F2 동시 호출.
+            // F11↔F12 상호는 "다른 키 개입" 취소의 예외(A107의 Z↔X 규칙 승계) — 한쪽 홀드 중
+            // 다른 쪽 down이면 그쪽도 독립적으로 같은 전이를 시작한다(F11+F12 동시 호출.
             // 타이머·2연타 판정은 원래 사이드별 분리라 추가 작업 없음).
             OnOverlaySideDown(side);
         }
-        // 오버레이 컨텍스트가 있으면 소비한다(오토리피트 포함) — F1/F2는 시스템 조합이 아니고
+        // 오버레이 컨텍스트가 있으면 소비한다(오토리피트 포함) — F11/F12는 시스템 조합이 아니고
         // 다른 수신자도 없다. A119: 패널 제공 뷰(정보 모듈)도 컨텍스트다(HasPanelContext) —
         // 컨텍스트 없음(설정·빈 셸·미지원 안내)만 종전대로 무소비.
         if (HasPanelContext) e.Handled = true;
     }
 
     /// <summary>
-    /// 사이드 키(A118: F1/F2) 최초 down(오토리피트 제외)의 상태 전이 (A58 전이 + A86 keymap):
+    /// 사이드 키(A158: F11/F12) 최초 down(오토리피트 제외)의 상태 전이 (A58 전이 + A86 keymap):
     /// 닫힘에서 down = 홀드 세션 시작(오버레이 덮기 + 2초 승격 타이머) — "닫힌 패널 꺼내기".
     /// **열림(오버레이 고정·사이드바)에서 down 1회 = 그 쪽 닫기** (A86 신설 — keymap S3 행:
-    /// S3L에서 F1 = 좌 닫기. A58에서는 무동작이던 자리. A107 재검토 결과 유지).
+    /// S3L에서 F11 = 좌 닫기. A58에서는 무동작이던 자리. A107 재검토 결과 유지).
     /// 2연타 = 사이드바 고정/해제(A58 유지). 첫 탭이 이미 상태를 옮기므로 판정은
     /// **첫 탭 이전 상태(TapStartState)** 기준이다: 닫힘에서 시작한 2연타 = 사이드바,
     /// 열림에서 시작한 2연타 = 해제(첫 탭이 이미 닫았다 — 두 번째 탭은 그대로 둔다).
-    /// 양쪽 사이드가 각자 이 전이를 독립적으로 탄다 — F1+F2 동시 호출(A107 규칙 승계)의 실행부.
+    /// 양쪽 사이드가 각자 이 전이를 독립적으로 탄다 — F11+F12 동시 호출(A107 규칙 승계)의 실행부.
     /// </summary>
     private void OnOverlaySideDown(OverlaySide side)
     {
@@ -1824,7 +1830,7 @@ public sealed partial class MainWindow : Window
         var side = SideForKey(e.Key);
         if (side is null) return;
 
-        // F1/F2 up = 홀드 세션 종료 판정(A118 — 단독 키라 A107의 "Alt를 먼저 뗀 잔여 홀드" 특례는
+        // F11/F12 up = 홀드 세션 종료 판정(A118·A158 — 단독 키라 A107의 "Alt를 먼저 뗀 잔여 홀드" 특례는
         // 소멸). 키를 놓으면 진행 중 홀드 세션이 반드시 끝나야 한다(고아 세션 방지).
         if (side.HoldSessionActive)
         {
@@ -1838,7 +1844,7 @@ public sealed partial class MainWindow : Window
             // 타이머가 이미 TranslucentPinned로 승격했다면 그대로 유지 —
             // "2초 넘겨 뗐을 때 = 고정 유지" (A58 확정 해석)
         }
-        // F1/F2 자체의 up은 소비하지 않는다(A86 이래 유지) — Alt 액셀러레이터 조합의 up 소비는
+        // F11/F12 자체의 up은 소비하지 않는다(A86 이래 유지) — Alt 액셀러레이터 조합의 up 소비는
         // 위 Menu 분기가 담당(A118 뒤에도 존치).
     }
 
@@ -1915,7 +1921,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 모드3(전체화면) 진입 + 복귀 스냅샷(A151 ②③): 스냅샷 = 지금 모드 + 좌/우 패널 상태
     /// (홀드는 Sticky로 반투명 피닝 승격 — A86 스냅샷 관용구 승계). 패널은 건드리지 않는다 —
-    /// 진입 후 F1/F2로 바꾼 구성을 Esc/Alt+Enter가 이 스냅샷으로 되돌린다(A153: 모드3에서도
+    /// 진입 후 F11/F12로 바꾼 구성을 Esc/Alt+Enter가 이 스냅샷으로 되돌린다(A153: 모드3에서도
     /// 패널 전이는 그대로 살아 있다). Enter 2→3·Alt+Enter·"Full screen" 버튼이 모두 이 경로다.
     /// </summary>
     private void EnterFullScreenRemembering()
@@ -2107,7 +2113,7 @@ public sealed partial class MainWindow : Window
     /// 포인터 개입(클릭·휠 — Ctrl+휠 줌 포함, A86 확정)도 홀드 판정을 취소한다(A58 안전장치,
     /// 휠은 A84에서 추가) — 클릭 다중 선택·더블클릭 새 인스턴스(A24)·휠 줌이
     /// 오버레이를 물고 있지 않게. 단, 그 오버레이 자신 안에서의 클릭·스크롤은 예외 —
-    /// F1을 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
+    /// F11을 쥔 채 리스트에서 파일을 더블클릭해 열거나 목록을 휠로 넘기는
     /// 기존 흐름(v0.25.0)을 끊으면 안 된다.
     /// A154: **그 쪽 경계 버튼 스택 안의 눌림도 같은 예외**다. 이 핸들러는 RootLayout에
     /// handledEventsToo로 걸려 있어 버튼 눌림이 BeginPeek 뒤에 여기까지 올라오는데, 예외가 없으면
@@ -2118,7 +2124,7 @@ public sealed partial class MainWindow : Window
     private void OnRootPointerIntervened(object sender, PointerRoutedEventArgs e)
     {
         // A119: 모듈 패널 호스트 안의 클릭·스크롤도 "그 오버레이 자신 안"의 예외에 포함 —
-        // F1을 쥔 채 정보 모듈 좌 패널(그래프)을 만지는 흐름이 파일 리스트와 같은 규칙을 탄다.
+        // F11을 쥔 채 정보 모듈 좌 패널(그래프)을 만지는 흐름이 파일 리스트와 같은 규칙을 탄다.
         var origin = e.OriginalSource as DependencyObject;
         var changed = false;
         if (!IsWithin(origin, ListOverlay) && !IsWithin(origin, LeftPanelHost)
@@ -2328,7 +2334,7 @@ public sealed partial class MainWindow : Window
         // ISidebarAwareView — 정보 모듈의 센터 타일 그리드가 열 수 4/3/2를 이 신호로 정한다.
         // 구 bool "양쪽 열림"의 4/8 매핑은 폐지). 오버레이(반투명)는 메인 폭을 안 줄이므로 세지
         // 않는다(도크만 — A93 썸네일과 같은 해석). 이 메서드가 사이드바 상태 변경의 단일
-        // 종착점이라(F1/F2·2연타·모드 전이 복귀·경계 버튼·모듈 진입 기본 전부 경유) 재푸시 누락이 없고,
+        // 종착점이라(F11/F12·2연타·모드 전이 복귀·경계 버튼·모듈 진입 기본 전부 경유) 재푸시 누락이 없고,
         // 미구현 뷰(다른 모듈·설정)는 캐스트 실패로 no-op이다.
         var dockCount = (left > 0 ? 1 : 0) + (right > 0 ? 1 : 0);
         (ModuleHost.Content as ISidebarAwareView)?.SetSidebarsState(dockCount);
@@ -2365,7 +2371,7 @@ public sealed partial class MainWindow : Window
 
         // A135 2차(방어 수리): 표시 반영이 끝난 뒤의 포커스 후처리. 포커스가 방금 화면에서 내려간
         // 좌/우 패널(파일 오버레이·모듈 패널 호스트 4표면) 안에 남아 있으면 모듈 뷰(중앙 콘텐츠)로
-        // 되돌린다. 닫힘 경로 전부(F1/F2 열림 1회 닫기·2연타 해제·모드2 진입 일괄 닫기·경계 버튼·홀드
+        // 되돌린다. 닫힘 경로 전부(F11/F12 열림 1회 닫기·2연타 해제·모드2 진입 일괄 닫기·경계 버튼·홀드
         // 해제·컨텍스트 소멸)가 이 메서드를 지나므로 여기 한 곳이면 충분하다(상태 변경 단일 종착점).
         // 가설(포커스 고아 — collapse된 요소에 포커스가 남으면 셸 KeyDown이 아예 안 올 수 있다)은
         // 실기기 확정 전이다: 이 수리는 방어적이며, 실기기에서 증상이 남으면 가설 기각·재조사
@@ -2507,7 +2513,7 @@ public sealed partial class MainWindow : Window
     private void OnRightEdgeToggle(object sender, RoutedEventArgs e) => ToggleOpaqueDock(_infoSide);
 
     // ---------- 순간 표시(peek) 버튼 (A154, v0.170.0) ----------
-    // 키 홀드(F1/F2)의 포인터 판이다: 누르는 동안만 반투명 오버레이가 열리고 떼면 원상 복귀.
+    // 키 홀드(F11/F12)의 포인터 판이다: 누르는 동안만 반투명 오버레이가 열리고 떼면 원상 복귀.
     // 새 상태를 만들지 않고 키 홀드와 같은 OverlayState.Holding으로 전이하며, 상태 변경은 전부
     // ApplyOverlayStates(단일 종착점)를 거친다. 2초 승격 타이머는 붙이지 않는다(핀은 클릭 겸임).
 
@@ -2675,7 +2681,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// S4 종료 (A90): restore=true(Esc·재누름) = 진입 전 스냅샷으로 복귀 —
     /// 이번에 추가된 구획만 내려가고 원래 있던 구획은 원래 모습(불투명이면 불투명) 그대로.
-    /// S4 중에는 F1/F2·경계 버튼이 전부 무동작이라 좌/우 상태가 변할 길이 없어, 스냅샷 전체 대입이
+    /// S4 중에는 F11/F12·경계 버튼이 전부 무동작이라 좌/우 상태가 변할 길이 없어, 스냅샷 전체 대입이
     /// 곧 "추가분만 되돌리기"와 같다. restore=false(콘텐츠 전환 = SetContentState/OnContentOpened) =
     /// 스냅샷을 버리고 좌/우는 지금 상태 그대로 A86 "상태는 콘텐츠를 넘어 유지" 규칙을 탄다.
     /// refresh=false는 호출부가 곧바로 ApplyOverlayStates를 부르는 경로(콘텐츠 전환)용.

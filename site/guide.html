@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.171.0</span>
+    <span class="asof">AS OF v0.176.0</span>
   </div>
 </section>
 
@@ -291,13 +291,25 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <ul>
           <li><strong>Centre</strong> — the module view: the photo, the video, the PDF, the archive listing.</li>
           <li><strong>Bottom bar</strong> — one row. On the left the <strong>menu</strong> button and the
-              <strong>Open file</strong> button; the rest belongs to whichever module is open.</li>
+              <strong>Open file</strong> button; at the right end two view-mode buttons,
+              <strong>Full window</strong> and <strong>Full screen</strong>; the rest belongs to whichever
+              module is open.</li>
           <li><strong>Two side panels</strong> — a <strong>left</strong> panel (folder tree and file list) and a
               <strong>right</strong> panel (information about the current file). Both stay hidden until you call them.</li>
         </ul>
         <p>Two words are used consistently for the side panels. A <strong>sidebar</strong> is opaque: it stands
            beside the content and makes the centre narrower. An <strong>overlay</strong> is translucent: it lies
            over the content and takes no space away from it. Either panel is 25% of the window width.</p>
+        <p><strong>View modes.</strong> The window has three of them, and <kbd>Enter</kbd> steps through them
+           in one direction: <strong>Window</strong> (title bar, bottom bar, panels as you left them) →
+           <strong>Full window</strong> (the bottom bar and both side panels go away; the window itself does
+           not change) → <strong>Full screen</strong> (the window fills the screen, taskbar included) → back
+           to Window. <kbd>Alt</kbd>+<kbd>Enter</kbd> jumps straight to full screen from wherever you are, and
+           pressing it again returns you to the mode and the panel arrangement you came from. <kbd>Esc</kbd>
+           goes back one step. The two buttons at the right end of the bottom bar do the same as the second
+           and third modes. <kbd>Enter</kbd> from full screen returns to the plain window but does not bring
+           the panels back — only <kbd>Esc</kbd> and <kbd>Alt</kbd>+<kbd>Enter</kbd> restore the arrangement
+           you had. Opening a file, or switching module, always puts the window back into the first mode.</p>
         <p>The title bar shows <code>1-KOTU</code>, or <code>1-KOTU - filename</code> once a file is open. The
            number in front is the window number: the first window is <code>1-KOTU</code>, the second
            <code>2-KOTU - holiday.jpg</code>. A leading <code>●</code> means that window has unsaved changes.
@@ -349,7 +361,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>To the right of that run sits the current zoom level — <code>100%</code>. The Fit options
               resize the picture without touching that figure, so it stays at 100% until you zoom with the
               wheel or a pinch.</li>
-          <li><kbd>F11</kbd> or a double-click goes full screen; <kbd>Esc</kbd> leaves it.</li>
+          <li>A double-click goes full screen, and <kbd>Alt</kbd>+<kbd>Enter</kbd> does the same from the
+              keyboard; <kbd>Esc</kbd> leaves it.</li>
         </ul>
 
         <h3>Video</h3>
@@ -372,8 +385,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Zoom</strong> with <kbd>Ctrl</kbd>+wheel, from 10% to 800%.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Each new file starts at
               Contain again.</li>
-          <li><kbd>Enter</kbd>, <kbd>F11</kbd> or the ⛶ button goes full screen; <kbd>Esc</kbd> leaves it. In
-              full screen, play, pause, seek, volume, mute and zoom each flash a short caption in the middle.</li>
+          <li><kbd>Alt</kbd>+<kbd>Enter</kbd> goes full screen, <kbd>Enter</kbd> steps there through Full
+              window, and <kbd>Esc</kbd> leaves it. In full screen, play, pause, seek, volume, mute and zoom
+              each flash a short caption in the middle.</li>
           <li>Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.</li>
           <li>Once a video has played to the end, resizing the window clears the picture to black instead of
               rescaling the last frame. Press play to start it again and the picture returns at the new size.</li>
@@ -386,7 +400,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               speeds. Clicking the surface also toggles play/pause.</li>
           <li>A live waveform fills the window while a track plays, with the track name above it.</li>
           <li><strong>Resume</strong> works exactly as in Video.</li>
-          <li><kbd>F11</kbd> or the ⛶ button goes full screen; <kbd>Esc</kbd> leaves it.</li>
+          <li><kbd>Alt</kbd>+<kbd>Enter</kbd> goes full screen, <kbd>Enter</kbd> steps there through Full
+              window, and <kbd>Esc</kbd> leaves it.</li>
           <li>Press ▶ with nothing open to play a built-in 18-second sample tune.</li>
         </ul>
 
@@ -477,8 +492,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               5 minutes at every refresh setting. The length of that window is written once at the
               right-hand end of the two graphs.</li>
         </ul>
-        <p>The two panels are the ordinary side panels: <kbd>F1</kbd>, <kbd>F2</kbd>, <kbd>Enter</kbd> and the
-           edge buttons drive them exactly as in the file modules, and the module opens with both docked.
+        <p>The two panels are the ordinary side panels: <kbd>F11</kbd>, <kbd>F12</kbd> and the edge buttons
+           drive them exactly as in the file modules, and the module opens with both docked.
            Close them and the sensor grid takes the whole window.</p>
         <p>Every graph writes its channel name and its current value along the top. Where there is room for
            them, the tiles and the enlarged graphs also label the top of the scale, prefixed so it cannot be
@@ -492,7 +507,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Refresh interval</td><td><kbd>I</kbd></td><td>50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU</td></tr>
           <tr><td>Bottom bar size</td><td><kbd>B</kbd></td><td>cycles Small → Medium → Large</td></tr>
           <tr><td>Always on top</td><td><kbd>P</kbd></td><td>pins the window over other windows and collapses it down to just the bottom bar</td></tr>
-          <tr><td>Full screen</td><td><kbd>F11</kbd></td><td>full-screen dashboard; <kbd>Esc</kbd> leaves it</td></tr>
+          <tr><td>Full screen</td><td><kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>full-screen dashboard, like every other module; <kbd>Esc</kbd> leaves it</td></tr>
         </table></div>
         <p>The selected sensors are also what this window's tray icon displays. Selection, tile order and bar
            size belong to each window separately; the most recent change is what a newly opened window starts
@@ -534,23 +549,24 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <div class="tbl"><table>
           <tr><th>Key</th><th>Action</th></tr>
           <tr><td><kbd>Alt</kbd>+<kbd>`</kbd></td><td>open the menu (bottom left)</td></tr>
-          <tr><td><kbd>F1</kbd></td><td>left panel</td></tr>
-          <tr><td><kbd>F2</kbd></td><td>right panel</td></tr>
-          <tr><td><kbd>Enter</kbd></td><td>open or close both panels at once</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>leave full screen, or leave the Open file browser</td></tr>
+          <tr><td><kbd>F11</kbd></td><td>left panel</td></tr>
+          <tr><td><kbd>F12</kbd></td><td>right panel</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>next view mode: window → full window → full screen → window</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>full screen and back again</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>one step back: out of full screen, out of full window, or out of the Open file browser</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
-          <tr><td><kbd>F11</kbd></td><td>full screen</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
           <tr><td><kbd>Browser Back</kbd></td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
         </table></div>
-        <p><kbd>Alt</kbd>+<kbd>`</kbd> and <kbd>F1</kbd> / <kbd>F2</kbd> work even while you are typing
-           in a text box, because they produce no character of their own. <kbd>Shift</kbd>+<kbd>N</kbd> gives
-           way to typing. There is no keyboard shortcut for switching module or for opening Settings —
+        <p><kbd>Alt</kbd>+<kbd>`</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd> and <kbd>F11</kbd> / <kbd>F12</kbd>
+           work even while you are typing in a text box; the panel keys produce no character of their own.
+           Plain <kbd>Enter</kbd> gives way to typing — in a text document it is a line break — and
+           <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well. There is no keyboard shortcut for switching module or for opening Settings —
            both live in the menu at the bottom left. Switching module always arrives with both sidebars
            open; choosing the module you are already in changes nothing.</p>
 
-        <h3>Panels: how F1 and F2 behave</h3>
-        <p><kbd>F1</kbd> drives the left panel, <kbd>F2</kbd> the right one. Both
+        <h3>Panels: how F11 and F12 behave</h3>
+        <p><kbd>F11</kbd> drives the left panel, <kbd>F12</kbd> the right one. Both
            react to <em>how</em> you press them.</p>
         <div class="tbl"><table>
           <tr><th>Input</th><th>Result</th></tr>
@@ -560,15 +576,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Press once while open</td><td>that panel closes</td></tr>
           <tr><td>Press twice quickly while open</td><td>it stays closed</td></tr>
           <tr><td>Both keys together</td><td>both sides do all of the above at once, in any press order</td></tr>
-          <tr><td><kbd>Enter</kbd></td><td>closes both if either is open; opens them again in the arrangement you last had</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>closes whatever is open on the way to Full window; it never opens a panel</td></tr>
         </table></div>
         <p>When a panel is pinned or docked, a short hint appears next to it on a small dark plate, so it
-           stays readable over whatever is behind it — <em>Pinned - press F1 to close, or the pin button
-           to dock</em>, <em>Sidebar - press F1 or the pin button to close</em> — and fades after a couple
-           of seconds. One exception: while the file browser has the focus <strong>and a file is selected</strong>,
-           <kbd>F2</kbd> renames that file instead of calling the right panel — renaming keeps its usual
-           Windows key. Inside the Open file browser, <kbd>F1</kbd> and <kbd>F2</kbd> do nothing;
-           <kbd>Esc</kbd> gets you out.</p>
+           stays readable over whatever is behind it — <em>Pinned - press F11 to close, or the pin button
+           to dock</em>, <em>Sidebar - press F11 or the pin button to close</em> — and fades after a couple
+           of seconds. The panels answer these keys in every view mode, full screen included. Inside the
+           Open file browser, <kbd>F11</kbd> and <kbd>F12</kbd> do nothing; <kbd>Esc</kbd> gets you out.</p>
 
         <h3>Letter keys, per module</h3>
         <p>Only one module is on screen at a time, so the same letter can mean different things in different
@@ -588,7 +602,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Video</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
           <tr><td>Video</td><td><kbd>C</kbd></td><td>subtitles</td></tr>
           <tr><td>Video</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option</td></tr>
-          <tr><td>Video</td><td><kbd>Enter</kbd></td><td>full screen</td></tr>
           <tr><td>Audio</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
           <tr><td>Audio</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
           <tr><td>Audio</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>
@@ -608,7 +621,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>H/W Info</td><td><kbd>B</kbd></td><td>bottom bar size</td></tr>
           <tr><td>H/W Info</td><td><kbd>P</kbd></td><td>always on top</td></tr>
         </table></div>
-        <p><kbd>F11</kbd> and <kbd>Esc</kbd> behave the same in all seven modules.</p>
+        <p><kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd> and <kbd>Esc</kbd> behave the same in all seven
+           modules — they belong to the window, not to the module.</p>
         <p><kbd>Space</kbd> gives way in the same manner as the letter keys. While the file list, the folder
            tree or the centre thumbnails have the focus it no longer starts or stops playback in Video and
            Audio; in the file list and in the thumbnails it selects the focused item instead.</p>
@@ -618,7 +632,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><th>Key</th><th>Action</th></tr>
           <tr><td><kbd>Enter</kbd></td><td>open the selected item — with several files selected, all of them</td></tr>
           <tr><td><kbd>Space</kbd></td><td>select or deselect the item that has the focus</td></tr>
-          <tr><td><kbd>F2</kbd></td><td>rename the selected item (with nothing selected, <kbd>F2</kbd> calls the right panel as usual)</td></tr>
+          <tr><td><kbd>F2</kbd></td><td>rename the selected item (nothing selected: nothing happens)</td></tr>
           <tr><td><kbd>Delete</kbd></td><td>move to the Recycle Bin</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>delete for good, after a confirmation</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd></td><td>copy / cut / paste</td></tr>
@@ -657,9 +671,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
         <h3 id="back">Going back</h3>
         <p>The mouse back button, and the <kbd>Browser Back</kbd> key on keyboards that have one, undo one
-           step at a time, in this order: leave full screen, then leave the Open file browser (returning to
-           the arrangement you had), then close the file and go back to the module's own browser with the
-           side panels as they were. With nothing left to undo they do nothing. The mouse button works
+           step at a time, in this order: step back out of full screen or full window, then leave the Open
+           file browser (returning to the arrangement you had), then close the file and go back to the
+           module's own browser with the side panels as they were. With nothing left to undo they do nothing. The mouse button works
            everywhere; the key gives way to typing, like the letter keys.</p>
       </section>
 
@@ -677,8 +691,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            it, or otherwise its name, size, date and folder. You can drop a file onto this panel to open it.</p>
         <p>In H/W Info the same two panels carry that module's own content instead — the enlarged graphs on
            the left, the specification list on the right. Everything below applies there unchanged.</p>
-        <p>Ways to bring a panel up: <kbd>F1</kbd> / <kbd>F2</kbd> as described
-           above; <kbd>Enter</kbd> for both at once; or the <strong>edge buttons</strong> — move the pointer
+        <p>Ways to bring a panel up: <kbd>F11</kbd> / <kbd>F12</kbd> as described
+           above; or the <strong>edge buttons</strong> — move the pointer
            close to the left or right edge of the window, near the bottom, and two small buttons appear one
            above the other, just over the bottom bar. <strong>Hold</strong> the upper one and that panel
            comes up as a translucent overlay for as long as you hold it, then goes back to whatever it was.
@@ -907,7 +921,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
         <h3 id="about">About</h3>
         <p>The version, a link to the repository, and the mission statement. The bottom bar of the Settings
-           screen has a link to the project's Patreon page and the full-screen button.</p>
+           screen has a link to the project's Patreon page.</p>
       </section>
 
       <!-- ================= 9. TRAY ================= -->

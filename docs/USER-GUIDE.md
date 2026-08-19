@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.171.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.176.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -29,7 +29,8 @@ Every KOTU window has the same three parts.
 
 - **Centre** — the module view: the photo, the video, the PDF, the archive listing.
 - **Bottom bar** — one row, 44 px tall. On the left the **menu** button and the **Open file** button;
-  the rest belongs to whichever module is open.
+  at the right end two view-mode buttons, **Full window** and **Full screen**; the rest belongs to
+  whichever module is open.
 - **Two side panels** — a **left** panel (folder tree and file list) and a **right** panel
   (information about the current file). Both are hidden until you call them.
 
@@ -39,6 +40,20 @@ Two words are used consistently for the side panels:
 - An **overlay** is translucent. It lies over the content and takes no space away from it.
 
 Either panel is 25% of the window width.
+
+**View modes.** The window has three of them, and `Enter` steps through them in one direction:
+
+1. **Window** — the ordinary state: title bar, bottom bar, side panels as you left them.
+2. **Full window** — the bottom bar and both side panels go away; the window itself does not change.
+3. **Full screen** — the window fills the screen, taskbar included.
+
+`Alt`+`Enter` jumps straight to full screen from wherever you are, and pressing it again returns you
+to the mode and the panel arrangement you came from. `Esc` goes back one step: out of full screen to
+where you came from, out of full window back to the window. The two buttons at the right end of the
+bottom bar do the same as steps 2 and 3. `Enter` from full screen returns to the plain window, but it
+does not bring the panels back — only `Esc` and `Alt`+`Enter` restore the arrangement you had.
+
+Opening a file, or switching module, always puts the window back into mode 1.
 
 The title bar shows `1-KOTU`, or `1-KOTU - filename` once a file is open. The number in front is the
 window number: the first window is `1-KOTU`, the second `2-KOTU - holiday.jpg`, and so on. A leading
@@ -86,7 +101,7 @@ Seven modules. Switch between them from the menu at the bottom left.
   in a tooltip, since a narrow window trims it.
 - To the right of that run sits the current zoom level — `100%`. The Fit options resize the picture
   without touching that figure, so it stays at 100% until you zoom with the wheel or a pinch.
-- `F11` or a double-click on the picture goes full screen; `Esc` leaves it.
+- A double-click on the picture goes full screen, and `Alt`+`Enter` does the same from the keyboard; `Esc` leaves it.
 
 ### 2.2 Video
 
@@ -103,8 +118,9 @@ Seven modules. Switch between them from the menu at the bottom left.
   remembered and playback continues there next time.
 - **Zoom** with `Ctrl`+wheel, from 10% to 800%.
 - **Fit** — see [2.9](#29-the-fit-button). Each new file starts at Contain again.
-- `Enter`, `F11` or the ⛶ button goes full screen; `Esc` leaves it. In full screen, play, pause,
-  seek, volume, mute and zoom each flash a short caption in the middle of the picture.
+- `Alt`+`Enter` goes full screen, `Enter` steps there through Full window, and `Esc` leaves it.
+  In full screen, play, pause, seek, volume, mute and zoom each flash a short caption in the middle
+  of the picture.
 - Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.
 - Once a video has played to the end, resizing the window clears the picture to black instead of
   rescaling the last frame. Press play to start it again and the picture returns at the new size.
@@ -115,7 +131,7 @@ Seven modules. Switch between them from the menu at the bottom left.
   mute, `S` for the same six speeds. Clicking the surface also toggles play/pause.
 - A live waveform fills the window while a track plays, with the track name above it.
 - **Resume** works exactly as in Video (over 30 seconds played, stopped before the last 3%).
-- `F11` or the ⛶ button goes full screen; `Esc` leaves it.
+- `Alt`+`Enter` goes full screen, `Enter` steps there through Full window, and `Esc` leaves it.
 - Press ▶ with nothing open to play a built-in 18-second sample tune.
 
 ### 2.4 Document — plain text
@@ -196,8 +212,8 @@ The centre of the window is the sensor grid; the two side panels carry the rest.
   every refresh setting. The length of that window is written once at the right-hand end of the
   two graphs.
 
-The two panels are the ordinary side panels: `F1`, `F2`, `Enter` and the edge buttons drive them
-exactly as in the file modules, and the module opens with both docked. Close them and the sensor
+The two panels are the ordinary side panels: `F11`, `F12` and the edge buttons drive them exactly
+as in the file modules, and the module opens with both docked. Close them and the sensor
 grid takes the whole window.
 
 Every graph writes its channel name and its current value along the top. Where there is room for
@@ -214,7 +230,7 @@ Controls:
 | Sensor refresh interval | `I` | 50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU |
 | Bottom bar size | `B` | cycles Small → Medium → Large |
 | Always on top | `P` | pins the window over other windows and collapses it down to just the bottom bar |
-| Full screen | `F11` | full-screen dashboard; `Esc` leaves it |
+| Full screen | `Alt`+`Enter` | full-screen dashboard, like every other module; `Esc` leaves it |
 
 The selected sensors are also what this window's tray icon displays. Selection, tile order and bar
 size belong to each window separately; the most recent change is what a newly opened window starts from.
@@ -259,25 +275,26 @@ These work in every module.
 | Key | Action |
 |---|---|
 | ``Alt+` `` | open the menu (bottom left) |
-| `F1` | left panel |
-| `F2` | right panel |
-| `Enter` | open or close both panels at once |
-| `Esc` | leave full screen, or leave the Open file browser |
+| `F11` | left panel |
+| `F12` | right panel |
+| `Enter` | next view mode: window → full window → full screen → window |
+| `Alt`+`Enter` | full screen and back again |
+| `Esc` | one step back: out of full screen, out of full window, or out of the Open file browser |
 | `Shift+N` | new window of the module you are looking at |
-| `F11` | full screen |
 | `Ctrl+S` | save (text document) |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
 
-``Alt+` `` and `F1` / `F2` work even while you are typing in a text box, because they produce no
-character of their own. `Shift+N` gives way to typing.
+``Alt+` ``, `Alt`+`Enter` and `F11` / `F12` work even while you are typing in a text box. The panel
+keys produce no character of their own, so nothing is taken away from the text. Plain `Enter` does
+give way to typing — in a text document it is a line break — and `Shift+N` gives way as well.
 
 There is no keyboard shortcut for switching module or for opening Settings — both live in the menu
 at the bottom left. Switching module from the menu always arrives with both sidebars open. Choosing
 the module you are already in changes nothing.
 
-### 3.2 Panels: how `F1` and `F2` behave
+### 3.2 Panels: how `F11` and `F12` behave
 
-`F1` drives the left panel, `F2` the right one. Both react to *how* you press them.
+`F11` drives the left panel, `F12` the right one. Both react to *how* you press them.
 
 | Input | Result |
 |---|---|
@@ -286,17 +303,16 @@ the module you are already in changes nothing.
 | Press twice quickly | the panel docks as an opaque **sidebar**, making the centre narrower |
 | Press once while it is open | that panel closes |
 | Press twice quickly while it is open | it stays closed |
-| `F1` and `F2` together | both sides do all of the above at once, in any press order |
-| `Enter` | closes both if either is open; opens them again in the arrangement you last had |
+| `F11` and `F12` together | both sides do all of the above at once, in any press order |
+| `Enter` | closes whatever is open on the way to Full window; it never opens a panel |
 
 When a panel is pinned or docked, a short hint appears next to it on a small dark plate, so it
-stays readable over whatever is behind it — *Pinned - press F1 to close, or the pin button to dock*,
-*Sidebar - press F1 or the pin button to close* — and fades after a couple of seconds.
+stays readable over whatever is behind it — *Pinned - press F11 to close, or the pin button to dock*,
+*Sidebar - press F11 or the pin button to close* — and fades after a couple of seconds.
 
-One exception: while the file browser has the focus **and a file is selected**, `F2` renames that
-file instead of calling the right panel — renaming keeps its usual Windows key.
+The panels answer these keys in every view mode, full screen included.
 
-Inside the Open file browser, `F1` and `F2` do nothing; `Esc` gets you out.
+Inside the Open file browser, `F11` and `F12` do nothing; `Esc` gets you out.
 
 ### 3.3 Letter keys, per module
 
@@ -319,7 +335,6 @@ box or while you are typing to jump through the file list.
 | Video | `C` | subtitles |
 | Video | `A` | 100% |
 | Video | `F` | re-apply the last Fit option |
-| Video | `Enter` | full screen |
 | Audio | `Space` | play / pause |
 | Audio | `←` `→` | back / forward 5 seconds |
 | Audio | `↑` `↓` | volume |
@@ -340,7 +355,8 @@ box or while you are typing to jump through the file list.
 | H/W Info | `B` | bottom bar size |
 | H/W Info | `P` | always on top |
 
-`F11` and `Esc` behave the same in all seven modules.
+`Enter`, `Alt`+`Enter` and `Esc` behave the same in all seven modules — they belong to the window,
+not to the module.
 
 `Space` gives way in the same manner as the letter keys. While the file list, the folder tree or the
 centre thumbnails have the focus it no longer starts or stops playback in Video and Audio; in the
@@ -352,7 +368,7 @@ file list and in the thumbnails it selects the focused item instead.
 |---|---|
 | `Enter` | open the selected item — with several files selected, all of them |
 | `Space` | select or deselect the item that has the focus |
-| `F2` | rename the selected item (with nothing selected, `F2` calls the right panel as usual) |
+| `F2` | rename the selected item (nothing selected: nothing happens) |
 | `Delete` | move to the Recycle Bin |
 | `Shift+Delete` | delete for good, after a confirmation |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | copy / cut / paste |
@@ -394,7 +410,7 @@ scrolls there.
 The mouse back button, and the `Browser Back` key on keyboards that have one, undo one step at a
 time, in this order:
 
-1. leave full screen;
+1. step back out of full screen or full window;
 2. leave the Open file browser, returning to the arrangement you had;
 3. close the file and go back to the module's own browser, keeping the side panels as they were.
 
@@ -419,8 +435,7 @@ the left, the specification list on the right. Everything below applies there un
 
 Ways to bring a panel up:
 
-- `F1` / `F2`, as described in [3.2](#32-panels-how-f1-and-f2-behave);
-- `Enter` for both at once;
+- `F11` / `F12`, as described in [3.2](#32-panels-how-f11-and-f12-behave);
 - the **edge buttons** — move the pointer close to the left or right edge of the window, near the
   bottom, and two small buttons appear one above the other, just over the bottom bar. **Hold** the
   upper one and that panel comes up as a translucent overlay for as long as you hold it, then goes
@@ -646,8 +661,7 @@ it with the built-in text editor.
 
 The version, a link to the repository, and the mission statement.
 
-The bottom bar of the Settings screen has a link to the project's Patreon page and the full-screen
-button.
+The bottom bar of the Settings screen has a link to the project's Patreon page.
 
 ---
 

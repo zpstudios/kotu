@@ -12,7 +12,7 @@ namespace KOTU.App.Overlays;
 /// 안내 문구(2.5초 + 페이드, OverlayHints 단일 출처)·내부 별 분할(SetPanelPercent)을 파일
 /// 오버레이와 <b>같은 규칙으로 재현</b>한다. 배경·상태 적용이 두 오버레이 컨트롤 내부에 있어
 /// 셸 층으로 뽑는 대신 이 호스트에 재현하는 쪽을 택했다(A119 구현 결정 — diff 최소).
-/// 입력(F1/F2·2연타·Enter·경계 버튼)은 종전대로 셸(MainWindow) 상태 머신이 담당하고,
+/// 입력(F11/F12·2연타·Enter·경계 버튼)은 종전대로 셸(MainWindow) 상태 머신이 담당하고,
 /// 이 컨트롤은 ShowContent/Hide/SetState/SetPanelPercent만 받는다.
 /// 좌/우 방향(패널이 어느 가장자리인가·문구 키 표기)은 Initialize가 정한다 — XAML에는
 /// 속성 없이 선언하고 MainWindow 생성자가 1회 조립한다(코드 전용 컨트롤 — 자체 XAML 없음).

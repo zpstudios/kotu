@@ -169,6 +169,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         }
 
         // A94 2차: F2 = 이름변경(첫 선택 타일 1개 — 다중 선택이어도 첫 항목만), Del = 휴지통 삭제.
+        // A158: 셸 패널 키가 F1/F2에서 F11/F12로 옮겨가 F2 충돌은 소멸했다 — 이름변경은 F2 그대로
+        // 유지하고(사용자 확정), "선택이 있을 때만 Handled"라는 기존 소비 규칙도 그대로 둔다.
         if (e.Key == VirtualKey.F2)
         {
             if (TileGrid.SelectedItem is not GridViewItem selected) return;

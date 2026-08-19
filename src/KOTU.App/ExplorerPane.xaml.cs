@@ -1090,6 +1090,8 @@ public sealed partial class ExplorerPane : UserControl
                 if (entry.IsFolder) NavigateTo(entry.Path, _extensions);
                 else FileActivated?.Invoke(entry.Path);
                 return;
+            // A158: 셸 패널 키가 F11/F12로 옮겨가 F2 충돌 소멸 — 이름변경은 F2 유지(사용자 확정),
+            // "선택이 있을 때만 Handled"라는 기존 소비 규칙도 무변경.
             case Windows.System.VirtualKey.F2: // 이름변경 — 다중 선택이어도 첫 항목(SelectedItem)만
                 if (owner.SelectedItem is not SelectorItem selected) return;
                 e.Handled = true;
