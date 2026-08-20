@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.192.0</span>
+    <span class="asof">AS OF v0.204.0</span>
   </div>
 </section>
 
@@ -557,7 +557,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>F12</kbd></td><td>right panel open / closed</td></tr>
           <tr><td><kbd>Enter</kbd></td><td>full screen and back again</td></tr>
           <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>full screen and back again — the same toggle, typing-proof (see below)</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>one step back: out of full screen, or out of the Open file browser</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>one step back: out of full screen, out of the Open file browser, or close the open file</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
           <tr><td><kbd>Browser Back</kbd></td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
@@ -568,6 +568,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well. There is no keyboard shortcut for switching module or for opening Settings —
            both live in the menu at the bottom left. Switching module always arrives with both sidebars
            open; choosing the module you are already in changes nothing.</p>
+        <p><kbd>Esc</kbd> undoes one layer per press: full screen first, then the Open file browser, then
+           the file itself. Closing the file this way lands on the module's own browser with both sidebars
+           open — the same screen as starting the module from the menu — so a file opened straight from
+           Windows Explorer is one <kbd>Esc</kbd> away from the standard screen. A document with unsaved
+           changes asks before closing. Where <kbd>Esc</kbd> already means something it keeps that meaning
+           first: it cancels a rename, it clears the cut-mark in the file browser, and an open dialog takes
+           it for itself.</p>
 
         <h3>Panels: how F11 and F12 behave</h3>
         <p><kbd>F11</kbd> drives the left panel, <kbd>F12</kbd> the right one. One press opens the panel as
@@ -575,7 +582,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            translucent variant. Press both keys and both sides toggle, in any order.</p>
         <p>When a panel opens, a short hint appears next to it on a small dark plate, so it stays readable
            over whatever is behind it — <em>Sidebar - press F11 or the pin button to close</em> — and fades
-           after a couple of seconds. The panels answer these keys in every view mode, full screen included.
+           after a couple of seconds. The panels answer these keys in every view mode, full screen included —
+           and on every screen: Settings, the unsupported-file notice and a new unsaved document included.
+           With no file open the left panel shows the folder you last browsed — on Settings and the notice
+           it lists files of every type — and the right panel says <em>No file open</em>.
            Inside the Open file browser, <kbd>F11</kbd> and <kbd>F12</kbd> do nothing; <kbd>Esc</kbd> gets
            you out.</p>
 
@@ -633,7 +643,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd></td><td>copy / cut / paste</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>select all</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></td><td>new folder</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>clear the dimming left by <kbd>Ctrl</kbd>+<kbd>X</kbd> (the clipboard keeps its contents)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>clear the dimming left by <kbd>Ctrl</kbd>+<kbd>X</kbd> (the clipboard keeps its contents); with nothing to clear, the window rule applies — one step back</td></tr>
         </table></div>
 
         <h3>Mouse and wheel</h3>
@@ -670,7 +680,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            step at a time, in this order: step back out of full screen, then leave the Open
            file browser (returning to the arrangement you had), then close the file and go back to the
            module's own browser with the side panels as they were. With nothing left to undo they do nothing. The mouse button works
-           everywhere; the key gives way to typing, like the letter keys.</p>
+           everywhere; the key gives way to typing, like the letter keys. That last step is the one place
+           going back and <kbd>Esc</kbd> differ: going back keeps the panels exactly as they were, while
+           closing with <kbd>Esc</kbd> arrives with both sidebars open — the standard module screen.</p>
       </section>
 
       <!-- ================= 4. PANELS ================= -->
@@ -693,7 +705,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            bar. It opens that side as a sidebar, and closes it again if it already is one — the same toggle
            as the key.</p>
         <p>Opening a module (rather than opening a file directly) starts with both sidebars open. A file
-           opened straight from Windows Explorer starts with no panels, so nothing covers what you came to see.</p>
+           opened straight from Windows Explorer starts with no panels, so nothing covers what you came to
+           see. Press <kbd>Esc</kbd> when you are done and the file closes onto that standard screen —
+           sidebars and thumbnails — as if you had started the module from the menu.</p>
       </section>
 
       <!-- ================= 5. FILE BROWSER ================= -->

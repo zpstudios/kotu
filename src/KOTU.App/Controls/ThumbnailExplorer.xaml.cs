@@ -185,9 +185,12 @@ public sealed partial class ThumbnailExplorer : UserControl
         }
         if (e.Key == VirtualKey.Escape)
         {
-            // A94 4차 — 잘라내기 표시만 해제(탐색기 동등). 소비하지 않는다: 셸 Esc(S4 복귀)가
-            // 이 그리드 포커스에서도 성립해야 한다. 클립보드 자체는 건드리지 않는다.
-            ExplorerFileOps.ClearCutMarks();
+            // A94 4차 — 잘라내기 표시 해제(탐색기 동등). A202 개정: **실제로 지운 표시가 있을
+            // 때만 소비**한다(ExplorerPane.OnSurfaceKeyDown의 Esc와 같은 규칙 — 무조건 흘리면
+            // 셸 Esc의 새 콘텐츠 닫기 층과 겹쳐 한 번에 두 층이 움직인다). 지울 게 없으면
+            // 종전대로 흘려 셸 체인(전체화면 → S4 복귀 → 콘텐츠 닫기)이 받는다.
+            // 클립보드 자체는 건드리지 않는다.
+            if (ExplorerFileOps.ClearCutMarks()) e.Handled = true;
             return;
         }
 

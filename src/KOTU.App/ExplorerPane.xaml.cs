@@ -370,6 +370,10 @@ public sealed partial class ExplorerPane : UserControl
         var extensionToggles = new List<ToggleMenuFlyoutItem>();
         foreach (var ext in _extensions)
         {
+            // A196: 전체 파일 필터(ExplorerListing.AllFiles — 설정·미지원 안내 화면)의 "*"는
+            // 토글로 만들지 않는다 — 좁힐 확장자 목록 자체가 없고, 숨김 판정(Arrange의
+            // hiddenExtensions)은 실제 확장자 문자열이라 "*" 토글은 아무 일도 못 하는 거짓 UI다.
+            if (ext == "*") continue;
             var toggle = new ToggleMenuFlyoutItem { Text = ext, IsChecked = true };
             toggle.Click += (_, _) =>
             {
@@ -1421,10 +1425,12 @@ public sealed partial class ExplorerPane : UserControl
                 _lastClick = null;
                 ToggleCheckOf(focused); // A179 — 선택(IsSelected)은 건드리지 않는다
                 return;
-            case Windows.System.VirtualKey.Escape: // A94 4차 — 잘라내기 표시만 해제(탐색기 동등)
-                // 소비하지 않는다: 셸 Esc(S4 복귀 — OnShellEscape)가 이 표면 포커스에서도 성립해야 한다.
-                // 클립보드 자체는 건드리지 않는다(Ctrl+V로 다시 붙여넣을 수 있다 — 보고서 명기).
-                ExplorerFileOps.ClearCutMarks();
+            case Windows.System.VirtualKey.Escape: // A94 4차 — 잘라내기 표시 해제(탐색기 동등)
+                // A202 개정: **실제로 지운 표시가 있을 때만 소비**한다 — 셸 Esc 체인에 콘텐츠
+                // 닫기 층이 생겨, 무조건 흘리면 "표시 해제 + 콘텐츠 닫힘/S4 복귀"가 한 번에
+                // 일어난다(한 층씩 규칙 위반). 지울 게 없으면 종전대로 흘려 셸 체인(전체화면 →
+                // S4 → 콘텐츠 닫기)이 받는다. 클립보드 자체는 건드리지 않는다(Ctrl+V 재사용 가능).
+                if (ExplorerFileOps.ClearCutMarks()) e.Handled = true;
                 return;
         }
 

@@ -22,9 +22,20 @@ public static class ExplorerListing
         string Path, string Name, bool IsFolder, long Size, DateTime Modified, DateTime Created,
         bool IsPlaceholder = false);
 
-    /// <summary>파일명이 확장자 목록(소문자, 점 포함)에 해당하는지. 대소문자 무시.</summary>
+    /// <summary>
+    /// 전체 파일 필터 (A196): 담당 확장자라는 개념이 없는 화면(설정·미지원 파일 안내)의 좌 리스트가
+    /// 확장자 필터 없이 모든 파일을 보여야 해서 신설한 와일드카드 목록이다. <see cref="MatchesExtension"/>이
+    /// "*" 항목을 전부 일치로 해석한다 — 모듈 담당 확장자 목록(IModule.SupportedExtensions)에는
+    /// "*"가 없으므로 기존 판정은 전부 종전 그대로다. UI 쪽 A7 필터 메뉴는 이 항목으로 토글을
+    /// 만들지 않는다(ExplorerPane.EnsureFilterFlyout — 좁힐 목록 자체가 없다).
+    /// </summary>
+    public static readonly IReadOnlyList<string> AllFiles = ["*"];
+
+    /// <summary>파일명이 확장자 목록(소문자, 점 포함)에 해당하는지. 대소문자 무시.
+    /// "*"가 목록에 있으면(<see cref="AllFiles"/> — A196 전체 파일 필터) 전부 일치.</summary>
     public static bool MatchesExtension(string fileName, IReadOnlyList<string> extensions) =>
-        extensions.Contains(System.IO.Path.GetExtension(fileName).ToLowerInvariant());
+        extensions.Contains("*")
+        || extensions.Contains(System.IO.Path.GetExtension(fileName).ToLowerInvariant());
 
     /// <summary>
     /// 폴더 내용을 나열한다: 폴더 먼저, 그다음 확장자 일치 파일, 각각 이름순.

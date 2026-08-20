@@ -139,6 +139,10 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         _initialArgs = context.Arguments;
         // A22: 상태 문구가 생기거나 사라지면 드라이브 줄 표시를 다시 판정한다.
         StatusText.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => ApplyDriveStrip());
+        // A201(키 감사 수리): 로드 시 자기 포커스 — 7개 모듈 뷰 중 이 뷰만 IsTabStop·자기 포커스가
+        // 없어, 뷰 교체 직후(이전 뷰 철거로 포커스가 표류하면) 셸 전역 키(Enter·Esc·F11/F12)가
+        // 죽을 수 있었다. 다른 뷰들과 같은 관용구(ImageViewerView 등 — IsTabStop은 XAML에서 설정).
+        Loaded += (_, _) => Focus(FocusState.Programmatic);
         Loaded += OnLoaded;
         Unloaded += (_, _) =>
         {

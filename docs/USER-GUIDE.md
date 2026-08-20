@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.192.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.204.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -279,7 +279,7 @@ These work in every module.
 | `F12` | right panel open / closed |
 | `Enter` | full screen and back again |
 | `Alt`+`Enter` | full screen and back again — the same toggle, typing-proof (see below) |
-| `Esc` | one step back: out of full screen, or out of the Open file browser |
+| `Esc` | one step back: out of full screen, out of the Open file browser, or close the open file |
 | `Shift+N` | new window of the module you are looking at |
 | `Ctrl+S` | save (text document) |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
@@ -287,6 +287,13 @@ These work in every module.
 ``Alt+` ``, `Alt`+`Enter` and `F11` / `F12` work even while you are typing in a text box. The panel
 keys produce no character of their own, so nothing is taken away from the text. Plain `Enter` does
 give way to typing — in a text document it is a line break — and `Shift+N` gives way as well.
+
+`Esc` undoes one layer per press: full screen first, then the Open file browser, then the file
+itself. Closing the file this way lands on the module's own browser with **both sidebars open** —
+the same screen as starting the module from the menu — so a file opened straight from Windows
+Explorer is one `Esc` away from the standard screen. A document with unsaved changes asks before
+closing. Where `Esc` already means something it keeps that meaning first: it cancels a rename, it
+clears the cut-mark in the file browser, and an open dialog takes it for itself.
 
 There is no keyboard shortcut for switching module or for opening Settings — both live in the menu
 at the bottom left. Switching module from the menu always arrives with both sidebars open. Choosing
@@ -302,7 +309,10 @@ When a panel opens, a short hint appears next to it on a small dark plate, so it
 over whatever is behind it — *Sidebar - press F11 or the pin button to close* — and fades after a
 couple of seconds.
 
-The panels answer these keys in every view mode, full screen included.
+The panels answer these keys in every view mode, full screen included — and on every screen:
+Settings, the unsupported-file notice and a new unsaved document included. With no file open the
+left panel shows the folder you last browsed — on Settings and the notice it lists files of every
+type — and the right panel says *No file open*.
 
 Inside the Open file browser, `F11` and `F12` do nothing; `Esc` gets you out.
 
@@ -366,7 +376,7 @@ file list and in the thumbnails it selects the focused item instead.
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | copy / cut / paste |
 | `Ctrl+A` | select all |
 | `Ctrl+Shift+N` | new folder |
-| `Esc` | clear the dimming left by `Ctrl+X` (the clipboard keeps its contents) |
+| `Esc` | clear the dimming left by `Ctrl+X` (the clipboard keeps its contents); with nothing to clear, the window rule applies — see [3.1](#31-global) |
 
 ### 3.5 Mouse and wheel
 
@@ -410,6 +420,9 @@ time, in this order:
 With nothing left to undo they do nothing. The mouse button works everywhere; the key gives way to
 typing, like the letter keys.
 
+Step 3 is the one place going back and `Esc` differ: going back keeps the panels exactly as they
+were, while closing with `Esc` arrives with both sidebars open — the standard module screen.
+
 ---
 
 ## 4. Side panels
@@ -434,7 +447,9 @@ Ways to bring a panel up:
   sidebar, and closes it again if it already is one — the same toggle as the key.
 
 Opening a module (rather than opening a file directly) starts with both sidebars open. A file
-opened straight from Windows Explorer starts with no panels, so nothing covers what you came to see.
+opened straight from Windows Explorer starts with no panels, so nothing covers what you came to
+see. Press `Esc` when you are done and the file closes onto that standard screen — sidebars and
+thumbnails — as if you had started the module from the menu.
 
 ---
 

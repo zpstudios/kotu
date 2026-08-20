@@ -173,12 +173,15 @@ internal static class ExplorerFileOps
     /// <summary>
     /// 잘라내기 표시 해제 — 붙여넣기 소진(클립보드 비우기와 같은 조건)·Ctrl+C·Esc 공용.
     /// 이미 비어 있으면 통지도 하지 않는다(무의미한 전 표면 재적용 방지).
+    /// 반환값(A202) = 실제로 지운 표시가 있었는가 — 표면 Esc가 "지웠을 때만 소비"(한 층씩 규칙)를
+    /// 판정하는 근거다. 다른 호출부(붙여넣기 소진·Ctrl+C)는 값을 버린다(무해).
     /// </summary>
-    internal static void ClearCutMarks()
+    internal static bool ClearCutMarks()
     {
-        if (CutMarked.Count == 0) return;
+        if (CutMarked.Count == 0) return false;
         CutMarked.Clear();
         RaiseCutMarksChanged();
+        return true;
     }
 
     /// <summary>

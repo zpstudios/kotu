@@ -48,7 +48,9 @@ public sealed partial class MainWindow : Window
     // 단순화됐다 — 아래 ShellViewMode/_viewMode 절 참고.
     // A119(v0.145.0): 패널 컨텍스트에 "패널 제공 뷰"(ISidePanelProvider — 정보 모듈)가 추가됐다.
     //   그 뷰에서는 좌/우 패널 자리에 파일 리스트/정보 대신 모듈 고유 콘텐츠(SidePanelHost 호스트)가
-    //   뜨고, 키·힌트·경계 버튼은 전부 같은 경로다. 설정·빈 셸·미지원 안내만 무소비로 남는다.
+    //   뜨고, 키·힌트·경계 버튼은 전부 같은 경로다. A196(게이트 완화)부터는 설정·미지원 안내·
+    //   무제 문서(A189)도 컨텍스트다(좌 = 전역 마지막 폴더 리스트 / 우 = 플레이스홀더) —
+    //   무소비로 남는 화면은 빈 셸(중앙에 아무 뷰도 없음)뿐이고 S4 중 무동작은 별도 게이트(사양).
     // Alt 단독 OS 메뉴 모드 회피(A86 제거 → A107 재도입)는 A176 뒤에도 존치 — A147(v0.163.0)이
     // Alt+숫자·Alt+0을 폐지한 뒤에도 **Alt+` 액셀러레이터 하나가 여전히 쓴다**(지우면 Alt를 눌렀다
     // 뗄 때마다 창 메뉴 모드로 빠진다). 우리 조합에 쓰인 Alt의 단독 up만 조건 소비
@@ -60,8 +62,10 @@ public sealed partial class MainWindow : Window
     /// A189: 무제 문서(경로 없는 콘텐츠 — IUntitledContentSource, 문서 모듈 'New text file')가
     /// 중앙을 차지 중인지. <c>_currentFilePath</c>가 null이어도 빈 상태(S1 탐색기·드라이브 줄)로
     /// 취급하면 안 되는 상태 축이다 — 소비처는 IsEmptyFileModule·UpdateDriveStrip·TryNavigateBack
-    /// 세 곳뿐이고, 경로 기반 축(정보 오버레이·패널 컨텍스트·S4·32px 아이콘·마지막 폴더)은 전부
-    /// 종전 null 경로 폴백 그대로 둔다(무제는 보여줄 파일 정보가 없다 — 구현 결정).
+    /// (A202부터 TryCloseContent)·**HasPanelContext(A196 — 패널 컨텍스트 편입: F11/F12·경계 버튼이
+    /// 동작하고 좌 리스트 = 전역 마지막 폴더 + 문서 모듈 필터, 우 정보 = 플레이스홀더)**다.
+    /// 나머지 경로 기반 축(S4·32px 아이콘·마지막 폴더)은 종전 null 경로 폴백 그대로
+    /// (무제는 보여줄 파일 정보가 없다 — 구현 결정).
     /// 세우는 곳 = OnUntitledOpened, 내리는 곳 = SetContentState(모듈 전환·실경로 열기)와
     /// OnContentOpened(무제 첫 저장 → 경로 확정).
     /// </summary>
@@ -88,7 +92,8 @@ public sealed partial class MainWindow : Window
     /// 셸 수준 "구성 상태" (A86 keymap): 패널별 상태를 대체하는 게 아니라 그 위에서
     /// "지금 화면 구성이 어떤 조합인가"를 요약한다 — '오픈 파일' 버튼·경계 버튼 분배의 기준.
     /// (A186: Enter는 이 상태와 무관한 전체화면 토글이다 — A151의 순환도, A86의 일괄 토글도 폐지.)
-    /// None = 패널 컨텍스트 없음(빈 셸·설정·미지원 안내) — keymap 표 밖.
+    /// None = 패널 컨텍스트 없음 — keymap 표 밖. A196부터 빈 셸(중앙에 아무 뷰도 없음)뿐이다:
+    /// 설정·미지원 안내·무제 문서는 게이트 완화로 패널 컨텍스트에 편입됐다(HasPanelContext).
     /// A119(v0.145.0): 정보(H/W)는 None에서 빠졌다 — 패널 제공 뷰(ISidePanelProvider)는 파일이
     /// 없어도 좌/우 조합으로 S2/S3*에 분류되어 경계 버튼이 파일 모듈과 같은 표를 탄다.
     /// S4('오픈 파일' 탐색 모드)의 진입/복귀는 A90(v0.122.0) — 아래 '오픈 파일' 버튼 절 참고.
@@ -116,7 +121,10 @@ public sealed partial class MainWindow : Window
         {
             if (IsOpenFileBrowsing) return ShellState.S4; // A90 — '오픈 파일' 탐색 진입 중
             if (IsEmptyFileModule) return ShellState.S1;
-            if (_currentFilePath is null && PanelProviderView is null) return ShellState.None;
+            // A196: None 판정을 게이트 공용 판정(HasPanelContext)에 묶는다 — 무제 문서·설정·
+            // 미지원 안내도 좌/우 조합으로 S2/S3*에 분류된다(파일이 없어 '오픈 파일' 버튼은
+            // EnterOpenFileBrowsing의 파일 가드가 종전과 같은 무동작으로 거른다). None = 빈 셸뿐.
+            if (!HasPanelContext) return ShellState.None;
             var left = _listSide.State != OverlayState.Closed;
             var right = _infoSide.State != OverlayState.Closed;
             return (left, right) switch
@@ -1181,12 +1189,25 @@ public sealed partial class MainWindow : Window
             if (!await ConfirmDiscardAsync()) return; // 문서 편집 미저장 가드 (A37)
             _titleDirtyMark = false;
             ApplyTitle();
-            ModuleHost.Content = new TextBlock
+            // A196: 안내를 포커스 가능한 ContentControl로 감싼다(구 TextBlock 단독은 Control이
+            // 아니라 포커스를 못 받는다) — ① 로드 시 자기 포커스로 셸 키(F11/F12·Enter·Esc)가
+            // 이 화면에서도 곧장 듣고(모듈 뷰들의 Loaded 자기 포커스 관용구 — SettingsView와 동일)
+            // ② 패널 닫힘 뒤 포커스 고아 복구(ApplyOverlayStates 말미 `as Control` 재포커스)의
+            // 대상이 된다. 콘텐츠 정렬은 TextBlock 자신의 Center + 스트레치 프레젠터로 유지한다.
+            var unsupported = new ContentControl
             {
-                Text = $"Unsupported file type: {Path.GetFileName(path)}",
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
+                IsTabStop = true,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Stretch,
+                Content = new TextBlock
+                {
+                    Text = $"Unsupported file type: {Path.GetFileName(path)}",
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
             };
+            unsupported.Loaded += (_, _) => unsupported.Focus(FocusState.Programmatic);
+            ModuleHost.Content = unsupported;
             ModuleBarHost.Content = null;
             ClearModulePanels(); // A119: 미지원 안내 화면에도 이전 모듈 패널이 남으면 안 된다
             AttachDriveStrip(null); // 미지원 파일 안내 화면 — 모듈 바와 함께 드라이브 줄도 내린다 (A22)
@@ -1490,11 +1511,12 @@ public sealed partial class MainWindow : Window
     /// A189: 뷰가 무제 문서(경로 없는 콘텐츠)로 에디터에 진입했다는 알림(IUntitledContentSource) —
     /// <see cref="OnContentOpened"/>의 경로 없는 판본. 탐색기(S1)를 내리고 드라이브 줄을 숨기고
     /// 제목을 "KOTU - Untitled"(A103 연장 — FileTitle과 같은 하이픈 구분자, 표기는
-    /// DocumentView.UntitledDisplayName과 동기)로 바꾼다. 경로 기반 축은 전부 폴백 그대로다:
-    /// 정보 오버레이·패널 컨텍스트 없음(HasPanelContext=false → F11/F12·S4 무동작 — 정보 모듈의
-    /// None 취급과 같은 층), 트레이·32px 아이콘 유휴(OpenFileIconInfo의 File.Exists 가드),
-    /// 마지막 폴더 무변경(RememberLastFolder의 null 가드). 첫 저장이 경로를 확정하면
-    /// ContentOpened가 정상 콘텐츠로 승격시킨다.
+    /// DocumentView.UntitledDisplayName과 동기)로 바꾼다.
+    /// A196: 무제도 패널 컨텍스트다(HasPanelContext — 빈 파일 모듈과 동일 취급: F11/F12·경계
+    /// 버튼 동작, 좌 리스트 = 전역 마지막 폴더(A174) + 문서 모듈 필터, 우 정보 = "No file open"
+    /// 플레이스홀더). S4는 종전대로 무동작(파일 가드), 트레이·32px 아이콘 유휴(OpenFileIconInfo의
+    /// File.Exists 가드), 마지막 폴더 무변경(RememberLastFolder의 null 가드)도 폴백 그대로다.
+    /// 첫 저장이 경로를 확정하면 ContentOpened가 정상 콘텐츠로 승격시킨다.
     /// </summary>
     private void OnUntitledOpened()
     {
@@ -1570,12 +1592,23 @@ public sealed partial class MainWindow : Window
     private ISidePanelProvider? PanelProviderView => ModuleHost.Content as ISidePanelProvider;
 
     /// <summary>
-    /// 좌/우 패널(오버레이/사이드바) 컨텍스트가 있는가 — 게이트 확장의 단일 판정(A119):
-    /// 파일 열림 · 빈 파일 모듈(A81) · 패널 제공 뷰(A119 — 정보 모듈). F11/F12 소비·상태 전이·
-    /// 경계 버튼이 전부 이걸 탄다. 남은 예외 = 설정·빈 셸·미지원 안내(종전대로 무소비·무동작).
+    /// A196: 모듈 축 밖의 폴백 패널 컨텍스트 화면(설정·미지원 파일 안내)인지 — 모듈은 없지만
+    /// 중앙에 뷰가 있는 상태다. 좌 리스트는 전역 마지막 폴더(A174)에 **전체 파일 필터**
+    /// (ExplorerListing.AllFiles — 모듈 개념이 없어 담당 확장자도 없다), 우 정보는 "No file open"
+    /// 플레이스홀더를 쓴다. 빈 셸(ModuleHost 비어 있음 — 창 생성 직후 잠깐)만 컨텍스트 밖으로 남는다.
+    /// </summary>
+    private bool IsPanelFallbackView => _currentModule is null && ModuleHost.Content is not null;
+
+    /// <summary>
+    /// 좌/우 패널(오버레이/사이드바) 컨텍스트가 있는가 — 게이트 확장의 단일 판정(A119 통일):
+    /// 파일 열림 · 빈 파일 모듈(A81) · 패널 제공 뷰(A119 — 정보 모듈) · **무제 문서(A189) ·
+    /// 설정·미지원 파일 안내(A196 — 위 폴백 화면)**. F11/F12 소비·상태 전이(ApplyOverlayStates의
+    /// 폴백 축)·경계 버튼·CurrentShellState가 전부 이걸 탄다. A196 완화로 남은 예외 =
+    /// 빈 셸(중앙에 아무 뷰도 없음)뿐이고, S4 중 무동작 게이트(IsOpenFileBrowsing)는 별도 존치(사양).
     /// </summary>
     private bool HasPanelContext
-        => _currentFilePath is not null || IsEmptyFileModule || PanelProviderView is not null;
+        => _currentFilePath is not null || IsEmptyFileModule || PanelProviderView is not null
+           || _untitledContent || IsPanelFallbackView;
 
     /// <summary>좌 패널이 화면에 떠 있는가 — 파일 컨텍스트는 ListOverlay, 패널 제공 뷰(A119)는
     /// LeftPanelHost가 표면이다(도크 폭·경계 버튼 x 계산 공용 판정).</summary>
@@ -1702,6 +1735,9 @@ public sealed partial class MainWindow : Window
     {
         // A90: Esc는 텍스트 입력 판정보다 먼저 본다 — keymap 포커스 예외가 "텍스트 입력에서도
         // Esc만은 통과"라서다(필터 입력란에 포커스를 둔 채로도 S4 복귀가 성립해야 한다).
+        // A202: 그래서 문서 에디터 포커스 중 Esc도 셸 체인(말단 = 콘텐츠 닫기)에 닿는다 —
+        // 더티면 ShowModule의 미저장 가드가 묻는다. 이름변경 편집 상자는 자체 Esc 소비(취소)가
+        // 먼저다(ExplorerRenameBox — e.Handled 존중). IME 조합 취소는 IME가 키를 먹어 여기 안 온다.
         if (e.Key == VirtualKey.Escape)
         {
             OnShellEscape(e);
@@ -1785,8 +1821,8 @@ public sealed partial class MainWindow : Window
         }
         if (!e.KeyStatus.WasKeyDown) OnOverlaySideDown(side); // 오토리피트 제외 — 토글 연사 방지
         // 패널 컨텍스트가 있으면 소비한다(오토리피트 포함) — F11/F12는 시스템 조합이 아니고
-        // 다른 수신자도 없다. A119: 패널 제공 뷰(정보 모듈)도 컨텍스트다(HasPanelContext) —
-        // 컨텍스트 없음(설정·빈 셸·미지원 안내)만 종전대로 무소비.
+        // 다른 수신자도 없다. A119: 패널 제공 뷰(정보 모듈)도 컨텍스트다(HasPanelContext).
+        // A196: 설정·미지원 안내·무제 문서도 편입 — 컨텍스트 없음(빈 셸)만 무소비로 남는다.
         if (HasPanelContext) e.Handled = true;
     }
 
@@ -1799,9 +1835,9 @@ public sealed partial class MainWindow : Window
     {
         if (IsOpenFileBrowsing) return; // A90 keymap S4: 좌/우 키 = 무동작 — OnRootKeyDown 가드의 이중 방어선
 
-        // 패널 컨텍스트가 없으면(설정·빈 셸·미지원 파일 안내) 무동작. 파일 없이 연
-        // 파일 모듈(빈 모듈 상태)은 A81부터, 패널 제공 뷰(정보 모듈)는 A119부터 컨텍스트에
-        // 포함 — 기본 도크를 키로 닫고 다시 여는 입력이 성립해야 한다.
+        // 패널 컨텍스트가 없으면(A196부터 빈 셸뿐) 무동작. 파일 없이 연 파일 모듈(빈 모듈
+        // 상태)은 A81부터, 패널 제공 뷰(정보 모듈)는 A119부터, 무제 문서·설정·미지원 안내는
+        // A196부터 컨텍스트에 포함 — 기본 도크를 키로 닫고 다시 여는 입력이 성립해야 한다.
         if (!HasPanelContext) return;
 
         side.State = side.State == OverlayState.OpaqueDocked
@@ -2068,16 +2104,20 @@ public sealed partial class MainWindow : Window
         NotifyBarAutoHideInput();
     }
 
-    // ---------- Esc (A151 전체화면 복귀 → A90 S4 복귀) ----------
+    // ---------- Esc (A151 전체화면 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기) ----------
 
     /// <summary>
     /// Esc 분배(A151 — "한 단계 되돌리기" 일관. A186: 모드2 분기는 모드2 소멸로 자동 소진):
-    /// ① 전체화면 = 복귀 스냅샷으로(창 모드 + 좌/우 패널 구성) ② S4 = 진입 전 상태로 복귀.
-    /// 검사 순서는 A112 '뒤로' 선례 그대로 — 전체화면 검사가 S4보다 앞이라
-    /// "첫 Esc = 전체화면 해제, 다음 Esc = S4 복귀"가 성립한다.
-    /// 모듈별 Esc=전체화면 해제 액셀러레이터 8벌은 A151에서 제거 — 전체화면 해제는 셸의
-    /// 이 경로 하나다(뷰가 남긴 다른 Esc 소비는 e.Handled 존중으로 종전대로 양보).
-    /// 그 외(창 모드·S4 아님)는 종전대로 건드리지 않는다.
+    /// ① 전체화면 = 복귀 스냅샷으로(창 모드 + 좌/우 패널 구성) ② S4 = 진입 전 상태로 복귀
+    /// ③ **콘텐츠 열림(무제 포함) = 닫기(A202)** — '뒤로' ③과 같은 실행부(TryCloseContent)를
+    /// 쓰되 defaultSidebars=true: 닫은 뒤 A109 기본 사이드바가 얹혀, 파일 인자 시작(A81
+    /// 무사이드바)에서 Esc 하나로 아이콘 실행 기본 화면(좌/우 사이드바 + 센터 썸네일)이 된다
+    /// (사용자 문면). 검사 순서는 A112 '뒤로' 선례 그대로 — 전체화면 → S4 → 콘텐츠 한 층씩.
+    /// 원 기능 우선(먼저 소비하는 쪽이 이긴다 — e.Handled 존중): 이름변경 편집 취소
+    /// (ExplorerRenameBox), 잘라내기 표시 해제(A94 — A202부터 지운 게 있을 때만 표면이 소비),
+    /// 대화상자·플라이아웃(팝업 트리 — 셸에 키가 오지 않는다). 문서 더티 닫기는 ShowModule의
+    /// ConfirmDiscardAsync 가드 경유(취소 = 무변경)다. 그 외(콘텐츠 없는 창 모드)는 종전대로
+    /// 건드리지 않는다(무간섭 원칙 — 설정·미지원 안내·빈 셸·S1에서 Esc는 무동작).
     /// </summary>
     private void OnShellEscape(KeyRoutedEventArgs e)
     {
@@ -2088,9 +2128,14 @@ public sealed partial class MainWindow : Window
             RestoreFromFullScreen();
             return;
         }
-        if (!IsOpenFileBrowsing) return;
-        e.Handled = true;
-        ExitOpenFileBrowsing(restore: true);
+        if (IsOpenFileBrowsing)
+        {
+            e.Handled = true;
+            ExitOpenFileBrowsing(restore: true);
+            return;
+        }
+        // A202: 말단 층 — 콘텐츠가 열려 있으면 닫고 기본 사이드바를 적용한다(위 요약 ③).
+        if (TryCloseContent(defaultSidebars: true)) e.Handled = true;
     }
 
     // ---------- '뒤로' 입력 (A112 — 마우스 XButton1 · 키보드 Browser Back) ----------
@@ -2135,7 +2180,8 @@ public sealed partial class MainWindow : Window
     ///    제목 복귀(A103 "KOTU")·트레이 유휴 1줄(A54)·하단 바·드라이브 줄 교체·
     ///    S1 썸네일 탐색기(마지막 폴더 = 방금 닫은 파일의 폴더, v0.55.0)가 전부 그 경로 몫이다.
     ///    defaultSidebars는 기본 false — A109의 사이드바 기본 재적용을 타지 않아
-    ///    좌/우 열림·닫힘 상태가 닫기 직전 그대로 보존된다(A112 요구).
+    ///    좌/우 열림·닫힘 상태가 닫기 직전 그대로 보존된다(A112 요구 — **Esc의 콘텐츠 닫기
+    ///    (A202)는 반대로 true**: 두 입력의 문면이 달라 의도된 차이다. TryCloseContent 주석 참고).
     /// ④ 콘텐츠 없음(S1·빈 셸·설정·정보 모듈·미지원 안내) = 무동작, 소비도 안 한다
     ///    (정보 모듈은 A119부터 패널 컨텍스트지만 닫을 콘텐츠(파일)가 없는 점은 그대로다).
     /// </summary>
@@ -2153,12 +2199,27 @@ public sealed partial class MainWindow : Window
         }
         // A189: 무제 문서도 닫을 콘텐츠다 — 경로는 없지만 ③과 같은 "콘텐츠 닫기 → S1" 층.
         // 미저장 가드는 종전대로 ShowModule 안의 ConfirmDiscardAsync가 담당한다(취소 = 무변경).
-        if ((_currentFilePath is not null || _untitledContent) && _currentModule is { } module)
-        {
-            ShowModule(module, OpenContext.Empty, Branding.AppName);
-            return true;
-        }
-        return false;
+        // A202: 닫기 실행부는 Esc 말단 층과 공용(TryCloseContent) — '뒤로'는 defaultSidebars=false
+        // (좌/우 상태를 닫기 직전 그대로 보존 — A112 명시 요구라 Esc의 true와 다르다).
+        return TryCloseContent(defaultSidebars: false);
+    }
+
+    /// <summary>
+    /// 콘텐츠 닫기 층의 단일 실행부(A112 '뒤로' ③ — A202에서 Esc 말단 층과 공용으로 추출):
+    /// 콘텐츠(파일 또는 무제 문서 A189)가 열려 있으면 그 모듈의 빈 상태(S1)로 돌아간다 —
+    /// 새 해체 경로 없이 모듈 전환과 같은 ShowModule(빈 컨텍스트) 재사용이다(미저장 가드 A37 ·
+    /// 재생 정지·파일 핸들 해제(뷰 Unloaded)·제목 복귀·트레이·하단 바·드라이브 줄 교체가 전부
+    /// 그 경로 몫 — 상세는 TryNavigateBack ③ 주석). 반환값 = 닫을 콘텐츠가 있었는가.
+    /// defaultSidebars: '뒤로'(A112) = false(좌/우 열림·닫힘 상태 보존 — 명시 요구) /
+    /// Esc(A202) = true(A109 기본 사이드바 재적용 — 파일 인자 시작(A81 무사이드바)에서 닫아도
+    /// 아이콘 실행 기본 화면과 동일해지는 것이 사용자 문면의 합격선).
+    /// </summary>
+    private bool TryCloseContent(bool defaultSidebars)
+    {
+        if ((_currentFilePath is null && !_untitledContent) || _currentModule is not { } module)
+            return false;
+        ShowModule(module, OpenContext.Empty, Branding.AppName, defaultSidebars);
+        return true;
     }
 
     /// <summary>포커스 요소가 주어진 루트의 비주얼 트리 안에 있는지 (A90 — S4 그리드 포커스 판정).</summary>
@@ -2233,8 +2294,10 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 상태 → 화면 반영의 단일 종착점 (A58 계보 — A176에서 단순화: 상태 축 = 닫힘/사이드바).
     /// 표시 여부·안내 문구·도크 컬럼을 한 곳에서 일괄 갱신한다. 패널 컨텍스트가 없으면
-    /// (빈 셸·설정·미지원 안내) 상태와 무관하게 숨긴다 — 상태 자체는 남아 있어 다음 파일을 열면
+    /// (A196부터 빈 셸뿐) 상태와 무관하게 숨긴다 — 상태 자체는 남아 있어 다음 파일을 열면
     /// 같은 구성으로 되살아난다(기존 유지 규칙).
+    /// A196: 설정·미지원 안내·무제 문서도 컨텍스트다 — 좌 리스트(전역 마지막 폴더)·우 정보
+    /// 플레이스홀더가 아래 fallback 축으로 뜬다(게이트 완화 등재문).
     /// 파일 없이 연 파일 모듈(빈 모듈 상태)도 컨텍스트다(A81): 좌측 리스트는 모듈 시작 폴더,
     /// 우측 정보는 "No file open" 플레이스홀더를 보여준다.
     /// A119: 패널 제공 뷰(ISidePanelProvider — 정보 모듈)도 컨텍스트다 — 같은 좌/우 상태를 파일
@@ -2248,8 +2311,12 @@ public sealed partial class MainWindow : Window
         var hasFile = _currentFilePath is not null;
         var emptyModule = IsEmptyFileModule; // 파일 없이 연 파일 모듈 — A81부터 패널 컨텍스트
         var panelView = PanelProviderView;   // A119: 모듈 고유 패널(정보 모듈) — 아래 호스트 절이 소비
-        var listShow = (hasFile || emptyModule) && _listSide.State == OverlayState.OpaqueDocked;
-        var infoShow = (hasFile || emptyModule) && _infoSide.State == OverlayState.OpaqueDocked;
+        // A196: 무제 문서(A189)·설정·미지원 안내도 파일 패널 표면을 쓴다 — 좌 리스트는
+        // ShowListOverlay(무제 = 모듈 필터 / 폴백 화면 = 전체 파일 필터), 우 정보는 파일이 없어
+        // 플레이스홀더다. 패널 제공 뷰(정보 모듈)와는 상호 배타(모듈 유무로 갈린다).
+        var fallback = _untitledContent || IsPanelFallbackView;
+        var listShow = (hasFile || emptyModule || fallback) && _listSide.State == OverlayState.OpaqueDocked;
+        var infoShow = (hasFile || emptyModule || fallback) && _infoSide.State == OverlayState.OpaqueDocked;
 
         if (listShow) ShowListOverlay();
         else ListOverlay.Hide();
@@ -2496,7 +2563,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ShowListOverlay()
     {
-        if (_currentModule is null)
+        // A196: 모듈이 없어도 폴백 화면(설정·미지원 안내)이면 전체 파일 필터로 띄운다 —
+        // 모듈 개념이 없어 담당 확장자가 없다(등재문 확정). 빈 셸(폴백도 아님)만 종전대로 숨김.
+        var extensions = _currentModule?.SupportedExtensions
+            ?? (IsPanelFallbackView ? ExplorerListing.AllFiles : null);
+        if (extensions is null)
         {
             ListOverlay.Hide();
             return;
@@ -2509,7 +2580,7 @@ public sealed partial class MainWindow : Window
             ListOverlay.Hide();
             return;
         }
-        ListOverlay.Show(folder, _currentModule.SupportedExtensions);
+        ListOverlay.Show(folder, extensions);
     }
 
     // ---------- '오픈 파일' 버튼 · S4 탐색 모드 (A90) ----------
@@ -2518,9 +2589,10 @@ public sealed partial class MainWindow : Window
     /// 하단 바 '오픈 파일' 버튼 (A90 — 시작 메뉴 버튼 바로 옆): 네이티브 파일 대화상자를 띄우지 않고
     /// 자체 탐색기를 쓴다. 분배는 keymap '오픈 파일' 행 그대로 — S1 = "이미 열려 있음" 강조만(A90-b,
     /// 복귀 개념 없음) / S2·S3* = S4 진입 / S4 = 진입 전 상태로 복귀(재누름).
-    /// None(빈 셸·설정·미지원 안내)은 keymap 표 밖 — 띄울 탐색기 컨텍스트가 없어 무동작(구현 결정).
+    /// None(A196부터 빈 셸뿐)은 keymap 표 밖 — 띄울 탐색기 컨텍스트가 없어 무동작(구현 결정).
     /// A119: 정보 모듈은 S2/S3*로 분류되지만 파일 컨텍스트가 없어 EnterOpenFileBrowsing의
-    /// 방어선이 걸러 준다 — 결과는 종전(None 시절)과 같은 무동작.
+    /// 방어선이 걸러 준다 — 결과는 종전(None 시절)과 같은 무동작. A196: 설정·미지원 안내·
+    /// 무제 문서도 같은 방어선이 걸러 준다(S4는 파일 콘텐츠 전용 — 사양 유지).
     /// 바가 숨은 동안(전체화면·영상 자동 숨김)은 이 버튼 자체를 누를 수 없고, 영상 자동 숨김
     /// 축에서 전체화면 중 바가 나타나 눌리면 S4가 전체화면 위에 뜬다 — Esc 순서는 종전 규칙
     /// 그대로(첫 Esc = 전체화면 해제, 다음 Esc = S4 복귀)라 특별 처리하지 않는다.

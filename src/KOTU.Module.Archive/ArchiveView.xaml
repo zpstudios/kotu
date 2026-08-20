@@ -6,6 +6,7 @@
     AllowDrop="True"
     DragOver="OnDragOver"
     Drop="OnDrop"
+    IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden">
 
     <!-- 전체화면 계열(F11·Esc 액셀러레이터, v0.40.0)은 A151에서 제거 — 전체화면은 셸의
