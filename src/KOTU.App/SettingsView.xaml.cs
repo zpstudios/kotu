@@ -24,8 +24,10 @@ namespace KOTU.App;
 /// <b>우클릭 메뉴 토글 초기값 읽기</b>·<b>우클릭 메뉴 등록/해제</b>)도 같은 워커로 옮겼다 —
 /// 이 화면에서 레지스트리를 만지는 코드는 이제 <b>전부</b> 워커 스레드에 있다
 /// (ARCHITECTURE.md §11.1 ① "UI 스레드 동기 레지스트리 IO 금지").
-/// A183: Explorer integration 절의 스위치들은 스위치 하나당 카드 하나(<see cref="NewCard"/>)로 묶였다 —
-/// 제목은 카드 헤더 좌측, 스위치는 그 행의 <b>우측 끝</b>(Windows 설정 앱 관례)이다.
+/// A183: Explorer integration 절의 스위치들은 스위치 하나당 카드 하나(<see cref="NewCard"/>)로 묶였다.
+/// A197: 카드 헤더 행의 순서는 <b>스위치 → 제목 → 진행 링</b>이다 — 스위치가 제목 <b>왼쪽</b>에
+/// 선다(A183의 우측 끝 배치를 사용자 지시로 뒤집은 것. 스위치 내장 On/Off 문구는 제목과
+/// 붙어 보이지 않게 비워 뒀다).
 /// </summary>
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
@@ -149,9 +151,18 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             var toggle = new ToggleSwitch
             {
                 // Header(구 "Register ... file associations (확장자들)")는 카드 제목·확장자 줄로
-                // 올라갔다 — 스위치에는 기본 On/Off 문구만 남는다(Windows 설정 앱도 상태 문구를
-                // 표시한다). MinWidth 0 = ToggleSwitch 기본값 154를 풀어 스위치가 카드 오른쪽 끝에
-                // 붙게 한다(풀지 않으면 스위치 오른쪽에 빈 자리가 남는다).
+                // 올라갔다. A197: 스위치가 제목 왼쪽으로 오면서 A183이 남겨 뒀던 내장 On/Off 문구도
+                // 걷어낸다 — 스위치와 제목 사이에 상태 문구가 끼면 어느 쪽이 이 카드의 이름인지
+                // 흐려진다. 빈 문자열이면 템플릿의 문구 자리가 0폭으로 재어져 사라진다(ContentPresenter가
+                // 빈 TextBlock을 재는 결과). null도 같은 결과지만 "일부러 비웠다"를 코드에 남기려고
+                // 빈 문자열을 쓴다. 켜짐/꺼짐은 스위치 모양이 말하고, 화면 낭독기에는 종전과 같이
+                // ToggleState가 전달된다(문구가 이름을 만들던 게 아니다 — Header는 A183에서 이미 없다).
+                OnContent = string.Empty,
+                OffContent = string.Empty,
+                // MinWidth 0 = ToggleSwitch 기본값 154 해제. A183에서는 스위치를 카드 오른쪽 끝에
+                // 붙이려고 풀었고, 왼쪽으로 옮긴 A197에서도 그대로 필요하다 — 154는 On/Off 문구가
+                // 들어갈 자리까지 미리 잡아 두는 값이라, 문구를 지운 채 남겨 두면 스위치와 제목
+                // 사이에 100px 넘는 빈 자리가 생긴다.
                 MinWidth = 0,
                 // A195: IsOn 초기값은 여기서 정하지 않는다 — 레지스트리 읽기는 아래
                 // 초기 상태 조회(워커)가 맡고, 답이 오면 그때 반영한다. 답이 오기 전·읽기 실패는
@@ -162,8 +173,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             // A77(v0.106.0): 진행 링 + 진행/결과 텍스트.
             // A79 ⑤(v0.119.0): 앱에서 가장 오래 도는 인디케이터라 발바닥 스피너를 여기 하나에만 붙였다.
             // 브랜드 레벨이 낮으면 지금까지의 ProgressRing 그대로다.
-            // A183: 링은 카드 헤더 행(스위치 왼쪽)에, 텍스트는 아래 defaults 줄 끝으로 나뉘었다 —
+            // A183: 링은 카드 헤더 행에, 텍스트는 아래 defaults 줄 끝으로 나뉘었다 —
             // 진행 문구가 길어져도 제목·스위치를 밀지 않는다.
+            // A197: 스위치가 왼쪽으로 가면서 링은 헤더 행의 오른쪽 끝(스위치가 비운 자리)으로.
             var busySpinner = BrandSpinner.Create(16);
             busySpinner.Element.Visibility = Visibility.Collapsed;
             busySpinner.Element.VerticalAlignment = VerticalAlignment.Center;
@@ -175,12 +187,16 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 TextWrapping = TextWrapping.Wrap,
             };
 
-            // A183 카드 헤더 행: 제목(가변 폭) · 진행 링 · 스위치(우측 끝).
-            // Grid를 쓰는 이유는 종전 toggleRow와 같다 — 제목이 길어져도 링·스위치가
-            // MaxWidth 680 밖으로 밀려나 잘리지 않게 오른쪽에 고정한다.
+            // A197 카드 헤더 행: 스위치(왼쪽) · 제목(가변 폭) · 진행 링(행 오른쪽 끝).
+            // A183은 스위치를 우측 끝에 뒀지만 사용자 지시(2026-08-20, 부록 B 75)로 뒤집었다.
+            // Grid를 쓰는 이유는 A183과 같다 — 제목이 길어져도 링이 MaxWidth 680 밖으로 밀려나
+            // 잘리지 않게 오른쪽에 고정한다(제목 칸만 Star라 링은 늘 행 끝에 선다).
+            // 링을 스위치와 제목 사이에 끼우지 않은 이유: Grid.ColumnSpacing은 칸이 0폭
+            // (링 숨김)이어도 간격을 넣어 스위치·제목 사이가 상시로 벌어지고, 작업이 시작돼
+            // 링이 뜨는 순간 제목이 옆으로 밀린다(A183이 피하려던 그 흔들림).
             var headerRow = new Grid { ColumnSpacing = 8 };
-            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var title = new TextBlock
             {
@@ -189,12 +205,12 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            Grid.SetColumn(title, 0);
-            Grid.SetColumn(busySpinner.Element, 1);
-            Grid.SetColumn(toggle, 2);
+            Grid.SetColumn(toggle, 0);
+            Grid.SetColumn(title, 1);
+            Grid.SetColumn(busySpinner.Element, 2);
+            headerRow.Children.Add(toggle);
             headerRow.Children.Add(title);
             headerRow.Children.Add(busySpinner.Element);
-            headerRow.Children.Add(toggle);
 
             // 종전 ToggleSwitch.Header 괄호 안에 붙어 있던 확장자 목록 — 제목에서 떼어 제 줄로.
             var extensionsText = new TextBlock
@@ -405,6 +421,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // 제목 + 설명 줄로 나뉘고, 아래 "Show more options" 안내도 이 카드 안으로 들어온다.
         var menuToggle = new ToggleSwitch
         {
+            // A197: 위 모듈 카드와 같은 배치·같은 정리(스위치 = 제목 왼쪽, 내장 On/Off 문구 제거,
+            // MinWidth 0 유지). 한 절 안에서 카드마다 스위치 자리가 다르면 다시 흐려진다.
+            OnContent = string.Empty,
+            OffContent = string.Empty,
             MinWidth = 0,
             // A195: 위 모듈 토글과 같은 이유로 IsOn 초기값을 여기서 읽지 않는다(아래 워커 조회).
             VerticalAlignment = VerticalAlignment.Center,
@@ -477,9 +497,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             });
         });
 
+        // A197: 스위치(왼쪽) · 제목(가변 폭). 이 카드에는 진행 링이 없어 두 칸이면 된다.
         var menuHeaderRow = new Grid { ColumnSpacing = 8 };
-        menuHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         menuHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        menuHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var menuTitle = new TextBlock
         {
             Text = "Explorer right-click menu",
@@ -487,10 +508,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        Grid.SetColumn(menuTitle, 0);
-        Grid.SetColumn(menuToggle, 1);
-        menuHeaderRow.Children.Add(menuTitle);
+        Grid.SetColumn(menuToggle, 0);
+        Grid.SetColumn(menuTitle, 1);
         menuHeaderRow.Children.Add(menuToggle);
+        menuHeaderRow.Children.Add(menuTitle);
 
         var menuCardBody = new StackPanel { Spacing = 6 };
         menuCardBody.Children.Add(menuHeaderRow);
