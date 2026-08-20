@@ -20,6 +20,10 @@ namespace KOTU.App;
 /// 자동 두 경로가 남았다. 토스트·오토체크 토글은 계속 없다).
 /// 연결 토글의 레지스트리 작업·기본 앱 개수 조회는 전부 <see cref="Worker"/>에서 돌고
 /// UI에는 진행률과 결과만 흘러온다(A77, v0.106.0).
+/// A195: 남아 있던 UI 스레드 동기 레지스트리 접근 셋(<b>모듈 토글 초기값 읽기</b>·
+/// <b>우클릭 메뉴 토글 초기값 읽기</b>·<b>우클릭 메뉴 등록/해제</b>)도 같은 워커로 옮겼다 —
+/// 이 화면에서 레지스트리를 만지는 코드는 이제 <b>전부</b> 워커 스레드에 있다
+/// (ARCHITECTURE.md §11.1 ① "UI 스레드 동기 레지스트리 IO 금지").
 /// A183: Explorer integration 절의 스위치들은 스위치 하나당 카드 하나(<see cref="NewCard"/>)로 묶였다 —
 /// 제목은 카드 헤더 좌측, 스위치는 그 행의 <b>우측 끝</b>(Windows 설정 앱 관례)이다.
 /// </summary>
@@ -39,8 +43,11 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
     /// <summary>
     /// 설정 화면 전용 직렬 워커(A42 계약, A77에서 도입). 레지스트리 등록·해제·UserChoice 쓰기·
-    /// 기본 앱 개수 조회가 전부 여기서 돈다. 모듈별로 나누지 않고 하나로 둔 이유 —
+    /// 기본 앱 개수 조회 + <b>토글 초기 상태 조회·우클릭 메뉴 등록/해제</b>(A195)가 전부 여기서 돈다.
+    /// 모듈별로 나누지 않고 하나로 둔 이유 —
     /// 모듈들이 Capabilities 키 하나를 공유해 동시 쓰기가 서로를 지울 수 있다.
+    /// 우클릭 메뉴도 같은 워커에 태우는 이유는 같다 — 파일 연결과 같은 HKCU\Software\Classes를
+    /// 만지고, 등록 끝에 부르는 셸 통지(SHChangeNotify)도 겹치면 안 된다(A195).
     /// 화면 UI는 모듈마다 따로 놀지만(각자 링·텍스트·토글) 실제 작업은 큐 순서대로 직렬 실행된다.
     /// </summary>
     private ModuleWorker? _worker;
@@ -146,7 +153,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 // 표시한다). MinWidth 0 = ToggleSwitch 기본값 154를 풀어 스위치가 카드 오른쪽 끝에
                 // 붙게 한다(풀지 않으면 스위치 오른쪽에 빈 자리가 남는다).
                 MinWidth = 0,
-                IsOn = Safe(() => ExplorerIntegration.IsAssociationRegistered(module)),
+                // A195: IsOn 초기값은 여기서 정하지 않는다 — 레지스트리 읽기는 아래
+                // 초기 상태 조회(워커)가 맡고, 답이 오면 그때 반영한다. 답이 오기 전·읽기 실패는
+                // 둘 다 Off로 보이는데, 이는 종전 Safe(...)의 실패 폴백과 같은 표시다.
                 VerticalAlignment = VerticalAlignment.Center,
             };
 
@@ -362,6 +371,26 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                     }
                 }
             };
+
+            // A195: 토글 초기값(레지스트리 읽기)도 워커에서 — 종전에는 ToggleSwitch를 만들면서
+            // UI 스레드에서 동기로 읽었다(모듈마다 확장자 수만큼 OpenSubKey). 관용구는 바로 위
+            // RefreshDefaultsAsync와 같다: 워커에서 읽고, DispatcherQueue로 돌아와 대입한다.
+            // 같은 워커 큐라 아래 등록/해제 작업과 순서가 보장되고(직렬), 화면을 떠난 뒤 도착한
+            // 답은 _uiAlive가 막는다. Toggled를 다시 발화시키지 않도록 _suppressToggle로 감싼다.
+            // 이름이 dispatcher가 아닌 이유 — RefreshDefaultsAsync 안의 지역 변수와 이름이 겹친다.
+            var stateDispatcher = DispatcherQueue;
+            Worker.Post(() =>
+            {
+                var registered = Safe(() => ExplorerIntegration.IsAssociationRegistered(module));
+                stateDispatcher.TryEnqueue(() =>
+                {
+                    // busy = 답이 오기 전에 사람이 먼저 토글했다 — 그 작업 결과가 우선이다.
+                    if (!_uiAlive || busy) return;
+                    _suppressToggle = true;
+                    toggle.IsOn = registered;
+                    _suppressToggle = false;
+                });
+            });
         }
 
         var archiveModule = router.Modules.FirstOrDefault(m => m.Id == "archive");
@@ -377,21 +406,76 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var menuToggle = new ToggleSwitch
         {
             MinWidth = 0,
-            IsOn = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)
-                           || ExplorerIntegration.IsCompressMenuRegistered()),
+            // A195: 위 모듈 토글과 같은 이유로 IsOn 초기값을 여기서 읽지 않는다(아래 워커 조회).
             VerticalAlignment = VerticalAlignment.Center,
         };
-        menuToggle.Toggled += (_, _) => Apply(menuToggle,
-            () =>
+
+        // A195: 등록/해제(레지스트리 쓰기 + SHChangeNotify 셸 통지)를 워커로 옮긴다 —
+        // 종전 Apply()는 이 전부를 UI 스레드에서 동기로 돌렸다(ARCHITECTURE §11.1 ①).
+        // 배선은 위 파일 연결 토글(A77)과 같은 관용구다: 재진입 플래그 → 토글 잠금 →
+        // 진행 문구 → await Worker.Run → UI 스레드 복귀 후 잠금 해제 → 실패면 IsOn 되돌리기.
+        // 다른 점 둘 — ① 진행 링을 붙이지 않는다(A79 ⑤: 발바닥 스피너 적용 위치는 파일 연결
+        // 토글 한 곳으로 못 박혀 있다) ② n/m 진행이 없어 문구가 한 줄로 끝난다.
+        // 같은 워커라 파일 연결 등록/해제와 겹치지 않는다(둘 다 HKCU\Software\Classes를 쓴다).
+        var menuBusy = false;
+        menuToggle.Toggled += async (_, _) =>
+        {
+            if (_suppressToggle || menuBusy) return;
+            var turnedOn = menuToggle.IsOn;
+
+            menuBusy = true;
+            menuToggle.IsEnabled = false;
+            var progressMessage = turnedOn
+                ? "Registering the right-click menu..."
+                : "Removing the right-click menu...";
+            _status.Text = progressMessage;
+
+            string? error;
+            try
             {
-                ExplorerIntegration.RegisterExtractHereMenu(archiveExts, archiveBrand);
-                ExplorerIntegration.RegisterCompressMenu(archiveBrand);
-            },
-            () =>
+                error = await Worker.Run(ctx => ApplyMenuRegistration(archiveExts, archiveBrand, turnedOn));
+            }
+            catch (Exception ex)
             {
-                ExplorerIntegration.UnregisterExtractHereMenu(archiveExts);
-                ExplorerIntegration.UnregisterCompressMenu();
+                // 워커가 이미 닫혔거나(뷰 이탈) 예상 못 한 실패 — 종전 Apply()와 같은 실패 처리로 보낸다.
+                error = ex.Message;
+            }
+
+            // 여기부터는 UI 스레드. 화면을 떠났어도 잠금은 풀어 둔다(파일 연결 토글과 같은 처리).
+            menuBusy = false;
+            menuToggle.IsEnabled = true;
+            if (!_uiAlive) return;
+
+            if (error is null)
+            {
+                // 종전 Apply()의 성공 동작(상태 줄 비우기) 그대로 — 단, 동기였던 종전과 달리
+                // 작업 중에 옆 모듈 토글이 이 공용 줄에 결과를 써 놓았을 수 있다.
+                // 그래서 아직 우리 진행 문구일 때만 지운다(남의 결과를 지우지 않는다).
+                if (_status.Text == progressMessage) _status.Text = string.Empty;
+                return;
+            }
+
+            // 종전 Apply()의 실패 동작 유지: 토글을 원위치로 되돌리고 이유를 표시한다.
+            _suppressToggle = true;
+            menuToggle.IsOn = !menuToggle.IsOn;
+            _suppressToggle = false;
+            _status.Text = "Failed to apply: " + error;
+        };
+
+        // A195: 메뉴 토글 초기값도 워커에서(위 모듈 토글과 같은 관용구).
+        var menuStateDispatcher = DispatcherQueue;
+        Worker.Post(() =>
+        {
+            var registered = Safe(() => ExplorerIntegration.IsExtractHereMenuRegistered(archiveExts)
+                                     || ExplorerIntegration.IsCompressMenuRegistered());
+            menuStateDispatcher.TryEnqueue(() =>
+            {
+                if (!_uiAlive || menuBusy) return;
+                _suppressToggle = true;
+                menuToggle.IsOn = registered;
+                _suppressToggle = false;
             });
+        });
 
         var menuHeaderRow = new Grid { ColumnSpacing = 8 };
         menuHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1017,25 +1101,36 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         public void Report(T value) => _queue.TryEnqueue(() => _onReport(value));
     }
 
-    /// <summary>토글 적용. 실패하면 토글을 원위치로 되돌리고 이유를 표시한다.</summary>
-    private void Apply(ToggleSwitch toggle, Action register, Action unregister)
+    /// <summary>
+    /// 워커 스레드 전용 (A195) — 우클릭 메뉴 등록/해제. 스위치 하나가 "여기에 풀기"(압축 파일)와
+    /// "압축하기"(모든 파일) 둘을 함께 다루므로 한 작업으로 묶는다(종전 <c>Apply</c>의 두 델리게이트).
+    /// UI 요소는 일절 건드리지 않고 실패 사유만 돌려준다 — 성공이면 null.
+    /// 앞쪽 등록이 성공한 뒤 뒤쪽이 실패하면 앞쪽은 남는데, 이는 종전 UI 스레드 판과 같은 동작이다.
+    /// </summary>
+    private static string? ApplyMenuRegistration(
+        IReadOnlyList<string> archiveExtensions, string brandLabel, bool turnOn)
     {
-        if (_suppressToggle) return;
         try
         {
-            if (toggle.IsOn) register();
-            else unregister();
-            _status.Text = string.Empty;
+            if (turnOn)
+            {
+                ExplorerIntegration.RegisterExtractHereMenu(archiveExtensions, brandLabel);
+                ExplorerIntegration.RegisterCompressMenu(brandLabel);
+            }
+            else
+            {
+                ExplorerIntegration.UnregisterExtractHereMenu(archiveExtensions);
+                ExplorerIntegration.UnregisterCompressMenu();
+            }
+            return null;
         }
         catch (Exception ex)
         {
-            _suppressToggle = true;
-            toggle.IsOn = !toggle.IsOn;
-            _suppressToggle = false;
-            _status.Text = "Failed to apply: " + ex.Message;
+            return ex.Message;
         }
     }
 
+    /// <summary>레지스트리 조회 실패를 '꺼짐'으로 보는 폴백 (워커에서만 호출 — A195).</summary>
     private static bool Safe(Func<bool> check)
     {
         try { return check(); }
