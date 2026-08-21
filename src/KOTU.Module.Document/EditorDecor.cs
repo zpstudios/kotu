@@ -60,6 +60,9 @@ internal sealed class EditorDecor
     private const double GutterFontSize = 12;
     private const double GutterDigitWidth = 8;  // 자릿수당 예약 폭(px) — 12px 폰트 숫자에 여유 포함
     private const double GutterTextGap = 12;    // 번호 오른끝과 본문 텍스트 왼끝(pad.Left) 사이 간격(px)
+    // A208: 자리가 빠듯할 때 허용하는 최소 간격(px, × _scale). 선호 간격(GutterTextGap)으로 자리가
+    // 안 나오면 이 간격까지 줄여서라도 그리고, 이마저 안 되면(번호가 본문을 덮는다) 그때만 숨긴다.
+    private const double GutterMinTextGap = 2;
 
     /// <summary>
     /// A181: 소유자(DocumentView)가 거터 자리를 왼쪽 패딩에 예약할 때 쓰는 산식 — 렌더의 거터
@@ -265,8 +268,15 @@ internal sealed class EditorDecor
         for (var n = _lineStarts.Length; n >= 10; n /= 10) digits++;
         var gutterWidth = digits * GutterDigitWidth * _scale;
         var margin = Math.Max(0, (_themeSource.ActualWidth - vw) / 2); // 컬럼 왼쪽의 가용 여백(보통 0)
-        var gutterX = pad.Left - GutterTextGap * _scale - gutterWidth;
-        var gutterVisible = gutterX >= -margin; // 클립 좌변(-margin)과 같은 기준
+        // A208(v0.217.0): 종전 판정은 "선호 간격(GutterTextGap) 기준 x가 클립 좌변(-margin)보다
+        // 왼쪽이면 통째 숨김" 하나뿐이라, 실측 pad.Left가 예약 산식(GutterReserveWidth)의 전제와
+        // 조금만 어긋나도 — 예약이 안 실린 기본 패딩 24에서는 소형 파일조차(2자릿수 = x −4 < 0) —
+        // 거터만 침묵 소멸했다(실기기 보고: 가이드·¶ 정상, 줄번호만 없음). 이제 자리가 빠듯하면
+        // 간격을 GutterMinTextGap까지 양보해 클립 좌변에 붙여서라도 그리고, 그래도 번호 오른끝이
+        // 본문 왼끝(pad.Left)을 최소 간격 이내로 침범하는 진짜 자리 부족만 숨긴다(종전 폴백 유지 —
+        // 본문을 덮는 그림은 여전히 없다). 예약이 정상 실린 상태의 좌표는 종전과 완전히 같다.
+        var gutterX = Math.Max(-margin, pad.Left - GutterTextGap * _scale - gutterWidth);
+        var gutterVisible = gutterX + gutterWidth <= pad.Left - GutterMinTextGap * _scale;
 
         var idx = FirstVisibleIndex(len);
         var line = idx >= 0 ? LineIndexOf(idx) : 0; // 첫 표시 줄이 속한 논리 줄(0-base)
