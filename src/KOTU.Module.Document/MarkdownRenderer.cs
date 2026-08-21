@@ -19,8 +19,9 @@ namespace KOTU.Module.Document;
 /// 성립한다. 브러시는 호출마다 새로 만든다 — v0.174.1 Geometry 공유 크래시(부모 1개 제약) 이후
 /// 리소스 공유는 하지 않는 방침(브러시는 공유 가능한 부류지만 비용이 미미해 방침을 따른다).
 ///
-/// <b>실패 안전(함정 3)</b>: 조립 중 예외는 소유자(DocumentView.EnterRenderMode)가 잡아
-/// 원문 TextBlock 폴백으로 대체한다 — 여기서는 던져도 앱이 죽지 않는다.
+/// <b>실패 안전(함정 3)</b>: 조립 중 예외는 소유자(DocumentView — EnterRenderMode의 첫 조각과
+/// A193 분할 조립 틱 루프 양쪽)가 잡아 원문 TextBlock 폴백으로 대체한다 — 여기서는 던져도
+/// 앱이 죽지 않는다.
 /// </summary>
 internal static class MarkdownRenderer
 {
@@ -33,12 +34,16 @@ internal static class MarkdownRenderer
     /// <summary>헤딩 크기 3단(사양) — 인덱스 = Level - 1.</summary>
     private static readonly double[] HeadingFontSizes = [24, 20, 16];
 
-    /// <summary>블록 목록을 패널에 조립한다(기존 자식은 버린다 — 재렌더는 토글 시점 1회, 사양).</summary>
-    public static void Render(Panel target, IReadOnlyList<MdBlock> blocks)
+    /// <summary>
+    /// A193: 블록 목록의 [start, start + count) 구간을 패널 <b>끝에 덧붙인다</b>(분할 조립).
+    /// 첫 호출 전 Clear는 호출자 몫이다 — 루프 제어(프레임 틱·중단 판정·폴백)는 DocumentView가
+    /// 소유하고(A42 분업: 파싱 = 워커 / 조립 = UI / 제어 = 뷰), 여기는 요청 구간의 조립만 한다.
+    /// 종전 Render(전 블록 일괄)는 Clear 후 start=0, count=blocks.Count 호출과 등가다.
+    /// </summary>
+    public static void AppendRange(Panel target, IReadOnlyList<MdBlock> blocks, int start, int count)
     {
-        target.Children.Clear();
-        foreach (var block in blocks)
-            target.Children.Add(BuildBlock(block));
+        for (var i = start; i < start + count; i++)
+            target.Children.Add(BuildBlock(blocks[i]));
     }
 
     private static UIElement BuildBlock(MdBlock block) => block.Kind switch

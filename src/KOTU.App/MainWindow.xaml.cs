@@ -77,6 +77,18 @@ public sealed partial class MainWindow : Window
     // v0.111.0 COMException 전례)에 걸려서다.
     private ThumbnailExplorer? _s4Explorer;
 
+    /// <summary>
+    /// A200: 중앙 썸네일뷰(S1/_thumbnailExplorer · S4/_s4Explorer)의 파일 선택 축 — 값이 있으면
+    /// 우측 정보 패널이 열린 콘텐츠 대신 **이 선택 파일**의 정보를 보여준다(탐색 중 문맥 우선,
+    /// 해제되면 종전 열린 콘텐츠 기준으로 복귀). 폴더 선택·무선택 = null(파일만 — 구현 결정).
+    /// IsPlaceholder(A175)를 같이 들고 다녀 선택 조회의 하이드레이션 가드에 쓴다.
+    /// 세우는 곳 = OnBrowseSelectionChanged 하나, 내리는 곳 = 같은 메서드(해제) +
+    /// SetContentState/OnContentOpened(열기 = 선택 축 리셋 — 열기 직후 선택이 열린 콘텐츠
+    /// 정보를 가리는 역전 방지)/OnUntitledOpened/ExitOpenFileBrowsing/ViewChanged(목록 재작성 =
+    /// 타일 전부 새로 만듦 — stale 경로 방지).
+    /// </summary>
+    private (string Path, bool IsPlaceholder)? _selectedBrowse;
+
     // ---- 하단 바 드라이브 줄 (A22, v0.108.0) ----
     // 표시 컨트롤은 셸에 하나(공용 DriveStrip)만 두고 모듈 하단 바가 슬롯을 내준다(IDriveStripHost).
     // 보임 조건은 "파일이 열려 있지 않을 때"뿐이라, 새 상태 플래그 없이 _currentFilePath를 그대로 쓴다.
@@ -199,6 +211,14 @@ public sealed partial class MainWindow : Window
         ListOverlay.ViewChanged += (folder, entries) =>
         {
             RememberBrowsedFolder(folder); // A174 — 브라우징 위치도 전역 마지막 폴더로(같은 값이면 무동작)
+            // A200: 목록 재작성(폴더 이동·정렬·감시 재스캔)은 타일을 전부 새로 만든다 — 선택 축도
+            // 여기서 확정 리셋한다(그리드 SelectionChanged가 Clear에서 안 와도 stale 경로가 우측
+            // 정보에 남지 않게). 이미 없으면 무동작 — 재스캔마다 정보 패널을 다시 그리지 않는다.
+            if (_selectedBrowse is not null)
+            {
+                _selectedBrowse = null;
+                RefreshInfoOverlayForSelection();
+            }
             if (_openFileBrowsing) _s4Explorer?.ShowEntries(folder, entries);
             else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(folder, entries);
         };
@@ -1432,6 +1452,8 @@ public sealed partial class MainWindow : Window
         _currentModule = module;
         _currentFilePath = filePath;
         _untitledContent = false; // A189: 모듈 전환·실경로 열기·설정 진입은 무제 상태를 걷는다
+        _selectedBrowse = null;   // A200: 열기·모듈 전환 = 선택 축 리셋 — 더블클릭 열기의 선택
+                                  // 겹발화가 열린 콘텐츠 정보를 가리는 역전 방지(아래 Apply가 그린다)
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // 전역 마지막 폴더 저장 (v0.55.0 모듈별 → A174 전역 1벌)
         UpdateEmptyExplorer();
@@ -1492,6 +1514,7 @@ public sealed partial class MainWindow : Window
         var wasUntitled = _untitledContent; // A189: 무제 → 첫 저장(Save as)의 경로 확정 전이인지
         _untitledContent = false;
         _currentFilePath = path;
+        _selectedBrowse = null; // A200: 뷰 내부 열기(◀/▶ 등)도 열기 — 선택 축 리셋(SetContentState와 동일 규칙)
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // v0.55.0
         UpdateEmptyExplorer();
@@ -1525,6 +1548,7 @@ public sealed partial class MainWindow : Window
         ResetBarAutoHide();
         _currentFilePath = null;
         _untitledContent = true;
+        _selectedBrowse = null; // A200: 무제 진입도 콘텐츠 전환 — 선택 축 리셋(방어 — S1 경유라 대개 이미 null)
         InfoOverlay.InvalidateCache();
         UpdateEmptyExplorer(); // IsEmptyFileModule=false → 중앙 썸네일 탐색기를 내린다(에디터가 중앙)
         UpdateDriveStrip();    // 무제도 "콘텐츠 열림" — 드라이브 줄 대신 파일명(Untitled) 칸
@@ -1657,6 +1681,7 @@ public sealed partial class MainWindow : Window
                 _thumbnailExplorer.FolderActivated += folder => ListOverlay.NavigateList(folder);
                 _thumbnailExplorer.FileActivated += OpenFileRouted;
                 _thumbnailExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow;
+                _thumbnailExplorer.SelectionChanged += OnBrowseSelectionChanged; // A200 — 선택 우선 정보
                 ExplorerHost.Children.Add(_thumbnailExplorer);
             }
             // A174: 빈 모듈 전환은 좌 리스트의 현재 위치를 리셋하지 않는다 — ExplorerStartFolder가
@@ -2327,12 +2352,7 @@ public sealed partial class MainWindow : Window
         if (listShow) ShowListOverlay();
         else ListOverlay.Hide();
 
-        if (infoShow && hasFile)
-            InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider);
-        else if (infoShow)
-            InfoOverlay.ShowPlaceholder(); // 빈 모듈 상태 — 보여줄 파일 정보가 없다 (A81)
-        else
-            InfoOverlay.Hide();
+        ApplyInfoOverlayContent(infoShow, hasFile); // A200 — 선택 축 포함 정보 절(선택 변경 경로와 공용)
 
         // A119: 패널 제공 뷰(정보 모듈) — 같은 좌/우 상태를 모듈 콘텐츠 호스트로 표시한다.
         // 콘텐츠(그래프·스펙)는 뷰가 생성·소유하고(같은 인스턴스 반복 반환) 셸은 얹기만 한다.
@@ -2414,6 +2434,63 @@ public sealed partial class MainWindow : Window
             (!RightPanelHost.IsOpen && IsFocusWithin(RightPanelHost));
         if (focusOrphaned)
             (ModuleHost.Content as Control)?.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// 우측 정보 패널의 내용 절 (A200 — ApplyOverlayStates의 정보 분기를 추출해 선택 변경 경로와
+    /// 공용화): 선택 축(_selectedBrowse)이 있으면 **선택 파일** 우선(ShowForSelection — 셸 조회기),
+    /// 없으면 종전 규칙 그대로 — 열린 콘텐츠(provider) → 플레이스홀더(A81) → 숨김.
+    /// </summary>
+    private void ApplyInfoOverlayContent(bool infoShow, bool hasFile)
+    {
+        if (infoShow && _selectedBrowse is { } selected)
+            InfoOverlay.ShowForSelection(selected.Path, selected.IsPlaceholder);
+        else if (infoShow && hasFile)
+            InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider);
+        else if (infoShow)
+            InfoOverlay.ShowPlaceholder(); // 빈 모듈 상태 — 보여줄 파일 정보가 없다 (A81)
+        else
+            InfoOverlay.Hide();
+    }
+
+    /// <summary>
+    /// A200: 선택 축 변경 시 우측 정보 패널만 다시 판정한다 — 전체 ApplyOverlayStates를 부르지
+    /// 않는 이유는 그 경로가 좌 리스트를 매번 Show → 폴더 재스캔까지 시키기 때문(SetDockedState의
+    /// A109 가드와 같은 근거). 패널이 닫혀 있으면 무동작 — 다음 열림 때 ApplyOverlayStates 경로가
+    /// 선택 축을 판정한다(구현 결정). infoShow 산식은 ApplyOverlayStates와 동일해야 한다.
+    /// </summary>
+    private void RefreshInfoOverlayForSelection()
+    {
+        if (!InfoOverlay.IsOpen) return;
+        var hasFile = _currentFilePath is not null;
+        var fallback = _untitledContent || IsPanelFallbackView;
+        var infoShow = (hasFile || IsEmptyFileModule || fallback)
+                       && _infoSide.State == OverlayState.OpaqueDocked;
+        ApplyInfoOverlayContent(infoShow, hasFile);
+    }
+
+    /// <summary>
+    /// A200: 중앙 썸네일 그리드의 선택 변경 — 지금 화면을 차지한 표면(S4 중이면 _s4Explorer,
+    /// 빈 모듈이면 _thumbnailExplorer)의 선택만 채택한다(내려간 표면의 잔존 이벤트 무시).
+    /// 파일 선택 = 선택 축 갱신, 폴더 선택·해제 = null(구현 결정 — 파일만). 같은 값이면 무동작 —
+    /// 목록 재작성이 만드는 중복 발화로 정보 패널을 다시 그리지 않는다.
+    /// 더블클릭 열기와의 겹발화는 열기 경로(SetContentState·OnContentOpened)의 선택 축 리셋이
+    /// 결박한다 — 선택 → 열기 순서라 열기가 항상 마지막에 축을 걷는다.
+    /// </summary>
+    private void OnBrowseSelectionChanged()
+    {
+        var active = _openFileBrowsing ? _s4Explorer
+            : IsEmptyFileModule ? _thumbnailExplorer
+            : null;
+        if (active is null) return;
+        var next = active.SelectedEntry is { IsFolder: false } entry
+            ? ((string Path, bool IsPlaceholder)?)(entry.Path, entry.IsPlaceholder)
+            : null;
+        if (next is null && _selectedBrowse is null) return;
+        if (next is { } n && _selectedBrowse is { } cur &&
+            n.Path == cur.Path && n.IsPlaceholder == cur.IsPlaceholder) return;
+        _selectedBrowse = next;
+        RefreshInfoOverlayForSelection();
     }
 
     // ---------- 경계 버튼 (A86 keymap Q7) ----------
@@ -2664,6 +2741,7 @@ public sealed partial class MainWindow : Window
     {
         if (!_openFileBrowsing) return;
         _openFileBrowsing = false;
+        _selectedBrowse = null; // A200: S4 그리드가 내려간다 — 그 선택이 우측 정보에 남지 않게
         S4Host.Visibility = Visibility.Collapsed;
         if (restore && _s4Restore is { } snap)
         {
@@ -2696,6 +2774,7 @@ public sealed partial class MainWindow : Window
         // 새 창 열기(Shift+더블클릭·우클릭)는 이 창의 콘텐츠가 안 바뀌므로 S4를 유지한다(구현 결정 —
         // 다른 창에 하나 열고 계속 고르는 흐름이 자연스럽다).
         _s4Explorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow;
+        _s4Explorer.SelectionChanged += OnBrowseSelectionChanged; // A200 — S1 쪽과 동일 배선(선택 우선 정보)
         S4CenterHost.Children.Add(_s4Explorer);
     }
 

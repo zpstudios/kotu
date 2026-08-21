@@ -24,14 +24,31 @@ namespace KOTU.App;
 /// ThumbnailExplorer가 대체했고, 이 페인의 표시 목록(ViewChanged)이 그 뷰의 데이터 원본이다.
 /// 썸네일 그리드 경로(MakeGridItem·LoadThumbnailsAsync)는 전체 페인 사용처가 다시 생길 때를
 /// 위해 남겨 뒀다(리스트 전용 모드에서는 그리드가 숨겨져 실행되지 않는다).
-/// 폴더 스캔·썸네일 추출은 페인 전용 워커(A42)에서 돌고, UI 스레드는 결과 반영만 한다.
+/// 폴더 스캔은 페인 전용 워커(A42)에서 직렬로, 항목별로 독립인 썸네일·상세 조각 fetch는
+/// 페인 전용 풀(A194 — ModuleWorkerPool, 워커 3)에서 상한 있는 병렬로 돌고,
+/// UI 스레드는 결과 반영만 한다(카운터·캐시·컨테이너 접근은 전부 UI 스레드 단독).
 /// 외부 변경(다른 앱·OS 탐색기)은 폴더 감시(A94 5차 — FileSystemWatcher + 디바운스)가
 /// 같은 재스캔 경로로 반영한다(아래 "폴더 감시" 절).
 /// </summary>
 public sealed partial class ExplorerPane : UserControl
 {
     private const int ThumbnailLimit = 300;   // 썸네일 로드 상한 (초대형 폴더 보호)
+    private const int FetchConcurrency = 3;   // 썸네일·상세 조각 fetch 동시성 상한 (A194 — 풀 워커 수와 동일)
     private const int DoubleClickMs = 500;
+
+    /// <summary>
+    /// A192 체감 조정 지점: 분할 조립 조각 크기(항목 수) — 첫 즉시 조각과 프레임당 append 조각이
+    /// 같은 값을 쓴다(확정 수치 80 — DocumentView.RenderChunkBlocks의 상수 배치 관용구.
+    /// 되돌리기·조정은 이 상수 하나만 고치면 된다).
+    /// </summary>
+    private const int FillChunkItems = 80;
+
+    /// <summary>
+    /// A192: 표면당 컨테이너 실체화 상한 — 초과분은 컨테이너를 만들지 않고 말미에 비상호작용
+    /// 안내 1행만 붙인다(MakeOverflowNotice). 상한은 <b>컨테이너 실체화에만</b> 걸린다:
+    /// _entries·_display·ViewChanged로 흐르는 Entry 목록과 체크 prune(A179)은 전체 그대로다.
+    /// </summary>
+    private const int MaterializeLimit = 2000;
 
     /// <summary>파일 더블클릭 시 전체 경로와 함께 발생. 셸이 라우팅한다(재사용 규칙 적용, A24).</summary>
     public event Action<string>? FileActivated;
@@ -86,11 +103,34 @@ public sealed partial class ExplorerPane : UserControl
     private IReadOnlyList<string> _extensions = [];
     private string _folder = string.Empty;
     private int _loadSeq;                     // 빠른 연속 탐색 시 늦은 결과 폐기
+
+    /// <summary>
+    /// A192: 분할 조립 루프의 프레임 틱 핸들러(null = 루프 없음). CompositionTarget.Rendering은
+    /// static 이벤트라 뷰 수명 안에서 반드시 해제한다 — 남기면 닫힌 페인이 통째로 누수된다
+    /// (DocumentView._renderAppendHandler와 같은 사정). 해제의 단일 지점 = StopFillAppendLoop.
+    /// 호출부 전수 = Unloaded·Fill 기동 직전 방어·NavigateToAsync 스캔 실패 경로·틱 내부
+    /// (완료/seq 중단/예외).
+    /// </summary>
+    private EventHandler<object>? _fillAppendHandler;
+
+    /// <summary>
+    /// A192: 진행 중 분할 조립의 완료 신호 — 새 폴더/파일 생성 직후의 편집 진입
+    /// (CreateFolderThenRenameAsync류)이 "컨테이너가 다 만들어진 뒤"를 기다리는 통로.
+    /// 루프가 돌 때만 존재하고(소형 폴더 = 동기 완료 = null), 완료·예외·새 Fill로 대체될 때
+    /// 반드시 TrySetResult로 풀어 준다(안 풀면 대기 흐름이 영원히 걸린다).
+    /// 생성 형태는 ModuleWorker.Run의 RunContinuationsAsynchronously 관용구.
+    /// </summary>
+    private TaskCompletionSource<bool>? _fillDone;
     private (string Path, DateTime At)? _lastClick;
     private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
     private (string Path, DateTime At)? _lastPress;      // A131: 원시 눌림 쌍 — 항목 재구축을 건너 살아남는 최후 폴백
-    private ModuleWorker? _worker;            // 스캔·썸네일 전용 — 페인별 분리(A42 정책)
-    private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 정렬 변경 시 재스캔 없이 재배치(A5)
+    private ModuleWorker? _worker;            // 폴더 스캔 전용(순서 의존) — 페인별 분리(A42 정책)
+    private ModuleWorkerPool? _fetchPool;     // 썸네일·상세 조각 fetch 전용(A194 — 항목별 독립 작업만)
+    private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 재스캔 없는 재배치의 원본(A5)
+    // A204: 마지막 Arrange 결과(현재 표시 순서). 정렬 키·방향 변경(헤더 클릭)은 이것을 입력으로
+    // stable 재정렬해 직전 기준이 동률의 2차 순서로 살아남는다. 재스캔·필터 변경은 _entries
+    // (스캔 결과 = 이름순)를 입력으로 — 안정성은 세션 내 정렬 조작 간에만 성립, 재스캔은 리셋.
+    private IReadOnlyList<ExplorerListing.Entry> _display = [];
     private ExplorerListing.SortKey _sortKey = ExplorerListing.SortKey.Name;
     private bool _sortDesc; // A155 — 초기값 false = Name의 기본 방향(DefaultDescending(Name))과 일치
     private bool _showHidden; // A160 — explorer.showHidden(기본 false = 숨김·시스템 감춤)
@@ -125,6 +165,14 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도(좌 리스트 오버레이 재오픈) 되살아난다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU explorer worker");
+
+    /// <summary>
+    /// 썸네일·상세 조각 fetch 전용 풀 (A194 — 워커 3, Worker와 같은 지연 생성·Unloaded 정리 규칙).
+    /// 항목별로 독립인 fetch만 여기로 — 순서 의존 작업(폴더 스캔)은 단일 Worker에 남는다
+    /// (풀은 배정 간 순서를 보장하지 않는다 — ModuleWorkerPool 계약).
+    /// </summary>
+    private ModuleWorkerPool FetchPool =>
+        _fetchPool ??= new ModuleWorkerPool("KOTU explorer fetch", FetchConcurrency);
 
     public ExplorerPane()
     {
@@ -182,9 +230,14 @@ public sealed partial class ExplorerPane : UserControl
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             ExplorerRenameBox.EditEnded -= OnRenameEditEnded;
             _surfaceLive = false;
+            StopFillAppendLoop(); // A192 — CompositionTarget.Rendering은 static: 남기면 닫힌 페인 통째 누수
+            _fillDone?.TrySetResult(true); // A192 — 조립 완료를 기다리던 흐름 해방(소화할 곳이 없다)
+            _fillDone = null;
             TearDownWatch(); // 감시 이벤트 전부 해제 + Dispose + 디바운스 정지 — 창 통째 누수 방지
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
+            _fetchPool?.Dispose(); // A194 — 풀 전파 Dispose. 닫힌 뒤의 Run은 취소 Task(계약)라
+            _fetchPool = null;     // 발사 루프의 OperationCanceledException 처리로 조용히 끝난다.
         };
     }
 
@@ -299,9 +352,14 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>
     /// 헤더 클릭 (A155): 같은 헤더 = 방향 토글, 다른 헤더 = 그 키로 전환(방향은 키의 기본값으로
-    /// 리셋 — 탐색기 관례). 저장은 종전 OnSortChanged와 같은 즉시 Set + Save(전역 1벌).
+    /// 리셋 — 탐색기 관례). 저장은 종전 OnSortChanged와 같은 즉시 Set + Save(전역 1벌) —
+    /// A204에서도 저장은 <b>최종 기준 1개</b>(explorer.sort/sortDesc)뿐이고 정렬 이력은 저장하지
+    /// 않는다(안정성은 세션 내 표시 순서 승계로만 성립 — 재시작·재스캔이면 리셋).
     /// 재그리기는 RefreshView(재스캔 없음) — ViewChanged로 중앙 썸네일까지 같은 순서가 흐르고,
     /// 트리 동기(A134 SyncTreeToFolder)는 같은 폴더 조기 반환으로 걸러진다(재통지 무해).
+    /// A204: 입력은 _display(직전 Arrange 결과 = 현재 표시 순서) — Arrange가 stable이라
+    /// "이름 오름 → 크기" 전환 시 같은 크기끼리 이름 오름 순서가 유지된다. 같은 키 재클릭
+    /// (방향 토글)도 같은 경로 — stable이라 동률 내 직전 순서가 그대로다(별도 처리 없음).
     /// </summary>
     private void OnSortHeaderClick(ExplorerListing.SortKey key)
     {
@@ -318,20 +376,30 @@ public sealed partial class ExplorerPane : UserControl
         _settings?.Set(SortDescSettingKey, _sortDesc);
         _settings?.Save();
         SyncSortHeaders();
-        RefreshView();
+        RefreshView(_display);
     }
 
     /// <summary>
-    /// 캐시된 스캔 결과를 현재 정렬·필터로 재배치해 다시 그린다. 재스캔 없음.
+    /// 입력 목록을 현재 정렬·필터로 재배치해 다시 그린다. 재스캔 없음.
     /// 항목이 새로 만들어지므로 썸네일도 다시 채운다(셸 썸네일 캐시라 재추출은 싸다).
+    /// A204 — 입력 선택이 안정성의 전부다:
+    /// · 정렬 키·방향 변경(OnSortHeaderClick) = _display(직전 표시 순서) → 직전 기준이 동률의
+    ///   2차 순서로 승계(stable sort).
+    /// · 재스캔(NavigateToAsync — 감시 디바운스 포함)·필터 토글(A7) = _entries(스캔 결과 = 이름순)
+    ///   → 최종 키 1개만 적용 = 종전과 같은 화면. 감시 재통지마다 순서가 흔들리지 않도록
+    ///   재스캔 경로는 절대 _display를 입력으로 쓰지 않는다(이전 화면 순서의 재정렬 금지).
+    ///   필터 해제로 돌아오는 항목은 _display에 없으므로 필터 경로도 _entries가 맞다.
     /// </summary>
-    private void RefreshView()
+    private void RefreshView(IReadOnlyList<ExplorerListing.Entry> input)
     {
         var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
-        var arranged = ExplorerListing.Arrange(_entries, _sortKey, _sortDesc, _hiddenExts);
-        Fill(arranged);
+        var arranged = ExplorerListing.Arrange(input, _sortKey, _sortDesc, _hiddenExts);
+        _display = arranged; // A204 — 다음 정렬 변경의 입력(현재 표시 순서)
+        Fill(arranged, seq); // A192 — 첫 조각 즉시 + 나머지는 프레임 분할(완료 시 FinishFill)
         ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
-        _ = LoadDetailsAsync(seq);
+        // A192: 소형 폴더(첫 조각 이하)는 조립이 위 Fill에서 동기로 끝났다 — 종전 순서 그대로
+        // (Fill → ViewChanged → 로더) 마무리를 여기서 한다. 루프가 돌면 마지막 틱이 부른다.
+        if (_fillAppendHandler is null) FinishFill(arranged, seq);
     }
 
     // ---------- 파일 종류 필터 (A7) ----------
@@ -370,7 +438,7 @@ public sealed partial class ExplorerPane : UserControl
                 if (toggle.IsChecked) _hiddenExts.Remove(ext);
                 else _hiddenExts.Add(ext);
                 UpdateFilterVisual();
-                RefreshView();
+                RefreshView(_entries); // A204 — 필터 변경은 스캔 결과 입력(안정성 리셋, 계약대로)
             };
             extensionToggles.Add(toggle);
             flyout.Items.Add(toggle);
@@ -385,7 +453,7 @@ public sealed partial class ExplorerPane : UserControl
             // 훑으면 아래 숨김 표시 토글까지 체크돼, 설정은 그대로인 채 메뉴만 거짓말을 한다.
             foreach (var t in extensionToggles) t.IsChecked = true;
             UpdateFilterVisual();
-            RefreshView();
+            RefreshView(_entries); // A204 — 위 확장자 토글과 같은 입력 선택(스캔 결과)
         };
         flyout.Items.Add(showAll);
 
@@ -407,7 +475,7 @@ public sealed partial class ExplorerPane : UserControl
             _settings?.Save();
             // 좌 패널 폴더 트리는 자기 열거를 따로 한다 — 같은 설정으로 다시 만들라고 알린다.
             ShowHiddenChanged?.Invoke();
-            // ⚠️ RefreshView가 아니라 **재열거**여야 한다: RefreshView는 마지막 스캔 결과(_entries)를
+            // ⚠️ RefreshView(_entries)가 아니라 **재열거**여야 한다: 그건 마지막 스캔 결과를
             // 다시 배열할 뿐인데 숨김 항목은 애초에 그 목록에 없다(거르기가 열거 시점에 일어난다).
             // RefreshAfterFileOp = 현재 폴더 NavigateTo(재스캔) — 빈 영역 메뉴의 Refresh와 같은 경로다.
             RefreshAfterFileOp();
@@ -444,7 +512,8 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>가벼운 상세 텍스트(길이·모듈별 정보 — A6·A155)를 먼저 채우고,
-    /// 무거운 썸네일을 이어서 채운다(같은 워커 직렬 큐).</summary>
+    /// 무거운 썸네일을 이어서 채운다. A194: 각 단계 안에서는 fetch가 풀(워커 3)로 겹치지만
+    /// 단계 간 순서(상세 전체 → 썸네일)는 종전대로 유지한다(await 직렬).</summary>
     private async Task LoadDetailsAsync(int seq)
     {
         await LoadDetailInfoAsync(seq);
@@ -519,6 +588,9 @@ public sealed partial class ExplorerPane : UserControl
         catch (Exception ex)
         {
             if (seq != _loadSeq) return;
+            StopFillAppendLoop(); // A192 — 직전 폴더의 조립 루프가 빈 판에 낡은 조각을 붙이지 않게(seq 대조와 이중)
+            _fillDone?.TrySetResult(true);
+            _fillDone = null;
             IconGrid.Items.Clear();
             ListPane.Items.Clear();
             EmptyText.Text = "Cannot read this folder: " + ex.Message;
@@ -539,31 +611,168 @@ public sealed partial class ExplorerPane : UserControl
             var alive = new HashSet<string>(entries.Select(e => e.Path), StringComparer.OrdinalIgnoreCase);
             _checkedPaths.RemoveWhere(p => !alive.Contains(p));
         }
-        RefreshView();
+        // A204: 재스캔(폴더 감시 디바운스 포함)은 스캔 결과(이름순)에 최종 키 1개만 적용 —
+        // 감시 재통지마다 화면이 흔들리지 않는다. 직전 표시 순서(_display)는 정렬 클릭 전용.
+        RefreshView(_entries);
     }
 
     /// <summary>
     /// 표시 목록을 항목 컨테이너로 다시 만들어 채운다(ItemsSource·DataTemplate 없음 — 구조 규칙).
+    /// A192: 종전 전량 동기 생성을 분할 조립으로 대체 — 첫 조각(FillChunkItems)만 즉시 만들고
+    /// 나머지는 CompositionTarget.Rendering 틱당 한 조각씩 append한다(StartFillAppendLoop —
+    /// DocumentView.StartRenderAppendLoop의 A193 구조 복제). 실체화 상한(MaterializeLimit)을
+    /// 넘는 초과분은 만들지 않고 완료 시점(FinishFill)에 안내 1행만 붙는다. 재스캔·정렬·필터
+    /// 재진입은 명시 해제(아래 Stop) + 틱 진입 seq 대조의 이중 방어 — 낡은 조각이 새 목록에
+    /// 붙는 사고가 없다. 상세·썸네일 로더 기동도 FinishFill로 옮겼다(조각이 덜 붙은 스냅샷을
+    /// 로더가 잡으면 나중 항목이 이번 회차에서 영영 빠지기 때문 — 근거는 FinishFill 주석).
     /// A179 유의: 체크(작업 집합)는 경로 키 집합(_checkedPaths)이 진실이라 이 재생성(폴더 감시
     /// 400ms 재스캔 포함)이 돌아도 MakeListItem이 집합에서 복원한다 — 종전 A157의 "재스캔 후
     /// 체크 소실" 낙수는 이것으로 해소. **선택**(하이라이트)은 여전히 재생성과 함께 사라진다 —
     /// 선택 복원은 별도 설계가 필요해 범위 밖(등재 후보 유지).
     /// </summary>
-    private void Fill(IReadOnlyList<ExplorerListing.Entry> entries)
+    private void Fill(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
     {
+        StopFillAppendLoop(); // 방어: 직전 조립 루프가 남아 있으면 먼저 해제(A193 관용구)
+        _fillDone?.TrySetResult(true); // 직전 조립을 기다리던 흐름 해방 — 낡은 목록이니 미매칭 폴백으로 끝난다
+        _fillDone = null;
+
         IconGrid.Items.Clear();
         ListPane.Items.Clear();
 
-        foreach (var entry in entries)
-        {
-            if (IconGrid.Visibility == Visibility.Visible)
-                IconGrid.Items.Add(MakeGridItem(entry));
-            ListPane.Items.Add(MakeListItem(entry));
-        }
+        var cap = Math.Min(entries.Count, MaterializeLimit);
+        var first = Math.Min(FillChunkItems, cap);
+        AppendFillRange(entries, 0, first);
 
         EmptyText.Text = "No matching files here";
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (first < cap)
+        {
+            _fillDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            StartFillAppendLoop(seq, entries, first, cap);
+        }
+        // 소형 폴더(첫 조각 이하)는 여기서 조립이 끝났다 — 마무리(FinishFill)는 호출자
+        // (RefreshView)가 종전 순서(Fill → ViewChanged → 로더)를 지키려고 자기 자리에서 부른다.
     }
+
+    /// <summary>조각 하나를 두 표면에 붙인다 (A192) — 종전 Fill 본문의 항목 생성 그대로.</summary>
+    private void AppendFillRange(IReadOnlyList<ExplorerListing.Entry> entries, int start, int count)
+    {
+        var makeGrid = IconGrid.Visibility == Visibility.Visible; // 리스트 전용 모드(현행 유일 사용처)면 그리드 생략
+        for (var i = start; i < start + count; i++)
+        {
+            var entry = entries[i];
+            if (makeGrid) IconGrid.Items.Add(MakeGridItem(entry));
+            ListPane.Items.Add(MakeListItem(entry));
+        }
+    }
+
+    /// <summary>
+    /// A192: 첫 조각 이후의 나머지 항목을 CompositionTarget.Rendering 틱마다 한 조각
+    /// (FillChunkItems)씩 append한다 — UI 스레드 점유 상한 = 조각 1개 생성
+    /// (DocumentView.StartRenderAppendLoop과 같은 프레임 틱 관용구·같은 해제 의무).
+    /// 중단 판정 = 매 틱 append 직전의 seq 대조(한 틱 = 한 조각이라 틱 진입 시 1회로 충분):
+    /// 재스캔(감시 디바운스 포함)·정렬·필터·폴더 전환이 _loadSeq를 올리는 현행 구조 그대로다.
+    /// 틱 핸들러는 본문 전체가 try/catch다(static 이벤트라 예외가 새면 앱 전역 크래시) —
+    /// 조각 생성 예외 = 루프 중단(부분 목록 잔존은 다음 재스캔이 덮는다) + 완료 신호 해방.
+    /// </summary>
+    private void StartFillAppendLoop(int seq, IReadOnlyList<ExplorerListing.Entry> entries, int start, int cap)
+    {
+        StopFillAppendLoop(); // 방어: 기동 직전 잔존 루프 해제(A193 관용구)
+
+        var next = start;
+        void OnTick(object? sender, object? e)
+        {
+            try
+            {
+                if (seq != _loadSeq)
+                {
+                    StopFillAppendLoop(); // 그새 재스캔·정렬·폴더 전환 — 낡은 조각을 붙이지 않는다
+                    return;               // _fillDone은 건드리지 않는다 — 이미 새 Fill 것으로 대체됐다
+                }
+                var count = Math.Min(FillChunkItems, cap - next);
+                AppendFillRange(entries, next, count);
+                next += count;
+                if (next >= cap)
+                {
+                    StopFillAppendLoop(); // 완료 — 더 깨울 이유가 없다
+                    FinishFill(entries, seq);
+                }
+            }
+            catch (Exception)
+            {
+                StopFillAppendLoop();
+                _fillDone?.TrySetResult(true); // seq 일치 확인 뒤의 예외라 이 신호는 이번 조립 것이다
+                _fillDone = null;
+            }
+        }
+        _fillAppendHandler = OnTick;
+        CompositionTarget.Rendering += OnTick;
+    }
+
+    /// <summary>A192: 분할 조립 루프 해제의 단일 지점 — 구독 해제 + 표지 소거(루프 없으면 무동작).
+    /// 기동은 StartFillAppendLoop 한 곳뿐이라 구독 중 핸들러 = 이 필드 하나가 불변식이다.</summary>
+    private void StopFillAppendLoop()
+    {
+        if (_fillAppendHandler is { } handler)
+        {
+            CompositionTarget.Rendering -= handler;
+            _fillAppendHandler = null;
+        }
+    }
+
+    /// <summary>
+    /// A192: 조립 완료의 단일 마무리 — ① 상한 초과분 안내 1행 부착, ② 완료 신호 해방,
+    /// ③ 상세·썸네일 로더 기동. 로더를 "루프 완료 후"로 옮긴 근거: LoadDetailInfoAsync·
+    /// LoadThumbnailsAsync는 기동 시점에 Items를 스냅샷해 순회하므로, 조각이 덜 붙은 시점에
+    /// 기동하면 뒤 조각의 항목이 이번 회차에서 영영 빠진다(부재 "내성"으로 해결 불가 —
+    /// 다시 찾지 않는 구조). 대형 폴더의 상세·썸네일이 조립 완료까지(2000항목 기준 수백 ms)
+    /// 늦는 것은 수용(사양 명기). 소형 폴더는 RefreshView가 동기로 불러 종전 시점과 같다.
+    /// 낡은 완료(폐기된 루프의 마지막 틱)는 seq 대조로 걸러진다.
+    /// </summary>
+    private void FinishFill(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
+    {
+        if (seq != _loadSeq) return; // 방어 — 낡은 완료가 로더를 기동하지 않게
+        if (entries.Count > MaterializeLimit)
+        {
+            var hidden = entries.Count - MaterializeLimit;
+            if (IconGrid.Visibility == Visibility.Visible)
+                IconGrid.Items.Add(MakeOverflowNotice(hidden, grid: true));
+            ListPane.Items.Add(MakeOverflowNotice(hidden, grid: false));
+        }
+        _fillDone?.TrySetResult(true);
+        _fillDone = null;
+        _ = LoadDetailsAsync(seq);
+    }
+
+    /// <summary>
+    /// A192: 실체화 상한 초과 안내 — 비상호작용 1행/1타일. Tag 없음(항목 조회·조작 루틴은 전부
+    /// Tag의 Entry 패턴 매칭이라 자연 제외된다: FindItemByPath·CheckedPathsInView·SelectedPathsOf·
+    /// ApplyCutMark·LoadDetailInfoAsync 전수 확인), 계약 훅(메뉴·드래그·체크·더블클릭) 미부착,
+    /// IsEnabled=false로 포커스·클릭 대상에서도 뺀다. 문구는 사양 확정(UI 문자열 영어).
+    /// </summary>
+    private static SelectorItem MakeOverflowNotice(int hidden, bool grid)
+    {
+        var text = new TextBlock
+        {
+            Text = $"{hidden} more items are not shown. Refine the filter to see them.",
+            FontSize = 11,
+            Opacity = 0.6,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(4),
+        };
+        return grid
+            ? new GridViewItem { Content = text, IsEnabled = false }
+            : (SelectorItem)new ListViewItem { Content = text, IsEnabled = false };
+    }
+
+    /// <summary>
+    /// A192: 진행 중 분할 조립의 완료 대기(없으면 즉시) — 새 폴더/파일 생성 직후의 편집 진입이
+    /// FindItemByPath 전에 부른다(그 항목의 컨테이너가 뒤 조각에 있을 수 있다). 대기 중 새
+    /// 재스캔이 끼어들면 낡은 신호가 즉시 풀리고, 뒤이은 FindItemByPath 미매칭이 기존
+    /// "그새 사라짐" 폴백으로 무해하게 끝난다. 상한 밖(2000 초과분) 항목도 같은 폴백이다.
+    /// </summary>
+    private Task WhenFillCompleteAsync() => _fillDone?.Task ?? Task.CompletedTask;
 
     /// <summary>
     /// 항목 우클릭 메뉴 (A94 2차 신설 → 6차 확장). 순서는 탐색기 관례 근사:
@@ -992,13 +1201,57 @@ public sealed partial class ExplorerPane : UserControl
     /// 2줄째 상세 줄에 합쳐 넣는다. 취득은 전부 워커에서(폴더 진입 체감 불변 — 동기 열거에 안 싣는 A156 결정),
     /// UI는 텍스트 반영만. 재진입은 _loadSeq 가드(썸네일 루프와 같은 관용구).
     /// 정렬·필터 재그리기는 캐시가 흡수한다(수정시각 일치 시 재조회 없음).
+    /// <para>
+    /// A194: 항목별 fetch는 서로 독립이라 풀(FetchPool — 워커 3)로 겹치게 돌린다. 발사는
+    /// UI 스레드의 SemaphoreSlim 게이트로 동시 3건까지만 — 폴더 전환(seq 변화)·풀 닫힘이 오면
+    /// 더 발사하지 않으므로 낡은 폴더의 fetch가 큐에 쌓이지 않는다. 결과 도착 순서는 무관(사양) —
+    /// 항목별 반영이라 순서가 필요 없다. <b>_infoCache와 ApplyDetail은 종전대로 UI 스레드에서만
+    /// 만진다</b>(발사 루프와 fetch 후속부는 전부 UI 문맥에서 돌고, 워커 람다는 순수 fetch뿐).
+    /// </para>
     /// </summary>
     private async Task LoadDetailInfoAsync(int seq)
     {
         var items = ListPane.Items.ToList(); // 스냅샷 — await 중 컬렉션 변경 대비
+        using var gate = new SemaphoreSlim(FetchConcurrency); // 동시 발사 상한 (A194)
+        var running = new List<Task>();
+        var stop = false; // 풀이 닫힘(취소 Task) — 남은 발사 중단. UI 스레드에서만 읽고 쓴다.
+
+        // 항목 하나의 fetch + UI 반영. UI 스레드에서 시작하므로 await 후속부도 UI 스레드다.
+        async Task FetchIntoAsync(ListViewItem item, ExplorerListing.Entry entry, InfoKind kind)
+        {
+            try
+            {
+                DetailInfo details;
+                try
+                {
+                    details = await FetchPool.Run(_ => FetchDetailInfo(kind, entry.Path));
+                }
+                catch (OperationCanceledException)
+                {
+                    stop = true; // 페인이 내려가며 풀이 닫힘 — 발사 루프도 멈춘다
+                    return;
+                }
+                catch
+                {
+                    return; // 속성·헤더를 못 읽는 파일은 빈 칸 유지
+                }
+                if (seq != _loadSeq) return; // 폴더 전환 — 낡은 결과 폐기
+                if (_infoCache.Count > 4000) _infoCache.Clear(); // 장시간 세션 폭주 방지
+                _infoCache[entry.Path] = (entry.Modified, details);
+                if (details.Info.Length == 0) return;
+                // A156: 대입이 아니라 그 항목의 상세 줄과 툴팁을 통째로 다시 조립한다
+                // (조각 순서는 BuildDetailText가 쥔다).
+                ApplyDetail(item, entry, details);
+            }
+            finally
+            {
+                gate.Release(); // 예외·취소 경로 포함 — 누락되면 3건 뒤 조용히 멈춘다
+            }
+        }
+
         foreach (var obj in items)
         {
-            if (seq != _loadSeq) return;
+            if (stop || seq != _loadSeq) break;
             if (obj is not ListViewItem { Tag: ExplorerListing.Entry { IsFolder: false } entry } item) continue;
             var kind = InfoKindOf(entry.Name);
             if (kind == InfoKind.None) continue;
@@ -1009,35 +1262,22 @@ public sealed partial class ExplorerPane : UserControl
             // 사용자가 열어 로컬화되면 다음 재스캔에서 정상 조회된다.
             if (entry.IsPlaceholder) continue;
 
-            DetailInfo details;
             if (_infoCache.TryGetValue(entry.Path, out var hit) && hit.Modified == entry.Modified)
             {
-                details = hit.Details;
-            }
-            else
-            {
-                try
-                {
-                    details = await Worker.Run(_ => FetchDetailInfo(kind, entry.Path));
-                    if (seq != _loadSeq) return;
-                }
-                catch (OperationCanceledException)
-                {
-                    return; // 페인이 내려가며 워커가 닫힘
-                }
-                catch
-                {
-                    continue; // 속성·헤더를 못 읽는 파일은 빈 칸 유지
-                }
-                if (_infoCache.Count > 4000) _infoCache.Clear(); // 장시간 세션 폭주 방지
-                _infoCache[entry.Path] = (entry.Modified, details);
+                if (hit.Details.Info.Length > 0) ApplyDetail(item, entry, hit.Details);
+                continue; // 캐시 히트는 워커 없이 즉시 반영 (종전 동작)
             }
 
-            if (details.Info.Length == 0) continue;
-            // A156: 대입이 아니라 그 항목의 상세 줄과 툴팁을 통째로 다시 조립한다
-            // (조각 순서는 BuildDetailText가 쥔다).
-            ApplyDetail(item, entry, details);
+            await gate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
+            if (stop || seq != _loadSeq)
+            {
+                gate.Release(); // 획득만 하고 발사하지 않는 경로 — 누수 방지
+                break;
+            }
+            running.Add(FetchIntoAsync(item, entry, kind));
         }
+        // 발사분 완주 대기 — using gate의 Dispose가 대기 중 Release보다 앞서지 않게 한다.
+        await Task.WhenAll(running);
     }
 
     /// <summary>
@@ -1131,27 +1371,33 @@ public sealed partial class ExplorerPane : UserControl
     /// 파일 썸네일을 채운다(그리드 타일의 글리프를 이미지로 교체).
     /// 추출(셸 API 호출·스트림 읽기)은 워커에서 하고 UI 스레드는 비트맵 표시만 한다(A42).
     /// 항목마다 느릴 수 있으므로 상한을 두고, 폴더 이동 시 중단한다.
+    /// A194: 추출은 상세 조각과 같은 풀(FetchPool)·같은 발사 구조(SemaphoreSlim 게이트,
+    /// LoadDetailInfoAsync 주석 참고)로 동시 3건까지 겹친다. loaded 카운터는 발사 전 검사와
+    /// 반영 직전 검사 양쪽에서 보므로 상한(300)을 넘겨 반영되지 않고, 증감·검사 전부
+    /// UI 스레드에서만 일어난다(경쟁 없음 — 워커 람다는 순수 fetch뿐).
     /// </summary>
     private async Task LoadThumbnailsAsync(int seq)
     {
-        var loaded = 0;
+        var loaded = 0; // 성공 수 — UI 스레드에서만 읽고 쓴다
         // 스냅샷 순회: await 중 NavigateTo가 Items를 비우면 라이브 컬렉션 순회는 깨진다.
         var items = IconGrid.Items.ToList();
-        foreach (var obj in items)
-        {
-            if (seq != _loadSeq || loaded >= ThumbnailLimit) return;
-            if (obj is not GridViewItem { Tag: ExplorerListing.Entry { IsFolder: false } entry } item) continue;
+        using var gate = new SemaphoreSlim(FetchConcurrency); // 동시 발사 상한 (A194)
+        var running = new List<Task>();
+        var stop = false; // 풀이 닫힘(취소 Task) — 남은 발사 중단. UI 스레드에서만 읽고 쓴다.
 
+        // 타일 하나의 추출 + 교체. UI 스레드에서 시작하므로 await 후속부도 UI 스레드다.
+        async Task FetchIntoAsync(GridViewItem item, ExplorerListing.Entry entry)
+        {
             try
             {
-                var png = await Worker.Run(_ => FetchThumbnail(entry.Path, entry.IsPlaceholder));
-                if (seq != _loadSeq) return;
-                if (png is null) continue;
+                var png = await FetchPool.Run(_ => FetchThumbnail(entry.Path, entry.IsPlaceholder));
+                if (seq != _loadSeq || loaded >= ThumbnailLimit) return; // 낡은 결과·상한 도달 폐기
+                if (png is null) return;
 
                 var bitmap = new BitmapImage();
                 using (var stream = new MemoryStream(png))
                     await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
-                if (seq != _loadSeq) return;
+                if (seq != _loadSeq || loaded >= ThumbnailLimit) return;
 
                 var host = (Grid)((StackPanel)item.Content).Children[0];
                 host.Children.Clear();
@@ -1164,13 +1410,33 @@ public sealed partial class ExplorerPane : UserControl
             }
             catch (OperationCanceledException)
             {
-                return; // 페인이 내려가며 워커가 닫힘
+                stop = true; // 페인이 내려가며 풀이 닫힘 — 발사 루프도 멈춘다
             }
             catch
             {
                 // 썸네일 실패는 글리프 유지로 충분하다.
             }
+            finally
+            {
+                gate.Release(); // 예외·취소 경로 포함 — 누락되면 3건 뒤 조용히 멈춘다
+            }
         }
+
+        foreach (var obj in items)
+        {
+            if (stop || seq != _loadSeq || loaded >= ThumbnailLimit) break;
+            if (obj is not GridViewItem { Tag: ExplorerListing.Entry { IsFolder: false } entry } item) continue;
+
+            await gate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
+            if (stop || seq != _loadSeq || loaded >= ThumbnailLimit)
+            {
+                gate.Release(); // 획득만 하고 발사하지 않는 경로 — 누수 방지
+                break;
+            }
+            running.Add(FetchIntoAsync(item, entry));
+        }
+        // 발사분 완주 대기 — using gate의 Dispose가 대기 중 Release보다 앞서지 않게 한다.
+        await Task.WhenAll(running);
     }
 
     /// <summary>
@@ -1540,6 +1806,7 @@ public sealed partial class ExplorerPane : UserControl
         if (notice is not null) await ExplorerFileOps.ReportAsync(notice, denied ? 1 : 0, MakeOpUi());
         if (created is null) return;
         await NavigateToAsync(_folder, _extensions);
+        await WhenFillCompleteAsync(); // A192 — 분할 조립 완료 뒤에 찾는다(새 항목이 뒤 조각일 수 있다)
         if (FindItemByPath(owner, created) is not { } item) return; // 그새 사라짐 등 — 생성만으로 끝
         owner.SelectedItem = item;
         owner.ScrollIntoView(item);
@@ -1561,6 +1828,7 @@ public sealed partial class ExplorerPane : UserControl
         if (notice is not null) await ExplorerFileOps.ReportAsync(notice, denied ? 1 : 0, MakeOpUi());
         if (created is null) return;
         await NavigateToAsync(_folder, _extensions);
+        await WhenFillCompleteAsync(); // A192 — 분할 조립 완료 뒤에 찾는다(새 항목이 뒤 조각일 수 있다)
         if (FindItemByPath(owner, created) is not { } item) return; // 필터 밖·그새 사라짐 — 생성만으로 끝
         owner.SelectedItem = item;
         owner.ScrollIntoView(item);

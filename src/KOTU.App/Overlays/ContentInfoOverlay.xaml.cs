@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Windows.ApplicationModel.DataTransfer;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
+using KOTU.Core.Threading;
 
 namespace KOTU.App.Overlays;
 
@@ -19,15 +20,27 @@ namespace KOTU.App.Overlays;
 /// 없거나 실패하면 파일 기본 정보로 대체한다. 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
 /// 애초에 ShowFor를 부르지 않는다(현행 동작 유지).
 /// 입력(A176: F12 단타 = 열기/닫기 토글, 핀 버튼 동일)은 셸(MainWindow)이 담당한다 —
-/// 이 컨트롤은 ShowFor/ShowPlaceholder/Hide/SetPanelPercent만 받는다(구 SetState는 반투명 축과
-/// 함께 폐지 — 사이드바 안내·히트테스트는 표시 메서드가 직접 켠다).
+/// 이 컨트롤은 ShowFor/ShowForSelection(A200 — 썸네일 선택 파일)/ShowPlaceholder/Hide/
+/// SetPanelPercent만 받는다(구 SetState는 반투명 축과 함께 폐지 — 사이드바 안내·히트테스트는
+/// 표시 메서드가 직접 켠다).
 /// </summary>
 public sealed partial class ContentInfoOverlay : UserControl
 {
     private int _seq;             // 정보 로드 경쟁 방지 (기존 MainWindow._infoSeq)
     private string? _activePath;  // 마지막으로 요청된 파일 — 늦게 도착한 결과 폐기 판단
     private string? _cachePath;   // 정보 캐시 (파일별 1회 로드 — 기존 _infoPath/_infoText)
+    private bool _cacheSelection; // A200: 캐시의 소스 축 — 선택 조회(true)/열린 콘텐츠 provider(false).
+                                  // 경로가 같아도 소스가 다르면 캐시 미스다: "같은 파일을 선택했다가 연"
+                                  // 경우 선택 조회 결과가 모듈 provider 결과를 가리면 안 된다.
     private IReadOnlyList<ContentInfoItem>? _cacheItems; // A150: 문자열 → 라벨·값 행 목록
+    private ModuleWorker? _worker; // A200: 선택 조회(SelectionQuickInfo) 전용 — UI 스레드 금지(A42)
+    private CancellationTokenSource? _selectionCts; // A200: 직전 선택 조회 취소 — 빠른 연속 선택
+                                                    // (그리드 화살표 이동)이 직렬 워커 큐에 낡은
+                                                    // PDF 열기 등을 쌓지 않게(Run은 차례가 오기
+                                                    // 전에 취소되면 실행 없이 건너뛴다)
+
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다(ExplorerPane과 같은 규칙).</summary>
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU info worker");
 
     /// <summary>오버레이가 화면에 떠 있는지 — 셸의 표시 갱신 판단에 쓴다.</summary>
     public bool IsOpen => Visibility == Visibility.Visible;
@@ -41,6 +54,13 @@ public sealed partial class ContentInfoOverlay : UserControl
     public ContentInfoOverlay()
     {
         InitializeComponent();
+        // A200: 선택 조회 워커 정리 — 진행 중 작업은 워커가 마저 끝내고 스레드 종료
+        // (ImageViewerView와 같은 Unloaded 수명 규칙. 재로드되면 지연 생성이 되살린다).
+        Unloaded += (_, _) =>
+        {
+            _worker?.Dispose();
+            _worker = null;
+        };
     }
 
     /// <summary>
@@ -55,6 +75,21 @@ public sealed partial class ContentInfoOverlay : UserControl
         OverlayBorder.IsHitTestVisible = true;
         ShowHint(OverlayHints.Docked(OverlayHints.InfoKey));
         _ = LoadAsync(path, provider);
+    }
+
+    /// <summary>
+    /// A200: 썸네일뷰에서 **선택**(클릭, 열기 아님)된 파일의 정보 표시 — ShowFor의 선택 축 판본.
+    /// 모듈 뷰를 경유하지 않고 셸 조회기(SelectionQuickInfo)를 오버레이 전용 워커에서 돌린다
+    /// (UI 스레드 금지 — A42). isPlaceholder(A175 클라우드 전용 파일)면 조회 자체를 생략하고
+    /// 파일 기본 정보(이름·크기·날짜 — 열거로 이미 아는 것)만 그린다 — 원본을 여는 자동 조회는
+    /// 하이드레이션(전체 다운로드)을 일으키므로 금지.
+    /// </summary>
+    public void ShowForSelection(string path, bool isPlaceholder)
+    {
+        Visibility = Visibility.Visible;
+        OverlayBorder.IsHitTestVisible = true;
+        ShowHint(OverlayHints.Docked(OverlayHints.InfoKey));
+        _ = LoadAsync(path, provider: null, selection: true, placeholder: isPlaceholder);
     }
 
     public void Hide()
@@ -222,12 +257,19 @@ public sealed partial class ContentInfoOverlay : UserControl
         _cacheItems = null;
         _activePath = null;
         _seq++;
+        _selectionCts?.Cancel(); // A200: 보류 중 선택 조회도 폐기 — 실행 전이면 워커 큐에서 건너뛴다
     }
 
-    /// <summary>모듈 제공 정보(IContentInfoProvider) 우선, 없으면 파일 기본 정보. 파일별 1회 캐시.</summary>
-    private async Task LoadAsync(string path, IContentInfoProvider? provider)
+    /// <summary>
+    /// 모듈 제공 정보(IContentInfoProvider) 우선, 없으면 파일 기본 정보. 파일별 1회 캐시.
+    /// A200: selection=true면 provider 대신 셸 선택 조회기(SelectionQuickInfo)를 워커에서 돌리고,
+    /// placeholder=true면 조회 없이 파일 기본 정보만(A175 하이드레이션 금지). 캐시 적중은
+    /// 경로 + 소스 축(_cacheSelection)이 둘 다 일치해야 한다.
+    /// </summary>
+    private async Task LoadAsync(string path, IContentInfoProvider? provider,
+        bool selection = false, bool placeholder = false)
     {
-        if (_cachePath == path && _cacheItems is not null)
+        if (_cachePath == path && _cacheSelection == selection && _cacheItems is not null)
         {
             RenderItems(_cacheItems);
             return;
@@ -240,26 +282,36 @@ public sealed partial class ContentInfoOverlay : UserControl
         IReadOnlyList<ContentInfoItem>? items = null;
         try
         {
-            if (provider is not null)
+            if (selection && !placeholder)
+            {
+                _selectionCts?.Cancel(); // 직전 선택 조회는 폐기 대상 — 큐에서 실행 전이면 건너뛴다
+                var cts = _selectionCts = new CancellationTokenSource();
+                items = await Worker.Run(_ => SelectionQuickInfo.Build(path), cts.Token);
+            }
+            else if (!selection && provider is not null)
                 items = await provider.GetContentInfoAsync();
+            // placeholder 선택은 조회하지 않는다 — 아래 파일 기본 정보로 바로 간다
+            // (FileInfo 메타데이터 읽기는 하이드레이션을 일으키지 않는다 — A175 계열 판단).
         }
         catch
         {
-            // 모듈 정보 실패 → 아래 파일 기본 정보로 대체
+            // 모듈 정보·선택 조회 실패 → 아래 파일 기본 정보로 대체
         }
         items ??= BuildBasicFileInfo(path);
 
         if (seq != _seq || _activePath != path) return; // 그새 파일이 바뀜
         _cachePath = path;
+        _cacheSelection = selection;
         _cacheItems = items;
         RenderItems(items);
     }
 
     /// <summary>
-    /// 셸 폴백(문서·압축 등 미구현 모듈·모듈 정보 실패) — A150에서 개행 문자열을 라벨·값 행으로
-    /// 이식했다. 표시 항목(이름·크기·수정일·폴더)과 값 포맷은 종전 그대로다.
+    /// 셸 폴백(문서·압축 등 미구현 모듈·모듈 정보 실패·placeholder 선택) — A150에서 개행 문자열을
+    /// 라벨·값 행으로 이식했다. 표시 항목(이름·크기·수정일·폴더)과 값 포맷은 종전 그대로다.
+    /// A200: 셸 선택 조회기(SelectionQuickInfo)도 비이미지 종류의 기본 행으로 재사용한다(internal).
     /// </summary>
-    private static IReadOnlyList<ContentInfoItem> BuildBasicFileInfo(string path)
+    internal static IReadOnlyList<ContentInfoItem> BuildBasicFileInfo(string path)
     {
         try
         {

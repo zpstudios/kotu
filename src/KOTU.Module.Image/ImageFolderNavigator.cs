@@ -64,6 +64,12 @@ public sealed class ImageFolderNavigator
 
     public bool HasPrevious => _index > 0;
 
+    /// <summary>다음 파일 경로 — 이동 없이 들여다본다(A194 이웃 선읽기용). 없으면 null.</summary>
+    public string? PeekNext => HasNext ? _files[_index + 1] : null;
+
+    /// <summary>이전 파일 경로 — 이동 없이 들여다본다(A194 이웃 선읽기용). 없으면 null.</summary>
+    public string? PeekPrevious => HasPrevious ? _files[_index - 1] : null;
+
     /// <summary>다음 파일로 이동. 끝이면 이동하지 않고 false(순환 없음).</summary>
     public bool MoveNext()
     {

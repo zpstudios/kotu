@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Version>0.206.0</Version>
+    <Version>0.207.0</Version>
     <!--
       A82(v0.90.0): 저작권자 = ZP Studios 한 이름으로 통일.
       개인 실명은 배포물·저장소 어디에도 표시하지 않는다(문서에도 다시 적지 말 것).

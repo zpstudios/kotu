@@ -146,25 +146,26 @@ public class ExplorerListingTests : IDisposable
     }
 
     [Fact]
-    public void Arrange_크기순_내림이면_파일은_큰_것부터_폴더는_이름순()
+    public void Arrange_크기순_내림이면_파일은_큰_것부터_폴더는_입력_순서()
     {
         // descending: true = 종전 Size 고정 방향(큰 것부터) — UI의 DefaultDescending(Size)이 넘기는 값.
+        // A204: 폴더(크기 개념 없음)는 무정렬 = 입력 순서 유지(종전 "항상 이름 오름" 강제 폐지).
         var entries = new[] { AFolder("z", 1), AFolder("a", 2), AFile("small.jpg", 10, 1), AFile("big.jpg", 999, 1) };
 
         var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Size, descending: true);
 
-        Assert.Equal(["a", "z", "big.jpg", "small.jpg"], result.Select(e => e.Name).ToArray());
+        Assert.Equal(["z", "a", "big.jpg", "small.jpg"], result.Select(e => e.Name).ToArray());
     }
 
     [Fact]
-    public void Arrange_크기순_오름이면_작은_것부터_폴더는_그대로_이름순()
+    public void Arrange_크기순_오름이면_작은_것부터_폴더는_입력_순서()
     {
-        // A155: 방향 인자화 — 1차 키만 뒤집히고 폴더(크기 개념 없음)는 방향과 무관하게 이름순.
+        // A155: 방향 인자화 — 1차 키만 뒤집힌다. A204: 폴더는 방향과 무관하게 입력 순서 유지.
         var entries = new[] { AFolder("z", 1), AFolder("a", 2), AFile("small.jpg", 10, 1), AFile("big.jpg", 999, 1) };
 
         var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Size);
 
-        Assert.Equal(["a", "z", "small.jpg", "big.jpg"], result.Select(e => e.Name).ToArray());
+        Assert.Equal(["z", "a", "small.jpg", "big.jpg"], result.Select(e => e.Name).ToArray());
     }
 
     [Fact]
@@ -189,9 +190,10 @@ public class ExplorerListingTests : IDisposable
     }
 
     [Fact]
-    public void Arrange_타입순_확장자로_묶고_같은_확장자는_이름순_폴더는_이름순()
+    public void Arrange_타입순_확장자로_묶고_같은_확장자는_입력_순서_폴더도_입력_순서()
     {
-        // A155: Type = Name에서 파생한 확장자 키(대소문자 무시). 2차 키 = 이름(늘 오름차순).
+        // A155: Type = Name에서 파생한 확장자 키(대소문자 무시).
+        // A204: 고정 이름 2차 키 폐지 — 같은 확장자 안은 입력 순서 보존(stable sort), 폴더는 무정렬.
         var entries = new[]
         {
             AFolder("sub", 1),
@@ -201,11 +203,11 @@ public class ExplorerListingTests : IDisposable
         };
 
         var asc = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Type);
-        Assert.Equal(["sub", "z.jpg", "a.PNG", "b.png"], asc.Select(e => e.Name).ToArray());
+        Assert.Equal(["sub", "z.jpg", "b.png", "a.PNG"], asc.Select(e => e.Name).ToArray());
 
-        // 내림 = 확장자만 역순 — 같은 확장자 안 이름순과 폴더 이름순은 그대로다.
+        // 내림 = 확장자(1차 키)만 역순 — 같은 확장자 안 입력 순서와 폴더 입력 순서는 그대로다.
         var desc = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Type, descending: true);
-        Assert.Equal(["sub", "a.PNG", "b.png", "z.jpg"], desc.Select(e => e.Name).ToArray());
+        Assert.Equal(["sub", "b.png", "a.PNG", "z.jpg"], desc.Select(e => e.Name).ToArray());
     }
 
     [Fact]
@@ -233,6 +235,46 @@ public class ExplorerListingTests : IDisposable
         var result = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Name, hiddenExtensions: [".jpg"]);
 
         Assert.Equal(["sub", "b.png"], result.Select(e => e.Name).ToArray());
+    }
+
+    // ---------- 정렬 안정성 (A204) ----------
+    // Arrange는 stable sort(동률 = 입력 순서 보존)라 직전 Arrange 결과를 입력으로 주면
+    // 직전 기준이 동률의 2차 순서로 승계된다 — UI(ExplorerPane.RefreshView)의 입력 선택 계약.
+
+    [Fact]
+    public void Arrange_직전_정렬_결과를_입력으로_주면_동률은_그_순서를_유지한다()
+    {
+        // 사용자 예시 그대로: 이름 오름 정렬 → 크기 정렬 시 같은 크기끼리 이름 오름 순서 유지.
+        // 폴더도 함께 검증 — Size 정렬의 폴더는 무정렬이라 직전(이름 오름) 순서가 살아남는다.
+        var entries = new[]
+        {
+            AFile("c.jpg", 10, 1), AFile("a.jpg", 10, 1), AFile("b.jpg", 5, 1),
+            AFolder("z", 1), AFolder("m", 1),
+        };
+
+        var byNameAsc = ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Name);
+        Assert.Equal(["m", "z", "a.jpg", "b.jpg", "c.jpg"], byNameAsc.Select(e => e.Name).ToArray());
+
+        var bySize = ExplorerListing.Arrange(byNameAsc, ExplorerListing.SortKey.Size);
+
+        // b(5) 먼저, 같은 크기(10)끼리는 직전 순서(이름 오름) a → c. 폴더도 직전 순서 m → z 그대로.
+        Assert.Equal(["m", "z", "b.jpg", "a.jpg", "c.jpg"], bySize.Select(e => e.Name).ToArray());
+    }
+
+    [Fact]
+    public void Arrange_같은_키_방향_토글도_동률_내_직전_순서를_유지한다()
+    {
+        var entries = new[] { AFile("c.jpg", 10, 1), AFile("a.jpg", 10, 1), AFile("b.jpg", 5, 1) };
+
+        // 이름 오름 → 크기 오름: b(5), a(10), c(10) — 동률은 이름 오름 승계.
+        var asc = ExplorerListing.Arrange(
+            ExplorerListing.Arrange(entries, ExplorerListing.SortKey.Name),
+            ExplorerListing.SortKey.Size);
+        Assert.Equal(["b.jpg", "a.jpg", "c.jpg"], asc.Select(e => e.Name).ToArray());
+
+        // 재클릭(내림)은 1차 키(크기)만 뒤집는다 — 동률(10)끼리는 입력(오름 결과) 순서 a → c 그대로.
+        var desc = ExplorerListing.Arrange(asc, ExplorerListing.SortKey.Size, descending: true);
+        Assert.Equal(["a.jpg", "c.jpg", "b.jpg"], desc.Select(e => e.Name).ToArray());
     }
 
     [Fact]

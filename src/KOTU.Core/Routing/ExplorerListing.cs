@@ -85,20 +85,31 @@ public static class ExplorerListing
     }
 
     /// <summary>
-    /// 정렬·필터를 적용한 표시용 목록을 만든다 (A5·A7·A155). 폴더 먼저 규칙은 유지.
+    /// 정렬·필터를 적용한 표시용 목록을 만든다 (A5·A7·A155·A204). 폴더 먼저 규칙은 유지.
+    /// A204(v0.207.0) — 정렬 안정성: 종전의 고정 이름 2차 키(ThenBy Name)를 없앴다.
+    /// 여기의 모든 정렬은 LINQ OrderBy/OrderByDescending = <b>stable sort</b>(동률은 입력 순서
+    /// 보존이 문서화된 계약)라, <b>입력 순서가 곧 2차 키다</b>. 호출부가 직전 Arrange 결과
+    /// (현재 표시 순서)를 입력으로 다시 부르면 "이름 오름 → 크기" 전환 시 같은 크기끼리
+    /// 이름 오름 순서가 유지된다(직전 기준이 동률의 순서로 승계). 스캔 결과(List — 이름순)를
+    /// 입력으로 주면 동률이 이름순이 되어 종전 화면과 같다 — 안정성은 세션 내 정렬 조작
+    /// 간에만 성립하고 재스캔은 리셋이다(호출부 계약, A204 확정).
     /// A155: 종류별 고정 방향(Size/Modified/Created = 내림 고정)을 descending 인자로 바꿨다 —
     /// 기본 false = 오름차순이고, 종전과 같은 화면을 원하는 호출부는 종류별 기본 방향을 스스로 넘긴다
     /// (UI 쪽 ExplorerPane.DefaultDescending — Core는 방향 정책을 알지 않는다).
     /// 오름차순 기준: Name=이름, Size=작은 것부터, Modified/Created=오래된 것부터,
-    /// Type=확장자(점 포함, 대소문자 무시). descending은 1차 키만 뒤집고 동률 이름순은 늘 오름차순이다
-    /// (종전 ThenBy 규칙 보존). 폴더: Name/Modified/Created는 파일과 같은 키·방향으로,
-    /// Size/Type은 폴더에 그 개념이 없어 항상 이름 오름차순(종전 Size 규칙 승계).
+    /// Type=확장자(점 포함, 대소문자 무시). descending은 1차 키만 뒤집는다 — 뒤집어도 stable이라
+    /// 동률의 입력 순서는 그대로다(같은 키 재클릭 방향 토글이 동률 순서를 흔들지 않는 근거).
+    /// 폴더: Name/Modified/Created는 파일과 같은 키·방향으로 정렬하고, Size/Type은 폴더에
+    /// 그 개념이 없어 <b>무정렬 = 입력 순서 유지</b>다(A204 — 종전 "항상 이름 오름" 강제를 없애
+    /// 직전 기준이 폴더에도 살아남는다).
     /// hiddenExtensions(소문자, 점 포함)에 있는 확장자의 파일은 뺀다 — 폴더는 항상 남긴다.
     /// </summary>
     public static IReadOnlyList<Entry> Arrange(
         IReadOnlyList<Entry> entries, SortKey key, bool descending = false,
         IReadOnlyCollection<string>? hiddenExtensions = null)
     {
+        // Where는 순서 보존이라 폴더·파일 각각의 입력 순서(=직전 표시 순서)가 그대로 남는다.
+        // "폴더 먼저" 병합 순서는 불변 — 입력이 어떤 순서였어도 출력은 늘 폴더가 앞이다.
         var folders = entries.Where(e => e.IsFolder);
         var files = entries.Where(e => !e.IsFolder);
         if (hiddenExtensions is { Count: > 0 })
@@ -106,31 +117,33 @@ public static class ExplorerListing
                 !hiddenExtensions.Contains(System.IO.Path.GetExtension(f.Name).ToLowerInvariant()));
 
         var byName = StringComparer.OrdinalIgnoreCase;
-        (folders, files) = key switch
+        // A204: 폴더·파일을 각각 target-typed switch로 나눴다 — Size/Type의 폴더 분기가
+        // 무정렬(IEnumerable)이 되면서, 종전처럼 튜플 switch로 묶으면 IOrderedEnumerable과의
+        // 공통 타입 추론에 기대게 되어 분리했다(각 분기는 IEnumerable로 안전하게 수렴).
+        IEnumerable<Entry> sortedFolders = key switch
         {
-            SortKey.Size => (
-                folders.OrderBy(e => e.Name, byName),
-                OrderByDirection(files, e => e.Size, descending).ThenBy(e => e.Name, byName)),
-            // A155: 확장자 정렬 — 키는 Name에서 파생(점 포함). 같은 확장자 안은 이름순(2차 키).
-            SortKey.Type => (
-                folders.OrderBy(e => e.Name, byName),
-                OrderByDirection(files, e => System.IO.Path.GetExtension(e.Name), descending, byName)
-                    .ThenBy(e => e.Name, byName)),
-            SortKey.Modified => (
-                OrderByDirection(folders, e => e.Modified, descending).ThenBy(e => e.Name, byName),
-                OrderByDirection(files, e => e.Modified, descending).ThenBy(e => e.Name, byName)),
-            // A117: 만든 날짜 — 위 Modified 분기와 같은 모양(폴더도 파일도 같은 방향, 동률은 이름순).
-            SortKey.Created => (
-                OrderByDirection(folders, e => e.Created, descending).ThenBy(e => e.Name, byName),
-                OrderByDirection(files, e => e.Created, descending).ThenBy(e => e.Name, byName)),
-            _ => (
-                OrderByDirection(folders, e => e.Name, descending, byName),
-                OrderByDirection(files, e => e.Name, descending, byName)),
+            // A204: 폴더에 크기·확장자 개념이 없다 — 정렬하지 않고 입력 순서(직전 기준)를 보존.
+            SortKey.Size or SortKey.Type => folders,
+            SortKey.Modified => OrderByDirection(folders, e => e.Modified, descending),
+            // A117: 만든 날짜 — Modified와 같은 모양(폴더도 파일과 같은 키·방향).
+            SortKey.Created => OrderByDirection(folders, e => e.Created, descending),
+            _ => OrderByDirection(folders, e => e.Name, descending, byName),
         };
-        return [.. folders, .. files];
+        IEnumerable<Entry> sortedFiles = key switch
+        {
+            SortKey.Size => OrderByDirection(files, e => e.Size, descending),
+            // A155: 확장자 정렬 — 키는 Name에서 파생(점 포함, 대소문자 무시).
+            SortKey.Type => OrderByDirection(
+                files, e => System.IO.Path.GetExtension(e.Name), descending, byName),
+            SortKey.Modified => OrderByDirection(files, e => e.Modified, descending),
+            SortKey.Created => OrderByDirection(files, e => e.Created, descending),
+            _ => OrderByDirection(files, e => e.Name, descending, byName),
+        };
+        return [.. sortedFolders, .. sortedFiles];
     }
 
-    /// <summary>방향 인자 한 곳 처리 (A155) — Arrange의 분기마다 3항이 반복되는 것을 막는다.</summary>
+    /// <summary>방향 인자 한 곳 처리 (A155) — Arrange의 분기마다 3항이 반복되는 것을 막는다.
+    /// OrderBy/OrderByDescending 어느 쪽이든 stable — A204 "입력 순서 = 2차 키" 계약의 토대.</summary>
     private static IOrderedEnumerable<Entry> OrderByDirection<TKey>(
         IEnumerable<Entry> source, Func<Entry, TKey> selector, bool descending,
         IComparer<TKey>? comparer = null) =>

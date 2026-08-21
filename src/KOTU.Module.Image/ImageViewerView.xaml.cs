@@ -8,6 +8,7 @@ using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Core.Routing;
 using KOTU.Core.Threading;
 using KOTU.Input;
 
@@ -17,7 +18,9 @@ namespace KOTU.Module.Image;
 /// 이미지 뷰어 화면. 폴더 내 ←/→ 탐색, 줌/팬(A148 마우스 드래그), 회전(R), 휴지통 삭제(Delete),
 /// 전체화면 더블클릭 토글, 하단 상태바를 제공한다(F11·⛶ 버튼은 A151에서 셸 모드 체계로 이관).
 /// 폴더 스캔·파일 읽기·디코드(WIC 메타데이터/Magick)는 뷰 전용 워커(A42)에서 직렬로 돌고
-/// UI 스레드는 비트맵 표시만 한다 — 직렬이라 빠른 ←/→ 연타에도 적용 순서가 요청 순서와 같다.
+/// UI 스레드는 비트맵 표시만 한다 — 빠른 ←/→ 연타의 낡은 결과는 적용 직전의 현재 파일
+/// 재검증이 버린다(A194 — 이웃 선읽기 캐시 히트는 대기 없이 완료돼 직렬 순서만으로는 부족).
+/// A194: 표시 완료 후 양옆 이웃 각 1장을 같은 워커로 선읽기해 항해 체감 지연을 줄인다.
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ITrayStatusProvider
@@ -93,6 +96,18 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU image worker");
 
+    /// <summary>
+    /// 이웃 선읽기 캐시 (A194): 경로 → ReadImageFile 결과의 Task. <b>현재 파일의 양옆 각 1장,
+    /// 최대 2건</b>만 담고 양옆을 벗어나면 즉시 버린다(PrunePreloadCache) — 메모리는 인코딩
+    /// 원본 바이트 그대로라 대형 이미지 2장 분량까지 허용(등재 확정). Task를 담는 이유:
+    /// 선읽기가 아직 워커 큐에 있을 때 항해가 오면 표시 경로가 <b>같은 Task를 await</b>해
+    /// 중복 디코드 없이 결과를 받는다(직렬 큐라 표시보다 먼저 완료된다). 표시는 항상
+    /// LoadCurrentAsync가 캐시를 조회하는 단방향 — 선읽기 완료가 화면을 직접 만지지 않는다.
+    /// 모든 접근은 UI 스레드에서만(항해·선읽기 후속부 전부 UI 문맥 — 경쟁 없음).
+    /// </summary>
+    private readonly Dictionary<string, Task<(byte[] Data, uint Width, uint Height, int ExifRotation,
+        string Size, string Kind, string Exif)>> _preloadCache = new(StringComparer.OrdinalIgnoreCase);
+
     public ImageViewerView(OpenContext context)
     {
         InitializeComponent();
@@ -104,6 +119,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         {
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
+            _preloadCache.Clear(); // A194 — 뷰 언로드 = 선읽기 캐시 무효화(대형 바이트를 붙들지 않는다)
         };
 
         // A98: 휠 = 줌(사진 특례 — Ctrl 없이 휠 단독으로도, Ctrl+휠도 동일). 내장 Ctrl+휠 줌은
@@ -157,6 +173,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
         if (seq != _openSeq) return; // 그새 다른 파일이 열렸다 — 이 결과는 버린다.
         _navigator = navigator;
+        _preloadCache.Clear(); // A194 — 파일·폴더 전환 = 옛 목록 기준의 선읽기 캐시 무효화
         PlaceholderText.Visibility = Visibility.Collapsed;
         _ = LoadCurrentAsync();
     }
@@ -459,8 +476,16 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
             // 파일 읽기와 메타데이터 디코드(해상도·EXIF orientation·A9 메타 요약)는 워커에서(A42).
             // BitmapImage는 EXIF 회전을 자동 반영하지 않으므로 여기서 읽어 RotateTransform에 합산한다.
+            // A194: 이웃 선읽기 캐시에 있으면(완료·진행 중 모두 Task) 그 결과를 받아 디코드를
+            // 생략한다 — 진행 중이면 같은 Task를 await(직렬 큐라 새로 넣는 것보다 먼저 끝난다).
             var (data, width, height, exifRotation, size, kind, exif) =
-                await Worker.Run(_ => ReadImageFile(path));
+                _preloadCache.TryGetValue(path, out var preloaded)
+                    ? await preloaded
+                    : await Worker.Run(_ => ReadImageFile(path));
+            // A194: 캐시 히트는 대기 없이 완료될 수 있어 종전 직렬 큐의 "요청 순서 = 적용 순서"가
+            // 깨질 수 있다 — Magick 경로와 같은 현재 파일 재검증으로 낡은 결과를 버린다
+            // (필드 대입 전이라 직전 파일 메타가 새 화면에 섞이지 않는다).
+            if (_navigator?.Current != path) return;
 
             _pixelWidth = width;
             _pixelHeight = height;
@@ -472,6 +497,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             var bitmap = new BitmapImage(); // GIF 애니메이션은 BitmapImage 기본 지원
             using (var stream = new MemoryStream(data))
                 await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+            if (_navigator?.Current != path) return; // A194 — SetSourceAsync 대기 중의 항해도 폐기
 
             ImageControl.Source = bitmap;
             PlaceholderText.Visibility = Visibility.Collapsed;
@@ -483,6 +509,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             // A54 → A191: 트레이 = 해상도 2줄. 이 발화는 _pixelWidth/_pixelHeight와 _exifRotation이
             // 모두 확정된 뒤라야 한다(위 대입 순서 유지 — 앞서 쏘면 직전 파일 해상도가 그려진다).
             TrayStatusChanged?.Invoke();
+            SchedulePreloads(); // A194 — 표시 완료 후에야 이웃 선읽기(표시 로드보다 후순위)
         }
         catch (Exception ex)
         {
@@ -544,6 +571,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         UpdateStatusBar();
         ContentOpened?.Invoke(path);
         TrayStatusChanged?.Invoke(); // A54 → A191: 트레이 = 해상도 2줄(Magick 경로도 크기를 먼저 대입했다)
+        SchedulePreloads(); // A194 — psd의 이웃이 일반 이미지면 선읽기가 그대로 통한다
     }
 
     /// <summary>
@@ -578,6 +606,77 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             kind = FormatKind(path, 0);
         }
         return (data, width, height, exifRotation, size, kind, exifSummary);
+    }
+
+    // ---------- 이웃 선읽기 (A194) ----------
+
+    /// <summary>
+    /// 표시 완료 후 현재 파일의 양옆 각 1장을 선읽기한다 — 워커 큐에 표시 로드 <b>뒤</b>에 들어가
+    /// 자연히 후순위다(직렬 큐 성질). 먼저 양옆을 벗어난 캐시를 즉시 버린다(등재 확정: 최대 2건).
+    /// 다음 파일을 이전보다 먼저 넣는다 — 앞으로 넘기는 항해가 더 흔하다.
+    /// </summary>
+    private void SchedulePreloads()
+    {
+        PrunePreloadCache();
+        if (_navigator is not { } nav) return;
+        if (nav.PeekNext is { } next) _ = PreloadAsync(next);
+        if (nav.PeekPrevious is { } previous) _ = PreloadAsync(previous);
+    }
+
+    /// <summary>
+    /// 이웃 1장의 선읽기: ReadImageFile을 워커에 넣고 <b>Task째</b> 캐시에 담는다(캐시 doc 참고).
+    /// 화면은 절대 만지지 않는다 — 결과 소비는 LoadCurrentAsync의 캐시 조회 단방향뿐이다.
+    /// 제외: 이미 캐시에 있는 경로(중복 디코드 방지), Magick 디코드 경로(psd — 표시가 다른
+    /// 경로라 조회처가 없다), 클라우드 전용 placeholder(A175 — 내용을 읽는 순간 하이드레이션.
+    /// Navigator 엔트리에는 placeholder 정보가 없어 파일 Attributes로 판정한다 —
+    /// ExplorerListing.IsCloudPlaceholder 단일 원본 재사용. 속성 읽기는 하이드레이션을 유발하지
+    /// 않는다). 실패(디코드 예외·취소)는 조용히 캐시에서 걷어낸다(등재 확정 — 캐시에 안 남김).
+    /// 완료 후 재검증: 그새 항해가 진행돼 양옆이 아니게 됐으면 낡은 결과를 즉시 버린다.
+    /// </summary>
+    private async Task PreloadAsync(string path)
+    {
+        if (_preloadCache.ContainsKey(path)) return;
+        if (NeedsMagickDecode(path)) return;
+        try
+        {
+            if (ExplorerListing.IsCloudPlaceholder(File.GetAttributes(path))) return;
+        }
+        catch
+        {
+            return; // 속성도 못 읽는 파일(그새 소실 등) — 선읽기 포기(표시 경로가 자기 오류를 띄운다)
+        }
+
+        var task = Worker.Run(_ => ReadImageFile(path));
+        _preloadCache[path] = task;
+        try
+        {
+            await task;
+        }
+        catch
+        {
+            _preloadCache.Remove(path); // 디코드 실패·워커 닫힘 — 조용히 무시, 캐시에 안 남김
+            return;
+        }
+        PrunePreloadCache(); // 선읽는 사이 항해가 진행됐으면 여기서 걸러진다(낡은 결과 폐기)
+    }
+
+    /// <summary>양옆(PeekNext·PeekPrevious)이 아닌 캐시 항목을 전부 버린다 — 진행 중 Task도 함께
+    /// (결과는 도착해도 담기지 않는다). 항해 불능 상태(목록 없음)면 전부 버린다.</summary>
+    private void PrunePreloadCache()
+    {
+        if (_preloadCache.Count == 0) return;
+        if (_navigator is not { } nav || nav.Current is null)
+        {
+            _preloadCache.Clear();
+            return;
+        }
+        var next = nav.PeekNext;
+        var previous = nav.PeekPrevious;
+        foreach (var stale in _preloadCache.Keys
+                     .Where(k => !string.Equals(k, next, StringComparison.OrdinalIgnoreCase) &&
+                                 !string.Equals(k, previous, StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+            _preloadCache.Remove(stale);
     }
 
     // ---------- 하단 바 메타 요약 구성 (A9) ----------
@@ -617,7 +716,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     /// <summary>
     /// EXIF 요약 한 줄: 촬영일 · 카메라(제조사 모델) · 노출(셔터 f/조리개 ISO 초점거리).
-    /// 정보 오버레이(BuildContentInfo)의 여러 줄 표기를 하단 바용 인라인으로 압축한 것.
+    /// 정보 오버레이(ImageQuickInfo.BuildRows — A200에서 단일 빌더로 이관)의 여러 줄 표기를
+    /// 하단 바용 인라인으로 압축한 것.
     /// EXIF 미지원 포맷·손상 파일은 빈 문자열.
     /// </summary>
     private static string ReadExifSummary(BitmapDecoder decoder)
@@ -904,6 +1004,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             var file = await StorageFile.GetFileFromPathAsync(path);
             await file.DeleteAsync(StorageDeleteOption.Default); // 휴지통으로
             _navigator.Remove(path);
+            _preloadCache.Remove(path); // A194 — 삭제된 파일의 선읽기 잔재 제거(이어지는 표시는
+                                        // 이웃 캐시 히트가 그대로 통한다 — LoadCurrentAsync 조회)
             await LoadCurrentAsync(); // 다음(마지막이었다면 이전) 이미지 표시
         }
         catch (Exception ex)
@@ -1068,9 +1170,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     // ---------- Ctrl 정보 오버레이 (v0.25.0) ----------
 
     /// <summary>
-    /// 파일·해상도 + EXIF. A150에서 라벨·값 행 목록으로 이식하고 항목을 확장했다
-    /// (렌즈·프로그램·측광·플래시·화이트밸런스·색공간 — 기존과 같은 BitmapProperties 키 추가).
-    /// 값이 없는 행은 생략한다. 미지원 포맷은 기본 정보만.
+    /// 파일·해상도 + EXIF. A150에서 라벨·값 행 목록으로 이식했고, A200에서 행 구성 전체를
+    /// <see cref="ImageQuickInfo.BuildRows"/>(단일 빌더)로 이관했다 — 셸의 썸네일 선택 조회와
+    /// 같은 출력을 내기 위함(두 경로 표시 불일치 금지). EXIF는 표시 키 전부 나열·값 없으면
+    /// 빈칸(A150 "행 생략"의 반전 — 상세 규칙은 ImageQuickInfo 주석), 미지원 포맷은 기본 정보만.
+    /// 해상도도 빌더가 디코더 헤더에서 직접 읽는다(_pixelWidth와 같은 원천 값 — decoder.PixelWidth).
     /// </summary>
     public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
     {
@@ -1078,10 +1182,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         if (path is null) return null;
 
         // 파일 크기·EXIF 조회는 파일 I/O — 워커에서 만들어 결과 목록만 받는다(A42).
-        var (width, height) = (_pixelWidth, _pixelHeight);
         try
         {
-            return await Worker.Run(_ => BuildContentInfo(path, width, height));
+            return await Worker.Run(_ => ImageQuickInfo.BuildRows(path));
         }
         catch
         {
@@ -1089,147 +1192,6 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
     }
 
-    /// <summary>워커 스레드: 정보 오버레이 행 목록 구성(WinRT 비동기는 동기 대기 — 전용 스레드).</summary>
-    private static IReadOnlyList<ContentInfoItem> BuildContentInfo(string path, uint pixelWidth, uint pixelHeight)
-    {
-        var rows = new List<ContentInfoItem> { new("File", Path.GetFileName(path)) };
-        try
-        {
-            var info = new FileInfo(path);
-            rows.Add(new ContentInfoItem("Size", $"{info.Length / 1024.0 / 1024.0:0.##} MB"));
-            rows.Add(new ContentInfoItem("Modified", $"{info.LastWriteTime:yyyy-MM-dd HH:mm}"));
-        }
-        catch
-        {
-            // 크기·날짜는 없어도 된다.
-        }
-        if (pixelWidth > 0)
-            rows.Add(new ContentInfoItem("Dimensions", $"{pixelWidth}×{pixelHeight} px"));
-
-        var exif = new List<ContentInfoItem>();
-        try
-        {
-            var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
-            using var stream = file.OpenAsync(FileAccessMode.Read).AsTask().GetAwaiter().GetResult();
-            var decoder = BitmapDecoder.CreateAsync(stream).AsTask().GetAwaiter().GetResult();
-            // ⚠️ GPS 키(System.GPS.*)는 넣지 않는다 — 위치는 개인정보라 기본 숨김이 확정됐고
-            // (부록 B 69), 표시 토글이 생기기 전에는 수집 자체를 하지 않는 게 가장 안전하다.
-            var props = decoder.BitmapProperties.GetPropertiesAsync(new[]
-            {
-                "System.Photo.DateTaken", "System.Photo.CameraManufacturer",
-                "System.Photo.CameraModel", "System.Photo.LensModel",
-                "System.Photo.ExposureTime", "System.Photo.FNumber",
-                "System.Photo.ISOSpeed", "System.Photo.FocalLength",
-                "System.Photo.ExposureProgram", "System.Photo.MeteringMode",
-                "System.Photo.Flash", "System.Photo.WhiteBalance", "System.Image.ColorSpace",
-            }).AsTask().GetAwaiter().GetResult();
-
-            if (Get(props, "System.Photo.DateTaken") is DateTimeOffset taken)
-                exif.Add(new ContentInfoItem("Taken", $"{taken.LocalDateTime:yyyy-MM-dd HH:mm}"));
-
-            var maker = Get(props, "System.Photo.CameraManufacturer") as string;
-            var model = Get(props, "System.Photo.CameraModel") as string;
-            if (!string.IsNullOrWhiteSpace(maker) || !string.IsNullOrWhiteSpace(model))
-                exif.Add(new ContentInfoItem("Camera", $"{maker} {model}".Trim()));
-
-            if (Get(props, "System.Photo.LensModel") is string lens && !string.IsNullOrWhiteSpace(lens))
-                exif.Add(new ContentInfoItem("Lens", lens.Trim()));
-
-            // 노출 4요소는 종전과 같은 합성 값 한 행(1/125 s · f/2.8 · ISO 400 · 50 mm).
-            var exposure = new List<string>();
-            if (Get(props, "System.Photo.ExposureTime") is double sec and > 0)
-                exposure.Add(sec >= 1 ? $"{sec:0.#} s" : $"1/{Math.Round(1 / sec)} s");
-            if (Get(props, "System.Photo.FNumber") is double f and > 0)
-                exposure.Add($"f/{f:0.#}");
-            if (Get(props, "System.Photo.ISOSpeed") is ushort iso)
-                exposure.Add($"ISO {iso}");
-            if (Get(props, "System.Photo.FocalLength") is double mm and > 0)
-                exposure.Add($"{mm:0.#} mm");
-            if (exposure.Count > 0)
-                exif.Add(new ContentInfoItem("Exposure", string.Join(" · ", exposure)));
-
-            // enum류는 영어 문구로 매핑, 미정의 값은 행 생략(수치 노출보다 생략이 안전).
-            if (ExposureProgramText(GetUInt(props, "System.Photo.ExposureProgram")) is { } program)
-                exif.Add(new ContentInfoItem("Program", program));
-            if (MeteringModeText(GetUInt(props, "System.Photo.MeteringMode")) is { } metering)
-                exif.Add(new ContentInfoItem("Metering", metering));
-            if (GetUInt(props, "System.Photo.Flash") is { } flash)
-                exif.Add(new ContentInfoItem("Flash", (flash & 1) != 0 ? "Fired" : "Did not fire"));
-            if (WhiteBalanceText(GetUInt(props, "System.Photo.WhiteBalance")) is { } wb)
-                exif.Add(new ContentInfoItem("White balance", wb));
-            if (ColorSpaceText(GetUInt(props, "System.Image.ColorSpace")) is { } cs)
-                exif.Add(new ContentInfoItem("Color space", cs));
-        }
-        catch
-        {
-            // EXIF 미지원 포맷(BMP/GIF 등)·손상 파일은 기본 정보만.
-        }
-
-        if (exif.Count > 0)
-        {
-            rows.Add(ContentInfoItem.Separator); // 파일 정보 / 촬영 정보 그룹 구분
-            rows.AddRange(exif);
-        }
-        return rows;
-    }
-
     private static object? Get(IDictionary<string, Windows.Graphics.Imaging.BitmapTypedValue> props, string key) =>
         props.TryGetValue(key, out var v) ? v.Value : null;
-
-    /// <summary>
-    /// EXIF 정수 값 안전 변환 — WIC이 키에 따라 Byte/UInt16/UInt32 등으로 boxing하는 폭을
-    /// 흡수한다(정확한 폭을 못 박으면 포맷·코덱에 따라 행이 통째로 사라진다).
-    /// </summary>
-    private static uint? GetUInt(IDictionary<string, Windows.Graphics.Imaging.BitmapTypedValue> props, string key) =>
-        Get(props, key) switch
-        {
-            byte b => b,
-            ushort us => us,
-            uint u => u,
-            short s when s >= 0 => (uint)s,
-            int i when i >= 0 => (uint)i,
-            _ => null,
-        };
-
-    /// <summary>EXIF ExposureProgram → 영어 문구. 미정의 값은 null(행 생략).</summary>
-    private static string? ExposureProgramText(uint? v) => v switch
-    {
-        1 => "Manual",
-        2 => "Program",
-        3 => "Aperture priority",
-        4 => "Shutter priority",
-        5 => "Creative",
-        6 => "Action",
-        7 => "Portrait",
-        8 => "Landscape",
-        _ => null,
-    };
-
-    /// <summary>EXIF MeteringMode → 영어 문구. 미정의 값은 null(행 생략).</summary>
-    private static string? MeteringModeText(uint? v) => v switch
-    {
-        1 => "Average",
-        2 => "Center-weighted",
-        3 => "Spot",
-        4 => "Multi-spot",
-        5 => "Pattern",
-        6 => "Partial",
-        _ => null,
-    };
-
-    /// <summary>EXIF WhiteBalance → 영어 문구. 미정의 값은 null(행 생략).</summary>
-    private static string? WhiteBalanceText(uint? v) => v switch
-    {
-        0 => "Auto",
-        1 => "Manual",
-        _ => null,
-    };
-
-    /// <summary>EXIF ColorSpace → 영어 문구. Uncalibrated(0xFFFF)·미정의 값은 행 생략.</summary>
-    private static string? ColorSpaceText(uint? v) => v switch
-    {
-        1 => "sRGB",
-        2 => "Adobe RGB",
-        _ => null,
-    };
 }

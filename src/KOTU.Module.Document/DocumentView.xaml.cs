@@ -212,6 +212,9 @@ public sealed partial class DocumentView : UserControl,
                 Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= pendingApply;
                 _pendingApplyHandler = null;
             }
+            // A193: 분할 조립 루프도 같은 static 이벤트 — 같은 해제 의무(남기면 뷰 누수 +
+            // 닫힌 뷰의 RenderStack 조작).
+            StopRenderAppendLoop();
         };
 
         if (context.FilePath is { } path && File.Exists(path))
@@ -645,6 +648,16 @@ public sealed partial class DocumentView : UserControl,
     // 에디터는 Collapsed일 뿐 내용은 그대로다(렌더는 읽기 전용 표시일 뿐 — 더티·저장·A113 체계
     // 전부 에디터 버퍼가 정본). 줌(A181)·Fit(A145)은 에디터 모드 기준 그대로다(렌더 모드 줌은
     // 범위 밖 — 등재 후보).
+    //
+    // A193(분할 조립 축): 렌더 진입은 첫 조각(RenderChunkBlocks)만 즉시 조립하고 나머지는
+    // CompositionTarget.Rendering 틱당 한 조각씩 append한다(StartRenderAppendLoop). 루프는
+    // _renderMode 동안만 살아 있고, 위 표의 모든 이탈 전이가 루프를 죽인다 —
+    // 파일/PDF/무제 열기(ResetRenderState)·편집 토글(ExitRenderMode) = 명시 해제 + _renderSeq 증가,
+    // 렌더 재진입(EnterRenderMode) = seq 증가 + 루프 기동 직전 방어 해제,
+    // 뷰 언로드 = Unloaded의 명시 해제(static 이벤트 — 함정 1).
+    // 구 루프가 한 틱 살아남아도 append 직전 seq 대조가 낡은 블록 부착(잔상)을 막는다(함정 2 —
+    // 한 틱 = 한 조각이라 틱 진입 시 1회 대조로 충분하다). 토글 재진입은 전체 재조립(현행 사양 —
+    // Clear 후 첫 조각부터 다시, 진행 중이던 구 루프는 seq로 무산).
 
     /// <summary>렌더 가능 판정(md 파일 + 비잘림 + A177 임계 이하) — 토글 버튼 활성의 단일 출처.</summary>
     private bool _renderEligible;
@@ -653,8 +666,25 @@ public sealed partial class DocumentView : UserControl,
     /// ExitRenderMode/ResetRenderState 셋뿐이다.</summary>
     private bool _renderMode;
 
-    /// <summary>느린 파싱이 모드 전환·파일 전환 뒤에 낡은 결과를 그리지 않게(_openSeq 관용구).</summary>
+    /// <summary>느린 파싱이 모드 전환·파일 전환 뒤에 낡은 결과를 그리지 않게(_openSeq 관용구).
+    /// A193: 분할 조립 루프의 중단 판정도 이 값이다 — 매 틱 append 직전에 대조한다.</summary>
     private int _renderSeq;
+
+    /// <summary>
+    /// A193 체감 조정 지점: 분할 조립 조각 크기(블록 수) — 첫 즉시 조각과 프레임당 append 조각이
+    /// 같은 값을 쓴다(확정 수치 60 — 되돌리기·조정은 이 상수 하나만 고치면 된다.
+    /// 수치를 한 곳에만 두는 MarkdownRenderer 상수 배치 관용구).
+    /// </summary>
+    private const int RenderChunkBlocks = 60;
+
+    /// <summary>
+    /// A193: 분할 조립 루프의 프레임 틱 핸들러(null = 루프 없음). CompositionTarget.Rendering은
+    /// static 이벤트라(A177 _pendingApplyHandler와 같은 사정) 뷰 수명 안에서 반드시 해제한다 —
+    /// 남기면 뷰가 통째로 누수되고 닫힌 뷰의 RenderStack을 계속 조작한다(함정 1).
+    /// 해제의 단일 지점 = StopRenderAppendLoop. 호출부 전수 = Unloaded·ResetRenderState·
+    /// ExitRenderMode·StartRenderAppendLoop 기동 직전 방어·틱 내부(완료/seq 중단/예외).
+    /// </summary>
+    private EventHandler<object>? _renderAppendHandler;
 
     private static bool IsMarkdownPath(string path)
     {
@@ -684,9 +714,14 @@ public sealed partial class DocumentView : UserControl,
 
     /// <summary>
     /// A190: 렌더 모드 진입 — 표시 전환은 즉시, 내용은 워커 파싱(A42: 파싱 = 워커, 요소 조립 = UI)
-    /// 완료 후 채운다(소용량 한정이라 순간이다 — 그동안 이전 내용 또는 빈 판이 보인다).
-    /// 파싱·조립 어느 쪽이 실패해도 원문 TextBlock 폴백으로 대체한다(함정 3 — 앱 다운 금지).
-    /// 포커스는 뷰 루트로 옮긴다(Collapsed 에디터에 남기지 않는다 — 셸 키 처리 관례).
+    /// 완료 후 채운다(그동안 이전 내용 또는 빈 판이 보인다). A193: 조립은 첫 조각
+    /// (RenderChunkBlocks — 첫 화면 분량)만 즉시 하고 나머지는 프레임 틱 루프
+    /// (StartRenderAppendLoop)가 조각 단위로 잇는다 — 수백 KB md의 일괄 조립이 UI 스레드를
+    /// 수백 ms 점유하던 것의 A178 수리(파싱은 무변경). 소형 문서(첫 조각 이하)는 여기서 전부
+    /// 끝나 루프가 아예 돌지 않는다 — 종전 일괄 조립과 동작 동일.
+    /// 파싱·조립 어느 쪽이 실패해도 원문 TextBlock 폴백으로 대체한다(함정 3 — 앱 다운 금지,
+    /// ApplyPlainTextFallback). 포커스는 뷰 루트로 옮긴다(Collapsed 에디터에 남기지 않는다 —
+    /// 셸 키 처리 관례).
     /// </summary>
     private async void EnterRenderMode()
     {
@@ -716,25 +751,97 @@ public sealed partial class DocumentView : UserControl,
 
         try
         {
-            MarkdownRenderer.Render(RenderStack, blocks);
+            // A193: 첫 조각만 즉시 조립 — 첫 호출 전 Clear는 호출자 몫(AppendRange 계약).
+            RenderStack.Children.Clear();
+            var first = Math.Min(RenderChunkBlocks, blocks.Count);
+            MarkdownRenderer.AppendRange(RenderStack, blocks, 0, first);
+            if (first < blocks.Count) StartRenderAppendLoop(seq, blocks, first, text);
         }
         catch (Exception)
         {
-            // 조립 실패 — 원문 그대로(고정폭)가 합격선이다. 이것마저 실패하면 빈 판(최후 방어).
+            ApplyPlainTextFallback(text); // 조립 실패 — 원문 그대로(고정폭)가 합격선이다
+        }
+    }
+
+    /// <summary>
+    /// A193: 첫 조각 이후의 나머지 블록을 CompositionTarget.Rendering 틱마다 한 조각
+    /// (RenderChunkBlocks)씩 RenderStack 끝에 append한다 — UI 스레드 점유 상한 = 조각 1개 조립
+    /// (A177 지연 대입과 같은 프레임 틱 관용구·같은 해제 의무).
+    /// 중단 판정 = 매 틱 append 직전의 seq 대조(한 틱 = 한 조각이라 틱 진입 시 1회로 충분 —
+    /// 함정 2): ResetRenderState·ExitRenderMode·EnterRenderMode 재진입이 _renderSeq를 올리는
+    /// 현행 구조 그대로다 — 구 루프가 새 문서·비워진 판에 낡은 블록을 붙이는 사고를 막는다.
+    /// 스크롤 보정은 불요 — append는 판 끝에만 붙어 이미 보이는 내용의 오프셋(뷰포트 상단)이
+    /// 움직이지 않는다. 틱 핸들러는 본문 전체가 try/catch다(static 이벤트라 예외가 새면 앱 전역
+    /// 크래시 — 함정 3): 조각 조립 예외 = 부분 조립물 전체를 버리고 원문 폴백으로 교체 + 루프
+    /// 중단(부분 렌더 잔존 금지 — EnterRenderMode 첫 조각의 폴백 계약과 동일).
+    /// </summary>
+    private void StartRenderAppendLoop(int seq, IReadOnlyList<MdBlock> blocks, int start, string text)
+    {
+        StopRenderAppendLoop(); // 방어: 직전 루프가 남아 있으면 먼저 해제(DeferApplyAfterRender 관용구)
+
+        var next = start;
+        void OnTick(object? sender, object? e)
+        {
             try
             {
-                RenderStack.Children.Clear();
-                RenderStack.Children.Add(new TextBlock
+                if (seq != _renderSeq)
                 {
-                    Text = text,
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = BaseEditorFontSize,
-                    FontFamily = new FontFamily("Consolas"),
-                });
+                    StopRenderAppendLoop(); // 그새 토글·파일 전환·재진입 — 낡은 블록을 붙이지 않는다
+                    return;
+                }
+                var count = Math.Min(RenderChunkBlocks, blocks.Count - next);
+                MarkdownRenderer.AppendRange(RenderStack, blocks, next, count);
+                next += count;
+                if (next >= blocks.Count) StopRenderAppendLoop(); // 완료 — 더 깨울 이유가 없다
             }
             catch (Exception)
             {
+                StopRenderAppendLoop();
+                ApplyPlainTextFallback(text); // 자체 최후 방어까지 있어 여기서 다시 던지지 않는다
+            }
+        }
+        _renderAppendHandler = OnTick;
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnTick;
+    }
+
+    /// <summary>A193: 분할 조립 루프 해제의 단일 지점 — 구독 해제 + 표지 소거(루프 없으면 무동작).
+    /// 기동은 StartRenderAppendLoop 한 곳뿐이라 구독 중 핸들러 = 이 필드 하나가 불변식이다.</summary>
+    private void StopRenderAppendLoop()
+    {
+        if (_renderAppendHandler is { } handler)
+        {
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler;
+            _renderAppendHandler = null;
+        }
+    }
+
+    /// <summary>
+    /// A190/A193: 조립 실패 폴백 — 조립물(부분 조립 포함)을 전부 버리고 원문 그대로(고정폭)로
+    /// 교체한다. 이것마저 실패하면 빈 판(최후 방어). 어떤 경우에도 밖으로 던지지 않는다 —
+    /// 분할 조립 틱(static 이벤트)에서도 불리므로 예외가 새면 앱 전역 크래시다(함정 3).
+    /// </summary>
+    private void ApplyPlainTextFallback(string text)
+    {
+        try
+        {
+            RenderStack.Children.Clear();
+            RenderStack.Children.Add(new TextBlock
+            {
+                Text = text,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = BaseEditorFontSize,
+                FontFamily = new FontFamily("Consolas"),
+            });
+        }
+        catch (Exception)
+        {
+            try
+            {
                 RenderStack.Children.Clear();
+            }
+            catch (Exception)
+            {
+                // 최후 방어 — 빈 판 복구조차 실패하면 삼킨다(틱 핸들러 밖으로 새면 앱이 죽는다)
             }
         }
     }
@@ -742,7 +849,8 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>A190: 편집 모드 복귀 — 렌더 내용은 남겨 둔다(다음 진입 시 통째 교체 — 재렌더는 토글 시점, 사양).</summary>
     private void ExitRenderMode()
     {
-        _renderSeq++; // 보류 중 파싱 무산
+        _renderSeq++; // 보류 중 파싱 무산(A193: 분할 조립 루프의 seq 대조도 이걸로 무산된다)
+        StopRenderAppendLoop(); // A193: 진행 중 루프는 즉시 명시 해제 — 다음 틱을 기다리지 않는다
         _renderMode = false;
         UpdateViewToggle();
         RenderPane.Visibility = Visibility.Collapsed;
@@ -754,11 +862,14 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>
     /// A190: 렌더 축 리셋 — 파일·PDF·무제 열기의 공통 선행 단계(상태 전이표의 "렌더 축 리셋").
     /// 판(RenderPane)을 내리고 조립물을 비워 이전 문서의 잔상이 새 문서에 비치지 않게 한다.
+    /// A193: 진행 중 분할 조립 루프도 여기서 명시 해제한다 — Clear보다 먼저라 비워진 판에
+    /// 구 루프가 한 틱 늦게 append하는 잔상 경로가 없다(seq 대조가 2중 방어).
     /// 에디터 Visibility는 만지지 않는다 — 각 열기 경로가 자기 표시 전환을 그대로 수행한다.
     /// </summary>
     private void ResetRenderState(bool eligible)
     {
-        _renderSeq++; // 보류 중 파싱 무산
+        _renderSeq++; // 보류 중 파싱 무산(A193: 분할 조립 루프의 seq 대조도 이걸로 무산된다)
+        StopRenderAppendLoop(); // A193: 루프 명시 해제 — 아래 Clear 이후 append가 성립할 수 없다
         _renderMode = false;
         _renderEligible = eligible;
         RenderPane.Visibility = Visibility.Collapsed;

@@ -31,6 +31,20 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>더블클릭 판정 창 — ExplorerPane.DoubleClickMs와 같은 값(같은 감각).</summary>
     private const int DoubleClickMs = 500;
 
+    /// <summary>
+    /// A192 체감 조정 지점: 분할 조립 조각 크기(타일 수) — 첫 즉시 조각과 프레임당 append 조각이
+    /// 같은 값을 쓴다(확정 수치 60 — DocumentView.RenderChunkBlocks의 상수 배치 관용구.
+    /// 되돌리기·조정은 이 상수 하나만 고치면 된다).
+    /// </summary>
+    private const int TileChunkItems = 60;
+
+    /// <summary>
+    /// A192: 타일 실체화 상한(ExplorerPane.MaterializeLimit와 같은 값) — 초과분은 타일을 만들지
+    /// 않고 말미에 비상호작용 안내 1타일만 붙인다(MakeOverflowNotice). 상한은 컨테이너 실체화에만
+    /// 걸린다 — ShowEntries로 받는 Entry 목록 자체는 전체 그대로다(원본은 좌 리스트, A93).
+    /// </summary>
+    private const int MaterializeLimit = 2000;
+
     /// <summary>폴더 더블클릭 — 셸이 좌 리스트를 그 폴더로 항해시킨다(상태 공유의 되돌이 경로).</summary>
     public event Action<string>? FolderActivated;
 
@@ -41,12 +55,31 @@ public sealed partial class ThumbnailExplorer : UserControl
     public event Action<string>? FileActivatedNewWindow;
 
     /// <summary>
+    /// 타일 선택 변경 (A200) — 셸이 우측 정보 패널의 "선택 우선" 표시에 쓴다. 인자 없음:
+    /// 셸이 <see cref="SelectedEntry"/>를 질의한다(선택 상태의 원본은 그리드 하나 — A86/A90의
+    /// 질의 API 관례). 목록 재구축(ShowEntries)·다중 선택 조작에서도 그리드가 알아서 발화한다.
+    /// </summary>
+    public event Action? SelectionChanged;
+
+    /// <summary>
     /// 파일 경로 → 담당 모듈 ID (액센트 색 타일용). 셸이 라우터로 주입한다 —
     /// 이 컨트롤이 FileTypeRouter를 직접 알면 DI 없이 못 만드는 컨트롤이 된다.
     /// </summary>
     public Func<string, string?>? ModuleIdForFile { get; set; }
 
     private int _columns = 8; // 기본 = 도크 하나라도 닫힘(전폭) 기준 — 셸이 곧 SetColumns로 덮는다
+
+    /// <summary>A192: 조립 재진입 가드 — ShowEntries가 올 때마다 증가(ExplorerPane._loadSeq 관용구).
+    /// 진행 중 루프의 틱은 append 직전에 이 값과 대조해 낡은 조각을 버린다.</summary>
+    private int _showSeq;
+
+    /// <summary>
+    /// A192: 분할 조립 루프의 프레임 틱 핸들러(null = 루프 없음). CompositionTarget.Rendering은
+    /// static 이벤트라 뷰 수명 안에서 반드시 해제한다 — 남기면 닫힌 뷰가 통째로 누수된다
+    /// (DocumentView._renderAppendHandler와 같은 사정). 해제의 단일 지점 = StopTileAppendLoop.
+    /// 호출부 전수 = Unloaded·ShowEntries 기동 직전 방어·틱 내부(완료/seq 중단/예외).
+    /// </summary>
+    private EventHandler<object>? _tileAppendHandler;
     private (string Path, DateTime At)? _lastClick;
     private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
     private (string Path, DateTime At)? _lastPress;      // A131: 원시 눌림 쌍 — 항목 재구축을 건너 살아남는 최후 폴백
@@ -54,7 +87,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>
     /// Ctrl+Shift+N(새 폴더) 직후의 편집 진입 예약 (A94 2차). 이 뷰의 재스캔은 좌 리스트 경유
     /// 비동기(FolderActivated → 셸 → ViewChanged → ShowEntries)라 완료 시점을 직접 기다릴 수 없다 —
-    /// 다음 ShowEntries가 이 경로의 타일을 찾아 이름변경 편집으로 진입하고 지운다(1회성).
+    /// 다음으로 <b>완주한</b> 조립(FinishShowEntries — A192에서 분할 조립 완료 시점으로 이동)이
+    /// 이 경로의 타일을 찾아 이름변경 편집으로 진입하고 지운다(1회성 — 그 타일이 뒤 조각에
+    /// 있을 수 있어 조립 도중에는 소비하지 않는다).
     /// </summary>
     private string? _pendingRenamePath;
 
@@ -109,7 +144,14 @@ public sealed partial class ThumbnailExplorer : UserControl
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             ExplorerFileOps.CutMarksChanged += ApplyCutMarks;
         };
-        Unloaded += (_, _) => ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
+        Unloaded += (_, _) =>
+        {
+            ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
+            StopTileAppendLoop(); // A192 — CompositionTarget.Rendering은 static: 남기면 닫힌 뷰 통째 누수
+        };
+        // A200: 선택 변경을 셸로 중계 — 우측 정보 패널의 선택 우선 표시(파일 정보 직접 조회)용.
+        // 그리드 자체 이벤트를 얇게 감싸기만 한다(선택 판정·해석은 셸 몫 — SelectedEntry 질의).
+        TileGrid.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
         // A94 6차: 빈 영역(타일이 아닌 곳) 우클릭 메뉴 — New folder / Paste / Refresh.
         // 타일 메뉴와의 이중 발화는 ContextFlyout 규칙이 원천 차단한다: 컨텍스트 요청은 원본
         // 요소에서 위로 버블링하며 **가장 안쪽의 ContextFlyout 하나만** 뜨므로, 타일 위 우클릭은
@@ -346,16 +388,105 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 표시 목록 교체 — 좌 리스트(ExplorerPane)가 정렬·필터를 적용해 넘긴 결과를 그대로 그린다.
     /// folder = 그 목록의 폴더 경로(A94 — 드랍·붙여넣기 대상으로 기억한다).
     /// 이미지 미리보기는 BitmapImage가 스스로 비동기 디코드하므로 별도 로드 루프가 없다.
+    /// A192: 종전 전량 동기 생성을 분할 조립으로 대체 — 첫 조각(TileChunkItems)만 즉시 만들고
+    /// 나머지는 CompositionTarget.Rendering 틱당 한 조각씩 append한다(StartTileAppendLoop —
+    /// DocumentView.StartRenderAppendLoop의 A193 구조 복제). 실체화 상한(MaterializeLimit)을
+    /// 넘는 초과분은 만들지 않고 완료 시점(FinishShowEntries)에 안내 1타일만 붙는다.
+    /// 재진입(감시 재스캔·정렬·폴더 전환 — 전부 이 메서드로 다시 온다)은 명시 해제 +
+    /// 틱 진입 seq 대조의 이중 방어. UpdateLayout은 전량 조립 뒤 1회에서 <b>첫 조각 직후 1회</b>로
+    /// 축소 — 목적(ApplyTileSize가 캐스트하는 ItemsPanelRoot의 실체화)은 항목 수와 무관하게
+    /// 첫 레이아웃 한 번이면 성립하고, 이후 조각은 패널 속성(ItemWidth/ItemHeight)이 셀 크기를
+    /// 자동 적용한다(폴백 경로 보정은 FinishShowEntries 주석).
     /// </summary>
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
+        var seq = ++_showSeq;
+        StopTileAppendLoop(); // 방어: 직전 조립 루프가 남아 있으면 먼저 해제(A193 관용구)
         CurrentFolder = folder;
         TileGrid.Items.Clear();
-        foreach (var entry in entries)
-            TileGrid.Items.Add(MakeTile(entry));
+
+        var cap = Math.Min(entries.Count, MaterializeLimit);
+        var first = Math.Min(TileChunkItems, cap);
+        for (var i = 0; i < first; i++)
+            TileGrid.Items.Add(MakeTile(entries[i]));
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        TileGrid.UpdateLayout(); // 새 항목의 패널 실체화 — 아래 타일 크기 반영이 헛돌지 않게
+        TileGrid.UpdateLayout(); // 첫 조각(상한 60타일)의 패널 실체화 — 아래 타일 크기 반영이 헛돌지 않게
+        ApplyTileSize();
+
+        if (first < cap) StartTileAppendLoop(seq, entries, first, cap);
+        else FinishShowEntries(entries, seq); // 소형 폴더 — 조립이 여기서 동기 완료(종전 동작 동일)
+    }
+
+    /// <summary>
+    /// A192: 첫 조각 이후의 나머지 타일을 CompositionTarget.Rendering 틱마다 한 조각
+    /// (TileChunkItems)씩 append한다 — UI 스레드 점유 상한 = 조각 1개 생성
+    /// (DocumentView.StartRenderAppendLoop과 같은 프레임 틱 관용구·같은 해제 의무).
+    /// 중단 판정 = 매 틱 append 직전의 seq 대조(한 틱 = 한 조각이라 틱 진입 시 1회로 충분):
+    /// ShowEntries 재진입(감시 디바운스 재스캔 포함)이 _showSeq를 올린다 — 구 루프가 새 목록에
+    /// 낡은 타일을 붙이는 사고를 막는다. 틱 핸들러는 본문 전체가 try/catch다(static 이벤트라
+    /// 예외가 새면 앱 전역 크래시) — 조각 생성 예외 = 루프 중단(부분 타일 잔존은 다음
+    /// ShowEntries가 덮는다).
+    /// </summary>
+    private void StartTileAppendLoop(int seq, IReadOnlyList<ExplorerListing.Entry> entries, int start, int cap)
+    {
+        StopTileAppendLoop(); // 방어: 기동 직전 잔존 루프 해제(A193 관용구)
+
+        var next = start;
+        void OnTick(object? sender, object? e)
+        {
+            try
+            {
+                if (seq != _showSeq)
+                {
+                    StopTileAppendLoop(); // 그새 다른 목록이 왔다 — 낡은 타일을 붙이지 않는다
+                    return;
+                }
+                var count = Math.Min(TileChunkItems, cap - next);
+                for (var i = next; i < next + count; i++)
+                    TileGrid.Items.Add(MakeTile(entries[i]));
+                next += count;
+                if (next >= cap)
+                {
+                    StopTileAppendLoop(); // 완료 — 더 깨울 이유가 없다
+                    FinishShowEntries(entries, seq);
+                }
+            }
+            catch (Exception)
+            {
+                StopTileAppendLoop();
+            }
+        }
+        _tileAppendHandler = OnTick;
+        CompositionTarget.Rendering += OnTick;
+    }
+
+    /// <summary>A192: 분할 조립 루프 해제의 단일 지점 — 구독 해제 + 표지 소거(루프 없으면 무동작).
+    /// 기동은 StartTileAppendLoop 한 곳뿐이라 구독 중 핸들러 = 이 필드 하나가 불변식이다.</summary>
+    private void StopTileAppendLoop()
+    {
+        if (_tileAppendHandler is { } handler)
+        {
+            CompositionTarget.Rendering -= handler;
+            _tileAppendHandler = null;
+        }
+    }
+
+    /// <summary>
+    /// A192: 조립 완료의 단일 마무리 — ① 상한 초과분 안내 1타일 부착, ② 폴백 크기 재적용,
+    /// ③ 보류 중 이름변경 편집 진입. ③을 완료 뒤로 옮긴 이유: 새 폴더 타일이 뒤 조각에 있으면
+    /// FindTileByPath가 조립 중에는 못 찾는다 — 편집 진입 예약(_pendingRenamePath)의 소비를
+    /// "처음으로 완주한 조립"으로 미룬다(조립이 도중 무산되면 예약이 남아 다음 완주가 소비 —
+    /// 종전 '다음 ShowEntries가 소비'와 같은 1회성). ②는 ApplyTileSize의 폴백 경로(패널이
+    /// ItemsWrapGrid가 아닐 때 타일 직접 지정) 전용 보정 — 그 경로는 첫 조각만 크기를 받았으므로
+    /// 완료 시 한 번 더 전체 적용한다(정상 경로에서는 패널 속성 재대입 한 줄이라 무해).
+    /// 낡은 완료(폐기된 루프의 마지막 틱)는 seq 대조로 걸러진다.
+    /// </summary>
+    private void FinishShowEntries(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
+    {
+        if (seq != _showSeq) return; // 방어 — 낡은 완료가 편집 진입을 훔치지 않게
+        if (entries.Count > MaterializeLimit)
+            TileGrid.Items.Add(MakeOverflowNotice(entries.Count - MaterializeLimit));
         ApplyTileSize();
 
         // A94 2차: 새 폴더(Ctrl+Shift+N) 직후의 재스캔이면 그 타일을 선택하고 곧바로 이름변경
@@ -372,6 +503,28 @@ public sealed partial class ThumbnailExplorer : UserControl
             }
         }
     }
+
+    /// <summary>
+    /// A192: 실체화 상한 초과 안내 — 비상호작용 1타일. Tag 없음(타일 조회·조작 루틴은 전부
+    /// Tag의 Entry 패턴 매칭이라 자연 제외된다: FindTileByPath·SelectedPaths·EntryFromSource·
+    /// ApplyCutMark·OnItemClick 전수 확인), 계약 훅(메뉴·드래그·더블클릭) 미부착,
+    /// IsEnabled=false로 포커스·클릭 대상에서도 뺀다. 문구는 좌 리스트(ExplorerPane)와 동일 사양.
+    /// </summary>
+    private static GridViewItem MakeOverflowNotice(int hidden) => new()
+    {
+        Content = new TextBlock
+        {
+            Text = $"{hidden} more items are not shown. Refine the filter to see them.",
+            FontSize = 11,
+            Opacity = 0.6,
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4),
+        },
+        IsEnabled = false,
+    };
 
     /// <summary>경로로 타일 컨테이너 찾기 — 항목 = 컨테이너 직접 추가(Tag = Entry) 구조 전제.</summary>
     private GridViewItem? FindTileByPath(string path) =>
