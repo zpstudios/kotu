@@ -743,15 +743,20 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
     private void TogglePlayPause()
     {
-        if (_player is not { } p) return;
-
         // 아무것도 열지 않은 상태의 ▶ = 내장 샘플 곡 재생 (A66 — 비디오의 테스트 클립과 동일 UX).
+        // A207: 반드시 _player 가드보다 앞이다 — 빈 모듈 상태(S1 중앙 탐색기)에서는 스왑체인
+        // 초기화(OnVlcInitialized → _player 생성)가 아직 안 끝났을 수 있어, 종전 가드 순서로는
+        // ▶가 침묵 무동작이었다(회귀 원인, 비디오와 동형). OpenPath는 플레이어가 없으면
+        // _filePath만 걸어 두고 OnVlcInitialized 말미의 PlayCurrent()가 잇는다(파일 열기 정상
+        // 경로와 동일 훅) — 스왑체인 없이 Play를 직접 부르는 경로는 생기지 않는다.
         if (_filePath is null)
         {
             if (File.Exists(SampleTrackPath)) OpenPath(SampleTrackPath);
             else ShowMessage(@"Sample track not found (Assets\sample.mp3)");
             return;
         }
+
+        if (_player is not { } p) return;
 
         // 끝까지 재생된(Ended) 상태에서는 Play()만으로 재시작이 안 되므로 미디어를 다시 건다.
         if (p.State == VLCState.Ended)
