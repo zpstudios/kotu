@@ -109,6 +109,12 @@ Seven modules. Switch between them from the menu at the bottom left.
   files display correctly. Press `C` or the subtitle button to switch track or choose **No subtitles**.
 - **Resume**: if you watched more than 30 seconds and stopped before the last 3%, the position is
   remembered and playback continues there next time.
+- **The whole folder plays as a list.** When a video ends, the next file in the same folder starts
+  automatically (name order, hidden files skipped), and after the last one the list starts over —
+  that is **Loop list**, on by default. Press `L` or the loop button for the options: turn
+  *Loop list* off to stop after the last file, or pick *Repeat this file* — once more, three more
+  times, or forever — which takes priority over the list while it lasts. Repeating never replays
+  from a resume point; every pass starts at 0:00.
 - **Zoom** with `Ctrl`+wheel, from 10% to 800%.
 - **Fit** — see [2.9](#29-the-fit-button). Each new file starts at Contain again.
 - `Enter` or `Alt`+`Enter` toggles full screen, and `Esc` leaves it.
@@ -121,8 +127,9 @@ Seven modules. Switch between them from the menu at the bottom left.
   which also means full screen is no longer bar-less for video: move the mouse and the controls
   appear, hold still and they hide again. The mouse pointer itself is never hidden.
 - Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.
-- Once a video has played to the end, resizing the window clears the picture to black instead of
-  rescaling the last frame. Press play to start it again and the picture returns at the new size.
+- When playback actually stops at the end — looping is off and the list is done — resizing the
+  window clears the picture to black instead of rescaling the last frame. Press play to start it
+  again and the picture returns at the new size.
 
 ### 2.3 Audio
 
@@ -345,6 +352,7 @@ box or while you are typing to jump through the file list.
 | Video | `M` | mute |
 | Video | `S` | playback speed |
 | Video | `C` | subtitles |
+| Video | `L` | loop options |
 | Video | `A` | 100% |
 | Video | `F` | re-apply the last Fit option |
 | Audio | `Space` | play / pause |

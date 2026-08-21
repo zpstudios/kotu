@@ -10,7 +10,7 @@
          전체화면 계열(Enter·F11·Esc 액셀러레이터)은 A151에서 전부 제거 — 전체화면은 셸의
          3단 모드 체계(Enter 순환·Alt+Enter·Esc·하단 바 모드 버튼)가 담당한다. 특히 영상 전용
          Enter=전체화면 가로채기를 없애야 셸의 순환이 영상에서도 동작한다(부록 B 68 ④).
-         버튼에 걸린 단독 문자 키(M 음소거 · S 배속 · C 자막 · A 100% · F Fit)는
+         버튼에 걸린 단독 문자 키(M 음소거 · S 배속 · C 자막 · A 100% · F Fit · L 루프)는
          A34에서 코드(SetupHotkeys)로 옮겼다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들고,
          텍스트 입력·파일 리스트 포커스에서는 통과시켜야 하기 때문.
          A111(v0.133.0)에서 1:1 버튼이 사라져 A·F 둘 다 Fit 버튼에 걸린다(의미는 무변경).
@@ -91,6 +91,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -193,6 +194,18 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
             </StackPanel>
+            <!-- A11(v0.211.0): 루프 c9 — A163 EQ 칸(자막 버튼+플라이아웃 규격)과 같은 1칸(32×32)
+                 신설. 항목(목록 루프 토글 + 현재 파일 반복 라디오 4택)은 코드(BuildLoopFlyout)가
+                 1회 채우고, 본체 아이콘·툴팁(L 키 표기 포함)은 UpdateLoopButton()이 상태형으로
+                 갱신한다 — 아래 FontIcon은 초기값일 뿐이다. 폭 계수: 이 칸(32+간격 6 = 38)은
+                 A151이 전체화면 칸을 제거하며 남긴 여유 38을 정확히 소진한다 — 축약 임계 640
+                 유지(UpdateCompactTransport 산식 주석 참조, 설계 A11-playlist-design.md §4.1). -->
+            <Button x:Name="LoopButton" Grid.Column="9" Style="{StaticResource BottomBarButtonStyle}">
+                <FontIcon Glyph="&#xE8EE;" FontSize="18" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="LoopFlyout" Placement="Top" />
+                </Button.Flyout>
+            </Button>
         </Grid>
     </Grid>
 </UserControl>

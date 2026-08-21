@@ -380,6 +380,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <em>No subtitles</em>.</li>
           <li><strong>Resume</strong>: watch more than 30 seconds and stop before the last 3%, and playback
               continues from there next time.</li>
+          <li><strong>The whole folder plays as a list.</strong> When a video ends, the next file in the same
+              folder starts automatically (name order, hidden files skipped), and after the last one the list
+              starts over — that is <em>Loop list</em>, on by default. Press <kbd>L</kbd> or the loop button
+              for the options: turn <em>Loop list</em> off to stop after the last file, or pick
+              <em>Repeat this file</em> — once more, three more times, or forever — which takes priority over
+              the list while it lasts. Repeating never replays from a resume point; every pass starts
+              at 0:00.</li>
           <li><strong>Zoom</strong> with <kbd>Ctrl</kbd>+wheel, from 10% to 800%.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Each new file starts at
               Contain again.</li>
@@ -393,8 +400,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               in full screen — move the mouse and the controls appear, hold still and they hide again. The
               mouse pointer itself is never hidden.</li>
           <li>Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.</li>
-          <li>Once a video has played to the end, resizing the window clears the picture to black instead of
-              rescaling the last frame. Press play to start it again and the picture returns at the new size.</li>
+          <li>When playback actually stops at the end — looping is off and the list is done — resizing the
+              window clears the picture to black instead of rescaling the last frame. Press play to start it
+              again and the picture returns at the new size.</li>
         </ul>
 
         <h3>Audio</h3>
@@ -615,6 +623,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Video</td><td><kbd>M</kbd></td><td>mute</td></tr>
           <tr><td>Video</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
           <tr><td>Video</td><td><kbd>C</kbd></td><td>subtitles</td></tr>
+          <tr><td>Video</td><td><kbd>L</kbd></td><td>loop options</td></tr>
           <tr><td>Video</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option</td></tr>
           <tr><td>Audio</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
           <tr><td>Audio</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
