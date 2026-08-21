@@ -578,7 +578,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     /// <summary>
     /// Display 섹션: ① 앱 UI 스케일 — 옵션은 윈도우 디스플레이 설정과 같은 배율 목록(UiScale.Percents),
     /// 바꾸면 저장 후 열린 모든 창에 즉시 적용된다(UiScale.Changed → MainWindow.ApplyUiScale).
-    /// ② 문서 편집기 폭(A171) — 저장만 하고 즉시 전파는 하지 않는다(문서 뷰 재생성 때 반영).
+    /// ② 윈도우 디스플레이 배율 변경(A48) — ①과 별개 축(OS 전체 배율). 비공식 DisplayConfig
+    /// API(<see cref="Integration.DisplayScale"/>) 경유, 실패 시 ms-settings:display 딥링크 폴백.
+    /// (문서 편집기 폭 콤보는 A181에서 제거 — 아래 주석 참고.)
     /// </summary>
     private void BuildDisplaySection()
     {
@@ -608,7 +610,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // XamlRoot.RasterizationScale = 이 창이 떠 있는 모니터의 시스템 배율(앱 자체 배율과 무관).
         // 항목을 ComboBoxItem으로 만들어 Content만 갱신 — 선택 상태를 건드리지 않고 라이브 갱신 가능.
         // 생성 시점엔 XamlRoot가 없으므로 Loaded에서 채우고, 모니터 이동/배율 변경(Changed)에 추종.
-        var scaleBox = new ComboBox { Header = "UI scale", MinWidth = 200 };
+        // A48: OS 배율 콤보가 아래 나란히 생기면서 "이 앱만"임을 헤더에서 바로 구분한다.
+        var scaleBox = new ComboBox { Header = "UI scale (this app only)", MinWidth = 200 };
         scaleBox.Items.Add(new ComboBoxItem { Content = "System default" });
         foreach (var p in UiScale.Percents)
             scaleBox.Items.Add(new ComboBoxItem { Content = $"{p}%", Tag = p });
@@ -677,6 +680,134 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Unloaded += (_, _) => UiScale.Changed -= SyncScaleBoxFromSetting;
         Root.Children.Add(scaleBox);
         Root.Children.Add(offListNote);
+
+        // A48(v0.214.0): 윈도우 디스플레이 배율(OS 전체) 변경 — 위 UI scale(앱 전용)과 별개 축.
+        // 대상 = 이 설정 창이 지금 놓인 모니터 고정(부록 B 76 확정 — 모니터 선택 콤보 없음).
+        // GET/SET은 비공식 DisplayConfig API(Integration/DisplayScale — 전부 try/catch)로 하고,
+        // 실패하면 ms-settings:display 딥링크 폴백. stale 방지: 재조회 = Loaded·콤보 열 때·적용
+        // 직후 — 창을 다른 모니터로 옮긴 뒤 콤보를 다시 열면 그 모니터 기준으로 다시 채워진다.
+        Root.Children.Add(new TextBlock
+        {
+            Text = "Windows display scale changes the monitor this window is on, for every app.",
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 12, 0, 0),
+        });
+        Root.Children.Add(LearnMore(
+            "Uses the same undocumented Windows mechanism as the Settings app, applied immediately "
+            + "with no sign-out. If it fails or a Windows update breaks it, the Windows Settings "
+            + "display page opens so you can change it there."));
+
+        var winScaleBox = new ComboBox
+        {
+            Header = "Windows display scale (all apps)",
+            MinWidth = 200,
+            IsEnabled = false, // Loaded의 첫 조회가 성공해야 켜진다
+        };
+        var winScaleNote = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed,
+        };
+        var openDisplaySettings = new HyperlinkButton
+        {
+            Content = "Open Windows display settings",
+            Padding = new Thickness(0),
+            Visibility = Visibility.Collapsed, // 폴백이 필요해질 때만 보인다
+        };
+        openDisplaySettings.Click += (_, _) => DisplayScale.TryOpenDisplaySettings();
+
+        // 프로그램적 재구성 중 SelectionChanged를 무시한다 — 재조회가 SET을 다시 부르는 루프 차단.
+        var winScaleSyncing = false;
+        var winScalePercents = Array.Empty<int>();
+
+        // GET 재조회 + 콤보 재구성. GET 실패 = 콤보 비활성 + 딥링크만(구현 시 결정 사항).
+        void RefreshWindowsScale()
+        {
+            winScaleSyncing = true;
+            try
+            {
+                winScaleBox.Items.Clear();
+                winScalePercents = [];
+                nint hwnd;
+                try { hwnd = GetHwnd(); }
+                catch { hwnd = 0; } // XamlRoot 미준비 — GET 실패와 같은 취급(아래 폴백 분기)
+                if (hwnd != 0
+                    && DisplayScale.TryGet(hwnd, out var current, out var recommended, out var available))
+                {
+                    // 표준 배율 목록(100~350% — UiScale.Percents와 같은 표)의 가용분만 노출한다.
+                    winScalePercents = available.Where(p => Array.IndexOf(UiScale.Percents, p) >= 0).ToArray();
+                    foreach (var p in winScalePercents)
+                    {
+                        winScaleBox.Items.Add(new ComboBoxItem
+                        {
+                            Content = p == recommended ? $"{p}% (recommended)" : $"{p}%",
+                            Tag = p,
+                        });
+                    }
+                    winScaleBox.SelectedIndex = Array.IndexOf(winScalePercents, current);
+                    winScaleBox.IsEnabled = winScalePercents.Length > 0;
+                    openDisplaySettings.Visibility = Visibility.Collapsed;
+                    if (winScaleBox.SelectedIndex < 0)
+                    {
+                        // 커스텀 %·350% 초과 등 목록 밖 현재값 — 선택 없음 + 안내 한 줄.
+                        winScaleNote.Text = $"Current Windows scale on this monitor is {current}%, "
+                            + "which is not in the list above.";
+                        winScaleNote.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        winScaleNote.Visibility = Visibility.Collapsed;
+                    }
+                }
+                else
+                {
+                    winScaleBox.IsEnabled = false;
+                    winScaleNote.Text = "Couldn't read the Windows display scale here - "
+                        + "use Windows Settings instead.";
+                    winScaleNote.Visibility = Visibility.Visible;
+                    openDisplaySettings.Visibility = Visibility.Visible;
+                }
+            }
+            finally
+            {
+                winScaleSyncing = false;
+            }
+        }
+
+        winScaleBox.SelectionChanged += (_, _) =>
+        {
+            if (winScaleSyncing || winScaleBox.SelectedIndex < 0) return;
+            var target = winScalePercents[winScaleBox.SelectedIndex];
+            var applied = false;
+            try
+            {
+                applied = DisplayScale.TrySet(GetHwnd(), target);
+            }
+            catch
+            {
+                // GetHwnd 실패(이론상 Loaded 후엔 불가) — SET 실패와 같은 폴백으로.
+            }
+            if (!applied) _ = DisplayScale.TryOpenDisplaySettings(); // ③ 폴백(부록 B 76)
+            RefreshWindowsScale(); // 적용 직후 재조회 — 표시를 실제 OS 값과 동기
+            if (!applied)
+            {
+                // 재조회가 안내 줄을 지웠어도 폴백 발동은 사용자에게 보여야 한다(등재 결정).
+                winScaleNote.Text = "Couldn't change the scale from here - "
+                    + "Windows Settings has been opened so you can change it there.";
+                winScaleNote.Visibility = Visibility.Visible;
+                openDisplaySettings.Visibility = Visibility.Visible;
+            }
+        };
+        // 콤보를 열 때마다 창이 지금 놓인 모니터 기준으로 다시 조회한다(모니터 이동 stale 방지).
+        winScaleBox.DropDownOpened += (_, _) => RefreshWindowsScale();
+        Loaded += (_, _) => RefreshWindowsScale();
+
+        Root.Children.Add(winScaleBox);
+        Root.Children.Add(winScaleNote);
+        Root.Children.Add(openDisplaySettings);
 
         // A171의 "Document editor width" 콤보는 A181에서 제거 — 본문은 항상 창 폭을 꽉 채우고,
         // 크기 조절은 문서 편집기 안의 Ctrl+휠 줌(document.zoom, 즉시 저장)이 대신한다.

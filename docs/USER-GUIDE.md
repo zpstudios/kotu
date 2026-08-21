@@ -649,6 +649,21 @@ to *System default*, and `Ctrl`+wheel over the bottom bar steps it as well. Over
 does not move. If the setting is on *System default*, the first step starts from the list entry
 closest to your current effective scale.
 
+### Windows display scale
+
+Under **Display**, right below *UI scale*. Where *UI scale* resizes KOTU only, this list changes the
+**Windows display scaling itself** — the monitor the KOTU window is currently on, for every app on
+that monitor. Move the window to another monitor and reopen the list to adjust that one instead.
+
+The list offers the standard Windows values the monitor supports (100% to 350%) and marks the one
+Windows recommends. A change applies immediately; no sign-out is needed, and KOTU's own *UI scale*
+setting keeps working exactly as before on top of the new value.
+
+This uses an undocumented Windows mechanism — the same one the Windows Settings app uses — so a
+future Windows update could break it. If reading or changing the scale fails for any reason, KOTU
+opens the Windows Settings display page (and shows an *Open Windows display settings* link) so you
+can change it there instead.
+
 ### Always open files in a new instance
 
 Under **Windows**. Off by default.
