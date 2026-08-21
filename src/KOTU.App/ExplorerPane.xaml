@@ -66,10 +66,10 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <!-- A155: 헤더 6종(Name/Type/Size/Created/Modified/Info) — 정렬 버튼이 본체다
-                     (값 표시는 A156의 2줄 행이 담당). 버튼·컬럼 정의는 코드에서 채운다
-                     (BuildListHeader — EnsureFilterFlyout처럼 조립 지점 1곳).
-                     아래 구분선은 FileListOverlay의 PathBarHost와 같은 Border 관용구. -->
+                <!-- A155 → A199: 정렬 헤더 5종(Name/Type/Size/Created/Modified) — 정렬 버튼이
+                     본체다(값 표시는 A156의 2줄 행이 담당. 표시 전용 Info 헤더는 A199에서 제거).
+                     버튼·컬럼 정의는 코드에서 채운다(BuildListHeader — EnsureFilterFlyout처럼
+                     조립 지점 1곳). 아래 구분선은 FileListOverlay의 PathBarHost와 같은 Border 관용구. -->
                 <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="0,0,0,1">
                     <Grid x:Name="ListHeader" ColumnSpacing="4" Padding="8,2,8,2" />

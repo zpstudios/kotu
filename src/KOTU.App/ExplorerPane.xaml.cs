@@ -200,8 +200,10 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     // ---------- 정렬 (A5 → A155 컬럼 헤더) ----------
-    // A155: 종전 SortButton 드롭다운(4옵션·방향 토글 없음)을 리스트 위 컬럼 헤더 6종으로 대체.
+    // A155: 종전 SortButton 드롭다운(4옵션·방향 토글 없음)을 리스트 위 컬럼 헤더로 대체.
     // 헤더 클릭 = 그 속성으로 정렬, 같은 헤더 재클릭 = 방향 토글(부록 B 69 ①). 필터(A7)는 존치.
+    // A199: A155 때 함께 있던 표시 전용 Info 헤더(6번째 칸)는 제거됐다.
+    // 헤더는 정렬 5종(Name·Type·Size·Created·Modified)만 남는다 — 정렬 키 자체는 불변.
 
     /// <summary>정렬 방향 지표 글리프 — 오름차순(ChevronUp). 활성 헤더에만 보인다.</summary>
     private const string SortAscGlyph = "\uE70E";
@@ -223,16 +225,18 @@ public sealed partial class ExplorerPane : UserControl
             or ExplorerListing.SortKey.Created;
 
     /// <summary>
-    /// 리스트 컬럼 헤더 조립 (A155) — XAML의 빈 ListHeader 그리드에 6칸을 채운다(생성자에서 1회).
-    /// 헤더는 정렬 버튼이 본체다: 값 표시는 A156의 2줄 행이 담당하므로 열 정렬(칸 맞춤)은 없고,
-    /// 25% 사이드바 폭에 맞춰 축약 라벨 + 잘림 허용(TextTrimming)으로 간다.
+    /// 리스트 컬럼 헤더 조립 (A155 → A199) — XAML의 빈 ListHeader 그리드에 정렬 5칸을 채운다
+    /// (생성자에서 1회). 헤더는 정렬 버튼이 본체다: 값 표시는 A156의 2줄 행이 담당하므로
+    /// 열 정렬(칸 맞춤)은 없고, 25% 사이드바 폭에 맞춰 축약 라벨 + 잘림 허용(TextTrimming)으로 간다.
     /// 버튼 모양은 MainWindow.MakeMenuItem의 투명 평면 버튼 관용구(배경 투명·테두리 0).
+    /// A199: 표시 전용 Info 헤더(A155 — 부록 B 69 ④, 정렬 비대상·흐림 표시)는 제거됐다.
+    /// 모듈별 속성 조각은 상세 줄(BuildDetailText)이 유일한 표시 자리다.
     /// </summary>
     private void BuildListHeader()
     {
-        // Name만 2* — 나머지 5칸은 1*(약어 라벨 기준. 좁으면 라벨이 잘리는 것을 허용한다).
+        // Name만 2* — 나머지 4칸은 1*(약어 라벨 기준. 좁으면 라벨이 잘리는 것을 허용한다).
         ListHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 4; i++)
             ListHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         AddSortHeader(0, "Name", "Sort by name", ExplorerListing.SortKey.Name);
@@ -240,20 +244,6 @@ public sealed partial class ExplorerPane : UserControl
         AddSortHeader(2, "Size", "Sort by size", ExplorerListing.SortKey.Size);
         AddSortHeader(3, "Created", "Sort by date created", ExplorerListing.SortKey.Created);
         AddSortHeader(4, "Modified", "Sort by date modified", ExplorerListing.SortKey.Modified);
-
-        // Info(모듈별 정보 — 부록 B 69 ④)는 정렬 비대상: 값(해상도·페이지 수·압축률)이 지연
-        // 로드(LoadDetailInfoAsync)라 정렬 시점에는 아직 없다. Entry에 넣어 동기 열거로 채우는
-        // 것은 폴더 진입을 늦춰 금지(A156 결정)라, 이 헤더는 표시 전용(버튼 아님·흐림)으로 확정.
-        var info = new TextBlock
-        {
-            Text = "Info",
-            FontSize = 11,
-            Opacity = 0.5,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        Grid.SetColumn(info, 5);
-        ListHeader.Children.Add(info);
 
         SyncSortHeaders();
     }
@@ -765,7 +755,7 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>이름 TextBlock의 조회 키 (A156). MakeListItem·MakeGridItem이 같은 이름을 붙인다.</summary>
     private const string ItemNameBlockName = "ExplorerItemName";
 
-    /// <summary>2줄째 상세 TextBlock의 조회 키 (A156) — 크기·길이·날짜를 한 줄로 합쳐 담는다.</summary>
+    /// <summary>2줄째 상세 TextBlock의 조회 키 (A156) — 크기·속성·날짜를 한 줄로 합쳐 담는다.</summary>
     private const string ItemDetailBlockName = "ExplorerItemDetail";
 
     /// <summary>체크박스의 조회 키 (A157 → A179) — Space 체크 토글의 시각 동기가 이 이름으로 찾는다.</summary>
@@ -788,75 +778,56 @@ public sealed partial class ExplorerPane : UserControl
             : null;
 
     /// <summary>
-    /// 지연 로드로 채우는 상세 조각 한 벌 (A6 길이 → A155 모듈별 정보 확장).
-    /// Duration = 재생 길이(미디어만), Info = 상세 줄 조각(해상도 "1920x1080" · 페이지 "12 pages" ·
-    /// 압축률 "42%"), InfoTip = 툴팁용 라벨 포함 한 줄("Resolution: …" 등 — 라벨 선택이 종류마다
+    /// 지연 로드로 채우는 상세 조각 한 벌 (A6 길이 → A155 확장 → A199 모듈별 1조각으로 정리).
+    /// Info = 상세 줄의 속성 조각 — 종류마다 정확히 하나다(영상·오디오 재생시간 "1:23:45" ·
+    /// 이미지 해상도 "1920x1080" · PDF 페이지 "12 pages" · 텍스트 인코딩 "UTF-8" · zip 압축률 "42%").
+    /// A199에서 영상 해상도가 탈락하며 종전 Duration 필드(재생 길이 전용)가 Info로 합쳐졌다.
+    /// InfoTip = 툴팁용 라벨 포함 한 줄("Length: …"·"Resolution: …" 등 — 라벨 선택이 종류마다
     /// 달라 조립 시점이 아니라 취득 시점(FetchDetailInfo)에 확정한다).
     /// Entry에 싣지 않는 이유(A156 결정 승계): 폴더 스캔이 동기 열거라 진입이 느려진다.
     /// </summary>
-    private sealed record DetailInfo(string Duration, string Info, string InfoTip)
+    private sealed record DetailInfo(string Info, string InfoTip)
     {
-        public static readonly DetailInfo Empty = new(string.Empty, string.Empty, string.Empty);
+        public static readonly DetailInfo Empty = new(string.Empty, string.Empty);
     }
 
     /// <summary>
-    /// 리스트 행 2줄째 텍스트 (A156). 순서 확정: 크기 · [길이] · [모듈별 정보(A155)] · Created · Modified.
+    /// 리스트 행 2줄째 텍스트 (A156 → A199). 순서 확정: 크기 · [속성(모듈별 1조각)] · Created · Modified.
     /// 구분자는 저장소 관용구 "  ·  "(ImageViewerView.BuildMetaText와 같은 조립)이고,
     /// 빈 조각은 건너뛴다 = 구분자만 남는 "  ·    ·  " 모양이 생기지 않는다.
     /// 폴더는 크기 조각을 넣지 않는다(종전 리스트 행의 규칙 승계).
-    /// 날짜 축약(A180, 부록 B 73): Created = yy-MM-dd / Modified = 순수 상대 표기(FormatRelativeAge)
-    /// — 이 줄이 폭 25% 사이드바에 두 날짜를 담아야 한다. 정확한 날짜·시각은 툴팁(BuildTooltipText) 몫.
+    /// 날짜는 둘 다 yy-MM-dd 절대 표기 (A199 — A180이 Modified에 썼던 순수 상대 표기("3d"류
+    /// 전용 헬퍼 포함)를 원복·삭제: 상대 표기는 시간이 지나면 낡는데 갱신 트리거가 재스캔·지연
+    /// 로드 도착뿐이라 오차가 쌓였다. 절대 표기는 낡지 않아 그 문제 자체가 소멸).
+    /// 정확한 날짜·시각은 툴팁(BuildTooltipText) 몫.
     /// 문화권 인자 없이 쓰는 것은 저장소 표시 관용구 그대로다(ImageViewerView·ArchiveView 동일).
     /// 크기·날짜는 빈 문자열이 될 수 없어(FormatSize는 최소 "0 B") 조각 가드가 필요 없고,
-    /// 길이·정보만 비어 올 수 있어 그것만 가드한다.
+    /// 속성 조각만 비어 올 수 있어 그것만 가드한다.
     /// </summary>
     private static string BuildDetailText(ExplorerListing.Entry entry, DetailInfo details)
     {
         var parts = new List<string>();
         if (!entry.IsFolder) parts.Add(ExplorerListing.FormatSize(entry.Size));
-        if (details.Duration.Length > 0) parts.Add(details.Duration);
-        if (details.Info.Length > 0) parts.Add(details.Info); // A155 — 길이 옆이 예약된 자리(A156 훅)
+        if (details.Info.Length > 0) parts.Add(details.Info); // A155 모듈별 속성 — A199 1조각 확정
         parts.Add(entry.Created.ToString("yy-MM-dd"));
-        parts.Add(FormatRelativeAge(entry.Modified));
+        parts.Add(entry.Modified.ToString("yy-MM-dd"));
         return string.Join("  ·  ", parts);
-    }
-
-    /// <summary>
-    /// Modified의 순수 상대 표기 (A180, 부록 B 73 확정). UI 영어 규칙에 따라 today·{n}d·{n}w·{n}mo·{n}y.
-    /// 단위 승급 임계와 반올림: 24시간 미만 = "today", 이후 일수 기준 &lt;7 = {n}d / &lt;30 = {n}w /
-    /// &lt;365 = {n}mo / 그 이상 = {n}y — 각 단위 안에서 내림(floor)이다(13일 = "1w", 45일 = "1mo":
-    /// "지난 지 얼마나 됐나"는 관례상 채워진 단위만 센다). 주 = 7일·월 = 30일·년 = 365일의 근사 나눗셈
-    /// (달력 계산 아님 — 상세 줄 요약에는 이 정밀도로 충분하고 정확한 시각은 툴팁이 담당).
-    /// 미래 시각(시계 왜곡·타임스탬프 조작)은 음수 경과로 오지만 "today"로 뭉갠다 — 요약 줄에서
-    /// 미래 표기를 발명하지 않는다.
-    /// ⚠️ 상대 표기는 시간이 지나면 낡는다 — 갱신 트리거는 재스캔(Fill 재조립)과 지연 로드 도착
-    /// (ApplyDetail) 뿐이고, 시계 타이머 등 추가 트리거는 만들지 않는다(표시 오차 허용 — A180 확정).
-    /// </summary>
-    private static string FormatRelativeAge(DateTime modified)
-    {
-        var age = DateTime.Now - modified; // Entry.Modified는 FileInfo.LastWriteTime(로컬)이라 Now와 짝
-        if (age < TimeSpan.FromHours(24)) return "today";
-        var days = (int)age.TotalDays; // 내림 — TotalDays는 이 지점에서 항상 양수
-        return days < 7 ? days + "d"
-            : days < 30 ? (days / 7) + "w"
-            : days < 365 ? (days / 30) + "mo"
-            : (days / 365) + "y";
     }
 
     /// <summary>
     /// 리스트 행 툴팁 (A156): 파일명 + 라벨 붙은 상세를 줄 단위로 쌓는다.
     /// 2줄 레이아웃의 상세 줄에는 라벨이 없어 Created와 Modified를 눈으로 구분할 수 없고,
-    /// A180부터는 Modified가 상대 표기로 축약된다 — 정확한 날짜·시각의 정본이 이 툴팁이다
+    /// 상세 줄 날짜는 yy-MM-dd로 축약된다 — 정확한 날짜·시각의 정본이 이 툴팁이다
     /// (yyyy-MM-dd HH:mm — 인포 오버레이·플레이어 정보 행과 같은 저장소 관용구.
-    /// 조각 선택 규칙은 BuildDetailText와 같다).
-    /// 모듈별 정보(A155)의 라벨은 InfoTip이 이미 담고 있어 그대로 한 줄을 얹는다.
+    /// 조각 선택 규칙은 BuildDetailText와 같다 — A199에서 영상 해상도가 상세 줄에서 빠지며
+    /// 이 툴팁에서도 함께 빠졌다).
+    /// 모듈별 속성(A155)의 라벨은 InfoTip이 이미 담고 있어 그대로 한 줄을 얹는다.
     /// </summary>
     private static string BuildTooltipText(ExplorerListing.Entry entry, DetailInfo details)
     {
         var lines = new List<string> { entry.Name };
         if (!entry.IsFolder) lines.Add("Size: " + ExplorerListing.FormatSize(entry.Size));
-        if (details.Duration.Length > 0) lines.Add("Length: " + details.Duration);
-        if (details.InfoTip.Length > 0) lines.Add(details.InfoTip); // A155
+        if (details.InfoTip.Length > 0) lines.Add(details.InfoTip); // A155 → A199 1조각
         lines.Add("Created: " + entry.Created.ToString("yyyy-MM-dd HH:mm"));
         lines.Add("Modified: " + entry.Modified.ToString("yyyy-MM-dd HH:mm"));
         return string.Join("\n", lines);
@@ -875,14 +846,20 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 리스트 행 (A156 — 2줄): 1줄 = 아이콘 + 이름, 2줄 = 크기·[길이]·Created·Modified 한 줄,
-    /// 우측 끝 = 작업 집합 체크박스(A157 → A179). 길이는 지연 로드(A6)라 처음에는 빠진 채 조립되고,
-    /// 도착하면 상세 줄을 통째로 다시 만든다.
+    /// 리스트 행 (A156 — 2줄): 1줄 = 아이콘 + 이름, 2줄 = 크기·[속성]·Created·Modified 한 줄,
+    /// 우측 끝 = 작업 집합 체크박스(A157 → A179). 속성 조각은 지연 로드(A6 → A155)라 처음에는
+    /// 빠진 채 조립되고, 도착하면 상세 줄을 통째로 다시 만든다.
     /// 루트는 **평평한 Grid 하나**다(중첩 패널 금지) — 이름변경(ExplorerRenameBox.Begin)이
     /// host 패널에 편집 상자를 끼우고 Grid.SetRow/SetColumn으로 이름 자리에 앉히기 때문.
-    /// 행 높이는 지정하지 않는다: 2줄 콘텐츠(12px + 11px 약 31px)가 WinUI 기본
-    /// ListViewItemMinHeight 안에 들어갈 것으로 보고 명시 Height/MinHeight 없이 간다.
-    /// 실기기에서 행이 커지면 복구 지점은 이 컨테이너에 MinHeight 한 줄을 주는 것이다
+    /// A198 행 높이 압축: 위 트리(FileListOverlay의 FolderTree — 스타일 무지정 = WinUI 기본
+    /// TreeViewItemMinHeight 32px)와 동급을 목표로, 숨은 하한 세 개를 전부 명시로 누른다:
+    /// ① ListViewItem.MinHeight = 0 (기본 ListViewItemMinHeight 40이 진짜 하한이었다 — A156이
+    ///    예고한 "커지면 MinHeight 한 줄" 복구 지점의 반대 방향 적용),
+    /// ② ListViewItem.Padding = 12,1,12,1 (세로 1px — 기본 세로 패딩 승계 차단, 가로는 기본 근사),
+    /// ③ 체크박스 MinHeight = 0 (기본 32가 RowSpan=2로 두 줄 전체를 32px 이상으로 버텼다).
+    /// 글꼴은 이름 12 유지·상세 10(11에서 축소)·아이콘 13 유지 → 콘텐츠 약 29px + 패딩 2px ≈ 31px.
+    /// 실기기 육안이 최종 판정 — 되돌리기 지점은 아래 item 초기화의 MinHeight·Padding 두 줄과
+    /// 상세 FontSize 한 줄이다(전부 이 메서드 안).
     /// (LineHeight/LineStackingStrategy는 쓰지 않는다 — 저장소 선례 0건이고 기본 전략상 무효).
     /// </summary>
     private ListViewItem MakeListItem(ExplorerListing.Entry entry)
@@ -915,7 +892,7 @@ public sealed partial class ExplorerPane : UserControl
         var detail = new TextBlock
         {
             Name = ItemDetailBlockName,
-            FontSize = 11,
+            FontSize = 10, // A198: 11 → 10 — 행 높이 압축의 일부(되돌리기 지점)
             Opacity = 0.6,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -930,7 +907,8 @@ public sealed partial class ExplorerPane : UserControl
         // 콘텐츠 '안'에 두는 이유 = 잘라내기 흐림(ExplorerFileOps.ApplyCutMark)이 SelectorItem.Content
         // 루트의 Opacity를 만지므로, 밖에 두면 잘라낸 항목에서 체크만 또렷하게 남는다. 잘라내기 중
         // 체크도 함께 0.5로 흐려지는 것은 수용한다(항목 전체가 흐려지는 탐색기 모양).
-        // 기본 치수(MinWidth·Padding·Margin)를 0으로 눌러야 2줄 행 높이를 체크박스가 먹지 않는다.
+        // 기본 치수(MinWidth·MinHeight·Padding·Margin)를 0으로 눌러야 2줄 행 높이를 체크박스가
+        // 먹지 않는다(A198: 기본 MinHeight 32가 A156 경고대로 숨은 하한이었다 — 명시 0 추가).
         var check = new CheckBox
         {
             Name = ItemCheckBoxName,
@@ -938,6 +916,7 @@ public sealed partial class ExplorerPane : UserControl
             // A179: 경로 키 집합에서 복원 — Fill 전량 재생성(재스캔)을 건너 체크가 생존한다.
             IsChecked = _checkedPaths.Contains(entry.Path),
             MinWidth = 0,
+            MinHeight = 0, // A198 — 행 압축의 필수 조건(이게 남으면 다른 압축이 전부 무효)
             Padding = new Thickness(0),
             Margin = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -954,8 +933,16 @@ public sealed partial class ExplorerPane : UserControl
         row.Children.Add(detail);
         row.Children.Add(check);
 
-        var item = new ListViewItem { Content = row, Tag = entry };
-        ApplyDetail(item, entry, DetailInfo.Empty); // 상세 줄 + 툴팁 초판(길이·정보는 아직 도착 전)
+        var item = new ListViewItem
+        {
+            Content = row,
+            Tag = entry,
+            // A198 행 높이 압축(트리 행 32px 동급 목표) — 되돌리기 지점: 아래 두 줄을 지우면
+            // WinUI 기본(ListViewItemMinHeight 40·테마 패딩)으로 복귀한다.
+            MinHeight = 0,
+            Padding = new Thickness(12, 1, 12, 1),
+        };
+        ApplyDetail(item, entry, DetailInfo.Empty); // 상세 줄 + 툴팁 초판(속성 조각은 아직 도착 전)
         ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
         AttachContextMenu(item, entry, ListPane); // A24 + A94 2차(Rename·Delete)
         AttachDragDrop(item, entry, ListPane); // A94 — 드래그 아웃 + 폴더 항목 드랍
@@ -972,11 +959,12 @@ public sealed partial class ExplorerPane : UserControl
     private enum InfoKind
     {
         None,
-        Video, // 길이 + 해상도
-        Audio, // 길이만 (A6 종전 동작)
+        Video, // 재생시간만 (A199 — 종전 "길이 + 해상도"에서 해상도 탈락)
+        Audio, // 재생시간 (A6 종전 동작)
         Image, // 해상도 (A180 — A155 확정 때 누락된 원 서술 "해상도(이미지 기준)"의 수리)
-        Pdf,   // 페이지 수 — 문서 모듈 확장자 중 PDF만(비PDF 텍스트는 페이지 개념이 없다)
+        Pdf,   // 페이지 수 — 문서 모듈 확장자 중 PDF만(인코딩 개념이 없어 A199에서도 유지 확정)
         Zip,   // 압축률 — 압축 모듈 확장자 중 zip만(그 외 포맷은 헤더 읽기가 값싸지 않아 생략)
+        Text,  // 인코딩 (A199 신규) — 문서 모듈의 비PDF 텍스트. ReadTextSmart 판정 규칙 재사용
     }
 
     /// <summary>
@@ -993,11 +981,15 @@ public sealed partial class ExplorerPane : UserControl
             ? InfoKind.Pdf
         : string.Equals(System.IO.Path.GetExtension(name), ".zip", StringComparison.OrdinalIgnoreCase)
             ? InfoKind.Zip
+        // A199: 문서 모듈 담당 목록 재사용 — .pdf도 이 목록에 있지만 위 Pdf 갈래가 먼저 잡으므로
+        // 여기 도달하는 것은 비PDF 텍스트(txt·md·markdown·log·ini)뿐이다.
+        : ExplorerListing.MatchesExtension(name, KOTU.Module.Document.DocumentModule.Extensions)
+            ? InfoKind.Text
         : InfoKind.None;
 
     /// <summary>
-    /// 파일별 상세 조각(길이·해상도·페이지 수·압축률 — A6 → A155)을 리스트 행 2줄째 상세 줄에
-    /// 합쳐 넣는다. 취득은 전부 워커에서(폴더 진입 체감 불변 — 동기 열거에 안 싣는 A156 결정),
+    /// 파일별 상세 조각(재생시간·해상도·페이지 수·압축률·인코딩 — A6 → A155 → A199)을 리스트 행
+    /// 2줄째 상세 줄에 합쳐 넣는다. 취득은 전부 워커에서(폴더 진입 체감 불변 — 동기 열거에 안 싣는 A156 결정),
     /// UI는 텍스트 반영만. 재진입은 _loadSeq 가드(썸네일 루프와 같은 관용구).
     /// 정렬·필터 재그리기는 캐시가 흡수한다(수정시각 일치 시 재조회 없음).
     /// </summary>
@@ -1011,8 +1003,9 @@ public sealed partial class ExplorerPane : UserControl
             var kind = InfoKindOf(entry.Name);
             if (kind == InfoKind.None) continue;
             // A175: 클라우드 전용(placeholder) 파일은 상세 조각 취득 자체가 하이드레이션이다 —
-            // 길이·영상/이미지 해상도(속성 핸들러가 파일을 연다 — A180의 이미지 축 포함)·PDF 페이지 수
-            // (전체 로드)·zip 압축률(아카이브 열기) 전부 생략하고 상세 줄은 초판(크기·날짜)대로 둔다. 캐시에도 넣지 않는다 —
+            // 재생시간·이미지 해상도(속성 핸들러가 파일을 연다 — A180의 이미지 축 포함)·PDF 페이지 수
+            // (전체 로드)·zip 압축률(아카이브 열기)·텍스트 인코딩(A199 — 앞부분이라도 파일을 읽는다)
+            // 전부 생략하고 상세 줄은 초판(크기·날짜)대로 둔다. 캐시에도 넣지 않는다 —
             // 사용자가 열어 로컬화되면 다음 재스캔에서 정상 조회된다.
             if (entry.IsPlaceholder) continue;
 
@@ -1040,7 +1033,7 @@ public sealed partial class ExplorerPane : UserControl
                 _infoCache[entry.Path] = (entry.Modified, details);
             }
 
-            if (details.Duration.Length == 0 && details.Info.Length == 0) continue;
+            if (details.Info.Length == 0) continue;
             // A156: 대입이 아니라 그 항목의 상세 줄과 툴팁을 통째로 다시 조립한다
             // (조각 순서는 BuildDetailText가 쥔다).
             ApplyDetail(item, entry, details);
@@ -1055,32 +1048,28 @@ public sealed partial class ExplorerPane : UserControl
     {
         switch (kind)
         {
+            // A199: 영상도 재생시간만 — 해상도 조각은 탈락했다(오디오와 같은 갈래로 합류.
+            // 상세 줄·툴팁이 조각 선택 규칙을 공유하므로 양쪽에서 함께 빠진다 — BuildTooltipText 계약).
             case InfoKind.Video:
-            {
-                var (ticks, width, height) = FetchMediaProperties(path);
-                var duration = ticks > 0
-                    ? ExplorerListing.FormatDuration(TimeSpan.FromTicks(ticks))
-                    : string.Empty;
-                // 해상도(부록 B 69 ④) — 속성이 없는 파일(손상·비표준 컨테이너)은 길이만 남는다.
-                var res = width > 0 && height > 0 ? $"{width}x{height}" : string.Empty;
-                return new DetailInfo(duration, res, res.Length > 0 ? "Resolution: " + res : string.Empty);
-            }
             case InfoKind.Audio:
             {
-                var (ticks, _, _) = FetchMediaProperties(path);
+                var ticks = FetchDurationTicks(path);
                 var duration = ticks > 0
                     ? ExplorerListing.FormatDuration(TimeSpan.FromTicks(ticks))
                     : string.Empty;
-                return new DetailInfo(duration, string.Empty, string.Empty);
+                // 속성 없음(손상·비표준 컨테이너)이나 1초 미만(FormatDuration이 빈 문자열)은
+                // 조각 생략 — InfoTip까지 비워야 툴팁에 빈 "Length:" 줄이 남지 않는다.
+                if (duration.Length == 0) return DetailInfo.Empty;
+                return new DetailInfo(duration, "Length: " + duration);
             }
             case InfoKind.Image:
             {
-                // A180: 이미지 해상도 — 표기는 영상 해상도와 동일한 "1920x1080".
-                // 속성이 없는 파일(손상·비지원 코덱)은 조각 없이 빈 벌로 남는다(Video 갈래와 같은 규칙).
+                // A180: 이미지 해상도 — 표기는 "1920x1080".
+                // 속성이 없는 파일(손상·비지원 코덱)은 조각 없이 빈 벌로 남는다.
                 var (width, height) = FetchImageSize(path);
-                var res = width > 0 && height > 0 ? $"{width}x{height}" : string.Empty;
-                return new DetailInfo(
-                    string.Empty, res, res.Length > 0 ? "Resolution: " + res : string.Empty);
+                if (width <= 0 || height <= 0) return DetailInfo.Empty;
+                var res = $"{width}x{height}";
+                return new DetailInfo(res, "Resolution: " + res);
             }
             case InfoKind.Pdf:
             {
@@ -1091,35 +1080,41 @@ public sealed partial class ExplorerPane : UserControl
                     .AsTask().GetAwaiter().GetResult();
                 if (doc.PageCount == 0) return DetailInfo.Empty;
                 var pages = doc.PageCount == 1 ? "1 page" : $"{doc.PageCount} pages";
-                return new DetailInfo(string.Empty, pages, "Pages: " + doc.PageCount);
+                return new DetailInfo(pages, "Pages: " + doc.PageCount);
             }
             case InfoKind.Zip:
             {
                 // 압축률 = 파일 크기 ÷ 원본 합(중앙 디렉터리만 읽는다 — 해제 없음). zip 한정.
                 var percent = KOTU.Module.Archive.ArchiveQuickInfo.TryGetZipCompressionPercent(path);
                 if (percent < 0) return DetailInfo.Empty;
-                return new DetailInfo(string.Empty, percent + "%", "Compression ratio: " + percent + "%");
+                return new DetailInfo(percent + "%", "Compression ratio: " + percent + "%");
+            }
+            case InfoKind.Text:
+            {
+                // A199: 텍스트 인코딩 — ReadTextSmart(DocumentView)의 판정 규칙을 앞부분 상한
+                // 읽기로 재사용한다(DocumentQuickInfo — 전체 읽기를 워커 직렬 큐에 싣지 않는다).
+                // 판정 불가·실패(잠김·빈 파일 등)는 null = 조각 생략.
+                var encoding = KOTU.Module.Document.DocumentQuickInfo.TryGetEncodingName(path);
+                if (encoding is null) return DetailInfo.Empty;
+                return new DetailInfo(encoding, "Encoding: " + encoding);
             }
             default:
                 return DetailInfo.Empty;
         }
     }
 
-    /// <summary>워커 스레드: 셸 미디어 속성 — 길이(100ns 단위 = TimeSpan 틱)와 비디오 해상도를
-    /// 한 왕복으로 읽는다(A6 FetchDurationTicks의 확장 — 속성 목록만 늘었다). 없으면 0.</summary>
-    private static (long DurationTicks, int Width, int Height) FetchMediaProperties(string path)
+    /// <summary>워커 스레드: 셸 미디어 속성 — 재생 길이(100ns 단위 = TimeSpan 틱)를 읽는다.
+    /// 없으면 0. (A6 원형 → A155에서 비디오 해상도를 얹어 FetchMediaProperties로 확장했다가
+    /// A199에서 해상도 조각이 탈락하며 길이 단일 조회로 복귀.)</summary>
+    private static long FetchDurationTicks(string path)
     {
         var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
-        var props = file.Properties.RetrievePropertiesAsync(
-                ["System.Media.Duration", "System.Video.FrameWidth", "System.Video.FrameHeight"])
+        var props = file.Properties.RetrievePropertiesAsync(["System.Media.Duration"])
             .AsTask().GetAwaiter().GetResult();
-        var ticks = props.TryGetValue("System.Media.Duration", out var d) && d is ulong u ? (long)u : 0L;
-        var width = props.TryGetValue("System.Video.FrameWidth", out var w) && w is uint uw ? (int)uw : 0;
-        var height = props.TryGetValue("System.Video.FrameHeight", out var h) && h is uint uh ? (int)uh : 0;
-        return (ticks, width, height);
+        return props.TryGetValue("System.Media.Duration", out var d) && d is ulong u ? (long)u : 0L;
     }
 
-    /// <summary>워커 스레드: 이미지 픽셀 치수 (A180 — FetchMediaProperties와 같은 셸 속성 관용구,
+    /// <summary>워커 스레드: 이미지 픽셀 치수 (A180 — FetchDurationTicks와 같은 셸 속성 관용구,
     /// 키만 이미지용 System.Image.*다. ImageViewerView의 System.Image.BitDepth 조회와 같은 계열). 없으면 0.</summary>
     private static (int Width, int Height) FetchImageSize(string path)
     {

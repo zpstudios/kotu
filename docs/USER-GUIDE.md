@@ -461,10 +461,11 @@ Open a module without a file and the window becomes a file browser: folder tree 
 left, thumbnails in the centre, file information on the right.
 
 - **Each row in the left panel is two lines** — the file name on the first, and on the second its
-  size, its playing length for video and audio, the date it was created and the date it was last
-  modified, written as `2026-08-19`. Point at a row and the tooltip repeats the same values with
-  **Size:**, **Length:**, **Created:** and **Modified:** in front of them, so the two dates cannot be
-  mistaken for one another.
+  size, one fact from the file's own module — playing length for video and audio, resolution for an
+  image, page count for a PDF, text encoding for a document, compression ratio for a ZIP — and the
+  dates it was created and last modified, both written as `26-08-19`. Point at a row and the tooltip
+  repeats the same values with labels such as **Size:**, **Length:**, **Created:** and **Modified:**
+  in front of them, with the dates in full, so the two dates cannot be mistaken for one another.
 - **A checkbox at the right-hand end of each row** shows whether that file is selected. Ticking or
   unticking it selects or deselects the file, and `Space` does the same to whichever item has the
   focus. It is one selection, not two — the boxes only make it visible.

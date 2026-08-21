@@ -719,10 +719,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            left, thumbnails in the centre, file information on the right.</p>
         <ul>
           <li><strong>Each row in the left panel is two lines</strong> — the file name on the first, and on
-              the second its size, its playing length for video and audio, the date it was created and the
-              date it was last modified, written as <code>2026-08-19</code>. Point at a row and the tooltip
-              repeats the same values with <em>Size:</em>, <em>Length:</em>, <em>Created:</em> and
-              <em>Modified:</em> in front of them, so the two dates cannot be mistaken for one another.</li>
+              the second its size, one fact from the file's own module — playing length for video and audio,
+              resolution for an image, page count for a PDF, text encoding for a document, compression ratio
+              for a ZIP — and the dates it was created and last modified, both written as
+              <code>26-08-19</code>. Point at a row and the tooltip repeats the same values with labels such
+              as <em>Size:</em>, <em>Length:</em>, <em>Created:</em> and <em>Modified:</em> in front of
+              them, with the dates in full, so the two dates cannot be mistaken for one another.</li>
           <li><strong>A checkbox at the right-hand end of each row</strong> shows whether that file is
               selected. Ticking or unticking it selects or deselects the file, and <kbd>Space</kbd> does the
               same to whichever item has the focus. It is one selection, not two — the boxes only make it
