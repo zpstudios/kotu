@@ -1,5 +1,7 @@
+using System.Management;
 using System.Security.Principal;
 using LibreHardwareMonitor.Hardware;
+using Microsoft.Win32;
 
 namespace KOTU.Module.Hardware;
 
@@ -23,10 +25,15 @@ public sealed record SensorFrame(
 ///
 /// - 모든 LHM 접근은 폴러 스레드(HardwareModule.Poller) 한 곳에서만 일어난다.
 ///   _gate 잠금은 앱 종료 시 Shutdown()과의 경합만 막기 위한 것.
-/// - Open()은 첫 Read에서 지연 수행(커널 드라이버 로드 + 장치 열거로 1~3초 걸릴 수 있음 —
+/// - Open()은 첫 Read에서 지연 수행(드라이버 디바이스 열기 + 장치 열거로 1~3초 걸릴 수 있음 —
 ///   폴러가 BelowNormal 백그라운드라 UI는 안 막힌다. 뷰는 그동안 Busy 링 표시).
-/// - 관리자 권한이 없으면 커널 드라이버를 못 올려 CPU 온도·전력·클럭(MSR)·팬(SuperIO)·
-///   SSD 온도(SMART)가 null이 된다. GPU(벤더 API)·RAM·CPU 부하는 비관리자도 나온다.
+/// - LHM 0.9.5+는 WinRing0가 제거되고 별도 설치형 서명 드라이버 PawnIO 기반이다(A47 조사 —
+///   docs/A47-sensor-access-research.md §1.3). 라이브러리는 드라이버를 동봉하지 않으며, 이미
+///   설치된 \\.\PawnIO 디바이스를 열어 내장 서명 모듈만 로드한다. 관리자 권한과 PawnIO 설치가
+///   모두 있어야 CPU 온도·전력·클럭(MSR)·팬(SuperIO)이 나오고, SSD 온도(SMART)는 승격만으로
+///   회복될 수 있다. 어느 쪽이 빠져도 예외 없이 해당 채널만 조용히 null이 된다(침묵 저하).
+///   GPU(벤더 API)·RAM·CPU 부하는 비관리자에서도 나온다. CPU 클럭만은 LHM이 못 줄 때
+///   WMI 성능 카운터 근사값으로 폴백한다(A47 ② — ClockApprox).
 /// - Storage 갱신은 10초마다 1회(A29에서 폴링 횟수 기반 → 시간 기반으로 교체 — 주기가
 ///   50~5000ms 어디로 바뀌어도 SMART 부하가 일정) — SMART 질의는 상대적으로 무겁고
 ///   드라이브 온도는 느리게 변한다. 센서 값은 다음 갱신까지 마지막 값을 유지한다.
@@ -85,6 +92,36 @@ public static class SensorService
     }
 
     /// <summary>
+    /// PawnIO 드라이버 설치 여부(A47) — 저하 안내 UI 판단용. LHM 0.9.6은 PawnIO가 없으면
+    /// 승격 상태여도 예외 없이 MSR/SuperIO 채널만 조용히 비우므로, 안내 분기가 이 판정에 기댄다.
+    /// 판정 = 설치본(PawnIO.Setup)이 남기는 HKLM 언인스톨 키(A47 조사 §1.3 — LHM 자신의 감지
+    /// 방식과 동일, 64/32비트 위치 모두) 또는 Program Files의 PawnIO 폴더. 디바이스 열기 시도보다
+    /// 안전하다(비관리자는 어차피 못 열어 판정 축이 승격과 섞이고, 핸들 부작용도 없다).
+    /// 시작 시 1회 고정 — Restart as admin 복귀는 새 프로세스라 자연히 재판정된다(폴링 불필요).
+    /// </summary>
+    public static bool IsPawnIoInstalled { get; } = ComputePawnIoInstalled();
+
+    private static bool ComputePawnIoInstalled()
+    {
+        try
+        {
+            using (var key = Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO"))
+                if (key is not null) return true;
+            using (var key = Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO"))
+                if (key is not null) return true;
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            return programFiles.Length > 0 && Directory.Exists(Path.Combine(programFiles, "PawnIO"));
+        }
+        catch
+        {
+            // 판정 실패 = 설치로 간주 — "설치하라"는 거짓 안내(오탐)보다 현행(침묵)이 낫다.
+            return true;
+        }
+    }
+
+    /// <summary>
     /// 센서 한 프레임 수집. 폴러 스레드에서 매 주기 호출된다.
     /// 실패해도 던지지 않는다 — 스냅샷의 스펙 섹션까지 잃으면 안 되기 때문. 실패 시 Empty.
     /// </summary>
@@ -102,6 +139,10 @@ public static class SensorService
                 _computer!.Accept(new UpdateVisitor(includeStorage));
 
                 var frame = Extract(_computer);
+                // A47 ②: LHM이 CPU 클럭을 못 주면(비관리자/PawnIO 미설치) WMI 근사값으로 채운다.
+                // LHM 값이 있으면 근사 경로는 아예 타지 않는다(LHM 우선 — 승격+PawnIO의 현행 유지).
+                if (frame.CpuClock is null && ClockApprox() is { } approxClock)
+                    frame = frame with { CpuClock = approxClock };
                 lock (_historyGate)
                 {
                     _history[_historyNext] = frame;
@@ -157,8 +198,8 @@ public static class SensorService
                 IsCpuEnabled = true,
                 IsGpuEnabled = true,
                 IsMemoryEnabled = true,
-                IsMotherboardEnabled = true, // SuperIO(팬) — 관리자 필요
-                IsStorageEnabled = true,     // SMART 온도 — 관리자 필요
+                IsMotherboardEnabled = true, // SuperIO(팬) — 관리자 + PawnIO 필요(A47)
+                IsStorageEnabled = true,     // SMART 온도 — 관리자 필요(PawnIO 무관 — 디스크 핸들 직접 질의)
                 // Controller(외장 팬 컨트롤러)·Network(A20에서 별도)·Psu·Battery는 끈다
             };
             computer.Open();
@@ -169,6 +210,84 @@ public static class SensorService
         {
             _openFailed = true; // 드라이버 로드 불가 등 — 매 주기 재시도해 봐야 같으니 멈춘다
             return false;
+        }
+    }
+
+    // ---------- CPU 클럭 근사 폴백 (A47 ②) ----------
+
+    /// <summary>근사 산출 실패(WMI·카운터 손상 머신 등) — Open 실패와 같은 정책으로 재시도하지 않는다.</summary>
+    private static bool _clockApproxFailed;
+
+    /// <summary>정격 클럭 MHz(Win32_Processor.MaxClockSpeed — 관리자 불필요). 첫 필요 시 1회 조회.</summary>
+    private static float _clockBaseMhz;
+    private static bool _clockBaseLoaded;
+
+    /// <summary>근사 조회 간격 — 50ms 폴링에서도 WMI 부하를 초당 1회로 억제(Storage 10초와 같은 취지).</summary>
+    private static readonly TimeSpan ClockApproxInterval = TimeSpan.FromSeconds(1);
+
+    private static DateTime _lastClockApproxAt = DateTime.MinValue;
+    private static float? _lastClockApprox;
+
+    /// <summary>
+    /// LHM이 CPU 클럭을 못 줄 때(MSR 접근 불가 = 비관리자 또는 PawnIO 미설치)의 근사값(A47 ②).
+    /// 근사 = 정격 클럭 × "% Processor Performance"(성능 카운터의 WMI 사영
+    /// Win32_PerfFormattedData_Counters_ProcessorInformation — 관리자 불필요. 터보 시 100%를
+    /// 넘는 값이 나와 부스트 클럭도 대략 따라간다). 폴러 스레드(Read 안, _gate 보유)에서만
+    /// 불린다 — 첫 조회가 수백 ms 걸려도 UI는 안 막힌다. 조회는 1초 1회로 제한하고 그 사이는
+    /// 직전 값을 유지한다. 형식(formatted) 카운터는 두 표본의 차분이라 첫 질의가 0으로 나올 수
+    /// 있어 0 이하는 미준비로 취급해 null을 돌려준다(다음 주기에 채워진다). 실패는 한 번이면
+    /// 영구 포기(_openFailed와 같은 정책) — 채널은 현행대로 빈 값("—")이 된다.
+    /// 근사값이라는 표기는 UI에 하지 않는다(A47 확정 — 값 채움 우선).
+    /// </summary>
+    private static float? ClockApprox()
+    {
+        if (_clockApproxFailed) return null;
+        var now = DateTime.UtcNow;
+        if (now - _lastClockApproxAt < ClockApproxInterval) return _lastClockApprox;
+        _lastClockApproxAt = now;
+        try
+        {
+            if (!_clockBaseLoaded)
+            {
+                using var cpuSearcher = new ManagementObjectSearcher(
+                    "SELECT MaxClockSpeed FROM Win32_Processor");
+                using var cpus = cpuSearcher.Get();
+                foreach (var cpu in cpus)
+                {
+                    var mhz = Convert.ToSingle(cpu["MaxClockSpeed"]);
+                    if (mhz > _clockBaseMhz) _clockBaseMhz = mhz; // 멀티 소켓은 최대값
+                    cpu.Dispose();
+                }
+                _clockBaseLoaded = true;
+            }
+            if (_clockBaseMhz <= 0)
+            {
+                _clockApproxFailed = true; // 정격을 모르면 비율을 곱할 밑이 없다
+                return null;
+            }
+
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT Name, PercentProcessorPerformance FROM Win32_PerfFormattedData_Counters_ProcessorInformation");
+            using var results = searcher.Get();
+            var percent = -1.0;
+            foreach (var row in results)
+            {
+                // 인스턴스는 "0,0"…"0,_Total"·"_Total" 꼴 — 전체 합계(_Total 계열)만 본다.
+                var name = row["Name"]?.ToString() ?? "";
+                if (name.EndsWith("_Total", StringComparison.OrdinalIgnoreCase))
+                {
+                    var value = Convert.ToDouble(row["PercentProcessorPerformance"]);
+                    if (value > percent) percent = value;
+                }
+                row.Dispose();
+            }
+            _lastClockApprox = percent > 0 ? (float)(_clockBaseMhz * percent / 100.0) : null;
+            return _lastClockApprox;
+        }
+        catch
+        {
+            _clockApproxFailed = true; // WMI 불가 머신 — 매 초 재시도해 봐야 같으니 멈춘다
+            return null;
         }
     }
 

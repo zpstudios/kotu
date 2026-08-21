@@ -1074,13 +1074,32 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     {
         _lastFrame = frame;
 
-        // 비관리자여서 커널 드라이버 의존 채널이 비어 있으면 안내 행을 보여준다.
-        // (관리자인데도 비면 하드웨어가 그 값을 안 주는 것 — 버튼을 내밀지 않는다)
-        var needsAdmin = !SensorService.IsElevated
-            && frame.Timestamp != DateTime.MinValue
-            && (frame.CpuTemp is null || frame.CpuPower is null
-                || frame.FanRpm is null || frame.SsdTemp is null);
-        AdminRow.Visibility = needsAdmin ? Visibility.Visible : Visibility.Collapsed;
+        // 저하 안내 2축 판정(A47): 승격 여부 × PawnIO 설치 여부. LHM 0.9.6은 별도 설치형 서명
+        // 드라이버 PawnIO가 없으면 승격해도 MSR/SuperIO 채널(CPU 온도·전력·팬)이 예외 없이
+        // 조용히 빈다 — 종전 휴리스틱("관리자인데 비면 하드웨어가 안 주는 것")이 이 경우를
+        // 침묵 실패로 오분류했다. 판정표(위에서부터 하나만 성립):
+        // · 비승격 + 저하 4채널 중 빈 것 있음      → 안내 + Restart as admin
+        //   (PawnIO까지 없으면 문구에 PawnIO 병기 + 설치 링크도 함께 — 승격만으론 CPU/팬이 안 돌아온다)
+        // · 승격 + PawnIO 없음 + CPU/팬 채널 빔    → 설치 안내 + Get PawnIO 링크(재시작은 무의미라 숨김)
+        // · 승격 + PawnIO 있음                     → 행 숨김 — 비는 채널 = 하드웨어 미제공(현행 유지)
+        // SsdTemp는 PawnIO 무관(디스크 핸들 직접 질의)이라 승격 축 판정에서만 본다.
+        // CpuClock은 근사 폴백(A47 ②)이 채우므로 어느 판정에도 넣지 않는다(종전과 동일).
+        var valid = frame.Timestamp != DateTime.MinValue;
+        var pawnIoMissing = !SensorService.IsPawnIoInstalled;
+        var cpuFanMissing = frame.CpuTemp is null || frame.CpuPower is null || frame.FanRpm is null;
+        var needsAdmin = !SensorService.IsElevated && valid
+            && (cpuFanMissing || frame.SsdTemp is null);
+        var needsPawnIo = SensorService.IsElevated && valid && pawnIoMissing && cpuFanMissing;
+        if (needsAdmin)
+            AdminText.Text = pawnIoMissing
+                ? "CPU temperature, power, fan and drive sensors need administrator rights and the PawnIO driver."
+                : "CPU temperature, power, fan and drive sensors need administrator rights.";
+        else if (needsPawnIo)
+            AdminText.Text = "Install PawnIO to read CPU temperature, power and fan speed.";
+        ElevateButton.Visibility = needsAdmin ? Visibility.Visible : Visibility.Collapsed;
+        PawnIoLink.Visibility = (needsAdmin && pawnIoMissing) || needsPawnIo
+            ? Visibility.Visible : Visibility.Collapsed;
+        AdminRow.Visibility = needsAdmin || needsPawnIo ? Visibility.Visible : Visibility.Collapsed;
         UpdateStripVisibility();
 
         var history = SensorService.History();

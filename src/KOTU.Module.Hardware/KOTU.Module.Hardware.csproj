@@ -14,8 +14,10 @@
          LibreHardwareMonitorLib 계열이 10.0.2+ 하한을 요구 — 직접 참조가 더 낮으면 NU1605.
          와일드카드로 항상 최신 10.0.x를 잡아 전이 하한과의 충돌을 피한다. -->
     <PackageReference Include="System.Management" Version="10.0.*" />
-    <!-- 센서 수집(온도·전력·팬 등, A17) — MPL-2.0. 커널 드라이버를 동봉·자동 로드하며
-         CPU MSR·SuperIO·SMART 계열 센서는 관리자 권한이 있어야 잡힌다(없으면 해당 채널 null). -->
+    <!-- 센서 수집(온도·전력·팬 등, A17) — MPL-2.0. 0.9.5부터 WinRing0가 제거되고 별도 설치형
+         서명 드라이버 PawnIO 기반(A47 조사): 드라이버 본체는 동봉되지 않고 서명 모듈(.bin)만
+         내장한다. CPU MSR·SuperIO 계열 센서는 관리자 권한 + PawnIO 설치가 모두 있어야 잡히고
+         SMART 온도는 관리자 권한만 필요하다(빠지면 해당 채널만 조용히 null). -->
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
   </ItemGroup>
   <ItemGroup>

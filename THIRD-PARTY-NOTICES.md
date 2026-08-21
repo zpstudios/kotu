@@ -16,7 +16,7 @@ KOTU는 아래 외부 구성요소를 사용합니다. 각 구성요소는 자�
 | System.Text.Encoding.CodePages | CP949 인코딩(압축 항목명·자막) | MIT | NuGet |
 | System.Management | WMI 조회(하드웨어 정보) | MIT | NuGet |
 | [Velopack](https://github.com/velopack/velopack) | 설치본·자동 업데이트 | MIT | NuGet |
-| [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (LibreHardwareMonitorLib) | 센서 모니터링(온도·전력·팬 등, A17) | MPL-2.0 | NuGet, 동적 링크. 커널 드라이버(WinRing0/PawnIO)를 동봉·자동 로드 — 파일 무수정 사용이라 MPL 공개 의무 없음 |
+| [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (LibreHardwareMonitorLib) | 센서 모니터링(온도·전력·팬 등, A17) | MPL-2.0 | NuGet, 동적 링크. 0.9.5+는 WinRing0 없이 별도 설치형 [PawnIO](https://pawnio.eu/) 드라이버 기반 — 드라이버 본체는 미동봉·미로드, 서명 모듈(.bin)만 내장(A47). 파일 무수정 사용이라 MPL 공개 의무 없음 |
 | [DiskInfoToolkit](https://github.com/Blacktempel/DiskInfoToolkit) | LHM 종속(SMART 디스크 정보) | MPL-2.0 | NuGet |
 | [RAMSPDToolkit](https://github.com/Blacktempel/RAMSPDToolkit) (RAMSPDToolkit-NDD) | LHM 종속(RAM SPD) | MPL-2.0 | NuGet |
 | [HidSharp](https://www.zer7.com/software/hidsharp) | LHM 종속(HID 장치) | Apache-2.0 | NuGet |

@@ -36,22 +36,34 @@
             <Grid x:Name="CenterGrid" ColumnSpacing="8" RowSpacing="8" />
         </ScrollViewer>
 
-        <!-- 센서 스트립(A17→v0.64.2 개편): 평소엔 비어 있고(Collapsed), ① 비관리자 안내(AdminRow)가
-             필요할 때 ② 전체화면(하단 바가 숨는 동안 SensorGrid의 긴 그래프 2개가 여기로 옮겨온다)일
-             때만 나타난다. 긴 그래프 자체는 코드(RebuildSelectionGraphs)가 만들어 SensorGrid에 얹는다. -->
+        <!-- 센서 스트립(A17→v0.64.2 개편): 평소엔 비어 있고(Collapsed), ① 저하 안내(AdminRow —
+             비관리자 또는 승격+PawnIO 미설치, A47)가 필요할 때 ② 전체화면(하단 바가 숨는 동안
+             SensorGrid의 긴 그래프 2개가 여기로 옮겨온다)일 때만 나타난다. 긴 그래프 자체는
+             코드(RebuildSelectionGraphs)가 만들어 SensorGrid에 얹는다. -->
         <Border x:Name="SensorStrip" Grid.Row="1" Padding="16,4,16,8" Visibility="Collapsed">
             <StackPanel x:Name="StripPanel" Spacing="6">
+                <!-- 안내 문구·버튼·링크의 조합은 코드 UpdateSensors의 2축 판정(승격 × PawnIO)이
+                     정한다(A47). 여기 Text는 비승격 기본 문구일 뿐이다. -->
                 <Grid x:Name="AdminRow" Visibility="Collapsed" ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" FontSize="12" Opacity="0.65"
+                    <TextBlock x:Name="AdminText" Grid.Column="0" FontSize="12" Opacity="0.65"
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                Text="CPU temperature, power, fan and drive sensors need administrator rights." />
-                    <Button Grid.Column="1" FontSize="12" Padding="10,2,10,3"
+                    <Button x:Name="ElevateButton" Grid.Column="1" FontSize="12" Padding="10,2,10,3"
                             Content="Restart as admin" Click="OnElevateClick" />
+                    <!-- PawnIO 설치 안내 링크(A47): 승격했는데 PawnIO가 없어 MSR/SuperIO 채널이
+                         조용히 비는 침묵 실패의 안내. NavigateUri = 기본 브라우저 열기(SettingsView의
+                         Patreon 링크와 같은 기제). URL은 PawnIO.Setup 공식 릴리스 페이지 하나만 쓴다. -->
+                    <HyperlinkButton x:Name="PawnIoLink" Grid.Column="2" FontSize="12" Padding="4,2"
+                                     Visibility="Collapsed" VerticalAlignment="Center"
+                                     Content="Get PawnIO"
+                                     NavigateUri="https://github.com/namazso/PawnIO.Setup/releases"
+                                     ToolTipService.ToolTip="github.com/namazso/PawnIO.Setup/releases" />
                 </Grid>
             </StackPanel>
         </Border>

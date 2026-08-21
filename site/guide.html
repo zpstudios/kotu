@@ -534,11 +534,17 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            size belong to each window separately; the most recent change is what a newly opened window starts
            from.</p>
         <div class="note">CPU temperature, CPU power, fan speed and drive temperature need administrator
-           rights. When they cannot be read, a line saying so and a <em>Restart as admin</em> button appear
-           just above the bottom bar. Restarting is a whole-program affair — every KOTU window closes and the
-           program starts again with administrator rights — so KOTU notes which windows were open and brings
-           the same set back: same modules, same files, same positions and sizes. Cancelling the Windows
-           prompt changes nothing.</div>
+           rights — and the CPU and fan readings additionally need <strong>PawnIO</strong>, a separately
+           installed signed kernel driver that LibreHardwareMonitor uses instead of bundling one of its own
+           (KOTU does not install it for you). When these sensors cannot be read, a line saying why appears
+           just above the bottom bar: without administrator rights it offers <em>Restart as admin</em>, and
+           when the program is already elevated but PawnIO is missing it offers a <em>Get PawnIO</em>
+           download link instead. CPU clock is the one exception — when it cannot be read directly, KOTU
+           falls back to an approximate reading based on Windows performance counters, which needs neither
+           administrator rights nor PawnIO. Restarting is a whole-program affair — every KOTU window closes
+           and the program starts again with administrator rights — so KOTU notes which windows were open and
+           brings the same set back: same modules, same files, same positions and sizes. Cancelling the
+           Windows prompt changes nothing.</div>
 
         <h3>All Readable</h3>
         <p>One module that opens every file type the other modules handle. When you open a file, the centre

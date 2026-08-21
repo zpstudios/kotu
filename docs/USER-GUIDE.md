@@ -250,8 +250,14 @@ Controls:
 The selected sensors are also what this window's tray icon displays. Selection, tile order and bar
 size belong to each window separately; the most recent change is what a newly opened window starts from.
 
-CPU temperature, CPU power, fan speed and drive temperature need administrator rights. When they
-cannot be read, a line saying so and a **Restart as admin** button appear just above the bottom bar.
+CPU temperature, CPU power, fan speed and drive temperature need administrator rights — and the CPU
+and fan readings additionally need **PawnIO**, a separately installed signed kernel driver that
+LibreHardwareMonitor uses instead of bundling one of its own (KOTU does not install it for you).
+When these sensors cannot be read, a line saying why appears just above the bottom bar: without
+administrator rights it offers **Restart as admin**, and when the program is already elevated but
+PawnIO is missing it offers a **Get PawnIO** download link instead. CPU clock is the one exception —
+when it cannot be read directly, KOTU falls back to an approximate reading based on Windows
+performance counters, which needs neither administrator rights nor PawnIO.
 Restarting is a whole-program affair — every KOTU window closes and the program starts again with
 administrator rights — so KOTU notes which windows were open and brings the same set back: same
 modules, same files, same positions and sizes. Cancelling the Windows prompt changes nothing.
