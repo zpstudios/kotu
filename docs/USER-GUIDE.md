@@ -311,10 +311,14 @@ When a panel opens, a short hint appears next to it on a small dark plate, so it
 over whatever is behind it — *Sidebar - press F11 or the pin button to close* — and fades after a
 couple of seconds.
 
-The panels answer these keys in every view mode, full screen included — and on every screen:
-Settings, the unsupported-file notice and a new unsaved document included. With no file open the
-left panel shows the folder you last browsed — on Settings and the notice it lists files of every
-type — and the right panel says *No file open*.
+The panels answer these keys in every view mode, full screen included — and on almost every screen:
+the unsupported-file notice and a new unsaved document included. With no file open the left panel
+shows the folder you last browsed — on the notice it lists files of every type — and the right
+panel says *No file open*.
+
+**Settings is the one exception.** It has no side panels at all: `F11`, `F12` and the edge buttons
+do nothing there, and any panel that was open slides away when you enter Settings. Leave Settings
+and your previous panel layout comes back.
 
 Inside the Open file browser, `F11` and `F12` do nothing; `Esc` gets you out.
 

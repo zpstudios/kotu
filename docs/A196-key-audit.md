@@ -7,6 +7,12 @@
 > **코드 행 번호는 이 배치 수리 후(v0.204.0 예정) 기준** — 이후 어긋나면 심볼명으로 재확인
 > (`HasPanelContext`·`IsPanelFallbackView`·`OnShellEscape`·`TryCloseContent`·`OnShellEnter`·
 > `OnOverlaySideKey`·`ApplyOverlayStates`·`ExplorerListing.AllFiles`).
+>
+> ⚠️ **A205(v0.208.0) 부분 반전 반영됨**: 사용자 확정("설정 모듈은 좌우 사이드바 안 떠야 해")으로
+> **설정 화면은 패널 컨텍스트에서 도로 제외**됐다 — F11/F12·경계 버튼 전부 무동작, 어떤 경로로도
+> 사이드바가 뜨지 않는다. 수리 지점은 `IsSettingsView` 신설 + `IsPanelFallbackView`에서 설정 제외
+> **한 곳**(게이트 산식 3곳이 전부 이 속성을 경유한다). **미지원 파일 안내·무제 문서의 A196
+> 편입분은 유지** — 아래 표에서 "설정" 행만 A196 이전(제외)으로 되돌아간다.
 
 ## 범례·판정 기준
 
@@ -34,26 +40,33 @@
 4. **실행**: 패널 = `ApplyOverlayStates`(:2309 단일 종착점) / 전체화면 = `ToggleFullScreen` /
    닫기 = `TryCloseContent`(:2217 — ShowModule 빈 컨텍스트 재사용).
 
-**게이트 정본(A196 수리 후)**: `HasPanelContext`(:1609) = 파일 열림 ∨ 빈 파일 모듈 ∨ 패널 제공 뷰
-∨ **무제 문서(A189) ∨ 폴백 화면(`IsPanelFallbackView` :1600 = 설정·미지원 안내)**. false = **빈 셸뿐**.
+**게이트 정본(A196 수리 + A205 반전 후)**: `HasPanelContext` = 파일 열림 ∨ 빈 파일 모듈 ∨ 패널
+제공 뷰 ∨ **무제 문서(A189) ∨ 폴백 화면(`IsPanelFallbackView` = 미지원 안내 — A205부터
+`&& !IsSettingsView`)**. false = **빈 셸 + 설정 화면**.
 4소비처(A119 통일)가 함께 움직인다: ① F11/F12 소비(:1826)·토글(:1841) ② 경계 버튼
 (`UpdateEdgeButtons` :2468 · `OnRootPointerMoved` :2507) ③ 전이(`ApplyOverlayStates`의 fallback 축
 :2317) ④ `CurrentShellState`(:127 — None = !HasPanelContext). S4 중 무동작 게이트는 별도 존치(사양).
+
+**A205 산식 정합 근거**: 폴백 축을 쓰는 산식은 셋(`HasPanelContext` · `ApplyOverlayStates`의
+`fallback` · `RefreshInfoOverlayForSelection`의 `fallback`)이고 **전부 `IsPanelFallbackView`를
+경유**한다(직접 산식 0건 — grep 전수). 그래서 설정 제외는 한 곳 수정으로 세 산식이 동시에
+꺼진다 — "키는 죽었는데 패널은 뜨는" 부류의 모순이 구조적으로 불가능하다.
+`ShowListOverlay`의 전체 파일 필터 분기도 같은 속성을 타므로 설정에서는 자동으로 null(숨김)이다.
 
 ## 표 1 — 화면 × F11/F12 (게이트 감사)
 
 키 경로가 셸 한 곳이라 화면별 차이는 게이트 입력값(HasPanelContext 구성 요소)과 좌 리스트
 필터·우 정보 내용뿐이다. "콘텐츠 열림"·"전체화면" 열은 A135 표 1 판정 그대로 유효(무변경).
 
-| 화면 | 게이트(수리 전) | 게이트(수리 후) | 좌 리스트 / 우 정보 | 근거 |
+| 화면 | 게이트(A196 수리 전) | 게이트(현행 = A196 + A205) | 좌 리스트 / 우 정보 | 근거 |
 | --- | --- | --- | --- | --- |
 | 이미지·영상·오디오·압축·문서(텍스트/PDF)·AllReadable — 콘텐츠 열림 | ✓ 파일 열림 | ✓ | 파일 폴더 + 모듈 필터 / 파일 정보 | `_currentFilePath`(:1609) |
 | 위 6종 — 빈 파일 모듈(S1) | ✓ 빈 모듈 | ✓ | 시작 폴더(A174) + 모듈 필터 / 플레이스홀더 | `IsEmptyFileModule`(:1582) |
 | 문서 렌더 모드(A190) | ✓ (파일 열림 — 렌더는 하위 표시 모드일 뿐) | ✓ | 파일 폴더 + 문서 필터 / 파일 정보 | `_renderMode`는 셸 상태 밖(DocumentView.xaml.cs:654) |
 | 문서 무제(A189) | **✗ 게이트 공백**(`_untitledContent` 미포함 — 등재문 확인) | **✗→✓ 편입** | 시작 폴더(A174) + **문서 모듈 필터**(빈 파일 모듈과 동일 취급 — 확정) / "No file open" | :1609 `_untitledContent` 항 + fallback 축(:2317) |
 | H/W(정보 모듈) | ✓ 패널 제공 뷰(A119) | ✓ | 모듈 고유 패널(SidePanelHost) | `PanelProviderView`(:1592) |
-| 설정 화면 | **✗ 게이트 제외**(A119 확정 예외였음) | **✗→✓ 편입**(확정) | 시작 폴더(A174) + **전체 파일 필터**(모듈 개념 부재 — `ExplorerListing.AllFiles`) / "No file open" | `IsPanelFallbackView`(:1600)·`ShowListOverlay`(:2564) |
-| 미지원 파일 안내 | **✗ 게이트 제외** | **✗→✓ 편입**(확정 — 설정과 동일 취급) | 〃 | 〃 |
+| 설정 화면 | **✗ 게이트 제외**(A119 확정 예외였음) | **✗ 제외**(A196에서 잠깐 편입 → **A205에서 전면 배제로 되돌림** — 사용자 확정) | — (좌/우 어느 쪽도 뜨지 않는다. 열려 있던 패널도 진입 시 Hide로 수렴 — 상태 필드는 보존해 나갈 때 복원) | `IsSettingsView` + `IsPanelFallbackView`의 `&& !IsSettingsView` |
+| 미지원 파일 안내 | **✗ 게이트 제외** | **✗→✓ 편입**(A196 확정 — **A205 반전 대상 아님, 유지**) | 시작 폴더(A174) + **전체 파일 필터**(모듈 개념 부재 — `ExplorerListing.AllFiles`) / "No file open" | `IsPanelFallbackView`(:1600)·`ShowListOverlay`(:2564) |
 | 빈 셸(중앙에 아무 뷰도 없음 — 창 생성 직후 잠깐) | ✗ 제외 | 제외 유지(사양 — 띄울 표면이 없다) | — | :1600 `ModuleHost.Content is not null` |
 | S4('오픈 파일' 탐색) 중 | 사양(무동작 소비 — Q5) | 존치(사양 — keymap 명기) | — | :1817·:1836 |
 
@@ -117,15 +130,18 @@ defaultSidebars:**true**) → 그 외 무동작·무소비**. 한 번의 Esc는 
 
 | # | 항목 | 버그/공백 | 수리 | 지점 |
 | --- | --- | --- | --- | --- |
-| 1 | A196 | 게이트 false 3화면(무제 문서·설정·미지원 안내)에서 F11/F12·경계 버튼 무동작 | `HasPanelContext`에 `_untitledContent`·`IsPanelFallbackView` 편입 + `ApplyOverlayStates` fallback 축 + `ShowListOverlay` 모듈 없음 분기(전체 파일 필터) + `CurrentShellState` None = !HasPanelContext(4소비처 일관) | MainWindow.xaml.cs:1600·1609·2317·2564-2569·127 |
+| 1 | A196 | 게이트 false 3화면(무제 문서·설정·미지원 안내)에서 F11/F12·경계 버튼 무동작 | `HasPanelContext`에 `_untitledContent`·`IsPanelFallbackView` 편입 + `ApplyOverlayStates` fallback 축 + `ShowListOverlay` 모듈 없음 분기(전체 파일 필터) + `CurrentShellState` None = !HasPanelContext(4소비처 일관). **A205(v0.208.0)에서 설정 갈래만 반전 — 아래 7번** | MainWindow.xaml.cs:1600·1609·2317·2564-2569·127 |
 | 2 | A196 | 전체 파일 필터 개념 부재(확장자 목록 = Contains 판정뿐) | `ExplorerListing.AllFiles`(["*"]) 신설 + `MatchesExtension` 와일드카드 해석. A7 필터 메뉴는 "*" 토글 미생성 | ExplorerListing.cs:32·36-38 / ExplorerPane.xaml.cs:376(continue) |
 | 3 | A202 | Esc 체인에 콘텐츠 닫기 층 없음(전체화면·S4 복귀뿐) | 체인 말단에 `TryCloseContent(defaultSidebars:true)` — '뒤로' ③ 실행부를 공용 추출 | MainWindow.xaml.cs:2122-2139·2217 |
 | 4 | A201 | 압축 뷰만 IsTabStop·Loaded 자기 포커스 부재(7뷰 중 유일 — A135 표 1의 "전 모듈 뷰 IsTabStop" 서술이 실은 압축에 거짓) → 뷰 교체 직후 셸 키(Enter·Esc·F11/F12) 표류 가능 | 다른 6뷰와 같은 관용구 적용 | ArchiveView.xaml:9 · ArchiveView.xaml.cs:145 |
 | 5 | A201/A196 | 미지원 안내 = 맨 TextBlock(Control 아님 — 포커스 불가·고아 복구 대상도 아님) | 포커스 가능 ContentControl 래퍼 + Loaded 자기 포커스(설정 화면과 같은 관용구) — A135 2차 방어(`as Control` 재포커스)의 대상도 된다 | MainWindow.xaml.cs:1197-1210 |
 | 6 | A202 부수 | 잘라내기 Esc가 무조건 비소비 → 신설 닫기 층과 겹치면 한 Esc에 두 층(표시 해제 + 닫힘) | `ClearCutMarks` bool 반환 + **지웠을 때만 소비**(한 층씩 규칙) — S4에서도 표시 해제와 S4 복귀가 두 번의 Esc로 갈라진다(A94 4차의 "비소비" 개정) | ExplorerFileOps.cs:179 / ExplorerPane.xaml.cs:1433 / ThumbnailExplorer.xaml.cs:193 |
+| 7 | **A205** (v0.208.0) | A196의 설정 편입이 사용자 의도와 반대 — 설정 화면에는 좌/우 사이드바가 아예 뜨면 안 된다(전면 배제) | `IsSettingsView`(`ModuleHost.Content is SettingsView`) 신설 + `IsPanelFallbackView`에 `&& !IsSettingsView`. 산식 3곳이 전부 이 속성을 경유해 한 곳으로 정합. 상태 필드(`_listSide`/`_infoSide`)는 보존 — 설정 진입 시 `ShowSettingsAsync → SetContentState → ApplyOverlayStates`가 Hide로 수렴시키고, 나가면 직전 구성이 그대로 다시 그려진다 | MainWindow.xaml.cs `IsSettingsView`·`IsPanelFallbackView`·`ShowSettingsAsync` |
 
-수리하지 않은 것: 문서 렌더 모드 Enter(이미 성립 — 표 3), 설정 화면 Enter(이미 성립),
-탐색기 표면 무선택 Enter 무동작(사양), S4 중 F11/F12 무동작(사양 존치), 빈 셸(컨텍스트 밖 유지).
+수리하지 않은 것: 문서 렌더 모드 Enter(이미 성립 — 표 3), 설정 화면 Enter(이미 성립 — A205는
+패널 축만 건드리고 Enter/Alt+Enter 전체화면 토글은 그대로다), 탐색기 표면 무선택 Enter 무동작(사양),
+S4 중 F11/F12 무동작(사양 존치), 빈 셸(컨텍스트 밖 유지),
+설정·미지원 안내의 Esc 무동작(§5-①·② — A205에서도 무변경), '뒤로' ③ defaultSidebars(§5-③ 유지).
 
 ## 표 B — Esc 소비자 전수 · 체인 순서 증빙
 
@@ -156,9 +172,10 @@ defaultSidebars:**true**) → 그 외 무동작·무소비**. 한 번의 Esc는 
 3. **'뒤로' ③의 defaultSidebars 통일 여부**: 유지(false) 판단 — A112가 "닫기 직전 그대로 보존"을
    명시 요구했고, A202 문면은 Esc에만 걸린다. 두 닫기 경로의 패널 결과가 다른 것이 의도된
    차이임을 keymap·가이드에 명기했다. 통일을 원하면 A112 개정으로.
-4. **설정 화면 진입 시 사이드바 기본**: 모듈 전환(A109)과 달리 설정 진입은 defaultSidebars를
-   적용하지 않는다(종전 유지 규칙 — 직전 상태 승계). 편입 후에도 그대로 두었다(등재문이 초기
-   상태를 지정하지 않음). 설정도 A109처럼 "항상 양쪽"으로 시작해야 하면 한 줄 수리로 가능.
+4. ~~**설정 화면 진입 시 사이드바 기본**~~ — **A205(v0.208.0)에서 해소**: 설정은 사이드바를
+   전면 배제한다(초기 상태 질문 자체가 소멸). 진입 시 defaultSidebars를 적용하지 않는 것도
+   그대로 — 애초에 게이트가 꺼져 있어 무의미하고, `_listSide`/`_infoSide` 상태를 건드리지 않아야
+   설정을 나갔을 때 직전 구성이 복원된다(S4 게이트와 같은 "상태는 유지·표시만 게이트" 관용구).
 
 ## §6 — 실기기 확인 포인트
 
@@ -166,9 +183,10 @@ defaultSidebars:**true**) → 그 외 무동작·무소비**. 한 번의 Esc는 
    이번 수리로 압축 뷰·미지원 안내가 자기 포커스를 갖게 돼 "뷰 교체 직후 키 전멸" 후보가 줄었다 —
    실기기에서 A196 재보고("v0.201.0에서도 안 되는 상황") 증상이 남으면 재현 화면을 특정할 것
    (게이트 3화면 + 압축 포커스 공백 밖이면 재조사).
-② **설정 화면 사이드바 레이아웃**(함정 3): 도크 25%가 서면 설정 콘텐츠(MaxWidth 680
-   ScrollViewer)가 좁아진다 — 코드상 충돌은 없으나(스크롤로 흡수) 실표시 확인.
-   전체 파일 필터 리스트(썸네일·상세 조각 포함)의 체감 성능도 실기기 몫.
+② ~~**설정 화면 사이드바 레이아웃**~~ — **A205(v0.208.0)로 소멸**(설정에 사이드바가 없다).
+   대신 확인할 것: **패널이 열린 채 설정에 들어갔다 나오면 직전 좌/우 구성이 그대로 돌아오는지**
+   (모듈 전환으로 나가면 A109 defaultSidebars가 양쪽을 다시 여는 것이 정상 — 이건 A205와 무관한
+   기존 규칙이다). 전체 파일 필터 리스트의 체감 성능은 미지원 안내 화면 몫으로 남는다.
 ③ **IME 조합 중 Esc**: 조합 취소가 IME에서 소비되어 앱에 안 오는 것이 기대 — 오는 기종/IME이면
    닫기 층이 움직일 수 있다(그 경우 원 기능 우선 예외 추가 필요).
 ④ **ContentControl 래퍼(미지원 안내)의 문구 중앙 정렬**: 스트레치 프레젠터 + TextBlock Center

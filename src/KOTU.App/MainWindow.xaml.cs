@@ -104,8 +104,9 @@ public sealed partial class MainWindow : Window
     /// 셸 수준 "구성 상태" (A86 keymap): 패널별 상태를 대체하는 게 아니라 그 위에서
     /// "지금 화면 구성이 어떤 조합인가"를 요약한다 — '오픈 파일' 버튼·경계 버튼 분배의 기준.
     /// (A186: Enter는 이 상태와 무관한 전체화면 토글이다 — A151의 순환도, A86의 일괄 토글도 폐지.)
-    /// None = 패널 컨텍스트 없음 — keymap 표 밖. A196부터 빈 셸(중앙에 아무 뷰도 없음)뿐이다:
-    /// 설정·미지원 안내·무제 문서는 게이트 완화로 패널 컨텍스트에 편입됐다(HasPanelContext).
+    /// None = 패널 컨텍스트 없음 — keymap 표 밖. A196부터 빈 셸(중앙에 아무 뷰도 없음)과
+    /// **설정 화면(A205 — 사이드바 전면 배제로 되돌림)**뿐이다: 미지원 안내·무제 문서는 게이트
+    /// 완화로 패널 컨텍스트에 편입돼 남는다(HasPanelContext).
     /// A119(v0.145.0): 정보(H/W)는 None에서 빠졌다 — 패널 제공 뷰(ISidePanelProvider)는 파일이
     /// 없어도 좌/우 조합으로 S2/S3*에 분류되어 경계 버튼이 파일 모듈과 같은 표를 탄다.
     /// S4('오픈 파일' 탐색 모드)의 진입/복귀는 A90(v0.122.0) — 아래 '오픈 파일' 버튼 절 참고.
@@ -133,9 +134,11 @@ public sealed partial class MainWindow : Window
         {
             if (IsOpenFileBrowsing) return ShellState.S4; // A90 — '오픈 파일' 탐색 진입 중
             if (IsEmptyFileModule) return ShellState.S1;
-            // A196: None 판정을 게이트 공용 판정(HasPanelContext)에 묶는다 — 무제 문서·설정·
-            // 미지원 안내도 좌/우 조합으로 S2/S3*에 분류된다(파일이 없어 '오픈 파일' 버튼은
-            // EnterOpenFileBrowsing의 파일 가드가 종전과 같은 무동작으로 거른다). None = 빈 셸뿐.
+            // A196: None 판정을 게이트 공용 판정(HasPanelContext)에 묶는다 — 무제 문서·미지원
+            // 안내도 좌/우 조합으로 S2/S3*에 분류된다(파일이 없어 '오픈 파일' 버튼은
+            // EnterOpenFileBrowsing의 파일 가드가 종전과 같은 무동작으로 거른다).
+            // A205: 설정 화면은 게이트에서 빠져 A196 이전 분류(None)로 복귀한다 — 빈 셸과 같은
+            // 행이라 경계 버튼·'오픈 파일' 버튼 분배가 keymap 표 밖으로 돌아간다.
             if (!HasPanelContext) return ShellState.None;
             var left = _listSide.State != OverlayState.Closed;
             var right = _infoSide.State != OverlayState.Closed;
@@ -1163,6 +1166,10 @@ public sealed partial class MainWindow : Window
         CurrentModuleId = null;
         IsUntouched = false;
         UpdateModeIndicator(null, isSettings: true);
+        // A205: 설정은 좌/우 사이드바 전면 배제 화면이다 — 아래 SetContentState가 부르는
+        // ApplyOverlayStates에서 게이트(IsPanelFallbackView 제외)가 꺼져, 진입 직전에 떠 있던
+        // 사이드바가 함께 내려간다. _listSide/_infoSide 상태 자체는 건드리지 않으므로
+        // 설정을 나가면(모듈 복귀) 직전 구성이 그대로 복원된다.
         SetContentState(null, null);
     }
 
@@ -1616,19 +1623,33 @@ public sealed partial class MainWindow : Window
     private ISidePanelProvider? PanelProviderView => ModuleHost.Content as ISidePanelProvider;
 
     /// <summary>
-    /// A196: 모듈 축 밖의 폴백 패널 컨텍스트 화면(설정·미지원 파일 안내)인지 — 모듈은 없지만
+    /// A205(v0.208.0): 지금 중앙이 설정 화면인지 — 설정은 좌/우 사이드바를 **전면 배제**한다
+    /// (사용자 확정: "설정 모듈은 좌우 사이드바 안 떠야 해"). 판별을 모듈 축(_currentModule is null)이
+    /// 아니라 **뷰 타입**으로 하는 이유: 모듈 축으로 거르면 같은 폴백 화면인 미지원 파일 안내까지
+    /// 함께 빠져 A196 편입분이 무너진다(설정만 도로 제외가 사양).
+    /// </summary>
+    private bool IsSettingsView => ModuleHost.Content is SettingsView;
+
+    /// <summary>
+    /// A196: 모듈 축 밖의 폴백 패널 컨텍스트 화면(미지원 파일 안내)인지 — 모듈은 없지만
     /// 중앙에 뷰가 있는 상태다. 좌 리스트는 전역 마지막 폴더(A174)에 **전체 파일 필터**
     /// (ExplorerListing.AllFiles — 모듈 개념이 없어 담당 확장자도 없다), 우 정보는 "No file open"
     /// 플레이스홀더를 쓴다. 빈 셸(ModuleHost 비어 있음 — 창 생성 직후 잠깐)만 컨텍스트 밖으로 남는다.
+    /// A205(v0.208.0 — A196 부분 반전): **설정 화면은 여기서 제외**된다. 이 속성이 게이트 산식
+    /// 3곳(HasPanelContext · ApplyOverlayStates의 fallback 축 · RefreshInfoOverlayForSelection)의
+    /// 유일한 폴백 입력이라, 여기 한 곳을 좁히면 세 산식이 함께 정합한다(F11/F12·경계 버튼·표시가
+    /// 동시에 꺼진다 — "키는 죽었는데 패널은 뜨는" 모순 없음).
     /// </summary>
-    private bool IsPanelFallbackView => _currentModule is null && ModuleHost.Content is not null;
+    private bool IsPanelFallbackView =>
+        _currentModule is null && ModuleHost.Content is not null && !IsSettingsView;
 
     /// <summary>
     /// 좌/우 패널(오버레이/사이드바) 컨텍스트가 있는가 — 게이트 확장의 단일 판정(A119 통일):
     /// 파일 열림 · 빈 파일 모듈(A81) · 패널 제공 뷰(A119 — 정보 모듈) · **무제 문서(A189) ·
-    /// 설정·미지원 파일 안내(A196 — 위 폴백 화면)**. F11/F12 소비·상태 전이(ApplyOverlayStates의
-    /// 폴백 축)·경계 버튼·CurrentShellState가 전부 이걸 탄다. A196 완화로 남은 예외 =
-    /// 빈 셸(중앙에 아무 뷰도 없음)뿐이고, S4 중 무동작 게이트(IsOpenFileBrowsing)는 별도 존치(사양).
+    /// 미지원 파일 안내(A196 — 위 폴백 화면)**. F11/F12 소비·상태 전이(ApplyOverlayStates의
+    /// 폴백 축)·경계 버튼·CurrentShellState가 전부 이걸 탄다. 남은 예외 = 빈 셸(중앙에 아무 뷰도
+    /// 없음)과 **설정 화면(A205 — 사이드바 전면 배제)**이고, S4 중 무동작 게이트
+    /// (IsOpenFileBrowsing)는 별도 존치(사양).
     /// </summary>
     private bool HasPanelContext
         => _currentFilePath is not null || IsEmptyFileModule || PanelProviderView is not null
@@ -2327,8 +2348,12 @@ public sealed partial class MainWindow : Window
     /// 표시 여부·안내 문구·도크 컬럼을 한 곳에서 일괄 갱신한다. 패널 컨텍스트가 없으면
     /// (A196부터 빈 셸뿐) 상태와 무관하게 숨긴다 — 상태 자체는 남아 있어 다음 파일을 열면
     /// 같은 구성으로 되살아난다(기존 유지 규칙).
-    /// A196: 설정·미지원 안내·무제 문서도 컨텍스트다 — 좌 리스트(전역 마지막 폴더)·우 정보
+    /// A196: 미지원 안내·무제 문서도 컨텍스트다 — 좌 리스트(전역 마지막 폴더)·우 정보
     /// 플레이스홀더가 아래 fallback 축으로 뜬다(게이트 완화 등재문).
+    /// A205: 설정 화면은 fallback 축(IsPanelFallbackView)에서 빠졌다 — 설정 진입 경로
+    /// (ShowSettingsAsync → SetContentState)가 이 메서드를 부르므로, 진입 전 열려 있던
+    /// 사이드바는 listShow/infoShow가 false로 떨어져 Hide로 수렴한다(상태 필드는 보존 —
+    /// 설정을 나가면 직전 구성이 그대로 다시 그려진다).
     /// 파일 없이 연 파일 모듈(빈 모듈 상태)도 컨텍스트다(A81): 좌측 리스트는 모듈 시작 폴더,
     /// 우측 정보는 "No file open" 플레이스홀더를 보여준다.
     /// A119: 패널 제공 뷰(ISidePanelProvider — 정보 모듈)도 컨텍스트다 — 같은 좌/우 상태를 파일
@@ -2342,9 +2367,10 @@ public sealed partial class MainWindow : Window
         var hasFile = _currentFilePath is not null;
         var emptyModule = IsEmptyFileModule; // 파일 없이 연 파일 모듈 — A81부터 패널 컨텍스트
         var panelView = PanelProviderView;   // A119: 모듈 고유 패널(정보 모듈) — 아래 호스트 절이 소비
-        // A196: 무제 문서(A189)·설정·미지원 안내도 파일 패널 표면을 쓴다 — 좌 리스트는
+        // A196: 무제 문서(A189)·미지원 안내도 파일 패널 표면을 쓴다 — 좌 리스트는
         // ShowListOverlay(무제 = 모듈 필터 / 폴백 화면 = 전체 파일 필터), 우 정보는 파일이 없어
         // 플레이스홀더다. 패널 제공 뷰(정보 모듈)와는 상호 배타(모듈 유무로 갈린다).
+        // A205: 설정 화면은 IsPanelFallbackView가 이미 걸러낸다(산식 3곳 공용 입력).
         var fallback = _untitledContent || IsPanelFallbackView;
         var listShow = (hasFile || emptyModule || fallback) && _listSide.State == OverlayState.OpaqueDocked;
         var infoShow = (hasFile || emptyModule || fallback) && _infoSide.State == OverlayState.OpaqueDocked;
@@ -2457,7 +2483,8 @@ public sealed partial class MainWindow : Window
     /// A200: 선택 축 변경 시 우측 정보 패널만 다시 판정한다 — 전체 ApplyOverlayStates를 부르지
     /// 않는 이유는 그 경로가 좌 리스트를 매번 Show → 폴더 재스캔까지 시키기 때문(SetDockedState의
     /// A109 가드와 같은 근거). 패널이 닫혀 있으면 무동작 — 다음 열림 때 ApplyOverlayStates 경로가
-    /// 선택 축을 판정한다(구현 결정). infoShow 산식은 ApplyOverlayStates와 동일해야 한다.
+    /// 선택 축을 판정한다(구현 결정). infoShow 산식은 ApplyOverlayStates와 동일해야 한다
+    /// (A205: 두 산식의 폴백 입력이 IsPanelFallbackView 하나라 설정 제외가 자동으로 함께 간다).
     /// </summary>
     private void RefreshInfoOverlayForSelection()
     {
@@ -2646,8 +2673,10 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ShowListOverlay()
     {
-        // A196: 모듈이 없어도 폴백 화면(설정·미지원 안내)이면 전체 파일 필터로 띄운다 —
+        // A196: 모듈이 없어도 폴백 화면(미지원 안내)이면 전체 파일 필터로 띄운다 —
         // 모듈 개념이 없어 담당 확장자가 없다(등재문 확정). 빈 셸(폴백도 아님)만 종전대로 숨김.
+        // A205: 설정 화면은 폴백이 아니다 — 애초에 listShow가 false라 여기까지 오지 않지만,
+        // 와도 extensions가 null이라 숨김으로 떨어진다(이중 안전).
         var extensions = _currentModule?.SupportedExtensions
             ?? (IsPanelFallbackView ? ExplorerListing.AllFiles : null);
         if (extensions is null)
