@@ -215,7 +215,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     // 설정 3축(부록 B 76 확정): 목록 루프(기본 켬·무한 고정) / 현재 파일 루프(기본 끔) /
     // 루프 횟수(현재 파일 루프 전용 — "1" = 한 번 더 = 총 2회 재생, 확정 ⓐ 해석).
     // 저장은 전역 1벌·즉시 Set+Save(EQ 선례), 창 간 실시간 전파 없음 — 상태는 로컬 소유(_muted 규칙).
-    // [오디오 동형 이식 지점 — 배치 ③] 키 접두사만 audio.* 로 바꿔 그대로 복제한다.
+    // [오디오 동형 이식 완료 — v0.212.0] 키 접두사만 audio.* 로 바꿔 그대로 복제한다.
 
     private const string LoopListKey = "video.loopList";
     private const string LoopCurrentKey = "video.loopCurrent";
@@ -411,7 +411,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// ③ ContentOpened 생략 — 같은 파일이라 셸 동기화(S4 종료·오버레이·아이콘)는 전부 무의미한 재계산.
     /// 이어보기 조회도 생략(_pendingResumeMs = -1 고정) — EndReached가 기록을 이미 지웠고
     /// (97% 정책) 리핏은 항상 0초 시작이다. 배속·Fit 재적용은 기존 Playing 핸들러가 잇는다.
-    /// [오디오 동형 이식 지점 — 배치 ③] 오디오는 A12 오버레이·자막이 없어 ①②가 빠져 더 단순하다.
+    /// [오디오 동형 이식 완료 — v0.212.0] 오디오는 A12 오버레이·자막이 없어 ①②가 빠져 더 단순하다.
     /// </summary>
     private void ReplayCurrent()
     {
@@ -434,7 +434,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// 테스트 클립은 목록 대상이 아니다(Assets 폴더 순회는 무의미 — 이어보기 제외와 같은 성질).
     /// 스캔이 끝나기 전에 EOF가 오면 그 회차는 "목록 없음"으로 판정된다(아주 짧은 클립 +
     /// 느린 네트워크 폴더의 희귀 경합 — 수용, 다음 EOF부터 정상).
-    /// [오디오 동형 이식 지점 — 배치 ③] AudioModule.Extensions로 바꾸면 그대로 복제된다.
+    /// [오디오 동형 이식 완료 — v0.212.0] AudioModule.Extensions로 바꾸면 그대로 복제된다.
     /// </summary>
     private async void EnsurePlaylist()
     {
@@ -693,7 +693,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// Ended 신호와 Playing 신호의 이중 재평가(A186)도 없앤다. 정지(전이 5)만 종전 갱신 그대로다.
     /// EncounteredError는 전이 트리거가 아니다(실패 파일 자동 스킵은 무한 실패 루프 위험 — 별도
     /// 설계 대상, §3.3). UI 스레드 전용.
-    /// [오디오 동형 이식 지점 — 배치 ③] 오디오에는 PlaybackStateChanged가 없다 — 그 줄만 빼고 복제.
+    /// [오디오 동형 이식 완료 — v0.212.0] 오디오에는 PlaybackStateChanged가 없다 — 그 줄만 빼고 복제.
     /// </summary>
     private void AdvanceAfterEnd(string? endedFile)
     {
@@ -905,7 +905,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// 줄 1 = "Loop list" 토글(ToggleMenuFlyoutItem — A160 숨김 토글 선례. 모듈 코드에서는 첫 사용),
     /// 구분선 아래 = "Repeat this file" 라디오 4택(끔/1×/3×/무한 — 현재 파일 루프와 그 횟수는
     /// 한 축으로 고른다. 끔을 골라도 저장된 횟수는 남겨 다음 켬 때 되살아난다).
-    /// [오디오 동형 이식 지점 — 배치 ③] 문자열·구성 동일, 설정 키만 audio.* 로 바꾼다.
+    /// [오디오 동형 이식 완료 — v0.212.0] 문자열·구성 동일, 설정 키만 audio.* 로 바꾼다.
     /// </summary>
     private void BuildLoopFlyout()
     {

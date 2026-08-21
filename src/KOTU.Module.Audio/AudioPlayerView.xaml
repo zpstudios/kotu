@@ -67,13 +67,17 @@
             <!-- 열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
                  전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다.
                  c7 EQ·c8 장치 칸은 A163·A164에서 신설(비디오 자막 버튼+플라이아웃 규격).
-                 폭 재계수(A40 방식): 고정 폭 합 = 1칸 버튼 4개(재생·음소거·EQ·장치) 128 +
-                 볼륨 96 + 배속 84 + 간격 6×8 = 356 — 비디오 임계 640의 계수(388)보다 32 작아
-                 최소 창 폭 720(바 약 656)에서도 시크 슬라이더가 눌리지 않는다 → 축약 로직 불요. -->
+                 c9 루프 칸은 A11(v0.212.0)에서 신설(같은 규격 — 영상 c9의 동형 이식).
+                 폭 재계수(A40 방식): 고정 폭 합 = 1칸 버튼 5개(재생·음소거·EQ·장치·루프) 160 +
+                 볼륨 96 + 배속 84 + 간격 6×9 = 394 — 같은 시점의 비디오 계수(426: A11 c9 포함)보다
+                 여전히 32 작다. 최소 창 폭 720(바 약 656)에서 남는 폭은 262로 시간 텍스트 2개 +
+                 시크 슬라이더에 넉넉하다 → 비디오와 달리 축약 로직(UpdateCompactTransport)은
+                 이번에도 불요(설계 docs/A11-playlist-design.md §4.1 판정을 오디오 축으로 재계수). -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -121,6 +125,16 @@
                 <FontIcon Glyph="&#xE7F5;" FontSize="18" />
                 <Button.Flyout>
                     <MenuFlyout x:Name="DevicesFlyout" Placement="Top" />
+                </Button.Flyout>
+            </Button>
+            <!-- A11(v0.212.0): 루프 c9 — 영상 c9의 동형 이식(A163 EQ 칸과 같은 1칸 32×32 +
+                 라디오 플라이아웃 규격). 항목(목록 루프 토글 + 현재 파일 반복 라디오 4택)은
+                 코드(BuildLoopFlyout)가 1회 채우고, 본체 아이콘·툴팁(L 키 표기 포함)은
+                 UpdateLoopButton()이 상태형으로 갱신한다 — 아래 FontIcon은 초기값일 뿐이다. -->
+            <Button x:Name="LoopButton" Grid.Column="9" Style="{StaticResource BottomBarButtonStyle}">
+                <FontIcon Glyph="&#xE8EE;" FontSize="18" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="LoopFlyout" Placement="Top" />
                 </Button.Flyout>
             </Button>
         </Grid>

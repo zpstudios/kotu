@@ -412,6 +412,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               speeds. Clicking the surface also toggles play/pause.</li>
           <li>A live waveform fills the window while a track plays, with the track name above it.</li>
           <li><strong>Resume</strong> works exactly as in Video.</li>
+          <li><strong>The whole folder plays as a list.</strong> When a track ends, the next file in the same
+              folder starts automatically (name order, hidden files skipped), and after the last one the list
+              starts over — that is <em>Loop list</em>, on by default. Press <kbd>L</kbd> or the loop button
+              for the options: turn <em>Loop list</em> off to stop after the last track, or pick
+              <em>Repeat this file</em> — once more, three more times, or forever — which takes priority over
+              the list while it lasts. Repeating never replays from a resume point; every pass starts
+              at 0:00.</li>
           <li><kbd>Enter</kbd> or <kbd>Alt</kbd>+<kbd>Enter</kbd> toggles full screen, and <kbd>Esc</kbd>
               leaves it. The bottom bar stays put — the auto-hide above is a Video-module behaviour.</li>
           <li>Press ▶ with nothing open to play a built-in 18-second sample tune.</li>
@@ -630,6 +637,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Audio</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>
           <tr><td>Audio</td><td><kbd>M</kbd></td><td>mute</td></tr>
           <tr><td>Audio</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
+          <tr><td>Audio</td><td><kbd>L</kbd></td><td>loop options</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save</td></tr>
           <tr><td>Document</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option (PDF)</td></tr>
           <tr><td>Document</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>scroll the PDF, about an eighth of the view</td></tr>

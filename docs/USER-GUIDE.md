@@ -137,6 +137,12 @@ Seven modules. Switch between them from the menu at the bottom left.
   mute, `S` for the same six speeds. Clicking the surface also toggles play/pause.
 - A live waveform fills the window while a track plays, with the track name above it.
 - **Resume** works exactly as in Video (over 30 seconds played, stopped before the last 3%).
+- **The whole folder plays as a list.** When a track ends, the next file in the same folder starts
+  automatically (name order, hidden files skipped), and after the last one the list starts over —
+  that is **Loop list**, on by default. Press `L` or the loop button for the options: turn
+  *Loop list* off to stop after the last track, or pick *Repeat this file* — once more, three more
+  times, or forever — which takes priority over the list while it lasts. Repeating never replays
+  from a resume point; every pass starts at 0:00.
 - `Enter` or `Alt`+`Enter` toggles full screen, and `Esc` leaves it. The bottom bar stays put —
   the auto-hide above is a Video-module behaviour.
 - Press ▶ with nothing open to play a built-in 18-second sample tune.
@@ -360,6 +366,7 @@ box or while you are typing to jump through the file list.
 | Audio | `↑` `↓` | volume |
 | Audio | `M` | mute |
 | Audio | `S` | playback speed |
+| Audio | `L` | loop options |
 | Document | `Ctrl+S` | save |
 | Document | `A` | 100% (PDF) |
 | Document | `F` | re-apply the last Fit option (PDF) |

@@ -9,6 +9,7 @@ using Windows.Media.Devices;
 using Windows.System;
 using KOTU.Core.Contracts;
 using KOTU.Core.Integration;
+using KOTU.Core.Navigation;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -195,6 +196,31 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU audio worker");
 
+    // ---------- A11(v0.212.0) 재생 목록 루프 상태 (설계 docs/A11-playlist-design.md §3) ----------
+    // 영상(v0.211.0)에 먼저 구현한 구조의 동형 이식이다 — 키 접두사만 audio.* 로 다르고
+    // 의미·기본값·우선순위는 한 글자도 다르지 않다(설계 §7 배치 ③).
+    // 설정 3축(부록 B 76 확정): 목록 루프(기본 켬·무한 고정) / 현재 파일 루프(기본 끔) /
+    // 루프 횟수(현재 파일 루프 전용 — "1" = 한 번 더 = 총 2회 재생, 확정 ⓐ 해석).
+    // 저장은 전역 1벌·즉시 Set+Save(EQ 선례), 창 간 실시간 전파 없음 — 상태는 로컬 소유(_muted 규칙).
+
+    private const string LoopListKey = "audio.loopList";
+    private const string LoopCurrentKey = "audio.loopCurrent";
+    private const string LoopCountKey = "audio.loopCount"; // 문자열 enum "1"·"3"·"infinite" — explorer.sort 관례
+
+    private FolderPlaylist? _playlist; // 같은 폴더 스냅샷 목록 — EnsurePlaylist가 워커에서 만든다
+    private bool _loopList;
+    private bool _loopCurrent;
+    private int _loopCountLimit; // 0 = 무한, 1·3 = "그만큼 한 번 더"(리핏 허용 횟수)
+    private int _loopPlays;      // 현재 파일에서 소진한 리핏 횟수 — PlayCurrent가 리셋, ReplayCurrent만 증가
+
+    /// <summary>"1"·"3"은 그 횟수, 그 외(기본 "infinite"·구버전 잔값 포함)는 전부 무한(0)으로 읽는다.</summary>
+    private static int ParseLoopCount(string value) => value switch
+    {
+        "1" => 1,
+        "3" => 3,
+        _ => 0,
+    };
+
     public AudioPlayerView(OpenContext context, ISettingsService settings)
     {
         InitializeComponent();
@@ -205,6 +231,14 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         foreach (var s in Speeds)
             SpeedBox.Items.Add($"{s:0.##}×");
         SpeedBox.SelectedIndex = Array.IndexOf(Speeds, 1.0f);
+
+        // A11: 루프 설정 읽기(생성자 1회 — _muted 규칙)와 플라이아웃 구성은 SetupHotkeys보다
+        // 먼저다 — UpdateLoopButton(툴팁 초기값)이 상태를 읽는다(영상과 같은 순서).
+        _loopList = _settings.Get(LoopListKey, true);
+        _loopCurrent = _settings.Get(LoopCurrentKey, false);
+        _loopCountLimit = ParseLoopCount(_settings.Get(LoopCountKey, "infinite"));
+        BuildLoopFlyout();
+
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
         _eqPreset = _settings.Get("audio.equalizer", string.Empty);
@@ -366,9 +400,11 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
         _durationMs = 0;
         _lastReportedMs = 0;
+        _loopPlays = 0; // A11: 재생 단위가 새로 시작되면 리핏 카운터 리셋 — ReplayCurrent만 증가시킨다
         _pendingResumeMs = IsSampleTrack(_filePath)
             ? -1
             : _resumeStore.GetResumePositionMs(_filePath) ?? -1;
+        EnsurePlaylist(); // A11: 폴더 재생 목록 준비(워커행 — libvlc 생성과 같은 Worker.Run 관용구)
 
         using var media = new Media(lib, new Uri(_filePath));
         p.Play(media);
@@ -377,6 +413,69 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         TitleText.Text = Path.GetFileNameWithoutExtension(_filePath);
         ContentOpened?.Invoke(_filePath); // 셸 동기화
         TrayStatusChanged?.Invoke();      // A54: 유휴("AUD") → 열림(시간 · 이퀄라이저)
+    }
+
+    /// <summary>
+    /// A11(설계 §2.3): 리핏 전용 재장전. Ended에서는 Play()만으로 재시작이 안 되므로
+    /// (TogglePlayPause Ended 분기의 실검증 선례) PlayCurrent처럼 미디어를 다시 걸되,
+    /// 매 루프마다 나면 소음인 부작용을 뺀 변형이다 — 원형(PlayCurrent)은 고치지 않는다:
+    /// ① TitleOverlay 재대입 생략 — 같은 파일이라 이미 같은 이름이 떠 있다.
+    /// ② ContentOpened 생략 — 셸 동기화(S4 종료·오버레이·아이콘)는 전부 무의미한 재계산.
+    /// 이어듣기 조회도 생략(_pendingResumeMs = -1 고정) — EndReached가 기록을 이미 지웠고
+    /// (97% 정책) 리핏은 항상 0초 시작이다. 배속·출력 장치 재적용은 기존 Playing 핸들러가 잇고,
+    /// EQ는 인스턴스에 걸린 채 유지된다(EnsurePlayerAsync 주석). 트레이 1초 타이머도 같은
+    /// Playing 핸들러가 다시 켠다.
+    /// 영상 원본과 다른 점: A12 시작 오버레이·자막(_pendingAutoSubtitle)이 없어 더 단순하다.
+    /// </summary>
+    private void ReplayCurrent()
+    {
+        if (_player is not { } p || _libVlc is not { } lib || _filePath is null) return;
+
+        _durationMs = 0;
+        _lastReportedMs = 0;
+        _pendingResumeMs = -1;
+
+        using var media = new Media(lib, new Uri(_filePath));
+        p.Play(media);
+    }
+
+    /// <summary>
+    /// A11: 현재 파일의 폴더 재생 목록(같은 폴더 스냅샷 — 감시 없음, 이미지·영상 선례와 동일)을
+    /// 준비한다. 폴더 스캔은 파일당 속성 읽기가 있어 UI 스레드 금지(§11.1) — libvlc 생성과 같은
+    /// Worker.Run 관용구로 돌리고, 결과가 오기 전에 파일이 바뀌었으면 버린다.
+    /// 목록 진행(OpenPath)으로 온 파일은 이미 목록의 현재 항목이라 재스캔하지 않는다.
+    /// 내장 샘플 곡은 목록 대상이 아니다(Assets 폴더 순회는 무의미 — 이어듣기 제외와 같은 성질,
+    /// 영상의 테스트 클립 판정과 동형).
+    /// 스캔이 끝나기 전에 EOF가 오면 그 회차는 "목록 없음"으로 판정된다(아주 짧은 트랙 +
+    /// 느린 네트워크 폴더의 희귀 경합 — 수용, 다음 EOF부터 정상).
+    /// </summary>
+    private async void EnsurePlaylist()
+    {
+        var file = _filePath!;
+        if (IsSampleTrack(file))
+        {
+            _playlist = null;
+            return;
+        }
+        if (_playlist is { } current &&
+            string.Equals(current.Current, file, StringComparison.OrdinalIgnoreCase))
+        {
+            return; // 목록 진행으로 온 파일 — 스냅샷 유지
+        }
+
+        _playlist = null;
+        FolderPlaylist list;
+        try
+        {
+            list = await Worker.Run(_ => FolderPlaylist.Create(file, AudioModule.Extensions));
+        }
+        catch
+        {
+            return; // 목록 생성 실패가 재생을 방해하면 안 된다(libvlc 부수 작업과 같은 규칙)
+        }
+
+        if (_tornDown || file != _filePath) return; // 그새 다른 파일로 전환됨
+        _playlist = list;
     }
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
@@ -540,19 +639,86 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     private void OnPlayerEndReached(object? sender, EventArgs e)
     {
         // 끝까지 들었으면 이어듣기 기록을 지운다. (이 콜백 안에서 Stop()을 부르면 교착 — 금지)
+        // A11: 이 삭제는 루프 전이와 무관하게 유지한다 — 다 들은 파일의 기록 청소는 별개 사실이고,
+        // 바로 이 삭제가 목록 진행·리핏 후 이 파일을 다시 열 때 0초 시작을 보장한다(설계 §3.3).
         if (_filePath is not null && !IsSampleTrack(_filePath) && _durationMs > 0)
             _resumeStore.Report(_filePath, _durationMs, _durationMs);
 
-        Dispatch(() =>
+        // A11(v0.212.0): EOF 전이가 여기 얹힌다. 전이 판정·재생 API는 전부 UI 스레드에서
+        // (libvlc 콜백 안 재생 API 직접 호출 금지 — Dispatch 경유), Dispatch 사이에 사용자가
+        // 개입했을 수 있어 AdvanceAfterEnd가 파일·상태를 재검사한다.
+        var endedFile = _filePath;
+        Dispatch(() => AdvanceAfterEnd(endedFile));
+    }
+
+    /// <summary>
+    /// A11: EOF 전이(설계 §3.3 전이표 — 위에서부터 첫 일치). 우선순위 = 현재 루프(횟수 내) >
+    /// 목록 진행 > 목록 루프(처음으로) > 정지(부록 B 76 확정 — repeat one이 repeat all을 가리는
+    /// 음악 플레이어 통례). 전이 1~4는 Ended에 머물지 않으므로 종전 EndReached UI 갱신
+    /// (▶ 표기·시크바 끝·트레이 타이머 정지)을 생략한다 — 곧 Playing이 덮어써 깜빡임만 만든다.
+    /// 정지(전이 5)만 종전 갱신 그대로다. EncounteredError는 전이 트리거가 아니다(실패 파일
+    /// 자동 스킵은 무한 실패 루프 위험 — 별도 설계 대상, §3.3). UI 스레드 전용.
+    /// 영상 원본과 다른 점: 오디오에는 IPlaybackStateSource·PlaybackStateChanged가 없어
+    /// (설계 §5.2 — A186 확대는 이번 범위 밖) 그 발화 줄이 통째로 빠지고, 대신 오디오만의
+    /// 트레이 1초 타이머 정지(SetTrayTimer(false))·TrayStatusChanged가 정지 전이에 남는다.
+    /// </summary>
+    private void AdvanceAfterEnd(string? endedFile)
+    {
+        // 재진입 가드(설계 §2.3): _tornDown은 Dispatch가 이중 검사했다. 여기서는
+        // ② 그새 다른 파일로 전환되지 않았는지 ③ 사용자가 ▶로 이미 재시작하지 않았는지(Ended 유지)만.
+        if (_player is not { } p || _filePath is null || _filePath != endedFile) return;
+        if (p.State != VLCState.Ended) return;
+
+        // 전이 1: 현재 파일 루프 — 횟수 내면 같은 파일 재시작(0 = 무한. "1" = 한 번 더 = 총 2회).
+        if (_loopCurrent && (_loopCountLimit == 0 || _loopPlays < _loopCountLimit))
         {
-            PlayButton.Content = "▶";
-            PositionText.Text = TimeText.Format(_durationMs);
-            _suppressSeekEvent = true;
-            SeekSlider.Value = SeekSlider.Maximum;
-            _suppressSeekEvent = false;
-            SetTrayTimer(false); // A54
-            TrayStatusChanged?.Invoke();
-        });
+            _loopPlays++;
+            ReplayCurrent();
+            return;
+        }
+
+        // 전이 2·3: 다음 파일로 / 목록 끝이면 첫 파일로(목록 루프는 무한 고정 — 부록 B 76).
+        // 그새 소실된 파일은 Remove로 목록에서 빼고 그다음 후보로 재시도한다(구현 시 결정).
+        // OpenPath = 기존 완결 경로 재사용(설계 §2.2 경로 B) — 이어듣기 저장·PlayCurrent·
+        // ContentOpened 셸 동기화(트레이·A174)까지 전부 따라온다. 신규 셸 배선 0(설계 §5).
+        if (_playlist is { } list)
+        {
+            while (true)
+            {
+                var next = list.HasNext ? list.PeekNext
+                    : _loopList && list.Count > 1 ? list.PeekFirst
+                    : null;
+                if (next is null) break;
+
+                if (!File.Exists(next))
+                {
+                    list.Remove(next);
+                    continue;
+                }
+
+                if (list.HasNext) list.MoveNext();
+                else list.MoveFirst();
+                OpenPath(next);
+                return;
+            }
+
+            // 전이 4: 목록 루프 켬 + 단일 파일 목록 = 같은 파일 재시작.
+            // _loopPlays와 무관하다 — 이것은 횟수 축이 없는 "목록 루프"의 축이다(설계 §3.3).
+            if (_loopList && list.Count == 1)
+            {
+                ReplayCurrent();
+                return;
+            }
+        }
+
+        // 전이 5: 정지 — 종전 EndReached UI 갱신 그대로(유일하게 Ended에 머무는 경로).
+        PlayButton.Content = "▶";
+        PositionText.Text = TimeText.Format(_durationMs);
+        _suppressSeekEvent = true;
+        SeekSlider.Value = SeekSlider.Maximum;
+        _suppressSeekEvent = false;
+        SetTrayTimer(false); // A54: 멈추면 타이머도 멈춘다 — 막대는 낮게 고정
+        TrayStatusChanged?.Invoke();
     }
 
     private void OnPlayerError(object? sender, EventArgs e) =>
@@ -813,6 +979,82 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         flyout.ShowAt(DevicesButton);
     }
 
+    // ---------- A11 루프 플라이아웃 (c9 — A163 EQ 칸과 같은 "버튼 + 라디오 플라이아웃" 규격) ----------
+
+    /// <summary>
+    /// 루프 플라이아웃 구성(1회 — 항목이 정적이라 EQ·장치처럼 다시 채울 일이 없다).
+    /// 줄 1 = "Loop list" 토글(ToggleMenuFlyoutItem), 구분선 아래 = "Repeat this file" 라디오
+    /// 4택(끔/1×/3×/무한 — 현재 파일 루프와 그 횟수는 한 축으로 고른다. 끔을 골라도 저장된
+    /// 횟수는 남겨 다음 켬 때 되살아난다). 문구·구성은 영상과 동일하고 설정 키만 audio.* 다.
+    /// </summary>
+    private void BuildLoopFlyout()
+    {
+        LoopFlyout.Items.Clear();
+
+        var listToggle = new ToggleMenuFlyoutItem { Text = "Loop list", IsChecked = _loopList };
+        listToggle.Click += (_, _) =>
+        {
+            // ToggleMenuFlyoutItem은 Click 시점에 IsChecked가 이미 뒤집혀 있다(A160 선례와 같은 성질).
+            _loopList = listToggle.IsChecked;
+            _settings.Set(LoopListKey, _loopList);
+            _settings.Save(); // 즉시 저장 — EQ 선례(전역 1벌)
+            UpdateLoopButton();
+        };
+        LoopFlyout.Items.Add(listToggle);
+        LoopFlyout.Items.Add(new MenuFlyoutSeparator());
+
+        AddLoopCurrentChoice("Repeat this file: Off", repeat: false, limit: 0);
+        AddLoopCurrentChoice("Repeat this file: 1×", repeat: true, limit: 1);
+        AddLoopCurrentChoice("Repeat this file: 3×", repeat: true, limit: 3);
+        AddLoopCurrentChoice("Repeat this file: Infinite", repeat: true, limit: 0);
+    }
+
+    /// <summary>"Repeat this file" 라디오 1개 추가 — EQ의 AddEqualizerChoice 관용구.</summary>
+    private void AddLoopCurrentChoice(string label, bool repeat, int limit)
+    {
+        var item = new RadioMenuFlyoutItem
+        {
+            Text = label,
+            GroupName = "loop-current",
+            IsChecked = repeat == _loopCurrent && (!repeat || limit == _loopCountLimit),
+        };
+        item.Click += (_, _) =>
+        {
+            _loopCurrent = repeat;
+            _settings.Set(LoopCurrentKey, _loopCurrent);
+            if (repeat)
+            {
+                _loopCountLimit = limit;
+                _settings.Set(LoopCountKey, limit == 0 ? "infinite" : limit.ToString());
+            }
+            _settings.Save();
+            UpdateLoopButton();
+        };
+        LoopFlyout.Items.Add(item);
+    }
+
+    /// <summary>
+    /// 루프 버튼 본체를 상태형으로 갱신 — 영상 UpdateLoopButton과 같은 규칙(아이콘 + 툴팁을
+    /// 상태에서 만든다). 글리프 E8EE(RepeatAll)/E8ED(RepeatOne)는 영상 c9와 같은 값이다.
+    /// 현재 파일 루프가 켜져 있으면 RepeatOne(우선순위 그대로 — 목록 루프를 가린다), 아니면
+    /// RepeatAll이고 끔 상태는 툴팁이 알린다. 툴팁 표기는 A34 규칙대로 키 상수에서 조립한다.
+    /// </summary>
+    private void UpdateLoopButton()
+    {
+        (string glyph, string state) = _loopCurrent
+            ? ("\uE8ED", _loopCountLimit switch
+            {
+                1 => "Repeat this file: 1×",
+                3 => "Repeat this file: 3×",
+                _ => "Repeat this file: Infinite",
+            })
+            : _loopList
+                ? ("\uE8EE", "Loop list")
+                : ("\uE8EE", "Loop: off");
+        LoopButton.Content = new FontIcon { Glyph = glyph, FontSize = 18 };
+        ToolTipService.SetToolTip(LoopButton, HotkeySupport.Tip(state, LoopKey));
+    }
+
     // ---------- 입력 핸들러 ----------
 
     private void OnPlayClicked(object sender, RoutedEventArgs e) => TogglePlayPause();
@@ -928,15 +1170,26 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     // ---------- 하단 바 버튼 핫키 (A34) ----------
 
     /// <summary>
+    /// A11 루프 키(설계 §4.1) — 플라이아웃 열기. 툴팁 표기(UpdateLoopButton)와 액셀러레이터가
+    /// 이 한 값을 함께 쓴다. 오디오 기사용 문자 키 M·S와 충돌 없고, 영상 모듈의 L과 같은 뜻이다
+    /// (같은 동작에 같은 키 규칙 — 두 뷰가 동시에 살아 있지 않으므로 스코프 충돌도 없다).
+    /// </summary>
+    private const VirtualKey LoopKey = VirtualKey.L;
+
+    /// <summary>
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// 텍스트 입력·탐색기 파일 리스트 포커스에서는 HotkeySupport가 키를 통과시킨다(A32/A84 규칙).
     /// M(음소거)은 v0.75.0부터 있던 키를 XAML 액셀러레이터에서 여기로 옮긴 것 — 의미는 그대로다.
-    /// 키 배정은 같은 뜻의 동작에 같은 키를 쓰는 규칙에 따라 영상 모듈과 일치시켰다(M·S).
+    /// 키 배정은 같은 뜻의 동작에 같은 키를 쓰는 규칙에 따라 영상 모듈과 일치시켰다(M·S·A11의 L).
     /// </summary>
     private void SetupHotkeys()
     {
         HotkeySupport.Bind(this, MuteButton, VirtualKey.M, "Mute", ToggleMute);
         HotkeySupport.Bind(this, SpeedBox, VirtualKey.S,
             "Playback speed", () => SpeedBox.IsDropDownOpen = true);
+        // A11: L = 루프 플라이아웃 열기(영상 c9와 같은 배선). 툴팁이 상태형이라 Bind가 아닌
+        // Register — 표기는 UpdateLoopButton()이 같은 키 상수(LoopKey)로 조립한다.
+        HotkeySupport.Register(this, LoopButton, LoopKey, () => LoopFlyout.ShowAt(LoopButton));
+        UpdateLoopButton(); // A11: 루프 아이콘·툴팁 초기값
     }
 }
