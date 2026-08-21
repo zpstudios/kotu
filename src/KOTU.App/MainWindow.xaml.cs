@@ -255,6 +255,13 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
+        // A206(v0.215.0): 업데이트 자동 확인은 '설정 화면 열림' 참조 카운트가 0이 아닌 동안에만
+        // 돈다. 카운트를 놓는 정상 경로는 SettingsView의 Unloaded지만, 설정을 띄운 채 창을 닫으면
+        // Unloaded가 오지 않을 수 있어(A41에서 확인된 한계) 카운트가 샌다 — 그러면 아무도 보지
+        // 않는 확인이 계속 돌게 되므로 창이 내려갈 때 한 번 더 놓아 준다.
+        // 뷰 쪽 해제가 멱등(_updateWatchHeld)이라 Unloaded와 겹쳐도 두 번 빠지지 않는다.
+        Closed += (_, _) => (ModuleHost.Content as SettingsView)?.ReleaseUpdateWatch();
+
         // F11/F12 패널 키 감지(A176 단타 토글 — v0.25.0 Alt/Ctrl 홀드 → A58 → A86 → A107 →
         // A118 → A158 계보의 홀드/2연타 판정 기계는 A176에서 철거):
         // 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.

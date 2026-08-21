@@ -15,9 +15,11 @@ namespace KOTU.App;
 /// 탐색기 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
 /// 하단 바(후원 문구 — ⛶ 전체화면은 A151에서 셸 모드 버튼으로 이관)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
 /// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시만 하고, 확인은
-/// <b>이 화면 진입 1회</b> · 2분 주기 타이머의 두 경로가 코디네이터에서 돈다
-/// (A114, v0.136.0 — A95의 "수동 전용"을 대체. A125/v0.148.0에서 수동 버튼만 걷어내
-/// 자동 두 경로가 남았다. 토스트·오토체크 토글은 계속 없다).
+/// <b>이 화면 진입 1회</b> · <b>이 화면에 머무는 동안</b>의 2분 주기 타이머 두 경로가
+/// 코디네이터에서 돈다(A114, v0.136.0 — A95의 "수동 전용"을 대체. A125/v0.148.0에서 수동 버튼만
+/// 걷어내 자동 두 경로가 남았고, A206/v0.215.0에서 주기 타이머가 "상시"에서 "이 화면 체류 중"으로
+/// 좁혀졌다. 토스트·오토체크 토글은 계속 없다). 그 체류를 코디네이터에 알리는 것이
+/// Loaded/Unloaded에 걸린 <see cref="HoldUpdateWatch"/>/<see cref="ReleaseUpdateWatch"/>다.
 /// 연결 토글의 레지스트리 작업·기본 앱 개수 조회는 전부 <see cref="Worker"/>에서 돌고
 /// UI에는 진행률과 결과만 흘러온다(A77, v0.106.0).
 /// A195: 남아 있던 UI 스레드 동기 레지스트리 접근 셋(<b>모듈 토글 초기값 읽기</b>·
@@ -42,6 +44,14 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     /// Loaded에서 시작해 Unloaded에서 멈춘다(화면 밖에서는 돌지 않는다).
     /// </summary>
     private readonly DispatcherTimer _countdownTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+
+    /// <summary>
+    /// A206(v0.215.0): 이 뷰가 지금 <see cref="UpdateCoordinator"/>의 "설정 열림" 카운트를 하나
+    /// 쥐고 있는지. 코디네이터의 카운트는 창 여러 개가 함께 쓰는 전역 값이라, 이 뷰가 올린 몫은
+    /// 정확히 1이어야 한다 — 이 bool이 그 멱등성을 지킨다(Loaded가 두 번 와도 +1은 한 번,
+    /// Unloaded/창 닫기가 겹쳐 와도 -1은 한 번).
+    /// </summary>
+    private bool _updateWatchHeld;
 
     /// <summary>
     /// 설정 화면 전용 직렬 워커(A42 계약, A77에서 도입). 레지스트리 등록·해제·UserChoice 쓰기·
@@ -921,11 +931,14 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     /// Updates 섹션(A95, v0.117.0 — 확인 정책은 A114, v0.136.0). 구성은 위에서부터
     /// <b>현재 버전 · 최신 버전 · 마지막 확인 시각 · 다음 확인까지 남은 시간 · [Update to vX] · 안내 문구</b>
     /// (남은 시간 줄은 A167, v0.171.0에서 추가 — 확인 중에는 진행을 말하고, 예정 시각이 없으면 접힌다).
-    /// 확인은 <b>이 섹션을 만들 때(설정 진입) 1회</b> · 2분 주기 타이머 둘 다 돌지만
+    /// 확인은 <b>이 화면이 붙을 때(설정 진입) 1회</b> · 머무는 동안 2분 주기 타이머 둘 다 돌지만
     /// 새 버전 알림은 여기 표시가 전부다 — <b>토스트·팝업은 금지</b>(A114 알림 방식 b).
     /// A125(v0.148.0): 수동 확인 버튼을 없앴다 — 이 화면은 이제 <b>확인을 시키는 손잡이가 없고</b>
-    /// 진입만으로 최신 상태가 된다(코디네이터의 <c>CheckNowAsync</c>는 위 두 경로가 계속 쓴다).
-    /// (v0.17.0 → v0.105.0 → v0.117.0 → v0.136.0 → v0.148.0으로 다섯 번 뒤집힌 정책이다.
+    /// 진입과 체류가 곧 확인이다(코디네이터의 <c>CheckNowAsync</c>는 위 두 경로가 계속 쓴다).
+    /// A206(v0.215.0): 주기 확인은 이 화면을 <b>떠나면 멈춘다</b> — 확인 결과를 보여 주는 자리가
+    /// 여기뿐이라, 나가 있는 동안의 확인은 아무도 보지 않는다. 그래서 이 화면을 나가면
+    /// 다음 확인 예정(카운트다운)도 사라진다.
+    /// (v0.17.0 → v0.105.0 → v0.117.0 → v0.136.0 → v0.148.0 → v0.215.0으로 여섯 번 뒤집힌 정책이다.
     /// 상세는 UpdateCoordinator 주석).
     /// 실제 확인은 전역 <see cref="UpdateCoordinator"/>가 소유하고 여기서는 그 상태를 <b>표시만</b> 한다 —
     /// 다른 창에서 확인해도 이 화면이 따라 갱신된다.
@@ -1074,6 +1087,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         UpdateCoordinator.Changed += Render;
         Loaded += (_, _) =>
         {
+            // A206(v0.215.0): 자동 확인은 이 화면이 떠 있는 동안에만 돈다. 열림을 알리는 자리는
+            // 생성자가 아니라 여기다 — Unloaded와 짝이 맞아야 카운트가 새지 않기 때문이고,
+            // 진입 즉시 1회 확인도 같은 훅 안에 있어야 "열림 = 확인 시작"이 한 곳에서 읽힌다.
+            HoldUpdateWatch();
             RenderCountdown();          // 화면에 붙는 즉시 한 번 — 첫 1초를 빈 줄로 두지 않는다
             _countdownTimer.Start();
         };
@@ -1081,14 +1098,43 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         {
             UpdateCoordinator.Changed -= Render;
             _countdownTimer.Stop();
+            // 구독을 끊은 뒤에 놓는다 — 코디네이터가 정지를 알릴 때 이미 내려간 이 뷰가 다시
+            // 그려지지 않게(표시할 화면이 없다는 게 정지의 전제다).
+            ReleaseUpdateWatch();
         };
         Render();
+    }
 
-        // A114(v0.136.0): 설정 화면 진입마다 즉시 1회 확인. 이 뷰는 설정을 열 때마다 새로 만들어지므로
-        // (MainWindow.ShowSettingsAsync가 new SettingsView) 여기 한 줄이 곧 "진입 1회"다.
-        // 2분 주기 타이머와 겹쳐도 CheckNowAsync가 진행 중이면 되돌아가 요청이 두 번 나가지 않는다.
-        // 발사 후 망각 — 예외는 코디네이터가 삼키고 결과는 Render로 돌아온다.
+    /// <summary>
+    /// A206(v0.215.0): 설정 화면 열림을 <see cref="UpdateCoordinator"/>에 알리고(전역 열림 수가
+    /// 0→1이면 2분 주기 자동 확인 타이머가 선다) 진입 즉시 1회 확인을 쏜다.
+    /// 진입 1회 확인이 A114 이래 이 화면의 몫이었던 것은 그대로고, 부르는 자리만
+    /// 생성자(<see cref="BuildUpdatesSection"/> 끝)에서 Loaded로 옮겼다 — 생성자에는 짝이 될
+    /// 닫힘 신호가 없어 카운트가 샜을 것이기 때문이다.
+    /// 이미 쥐고 있으면 아무것도 하지 않는다: 뷰가 떼였다 다시 붙어도 카운트는 +1을 넘지 않고
+    /// 확인 요청도 두 번 나가지 않는다.
+    /// 주기 타이머와 이 확인이 겹쳐도 <c>CheckNowAsync</c>가 진행 중이면 되돌아간다(요청 1개).
+    /// </summary>
+    private void HoldUpdateWatch()
+    {
+        if (_updateWatchHeld) return;
+        _updateWatchHeld = true;
+        UpdateCoordinator.NotifySettingsOpened();
+        // 발사 후 망각 — 예외는 코디네이터가 삼키고 결과는 Changed → Render로 돌아온다.
         _ = UpdateCoordinator.CheckNowAsync();
+    }
+
+    /// <summary>
+    /// A206(v0.215.0): <see cref="HoldUpdateWatch"/>의 짝. 전역 열림 수가 1→0이면 자동 확인
+    /// 타이머가 멈추고 카운트다운 줄이 접힌다(NextCheckAt = null).
+    /// Unloaded가 정상 경로이고, 설정 화면을 띄운 채 창을 닫아 Unloaded가 오지 않는 경우를 위해
+    /// <see cref="MainWindow"/>의 Closed도 이 메서드를 부른다 — 둘이 겹쳐도 위 bool이 -1을 한 번으로 막는다.
+    /// </summary>
+    internal void ReleaseUpdateWatch()
+    {
+        if (!_updateWatchHeld) return;
+        _updateWatchHeld = false;
+        UpdateCoordinator.NotifySettingsClosed();
     }
 
     /// <summary>다운로드 → 사람 확인(Install and restart / Later) 대기 → 적용. 자동 재시작 없음.</summary>

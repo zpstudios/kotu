@@ -704,9 +704,11 @@ it with the built-in text editor.
 - **Current version** and **Latest version**, plus when the last check ran and how long it is until
   the next one — *Next check in 1:23*, counting down. While a check is running the line says so
   instead.
-- KOTU checks for updates on its own every two minutes, and once whenever you open Settings.
-  There is no button to check by hand — opening this screen is the check. Nothing pops up when a
-  new version is found — the Updates section is the only place it is announced.
+- KOTU checks for updates once whenever you open Settings, and then every two minutes for as long
+  as you stay on this screen. Leave Settings and the checking stops, so nothing runs in the
+  background while you work. There is no button to check by hand — opening this screen is the
+  check. Nothing pops up when a new version is found — the Updates section is the only place it
+  is announced.
 - When there is one, an **Update to vX.Y.Z** button appears. It downloads with a progress figure,
   then asks: *KOTU will close and restart to finish installing.* **Install and restart** applies it
   immediately; **Later** keeps the download ready for the next time you press the button.
