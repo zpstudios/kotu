@@ -37,9 +37,11 @@ The side panels are opaque **sidebars**: an open panel stands beside the content
 centre narrower. Either panel is 25% of the window width.
 
 **Full screen.** `Enter` and `Alt`+`Enter` both toggle full screen: the window fills the screen,
-taskbar included, and the bottom bar goes away. Leaving full screen — with `Enter`, `Alt`+`Enter`
-or `Esc` — brings back the window, the bottom bar and the panel arrangement you had when you went
-in. The **Full screen** button at the right end of the bottom bar does the same as the keys.
+taskbar included, the bottom bar goes away, and both side panels close so the content stands
+alone — press `F11` or `F12` if you want a panel back while you are there. Leaving full screen —
+with `Enter`, `Alt`+`Enter` or `Esc` — brings back the window, the bottom bar and the panel
+arrangement you had when you went in. The **Full screen** button at the right end of the bottom
+bar does the same as the keys.
 
 While a video is playing the bottom bar hides itself after a few seconds and the full-screen rule
 above bends a little — see [2.2](#22-video).

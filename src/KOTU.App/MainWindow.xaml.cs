@@ -1908,16 +1908,22 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 전체화면 진입 + 복귀 스냅샷(A151 ②③): 스냅샷 = 지금 좌/우 패널 상태(A176: 닫힘/도크
-    /// 2상태 — A186: 모드 항목은 2단화로 소멸, 복귀는 항상 창 모드). 패널은 건드리지 않는다 —
-    /// 진입 후 F11/F12로 바꾼 구성을 Esc/Alt+Enter가 이 스냅샷으로 되돌린다(A153: 전체화면에서도
-    /// 패널 조작은 그대로 살아 있다).
+    /// 전체화면 진입 + 복귀 스냅샷(A151 ②③ — **A203 개정**): 스냅샷 = 진입 직전 좌/우 패널 상태
+    /// (A176: 닫힘/도크 2상태 — A186: 모드 항목은 2단화로 소멸, 복귀는 항상 창 모드).
+    /// A203: 진입하면서 **양쪽 패널을 닫는다**(콘텐츠 전용 화면 — 구 "패널은 건드리지 않는다"
+    /// 폐지). 스냅샷 기록이 반드시 닫기보다 먼저다 — 뒤집으면 복귀가 항상 "닫힘"이 된다.
+    /// 전체화면 중 F11/F12 패널 조작은 그대로 살아 있고(A153/A196 불변), 그렇게 바꾼 구성도
+    /// 복귀(Esc/Enter/Alt+Enter/'뒤로'/버튼)가 이 스냅샷으로 되돌린다. 상태 적용은
+    /// RestoreFromFullScreen과 같은 순서(State 대입 → SetViewMode → ApplyOverlayStates 단일 종착점).
     /// </summary>
     private void EnterFullScreenRemembering()
     {
         if (_viewMode == ShellViewMode.FullScreen) return; // 버튼 연타 등 재진입 방어
-        _fullScreenRestore = (_listSide.State, _infoSide.State);
+        _fullScreenRestore = (_listSide.State, _infoSide.State); // 닫기 전에 기록 — A203의 핵심 순서
+        _listSide.State = OverlayState.Closed;
+        _infoSide.State = OverlayState.Closed;
         SetViewMode(ShellViewMode.FullScreen);
+        ApplyOverlayStates();
     }
 
     /// <summary>
