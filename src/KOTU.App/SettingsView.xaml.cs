@@ -594,6 +594,15 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(LearnMore(
             "\"System default\" follows the Windows display scaling; picking a value overrides it "
             + "for this app only."));
+        // A41: 단축키 안내 한 줄(사양) — 키 정본은 MainWindow.UiScaleStepForKey.
+        Root.Children.Add(new TextBlock
+        {
+            Text = "Shortcuts: Ctrl + '+' / '-' step the scale, Ctrl + numpad '*' resets it, "
+                + "and Ctrl + wheel over the bottom bar steps it too.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
 
         // A44(A21 보강): 현재 윈도우 배율을 별도 줄이 아니라 배율 목록 항목 옆에 표기한다.
         // XamlRoot.RasterizationScale = 이 창이 떠 있는 모니터의 시스템 배율(앱 자체 배율과 무관).
@@ -648,6 +657,24 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             _settings.Save();
             UiScale.NotifyChanged();
         };
+        // A41: 단축키(Ctrl+±·Ctrl+휠)로 배율이 바뀌면 열려 있는 이 화면의 콤보 표시도 따라온다 —
+        // 종전에는 콤보가 Changed를 구독하지 않았다(설정 화면이 유일한 변경 진입로여서 불필요).
+        // 위 SelectionChanged의 "저장값과 같으면 return" 가드가 재저장 루프를 끊고, 다른 창
+        // (다른 UI 스레드)에서 발화될 수 있어 MainWindow.ApplyUiScale과 같은 마샬링을 거친다.
+        // 구독 해제는 Unloaded(모듈 전환으로 설정 화면이 내려갈 때) — 같은 클로저라 -=가 성립한다.
+        void SyncScaleBoxFromSetting()
+        {
+            if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+            {
+                dq.TryEnqueue(SyncScaleBoxFromSetting);
+                return;
+            }
+            var saved = _settings.Get(UiScale.SettingKey, 0);
+            var savedIndex = Array.IndexOf(UiScale.Percents, saved);
+            scaleBox.SelectedIndex = saved <= 0 || savedIndex < 0 ? 0 : savedIndex + 1;
+        }
+        UiScale.Changed += SyncScaleBoxFromSetting;
+        Unloaded += (_, _) => UiScale.Changed -= SyncScaleBoxFromSetting;
         Root.Children.Add(scaleBox);
         Root.Children.Add(offListNote);
 

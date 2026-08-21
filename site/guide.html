@@ -562,12 +562,16 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Esc</kbd></td><td>one step back: out of full screen, out of the Open file browser, or close the open file</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>UI scale one step up / down (numpad <kbd>+</kbd> / <kbd>-</kbd> work too; hold to repeat)</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>reset the UI scale to <em>System default</em></td></tr>
           <tr><td><kbd>Browser Back</kbd></td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
         </table></div>
         <p><kbd>Alt</kbd>+<kbd>`</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd> and <kbd>F11</kbd> / <kbd>F12</kbd>
            work even while you are typing in a text box; the panel keys produce no character of their own.
            Plain <kbd>Enter</kbd> gives way to typing — in a text document it is a line break — and
-           <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well. There is no keyboard shortcut for switching module or for opening Settings —
+           <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well. The UI-scale keys <kbd>Ctrl</kbd>+<kbd>+</kbd> /
+           <kbd>-</kbd> give way too: while you are typing, they belong to the text editor and the system.
+           There is no keyboard shortcut for switching module or for opening Settings —
            both live in the menu at the bottom left. Switching module always arrives with both sidebars
            open; choosing the module you are already in changes nothing.</p>
         <p><kbd>Esc</kbd> undoes one layer per press: full screen first, then the Open file browser, then
@@ -878,6 +882,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            350% — overrides Windows for KOTU only, and nothing else on the desktop changes.</p>
         <p>A change takes effect in every open KOTU window immediately; there is nothing to restart. If the
            Windows scaling on your monitor is a value the list does not offer, a note under the list says so.</p>
+        <p>The scale can also be driven without opening Settings: <kbd>Ctrl</kbd>+<kbd>+</kbd> /
+           <kbd>Ctrl</kbd>+<kbd>-</kbd> step it up and down the same list (the numpad keys work too, and
+           holding the key repeats), <kbd>Ctrl</kbd>+numpad <kbd>*</kbd> resets it to <em>System default</em>,
+           and <kbd>Ctrl</kbd>+wheel over the bottom bar steps it as well. Over module content,
+           <kbd>Ctrl</kbd>+wheel keeps its usual meaning — zooming an image or a document, for instance —
+           and the scale does not move. If the setting is on <em>System default</em>, the first step starts
+           from the list entry closest to your current effective scale.</p>
 
         <h3 id="always-open-files-in-a-new-instance">Always open files in a new instance</h3>
         <p>Under <strong>Windows</strong>. Off by default.</p>

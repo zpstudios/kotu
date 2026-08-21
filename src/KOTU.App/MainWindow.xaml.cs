@@ -274,6 +274,10 @@ public sealed partial class MainWindow : Window
         // A186: 같은 이동 이벤트가 하단 바 자동 숨김의 입력이기도 하다(OnRootPointerMoved 안).
         RootLayout.AddHandler(UIElement.PointerMovedEvent,
             new PointerEventHandler(OnRootPointerMoved), handledEventsToo: true);
+        // A41: Ctrl+휠 = UI 배율 한 단계 증/감. handledEventsToo **없이** 구독한다 — 모듈
+        // 콘텐츠가 소비한 휠(사진 줌 A98·문서/PDF 줌·영상 볼륨)은 여기 오지 않고, 안 소비하고
+        // 흘린 휠도 표면 판정(IsUiScaleWheelSurface — 하단 바·빈 셸만)이 다시 거른다(이중 방어).
+        RootLayout.PointerWheelChanged += OnRootPointerWheel;
         RootLayout.PointerExited += (_, _) => HideEdgeButtons();
         CenterArea.SizeChanged += (_, _) => UpdateEdgeButtons(); // 경계 x 좌표는 실폭 기준
         Activated += (_, e) =>
@@ -1828,6 +1832,15 @@ public sealed partial class MainWindow : Window
         // Esc는 위에서 따로 처리했다(전체화면·S4는 텍스트 입력 중에도 Esc가 통해야 한다).
         if (IsTextInputFocused()) return;
 
+        // A41: Ctrl + '+'/'-'(OEM·넘패드) = UI 배율 한 단계 증/감, Ctrl + 넘패드 '*' = 리셋
+        // (0 = 시스템 따름). 위 IsTextInputFocused 분기가 텍스트 입력 양보(3종 세트 ②)를 겸한다 —
+        // 에디터의 Ctrl+±는 시스템/에디터 몫이다. Ctrl 판정은 저장소 관용구(ExplorerFileOps.IsCtrlDown).
+        if (UiScaleStepForKey(e.Key) is { } scaleStep && ExplorerFileOps.IsCtrlDown())
+        {
+            OnUiScaleKey(scaleStep, e);
+            return;
+        }
+
         if (e.Key == VirtualKey.Enter)
         {
             OnShellEnter(e); // A186: Alt+Enter와 동일한 전체화면 토글 — 원 기능 우선 판정 포함
@@ -1907,6 +1920,116 @@ public sealed partial class MainWindow : Window
             _altComboUsed = false;
             e.Handled = true;
         }
+    }
+
+    // ---------- UI 배율 라이브 조절 (A41) ----------
+
+    /// <summary>표면 판정의 조상 순회 상한 — HotkeySupport.MaxAncestorDepth와 같은 방어 값.</summary>
+    private const int UiScaleAncestorDepth = 64;
+
+    /// <summary>
+    /// A41 배율 키 판별: +1 = 확대 / -1 = 축소 / 0 = 리셋(시스템 따름) / null = 배율 키 아님.
+    /// '+'/'-' 문자 키는 VirtualKey에 이름이 없어 VK_OEM_PLUS(187)/VK_OEM_MINUS(189)를 int 캐스트로
+    /// 쓴다 — Alt+`의 (VirtualKey)192(VK_OEM_3, RegisterShortcuts)와 같은 관용구.
+    /// 리셋은 Ctrl+넘패드 '*'다 — Ctrl+0은 쓰지 않는다(설정 진입 충돌 회피, 사양 확정).
+    /// </summary>
+    private static int? UiScaleStepForKey(VirtualKey key) => key switch
+    {
+        VirtualKey.Add or (VirtualKey)187 => 1,       // 넘패드 + / '='(Shift로 +가 되는 그 키)
+        VirtualKey.Subtract or (VirtualKey)189 => -1, // 넘패드 - / '-'
+        VirtualKey.Multiply => 0,                     // 넘패드 * = 리셋
+        _ => null,
+    };
+
+    /// <summary>
+    /// A41 배율 키 실행부 — 호출부(OnRootKeyDown)가 Ctrl 판정·텍스트 입력 양보(3종 세트 ②)를
+    /// 마친 뒤 부른다. ① 오토리피트는 **허용**한다(꾹 눌러 연속 조절이 사양 — A121 PDF 스크롤이
+    /// 오토리피트를 살려 둔 것과 같은 취지. 토글 키들의 WasKeyDown 가드를 일부러 두지 않는다).
+    /// ③ 탐색기 통과 표면(PassThroughTag)·텍스트 입력은 ShouldPassThrough로 양보한다.
+    /// </summary>
+    private void OnUiScaleKey(int step, KeyRoutedEventArgs e)
+    {
+        if (e.Handled) return; // 원 기능 우선 — 먼저 소비한 쪽에 양보(셸 공통 규칙)
+        if (HotkeySupport.ShouldPassThrough(RootLayout)) return; // 3종 세트 ③ — 표면 양보
+        e.Handled = true;
+        if (step == 0) SetUiScaleSetting(0);
+        else StepUiScale(step);
+    }
+
+    /// <summary>
+    /// A41 Ctrl+휠 — 적용 표면은 **하단 바 위 + 빈 셸뿐**이다(사양 확정). 모듈 콘텐츠 위의
+    /// Ctrl+휠은 기존 동작(사진 줌 A98·문서/PDF 줌·영상 볼륨)이 그대로 가져간다 — 구독이
+    /// handledEventsToo 없음이라 소비된 휠은 애초에 안 오고, 안 소비된 휠도 아래 표면 판정이
+    /// 거른다(판정이 애매한 표면은 기존 동작 우선 = 무동작).
+    /// </summary>
+    private void OnRootPointerWheel(object sender, PointerRoutedEventArgs e)
+    {
+        if (!e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control)) return;
+        if (!IsUiScaleWheelSurface(e.OriginalSource as DependencyObject)) return;
+        var delta = e.GetCurrentPoint(RootLayout).Properties.MouseWheelDelta;
+        if (delta == 0) return;
+        e.Handled = true;
+        StepUiScale(delta > 0 ? 1 : -1);
+    }
+
+    /// <summary>
+    /// 휠이 배율 조절 표면 위에서 굴렀는가 — ① 히트 요소의 조상에 BottomBar가 있으면 하단 바 위,
+    /// ② 패널 컨텍스트 없는 빈 셸(HasPanelContext false)이면 전면 허용. 단 설정 화면은 A205부터
+    /// 컨텍스트 밖이어도 콤보 등 컨트롤 위 휠이 애매하므로 제외한다(기존 동작 우선).
+    /// 그 밖(모듈 콘텐츠·패널·탐색기)은 전부 거짓 = 기존 동작 유지.
+    /// </summary>
+    private bool IsUiScaleWheelSurface(DependencyObject? source)
+    {
+        if (!HasPanelContext && !IsSettingsView) return true; // 빈 셸 — 충돌할 콘텐츠가 없다
+        var node = source;
+        for (var depth = 0; node is not null && depth < UiScaleAncestorDepth; depth++)
+        {
+            if (ReferenceEquals(node, BottomBar)) return true;
+            if (ReferenceEquals(node, RootLayout)) return false; // 바를 안 거치고 루트 도달 — 콘텐츠 표면
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// UiScale.Percents 목록 위를 한 칸 이동(A41). 현재 값이 0(시스템 따름)·목록 밖 값이면
+    /// **현재 유효 배율**(ApplyUiScale의 percent 계산과 같은 축 — 0이면 유효 배율 = 시스템
+    /// RasterizationScale×100)에 가장 가까운 목록 값을 기준 칸으로 삼는다. XamlRoot가 살아 있는
+    /// 값을 주므로 모니터 이동 뒤에도 그 모니터 기준으로 성립한다. 목록 끝에서 더 가면 무동작.
+    /// </summary>
+    private void StepUiScale(int direction)
+    {
+        var percents = UiScale.Percents;
+        var current = _settings.Get(UiScale.SettingKey, 0);
+        var index = Array.IndexOf(percents, current);
+        if (index < 0)
+        {
+            var effective = current > 0
+                ? (double)current
+                : (RootLayout.XamlRoot?.RasterizationScale ?? 1.0) * 100.0;
+            index = 0;
+            for (var i = 1; i < percents.Length; i++)
+            {
+                if (Math.Abs(percents[i] - effective) < Math.Abs(percents[index] - effective))
+                    index = i;
+            }
+        }
+        var next = index + direction;
+        if (next < 0 || next >= percents.Length) return; // 목록 끝 — 무동작
+        SetUiScaleSetting(percents[next]);
+    }
+
+    /// <summary>
+    /// 배율 저장·전파의 단일 깔때기 — 설정 화면 콤보(SettingsView.BuildDisplaySection)와 같은
+    /// 순서(Set → Save → NotifyChanged)로만 쓴다(A41 사양: 새 깔때기 금지). 같은 값이면 무동작 —
+    /// 리셋 중복·목록 끝 무동작에서 저장 파일을 다시 쓰지 않는다.
+    /// </summary>
+    private void SetUiScaleSetting(int value)
+    {
+        if (value == _settings.Get(UiScale.SettingKey, 0)) return;
+        _settings.Set(UiScale.SettingKey, value);
+        _settings.Save();
+        UiScale.NotifyChanged(); // 열린 모든 창의 ApplyUiScale + 설정 콤보 동기(A41)
     }
 
     // ---------- 셸 표시 모드 토글 (A151 3단 순환 → A186 전체화면 토글로 단순화) ----------

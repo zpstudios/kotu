@@ -284,11 +284,15 @@ These work in every module.
 | `Esc` | one step back: out of full screen, out of the Open file browser, or close the open file |
 | `Shift+N` | new window of the module you are looking at |
 | `Ctrl+S` | save (text document) |
+| `Ctrl` + `+` / `-` | UI scale one step up / down (numpad `+` / `-` work too; hold to repeat) |
+| `Ctrl` + numpad `*` | reset the UI scale to *System default* |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
 
 ``Alt+` ``, `Alt`+`Enter` and `F11` / `F12` work even while you are typing in a text box. The panel
 keys produce no character of their own, so nothing is taken away from the text. Plain `Enter` does
 give way to typing — in a text document it is a line break — and `Shift+N` gives way as well.
+The UI-scale keys `Ctrl`+`+` / `-` give way too: while you are typing, they belong to the text
+editor and the system.
 
 `Esc` undoes one layer per press: full screen first, then the Open file browser, then the file
 itself. Closing the file this way lands on the module's own browser with **both sidebars open** —
@@ -616,6 +620,13 @@ for KOTU only, and nothing else on the desktop changes.
 
 A change takes effect in every open KOTU window immediately; there is nothing to restart. If the
 Windows scaling on your monitor is a value the list does not offer, a note under the list says so.
+
+The scale can also be driven without opening Settings: `Ctrl`+`+` / `Ctrl`+`-` step it up and down
+the same list (the numpad keys work too, and holding the key repeats), `Ctrl`+numpad `*` resets it
+to *System default*, and `Ctrl`+wheel over the bottom bar steps it as well. Over module content,
+`Ctrl`+wheel keeps its usual meaning — zooming an image or a document, for instance — and the scale
+does not move. If the setting is on *System default*, the first step starts from the list entry
+closest to your current effective scale.
 
 ### Always open files in a new instance
 
