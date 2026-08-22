@@ -2164,6 +2164,51 @@ public sealed partial class MainWindow : Window
     {
         BottomBar.Visibility = BarVisible ? Visibility.Visible : Visibility.Collapsed;
         UpdateEdgeButtons();
+        RecoverChromeFocusOrphan(); // A209: 바 붕괴 축 포커스 고아 방어 — 표시 반영 직후
+    }
+
+    /// <summary>
+    /// A209: 크롬(하단 바) 붕괴 축의 포커스 고아 방어 — <see cref="UpdateShellChrome"/> 말미 전용
+    /// 후처리. 포커스가 바 버튼 위인 채 바가 Collapsed되면(전체화면 진입·A186 자동 숨김) WinUI가
+    /// 포커스를 null로 떨구거나 붕괴 요소에 남겨 두는데, 어느 쪽이든 이후 셸 KeyDown(RootLayout
+    /// 버블 수신 — Esc·Enter·Alt+Enter·F11/F12 전부)이 미발화해 키가 전멸한다(실기기 확진
+    /// 2026-08-21: 이미지 더블클릭 전체화면에서 키 3종 무반응·더블클릭만 생존 —
+    /// docs/A135-audit.md §4-②가 예약해 둔 바로 그 갈래. ApplyOverlayStates 말미의 A135 2차
+    /// 방어는 좌/우 패널 4표면만 커버하고 바 축은 무방비였다).
+    /// 지점 선택: 전체화면 진입·해제의 두 경로(셸 SetViewMode · 외부 프레젠터 변화의
+    /// AppWindow.Changed 동기 — 이미지 뷰 자체 토글 등. 후자는 SetViewMode를 거치지 않는다)와
+    /// A186 자동 숨김(타이머 틱)까지, 바를 내리고 올리는 흐름 전부가 UpdateShellChrome 하나를
+    /// 지난다(바 가시성의 단일 결정 지점). 호출 부위 전수(생성자 동기·SetViewMode·
+    /// ResetBarAutoHide·NotifyBarAutoHideInput·자동 숨김 틱)가 모두 전이 시점뿐이라 포인터
+    /// 이동마다 돌지 않는다 — 판정 비용(포커스 조회 1회 + 상한 있는 조상 순회)은 여기 얹어도 싸다.
+    /// 조건 = 고아일 때만: 포커스가 null이거나, 포커스 요소가 스스로 또는 조상 Collapse로 화면에
+    /// 없을 때만 모듈 뷰(중앙 콘텐츠)로 되돌린다 — 살아 있는 포커스(문서 에디터·이름변경 편집
+    /// 상자·설정 콤보·열린 패널 리스트·팝업 트리는 전부 가시)는 절대 건드리지 않는다(과잉
+    /// 재포커스 금지). 열린 패널 안 포커스 무개입·실패(Content가 Control 아님·반환 false) 무시
+    /// 규칙은 A135 블록과 동일하고, 같은 전이에서 A135 블록과 겹쳐 돌아도 조건이 서로 배타적
+    /// 표면이라 무해하다(둘 다 같은 대상 재포커스 관용구 — S4 종료 ExitOpenFileBrowsing 말미와 동일).
+    /// </summary>
+    private void RecoverChromeFocusOrphan()
+    {
+        if (RootLayout.XamlRoot is not { } xr) return; // 로드 전 — 판정 불가면 무동작
+        if (FocusManager.GetFocusedElement(xr) is DependencyObject focused && IsVisibleInTree(focused))
+            return; // 포커스 생존 — 무개입(정상 상태에서 포커스를 뺏지 않는다)
+        (ModuleHost.Content as Control)?.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>요소가 화면에 있는가 — 자신·조상 어느 층도 Collapsed가 아니면 참(A209 고아 판정).
+    /// 순회 상한은 UiScaleAncestorDepth(HotkeySupport.MaxAncestorDepth와 같은 방어 값) 재사용.
+    /// 팝업 트리(플라이아웃·대화상자)는 루트까지 전부 Visible이라 자연히 참 = 무개입이고,
+    /// 텍스트 요소 등 UIElement가 아닌 층은 판정 없이 지나간다(IsWithin과 같은 순회 관용구).</summary>
+    private static bool IsVisibleInTree(DependencyObject element)
+    {
+        var node = element;
+        for (var depth = 0; node is not null && depth < UiScaleAncestorDepth; depth++)
+        {
+            if (node is UIElement { Visibility: Visibility.Collapsed }) return false;
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return true;
     }
 
     /// <summary>하단 바 우측 "Full screen" 버튼 = Enter/Alt+Enter와 같은 전체화면 토글(A186 —
