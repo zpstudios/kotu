@@ -30,10 +30,13 @@ namespace KOTU.Module.Document;
 /// ⓑ 로드 시 라운드트립 판정(무수정 저장이 원본 바이트를 재현 못 하면 저장 전에 예고),
 /// ⓒ 더티 = 기준 텍스트와의 실제 내용 비교(길이 우선 + 250ms 디바운스 — undo 원복이면 ●가 꺼진다),
 /// ⓓ 저장 직전 디스크 스탬프(수정 시각·크기) 대조로 외부 변경 검출. 전부 잘림·PDF에는 비적용.
+/// A211 배치 3(v0.222.0): 인쇄 공급자(<see cref="IPrintPageProvider"/>) — PDF 갈래부터. 보고 있는
+/// PDF의 전 페이지를 지연 렌더로 셸 PrintHost에 공급한다(Ctrl+P·하단 바 버튼. 텍스트/마크다운
+/// 갈래는 배치 4·5 — 갈래 분기 설계는 아래 "인쇄" 절 주석이 정본).
 /// </summary>
 public sealed partial class DocumentView : UserControl,
     IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
-    IUntitledContentSource
+    IUntitledContentSource, IPrintPageProvider
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -951,6 +954,7 @@ public sealed partial class DocumentView : UserControl,
 
         _shownPath = path;
         UpdateNewFileButton(); // A189: 콘텐츠가 열렸다 — New text file 비활성
+        UpdatePrintButton(); // A211 배치 3: PDF 로드 성공 — 인쇄 가능(버튼 활성·셸 Ctrl+P는 같은 판정을 직접 본다)
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = 현재/전체 페이지(LoadAsync가 (1, 전체)를 이미 쐈다)
     }
@@ -963,6 +967,9 @@ public sealed partial class DocumentView : UserControl,
         _pdfPane.Visibility = Visibility.Collapsed;
         PageInfoText.Visibility = Visibility.Collapsed;
         ShowTextFitState(); // A145: 숨기지 않고 비활성 "1/1"로 (구 A49의 Collapsed를 대체)
+        // A211 배치 3: PDF 갈래 이탈(텍스트/무제 전환·열기 실패·빈 화면 복귀 전부 이 관문을
+        // 지난다) — 인쇄 비활성. OpenPdf 성공과 이 둘이 PDF 인쇄 상태 변화의 호출 전수다.
+        UpdatePrintButton();
     }
 
     // ---------- PDF 키보드 스크롤 (A121) ----------
@@ -1765,6 +1772,158 @@ public sealed partial class DocumentView : UserControl,
     // A151: 전체화면 토글(ToggleFullScreen·⛶ 버튼·F11/Esc 액셀러레이터)은 전부 제거 —
     // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
     // 편집 중 Enter는 줄바꿈이 우선이라 순환하지 않는다(셸의 텍스트 입력 통과 — A151 ④ⓐ).
+
+    // ---------- 인쇄 (A211 배치 3, v0.222.0 — 계약 = IPrintPageProvider, 소비자 = 셸 PrintHost) ----------
+    // 사양 단일 원본 = docs/A211-print-research.md §2(PdfPane 접점)·§3-2 + 배치 2(ImageViewerView)
+    // 산식 선례. 이 절이 문서 모듈 인쇄의 **모드 분기 축**이다(설계 정본): 한 뷰가 PDF / 텍스트
+    // 편집 / 마크다운 렌더 세 표면을 오가므로 계약 구현은 "지금 전면인 표면" 판정에서 갈라진다 —
+    // 배치 3은 PDF 갈래(PrintablePdfPane)만 얹고, 텍스트(배치 4)·마크다운(배치 5)은 아래 각
+    // 멤버의 "배치 4/5 예약" 주석 자리에 자기 갈래를 분기로 얹는다(멤버 추가가 아니라 분기 추가 —
+    // 네 판정(CanPrintNow·GetPrintPageCount·CreatePrintPageAsync·버튼 활성)이 같은 갈래를 봐야 한다).
+
+    /// <summary>
+    /// 인쇄 렌더 유효 DPI 상한(A211 배치 3 확정값 300). 근거: 래스터 인쇄 품질의 관행 기준이
+    /// 300DPI이고 그 위는 지면 체감 향상이 미미한데 비트맵 메모리는 DPI 제곱으로 는다 —
+    /// Letter 세로 300DPI ≈ 2550×3300px ≈ 32MB(BGRA)라 "한 장 렌더·즉시 폐기"(조사 §1-ⓑ
+    /// MS 조언 — 셸 AddPages가 참조를 넘기고 버린다)의 페이지당 일시 점유가 안전권이다.
+    /// 600·1200DPI 프린터 값을 그대로 따르면 페이지당 129MB~0.5GB가 된다.
+    /// </summary>
+    private const double MaxPrintRenderDpi = 300;
+
+    /// <summary>인쇄 렌더 유효 DPI 하한 = 화면 밀도 96 — 프린터가 이상 규격(DpiX 0 등)을 줘도
+    /// 화면보다 흐려지지는 않게(셸 PrintHost.FallbackSpec의 96과 같은 값).</summary>
+    private const double MinPrintRenderDpi = 96;
+
+    /// <summary>
+    /// 인쇄 렌더 비트맵 한 변 픽셀 상한. DPI 상한이 못 막는 축을 막는다 — 렌더 픽셀은 용지
+    /// 크기에도 비례하므로 대형 용지·세장 페이지(포스터·배너 PDF)는 300DPI로도 폭주한다.
+    /// 4096이면 최악(정사각)에도 4096²×4B = 64MB로 닫히고, 표준 용지(Letter/A4)의 300DPI 긴 변
+    /// (3300~3508px)은 안 걸려 일반 문서 품질은 그대로다.
+    /// </summary>
+    private const double MaxPrintRenderPixels = 4096;
+
+    /// <summary>
+    /// 모듈 하단 바 인쇄 버튼(PrintButton) → 셸 인쇄 단일 경로(MainWindow.RequestPrint).
+    /// 셸이 ShowModule에서 구독하고, All Readable 자식일 때는 AllReadableView가 중계한다(배치 2).
+    /// 뷰는 셸을 모른 채 신호만 쏜다(계약 규정 — 배치 2와 동일 배선).
+    /// </summary>
+    public event Action? PrintRequested;
+
+    /// <summary>
+    /// PDF 인쇄 가능 판정의 단일 지점 — "PDF 표면이 전면"(패널 존재+표시, OnRootPreviewKeyDown
+    /// 게이트 ⓐ와 같은 기준) + "문서가 실제로 로드됨"(PrintPageCount 양수 — LoadAsync 완료 전·
+    /// 실패 후는 제외된다. 로드 진행 중의 값 의미는 PdfPane.PrintPageCount 주석 참고).
+    /// </summary>
+    private PdfPane? PrintablePdfPane =>
+        _pdfPane is { Visibility: Visibility.Visible, PrintPageCount: > 0 } pane ? pane : null;
+
+    /// <summary>
+    /// 지금 인쇄할 콘텐츠가 있는가 — <b>배치 3은 PDF만</b>: 텍스트 편집·마크다운 렌더·무제·빈
+    /// 화면은 false(Ctrl+P·버튼 둘 다 잠잠 — 부록 B 78 범위의 단계적 확장 중).
+    /// 배치 4/5 예약: 텍스트/마크다운 갈래는 이 식에 || 분기로 얹는다 —
+    /// <see cref="CreatePrintPageAsync"/>의 갈래 분기와 반드시 짝으로.
+    /// </summary>
+    public bool CanPrintNow => PrintablePdfPane is not null;
+
+    /// <summary>
+    /// OS 인쇄 큐·대화상자에 뜰 작업 이름 = 보고 있는 파일 이름(_shownPath — PDF도 채워진다).
+    /// 배치 4 예약: 무제 문서 갈래는 UntitledDisplayName을 돌려줄 것(경로가 없다 — 계약의
+    /// "무제 문서는 표시 제목" 규정). 비면 셸이 앱 이름으로 대체한다(계약).
+    /// </summary>
+    public string PrintJobName => _shownPath is { } shown ? Path.GetFileName(shown) : string.Empty;
+
+    /// <summary>
+    /// PDF = 문서 전체 페이지 수(PdfPane.PrintPageCount — PageCount 메타 값 즉답·렌더 0회라
+    /// 수백 페이지에서도 Paginate가 무겁지 않다 — 계약의 "무겁게 만들지 말 것").
+    /// spec은 PDF 갈래에서는 안 본다 — PDF 1페이지 = 종이 1장 고정이라 용지가 수를 못 바꾼다.
+    /// 배치 4/5 예약: 텍스트/마크다운은 측정 기반 페이지네이터의 결과를 여기 갈래로 얹는다
+    /// (그때부터 spec(용지·영역)이 페이지 수를 결정한다).
+    /// </summary>
+    public int GetPrintPageCount(PrintPageSpec spec) => PrintablePdfPane?.PrintPageCount ?? 0;
+
+    /// <summary>
+    /// pageNumber(1-base) 인쇄 페이지 1장 조립 — 미리보기(GetPreviewPage)와 본인쇄(AddPages)가
+    /// 같은 이 메서드를 타므로 <b>호출마다 전부 새 인스턴스</b>다(v0.174.1 교훈 — 요소 부모 1개,
+    /// 계약 규칙. 비트맵도 매회 새로 렌더한다). 요청 페이지만 지연 렌더 — 선렌더·자체 캐시 없음
+    /// (수백 페이지 PDF에서 미리보기 n페이지 이동 = 그 페이지 1회 렌더가 전부다).
+    /// <para>
+    /// 해상도: 렌더 픽셀 폭 = 종이 위 실크기(DIP) × 유효 DPI ÷ 96. 유효 DPI =
+    /// spec.DpiX를 [96, 300]으로 접은 값 + 한 변 4096px 상한 — 근거는 상수 3종 주석.
+    /// 미리보기와 본인쇄를 구분하지 않는다(보수적 단일 상한): 셸 PrintHost는 두 경로가 같은
+    /// BuildPageAsync 하나고 spec도 Paginate에서 굳힌 한 벌이라(PrintHost._spec) 계약상 구분
+    /// 신호가 없다 — 300DPI 상한이면 미리보기 과렌더도 페이지당 수십 MB 일시 점유로 닫히고,
+    /// 미리보기가 인쇄물과 같은 픽셀이라 품질 확인 수단으로도 정직하다.
+    /// </para>
+    /// 배치 4/5 예약: 모드 갈래는 첫 판정에서 나눈다 — PDF 갈래가 아니면(그때 가서 텍스트/
+    /// 마크다운 갈래로) null. null·예외는 셸이 안내 페이지로 대체한다(계약 — 파이프는 계속 간다).
+    /// </summary>
+    public async Task<object?> CreatePrintPageAsync(int pageNumber, PrintPageSpec spec)
+    {
+        if (PrintablePdfPane is not { } pane) return null; // 배치 4/5 예약: 텍스트/마크다운 갈래 분기 지점
+        if (pageNumber < 1 || pageNumber > pane.PrintPageCount) return null;
+        if (pane.GetPrintPageSize(pageNumber) is not { } size) return null;
+
+        // 인쇄 가능 영역(Imageable) — 용지 기준으로 잡으면 프린터가 물리적으로 못 찍는 가장자리에서
+        // 잘린다. 이상 규격(0 이하) 방어까지 배치 2(ImageViewerView.CreatePrintPageAsync) 산식 그대로.
+        var areaWidth = spec.ImageableWidth > 0 ? spec.ImageableWidth : spec.PageWidth;
+        var areaHeight = spec.ImageableHeight > 0 ? spec.ImageableHeight : spec.PageHeight;
+        var areaX = spec.ImageableWidth > 0 ? spec.ImageableX : 0;
+        var areaY = spec.ImageableHeight > 0 ? spec.ImageableY : 0;
+        if (areaWidth <= 0 || areaHeight <= 0) return null;
+
+        // contain — PDF 페이지(96DPI DIP)와 인쇄 영역(96DPI DIP)이 같은 좌표계라 비율 그대로다.
+        // 배율 상한 없는 "영역 안 최대"(부록 B 78 이미지 확정과 같은 의미론) — 화면 Contain의
+        // "축소만"(A83)은 화면 전용 결정이라 종이에는 옮기지 않는다(배치 2와 같은 판정 — 뒤집지 말 것).
+        var scale = Math.Min(areaWidth / size.Width, areaHeight / size.Height);
+        if (double.IsNaN(scale) || double.IsInfinity(scale) || scale <= 0) return null;
+        var layoutWidth = size.Width * scale;
+        var layoutHeight = size.Height * scale;
+
+        // 렌더 픽셀 폭 — 상한 근거는 메서드·상수 주석. 높이 쪽 상한 초과도 폭을 줄여서 막는다
+        // (DestinationWidth만 주면 렌더러가 종횡비를 유지하므로 폭 하나로 두 축이 닫힌다).
+        var dpi = Math.Clamp((double)spec.DpiX, MinPrintRenderDpi, MaxPrintRenderDpi);
+        var pixelWidth = layoutWidth * dpi / 96.0;
+        var pixelHeight = layoutHeight * dpi / 96.0;
+        var overflow = Math.Max(pixelWidth, pixelHeight) / MaxPrintRenderPixels;
+        if (overflow > 1) pixelWidth /= overflow;
+
+        var bitmap = await pane.RenderPrintPageAsync(
+            pageNumber, (uint)Math.Max(1, Math.Round(pixelWidth)));
+        if (bitmap is null) return null; // 렌더 실패·그새 문서 교체 — 셸이 안내 페이지로 대체
+
+        // 페이지 요소 — Canvas 절대 배치(배치 2 관용구: 자식을 원하는 크기 그대로 놓아 레이아웃
+        // 잘림 규칙에 기대지 않는다). 색 명시(흰 종이) — 테마 브러시 금지(계약 규칙).
+        var image = new Image
+        {
+            Source = bitmap,
+            Stretch = Stretch.Uniform,
+            Width = layoutWidth,
+            Height = layoutHeight,
+        };
+        Canvas.SetLeft(image, areaX + ((areaWidth - layoutWidth) / 2));
+        Canvas.SetTop(image, areaY + ((areaHeight - layoutHeight) / 2));
+        var page = new Canvas
+        {
+            Width = spec.PageWidth,
+            Height = spec.PageHeight,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+        };
+        page.Children.Add(image);
+        return page;
+    }
+
+    /// <summary>
+    /// 인쇄 버튼 활성 = <see cref="CanPrintNow"/>(부록 B 78 규격 — 배치 3에서는 PDF 로드 성공
+    /// 동안만 켜지고 텍스트/마크다운/무제/빈 화면은 비활성. 텍스트 갈래 활성은 배치 4 몫).
+    /// 셸 Ctrl+P는 버튼이 아니라 같은 속성을 직접 물으므로(MainWindow.RequestPrint) 버튼 표기와
+    /// 키 동작이 어긋날 수 없다(배치 2 UpdatePrintButton과 같은 형). 호출 전수 = OpenPdf 성공 ·
+    /// HidePdf(PDF 갈래 상태 변화의 관문 2곳 — HidePdf 쪽 주석 참고). 배치 4/5가 갈래를 얹으면
+    /// 그 갈래의 상태 변화 지점에서도 함께 부를 것.
+    /// </summary>
+    private void UpdatePrintButton() => PrintButton.IsEnabled = CanPrintNow;
+
+    /// <summary>버튼 클릭 = 셸에 인쇄 요청 신호 1발(배선은 셸·All Readable 중계가 — 계약 규정).</summary>
+    private void OnPrintButtonClick(object sender, RoutedEventArgs e) => PrintRequested?.Invoke();
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------
 

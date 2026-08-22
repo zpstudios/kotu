@@ -13,6 +13,9 @@ namespace KOTU.App.Printing;
 /// WinRT 인쇄 축(A축): <c>PrintManagerInterop.GetForWindow/ShowPrintUIForWindowAsync</c>(OS 표준
 /// 인쇄 대화상자 + 내장 미리보기) + <c>Microsoft.UI.Xaml.Printing.PrintDocument</c>(페이지 공급).
 /// 페이지 내용은 활성 모듈 뷰의 <see cref="IPrintPageProvider"/>(배치 2~5에서 구현)가 댄다.
+/// A211 배치 3(v0.222.0): 표준 페이지 범위 옵션이 이 파일에 얹혔다 — 활성 =
+/// <see cref="EnablePageRangeOption"/>(태스크 생성 시), 해석 = <see cref="SelectPrintPages"/>
+/// (AddPages). 추가 API도 전부 Windows.Graphics.Printing(선례 0 API 집결지 규칙 그대로).
 ///
 /// ⚠️ 저장소 인쇄 API 선례 0 — 이 파일이 선례 0 API의 유일한 집결지다. CI가 여기서 깨지면
 /// 최소 복구 = ① 이 파일 삭제 ② MainWindow.xaml.cs의 "A211 배치 1" 표식 4곳 제거
@@ -165,7 +168,21 @@ internal sealed class PrintHost : IDisposable
         {
             var source = _printDocSource;
             if (source is null || !_sessionActive) return;
-            var task = args.Request.CreatePrintTask(_jobName, sourceArgs => sourceArgs.SetSource(source));
+            // A211 배치 3: 페이지 범위 옵션 노출은 공식 문서 관용구대로 소스 요청 콜백 안에서
+            // task.Options에 건다("Customize the print preview UI"의 null 선언 후 대입 폐쇄 참조
+            // 형태 그대로 — 콜백은 CreatePrintTask 반환 뒤에 인쇄 시스템이 부른다). 콜백은 이
+            // 바깥 try가 못 덮는 시점에 불리므로 자체 방어가 필수고, 실패해도 인쇄는 계속 간다
+            // (범위 UI만 없는 배치 1 동작 — "다운 0" 공통 방어).
+            PrintTask? task = null;
+            task = args.Request.CreatePrintTask(_jobName, sourceArgs =>
+            {
+                try
+                {
+                    if (task is { } created) EnablePageRangeOption(created.Options);
+                }
+                catch { /* 옵션 구성 실패 — 범위 UI 없이 진행 */ }
+                sourceArgs.SetSource(source);
+            });
             task.Completed += OnPrintTaskCompleted;
         }
         catch
@@ -173,6 +190,34 @@ internal sealed class PrintHost : IDisposable
             // 태스크 생성 실패 — 대화상자가 자체 오류 상태를 보인다. 여기서 예외가 새면
             // 비UI 스레드 이벤트 디스패치라 프로세스가 죽는다("다운 0" — 전 핸들러 공통 방어).
         }
+    }
+
+    /// <summary>
+    /// A211 배치 3: OS 인쇄 대화상자에 표준 페이지 범위 옵션을 노출한다.
+    /// <para>
+    /// 판정(배치 3 과제 — "OS가 범위를 자체 처리하는가"): <b>아니다, 코드 0으로는 성립하지 않는다.</b>
+    /// 근거 = StandardPrintTaskOptions/CustomPageRanges 문서와 UWP 인쇄 공식 샘플의 페이지 범위
+    /// 시나리오: ① 범위 UI는 앱이 CustomPageRanges를 DisplayedOptions에 넣어야 나타난다(기본
+    /// 노출 목록에 없다) ② 대화상자는 입력 파싱·형식 검증까지만 하고 결과를
+    /// PrintTaskOptions.CustomPageRanges(PrintPageRange 목록)로 앱에 넘긴다 — <b>적용(그 페이지만
+    /// 찍기)은 앱 몫</b>이다(샘플도 AddPages에서 앱이 거른다). 그래서 이 활성과
+    /// <see cref="SelectPrintPages"/>(AddPages 해석)가 한 쌍이다.
+    /// </para>
+    /// DisplayedOptions는 Clear() 없이 Add만 한다 — 프린터 기본 노출 옵션(매수·용지·방향 등)을
+    /// 종전 그대로 두는 최소 변경(공식 예제의 Clear 후 재구성은 노출 목록 전체를 통제하는
+    /// 시나리오라 복제하지 않는다). "Current page"는 끈다 — OS가 아는 "현재"는 미리보기에서 보던
+    /// 페이지지 앱 화면의 현재 페이지가 아니라서 의미가 어긋난다. 1페이지 공급자(이미지)에서도
+    /// 함께 뜨지만 무해하다(기본값 All pages, 범위 밖 입력은 SelectPrintPages가 접는다).
+    /// </summary>
+    private static void EnablePageRangeOption(PrintTaskOptions options)
+    {
+        var displayed = options.DisplayedOptions;
+        if (!displayed.Contains(StandardPrintTaskOptions.CustomPageRanges))
+            displayed.Add(StandardPrintTaskOptions.CustomPageRanges);
+        var range = options.PageRangeOptions;
+        range.AllowAllPages = true;
+        range.AllowCustomSetOfPages = true;
+        range.AllowCurrentPage = false;
     }
 
     /// <summary>
@@ -235,9 +280,12 @@ internal sealed class PrintHost : IDisposable
     }
 
     /// <summary>
-    /// 본인쇄 확정 — 전 페이지를 한 장씩 공급한다(참조는 넘기고 버린다 — 대용량 메모리 규칙,
-    /// 조사 §1-ⓑ MS 조언). 페이지 범위 옵션(PrintTask.Options 활성 + e.PrintTaskOptions 해석)은
-    /// 배치 3(PDF)이 이 자리에 얹는다. 어떤 실패에도 AddPagesComplete는 부른다(안 부르면 큐가 매달린다).
+    /// 본인쇄 확정 — 선택된 페이지를 한 장씩 공급한다(참조는 넘기고 버린다 — 대용량 메모리 규칙,
+    /// 조사 §1-ⓑ MS 조언). 페이지 범위(A211 배치 3): 활성은 <see cref="EnablePageRangeOption"/>
+    /// (태스크 생성 시), 해석은 여기 <see cref="SelectPrintPages"/> — 대화상자는 범위 UI 표시와
+    /// 입력 파싱까지만 하고 적용은 앱 몫이다(판정 근거는 EnablePageRangeOption 주석). 범위
+    /// 미지정 = 전 페이지(배치 1 동작 그대로). 어떤 실패에도 AddPagesComplete는 부른다(안 부르면
+    /// 큐가 매달린다).
     /// </summary>
     private async void OnAddPages(object sender, AddPagesEventArgs e)
     {
@@ -245,9 +293,9 @@ internal sealed class PrintHost : IDisposable
         if (doc is null) return;
         try
         {
-            var count = _pageCount;
-            for (var i = 1; i <= count; i++)
-                doc.AddPage(await BuildPageAsync(i));
+            // 캐스트는 OnPaginate와 같은 공식 예제 형(WASDK 이벤트 args의 PrintTaskOptions는 object).
+            foreach (var pageNumber in SelectPrintPages(e.PrintTaskOptions as PrintTaskOptions, _pageCount))
+                doc.AddPage(await BuildPageAsync(pageNumber));
         }
         catch { /* 남은 페이지 포기 — 아래 완료 통지로 파이프는 닫는다 */ }
         finally
@@ -255,6 +303,42 @@ internal sealed class PrintHost : IDisposable
             try { doc.AddPagesComplete(); }
             catch { /* 이미 닫힌 세션 — 무시 */ }
         }
+    }
+
+    /// <summary>
+    /// 이번 인쇄가 찍을 페이지 번호 목록(1-base·오름차순·중복 없음 — A211 배치 3).
+    /// CustomPageRanges가 비어 있으면(사용자가 범위 옵션을 안 건드림 = All pages) 전 페이지.
+    /// 지정 범위는 문서 범위 [1, pageCount]로 접고(겹침·역순 입력은 합집합으로 흡수), 접은 결과가
+    /// 비면 전 페이지로 돌아간다(방어 — 대화상자가 범위 입력을 자체 검증하므로 정상 경로에서는
+    /// 나오지 않고, 0장 제출로 태스크를 실패시키는 것보다 낫다). 미리보기는 종전대로 전 페이지를
+    /// 보인다 — 범위 반영 미리보기는 PrintTaskOptionDetails.OptionChanged + InvalidatePreview
+    /// 재파이프가 필요한 별도 표면이라 이번 범위 밖이다(인쇄물에만 범위 적용 — 샘플의 기본형).
+    /// </summary>
+    private static List<int> SelectPrintPages(PrintTaskOptions? options, int pageCount)
+    {
+        var pages = new List<int>(Math.Max(1, pageCount));
+        try
+        {
+            if (options?.CustomPageRanges is { Count: > 0 } ranges)
+            {
+                var include = new bool[pageCount + 1];
+                foreach (var range in ranges)
+                {
+                    var first = Math.Max(1, range.FirstPageNumber);
+                    var last = Math.Min(pageCount, range.LastPageNumber);
+                    for (var page = first; page <= last; page++) include[page] = true;
+                }
+                for (var page = 1; page <= pageCount; page++)
+                    if (include[page]) pages.Add(page);
+            }
+        }
+        catch
+        {
+            pages.Clear(); // 범위 조회 실패 — 아래 공통 폴백(전 페이지)으로
+        }
+        if (pages.Count == 0)
+            for (var page = 1; page <= pageCount; page++) pages.Add(page);
+        return pages;
     }
 
     // ---------- 페이지 조립 ----------

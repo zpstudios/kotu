@@ -479,6 +479,15 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               The zoom level never changes, and <kbd>←</kbd> <kbd>→</kbd> are not used.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Zooming by hand releases
               the fit.</li>
+          <li><strong>Print</strong> with <kbd>Ctrl</kbd>+<kbd>P</kbd> or the print button in the bottom bar —
+              the same Windows print dialog as for pictures, with its own preview. Every page prints by
+              default; a page range typed in the dialog (for example <code>2-5, 8</code>) prints just those
+              pages, while the preview keeps showing the whole document. Each PDF page goes on its own sheet,
+              scaled to fit the printable area of the chosen paper, and is rendered for paper — up to
+              300 DPI — no matter the zoom or Fit on screen. Pages are prepared one at a time, so a document
+              hundreds of pages long prints without loading them all at once, and a password-protected PDF
+              prints without asking for the password again while it is open. The button is greyed out while
+              no PDF is open.</li>
         </ul>
 
         <h3>Archive</h3>
@@ -589,7 +598,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Esc</kbd></td><td>one step back: out of full screen, out of the Open file browser, or close the open file</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print what you are looking at (picture)</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print what you are looking at (picture or PDF)</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>UI scale one step up / down (numpad <kbd>+</kbd> / <kbd>-</kbd> work too; hold to repeat)</td></tr>
           <tr><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>reset the UI scale to <em>System default</em></td></tr>
           <tr><td><kbd>Browser Back</kbd></td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
@@ -653,6 +662,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Audio</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
           <tr><td>Audio</td><td><kbd>L</kbd></td><td>loop options</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save</td></tr>
+          <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print the PDF</td></tr>
           <tr><td>Document</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option (PDF)</td></tr>
           <tr><td>Document</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>scroll the PDF, about an eighth of the view</td></tr>
           <tr><td>Document</td><td><kbd>Page Up</kbd> <kbd>Page Down</kbd></td><td>scroll the PDF, about a full screen</td></tr>

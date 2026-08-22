@@ -198,6 +198,73 @@ public sealed partial class PdfPane : UserControl
         }
     }
 
+    // ---------- 인쇄 렌더 (A211 배치 3 — 소비자 = DocumentView.CreatePrintPageAsync) ----------
+
+    /// <summary>
+    /// 인쇄(A211 배치 3): 열린 문서의 전체 페이지 수 — 셸 Paginate가 이 값 하나로 즉답한다
+    /// (렌더 0회: PageCount는 문서 메타 값이라 수백 페이지 PDF에서도 상수 시간이다). 문서가 없으면 0.
+    /// LoadAsync 진행 중에는 직전 문서 값이 유지된다(_doc 교체는 성공 시점) — 그동안의 인쇄
+    /// 대상도 직전 문서다(파일명 표시(_shownPath)가 같은 시점에 함께 바뀌므로 서로 어긋나지 않는다).
+    /// </summary>
+    public int PrintPageCount => _doc is { } doc ? (int)doc.PageCount : 0;
+
+    /// <summary>
+    /// 인쇄(A211 배치 3): 페이지 원본 크기(96DPI DIP — Windows.Data.Pdf 좌표, A49 1:1 기준과
+    /// 같은 단위). pageNumber는 1-base(IPrintPageProvider 규약). LoadAsync가 레이아웃 확정 때
+    /// 하듯 GetPage로 Size만 읽고 닫는다(렌더 없음). 문서 없음·범위 밖·조회 실패 = null.
+    /// </summary>
+    public (double Width, double Height)? GetPrintPageSize(int pageNumber)
+    {
+        if (_doc is not { } doc) return null;
+        if (pageNumber < 1 || pageNumber > (int)doc.PageCount) return null;
+        try
+        {
+            using var page = doc.GetPage((uint)(pageNumber - 1));
+            var size = page.Size;
+            return size.Width > 0 && size.Height > 0 ? (size.Width, size.Height) : null;
+        }
+        catch
+        {
+            return null; // 손상 페이지 — 호출부가 null을 안내 페이지로 처리한다(계약)
+        }
+    }
+
+    /// <summary>
+    /// 인쇄(A211 배치 3): pageNumber(1-base) 페이지를 pixelWidth 픽셀 폭으로 지연 렌더한 비트맵.
+    /// 화면 경로(OnRenderPhase)와 같은 관용구다 — RenderToStreamAsync(DestinationWidth) →
+    /// BitmapImage.SetSourceAsync. 열린 _doc 재사용이라 암호 PDF도 재입력 없이 찍힌다(조사 §2).
+    /// 화면용 비트맵(ListView 컨테이너의 캐시)은 재사용하지 않는다 — 그쪽 폭은 화면 배율
+    /// 기준이라 인쇄 해상도에 못 미친다(조사 §1-ⓒ). 호출 스레드 = UI(계약 규약 그대로 — 화면
+    /// 렌더(OnRenderPhase)와 같다): RenderToStreamAsync는 WinRT 비동기 작업이라 await 동안 UI를
+    /// 블로킹하지 않고, BitmapImage는 DependencyObject라 워커 스레드로 뺄 수도 없다.
+    /// 렌더 사이 문서가 바뀌면(_loadSeq — 화면 렌더의 늦은 도착 폐기와 같은 시퀀스 가드) null.
+    /// 실패도 null — 한 페이지 실패가 인쇄 파이프를 죽이면 안 된다(화면 쪽 빈 페이지 방침과 동형).
+    /// </summary>
+    public async Task<BitmapImage?> RenderPrintPageAsync(int pageNumber, uint pixelWidth)
+    {
+        if (_doc is not { } doc || pixelWidth == 0) return null;
+        if (pageNumber < 1 || pageNumber > (int)doc.PageCount) return null;
+        var seq = _loadSeq;
+        try
+        {
+            using var stream = new InMemoryRandomAccessStream();
+            using (var page = doc.GetPage((uint)(pageNumber - 1)))
+            {
+                await page.RenderToStreamAsync(stream,
+                    new PdfPageRenderOptions { DestinationWidth = pixelWidth });
+            }
+            if (seq != _loadSeq) return null; // 그새 다른 문서/Clear — 낡은 렌더 폐기
+
+            var bitmap = new BitmapImage();
+            await bitmap.SetSourceAsync(stream);
+            return seq == _loadSeq ? bitmap : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // ---------- 현재 페이지 추적 ----------
 
     private void HookScroll()

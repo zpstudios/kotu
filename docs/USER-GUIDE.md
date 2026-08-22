@@ -196,6 +196,14 @@ editor either way.
   about a full screen, and `Home` `End` jump to the start and the end of the document. Holding a key
   keeps scrolling. The zoom level never changes, and `←` `→` are not used.
 - **Fit** — see [2.9](#29-the-fit-button). Zooming by hand releases the fit.
+- **Print** with `Ctrl+P` or the print button in the bottom bar — the same Windows print dialog as
+  for pictures, with its own preview. Every page prints by default; a **page range** typed in the
+  dialog (for example `2-5, 8`) prints just those pages, while the preview keeps showing the whole
+  document. Each PDF page goes on its own sheet, scaled to fit the printable area of the chosen
+  paper, and is rendered for paper — up to 300 DPI — no matter the zoom or Fit on screen. Pages are
+  prepared one at a time, so a document hundreds of pages long prints without loading them all at
+  once, and a password-protected PDF prints without asking for the password again while it is open.
+  The button is greyed out while no PDF is open.
 
 ### 2.6 Archive
 
@@ -309,7 +317,7 @@ These work in every module.
 | `Esc` | one step back: out of full screen, out of the Open file browser, or close the open file |
 | `Shift+N` | new window of the module you are looking at |
 | `Ctrl+S` | save (text document) |
-| `Ctrl+P` | print what you are looking at (picture) |
+| `Ctrl+P` | print what you are looking at (picture or PDF) |
 | `Ctrl` + `+` / `-` | UI scale one step up / down (numpad `+` / `-` work too; hold to repeat) |
 | `Ctrl` + numpad `*` | reset the UI scale to *System default* |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
@@ -382,6 +390,7 @@ box or while you are typing to jump through the file list.
 | Audio | `S` | playback speed |
 | Audio | `L` | loop options |
 | Document | `Ctrl+S` | save |
+| Document | `Ctrl+P` | print the PDF |
 | Document | `A` | 100% (PDF) |
 | Document | `F` | re-apply the last Fit option (PDF) |
 | Document | `↑` `↓` | scroll the PDF, about an eighth of the view |
