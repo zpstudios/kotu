@@ -797,11 +797,12 @@ public sealed partial class MainWindow : Window
     private const string MenuShortcutHint = "Alt+`";
 
     /// <summary>
-    /// 셸 액셀러레이터 등록. A147(v0.163.0) 이후 남는 것은 **Alt+`(1 왼쪽 키) = 시작 메뉴**와
-    /// **Shift+N = 새 창** 둘뿐이다 — Alt+숫자(모듈 전환)·Alt+0(Settings)은 폐지됐고, 모듈 전환·설정
+    /// 셸 액셀러레이터 등록. A147(v0.163.0) 이후 **Alt+`(1 왼쪽 키) = 시작 메뉴**와
+    /// **Shift+N = 새 창**, 그리고 **Ctrl+P = 인쇄(A211 배치 1, v0.220.0)** 셋이다 —
+    /// Alt+숫자(모듈 전환)·Alt+0(Settings)은 폐지됐고, 모듈 전환·설정
     /// 진입은 **시작 메뉴가 유일한 키보드 경로**다(A34 문자 핫키는 모듈 바 버튼 전용 — 전환과 무관).
-    /// Shift+N = 새 창(A24 — A84에서 Ctrl+N을 Shift 계열로 전환, A107 무변경. 앱에 남는 Ctrl 조합은
-    /// 문서 Ctrl+S 하나뿐). 텍스트 입력 통과 예외(A32)는 Shift+N에만 적용된다 —
+    /// Shift+N = 새 창(A24 — A84에서 Ctrl+N을 Shift 계열로 전환, A107 무변경. 앱의 Ctrl 조합은
+    /// 문서 Ctrl+S·A41 Ctrl+±(배율)·이 Ctrl+P뿐). 텍스트 입력 통과 예외(A32)는 Shift+N에만 적용된다 —
     /// Alt 조합은 문자를 만들지 않아 뺏을 입력이 없으므로 어디서나 동작한다(A107 전환의 목적).
     /// ⚠️ Alt+`도 <see cref="AddShortcut"/>의 `_altComboUsed` 부기를 그대로 탄다 — 그 분기를 지우면
     /// Alt 단독 up 조건 소비(OS 창 메뉴 모드 회피, OnRootKeyUp)가 깨진다.
@@ -820,6 +821,13 @@ public sealed partial class MainWindow : Window
         // 새 창 = 지금 보는 모듈의 빈 인스턴스(A24 사용자 확정). 설정 화면 등 모듈 없는 창은 기본 화면으로.
         AddShortcut(VirtualKey.N, () => _manager.OpenNewWindow(CurrentModuleId),
             Windows.System.VirtualKeyModifiers.Shift); // A84: Ctrl+N → Shift+N
+        // A211 배치 1(v0.220.0): Ctrl+P = 인쇄. 조사 문서(A211-print-research.md §2) 확정 관용구 =
+        // 액셀러레이터(DocumentView Ctrl+S와 같은 형 — 셸에서는 이 AddShortcut이 그 자리다).
+        // Control 조합은 아래 A32 통과 예외(None/Shift)에 안 걸린다 — 문자를 만들지 않아 뺏을
+        // 입력이 없고(A107 Alt 조합과 같은 논리), 문서 편집 중에도 인쇄 진입로가 있어야 한다
+        // (배치 4~5 텍스트/마크다운의 주 사용처). 오토리피트·재진입은 PrintHost 세션 가드가
+        // 무동작으로 거르고, 계약 미구현 뷰·S4는 RequestPrint가 거른다(양보 판단 3종은 그쪽 주석).
+        AddShortcut(VirtualKey.P, RequestPrint, Windows.System.VirtualKeyModifiers.Control);
     }
 
     private void AddShortcut(VirtualKey key, Action action,
@@ -831,6 +839,7 @@ public sealed partial class MainWindow : Window
             // A32 예외: 단독 키는 입력 컨트롤 타이핑을 뺏으면 안 된다.
             // A84: Shift 조합도 동일 — 에디터에서 Shift+글자는 대문자 입력이 우선(Shift+N 통과).
             // A107: Menu 조합은 이 예외에 안 걸린다(문자를 안 만든다) — 텍스트 입력 중에도 발화.
+            // A211: Control 조합도 같은 이유로 예외 밖 — Ctrl+P는 문서 편집 중에도 인쇄여야 한다.
             if (modifiers is Windows.System.VirtualKeyModifiers.None
                     or Windows.System.VirtualKeyModifiers.Shift
                 && IsTextInputFocused())
@@ -856,6 +865,41 @@ public sealed partial class MainWindow : Window
     /// 텍스트 입력만 보는 이 판정을 쓴다. 루트 KeyDown(Enter·홀드 취소 리셋)도 같은 판정을 공유한다.
     /// </summary>
     private bool IsTextInputFocused() => HotkeySupport.IsTextInputFocused(RootLayout);
+
+    // ---------- 인쇄 (A211 배치 1, v0.220.0 — 사양 = docs/A211-print-research.md §3) ----------
+    // CI가 인쇄 API(저장소 선례 0 — PrintHost.cs에 전부 격리)에서 깨질 때의 최소 복구:
+    // PrintHost.cs 삭제 + 이 절 삭제 + RegisterShortcuts의 Ctrl+P 1줄 + ShowModule의
+    // PrintRequested 블록 삭제(전부 "A211" 표식). Core 계약은 BCL 전용이라 남아도 안전.
+    //
+    // 하단 바 인쇄 버튼 규격(배치 2~5에서 모듈별 추가 — 이 배치는 키·기반만, 부록 B 78):
+    // 모듈 자신의 하단 바 줄(IBottomBarProvider)에 버튼을 두고, 클릭 = 뷰가
+    // IPrintPageProvider.PrintRequested를 발화하는 한 줄이 전부다(셸이 ShowModule에서 구독해
+    // 아래 RequestPrint로 흘린다 — 모듈은 셸을 모른 채 끝난다). 툴팁 "Print (Ctrl+P)",
+    // 활성 조건 = CanPrintNow(인쇄할 콘텐츠 없으면 비활성), A34 문자 핫키는 배정하지 않는다.
+
+    /// <summary>창당 1개 인쇄 호스트 — 첫 요청 때 만든다(시작 경로에서 인쇄 API 무접촉 =
+    /// 구형 OS에서도 요청 전까지는 아무 일도 없다). 해제는 자신이 창 Closed에서 전수 수행.</summary>
+    private Printing.PrintHost? _printHost;
+
+    /// <summary>현재 모듈 뷰의 인쇄 계약 — PlaybackView 등과 같은 캐스트 관용구. 설정·빈 셸은 자연히 null.</summary>
+    private IPrintPageProvider? PrintProviderView => ModuleHost.Content as IPrintPageProvider;
+
+    /// <summary>
+    /// 인쇄 진입 단일 경로 — Ctrl+P 액셀러레이터와 모듈 하단 바 인쇄 버튼(PrintRequested, 배치 2~5)이
+    /// 전부 여기로 온다. 양보 판단(A211 배치 1에서 확정): ① 오토리피트 = PrintHost 세션 가드가 1발로
+    /// 접는다(대화상자 표시 중 재요청도 무동작) ② 텍스트 입력 = 통과 없이 발화(문자 비생성 —
+    /// RegisterShortcuts 주석) ③ 탐색기 통과 표면(PassThroughTag) = 원 기능이 없어 양보 불요.
+    /// 단 S4('오픈 파일' 탐색)는 무동작 — keymap S4 무동작 계열(중앙을 탐색기가 덮고 있어 "지금
+    /// 보는 화면"이 인쇄 대상이 아니다). 계약 미구현 뷰·CanPrintNow false도 무동작 — 배치 1
+    /// 시점엔 구현 모듈이 0이라 Ctrl+P는 항상 무동작이 정상이다(부록 B 78 확정 범위 = 3모듈).
+    /// </summary>
+    private void RequestPrint()
+    {
+        if (IsOpenFileBrowsing) return;
+        if (PrintProviderView is not { CanPrintNow: true } provider) return;
+        _printHost ??= new Printing.PrintHost(this);
+        _ = _printHost.RequestPrintAsync(provider); // 실패 전부 내부 흡수(영어 안내 다이얼로그) — 예외 무전파
+    }
 
     /// <summary>
     /// 단축키·센서 트레이(A18)로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호) —
@@ -1361,6 +1405,14 @@ public sealed partial class MainWindow : Window
             {
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnPlaybackStateChanged();
+            });
+        // A211 배치 1: 모듈 하단 바 인쇄 버튼(배치 2~5에서 추가)의 신호 → 셸 인쇄 단일 경로.
+        // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(위와 같은 가드).
+        if (view is IPrintPageProvider printProvider)
+            printProvider.PrintRequested += () => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                RequestPrint();
             });
         // 하단 바만 남기는 접힘(A61): 판단은 뷰(핀 ON && 전체화면 아님), 실행은 셸.
         // 접기는 지금 보이는 뷰의 요청만 받고, 펼치기는 뷰가 내려간 뒤(Unloaded)에도 받아준다 —
