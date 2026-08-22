@@ -350,6 +350,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               your choice while you browse the folder.</li>
           <li><strong>Delete</strong> moves the current file to the Recycle Bin and shows the next picture.
               There is no confirmation and no toolbar button — the <kbd>Delete</kbd> key is the only way in.</li>
+          <li><strong>Print</strong> the picture with <kbd>Ctrl</kbd>+<kbd>P</kbd> or the print button in the
+              bottom bar. Windows brings up its own print dialog, with its own preview, where the printer,
+              the paper and the number of copies are chosen. The picture goes on one page, scaled as large as
+              the printable area of that page allows without cropping it, and the rotation you are looking at
+              — from EXIF or from <kbd>R</kbd> — is printed the same way. Zoom and Fit are screen settings and
+              change nothing on paper. The button is greyed out while no picture is open.</li>
           <li>Animated GIFs play.</li>
           <li>The bottom bar carries one run of text on the left: the file name, then
               <code>width×height</code>, the kind (<code>JPG 24-bit</code>), the size,
@@ -583,6 +589,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Esc</kbd></td><td>one step back: out of full screen, out of the Open file browser, or close the open file</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print what you are looking at (picture)</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>UI scale one step up / down (numpad <kbd>+</kbd> / <kbd>-</kbd> work too; hold to repeat)</td></tr>
           <tr><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>reset the UI scale to <em>System default</em></td></tr>
           <tr><td><kbd>Browser Back</kbd></td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
@@ -630,6 +637,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Image</td><td><kbd>F</kbd></td><td>re-apply the last Fit option</td></tr>
           <tr><td>Image</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>previous / next file in the folder</td></tr>
           <tr><td>Image</td><td><kbd>Delete</kbd></td><td>move to the Recycle Bin</td></tr>
+          <tr><td>Image</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print the picture</td></tr>
           <tr><td>Video</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
           <tr><td>Video</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
           <tr><td>Video</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>

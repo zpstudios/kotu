@@ -19,6 +19,8 @@ namespace KOTU.Module.AllReadable;
 ///  · <see cref="ITrayStatusProvider"/> — 트레이 아이콘 표시 내용(A54)도 자식 것을 그대로 중계.
 ///  · <see cref="IPlaybackStateSource"/> — 영상 자식의 재생 상태(A186 하단 바 자동 숨김)를 중계.
 ///    자식이 계약을 구현할 때만 HasPlaybackSurface가 참이 된다(문서·사진 자식이면 거짓).
+///  · <see cref="IPrintPageProvider"/> — 인쇄(A211)도 자식 것을 그대로 중계. 자식이 계약을
+///    구현하고 인쇄할 콘텐츠가 있을 때만 CanPrintNow가 참이다(계약 문서가 이 호스트를 명시한다).
 ///  · <see cref="IFileOpenTarget"/> — 셸이 "이 파일 네가 열래?"를 먼저 물어보는 지점(A24 유지).
 ///
 /// <b>워커 수명(A42)</b>: 자식 뷰의 워커·재생·구독은 자식이 <c>Unloaded</c>에서 스스로 정리한다.
@@ -28,7 +30,7 @@ namespace KOTU.Module.AllReadable;
 /// </summary>
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
-    IPlaybackStateSource
+    IPlaybackStateSource, IPrintPageProvider
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -55,6 +57,32 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>영상 자식이 지금 재생 중인가(A186) — 자식이 계약 미구현이면 false.</summary>
     public bool IsPlaying => _childView is IPlaybackStateSource { IsPlaying: true };
+
+    // ---------- 셸 계약: 인쇄 중계 (A211 배치 2, v0.221.0) ----------
+    // 자식의 하단 바를 통째로 얹는 구조라(ChildBarHost) 자식 모듈의 인쇄 버튼도 All Readable
+    // 화면에 그대로 나타난다 — 중계가 없으면 그 버튼과 셸 Ctrl+P가 둘 다 무동작이 된다
+    // (셸은 ModuleHost.Content = 이 뷰만 보고 계약을 묻는다 — MainWindow.PrintProviderView).
+    // 판단은 전부 자식이 하고 이 뷰는 그대로 흘린다(트레이 A54·재생 A186 중계와 같은 형).
+
+    /// <summary>자식의 인쇄 버튼 클릭을 그대로 셸로 올린다(A211) — 셸이 ShowModule에서 구독한다.</summary>
+    public event Action? PrintRequested;
+
+    /// <summary>지금 인쇄할 콘텐츠가 있는가 — 자식이 계약 미구현이거나 빈 상태면 false.</summary>
+    public bool CanPrintNow => _childView is IPrintPageProvider { CanPrintNow: true };
+
+    /// <summary>인쇄 작업 이름도 자식 것을 그대로(보통 파일 이름). 비면 셸이 앱 이름으로 대체한다.</summary>
+    public string PrintJobName =>
+        _childView is IPrintPageProvider provider ? provider.PrintJobName : string.Empty;
+
+    /// <summary>페이지 수 — 자식이 계약 미구현이면 0(셸이 안내 페이지로 대체).</summary>
+    public int GetPrintPageCount(PrintPageSpec spec) =>
+        _childView is IPrintPageProvider provider ? provider.GetPrintPageCount(spec) : 0;
+
+    /// <summary>페이지 요소 — 자식이 만든 것을 그대로 넘긴다(이 뷰는 요소를 만들지 않는다).</summary>
+    public Task<object?> CreatePrintPageAsync(int pageNumber, PrintPageSpec spec) =>
+        _childView is IPrintPageProvider provider
+            ? provider.CreatePrintPageAsync(pageNumber, spec)
+            : Task.FromResult<object?>(null);
 
     /// <summary>
     /// 트레이 아이콘 내용(A54): <b>지금 자식의 것을 그대로</b> 쓴다 — 자식이 영상이면 해상도·비트레이트,
@@ -129,6 +157,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         if (view is ICloseGuard guard) guard.UnsavedChanged += OnChildUnsavedChanged;
         if (view is ITrayStatusProvider tray) tray.TrayStatusChanged += OnChildTrayStatusChanged;
         if (view is IPlaybackStateSource playback) playback.PlaybackStateChanged += OnChildPlaybackStateChanged;
+        if (view is IPrintPageProvider print) print.PrintRequested += OnChildPrintRequested; // A211
         UpdateBars();
         TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
         PlaybackStateChanged?.Invoke(); // A186: 자식 교체도 재생 상태 재평가 대상이다(트레이와 같은 이유)
@@ -146,6 +175,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         if (_childView is ICloseGuard guard) guard.UnsavedChanged -= OnChildUnsavedChanged;
         if (_childView is ITrayStatusProvider tray) tray.TrayStatusChanged -= OnChildTrayStatusChanged;
         if (_childView is IPlaybackStateSource playback) playback.PlaybackStateChanged -= OnChildPlaybackStateChanged;
+        if (_childView is IPrintPageProvider print) print.PrintRequested -= OnChildPrintRequested; // A211
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
@@ -163,6 +193,13 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>영상 자식의 재생 상태 변화를 그대로 셸로 올린다(A186 — 중계만, 판단은 셸이).</summary>
     private void OnChildPlaybackStateChanged() => PlaybackStateChanged?.Invoke();
+
+    /// <summary>
+    /// 자식의 인쇄 요청(하단 바 버튼)을 그대로 셸로 올린다(A211 — 중계만).
+    /// 자식 교체 자체는 이 이벤트를 쏘지 않는다: 트레이·재생과 달리 <b>상태 변화 통지가 아니라
+    /// 행동 신호</b>라, 자식이 바뀌었다고 인쇄 대화상자가 떠서는 안 된다.
+    /// </summary>
+    private void OnChildPrintRequested() => PrintRequested?.Invoke();
 
     /// <summary>자식이 파일을 열었다(첫 로드·자식 내부 탐색). 셸에 중계해 오버레이·탐색기를 맞춘다.</summary>
     private void OnChildContentOpened(string path)

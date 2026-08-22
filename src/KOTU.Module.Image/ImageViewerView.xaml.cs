@@ -21,9 +21,11 @@ namespace KOTU.Module.Image;
 /// UI 스레드는 비트맵 표시만 한다 — 빠른 ←/→ 연타의 낡은 결과는 적용 직전의 현재 파일
 /// 재검증이 버린다(A194 — 이웃 선읽기 캐시 히트는 대기 없이 완료돼 직렬 순서만으로는 부족).
 /// A194: 표시 완료 후 양옆 이웃 각 1장을 같은 워커로 선읽기해 항해 체감 지연을 줄인다.
+/// A211 배치 2(v0.221.0): 인쇄 공급자(<see cref="IPrintPageProvider"/>) — 보고 있는 사진 1장을
+/// 인쇄 가능 영역 안 contain으로 담은 1페이지를 셸 PrintHost에 넘긴다(Ctrl+P·하단 바 버튼).
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
-    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider
+    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IPrintPageProvider
 {
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패, 회전(A191) 시점.</summary>
     public event Action? TrayStatusChanged;
@@ -93,6 +95,27 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private string _exifText = string.Empty; // A9 EXIF 요약 — 순번 뒤에 이어 붙인다(정보 손실 금지)
     private ModuleWorker? _worker; // 폴더 스캔·파일 읽기·디코드 전용(A42) — 뷰별 분리
 
+    /// <summary>
+    /// A211 배치 2: 인쇄 페이지의 비트맵 재료 = <b>지금 표시 중인 이미지의 인코딩 바이트</b>
+    /// (일반 경로는 원본 파일 바이트, psd는 Magick이 만든 PNG 바이트). 표시 상태와 한 몸이라
+    /// <c>ImageControl.Source</c>와 <b>같은 자리에서 함께 세우고 함께 비운다</b>.
+    /// <para>
+    /// 표시용 <c>BitmapImage</c>를 인쇄 페이지의 Image에 그대로 물리지 않는 이유(소스 공유 판정):
+    /// ① 저장소에 <b>하나의 ImageSource를 두 Image가 나눠 쓰는 선례가 0건</b>이다 — BitmapImage
+    ///    생성 지점 전수(PdfPane·ThumbnailExplorer·ExplorerPane·BrandAssets·BrandSpinner·
+    ///    SponsorAds·이 파일)가 소비처마다 새로 만든다. CLAUDE.md §3 "저장소 안에 실제로 쓰이고
+    ///    있는 형태만 복제한다"에 걸린다. ② WinUI DependencyObject 공유 실패는 <b>런타임에만</b>
+    ///    드러난다(v0.174.1 실사례 — 공유 Geometry를 PathIcon.Data에 걸어 앱이 죽었고 CI는 컴파일만
+    ///    하므로 못 잡았다). 인쇄 경로는 실기기에서만 검증되므로 같은 종류의 도박을 하지 않는다.
+    /// </para>
+    /// <para>
+    /// 인쇄 시점에 파일을 다시 읽지 않는 이유: psd(Magick 경로)는 원본 바이트를 WIC가 못 읽어
+    /// 재현이 안 되고, 보던 파일이 그새 지워졌을 수도 있다. 메모리는 인코딩 바이트 1장분 —
+    /// A194 선읽기 캐시가 이미 같은 성질로 2장분을 허용한 예산 안이다.
+    /// </para>
+    /// </summary>
+    private byte[]? _printBytes;
+
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU image worker");
 
@@ -120,6 +143,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
             _preloadCache.Clear(); // A194 — 뷰 언로드 = 선읽기 캐시 무효화(대형 바이트를 붙들지 않는다)
+            _printBytes = null;    // A211 — 인쇄 재료도 같은 이유로 놓는다(뷰가 내려가면 인쇄 대상도 없다)
         };
 
         // A98: 휠 = 줌(사진 특례 — Ctrl 없이 휠 단독으로도, Ctrl+휠도 동일). 내장 Ctrl+휠 줌은
@@ -460,6 +484,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         if (path is null)
         {
             ImageControl.Source = null;
+            _printBytes = null; // A211 — 표시가 비면 인쇄 재료도 비운다(CanPrintNow false)
             PlaceholderText.Visibility = Visibility.Visible;
             UpdateStatusBar();
             TrayStatusChanged?.Invoke(); // A54: 볼 파일이 없어졌다 → 유휴("IMG")로
@@ -500,6 +525,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             if (_navigator?.Current != path) return; // A194 — SetSourceAsync 대기 중의 항해도 폐기
 
             ImageControl.Source = bitmap;
+            _printBytes = data; // A211 — 인쇄 재료(표시 소스와 한 몸으로 세운다)
             PlaceholderText.Visibility = Visibility.Collapsed;
             _userRotation = 0;
             ApplyRotation();
@@ -514,6 +540,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         catch (Exception ex)
         {
             ImageControl.Source = null;
+            _printBytes = null; // A211 — 로드 실패도 "인쇄할 그림 없음"이다(표시 소스와 같은 처리)
             FileNameText.Text = $"Failed to load: {Path.GetFileName(path)} ({ex.Message})";
             // 이전 이미지 메타가 남지 않게 조각을 전부 비운다. A149에서 해상도가 MetaText로
             // 옮겨졌으므로 픽셀 크기도 함께 비워야 실패한 파일에 직전 파일의 해상도가 붙지 않는다.
@@ -526,6 +553,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             MetaText.Text = failedMeta;
             ToolTipService.SetToolTip(MetaText, failedMeta.Length > 0 ? failedMeta : null);
             UpdateZoomText(); // A149: 보여 줄 이미지가 없으니 배율 표기도 비운다(위에서 Source=null)
+            UpdatePrintButton(); // A211 — 이 경로는 UpdateStatusBar를 타지 않는다(파일명 칸에 오류 문구를 남겨야 해서)
             TrayStatusChanged?.Invoke();
         }
     }
@@ -564,6 +592,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
 
         ImageControl.Source = bitmap;
+        _printBytes = png; // A211 — psd도 이 시점엔 PNG 바이트라 인쇄 파이프가 같다(BitmapImage 디코드 가능)
         PlaceholderText.Visibility = Visibility.Collapsed;
         _userRotation = 0;
         ApplyRotation();
@@ -787,18 +816,27 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     // ---------- 회전 / 창맞춤 ----------
 
+    /// <summary>
+    /// 지금 화면에 적용 중인 총 회전 각도(도, 0/90/180/270) = EXIF 회전 + R 키 누적 회전.
+    /// <b>이 뷰에서 회전 각의 단일 원본</b>이다 — 표시 변환(<see cref="ApplyRotation"/>),
+    /// 축 교환 판정(<see cref="RotationSwapsAxes"/>), 인쇄 페이지 변환
+    /// (<see cref="CreatePrintPageAsync"/>)이 모두 이 한 값을 본다(A211 배치 2에서 이름을 붙였다 —
+    /// 식 자체는 v0.29.0부터 무변경이고 계산 결과도 종전과 같다).
+    /// </summary>
+    private int TotalRotation => (_exifRotation + _userRotation) % 360;
+
     private void ApplyRotation()
     {
-        RotationTransform.Angle = (_exifRotation + _userRotation) % 360;
+        RotationTransform.Angle = TotalRotation;
         UpdateFit();
     }
 
     /// <summary>
     /// 표시 축이 원본 디코드 축과 뒤바뀐 상태인가 = 총 회전(EXIF + R 키 누적)이 90°/270°인가.
-    /// 레이아웃 제한(<see cref="UpdateFit"/>)과 트레이 해상도 2줄(A191)이 <b>같은 한 판정</b>을
-    /// 봐야 "보이는 모양"과 "표기"가 어긋나지 않는다.
+    /// 레이아웃 제한(<see cref="UpdateFit"/>)과 트레이 해상도 2줄(A191), 인쇄 맞춤 계산
+    /// (A211 배치 2)이 <b>같은 한 판정</b>을 봐야 "보이는 모양"과 "표기"가 어긋나지 않는다.
     /// </summary>
-    private bool RotationSwapsAxes => (_exifRotation + _userRotation) % 180 != 0;
+    private bool RotationSwapsAxes => TotalRotation % 180 != 0;
 
     // ---------- 보기 모드 (A83: 100% / Contain / Fit width / Fit height — 3모듈 공통) ----------
 
@@ -1035,6 +1073,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     private void UpdateStatusBar()
     {
+        // A211: 인쇄 버튼 활성은 아래 두 분기(파일 있음·없음)에 공통이라 분기 앞에서 한 번 갱신한다.
+        // 이 메서드는 표시 상태가 확정된 뒤에만 불린다(Source·_printBytes 대입 다음) — 호출 지점
+        // 전수: 생성자 빈 상태 · LoadCurrentAsync 성공/빈 상태 · LoadViaMagickAsync 성공.
+        // 예외는 로드 실패 경로 하나뿐이고 거기서는 직접 부른다(그쪽 주석 참조).
+        UpdatePrintButton();
         var path = _navigator?.Current;
         if (path is null)
         {
@@ -1166,6 +1209,140 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         HotkeySupport.Register(this, FitButton, FitKey, () => SetFitMode(_lastFitOption));
         UpdateFitButton(); // Fit 툴팁은 표시 상태를 따라가므로 초기값도 여기서 만든다
     }
+
+    // ---------- 인쇄 (A211 배치 2, v0.221.0 — 계약 = IPrintPageProvider, 소비자 = 셸 PrintHost) ----------
+    // 사양 단일 원본 = docs/A211-print-research.md §3-2 + 부록 B 78(이미지 = contain 고정·배치 옵션 없음).
+    // 이 절이 하는 일은 셋뿐이다: ① "지금 인쇄 가능한가"를 표시 상태에서 답한다 ② 1페이지짜리
+    // 인쇄 전용 요소를 매 호출 새로 조립한다 ③ 하단 바 버튼 클릭을 셸로 흘린다.
+    // 대화상자·미리보기·페이지 수명은 전부 셸(PrintHost)이 갖는다 — 여기서 인쇄 API를 만지지 않는다.
+
+    /// <summary>
+    /// 모듈 하단 바 인쇄 버튼(PrintButton) → 셸 인쇄 단일 경로(MainWindow.RequestPrint).
+    /// 셸이 ShowModule에서 구독한다 — 뷰는 셸을 모른 채 신호만 쏜다(계약 규정).
+    /// </summary>
+    public event Action? PrintRequested;
+
+    /// <summary>
+    /// 지금 인쇄할 그림이 있는가 = <b>표시 중인 비트맵</b>(첫 항)과 <b>그 재료</b>(둘째 항)가 함께 있는가.
+    /// 첫 항의 기준은 <see cref="UpdateZoomText"/>가 쓰는 것과 같다(<c>ImageControl.Source</c>) —
+    /// "파일 없음"과 "로드 실패"를 한 조건으로 덮는 이 뷰의 관용구다. 둘째 항은 페이지를 실제로
+    /// 만들 수 있는지(<see cref="_printBytes"/>)이고, 두 값은 늘 같은 자리에서 함께 세워지고 비워진다.
+    /// 빈 뷰(파일 없음)는 false — 셸 Ctrl+P·하단 바 버튼 둘 다 잠잠해진다.
+    /// </summary>
+    public bool CanPrintNow => ImageControl.Source is not null && _printBytes is { Length: > 0 };
+
+    /// <summary>OS 인쇄 큐·대화상자에 뜰 작업 이름 = 파일 이름. 비면 셸이 앱 이름으로 대체한다.</summary>
+    public string PrintJobName =>
+        _navigator?.Current is { } path ? Path.GetFileName(path) : string.Empty;
+
+    /// <summary>
+    /// 이미지는 언제나 <b>1페이지</b>다(부록 B 78 — 배치 옵션 UI 없음, 여러 장 모아 찍기 없음).
+    /// 규격(용지·해상도)에 따라 달라질 여지가 없어 <paramref name="spec"/>은 보지 않는다.
+    /// 인쇄할 그림이 없으면 0 — 셸이 안내 페이지 1장으로 대체한다(계약).
+    /// </summary>
+    public int GetPrintPageCount(PrintPageSpec spec) => CanPrintNow ? 1 : 0;
+
+    /// <summary>
+    /// 인쇄 페이지 1장을 새로 조립한다 — 용지 크기의 <c>Canvas</c>(흰 배경) 위에 새 <c>Image</c> 하나.
+    /// 미리보기(GetPreviewPage)와 본인쇄(AddPages)가 <b>같은 이 메서드</b>를 타므로 호출마다
+    /// 새 인스턴스를 만든다(v0.174.1 교훈 — WinUI 요소는 부모가 하나뿐이다. 넘긴 참조는 셸이 쓰고 버린다).
+    /// <para>
+    /// 맞춤(contain)은 <b>용지 전체가 아니라 인쇄 가능 영역(Imageable)</b> 기준이다 — 용지 기준으로
+    /// 잡으면 프린터가 물리적으로 못 찍는 가장자리에서 그림이 잘린다. 배율은 상한을 두지 않는다:
+    /// 부록 B 78의 "여백 안 최대"가 확정 사양이고, 원본 크기(DPI 반영) 배치는 그 자리에서 기각됐다.
+    /// 화면 Contain(A83)이 "축소만"인 것과 다른데, 그쪽은 작은 그림이 화면에서 뭉개지지 않게 하는
+    /// 화면 전용 결정이라 종이에는 그대로 옮기지 않는다(의도된 차이 — 뒤집지 말 것).
+    /// </para>
+    /// <para>
+    /// 회전은 화면과 <b>같은 한 값</b>(<see cref="TotalRotation"/>)을 그대로 옮긴다. 90°/270°에서는
+    /// 종이 위에서 차지하는 축이 뒤바뀌므로(<see cref="RotationSwapsAxes"/>) 맞춤 계산의 폭·높이를
+    /// 맞바꾼다 — 이 교환을 빼먹으면 세로 사진이 잘리는 고전 버그가 된다.
+    /// 요소의 <b>레이아웃</b> 크기는 회전 전 축 그대로다(RotateTransform은 RenderTransform이라
+    /// 레이아웃을 바꾸지 않는다). 그래서 회전 후 축으로 구한 배율을 원본 축에 곱해 크기를 주고,
+    /// 배치는 <b>Canvas 절대 좌표</b>로 한다: 90°/270°에서는 회전 전 상자가 영역보다 넓을 수 있는데
+    /// (예: 가로 사진을 세로 용지에 눕혀 찍을 때) Canvas는 자식을 항상 <b>원하는 크기 그대로</b>
+    /// 배치해 잘림 여지가 없다(Grid의 정렬 배치는 슬롯보다 큰 자식에서 레이아웃 잘림 규칙에
+    /// 걸릴 수 있다 — 그 규칙에 기대지 않는다). 좌표는 회전 중심(요소 중앙)이 영역 중앙에 오도록
+    /// 잡으므로, 회전 후 그림은 인쇄 가능 영역 한가운데에 앉는다.
+    /// </para>
+    /// <para>
+    /// 비동기: 계약이 Task를 돌려주는 이유가 여기 있다 — <b>디코드가 끝난 뒤에야</b> 반환한다.
+    /// 먼저 반환하면 미리보기·인쇄물이 빈 페이지가 된다. 디코드 폭은 줄이지 않는다(DecodePixelWidth
+    /// 미지정 = 원본 해상도) — 종이 해상도는 프린터가 정하고, 여기서 줄이면 되돌릴 수 없다.
+    /// 그래서 <paramref name="spec"/>의 DpiX/DpiY도 보지 않는다(그 값은 PDF처럼 <b>우리가</b>
+    /// 래스터화하는 공급자용이다 — 조사 §1-ⓒ).
+    /// </para>
+    /// null을 돌려주면 셸이 안내 페이지로 대체한다(인쇄 파이프는 계속 간다) — 예외를 던지지 않는다.
+    /// </summary>
+    public async Task<object?> CreatePrintPageAsync(int pageNumber, PrintPageSpec spec)
+    {
+        if (pageNumber != 1) return null;                       // 1페이지 고정 — 그 밖의 요청은 규격 위반
+        if (_printBytes is not { Length: > 0 } bytes) return null;
+
+        // 매 호출 새 BitmapImage — 표시용 소스를 나눠 쓰지 않는다(_printBytes 주석의 공유 판정).
+        // 스트림 → BitmapImage 변환은 LoadCurrentAsync와 같은 관용구다(dispose 시점 포함).
+        var bitmap = new BitmapImage();
+        using (var stream = new MemoryStream(bytes))
+            await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+
+        // 원본 픽셀 크기: 표시 경로가 WIC 헤더에서 확정해 둔 값이 정본이고, 그걸 못 읽은 파일
+        // (메타데이터 미지원·손상)은 방금 디코드한 비트맵 크기로 대신한다.
+        var sourceWidth = _pixelWidth > 0 ? (double)_pixelWidth : bitmap.PixelWidth;
+        var sourceHeight = _pixelHeight > 0 ? (double)_pixelHeight : bitmap.PixelHeight;
+        if (sourceWidth <= 0 || sourceHeight <= 0) return null;
+
+        // 인쇄 가능 영역. 규격이 영역을 안 주면(0 이하 — 이상 규격 방어) 용지 전체를 영역으로 본다
+        // (셸 PrintHost의 예비 규격도 같은 형: 용지 = 영역).
+        var areaWidth = spec.ImageableWidth > 0 ? spec.ImageableWidth : spec.PageWidth;
+        var areaHeight = spec.ImageableHeight > 0 ? spec.ImageableHeight : spec.PageHeight;
+        var areaX = spec.ImageableWidth > 0 ? spec.ImageableX : 0;
+        var areaY = spec.ImageableHeight > 0 ? spec.ImageableY : 0;
+        if (areaWidth <= 0 || areaHeight <= 0) return null;
+
+        // 종이 위에서 차지하는 축(회전 반영) 기준으로 배율을 구한다 — 90°/270°면 폭·높이 교환.
+        var swapped = RotationSwapsAxes;
+        var printedWidth = swapped ? sourceHeight : sourceWidth;
+        var printedHeight = swapped ? sourceWidth : sourceHeight;
+        var scale = Math.Min(areaWidth / printedWidth, areaHeight / printedHeight);
+        if (double.IsNaN(scale) || double.IsInfinity(scale) || scale <= 0) return null;
+
+        var layoutWidth = sourceWidth * scale;   // 회전 전(레이아웃) 크기
+        var layoutHeight = sourceHeight * scale;
+        // 타입 이름 주의: 이 네임스페이스(KOTU.Module.Image) 안에서 `Image`는 네임스페이스로 먼저
+        // 해석되므로 XAML 요소 타입은 반드시 완전 이름으로 적는다(SponsorAds.Apply와 같은 형).
+        var image = new Microsoft.UI.Xaml.Controls.Image
+        {
+            Source = bitmap,
+            Stretch = Stretch.Uniform,
+            Width = layoutWidth,
+            Height = layoutHeight,
+            RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5), // 요소 중앙을 회전 중심으로
+            RenderTransform = new RotateTransform { Angle = TotalRotation },
+        };
+        // 회전 중심(= 요소 중앙)을 인쇄 가능 영역 중앙에 맞춘다 → 회전 후 그림이 영역 한가운데.
+        Canvas.SetLeft(image, areaX + ((areaWidth - layoutWidth) / 2));
+        Canvas.SetTop(image, areaY + ((areaHeight - layoutHeight) / 2));
+
+        // 색은 명시 지정(흰 종이) — 테마 브러시는 다크 테마에서 검정으로 풀려 온 페이지가 잉크가 된다(계약 규칙).
+        var page = new Canvas
+        {
+            Width = spec.PageWidth,
+            Height = spec.PageHeight,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+        };
+        page.Children.Add(image);
+        return page;
+    }
+
+    /// <summary>
+    /// 인쇄 버튼 활성 = <see cref="CanPrintNow"/>(부록 B 78 규격 — 인쇄할 콘텐츠가 없으면 비활성).
+    /// 셸 Ctrl+P는 이 버튼을 보지 않고 같은 속성을 직접 물으므로(MainWindow.RequestPrint)
+    /// 버튼 표기와 키 동작이 어긋날 수 없다.
+    /// </summary>
+    private void UpdatePrintButton() => PrintButton.IsEnabled = CanPrintNow;
+
+    /// <summary>버튼 클릭 = 셸에 인쇄 요청 신호 1발(배선은 셸이 — 계약 문서 규정).</summary>
+    private void OnPrintButtonClick(object sender, RoutedEventArgs e) => PrintRequested?.Invoke();
 
     // ---------- Ctrl 정보 오버레이 (v0.25.0) ----------
 

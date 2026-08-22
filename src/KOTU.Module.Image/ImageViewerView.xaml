@@ -76,6 +76,8 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <!-- A211 배치 2(v0.221.0): 인쇄 버튼 칸(c4) — 아래 PrintButton 주석 참조. -->
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <!-- A27(v0.107.0): 하단 바 버튼은 1칸(32×32)·2칸(84×32) 두 규격만
                      (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
@@ -192,6 +194,28 @@
                         </DropDownButton.Flyout>
                     </DropDownButton>
                 </StackPanel>
+                <!-- A211 배치 2(v0.221.0): 인쇄 c4 — 규격은 셸 인쇄 절 주석(MainWindow.xaml.cs,
+                     부록 B 78 확정)이 정본이다: 1칸(32×32) 버튼 · 툴팁 "Print (Ctrl+P)" ·
+                     A34 문자 핫키는 배정하지 않는다(Ctrl+P 셸 액셀러레이터가 유일한 키) ·
+                     활성 조건 = IPrintPageProvider.CanPrintNow. 여기 IsEnabled="False"는
+                     "파일 없음"으로 시작하는 초기값일 뿐이고, 이후 값의 단일 출처는
+                     코드의 UpdatePrintButton()이다. 클릭 = PrintRequested 발화 한 줄
+                     (셸이 ShowModule에서 구독해 MainWindow.RequestPrint로 흘린다).
+                     A11(영상 루프 c9) 칸 추가 선례와 같은 형 — 새 칸은 오른쪽 끝에 붙인다.
+                     ⚠️ 폭 계수(A144·A11의 여유 산식에 해당하는 것): **이 바에는 재계수할 파생
+                     수치가 없다.** 영상 바의 축약 임계(UpdateCompactTransport 640)는 고정 폭
+                     요소 합에서 나온 수치인데, 이미지 바는 애초에 폭 임계 축약 로직을 두지 않고
+                     남는 폭에서 메타 텍스트를 말줄임으로 흡수하는 설계다(위 FileInfoPanel 주석).
+                     늘어난 38(버튼 32 + ColumnSpacing 6)은 * 칸(파일명·메타)에서 나온다. -->
+                <Button
+                    x:Name="PrintButton"
+                    Grid.Column="4"
+                    Style="{StaticResource BottomBarButtonStyle}"
+                    IsEnabled="False"
+                    ToolTipService.ToolTip="Print (Ctrl+P)"
+                    Click="OnPrintButtonClick">
+                    <FontIcon Glyph="&#xE749;" FontSize="18" />
+                </Button>
             </Grid>
         </Border>
     </Grid>

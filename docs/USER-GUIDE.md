@@ -87,6 +87,12 @@ Seven modules. Switch between them from the menu at the bottom left.
 - **Fit** — see [2.9](#29-the-fit-button). The Image module keeps your choice while you browse the folder.
 - **Delete** removes the current file to the Recycle Bin and shows the next picture. There is no
   confirmation dialog and no toolbar button — the `Delete` key is the only way in.
+- **Print** the picture with `Ctrl+P` or the print button in the bottom bar. Windows brings up its
+  own print dialog, with its own preview, where the printer, the paper and the number of copies are
+  chosen. The picture goes on one page, scaled as large as the printable area of that page allows
+  without cropping it, and the rotation you are looking at — from EXIF or from `R` — is printed the
+  same way. Zoom and Fit are screen settings and change nothing on paper. The button is greyed out
+  while no picture is open.
 - Animated GIFs play.
 - The bottom bar carries one run of text on the left: the file name, then `width×height`, the kind
   (`JPG 24-bit`), the size, `position/total`, and an EXIF summary (date taken, camera, exposure,
@@ -303,6 +309,7 @@ These work in every module.
 | `Esc` | one step back: out of full screen, out of the Open file browser, or close the open file |
 | `Shift+N` | new window of the module you are looking at |
 | `Ctrl+S` | save (text document) |
+| `Ctrl+P` | print what you are looking at (picture) |
 | `Ctrl` + `+` / `-` | UI scale one step up / down (numpad `+` / `-` work too; hold to repeat) |
 | `Ctrl` + numpad `*` | reset the UI scale to *System default* |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
@@ -358,6 +365,7 @@ box or while you are typing to jump through the file list.
 | Image | `F` | re-apply the last Fit option |
 | Image | `←` `→` | previous / next file in the folder |
 | Image | `Delete` | move to the Recycle Bin |
+| Image | `Ctrl+P` | print the picture |
 | Video | `Space` | play / pause |
 | Video | `←` `→` | back / forward 5 seconds |
 | Video | `↑` `↓` | volume |
