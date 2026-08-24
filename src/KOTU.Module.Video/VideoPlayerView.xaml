@@ -86,7 +86,11 @@
         <Grid x:Name="TransportBar" Grid.Row="1" Padding="0,2" ColumnSpacing="6">
             <!-- 열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
                  1:1 버튼 칸은 A111에서 제거 — 100%가 Fit 플라이아웃 4옵션에 들어갔다.
-                 전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다. -->
+                 전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다.
+                 A217(v0.229.0) 정렬 계약: 공통 클러스터(재생·위치·시크·길이·음소거·볼륨·배속 =
+                 c1~c7)의 시작·끝 x가 오디오 바와 일치한다 — 좌군(루프) 32+간격 6 = 38,
+                 우군(자막 32 + Fit 64 + 간격 2×6) = 108을 오디오가 스페이서로 맞춘 상태.
+                 이 바의 양옆 구성·폭을 바꾸면 오디오 바(AudioPlayerView.xaml)도 함께 재계수할 것. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />

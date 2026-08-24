@@ -153,6 +153,22 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         return TransportBar;
     }
 
+    /// <summary>
+    /// A217(v0.229.0): 좁은 하단 바 축약 — 비디오 A40 로직의 동형 이식(임계·숨김 대상 동일).
+    /// A217의 공통 클러스터 정렬로 이 바의 고정 폭 합이 비디오와 같은 426이 됐다
+    /// (XAML TransportBar 헤더 주석의 재계수 참조 — 종전 394 시절의 "축약 불요" 판정 소멸).
+    /// 임계 640과 산식 계보는 비디오 UpdateCompactTransport 주석이 정본이다. 숨김 대상
+    /// (볼륨·시간 텍스트 2개)까지 비디오와 같아야 축약 후에도 클러스터 x가 일치한다.
+    /// 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
+    /// </summary>
+    private void UpdateCompactTransport(double width)
+    {
+        var visibility = width < 640 ? Visibility.Collapsed : Visibility.Visible;
+        VolumeSlider.Visibility = visibility;
+        PositionText.Visibility = visibility;
+        DurationText.Visibility = visibility;
+    }
+
     private const long SeekStepMs = 5_000;
     private const int VolumeStep = 5;
     private const long ResumeReportIntervalMs = 10_000;
@@ -272,6 +288,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         // 휠 = 볼륨 (플레이어 관례). 자식 요소가 소비해도 받도록 handledEventsToo.
         AudioSurface.AddHandler(PointerWheelChangedEvent,
             new PointerEventHandler(OnSurfaceWheel), handledEventsToo: true);
+
+        // A217: 바 폭이 좁으면 볼륨 슬라이더·시간 텍스트를 숨긴다(비디오 A40 훅의 동형 —
+        // 셸 하단 바로 옮겨진 뒤에도 유효).
+        TransportBar.SizeChanged += (_, e) => UpdateCompactTransport(e.NewSize.Width);
 
         // 시크 슬라이더 스크럽 감지: 드래그 중에는 시킹하지 않고 놓을 때 1회만 시킹한다.
         // (드래그 틱마다 p.Time을 설정하면 시킹이 폭주하는 실기기 버그 — 비디오와 동일 대응)
