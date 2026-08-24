@@ -649,6 +649,11 @@ public sealed partial class DocumentView : UserControl,
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
         UpdateZoomText(); // A181: _path가 잡혔다 — 하단 바에 현재 배율 표시(항상, 100% 포함)
+        // A214: 파일이 바뀌면 텍스트 갈래 Fit 표시는 100% 아이콘으로 회귀(A30 준용 — 기억 안 함.
+        // 줌 %는 안 건드린다). 위 HidePdf의 ShowTextFitState는 _path가 서기 전이라(빈 화면 판정
+        // 가능) 상태가 선 지금 다시 부른다 — 같은 동기 흐름 안이라 중간 표시는 그려지지 않는다.
+        _lastTextFitOption = PdfFitMode.ActualSize;
+        ShowTextFitState();
         _shownPath = path;
         UpdateNewFileButton(); // A189: 콘텐츠가 열렸다 — New text file 비활성
         UpdatePrintButton(); // A211 배치 4: 텍스트 편집 대상 확보 — 인쇄 가능(예약 ⑤의 갈래 상태 변화 지점)
@@ -747,6 +752,9 @@ public sealed partial class DocumentView : UserControl,
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = UntitledDisplayName;
         UpdateZoomText(); // A181: 무제도 텍스트 편집 — 배율 표시
+        // A214: 무제도 텍스트 갈래 — Fit 조절기 활성(ApplyLoadedText와 같은 회귀·재호출 이유).
+        _lastTextFitOption = PdfFitMode.ActualSize;
+        ShowTextFitState();
         UpdateNewFileButton();
         UpdatePrintButton(); // A211 배치 4: 무제도 인쇄 대상(_untitled) — 작업명은 UntitledDisplayName
         // A224: 토글 재판정 — 위 ResetRenderState는 _untitled가 서기 전에 돌았다(직전이 PDF·빈
@@ -792,7 +800,8 @@ public sealed partial class DocumentView : UserControl,
     // 에디터는 Collapsed일 뿐 내용은 그대로다(렌더는 읽기 전용 표시일 뿐 — 더티·저장·A113 체계
     // 전부 에디터 버퍼가 정본). A225: 줌(A181)은 렌더 뷰에도 같은 축(_zoomPercent)이 적용된다
     // (ApplyRenderZoom — ZoomFactor + 랩 폭 보정. 편집과 렌더를 오가도 %가 이어진다).
-    // Fit(A145)은 에디터 모드 기준 그대로다(렌더 모드 Fit은 범위 밖).
+    // Fit(A145→A214): 텍스트 갈래(편집·잠금 뷰·렌더 뷰 공통)에서도 활성 — Fit height만 비활성
+    // (높이 무한). 세 옵션 전부 SetZoom(100) 경유라 렌더 뷰의 ZoomFactor도 자동 정합된다.
     //
     // A193(분할 조립 축): 렌더 진입은 첫 조각(RenderChunkBlocks)만 즉시 조립하고 나머지는
     // CompositionTarget.Rendering 틱당 한 조각씩 append한다(StartRenderAppendLoop). 루프는
@@ -1214,9 +1223,9 @@ public sealed partial class DocumentView : UserControl,
         PageInfoText.Text = string.Empty;
         FileNameText.Text = Path.GetFileName(path);
 
-        // A49→A145: Fit 조절기는 이제 항상 보이고(텍스트 모드는 비활성 "1/1") PDF에서 4옵션이
-        // 활성화된다. 파일이 바뀌면 버튼 표시도 Contain으로 회귀(A30 규칙, 기억 안 함) —
-        // 실제 배율 적용은 PdfPane.LoadAsync가 한다.
+        // A49→A145→A214: Fit 조절기는 항상 보이고 PDF에서 4옵션 전부 활성이다(텍스트 갈래는
+        // Fit height만 빼고 활성 — ShowTextFitState). 파일이 바뀌면 버튼 표시도 Contain으로
+        // 회귀(A30 규칙, 기억 안 함) — 실제 배율 적용은 PdfPane.LoadAsync가 한다.
         _lastFitOption = PdfFitMode.Contain;
         ShowPdfFitState();
 
@@ -1247,7 +1256,8 @@ public sealed partial class DocumentView : UserControl,
         _pdfPane.Clear();
         _pdfPane.Visibility = Visibility.Collapsed;
         PageInfoText.Visibility = Visibility.Collapsed;
-        ShowTextFitState(); // A145: 숨기지 않고 비활성 "1/1"로 (구 A49의 Collapsed를 대체)
+        ShowTextFitState(); // A145→A214: 텍스트 갈래 상태로 — 파일·무제가 있으면 활성,
+                            // 빈 화면 복귀면 비활성 "1/1"(판정은 저쪽이 _path·_untitled로 한다)
         // A211 배치 3: PDF 갈래 이탈(텍스트/무제 전환·열기 실패·빈 화면 복귀 전부 이 관문을
         // 지난다) — 재판정. OpenPdf 성공과 이 둘이 PDF 인쇄 상태 변화의 호출 전수다(배치 4부터는
         // 텍스트 갈래 지점 3곳 — ApplyLoadedText·StartUntitled·OpenPdf 진입 — 이 추가로 부른다).
@@ -1305,48 +1315,79 @@ public sealed partial class DocumentView : UserControl,
     // ---------- PDF 맞춤 보기 (A49 — A30 규격) ----------
 
     /// <summary>
-    /// A30 규격: Fit 버튼 본체가 표시·재적용할 마지막 핏 옵션. A83 이후 100%도 플라이아웃
-    /// 옵션이라 ActualSize까지 들어온다(1:1 별도 버튼은 A111에서 없어졌다).
+    /// A30 규격: Fit 버튼 본체가 표시·재적용할 마지막 핏 옵션(PDF 갈래 전용 — A214에서 텍스트
+    /// 갈래는 _lastTextFitOption으로 분리했다. 갈래별 상태라 PDF·텍스트를 오가도 서로의 표시를
+    /// 오염시키지 않는다). A83 이후 100%도 플라이아웃 옵션이라 ActualSize까지 들어온다
+    /// (1:1 별도 버튼은 A111에서 없어졌다).
     /// 기억하지 않는다 — 파일이 바뀌면 Contain으로 회귀(A30 규칙).
     /// </summary>
     private PdfFitMode _lastFitOption = PdfFitMode.Contain;
 
     /// <summary>
+    /// A214: 텍스트 갈래(파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)의 마지막 핏 옵션. FitHeight는
+    /// 들어오지 않는다(높이 무한 — 플라이아웃 항목 자체가 텍스트 갈래에서 비활성).
+    /// 기억하지 않는다 — 파일이 바뀌면 ActualSize(100% 아이콘)로 회귀(A30 규칙 준용).
+    /// 회귀는 표시뿐이고 줌 %는 건드리지 않는다(텍스트 기본 = 현재 줌 그대로 — 사양).
+    /// </summary>
+    private PdfFitMode _lastTextFitOption = PdfFitMode.ActualSize;
+
+    /// <summary>
+    /// A214: Fit 조절기의 현재 갈래 판정 — PDF 패널이 표시 중이면 PDF 갈래, 아니면 텍스트 갈래.
+    /// OpenPdf는 ShowPdfFitState 전에 Visibility를 세우고 HidePdf는 ShowTextFitState 전에
+    /// 내리므로(호출 순서 계약) 이 판정은 두 상태 함수·핸들러 어디서든 일관된다.
+    /// </summary>
+    private bool IsPdfFitBranch => _pdfPane is not null && _pdfPane.Visibility == Visibility.Visible;
+
+    /// <summary>
     /// A145: PDF 모드 진입 — Fit 조절기(본체 + 화살표) 활성. 본체 내용·툴팁은 UpdateFitButton()이
     /// 마지막 옵션으로 맞춘다. 짝은 아래 ShowTextFitState() — 활성/비활성 전환은 이 한 쌍만 한다.
+    /// A214: 텍스트 갈래가 꺼 둔 Fit height 항목도 여기서 되살린다(PDF는 4옵션 전부).
     /// </summary>
     private void ShowPdfFitState()
     {
         FitButton.IsEnabled = true;
         FitOptionsButton.IsEnabled = true;
+        FitHeightItem.IsEnabled = true; // A214: 텍스트 갈래에서 꺼졌을 수 있다 — PDF는 항상 활성
         ToolTipService.SetToolTip(FitOptionsButton, "Fit options"); // 형제 모듈 XAML 고정값과 동일
         UpdateFitButton();
     }
 
     /// <summary>
-    /// A145: 텍스트 에디터·빈 화면 — 표시만 하는 비활성 "1/1"(텍스트는 확대/축소 대상이 없어
-    /// 옵션이 무의미하다 — 부록 B 67, 1차는 표시만). 구 A49의 Collapsed 분기를 대체한다 —
-    /// 조절기가 항상 보여 문서 바 폭이 모드 전환에 출렁이지 않는다.
-    /// 비활성이라 A·F 키도 HotkeySupport의 IsEnabled 게이트에서 통과된다(타이핑 우선 —
-    /// 종전 Visibility 게이트와 같은 효과). 표기 "1/1"은 트레이(A138)의 텍스트 문서 표기와
-    /// 같은 값이다(페이지 1/1 — Fit 모드 아이콘이 아니라 고정 상태 표기).
-    /// 실기기 확인 포인트: WinUI는 비활성 컨트롤 위에서 툴팁이 안 뜰 수 있다 — 안 뜨면
-    /// 표기("1/1")만으로 충분한지 사용자 판단을 받는다.
+    /// A145→A214: 텍스트 갈래 상태. 종전 "비활성 1/1"(부록 B 67 — 텍스트는 옵션 무의미)을
+    /// 뒤집어(2026-08-24 사용자 지시 — 용지가 어떻게 보일 것이냐의 개념) 파일·무제가 있으면
+    /// **활성**으로 재정의했다: 100%·Contain·Fit width 3옵션 + 본체(마지막 옵션 표시·재적용).
+    /// Fit height만 비활성 — 텍스트는 높이가 무한이라 성립하지 않는다(사용자 명시).
+    /// 빈 화면(파일·무제 없음)은 종전대로 비활성 "1/1" 표시.
+    /// 활성/비활성 전환은 ShowPdfFitState와 이 한 쌍만 한다(계약 무변경).
+    /// 활성이면 A·F 키도 HotkeySupport의 IsEnabled 게이트를 통과해 동작한다 — 단 에디터
+    /// 타이핑 중에는 종전대로 글자가 우선이다(A32/A84 통과 규칙 — ShouldPassThrough).
+    /// 실기기 확인 포인트: WinUI는 비활성 컨트롤 위에서 툴팁이 안 뜰 수 있다(빈 화면 갈래).
     /// </summary>
     private void ShowTextFitState()
     {
-        FitButton.IsEnabled = false;
-        FitOptionsButton.IsEnabled = false;
+        // 판정은 줌 표기(UpdateZoomText)와 같은 축 — 잘림(잠금 뷰)도 _path가 있어 활성이다.
+        var active = _path is not null || _untitled;
+        FitButton.IsEnabled = active;
+        FitOptionsButton.IsEnabled = active;
+        if (active)
+        {
+            FitHeightItem.IsEnabled = false; // 높이 무한 — 이 항목만 제외(PDF 복귀 시 짝이 되살린다)
+            ToolTipService.SetToolTip(FitOptionsButton, "Fit options");
+            UpdateFitButton();
+            return;
+        }
         FitButton.Content = new TextBlock { Text = "1/1", FontSize = 13 };
-        ToolTipService.SetToolTip(FitButton, "Text documents are always 1:1");
-        ToolTipService.SetToolTip(FitOptionsButton, "Text documents are always 1:1");
+        ToolTipService.SetToolTip(FitButton, "No document open");
+        ToolTipService.SetToolTip(FitOptionsButton, "No document open");
     }
 
     /// <summary>
     /// A30 규격: Fit 버튼 본체 내용(4옵션 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
     /// A144: 본체가 SplitButton에서 일반 Button(32×32)이 됐다 — 화살표는 별도
     /// DropDownButton(FitOptionsButton, 플라이아웃 전담·A34 키 없음)이라 이 메서드는
-    /// 종전대로 본체(FitButton)만 만진다. PDF 모드에서만 불린다(텍스트 모드는 ShowTextFitState).
+    /// 종전대로 본체(FitButton)만 만진다. A214: 갈래별 마지막 옵션을 골라 표시한다
+    /// (PDF = _lastFitOption / 텍스트 = _lastTextFitOption — 빈 화면은 ShowTextFitState가
+    /// "1/1"을 직접 그리므로 여기 안 온다). 텍스트 갈래는 FitHeight가 될 수 없다(항목 비활성).
     /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
     /// A184: 그 PathIcon 도형을 글자 "1:1" 형상에서 꺾쇠 프레임으로 바꿨다
     /// (BuildActualSizeIconGeometry 주석 참조 — 툴팁·키·동작은 무변경).
@@ -1357,7 +1398,8 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private void UpdateFitButton()
     {
-        (object content, string tip) = _lastFitOption switch
+        var option = IsPdfFitBranch ? _lastFitOption : _lastTextFitOption; // A214: 갈래별 상태
+        (object content, string tip) = option switch
         {
             PdfFitMode.FitWidth =>
                 ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
@@ -1420,19 +1462,51 @@ public sealed partial class DocumentView : UserControl,
     private static string FitTip(string description) =>
         $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
 
-    /// <summary>플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
+    /// <summary>플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.
+    /// A214: 갈래 분기 — PDF는 종전 그대로(PdfPane.ApplyFit), 텍스트 갈래는 상태 갱신 후
+    /// ApplyTextFit(SetZoom 경유). 텍스트 갈래의 FitHeight는 항목 비활성이라 못 오지만,
+    /// 경로가 새로 생겨도 무동작이 되게 방어한다.</summary>
     private void SelectFitOption(PdfFitMode option)
     {
-        _lastFitOption = option;
+        if (IsPdfFitBranch)
+        {
+            _lastFitOption = option;
+            UpdateFitButton();
+            _pdfPane?.ApplyFit(option);
+            return;
+        }
+        if (option == PdfFitMode.FitHeight) return; // 방어 — 텍스트는 높이 무한(항목도 비활성)
+        _lastTextFitOption = option;
         UpdateFitButton();
-        _pdfPane?.ApplyFit(option);
+        ApplyTextFit();
     }
+
+    /// <summary>
+    /// A214: 텍스트 갈래 Fit 적용 — 세 옵션(100%·Contain·Fit width) 전부 결과는 SetZoom(100)
+    /// 하나다: A181부터 본문 랩 기준 폭 = 뷰포트 폭이라 "Fit width = 뷰포트에 폭 맞춤"이
+    /// 100%와 항등이고, 높이가 무한이라 Contain도 Fit width와 동치다(등재 확정 — 개념만
+    /// 옵션별로 유지하고 본체 표시로 구분한다). 줌 갱신은 단일 경로 SetZoom 경유(사양) —
+    /// % 표기·저장 관용구 그대로고, 렌더 뷰(A225)는 ApplyZoom→ApplyRenderZoom으로 자동
+    /// 정합된다(ZoomFactor 직접 조작 없음). 이미 100%면 SetZoom이 조기 반환한다(무해).
+    /// </summary>
+    private void ApplyTextFit() => SetZoom(DefaultZoomPercent);
 
     /// <summary>A30 규격: 본체 클릭 = 버튼에 표시된 마지막 옵션 재적용
     /// (A144: SplitButton 본체 → 일반 Button — 시그니처만 RoutedEventArgs로 바뀌었다).
-    /// 텍스트 모드에서는 버튼이 비활성(A145)이라 이 핸들러에 못 온다.</summary>
-    private void OnFitClicked(object sender, RoutedEventArgs e) =>
-        _pdfPane?.ApplyFit(_lastFitOption);
+    /// A214: 텍스트 갈래도 활성 — 재적용은 갈래 공용 ReapplyFit으로(F 키와 같은 경로).
+    /// 빈 화면에서는 버튼이 비활성이라 이 핸들러에 못 온다.</summary>
+    private void OnFitClicked(object sender, RoutedEventArgs e) => ReapplyFit();
+
+    /// <summary>
+    /// A214: 본체 클릭·F 키 공용 — 현재 갈래의 마지막 옵션 재적용(A30). 사용자가 Ctrl+휠로
+    /// 줌을 바꿔도 본체 상태는 그대로 두는(A149 관용구 — 줌과 Fit 상태는 별개 축) 대신,
+    /// 여기서 그 옵션을 다시 적용한다.
+    /// </summary>
+    private void ReapplyFit()
+    {
+        if (IsPdfFitBranch) _pdfPane?.ApplyFit(_lastFitOption);
+        else ApplyTextFit(); // 텍스트 갈래 — 어느 옵션이든 결과는 SetZoom(100)
+    }
 
     /// <summary>플라이아웃 100%·A 키(A34) 공용 경로 — 구 1:1 버튼 자리(A111).</summary>
     private void OnFitActualSizeClicked(object sender, RoutedEventArgs e) =>
@@ -2905,17 +2979,19 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// **이 모듈은 에디터(TextBox)가 본문**이라 통과 규칙이 특히 중요하다 — 타이핑 중에는
-    /// HotkeySupport가 A·F를 삼키지 않고 글자를 그대로 흘려보낸다(A32/A84 규칙 재사용).
-    /// 100%(A)·Fit(F)은 PDF에서만 활성인 Fit 본체(FitButton)에 걸리므로, 텍스트 모드
-    /// (A145에서 Collapsed → 비활성 "1/1"로 바뀌었다)에서는 키도 동작하지 않는다 —
-    /// HotkeySupport.Register의 IsEnabled 게이트가 종전 Visibility 게이트와 같은 효과를 낸다.
+    /// HotkeySupport가 A·F를 삼키지 않고 글자를 그대로 흘려보낸다(A32/A84 규칙 재사용 —
+    /// 잠금 뷰도 TextBox 포커스라 같은 통과가 걸린다. 렌더 뷰·바 포커스에서는 동작).
+    /// A214: 100%(A)·Fit(F)은 텍스트 갈래에서도 동작한다 — 액션이 갈래 분기
+    /// (SelectFitOption/ReapplyFit)라 별도 배선 변경 없이 FitButton 활성화만으로 살아난다.
+    /// 빈 화면에서는 FitButton이 비활성이라 HotkeySupport.Register의 IsEnabled 게이트가
+    /// 종전대로 키를 흘려보낸다.
     /// 저장은 Ctrl+S 그대로(A84의 유일한 Ctrl 예외) — XAML 액셀러레이터에 남겨 둔다.
     /// </summary>
     private void SetupHotkeys()
     {
         HotkeySupport.Register(this, FitButton, ActualSizeKey,
             () => SelectFitOption(PdfFitMode.ActualSize));
-        HotkeySupport.Register(this, FitButton, FitKey, () => _pdfPane?.ApplyFit(_lastFitOption));
-        ShowTextFitState(); // A145: 초기 상태(파일 없음)도 텍스트 상태와 같은 비활성 "1/1"
+        HotkeySupport.Register(this, FitButton, FitKey, ReapplyFit); // A214: 갈래 공용 재적용
+        ShowTextFitState(); // A145→A214: 초기 상태(파일 없음) = 빈 화면 갈래(비활성 "1/1")
     }
 }
