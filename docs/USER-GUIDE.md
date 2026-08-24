@@ -636,9 +636,9 @@ If KOTU's own folder moves — after an update, or after you move a portable cop
 you turned on are repaired silently the next time it starts.
 
 **The Start menu** is the button at the bottom-left corner (``Alt+` ``). It rises from the bar and
-lists, from the bottom up: All Readable, Image, Video, Audio, Document, Archive, H/W Info, then
-Settings. There is no Exit entry here — closing the last window ends the app, and the tray menu has
-**Exit KOTU**.
+lists, from the bottom up: Minimize to tray, then All Readable, Image, Video, Audio, Document,
+Archive, H/W Info, then Settings. There is no Exit entry here — closing the last window ends the
+app, and the tray menu has **Exit KOTU**.
 
 ---
 
@@ -650,10 +650,9 @@ Ways to get a new one:
 
 - `Shift+N` — a new, empty window of the module you are looking at;
 - `Shift`+double-click a file in the built-in file browser;
-- right-click a file there and choose **Open in new instance**;
-- turn on **Always open files in a new instance** in Settings, and every file opens its own window.
+- right-click a file there and choose **Open in new instance**.
 
-With that setting off (the default), opening a file re-uses an existing window of the same module.
+Otherwise, opening a file re-uses an existing window of the same module.
 
 Each window is independent: its own module, its own file, its own side panels, its own tray icon,
 its own taskbar button, its own H/W Info selection. Every window carries its number at the front of
@@ -661,8 +660,10 @@ the title bar, so you can tell them apart in the taskbar and in `Alt`+`Tab`.
 
 A new window inherits the size and position of the last window you closed.
 
-**Minimising** a window hides it from the taskbar and from `Alt`+`Tab`. Its tray icon stays — click
-that to bring it back.
+**Minimising** a window works the standard Windows way — the window stays on the taskbar. To hide a
+window completely, use **Minimize to tray**: the bottom entry of the menu, or the same command in
+the right-click menu of that window's tray icon. A hidden window disappears from the taskbar and
+from `Alt`+`Tab`; its tray icon stays — click that to bring it back.
 
 ---
 
@@ -686,32 +687,6 @@ to *System default*, and `Ctrl`+wheel over the bottom bar steps it as well. Over
 `Ctrl`+wheel keeps its usual meaning — zooming an image or a document, for instance — and the scale
 does not move. If the setting is on *System default*, the first step starts from the list entry
 closest to your current effective scale.
-
-### Windows display scale
-
-Under **Display**, right below *UI scale*. Where *UI scale* resizes KOTU only, this list changes the
-**Windows display scaling itself** — the monitor the KOTU window is currently on, for every app on
-that monitor. Move the window to another monitor and reopen the list to adjust that one instead.
-
-The list offers the standard Windows values the monitor supports (100% to 350%) and marks the one
-Windows recommends. A change applies immediately; no sign-out is needed, and KOTU's own *UI scale*
-setting keeps working exactly as before on top of the new value.
-
-This uses an undocumented Windows mechanism — the same one the Windows Settings app uses — so a
-future Windows update could break it. If reading or changing the scale fails for any reason, KOTU
-opens the Windows Settings display page (and shows an *Open Windows display settings* link) so you
-can change it there instead.
-
-### Always open files in a new instance
-
-Under **Windows**. Off by default.
-
-- **Off** — a file opens in the existing window of the same module, replacing what was there.
-- **On** — every file opens its own new window.
-
-Either way, the explicit "new instance" actions always open a new window and ignore this setting:
-`Shift+N`, `Shift`+double-click in the file browser, and **Open in new instance** in the
-right-click menu. See [7](#7-several-windows-at-once).
 
 ### Explorer integration
 
@@ -776,8 +751,8 @@ the window lives.
   selected in that window.
 - The icon's tooltip is the window's title.
 - **Left-click** brings that window to the front.
-- **Right-click** opens a menu: **Activate window** · **Close this window** · **Exit KOTU**.
-  The last one closes every window.
+- **Right-click** opens a menu: **Activate window** · **Minimize to tray** · **Close this window** ·
+  **Exit KOTU**. The last one closes every window.
 
 ---
 

@@ -909,9 +909,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>If KOTU's own folder moves — after an update, or after you move a portable copy — the registrations
            you turned on are repaired silently the next time it starts.</p>
         <p><strong>The Start menu</strong> is the button at the bottom-left corner
-           (<kbd>Alt</kbd>+<kbd>`</kbd>). It rises from the bar and lists, from the bottom up: All Readable,
-           Image, Video, Audio, Document, Archive, H/W Info, then Settings. There is no Exit entry here —
-           closing the last window ends the app, and the tray menu has <em>Exit KOTU</em>.</p>
+           (<kbd>Alt</kbd>+<kbd>`</kbd>). It rises from the bar and lists, from the bottom up: Minimize to
+           tray, then All Readable, Image, Video, Audio, Document, Archive, H/W Info, then Settings.
+           There is no Exit entry here — closing the last window ends the app, and the tray menu has
+           <em>Exit KOTU</em>.</p>
       </section>
 
       <!-- ================= 7. WINDOWS ================= -->
@@ -921,17 +922,18 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <ul>
           <li><kbd>Shift</kbd>+<kbd>N</kbd> — a new, empty window of the module you are looking at;</li>
           <li><kbd>Shift</kbd>+double-click a file in the built-in file browser;</li>
-          <li>right-click a file there and choose <em>Open in new instance</em>;</li>
-          <li>turn on <em>Always open files in a new instance</em> in Settings, and every file opens its own
-              window.</li>
+          <li>right-click a file there and choose <em>Open in new instance</em>.</li>
         </ul>
-        <p>With that setting off (the default), opening a file re-uses an existing window of the same module.</p>
+        <p>Otherwise, opening a file re-uses an existing window of the same module.</p>
         <p>Each window is independent: its own module, its own file, its own side panels, its own tray icon,
            its own taskbar button, its own H/W Info selection. Every window carries its number at the front
            of the title bar, so you can tell them apart in the taskbar and in <kbd>Alt</kbd>+<kbd>Tab</kbd>.
            A new window inherits the size and position of the last window you closed.</p>
-        <p><strong>Minimising</strong> a window hides it from the taskbar and from <kbd>Alt</kbd>+<kbd>Tab</kbd>.
-           Its tray icon stays — click that to bring it back.</p>
+        <p><strong>Minimising</strong> a window works the standard Windows way — the window stays on the
+           taskbar. To hide a window completely, use <em>Minimize to tray</em>: the bottom entry of the
+           menu, or the same command in the right-click menu of that window's tray icon. A hidden window
+           disappears from the taskbar and from <kbd>Alt</kbd>+<kbd>Tab</kbd>; its tray icon stays —
+           click that to bring it back.</p>
       </section>
 
       <!-- ================= 8. SETTINGS =================
@@ -955,31 +957,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            <kbd>Ctrl</kbd>+wheel keeps its usual meaning — zooming an image or a document, for instance —
            and the scale does not move. If the setting is on <em>System default</em>, the first step starts
            from the list entry closest to your current effective scale.</p>
-
-        <h3 id="windows-display-scale">Windows display scale</h3>
-        <p>Under <strong>Display</strong>, right below <em>UI scale</em>. Where <em>UI scale</em> resizes
-           KOTU only, this list changes the <strong>Windows display scaling itself</strong> — the monitor
-           the KOTU window is currently on, for every app on that monitor. Move the window to another
-           monitor and reopen the list to adjust that one instead.</p>
-        <p>The list offers the standard Windows values the monitor supports (100% to 350%) and marks the
-           one Windows recommends. A change applies immediately; no sign-out is needed, and KOTU's own
-           <em>UI scale</em> setting keeps working exactly as before on top of the new value.</p>
-        <p>This uses an undocumented Windows mechanism — the same one the Windows Settings app uses — so a
-           future Windows update could break it. If reading or changing the scale fails for any reason,
-           KOTU opens the Windows Settings display page (and shows an <em>Open Windows display settings</em>
-           link) so you can change it there instead.</p>
-
-        <h3 id="always-open-files-in-a-new-instance">Always open files in a new instance</h3>
-        <p>Under <strong>Windows</strong>. Off by default.</p>
-        <ul>
-          <li><strong>Off</strong> — a file opens in the existing window of the same module, replacing what
-              was there.</li>
-          <li><strong>On</strong> — every file opens its own new window.</li>
-        </ul>
-        <p>Either way, the explicit "new instance" actions always open a new window and ignore this setting:
-           <kbd>Shift</kbd>+<kbd>N</kbd>, <kbd>Shift</kbd>+double-click in the file browser, and
-           <em>Open in new instance</em> in the right-click menu. See
-           <a class="inl" href="#windows">several windows at once</a>.</p>
 
         <h3 id="explorer-integration">Explorer integration</h3>
         <p>The file-type switches and the right-click-menu switch, described in full in
@@ -1045,8 +1022,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               sensors you selected in that window.</li>
           <li>The icon's tooltip is the window's title.</li>
           <li><strong>Left-click</strong> brings that window to the front.</li>
-          <li><strong>Right-click</strong> opens a menu: <em>Activate window</em> · <em>Close this window</em>
-              · <em>Exit KOTU</em>. The last one closes every window.</li>
+          <li><strong>Right-click</strong> opens a menu: <em>Activate window</em> · <em>Minimize to tray</em>
+              · <em>Close this window</em> · <em>Exit KOTU</em>. The last one closes every window.</li>
         </ul>
       </section>
 

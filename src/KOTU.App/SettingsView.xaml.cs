@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using KOTU.App.Integration;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
@@ -26,7 +25,9 @@ namespace KOTU.App;
 /// <b>우클릭 메뉴 토글 초기값 읽기</b>·<b>우클릭 메뉴 등록/해제</b>)도 같은 워커로 옮겼다 —
 /// 이 화면에서 레지스트리를 만지는 코드는 이제 <b>전부</b> 워커 스레드에 있다
 /// (ARCHITECTURE.md §11.1 ① "UI 스레드 동기 레지스트리 IO 금지").
-/// A183: Explorer integration 절의 스위치들은 스위치 하나당 카드 하나(<see cref="NewCard"/>)로 묶였다.
+/// A183: Explorer integration 절의 스위치들은 스위치 하나당 묶음 하나로 구획한다 —
+/// A220(2026-08-24)에서 구획 수단이 카드(Border)에서 그룹 간 여백으로 바뀌었다(카드 안쪽
+/// Padding이 스위치 좌변을 들뜨게 한다는 사용자 보고 — 묶음 구조 자체는 유지).
 /// A197: 카드 헤더 행의 순서는 <b>스위치 → 제목 → 진행 링</b>이다 — 스위치가 제목 <b>왼쪽</b>에
 /// 선다(A183의 우측 끝 배치를 사용자 지시로 뒤집은 것. 스위치 내장 On/Off 문구는 제목과
 /// 붙어 보이지 않게 비워 뒀다).
@@ -113,7 +114,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         }
 
         BuildDisplaySection();
-        BuildWindowsSection(); // 창 재사용 규칙 (A24)
+        // A222(2026-08-24): Windows 섹션(A24 "Always open files in a new instance" 토글 하나뿐이었다)은
+        // 옵션 폐지와 함께 통째로 제거 — 창 재사용 규칙은 이제 설정 없이 고정이다(WindowManager 주석).
 
         AddHeader("Explorer integration");
         // A162(v0.171.0): 4문장 374자였던 설명을 한 줄로 줄이고 상세(관리자 권한 불필요·해제 시 완전 삭제·
@@ -296,11 +298,15 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             defaultsRow.Children.Add(setDefaultButton);
             defaultsRow.Children.Add(progressText);
 
-            var cardBody = new StackPanel { Spacing = 6 };
+            // A220(2026-08-24): A183의 구획 카드(Border) 해체 — 카드 안쪽 Padding 12 때문에
+            // 스위치 좌변이 절의 다른 토글들보다 들떠 보였다(사용자 보고). 묶음 자체(StackPanel
+            // Spacing 6)는 유지하고, 그룹 사이 구분은 테두리 대신 아래 여백 8(+Root Spacing 12 =
+            // 20)로 만든다 — 그룹 안 6 vs 그룹 사이 20의 간격 차가 구획을 대신한다.
+            var cardBody = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 8) };
             cardBody.Children.Add(headerRow);
             cardBody.Children.Add(extensionsText);
             cardBody.Children.Add(defaultsRow);
-            Root.Children.Add(NewCard(cardBody));
+            Root.Children.Add(cardBody);
 
             // 같은 모듈의 재진입 방지 플래그(A77). 작업 중에는 토글도 비활성이라 사람 조작으로는
             // 도달하지 않지만, 실패 되돌리기(IsOn 재설정)나 프로그램적 변경까지 막아 준다.
@@ -523,7 +529,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         menuHeaderRow.Children.Add(menuToggle);
         menuHeaderRow.Children.Add(menuTitle);
 
-        var menuCardBody = new StackPanel { Spacing = 6 };
+        // A220: 위 모듈 그룹과 같은 처리 — 카드 해체·간격 구분(한 절 안에서 배치가 갈리면 다시 흐려진다).
+        var menuCardBody = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 8) };
         menuCardBody.Children.Add(menuHeaderRow);
         menuCardBody.Children.Add(new TextBlock
         {
@@ -542,10 +549,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             Opacity = 0.6,
             TextWrapping = TextWrapping.Wrap,
         });
-        Root.Children.Add(NewCard(menuCardBody));
+        Root.Children.Add(menuCardBody);
 
-        // 공용 상태 줄은 카드 밖에 남는다 — 모듈 토글과 이 메뉴 토글이 함께 쓰는 한 줄이라
-        // 어느 카드에도 속하지 않는다(모듈별 진행·결과는 각 카드의 progressText가 말한다).
+        // 공용 상태 줄은 그룹 밖에 남는다 — 모듈 토글과 이 메뉴 토글이 함께 쓰는 한 줄이라
+        // 어느 그룹에도 속하지 않는다(모듈별 진행·결과는 각 그룹의 progressText가 말한다).
         Root.Children.Add(_status);
 
         BuildSettingsFileSection(); // A36: 연결 섹션 아래 "Open settings.json"
@@ -586,11 +593,11 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     }
 
     /// <summary>
-    /// Display 섹션: ① 앱 UI 스케일 — 옵션은 윈도우 디스플레이 설정과 같은 배율 목록(UiScale.Percents),
+    /// Display 섹션: 앱 UI 스케일 — 옵션은 윈도우 디스플레이 설정과 같은 배율 목록(UiScale.Percents),
     /// 바꾸면 저장 후 열린 모든 창에 즉시 적용된다(UiScale.Changed → MainWindow.ApplyUiScale).
-    /// ② 윈도우 디스플레이 배율 변경(A48) — ①과 별개 축(OS 전체 배율). 비공식 DisplayConfig
-    /// API(<see cref="Integration.DisplayScale"/>) 경유, 실패 시 ms-settings:display 딥링크 폴백.
-    /// (문서 편집기 폭 콤보는 A181에서 제거 — 아래 주석 참고.)
+    /// (문서 편집기 폭 콤보는 A181에서 제거 — 아래 주석 참고. A48의 "Windows display scale
+    /// (all apps)" 콤보·Integration/DisplayScale.cs는 A221(2026-08-24)에서 전면 제거 —
+    /// "우리 앱에서 건드릴 게 아님" 사용자 지시. 복원 참조 = A48 도입(v0.214.0) 이후 git 이력.)
     /// </summary>
     private void BuildDisplaySection()
     {
@@ -620,7 +627,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // XamlRoot.RasterizationScale = 이 창이 떠 있는 모니터의 시스템 배율(앱 자체 배율과 무관).
         // 항목을 ComboBoxItem으로 만들어 Content만 갱신 — 선택 상태를 건드리지 않고 라이브 갱신 가능.
         // 생성 시점엔 XamlRoot가 없으므로 Loaded에서 채우고, 모니터 이동/배율 변경(Changed)에 추종.
-        // A48: OS 배율 콤보가 아래 나란히 생기면서 "이 앱만"임을 헤더에서 바로 구분한다.
+        // 헤더 "(this app only)"는 A48이 OS 배율 콤보와 구분하려 붙인 것 — A221로 그 콤보는
+        // 사라졌지만 "OS 배율이 아니라 앱 배율"이라는 구분 자체는 계속 유효해 문구를 유지한다.
         var scaleBox = new ComboBox { Header = "UI scale (this app only)", MinWidth = 200 };
         scaleBox.Items.Add(new ComboBoxItem { Content = "System default" });
         foreach (var p in UiScale.Percents)
@@ -691,175 +699,18 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(scaleBox);
         Root.Children.Add(offListNote);
 
-        // A48(v0.214.0): 윈도우 디스플레이 배율(OS 전체) 변경 — 위 UI scale(앱 전용)과 별개 축.
-        // 대상 = 이 설정 창이 지금 놓인 모니터 고정(부록 B 76 확정 — 모니터 선택 콤보 없음).
-        // GET/SET은 비공식 DisplayConfig API(Integration/DisplayScale — 전부 try/catch)로 하고,
-        // 실패하면 ms-settings:display 딥링크 폴백. stale 방지: 재조회 = Loaded·콤보 열 때·적용
-        // 직후 — 창을 다른 모니터로 옮긴 뒤 콤보를 다시 열면 그 모니터 기준으로 다시 채워진다.
-        Root.Children.Add(new TextBlock
-        {
-            Text = "Windows display scale changes the monitor this window is on, for every app.",
-            Opacity = 0.7,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 12, 0, 0),
-        });
-        Root.Children.Add(LearnMore(
-            "Uses the same undocumented Windows mechanism as the Settings app, applied immediately "
-            + "with no sign-out. If it fails or a Windows update breaks it, the Windows Settings "
-            + "display page opens so you can change it there."));
-
-        var winScaleBox = new ComboBox
-        {
-            Header = "Windows display scale (all apps)",
-            MinWidth = 200,
-            IsEnabled = false, // Loaded의 첫 조회가 성공해야 켜진다
-        };
-        var winScaleNote = new TextBlock
-        {
-            FontSize = 12,
-            Opacity = 0.7,
-            TextWrapping = TextWrapping.Wrap,
-            Visibility = Visibility.Collapsed,
-        };
-        var openDisplaySettings = new HyperlinkButton
-        {
-            Content = "Open Windows display settings",
-            Padding = new Thickness(0),
-            Visibility = Visibility.Collapsed, // 폴백이 필요해질 때만 보인다
-        };
-        openDisplaySettings.Click += (_, _) => DisplayScale.TryOpenDisplaySettings();
-
-        // 프로그램적 재구성 중 SelectionChanged를 무시한다 — 재조회가 SET을 다시 부르는 루프 차단.
-        var winScaleSyncing = false;
-        var winScalePercents = Array.Empty<int>();
-
-        // GET 재조회 + 콤보 재구성. GET 실패 = 콤보 비활성 + 딥링크만(구현 시 결정 사항).
-        void RefreshWindowsScale()
-        {
-            winScaleSyncing = true;
-            try
-            {
-                winScaleBox.Items.Clear();
-                winScalePercents = [];
-                nint hwnd;
-                try { hwnd = GetHwnd(); }
-                catch { hwnd = 0; } // XamlRoot 미준비 — GET 실패와 같은 취급(아래 폴백 분기)
-                if (hwnd != 0
-                    && DisplayScale.TryGet(hwnd, out var current, out var recommended, out var available))
-                {
-                    // 표준 배율 목록(100~350% — UiScale.Percents와 같은 표)의 가용분만 노출한다.
-                    winScalePercents = available.Where(p => Array.IndexOf(UiScale.Percents, p) >= 0).ToArray();
-                    foreach (var p in winScalePercents)
-                    {
-                        winScaleBox.Items.Add(new ComboBoxItem
-                        {
-                            Content = p == recommended ? $"{p}% (recommended)" : $"{p}%",
-                            Tag = p,
-                        });
-                    }
-                    winScaleBox.SelectedIndex = Array.IndexOf(winScalePercents, current);
-                    winScaleBox.IsEnabled = winScalePercents.Length > 0;
-                    openDisplaySettings.Visibility = Visibility.Collapsed;
-                    if (winScaleBox.SelectedIndex < 0)
-                    {
-                        // 커스텀 %·350% 초과 등 목록 밖 현재값 — 선택 없음 + 안내 한 줄.
-                        winScaleNote.Text = $"Current Windows scale on this monitor is {current}%, "
-                            + "which is not in the list above.";
-                        winScaleNote.Visibility = Visibility.Visible;
-                    }
-                    else
-                    {
-                        winScaleNote.Visibility = Visibility.Collapsed;
-                    }
-                }
-                else
-                {
-                    winScaleBox.IsEnabled = false;
-                    winScaleNote.Text = "Couldn't read the Windows display scale here - "
-                        + "use Windows Settings instead.";
-                    winScaleNote.Visibility = Visibility.Visible;
-                    openDisplaySettings.Visibility = Visibility.Visible;
-                }
-            }
-            finally
-            {
-                winScaleSyncing = false;
-            }
-        }
-
-        winScaleBox.SelectionChanged += (_, _) =>
-        {
-            if (winScaleSyncing || winScaleBox.SelectedIndex < 0) return;
-            var target = winScalePercents[winScaleBox.SelectedIndex];
-            var applied = false;
-            try
-            {
-                applied = DisplayScale.TrySet(GetHwnd(), target);
-            }
-            catch
-            {
-                // GetHwnd 실패(이론상 Loaded 후엔 불가) — SET 실패와 같은 폴백으로.
-            }
-            if (!applied) _ = DisplayScale.TryOpenDisplaySettings(); // ③ 폴백(부록 B 76)
-            RefreshWindowsScale(); // 적용 직후 재조회 — 표시를 실제 OS 값과 동기
-            if (!applied)
-            {
-                // 재조회가 안내 줄을 지웠어도 폴백 발동은 사용자에게 보여야 한다(등재 결정).
-                winScaleNote.Text = "Couldn't change the scale from here - "
-                    + "Windows Settings has been opened so you can change it there.";
-                winScaleNote.Visibility = Visibility.Visible;
-                openDisplaySettings.Visibility = Visibility.Visible;
-            }
-        };
-        // 콤보를 열 때마다 창이 지금 놓인 모니터 기준으로 다시 조회한다(모니터 이동 stale 방지).
-        winScaleBox.DropDownOpened += (_, _) => RefreshWindowsScale();
-        Loaded += (_, _) => RefreshWindowsScale();
-
-        Root.Children.Add(winScaleBox);
-        Root.Children.Add(winScaleNote);
-        Root.Children.Add(openDisplaySettings);
+        // A48(v0.214.0)의 "Windows display scale (all apps)" 콤보·안내·딥링크 폴백은
+        // A221(2026-08-24)에서 전면 제거 — OS 배율은 이 앱이 건드릴 축이 아니라는 사용자 지시.
+        // Integration/DisplayScale.cs(비공식 DisplayConfig 래퍼)도 함께 삭제됐다.
 
         // A171의 "Document editor width" 콤보는 A181에서 제거 — 본문은 항상 창 폭을 꽉 채우고,
         // 크기 조절은 문서 편집기 안의 Ctrl+휠 줌(document.zoom, 즉시 저장)이 대신한다.
         // 설정 화면 UI는 두지 않는다(뷰에서 직접 조작·표시하는 값이라 여기 둘 게 없다).
     }
 
-    /// <summary>
-    /// Windows 섹션(A24): 창 재사용 규칙. 기본 off = 같은 모듈 창 재사용(현행).
-    /// on = 파일을 열 때마다 새 창(내장 탐색기·외부 열기 공통). Shift+N(A84)·Shift+더블클릭·
-    /// 우클릭 "Open in new instance"는 규칙과 무관하게 항상 새 창이므로 여기 영향 없음.
-    /// 문구는 A53에서 "new window" → "new instance"로 통일.
-    /// </summary>
-    private void BuildWindowsSection()
-    {
-        AddHeader("Windows");
-        var toggle = new ToggleSwitch
-        {
-            Header = "Always open files in a new instance",
-            IsOn = _settings.Get(WindowManager.AlwaysNewWindowKey, false),
-        };
-        toggle.Toggled += (_, _) =>
-        {
-            _settings.Set(WindowManager.AlwaysNewWindowKey, toggle.IsOn);
-            _settings.Save();
-        };
-        Root.Children.Add(toggle);
-        // A162(v0.171.0): 명시적 "새 인스턴스" 조작(Shift+N 등)이 이 설정과 무관하다는 단서는
-        // 가이드 "Always open files in a new instance" 절로 옮겼다.
-        Root.Children.Add(new TextBlock
-        {
-            Text = "Off: files re-use the existing instance of the same module. "
-                 + "On: every file opens a new instance.",
-            FontSize = 12,
-            Opacity = 0.7,
-            TextWrapping = TextWrapping.Wrap,
-        });
-        // A182: 명시적 "새 인스턴스" 조작이 이 설정과 무관하다는 단서를 다시 앱 안에서 펼쳐 본다
-        // (원문 = b80c437^ 그대로).
-        Root.Children.Add(LearnMore(
-            "Explicit \"new instance\" actions (Shift+N, Shift+double-click, right-click menu) "
-            + "always open a new instance either way."));
-    }
+    // Windows 섹션(A24 창 재사용 토글)은 A222(2026-08-24)에서 제거 — 복원 참조 = git 이력
+    // (v0.65.0 A24 도입 → A222 직전까지 존치). 명시적 새 인스턴스 조작(Shift+N·Shift+더블클릭·
+    // 우클릭 메뉴)은 설정과 무관하게 그대로 살아 있다.
 
     /// <summary>
     /// A36(v0.109.0): 연결 섹션 아래 "Open settings.json" 버튼 + 경로·주의 안내.
@@ -1229,28 +1080,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         return group;
     }
 
-    /// <summary>
-    /// A183: 인티그레이션 절의 구획 카드. 스위치 하나와 그에 딸린 줄들을 한 상자에 담아
-    /// "어느 스위치가 어느 줄에 속하는가"를 눈으로 구분하게 한다(사용자 보고 2026-08-19).
-    /// <para>
-    /// 형태는 <b>저장소에 이미 쓰이고 있는 카드</b>와 같은 조합이다 — HardwareView의 센서 그래프
-    /// 표면(CardBackgroundFillColorDefaultBrush + CardStrokeColorDefaultBrush + 1px 테두리 +
-    /// 모서리 8). 새 시스템 브러시는 끌어오지 않았다.
-    /// </para>
-    /// <para>
-    /// 카드 사이 간격은 Root의 Spacing 12가 이미 준다 — 테두리가 곧 구획선이라
-    /// <b>별도 구분선은 두지 않는다</b>(선을 더하면 테두리와 이중선이 된다).
-    /// </para>
-    /// </summary>
-    private static Border NewCard(UIElement content) => new()
-    {
-        Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-        BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(8),
-        Padding = new Thickness(12),
-        Child = content,
-    };
+    // A183의 구획 카드(NewCard — Border·Padding 12)는 A220(2026-08-24)에서 해체됐다:
+    // 안쪽 Padding 때문에 스위치 좌변이 절의 다른 토글들과 어긋나 보인다는 사용자 보고.
+    // 구획은 이제 그룹 StackPanel의 아래 여백 8(+Root Spacing 12)로 만든다 — 되살릴 일이
+    // 생기면 git 이력의 v0.194.0(A183) NewCard를 참조할 것.
 
     /// <summary>섹션 머리글 추가.</summary>
     private void AddHeader(string text)

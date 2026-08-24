@@ -114,6 +114,12 @@ internal sealed class EditorDecor
     private int[] _lineStarts = [];
     private string? _lineStartsSource;
 
+    // A215(2026-08-24): 표시 토글 2축 — 라인 가이드 / ¶·EOF 마커. 거터(A142 행 번호)는 축 밖
+    // (항상 표시 — 사용자 지시 범위가 "감싸는 줄"과 "펑츄에이션" 둘뿐이다). 끈 축의 요소는
+    // 렌더 패스가 아예 안 만들고, EndPass의 잔여 풀 정리(Collapsed)가 이전 패스 요소를 걷는다.
+    private bool _showGuides = true;
+    private bool _showMarks = true;
+
     private readonly List<Rectangle> _guides = [];  // 수평선 풀 — 패스마다 재사용
     private readonly List<TextBlock> _markers = []; // ¶·EOF 풀
     private readonly List<TextBlock> _numbers = []; // A142 ③: 행 번호 풀
@@ -177,6 +183,19 @@ internal sealed class EditorDecor
         _scale = scale;
         foreach (var marker in _markers) marker.FontSize = MarkerFontSize * scale;
         foreach (var number in _numbers) number.FontSize = GutterFontSize * scale;
+        Invalidate();
+    }
+
+    /// <summary>
+    /// A215: 표시 토글 — guides = 라인 가이드(줄 상/하단 선), marks = ¶·EOF 마커.
+    /// SetScale과 같은 관용구(같은 값 조기 반환 + Invalidate — 다음 레이아웃에서 반영).
+    /// 폴백 오프(_disabled) 상태에서는 무동작 — 켤 것이 없다.
+    /// </summary>
+    public void SetDecorVisibility(bool guides, bool marks)
+    {
+        if (_disabled || (guides == _showGuides && marks == _showMarks)) return;
+        _showGuides = guides;
+        _showMarks = marks;
         Invalidate();
     }
 
@@ -458,6 +477,7 @@ internal sealed class EditorDecor
 
     private void EmitGuide(double y, double vw, double vh, Thickness pad)
     {
+        if (!_showGuides) return; // A215: 가이드 토글 오프 — 병합 부기(pending)는 돌되 선은 안 긋는다
         if (y < -1 - GuideGap || y > vh + 1 + GuideGap) return; // 뷰포트 밖(클립도 있지만 요소를 아낀다)
         var guide = TakeGuide();
         guide.Width = Math.Max(0, vw - pad.Left - pad.Right);
@@ -473,6 +493,7 @@ internal sealed class EditorDecor
 
     private void DrawMarker(string glyph, double x, double y, double vh)
     {
+        if (!_showMarks) return; // A215: 마커(¶·EOF) 토글 오프 — 단일 깔때기라 이 한 줄이 전부다
         if (y > vh || y < -30) return;
         var marker = TakeMarker();
         marker.Text = glyph;

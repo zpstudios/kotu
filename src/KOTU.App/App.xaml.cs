@@ -58,9 +58,9 @@ public partial class App : Application
             router.SetOverride(".json", "document");
             return router;
         });
+        // A222: 창 재사용 규칙 설정(A24 window.alwaysNewWindow) 폐지로 ISettingsService 주입 제거.
         services.AddSingleton(sp => new WindowManager(
-            sp.GetRequiredService<FileTypeRouter>(),
-            sp.GetRequiredService<ISettingsService>())); // 창 재사용 규칙(A24)
+            sp.GetRequiredService<FileTypeRouter>()));
         return services.BuildServiceProvider();
     }
 

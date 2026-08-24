@@ -30,7 +30,7 @@ namespace KOTU.Module.AllReadable;
 /// </summary>
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
-    IPlaybackStateSource, IPrintPageProvider
+    IPlaybackStateSource, IPrintPageProvider, IOpenFileRequestSource
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -158,6 +158,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         if (view is ITrayStatusProvider tray) tray.TrayStatusChanged += OnChildTrayStatusChanged;
         if (view is IPlaybackStateSource playback) playback.PlaybackStateChanged += OnChildPlaybackStateChanged;
         if (view is IPrintPageProvider print) print.PrintRequested += OnChildPrintRequested; // A211
+        if (view is IOpenFileRequestSource open) open.OpenFileRequested += OnChildOpenFileRequested; // A223
         UpdateBars();
         TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
         PlaybackStateChanged?.Invoke(); // A186: 자식 교체도 재생 상태 재평가 대상이다(트레이와 같은 이유)
@@ -176,6 +177,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         if (_childView is ITrayStatusProvider tray) tray.TrayStatusChanged -= OnChildTrayStatusChanged;
         if (_childView is IPlaybackStateSource playback) playback.PlaybackStateChanged -= OnChildPlaybackStateChanged;
         if (_childView is IPrintPageProvider print) print.PrintRequested -= OnChildPrintRequested; // A211
+        if (_childView is IOpenFileRequestSource open) open.OpenFileRequested -= OnChildOpenFileRequested; // A223
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
@@ -200,6 +202,14 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     /// 행동 신호</b>라, 자식이 바뀌었다고 인쇄 대화상자가 떠서는 안 된다.
     /// </summary>
     private void OnChildPrintRequested() => PrintRequested?.Invoke();
+
+    /// <summary>A223: 자식의 열기 요청(문서 하단 바 Open)을 그대로 셸로 올린다 — 인쇄와 같은
+    /// <b>행동 신호</b> 중계(자식 교체가 이 이벤트를 쏘는 일은 없다). 셸 OpenFile은 All Readable이
+    /// 떠 있으면 IFileOpenTarget(TryOpenFile)으로 되돌아와 이 뷰 안에서 열린다 — 죽은 버튼 방지.</summary>
+    private void OnChildOpenFileRequested(string path) => OpenFileRequested?.Invoke(path);
+
+    /// <summary>A223: 열기 위임 이벤트(IOpenFileRequestSource) — 자식 중계 전용.</summary>
+    public event Action<string>? OpenFileRequested;
 
     /// <summary>자식이 파일을 열었다(첫 로드·자식 내부 탐색). 셸에 중계해 오버레이·탐색기를 맞춘다.</summary>
     private void OnChildContentOpened(string path)

@@ -334,6 +334,7 @@ public sealed partial class MainWindow : Window
         _tray = new TrayIcon(File.Exists(IconPath) ? IconPath : null);
         _tray.ActivateRequested += BringToFront;
         _tray.CloseRequested += () => _ = ConfirmThenCloseAsync(); // 닫기도 미저장 가드 경유 (A37)
+        _tray.MinimizeToTrayRequested += HideToTray; // A218: 트레이 숨김은 명시 호출 2곳뿐(이 메뉴 + 시작 메뉴)
         _tray.ExitAllRequested += _manager.CloseAll;
         Closed += (_, _) => _tray.Dispose();
 
@@ -343,13 +344,11 @@ public sealed partial class MainWindow : Window
         // 1회 지정하고, 실패는 TaskbarIdentity가 전부 조용히 무시한다(공유 AUMID로 후퇴).
         Integration.TaskbarIdentity.Apply(this, _tray.Slot);
 
-        // A69: 최소화 = 트레이로 숨김 (전 모듈). 감지는 AppWindow.Changed의 프레젠터 상태 검사 —
-        // A55 TrackNormalBounds가 이미 실증한 이벤트 경로. WM_SYSCOMMAND(SC_MINIMIZE)를 "대체
-        // 감지 경로"로 쓰는 안은 당시 기각했지만(애니메이션 전 개입·마스킹 부담), A185에서
-        // **관찰 전용**으로 부분 채택됐다: 상태 전이 감지는 여전히 이 이벤트가 하고, WindowMinSize의
-        // SC_MINIMIZE 관찰은 "그 최소화가 사용자 명령이었는가"라는 원인 구분만 보탠다 —
-        // Win+D(바탕화면 보기)의 셸 일괄 최소화까지 트레이로 숨던 과잉을 걷어내기 위함이다.
-        AppWindow.Changed += OnMinimizeStateChanged;
+        // A218(2026-08-24): 최소화 → 트레이 자동 숨김(A69 전 최소화 → A185 SC_MINIMIZE 한정 —
+        // 이 주제 세 번째 변경)은 철회됐다. 최소화는 이제 OS 표준 그대로(작업표시줄에 남는다)이고,
+        // 트레이 숨김은 명시 호출 2곳(트레이 우클릭 "Minimize to tray" + 시작 메뉴 최하단 항목)만
+        // 들어간다 — 진입은 전부 HideToTray() 하나로 모인다. A185의 SC_MINIMIZE 관찰 기계
+        // (WindowMinSize)도 소비자가 사라져 함께 제거됐다.
     }
 
     // ---------- UI 스케일 오버라이드 (v0.24.0) ----------
@@ -923,7 +922,8 @@ public sealed partial class MainWindow : Window
     /// **표기·순서용 개념**일 뿐 어떤 키와도 연결되지 않는다.
     /// A96(v0.116.0) 이후 배치(위→아래):
     /// 광고 · 구분선 · Settings(0) · **구분선** · 하드웨어(7) · 구분선 · 압축(6) · 구분선 ·
-    /// 문서(5) · 오디오(4) · 영상(3) · 사진(2) · **구분선** · All Readable(1).
+    /// 문서(5) · 오디오(4) · 영상(3) · 사진(2) · **구분선** · All Readable(1) · 구분선 ·
+    /// Minimize to tray(A218 — 최하단·번호 없음).
     /// 굵게 표시한 구분선 2개가 A96 신규다 — ① 1번과 2번 사이 ② 하드웨어와 Settings 사이
     /// (둘이 서로 붙어 보인다는 사용자 지적).
     /// </summary>
@@ -964,6 +964,24 @@ public sealed partial class MainWindow : Window
 
         AddModuleItem(KOTU.Module.AllReadable.AllReadableModule.ModuleId); // 1 — A96에서 최하단으로
         // 하단 바 우측 Info·Settings 아이콘은 제거(v0.28.2) — 시작 메뉴 항목으로 일원화.
+
+        // A218: "Minimize to tray"는 All Readable보다 더 아래(진짜 최하단 — 사용자 지정 위치).
+        // 모듈 항목이 아니라 창 동작이라 구분선으로 모듈 그룹과 나눈다. 같은 동작의 다른 진입은
+        // 트레이 우클릭 메뉴(TrayIcon.MinimizeToTrayRequested) 하나뿐이다.
+        StartMenuPanel.Children.Add(Divider());
+        AddMinimizeToTrayItem();
+    }
+
+    /// <summary>A218: 시작 메뉴 최하단 "Minimize to tray" — HideToTray()의 시작 메뉴 진입로.</summary>
+    private void AddMinimizeToTrayItem()
+    {
+        var item = MakeMenuItem("", "Minimize to tray"); // E921 = ChromeMinimize 글리프
+        item.Click += (_, _) =>
+        {
+            StartFlyout.Hide(); // 플라이아웃을 연 채 창만 사라지지 않게 먼저 닫는다
+            HideToTray();
+        };
+        StartMenuPanel.Children.Add(item);
     }
 
     private void AddModuleItem(string moduleId)
@@ -1231,17 +1249,13 @@ public sealed partial class MainWindow : Window
     // ---------- 파일 열기 ----------
 
     /// <summary>
-    /// 내장 탐색기·좌 리스트 오버레이의 일반 더블클릭 열기(A24): 재사용 규칙이 "항상 새 창"이면
-    /// WindowManager로 넘겨 새 창에 열고, 아니면(기본) 이 창에서 그대로 연다.
-    /// 외부 진입(WindowManager가 창을 이미 골라 OpenFile을 부르는 경로)과 섞이지 않게 별도 메서드.
+    /// 내장 탐색기·좌 리스트 오버레이의 일반 더블클릭 열기(A24): 이 창에서 그대로 연다.
+    /// A222(2026-08-24): "항상 새 창" 설정 분기(window.alwaysNewWindow) 폐지 — 명시적 새 창
+    /// 조작(Shift+더블클릭·우클릭 메뉴)만 새 창을 만든다. 외부 진입(WindowManager가 창을 이미
+    /// 골라 OpenFile을 부르는 경로)과 섞이지 않게 별도 메서드는 유지 — 배선 지점이 여럿이라
+    /// (ExplorerPane·ThumbnailExplorer·오버레이) 시그니처를 흔들지 않는 쪽이 안전하다.
     /// </summary>
-    private void OpenFileRouted(string path)
-    {
-        if (_settings.Get(WindowManager.AlwaysNewWindowKey, false))
-            _manager.OpenFileInNewWindow(path);
-        else
-            OpenFile(path);
-    }
+    private void OpenFileRouted(string path) => OpenFile(path);
 
     /// <summary>파일 라우팅의 종착점: 확장자로 모듈을 찾아 뷰를 띄운다.</summary>
     public async void OpenFile(string path)
@@ -1405,6 +1419,15 @@ public sealed partial class MainWindow : Window
             {
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnPlaybackStateChanged();
+            });
+        // A223: 모듈 하단 바 Open 버튼(문서 모듈)의 열기 위임 — 셸 OpenFile 경로로 받는다.
+        // 이 경로가 미저장 가드(A37)·제목 갱신을 전부 갖고 있다(뷰 직접 열기의 우회 방지 —
+        // 계약 주석). 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 교체됐으면 무시한다.
+        if (view is IOpenFileRequestSource openRequest)
+            openRequest.OpenFileRequested += path => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                OpenFile(path);
             });
         // A211 배치 1: 모듈 하단 바 인쇄 버튼(배치 2~5에서 추가)의 신호 → 셸 인쇄 단일 경로.
         // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(위와 같은 가드).
@@ -2648,16 +2671,18 @@ public sealed partial class MainWindow : Window
 
         // A93: S1 중앙은 항상 썸네일 뷰다 — A81의 "좌 도크가 불투명이면 중앙 탐색기 숨김"
         // (중복 목록 제거)을 대체한다. 중앙이 리스트가 아니라 타일이라 중복으로 보이지 않는다.
-        // 열 수 = 좌우 사이드바가 둘 다 열려 있으면 4, 하나라도 닫히면 8 (A63 대체 —
-        // 타일 크기는 SizeChanged에서 floor(실폭/열수)로 따라온다).
+        // A213: 열 수 = 8 − 2×(열린 도크 수) → 둘 다 4 · 하나 6 · 없음 8 (구 A93의 4/8 2단을
+        // 3단으로 — A168 H/W 센터 열 산식과 동형. 타일 크기는 SizeChanged에서 floor(실폭/열수)로
+        // 따라온다). dockCount는 위 A119 블록이 이미 셌다(도크만 — 오버레이 불산입 해석 공유).
         if (emptyModule)
-            _thumbnailExplorer?.SetColumns(left > 0 && right > 0 ? 4 : 8);
+            _thumbnailExplorer?.SetColumns(8 - 2 * dockCount);
 
         // A90 S4: 중앙 썸네일 영역을 좌/우 패널 폭만큼 비켜 세운다. S4 호스트는 ColumnSpan=3
         // 전폭이라 도크 컬럼과 별개로 같은 %의 스페이서를 스스로 잡아야 패널과 픽셀 정렬된다
         // (SetPanelPercent 산식). A176: S4가 추가하는 패널도 사이드바(도크)라 스페이서와 도크
-        // 컬럼이 같은 25%로 일치한다. 열 수는 A93 규칙 준용(좌우 모두 떠 있으면 4, 아니면 8) —
-        // S4는 양쪽을 항상 채우므로 통상 4, 폴더 소실로 리스트가 못 뜬 경우(IsOpen=false)만 8이다.
+        // 컬럼이 같은 25%로 일치한다. A213: 열 수는 A93 규칙 준용(8 − 2×열린 패널 수 = 4/6/8) —
+        // S4는 양쪽을 항상 채우므로 통상 4, 폴더 소실로 한쪽이 못 뜬 경우(IsOpen=false)에만
+        // 6 또는 8로 넓어진다.
         if (_openFileBrowsing)
         {
             var s4Left = ListOverlay.IsOpen ? dockPercent : 0;
@@ -2665,7 +2690,7 @@ public sealed partial class MainWindow : Window
             S4LeftSpacer.Width = new GridLength(s4Left, GridUnitType.Star);
             S4RightSpacer.Width = new GridLength(s4Right, GridUnitType.Star);
             S4CenterColumn.Width = new GridLength(100 - s4Left - s4Right, GridUnitType.Star);
-            _s4Explorer?.SetColumns(s4Left > 0 && s4Right > 0 ? 4 : 8);
+            _s4Explorer?.SetColumns(8 - 2 * ((s4Left > 0 ? 1 : 0) + (s4Right > 0 ? 1 : 0)));
         }
 
         UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다 (S4에서는 숨김 — A90)
@@ -3298,7 +3323,7 @@ public sealed partial class MainWindow : Window
         _ => string.Empty,
     };
 
-    // ---------- 최소화 = 트레이로 숨김 (A69) ----------
+    // ---------- 트레이로 숨김 (A69 → A218: 자동 감지 폐지·명시 호출 전용) ----------
 
     /// <summary>
     /// 트레이로 숨긴 상태(A69) — 작업표시줄·Alt+Tab에 없고 창별 트레이 아이콘으로만 복귀한다.
@@ -3308,32 +3333,19 @@ public sealed partial class MainWindow : Window
     private bool _hiddenInTray;
 
     /// <summary>
-    /// 최소화 전이 감지(A69). 이 이벤트가 올 땐 창이 이미 -32000으로 이동한 뒤라(A55와 같은 관찰)
-    /// 최소화 애니메이션이 끝나 있다 — "애니메이션 후 Hide" 순서가 자연히 성립한다.
-    /// A39 핀(always on top) 창도 예외 없다: 사용자가 직접 띄워둔 창이라도 최소화 버튼을
-    /// 눌렀다는 사실이 우선(일관성). 실제 숨김은 큐로 미뤄 Changed 디스패치 중의 재진입을 피한다.
+    /// A218: 이 창을 트레이로 숨긴다 — 진입은 명시 호출 2곳뿐(트레이 우클릭 "Minimize to tray" +
+    /// 시작 메뉴 최하단 항목). 최소화 버튼·Win+D 등 OS 최소화는 이제 전부 일반 최소화다
+    /// (A69/A185의 자동 감지 폐지 — 세 번째 변경. 복원 참조 = A218 이전 git 이력의 OnMinimizeStateChanged).
+    /// 숨김 동안만 WS_EX_TOOLWINDOW(부록 B 18번 사양 메모) — Hide가 주 동작이고 스타일은
+    /// 숨김 창을 순환 목록에 남기는 셸 변형에 대한 보조 방어선이다. 복귀는 종전 그대로
+    /// <see cref="BringToFront"/>(트레이 좌클릭·Activate window·파일 열기 재사용)로 모인다.
     /// </summary>
-    private void OnMinimizeStateChanged(Microsoft.UI.Windowing.AppWindow sender,
-        Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
+    public void HideToTray()
     {
         if (_hiddenInTray) return;
-        if (sender.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter
-            { State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized }) return;
-
-        // A185: 사용자 최소화(타이틀바 버튼·시스템 메뉴 등 SC_MINIMIZE 경유)일 때만 트레이로.
-        // Win+D 등 SC_MINIMIZE 없는 최소화는 여기서 끝 — 창은 일반 최소화로 작업표시줄에 남고,
-        // 이후 연쇄 Changed가 와도 관찰이 이미 없으므로(1회 소비·타임아웃) 계속 조용하다.
-        if (!WindowMinSize.ConsumeUserMinimize(this)) return;
-
-        _hiddenInTray = true; // 연쇄 Changed(위치·크기·Z순서)로 중복 큐잉되지 않게 먼저 표시
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            if (!_hiddenInTray) return; // 큐 대기 중 트레이 좌클릭으로 이미 복귀했으면 숨기지 않는다
-            // 숨김 동안만 WS_EX_TOOLWINDOW(부록 B 18번 사양 메모) — Hide가 주 동작이고
-            // 스타일은 숨김 창을 순환 목록에 남기는 셸 변형에 대한 보조 방어선이다.
-            AltTabExclusion.Set(this, true);
-            AppWindow.Hide(); // 작업표시줄 버튼 제거. 트레이 아이콘(_tray)은 창 수명 내내 남는다
-        });
+        _hiddenInTray = true;
+        AltTabExclusion.Set(this, true);
+        AppWindow.Hide(); // 작업표시줄 버튼 제거. 트레이 아이콘(_tray)은 창 수명 내내 남는다
     }
 
     /// <summary>

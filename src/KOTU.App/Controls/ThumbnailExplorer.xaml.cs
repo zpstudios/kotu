@@ -20,8 +20,9 @@ namespace KOTU.App.Controls;
 /// 셸이 ShowEntries로 밀어 넣는다(ExplorerPane.ViewChanged 경유) — 어느 쪽에서 폴더를 바꿔도
 /// 둘 다 같은 목록을 그린다. 더블클릭 열기·새 인스턴스 이벤트도 ExplorerPane과 같은 배선이라
 /// 셸의 기존 라우팅(OpenFileRouted·A24)을 그대로 쓴다.
-/// 열 수 = 좌우 도크가 둘 다 열려 있으면 4, 하나라도 닫히면 8(A63 대체 — 크기 고정·열 수 가변이던
-/// 종전 규칙을 열 수 고정·크기 가변으로 뒤집었다). 타일 한 변 = floor(실폭/열수).
+/// 열 수 = 8 − 2×(열린 도크 수) → 둘 다 열림 4 · 하나 6 · 없음 8(A213 — 구 A93의 4/8 2단 개정.
+/// A63 대체 계보: 크기 고정·열 수 가변이던 종전 규칙을 열 수 고정·크기 가변으로 뒤집은 위에
+/// 3단화). 타일 한 변 = floor(실폭/열수).
 /// </summary>
 public sealed partial class ThumbnailExplorer : UserControl
 {
@@ -67,7 +68,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     public Func<string, string?>? ModuleIdForFile { get; set; }
 
-    private int _columns = 8; // 기본 = 도크 하나라도 닫힘(전폭) 기준 — 셸이 곧 SetColumns로 덮는다
+    private int _columns = 8; // 기본 = 도크 둘 다 닫힘(전폭) 기준 — 셸이 곧 SetColumns(4/6/8)로 덮는다
 
     /// <summary>A192: 조립 재진입 가드 — ShowEntries가 올 때마다 증가(ExplorerPane._loadSeq 관용구).
     /// 진행 중 루프의 틱은 append 직전에 이 값과 대조해 낡은 조각을 버린다.</summary>
@@ -376,7 +377,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         return true;
     }
 
-    /// <summary>열 수 지정(A93: 도크 둘 다 열림 4 / 하나라도 닫힘 8). 바뀌면 타일 크기 재계산.</summary>
+    /// <summary>열 수 지정(A213: 8 − 2×열린 도크 수 = 둘 다 4 / 하나 6 / 없음 8). 바뀌면 타일 크기 재계산.</summary>
     public void SetColumns(int columns)
     {
         if (columns == _columns) return;

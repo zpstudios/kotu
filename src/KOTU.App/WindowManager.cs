@@ -1,7 +1,6 @@
 using Microsoft.UI.Xaml;
 using KOTU.Core.Cli;
 using KOTU.Core.Routing;
-using KOTU.Core.Settings;
 
 namespace KOTU.App;
 
@@ -11,21 +10,18 @@ namespace KOTU.App;
 ///
 /// 창 선택 규칙(파일 열기 시):
 ///  1) 같은 모듈을 보여주는 창이 있으면 재사용 (이미지 ←/→ 탐색 컨텍스트 유지)
-///     — 단 "항상 새 창" 설정(A24)이면 이 단계를 건너뛴다
 ///  2) 아직 아무것도 안 연 빈 셸 창이 있으면 재사용 (시작 직후 등)
 ///  3) 없으면 새 창
 /// 명시적 새 창 수단(Shift+N(A84 — 기존 Ctrl+N)·Shift+더블클릭·우클릭 메뉴, A24)은 규칙과 무관하게 항상 새 창.
+/// ※ A222(2026-08-24): A24의 "Always open files in a new instance" 설정 토글
+/// (window.alwaysNewWindow — 1단계 건너뛰기 게이트)은 폐지 — 재사용 규칙만 남는다.
 /// 마지막 창이 닫히면 앱을 종료한다 — 트레이로 숨긴 창(A69)도 닫히기 전까지는 열린 창이다
 /// (목록 제거는 Closed에서만 일어나므로, 마지막 창까지 숨겨도 프로세스는 유지된다).
 /// 모든 메서드는 UI 스레드에서 호출해야 한다.
 /// </summary>
 public sealed class WindowManager
 {
-    /// <summary>창 재사용 규칙 설정 키(A24): true = 파일을 열 때마다 새 창(기본 false = 재사용).</summary>
-    public const string AlwaysNewWindowKey = "window.alwaysNewWindow";
-
     private readonly FileTypeRouter _router;
-    private readonly ISettingsService _settings;
 
     /// <summary>열린 창 목록. 끝쪽이 가장 최근에 활성화된 창(MRU).</summary>
     private readonly List<MainWindow> _windows = [];
@@ -37,10 +33,9 @@ public sealed class WindowManager
     /// </summary>
     private readonly List<MainWindow> _ordered = [];
 
-    public WindowManager(FileTypeRouter router, ISettingsService settings)
+    public WindowManager(FileTypeRouter router)
     {
         _router = router;
-        _settings = settings;
     }
 
     /// <summary>가장 최근 활성화된 창. 업데이트 다이얼로그 등 공용 UI의 호스트로 쓴다.</summary>
@@ -244,9 +239,8 @@ public sealed class WindowManager
     private MainWindow FindReusable(string? moduleId)
     {
         // 1) 같은 모듈 창 (여러 개면 가장 최근 활성화된 것).
-        //    "항상 새 창" 설정(A24)이면 건너뛴다 — 빈 셸 재사용(2)은 유지:
-        //    방금 뜬 빈 창을 두고 또 창을 만드는 건 규칙의 의도가 아니다.
-        if (moduleId is not null && !_settings.Get(AlwaysNewWindowKey, false))
+        //    A222: "항상 새 창" 설정(A24)의 건너뛰기 게이트는 폐지 — 항상 이 단계부터 본다.
+        if (moduleId is not null)
         {
             for (var i = _windows.Count - 1; i >= 0; i--)
                 if (_windows[i].CurrentModuleId == moduleId)

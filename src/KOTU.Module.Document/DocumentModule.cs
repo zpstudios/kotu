@@ -27,6 +27,13 @@ public sealed class DocumentModule : IModule
     /// </summary>
     public const string ZoomSettingKey = "document.zoom";
 
+    /// <summary>A215: 라인 가이드(줄 상/하단 선 — A115 ①) 표시 여부. bool, 기본 true, 전역 1벌.
+    /// 하단 바 토글 버튼이 즉시 저장한다(줌과 같은 관용구 — 설정 화면 UI 없음).</summary>
+    public const string ShowGuidesSettingKey = "document.showLineGuides";
+
+    /// <summary>A215: 펑츄에이션 마커(¶·EOF — A115 ②) 표시 여부. bool, 기본 true, 전역 1벌.</summary>
+    public const string ShowMarksSettingKey = "document.showMarks";
+
     private readonly ISettingsService _settings;
 
     /// <summary>A171→A181: 줌 배율 설정을 뷰에 넘기기 위한 주입(선례 = AudioModule).</summary>

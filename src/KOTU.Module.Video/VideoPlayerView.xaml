@@ -90,8 +90,8 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -104,27 +104,40 @@
                  (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
                  치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
             <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
-            <Button x:Name="PlayButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
+            <!-- A11(v0.211.0) 루프 칸: A163 EQ 칸(자막 버튼+플라이아웃 규격)과 같은 1칸(32×32).
+                 항목(목록 루프 토글 + 현재 파일 반복 라디오 4택)은 코드(BuildLoopFlyout)가
+                 1회 채우고, 본체 아이콘·툴팁(L 키 표기 포함)은 UpdateLoopButton()이 상태형으로
+                 갱신한다 — 아래 FontIcon은 초기값일 뿐이다. 폭 계수: 이 칸(32+간격 6 = 38)은
+                 A151이 전체화면 칸을 제거하며 남긴 여유 38을 정확히 소진한다 — 축약 임계 640
+                 유지(UpdateCompactTransport 산식 주석 참조, 설계 A11-playlist-design.md §4.1).
+                 A216(2026-08-24): 위치를 c9(맨 끝)에서 재생 버튼 왼쪽(c0)으로 이동 — 총폭 불변. -->
+            <Button x:Name="LoopButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}">
+                <FontIcon Glyph="&#xE8EE;" FontSize="18" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="LoopFlyout" Placement="Top" />
+                </Button.Flyout>
+            </Button>
+            <Button x:Name="PlayButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
                     Content="▶"
                     ToolTipService.ToolTip="Play/Pause (Space)" Click="OnPlayClicked" />
-            <TextBlock x:Name="PositionText" Grid.Column="1" Text="0:00"
+            <TextBlock x:Name="PositionText" Grid.Column="2" Text="0:00"
                        VerticalAlignment="Center" />
-            <Slider x:Name="SeekSlider" Grid.Column="2" Minimum="0" Maximum="1000"
+            <Slider x:Name="SeekSlider" Grid.Column="3" Minimum="0" Maximum="1000"
                     IsThumbToolTipEnabled="False" VerticalAlignment="Center"
                     ValueChanged="OnSeekSliderChanged" />
-            <TextBlock x:Name="DurationText" Grid.Column="3" Text="0:00"
+            <TextBlock x:Name="DurationText" Grid.Column="4" Text="0:00"
                        VerticalAlignment="Center" />
-            <Button x:Name="MuteButton" Grid.Column="4" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="MuteButton" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
                     Content="🔊" Click="OnMuteClicked" />
-            <Slider x:Name="VolumeSlider" Grid.Column="5" Width="96" Minimum="0" Maximum="100"
+            <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(v0.49.0 사용자 요청 — 공간 절약).
                  A27(v0.107.0)에서 2칸 규격(A97에서 84×36 → A106에서 84×32) — "1.0×"가 1칸에 안 들어간다. -->
-            <ComboBox x:Name="SpeedBox" Grid.Column="6" Style="{StaticResource BottomBarWideComboBoxStyle}"
+            <ComboBox x:Name="SpeedBox" Grid.Column="7" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
             <!-- 자막: 콤보 → 아이콘 버튼 + 라디오 플라이아웃 (v0.53.0 사용자 요청 — 공간 절약) -->
-            <Button x:Name="SubtitleButton" Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="SubtitleButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
                     IsEnabled="False">
                 <FontIcon Glyph="&#xE190;" FontSize="18" />
                 <Button.Flyout>
@@ -147,7 +160,7 @@
                  없어 BasedOn 불가(v0.113.1 실기기 이력)라 구 SplitButton처럼 인라인 값으로 적는다.
                  화살표는 내용 없이 내장 셰브론만 표시하고 A34 키가 없어 툴팁을 XAML에 적는다. -->
             <!-- 본체 툴팁(키 표기 포함)은 UpdateFitButton()이 상태와 함께 갱신한다 — A34 -->
-            <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
                         CornerRadius="4,0,0,4" Click="OnFitClicked">
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />
@@ -194,18 +207,7 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
             </StackPanel>
-            <!-- A11(v0.211.0): 루프 c9 — A163 EQ 칸(자막 버튼+플라이아웃 규격)과 같은 1칸(32×32)
-                 신설. 항목(목록 루프 토글 + 현재 파일 반복 라디오 4택)은 코드(BuildLoopFlyout)가
-                 1회 채우고, 본체 아이콘·툴팁(L 키 표기 포함)은 UpdateLoopButton()이 상태형으로
-                 갱신한다 — 아래 FontIcon은 초기값일 뿐이다. 폭 계수: 이 칸(32+간격 6 = 38)은
-                 A151이 전체화면 칸을 제거하며 남긴 여유 38을 정확히 소진한다 — 축약 임계 640
-                 유지(UpdateCompactTransport 산식 주석 참조, 설계 A11-playlist-design.md §4.1). -->
-            <Button x:Name="LoopButton" Grid.Column="9" Style="{StaticResource BottomBarButtonStyle}">
-                <FontIcon Glyph="&#xE8EE;" FontSize="18" />
-                <Button.Flyout>
-                    <MenuFlyout x:Name="LoopFlyout" Placement="Top" />
-                </Button.Flyout>
-            </Button>
+            <!-- A216: 루프 버튼은 재생 버튼 왼쪽(c0)으로 이동 — 선언도 바 맨 앞으로 옮겼다. -->
         </Grid>
     </Grid>
 </UserControl>

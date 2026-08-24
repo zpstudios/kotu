@@ -40,7 +40,7 @@ namespace KOTU.Module.Document;
 /// </summary>
 public sealed partial class DocumentView : UserControl,
     IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
-    IUntitledContentSource, IPrintPageProvider
+    IUntitledContentSource, IPrintPageProvider, IOpenFileRequestSource
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -177,6 +177,14 @@ public sealed partial class DocumentView : UserControl,
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
         // A115: 에디터 장식(가이드·¶·EOF·A142 행 번호). 전문 텍스트는 공유 스냅샷으로 공급한다(A142 ①ⓑ).
         _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText);
+
+        // A215: 저장된 표시 토글 2축(라인 가이드·¶ 마커 — 기본 둘 다 켜짐)을 장식기와 버튼에 반영.
+        // 토글 노출 자체(편집 모드에서만)는 UpdateDecorToggles가 모드 전환 지점마다 맞춘다.
+        _showGuides = settings.Get(DocumentModule.ShowGuidesSettingKey, true);
+        _showMarks = settings.Get(DocumentModule.ShowMarksSettingKey, true);
+        _decor.SetDecorVisibility(_showGuides, _showMarks);
+        GuideToggleButton.IsChecked = _showGuides;
+        MarksToggleButton.IsChecked = _showMarks;
 
         // A181: 저장된 줌 배율(전역 1벌)을 XAML 기본값(FontSize 14 = 100%) 위에 얹는다.
         // 파일을 열기 전에 적용해야 대용량 텍스트의 랩 계산이 최종 폰트로 한 번에 끝난다(A177).
@@ -547,6 +555,7 @@ public sealed partial class DocumentView : UserControl,
 
         EditorBox.Visibility = Visibility.Visible;
         _decor.Invalidate(); // A115: 새 문서·표시 전환이 레이아웃에 반영된 뒤 장식을 다시 그린다
+        UpdateDecorToggles(); // A215: 편집 모드 진입 — 표시 토글 노출
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
         UpdateZoomText(); // A181: _path가 잡혔다 — 하단 바에 현재 배율 표시(항상, 100% 포함)
@@ -565,6 +574,27 @@ public sealed partial class DocumentView : UserControl,
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
     }
+
+    // ---------- 파일 열기 버튼 (A223) ----------
+
+    /// <summary>
+    /// A223: 하단 바 Open 클릭 — FileOpenPicker(PickSaveAsPathAsync와 같은 InitializeWithWindow +
+    /// GetHwnd 패턴, 선례 = ArchiveView 피커)로 문서 확장자를 고르게 하고, 실제 열기는
+    /// <see cref="OpenFileRequested"/>로 셸에 위임한다 — 미저장 가드(A37)·제목 갱신이 전부
+    /// 셸 OpenFile 경로에 있어 뷰가 직접 열면(OpenAny) 가드를 우회하게 된다(계약 주석 참고).
+    /// 피커 자체가 모달이라 재진입은 없고, 취소(null)는 무동작.
+    /// </summary>
+    private async void OnOpenFileClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+        foreach (var ext in DocumentModule.Extensions) picker.FileTypeFilter.Add(ext);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
+        var file = await picker.PickSingleFileAsync();
+        if (file?.Path is { Length: > 0 } path) OpenFileRequested?.Invoke(path);
+    }
+
+    /// <summary>A223: 열기 위임 이벤트(IOpenFileRequestSource) — 셸이 OpenFile 경로로 받는다.</summary>
+    public event Action<string>? OpenFileRequested;
 
     // ---------- 무제 문서 (A189) ----------
 
@@ -623,6 +653,7 @@ public sealed partial class DocumentView : UserControl,
 
         EditorBox.Visibility = Visibility.Visible;
         _decor.Invalidate(); // A115: 표시 전환이 레이아웃에 반영된 뒤 장식을 다시 그린다
+        UpdateDecorToggles(); // A215: 무제도 편집 모드 — 표시 토글 노출
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = UntitledDisplayName;
         UpdateZoomText(); // A181: 무제도 텍스트 편집 — 배율 표시
@@ -734,6 +765,38 @@ public sealed partial class DocumentView : UserControl,
         ToolTipService.SetToolTip(ViewToggleButton, _renderMode ? "Edit" : "Preview (Markdown only)");
     }
 
+    // ---------- \uD3B8\uC9D1 \uD45C\uC2DC \uD1A0\uAE00 2\uC885 (A215) ----------
+
+    /// <summary>A215: \uB77C\uC778 \uAC00\uC774\uB4DC \uD45C\uC2DC \uC0C1\uD0DC \u2014 \uBC84\uD2BC(IsChecked)\u00B7\uC7A5\uC2DD\uAE30(SetDecorVisibility)\u00B7\uC124\uC815 \uD0A4\uC758 \uB2E8\uC77C \uCD9C\uCC98.</summary>
+    private bool _showGuides = true;
+
+    /// <summary>A215: \u00B6\u00B7EOF \uB9C8\uCEE4 \uD45C\uC2DC \uC0C1\uD0DC \u2014 \uC704\uC640 \uAC19\uC740 3\uBA74 \uB3D9\uAE30 \uCD95.</summary>
+    private bool _showMarks = true;
+
+    /// <summary>A215: \uD1A0\uAE00 \uB178\uCD9C\uC758 \uB2E8\uC77C \uC9C0\uC810 \u2014 \uD3B8\uC9D1 \uBAA8\uB4DC(\uC5D0\uB514\uD130 \uD45C\uC2DC \uC911)\uC5D0\uC11C\uB9CC \uBCF4\uC778\uB2E4.
+    /// \uD638\uCD9C \uC2DC\uC810 = EditorBox.Visibility\uAC00 \uBC14\uB00C\uB294 \uBAA8\uB4DC \uC804\uD658 5\uACF3(\uD30C\uC77C \uC5F4\uAE30\u00B7\uBB34\uC81C\u00B7\uB80C\uB354 \uC9C4\uC785/\uBCF5\uADC0\u00B7PDF).</summary>
+    private void UpdateDecorToggles() =>
+        DecorTogglePanel.Visibility = EditorBox.Visibility == Visibility.Visible
+            ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>A215: \uAC00\uC774\uB4DC \uD1A0\uAE00 \uD074\uB9AD \u2014 \uC989\uC2DC \uC801\uC6A9 + \uC989\uC2DC \uC800\uC7A5(A181 \uC90C \uAD00\uC6A9\uAD6C).</summary>
+    private void OnGuideToggleClick(object sender, RoutedEventArgs e)
+    {
+        _showGuides = GuideToggleButton.IsChecked == true;
+        _decor.SetDecorVisibility(_showGuides, _showMarks);
+        _settings.Set(DocumentModule.ShowGuidesSettingKey, _showGuides);
+        _settings.Save();
+    }
+
+    /// <summary>A215: \u00B6 \uB9C8\uCEE4 \uD1A0\uAE00 \uD074\uB9AD \u2014 \uAC00\uC774\uB4DC\uC640 \uB3D9\uD615.</summary>
+    private void OnMarksToggleClick(object sender, RoutedEventArgs e)
+    {
+        _showMarks = MarksToggleButton.IsChecked == true;
+        _decor.SetDecorVisibility(_showGuides, _showMarks);
+        _settings.Set(DocumentModule.ShowMarksSettingKey, _showMarks);
+        _settings.Save();
+    }
+
     /// <summary>
     /// A190: 렌더 모드 진입 — 표시 전환은 즉시, 내용은 워커 파싱(A42: 파싱 = 워커, 요소 조립 = UI)
     /// 완료 후 채운다(그동안 이전 내용 또는 빈 판이 보인다). A193: 조립은 첫 조각
@@ -752,6 +815,7 @@ public sealed partial class DocumentView : UserControl,
         UpdateViewToggle();
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(OpenPdf 관용구)
+        UpdateDecorToggles(); // A215: 뷰(렌더) 모드 — 표시 토글 숨김(편집 전용)
         RenderPane.Visibility = Visibility.Visible;
         Focus(FocusState.Programmatic);
 
@@ -886,6 +950,7 @@ public sealed partial class DocumentView : UserControl,
         RenderPane.Visibility = Visibility.Collapsed;
         EditorBox.Visibility = Visibility.Visible;
         _decor.Invalidate(); // A115: 에디터 복귀 — 다음 레이아웃에서 장식 재개
+        UpdateDecorToggles(); // A215: 편집 모드 복귀 — 표시 토글 재노출
         EditorBox.Focus(FocusState.Programmatic);
     }
 
@@ -954,6 +1019,7 @@ public sealed partial class DocumentView : UserControl,
         ResetRenderState(false); // A190: 렌더 축 리셋 — PDF 뷰에는 토글이 없다(비활성)
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다
+        UpdateDecorToggles(); // A215: PDF 뷰 — 표시 토글 숨김(편집 전용)
         UpdateZoomText(); // A181: PDF는 별개 줌 체계 — 텍스트 배율 표기를 비운다(_path=null)
         // A211 배치 4: 텍스트 갈래 이탈(편집 대상이 방금 비워졌다) — 첫 PDF 열기의 로드 동안
         // 버튼이 텍스트 시절 활성으로 남지 않게 즉시 재판정한다(같은 패널 재사용 PDF→PDF는

@@ -20,7 +20,7 @@ internal sealed class TrayIcon : IDisposable
     private const uint MfString = 0x0, MfSeparator = 0x800;
     private const uint TpmReturnCmd = 0x0100, TpmRightButton = 0x0002;
     private const uint WsPopup = 0x80000000;
-    private const int CmdActivate = 1, CmdClose = 2, CmdExitAll = 3;
+    private const int CmdActivate = 1, CmdClose = 2, CmdExitAll = 3, CmdMinimizeToTray = 4;
     private const uint ImageIcon = 1, LrLoadFromFile = 0x10;
     private const int SmCxSmIcon = 49, SmCySmIcon = 50;
 
@@ -59,6 +59,9 @@ internal sealed class TrayIcon : IDisposable
 
     /// <summary>메뉴의 'Exit KOTU' (모든 창 닫기).</summary>
     public event Action? ExitAllRequested;
+
+    /// <summary>A218: 우클릭 메뉴 "Minimize to tray" — 이 창을 트레이로 숨긴다(명시 호출 전용).</summary>
+    public event Action? MinimizeToTrayRequested;
 
     /// <param name="iconPath">.ico 파일 경로. 없거나 로드 실패 시 시스템 기본 아이콘.</param>
     public TrayIcon(string? iconPath)
@@ -294,6 +297,8 @@ internal sealed class TrayIcon : IDisposable
         try
         {
             _ = AppendMenuW(menu, MfString, CmdActivate, "Activate window");
+            // A218: 트레이 숨김은 자동(A69/A185 — 폐지)이 아니라 이 명시 항목으로만 들어간다.
+            _ = AppendMenuW(menu, MfString, CmdMinimizeToTray, "Minimize to tray");
             _ = AppendMenuW(menu, MfString, CmdClose, "Close this window");
             _ = AppendMenuW(menu, MfSeparator, 0, null);
             _ = AppendMenuW(menu, MfString, CmdExitAll, $"Exit {Branding.AppName}");
@@ -307,6 +312,7 @@ internal sealed class TrayIcon : IDisposable
             switch (cmd)
             {
                 case CmdActivate: ActivateRequested?.Invoke(); break;
+                case CmdMinimizeToTray: MinimizeToTrayRequested?.Invoke(); break;
                 case CmdClose: CloseRequested?.Invoke(); break;
                 case CmdExitAll: ExitAllRequested?.Invoke(); break;
             }
