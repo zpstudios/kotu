@@ -86,9 +86,16 @@
              특히 아래 68은 A152(하단 바 44 오버레이) 스크롤 끝 보정의 복제다.
              대용량(A177 임계 초과)·4MB 잘림 md는 렌더를 생략하고 에디터만 쓴다(A178 성능 원칙).
              장식(DecorLayer)은 에디터 전용이라 이 판 위에는 아무것도 그리지 않는다
-             (EditorDecor.RenderCore의 에디터 Visibility 게이트가 걷어 준다). -->
+             (EditorDecor.RenderCore의 에디터 Visibility 게이트가 걷어 준다).
+             A225: 렌더 뷰 줌 — 편집 모드와 같은 축(_zoomPercent)을 ScrollViewer ZoomFactor로
+             적용한다(PdfPane·ImageViewerView의 ZoomMode 선례). 랩 폭은 코드가 RenderStack.Width를
+             "뷰포트 폭 나누기 배율"로 보정한다(ApplyRenderZoom — PdfPane EnsureContentMinWidth의
+             A188 역수 폭 관용구. ZoomMode가 켜지면 콘텐츠 측정 제약이 무한이 되므로 명시 폭이
+             랩의 유일한 기준이다). Min=Max 핀 고정은 핀치·내장 줌이 10% 단계 축 밖의 배율을
+             만들지 못하게 하는 잠금 — 배율 변경은 ApplyRenderZoom의 ChangeView 한 곳뿐이다. -->
         <ScrollViewer x:Name="RenderPane" Visibility="Collapsed"
-                      VerticalScrollBarVisibility="Auto">
+                      VerticalScrollBarVisibility="Auto"
+                      ZoomMode="Enabled" MinZoomFactor="1" MaxZoomFactor="1">
             <StackPanel x:Name="RenderStack" Padding="24,16,24,68" />
         </ScrollViewer>
 

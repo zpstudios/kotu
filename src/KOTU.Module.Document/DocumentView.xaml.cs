@@ -199,6 +199,11 @@ public sealed partial class DocumentView : UserControl,
         // ScrollViewer 훅과 같은 사정이라 같은 방식(레이아웃마다 재시도·상한 후 조용히 포기)을 쓴다.
         // 플래그 검사뿐이라 상시 구독 비용은 없다(EnsureZoomWheelHook 주석 참고).
         EditorBox.LayoutUpdated += (_, _) => EnsureZoomWheelHook();
+        // A225: 렌더 판 쪽 Ctrl+휠 배선 — 같은 사정(프레젠터는 표시 후에야 잡힌다)·같은 관용구.
+        RenderPane.LayoutUpdated += (_, _) => EnsureRenderZoomWheelHook();
+        // A225: 뷰포트 폭이 바뀌면 랩 폭 보정(폭 = 뷰포트 나누기 배율)을 따라잡는다 —
+        // PdfPane의 리사이즈 재적용(EnsureContentMinWidth)과 같은 필요.
+        RenderPane.SizeChanged += (_, _) => ApplyRenderZoom();
 
         // A121: PDF 키보드 스크롤의 키 수신 지점. **터널링**(PreviewKeyDown)이라 PdfPane 안쪽
         // ListView·ScrollViewer의 내장 키 내비게이션보다 먼저 온다 — 버블링 KeyDown이면 그것들이
@@ -268,6 +273,10 @@ public sealed partial class DocumentView : UserControl,
     private int _zoomHookAttempts;
     private bool _zoomHookDone; // 성공 또는 포기 — 이후 LayoutUpdated 검사는 즉시 반환
 
+    // A225: 렌더 판 쪽 휠 배선의 동형 표지(EnsureRenderZoomWheelHook — 에디터와 별개 재시도 축)
+    private int _renderZoomHookAttempts;
+    private bool _renderZoomHookDone;
+
     /// <summary>
     /// A181: 현재 배율을 에디터에 적용한다 — ⓐ 본문 FontSize(랩 재계산 — ScaleTransform이 아니라
     /// 실측 계열(A115 장식·A142 거터)과 정합하는 유일한 방식), ⓑ 장식 배율(거터·마커 폰트 —
@@ -276,6 +285,8 @@ public sealed partial class DocumentView : UserControl,
     /// "두 요소 같은 제약"이고, FontSize·Padding은 EditorBox 내부 값이라 장식이 실측(rect·Padding
     /// 실시간 읽기)으로 자연히 따라온다.
     /// PDF 모드에는 아무 영향이 없다 — PdfPane은 별개 줌 체계(ZoomFactor·Fit)다.
+    /// A225: ⓔ 렌더 판(ApplyRenderZoom — 같은 배율 축을 md 렌더 뷰에도 적용. 판이 내려가 있으면
+    /// 무동작이고, 다음 표시(EnterRenderMode·SizeChanged)가 따라잡는다).
     /// </summary>
     private void ApplyZoom()
     {
@@ -284,6 +295,7 @@ public sealed partial class DocumentView : UserControl,
         _decor.SetScale(scale);
         UpdateEditorPadding();
         UpdateZoomText();
+        ApplyRenderZoom();
     }
 
     /// <summary>
@@ -343,7 +355,7 @@ public sealed partial class DocumentView : UserControl,
         if (FindDescendant<ScrollContentPresenter>(EditorBox) is { } presenter)
         {
             // 참조는 보관하지 않는다 — 해제 경로가 없고(뷰와 함께 내려간다) 재탐색도 없다.
-            presenter.PointerWheelChanged += OnEditorWheel;
+            presenter.PointerWheelChanged += OnZoomWheel;
             _zoomHookDone = true;
             return;
         }
@@ -351,23 +363,100 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>
-    /// A181: 에디터 본문 위 Ctrl+휠 = 줌(노치당 10%p). 휠 단독은 손대지 않는다 — 문서는 스크롤이
-    /// 본분이라(이미지의 "휠 단독 = 줌" 사진 특례와 다르고, PDF의 Ctrl 게이트와 같다 —
-    /// PdfPane.OnPresenterWheel 관용구). Shift 등 다른 수정키 조합도 기본 처리에 양보한다.
+    /// A225: 렌더 판(RenderPane) 쪽 Ctrl+휠 배선 — 에디터(EnsureZoomWheelHook)와 같은 지점
+    /// (내장 ScrollViewer의 콘텐츠 프레젠터 — 버블 순서상 ScrollViewer의 내장 Ctrl+휠 처리보다
+    /// 먼저 받는다, A98/PdfPane.HookScroll 관용구)·같은 폴백(표시 후 레이아웃 3회 재시도, 실패
+    /// 시 조용히 포기 — 휠 줌만 비활성, 렌더 표시 본기능 무영향). 핸들러는 에디터와 공유한다
+    /// (OnZoomWheel — 두 표면이 같은 줌 축이므로 노치 누적도 공유가 맞다).
+    /// </summary>
+    private void EnsureRenderZoomWheelHook()
+    {
+        if (_renderZoomHookDone || RenderPane.Visibility != Visibility.Visible) return;
+        if (FindDescendant<ScrollContentPresenter>(RenderPane) is { } presenter)
+        {
+            presenter.PointerWheelChanged += OnZoomWheel;
+            _renderZoomHookDone = true;
+            return;
+        }
+        if (RenderPane.ActualWidth > 0 && ++_renderZoomHookAttempts >= 3) _renderZoomHookDone = true;
+    }
+
+    /// <summary>
+    /// A181→A225: 본문 위 Ctrl+휠 = 줌(노치당 10%p) — 에디터·렌더 판 공용(같은 줌 축 _zoomPercent.
+    /// 배선은 EnsureZoomWheelHook/EnsureRenderZoomWheelHook 두 곳, 처리는 여기 한 곳).
+    /// 휠 단독은 손대지 않는다 — 문서는 스크롤이 본분이라(이미지의 "휠 단독 = 줌" 사진 특례와
+    /// 다르고, PDF의 Ctrl 게이트와 같다 — PdfPane.OnPresenterWheel 관용구). Shift 등 다른
+    /// 수정키 조합도 기본 처리에 양보한다.
     /// 정밀 터치패드(120 미만 delta)는 한 노치만큼 모일 때까지 누적한다 — 부호만 보면 미세
     /// 이벤트마다 10%씩 튀어 과속한다.
     /// </summary>
-    private void OnEditorWheel(object sender, PointerRoutedEventArgs e)
+    private void OnZoomWheel(object sender, PointerRoutedEventArgs e)
     {
         if (!e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control)) return; // 휠 단독 = 스크롤(기본 처리)
-        e.Handled = true; // 내장 처리(Ctrl+휠 스크롤)보다 먼저 소비 — A98 관용구
-        var delta = e.GetCurrentPoint(EditorBox).Properties.MouseWheelDelta;
+        e.Handled = true; // 내장 처리(Ctrl+휠 스크롤·줌)보다 먼저 소비 — A98 관용구
+        var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta; // 좌표는 안 쓴다 — delta만
         if (delta == 0) return;
         _wheelDeltaAccum += delta;
         var notches = _wheelDeltaAccum / 120; // 0을 향해 자르는 정수 나눗셈 — 잔여분은 다음 이벤트로
         if (notches == 0) return;
         _wheelDeltaAccum -= notches * 120;
         SetZoom(_zoomPercent + notches * ZoomStepPercent);
+    }
+
+    /// <summary>
+    /// A225: 현재 배율을 md 렌더 판에 적용한다 — 편집 모드(ApplyZoom ⓐ~ⓓ)와 같은 축(_zoomPercent)
+    /// 의 렌더 쪽 절반. 방식 = ScrollViewer ZoomFactor + 랩 폭 보정(RenderStack.Width =
+    /// 뷰포트 폭 나누기 배율 — 배율을 곱하면 정확히 뷰포트 폭이라 가로 스크롤이 생기지 않는다.
+    /// PdfPane EnsureContentMinWidth(A188)·셸 LayoutUiScale의 역수 크기 관용구). 재조립 방식을
+    /// 기각한 이유: 치수(마진·들여쓰기)가 빌더 각처에 흩어져 배율 인자 인입이 크고, 줌마다
+    /// A193 분할 조립 루프를 재기동해야 해 재진입 면이 넓어진다 — ZoomFactor 방식은 조립물·
+    /// 루프·모델(_renderBlocks) 전부 무접촉이고 인쇄(BuildPrintBlock 신조립)에도 배율이 새지
+    /// 않는다. 스크롤은 뷰포트 세로 중앙의 콘텐츠 비율 위치를 유지한다(재랩으로 높이 분포가
+    /// 달라져 정확 유지는 성립하지 않는다 — 비율 유지가 대체 유지의 정의. ApplyFitAt의
+    /// UpdateLayout 후 ChangeView 관용구).
+    /// 판이 내려가 있거나 뷰포트가 아직 0이면 무동작 — EnterRenderMode 직후 호출과 SizeChanged
+    /// (0 → 실폭 전이 포함)가 표시 시점을 놓치지 않고 따라잡는다.
+    /// </summary>
+    private void ApplyRenderZoom()
+    {
+        if (RenderPane.Visibility != Visibility.Visible) return;
+        var viewportW = RenderPane.ViewportWidth;
+        if (viewportW <= 0) return;
+        var scale = _zoomPercent / 100.0;
+        var width = viewportW / scale;
+        var widthChanged = double.IsNaN(RenderStack.Width) || Math.Abs(RenderStack.Width - width) > 0.5;
+        var zoomChanged = Math.Abs(RenderPane.ZoomFactor - scale) > 0.001;
+        if (!widthChanged && !zoomChanged) return; // 세로만 변한 리사이즈 등 — 스크롤을 건드리지 않는다
+
+        // 앵커: 뷰포트 세로 중앙이 콘텐츠 전체 높이에서 차지하는 비율(줌 좌표계 분자·분모 동일 —
+        // 배율 무관 비율값). 빈 판(extent 0)은 머리로.
+        var oldExtent = RenderPane.ExtentHeight;
+        var anchor = oldExtent > 0
+            ? (RenderPane.VerticalOffset + RenderPane.ViewportHeight / 2) / oldExtent
+            : 0.0;
+
+        if (widthChanged) RenderStack.Width = width;
+        if (zoomChanged)
+        {
+            // Min = Max = 목표 배율 핀 고정(XAML 주석) — 대입 순서는 Min 이하 Max 불변식이
+            // 중간 상태에서도 성립하는 쪽부터.
+            if (scale <= RenderPane.MaxZoomFactor)
+            {
+                RenderPane.MinZoomFactor = (float)scale;
+                RenderPane.MaxZoomFactor = (float)scale;
+            }
+            else
+            {
+                RenderPane.MaxZoomFactor = (float)scale;
+                RenderPane.MinZoomFactor = (float)scale;
+            }
+        }
+        // 새 폭의 재랩·배율 반영을 확정한 뒤의 ExtentHeight라야 아래 복원이 이번 배율의 실제
+        // 높이를 읽는다(낡은 값 방지 — PdfPane.ApplyFitAt의 UpdateLayout 선례).
+        RenderPane.UpdateLayout();
+        var newExtent = RenderPane.ExtentHeight / Math.Max(0.1, RenderPane.ZoomFactor) * scale;
+        var top = Math.Max(0, anchor * newExtent - RenderPane.ViewportHeight / 2);
+        RenderPane.ChangeView(null, top, (float)scale, disableAnimation: true);
     }
 
     /// <summary>
@@ -701,8 +790,9 @@ public sealed partial class DocumentView : UserControl,
     // 갈래 판정(_renderMode && md)이 이 축에 얹혀 있다). A224 추가 불변식: _renderMode이면
     // 반드시 _viewMode다(렌더는 뷰 모드의 md 구현). 렌더 모드에서
     // 에디터는 Collapsed일 뿐 내용은 그대로다(렌더는 읽기 전용 표시일 뿐 — 더티·저장·A113 체계
-    // 전부 에디터 버퍼가 정본). 줌(A181)·Fit(A145)은 에디터 모드 기준 그대로다(렌더 모드 줌은
-    // 범위 밖 — 등재 후보).
+    // 전부 에디터 버퍼가 정본). A225: 줌(A181)은 렌더 뷰에도 같은 축(_zoomPercent)이 적용된다
+    // (ApplyRenderZoom — ZoomFactor + 랩 폭 보정. 편집과 렌더를 오가도 %가 이어진다).
+    // Fit(A145)은 에디터 모드 기준 그대로다(렌더 모드 Fit은 범위 밖).
     //
     // A193(분할 조립 축): 렌더 진입은 첫 조각(RenderChunkBlocks)만 즉시 조립하고 나머지는
     // CompositionTarget.Rendering 틱당 한 조각씩 append한다(StartRenderAppendLoop). 루프는
@@ -902,6 +992,9 @@ public sealed partial class DocumentView : UserControl,
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(OpenPdf 관용구)
         UpdateDecorToggles(); // A215→A224: 렌더 뷰 — 표시 토글 숨김(에디터 표면 전용)
         RenderPane.Visibility = Visibility.Visible;
+        // A225: 편집 중 바뀐 배율을 판이 서자마자 따라잡는다(내려가 있는 동안 ApplyZoom ⓔ는
+        // 무동작이었다). 뷰포트가 아직 0이면 여기서도 무동작 — SizeChanged가 이어받는다.
+        ApplyRenderZoom();
         Focus(FocusState.Programmatic);
 
         var seq = ++_renderSeq;
