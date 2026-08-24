@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.204.0</span>
+    <span class="asof">AS OF v0.230.0</span>
   </div>
 </section>
 
@@ -378,6 +378,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Volume</strong> ±5 with <kbd>↑</kbd> / <kbd>↓</kbd> or the mouse wheel. <kbd>M</kbd>
               mutes. The volume is remembered.</li>
           <li><strong>Speed</strong>: 0.5× · 0.75× · 1× · 1.25× · 1.5× · 2×.</li>
+          <li><strong>A narrow window drops what it can spare.</strong> Below about 640 px of bottom bar the
+              volume slider and the two time labels give up their room so the seek slider keeps its own.
+              Volume is still on <kbd>↑</kbd> / <kbd>↓</kbd>, the wheel and <kbd>M</kbd>, and the position of
+              the seek thumb still says where you are.</li>
           <li><strong>Subtitles</strong> are picked up automatically from the video's own folder —
               <code>.srt .smi .ass .ssa .sub .vtt</code>. A file with exactly the video's name wins over a
               suffixed one (<code>movie.srt</code> before <code>movie.ko.srt</code>). Subtitles that are not
@@ -388,7 +392,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               continues from there next time.</li>
           <li><strong>The whole folder plays as a list.</strong> When a video ends, the next file in the same
               folder starts automatically (name order, hidden files skipped), and after the last one the list
-              starts over — that is <em>Loop list</em>, on by default. Press <kbd>L</kbd> or the loop button
+              starts over — that is <em>Loop list</em>, on by default. Press <kbd>L</kbd> or the loop button —
+              the first button in the bottom bar, immediately left of ▶ —
               for the options: turn <em>Loop list</em> off to stop after the last file, or pick
               <em>Repeat this file</em> — once more, three more times, or forever — which takes priority over
               the list while it lasts. Repeating never replays from a resume point; every pass starts
@@ -417,10 +422,17 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <kbd>↓</kbd> and the wheel (volume ±5), <kbd>M</kbd> to mute, <kbd>S</kbd> for the same six
               speeds. Clicking the surface also toggles play/pause.</li>
           <li>A live waveform fills the window while a track plays, with the track name above it.</li>
+          <li><strong>The controls stand where Video puts them.</strong> Loop, ▶, the position, the seek
+              slider, the length, mute, the volume slider and the speed box occupy the same places in both
+              modules, so nothing shifts under the pointer when you go from a video to a track. Audio's own
+              equalizer and audio-device buttons take the right-hand end, where Video keeps subtitles and Fit.
+              The narrow-window rule is the same too: below about 640 px of bar the volume slider and the two
+              time labels are hidden.</li>
           <li><strong>Resume</strong> works exactly as in Video.</li>
           <li><strong>The whole folder plays as a list.</strong> When a track ends, the next file in the same
               folder starts automatically (name order, hidden files skipped), and after the last one the list
-              starts over — that is <em>Loop list</em>, on by default. Press <kbd>L</kbd> or the loop button
+              starts over — that is <em>Loop list</em>, on by default. Press <kbd>L</kbd> or the loop button —
+              first in the bottom bar, immediately left of ▶, as in Video —
               for the options: turn <em>Loop list</em> off to stop after the last track, or pick
               <em>Repeat this file</em> — once more, three more times, or forever — which takes priority over
               the list while it lasts. Repeating never replays from a resume point; every pass starts
@@ -433,6 +445,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <h3>Document — plain text</h3>
         <ul>
           <li><code>.txt .md .markdown .log .ini .html .htm</code> open in an editable text box.</li>
+          <li><strong>The module brings five buttons of its own to the bottom bar</strong>, just right of the
+              window's menu and <em>Open file</em> buttons, in this order: <em>Open</em>,
+              <em>New text file</em>, <em>Save</em>, the <em>view</em> toggle and <em>Print</em>.
+              <em>Open</em> is the one that does use the ordinary Windows file dialog, listing the document
+              types — PDFs included — and a document with unsaved changes still asks before it gives way.
+              <em>New text file</em> starts an empty <code>Untitled</code> document and is available only
+              while nothing is open.</li>
           <li><strong>Every text document has an edit mode and a view mode.</strong> The view button in the
               bottom bar switches between them. In view mode the editor is locked so nothing changes while
               you read — you can still move the caret, select and copy, and save any edits you made earlier.
@@ -457,10 +476,19 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>The text fills the full width of the window. To make it larger or smaller, zoom with
               <kbd>Ctrl</kbd>+wheel — 50% to 300% of the normal size, 10% per notch. The current level shows
               in the bottom bar, and one level applies everywhere: it is remembered across files, windows and
-              restarts. Zooming never touches the file itself.</li>
+              restarts. Zooming never touches the file itself. <strong>The rendered Markdown view zooms with
+              the same <kbd>Ctrl</kbd>+wheel on the same scale</strong>, so switching between the preview and
+              the editor keeps the size you set; the text still wraps to the width of the view at every
+              level, so nothing scrolls sideways.</li>
           <li>Very faint guide lines mark the top and bottom of each line of text, <code>¶</code> marks a line
               break and <code>·EOF</code> marks the end of the file. They are drawn over the text and never
-              become part of it.</li>
+              become part of it. <strong>Two toggle buttons in the middle of the bottom bar turn them off and
+              on</strong> — <em>Line guides</em> for the lines, <em>Paragraph marks</em> for <code>¶</code>
+              and <code>·EOF</code>. Either one takes effect as you press it and is remembered for next time.
+              The pair is there whenever the editor is on screen, view mode included, and steps aside for the
+              rendered Markdown view and for PDFs.</li>
+          <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Text and Markdown
+              documents offer three of the four options.</li>
           <li><strong>Print</strong> with <kbd>Ctrl</kbd>+<kbd>P</kbd> or the print button in the bottom bar —
               the same Windows print dialog as for pictures and PDFs, with its own preview and the same
               page-range option. The text prints in the editor's fixed-width font at its normal size — the
@@ -599,7 +627,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            Explorer still opens its dedicated module.</p>
 
         <h3 id="fit">The Fit button</h3>
-        <p>Image, Video and PDF share one Fit control with four options.</p>
+        <p>Image, Video, PDF and text documents share one Fit control with four options.</p>
         <div class="tbl"><table>
           <tr><th>Option</th><th>Result</th></tr>
           <tr><td>100%</td><td>actual size, one image pixel per screen pixel. The button then shows the 1:1 icon</td></tr>
@@ -608,7 +636,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Fit height</td><td>fills the height</td></tr>
         </table></div>
         <p>Clicking the body of the button re-applies the option you last chose (<kbd>F</kbd>). Clicking the
-           arrow opens the list. <kbd>A</kbd> jumps straight to 100%. New files start at Contain.</p>
+           arrow opens the list. <kbd>A</kbd> jumps straight to 100%. A new picture, video or PDF starts at
+           Contain.</p>
+        <p><strong>In a text or Markdown document</strong> — while you edit, while you read the locked view,
+           and in the rendered Markdown view alike — the first three options are live and <em>Fit height</em>
+           is greyed out, since a document has no fixed height to fit. The text already wraps to the width of
+           the view, so all three come to the same thing: the document goes back to 100%. Which one you picked
+           is what the button then shows, and a document opens showing 100%. The control is greyed out
+           altogether only when no document is open.</p>
       </section>
 
       <!-- ================= 3. SHORTCUTS ================= -->
@@ -694,7 +729,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Audio</td><td><kbd>L</kbd></td><td>loop options</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print the PDF or the text</td></tr>
-          <tr><td>Document</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option (PDF)</td></tr>
+          <tr><td>Document</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option</td></tr>
           <tr><td>Document</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>scroll the PDF, about an eighth of the view</td></tr>
           <tr><td>Document</td><td><kbd>Page Up</kbd> <kbd>Page Down</kbd></td><td>scroll the PDF, about a full screen</td></tr>
           <tr><td>Document</td><td><kbd>Home</kbd> <kbd>End</kbd></td><td>start / end of the PDF</td></tr>
@@ -741,8 +776,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>PDF</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>PDF</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom</td></tr>
           <tr><td>PDF</td><td>left-button drag</td><td>push the pages around</td></tr>
-          <tr><td>Text editor</td><td>wheel</td><td>scroll</td></tr>
-          <tr><td>Text editor</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom the text, 50%&ndash;300%</td></tr>
+          <tr><td>Text document</td><td>wheel</td><td>scroll</td></tr>
+          <tr><td>Text document</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom the text, 50%&ndash;300% &mdash; editor and Markdown view alike</td></tr>
           <tr><td>File browser, side panels</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>File browser</td><td>double-click</td><td>open (folders: go in)</td></tr>
           <tr><td>File browser</td><td><kbd>Shift</kbd>+double-click</td><td>open in a new window</td></tr>
@@ -795,7 +830,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
       <section id="browser">
         <h2><span class="num">5</span>The built-in file browser</h2>
         <p>Open a module without a file and the window becomes a file browser: folder tree and file list on the
-           left, thumbnails in the centre, file information on the right.</p>
+           left, thumbnails in the centre, file information on the right. The thumbnails are square, and the
+           grid is 4 columns wide with both sidebars docked, 6 with one and 8 with none.</p>
         <ul>
           <li><strong>Each row in the left panel is two lines</strong> — the file name on the first, and on
               the second its size, one fact from the file's own module — playing length for video and audio,

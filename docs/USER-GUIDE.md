@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.204.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.230.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -109,6 +109,9 @@ Seven modules. Switch between them from the menu at the bottom left.
 - **Seek** ±5 seconds with `←` / `→`, or drag the seek slider. Seeking happens once, when you let go.
 - **Volume** ±5 with `↑` / `↓` or the mouse wheel. `M` mutes. The volume is remembered.
 - **Speed**: 0.5× · 0.75× · 1× · 1.25× · 1.5× · 2×.
+- **A narrow window drops what it can spare.** Below about 640 px of bottom bar the volume slider
+  and the two time labels give up their room so the seek slider keeps its own. Volume is still on
+  `↑` / `↓`, the wheel and `M`, and the position of the seek thumb still says where you are.
 - **Subtitles** are picked up automatically from the video's own folder — `.srt .smi .ass .ssa .sub .vtt`.
   A file with exactly the video's name wins over a suffixed one (`movie.srt` before `movie.ko.srt`).
   Subtitles that are not UTF-8 are converted from CP949 before playback, so Korean `.srt` and `.smi`
@@ -117,7 +120,8 @@ Seven modules. Switch between them from the menu at the bottom left.
   remembered and playback continues there next time.
 - **The whole folder plays as a list.** When a video ends, the next file in the same folder starts
   automatically (name order, hidden files skipped), and after the last one the list starts over —
-  that is **Loop list**, on by default. Press `L` or the loop button for the options: turn
+  that is **Loop list**, on by default. Press `L` or the loop button — the first button in the
+  bottom bar, immediately left of ▶ — for the options: turn
   *Loop list* off to stop after the last file, or pick *Repeat this file* — once more, three more
   times, or forever — which takes priority over the list while it lasts. Repeating never replays
   from a resume point; every pass starts at 0:00.
@@ -142,10 +146,17 @@ Seven modules. Switch between them from the menu at the bottom left.
 - Same transport as Video: `Space`, `←` / `→` (±5 s), `↑` / `↓` and the wheel (volume ±5), `M` to
   mute, `S` for the same six speeds. Clicking the surface also toggles play/pause.
 - A live waveform fills the window while a track plays, with the track name above it.
+- **The controls stand where Video puts them.** Loop, ▶, the position, the seek slider, the length,
+  mute, the volume slider and the speed box occupy the same places in both modules, so nothing
+  shifts under the pointer when you go from a video to a track. Audio's own equalizer and
+  audio-device buttons take the right-hand end, where Video keeps subtitles and Fit. The
+  narrow-window rule is the same too: below about 640 px of bar the volume slider and the two time
+  labels are hidden.
 - **Resume** works exactly as in Video (over 30 seconds played, stopped before the last 3%).
 - **The whole folder plays as a list.** When a track ends, the next file in the same folder starts
   automatically (name order, hidden files skipped), and after the last one the list starts over —
-  that is **Loop list**, on by default. Press `L` or the loop button for the options: turn
+  that is **Loop list**, on by default. Press `L` or the loop button — first in the bottom bar,
+  immediately left of ▶, as in Video — for the options: turn
   *Loop list* off to stop after the last track, or pick *Repeat this file* — once more, three more
   times, or forever — which takes priority over the list while it lasts. Repeating never replays
   from a resume point; every pass starts at 0:00.
@@ -156,6 +167,12 @@ Seven modules. Switch between them from the menu at the bottom left.
 ### 2.4 Document — plain text
 
 - `.txt .md .markdown .log .ini .html .htm` open in an editable text box.
+- **The module brings five buttons of its own to the bottom bar**, just right of the window's menu
+  and **Open file** buttons, in this order: **Open**, **New text file**, **Save**, the **view**
+  toggle and **Print**. *Open* is the one that does use the ordinary Windows file dialog, listing
+  the document types — PDFs included — and a document with unsaved changes still asks before it
+  gives way. *New text file* starts an empty `Untitled` document and is available only while
+  nothing is open.
 - **Every text document has an edit mode and a view mode.** The view button in the bottom bar
   switches between them. In view mode the editor is locked so nothing changes while you read —
   you can still move the caret, select and copy, and save any edits you made earlier. For
@@ -178,9 +195,18 @@ Seven modules. Switch between them from the menu at the bottom left.
 - The text fills the full width of the window. To make it larger or smaller, zoom with
   `Ctrl`+wheel — 50% to 300% of the normal size, 10% per notch. The current level shows in the
   bottom bar, and one level applies everywhere: it is remembered across files, windows and
-  restarts. Zooming never touches the file itself.
+  restarts. Zooming never touches the file itself. **The rendered Markdown view zooms with the same
+  `Ctrl`+wheel on the same scale**, so switching between the preview and the editor keeps the size
+  you set; the text still wraps to the width of the view at every level, so nothing scrolls
+  sideways.
 - Very faint guide lines mark the top and bottom of each line of text, `¶` marks a line break and
   `·EOF` marks the end of the file. They are drawn over the text and never become part of it.
+  **Two toggle buttons in the middle of the bottom bar turn them off and on** — *Line guides* for
+  the lines, *Paragraph marks* for `¶` and `·EOF`. Either one takes effect as you press it and is
+  remembered for next time. The pair is there whenever the editor is on screen, view mode included,
+  and steps aside for the rendered Markdown view and for PDFs.
+- **Fit** — see [2.9](#29-the-fit-button). Text and Markdown documents offer three of the four
+  options.
 - **Print** with `Ctrl+P` or the print button in the bottom bar — the same Windows print dialog as
   for pictures and PDFs, with its own preview and the same page-range option. The text prints in
   the editor's fixed-width font at its normal size — the on-screen zoom never changes the
@@ -313,7 +339,7 @@ Explorer still opens its dedicated module.
 
 ### 2.9 The Fit button
 
-Image, Video and PDF share one Fit control with four options:
+Image, Video, PDF and text documents share one Fit control with four options:
 
 | Option | Result |
 |---|---|
@@ -323,7 +349,14 @@ Image, Video and PDF share one Fit control with four options:
 | **Fit height** | fills the height |
 
 Clicking the body of the button re-applies the option you last chose (`F`). Clicking the arrow opens
-the list. `A` jumps straight to 100%. New files start at Contain.
+the list. `A` jumps straight to 100%. A new picture, video or PDF starts at Contain.
+
+**In a text or Markdown document** — while you edit, while you read the locked view, and in the
+rendered Markdown view alike — the first three options are live and **Fit height** is greyed out,
+since a document has no fixed height to fit. The text already wraps to the width of the view, so
+all three come to the same thing: the document goes back to 100%. Which one you picked is what the
+button then shows, and a document opens showing 100%. The control is greyed out altogether only
+when no document is open.
 
 ---
 
@@ -418,8 +451,8 @@ box or while you are typing to jump through the file list.
 | Audio | `L` | loop options |
 | Document | `Ctrl+S` | save |
 | Document | `Ctrl+P` | print the PDF or the text |
-| Document | `A` | 100% (PDF) |
-| Document | `F` | re-apply the last Fit option (PDF) |
+| Document | `A` | 100% |
+| Document | `F` | re-apply the last Fit option |
 | Document | `↑` `↓` | scroll the PDF, about an eighth of the view |
 | Document | `Page Up` `Page Down` | scroll the PDF, about a full screen |
 | Document | `Home` `End` | start / end of the PDF |
@@ -468,8 +501,8 @@ file list and in the thumbnails it selects the focused item instead.
 | PDF | wheel | scroll |
 | PDF | `Ctrl`+wheel | zoom |
 | PDF | left-button drag | push the pages around |
-| Text editor | wheel | scroll |
-| Text editor | `Ctrl`+wheel | zoom the text, 50%–300% |
+| Text document | wheel | scroll |
+| Text document | `Ctrl`+wheel | zoom the text, 50%–300% — editor and Markdown view alike |
 | File browser, side panels | wheel | scroll |
 | File browser | double-click | open (folders: go in) |
 | File browser | `Shift`+double-click | open in a new window |
@@ -531,7 +564,8 @@ thumbnails — as if you had started the module from the menu.
 ## 5. The built-in file browser
 
 Open a module without a file and the window becomes a file browser: folder tree and file list on the
-left, thumbnails in the centre, file information on the right.
+left, thumbnails in the centre, file information on the right. The thumbnails are square, and the
+grid is 4 columns wide with both sidebars docked, 6 with one and 8 with none.
 
 - **Each row in the left panel is two lines** — the file name on the first, and on the second its
   size, one fact from the file's own module — playing length for video and audio, resolution for an
