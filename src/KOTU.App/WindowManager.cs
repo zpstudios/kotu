@@ -10,7 +10,10 @@ namespace KOTU.App;
 ///
 /// 창 선택 규칙(파일 열기 시):
 ///  1) 같은 모듈을 보여주는 창이 있으면 재사용 (이미지 ←/→ 탐색 컨텍스트 유지)
-///  2) 아직 아무것도 안 연 빈 셸 창이 있으면 재사용 (시작 직후 등)
+///     — 트레이로 숨긴 창(A69/A218)은 후보 제외(A219에서 정리한 A218 정합 — 아래 FindReusable 참고).
+///     — A219 특칙(문서 모듈 한정): 콘텐츠(실경로 파일·무제 문서)가 열려 있는 창도 후보 제외 —
+///       작성·열람 중인 문서를 밀어내지 않고 새 인스턴스로 연다. 빈 문서 모듈 창만 재활용.
+///  2) 아직 아무것도 안 연 빈 셸 창이 있으면 재사용 (시작 직후 등) — 트레이 숨김 창은 역시 제외.
 ///  3) 없으면 새 창
 /// 명시적 새 창 수단(Shift+N(A84 — 기존 Ctrl+N)·Shift+더블클릭·우클릭 메뉴, A24)은 규칙과 무관하게 항상 새 창.
 /// ※ A222(2026-08-24): A24의 "Always open files in a new instance" 설정 토글
@@ -68,7 +71,10 @@ public sealed class WindowManager
     {
         if (request.FilePath is not { } file || !File.Exists(file))
         {
-            // 파일 없는 실행: 창이 없으면 하나 열고, 있으면 최근 창만 앞으로
+            // 파일 없는 실행: 창이 없으면 하나 열고, 있으면 최근 창만 앞으로.
+            // A219: 최근 창이 트레이 숨김이어도 이 갈래는 복귀시킨다(현행 유지 — 파일 없는
+            // 재실행은 사용자가 앱을 다시 연 것이라 숨김 창 복귀가 자연스럽다. 숨김 창 불가침은
+            // 파일 열기 재사용(FindReusable)에만 적용).
             if (_windows.Count == 0) OpenInitialWindow();
             else ActiveWindow!.BringToFront();
             return;
@@ -87,7 +93,7 @@ public sealed class WindowManager
         }
     }
 
-    /// <summary>파일을 담당 모듈 창으로 라우팅해 연다. 창 선택은 재사용 규칙(A24)을 따른다.</summary>
+    /// <summary>파일을 담당 모듈 창으로 라우팅해 연다. 창 선택은 재사용 규칙(A24·A219 특칙)을 따른다.</summary>
     public void OpenFile(string path)
     {
         var target = FindReusable(_router.Resolve(path)?.Id);
@@ -236,6 +242,18 @@ public sealed class WindowManager
         return true;
     }
 
+    /// <summary>
+    /// 재사용할 창 선택(클래스 주석의 창 선택 규칙). 이 메서드를 타는 것은 전부 "그 창 밖에서 온
+    /// 열기"(외부 재전달 Dispatch·다른 모듈 파일로의 라우팅)다 — 창 안 더블클릭 열기
+    /// (OpenFileRouted → MainWindow.OpenFile)와 A124 세션 복원(RestoreWindow — Create 직행)은
+    /// 여기를 거치지 않아 무영향.
+    /// A218 정합(A219에서 정리): 트레이로 숨긴 창은 1·2단계 모두에서 후보 제외 — 특칙이 아니라
+    /// 전 모듈 공통. 명시로 숨긴 창(A218)이 파일 열기 재사용으로 소리 없이 앞에 튀어나오는 일
+    /// 자체를 없앤다(복귀는 트레이 좌클릭·Activate window 등 명시 경로만).
+    /// A219 특칙(문서 모듈 한정): 콘텐츠가 열린 창도 제외 — 아래 1단계 주석 참고.
+    /// ※ All Readable 창이 문서 파일을 열고 있어도 CurrentModuleId는 문서 모듈이 아니므로
+    /// 특칙 밖(현행 규칙 그대로)이다.
+    /// </summary>
     private MainWindow FindReusable(string? moduleId)
     {
         // 1) 같은 모듈 창 (여러 개면 가장 최근 활성화된 것).
@@ -243,13 +261,21 @@ public sealed class WindowManager
         if (moduleId is not null)
         {
             for (var i = _windows.Count - 1; i >= 0; i--)
-                if (_windows[i].CurrentModuleId == moduleId)
-                    return _windows[i];
+            {
+                var window = _windows[i];
+                if (window.CurrentModuleId != moduleId) continue;
+                if (window.IsHiddenInTray) continue; // A218 정합: 숨김 창 불가침(복귀도 안 시킨다)
+                // A219 특칙(문서 모듈 한정): 콘텐츠(실경로 파일·무제 문서)가 열려 있으면 그 창을
+                // 밀어내지 않고 새 인스턴스로 — 무제(A189)도 사용자가 작성 중일 수 있어
+                // "열려 있음"으로 취급한다(사양). 빈 문서 모듈 창(S1 탐색기)만 재활용.
+                if (moduleId == "document" && window.HasOpenContent) continue;
+                return window;
+            }
         }
 
-        // 2) 빈 셸 창
+        // 2) 빈 셸 창 — 트레이로 숨긴 빈 셸도 제외(A218 정합 — 1단계와 일관).
         for (var i = _windows.Count - 1; i >= 0; i--)
-            if (_windows[i].IsUntouched)
+            if (_windows[i].IsUntouched && !_windows[i].IsHiddenInTray)
                 return _windows[i];
 
         // 3) 새 창

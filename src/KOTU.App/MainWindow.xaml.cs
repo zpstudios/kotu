@@ -194,6 +194,13 @@ public sealed partial class MainWindow : Window
     /// <summary>아직 아무 콘텐츠도 안 연 빈 셸인지. 창 재사용 판단에 쓴다.</summary>
     public bool IsUntouched { get; private set; } = true;
 
+    /// <summary>
+    /// A219: 이 창에 콘텐츠가 표시 중인지 — 실경로 파일(_currentFilePath) 또는 무제 문서
+    /// (A189 _untitledContent) 어느 쪽이든 true. 창 재사용 판단(WindowManager.FindReusable의
+    /// 문서 모듈 특칙)에 쓴다 — 셸이 이미 추적하는 두 상태 축의 노출일 뿐 새 추적은 없다.
+    /// </summary>
+    public bool HasOpenContent => _currentFilePath is not null || _untitledContent;
+
     public MainWindow(WindowManager manager)
     {
         InitializeComponent();
@@ -3336,6 +3343,12 @@ public sealed partial class MainWindow : Window
     /// 마지막 창까지 숨겨도 열린 창으로 계산되어 프로세스가 유지된다(창 0개 = 종료 로직과 무충돌).
     /// </summary>
     private bool _hiddenInTray;
+
+    /// <summary>
+    /// A219: 트레이로 숨긴 상태인지의 조회 노출 — 창 재사용 판단(WindowManager.FindReusable)이
+    /// 숨김 창을 후보에서 빼는 데 쓴다(A218 정합 — 숨김 창은 명시 복귀 경로로만 돌아온다).
+    /// </summary>
+    public bool IsHiddenInTray => _hiddenInTray;
 
     /// <summary>
     /// A218: 이 창을 트레이로 숨긴다 — 진입은 명시 호출 2곳뿐(트레이 우클릭 "Minimize to tray" +
