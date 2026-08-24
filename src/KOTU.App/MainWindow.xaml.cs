@@ -1953,7 +1953,12 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnOverlaySideKey(OverlaySide side, KeyRoutedEventArgs e)
     {
-        if (e.Handled) return; // 원 기능 우선 — 먼저 소비한 쪽에 양보(일반 규칙)
+        // 원 기능 우선 — 먼저 소비한 쪽에 양보(일반 규칙). A212 전역 감사: F11/F12를 Handled로
+        // 만드는 소비자는 저장소에 실재하지 않는다(코드의 VirtualKey.F11/F12 = 위 상수 2줄뿐,
+        // 액셀러레이터·표면 KeyDown 전수 무해당) — 이 양보는 실사례 0의 일반 규칙으로만 남는다.
+        // 실제 불통 갈래는 도달 실패(포커스 고아 — A135 감사 §표1·A209)였다: 썸네일 빈 영역
+        // 클릭 시점의 정착 수리는 ThumbnailExplorer.OnSurfacePointerPressed(A212).
+        if (e.Handled) return;
         // A90 keymap S4 행: 좌/우 키 = 무동작 (Q5 확정) — 토글에 태우지 않고 소비만 한다.
         if (IsOpenFileBrowsing)
         {

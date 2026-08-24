@@ -135,7 +135,13 @@ public sealed partial class ThumbnailExplorer : UserControl
         // 눌림은 요소 교체와 무관하게 매번 도착하므로 경로 키 판정이 재구축을 건너 살아남는다.
         // handledEventsToo = 리스트가 눌림을 소비해도 판정은 돌아야 한다(셸 A58 홀드 취소 구독과
         // 같은 관용구). Handled는 건드리지 않는다 — 순수 관찰(선택·드래그·제스처 무간섭).
-        TileGrid.AddHandler(UIElement.PointerPressedEvent,
+        // A212: 구독 지점을 TileGrid → LayoutRoot로 올렸다. 타일 밖 빈 영역 눌림은 그리드에
+        // 배경이 없으면 TileGrid 서브트리에 히트되지 않고 배경 있는 LayoutRoot가 원본이 된다
+        // (아래 ContextFlyout를 LayoutRoot에 거는 "히트 보장"과 같은 근거) — 종전 TileGrid 구독은
+        // 그 눌림을 아예 못 봤다. 타일 위 눌림은 버블링 + handledEventsToo로 종전과 동일하게
+        // 도착하므로 A131 쌍 판정은 무변경이고, 빈 영역 눌림의 포커스 정착(A212 —
+        // OnSurfacePointerPressed의 빈 영역 분기)이 이 구독으로 성립한다.
+        LayoutRoot.AddHandler(UIElement.PointerPressedEvent,
             new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
         // A94 4차: 잘라내기 표시(프로세스 전역 1벌)가 바뀌면 이미 그려 둔 타일의 흐림만 다시 맞춘다.
         // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
@@ -963,20 +969,33 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 제외한다(Shift는 제외하지 않는다 — Shift+더블클릭 = 새 창(A24)은 Activate가 해석한다).
     /// 정상 환경에서는 기존 두 판정과 같은 제스처에서 겹쳐 발화하지만 Activate의 _lastActivation
     /// 억제(A85)가 1회로 누른다 — 두 번째 눌림 시점 발화는 탐색기 관례(WM_LBUTTONDBLCLK)와 같다.
+    /// A212: 빈 영역(타일 밖) 눌림의 포커스 정착(FocusGrid)도 여기서 한다 — 구독이 LayoutRoot로
+    /// 올라간 근거·고아 갈래 설명은 생성자와 본문 주석 참고.
     /// </summary>
     private void OnSurfacePointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (e.GetCurrentPoint(TileGrid).Properties.PointerUpdateKind
             != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
+        // A212: 빈 영역(타일 밖) 눌림 = 그리드로 포커스 정착. 빈 공간의 히트 대상(LayoutRoot·
+        // 스크롤 표면)은 전부 비포커스 요소라, 이 클릭이 포커스를 XAML 트리 밖/null로 흘리면
+        // 이후 셸 KeyDown(RootLayout 버블 수신 — F11/F12·Enter·Esc 전부)이 아예 안 와 키가
+        // 전멸한다(A135 감사 §표1 34행 확정 갈래·A209 RecoverChromeFocusOrphan과 같은 계보 —
+        // 그쪽은 크롬 붕괴 "전이 시점"만 지키고 클릭 시점은 무방비였다). FocusGrid = S4 진입
+        // (A90)과 같은 정착 관용구 재사용이다. Ctrl 판정보다 앞에 두는 이유: Ctrl+빈 영역
+        // 클릭도 같은 고아 갈래다 — 두 갈래 모두 쌍을 끊고 반환하므로 순서 교환은 A131 의미론
+        // 무변경. 이름변경 편집 상자 위 눌림은 위 TextBox 가드가 먼저 걸러 포커스를 뺏지 않고,
+        // 편집 중 빈 영역 클릭은 포커스 이동의 LostFocus 커밋(ExplorerRenameBox — "딴 곳 클릭 =
+        // 커밋" 탐색기 관례)이 그대로 성립한다.
+        if (EntryFromSource(e.OriginalSource) is not { } entry)
+        {
+            FocusGrid();
+            _lastPress = null; // 빈 영역·스크롤바 — 항목 밖 눌림은 쌍을 끊는다
+            return;
+        }
         if (ExplorerFileOps.IsCtrlDown())
         {
             _lastPress = null; // Ctrl 토글 선택 — 진행 중이던 쌍 판정을 끊는다
-            return;
-        }
-        if (EntryFromSource(e.OriginalSource) is not { } entry)
-        {
-            _lastPress = null; // 빈 영역·스크롤바 — 항목 밖 눌림은 쌍을 끊는다
             return;
         }
         var now = DateTime.UtcNow;
