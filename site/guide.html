@@ -329,7 +329,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>2</td><td>Image</td><td><code>.jpg .jpeg .png .gif .bmp .webp .tif .tiff .ico .psd</code></td></tr>
           <tr><td>3</td><td>Video</td><td><code>.mp4 .mkv .avi .webm .mov .wmv .m4v .mpg .mpeg .ts .m2ts .flv .3gp .ogv</code></td></tr>
           <tr><td>4</td><td>Audio</td><td><code>.mp3 .flac .wav .ogg .opus .m4a .aac .wma</code></td></tr>
-          <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .pdf</code></td></tr>
+          <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .html .htm .pdf</code></td></tr>
           <tr><td>6</td><td>Archive</td><td><code>.zip .7z .rar .tar .gz .tgz .bz2 .xz</code></td></tr>
           <tr><td>7</td><td>H/W Info</td><td>no files — live hardware information</td></tr>
         </table></div>
@@ -432,14 +432,20 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
         <h3>Document — plain text</h3>
         <ul>
-          <li><code>.txt .md .markdown .log .ini</code> open in an editable text box.</li>
+          <li><code>.txt .md .markdown .log .ini .html .htm</code> open in an editable text box.</li>
+          <li><strong>Every text document has an edit mode and a view mode.</strong> The view button in the
+              bottom bar switches between them. In view mode the editor is locked so nothing changes while
+              you read — you can still move the caret, select and copy, and save any edits you made earlier.
+              For Markdown the view mode is the rendered preview described below. The button is greyed out
+              only when nothing is open, for PDFs (always view-only) and for files opened read-only
+              (over 4 MB).</li>
           <li><strong>Markdown is rendered.</strong> A <code>.md</code> or <code>.markdown</code> file opens
               as a formatted preview — headings, bold and italic, inline code and code blocks, lists, quotes,
-              horizontal rules and links — and the preview button in the bottom bar switches between that view
+              horizontal rules and links — and the view button switches between that preview
               and the editor. The preview is built from what is in the editor at the moment you switch, so
               unsaved edits show up in it; anything the renderer does not know stays as it was written.
-              Markdown files over about 1 MB of text open straight in the editor and the button stays greyed
-              out.</li>
+              Markdown files over about 1 MB of text open straight in the editor, and at that size the view
+              button locks the editor instead of rendering the preview.</li>
           <li>The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
               as is the line ending style.</li>
           <li><kbd>Ctrl</kbd>+<kbd>S</kbd> saves. The save button stays disabled until there is something to

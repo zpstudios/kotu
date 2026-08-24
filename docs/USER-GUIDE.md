@@ -70,7 +70,7 @@ Seven modules. Switch between them from the menu at the bottom left.
 | 2 | Image | `.jpg .jpeg .png .gif .bmp .webp .tif .tiff .ico .psd` |
 | 3 | Video | `.mp4 .mkv .avi .webm .mov .wmv .m4v .mpg .mpeg .ts .m2ts .flv .3gp .ogv` |
 | 4 | Audio | `.mp3 .flac .wav .ogg .opus .m4a .aac .wma` |
-| 5 | Document | `.txt .md .markdown .log .ini .pdf` |
+| 5 | Document | `.txt .md .markdown .log .ini .html .htm .pdf` |
 | 6 | Archive | `.zip .7z .rar .tar .gz .tgz .bz2 .xz` |
 | 7 | H/W Info | no files — live hardware information |
 
@@ -155,13 +155,19 @@ Seven modules. Switch between them from the menu at the bottom left.
 
 ### 2.4 Document — plain text
 
-- `.txt .md .markdown .log .ini` open in an editable text box.
+- `.txt .md .markdown .log .ini .html .htm` open in an editable text box.
+- **Every text document has an edit mode and a view mode.** The view button in the bottom bar
+  switches between them. In view mode the editor is locked so nothing changes while you read —
+  you can still move the caret, select and copy, and save any edits you made earlier. For
+  Markdown the view mode is the rendered preview described below. The button is greyed out only
+  when nothing is open, for PDFs (always view-only) and for files opened read-only (over 4 MB).
 - **Markdown is rendered.** A `.md` or `.markdown` file opens as a formatted preview — headings,
   bold and italic, inline code and code blocks, lists, quotes, horizontal rules and links — and the
-  preview button in the bottom bar switches between that view and the editor. The preview is built
+  view button switches between that preview and the editor. The preview is built
   from what is in the editor at the moment you switch, so unsaved edits show up in it; anything the
   renderer does not know stays as it was written. Markdown files over about 1 MB of text open
-  straight in the editor and the button stays greyed out.
+  straight in the editor, and at that size the view button locks the editor instead of rendering
+  the preview.
 - The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
   as is the line ending style (CRLF or LF).
 - `Ctrl+S` saves. The save button stays disabled until there is something to save, and

@@ -4,16 +4,20 @@ using KOTU.Core.Settings;
 namespace KOTU.Module.Document;
 
 /// <summary>
-/// 문서 모듈(v0.44.0 뷰어 → A37 편집·저장 승격 → A16 PDF 뷰어 → A190 마크다운 렌더 뷰).
-/// 플레인 텍스트(txt·md·log·ini)는 편집·저장, PDF는 보기(Windows.Data.Pdf 렌더).
+/// 문서 모듈(v0.44.0 뷰어 → A37 편집·저장 승격 → A16 PDF 뷰어 → A190 마크다운 렌더 뷰
+/// → A224 편집/뷰 모드 전 형식화).
+/// 플레인 텍스트(txt·md·log·ini·html·htm)는 편집·저장, PDF는 보기(Windows.Data.Pdf 렌더).
 /// 마크다운(md·markdown)은 편집에 더해 렌더 뷰(자체 최소 렌더러 — MarkdownParser/Renderer)를
-/// 하단 바 토글로 오간다. HWP·오픈오피스는 뷰어가 생기면 확장.
+/// 하단 바 토글로 오간다. A224: 비md 텍스트 형식의 뷰 모드는 잠금 뷰(에디터 그대로 +
+/// IsReadOnly — HTML 렌더는 후속 확인 대기). HWP·오픈오피스는 뷰어가 생기면 확장.
 /// </summary>
 public sealed class DocumentModule : IModule
 {
-    /// <summary>담당 확장자(.ini는 A37, .pdf는 A16에서 뷰어와 함께 추가).
+    /// <summary>담당 확장자(.ini는 A37, .pdf는 A16에서 뷰어와 함께, .html/.htm은 A224에서
+    /// 편집/뷰 모드 전 형식화와 함께 추가 — 1차는 텍스트 에디터로 연다).
     /// HWP·오픈오피스는 뷰어가 생기면 추가한다(스텁에 연결하지 않는다).</summary>
-    public static readonly string[] Extensions = [".txt", ".md", ".markdown", ".log", ".ini", ".pdf"];
+    public static readonly string[] Extensions =
+        [".txt", ".md", ".markdown", ".log", ".ini", ".html", ".htm", ".pdf"];
 
     // ---------- A181: 본문 줌 설정 (A171 폭 설정 대체) ----------
     // A171(v0.173.0)의 폭 설정 상수 3종(키 document.editorMaxWidth·기본 900·선택지)은 A181에서

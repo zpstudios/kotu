@@ -14,7 +14,8 @@ using KOTU.Input;
 namespace KOTU.Module.Document;
 
 /// <summary>
-/// 문서 화면: 플레인 텍스트(txt·md·log·ini)는 열어서 바로 편집·저장까지 하고(A37 — 뷰어→에디터 승격),
+/// 문서 화면: 플레인 텍스트(txt·md·log·ini·html·htm — A224에서 HTML 추가)는 열어서 바로
+/// 편집·저장까지 하고(A37 — 뷰어→에디터 승격),
 /// PDF는 PdfPane으로 본다(A16). 텍스트 인코딩은 열 때 감지한 것(UTF-8/UTF-8 BOM/UTF-16/CP949)을
 /// 저장 시 그대로 보존하고, 줄바꿈도 원본 스타일(CRLF/LF)을 유지한다.
 /// 큰 파일(4MB 초과)은 앞부분만 읽으므로 읽기 전용.
@@ -179,7 +180,7 @@ public sealed partial class DocumentView : UserControl,
         _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText);
 
         // A215: 저장된 표시 토글 2축(라인 가이드·¶ 마커 — 기본 둘 다 켜짐)을 장식기와 버튼에 반영.
-        // 토글 노출 자체(편집 모드에서만)는 UpdateDecorToggles가 모드 전환 지점마다 맞춘다.
+        // 토글 노출 자체(에디터 표면에서만 — A224: 잠금 뷰 포함)는 UpdateDecorToggles가 모드 전환 지점마다 맞춘다.
         _showGuides = settings.Get(DocumentModule.ShowGuidesSettingKey, true);
         _showMarks = settings.Get(DocumentModule.ShowMarksSettingKey, true);
         _decor.SetDecorVisibility(_showGuides, _showMarks);
@@ -550,7 +551,7 @@ public sealed partial class DocumentView : UserControl,
         // 이 접근이 스냅샷을 새로 띄워 첫 장식 렌더(A115)까지 같은 복사본을 쓴다(A142 ①ⓑ).
         _baselineText = NormalizeNewlines(EditorText);
         _dirtyTimer?.Stop(); // 이전 파일의 보류 중 판정이 새 파일 상태를 건드리지 않게
-        EditorBox.IsReadOnly = loaded.Truncated; // 잘린 채 저장되는 사고 방지
+        UpdateEditorReadOnly(); // A224 단일 산출 지점 — 잘림(_truncated)이면 영구 잠금(잘린 채 저장 방지)
         SetDirty(false);
 
         EditorBox.Visibility = Visibility.Visible;
@@ -648,7 +649,7 @@ public sealed partial class DocumentView : UserControl,
         _textSnapshot = null;
         _baselineText = string.Empty; // A113 ⓒ: 무제의 더티 기준 = 빈 문자열
         _dirtyTimer?.Stop();
-        EditorBox.IsReadOnly = false;
+        UpdateEditorReadOnly(); // A224 단일 산출 지점 — 무제는 잘림·뷰 모드 둘 다 아님 = 편집 가능
         SetDirty(false);
 
         EditorBox.Visibility = Visibility.Visible;
@@ -659,32 +660,46 @@ public sealed partial class DocumentView : UserControl,
         UpdateZoomText(); // A181: 무제도 텍스트 편집 — 배율 표시
         UpdateNewFileButton();
         UpdatePrintButton(); // A211 배치 4: 무제도 인쇄 대상(_untitled) — 작업명은 UntitledDisplayName
+        // A224: 토글 재판정 — 위 ResetRenderState는 _untitled가 서기 전에 돌았다(직전이 PDF·빈
+        // 화면이었으면 비활성으로 계산된 상태). 무제도 토글 활성(사양 — 일관성).
+        UpdateViewToggle();
         UntitledOpened?.Invoke(); // 셸 동기화 — 탐색기 내림·드라이브 줄 숨김·제목 "KOTU - Untitled"
         EditorBox.Focus(FocusState.Programmatic); // 곧바로 타이핑 가능하게
     }
 
-    // ---------- 마크다운 렌더 뷰 (A190) ----------
+    // ---------- 편집/뷰 모드 (A190 마크다운 렌더 → A224 전 형식화) ----------
     //
     // 상태 전이표(함정 1 — 문서 모듈 상태 축 정본. 종전 3축: 파일 편집(_path)/무제(_untitled)/
-    // PDF·빈 화면(_path=null, !_untitled)에 렌더 축(_renderMode — 파일 편집의 하위 모드)이 얹혔다):
+    // PDF·빈 화면(_path=null, !_untitled)에 렌더 축(_renderMode — 파일 편집의 하위 모드)이 얹혔고,
+    // A224가 그 위에 뷰 모드 축(_viewMode — 형식 무관)을 승격했다. _renderMode는 이제
+    // "뷰 모드의 md 구현"이다: _viewMode && md 렌더 자격 → 렌더 판 / _viewMode && 그 외 →
+    // 잠금 뷰(에디터 그대로 + IsReadOnly)):
     //
     //   이벤트                        | 결과 상태
     //   ------------------------------+------------------------------------------------------------
-    //   열기 .txt/.log/.ini           | 편집(렌더 축 리셋 — _renderEligible=false, 토글 비활성)
+    //   열기 .txt/.log/.ini/.html/.htm| 편집(렌더 축 리셋 — _renderEligible=false. A224: 토글은
+    //                                 | 활성 — 누르면 잠금 뷰)
     //   열기 .md/.markdown (소용량)   | 렌더(기본 — 사양. 빈 파일은 편집으로 시작, 토글은 활성)
-    //   열기 .md (A177 대용량·4MB 잘림)| 편집만(_renderEligible=false — 렌더 생략, A178 성능 원칙)
-    //   열기 .pdf                     | PDF 뷰(렌더 축 리셋)
-    //   New text file (A189 무제)     | 무제 편집(렌더 축 리셋 — 무제 md는 범위 밖)
-    //   토글 클릭 (렌더 중)           | 편집(에디터 표시·포커스 — 보류 중 파싱은 시퀀스로 무산)
-    //   토글 클릭 (편집 중)           | 렌더(현재 에디터 버퍼를 그 시점에 재파싱 — 사양: 재렌더는
-    //                                 | 토글 시점. 미저장 변경도 렌더에 보인다)
-    //   저장 (Ctrl+S·버튼)            | 모드 불변 — 저장은 EditorText 기준이라 렌더 중에도 동작
+    //   열기 .md (A177 대용량)        | 편집(_renderEligible=false — 렌더 생략, A178 성능 원칙.
+    //                                 | A224: 토글은 활성이되 잠금 뷰로 간다 — 비md와 일관)
+    //   열기 4MB 잘림(형식 무관)      | 편집 불가(영구 IsReadOnly) — A224: 토글 비활성(토글이
+    //                                 | "편집으로 전환"을 약속하면 안 된다 — 잘림 저장 사고 방지 축)
+    //   열기 .pdf                     | PDF 뷰(렌더 축 리셋 — 편집 축이 없어 토글 비활성)
+    //   New text file (A189 무제)     | 무제 편집(렌더 축 리셋 — 무제 md는 범위 밖. 토글 활성)
+    //   토글 클릭 (뷰 중)             | 편집(md 렌더면 에디터 표시·포커스 — 보류 중 파싱은
+    //                                 | 시퀀스로 무산. 잠금 뷰면 IsReadOnly 해제뿐)
+    //   토글 클릭 (편집 중)           | 뷰 — md 렌더 자격이면 렌더(현재 에디터 버퍼를 그 시점에
+    //                                 | 재파싱. 미저장 변경도 렌더에 보인다), 아니면 잠금 뷰
+    //   저장 (Ctrl+S·버튼)            | 모드 불변 — 저장은 EditorText 기준이라 뷰 중에도 동작
+    //                                 | (잠금은 "입력"만 막는다 — 더티가 있으면 저장 가능)
     //   Save as로 경로 변경(검증 실패)| 모드 불변 — 확장자는 피커가 동일하게 유지, 자격만 재판정
-    //   무제 첫 저장 (.txt 고정)      | 편집 유지(자격 재판정 — .txt라 계속 비활성)
+    //   무제 첫 저장 (.txt 고정)      | 편집 유지(자격 재판정 — .txt라 렌더 자격은 계속 없음)
     //   닫기·모듈 전환               | ICloseGuard(HasUnsavedChanges) — 모드 무관, 버퍼 기준
     //   Esc·전체화면                  | 셸의 3단 모드 축(A151) — 이 모듈 상태 불변
     //
-    // 불변식: _renderMode이면 반드시 _renderEligible이고 _path는 md 파일이다. 렌더 모드에서
+    // 불변식: _renderMode이면 반드시 _renderEligible이고 _path는 md 파일이다(무변경 — 인쇄
+    // 갈래 판정(_renderMode && md)이 이 축에 얹혀 있다). A224 추가 불변식: _renderMode이면
+    // 반드시 _viewMode다(렌더는 뷰 모드의 md 구현). 렌더 모드에서
     // 에디터는 Collapsed일 뿐 내용은 그대로다(렌더는 읽기 전용 표시일 뿐 — 더티·저장·A113 체계
     // 전부 에디터 버퍼가 정본). 줌(A181)·Fit(A145)은 에디터 모드 기준 그대로다(렌더 모드 줌은
     // 범위 밖 — 등재 후보).
@@ -699,8 +714,29 @@ public sealed partial class DocumentView : UserControl,
     // 한 틱 = 한 조각이라 틱 진입 시 1회 대조로 충분하다). 토글 재진입은 전체 재조립(현행 사양 —
     // Clear 후 첫 조각부터 다시, 진행 중이던 구 루프는 seq로 무산).
 
-    /// <summary>렌더 가능 판정(md 파일 + 비잘림 + A177 임계 이하) — 토글 버튼 활성의 단일 출처.</summary>
+    /// <summary>렌더 가능 판정(md 파일 + 비잘림 + A177 임계 이하). A224: 토글 버튼 활성의
+    /// 출처 자리는 <see cref="CanToggleViewMode"/>에 넘겼다 — 이 값은 이제 "뷰 모드가 md 렌더
+    /// 판이 되는가"(EnterRenderMode 진입 게이트)만 뜻한다. 두 축을 섞으면 비md에서 렌더 진입이
+    /// 성립해 빈 판이 뜬다(함정 — OnViewToggleClick 주석).</summary>
     private bool _renderEligible;
+
+    /// <summary>
+    /// A224: 뷰 모드 여부(형식 무관 축). 세우고 걷는 곳 = EnterViewMode/ExitViewMode(잠금 뷰)·
+    /// EnterRenderMode/ExitRenderMode(md 렌더 — _renderMode와 함께 움직인다)·
+    /// ResetRenderState(파일 전환 리셋 — 뷰 모드는 파일이 바뀌면 초기화, 사양).
+    /// 표시 구현은 형식이 정한다: md 렌더 자격이면 렌더 판(_renderMode), 아니면 잠금 뷰
+    /// (에디터 그대로 + IsReadOnly — UpdateEditorReadOnly 단일 산출 지점).
+    /// </summary>
+    private bool _viewMode;
+
+    /// <summary>
+    /// A224: 편집/뷰 토글 활성의 단일 출처 — 텍스트 편집 대상(파일·무제)이 있고 잘림이 아니면
+    /// 활성. PDF·빈 화면(_path=null·!_untitled)은 편집 축이 없어 비활성, 4MB 잘림은 영구
+    /// IsReadOnly라 토글이 "편집으로 전환"을 약속하면 안 되므로 비활성(잘림 저장 사고 방지 축
+    /// 무손상). 대용량 md(A177 임계 초과)는 활성이다 — 렌더 자격만 없어 뷰 = 잠금 뷰(비md와
+    /// 일관). 무제도 활성(잠글 이유는 없지만 일관성 — 사양).
+    /// </summary>
+    private bool CanToggleViewMode => (_path is not null || _untitled) && !_truncated;
 
     /// <summary>true = 렌더 뷰 표시 중(에디터 Collapsed). 세우고 걷는 곳 = EnterRenderMode/
     /// ExitRenderMode/ResetRenderState 셋뿐이다.</summary>
@@ -746,40 +782,87 @@ public sealed partial class DocumentView : UserControl,
             || ext.Equals(".markdown", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>A190: 하단 바 토글 클릭 — 편집 ↔ 렌더. 비활성 게이트(XAML IsEnabled)가 1차지만 방어 재확인.</summary>
+    /// <summary>A190→A224: 하단 바 토글 클릭 — 편집 ↔ 뷰(형식 무관). 비활성 게이트(XAML
+    /// IsEnabled)가 1차지만 방어 재확인. 게이트는 CanToggleViewMode다 — _renderEligible로 걸면
+    /// 비md 토글이 죽는다(그 값은 EnterViewMode 안에서 "렌더 판이냐 잠금 뷰냐"만 가른다).</summary>
     private void OnViewToggleClick(object sender, RoutedEventArgs e)
     {
-        if (!_renderEligible) return;
-        if (_renderMode) ExitRenderMode();
-        else EnterRenderMode();
+        if (!CanToggleViewMode) return;
+        if (_viewMode) ExitViewMode();
+        else EnterViewMode();
     }
 
     /// <summary>
-    /// A190: 토글 버튼 표시 갱신의 단일 지점 — 활성(_renderEligible) + 글리프·툴팁(누르면 갈 모드:
-    /// 편집 중 E890 View / 렌더 중 E70F Edit). UpdateFitButton과 같은 "코드가 내용을 정한다" 관용구.
+    /// A224: 뷰 모드 진입 — md 렌더 자격이면 기존 렌더 판(EnterRenderMode — 그쪽이 _viewMode를
+    /// 함께 세운다), 아니면 잠금 뷰(에디터 표면 그대로 + IsReadOnly. 표시 전환이 없어 장식·
+    /// A215 표시 토글은 그대로 남는다 — 사양: 기준이 "편집 모드냐"에서 "에디터 표면이냐"가 됐다).
+    /// </summary>
+    private void EnterViewMode()
+    {
+        if (_renderEligible)
+        {
+            EnterRenderMode(); // md: 렌더 판(현행 A190 동작 그대로)
+            return;
+        }
+        _viewMode = true;
+        UpdateEditorReadOnly();
+        UpdateViewToggle();
+        EditorBox.Focus(FocusState.Programmatic); // 잠금 뷰도 에디터 표면 — 캐럿 탐색·복사 가능
+    }
+
+    /// <summary>A224: 뷰 모드 이탈 — md 렌더면 기존 편집 복귀(ExitRenderMode — _viewMode도 함께
+    /// 걷는다), 잠금 뷰면 IsReadOnly 해제뿐이다(표시 전환 없음).</summary>
+    private void ExitViewMode()
+    {
+        if (_renderMode)
+        {
+            ExitRenderMode(); // md: 편집 복귀(현행 A190 동작 그대로)
+            return;
+        }
+        _viewMode = false;
+        UpdateEditorReadOnly();
+        UpdateViewToggle();
+        EditorBox.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// A224: 에디터 IsReadOnly의 단일 산출 지점 = 잘림(영구 — 잘린 채 저장 사고 방지, A37) ∨
+    /// 뷰 모드(잠금 뷰 — 입력만 막는다). 산발 대입 금지 — 원인 축이 둘이라 한쪽 대입이 다른
+    /// 쪽을 지우면 회귀 1순위다. 호출 전수 = ApplyLoadedText·StartUntitled(상태 확정 직후)·
+    /// ResetRenderState(뷰 모드 리셋)·EnterRenderMode/ExitRenderMode·EnterViewMode/ExitViewMode.
+    /// </summary>
+    private void UpdateEditorReadOnly() => EditorBox.IsReadOnly = _truncated || _viewMode;
+
+    /// <summary>
+    /// A190→A224: 토글 버튼 표시 갱신의 단일 지점 — 활성(CanToggleViewMode) + 글리프·툴팁
+    /// (누르면 갈 모드: 편집 중 E890 View / 뷰 중 E70F Edit — "Markdown only" 문구는 A224에서
+    /// 제거, 전 텍스트 형식이 대상이다). UpdateFitButton과 같은 "코드가 내용을 정한다" 관용구.
     /// </summary>
     private void UpdateViewToggle()
     {
-        ViewToggleButton.IsEnabled = _renderEligible;
-        ViewToggleIcon.Glyph = _renderMode ? "\uE70F" : "\uE890"; // Edit / View
-        ToolTipService.SetToolTip(ViewToggleButton, _renderMode ? "Edit" : "Preview (Markdown only)");
+        ViewToggleButton.IsEnabled = CanToggleViewMode;
+        ViewToggleIcon.Glyph = _viewMode ? "\uE70F" : "\uE890"; // Edit / View
+        ToolTipService.SetToolTip(ViewToggleButton, _viewMode ? "Edit" : "View");
     }
 
-    // ---------- \uD3B8\uC9D1 \uD45C\uC2DC \uD1A0\uAE00 2\uC885 (A215) ----------
+    // ---------- 편집 표시 토글 2종 (A215) ----------
 
-    /// <summary>A215: \uB77C\uC778 \uAC00\uC774\uB4DC \uD45C\uC2DC \uC0C1\uD0DC \u2014 \uBC84\uD2BC(IsChecked)\u00B7\uC7A5\uC2DD\uAE30(SetDecorVisibility)\u00B7\uC124\uC815 \uD0A4\uC758 \uB2E8\uC77C \uCD9C\uCC98.</summary>
+    /// <summary>A215: 라인 가이드 표시 상태 — 버튼(IsChecked)·장식기(SetDecorVisibility)·설정 키의 단일 출처.</summary>
     private bool _showGuides = true;
 
-    /// <summary>A215: \u00B6\u00B7EOF \uB9C8\uCEE4 \uD45C\uC2DC \uC0C1\uD0DC \u2014 \uC704\uC640 \uAC19\uC740 3\uBA74 \uB3D9\uAE30 \uCD95.</summary>
+    /// <summary>A215: ¶·EOF 마커 표시 상태 — 위와 같은 3면 동기 축.</summary>
     private bool _showMarks = true;
 
-    /// <summary>A215: \uD1A0\uAE00 \uB178\uCD9C\uC758 \uB2E8\uC77C \uC9C0\uC810 \u2014 \uD3B8\uC9D1 \uBAA8\uB4DC(\uC5D0\uB514\uD130 \uD45C\uC2DC \uC911)\uC5D0\uC11C\uB9CC \uBCF4\uC778\uB2E4.
-    /// \uD638\uCD9C \uC2DC\uC810 = EditorBox.Visibility\uAC00 \uBC14\uB00C\uB294 \uBAA8\uB4DC \uC804\uD658 5\uACF3(\uD30C\uC77C \uC5F4\uAE30\u00B7\uBB34\uC81C\u00B7\uB80C\uB354 \uC9C4\uC785/\uBCF5\uADC0\u00B7PDF).</summary>
+    /// <summary>A215→A224: 토글 노출의 단일 지점 — 기준은 "에디터 표면이 보이는가"다(A224에서
+    /// "편집 모드인가"에서 재정의). 잠금 뷰(A224 — 에디터 그대로 + IsReadOnly)도 에디터 표면이라
+    /// 가이드·¶ 토글이 그대로 노출된다(사양). md 렌더 뷰·PDF·빈 화면은 종전대로 숨김.
+    /// 호출 시점 = EditorBox.Visibility가 바뀌는 모드 전환 5곳(파일 열기·무제·렌더 진입/복귀·PDF)
+    /// — 잠금 뷰 전환은 Visibility가 안 바뀌어 호출이 필요 없다.</summary>
     private void UpdateDecorToggles() =>
         DecorTogglePanel.Visibility = EditorBox.Visibility == Visibility.Visible
             ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>A215: \uAC00\uC774\uB4DC \uD1A0\uAE00 \uD074\uB9AD \u2014 \uC989\uC2DC \uC801\uC6A9 + \uC989\uC2DC \uC800\uC7A5(A181 \uC90C \uAD00\uC6A9\uAD6C).</summary>
+    /// <summary>A215: 가이드 토글 클릭 — 즉시 적용 + 즉시 저장(A181 줌 관용구).</summary>
     private void OnGuideToggleClick(object sender, RoutedEventArgs e)
     {
         _showGuides = GuideToggleButton.IsChecked == true;
@@ -788,7 +871,7 @@ public sealed partial class DocumentView : UserControl,
         _settings.Save();
     }
 
-    /// <summary>A215: \u00B6 \uB9C8\uCEE4 \uD1A0\uAE00 \uD074\uB9AD \u2014 \uAC00\uC774\uB4DC\uC640 \uB3D9\uD615.</summary>
+    /// <summary>A215: ¶ 마커 토글 클릭 — 가이드와 동형.</summary>
     private void OnMarksToggleClick(object sender, RoutedEventArgs e)
     {
         _showMarks = MarksToggleButton.IsChecked == true;
@@ -811,11 +894,13 @@ public sealed partial class DocumentView : UserControl,
     private async void EnterRenderMode()
     {
         _renderMode = true;
+        _viewMode = true; // A224: 렌더는 뷰 모드의 md 구현 — 두 표지는 함께 선다(불변식)
         _renderBlocks = null; // A211 배치 5: 파싱 완료 전까지는 판에 모델이 없다(인쇄는 원문 갈래)
+        UpdateEditorReadOnly(); // A224: 에디터는 Collapsed지만 축 정합 유지(단일 산출 지점)
         UpdateViewToggle();
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(OpenPdf 관용구)
-        UpdateDecorToggles(); // A215: 뷰(렌더) 모드 — 표시 토글 숨김(편집 전용)
+        UpdateDecorToggles(); // A215→A224: 렌더 뷰 — 표시 토글 숨김(에디터 표면 전용)
         RenderPane.Visibility = Visibility.Visible;
         Focus(FocusState.Programmatic);
 
@@ -945,7 +1030,9 @@ public sealed partial class DocumentView : UserControl,
         _renderSeq++; // 보류 중 파싱 무산(A193: 분할 조립 루프의 seq 대조도 이걸로 무산된다)
         StopRenderAppendLoop(); // A193: 진행 중 루프는 즉시 명시 해제 — 다음 틱을 기다리지 않는다
         _renderMode = false;
+        _viewMode = false; // A224: 렌더 이탈 = 뷰 모드 이탈(편집 복귀)
         _renderBlocks = null; // A211 배치 5: 편집 모드 = 렌더 갈래 종료(진행 중 인쇄 세션은 무관 — 자기 사본을 쥔다)
+        UpdateEditorReadOnly(); // A224: 편집 복귀 — IsReadOnly 재산출(잘림 md는 렌더 자체가 없다)
         UpdateViewToggle();
         RenderPane.Visibility = Visibility.Collapsed;
         EditorBox.Visibility = Visibility.Visible;
@@ -966,7 +1053,10 @@ public sealed partial class DocumentView : UserControl,
         _renderSeq++; // 보류 중 파싱 무산(A193: 분할 조립 루프의 seq 대조도 이걸로 무산된다)
         StopRenderAppendLoop(); // A193: 루프 명시 해제 — 아래 Clear 이후 append가 성립할 수 없다
         _renderMode = false;
+        _viewMode = false; // A224: 파일이 바뀌면 뷰 모드 초기화(사양 — md 기본 렌더 뷰는
+                           // ApplyLoadedText의 EnterRenderMode 호출이 이 뒤에 다시 세운다)
         _renderEligible = eligible;
+        UpdateEditorReadOnly(); // A224: 뷰 모드가 걷혔다 — IsReadOnly 재산출(잘림 축은 유지)
         _renderBlocks = null; // A211 배치 5: 판을 비웠다 — 모델도 함께(이전 문서 모델의 인쇄 유출 방지)
         RenderPane.Visibility = Visibility.Collapsed;
         RenderStack.Children.Clear();
@@ -1019,7 +1109,7 @@ public sealed partial class DocumentView : UserControl,
         ResetRenderState(false); // A190: 렌더 축 리셋 — PDF 뷰에는 토글이 없다(비활성)
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다
-        UpdateDecorToggles(); // A215: PDF 뷰 — 표시 토글 숨김(편집 전용)
+        UpdateDecorToggles(); // A215→A224: PDF 뷰 — 표시 토글 숨김(에디터 표면 전용)
         UpdateZoomText(); // A181: PDF는 별개 줌 체계 — 텍스트 배율 표기를 비운다(_path=null)
         // A211 배치 4: 텍스트 갈래 이탈(편집 대상이 방금 비워졌다) — 첫 PDF 열기의 로드 동안
         // 버튼이 텍스트 시절 활성으로 남지 않게 즉시 재판정한다(같은 패널 재사용 PDF→PDF는

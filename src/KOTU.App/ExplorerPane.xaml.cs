@@ -1191,7 +1191,7 @@ public sealed partial class ExplorerPane : UserControl
         : string.Equals(System.IO.Path.GetExtension(name), ".zip", StringComparison.OrdinalIgnoreCase)
             ? InfoKind.Zip
         // A199: 문서 모듈 담당 목록 재사용 — .pdf도 이 목록에 있지만 위 Pdf 갈래가 먼저 잡으므로
-        // 여기 도달하는 것은 비PDF 텍스트(txt·md·markdown·log·ini)뿐이다.
+        // 여기 도달하는 것은 비PDF 텍스트(txt·md·markdown·log·ini·html·htm — A224 추가분 자동 추종)뿐이다.
         : ExplorerListing.MatchesExtension(name, KOTU.Module.Document.DocumentModule.Extensions)
             ? InfoKind.Text
         : InfoKind.None;

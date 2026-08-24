@@ -95,7 +95,7 @@
         <!-- PDF 페이지 뷰(A16, PdfPane)는 코드에서 지연 생성해 RootGrid 맨 아래(z 순서상 뒤)에 꽂는다 -->
         <TextBlock
             x:Name="PlaceholderText"
-            Text="Open a text, Markdown, or PDF file, or drop one onto the window&#x0A;Plain text files can be edited and saved here (Ctrl+S)"
+            Text="Open a text, Markdown, HTML, or PDF file, or drop one onto the window&#x0A;Plain text files can be edited and saved here (Ctrl+S)"
             TextAlignment="Center"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
@@ -166,14 +166,17 @@
                         ToolTipService.ToolTip="Save (Ctrl+S)">
                     <FontIcon Glyph="&#xE74E;" FontSize="14" />
                 </Button>
-                <!-- A190: 편집 ↔ 렌더 토글. 마크다운 텍스트가 열려 있고 렌더 가능(비대용량·비잘림)일
-                     때만 활성 — A145 "항상 보이되 비활성" 관용구(판정·글리프·툴팁은 UpdateViewToggle).
-                     글리프는 누르면 갈 모드: 편집 중 E890(View — 렌더로) / 렌더 중 E70F(Edit — 편집으로).
+                <!-- A190 → A224: 편집 ↔ 뷰 토글(전 텍스트 형식). 텍스트 편집 대상(파일·무제)이
+                     있고 잘림이 아니면 활성 — A145 "항상 보이되 비활성" 관용구(판정·글리프·툴팁은
+                     UpdateViewToggle). 뷰 모드의 실체는 형식이 정한다: md 렌더 자격이면 렌더 판
+                     (A190 그대로), 그 외 텍스트는 잠금 뷰(에디터 그대로 + IsReadOnly). PDF·빈
+                     화면·4MB 잘림은 비활성(잘림은 토글이 "편집으로 전환"을 약속하면 안 된다).
+                     글리프는 누르면 갈 모드: 편집 중 E890(View) / 뷰 중 E70F(Edit).
                      핫키 없음(A34 등록 없음 — New 버튼과 같은 부류, 초기 툴팁은 고정값). -->
                 <Button x:Name="ViewToggleButton" Grid.Column="3" Style="{StaticResource BottomBarButtonStyle}"
                         IsEnabled="False"
                         Click="OnViewToggleClick"
-                        ToolTipService.ToolTip="Preview (Markdown only)">
+                        ToolTipService.ToolTip="View">
                     <FontIcon x:Name="ViewToggleIcon" Glyph="&#xE890;" FontSize="14" />
                 </Button>
                 <!-- A211 배치 3(v0.222.0) → A223: 인쇄 — 규격 정본은 셸 인쇄 절 주석(MainWindow.xaml.cs,
@@ -202,7 +205,8 @@
                                   VerticalAlignment="Center" Visibility="Collapsed" />
                 <!-- A215(2026-08-24): 편집 모드 표시 토글 2종 — ① 라인 가이드(줄 상/하단 선 —
                      A115 ①) ② 펑츄에이션 마커(¶·EOF — A115 ②). 좌우 star 칸 사이 = 바 가운데
-                     (사용자 지정 위치). 편집 모드(EditorBox 표시)일 때만 노출 — 뷰(렌더)·PDF·빈
+                     (사용자 지정 위치). 에디터 표면(EditorBox 표시)일 때만 노출 — A224 잠금 뷰도
+                     에디터 표면이라 그대로 노출되고, 렌더 뷰·PDF·빈
                      화면에서는 Collapsed(UpdateDecorToggles 단일 지점). 상태는 document.* 키 2개로
                      즉시 저장(A181 줌 관용구). 초기 IsChecked는 코드(생성자)가 설정값으로 맞춘다.
                      글리프: E7A5(가로줄 무리 — 가이드 근사) 대신 실존 확인이 쉬운 표준 글리프를
