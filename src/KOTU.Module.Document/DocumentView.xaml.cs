@@ -31,8 +31,12 @@ namespace KOTU.Module.Document;
 /// ⓒ 더티 = 기준 텍스트와의 실제 내용 비교(길이 우선 + 250ms 디바운스 — undo 원복이면 ●가 꺼진다),
 /// ⓓ 저장 직전 디스크 스탬프(수정 시각·크기) 대조로 외부 변경 검출. 전부 잘림·PDF에는 비적용.
 /// A211 배치 3(v0.222.0): 인쇄 공급자(<see cref="IPrintPageProvider"/>) — PDF 갈래부터. 보고 있는
-/// PDF의 전 페이지를 지연 렌더로 셸 PrintHost에 공급한다(Ctrl+P·하단 바 버튼. 텍스트/마크다운
-/// 갈래는 배치 4·5 — 갈래 분기 설계는 아래 "인쇄" 절 주석이 정본).
+/// PDF의 전 페이지를 지연 렌더로 셸 PrintHost에 공급한다(Ctrl+P·하단 바 버튼. 갈래 분기 설계는
+/// 아래 "인쇄" 절 주석이 정본).
+/// A211 배치 4(v0.223.0): 텍스트 갈래 — 편집 대상 텍스트(파일·무제, md 원문 포함)를 측정 1회
+/// 기반 산술 페이지네이터로 공급한다(줌 무관 14pt Consolas, 대용량(A177 임계)은 안내 1장).
+/// A211 배치 5(v0.224.0): 마크다운 렌더 갈래 — md를 렌더 모드로 보고 있으면 인쇄물도 렌더
+/// 모습이다(파싱 모델 재사용 + 블록 단위 페이지 팩킹). 편집 모드·렌더 불가는 원문 텍스트 폴백.
 /// </summary>
 public sealed partial class DocumentView : UserControl,
     IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
@@ -548,6 +552,7 @@ public sealed partial class DocumentView : UserControl,
         UpdateZoomText(); // A181: _path가 잡혔다 — 하단 바에 현재 배율 표시(항상, 100% 포함)
         _shownPath = path;
         UpdateNewFileButton(); // A189: 콘텐츠가 열렸다 — New text file 비활성
+        UpdatePrintButton(); // A211 배치 4: 텍스트 편집 대상 확보 — 인쇄 가능(예약 ⑤의 갈래 상태 변화 지점)
 
         // A190: 마크다운이면 기본 = 렌더 뷰(사양). 자격 = md 확장자 + 비잘림 + A177 임계 이하
         // (대용량 md는 렌더 생략·에디터만 — A178 성능 원칙. 4MB 잘림은 항상 임계 초과지만 명시
@@ -622,6 +627,7 @@ public sealed partial class DocumentView : UserControl,
         FileNameText.Text = UntitledDisplayName;
         UpdateZoomText(); // A181: 무제도 텍스트 편집 — 배율 표시
         UpdateNewFileButton();
+        UpdatePrintButton(); // A211 배치 4: 무제도 인쇄 대상(_untitled) — 작업명은 UntitledDisplayName
         UntitledOpened?.Invoke(); // 셸 동기화 — 탐색기 내림·드라이브 줄 숨김·제목 "KOTU - Untitled"
         EditorBox.Focus(FocusState.Programmatic); // 곧바로 타이핑 가능하게
     }
@@ -689,6 +695,19 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private EventHandler<object>? _renderAppendHandler;
 
+    /// <summary>
+    /// A211 배치 5: <b>지금 판에 올라 있는 렌더 모델</b>(null = 없음). 인쇄의 렌더 갈래가 파싱을
+    /// 다시 하지 않고 이 모델을 그대로 재사용한다 — 재파싱을 피하는 것이 목적이 아니라
+    /// <b>"인쇄물 = 지금 보이는 렌더 결과"를 같은 모델로 보장</b>하는 것이 목적이다(재파싱은
+    /// 같은 버퍼라도 판정이 갈릴 여지를 만든다). MdBlock은 불변 record라 참조 보관 = 스냅샷이고,
+    /// 요소는 절대 재사용하지 않는다(페이지마다 새로 조립 — 함정 1, v0.174.1).
+    /// 세우는 곳 = EnterRenderMode의 첫 조각 조립 성공 직후(그 전에는 판에 아무것도 없다).
+    /// 걷는 곳 = EnterRenderMode 진입(파싱 대기 구간)·ExitRenderMode·ResetRenderState·
+    /// ApplyPlainTextFallback(판이 원문으로 바뀌었다 = 렌더 모델 없음 → 인쇄도 원문 갈래).
+    /// 보유 상한 = A177 임계 이하 md 1개분 모델(판에 올린 요소 트리보다 훨씬 작다).
+    /// </summary>
+    private IReadOnlyList<MdBlock>? _renderBlocks;
+
     private static bool IsMarkdownPath(string path)
     {
         var ext = Path.GetExtension(path);
@@ -729,6 +748,7 @@ public sealed partial class DocumentView : UserControl,
     private async void EnterRenderMode()
     {
         _renderMode = true;
+        _renderBlocks = null; // A211 배치 5: 파싱 완료 전까지는 판에 모델이 없다(인쇄는 원문 갈래)
         UpdateViewToggle();
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(OpenPdf 관용구)
@@ -758,6 +778,9 @@ public sealed partial class DocumentView : UserControl,
             RenderStack.Children.Clear();
             var first = Math.Min(RenderChunkBlocks, blocks.Count);
             MarkdownRenderer.AppendRange(RenderStack, blocks, 0, first);
+            // A211 배치 5: 판에 오른 모델을 인쇄가 재사용한다(요소가 아니라 모델 — 필드 주석).
+            // 분할 조립(A193)이 아직 남아 있어도 모델은 이미 전량이라 인쇄는 문서 전체를 찍는다.
+            _renderBlocks = blocks;
             if (first < blocks.Count) StartRenderAppendLoop(seq, blocks, first, text);
         }
         catch (Exception)
@@ -825,6 +848,9 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private void ApplyPlainTextFallback(string text)
     {
+        // A211 배치 5: 판이 원문으로 바뀌었다 = 렌더 모델 없음 — 인쇄도 원문 갈래로 내려간다
+        // (화면과 인쇄물이 어긋나지 않게. 필드 대입뿐이라 아래 try 밖에서도 안전하다).
+        _renderBlocks = null;
         try
         {
             RenderStack.Children.Clear();
@@ -855,6 +881,7 @@ public sealed partial class DocumentView : UserControl,
         _renderSeq++; // 보류 중 파싱 무산(A193: 분할 조립 루프의 seq 대조도 이걸로 무산된다)
         StopRenderAppendLoop(); // A193: 진행 중 루프는 즉시 명시 해제 — 다음 틱을 기다리지 않는다
         _renderMode = false;
+        _renderBlocks = null; // A211 배치 5: 편집 모드 = 렌더 갈래 종료(진행 중 인쇄 세션은 무관 — 자기 사본을 쥔다)
         UpdateViewToggle();
         RenderPane.Visibility = Visibility.Collapsed;
         EditorBox.Visibility = Visibility.Visible;
@@ -875,6 +902,7 @@ public sealed partial class DocumentView : UserControl,
         StopRenderAppendLoop(); // A193: 루프 명시 해제 — 아래 Clear 이후 append가 성립할 수 없다
         _renderMode = false;
         _renderEligible = eligible;
+        _renderBlocks = null; // A211 배치 5: 판을 비웠다 — 모델도 함께(이전 문서 모델의 인쇄 유출 방지)
         RenderPane.Visibility = Visibility.Collapsed;
         RenderStack.Children.Clear();
         UpdateViewToggle();
@@ -927,6 +955,10 @@ public sealed partial class DocumentView : UserControl,
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다
         UpdateZoomText(); // A181: PDF는 별개 줌 체계 — 텍스트 배율 표기를 비운다(_path=null)
+        // A211 배치 4: 텍스트 갈래 이탈(편집 대상이 방금 비워졌다) — 첫 PDF 열기의 로드 동안
+        // 버튼이 텍스트 시절 활성으로 남지 않게 즉시 재판정한다(같은 패널 재사용 PDF→PDF는
+        // 직전 문서가 인쇄 대상으로 유지되는 배치 3 사양 그대로 — PdfPane.PrintPageCount 주석).
+        UpdatePrintButton();
         PlaceholderText.Visibility = Visibility.Collapsed;
         _pdfPane.Visibility = Visibility.Visible;
         PageInfoText.Visibility = Visibility.Visible;
@@ -968,7 +1000,8 @@ public sealed partial class DocumentView : UserControl,
         PageInfoText.Visibility = Visibility.Collapsed;
         ShowTextFitState(); // A145: 숨기지 않고 비활성 "1/1"로 (구 A49의 Collapsed를 대체)
         // A211 배치 3: PDF 갈래 이탈(텍스트/무제 전환·열기 실패·빈 화면 복귀 전부 이 관문을
-        // 지난다) — 인쇄 비활성. OpenPdf 성공과 이 둘이 PDF 인쇄 상태 변화의 호출 전수다.
+        // 지난다) — 재판정. OpenPdf 성공과 이 둘이 PDF 인쇄 상태 변화의 호출 전수다(배치 4부터는
+        // 텍스트 갈래 지점 3곳 — ApplyLoadedText·StartUntitled·OpenPdf 진입 — 이 추가로 부른다).
         UpdatePrintButton();
     }
 
@@ -1773,13 +1806,25 @@ public sealed partial class DocumentView : UserControl,
     // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
     // 편집 중 Enter는 줄바꿈이 우선이라 순환하지 않는다(셸의 텍스트 입력 통과 — A151 ④ⓐ).
 
-    // ---------- 인쇄 (A211 배치 3, v0.222.0 — 계약 = IPrintPageProvider, 소비자 = 셸 PrintHost) ----------
-    // 사양 단일 원본 = docs/A211-print-research.md §2(PdfPane 접점)·§3-2 + 배치 2(ImageViewerView)
-    // 산식 선례. 이 절이 문서 모듈 인쇄의 **모드 분기 축**이다(설계 정본): 한 뷰가 PDF / 텍스트
-    // 편집 / 마크다운 렌더 세 표면을 오가므로 계약 구현은 "지금 전면인 표면" 판정에서 갈라진다 —
-    // 배치 3은 PDF 갈래(PrintablePdfPane)만 얹고, 텍스트(배치 4)·마크다운(배치 5)은 아래 각
-    // 멤버의 "배치 4/5 예약" 주석 자리에 자기 갈래를 분기로 얹는다(멤버 추가가 아니라 분기 추가 —
-    // 네 판정(CanPrintNow·GetPrintPageCount·CreatePrintPageAsync·버튼 활성)이 같은 갈래를 봐야 한다).
+    // ---------- 인쇄 (A211 배치 3~4, v0.222.0~v0.223.0 — 계약 = IPrintPageProvider, 소비자 = 셸 PrintHost) ----------
+    // 사양 단일 원본 = docs/A211-print-research.md §2(접점)·§3-2 + 배치 2(ImageViewerView) 산식
+    // 선례 + 부록 B 78(텍스트 기본값). 이 절이 문서 모듈 인쇄의 **모드 분기 축**이다(설계 정본):
+    // 한 뷰가 PDF / 텍스트 편집 / 마크다운 렌더 세 표면을 오가므로 계약 구현은 "지금 전면인 표면"
+    // 판정에서 갈라진다 — 배치 3 = PDF 갈래(PrintablePdfPane), 배치 4 = 텍스트 갈래(파일·무제,
+    // md 원문 포함 — 아래 "텍스트 갈래" 소절). 네 판정(CanPrintNow·GetPrintPageCount·
+    // CreatePrintPageAsync·버튼 활성)이 같은 갈래를 본다(멤버 추가가 아니라 분기 추가).
+    // 갈래 배타 규칙(배치 4): 세션이 어느 갈래인가는 **세션 시작(PrintJobName 스냅샷) 시점에
+    // 1회 확정**된다 — 텍스트 편집 대상 판정(IsTextPrintTarget)은 PDF 모드에서 상태기계상 항상
+    // 거짓(_path=null·!_untitled)이라 PDF 열림 상태에서 텍스트 갈래로 새는 경로가 없고, 세션 중
+    // 모드가 바뀌어도(늦게 끝난 열기 등) 진행 중 인쇄는 시작 시점 갈래·스냅샷을 유지한다.
+    // 배치 5(v0.224.0): 마크다운 **렌더 갈래**가 텍스트 갈래 안쪽 분기로 얹혔다 — md를 렌더
+    // 모드로 보고 있으면 인쇄물도 렌더 모습이다(아래 "마크다운 렌더 갈래" 소절). 세션 모드
+    // 판정도 같은 스냅샷 시점(PrintJobName)에 함께 굳는다: 스냅샷이 렌더 모델(_printBlocks)을
+    // 잡았으면 렌더 갈래, 못 잡았으면(편집 모드·비md·파싱 실패·과대) 원문 갈래다. 두 스냅샷은
+    // 렌더 세션에서 함께 잡히고(원문이 폴백이라) 판정 우선순위는 렌더 → 원문 → PDF 순이다.
+    // 갈래 강등은 **페이지네이션 1회 확정**이다 — GetPrintPageCount에서 팩킹이 성립하지 않으면
+    // 그 자리에서 _printBlocks를 비워 원문 갈래로 내려앉히고, 그 뒤 페이지 조립이 실패하는 건
+    // 그 페이지만 셸 안내로 대체된다(페이지마다 갈래가 바뀌면 페이지 수와 내용이 어긋난다).
 
     /// <summary>
     /// 인쇄 렌더 유효 DPI 상한(A211 배치 3 확정값 300). 근거: 래스터 인쇄 품질의 관행 기준이
@@ -1818,28 +1863,71 @@ public sealed partial class DocumentView : UserControl,
         _pdfPane is { Visibility: Visibility.Visible, PrintPageCount: > 0 } pane ? pane : null;
 
     /// <summary>
-    /// 지금 인쇄할 콘텐츠가 있는가 — <b>배치 3은 PDF만</b>: 텍스트 편집·마크다운 렌더·무제·빈
-    /// 화면은 false(Ctrl+P·버튼 둘 다 잠잠 — 부록 B 78 범위의 단계적 확장 중).
-    /// 배치 4/5 예약: 텍스트/마크다운 갈래는 이 식에 || 분기로 얹는다 —
-    /// <see cref="CreatePrintPageAsync"/>의 갈래 분기와 반드시 짝으로.
+    /// 지금 인쇄할 콘텐츠가 있는가 — 배치 3 = PDF, 배치 4 = 텍스트 편집 대상(파일·무제, 마크다운
+    /// 파일 포함). 배치 5의 렌더 갈래는 <b>이 판정에 축을 더하지 않는다</b> — 렌더 모드는 md 파일
+    /// 편집의 하위 모드라 이미 텍스트 편집 대상이고(_path 있음), 렌더가 안 되면 원문이 나간다.
+    /// 빈 화면·A177 지연 대입 대기(그동안 _path=null)만 false다. 두 갈래는 상태기계상 배타라
+    /// (PDF 모드 = _path null + !_untitled) 이 식은 순수 합집합이고, 세션의 갈래 확정은
+    /// PrintJobName 스냅샷 시점이 한다(절 머리 주석 "갈래 배타 규칙").
+    /// 대용량(A177 임계 초과·4MB 잘림)도 true — 인쇄 자체는 억제되고 안내 페이지 1장이 나간다
+    /// (부록 B 78 확정 — <see cref="GetPrintPageCount"/> 참고).
     /// </summary>
-    public bool CanPrintNow => PrintablePdfPane is not null;
+    public bool CanPrintNow => PrintablePdfPane is not null || IsTextPrintTarget;
 
     /// <summary>
-    /// OS 인쇄 큐·대화상자에 뜰 작업 이름 = 보고 있는 파일 이름(_shownPath — PDF도 채워진다).
-    /// 배치 4 예약: 무제 문서 갈래는 UntitledDisplayName을 돌려줄 것(경로가 없다 — 계약의
-    /// "무제 문서는 표시 제목" 규정). 비면 셸이 앱 이름으로 대체한다(계약).
+    /// OS 인쇄 큐·대화상자에 뜰 작업 이름 = 보고 있는 파일 이름(_shownPath — PDF·텍스트 공용),
+    /// 무제 문서는 UntitledDisplayName(계약의 "무제 문서는 표시 제목" 규정 — 하단 바·창 제목과
+    /// 표기 동기). 비면 셸이 앱 이름으로 대체한다(계약).
+    /// <para>
+    /// <b>세션 시작 훅(A211 배치 4)</b>: 셸 PrintHost는 이 속성을 인쇄 세션 시작 시점(UI 스레드)에
+    /// 정확히 1회 읽는다(계약 규정·PrintHost.SafeJobName — All Readable 중계도 같은 경로다).
+    /// 공급자가 세션 시작을 알 수 있는 유일한 신호가 이 읽기라, 텍스트 갈래의 <b>내용 스냅샷도
+    /// 여기서 함께 굳힌다</b>(CapturePrintSnapshot — 게터의 의도된 부수 효과). 인쇄 중 편집이
+    /// 페이지를 바꾸면 안 된다는 요구(작업명 스냅샷과 동일 시점 규칙)의 구현 지점이다.
+    /// </para>
     /// </summary>
-    public string PrintJobName => _shownPath is { } shown ? Path.GetFileName(shown) : string.Empty;
+    public string PrintJobName
+    {
+        get
+        {
+            CapturePrintSnapshot();
+            return _shownPath is { } shown ? Path.GetFileName(shown)
+                : _untitled ? UntitledDisplayName
+                : string.Empty;
+        }
+    }
 
     /// <summary>
-    /// PDF = 문서 전체 페이지 수(PdfPane.PrintPageCount — PageCount 메타 값 즉답·렌더 0회라
-    /// 수백 페이지에서도 Paginate가 무겁지 않다 — 계약의 "무겁게 만들지 말 것").
-    /// spec은 PDF 갈래에서는 안 본다 — PDF 1페이지 = 종이 1장 고정이라 용지가 수를 못 바꾼다.
-    /// 배치 4/5 예약: 텍스트/마크다운은 측정 기반 페이지네이터의 결과를 여기 갈래로 얹는다
-    /// (그때부터 spec(용지·영역)이 페이지 수를 결정한다).
+    /// 총 페이지 수 — 갈래별(Paginate는 UI 스레드, 계약의 "무겁게 만들지 말 것"):
+    /// 마크다운 렌더(배치 5) = 블록 팩킹 시뮬레이션(EnsurePrintRenderLayout — 블록당 Measure 1회.
+    /// 블록 수 상한 MaxRenderPrintBlocks가 점유를 닫고, 넘으면 스냅샷 단계에서 이미 원문 갈래다).
+    /// 텍스트(배치 4) = 측정 1회 기반 산술 페이지네이션(EnsurePrintLayout — 전문 1패스 산술이라
+    /// A177 임계(1MB) 이하에서 수 ms). 임계 초과는 산출 없이 즉답 1(안내 페이지 1장 — 인쇄 억제,
+    /// 부록 B 78 확정. 장식 오프(A177 ⓑ)와 같은 성질의 성능 방어라 임계 상수도 재사용한다.
+    /// 4MB 잘림 텍스트는 어떤 인코딩에서도 임계를 넘어 항상 이 갈래다 — 잘린 내용이 온전한
+    /// 문서인 척 인쇄되는 일도 함께 막힌다).
+    /// PDF(배치 3) = PdfPane.PrintPageCount(메타 값 즉답·렌더 0회. spec 불참 — 1페이지 = 종이
+    /// 1장 고정). 텍스트 갈래는 spec(용지·영역)이 페이지 수를 결정한다.
     /// </summary>
-    public int GetPrintPageCount(PrintPageSpec spec) => PrintablePdfPane?.PrintPageCount ?? 0;
+    public int GetPrintPageCount(PrintPageSpec spec)
+    {
+        // 방어적 지연 스냅샷 — 정상 경로에서는 PrintJobName(세션 시작)이 항상 먼저라 무동작이다.
+        // (_printText는 렌더 세션에서도 함께 잡히므로 이 한 조건이 두 갈래의 스냅샷 유무를 대표한다.)
+        if (_printText is null) CapturePrintSnapshot();
+        // 렌더 갈래(배치 5)가 먼저 — 팩킹이 성립하지 않으면 여기서 세션을 원문 갈래로 강등한다
+        // (절 머리 주석의 "페이지네이션 1회 확정"). 이 아래로는 배치 4 코드가 그대로 돈다.
+        if (_printBlocks is { } blocks)
+        {
+            if (EnsurePrintRenderLayout(spec, blocks) is { } rendered) return rendered.PageCount;
+            _printBlocks = null;
+        }
+        if (_printText is { } text)
+        {
+            if (text.Length > LargeDocumentChars) return 1; // 인쇄 억제 — 안내 1장(전문 패스 없음)
+            return EnsurePrintLayout(spec, text)?.PageCount ?? 0; // 0 = 이상 규격 — 셸이 안내 1장
+        }
+        return PrintablePdfPane?.PrintPageCount ?? 0;
+    }
 
     /// <summary>
     /// pageNumber(1-base) 인쇄 페이지 1장 조립 — 미리보기(GetPreviewPage)와 본인쇄(AddPages)가
@@ -1854,12 +1942,20 @@ public sealed partial class DocumentView : UserControl,
     /// 신호가 없다 — 300DPI 상한이면 미리보기 과렌더도 페이지당 수십 MB 일시 점유로 닫히고,
     /// 미리보기가 인쇄물과 같은 픽셀이라 품질 확인 수단으로도 정직하다.
     /// </para>
-    /// 배치 4/5 예약: 모드 갈래는 첫 판정에서 나눈다 — PDF 갈래가 아니면(그때 가서 텍스트/
-    /// 마크다운 갈래로) null. null·예외는 셸이 안내 페이지로 대체한다(계약 — 파이프는 계속 간다).
+    /// 갈래 분기(A211 배치 4~5): 판정은 세션 스냅샷 순서다 — 렌더 모델(_printBlocks) → 텍스트
+    /// 스냅샷(_printText) → PDF. 스냅샷 존재 자체가 "이 세션이 어느 갈래로 시작했다"는 표지라
+    /// (절 머리 주석), 세션 중 모드가 바뀌어도 진행 중 인쇄는 시작 시점 갈래·스냅샷을 계속 찍는다.
+    /// 렌더 갈래는 실패해도 텍스트 갈래로 흘러내리지 않는다(강등은 페이지네이션에서만 — 페이지마다
+    /// 갈래가 바뀌면 페이지 수와 내용이 어긋난다). null·예외는 셸이 안내 페이지로 대체한다
+    /// (계약 — 파이프는 계속 간다).
     /// </summary>
     public async Task<object?> CreatePrintPageAsync(int pageNumber, PrintPageSpec spec)
     {
-        if (PrintablePdfPane is not { } pane) return null; // 배치 4/5 예약: 텍스트/마크다운 갈래 분기 지점
+        if (_printBlocks is { } blocks) // 마크다운 렌더 갈래(배치 5) — 세션 확정 갈래
+            return CreateRenderPrintPage(pageNumber, spec, blocks);
+        if (_printText is { } snapshot) // 텍스트 갈래(배치 4)
+            return CreateTextPrintPage(pageNumber, spec, snapshot);
+        if (PrintablePdfPane is not { } pane) return null;
         if (pageNumber < 1 || pageNumber > pane.PrintPageCount) return null;
         if (pane.GetPrintPageSize(pageNumber) is not { } size) return null;
 
@@ -1912,13 +2008,634 @@ public sealed partial class DocumentView : UserControl,
         return page;
     }
 
+    // ---------- 인쇄: 텍스트 갈래 (A211 배치 4, v0.223.0) ----------
+    // 방식(과제 확정 — 조사 §2 문서 절의 "문자 수 근사" 축): 요소를 페이지마다 실측하는 팩킹이
+    // 아니라 **측정 1회 + 산술 페이지네이션**이다. Paginate가 UI 스레드라(계약) 수백 KB 전문을
+    // TextBlock에 넣고 Measure하는 방식은 프레임을 수백 ms 점유한다 — 대신 Consolas 고정폭
+    // 성질을 써서 줄 높이·문자 폭을 1회 측정하고 줄바꿈(랩)·페이지 수를 산술로 낸다.
+    // 랩은 에디터 TextWrapping(Wrap = 단어 경계 우선 + 못 끊으면 강제 절단)과 같은 규칙을
+    // 산술로 재현하되 문자 그리드 근사라 경계가 자간 단위로 어긋날 수 있고, 그 오차는 전부
+    // **여유 방향**(행 예산 과대 = 페이지 수 과다·마지막 페이지 여백)으로 설계한다 — 잘림 0이
+    // 합격선이다(전각·탭 처리 주석 참고). 인쇄 페이지는 우리가 행을 확정한 문자열('\n' 연결)을
+    // 받으므로 TextBlock의 자체 랩에 페이지 산술을 의존하지 않는다(Wrap은 최후 안전벨트로만 —
+    // BuildTextPrintPage 주석).
+
     /// <summary>
-    /// 인쇄 버튼 활성 = <see cref="CanPrintNow"/>(부록 B 78 규격 — 배치 3에서는 PDF 로드 성공
-    /// 동안만 켜지고 텍스트/마크다운/무제/빈 화면은 비활성. 텍스트 갈래 활성은 배치 4 몫).
+    /// 텍스트 갈래 인쇄 대상 판정 — 편집 대상 존재(파일 _path 또는 무제 _untitled). 마크다운
+    /// 파일은 렌더 모드 중에도 여기 해당한다 — 배치 5의 렌더 갈래가 성립하지 않을 때 **원문
+    /// 텍스트가 폴백**이기 때문이다(A190 원문 폴백 계약과 동형: 렌더가 안 되면 원문이지 무동작이
+    /// 아니다). 렌더 갈래가 성립하면 CreatePrintPageAsync가 그쪽을 먼저 잡아 여기까지 오지 않는다.
+    /// PDF 모드·빈 화면·A177 지연 대입 대기는 둘 다 false라 PDF 갈래와 자연 배타다(절 머리 주석).
+    /// </summary>
+    private bool IsTextPrintTarget => _path is not null || _untitled;
+
+    /// <summary>
+    /// 인쇄 세션의 텍스트 스냅샷(null = 이번 세션은 텍스트 갈래가 아니다). 세션 시작
+    /// (<see cref="PrintJobName"/> 읽기)에 1회 굳는다 — string 불변이라 참조 보관 = 스냅샷이고,
+    /// 세션 중 편집·파일 전환이 와도 페이지 내용·수가 흔들리지 않는다(늦게 온 미리보기 요청
+    /// 포함). 세션 종료 신호는 계약에 없어 다음 세션 시작이 덮어쓸 때까지 유지된다(보유 상한
+    /// = A177 임계급 문자열 1개 — _baselineText가 상시 전문을 쥐는 기존 메모리 자세와 동급).
+    /// </summary>
+    private string? _printText;
+
+    /// <summary>텍스트 갈래 페이지 산출 캐시 — 같은 스냅샷·같은 규격이면 재계산하지 않는다
+    /// (Paginate 재발화(용지 변경)는 규격이 달라 자연 재산출된다). 무효화 = 다음 세션 시작.</summary>
+    private PrintTextLayout? _printLayout;
+
+    /// <summary>
+    /// 탭 정지 간격(셀) — 인쇄는 탭을 공백으로 전개한다(4칸 그리드). TextBlock에 탭을 그대로
+    /// 두면 내장 탭 스톱 폭을 통제할 문서화된 수단이 없어 폭 산술이 깨진다 — 전개하면 행 폭이
+    /// 공백 수로 확정된다. 에디터(TextBox 내장 탭 스톱)와 시각 간격이 다를 수 있다(실기기 확인
+    /// 포인트 — 정렬이 어긋나도 잘림은 없다).
+    /// </summary>
+    private const int PrintTabCells = 4;
+
+    /// <summary>A177 임계 초과 텍스트의 안내 페이지 문구(부록 B 78 확정 — UI 문자열은 영어만).</summary>
+    private const string TooLargeToPrintText = "File is too large to print.";
+
+    /// <summary>
+    /// 세션 스냅샷 확정(세션 시작 = PrintJobName 읽기 시점, 방어 재시도 = GetPrintPageCount).
+    /// 초기화가 먼저다: 캡처(EditorText)가 실패해도 직전 세션의 스냅샷이 남아 PDF 세션에서
+    /// 텍스트 갈래로 오인되는 일이 없게 한다. 텍스트 갈래가 아니면 null로 남는다(갈래 표지 겸용).
+    /// <para>
+    /// <b>A211 배치 5</b>: 세션 모드(렌더/편집)도 여기서 함께 굳는다 — 조건 4개가 전부 맞을 때만
+    /// 렌더 갈래다: ⓐ 지금 렌더 모드일 것 ⓑ 대상이 md 파일일 것(불변식상 ⓐ면 참이지만 갈래
+    /// 판정의 단일 지점이라 명시 재확인 — 무제·비md가 새는 경로를 코드로 닫는다) ⓒ 판에 오른
+    /// 모델이 있을 것(파싱 대기 중·원문 폴백 중이면 없다) ⓓ 블록 수가 팩킹 상한 이하일 것.
+    /// 하나라도 어긋나면 _printBlocks가 null로 남아 원문 갈래로 인쇄된다(다운·무동작 없음).
+    /// </para>
+    /// </summary>
+    private void CapturePrintSnapshot()
+    {
+        _printText = null;
+        _printLayout = null;
+        _printBlocks = null;
+        _printRenderLayout = null;
+        if (IsTextPrintTarget) _printText = EditorText; // A142 ①ⓑ 공유 스냅샷 관용구 — 복사 없음
+        if (_renderMode && _path is { } path && IsMarkdownPath(path)
+            && _renderBlocks is { Count: > 0 } blocks && blocks.Count <= MaxRenderPrintBlocks)
+        {
+            _printBlocks = blocks; // 불변 record 목록이라 참조 보관 = 스냅샷(세션 중 토글과 무관)
+        }
+    }
+
+    /// <summary>
+    /// 텍스트 갈래 페이지 산출물(불변) — 행 분해 결과와 페이지 요소 조립에 필요한 치수 일체.
+    /// Rows는 스냅샷 문자열 구간(시작·길이, 개행 제외)이고 탭 전개는 페이지 조립 시점에 행
+    /// 단위로 한다(전문 전개 복사본을 만들지 않는다 — 행 산술과 같은 셀 걸음이라 결과 동일).
+    /// </summary>
+    private sealed class PrintTextLayout
+    {
+        public PrintTextLayout(PrintPageSpec spec, string text, int[] rowStarts, int[] rowLengths,
+            int rowsPerPage, int pageCount, double lineHeight, int wideCells,
+            double areaX, double areaY, double areaWidth)
+        {
+            Spec = spec;
+            Text = text;
+            RowStarts = rowStarts;
+            RowLengths = rowLengths;
+            RowsPerPage = rowsPerPage;
+            PageCount = pageCount;
+            LineHeight = lineHeight;
+            WideCells = wideCells;
+            AreaX = areaX;
+            AreaY = areaY;
+            AreaWidth = areaWidth;
+        }
+
+        public PrintPageSpec Spec { get; }      // 캐시 키(record 값 비교) — 용지 변경 재산출 판정
+        public string Text { get; }             // 캐시 키(참조 비교) — 세션 스냅샷과 동일 인스턴스
+        public int[] RowStarts { get; }
+        public int[] RowLengths { get; }
+        public int RowsPerPage { get; }
+        public int PageCount { get; }
+        public double LineHeight { get; }
+        public int WideCells { get; }
+        public double AreaX { get; }
+        public double AreaY { get; }
+        public double AreaWidth { get; }
+    }
+
+    /// <summary>
+    /// 텍스트 페이지 산출(캐시 경유) — 인쇄 가능 영역 계산은 배치 2/3 산식 그대로(0 이하 방어
+    /// 포함), 격자 치수는 측정 1회(<see cref="MeasurePrintMetrics"/>), 행 분해는 전문 1패스
+    /// (<see cref="BuildPrintRows"/>). null = 이상 규격(영역 0 이하) — 호출부가 계약의 안내
+    /// 페이지 폴백으로 처리한다.
+    /// </summary>
+    private PrintTextLayout? EnsurePrintLayout(PrintPageSpec spec, string text)
+    {
+        if (_printLayout is { } cached && ReferenceEquals(cached.Text, text) && cached.Spec == spec)
+            return cached;
+
+        var areaWidth = spec.ImageableWidth > 0 ? spec.ImageableWidth : spec.PageWidth;
+        var areaHeight = spec.ImageableHeight > 0 ? spec.ImageableHeight : spec.PageHeight;
+        var areaX = spec.ImageableWidth > 0 ? spec.ImageableX : 0;
+        var areaY = spec.ImageableHeight > 0 ? spec.ImageableY : 0;
+        if (areaWidth <= 0 || areaHeight <= 0) return null;
+
+        var (cellWidth, wideWidth, lineHeight) = MeasurePrintMetrics();
+        // 전각(비ASCII) 셀 수 = 측정 전각폭을 반각 셀로 올림(최소 2). 한글은 Consolas에 글리프가
+        // 없어 시스템 폴백으로 그려지는데(XAML A142 ② 주석) 폴백 전각 전진폭(약 1em)은 반각
+        // (약 0.55em)의 2배 이하라 이 예산이 항상 실폭 이상이다 — 초과분은 행이 일찍 감겨
+        // 페이지 수 과다(여유) 방향으로만 어긋난다. 서러게이트 쌍(이모지)은 UTF-16 유닛당
+        // 예산이라 쌍 하나에 2×WideCells가 잡히고, 결합 문자는 과대 계상된다 — 전부 보수 방향.
+        var wideCells = Math.Max(2, (int)Math.Ceiling(wideWidth / cellWidth));
+        var columns = Math.Max(1, (int)(areaWidth / cellWidth));
+        var rowsPerPage = Math.Max(1, (int)(areaHeight / lineHeight));
+        BuildPrintRows(text, columns, wideCells, out var rowStarts, out var rowLengths);
+        var pageCount = Math.Max(1, (rowStarts.Length + rowsPerPage - 1) / rowsPerPage);
+        var layout = new PrintTextLayout(spec, text, rowStarts, rowLengths, rowsPerPage, pageCount,
+            lineHeight, wideCells, areaX, areaY, areaWidth);
+        _printLayout = layout;
+        return layout;
+    }
+
+    /// <summary>
+    /// 격자 치수 측정(세션·규격당 1회) — 인쇄 글꼴(Consolas, 기본 14pt = 100%)의 반각 셀 폭·
+    /// 전각(한글 폴백) 폭·줄 높이. 트리에 안 붙은 프로브 TextBlock의 Measure/DesiredSize를
+    /// 쓴다(저장소 선례 0 API — CI에서 깨지면 이 메서드 본문을 아래 catch의 예비 상수 반환
+    /// 한 줄로 줄이면 페이지네이션 전체가 그대로 동작한다. 예비 상수는 실측(반각 약 0.55em·
+    /// 줄 약 1.35em)보다 넉넉해 여유 방향이다). 줄 높이는 반각·전각 혼합 프로브의 높이 =
+    /// 두 글꼴 중 큰 쪽 — 인쇄 페이지가 이 값을 고정 줄 높이(BlockLineHeight)로 쓰므로 폴백
+    /// 글꼴이 끼어도 행 높이 산술이 흔들리지 않는다.
+    /// </summary>
+    private static (double CellWidth, double WideWidth, double LineHeight) MeasurePrintMetrics()
+    {
+        try
+        {
+            var cellWidth = NewPrintProbe(new string('0', 64)).DesiredSize.Width / 64;
+            var wideWidth = NewPrintProbe(new string('한', 16)).DesiredSize.Width / 16;
+            var lineHeight = NewPrintProbe("0한").DesiredSize.Height;
+            if (cellWidth > 0 && wideWidth > 0 && lineHeight > 0
+                && !double.IsNaN(cellWidth) && !double.IsInfinity(cellWidth)
+                && !double.IsNaN(wideWidth) && !double.IsInfinity(wideWidth)
+                && !double.IsNaN(lineHeight) && !double.IsInfinity(lineHeight))
+            {
+                return (cellWidth, wideWidth, lineHeight);
+            }
+        }
+        catch
+        {
+            // 측정 실패 — 아래 예비 상수로(인쇄가 이름 때문에 죽지 않는 SafeJobName과 같은 태도)
+        }
+        return (BaseEditorFontSize * 0.6, BaseEditorFontSize * 1.2, BaseEditorFontSize * 1.5);
+    }
+
+    /// <summary>측정 프로브 — 프로퍼티 변경·재측정 무효화 문제를 피하려고 문자열당 새 요소를 쓴다.</summary>
+    private static TextBlock NewPrintProbe(string text)
+    {
+        var probe = new TextBlock
+        {
+            Text = text,
+            FontFamily = new FontFamily("Consolas"), // XAML EditorBox와 같은 글꼴(A142 ②)
+            FontSize = BaseEditorFontSize,
+            TextWrapping = TextWrapping.NoWrap,
+        };
+        probe.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        return probe;
+    }
+
+    /// <summary>
+    /// 한 문자의 셀 폭(행 로컬 위치 기준) — 행 분해(<see cref="BuildPrintRows"/>)와 탭 전개
+    /// (<see cref="AppendPrintRow"/>)가 반드시 이 한 산식을 공유한다(어긋나면 전개 폭이 예산을
+    /// 벗어난다). 탭 = 다음 정지까지, ASCII = 1셀(고정폭이라 모든 반각이 같은 전진폭), 그 외 =
+    /// 전각 예산(EnsurePrintLayout의 보수 규칙).
+    /// </summary>
+    private static int PrintCellsFor(char c, int column, int wideCells) =>
+        c == '\t' ? PrintTabCells - (column % PrintTabCells)
+        : c < 0x80 ? 1
+        : wideCells;
+
+    /// <summary>
+    /// 전문 1패스 행 분해 — 논리 줄(개행 셈법 = CountLines/EnsureLineStarts와 동일: CRLF는 한
+    /// 개행, 끝 개행 뒤의 빈 마지막 줄도 한 줄. 에디터 스냅샷은 TextBox 정규화로 '\r'이 흔하다)을
+    /// 셀 예산(columns)으로 감는다. 랩 규칙은 에디터 TextWrapping.Wrap의 산술 재현이다:
+    /// 공백(스페이스·탭) 뒤가 우선 절단점이고, 절단점 뒤로 이어지는 공백 무리는 현재 행 끝에
+    /// 매달린다(에디터의 행 끝 공백 매달림 — 예산을 넘겨도 공백은 잉크가 없어 잘릴 것이 없다).
+    /// 행 예산 안에 공백이 없으면 예산 위치에서 강제 절단한다(Wrap의 비상 절단 — 긴 무공백
+    /// 문자열·연속 전각이 여기 온다. 논리 줄이 페이지보다 길면 행 단위로 페이지 경계를 넘는다 —
+    /// 부록 B 78 "대형 블록 분할 허용"). 페이지 경계는 항상 행 사이라 줄 중간이 잘리지 않는다.
+    /// </summary>
+    private static void BuildPrintRows(string text, int columns, int wideCells,
+        out int[] rowStarts, out int[] rowLengths)
+    {
+        var starts = new List<int>();
+        var lengths = new List<int>();
+        var pos = 0;
+        while (true)
+        {
+            var lineEnd = pos;
+            while (lineEnd < text.Length && text[lineEnd] != '\r' && text[lineEnd] != '\n') lineEnd++;
+
+            var rowStart = pos;
+            var col = 0;
+            var breakAfter = -1; // 마지막 공백 바로 뒤(우선 절단점) — 행마다 리셋
+            var i = pos;
+            while (i < lineEnd)
+            {
+                var c = text[i];
+                var w = PrintCellsFor(c, col, wideCells);
+                // 랩 트리거 예외 둘: ① 공백 자신(행 끝에 매달림 — 에디터의 공백 매달림. 예산
+                // 밖으로 나가도 잉크가 없어 잘릴 것이 없고, 다음 비공백 문자가 랩을 건다)
+                // ② 하위 서러게이트(이모지 뒷 유닛) — 여기서 자르면 쌍이 행 경계에서 쪼개져
+                // 양쪽 다 깨진 글리프가 된다. 쌍을 현재 행에 마저 담아 행이 전각 예산 하나만큼
+                // 넘칠 수 있는데, 그 초과는 페이지 TextBlock의 Wrap 안전벨트 범위다(조립 주석).
+                if (col + w > columns && i > rowStart && c != ' ' && c != '\t'
+                    && !char.IsLowSurrogate(c))
+                {
+                    var cut = i; // 비상 절단(행에 공백 없음)
+                    if (breakAfter > rowStart)
+                    {
+                        cut = breakAfter; // 공백 뒤 절단 + 이어지는 공백 무리는 현재 행에 매달기
+                        while (cut < lineEnd && (text[cut] == ' ' || text[cut] == '\t')) cut++;
+                    }
+                    starts.Add(rowStart);
+                    lengths.Add(cut - rowStart);
+                    rowStart = cut;
+                    i = cut;
+                    col = 0;
+                    breakAfter = -1;
+                    continue;
+                }
+                col += w;
+                i++;
+                if (c == ' ' || c == '\t') breakAfter = i;
+            }
+            // 줄의 마지막 행(빈 줄 포함). 매달린 공백이 줄 끝까지 삼켜진 경우만 빈 꼬리 행을
+            // 만들지 않는다(rowStart가 줄 시작을 지나 줄 끝에 닿은 상태).
+            if (rowStart < lineEnd || rowStart == pos)
+            {
+                starts.Add(rowStart);
+                lengths.Add(lineEnd - rowStart);
+            }
+
+            if (lineEnd >= text.Length) break;
+            pos = lineEnd
+                + (text[lineEnd] == '\r' && lineEnd + 1 < text.Length && text[lineEnd + 1] == '\n'
+                    ? 2 : 1);
+        }
+        rowStarts = starts.ToArray();
+        rowLengths = lengths.ToArray();
+    }
+
+    /// <summary>행 하나를 탭 전개(공백화)해 붙인다 — 셀 걸음은 <see cref="PrintCellsFor"/> 공유.</summary>
+    private static void AppendPrintRow(StringBuilder sb, string text, int start, int length, int wideCells)
+    {
+        var col = 0;
+        for (var i = start; i < start + length; i++)
+        {
+            var c = text[i];
+            var w = PrintCellsFor(c, col, wideCells);
+            if (c == '\t') sb.Append(' ', w);
+            else sb.Append(c);
+            col += w;
+        }
+    }
+
+    /// <summary>
+    /// 텍스트 갈래 페이지 1장(<see cref="CreatePrintPageAsync"/>의 텍스트 분기 본체 — 배치 5의
+    /// 렌더 분기가 그 앞단에 얹혔고, 여기는 그 폴백이자 비md·편집 모드의 본선이다).
+    /// A177 임계 초과 = 안내 1장(pageNumber 1 외에는 null).
+    /// 페이지 요소는 호출마다 새로 조립하고(v0.174.1 교훈·계약 규칙) TextBlock에는 그 페이지
+    /// 몫 행들만 담는다(전문 재사용 금지 — 페이지당 문자열은 행 수 × 예산 수준으로 작다).
+    /// </summary>
+    private object? CreateTextPrintPage(int pageNumber, PrintPageSpec spec, string snapshot)
+    {
+        if (snapshot.Length > LargeDocumentChars)
+            return pageNumber == 1 ? BuildPrintNoticePage(spec) : null;
+        if (EnsurePrintLayout(spec, snapshot) is not { } layout) return null;
+        if (pageNumber < 1 || pageNumber > layout.PageCount) return null;
+        return BuildTextPrintPage(pageNumber, spec, layout);
+    }
+
+    /// <summary>
+    /// 페이지 요소 조립 — 용지 크기 Canvas(흰 배경, 배치 2/3 관용구) + 인쇄 가능 영역 좌상단에
+    /// 앉힌 TextBlock 하나. 글꼴은 에디터 글꼴 그대로(Consolas 14pt) — 부록 B 78의 "에디터 글꼴
+    /// 그대로"는 글꼴 종류·기본 크기를 뜻하고, 화면 줌(A181 document.zoom)은 화면 전용이라
+    /// 인쇄에 옮기지 않는다(이미지 인쇄가 화면 줌·Fit을 안 보는 배치 2 판정과 동일). 색 명시
+    /// (검정 글자·흰 종이 — 계약 규칙). 줄 높이는 측정값 고정(BlockLineHeight) — 폴백 글꼴
+    /// 줄이 끼어도 모든 행이 같은 높이라 행 수 × 줄 높이 산술이 정확히 성립한다.
+    /// TextWrapping은 Wrap이되 안전벨트다: 행은 이미 예산 안으로 감아 놓았고, 예산 밖 실폭
+    /// (희귀 폴백 글꼴)이 나오면 오른쪽 잘림 대신 한 행이 더 감겨 내려간다 — 마지막 행이
+    /// 하단 여백 쪽으로 밀릴 수는 있어도 글자가 사라지지는 않는다(Canvas는 클립하지 않는다).
+    /// </summary>
+    private static object BuildTextPrintPage(int pageNumber, PrintPageSpec spec, PrintTextLayout layout)
+    {
+        var firstRow = (pageNumber - 1) * layout.RowsPerPage;
+        var rowEnd = Math.Min(layout.RowStarts.Length, firstRow + layout.RowsPerPage);
+        var sb = new StringBuilder();
+        for (var row = firstRow; row < rowEnd; row++)
+        {
+            if (row > firstRow) sb.Append('\n');
+            AppendPrintRow(sb, layout.Text, layout.RowStarts[row], layout.RowLengths[row],
+                layout.WideCells);
+        }
+
+        var block = new TextBlock
+        {
+            Text = sb.ToString(),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = BaseEditorFontSize, // 줌 무관 100% — 근거는 메서드 주석
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = layout.LineHeight,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            Width = layout.AreaWidth,
+        };
+        Canvas.SetLeft(block, layout.AreaX);
+        Canvas.SetTop(block, layout.AreaY);
+        var page = new Canvas
+        {
+            Width = spec.PageWidth,
+            Height = spec.PageHeight,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+        };
+        page.Children.Add(block);
+        return page;
+    }
+
+    /// <summary>
+    /// A177 임계 초과 안내 페이지 1장 — 셸 PrintHost.BuildFallbackPage와 같은 형(중앙 안내문·
+    /// 색 명시). 인쇄 억제의 실체다: 전문 행 분해도, 페이지 조립도 하지 않는다(프리즈 0).
+    /// </summary>
+    private static object BuildPrintNoticePage(PrintPageSpec spec)
+    {
+        var page = new Grid
+        {
+            Width = spec.PageWidth,
+            Height = spec.PageHeight,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+        };
+        page.Children.Add(new TextBlock
+        {
+            Text = TooLargeToPrintText,
+            FontSize = BaseEditorFontSize,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        return page;
+    }
+
+    // ---------- 인쇄: 마크다운 렌더 갈래 (A211 배치 5, v0.224.0) ----------
+    // 사양: md를 **렌더 모드로 보고 있으면 인쇄물도 렌더 모습**이다(헤딩 크기·코드 블록 배경·
+    // 리스트 들여쓰기·인용 세로선 그대로). 편집 모드거나 렌더가 성립하지 않으면 원문 텍스트
+    // (배치 4)로 내려간다 — 다운도, 무동작도 아니다(A190 원문 폴백 계약과 동형).
+    //
+    // 방식(배치 4의 산술 페이지네이션과 다른 이유): 마크다운은 블록마다 글꼴 크기·여백·장식이
+    // 달라 문자 격자 산술이 성립하지 않는다. 대신 **블록이 곧 독립 UIElement**라는 성질을 써서
+    // 블록 단위 팩킹을 한다 — 블록을 인쇄 폭(Imageable 폭)으로 Measure해 높이를 얻고, 누적이
+    // 페이지 높이를 넘으면 그 블록부터 다음 페이지다. 페이지 경계는 항상 블록 사이라 한 블록이
+    // 두 페이지에 걸쳐 반씩 잘리는 일이 없다.
+    //
+    // 측정 폭 = **Imageable 폭 고정**(화면 폭이 아니다 — 화면은 창 크기·A181 줌·RenderStack
+    // 패딩에 좌우된다). 팩킹의 Measure와 페이지 조립이 같은 폭·같은 빌더를 쓰므로 시뮬레이션과
+    // 실제 페이지의 높이가 어긋나지 않는다.
+    //
+    // 페이지보다 큰 블록: 코드 블록은 **줄 단위로 쪼개 여러 페이지에 잇는다**(부록 B 78 "대형
+    // 블록 분할 허용" — 조사 §4 질문 3의 제안 문안 "줄 단위 분할" 그대로. 배치 4가 긴 논리 줄을
+    // 행 단위로 페이지에 이어 붙이는 것과 같은 태도이고, 합격선도 같다: 잘림 0). 코드 블록이
+    // 아닌 초과 블록(한 문단이 페이지보다 긴 희귀 경우)·한 줄짜리 초과 코드 블록은 쪼갤 단위가
+    // 없어 **단독 페이지 + 하단 잘림**으로 둔다 — 알려진 한계다(문단 내부를 줄 단위로 쪼개려면
+    // 인라인 스팬을 재분배해야 해 파서 모델을 건드리게 된다).
+    //
+    // 스레드: 파싱은 하지 않는다 — 화면 렌더가 워커에서 이미 파싱해 둔 모델(_renderBlocks)을
+    // 그대로 재사용하므로(A42 분업 유지: 파싱 = 워커 / 조립·측정 = UI) UI 스레드에서 도는 건
+    // 조립과 Measure뿐이다. 팩킹은 GetPrintPageCount(동기·Paginate)에서 완료되고 결과는
+    // 캐시(_printRenderLayout — 배치 4 PrintTextLayout과 같은 spec 키 관용구)에 남아,
+    // 페이지 조립은 캐시된 구간을 다시 조립하기만 한다.
+
+    /// <summary>
+    /// 렌더 갈래 팩킹의 블록 수 상한 — 넘으면 그 세션은 원문 갈래다(스냅샷 단계 판정).
+    /// <para>
+    /// 왜 필요한가: 렌더 자격(A190)은 A177 임계(1MB 문자) 이하 md 전부라, 임계 직전 문서면
+    /// 블록이 수만 개까지 나올 수 있다. 팩킹은 블록당 조립 + Measure 1회이고 그 전량이
+    /// <b>Paginate(UI 스레드) 안에서 동기로</b> 돈다 — 계약이 "무겁게 만들지 말 것"이라고 못
+    /// 박은 자리다. 상한을 넘는 문서는 렌더 대신 원문 텍스트로 인쇄한다(과제 사양의 "대용량 =
+    /// 원문 폴백"). 값 근거: A193 분할 조립이 프레임당 60블록을 안전 조각으로 잡았는데
+    /// (RenderChunkBlocks), 그쪽은 시각 트리 부착까지 포함한 비용이고 여기는 측정 전용이라 더
+    /// 싸다. 3000 = 그 조각의 50배 — 페이지네이션 1회 점유를 A193 기준 50프레임 이내로 묶고,
+    /// 실제로는 부착·배치·렌더가 빠져 그보다 짧다. 일반 문서(수백 블록)는 걸리지 않는다.
+    /// </para>
+    /// </summary>
+    private const int MaxRenderPrintBlocks = 3000;
+
+    /// <summary>
+    /// 초과 코드 블록을 쪼갤 때 조각 하나를 페이지에 맞추는 재측정 상한. 첫 추정(줄 수 비례)이
+    /// 어긋나는 원인은 긴 줄의 랩이라 한두 번의 축소로 수렴한다 — 무한 루프를 막는 상한이지
+    /// 정확도 손잡이가 아니다(상한에 걸리면 그 조각은 하단이 잘릴 수 있다).
+    /// </summary>
+    private const int PrintSplitFitAttempts = 3;
+
+    /// <summary>
+    /// 인쇄 세션의 렌더 모델 스냅샷(null = 이번 세션은 렌더 갈래가 아니다 — 갈래 표지 겸용,
+    /// _printText와 같은 관용구). 세션 시작(<see cref="PrintJobName"/> 읽기)에 1회 굳는다 —
+    /// MdBlock이 불변 record라 참조 보관만으로 스냅샷이 되고, 세션 중 편집 모드로 토글하거나
+    /// 파일이 바뀌어도(_renderBlocks가 비어도) 진행 중 인쇄는 시작 시점 모습을 계속 찍는다.
+    /// </summary>
+    private IReadOnlyList<MdBlock>? _printBlocks;
+
+    /// <summary>렌더 갈래 팩킹 캐시 — 같은 모델·같은 규격이면 재팩킹하지 않는다(용지 변경으로
+    /// Paginate가 다시 오면 규격이 달라 자연 재산출). 무효화 = 다음 세션 시작.</summary>
+    private PrintRenderLayout? _printRenderLayout;
+
+    /// <summary>
+    /// 렌더 갈래 팩킹 산출물(불변) — 페이지별 블록 목록과 배치 좌표. Pages[i] = i+1페이지에
+    /// 담을 블록들(원본 블록 또는 분할된 코드 조각). 요소가 아니라 <b>모델</b>만 들고 있는 것이
+    /// 핵심이다 — 요소는 페이지를 만들 때마다 새로 조립한다(부모 1개 제약, v0.174.1).
+    /// </summary>
+    private sealed class PrintRenderLayout
+    {
+        public PrintRenderLayout(PrintPageSpec spec, IReadOnlyList<MdBlock> blocks,
+            IReadOnlyList<MdBlock>[] pages, double areaX, double areaY, double areaWidth)
+        {
+            Spec = spec;
+            Blocks = blocks;
+            Pages = pages;
+            AreaX = areaX;
+            AreaY = areaY;
+            AreaWidth = areaWidth;
+        }
+
+        public PrintPageSpec Spec { get; }            // 캐시 키(record 값 비교) — 용지 변경 재산출 판정
+        public IReadOnlyList<MdBlock> Blocks { get; } // 캐시 키(참조 비교) — 세션 스냅샷과 동일 인스턴스
+        public IReadOnlyList<MdBlock>[] Pages { get; }
+        public double AreaX { get; }
+        public double AreaY { get; }
+        public double AreaWidth { get; }
+
+        public int PageCount => Pages.Length;
+    }
+
+    /// <summary>
+    /// 렌더 페이지 산출(캐시 경유) — 인쇄 가능 영역 계산은 배치 2/3/4 산식 그대로(0 이하 방어
+    /// 포함), 팩킹은 <see cref="PackPrintRenderPages"/>. null = 이상 규격이거나 팩킹 실패
+    /// (측정·조립 예외) — 호출부(GetPrintPageCount)가 그 자리에서 세션을 원문 갈래로 강등한다.
+    /// </summary>
+    private PrintRenderLayout? EnsurePrintRenderLayout(PrintPageSpec spec, IReadOnlyList<MdBlock> blocks)
+    {
+        if (_printRenderLayout is { } cached && ReferenceEquals(cached.Blocks, blocks) && cached.Spec == spec)
+            return cached;
+
+        var areaWidth = spec.ImageableWidth > 0 ? spec.ImageableWidth : spec.PageWidth;
+        var areaHeight = spec.ImageableHeight > 0 ? spec.ImageableHeight : spec.PageHeight;
+        var areaX = spec.ImageableWidth > 0 ? spec.ImageableX : 0;
+        var areaY = spec.ImageableHeight > 0 ? spec.ImageableY : 0;
+        if (areaWidth <= 0 || areaHeight <= 0) return null;
+
+        List<IReadOnlyList<MdBlock>> pages;
+        try
+        {
+            pages = PackPrintRenderPages(blocks, areaWidth, areaHeight);
+        }
+        catch (Exception)
+        {
+            return null; // 조립·측정 실패 — 원문 갈래로 강등(렌더가 안 되면 원문, A190 폴백 계약)
+        }
+        if (pages.Count == 0) return null;
+
+        var layout = new PrintRenderLayout(spec, blocks, pages.ToArray(), areaX, areaY, areaWidth);
+        _printRenderLayout = layout;
+        return layout;
+    }
+
+    /// <summary>
+    /// 블록 팩킹 — 블록을 인쇄 폭으로 Measure해 높이를 얻고 페이지 예산(영역 높이)에 순서대로
+    /// 채운다. 새 페이지로 넘기는 조건은 "이미 뭔가 담긴 페이지에 더 담으면 넘칠 때"뿐이라,
+    /// 페이지 하나를 통째로 넘는 블록은 자연히 단독 페이지가 된다(그 다음 블록이 새 페이지를
+    /// 연다). 코드 블록의 초과는 그 전에 <see cref="SplitOversizedCodeBlock"/>이 줄 단위로 쪼갠다.
+    /// </summary>
+    private static List<IReadOnlyList<MdBlock>> PackPrintRenderPages(
+        IReadOnlyList<MdBlock> blocks, double areaWidth, double areaHeight)
+    {
+        var pages = new List<IReadOnlyList<MdBlock>>();
+        var current = new List<MdBlock>();
+        var used = 0.0;
+
+        void Place(MdBlock block, double height)
+        {
+            if (current.Count > 0 && used + height > areaHeight)
+            {
+                pages.Add(current);
+                current = [];
+                used = 0;
+            }
+            current.Add(block);
+            used += height;
+        }
+
+        foreach (var block in blocks)
+        {
+            var height = MeasurePrintBlockHeight(block, areaWidth);
+            if (height > areaHeight
+                && SplitOversizedCodeBlock(block, areaWidth, areaHeight, height) is { } pieces)
+            {
+                foreach (var piece in pieces) Place(piece.Block, piece.Height);
+                continue;
+            }
+            Place(block, height);
+        }
+        if (current.Count > 0) pages.Add(current);
+        return pages;
+    }
+
+    /// <summary>
+    /// 블록 1개의 인쇄 높이 — 트리에 붙지 않은 요소의 Measure/DesiredSize(배치 4
+    /// MeasurePrintMetrics의 프로브 관용구와 같은 축). 가용 폭은 인쇄 영역 폭 고정, 높이는 무한
+    /// (StackPanel이 세로로 쌓을 때 자식에게 주는 것과 같은 조건이라 시뮬레이션과 실제가 일치한다).
+    /// 여백(Margin)은 DesiredSize에 포함되므로 블록 사이 간격이 팩킹에 그대로 반영된다.
+    /// 이상 값(NaN·무한·음수)은 0으로 접는다 — 페이지가 늘지 않을 뿐 잘림은 생기지 않는다.
+    /// </summary>
+    private static double MeasurePrintBlockHeight(MdBlock block, double areaWidth)
+    {
+        var element = MarkdownRenderer.BuildPrintBlock(block); // 측정용도 매번 새 요소(공유 금지)
+        element.Measure(new Windows.Foundation.Size(areaWidth, double.PositiveInfinity));
+        var height = element.DesiredSize.Height;
+        return double.IsNaN(height) || double.IsInfinity(height) || height < 0 ? 0 : height;
+    }
+
+    /// <summary>
+    /// 페이지보다 큰 코드 블록을 줄 단위 조각으로 쪼갠다(부록 B 78 "대형 블록 분할 허용").
+    /// null = 쪼갤 수 없음(코드 블록이 아니거나 한 줄뿐) — 호출부가 단독 페이지로 두고 하단
+    /// 잘림을 감수한다. 조각은 같은 종류(CodeBlock)라 배경·글꼴이 이어지고, 페이지마다 새
+    /// 테두리가 생기는 모습이 된다(줄 번호·이어짐 표시는 사양 밖 — 머리글 없음 규정과 같은 결).
+    /// <para>
+    /// 첫 추정은 "높이가 줄 수에 비례한다"는 가정(고정 여백이 분자에 함께 들어가 과소 추정 =
+    /// 여유 방향)이고, 긴 줄의 랩 때문에 실측이 예산을 넘을 수 있어 조각마다 실측으로 확인하고
+    /// 줄여 잡는다(<see cref="PrintSplitFitAttempts"/> 상한). 한 줄까지 줄여도 안 들어가면
+    /// 그 조각은 하단이 잘린다 — 한 줄 밑으로는 쪼갤 단위가 없다.
+    /// </para>
+    /// </summary>
+    private static List<(MdBlock Block, double Height)>? SplitOversizedCodeBlock(
+        MdBlock block, double areaWidth, double areaHeight, double fullHeight)
+    {
+        if (block.Kind != MdBlockKind.CodeBlock || fullHeight <= 0) return null;
+        var lines = block.Literal.Split('\n');
+        if (lines.Length < 2) return null;
+
+        var pieces = new List<(MdBlock Block, double Height)>();
+        var guess = Math.Max(1, (int)(lines.Length * areaHeight / fullHeight));
+        var index = 0;
+        while (index < lines.Length)
+        {
+            var take = Math.Min(guess, lines.Length - index);
+            var piece = NewCodePiece(block, lines, index, take);
+            var height = MeasurePrintBlockHeight(piece, areaWidth);
+            for (var attempt = 0; attempt < PrintSplitFitAttempts && take > 1 && height > areaHeight; attempt++)
+            {
+                var fitted = height > 0 ? (int)(take * areaHeight / height) : take - 1;
+                take = Math.Max(1, Math.Min(take - 1, fitted)); // 반드시 줄어든다 — 진행 보장
+                piece = NewCodePiece(block, lines, index, take);
+                height = MeasurePrintBlockHeight(piece, areaWidth);
+            }
+            pieces.Add((piece, height));
+            index += take;
+            if (pieces.Count > MaxRenderPrintBlocks) return null; // 병리적 입력 방어 — 단독 페이지로
+        }
+        return pieces;
+    }
+
+    /// <summary>코드 블록 조각 하나(원본과 같은 종류·단계, 본문만 줄 구간) — 파서 모델을 그대로 재사용한다.</summary>
+    private static MdBlock NewCodePiece(MdBlock block, string[] lines, int start, int count) =>
+        new(MdBlockKind.CodeBlock, block.Level, string.Join("\n", lines, start, count), block.Spans);
+
+    /// <summary>
+    /// 렌더 갈래 페이지 1장 — 캐시된 페이지 구간의 블록들을 <b>새로 조립</b>해 세로 StackPanel에
+    /// 담는다(화면 조립물 재사용 금지 — 요소 부모 1개, v0.174.1. 미리보기와 본인쇄가 같은 경로라
+    /// 같은 페이지를 여러 번 요청받는다). 배치는 배치 2/3/4와 같은 형: 용지 크기 Canvas(흰 배경)
+    /// 위 인쇄 가능 영역 좌상단에 폭 고정 StackPanel. 색은 MarkdownRenderer.BuildPrintBlock이
+    /// 검정으로 못 박는다(계약 규칙 — 테마 브러시 금지).
+    /// </summary>
+    private object? CreateRenderPrintPage(int pageNumber, PrintPageSpec spec, IReadOnlyList<MdBlock> blocks)
+    {
+        if (EnsurePrintRenderLayout(spec, blocks) is not { } layout) return null;
+        if (pageNumber < 1 || pageNumber > layout.PageCount) return null;
+
+        var stack = new StackPanel { Width = layout.AreaWidth };
+        foreach (var block in layout.Pages[pageNumber - 1])
+            stack.Children.Add(MarkdownRenderer.BuildPrintBlock(block));
+        Canvas.SetLeft(stack, layout.AreaX);
+        Canvas.SetTop(stack, layout.AreaY);
+        var page = new Canvas
+        {
+            Width = spec.PageWidth,
+            Height = spec.PageHeight,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.White),
+        };
+        page.Children.Add(stack);
+        return page;
+    }
+
+    /// <summary>
+    /// 인쇄 버튼 활성 = <see cref="CanPrintNow"/>(부록 B 78 규격 — PDF 로드 성공 동안 + 텍스트
+    /// 편집 대상(파일·무제, md 원문 포함 — 배치 4)이 있는 동안 활성. 빈 화면·로딩 대기는 비활성).
     /// 셸 Ctrl+P는 버튼이 아니라 같은 속성을 직접 물으므로(MainWindow.RequestPrint) 버튼 표기와
     /// 키 동작이 어긋날 수 없다(배치 2 UpdatePrintButton과 같은 형). 호출 전수 = OpenPdf 성공 ·
-    /// HidePdf(PDF 갈래 상태 변화의 관문 2곳 — HidePdf 쪽 주석 참고). 배치 4/5가 갈래를 얹으면
-    /// 그 갈래의 상태 변화 지점에서도 함께 부를 것.
+    /// HidePdf(PDF 갈래 관문 2곳 — HidePdf 쪽 주석 참고) · ApplyLoadedText · StartUntitled ·
+    /// OpenPdf 진입(텍스트 갈래 상태 변화 3곳 — 배치 4). <b>배치 5에서도 호출 지점은 그대로다</b>
+    /// (예상 적중): 렌더 모드는 md 파일 편집의 하위 모드라 진입 전후 모두 CanPrintNow가 참이고,
+    /// 렌더 갈래는 "무엇을 찍는가"만 바꾼다 — 활성 여부를 바꾸는 상태 축이 아니다.
     /// </summary>
     private void UpdatePrintButton() => PrintButton.IsEnabled = CanPrintNow;
 

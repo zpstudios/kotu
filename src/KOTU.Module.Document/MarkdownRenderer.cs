@@ -22,6 +22,10 @@ namespace KOTU.Module.Document;
 /// <b>실패 안전(함정 3)</b>: 조립 중 예외는 소유자(DocumentView — EnterRenderMode의 첫 조각과
 /// A193 분할 조립 틱 루프 양쪽)가 잡아 원문 TextBlock 폴백으로 대체한다 — 여기서는 던져도
 /// 앱이 죽지 않는다.
+///
+/// <b>인쇄 재사용(A211 배치 5)</b>: 종이도 <b>같은 빌더</b>를 탄다 — 진입점만
+/// <see cref="BuildPrintBlock"/>(글자색을 종이용 검정으로 고정)이고, 화면 조립물을 페이지로
+/// 옮겨 담는 일은 없다(요소 부모 1개 제약 — v0.174.1).
 /// </summary>
 internal static class MarkdownRenderer
 {
@@ -45,6 +49,55 @@ internal static class MarkdownRenderer
         for (var i = start; i < start + count; i++)
             target.Children.Add(BuildBlock(blocks[i]));
     }
+
+    /// <summary>
+    /// A211 배치 5: 인쇄 페이지용 블록 1개 조립 — 화면 조립(<see cref="AppendRange"/>)과 같은
+    /// 빌더를 쓰되 글자색만 종이용으로 못 박는다. 소유자(DocumentView)는 팩킹 측정 때 한 번,
+    /// 페이지를 만들 때 또 한 번 <b>매번 새 인스턴스</b>를 이 진입점으로 받는다 — 화면
+    /// 조립물(RenderStack의 자식)을 페이지로 옮겨 담는 것은 금지다(요소 부모 1개 — v0.174.1).
+    /// <para>
+    /// <b>왜 색을 여기서 고정하나</b>: 화면 조립은 글자색을 지정하지 않아 테마 전경을 따르는데
+    /// (클래스 주석) 다크 테마의 흰 글자는 종이에 아무것도 남기지 않는다(IPrintPageProvider
+    /// 계약의 "색 명시" 규칙). 링크도 같은 검정으로 눌러 준다 — 종이에서는 클릭이 무의미해
+    /// 강조색을 쓸 이유가 없고, 밑줄은 남아 링크였다는 표시는 유지된다. 배경·선(SubtleBrush)은
+    /// 이미 테마 무관 반투명 회색이라 흰 종이 위에서 옅은 회색으로 성립한다 — 손대지 않는다.
+    /// </para>
+    /// </summary>
+    public static UIElement BuildPrintBlock(MdBlock block)
+    {
+        var element = BuildBlock(block);
+        ApplyPrintInk(element);
+        return element;
+    }
+
+    /// <summary>
+    /// 인쇄용 글자색 고정 — <see cref="BuildBlock"/>이 만드는 요소는 TextBlock·StackPanel·Border
+    /// 셋뿐이라(빌더 전수) 이 세 갈래로 닫힌다. 자식 순회는 인덱스로 한다(Count + 인덱서만 쓰는
+    /// 최소 표면). Hyperlink는 자기 전경색(강조색)을 들고 있어 TextBlock 지정만으로는 안 눌린다.
+    /// 브러시는 요소마다 새로 만든다(클래스 주석의 "리소스 공유 안 함" 방침).
+    /// </summary>
+    private static void ApplyPrintInk(UIElement element)
+    {
+        if (element is TextBlock tb)
+        {
+            tb.Foreground = PrintInkBrush();
+            var inlines = tb.Inlines;
+            for (var i = 0; i < inlines.Count; i++)
+                if (inlines[i] is Hyperlink link) link.Foreground = PrintInkBrush();
+            return;
+        }
+        if (element is Border border)
+        {
+            if (border.Child is { } inner) ApplyPrintInk(inner);
+            return;
+        }
+        if (element is Panel panel)
+            for (var i = 0; i < panel.Children.Count; i++) ApplyPrintInk(panel.Children[i]);
+    }
+
+    /// <summary>인쇄 잉크색(불투명 검정) — 흰 종이는 페이지 요소가 깐다(계약 규칙).</summary>
+    private static SolidColorBrush PrintInkBrush() =>
+        new(Windows.UI.Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
 
     private static UIElement BuildBlock(MdBlock block) => block.Kind switch
     {

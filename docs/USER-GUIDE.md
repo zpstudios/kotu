@@ -155,8 +155,13 @@ Seven modules. Switch between them from the menu at the bottom left.
 
 ### 2.4 Document — plain text
 
-- `.txt .md .markdown .log .ini` open in an editable text box. Markdown is shown as text; it is
-  not rendered.
+- `.txt .md .markdown .log .ini` open in an editable text box.
+- **Markdown is rendered.** A `.md` or `.markdown` file opens as a formatted preview — headings,
+  bold and italic, inline code and code blocks, lists, quotes, horizontal rules and links — and the
+  preview button in the bottom bar switches between that view and the editor. The preview is built
+  from what is in the editor at the moment you switch, so unsaved edits show up in it; anything the
+  renderer does not know stays as it was written. Markdown files over about 1 MB of text open
+  straight in the editor and the button stays greyed out.
 - The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
   as is the line ending style (CRLF or LF).
 - `Ctrl+S` saves. The save button stays disabled until there is something to save, and
@@ -170,6 +175,21 @@ Seven modules. Switch between them from the menu at the bottom left.
   restarts. Zooming never touches the file itself.
 - Very faint guide lines mark the top and bottom of each line of text, `¶` marks a line break and
   `·EOF` marks the end of the file. They are drawn over the text and never become part of it.
+- **Print** with `Ctrl+P` or the print button in the bottom bar — the same Windows print dialog as
+  for pictures and PDFs, with its own preview and the same page-range option. The text prints in
+  the editor's fixed-width font at its normal size — the on-screen zoom never changes the
+  printout — with no headers, footers or page numbers, filling the printable area of the chosen
+  paper. Long lines wrap as in the editor, tabs print as spaces, and a long file simply continues
+  onto the next page. What prints is the text as it stands in the editor, saved or not: a new
+  unsaved document prints too, under the name `Untitled`. Very large files (over about 1 MB of
+  text) print a single notice page instead of the document.
+- **Markdown prints the way you are looking at it.** From the preview it prints rendered — heading
+  sizes, code block backgrounds, list indents and quote bars are kept, and links print as ordinary
+  black text since there is nothing to click on paper. Each block stays whole on its page, and a
+  code block taller than one page carries on to the next. From the editor it prints as the plain
+  text described above. Whichever view you started the print from is what the whole job uses, even
+  if you switch views while the print dialog is open. When the preview is not available or cannot
+  be built — a very long file, for instance — the plain text rules above apply instead.
 
 **Before it writes.** When there is anything to be careful about, saving stops and asks first:
 
@@ -203,7 +223,7 @@ editor either way.
   paper, and is rendered for paper — up to 300 DPI — no matter the zoom or Fit on screen. Pages are
   prepared one at a time, so a document hundreds of pages long prints without loading them all at
   once, and a password-protected PDF prints without asking for the password again while it is open.
-  The button is greyed out while no PDF is open.
+  The button is greyed out while there is nothing to print.
 
 ### 2.6 Archive
 
@@ -317,13 +337,14 @@ These work in every module.
 | `Esc` | one step back: out of full screen, out of the Open file browser, or close the open file |
 | `Shift+N` | new window of the module you are looking at |
 | `Ctrl+S` | save (text document) |
-| `Ctrl+P` | print what you are looking at (picture or PDF) |
+| `Ctrl+P` | print what you are looking at (picture, PDF or text document) |
 | `Ctrl` + `+` / `-` | UI scale one step up / down (numpad `+` / `-` work too; hold to repeat) |
 | `Ctrl` + numpad `*` | reset the UI scale to *System default* |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
 
-``Alt+` ``, `Alt`+`Enter` and `F11` / `F12` work even while you are typing in a text box. The panel
-keys produce no character of their own, so nothing is taken away from the text. Plain `Enter` does
+``Alt+` ``, `Alt`+`Enter`, `F11` / `F12` and `Ctrl+P` work even while you are typing in a text box.
+These keys produce no character of their own, so nothing is taken away from the text — pressing
+`Ctrl+P` mid-edit prints the document just as it stands. Plain `Enter` does
 give way to typing — in a text document it is a line break — and `Shift+N` gives way as well.
 The UI-scale keys `Ctrl`+`+` / `-` give way too: while you are typing, they belong to the text
 editor and the system.
@@ -390,7 +411,7 @@ box or while you are typing to jump through the file list.
 | Audio | `S` | playback speed |
 | Audio | `L` | loop options |
 | Document | `Ctrl+S` | save |
-| Document | `Ctrl+P` | print the PDF |
+| Document | `Ctrl+P` | print the PDF or the text |
 | Document | `A` | 100% (PDF) |
 | Document | `F` | re-apply the last Fit option (PDF) |
 | Document | `↑` `↓` | scroll the PDF, about an eighth of the view |
