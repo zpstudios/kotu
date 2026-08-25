@@ -3438,6 +3438,11 @@ public sealed partial class MainWindow : Window
         }
         AppWindow.MoveInZOrderAtTop();
         Activate();
+        // A228: 백그라운드 프로세스는 Activate()만으로는 포그라운드를 못 뺏는다(OS 잠금).
+        // 외부 진입이면 리다이렉터가 이양한 권한(Program.cs의 AllowSetForegroundWindow)으로
+        // 실제 전면 전환이 성공하고, 권한이 없으면 작업표시줄 점멸로 후퇴한다. 트레이 클릭
+        // 같은 자체 포그라운드 경로에서는 그냥 성공해 점멸 없이 무해하다(반환값 판정).
+        Integration.ForegroundActivation.EnsureForeground(this);
     }
 
     // ---------- 인스턴스 번호 (A2, v0.58.0 → A141 배지 제거 → A137 아이콘 부분 부활) ----------

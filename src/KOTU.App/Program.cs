@@ -46,6 +46,11 @@ public static class Program
 
             if (!mainInstance.IsCurrent)
             {
+                // A228: 리다이렉트 전에 주 인스턴스로 포그라운드 전환 권한을 이양한다.
+                // 이 프로세스는 탐색기가 방금 시작해 대개 권한을 갖고 있지만, 백그라운드의
+                // 주 인스턴스는 이 이양 없이는 새로 만든 창을 앞으로 못 올린다(OS 잠금).
+                // 실패는 안에서 조용히 무시된다(주 프로세스 쪽 점멸 폴백으로 충분).
+                Integration.ForegroundActivation.AllowNextForegroundChange(mainInstance.ProcessId);
                 // 두 번째 실행 → 기존 인스턴스에 활성화 넘기고 즉시 종료
                 mainInstance.RedirectActivationToAsync(activationArgs).AsTask().Wait();
                 return 0;
