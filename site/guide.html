@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.230.0</span>
+    <span class="asof">AS OF v0.238.0</span>
   </div>
 </section>
 
@@ -642,8 +642,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            and in the rendered Markdown view alike — the first three options are live and <em>Fit height</em>
            is greyed out, since a document has no fixed height to fit. The text already wraps to the width of
            the view, so all three come to the same thing: the document goes back to 100%. Which one you picked
-           is what the button then shows, and a document opens showing 100%. The control is greyed out
-           altogether only when no document is open.</p>
+           is what the button then shows, and a document opens showing 100%.</p>
+        <p>While nothing is open — the window is showing the file browser — the Fit control is not on the
+           bar at all; it appears when a file opens.</p>
       </section>
 
       <!-- ================= 3. SHORTCUTS ================= -->
@@ -830,7 +831,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
       <section id="browser">
         <h2><span class="num">5</span>The built-in file browser</h2>
         <p>Open a module without a file and the window becomes a file browser: folder tree and file list on the
-           left, thumbnails in the centre, file information on the right. The thumbnails are square, and the
+           left, thumbnails in the centre, file information on the right. Image files show a real miniature;
+           text documents show the first lines of their content, loaded in the background; everything else
+           shows its extension on the module's colour. The thumbnails are square, and the
            grid is 4 columns wide with both sidebars docked, 6 with one and 8 with none.</p>
         <ul>
           <li><strong>Each row in the left panel is two lines</strong> — the file name on the first, and on

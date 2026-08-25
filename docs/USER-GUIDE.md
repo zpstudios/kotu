@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.230.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.238.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -355,8 +355,10 @@ the list. `A` jumps straight to 100%. A new picture, video or PDF starts at Cont
 rendered Markdown view alike — the first three options are live and **Fit height** is greyed out,
 since a document has no fixed height to fit. The text already wraps to the width of the view, so
 all three come to the same thing: the document goes back to 100%. Which one you picked is what the
-button then shows, and a document opens showing 100%. The control is greyed out altogether only
-when no document is open.
+button then shows, and a document opens showing 100%.
+
+While nothing is open — the window is showing the file browser — the Fit control is not on the bar
+at all; it appears when a file opens.
 
 ---
 
@@ -565,7 +567,10 @@ thumbnails — as if you had started the module from the menu.
 
 Open a module without a file and the window becomes a file browser: folder tree and file list on the
 left, thumbnails in the centre, file information on the right. The thumbnails are square, and the
-grid is 4 columns wide with both sidebars docked, 6 with one and 8 with none.
+grid is 4 columns wide with both sidebars docked, 6 with one and 8 with none. Image files show a
+real miniature; text documents — `.txt .md .log .ini .html` and friends — show the first lines of
+their content, loaded in the background so the grid never waits; everything else shows its
+extension on the module's colour.
 
 - **Each row in the left panel is two lines** — the file name on the first, and on the second its
   size, one fact from the file's own module — playing length for video and audio, resolution for an
