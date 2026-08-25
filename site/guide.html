@@ -938,6 +938,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            administrator rights are needed, and switching a toggle off removes the registration completely.</p>
         <p>In <strong>Settings → Explorer integration</strong>:</p>
         <ul>
+          <li><strong>Register all file associations</strong> at the top — one switch that turns every
+              module's file association on or off in one go. It drives the module switches below, so each
+              module still shows its own progress and result; a module that is busy at that moment is
+              skipped, and you can flip that one by hand afterwards. It reads as on only while every
+              module is registered.</li>
           <li>One switch per module — <em>Register KOTU-image file associations</em>, and the same for video,
               audio, document and archive — with the extensions listed beside it. Turning a switch on also
               tries to make KOTU the default app for those types. Windows protects a few types; for those, the
@@ -1005,6 +1010,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>The file-type switches and the right-click-menu switch, described in full in
            <a class="inl" href="#associations">file types and the Start menu</a>. In short:</p>
         <ul>
+          <li><strong>Register all file associations</strong> at the top flips every module switch at once.
+              It reads as on only while every module is registered, and it leaves the right-click-menu
+              switch alone.</li>
           <li>Everything is registered under <strong>your own user account only</strong>, so no administrator
               rights are needed, and turning a switch off removes the registration completely — nothing is
               left behind.</li>

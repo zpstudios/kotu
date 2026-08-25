@@ -31,12 +31,25 @@ namespace KOTU.App;
 /// A197: 카드 헤더 행의 순서는 <b>스위치 → 제목 → 진행 링</b>이다 — 스위치가 제목 <b>왼쪽</b>에
 /// 선다(A183의 우측 끝 배치를 사용자 지시로 뒤집은 것. 스위치 내장 On/Off 문구는 제목과
 /// 붙어 보이지 않게 비워 뒀다).
+/// A227: 절 맨 위에 "Register all file associations" 마스터 스위치가 하나 더 선다 —
+/// 등록 경로를 새로 만들지 않고 <b>모듈 토글의 IsOn을 대신 눌러</b> 위 A77 흐름을 그대로 태운다.
+/// 표시 규칙은 "전부 켜짐일 때만 On"이고, 그 되계산은 <see cref="_suppressMasterToggle"/>이 감싼다.
 /// </summary>
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
     private readonly TextBlock _status = new() { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
     private readonly ISettingsService _settings;
     private bool _suppressToggle;
+
+    /// <summary>
+    /// A227(v0.235.0): "Register all file associations" 마스터 스위치를 <b>프로그램적으로</b>
+    /// 고쳐 그릴 때만 켜는 전용 가드. <see cref="_suppressToggle"/>와 축을 나눈 이유가 이 배치의
+    /// 핵심이다 — 마스터의 동작은 "모듈 토글들의 IsOn을 대신 눌러 주는 것"이라 모듈 쪽 Toggled가
+    /// <b>반드시 돌아야</b> 하는데, 공용 <see cref="_suppressToggle"/>을 재활용하면 마스터 상태를
+    /// 되계산하는 순간 모듈 토글의 등록 흐름까지 함께 막혀 아무것도 등록되지 않는다.
+    /// 이 플래그가 막는 것은 오직 마스터 자신의 Toggled 재발화다.
+    /// </summary>
+    private bool _suppressMasterToggle;
 
     /// <summary>
     /// A167(v0.171.0): Updates 섹션의 "다음 확인까지 남은 시간"을 1초마다 다시 그리는 타이머.
@@ -139,6 +152,83 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             + $"{Branding.AppName}. If Windows blocks any other type, the Windows default-apps page "
             + "opens so you can confirm it once."));
 
+        // ── A227(2026-08-25): 모듈 스위치를 하나씩 누르지 않고 한 번에 켜고 끄는 마스터 스위치.
+        // 등록 경로를 새로 만들지 않는다 — 아래 모듈 토글들의 IsOn을 프로그램적으로 세팅해
+        // 기존 Toggled 흐름(A77: 재진입 방지·토글 잠금·진행 링·워커 등록/해제·실패 되돌리기)을
+        // 그대로 태운다. 그래서 이 그룹에는 제 진행 링도 제 결과 문구도 없다 — 진행과 결과는
+        // 종전대로 각 모듈 그룹이 제자리에서 말한다.
+        // 사정권: 파일 연결 모듈 토글만. 아래 우클릭 메뉴 토글(Extract here·Compress)은
+        // 파일 연결이 아니므로 이 스위치가 건드리지 않는다(사양 확정).
+        var masterToggle = new ToggleSwitch
+        {
+            // A197과 같은 문법 — 스위치가 제목 왼쪽, 내장 On/Off 문구 제거, MinWidth 0(기본 154 해제).
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        // 아래 foreach가 만드는 모듈 토글이 순서대로 담긴다. 배선을 루프보다 먼저 해도 되는 이유 —
+        // 아래 두 핸들러는 사람이 스위치를 만지거나 워커 답이 온 뒤에야 도는데, 그때는 이미
+        // Build()가 끝나 목록이 다 차 있다(클로저가 리스트 자체를 잡고 있다).
+        var moduleToggles = new List<ToggleSwitch>();
+
+        // 마스터 표시 규칙 = "전부 켜짐일 때만 On". 모듈 토글이 값을 확정하는 세 시점
+        // (A195 초기 조회 반영 · 작업 성공 · 실패 되돌리기) 뒤에 불린다.
+        // 대입은 마스터 자신의 Toggled를 다시 발화시키므로 전용 가드로 감싼다(_suppressToggle 금지 —
+        // 필드 주석 참고: 그 플래그를 켜면 모듈 토글의 등록 흐름까지 막힌다).
+        void RecomputeMaster()
+        {
+            if (moduleToggles.Count == 0) return; // 연결 가능한 모듈이 없으면 "전부 켜짐"도 성립하지 않는다
+            var allOn = moduleToggles.All(t => t.IsOn);
+            if (masterToggle.IsOn == allOn) return;
+            _suppressMasterToggle = true;
+            masterToggle.IsOn = allOn;
+            _suppressMasterToggle = false;
+        }
+
+        masterToggle.Toggled += (_, _) =>
+        {
+            if (_suppressMasterToggle) return; // 위 되계산이 만든 발화 — 사람이 누른 게 아니다
+            var turnedOn = masterToggle.IsOn;  // 아래 대입이 되계산을 부를 수 있으니 목표값을 먼저 잡는다
+            foreach (var moduleToggle in moduleToggles)
+            {
+                // 이미 목표 상태면 그대로 둔다(IsOn 대입이 없으면 Toggled도 없다 = 헛작업 없음).
+                // 작업 중인 그룹(IsEnabled = false)은 건너뛴다 — 기다리지도, 따로 안내하지도 않는다.
+                // 그 그룹만 작업이 끝난 뒤 사용자가 다시 누르면 된다(사양 확정).
+                if (moduleToggle.IsEnabled && moduleToggle.IsOn != turnedOn) moduleToggle.IsOn = turnedOn;
+            }
+            // 다섯 그룹이 한꺼번에 워커 큐에 쌓이지만 워커는 직렬이라(A195) 서로의 레지스트리
+            // 쓰기를 지우지 않는다. 마스터 자신의 표시는 각 그룹이 끝날 때마다 RecomputeMaster가 잡는다.
+        };
+
+        // A220과 같은 그룹 문법(카드 없음 · 안쪽 Spacing 6 · 아래 여백 8). 진행 링이 없어 두 칸이면 된다.
+        var masterHeaderRow = new Grid { ColumnSpacing = 8 };
+        masterHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        masterHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var masterTitle = new TextBlock
+        {
+            Text = "Register all file associations",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(masterToggle, 0);
+        Grid.SetColumn(masterTitle, 1);
+        masterHeaderRow.Children.Add(masterToggle);
+        masterHeaderRow.Children.Add(masterTitle);
+
+        var masterCardBody = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 8) };
+        masterCardBody.Children.Add(masterHeaderRow);
+        masterCardBody.Children.Add(new TextBlock
+        {
+            Text = "Turns every module's file association on or off in one go.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        Root.Children.Add(masterCardBody);
+
         // 토글 순서(A35, 사용자 확정 2026-08-10): 이미지 → 비디오 → 오디오 → 문서 → 압축.
         // 시작 메뉴 번호 순서(1이미지 2영상 3오디오 4문서 5압축)와 일치시킨 것 —
         // v0.28.0의 "압축→문서→영상→이미지"를 대체한다.
@@ -181,6 +271,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 // 둘 다 Off로 보이는데, 이는 종전 Safe(...)의 실패 폴백과 같은 표시다.
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            // A227: 마스터 스위치가 대신 눌러 줄 대상 목록. 순서는 화면 순서 그대로다.
+            moduleToggles.Add(toggle);
 
             // A77(v0.106.0): 진행 링 + 진행/결과 텍스트.
             // A79 ⑤(v0.119.0): 앱에서 가장 오래 도는 인디케이터라 발바닥 스피너를 여기 하나에만 붙였다.
@@ -360,8 +452,12 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                     _suppressToggle = false;
                     progressText.Text = string.Empty;
                     _status.Text = "Failed to apply: " + outcome.Error;
+                    RecomputeMaster(); // A227: 되돌린 값까지 마스터 표시에 반영(전부 켜짐이 깨졌다)
                     return;
                 }
+
+                // A227: 여기부터 toggle.IsOn은 더 바뀌지 않는다 — 성공 경로의 마스터 되계산은 이 한 곳이면 된다.
+                RecomputeMaster();
 
                 if (!turnedOn)
                 {
@@ -421,6 +517,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                     _suppressToggle = true;
                     toggle.IsOn = registered;
                     _suppressToggle = false;
+                    // A227: 초기 조회는 모듈마다 따로 도착한다 — 도착할 때마다 마스터를 다시 잰다.
+                    // 다 도착하기 전에는 아직 안 읽은 그룹이 Off로 보이므로 마스터도 Off가 자연스럽다.
+                    RecomputeMaster();
                 });
             });
         }
