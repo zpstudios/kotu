@@ -256,20 +256,25 @@
                      경계선 = 본체의 오른쪽 테두리 1px 하나). DropDownButton은 키 있는 기본 스타일이
                      없어 BasedOn 불가(v0.113.1 실기기 이력)라 구 SplitButton처럼 인라인 값으로 적는다.
                      화살표는 내용 없이 내장 셰브론만 표시한다(A키·F키는 본체 FitButton에 그대로). -->
-                <!-- A145→A214: 조절기는 항상 보이고, PDF는 4옵션 전부·텍스트 갈래(파일·무제 —
-                     편집·잠금 뷰·렌더 뷰 공통)는 Fit height만 뺀 3옵션이 활성이다(높이 무한 —
-                     2026-08-24 사용자 지시로 부록 B 67의 "텍스트 비활성"을 반전). 빈 화면만
-                     비활성 "1/1" 표시. 초기 IsEnabled=False가 그 기본 상태다(활성/비활성 전환은
-                     코드 ShowPdfFitState/ShowTextFitState 한 쌍). -->
+                <!-- A145→A214: 조절기는 콘텐츠가 있는 동안 보이고, PDF는 4옵션 전부·텍스트 갈래
+                     (파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)는 Fit height만 뺀 3옵션이 활성이다
+                     (높이 무한 — 2026-08-24 사용자 지시로 부록 B 67의 "텍스트 비활성"을 반전).
+                     A230(2026-08-25 사용자 지시): 빈 화면(중앙 = 셸 썸네일 탐색기)에서는 A145의
+                     "항상 보이되 비활성"을 부분 반전해 조절기 2개를 아예 접는다 — 초기
+                     Visibility=Collapsed가 그 기본 상태다(초기 상태 = 빈 화면이라 첫 프레임부터
+                     정합. 종전 초기 IsEnabled=False도 그대로 둔다 — 접힌 채로도 상태는 빈 화면 갈래).
+                     표시/활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍만 한다. -->
                 <StackPanel Grid.Column="11" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
-                            CornerRadius="4,0,0,4" IsEnabled="False" Click="OnFitClicked">
+                            CornerRadius="4,0,0,4" IsEnabled="False" Visibility="Collapsed"
+                            Click="OnFitClicked">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     </Button>
                     <DropDownButton x:Name="FitOptionsButton"
                                     Width="32" Height="32" Padding="4"
                                     BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
-                                    VerticalAlignment="Center" IsEnabled="False">
+                                    VerticalAlignment="Center" IsEnabled="False"
+                                    Visibility="Collapsed">
                         <DropDownButton.Flyout>
                             <MenuFlyout Placement="Top">
                                 <!-- A231: 100% 항목은 아이콘을 두지 않는다(도형 폐기).

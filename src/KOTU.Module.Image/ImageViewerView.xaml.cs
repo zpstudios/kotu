@@ -952,6 +952,22 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private static string FitTip(string description) =>
         $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
 
+    /// <summary>
+    /// A230(2026-08-25 사용자 지시): Fit 조절기 2개(본체 + 화살표)의 표시를 함께 여닫는다.
+    /// 빈 상태(볼 파일 없음)의 중앙은 셸 썸네일 탐색기(A93)라 하단 바에 Fit을 두지 않는다 —
+    /// A145의 "항상 보이되 비활성" 관용구를 Fit 조절기에 한해 부분 반전한 것이다(회전 버튼 등
+    /// 다른 요소는 범위 밖). 유일한 호출 지점 = UpdateStatusBar의 두 분기.
+    /// 부모 StackPanel이 아니라 버튼 각각을 접는 이유 = HotkeySupport의 통과 게이트가
+    /// <b>버튼 자신의</b> Visibility를 보기 때문이다(부모만 접으면 A·F 키가 보이지 않는 버튼에
+    /// 계속 걸린다). 두 버튼이 모두 접히면 StackPanel은 0폭이라 칸이 사라지는 결과는 같다.
+    /// </summary>
+    private void SetFitControlVisible(bool visible)
+    {
+        var value = visible ? Visibility.Visible : Visibility.Collapsed;
+        FitButton.Visibility = value;
+        FitOptionsButton.Visibility = value;
+    }
+
     /// <summary>A30 규격: 플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
     private void SelectFitOption(FitMode option)
     {
@@ -1038,10 +1054,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         // 이 메서드는 표시 상태가 확정된 뒤에만 불린다(Source·_printBytes 대입 다음) — 호출 지점
         // 전수: 생성자 빈 상태 · LoadCurrentAsync 성공/빈 상태 · LoadViaMagickAsync 성공.
         // 예외는 로드 실패 경로 하나뿐이고 거기서는 직접 부른다(그쪽 주석 참조).
+        // A230: Fit 조절기의 표시 전환도 이 메서드의 두 분기가 겸한다 — 판정 축은 이미 여기 있는
+        // "현재 파일 경로"(_navigator.Current) 하나뿐이라 표시 지점을 새로 만들지 않는다.
+        // 로드 실패(위 예외 경로)는 파일 자체는 열려 있고 ←/→ 탐색도 유효하므로 조절기를 접지
+        // 않는다 — 인쇄 버튼(CanPrintNow = 표시 중인 비트맵 축)과 판정 축이 다른 자리다.
         UpdatePrintButton();
         var path = _navigator?.Current;
         if (path is null)
         {
+            SetFitControlVisible(false); // A230: 빈 상태 = 중앙이 셸 썸네일 탐색기 — 조절기를 접는다
             FileNameText.Text = "No file open";
             ZoomText.Text = string.Empty;
             MetaText.Text = string.Empty;
@@ -1049,6 +1070,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             return;
         }
 
+        SetFitControlVisible(true); // A230: 볼 파일이 있다 — 조절기 복원
         FileNameText.Text = Path.GetFileName(path);
         // A149: 파일명 오른쪽에 나머지 정보를 한 덩어리로. 좁으면 말줄임되므로 전체는 툴팁으로.
         var meta = BuildMetaText();

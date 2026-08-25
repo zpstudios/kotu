@@ -90,7 +90,11 @@
                  A217(v0.229.0) 정렬 계약: 공통 클러스터(재생·위치·시크·길이·음소거·볼륨·배속 =
                  c1~c7)의 시작·끝 x가 오디오 바와 일치한다 — 좌군(루프) 32+간격 6 = 38,
                  우군(자막 32 + Fit 64 + 간격 2×6) = 108을 오디오가 스페이서로 맞춘 상태.
-                 이 바의 양옆 구성·폭을 바꾸면 오디오 바(AudioPlayerView.xaml)도 함께 재계수할 것. -->
+                 이 바의 양옆 구성·폭을 바꾸면 오디오 바(AudioPlayerView.xaml)도 함께 재계수할 것.
+                 A230: 이 등식은 "콘텐츠 열림 상태"에만 걸리는 계약이다 — 빈 상태에서는 Fit
+                 조절기(64 + 간격 6)가 접혀 우군이 38로 줄어 오디오와 어긋나지만, 오디오 자체가
+                 빈 상태의 비교 대상이 아니라(모듈 전환 없이 나란히 볼 일이 없다) 실익이 없다.
+                 빈 상태 대칭을 맞추려 오디오 스페이서(26)를 건드리지 말 것 — 과설계다. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -164,15 +168,21 @@
                  없어 BasedOn 불가(v0.113.1 실기기 이력)라 구 SplitButton처럼 인라인 값으로 적는다.
                  화살표는 내용 없이 내장 셰브론만 표시하고 A34 키가 없어 툴팁을 XAML에 적는다. -->
             <!-- 본체 툴팁(키 표기 포함)은 UpdateFitButton()이 상태와 함께 갱신한다 — A34 -->
+            <!-- A230(2026-08-25 사용자 지시): 빈 상태(재생 파일 없음 = 중앙이 셸 썸네일 탐색기)
+                 에서는 조절기 2개를 접는다. 초기 Visibility=Collapsed가 그 기본 상태고,
+                 생성자의 UpdateFitVisibility()가 파일 인자 유무로 곧바로 확정한다
+                 (첫 프레임 깜빡임 방지. 3모듈 일관). 빈 상태 ▶ = 테스트 클립(A207) 등
+                 다른 버튼은 빈 상태에도 그대로 쓰이므로 손대지 않는다. -->
             <StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
-                        CornerRadius="4,0,0,4" Click="OnFitClicked">
+                        CornerRadius="4,0,0,4" Visibility="Collapsed" Click="OnFitClicked">
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                 </Button>
                 <DropDownButton x:Name="FitOptionsButton"
                                 Width="32" Height="32" Padding="4"
                                 BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
                                 VerticalAlignment="Center"
+                                Visibility="Collapsed"
                                 ToolTipService.ToolTip="Fit options">
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="Top">

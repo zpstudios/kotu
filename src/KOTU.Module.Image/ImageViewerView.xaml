@@ -143,11 +143,16 @@
                      기본 스타일이 없어 BasedOn 불가(v0.113.1 실기기 이력)라 구 SplitButton처럼
                      인라인 값으로 적는다. 화살표는 A34 키가 없어 툴팁을 XAML에 적고,
                      내용 없이 내장 셰브론만 표시한다(A키·F키는 본체 FitButton에 그대로). -->
+                <!-- A230(2026-08-25 사용자 지시): 빈 상태(볼 파일 없음 = 중앙이 셸 썸네일 탐색기)
+                     에서는 조절기 2개를 접는다. 초기 Visibility=Collapsed가 그 기본 상태다 —
+                     생성자는 파일 인자가 없으면 그대로 빈 상태고, 있으면 폴더 스캔·디코드가
+                     끝난 뒤 UpdateStatusBar가 펼친다(첫 프레임 깜빡임 방지. 3모듈 일관). -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button
                         x:Name="FitButton"
                         Style="{StaticResource BottomBarButtonStyle}"
                         CornerRadius="4,0,0,4"
+                        Visibility="Collapsed"
                         Click="OnFitClick">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     </Button>
@@ -156,6 +161,7 @@
                         Width="32" Height="32" Padding="4"
                         BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
                         VerticalAlignment="Center"
+                        Visibility="Collapsed"
                         ToolTipService.ToolTip="Fit options">
                         <DropDownButton.Flyout>
                             <MenuFlyout Placement="Top">

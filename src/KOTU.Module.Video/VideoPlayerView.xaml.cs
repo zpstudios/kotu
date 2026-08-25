@@ -269,6 +269,10 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (_filePath is null)
             PlaceholderText.Visibility = Visibility.Visible;
 
+        // A230: 빈 상태(_filePath 없음)면 Fit 조절기를 접은 채로 시작한다 — XAML 초기값이 이미
+        // Collapsed라 파일 인자가 없으면 무동작이고, 있으면 여기서 곧바로 펼친다(첫 프레임 정합).
+        UpdateFitVisibility();
+
         Vlc.Initialized += OnVlcInitialized;
         Loaded += (_, _) => Focus(FocusState.Programmatic);
         Unloaded += OnUnloaded;
@@ -513,6 +517,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         }
 
         _filePath = path;
+
+        // A230: 빈 상태 → 재생 파일 확보 = Fit 조절기 복원. _filePath가 null이 아니게 되는 지점은
+        // 생성자와 여기 둘뿐이고(닫기 경로 없음 — EOF/Ended도 파일은 그대로다) 두 곳 다 갱신한다.
+        // 테스트 클립(A207 — 빈 상태 ▶)도 이 경로로 들어오므로 함께 펼쳐진다(재생 중인 콘텐츠다).
+        UpdateFitVisibility();
 
         // A30: 재생 영상이 바뀌면 핏 옵션은 Contain으로 회귀 — 이번 실행 내에서도 기억하지 않는다
         // (사용자 확정, A83에서 재확인). Manual(Ctrl+휠 줌, A98)·100%도 같은 규칙으로 회귀한다 —
@@ -1138,6 +1147,24 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// </summary>
     private static string FitTip(string description) =>
         $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
+
+    /// <summary>
+    /// A230(2026-08-25 사용자 지시): Fit 조절기 2개(본체 + 화살표)의 표시를 재판정한다 —
+    /// 빈 상태(재생 파일 없음)의 중앙은 셸 썸네일 탐색기(A93)라 하단 바에 Fit을 두지 않는다.
+    /// 판정 축 = <see cref="_filePath"/> 하나(이 뷰의 "파일 있음" 정본. EOF/Ended는 닫힘이 아니라
+    /// 파일이 그대로 걸려 있어 조절기도 그대로 남는다). 호출 지점 = 생성자 · OpenPath 두 곳이
+    /// 전부다(그 밖에 _filePath가 바뀌는 자리는 없다).
+    /// 부모 StackPanel이 아니라 버튼 각각을 접는 이유 = HotkeySupport의 통과 게이트가
+    /// <b>버튼 자신의</b> Visibility를 보기 때문이다(부모만 접으면 A·F 키가 보이지 않는 버튼에
+    /// 계속 걸린다). 두 버튼이 모두 접히면 StackPanel은 0폭이라 칸이 사라지는 결과는 같다.
+    /// 자막·루프·▶ 등 빈 상태에도 쓰이는 버튼(A207)은 범위 밖 — 손대지 않는다.
+    /// </summary>
+    private void UpdateFitVisibility()
+    {
+        var value = _filePath is not null ? Visibility.Visible : Visibility.Collapsed;
+        FitButton.Visibility = value;
+        FitOptionsButton.Visibility = value;
+    }
 
     /// <summary>A30: 플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
     private void SelectFitOption(VideoFitMode option)
