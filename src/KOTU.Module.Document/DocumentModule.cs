@@ -27,7 +27,7 @@ public sealed class DocumentModule : IModule
 
     /// <summary>
     /// A181: 본문 배율 설정 키. 값은 퍼센트(int, 기본 100)이고 <b>전역 1벌</b>이다(창·파일 무관).
-    /// 범위(50~300)·단계(10)·적용(FontSize 배율)은 전부 DocumentView가 정한다.
+    /// 범위(A229 — 20~500)·단계(10)·적용(FontSize 배율)은 전부 DocumentView가 정한다.
     /// </summary>
     public const string ZoomSettingKey = "document.zoom";
 

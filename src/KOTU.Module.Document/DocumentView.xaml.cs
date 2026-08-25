@@ -257,8 +257,8 @@ public sealed partial class DocumentView : UserControl,
     private const double BaseEditorPaddingLeft = 24;
 
     private const int DefaultZoomPercent = 100;
-    private const int MinZoomPercent = 50;   // A181 사양 범위 50~300, 단계 10
-    private const int MaxZoomPercent = 300;
+    private const int MinZoomPercent = 20;   // A229 사양 범위 20~500(A181의 50~300 확대), 단계 10
+    private const int MaxZoomPercent = 500;
     private const int ZoomStepPercent = 10;
 
     /// <summary>현재 줌(%) — 표시(ZoomText)·적용(FontSize)·저장(document.zoom)의 단일 출처.</summary>

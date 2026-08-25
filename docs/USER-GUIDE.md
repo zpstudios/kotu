@@ -193,7 +193,7 @@ Seven modules. Switch between them from the menu at the bottom left.
 - Files larger than 4 MB open read-only, showing the first 4 MB.
 - `Tab` inserts a tab character in the editor.
 - The text fills the full width of the window. To make it larger or smaller, zoom with
-  `Ctrl`+wheel — 50% to 300% of the normal size, 10% per notch. The current level shows in the
+  `Ctrl`+wheel — 20% to 500% of the normal size, 10% per notch. The current level shows in the
   bottom bar, and one level applies everywhere: it is remembered across files, windows and
   restarts. Zooming never touches the file itself. **The rendered Markdown view zooms with the same
   `Ctrl`+wheel on the same scale**, so switching between the preview and the editor keeps the size
@@ -502,7 +502,7 @@ file list and in the thumbnails it selects the focused item instead.
 | PDF | `Ctrl`+wheel | zoom |
 | PDF | left-button drag | push the pages around |
 | Text document | wheel | scroll |
-| Text document | `Ctrl`+wheel | zoom the text, 50%–300% — editor and Markdown view alike |
+| Text document | `Ctrl`+wheel | zoom the text, 20%–500% — editor and Markdown view alike |
 | File browser, side panels | wheel | scroll |
 | File browser | double-click | open (folders: go in) |
 | File browser | `Shift`+double-click | open in a new window |
