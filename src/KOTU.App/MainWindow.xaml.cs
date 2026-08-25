@@ -979,10 +979,12 @@ public sealed partial class MainWindow : Window
         AddMinimizeToTrayItem();
     }
 
-    /// <summary>A218: 시작 메뉴 최하단 "Minimize to tray" — HideToTray()의 시작 메뉴 진입로.</summary>
+    /// <summary>A218: 시작 메뉴 최하단 "Min to tray" — HideToTray()의 시작 메뉴 진입로.</summary>
     private void AddMinimizeToTrayItem()
     {
-        var item = MakeMenuItem("", "Minimize to tray"); // E921 = ChromeMinimize 글리프
+        // A232: 라벨은 "Min to tray" — 폭 136 메뉴에서 "Minimize to tray"가 잘렸다.
+        // 글리프는 E896 Download(아래 화살표+받침 — 트레이로 내려보낸다는 은유)로 교체. 종전 E921 = ChromeMinimize.
+        var item = MakeMenuItem("\uE896", "Min to tray");
         item.Click += (_, _) =>
         {
             StartFlyout.Hide(); // 플라이아웃을 연 채 창만 사라지지 않게 먼저 닫는다

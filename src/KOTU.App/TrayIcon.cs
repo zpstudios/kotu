@@ -298,6 +298,8 @@ internal sealed class TrayIcon : IDisposable
         {
             _ = AppendMenuW(menu, MfString, CmdActivate, "Activate window");
             // A218: 트레이 숨김은 자동(A69/A185 — 폐지)이 아니라 이 명시 항목으로만 들어간다.
+            // A232: 시작 메뉴 항목은 폭 제약으로 "Min to tray"로 줄였지만, 여기는 Win32 텍스트 메뉴라
+            // 폭 여유가 있어 "Minimize to tray" 전체 표기를 유지한다(의도된 비대칭).
             _ = AppendMenuW(menu, MfString, CmdMinimizeToTray, "Minimize to tray");
             _ = AppendMenuW(menu, MfString, CmdClose, "Close this window");
             _ = AppendMenuW(menu, MfSeparator, 0, null);

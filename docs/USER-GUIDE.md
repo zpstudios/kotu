@@ -676,7 +676,7 @@ If KOTU's own folder moves — after an update, or after you move a portable cop
 you turned on are repaired silently the next time it starts.
 
 **The Start menu** is the button at the bottom-left corner (``Alt+` ``). It rises from the bar and
-lists, from the bottom up: Minimize to tray, then All Readable, Image, Video, Audio, Document,
+lists, from the bottom up: Min to tray, then All Readable, Image, Video, Audio, Document,
 Archive, H/W Info, then Settings. There is no Exit entry here — closing the last window ends the
 app, and the tray menu has **Exit KOTU**.
 
@@ -701,9 +701,10 @@ the title bar, so you can tell them apart in the taskbar and in `Alt`+`Tab`.
 A new window inherits the size and position of the last window you closed.
 
 **Minimising** a window works the standard Windows way — the window stays on the taskbar. To hide a
-window completely, use **Minimize to tray**: the bottom entry of the menu, or the same command in
-the right-click menu of that window's tray icon. A hidden window disappears from the taskbar and
-from `Alt`+`Tab`; its tray icon stays — click that to bring it back.
+window completely, use the **Min to tray** entry at the bottom of the menu, or the same command in
+the right-click menu of that window's tray icon (which spells it out as *Minimize to tray*). A
+hidden window disappears from the taskbar and from `Alt`+`Tab`; its tray icon stays — click that
+to bring it back.
 
 ---
 
