@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,6 +10,7 @@ using Windows.Storage;
 using Windows.Storage.FileProperties;
 using Windows.System;
 using KOTU.Core.Routing;
+using KOTU.Core.Threading;
 using KOTU.Input;
 
 namespace KOTU.App.Controls;
@@ -28,6 +30,17 @@ public sealed partial class ThumbnailExplorer : UserControl
 {
     /// <summary>이미지 미리보기 디코드 폭 상한(물리 px) — 원본 크기 디코드로 메모리가 폭주하지 않게.</summary>
     private const int PreviewDecodeWidth = 256;
+
+    /// <summary>A233: 텍스트 프리뷰가 파일 앞에서 읽는 상한(바이트) — 타일에 이 이상 안 보이므로
+    /// 전체 읽기는 낭비다(대형 파일 보호 — File.ReadAllText 금지, FileStream 부분 읽기).</summary>
+    private const int TextPreviewMaxBytes = 4096;
+
+    /// <summary>A233: 텍스트 프리뷰 표시 줄 수 상한 — 읽기 상한과 같은 근거(타일 크기).</summary>
+    private const int TextPreviewMaxLines = 12;
+
+    /// <summary>A233: 텍스트 읽기 동시 상한 — ExplorerPane.FetchConcurrency(A194)와 같은 값·
+    /// 같은 근거(수백 파일 폴더에서 IO 폭주 방지). 풀 워커 수와 게이트 초기값이 함께 쓴다.</summary>
+    private const int TextPreviewConcurrency = 3;
 
     /// <summary>더블클릭 판정 창 — ExplorerPane.DoubleClickMs와 같은 값(같은 감각).</summary>
     private const int DoubleClickMs = 500;
@@ -81,6 +94,24 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 호출부 전수 = Unloaded·ShowEntries 기동 직전 방어·틱 내부(완료/seq 중단/예외).
     /// </summary>
     private EventHandler<object>? _tileAppendHandler;
+
+    /// <summary>
+    /// A233: 텍스트 프리뷰 읽기 전용 풀 — ExplorerPane._fetchPool과 같은 규칙(A194: 항목별
+    /// 독립 작업만·지연 생성·Unloaded에서 Dispose 후 다시 로드되면 되살아난다). UI 스레드에서
+    /// await하면 완료 시 UI 스레드로 복귀한다(ModuleWorker 계약 — 완료 반영의 seq 재대조가
+    /// 디스패치 없이 성립하는 근거).
+    /// </summary>
+    private ModuleWorkerPool? _textPool;
+
+    /// <summary>
+    /// A233: 텍스트 읽기 발사 게이트 — 동시 TextPreviewConcurrency건까지만
+    /// (ExplorerPane.LoadDetailInfoAsync의 SemaphoreSlim 게이트와 같은 A194 관용구.
+    /// 그쪽은 발사 루프 지역 변수지만 여기는 타일 생성 시점마다 개별 예약이라 인스턴스 필드다 —
+    /// 재스캔(A131 빈발)을 건너 상한이 유지되고, 낡은 예약은 게이트 통과 시점의 seq 대조로
+    /// 발사 없이 접힌다 = 자연 배압. static 아님 — 뷰 수명과 함께 버려진다).
+    /// </summary>
+    private readonly SemaphoreSlim _textReadGate = new(TextPreviewConcurrency);
+
     private (string Path, DateTime At)? _lastClick;
     private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
     private (string Path, DateTime At)? _lastPress;      // A131: 원시 눌림 쌍 — 항목 재구축을 건너 살아남는 최후 폴백
@@ -113,6 +144,11 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>선택된 항목(파일·폴더 불문) — 없으면 null (A90: S4 Enter "선택 열기 우선" 판정).</summary>
     public ExplorerListing.Entry? SelectedEntry =>
         TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry entry } ? entry : null;
+
+    /// <summary>A233: 지연 생성 — Unloaded로 정리된 뒤 다시 로드돼도 되살아난다
+    /// (ExplorerPane.FetchPool과 같은 규칙. 워커 수 = 동시 읽기 상한).</summary>
+    private ModuleWorkerPool TextPool =>
+        _textPool ??= new ModuleWorkerPool("KOTU tile text", TextPreviewConcurrency);
 
     public ThumbnailExplorer()
     {
@@ -155,6 +191,15 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             StopTileAppendLoop(); // A192 — CompositionTarget.Rendering은 static: 남기면 닫힌 뷰 통째 누수
+            // A233: 보류 텍스트 읽기 전부 무산 — seq를 올리면 게이트 대기 중이던 예약이 깨어나도
+            // 발사 없이 접힌다(대조 실패). 풀을 먼저 닫으면 진행 중 읽기는 워커가 마저 끝내고
+            // 스레드 종료(ModuleWorker 계약), 그 결과도 seq 대조가 버린다. 풀을 null로 두면
+            // 재로드 시 TextPool이 지연 재생성한다(ExplorerPane Unloaded와 같은 정리 규칙).
+            // seq 선증가가 중요: 닫힌 풀의 Run은 취소 Task라 어차피 무해지만, 낡은 예약이
+            // 지연 재생성으로 새 풀을 되살리는 길을 이 한 줄이 막는다.
+            _showSeq++;
+            _textPool?.Dispose();
+            _textPool = null;
         };
         // A200: 선택 변경을 셸로 중계 — 우측 정보 패널의 선택 우선 표시(파일 정보 직접 조회)용.
         // 그리드 자체 이벤트를 얇게 감싸기만 한다(선택 판정·해석은 셸 몫 — SelectedEntry 질의).
@@ -628,6 +673,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     {
         var preview = entry.IsFolder ? MakeFolderGlyph()
             : IsImageFile(entry.Name) ? MakeImagePreview(entry)
+            : IsTextPreviewFile(entry) ? MakeTextPreview(entry) // A233 — 내용 프리뷰(지연 교체)
             : MakeExtensionTile(entry);
 
         var tile = new Grid();
@@ -825,6 +871,161 @@ public sealed partial class ThumbnailExplorer : UserControl
             Child = label,
         };
     }
+
+    // ---------- 텍스트 내용 프리뷰 (A233) ----------
+
+    /// <summary>
+    /// 내용 프리뷰 대상 텍스트 파일인지 (A233) — 문서 모듈 담당 목록(DocumentModule.Extensions)
+    /// 재사용에서 .pdf만 뺀다(ExplorerPane.InfoKindOf의 Text 갈래와 같은 판정 — 그쪽은 Pdf
+    /// 갈래가 먼저 잡고 여기는 명시 제외. A224류 목록 추가분 자동 추종). 클라우드 전용
+    /// (placeholder) 파일은 앞부분 읽기조차 하이드레이션이라 제외한다(A175 — 확장자 타일 유지).
+    /// </summary>
+    private static bool IsTextPreviewFile(ExplorerListing.Entry entry) =>
+        !entry.IsPlaceholder
+        && !string.Equals(Path.GetExtension(entry.Name), ".pdf", StringComparison.OrdinalIgnoreCase)
+        && ExplorerListing.MatchesExtension(entry.Name, KOTU.Module.Document.DocumentModule.Extensions);
+
+    /// <summary>
+    /// 텍스트 파일 타일 (A233): 즉시 확장자 타일을 그려 두고, 워커 읽기가 끝나면 그 타일의
+    /// 내용만 교체한다(A175 MakePlaceholderPreview의 지연 교체 구조 — 조립 루프(ShowEntries·
+    /// A192 append 틱)는 예약만 하고 블로킹되지 않는다. 이미지 타일의 지연 디코드와 같은 감각).
+    /// </summary>
+    private UIElement MakeTextPreview(ExplorerListing.Entry entry)
+    {
+        var host = new Grid();
+        host.Children.Add(MakeExtensionTile(entry));
+        _ = FillTextPreviewAsync(host, entry.Path, _showSeq);
+        return host;
+    }
+
+    /// <summary>
+    /// 게이트(동시 TextPreviewConcurrency건) 획득 후 워커에서 파일 앞부분을 읽어 타일 내용을
+    /// 교체한다 (A233). UI 스레드에서 시작하므로 await 후속부도 UI 스레드다(ExplorerPane.
+    /// LoadDetailInfoAsync의 A194 발사 구조 — 별도 디스패치 없이 seq 재대조가 성립하는 근거).
+    /// 낡음 이중 방어(A192 관용구): ① 게이트 통과 시점 — 재스캔 빈발(A131)로 보류가 쌓여도
+    /// 낡은 예약은 읽기 자체를 시작하지 않는다(자연 배압 — 상한 초과분은 게이트 대기 큐에서
+    /// 잠들었다가 여기서 접힌다), ② 읽기 완료 시점 — 결과를 버린다. host는 이 타일 전용 클로저
+    /// 캡처라(컨테이너 재사용·풀 없음 — ShowEntries가 타일을 매번 새로 만든다) 교체가 다른
+    /// 타일로 갈 수 없다. Unloaded는 _showSeq를 올려 보류 전부를 무산시킨다(생성자 주석).
+    /// 실패(잠김·삭제 경합·풀 닫힘 취소)는 조용히 확장자 타일 유지 — 안내 없음(사양).
+    /// </summary>
+    private async Task FillTextPreviewAsync(Grid host, string path, int seq)
+    {
+        await _textReadGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
+        try
+        {
+            if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다
+            string? text;
+            try
+            {
+                text = await TextPool.Run(_ => ReadTextPreview(path));
+            }
+            catch
+            {
+                return; // 읽기 실패·풀 닫힘(취소 Task) — 확장자 타일 유지
+            }
+            if (seq != _showSeq || text is null) return; // ② 완료 시점 재대조(이중 방어)
+            host.Children.Clear();
+            host.Children.Add(MakeTextPreviewBlock(text));
+        }
+        finally
+        {
+            _textReadGate.Release(); // 예외·낡음 경로 포함 — 누락되면 상한 건 뒤 조용히 멈춘다(A194)
+        }
+    }
+
+    /// <summary>
+    /// 워커 스레드: 파일 앞부분(상한 TextPreviewMaxBytes)만 읽어 프리뷰 문자열을 만든다 (A233).
+    /// 인코딩 판정은 DocumentView.ReadTextSmart의 최소 복제(모듈 뷰 내부 private이라 직접 참조
+    /// 불가 — DocumentQuickInfo가 같은 사정으로 같은 규칙을 복제한 선례): BOM(UTF-8·UTF-16 LE/BE)
+    /// 우선, 없으면 엄격 UTF-8 시도, 깨질 때만 CP949 폴백. 상한에서 잘린 버퍼의 불완전한 UTF-8
+    /// 꼬리는 떼고 판정한다(진짜 UTF-8이 CP949로 오판되지 않게 — DocumentQuickInfo와 동일 처리).
+    /// CP949는 제공자 등록 없는 직접 취득(Cp949ZipReader·SubtitleCharset 관용구) — 취득 실패는
+    /// null. 표시는 앞 TextPreviewMaxLines줄까지, 전부 공백이면 null(호출부가 확장자 타일 유지).
+    /// 예외(잠김·삭제 경합 등)는 호출부 catch가 삼킨다.
+    /// </summary>
+    private static string? ReadTextPreview(string path)
+    {
+        using var stream = File.OpenRead(path);
+        if (stream.Length == 0) return null; // 빈 파일 — 보여 줄 내용이 없다
+        var truncated = stream.Length > TextPreviewMaxBytes;
+        var bytes = new byte[Math.Min(stream.Length, TextPreviewMaxBytes)];
+        stream.ReadExactly(bytes);
+
+        string text;
+        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+            text = Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+        else if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+            text = Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+        else if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+            text = Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+        else
+        {
+            var length = truncated ? TrimIncompleteUtf8Tail(bytes) : bytes.Length;
+            try
+            {
+                text = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false,
+                    throwOnInvalidBytes: true).GetString(bytes, 0, length);
+            }
+            catch (DecoderFallbackException)
+            {
+                // 레거시 한글(CP949) — 프리뷰는 근사면 충분해 UTF-16 BOM 없는 파일 등이 여기로
+                // 떨어져도 깨진 글자 타일일 뿐 무해하다(열기는 문서 모듈의 정식 판정이 한다).
+                var cp949 = CodePagesEncodingProvider.Instance.GetEncoding(949);
+                if (cp949 is null) return null; // 제공자 취득 실패 — 프리뷰 없음
+                text = cp949.GetString(bytes);
+            }
+        }
+
+        // 앞 N줄만 — 타일에 그 이상 안 보인다. CR은 떼서 CRLF 파일의 줄 끝 제어문자를 지운다.
+        var lines = text.Split('\n');
+        var preview = string.Join('\n',
+            lines.Take(Math.Min(lines.Length, TextPreviewMaxLines)).Select(l => l.TrimEnd('\r')));
+        return preview.Trim().Length == 0 ? null : preview;
+    }
+
+    /// <summary>버퍼 끝의 불완전한 UTF-8 시퀀스를 제외한 길이 — DocumentQuickInfo.
+    /// TrimIncompleteUtf8Tail의 복제(그쪽이 private이라 참조 불가 — 동작 동일, A233).
+    /// 끝에서 최대 3바이트의 연속 바이트(상위 2비트 = 0x80)를 거슬러 리드 바이트를 찾고,
+    /// 그 시퀀스의 기대 길이가 버퍼를 넘으면 리드 바이트 앞에서 자른다.</summary>
+    private static int TrimIncompleteUtf8Tail(byte[] bytes)
+    {
+        for (var i = bytes.Length - 1; i >= 0 && i >= bytes.Length - 4; i--)
+        {
+            if ((bytes[i] & 0xC0) == 0x80) continue; // 연속 바이트 — 더 거슬러 간다
+            var expected = (bytes[i] & 0xE0) == 0xC0 ? 2
+                : (bytes[i] & 0xF0) == 0xE0 ? 3
+                : (bytes[i] & 0xF8) == 0xF0 ? 4
+                : 1; // ASCII 또는 불량 리드 — 불완전으로 보지 않는다
+            return bytes.Length - i < expected ? i : bytes.Length;
+        }
+        return bytes.Length; // 끝 4바이트가 전부 연속 바이트 — 불량이므로 그대로 검사
+    }
+
+    /// <summary>
+    /// 내용 프리뷰 요소 (A233): 확장자 타일(MakeExtensionTile)과 같은 테두리 구성 — 테마 대응
+    /// 중립 레이어 배경(LayerFillColorDefaultBrush) 위 소형 고정폭 텍스트(Consolas — A142 ②
+    /// 에디터와 같은 Windows 동봉 고정폭, 한글은 시스템 폴백으로 그려진다). 긴 줄은 줄마다
+    /// 말줄임(캡션과 같은 CharacterEllipsis), 세로 넘침은 위부터 그려진다(줄 수 상한 12가
+    /// 이미 있어 실용상 충분 — 확장자 라벨은 유지하지 않는다: 겹침 없는 단순한 쪽 사양).
+    /// </summary>
+    private static UIElement MakeTextPreviewBlock(string text) => new Border
+    {
+        Margin = new Thickness(8),
+        CornerRadius = new CornerRadius(6),
+        Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
+        Padding = new Thickness(6, 4, 6, 4),
+        Child = new TextBlock
+        {
+            Text = text,
+            FontSize = 9,
+            FontFamily = new FontFamily("Consolas"),
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+        },
+    };
 
     /// <summary>
     /// 항목 우클릭 메뉴 — ExplorerPane.AttachContextMenu와 같은 구성(A94 2차 신설 → 6차 확장).

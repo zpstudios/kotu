@@ -50,6 +50,9 @@
     <PackageReference Include="Velopack" Version="1.2.0" />
     <!-- 센서 트레이 아이콘 동적 렌더링(A18) — Windows 전용 TFM이라 경고 없음 -->
     <PackageReference Include="System.Drawing.Common" Version="8.0.*" />
+    <!-- A233: 썸네일 텍스트 프리뷰의 CP949 폴백. 문서·압축·동영상 모듈과 같은 버전 —
+         모듈 경유 전이 참조에 기대지 않고 소비 프로젝트가 직접 선언한다(저장소 관례) -->
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
     <!-- 런타임 로드용 .ico 원본: 타이틀바(AppWindow.SetIcon)·트레이 아이콘(TrayIcon)이 exe 옆에서 읽는다.
