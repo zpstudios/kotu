@@ -36,6 +36,8 @@ public sealed partial class MainWindow : Window
     // 계보: A58 Alt/Shift → A86 Z/X → A107 Alt+Z/X → A118 F1/F2 → A158 F11/F12.
     // 단독 F키는 문자를 만들지 않아 문자 입력·리스트 첫 글자 점프와
     // 원천 무충돌 — 텍스트 입력 중에도 동작한다. 키 정본 = SideForKey 위 LeftPanelKey/RightPanelKey.
+    // 수신 층(A226): F11/F12만 터널링(RootLayout.PreviewKeyDown — OnRootPreviewKeyDown)으로
+    //   내장 소비보다 앞서 받고, 그 밖의 셸 키는 종전대로 버블(OnRootKeyDown)이다.
     // **A176(반투명 오버레이 폐지)**: 사이드마다 2상태 — Closed(닫힘) /
     //   OpaqueDocked(사이드바 — 불투명 + 메인을 반대쪽으로 축소. 폭은 전 상태 공통
     //   SidebarPercent(A116): 한쪽 25:75, 양쪽 25:50:25). **키 단타 = 그 쪽 토글**이 전부다.
@@ -269,10 +271,21 @@ public sealed partial class MainWindow : Window
         // 뷰 쪽 해제가 멱등(_updateWatchHeld)이라 Unloaded와 겹쳐도 두 번 빠지지 않는다.
         Closed += (_, _) => (ModuleHost.Content as SettingsView)?.ReleaseUpdateWatch();
 
-        // F11/F12 패널 키 감지(A176 단타 토글 — v0.25.0 Alt/Ctrl 홀드 → A58 → A86 → A107 →
-        // A118 → A158 계보의 홀드/2연타 판정 기계는 A176에서 철거):
+        // A226: F11/F12 패널 키는 **터널링**(PreviewKeyDown — 창 루트가 포커스 요소보다 먼저
+        // 받는다)으로 승격. A212 감사에서 앱 코드의 선소비는 0건이었는데도 사용자 재보고
+        // (2026-08-25: 어떤 모듈이든 특정 영역 한 번 클릭 후 F11/F12 무반응)가 전 모듈에서
+        // 재현됐다 — 남는 용의자는 WinUI 컨트롤 내장 처리(ScrollViewer·ListViewBase·Slider 등)의
+        // Handled 선점이라, 버블 수신 + 양보(구 게이트 ①)로는 원천 봉쇄가 불가능하다. 구독
+        // 형태는 저장소 유일 선례(DocumentView.xaml.cs A121 — 인스턴스 이벤트 += 직접 구독)를
+        // 복제한다. F키는 문자를 만들지 않아 선취해도 뺏을 텍스트 입력이 없다(A118 확정 취지 —
+        // 그래서 IsTextInputFocused 게이트를 여기 두지 않는다. 두면 에디터 포커스 중 패널이
+        // 안 열려 A118의 목적이 무너진다).
+        RootLayout.PreviewKeyDown += OnRootPreviewKeyDown;
+        // 그 밖의 셸 키(Esc·Enter·Alt·GoBack 등) 감지(A176 단타 토글 — v0.25.0 Alt/Ctrl 홀드 →
+        // A58 → A86 → A107 → A118 → A158 계보의 홀드/2연타 판정 기계는 A176에서 철거):
         // 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.
         // Alt(Menu) down/up도 같은 KeyDown/KeyUp 층으로 온다(A58 실증 — SystemKey도 이 핸들러가 받는다).
+        // A226: F11/F12 분기는 위 터널링으로 이관돼 이 버블 층에는 더 없다.
         RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
         // A112: 마우스 뒤로가기(XButton1) = '뒤로'(전체화면 해제 → S4 복귀 → 콘텐츠 닫기 → S1).
@@ -283,6 +296,13 @@ public sealed partial class MainWindow : Window
         // 달라 핸들러를 분리해 얹는다 — 둘은 서로 독립이라 무해.
         RootLayout.AddHandler(UIElement.PointerPressedEvent,
             new PointerEventHandler(OnRootPointerInput), handledEventsToo: true);
+        // A226: 클릭 시점 포커스 고아 방어 — A209(RecoverChromeFocusOrphan)는 크롬 붕괴 "전이
+        // 시점"만, A212(썸네일 FocusGrid)는 썸네일 표면만 지켜 다른 표면의 클릭발 고아는 무방비였다.
+        // 순수 관찰(handledEventsToo·무소비)로 얹고, 판정은 같은 A209 관용구를 재사용한다 —
+        // 정상 포커스(에디터·이름변경·콤보·팝업)면 무개입 규칙까지 통째로 상속. 위 두 핸들러와
+        // 역할이 달라 분리해 얹는다('뒤로'·자동 숨김과 서로 독립 — 순서 무관).
+        RootLayout.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnRootPointerFocusGuard), handledEventsToo: true);
         // A86 경계 버튼: 마우스가 경계 근처에 왔을 때만 보이므로 이동·이탈을 창 루트에서 감시한다
         // (handledEventsToo — 패널·모듈 뷰가 이동 이벤트를 소비해도 근접 판정은 계속 돌아야 한다).
         // A186: 같은 이동 이벤트가 하단 바 자동 숨김의 입력이기도 하다(OnRootPointerMoved 안).
@@ -1816,7 +1836,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 좌/우 패널 키 정본 — 되돌리기·재배정 지점을 이 두 상수 한 곳으로 모았다: 키를 바꾸려면
-    /// 여기만 고친다(KeyDown/KeyUp·S4 게이트가 전부 SideForKey 경유).
+    /// 여기만 고친다(터널링 수신(A226)·S4 게이트가 전부 SideForKey 경유).
     /// 이력: A107(v0.134.0) Alt+Z/X → A118(v0.144.0) F1/F2 → **A158 F11/F12**(A151이 F11을
     /// 전체화면 매핑에서 뺀 뒤라야 성립하는 순서 의존이었다).
     /// 힌트 문구의 키 표기는 OverlayHints.ListKey/InfoKey — 함께 고칠 것.
@@ -1828,8 +1848,9 @@ public sealed partial class MainWindow : Window
     /// 키 → 패널 사이드 매핑 (A118이 A107의 Alt+Z/X를 단독 F키로 대체하며 Alt 게이트 폐지,
     /// A158이 그 F키를 F11/F12로 재배정): F11 = 좌측 파일 리스트, F12 = 우측 정보. 그 밖의 키는
     /// null. 탐색기 표면의 F2 = 이름변경(A94)과의 "원 기능 우선" 공존은 **A158에서 충돌 자체가
-    /// 소멸**했다(패널 키가 F12로 옮겨갔다) — 양보 경로(OnOverlaySideKey의 Handled 검사)는
-    /// 일반 규칙으로 그대로 남는다. Z·X는 미배정이다.
+    /// 소멸**했다(패널 키가 F12로 옮겨갔다) — 양보 경로(구 OnOverlaySideKey의 Handled 검사)도
+    /// A226 터널링 승격에서 삭제됐다(실사례 0인 채 내장 소비까지 양보하던 게 불통의 축).
+    /// Z·X는 미배정이다.
     /// </summary>
     private OverlaySide? SideForKey(VirtualKey key) => key switch
     {
@@ -1896,16 +1917,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // A118(A158 재배정): F11/F12는 단독 패널 키 — A107의 Alt+Z/X를 전면 대체(Alt 게이트 폐지).
-        // 분기 위치는 텍스트 입력 판정보다 앞: F키는 문자를 만들지 않아 뺏을 입력이 없고(A32
-        // 예외·Q4 예외의 근거 없음), 문서 에디터 편집 중에도 패널 호출이 성립해야 한다 —
-        // "에디터·리스트 포커스가 키를 삼킨다"(A107의 계기)를 조합 없이 해소하는 것이 A118의 목적.
-        if (SideForKey(e.Key) is { } side)
-        {
-            OnOverlaySideKey(side, e);
-            MarkAltUseIfConsumed(e); // Esc·Enter와 같은 규칙 — Alt를 쥔 채 소비했으면 Alt up도 소비
-            return;
-        }
+        // A226: F11/F12(SideForKey) 분기는 여기 없다 — 터널링(OnRootPreviewKeyDown)으로 이관됐다
+        // (계보: A118 단독 F키 → A158 F11/F12 재배정 → A226 터널링 승격. 버블 분기를 남기면
+        // 터널링이 소비한 키가 handledEventsToo 구독 탓에 여기로도 와 죽은 이중 경로가 된다 —
+        // 깔끔히 제거. 이 핸들러에 F11/F12가 도착해도 아래 분기 어디에도 안 걸려 무동작이다).
 
         // A151(A186 승계): Alt+Enter = 상황 무관 전체화면 토글. 텍스트 입력 판정보다 **앞**이다 —
         // 문서 편집 중(Enter = 줄바꿈이라 토글 불가)에도 전체화면 진입로가 있어야 한다.
@@ -1952,22 +1967,36 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 좌/우 패널 키(A158: F11/F12) down 분배 — 호출부(OnRootKeyDown)가 텍스트 입력 판정보다
-    /// 앞에서 부른다. 순서: ① 원 기능 우선 ② S4 무동작 소비 ③ 첫 down만 토글 ④ 컨텍스트 소비.
-    /// ①은 A118 시절 탐색기 표면(ExplorerPane·ThumbnailExplorer)의 F2 = 이름변경(A94 2차)과
-    /// 겹치던 자리인데, **A158에서 패널 키가 F12로 옮겨가 그 충돌은 소멸했다**(이름변경은 F2 그대로
-    /// 유지 — 표면 코드 무변경). ①은 이제 실제 사례가 없는 일반 규칙으로 남는다.
+    /// A226: F11/F12 전용 터널링 수신 지점 — RootLayout.PreviewKeyDown(생성자 구독, DocumentView
+    /// A121 선례 형태)이라 포커스 요소·WinUI 컨트롤 내장 KeyDown보다 먼저 온다. 계기: A212가
+    /// 앱 코드 선소비 0건을 전수 증빙했는데도 "특정 영역 한 번 클릭 후 F11/F12 무반응"이 전
+    /// 모듈에서 재보고됐다(2026-08-25) — 남는 축은 컨트롤 내장 처리의 Handled 선점이고, 그
+    /// 축은 버블 수신으로는 원천 봉쇄가 안 된다. 여기서 조건 충족 시 소비하면(e.Handled)
+    /// 내장 처리·버블 전 구간이 그 키를 못 본다(패널 토글 우선이 사양 — 플라이아웃·콤보 등
+    /// 팝업 트리 포커스는 애초에 이 트리로 라우팅되지 않아 종전과 같이 못 받는 점도 무변경).
+    /// MarkAltUseIfConsumed는 버블 시절(OnRootKeyDown의 구 분기)과 같은 규칙으로 함께 이관 —
+    /// Alt를 쥔 채 소비했으면 Alt 단독 up도 소비 대상이다(A107).
+    /// </summary>
+    private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (SideForKey(e.Key) is not { } side) return; // 그 밖의 키는 전부 종전 경로(버블) 몫
+        OnOverlaySideKey(side, e);
+        MarkAltUseIfConsumed(e);
+    }
+
+    /// <summary>
+    /// 좌/우 패널 키(A158: F11/F12) down 분배 — 호출부가 A226부터 터널링(OnRootPreviewKeyDown)
+    /// 이라 텍스트 입력 판정은 물론 포커스 요소의 내장 처리보다도 앞이다.
+    /// 순서: ① S4 무동작 소비 ② 첫 down만 토글 ③ 컨텍스트 소비.
+    /// 구 게이트 "원 기능 우선"(e.Handled 양보 — A118 시절 탐색기 F2 = 이름변경(A94 2차)과
+    /// 겹치던 자리. A158에서 패널 키가 F12로 옮겨가 실사례가 소멸한 일반 규칙)은 A226에서
+    /// 삭제했다: 내장 Handled 선점을 무력화하는 것이 터널링 승격의 목적 그 자체이고, 터널링
+    /// 시점엔 우리보다 앞선 소비자가 트리에 없어(RootLayout 위층 구독자 0) 검사할 값도 없다.
     /// A176: 홀드/2초/2연타 판정은 폐지 — **단타 = 그 쪽 토글** 하나다. 오토리피트를 거르는
     /// 이유도 "2연타 오염 방지"에서 "꾹 누르면 토글이 연사되는 것 방지"로 바뀌었다.
     /// </summary>
     private void OnOverlaySideKey(OverlaySide side, KeyRoutedEventArgs e)
     {
-        // 원 기능 우선 — 먼저 소비한 쪽에 양보(일반 규칙). A212 전역 감사: F11/F12를 Handled로
-        // 만드는 소비자는 저장소에 실재하지 않는다(코드의 VirtualKey.F11/F12 = 위 상수 2줄뿐,
-        // 액셀러레이터·표면 KeyDown 전수 무해당) — 이 양보는 실사례 0의 일반 규칙으로만 남는다.
-        // 실제 불통 갈래는 도달 실패(포커스 고아 — A135 감사 §표1·A209)였다: 썸네일 빈 영역
-        // 클릭 시점의 정착 수리는 ThumbnailExplorer.OnSurfacePointerPressed(A212).
-        if (e.Handled) return;
         // A90 keymap S4 행: 좌/우 키 = 무동작 (Q5 확정) — 토글에 태우지 않고 소비만 한다.
         if (IsOpenFileBrowsing)
         {
@@ -1988,7 +2017,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnOverlaySideDown(OverlaySide side)
     {
-        if (IsOpenFileBrowsing) return; // A90 keymap S4: 좌/우 키 = 무동작 — OnRootKeyDown 가드의 이중 방어선
+        if (IsOpenFileBrowsing) return; // A90 keymap S4: 좌/우 키 = 무동작 — OnOverlaySideKey 가드의 이중 방어선(A226에서 호출부만 터널링으로 이동, 게이트 의미 불변)
 
         // 패널 컨텍스트가 없으면(A196부터 빈 셸뿐) 무동작. 파일 없이 연 파일 모듈(빈 모듈
         // 상태)은 A81부터, 패널 제공 뷰(정보 모듈)는 A119부터, 무제 문서·설정·미지원 안내는
@@ -2257,8 +2286,9 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A209: 크롬(하단 바) 붕괴 축의 포커스 고아 방어 — <see cref="UpdateShellChrome"/> 말미 전용
-    /// 후처리. 포커스가 바 버튼 위인 채 바가 Collapsed되면(전체화면 진입·A186 자동 숨김) WinUI가
+    /// A209: 크롬(하단 바) 붕괴 축의 포커스 고아 방어 — <see cref="UpdateShellChrome"/> 말미
+    /// 후처리(+ A226부터 클릭 시점 판본 <see cref="OnRootPointerFocusGuard"/>도 같은 판정을
+    /// 재사용한다). 포커스가 바 버튼 위인 채 바가 Collapsed되면(전체화면 진입·A186 자동 숨김) WinUI가
     /// 포커스를 null로 떨구거나 붕괴 요소에 남겨 두는데, 어느 쪽이든 이후 셸 KeyDown(RootLayout
     /// 버블 수신 — Esc·Enter·Alt+Enter·F11/F12 전부)이 미발화해 키가 전멸한다(실기기 확진
     /// 2026-08-21: 이미지 더블클릭 전체화면에서 키 3종 무반응·더블클릭만 생존 —
@@ -2419,6 +2449,24 @@ public sealed partial class MainWindow : Window
         _lastPointerY = e.GetCurrentPoint(CenterArea).Position.Y;
         NotifyBarAutoHideInput();
     }
+
+    /// <summary>
+    /// A226: 클릭 시점 포커스 고아 방어 — A209(전이 시점)·A212(썸네일 표면)가 못 지키던
+    /// "임의 표면 클릭이 포커스를 null/비XAML로 떨궈 이후 셸 키가 전멸"하는 갈래의 일반 방어.
+    /// 순수 관찰: 이벤트를 소비하지 않고(handledEventsToo 구독이라 소비된 눌림도 관찰),
+    /// 판정·복구는 A209 관용구(RecoverChromeFocusOrphan) 재사용이라 **살아 있는 포커스
+    /// (에디터·이름변경 상자·콤보·열린 패널·팝업 트리)는 절대 건드리지 않는다**(고아일 때만
+    /// 모듈 뷰 재포커스 — 그 무개입 규칙을 통째로 상속). 판정을 TryEnqueue로 한 틱 미루는
+    /// 이유: 눌림 버블 시점엔 이 클릭이 일으킬 포커스 이동(획득이든 고아 낙하든)이 아직 끝나지
+    /// 않았을 수 있다 — 입력 패스가 끝난 뒤의 최종 상태를 봐야 오판(정상 이동 중 가로채기·고아
+    /// 미검출)이 없다(TryEnqueue는 셸의 기존 UI 마샬 관용구 — OnContentOpened 등과 동일).
+    /// 비용 = 클릭당 enqueue 1 + 포커스 조회 1(조상 순회는 상한 있음 — A209 산정 그대로).
+    /// 재진입 없음: 복구의 Focus 호출은 이 핸들러를 다시 태우지 않는다(포인터 이벤트가 아니다).
+    /// A212의 썸네일 FocusGrid(눌림 동기 정착)와 같은 클릭에서 겹쳐도 무해: 그쪽이 먼저 정착에
+    /// 성공하면 이 판정은 "포커스 생존 = 무개입"으로 끝난다 — 둘 다 관찰·정착 계열이라 순서 무관.
+    /// </summary>
+    private void OnRootPointerFocusGuard(object sender, PointerRoutedEventArgs e)
+        => DispatcherQueue.TryEnqueue(() => RecoverChromeFocusOrphan()); // 람다 = 셸 TryEnqueue 관용구 그대로
 
     // ---------- Esc (A151 전체화면 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기) ----------
 
