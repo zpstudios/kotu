@@ -919,12 +919,14 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// DropDownButton(FitOptionsButton, 플라이아웃 전담·A34 키 없음·툴팁은 XAML 고정)이라
     /// 이 메서드는 종전대로 본체(FitButton)만 만진다.
     /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
-    /// A184: 그 PathIcon 도형을 글자 "1:1" 형상에서 꺾쇠 프레임으로 바꿨다
-    /// (BuildActualSizeIconGeometry 주석 참조 — 툴팁·키·동작은 무변경).
-    /// ⚠️ v0.174.1: PathIcon 인스턴스(UIElement)만이 아니라 **Geometry도 공유 금지** — WinUI
-    /// Geometry는 부모가 하나뿐이라 공유 인스턴스를 PathIcon.Data에 걸면 XamlParseException
-    /// ("Failed to assign to property")으로 앱이 죽는다(실기기 크래시 실사례 — 종전엔 App.xaml
-    /// 공유 리소스를 봤다). 호출마다 BuildActualSizeIconGeometry()로 새로 만든다.
+    /// A184: 그 PathIcon 도형을 글자 "1:1" 형상에서 꺾쇠 프레임으로 바꿨다.
+    /// A231(3차·확정): 도형 자체를 폐기하고 <b>소형 텍스트 "100%"</b>로 간다 — 2026-08-25
+    /// "무슨 아이콘인지 알 수 없다"는 사용자 재보고 때문이다. 오독이 불가능하고 플라이아웃
+    /// 항목 텍스트("100%")와 글자가 그대로 일치한다. 본체는 Button이라 Content에 TextBlock을
+    /// 넣을 수 있다(문서 모듈 A145의 비활성 "1/1" 표시와 같은 방식 — IconElement만 받는
+    /// MenuFlyoutItem.Icon과 다르다). FontSize 9 = 32×32 버튼에서 테두리 1 + Padding 2를 뺀
+    /// 26px 안에 네 글자가 들어가는 값(BottomBarButtonStyle 기준. 잘리면 8로 내릴 것).
+    /// 툴팁·키·동작은 무변경. 세 모듈(이미지·문서·영상) 동형이라 함께 고칠 것.
     /// </summary>
     private void UpdateFitButton()
     {
@@ -934,54 +936,13 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
                 ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
             FitMode.FitHeight =>
                 (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
-            FitMode.ActualSize => (new PathIcon
-            {
-                Data = BuildActualSizeIconGeometry(),
-            }, "Actual size"),
+            FitMode.ActualSize =>
+                (new TextBlock { Text = "100%", FontSize = 9 }, "Actual size"),
             _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
                 "Contain - the whole image fits, never enlarged"),
         };
         FitButton.Content = content;
         ToolTipService.SetToolTip(FitButton, FitTip(tip)); // A34: 표기는 키 상수에서
-    }
-
-    /// <summary>
-    /// A143/v0.174.1: 100% 아이콘 도형(16x16 좌표계 — PathIcon은 스케일하지 않는다).
-    /// A184: 도형 5개 = 바깥 네 모서리 꺾쇠 4개(각 변 4·획 1.5·모서리 여백 2) + 가운데 채움
-    /// 사각형 4x4(6,6~10,10). "원본 크기 프레임 그대로"라는 뜻이고 확대/축소 화살표가 없어
-    /// Contain류와 구분된다. 종전 A143 도형(글자 "1:1" 형상 — 깃발+기둥 2개와 콜론 점 2개)은
-    /// 어색하다는 사용자 보고로 폐기했다. 호출마다 새 인스턴스를 만든다
-    /// (Geometry 공유 금지 — 위 UpdateFitButton 주석). 좌표를 바꾸면 이 파일 XAML의 인라인 Data
-    /// 문자열과 형제 두 모듈(문서·영상)의 같은 두 곳까지 총 6곳을 함께 고칠 것.
-    /// </summary>
-    private static Geometry BuildActualSizeIconGeometry()
-    {
-        static PathFigure Fig(double sx, double sy, params (double X, double Y)[] points)
-        {
-            var figure = new PathFigure
-            {
-                StartPoint = new Windows.Foundation.Point(sx, sy),
-                IsClosed = true,
-                IsFilled = true,
-                Segments = new PathSegmentCollection(),
-            };
-            foreach ((double x, double y) in points)
-                figure.Segments.Add(new LineSegment { Point = new Windows.Foundation.Point(x, y) });
-            return figure;
-        }
-
-        var geometry = new PathGeometry { Figures = new PathFigureCollection() };
-        // 좌상 꺾쇠
-        geometry.Figures.Add(Fig(2.0, 2.0, (6.0, 2.0), (6.0, 3.5), (3.5, 3.5), (3.5, 6.0), (2.0, 6.0)));
-        // 우상 꺾쇠
-        geometry.Figures.Add(Fig(14.0, 2.0, (10.0, 2.0), (10.0, 3.5), (12.5, 3.5), (12.5, 6.0), (14.0, 6.0)));
-        // 우하 꺾쇠
-        geometry.Figures.Add(Fig(14.0, 14.0, (10.0, 14.0), (10.0, 12.5), (12.5, 12.5), (12.5, 10.0), (14.0, 10.0)));
-        // 좌하 꺾쇠
-        geometry.Figures.Add(Fig(2.0, 14.0, (6.0, 14.0), (6.0, 12.5), (3.5, 12.5), (3.5, 10.0), (2.0, 10.0)));
-        // 가운데 채움 사각형
-        geometry.Figures.Add(Fig(6.0, 6.0, (10.0, 6.0), (10.0, 10.0), (6.0, 10.0)));
-        return geometry;
     }
 
     /// <summary>

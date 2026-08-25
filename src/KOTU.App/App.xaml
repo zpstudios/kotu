@@ -97,10 +97,12 @@
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
             </Style>
-            <!-- A143 주의(v0.174.1): 100% 아이콘 Geometry를 여기(전역 리소스)에 두고 StaticResource로
-                 공유하면 안 된다 — WinUI Geometry는 부모가 하나뿐이라 PathIcon.Data 할당이 런타임
-                 XamlParseException으로 죽는다(실기기 크래시 실사례. CI는 컴파일만 하므로 못 잡는다).
-                 도형은 각 모듈 뷰(이미지·문서·영상)에 인라인 Data 문자열 + 코드 빌더로 산다. -->
+            <!-- A143 주의(v0.174.1): Geometry를 여기(전역 리소스)에 두고 StaticResource로 여러
+                 곳에서 공유하면 안 된다 — WinUI Geometry는 부모가 하나뿐이라 PathIcon.Data 할당이
+                 런타임 XamlParseException으로 죽는다(실기기 크래시 실사례. CI는 컴파일만 하므로
+                 못 잡는다). 도형이 필요하면 사용처마다 인라인 Data 문자열이나 코드 빌더로 새
+                 인스턴스를 만들 것. ※ 이 경고를 낳았던 100% 아이콘 도형 자체는 A231에서 폐기했다
+                 (Fit 본체 버튼의 소형 텍스트 "100%"로 대체 — 저장소에 남은 Geometry 공유 사례 0건). -->
         </ResourceDictionary>
     </Application.Resources>
 </Application>

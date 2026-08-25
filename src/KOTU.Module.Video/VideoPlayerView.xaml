@@ -176,22 +176,19 @@
                                 ToolTipService.ToolTip="Fit options">
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="Top">
-                            <!-- A143/v0.174.1: 100% 아이콘 = 인라인 path 문자열(Geometry 타입 속성의
-                                 문자열 변환은 파싱마다 새 인스턴스를 만든다). 종전 App.xaml 공유
-                                 PathGeometry StaticResource는 런타임 XamlParseException으로 앱을 죽였다
-                                 (WinUI Geometry는 부모 1개뿐 — 공유 불가. CI는 컴파일만 하므로 못 잡는다).
-                                 좌표 정본 = 이 문자열 + 코드 비하인드 BuildActualSizeIconGeometry().
-                                 모양 수정 시 세 모듈(이미지·문서·영상) × 2곳 = 6곳을 함께 고칠 것.
-                                 형제는 Segoe 글리프, 여기만 PathIcon(A111 판정 — 맞는 글리프가 없다.
-                                 A184에서 재탐색했지만 뒤집을 글리프를 못 찾아 판정 유지).
-                                 A184 도형 = 바깥 네 모서리 꺾쇠 4개(획 1.5) + 가운데 채움 사각형 4x4.
-                                 "원본 크기 프레임 그대로"라는 뜻이고, 확대/축소 화살표가 없어 Contain류와
-                                 구분된다(종전 "1:1" 글자 형상은 어색하다는 사용자 보고로 폐기). -->
-                            <MenuFlyoutItem Text="100%" Click="OnFitActualSizeClicked">
-                                <MenuFlyoutItem.Icon>
-                                    <PathIcon Data="M 2,2 L 6,2 6,3.5 3.5,3.5 3.5,6 2,6 Z M 14,2 L 10,2 10,3.5 12.5,3.5 12.5,6 14,6 Z M 14,14 L 10,14 10,12.5 12.5,12.5 12.5,10 14,10 Z M 2,14 L 6,14 6,12.5 3.5,12.5 3.5,10 2,10 Z M 6,6 L 10,6 10,10 6,10 Z" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
+                            <!-- A231: 100% 항목은 아이콘을 두지 않는다(도형 폐기).
+                                 계보 = "1:1" 글자 도형(A143) → 네 모서리 꺾쇠 + 중앙 사각(A184) →
+                                 2026-08-25 "무슨 아이콘인지 알 수 없다"는 사용자 재보고로 3차 폐기.
+                                 확정 사양은 소형 텍스트 "100%"지만 MenuFlyoutItem.Icon은
+                                 IconElement 타입이라 TextBlock을 넣을 수 없고, 임의 문자열을 그리는
+                                 IconElement 선례가 저장소에 0건이다(FontIcon.Glyph는 단일 글리프
+                                 전제이고 기본 아이콘 폰트에는 라틴 글자가 없다. CLAUDE.md 규칙 =
+                                 실제 쓰이는 형태만 복제). 그래서 항목 텍스트 "100%"만 남기고,
+                                 판독성의 본체는 Fit 본체 버튼(UpdateFitButton)이 그리는 소형 텍스트
+                                 "100%"가 진다. 형제 3항목은 FontIcon을 유지하므로 이 항목만 아이콘
+                                 칸이 비어 텍스트 시작 x가 어긋날 수 있다(WinUI 런타임 정렬 —
+                                 혼재 수용 판정, 실기기 확인 포인트). -->
+                            <MenuFlyoutItem Text="100%" Click="OnFitActualSizeClicked" />
                             <MenuFlyoutItem Text="Contain" Click="OnFitContainClicked">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE9A6;" />
