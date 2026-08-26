@@ -69,7 +69,15 @@
   판정 위에 얹혀 있었다). ③ 게이트는 무죄다(`CTX=Y`·`S4=N` — ⓒ 배제). `PREVIEW=4`는 클릭 전
   성공분 누적이다: 만약 클릭 뒤에도 키가 도달했다면 게이트가 전부 통과이므로 사이드바가 실제로
   토글됐어야 한다 — 안 됐다는 것이 곧 "도달하지 않았다"의 증거다.
-  **▶ 배치 2 = 확정 수리(ⓑ).** 고아 판정을 `null · Collapsed` → **`null · Collapsed ·
+  **▶ 배치 2 완료 = v0.240.0(확정 수리).** 판정 = `null | !Visible | (!InRoot && !InPopup)`.
+  **팝업 안 포커스는 사유 불문 무개입**(`skip(popup)` — 시작 메뉴·콤보·대화상자 탈취 금지.
+  팝업 목록 취득 실패도 보수적으로 무개입 쪽. 판정은 `InPopup=true`, 계측 표시만 `?` — 판정과
+  표시가 다른 유일 지점). 판정·계측을 **단일 헬퍼 `GetShellFocusState`로 통합**해 어긋남을
+  원천 제거했다(`GetOpenPopupsForXamlRoot` 호출부 = 1곳). GUARD에 사유 표기
+  (`orphan(null|hidden|detach)` · `skip(alive)`/`skip(popup)` 구분) + `RECOV` 카운터 추가.
+  복구부(2단 host→`ShellFocusAnchor`)는 배치 1 그대로. 호출 지점도 종전 2곳 그대로(추가 0).
+  설계 근거(원 계획):
+  고아 판정을 `null · Collapsed` → **`null · Collapsed ·
   (RootLayout 자손 아님 AND 열린 팝업 안도 아님)`**으로 확장한다. 팝업 제외는 계측으로 실측
   검증된 축이다(`GetOpenPopupsForXamlRoot`가 실기기에서 동작 — `popup=N`이 찍혔다) → 열린 시작
   메뉴·콤보의 포커스를 뺏지 않는다는 배치 1의 보류 사유가 해소됐다. 복구부는 이미 2단
