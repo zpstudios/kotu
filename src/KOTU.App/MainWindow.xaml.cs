@@ -330,8 +330,25 @@ public sealed partial class MainWindow : Window
             {
                 // Alt up을 못 본 채 비활성화(Alt+Tab 등) — 다음 활성 세션에 소비가 새면 안 된다(A107)
                 _altComboUsed = false;
+                // A234 배치 3: 비활성 창에서는 포커스 주기 감시를 반드시 멈춘다 — 비활성 창의
+                // FocusManager.GetFocusedElement는 null을 돌려줄 수 있어, 계속 돌면 백그라운드
+                // 창이 500ms마다 자기 모듈 뷰에 포커스를 꽂는 오작동이 된다. 트레이 숨김·최소화도
+                // 비활성화를 동반하므로 이 한 곳이 그 갈래까지 덮는다(활성 복귀 시 아래서 재개).
+                _focusWatchTimer?.Stop();
+            }
+            else
+            {
+                // A234 배치 3: 활성(첫 표시 포함 — Activate 호출이 이 이벤트를 낸다) = 포커스
+                // 주기 감시 시작. 지연 생성 + Stop 후 Start 되감기(_diagTimer 관용구 복제).
+                // 진단 오버레이와 무관하게 항상 돈다 — 수리용이라 오버레이(기본 꺼짐)에 묶으면
+                // 수리가 안 된다(포커스 주기 감시 절 참고).
+                _focusWatchTimer ??= MakeFocusWatchTimer();
+                _focusWatchTimer.Stop(); // DispatcherTimer 되감기 관용구(Stop 후 Start)
+                _focusWatchTimer.Start();
             }
         };
+        // A234 배치 3: 창 닫힘 = 주기 감시 정지(누수 금지 — _diagTimer의 Closed 배선과 같은 형태)
+        Closed += (_, _) => _focusWatchTimer?.Stop();
 
         // 타이틀바·작업표시줄 아이콘 (unpackaged는 exe 아이콘만으로는 타이틀바가 비어 보인다)
         if (File.Exists(IconPath))
@@ -1998,11 +2015,8 @@ public sealed partial class MainWindow : Window
         // A234 계측의 핵심 신호: 클릭 후 F11을 눌러도 이 카운트가 안 오르면 라우팅 키 이벤트
         // 자체가 미발화(포커스 null 또는 RootLayout 밖) = 갈래 ⓐ/ⓑ 확정이다. 값만 기록하고
         // 문자열 조립은 폴링(UpdateDiagStrip) 몫 — 오버레이 꺼짐 = 비용 0(_diagOn 앞단 차단).
-        if (_diagOn)
-        {
-            _diagPreviewCount++;
-            _diagPreviewLastKey = e.Key;
-        }
+        // 배치 3: 마지막 키(last=) 표기는 DET 자리를 내려고 제거했다 — 카운터가 신호의 본체다.
+        if (_diagOn) _diagPreviewCount++;
         OnOverlaySideKey(side, e);
         MarkAltUseIfConsumed(e);
     }
@@ -2347,17 +2361,23 @@ public sealed partial class MainWindow : Window
     /// skip(alive)로 끝나고, 모듈 전환·전체화면 전이 중 "옛 뷰가 트리에서 빠지는 찰나"의 발동은
     /// ModuleHost.Content가 이미 새 뷰로 교체된 뒤라(ShowModule이 교체 후 SetContentState 순)
     /// 새 모듈 뷰 재포커스 = 의도된 동작이다(A201 Loaded 자기 포커스와 같은 방향 — Focus가
-    /// false면 앵커로 안전). 호출 지점은 종전 2곳(UpdateShellChrome 말미 + 클릭 한 틱 뒤) 그대로
-    /// — 배치 2에서 늘리지 않았다. 실행 결과는 진단 오버레이의 GUARD 값(skip 2갈래 구분 +
+    /// false면 앵커로 안전). 호출 지점은 3곳 — UpdateShellChrome 말미(전이 시점) + 클릭 한 틱 뒤
+    /// (OnRootPointerFocusGuard) + **500ms 주기 감시(_focusWatchTimer — A234 배치 3)**. 배치 3의
+    /// 계기: v0.240.0 실기기에서 판정은 옳은데(RECOV=0·GUARD=skip(alive)·스트립 inRoot=N 병존)
+    /// 두 호출 시점 모두 detach **이전**이라 발동 기회가 없었다 — 판정 로직은 무변경, 부르는
+    /// 시점만 늘렸다(고아가 지속되면 매 틱 재시도 — 복구가 성공하면 다음 틱은 skip(alive)로
+    /// 자연 종료). 실행 결과는 진단 오버레이의 GUARD 값(skip 2갈래 구분 +
     /// orphan(사유))으로, 복구 실행 누적은 RECOV로 남는다(오버레이 꺼짐 = 기록 생략 — 복구 동작
-    /// 자체는 오버레이와 무관하게 항상 돈다).
+    /// 자체는 오버레이와 무관하게 항상 돈다). 직전 판정 결과(_focusWasOrphan — DET 에지 축)의
+    /// 갱신도 이 함수 안에서만 한다: 세 호출 경로가 전부 여기를 지나므로 호출부마다 흩어
+    /// 갱신하면 값이 뒤엉킨다(배치 3 규칙).
     /// </summary>
     private void RecoverChromeFocusOrphan()
     {
         if (RootLayout.XamlRoot is not { } xr)
         {
             if (_diagOn) _diagGuardLast = "no-xamlroot";
-            return; // 로드 전 — 판정 불가면 무동작
+            return; // 로드 전 — 판정 불가면 무동작(_focusWasOrphan도 미갱신: 판정 자체가 없었다)
         }
         var state = GetShellFocusState(xr); // 판정 산출 = 계측(UpdateDiagStrip)과 공유하는 단일 헬퍼
         string reason; // 고아 사유 — GUARD의 orphan(사유) 표기(다음 회차 스크린샷 판독용)
@@ -2371,6 +2391,7 @@ public sealed partial class MainWindow : Window
             // 사유 불문(비가시·비RootLayout이어도) 무개입 — 뺏으면 열린 메뉴가 클릭 한 번에
             // 닫힌다. 팝업 목록 취득 실패의 보수적 InPopup=true도 여기로 온다(모르면 개입 금지).
             if (_diagOn) _diagGuardLast = "skip(popup)";
+            _focusWasOrphan = false; // 판정 결과 갱신은 이 함수 안에서만(DET 에지 축 — 배치 3)
             return;
         }
         else if (!state.Visible)
@@ -2384,8 +2405,22 @@ public sealed partial class MainWindow : Window
         else
         {
             if (_diagOn) _diagGuardLast = "skip(alive)";
+            _focusWasOrphan = false; // 판정 결과 갱신은 이 함수 안에서만(DET 에지 축 — 배치 3)
             return; // 메인 트리 안 생존 포커스 — 무개입(정상 상태에서 포커스를 뺏지 않는다)
         }
+        // A234 배치 3 계측(DET): "직전 판정 = 고아 아님 → 이번 판정 = 고아"의 상승 에지에서만,
+        // 마지막 눌림(OnRootPointerFocusGuard 기록) 이후 경과 ms를 사유와 함께 남긴다 — 클릭 몇 ms
+        // 뒤에 트리 분리가 일어나는지가 다음 회차("누가 트리를 갈아엎는가" 특정)의 단서다.
+        // 진단 오버레이가 꺼져 있으면 계산·기록하지 않는다(핫 패스 비용 0 원칙 — 배치 1·2와 동일).
+        // 단 **복구 자체는 오버레이와 무관하게 항상 돈다**(아래) — 게이트되는 건 계측(DET·RECOV·
+        // GUARD 문자열)뿐이지 수리가 오버레이에 묶인다는 뜻이 아니다(혼동 주의 — 배치 3 결정).
+        // 눌림 미관측(_diagLastPressUtc 초기값)이면 경과의 기준점이 없어 표시를 DET=- 그대로 둔다.
+        if (_diagOn && !_focusWasOrphan && _diagLastPressUtc != DateTime.MinValue)
+        {
+            var ms = (long)(DateTime.UtcNow - _diagLastPressUtc).TotalMilliseconds;
+            _diagDetachLast = "+" + ms + "ms(" + reason + ")";
+        }
+        _focusWasOrphan = true; // 에지 축 갱신도 이 함수 한 곳뿐(호출부 산개 금지 — 배치 3 규칙)
         // 복구 실행 누적(RECOV) — 성공 여부와 무관하게 "판정이 발동해 복구가 돌았다"가 신호다.
         if (_diagOn) _diagRecovCount++;
         // 1단: 종전과 같은 모듈 뷰(중앙 콘텐츠). 성공하면 여기서 끝.
@@ -2481,13 +2516,56 @@ public sealed partial class MainWindow : Window
         return true;
     }
 
-    // ---------- 셸 키 진단 오버레이 (A234 배치 1 계측 · 배치 2 판정 통합) ----------
+    // ---------- 셸 포커스 주기 감시 (A234 배치 3) ----------
+    // v0.240.0 실기기 회수: 판정 확장(배치 2)은 옳았는데 "보는 시점"이 전부 detach 이전이었다.
+    // 클릭 한 틱 뒤(OnRootPointerFocusGuard)에는 포커스가 아직 멀쩡했고(GUARD=skip(alive)),
+    // 그 뒤 어느 시점에 그 요소가 산 트리에서 떨어져 나갔는데(스트립 inRoot=N) 판정을 다시
+    // 부르는 지점이 없어 영원히 복구되지 않았다(RECOV=0 — GUARD와 스트립의 어긋남은 모순이
+    // 아니라 시점 차였다). 그래서 detach 순간을 특정해 쫓는 대신 주기 감시로 뒤늦게라도 반드시
+    // 잡는다. detach는 F11/F12만이 아니라 셸 라우팅 키 전부(Esc·Enter·Alt+Enter·Alt+`·문자
+    // 핫키)를 죽이므로, 키별 우회 수신이 아니라 포커스를 트리 안으로 되돌리는 것이 맞는 수리다.
+    // 판정·복구는 기존 RecoverChromeFocusOrphan 그대로(무변경 — 부르는 시점만 늘린다).
+    // **진단 오버레이와 무관하게 항상 돈다**: 오버레이는 기본 꺼짐이라 거기 묶으면 수리가 안
+    // 된다 — _diagTimer(계측 표시용)와 존재 이유가 달라 별도 타이머다. 활성 창에서만 돈다
+    // (생성자 Activated 배선 — 비활성 창의 포커스를 건드리면 사고. 정지 = 비활성 전환 + Closed).
+
+    /// <summary>포커스 주기 감시 간격(ms) — 500 고정(A234 배치 3 구현 결정). 근거: 사용자가
+    /// "클릭하고 다음 셸 키를 누르기"까지의 간격에 최소 한 틱이 들어가는 값(체감 = 클릭 후
+    /// 늦어도 0.5초면 셸 키 복활)이면서, 틱 비용(포커스 조회 1 + 상한 있는 조상 순회(포함·가시
+    /// 두 축) + 열린 팝업 목록 조회 1)이 2Hz로는 _barAutoHideTimer 등 기존 셸 타이머와 같은
+    /// 층이라 부담이 없다.</summary>
+    private const int FocusWatchPollMs = 500;
+
+    /// <summary>포커스 주기 감시 타이머 — 활성 창에서 항상 돈다(진단 오버레이와 무관 — 수리용).
+    /// 지연 생성(_diagTimer 관용구), 시작·정지는 생성자 Activated 배선 + Closed 배선이 전부다.</summary>
+    private DispatcherTimer? _focusWatchTimer;
+
+    /// <summary>직전 판정이 고아였는가 — DET(트리 분리 시점 계측)의 상승 에지 축. 갱신은
+    /// RecoverChromeFocusOrphan 안에서만 한다: 전이·클릭·주기 세 호출 경로가 전부 그 함수를
+    /// 지나므로, 호출부마다 흩어 갱신하면 값이 뒤엉킨다(A234 배치 3 규칙). 판정 불가 갈래
+    /// (no-xamlroot)는 미갱신 — 이 필드는 "마지막으로 실제 내려진 판정"을 담는다.</summary>
+    private bool _focusWasOrphan;
+
+    private DispatcherTimer MakeFocusWatchTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FocusWatchPollMs) };
+        // 반복 폴링 — Tick에서 멈추지 않는다(MakeDiagTimer와 같은 형태).
+        // 정지 책임 = 생성자 Activated의 비활성 분기 + Closed 배선 두 곳뿐이다.
+        // 재진입 없음: 복구의 Focus()는 이 틱을 다시 태우지 않는다(포인터·타이머 이벤트가
+        // 아니고, GotFocus/GettingFocus 구독은 저장소 전체 0건 — grep 확인. 배치 3 함정 감사 ④).
+        timer.Tick += (_, _) => RecoverChromeFocusOrphan();
+        return timer;
+    }
+
+    // ---------- 셸 키 진단 오버레이 (A234 배치 1 계측 · 배치 2 판정 통합 · 배치 3 DET) ----------
     // F11/F12 불통 수리 3연속 실패(A209·A212·A226) 뒤의 계측 선행: 사용자에게 릴리스 1회 +
     // "클릭 후 F11 한 번 + 스크린샷 1장"만 요구해서 ⓐ 포커스 null(라우팅 미발화) /
     // ⓑ 포커스 생존이되 RootLayout 밖(팝업 트리 등) / ⓒ 키 도달하되 게이트 사망 중 어느
     // 갈래인지 실측으로 가른다. → 계측 회수(2026-08-27)로 ⓑ 확정 — 배치 2가 고아 판정을
     // 확장했고(RecoverChromeFocusOrphan 주석), 발동 여부는 RECOV 누적과 GUARD의 orphan(사유)로
-    // 다음 스크린샷 한 장에서 읽힌다. 카운터·GUARD·RECOV는 각 핸들러가 값만 기록하고
+    // 다음 스크린샷 한 장에서 읽힌다. → 배치 3: 수리 본체는 주기 감시(위 절 — 오버레이와 무관)로
+    // 갔고, 여기는 detach가 클릭 후 몇 ms 뒤에 오는지의 계측(DET)을 얹는다. 카운터·GUARD·RECOV·
+    // DET 입력은 각 핸들러가 값만 기록하고
     // (_diagOn 앞단 차단 = 꺼짐이면 비용 0), 문자열 조립·화면 갱신은 여기 폴링 한 곳이 전담한다.
 
     /// <summary>진단 스트립 폴링 주기(ms) — 포커스·게이트 값은 변경 이벤트가 없어 폴링이 유일한
@@ -2503,10 +2581,11 @@ public sealed partial class MainWindow : Window
     private DispatcherTimer? _diagTimer;
 
     private int _diagPreviewCount;                            // OnRootPreviewKeyDown이 F11/F12로 발화한 누적
-    private VirtualKey _diagPreviewLastKey = VirtualKey.None; // 마지막으로 관측한 F11/F12 (None = 아직 없음)
     private int _diagBubbleCount;                             // OnRootKeyDown이 아무 키로든 발화한 누적
     private string _diagGuardLast = "-";                      // RecoverChromeFocusOrphan 마지막 실행 결과
     private int _diagRecovCount;                              // 복구가 실제 실행된 누적(RECOV — 배치 2 발동 증거)
+    private DateTime _diagLastPressUtc = DateTime.MinValue;   // 마지막 눌림 시각(DET 기준점 — MinValue = 미관측)
+    private string _diagDetachLast = "-";                     // 마지막 고아 상승 에지의 +ms(사유) (DET — "-" = 미관측)
 
     /// <summary>
     /// 설정 토글 반영(생성자 배선: 초기 1회 + ShellDiagnostics.Changed) — 다른 창의 설정 화면
@@ -2552,8 +2631,11 @@ public sealed partial class MainWindow : Window
     /// 취득 실패 시 ? 표시, 판정 쪽만 보수적 true — 헬퍼 주석의 "판정과 표시가 다른 유일한
     /// 지점"). 2줄 = PREVIEW(터널링 F11/F12 발화 누적 — 클릭 후 이 값이 멈추면 갈래 ⓐ/ⓑ),
     /// BUBBLE(버블 KeyDown 발화 누적 — 아무 키), RECOV(복구 실제 실행 누적 — 배치 2 판정이
-    /// 발동했는가의 회귀 감시), GUARD(복구 마지막 결과), CTX(HasPanelContext),
-    /// S4(IsOpenFileBrowsing). 문자열 조립은 여기(4Hz)에서만 한다.
+    /// 발동했는가의 회귀 감시), DET(마지막 고아 상승 에지의 "마지막 눌림 이후 경과 ms(사유)" —
+    /// 배치 3: detach가 클릭 몇 ms 뒤에 오는지가 다음 회차의 단서. 미관측 = -), GUARD(복구
+    /// 마지막 결과), CTX(HasPanelContext), S4(IsOpenFileBrowsing). 배치 3에서 last=(마지막
+    /// F11/F12 키 이름)는 DET 자리를 내려고 뺐다 — 1줄 형식은 배치 1 그대로 불변(사용자가
+    /// 읽는 법을 익혔다). 문자열 조립은 여기(4Hz)에서만 한다.
     /// </summary>
     private void UpdateDiagStrip()
     {
@@ -2580,10 +2662,9 @@ public sealed partial class MainWindow : Window
                 line1 = $"FOCUS {focused.GetType().Name}#{name}   inRoot={inRoot}  popup={popup}  vis={vis}";
             }
         }
-        var lastKey = _diagPreviewLastKey == VirtualKey.None ? "-" : _diagPreviewLastKey.ToString();
         DiagText.Text = line1
-            + $"\nPREVIEW={_diagPreviewCount} last={lastKey}  BUBBLE={_diagBubbleCount}"
-            + $"  RECOV={_diagRecovCount}  GUARD={_diagGuardLast}  CTX={(HasPanelContext ? "Y" : "N")}  S4={(IsOpenFileBrowsing ? "Y" : "N")}";
+            + $"\nPREVIEW={_diagPreviewCount}  BUBBLE={_diagBubbleCount}  RECOV={_diagRecovCount}"
+            + $"  DET={_diagDetachLast}  GUARD={_diagGuardLast}  CTX={(HasPanelContext ? "Y" : "N")}  S4={(IsOpenFileBrowsing ? "Y" : "N")}";
     }
 
     /// <summary>하단 바 우측 "Full screen" 버튼 = Enter/Alt+Enter와 같은 전체화면 토글(A186 —
@@ -2722,9 +2803,16 @@ public sealed partial class MainWindow : Window
     /// 재진입 없음: 복구의 Focus 호출은 이 핸들러를 다시 태우지 않는다(포인터 이벤트가 아니다).
     /// A212의 썸네일 FocusGrid(눌림 동기 정착)와 같은 클릭에서 겹쳐도 무해: 그쪽이 먼저 정착에
     /// 성공하면 이 판정은 "포커스 생존 = 무개입"으로 끝난다 — 둘 다 관찰·정착 계열이라 순서 무관.
+    /// A234 배치 3: 여기가 DET(트리 분리 시점 계측)의 기준점 관측 지점이기도 하다 — 마지막 눌림
+    /// 시각만 기록하고(_diagOn 앞단 차단 = 꺼짐이면 비용 0, 배치 1 카운터와 같은 관용구.
+    /// DateTime.UtcNow = ExplorerPane 더블클릭 판정 등 저장소 선례), 경과 계산은
+    /// RecoverChromeFocusOrphan의 상승 에지에서, 표시는 UpdateDiagStrip에서 한다.
     /// </summary>
     private void OnRootPointerFocusGuard(object sender, PointerRoutedEventArgs e)
-        => DispatcherQueue.TryEnqueue(() => RecoverChromeFocusOrphan()); // 람다 = 셸 TryEnqueue 관용구 그대로
+    {
+        if (_diagOn) _diagLastPressUtc = DateTime.UtcNow; // DET 기준점 — 계측 전용(수리와 무관)
+        DispatcherQueue.TryEnqueue(() => RecoverChromeFocusOrphan()); // 람다 = 셸 TryEnqueue 관용구 그대로
+    }
 
     // ---------- Esc (A151 전체화면 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기) ----------
 
