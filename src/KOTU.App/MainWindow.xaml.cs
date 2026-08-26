@@ -2323,19 +2323,34 @@ public sealed partial class MainWindow : Window
     /// 지난다(바 가시성의 단일 결정 지점). 호출 부위 전수(생성자 동기·SetViewMode·
     /// ResetBarAutoHide·NotifyBarAutoHideInput·자동 숨김 틱)가 모두 전이 시점뿐이라 포인터
     /// 이동마다 돌지 않는다 — 판정 비용(포커스 조회 1회 + 상한 있는 조상 순회)은 여기 얹어도 싸다.
-    /// 조건 = 고아일 때만: 포커스가 null이거나, 포커스 요소가 스스로 또는 조상 Collapse로 화면에
-    /// 없을 때만 모듈 뷰(중앙 콘텐츠)로 되돌린다 — 살아 있는 포커스(문서 에디터·이름변경 편집
-    /// 상자·설정 콤보·열린 패널 리스트·팝업 트리는 전부 가시)는 절대 건드리지 않는다(과잉
-    /// 재포커스 금지). 열린 패널 안 포커스 무개입 규칙은 A135 블록과 동일하고, 같은 전이에서
-    /// A135 블록과 겹쳐 돌아도 조건이 서로 배타적 표면이라 무해하다(둘 다 같은 대상 재포커스
-    /// 관용구 — S4 종료 ExitOpenFileBrowsing 말미와 동일).
-    /// A234 배치 1: 복구가 2단이 됐다 — A209가 사양으로 뒀던 "실패(Content가 Control 아님·반환
-    /// false) 무시" 한 줄 침묵 폴백이 3연속 수리 실패(A209·A212·A226)의 유력 후보로 지목돼,
-    /// 1단(모듈 뷰)이 없거나 Focus가 false면 2단(ShellFocusAnchor — RootLayout 안 포커스 전용
-    /// 앵커, XAML 주석 참고)으로 폴백한다. 판정 조건(null·Collapsed)은 그대로다 — "RootLayout
-    /// 자손이 아니면 고아"로 넓히면 열린 시작 메뉴 플라이아웃·콤보의 팝업 포커스를 빼앗아 메뉴가
-    /// 깨진다(판정 확장은 계측 결과를 본 뒤 배치 2 몫). 실행 결과는 진단 오버레이의 GUARD 값으로
-    /// 남는다(오버레이 꺼짐 = 기록 생략 — 복구 동작 자체는 오버레이와 무관하게 항상 돈다).
+    /// 조건(A234 배치 2에서 확장) = 고아일 때만: 고아 = 포커스 null ∨ 비가시(자신·조상 Collapsed)
+    /// ∨ (RootLayout 자손 아님 ∧ 열린 팝업 안도 아님). 마지막 갈래가 배치 2의 확장분이다 —
+    /// 실기기 계측(v0.239.0 스크린샷: inRoot=N·popup=N·vis=Y·PREVIEW 정지)으로 "클릭 후 포커스가
+    /// 살아 있으면서 산 트리에서 분리된 템플릿 부품(이름 없는 ScrollViewer)에 남고, 그 조상
+    /// 사슬이 RootLayout에 닿지 않아 셸 라우팅 키(터널링·버블 모두)가 아예 미발화"가 확정됐는데,
+    /// 종전 판정(null·Collapsed 두 가지)은 이 상태를 생존 = 무개입으로 오판했다(GUARD=skip(alive)
+    /// — A209·A212·A226 3연속 수리 실패의 진짜 이유). 살아 있는 정상 포커스(문서 에디터·이름변경
+    /// 편집 상자·설정 콤보·열린 패널 리스트 = 전부 RootLayout 자손이며 가시)는 여전히 무개입이고,
+    /// **열린 팝업 안(시작 메뉴 플라이아웃·콤보 드롭다운·대화상자)은 사유 불문 무개입**이 최우선
+    /// 안전선이다 — 팝업 포커스를 뺏으면 열린 메뉴가 클릭 한 번에 닫히는 회귀가 난다(배치 1이
+    /// 확장을 미룬 유일한 이유였고, popup 축이 실기기 계측으로 동작 실증돼 이제 안전하게 넣는다.
+    /// 팝업 목록 취득 실패 시에도 InPopup=true 보수 처리 = 무개입 — GetShellFocusState 주석 참고).
+    /// 판정 산출은 <see cref="GetShellFocusState"/> 하나를 계측(UpdateDiagStrip)과 공유한다 —
+    /// 판정과 계측이 어긋나면 다음 회차 진단이 무의미해진다(배치 2 설계 핵심). 열린 패널 안
+    /// 포커스 무개입 규칙은 A135 블록과 동일하고, 같은 전이에서 A135 블록과 겹쳐 돌아도 조건이
+    /// 서로 배타적 표면이라 무해하다(둘 다 같은 대상 재포커스 관용구 — S4 종료
+    /// ExitOpenFileBrowsing 말미와 동일).
+    /// A234 배치 1의 2단 복구는 그대로다 — A209가 사양으로 뒀던 "실패(Content가 Control 아님·반환
+    /// false) 무시" 한 줄 침묵 폴백 제거: 1단(모듈 뷰)이 없거나 Focus가 false면 2단
+    /// (ShellFocusAnchor — RootLayout 안 포커스 전용 앵커, XAML 주석 참고)으로 폴백한다.
+    /// 무한 복구 없음: 앵커가 포커스를 쥔 상태는 RootLayout 자손 + Visible이라 다음 판정이
+    /// skip(alive)로 끝나고, 모듈 전환·전체화면 전이 중 "옛 뷰가 트리에서 빠지는 찰나"의 발동은
+    /// ModuleHost.Content가 이미 새 뷰로 교체된 뒤라(ShowModule이 교체 후 SetContentState 순)
+    /// 새 모듈 뷰 재포커스 = 의도된 동작이다(A201 Loaded 자기 포커스와 같은 방향 — Focus가
+    /// false면 앵커로 안전). 호출 지점은 종전 2곳(UpdateShellChrome 말미 + 클릭 한 틱 뒤) 그대로
+    /// — 배치 2에서 늘리지 않았다. 실행 결과는 진단 오버레이의 GUARD 값(skip 2갈래 구분 +
+    /// orphan(사유))으로, 복구 실행 누적은 RECOV로 남는다(오버레이 꺼짐 = 기록 생략 — 복구 동작
+    /// 자체는 오버레이와 무관하게 항상 돈다).
     /// </summary>
     private void RecoverChromeFocusOrphan()
     {
@@ -2344,30 +2359,116 @@ public sealed partial class MainWindow : Window
             if (_diagOn) _diagGuardLast = "no-xamlroot";
             return; // 로드 전 — 판정 불가면 무동작
         }
-        if (FocusManager.GetFocusedElement(xr) is DependencyObject focused && IsVisibleInTree(focused))
+        var state = GetShellFocusState(xr); // 판정 산출 = 계측(UpdateDiagStrip)과 공유하는 단일 헬퍼
+        string reason; // 고아 사유 — GUARD의 orphan(사유) 표기(다음 회차 스크린샷 판독용)
+        if (state.Focused is null)
+        {
+            reason = "null"; // 포커스 자체가 없다 — 라우팅 키 미발화 갈래 ⓐ
+        }
+        else if (state.InPopup)
+        {
+            // 최우선 안전선: 열린 팝업(시작 메뉴 플라이아웃·콤보 드롭다운·대화상자) 안 포커스는
+            // 사유 불문(비가시·비RootLayout이어도) 무개입 — 뺏으면 열린 메뉴가 클릭 한 번에
+            // 닫힌다. 팝업 목록 취득 실패의 보수적 InPopup=true도 여기로 온다(모르면 개입 금지).
+            if (_diagOn) _diagGuardLast = "skip(popup)";
+            return;
+        }
+        else if (!state.Visible)
+        {
+            reason = "hidden"; // 자신·조상 Collapsed — A209 원래 갈래(바 붕괴 축)
+        }
+        else if (!state.InRoot)
+        {
+            reason = "detach"; // 살아 있되 RootLayout 밖(산 트리에서 분리) — 배치 2가 잡는 그 갈래
+        }
+        else
         {
             if (_diagOn) _diagGuardLast = "skip(alive)";
-            return; // 포커스 생존 — 무개입(정상 상태에서 포커스를 뺏지 않는다)
+            return; // 메인 트리 안 생존 포커스 — 무개입(정상 상태에서 포커스를 뺏지 않는다)
         }
+        // 복구 실행 누적(RECOV) — 성공 여부와 무관하게 "판정이 발동해 복구가 돌았다"가 신호다.
+        if (_diagOn) _diagRecovCount++;
         // 1단: 종전과 같은 모듈 뷰(중앙 콘텐츠). 성공하면 여기서 끝.
         var host = ModuleHost.Content as Control;
         if (host is not null && host.Focus(FocusState.Programmatic))
         {
-            if (_diagOn) _diagGuardLast = "orphan>host=" + host.GetType().Name + " ok";
+            if (_diagOn) _diagGuardLast = "orphan(" + reason + ")>host=" + host.GetType().Name + " ok";
             return;
         }
         // 2단: 포커스 전용 앵커 — 1단이 없거나(빈 셸 등) false를 돌려줘도 포커스를 메인 트리에
         // 남긴다. GUARD 문자열 조립은 진단 켜짐일 때만(복구는 전이 시점에만 돌아 비용 무해).
+        // 1단 실패 갈래만 host= 접두어를 생략한다 — 사유가 붙으면서 40자 상한을 넘는 유일한
+        // 조합이라서다(최장 뷰 타입 15자 기준 "orphan(detach)>VideoPlayerView fail>a:ok" = 40자).
         var anchored = ShellFocusAnchor.Focus(FocusState.Programmatic);
         if (!_diagOn) return;
         _diagGuardLast = host is null
-            ? (anchored ? "orphan>anchor ok" : "orphan>anchor fail")
-            : "orphan>host=" + host.GetType().Name + (anchored ? " fail>a:ok" : " fail>a:no");
+            ? "orphan(" + reason + ")>anchor " + (anchored ? "ok" : "fail")
+            : "orphan(" + reason + ")>" + host.GetType().Name + (anchored ? " fail>a:ok" : " fail>a:no");
     }
 
-    /// <summary>요소가 화면에 있는가 — 자신·조상 어느 층도 Collapsed가 아니면 참(A209 고아 판정).
+    /// <summary>셸 포커스 상태(A234 배치 2) — <see cref="GetShellFocusState"/>의 산출 묶음.
+    /// Focused = 포커스 요소(null 가능), InRoot = RootLayout 자손인가, InPopup = 열린 팝업 안인가
+    /// (목록 취득 실패 시 보수적 true), Visible = IsVisibleInTree, PopupUnknown = 팝업 목록 취득
+    /// 실패(계측 표시 ? 전용 — InPopup의 보수적 true와 함께 켜진다).
+    /// private readonly record struct = SettingsView.AssociationOutcome 선례 형태.</summary>
+    private readonly record struct ShellFocusState(
+        DependencyObject? Focused, bool InRoot, bool InPopup, bool Visible, bool PopupUnknown);
+
+    /// <summary>
+    /// 셸 포커스 상태의 단일 산출 지점(A234 배치 2) — 판정(RecoverChromeFocusOrphan)과 계측
+    /// (UpdateDiagStrip)이 반드시 이 헬퍼 하나를 쓴다: 같은 조상 순회가 두 곳에 중복돼 서로
+    /// 어긋나면 다음 회차 진단이 무의미해진다(배치 1이 UpdateDiagStrip 안에 짜 뒀던 순회를
+    /// 그대로 들어낸 것). 한 번의 조상 순회(상한 UiScaleAncestorDepth)로 InRoot(RootLayout
+    /// 도달)와 InPopup(열린 팝업의 Child 통과)을 함께 판정한다 — RootLayout에 닿았다면 메인
+    /// 트리이므로 팝업 미검출이 맞다. Visible은 IsVisibleInTree(배치 1과 같은 산출 유지 —
+    /// RootLayout 위 조상까지 보는 전체 순회라 여기 순회와 축이 달라 합치지 않는다).
+    /// 포커스가 null이면 나머지 축은 전부 false다(호출부 규칙: null = 무조건 고아).
+    /// GetOpenPopupsForXamlRoot 취득 실패(try/catch — 배치 1에서 컴파일·런타임 모두 실증)는
+    /// **판정용 InPopup=true 보수 처리**다: 팝업 여부를 모를 땐 개입하지 않는 쪽이 안전하다
+    /// (열린 시작 메뉴 포커스 탈취 사고 방지). 단 계측 표시는 종전대로 ?가 뜬다(PopupUnknown)
+    /// — **판정(InPopup=true)과 표시(?)가 다른 유일한 지점이다**(A234 배치 2 구현 결정).
+    /// </summary>
+    private ShellFocusState GetShellFocusState(XamlRoot xr)
+    {
+        if (FocusManager.GetFocusedElement(xr) is not DependencyObject focused)
+            return new ShellFocusState(null, false, false, false, false);
+        // 열린 팝업 목록: 취득이 실패해도 나머지 축(inRoot·vis)은 산다 — InPopup만 보수적 true.
+        IReadOnlyList<Microsoft.UI.Xaml.Controls.Primitives.Popup>? popups = null;
+        var popupUnknown = false;
+        try
+        {
+            popups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
+        }
+        catch
+        {
+            popupUnknown = true;
+        }
+        var inRoot = false;
+        var inPopup = popupUnknown; // 취득 실패 = 팝업일지 모른다 → 무개입 쪽으로(절대 뒤집지 말 것)
+        var node = (DependencyObject?)focused;
+        for (var depth = 0; node is not null && depth < UiScaleAncestorDepth; depth++)
+        {
+            if (ReferenceEquals(node, RootLayout))
+            {
+                inRoot = true;
+                break;
+            }
+            if (popups is not null)
+            {
+                foreach (var p in popups)
+                {
+                    if (p.Child is { } child && ReferenceEquals(node, child)) inPopup = true;
+                }
+            }
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return new ShellFocusState(focused, inRoot, inPopup, IsVisibleInTree(focused), popupUnknown);
+    }
+
+    /// <summary>요소가 화면에 있는가 — 자신·조상 어느 층도 Collapsed가 아니면 참(A209 고아 판정의
+    /// 가시 축 — A234 배치 2부터 GetShellFocusState 경유로만 쓰인다).
     /// 순회 상한은 UiScaleAncestorDepth(HotkeySupport.MaxAncestorDepth와 같은 방어 값) 재사용.
-    /// 팝업 트리(플라이아웃·대화상자)는 루트까지 전부 Visible이라 자연히 참 = 무개입이고,
+    /// 팝업 트리(플라이아웃·대화상자)는 루트까지 전부 Visible이라 자연히 참이고,
     /// 텍스트 요소 등 UIElement가 아닌 층은 판정 없이 지나간다(IsWithin과 같은 순회 관용구).</summary>
     private static bool IsVisibleInTree(DependencyObject element)
     {
@@ -2380,13 +2481,14 @@ public sealed partial class MainWindow : Window
         return true;
     }
 
-    // ---------- 셸 키 진단 오버레이 (A234 배치 1) ----------
+    // ---------- 셸 키 진단 오버레이 (A234 배치 1 계측 · 배치 2 판정 통합) ----------
     // F11/F12 불통 수리 3연속 실패(A209·A212·A226) 뒤의 계측 선행: 사용자에게 릴리스 1회 +
     // "클릭 후 F11 한 번 + 스크린샷 1장"만 요구해서 ⓐ 포커스 null(라우팅 미발화) /
     // ⓑ 포커스 생존이되 RootLayout 밖(팝업 트리 등) / ⓒ 키 도달하되 게이트 사망 중 어느
-    // 갈래인지 실측으로 가른다. 수리(배치 2)는 이 값을 본 뒤 택일한다. 카운터·GUARD는 각
-    // 핸들러가 값만 기록하고(_diagOn 앞단 차단 = 꺼짐이면 비용 0), 문자열 조립·화면 갱신은
-    // 여기 폴링 한 곳이 전담한다.
+    // 갈래인지 실측으로 가른다. → 계측 회수(2026-08-27)로 ⓑ 확정 — 배치 2가 고아 판정을
+    // 확장했고(RecoverChromeFocusOrphan 주석), 발동 여부는 RECOV 누적과 GUARD의 orphan(사유)로
+    // 다음 스크린샷 한 장에서 읽힌다. 카운터·GUARD·RECOV는 각 핸들러가 값만 기록하고
+    // (_diagOn 앞단 차단 = 꺼짐이면 비용 0), 문자열 조립·화면 갱신은 여기 폴링 한 곳이 전담한다.
 
     /// <summary>진단 스트립 폴링 주기(ms) — 포커스·게이트 값은 변경 이벤트가 없어 폴링이 유일한
     /// 취득법이다. 250 = 눈으로 따라 읽히면서 부담 없는 4Hz(A234 구현 결정, 고정값).</summary>
@@ -2404,6 +2506,7 @@ public sealed partial class MainWindow : Window
     private VirtualKey _diagPreviewLastKey = VirtualKey.None; // 마지막으로 관측한 F11/F12 (None = 아직 없음)
     private int _diagBubbleCount;                             // OnRootKeyDown이 아무 키로든 발화한 누적
     private string _diagGuardLast = "-";                      // RecoverChromeFocusOrphan 마지막 실행 결과
+    private int _diagRecovCount;                              // 복구가 실제 실행된 누적(RECOV — 배치 2 발동 증거)
 
     /// <summary>
     /// 설정 토글 반영(생성자 배선: 초기 1회 + ShellDiagnostics.Changed) — 다른 창의 설정 화면
@@ -2444,11 +2547,13 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 진단 스트립 본문 갱신(폴링 틱 + 켜는 순간 1회). 1줄 = 포커스 상태: FOCUS(타입#이름 또는
-    /// null), inRoot(RootLayout 자손인가 — 비주얼 조상 순회, 상한 UiScaleAncestorDepth),
-    /// popup(열린 팝업(플라이아웃·콤보 드롭다운) 안인가 — 취득 실패 시 ?), vis(IsVisibleInTree —
-    /// A209 고아 판정과 같은 눈). 2줄 = PREVIEW(터널링 F11/F12 발화 누적 — 클릭 후 이 값이
-    /// 멈추면 갈래 ⓐ/ⓑ), BUBBLE(버블 KeyDown 발화 누적 — 아무 키), GUARD(복구 마지막 결과),
-    /// CTX(HasPanelContext), S4(IsOpenFileBrowsing). 문자열 조립은 여기(4Hz)에서만 한다.
+    /// null), inRoot/popup/vis — 표기 형식은 배치 1 그대로(사용자가 읽는 법을 익혔다), 값 산출만
+    /// A234 배치 2부터 GetShellFocusState 경유다(판정과 같은 눈 — 단일 헬퍼 공유. popup은 목록
+    /// 취득 실패 시 ? 표시, 판정 쪽만 보수적 true — 헬퍼 주석의 "판정과 표시가 다른 유일한
+    /// 지점"). 2줄 = PREVIEW(터널링 F11/F12 발화 누적 — 클릭 후 이 값이 멈추면 갈래 ⓐ/ⓑ),
+    /// BUBBLE(버블 KeyDown 발화 누적 — 아무 키), RECOV(복구 실제 실행 누적 — 배치 2 판정이
+    /// 발동했는가의 회귀 감시), GUARD(복구 마지막 결과), CTX(HasPanelContext),
+    /// S4(IsOpenFileBrowsing). 문자열 조립은 여기(4Hz)에서만 한다.
     /// </summary>
     private void UpdateDiagStrip()
     {
@@ -2458,53 +2563,27 @@ public sealed partial class MainWindow : Window
         {
             line1 = "FOCUS <no-xamlroot>"; // 로드 전 잠깐 — 다음 폴링 틱이 곧 채운다
         }
-        else if (FocusManager.GetFocusedElement(xr) is not DependencyObject focused)
-        {
-            line1 = "FOCUS <null>   inRoot=N  popup=N  vis=N"; // 갈래 ⓐ의 모양
-        }
         else
         {
-            var name = (focused as FrameworkElement)?.Name;
-            if (string.IsNullOrEmpty(name)) name = "-";
-            // 열린 팝업 목록: GetOpenPopupsForXamlRoot는 저장소 선례 0건 API라 try/catch로
-            // 격리한다 — 실패해도 popup 값만 ?가 되고 나머지 계측은 산다(A234 구현 결정).
-            IReadOnlyList<Microsoft.UI.Xaml.Controls.Primitives.Popup>? popups = null;
-            var popup = "N";
-            try
+            var state = GetShellFocusState(xr); // 계측 산출 = 판정과 공유(단일 헬퍼 — 배치 2)
+            if (state.Focused is not { } focused)
             {
-                popups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
+                line1 = "FOCUS <null>   inRoot=N  popup=N  vis=N"; // 갈래 ⓐ의 모양
             }
-            catch
+            else
             {
-                popup = "?";
+                var name = (focused as FrameworkElement)?.Name;
+                if (string.IsNullOrEmpty(name)) name = "-";
+                var inRoot = state.InRoot ? "Y" : "N";
+                var popup = state.PopupUnknown ? "?" : state.InPopup ? "Y" : "N";
+                var vis = state.Visible ? "Y" : "N";
+                line1 = $"FOCUS {focused.GetType().Name}#{name}   inRoot={inRoot}  popup={popup}  vis={vis}";
             }
-            // 한 번의 조상 순회로 inRoot(RootLayout 도달)와 popup(열린 팝업의 Child 통과)을
-            // 함께 판정한다 — RootLayout에 닿았다면 메인 트리이므로 popup은 N이 맞다.
-            var inRoot = "N";
-            var node = (DependencyObject?)focused;
-            for (var depth = 0; node is not null && depth < UiScaleAncestorDepth; depth++)
-            {
-                if (ReferenceEquals(node, RootLayout))
-                {
-                    inRoot = "Y";
-                    break;
-                }
-                if (popups is not null)
-                {
-                    foreach (var p in popups)
-                    {
-                        if (p.Child is { } child && ReferenceEquals(node, child)) popup = "Y";
-                    }
-                }
-                node = VisualTreeHelper.GetParent(node);
-            }
-            var vis = IsVisibleInTree(focused) ? "Y" : "N";
-            line1 = $"FOCUS {focused.GetType().Name}#{name}   inRoot={inRoot}  popup={popup}  vis={vis}";
         }
         var lastKey = _diagPreviewLastKey == VirtualKey.None ? "-" : _diagPreviewLastKey.ToString();
         DiagText.Text = line1
             + $"\nPREVIEW={_diagPreviewCount} last={lastKey}  BUBBLE={_diagBubbleCount}"
-            + $"  GUARD={_diagGuardLast}  CTX={(HasPanelContext ? "Y" : "N")}  S4={(IsOpenFileBrowsing ? "Y" : "N")}";
+            + $"  RECOV={_diagRecovCount}  GUARD={_diagGuardLast}  CTX={(HasPanelContext ? "Y" : "N")}  S4={(IsOpenFileBrowsing ? "Y" : "N")}";
     }
 
     /// <summary>하단 바 우측 "Full screen" 버튼 = Enter/Alt+Enter와 같은 전체화면 토글(A186 —
@@ -2631,9 +2710,11 @@ public sealed partial class MainWindow : Window
     /// A226: 클릭 시점 포커스 고아 방어 — A209(전이 시점)·A212(썸네일 표면)가 못 지키던
     /// "임의 표면 클릭이 포커스를 null/비XAML로 떨궈 이후 셸 키가 전멸"하는 갈래의 일반 방어.
     /// 순수 관찰: 이벤트를 소비하지 않고(handledEventsToo 구독이라 소비된 눌림도 관찰),
-    /// 판정·복구는 A209 관용구(RecoverChromeFocusOrphan) 재사용이라 **살아 있는 포커스
-    /// (에디터·이름변경 상자·콤보·열린 패널·팝업 트리)는 절대 건드리지 않는다**(고아일 때만
-    /// 모듈 뷰 재포커스 — 그 무개입 규칙을 통째로 상속). 판정을 TryEnqueue로 한 틱 미루는
+    /// 판정·복구는 A209 관용구(RecoverChromeFocusOrphan) 재사용이라 **메인 트리 안 생존 포커스
+    /// (에디터·이름변경 상자·콤보·열린 패널)와 열린 팝업 트리는 절대 건드리지 않는다**(고아일
+    /// 때만 모듈 뷰 재포커스 — 그 판정·무개입 규칙을 통째로 상속. A234 배치 2: 살아 있어도 산
+    /// 트리에서 분리된(detach) 포커스는 이제 고아다 — 이 클릭발 갈래가 실측으로 확정된 F11/F12
+    /// 불통의 진짜 원인이었다). 판정을 TryEnqueue로 한 틱 미루는
     /// 이유: 눌림 버블 시점엔 이 클릭이 일으킬 포커스 이동(획득이든 고아 낙하든)이 아직 끝나지
     /// 않았을 수 있다 — 입력 패스가 끝난 뒤의 최종 상태를 봐야 오판(정상 이동 중 가로채기·고아
     /// 미검출)이 없다(TryEnqueue는 셸의 기존 UI 마샬 관용구 — OnContentOpened 등과 동일).
