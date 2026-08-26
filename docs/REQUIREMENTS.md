@@ -46,7 +46,24 @@
 
 ## 1. 셸 · 시작 메뉴
 
-- [미반영 A234 · Fable] **F11/F12 불통 4차 — 계측 선행 후 포커스 비의존 수신으로 전환**
+- [진행중 A234 · Fable] **F11/F12 불통 4차 — 계측 선행 후 포커스 비의존 수신으로 전환**
+  **▶ 배치 1 완료 = v0.239.0(계측판).** 설정 맨 아래 숨김 토글 `Shell key diagnostics`
+  (`diag.shellKeyOverlay`·기본 꺼짐·즉시 반영·재시작 유지) → 창 상단에 진단 스트립.
+  1줄 `FOCUS <타입>#<이름>|<null>  inRoot  popup  vis` / 2줄 `PREVIEW= last=  BUBBLE=  GUARD=  CTX=  S4=`.
+  같이 넣은 안전 강화 = `RecoverChromeFocusOrphan` **2단 복구**(1단 모듈 뷰가 null이거나 `Focus()`가
+  false면 2단 `ShellFocusAnchor`(1×1·Opacity 0 ContentControl — Grid는 Control이 아니라 포커스
+  불가라 별도 앵커가 필요했다)로 폴백 → **A209 이래의 "실패 무시" 침묵 폴백 제거**). 판정 조건
+  (null·Collapsed)은 **일부러 확장하지 않았다** — 넓히면 열린 시작 메뉴 플라이아웃·콤보의 포커스를
+  빼앗아 메뉴가 깨진다(확장은 배치 2 몫). ⚠️ CI 1순위 위험 후보 = `VisualTreeHelper.GetOpenPopupsForXamlRoot`
+  (저장소 선례 0건·try/catch 격리됨) · `UseSystemFocusVisuals`(선례 0건·표준 Control 속성).
+  최소 복구법 = 전자는 `UpdateDiagStrip`의 popups 블록을 지우고 `var popup = "?";` 고정, 후자는 속성 한 줄 삭제.
+  **▶ 배치 2(미착수) = 계측 회수 후 확정 수리.** 판별표(스크린샷 값 조합 → 원인):
+  PREVIEW 안 오름 + FOCUS `<null>` → **ⓐ**(포커스 null → 라우팅 키 이벤트 자체 미발화) /
+  PREVIEW 안 오름 + FOCUS 살아있음 + `inRoot=N` → **ⓑ**(RootLayout 밖 — `popup=Y`면 팝업 트리 확정) /
+  PREVIEW 오름(last=F11) + 토글 안 됨 → **ⓒ**(게이트 사망 — `CTX=N`이면 HasPanelContext, `S4=Y`면 S4 사양) /
+  BUBBLE도 정지 → ⓐ/ⓑ 보강(키가 XAML 트리에 아예 미도달) / BUBBLE만 오르고 PREVIEW 정지 →
+  예상 밖(터널링만 죽는 갈래 = A226 승격 자체 재검토 신호).
+  (원 등재문 — 배치 2 착수 시 근거로 쓸 것)
   (2026-08-27 사용자 실기기 재보고. A209·A212·A226 3연속 실패 뒤라 **또 블라인드로 고치지 않는다**.)
   **재현 조건(사용자 문면 — 종전 보고보다 훨씬 좁혀졌다)**: 앱 신규 실행 직후 또는 모듈 전환 직후
   = F11/F12 **정상 동작**. 그 상태에서 **자체 하단 바(BottomBar)·좌우 사이드 패널·센터 썸네일 뷰
