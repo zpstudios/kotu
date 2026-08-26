@@ -1027,7 +1027,16 @@ A36 = settings.json 그대로 열고 표기만 수정(37), 3회전 배치 선정
 
 ## 4. 실기기 확인 대기 (사용자 몫) — **v0.85.0~v0.238.0 누적 (최신 항목이 §4 안 최상단)**
 
-⚠️ **최우선 = v0.239.0(A234 1/2) 계측 회수 — 스크린샷 1장.** 절차: 설정 맨 아래
+🚧 **CI 부채(2026-08-27) — v0.239.0 미검증·미발행.** push는 끝났으나(12eb892) **GitHub Actions
+장애**로 build가 Queued/Startup failure에 걸리고 release run 자체가 생성되지 않았다
+(githubstatus.com "Incident with Actions", 2026-08-26 15:11 UTC~ · Pages degraded 동반).
+**우리 코드 문제가 아니다.** 복구 후 다음 세션이 할 일: ① build/release run 재확인(안 돌았으면
+빈 커밋 1회로 재유발) ② **CI 1순위 위험 후보 2건 컴파일 통과 여부**(`VisualTreeHelper.
+GetOpenPopupsForXamlRoot`·`UseSystemFocusVisuals` — 둘 다 저장소 선례 0건. 깨지면 최소 복구법 =
+REQUIREMENTS §1 A234 참조) ③ v0.239.0 태그·릴리스 발행 확인. **사용자에게 계측을 요청하려면
+릴리스가 먼저 나와야 한다.**
+
+⚠️ **최우선(릴리스 나온 뒤) = v0.239.0(A234 1/2) 계측 회수 — 스크린샷 1장.** 절차: 설정 맨 아래
 `Shell key diagnostics` 켜기 → 아무 모듈로 가서 F11 한 번(동작 확인) → **문제 영역 클릭 1회** →
 **F11 한 번 더** → 창 상단 진단 스트립을 **그대로 캡처**. 값 조합이 원인을 가른다(판별표 =
 docs/REQUIREMENTS.md §1 A234). 이 한 장이 배치 2의 수리 방향(창 수준 키 후크 vs 고아 판정 확장 vs
