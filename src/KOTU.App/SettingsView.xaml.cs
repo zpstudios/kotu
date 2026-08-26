@@ -654,6 +654,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // 어느 그룹에도 속하지 않는다(모듈별 진행·결과는 각 그룹의 progressText가 말한다).
         Root.Children.Add(_status);
 
+        BuildShellDiagnosticsSection(); // A234: 설정 파일 안내 바로 위 — 셸 키 진단 오버레이 토글
         BuildSettingsFileSection(); // A36: 연결 섹션 아래 "Open settings.json"
 
         AddHeader("Updates");
@@ -810,6 +811,61 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     // Windows 섹션(A24 창 재사용 토글)은 A222(2026-08-24)에서 제거 — 복원 참조 = git 이력
     // (v0.65.0 A24 도입 → A222 직전까지 존치). 명시적 새 인스턴스 조작(Shift+N·Shift+더블클릭·
     // 우클릭 메뉴)은 설정과 무관하게 그대로 살아 있다.
+
+    /// <summary>
+    /// A234 배치 1: 셸 키(F11/F12) 진단 오버레이 토글 — 설정 파일 안내 바로 위의 단일 카드.
+    /// 배선은 표시 계열 토글의 최소형이다: Set → Save → NotifyChanged 세 줄(UiScale 콤보와
+    /// 같은 즉시 반영 축 — 열린 모든 창의 MainWindow가 ShellDiagnostics.Changed를 구독한다).
+    /// 레지스트리·워커와 무관하므로 위 파일 연결 토글들의 busy·<see cref="_suppressToggle"/>
+    /// 축은 일절 쓰지 않는다(그 가드는 파일 연결 전용 — 필드 주석 참고). 되돌아오는 동기화
+    /// 구독도 두지 않는다 — 변경 진입로가 이 토글 하나뿐이라 불필요(UiScale 콤보가 A41 전에는
+    /// 구독하지 않던 것과 같은 근거). 카드 문법은 A197/A220(스위치 왼쪽 + 제목 TextBlock,
+    /// 내장 On/Off 문구 제거, 그룹 간 여백 구획) 그대로다.
+    /// </summary>
+    private void BuildShellDiagnosticsSection()
+    {
+        var toggle = new ToggleSwitch
+        {
+            // A197과 같은 문법 — 스위치가 제목 왼쪽, 내장 On/Off 문구 제거, MinWidth 0(기본 154 해제).
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsOn = _settings.Get(ShellDiagnostics.SettingKey, false), // 파일 저장 — 재시작 후에도 유지
+        };
+        toggle.Toggled += (_, _) =>
+        {
+            _settings.Set(ShellDiagnostics.SettingKey, toggle.IsOn);
+            _settings.Save();
+            ShellDiagnostics.NotifyChanged(); // 열린 모든 창의 스트립이 즉시 켜지고 꺼진다
+        };
+
+        var headerRow = new Grid { ColumnSpacing = 8 };
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var title = new TextBlock
+        {
+            Text = "Shell key diagnostics",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(toggle, 0);
+        Grid.SetColumn(title, 1);
+        headerRow.Children.Add(toggle);
+        headerRow.Children.Add(title);
+
+        var cardBody = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 8) };
+        cardBody.Children.Add(headerRow);
+        cardBody.Children.Add(new TextBlock
+        {
+            Text = "Shows a live overlay with keyboard focus and key routing state. For troubleshooting only.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        Root.Children.Add(cardBody);
+    }
 
     /// <summary>
     /// A36(v0.109.0): 연결 섹션 아래 "Open settings.json" 버튼 + 경로·주의 안내.

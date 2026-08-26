@@ -264,6 +264,16 @@ public sealed partial class MainWindow : Window
         UiScale.Changed += ApplyUiScale;
         Closed += (_, _) => UiScale.Changed -= ApplyUiScale;
 
+        // A234 배치 1: 셸 키(F11/F12) 진단 오버레이 — 설정의 숨김 토글(diag.shellKeyOverlay,
+        // 기본 꺼짐)로 켜고 끈다. 배선은 바로 위 UiScale 관용구 복제: 다른 창의 설정 화면
+        // (다른 UI 스레드)에서 발화할 수 있어 ApplyShellDiagnostics가 스스로 마샬링하고,
+        // 구독 해제는 같은 자리(Closed)다. 폴링 타이머는 끄기 분기에 더해 창이 닫힐 때도
+        // 확실히 멈춘다(누수 금지 — 진단 오버레이 절 참고).
+        ShellDiagnostics.Changed += ApplyShellDiagnostics;
+        Closed += (_, _) => ShellDiagnostics.Changed -= ApplyShellDiagnostics;
+        Closed += (_, _) => _diagTimer?.Stop();
+        ApplyShellDiagnostics(); // 저장된 값의 초기 적용 — 재시작 후에도 켠 상태가 유지된다(사양)
+
         // A206(v0.215.0): 업데이트 자동 확인은 '설정 화면 열림' 참조 카운트가 0이 아닌 동안에만
         // 돈다. 카운트를 놓는 정상 경로는 SettingsView의 Unloaded지만, 설정을 띄운 채 창을 닫으면
         // Unloaded가 오지 않을 수 있어(A41에서 확인된 한계) 카운트가 샌다 — 그러면 아무도 보지
@@ -1895,6 +1905,11 @@ public sealed partial class MainWindow : Window
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        // A234 계측: 버블 KeyDown이 트리에 도달은 하는지(아무 키든 — F11/F12 한정 아님).
+        // 어느 분기보다 먼저 센다(아래 return들과 무관하게 "도달" 자체가 신호다).
+        // 오버레이가 꺼져 있으면 갱신하지 않는다(핫 패스 비용 0 — _diagOn 앞단 차단).
+        if (_diagOn) _diagBubbleCount++;
+
         // A90: Esc는 텍스트 입력 판정보다 먼저 본다 — keymap 포커스 예외가 "텍스트 입력에서도
         // Esc만은 통과"라서다(필터 입력란에 포커스를 둔 채로도 S4 복귀가 성립해야 한다).
         // A202: 그래서 문서 에디터 포커스 중 Esc도 셸 체인(말단 = 콘텐츠 닫기)에 닿는다 —
@@ -1980,6 +1995,14 @@ public sealed partial class MainWindow : Window
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (SideForKey(e.Key) is not { } side) return; // 그 밖의 키는 전부 종전 경로(버블) 몫
+        // A234 계측의 핵심 신호: 클릭 후 F11을 눌러도 이 카운트가 안 오르면 라우팅 키 이벤트
+        // 자체가 미발화(포커스 null 또는 RootLayout 밖) = 갈래 ⓐ/ⓑ 확정이다. 값만 기록하고
+        // 문자열 조립은 폴링(UpdateDiagStrip) 몫 — 오버레이 꺼짐 = 비용 0(_diagOn 앞단 차단).
+        if (_diagOn)
+        {
+            _diagPreviewCount++;
+            _diagPreviewLastKey = e.Key;
+        }
         OnOverlaySideKey(side, e);
         MarkAltUseIfConsumed(e);
     }
@@ -2303,16 +2326,43 @@ public sealed partial class MainWindow : Window
     /// 조건 = 고아일 때만: 포커스가 null이거나, 포커스 요소가 스스로 또는 조상 Collapse로 화면에
     /// 없을 때만 모듈 뷰(중앙 콘텐츠)로 되돌린다 — 살아 있는 포커스(문서 에디터·이름변경 편집
     /// 상자·설정 콤보·열린 패널 리스트·팝업 트리는 전부 가시)는 절대 건드리지 않는다(과잉
-    /// 재포커스 금지). 열린 패널 안 포커스 무개입·실패(Content가 Control 아님·반환 false) 무시
-    /// 규칙은 A135 블록과 동일하고, 같은 전이에서 A135 블록과 겹쳐 돌아도 조건이 서로 배타적
-    /// 표면이라 무해하다(둘 다 같은 대상 재포커스 관용구 — S4 종료 ExitOpenFileBrowsing 말미와 동일).
+    /// 재포커스 금지). 열린 패널 안 포커스 무개입 규칙은 A135 블록과 동일하고, 같은 전이에서
+    /// A135 블록과 겹쳐 돌아도 조건이 서로 배타적 표면이라 무해하다(둘 다 같은 대상 재포커스
+    /// 관용구 — S4 종료 ExitOpenFileBrowsing 말미와 동일).
+    /// A234 배치 1: 복구가 2단이 됐다 — A209가 사양으로 뒀던 "실패(Content가 Control 아님·반환
+    /// false) 무시" 한 줄 침묵 폴백이 3연속 수리 실패(A209·A212·A226)의 유력 후보로 지목돼,
+    /// 1단(모듈 뷰)이 없거나 Focus가 false면 2단(ShellFocusAnchor — RootLayout 안 포커스 전용
+    /// 앵커, XAML 주석 참고)으로 폴백한다. 판정 조건(null·Collapsed)은 그대로다 — "RootLayout
+    /// 자손이 아니면 고아"로 넓히면 열린 시작 메뉴 플라이아웃·콤보의 팝업 포커스를 빼앗아 메뉴가
+    /// 깨진다(판정 확장은 계측 결과를 본 뒤 배치 2 몫). 실행 결과는 진단 오버레이의 GUARD 값으로
+    /// 남는다(오버레이 꺼짐 = 기록 생략 — 복구 동작 자체는 오버레이와 무관하게 항상 돈다).
     /// </summary>
     private void RecoverChromeFocusOrphan()
     {
-        if (RootLayout.XamlRoot is not { } xr) return; // 로드 전 — 판정 불가면 무동작
+        if (RootLayout.XamlRoot is not { } xr)
+        {
+            if (_diagOn) _diagGuardLast = "no-xamlroot";
+            return; // 로드 전 — 판정 불가면 무동작
+        }
         if (FocusManager.GetFocusedElement(xr) is DependencyObject focused && IsVisibleInTree(focused))
+        {
+            if (_diagOn) _diagGuardLast = "skip(alive)";
             return; // 포커스 생존 — 무개입(정상 상태에서 포커스를 뺏지 않는다)
-        (ModuleHost.Content as Control)?.Focus(FocusState.Programmatic);
+        }
+        // 1단: 종전과 같은 모듈 뷰(중앙 콘텐츠). 성공하면 여기서 끝.
+        var host = ModuleHost.Content as Control;
+        if (host is not null && host.Focus(FocusState.Programmatic))
+        {
+            if (_diagOn) _diagGuardLast = "orphan>host=" + host.GetType().Name + " ok";
+            return;
+        }
+        // 2단: 포커스 전용 앵커 — 1단이 없거나(빈 셸 등) false를 돌려줘도 포커스를 메인 트리에
+        // 남긴다. GUARD 문자열 조립은 진단 켜짐일 때만(복구는 전이 시점에만 돌아 비용 무해).
+        var anchored = ShellFocusAnchor.Focus(FocusState.Programmatic);
+        if (!_diagOn) return;
+        _diagGuardLast = host is null
+            ? (anchored ? "orphan>anchor ok" : "orphan>anchor fail")
+            : "orphan>host=" + host.GetType().Name + (anchored ? " fail>a:ok" : " fail>a:no");
     }
 
     /// <summary>요소가 화면에 있는가 — 자신·조상 어느 층도 Collapsed가 아니면 참(A209 고아 판정).
@@ -2328,6 +2378,133 @@ public sealed partial class MainWindow : Window
             node = VisualTreeHelper.GetParent(node);
         }
         return true;
+    }
+
+    // ---------- 셸 키 진단 오버레이 (A234 배치 1) ----------
+    // F11/F12 불통 수리 3연속 실패(A209·A212·A226) 뒤의 계측 선행: 사용자에게 릴리스 1회 +
+    // "클릭 후 F11 한 번 + 스크린샷 1장"만 요구해서 ⓐ 포커스 null(라우팅 미발화) /
+    // ⓑ 포커스 생존이되 RootLayout 밖(팝업 트리 등) / ⓒ 키 도달하되 게이트 사망 중 어느
+    // 갈래인지 실측으로 가른다. 수리(배치 2)는 이 값을 본 뒤 택일한다. 카운터·GUARD는 각
+    // 핸들러가 값만 기록하고(_diagOn 앞단 차단 = 꺼짐이면 비용 0), 문자열 조립·화면 갱신은
+    // 여기 폴링 한 곳이 전담한다.
+
+    /// <summary>진단 스트립 폴링 주기(ms) — 포커스·게이트 값은 변경 이벤트가 없어 폴링이 유일한
+    /// 취득법이다. 250 = 눈으로 따라 읽히면서 부담 없는 4Hz(A234 구현 결정, 고정값).</summary>
+    private const int DiagPollMs = 250;
+
+    /// <summary>진단 오버레이 켜짐(diag.shellKeyOverlay 설정) — 표시 여부이자 핫 패스(키·복구
+    /// 핸들러)의 계측 기록을 앞단에서 차단하는 게이트다. 갱신은 ApplyShellDiagnostics 한 곳.</summary>
+    private bool _diagOn;
+
+    /// <summary>진단 폴링 타이머 — 오버레이가 켜져 있을 때만 돈다(끄면 Stop, 창 닫힘도 Stop —
+    /// 생성자 Closed 배선). _barAutoHideTimer와 같은 지연 생성 관용구.</summary>
+    private DispatcherTimer? _diagTimer;
+
+    private int _diagPreviewCount;                            // OnRootPreviewKeyDown이 F11/F12로 발화한 누적
+    private VirtualKey _diagPreviewLastKey = VirtualKey.None; // 마지막으로 관측한 F11/F12 (None = 아직 없음)
+    private int _diagBubbleCount;                             // OnRootKeyDown이 아무 키로든 발화한 누적
+    private string _diagGuardLast = "-";                      // RecoverChromeFocusOrphan 마지막 실행 결과
+
+    /// <summary>
+    /// 설정 토글 반영(생성자 배선: 초기 1회 + ShellDiagnostics.Changed) — 다른 창의 설정 화면
+    /// (다른 UI 스레드)에서 발화할 수 있어 ApplyUiScale과 같은 자가 마샬링을 거친다.
+    /// 켜면 스트립 표시 + 폴링 시작(첫 프레임은 즉시), 끄면 폴링 정지 + 스트립 숨김.
+    /// </summary>
+    private void ApplyShellDiagnostics()
+    {
+        if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+        {
+            dq.TryEnqueue(ApplyShellDiagnostics);
+            return;
+        }
+        _diagOn = _settings.Get(ShellDiagnostics.SettingKey, false);
+        if (_diagOn)
+        {
+            DiagStrip.Visibility = Visibility.Visible;
+            _diagTimer ??= MakeDiagTimer();
+            _diagTimer.Stop(); // DispatcherTimer 되감기 관용구(Stop 후 Start — ArmBarAutoHide와 동일)
+            _diagTimer.Start();
+            UpdateDiagStrip(); // 폴링 한 주기를 기다리지 않고 즉시 첫 프레임
+        }
+        else
+        {
+            _diagTimer?.Stop(); // 꺼짐 = 폴링 정지(누수 금지). 창 닫힘 정지는 생성자 Closed 배선.
+            DiagStrip.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private DispatcherTimer MakeDiagTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(DiagPollMs) };
+        // 반복 폴링 — Tick에서 멈추지 않는다(원샷 되감기인 MakeBarAutoHideTimer류와 다른 점).
+        // 정지 책임 = ApplyShellDiagnostics의 끄기 분기 + 생성자 Closed 배선 두 곳뿐이다.
+        timer.Tick += (_, _) => UpdateDiagStrip();
+        return timer;
+    }
+
+    /// <summary>
+    /// 진단 스트립 본문 갱신(폴링 틱 + 켜는 순간 1회). 1줄 = 포커스 상태: FOCUS(타입#이름 또는
+    /// null), inRoot(RootLayout 자손인가 — 비주얼 조상 순회, 상한 UiScaleAncestorDepth),
+    /// popup(열린 팝업(플라이아웃·콤보 드롭다운) 안인가 — 취득 실패 시 ?), vis(IsVisibleInTree —
+    /// A209 고아 판정과 같은 눈). 2줄 = PREVIEW(터널링 F11/F12 발화 누적 — 클릭 후 이 값이
+    /// 멈추면 갈래 ⓐ/ⓑ), BUBBLE(버블 KeyDown 발화 누적 — 아무 키), GUARD(복구 마지막 결과),
+    /// CTX(HasPanelContext), S4(IsOpenFileBrowsing). 문자열 조립은 여기(4Hz)에서만 한다.
+    /// </summary>
+    private void UpdateDiagStrip()
+    {
+        if (!_diagOn) return;
+        string line1;
+        if (RootLayout.XamlRoot is not { } xr)
+        {
+            line1 = "FOCUS <no-xamlroot>"; // 로드 전 잠깐 — 다음 폴링 틱이 곧 채운다
+        }
+        else if (FocusManager.GetFocusedElement(xr) is not DependencyObject focused)
+        {
+            line1 = "FOCUS <null>   inRoot=N  popup=N  vis=N"; // 갈래 ⓐ의 모양
+        }
+        else
+        {
+            var name = (focused as FrameworkElement)?.Name;
+            if (string.IsNullOrEmpty(name)) name = "-";
+            // 열린 팝업 목록: GetOpenPopupsForXamlRoot는 저장소 선례 0건 API라 try/catch로
+            // 격리한다 — 실패해도 popup 값만 ?가 되고 나머지 계측은 산다(A234 구현 결정).
+            IReadOnlyList<Microsoft.UI.Xaml.Controls.Primitives.Popup>? popups = null;
+            var popup = "N";
+            try
+            {
+                popups = VisualTreeHelper.GetOpenPopupsForXamlRoot(xr);
+            }
+            catch
+            {
+                popup = "?";
+            }
+            // 한 번의 조상 순회로 inRoot(RootLayout 도달)와 popup(열린 팝업의 Child 통과)을
+            // 함께 판정한다 — RootLayout에 닿았다면 메인 트리이므로 popup은 N이 맞다.
+            var inRoot = "N";
+            var node = (DependencyObject?)focused;
+            for (var depth = 0; node is not null && depth < UiScaleAncestorDepth; depth++)
+            {
+                if (ReferenceEquals(node, RootLayout))
+                {
+                    inRoot = "Y";
+                    break;
+                }
+                if (popups is not null)
+                {
+                    foreach (var p in popups)
+                    {
+                        if (p.Child is { } child && ReferenceEquals(node, child)) popup = "Y";
+                    }
+                }
+                node = VisualTreeHelper.GetParent(node);
+            }
+            var vis = IsVisibleInTree(focused) ? "Y" : "N";
+            line1 = $"FOCUS {focused.GetType().Name}#{name}   inRoot={inRoot}  popup={popup}  vis={vis}";
+        }
+        var lastKey = _diagPreviewLastKey == VirtualKey.None ? "-" : _diagPreviewLastKey.ToString();
+        DiagText.Text = line1
+            + $"\nPREVIEW={_diagPreviewCount} last={lastKey}  BUBBLE={_diagBubbleCount}"
+            + $"  GUARD={_diagGuardLast}  CTX={(HasPanelContext ? "Y" : "N")}  S4={(IsOpenFileBrowsing ? "Y" : "N")}";
     }
 
     /// <summary>하단 바 우측 "Full screen" 버튼 = Enter/Alt+Enter와 같은 전체화면 토글(A186 —

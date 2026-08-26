@@ -267,6 +267,43 @@
                 </Button>
             </StackPanel>
         </Grid>
+
+        <!-- A234 배치 1: 셸 포커스 앵커 — RecoverChromeFocusOrphan 2단 복구의 최후 착지점.
+             RootLayout(Grid)은 Control이 아니라 IsTabStop이 없어 포커스 대상이 될 수 없다
+             (UIElement.Focus는 있어도 런타임에 false만 돌아온다) → Control 파생인 ContentControl을
+             전용 앵커로 둔다. 1단(모듈 뷰 Focus)이 실패해도 포커스를 XAML 메인 트리 안에 남겨
+             셸 키 라우팅(F11/F12 터널링 포함)이 끊기지 않게 하는 안전망이다.
+             Visibility는 반드시 Visible이어야 한다(Collapsed면 포커스 불가) — 숨김은 Opacity 0과
+             1x1 크기로만 한다. IsTabStop=True라 Tab 순회에 한 칸 끼어드는 것은 수용한다
+             (진단·복구 전용 앵커, A234 구현 결정). IsHitTestVisible=False라 클릭 재현 조건에는
+             관여하지 않는다. -->
+        <ContentControl x:Name="ShellFocusAnchor"
+                        IsTabStop="True"
+                        UseSystemFocusVisuals="False"
+                        Width="1" Height="1" Opacity="0"
+                        IsHitTestVisible="False"
+                        HorizontalAlignment="Left" VerticalAlignment="Top" />
+
+        <!-- A234 배치 1: 셸 키 진단 스트립 — 설정의 숨김 토글(diag.shellKeyOverlay, 기본 꺼짐)로만
+             켜진다. RootLayout 마지막 자식 = 최상단 z순서(전체화면에서도 그대로 뜬다 — 진단
+             전용이라 예외 처리 없음, 상단 콘텐츠 가림은 켰을 때만이라 수용). IsHitTestVisible=False
+             필수: 이 스트립이 클릭을 가로채면 "첫 클릭이 셸 키 수신을 끊는다"는 재현 조건 자체가
+             바뀐다. 배경은 기존 테마 리소스 재사용(새 색 정의 금지) + Opacity 0.85 반투명.
+             본문 2줄(포커스 상태 / 키 카운터·게이트)은 코드 UpdateDiagStrip이 250ms 폴링으로
+             다시 그린다 — 포커스·게이트는 변경 이벤트가 없어 폴링이 유일한 취득법이다. -->
+        <Border x:Name="DiagStrip"
+                Visibility="Collapsed"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Stretch"
+                IsHitTestVisible="False"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                Opacity="0.85"
+                Padding="6">
+            <TextBlock x:Name="DiagText"
+                       FontFamily="Consolas"
+                       FontSize="11"
+                       TextWrapping="NoWrap" />
+        </Border>
     </Grid>
     </Grid>
 </Window>
