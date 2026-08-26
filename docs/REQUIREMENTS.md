@@ -57,6 +57,7 @@
   빼앗아 메뉴가 깨진다(확장은 배치 2 몫). ⚠️ CI 1순위 위험 후보 = `VisualTreeHelper.GetOpenPopupsForXamlRoot`
   (저장소 선례 0건·try/catch 격리됨) · `UseSystemFocusVisuals`(선례 0건·표준 Control 속성).
   최소 복구법 = 전자는 `UpdateDiagStrip`의 popups 블록을 지우고 `var popup = "?";` 고정, 후자는 속성 한 줄 삭제.
+  → **✅ 둘 다 CI 통과 실증**(release #226 초록 · v0.239.0 발행 완료 — 복구법은 쓸 일 없어졌다).
   **▶ 배치 2(미착수) = 계측 회수 후 확정 수리.** 판별표(스크린샷 값 조합 → 원인):
   PREVIEW 안 오름 + FOCUS `<null>` → **ⓐ**(포커스 null → 라우팅 키 이벤트 자체 미발화) /
   PREVIEW 안 오름 + FOCUS 살아있음 + `inRoot=N` → **ⓑ**(RootLayout 밖 — `popup=Y`면 팝업 트리 확정) /
