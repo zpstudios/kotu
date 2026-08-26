@@ -58,7 +58,24 @@
   (저장소 선례 0건·try/catch 격리됨) · `UseSystemFocusVisuals`(선례 0건·표준 Control 속성).
   최소 복구법 = 전자는 `UpdateDiagStrip`의 popups 블록을 지우고 `var popup = "?";` 고정, 후자는 속성 한 줄 삭제.
   → **✅ 둘 다 CI 통과 실증**(release #226 초록 · v0.239.0 발행 완료 — 복구법은 쓸 일 없어졌다).
-  **▶ 배치 2(미착수) = 계측 회수 후 확정 수리.** 판별표(스크린샷 값 조합 → 원인):
+  **▶ 계측 회수 완료(2026-08-27) — 원인 ⓑ 확정.** 실기기 스크린샷(문제 영역 클릭 후):
+  `FOCUS ScrollViewer#-   inRoot=N  popup=N  vis=Y` / `PREVIEW=4 last=F11  BUBBLE=4
+  GUARD=skip(alive)  CTX=Y  S4=N`.
+  판독: ① **포커스가 살아 있는데 RootLayout 자손이 아니다**(`inRoot=N`) — 팝업도 아니고(`popup=N`)
+  Collapsed도 아니다(`vis=Y`). 이름 없는 `ScrollViewer` = 컨트롤 템플릿 부품이 포커스를 쥐었고,
+  그 요소의 조상 사슬이 RootLayout에 닿지 않는다(= 살아 있는 트리에서 떨어져 나간 상태).
+  ② 그래서 **`GUARD=skip(alive)`** — A209 이래의 고아 판정이 **null·Collapsed 두 가지만 보기 때문에
+  이 상태를 "정상"으로 오판한다.** 3연속 수리 실패의 진짜 이유가 여기다(A209·A212·A226 전부 이
+  판정 위에 얹혀 있었다). ③ 게이트는 무죄다(`CTX=Y`·`S4=N` — ⓒ 배제). `PREVIEW=4`는 클릭 전
+  성공분 누적이다: 만약 클릭 뒤에도 키가 도달했다면 게이트가 전부 통과이므로 사이드바가 실제로
+  토글됐어야 한다 — 안 됐다는 것이 곧 "도달하지 않았다"의 증거다.
+  **▶ 배치 2 = 확정 수리(ⓑ).** 고아 판정을 `null · Collapsed` → **`null · Collapsed ·
+  (RootLayout 자손 아님 AND 열린 팝업 안도 아님)`**으로 확장한다. 팝업 제외는 계측으로 실측
+  검증된 축이다(`GetOpenPopupsForXamlRoot`가 실기기에서 동작 — `popup=N`이 찍혔다) → 열린 시작
+  메뉴·콤보의 포커스를 뺏지 않는다는 배치 1의 보류 사유가 해소됐다. 복구부는 이미 2단
+  (모듈 뷰 → `ShellFocusAnchor`)이라 그대로 쓴다. 판정 함수는 `UpdateDiagStrip`의 조상 순회와
+  **같은 산출을 공유**해야 한다(계측과 판정이 어긋나면 다음 회차 진단이 무의미해진다).
+  (참고 — 회수 전 판별표) 판별표(스크린샷 값 조합 → 원인):
   PREVIEW 안 오름 + FOCUS `<null>` → **ⓐ**(포커스 null → 라우팅 키 이벤트 자체 미발화) /
   PREVIEW 안 오름 + FOCUS 살아있음 + `inRoot=N` → **ⓑ**(RootLayout 밖 — `popup=Y`면 팝업 트리 확정) /
   PREVIEW 오름(last=F11) + 토글 안 됨 → **ⓒ**(게이트 사망 — `CTX=N`이면 HasPanelContext, `S4=Y`면 S4 사양) /
