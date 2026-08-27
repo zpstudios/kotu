@@ -842,7 +842,8 @@ public sealed partial class MainWindow : Window
     // 함께 사라졌다: 소비처가 ① RegisterShortcuts 등록 루프 ② 시작 메뉴 툴팁 힌트 둘뿐이었고
     // 둘 다 소멸했기 때문이다(둘 다 지운 채 배열만 남기면 읽는 곳이 없어 CS0414로 빌드가 깨진다).
     // ⚠️ 시작 메뉴의 항목 순서는 이 배열이 아니라 BuildStartMenu가 직접 나열한다 — 배열 소멸과 무관.
-    // 모듈 번호(메뉴 아래→위 1~7, A96/v0.116.0)는 표기·순서용 개념으로만 남는다(BuildStartMenu 주석).
+    // 모듈 번호(메뉴 아래→위 1~7, A254/v0.242.0가 A96/v0.116.0 배열을 대체)는 표기·순서용
+    // 개념으로만 남는다(BuildStartMenu 주석) — 재배열해도 키맵에는 아무 영향이 없다.
     // 정책 이력(같은 주제 세 번째 변경): 숫자 단독(A32/v0.66.0) → Alt+숫자(A107/v0.134.0) →
     // **폐지**(A147/v0.163.0). 숫자 키를 어떤 형태로도 되살리지 말 것.
 
@@ -971,15 +972,18 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 시작 메뉴 구성. 패널은 **위→아래**로 채우는데 **번호는 아래에서 위로** 올라간다
     /// (1번이 메뉴 최하단) — 그래서 아래 AddModuleItem 호출은 7 → 1 역순으로 늘어놓는다.
-    /// 번호(1=All Readable · 2=이미지 · 3=영상 · 4=오디오 · 5=문서 · 6=압축 · 7=하드웨어 —
-    /// A96/v0.116.0 배정, A10 오디오 삽입 승계)는 A147(v0.163.0)이 Alt+숫자를 폐지한 뒤로
-    /// **표기·순서용 개념**일 뿐 어떤 키와도 연결되지 않는다.
-    /// A96(v0.116.0) 이후 배치(위→아래):
+    /// 번호(1=All Readable · 2=문서 · 3=이미지 · 4=오디오 · 5=영상 · 6=압축 · 7=하드웨어 —
+    /// **A254/v0.242.0이 A96 배열을 대체**, A10 오디오 삽입 승계)는 A147(v0.163.0)이 Alt+숫자를
+    /// 폐지한 뒤로 **표기·순서용 개념**일 뿐 어떤 키와도 연결되지 않는다(그래서 번호를 다시
+    /// 매겨도 키맵은 영향이 없다 — A34 표는 폐지된 키의 이력일 뿐).
+    /// A254(v0.242.0) 이후 배치(위→아래):
     /// 광고 · 구분선 · Settings(0) · **구분선** · 하드웨어(7) · 구분선 · 압축(6) · 구분선 ·
-    /// 문서(5) · 오디오(4) · 영상(3) · 사진(2) · **구분선** · All Readable(1) · 구분선 ·
+    /// 영상(5) · 오디오(4) · 이미지(3) · 문서(2) · **구분선** · All Readable(1) · 구분선 ·
     /// Minimize to tray(A218 — 최하단·번호 없음).
-    /// 굵게 표시한 구분선 2개가 A96 신규다 — ① 1번과 2번 사이 ② 하드웨어와 Settings 사이
-    /// (둘이 서로 붙어 보인다는 사용자 지적).
+    /// 즉 화면에서 보이는 아래→위 순서는 Min to tray → All Readable → 문서 → 이미지 →
+    /// 오디오 → 영상이다(A254 사용자 지시). 압축·하드웨어·Settings·상단부는 불변.
+    /// 굵게 표시한 구분선 2개가 A96(v0.116.0) 신규다 — ① 1번과 2번 사이 ② 하드웨어와 Settings
+    /// 사이(둘이 서로 붙어 보인다는 사용자 지적). A254는 구분선 위치를 건드리지 않았다.
     /// </summary>
     private void BuildStartMenu()
     {
@@ -1009,11 +1013,12 @@ public sealed partial class MainWindow : Window
         AddModuleItem("archive"); // 6
         StartMenuPanel.Children.Add(Divider());
 
-        // 문서-오디오-영상-사진 그룹 (아래부터 사진 → 위로 갈수록 문서)
-        AddModuleItem("document"); // 5 — v0.44.0 실제 모듈로 교체 (텍스트·마크다운 1단계)
-        AddModuleItem("audio"); // 4 — 음악 재생 분리 (A10, v0.75.0)
-        AddModuleItem("video"); // 3
-        AddModuleItem("image"); // 2
+        // 영상-오디오-이미지-문서 그룹 (A254/v0.242.0 재배열 — 아래부터 문서 → 위로 갈수록 영상).
+        // 나열은 위→아래 채움 순서라 화면에서 읽히는 아래→위 순서와 정확히 반대다.
+        AddModuleItem("video"); // 5 — A254 이전 3
+        AddModuleItem("audio"); // 4 — 음악 재생 분리 (A10, v0.75.0), 번호 불변
+        AddModuleItem("image"); // 3 — A254 이전 2
+        AddModuleItem("document"); // 2 — v0.44.0 실제 모듈로 교체 (텍스트·마크다운 1단계), A254 이전 5
         StartMenuPanel.Children.Add(Divider()); // A96 신규 ①: 1번 ↔ 2번 분리
 
         AddModuleItem(KOTU.Module.AllReadable.AllReadableModule.ModuleId); // 1 — A96에서 최하단으로
