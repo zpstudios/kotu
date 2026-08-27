@@ -61,6 +61,14 @@ public sealed partial class FileListOverlay : UserControl
     public event Action<IReadOnlyList<ExplorerListing.Entry>>? FillCompleted;
 
     /// <summary>
+    /// A243: 내부 리스트의 폴더 실변경 항해 시작 중계(ExplorerPane.NavigationStarted) — 셸이
+    /// 중앙 썸네일(ThumbnailExplorer.ShowLoading)에 즉시 화면 전환을 지시한다. ViewChanged
+    /// (스캔 완료)와 같은 축의 앞 단 통지라 가시성 조건 없이 흘린다(도크가 닫혀 있어도 이
+    /// 리스트가 폴더 상태의 단일 원본 — A93. FillCompleted의 무조건 중계와 같은 방침).
+    /// </summary>
+    public event Action<string>? NavigationStarted;
+
+    /// <summary>
     /// 떠 있는 동안의 선택 항목(파일·폴더 불문) — 닫혀 있으면 null (A240 —
     /// SelectedFilePath의 가시성 규칙과 동일. 해석은 셸 몫).
     /// </summary>
@@ -147,6 +155,8 @@ public sealed partial class FileListOverlay : UserControl
                 ViewChanged?.Invoke(folder, entries); // A93 — 중앙 썸네일 동기화
                 SyncTreeToFolder(folder);             // A134 — 상단 트리 동기
             };
+            // A243: 폴더 실변경 항해 시작 — 중앙 썸네일 로딩 화면 중계(위 이벤트 주석 참고)
+            _list.NavigationStarted += folder => NavigationStarted?.Invoke(folder);
             // A240: 닫힌 채의 선택 변화(재작성이 만드는 소멸 포함)는 발화하지 않는다 — 위
             // SelectionChanged 계약 주석 참고. A241: 조립 완료는 가시성 무관 중계(캐시 데우기).
             _list.SelectionChanged += () =>

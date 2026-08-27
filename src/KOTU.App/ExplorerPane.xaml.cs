@@ -85,6 +85,14 @@ public sealed partial class ExplorerPane : UserControl
     public event Action<IReadOnlyList<ExplorerListing.Entry>>? FillCompleted;
 
     /// <summary>
+    /// A243: 폴더 실변경 항해의 시작 통지 — ViewChanged(스캔 완료 후 목록)보다 앞서, 스캔 시작
+    /// 시점에 새 폴더 경로와 함께 발생한다. 셸이 중앙 썸네일(ThumbnailExplorer.ShowLoading)에
+    /// 같은 즉시 화면 전환을 중계하는 통로다. 같은 폴더 재스캔(감시 400ms 디바운스·조작 후
+    /// 갱신)·정렬·필터 재작성은 발화하지 않는다 — 실변경 판정은 NavigateToAsync 한 곳(단일 지점).
+    /// </summary>
+    public event Action<string>? NavigationStarted;
+
+    /// <summary>
     /// 파일 조작(드랍 이동/복사·붙여넣기 — A94) 실패 안내 문구. 이 페인에는 상태 표시 줄이 없어
     /// 호스트(FileListOverlay)가 받아 A92류 일시 문구로 띄운다. 성공은 조용(뷰 갱신이 피드백).
     /// </summary>
@@ -586,7 +594,8 @@ public sealed partial class ExplorerPane : UserControl
         // A179: 폴더가 바뀌면 체크 집합을 비운다 — 다른 폴더의 체크가 보이지 않는 채 작업 집합에
         // 남으면 삭제·복사 대상이 화면 밖 항목이 된다(위험). 같은 폴더 재스캔(폴더 감시·조작 후
         // 갱신)은 여기 걸리지 않아 체크가 생존한다.
-        if (!string.Equals(folder, _folder, StringComparison.OrdinalIgnoreCase)) _checkedPaths.Clear();
+        var folderChanged = !string.Equals(folder, _folder, StringComparison.OrdinalIgnoreCase);
+        if (folderChanged) _checkedPaths.Clear();
         _folder = folder;
         PathText.Text = folder;
         ToolTipService.SetToolTip(PathText, folder); // 잘려도 전체 경로 확인 가능(A8)
@@ -594,6 +603,25 @@ public sealed partial class ExplorerPane : UserControl
         EnsureWatch(folder); // A94 5차 — 폴더 전환 즉시 재대상(스캔 완료 전의 변경도 디바운스로 잡힌다)
 
         var seq = ++_loadSeq;
+        // A243: 폴더 실변경이면 스캔 완료를 기다리지 않고 즉시 옛 폴더 화면을 지우고 로딩 문구를
+        // 띄운다(대형·OneDrive 폴더에서 수 초 무반응으로 보이던 체감 해소 — 스캔 완료 시 Fill이
+        // 문구·목록을 덮고, 실패 경로도 "Cannot read..."가 덮는다). 같은 폴더 재스캔(감시 400ms
+        // 디바운스·조작 후 갱신)은 이 갈래에 안 들어와 종전대로 무Clear(깜빡임 방지)다.
+        // Clear ~ Fill 사이의 소비자는 전부 빈 목록에 안전하다: 선택 소멸 발화는 A240의 null 선택
+        // 규칙(닫힌 도크는 FileListOverlay가 차단), ApplyCutMarks·CheckedPathsInView·FindItemByPath는
+        // 빈 순회, 낡은 로더·조립 루프는 위 seq 증가와 아래 Stop이 접고, 편집 진입 대기
+        // (WhenFillCompleteAsync)는 신호 해방 후 미매칭 폴백("그새 사라짐")으로 무해하게 끝난다.
+        if (folderChanged)
+        {
+            StopFillAppendLoop(); // 직전 폴더의 조립 루프가 빈 판에 낡은 조각을 붙이지 않게(seq 대조와 이중)
+            _fillDone?.TrySetResult(true); // 직전 조립을 기다리던 흐름 해방 — 낡은 목록이니 미매칭 폴백으로 끝난다
+            _fillDone = null;
+            IconGrid.Items.Clear();
+            ListPane.Items.Clear();
+            EmptyText.Text = "Loading...";
+            EmptyText.Visibility = Visibility.Visible;
+            NavigationStarted?.Invoke(folder); // 셸이 중앙 썸네일에도 같은 로딩 화면을 중계(A93 경로)
+        }
         // A160: 표시 정책은 스캔 시작 시점에 스냅샷해 워커로 넘긴다 — 워커 스레드에서 UI 필드를
         // 읽지 않는다(스캔 도중 토글이 바뀌면 그 토글이 자기 재스캔을 다시 건다).
         var includeHidden = _showHidden;

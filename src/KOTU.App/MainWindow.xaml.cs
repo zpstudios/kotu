@@ -237,6 +237,20 @@ public sealed partial class MainWindow : Window
             if (_openFileBrowsing) _s4Explorer?.ShowEntries(folder, entries);
             else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(folder, entries);
         };
+        // A243: 폴더 실변경 항해 시작 — 스캔 완료(ViewChanged)를 기다리지 않고 지금 화면을 차지한
+        // 썸네일 표면부터 즉시 로딩 화면으로 전환한다(수신 분기는 위 ViewChanged와 동일 — 표면이
+        // 없는 상태(콘텐츠 열림·Hardware 등)면 무동작). 선택 축도 같이 리셋한다 — 지워진 목록의
+        // 선택이 스캔이 끝날 때까지 우측 정보에 남지 않게(위 A200 리셋과 같은 규칙·같은 무동작 가드).
+        ListOverlay.NavigationStarted += folder =>
+        {
+            if (_openFileBrowsing) _s4Explorer?.ShowLoading(folder);
+            else if (IsEmptyFileModule) _thumbnailExplorer?.ShowLoading(folder);
+            if (_selectedBrowse is not null)
+            {
+                _selectedBrowse = null;
+                RefreshInfoOverlayForSelection();
+            }
+        };
         // A240: 좌 리스트 선택 → 우측 정보 패널(선택 우선 축). ListOverlay는 S1~S4 공용 단일
         // 인스턴스라 배선도 이 한 곳뿐이다 — 썸네일 축(상태별 인스턴스 2개)과 달리 표면 분기가
         // 없고, 닫힌 도크의 발화는 FileListOverlay가 원천에서 거른다(이중 발화·유령 발화 없음).

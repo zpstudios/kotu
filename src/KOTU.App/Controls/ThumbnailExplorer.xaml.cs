@@ -42,6 +42,11 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 같은 근거(수백 파일 폴더에서 IO 폭주 방지). 풀 워커 수와 게이트 초기값이 함께 쓴다.</summary>
     private const int TextPreviewConcurrency = 3;
 
+    /// <summary>A242: 셸 썸네일 추출 동시 상한 — A233과 같은 A194 구조(풀 워커 수 = 게이트
+    /// 초기값). 텍스트 풀과 분리한 이유: 셸 썸네일 추출(영상 프레임 디코드 등)은 건당 수백 ms까지
+    /// 느릴 수 있어, 같은 풀에 섞으면 가벼운 텍스트 앞부분 읽기가 그 뒤에 줄을 선다.</summary>
+    private const int ThumbFetchConcurrency = 3;
+
     /// <summary>더블클릭 판정 창 — ExplorerPane.DoubleClickMs와 같은 값(같은 감각).</summary>
     private const int DoubleClickMs = 500;
 
@@ -112,6 +117,16 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private readonly SemaphoreSlim _textReadGate = new(TextPreviewConcurrency);
 
+    /// <summary>A242: 셸 썸네일 추출 전용 풀 — _textPool과 같은 규칙(A194: 항목별 독립 작업만·
+    /// 지연 생성·Unloaded에서 Dispose 후 다시 로드되면 되살아난다. ModuleWorker 계약: UI 스레드
+    /// await 후속부는 UI 스레드 복귀 — 완료 반영의 seq 재대조가 디스패치 없이 성립).</summary>
+    private ModuleWorkerPool? _thumbPool;
+
+    /// <summary>A242: 셸 썸네일 발사 게이트 — _textReadGate와 같은 A194 관용구(타일 생성 시점마다
+    /// 개별 예약이라 인스턴스 필드·낡은 예약은 게이트 통과 시점 seq 대조로 발사 없이 접힌다 =
+    /// 자연 배압. static 아님 — 뷰 수명과 함께 버려진다).</summary>
+    private readonly SemaphoreSlim _thumbFetchGate = new(ThumbFetchConcurrency);
+
     private (string Path, DateTime At)? _lastClick;
     private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
     private (string Path, DateTime At)? _lastPress;      // A131: 원시 눌림 쌍 — 항목 재구축을 건너 살아남는 최후 폴백
@@ -149,6 +164,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// (ExplorerPane.FetchPool과 같은 규칙. 워커 수 = 동시 읽기 상한).</summary>
     private ModuleWorkerPool TextPool =>
         _textPool ??= new ModuleWorkerPool("KOTU tile text", TextPreviewConcurrency);
+
+    /// <summary>A242: 지연 생성 — TextPool과 같은 규칙(워커 수 = 동시 추출 상한).</summary>
+    private ModuleWorkerPool ThumbPool =>
+        _thumbPool ??= new ModuleWorkerPool("KOTU tile thumb", ThumbFetchConcurrency);
 
     public ThumbnailExplorer()
     {
@@ -200,6 +219,8 @@ public sealed partial class ThumbnailExplorer : UserControl
             _showSeq++;
             _textPool?.Dispose();
             _textPool = null;
+            _thumbPool?.Dispose(); // A242 — 텍스트 풀과 같은 정리 규칙(보류 무산은 위 seq 선증가가 겸한다)
+            _thumbPool = null;
         };
         // A200: 선택 변경을 셸로 중계 — 우측 정보 패널의 선택 우선 표시(파일 정보 직접 조회)용.
         // 그리드 자체 이벤트를 얇게 감싸기만 한다(선택 판정·해석은 셸 몫 — SelectedEntry 질의).
@@ -461,6 +482,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         var first = Math.Min(TileChunkItems, cap);
         for (var i = 0; i < first; i++)
             TileGrid.Items.Add(MakeTile(entries[i]));
+        EmptyText.Text = "No matching files here"; // A243 — ShowLoading의 "Loading..."을 원문구로 복원
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         TileGrid.UpdateLayout(); // 첫 조각(상한 60타일)의 패널 실체화 — 아래 타일 크기 반영이 헛돌지 않게
@@ -468,6 +490,26 @@ public sealed partial class ThumbnailExplorer : UserControl
 
         if (first < cap) StartTileAppendLoop(seq, entries, first, cap);
         else FinishShowEntries(entries, seq); // 소형 폴더 — 조립이 여기서 동기 완료(종전 동작 동일)
+    }
+
+    /// <summary>
+    /// A243: 폴더 실변경 항해의 시작 통지 — 스캔 완료(ShowEntries)를 기다리지 않고 즉시 옛 폴더
+    /// 타일을 지우고 로딩 문구를 띄운다(대형·OneDrive 폴더에서 수 초 무반응으로 보이던 체감 해소).
+    /// 실변경 판정은 좌 리스트(ExplorerPane.NavigateToAsync)가 단일 지점으로 하고, 같은 폴더 감시
+    /// 재스캔(400ms 디바운스)·정렬·필터 재작성은 이 경로로 오지 않아 종전대로 무Clear(깜빡임 방지).
+    /// _showSeq 증가 = 보류 중 텍스트 프리뷰(A233)·셸 썸네일(A242) 예약 전부 무산(Unloaded와 같은
+    /// 장치 — 낡은 완료는 고아 host 갱신일 뿐이라 무해). 스캔 결과는 반드시 ShowEntries로 돌아와
+    /// 문구·목록을 덮는다(실패 경로도 빈 목록 ViewChanged를 쏜다 — 로딩 문구가 잔존하지 않는 근거).
+    /// _pendingRenamePath는 건드리지 않는다 — 다음으로 완주한 조립(FinishShowEntries)이 소비한다.
+    /// </summary>
+    public void ShowLoading(string folder)
+    {
+        _showSeq++;
+        StopTileAppendLoop(); // 직전 조립 루프가 빈 판에 낡은 조각을 붙이지 않게(seq 대조와 이중)
+        CurrentFolder = folder; // 좌 리스트(_folder)와 같은 시점 갱신 — 로딩 중 드랍·붙여넣기 대상 일치
+        TileGrid.Items.Clear();
+        EmptyText.Text = "Loading...";
+        EmptyText.Visibility = Visibility.Visible;
     }
 
     /// <summary>
@@ -674,7 +716,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         var preview = entry.IsFolder ? MakeFolderGlyph()
             : IsImageFile(entry.Name) ? MakeImagePreview(entry)
             : IsTextPreviewFile(entry) ? MakeTextPreview(entry) // A233 — 내용 프리뷰(지연 교체)
-            : MakeExtensionTile(entry);
+            : MakeShellThumbTile(entry); // A242 — 그 외 전 파일: 셸 썸네일 지연 교체(단일 판정 지점)
 
         var tile = new Grid();
         tile.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -1026,6 +1068,124 @@ public sealed partial class ThumbnailExplorer : UserControl
             VerticalAlignment = VerticalAlignment.Top,
         },
     };
+
+    // ---------- 비이미지 셸 썸네일 (A242) ----------
+
+    /// <summary>
+    /// 비이미지 파일 타일 (A242): 즉시 확장자 타일 + 우하단 대기 배지를 그려 두고, 워커 추출이
+    /// 끝나면 셸 썸네일로 교체한다(A233 MakeTextPreview의 지연 교체 구조 그대로 — 조립 루프는
+    /// 예약만 하고 블로킹되지 않는다). 대상 = 폴더·이미지·텍스트(A233) 제외 전 파일 — 갈래
+    /// 선택은 MakeTile 한 곳이라 다른 갈래와 이중 로드가 없다. 실패·썸네일 없음 = 배지만 걷고
+    /// 확장자 타일 유지(안내 없음·사양). 자체 캐시는 두지 않는다 — 셸 썸네일 캐시가 이미 있어
+    /// 재추출이 싸다(ExplorerPane.RefreshView 주석과 같은 근거). 성공한 타일은 다음 재스캔
+    /// (타일 전량 재생성)까지 다시 바뀌지 않는다 — 감시 재스캔 시 재요청은 기존 파이프라인 규칙.
+    /// </summary>
+    private UIElement MakeShellThumbTile(ExplorerListing.Entry entry)
+    {
+        var host = new Grid();
+        host.Children.Add(MakeExtensionTile(entry));
+        var badge = MakePendingBadge();
+        host.Children.Add(badge);
+        _ = FillShellThumbnailAsync(host, badge, entry.Path, entry.IsPlaceholder, _showSeq);
+        return host;
+    }
+
+    /// <summary>
+    /// A243: 지연 교체 대기 배지 — 정적 글리프(E895 Sync). ProgressRing은 기각(CI가 컴파일
+    /// 전용이라 애니메이션을 검증할 수 없다 — A94류 보수 관용구). 확장자 타일을 가리지 않게
+    /// 우하단 소형·저투명으로 겹치고, 히트 테스트에서도 뺀다(타일 히트 판정은 조상 탐색
+    /// (EntryFromSource)이라 영향이 없지만 명시해 둔다).
+    /// </summary>
+    private static FontIcon MakePendingBadge() => new()
+    {
+        Glyph = "\uE895",
+        FontSize = 10,
+        Opacity = 0.55,
+        HorizontalAlignment = HorizontalAlignment.Right,
+        VerticalAlignment = VerticalAlignment.Bottom,
+        Margin = new Thickness(0, 0, 12, 12),
+        IsHitTestVisible = false,
+    };
+
+    /// <summary>
+    /// 게이트(동시 ThumbFetchConcurrency건) 획득 후 워커에서 셸 썸네일을 추출해 타일 내용을
+    /// 교체한다 (A242 — FillTextPreviewAsync의 A194 발사 구조 그대로: UI 스레드에서 시작하므로
+    /// await 후속부도 UI 스레드, 낡음 이중 방어 = ① 게이트 통과 시점 ② 완료 시점 seq 대조,
+    /// host·badge는 이 타일 전용 클로저 캡처라 교체가 다른 타일로 갈 수 없고, Unloaded·
+    /// ShowLoading(A243)은 _showSeq를 올려 보류 전부를 무산시킨다). cachedOnly = 클라우드 전용
+    /// (placeholder) 파일 — 캐시·클라우드 제공 썸네일만 요청(A175 하이드레이션 금지 불변).
+    /// 추출 실패·썸네일 없음·비트맵 디코드 실패는 배지만 걷고 확장자 타일 유지(안내 없음).
+    /// </summary>
+    private async Task FillShellThumbnailAsync(Grid host, FontIcon badge, string path, bool cachedOnly, int seq)
+    {
+        await _thumbFetchGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
+        try
+        {
+            if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다(고아 host라 배지도 무의미)
+            byte[]? bytes;
+            try
+            {
+                bytes = await ThumbPool.Run(_ => FetchShellThumbnail(path, cachedOnly));
+            }
+            catch
+            {
+                bytes = null; // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로(배지 걷기)로
+            }
+            if (seq != _showSeq) return; // ② 완료 시점 재대조(이중 방어)
+            if (bytes is null)
+            {
+                host.Children.Remove(badge); // 실패·썸네일 없음 — 확장자 타일 유지(사양)
+                return;
+            }
+            try
+            {
+                // 바이트 → BitmapImage: ExplorerPane.LoadThumbnailsAsync의 반영 관용구 그대로
+                var bitmap = new BitmapImage();
+                using (var stream = new MemoryStream(bytes))
+                    await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+                if (seq != _showSeq) return;
+                host.Children.Clear();
+                host.Children.Add(new Image
+                {
+                    Source = bitmap,
+                    Stretch = Stretch.Uniform,
+                    Margin = new Thickness(4),
+                });
+            }
+            catch
+            {
+                host.Children.Remove(badge); // 손상 데이터 디코드 실패 — 확장자 타일 유지
+            }
+        }
+        finally
+        {
+            _thumbFetchGate.Release(); // 예외·낡음 경로 포함 — 누락되면 상한 건 뒤 조용히 멈춘다(A194)
+        }
+    }
+
+    /// <summary>
+    /// 워커 스레드: 셸 썸네일을 PNG/JPG 바이트로 추출한다 (A242 — ExplorerPane.FetchThumbnail
+    /// 이식·요청 크기만 256 = PreviewDecodeWidth(이미지 실디코드 폭과 통일)). 없으면 null.
+    /// StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는 여기서 동기 대기한다
+    /// (전용 스레드라 UI 교착 없음). cachedOnly(A175): 옵션 없는 호출은 캐시가 비면 시스템이
+    /// 원본을 열어 생성하므로 placeholder에서는 하이드레이션(전체 다운로드)이 된다 —
+    /// ReturnOnlyIfCached로 캐시에 없으면 null. 예외(잠김·삭제 경합)는 호출부 catch가 삼킨다.
+    /// </summary>
+    private static byte[]? FetchShellThumbnail(string path, bool cachedOnly)
+    {
+        var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
+        using var thumb = (cachedOnly
+                ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth,
+                    ThumbnailOptions.ReturnOnlyIfCached)
+                : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth))
+            .AsTask().GetAwaiter().GetResult();
+        if (thumb is null || thumb.Size == 0) return null;
+
+        using var stream = thumb.AsStreamForRead();
+        using var buffer = new MemoryStream((int)thumb.Size);
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
+    }
 
     /// <summary>
     /// 항목 우클릭 메뉴 — ExplorerPane.AttachContextMenu와 같은 구성(A94 2차 신설 → 6차 확장).
