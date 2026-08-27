@@ -476,6 +476,33 @@ public sealed partial class PdfPane : UserControl
             newZoom, disableAnimation: true);
     }
 
+    /// <summary>
+    /// A246: 키 줌 한 단계(direction: +1 확대 / -1 축소) — ZoomAtPointer와 같은 ×1.1 단계·같은
+    /// 수동 줌 규칙(Fit 추종 해제 A49·최소 폭 추종 A188·무애니메이션)이고, 키에는 포인터가 없어
+    /// 앵커만 뷰포트 중앙이다(고정점 산식은 ZoomAtPointer와 동일 — pt만 중앙 좌표).
+    /// 미확보 스크롤러는 한 번 더 잡아 본다(TryHandleNavKey의 지연 HookScroll 관용구) —
+    /// 그래도 없거나 PDF 미로드면 무동작(호출부 DocumentView.OnZoomKey가 PDF 갈래에서만 부른다).
+    /// </summary>
+    public void StepZoom(int direction)
+    {
+        if (_scroll is null) HookScroll();
+        if (_scroll is null || _items.Count == 0) return;
+        var oldZoom = _scroll.ZoomFactor;
+        var newZoom = (float)Math.Clamp(oldZoom * Math.Pow(1.1, direction),
+            _scroll.MinZoomFactor, _scroll.MaxZoomFactor);
+        if (Math.Abs(newZoom - oldZoom) < 0.0001f) return;
+
+        _appliedFit = null; // 수동 줌 — Fit 크기 추종 해제(ZoomAtPointer와 동일)
+        EnsureContentMinWidth(newZoom);
+        var centerX = _scroll.ViewportWidth / 2;
+        var centerY = _scroll.ViewportHeight / 2;
+        var ratio = newZoom / oldZoom;
+        _scroll.ChangeView(
+            (_scroll.HorizontalOffset + centerX) * ratio - centerX,
+            (_scroll.VerticalOffset + centerY) * ratio - centerY,
+            newZoom, disableAnimation: true);
+    }
+
     // ---------- 드래그 투 스크롤 / 팬 (A148) ----------
 
     /// <summary>이만큼(px) 넘게 움직이기 전에는 클릭 취급 — 이미지 모듈과 같은 값·같은 의미.</summary>

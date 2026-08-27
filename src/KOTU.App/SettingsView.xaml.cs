@@ -777,15 +777,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(LearnMore(
             "\"System default\" follows the Windows display scaling; picking a value overrides it "
             + "for this app only."));
-        // A41: 단축키 안내 한 줄(사양) — 키 정본은 MainWindow.UiScaleStepForKey.
-        Root.Children.Add(new TextBlock
-        {
-            Text = "Shortcuts: Ctrl + '+' / '-' step the scale, Ctrl + numpad '*' resets it, "
-                + "and Ctrl + wheel over the bottom bar steps it too.",
-            FontSize = 12,
-            Opacity = 0.7,
-            TextWrapping = TextWrapping.Wrap,
-        });
+        // A246: A41의 단축키 안내 한 줄(Ctrl+±·Ctrl+넘패드 *·하단 바 Ctrl+휠)은 제거됐다 —
+        // 그 키·휠 진입로 자체가 회수돼 이 콤보가 UI 배율의 유일한 변경 진입로다.
 
         // A44(A21 보강): 현재 윈도우 배율을 별도 줄이 아니라 배율 목록 항목 옆에 표기한다.
         // XamlRoot.RasterizationScale = 이 창이 떠 있는 모니터의 시스템 배율(앱 자체 배율과 무관).
@@ -842,8 +835,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             _settings.Save();
             UiScale.NotifyChanged();
         };
-        // A41: 단축키(Ctrl+±·Ctrl+휠)로 배율이 바뀌면 열려 있는 이 화면의 콤보 표시도 따라온다 —
-        // 종전에는 콤보가 Changed를 구독하지 않았다(설정 화면이 유일한 변경 진입로여서 불필요).
+        // A41→A246: 단축키(Ctrl+±·Ctrl+휠) 진입로는 회수됐지만 이 동기 구독은 유지한다 —
+        // 다른 창의 설정 콤보가 배율을 바꾸면 열려 있는 이 화면의 콤보 표시도 따라와야 한다.
         // 위 SelectionChanged의 "저장값과 같으면 return" 가드가 재저장 루프를 끊고, 다른 창
         // (다른 UI 스레드)에서 발화될 수 있어 MainWindow.ApplyUiScale과 같은 마샬링을 거친다.
         // 구독 해제는 Unloaded(모듈 전환으로 설정 화면이 내려갈 때) — 같은 클로저라 -=가 성립한다.

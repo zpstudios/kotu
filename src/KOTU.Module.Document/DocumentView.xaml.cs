@@ -176,6 +176,7 @@ public sealed partial class DocumentView : UserControl,
         InitializeComponent();
         _settings = settings;
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
+        SetupZoomAccelerators(); // A246: Ctrl+± 문서 줌 — XAML에 못 쓰는 (VirtualKey)187/189 포함 코드 등록
         // A115: 에디터 장식(가이드·¶·EOF·A142 행 번호). 전문 텍스트는 공유 스냅샷으로 공급한다(A142 ①ⓑ).
         _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText);
 
@@ -401,6 +402,65 @@ public sealed partial class DocumentView : UserControl,
         if (notches == 0) return;
         _wheelDeltaAccum -= notches * 120;
         SetZoom(_zoomPercent + notches * ZoomStepPercent);
+    }
+
+    /// <summary>
+    /// A246: Ctrl+± 키 줌 등록 — 셸 A41(UI 배율 키)이 회수돼 빈 키를 문서 줌으로 재배정한다.
+    /// 코드 등록인 이유: '+'/'-' 문자 키는 VirtualKey에 이름이 없어 XAML로는 (VirtualKey)187/189를
+    /// 못 쓴다(Ctrl+S는 XAML 선례 — DocumentView.xaml, 캐스트 키는 셸 AddShortcut의 (VirtualKey)192
+    /// 관용구). 키 집합은 A41이 처리하던 그대로다(축소 금지): 넘패드 Add/Subtract·VK_OEM_PLUS(187)/
+    /// VK_OEM_MINUS(189), 넘패드 Multiply = 100% 리셋. 187/189에는 Control|Shift 변형도 함께 건다 —
+    /// 주열의 Ctrl+'+'는 실제로 Ctrl+Shift+'='(187)로 오는데, A41은 KeyDown에서 Ctrl만 봐서 Shift
+    /// 동반도 동작했고 KeyboardAccelerator는 수정자 정확 일치라 두 벌이 필요하다.
+    /// 오토리피트 허용(A41과 동일 — 액셀러레이터는 리피트 down마다 재발화한다). 에디터 포커스
+    /// 중에도 발동이 사양이다(TextBox는 Ctrl+±를 쓰지 않아 뺏을 입력이 없다 — A32 통과 불필요).
+    /// 스코프: 액셀러레이터는 요소가 뷰 트리에 있는 동안 창 전체에서 듣는다(HotkeySupport.Register
+    /// 주석과 같은 성질) — 다른 모듈로 전환하면 이 뷰가 트리에서 내려가 자연 해제된다.
+    /// [A237]이 같은 키를 하드웨어 뷰의 그래프 크기 조절에 쓴다 — 모듈별 소비라 충돌 없음.
+    /// </summary>
+    private void SetupZoomAccelerators()
+    {
+        AddZoomAccelerator(VirtualKey.Add, VirtualKeyModifiers.Control, +1);
+        AddZoomAccelerator((VirtualKey)187, VirtualKeyModifiers.Control, +1);
+        AddZoomAccelerator((VirtualKey)187, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, +1);
+        AddZoomAccelerator(VirtualKey.Subtract, VirtualKeyModifiers.Control, -1);
+        AddZoomAccelerator((VirtualKey)189, VirtualKeyModifiers.Control, -1);
+        AddZoomAccelerator((VirtualKey)189, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, -1);
+        AddZoomAccelerator(VirtualKey.Multiply, VirtualKeyModifiers.Control, 0);
+    }
+
+    /// <summary>A246 등록 한 줄 — step: +1/-1 = 한 단계 확대/축소, 0 = 100% 리셋.</summary>
+    private void AddZoomAccelerator(VirtualKey key, VirtualKeyModifiers modifiers, int step)
+    {
+        var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
+        accelerator.Invoked += (_, args) => OnZoomKey(step, args);
+        KeyboardAccelerators.Add(accelerator);
+    }
+
+    /// <summary>
+    /// A246 키 줌 실행부(갈래 분기): PDF = Ctrl+휠(ZoomAtPointer)과 같은 ×1.1 단계, 앵커만 뷰포트
+    /// 중앙(PdfPane.StepZoom — 키에는 포인터가 없다), 리셋 = 기존 100% 경로 재사용
+    /// (SelectFitOption(ActualSize) — A 키·플라이아웃 Original과 동일). 텍스트·렌더 뷰 =
+    /// SetZoom ±10%p(Ctrl+휠과 같은 단계·A229 범위 20~500은 SetZoom이 접는다), 리셋 = SetZoom(100).
+    /// 빈 화면(파일 없음·무제 아님)은 줌 대상이 없어 흘려보낸다(Handled=false — 기본값 true를
+    /// 명시적으로 되돌리는 HotkeySupport.Register 관용구. 셸 분기도 A246으로 비어 무동작이 된다).
+    /// </summary>
+    private void OnZoomKey(int step, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (IsPdfFitBranch)
+        {
+            args.Handled = true;
+            if (step == 0) SelectFitOption(PdfFitMode.ActualSize);
+            else _pdfPane?.StepZoom(step);
+            return;
+        }
+        if (_path is null && !_untitled)
+        {
+            args.Handled = false;
+            return;
+        }
+        args.Handled = true;
+        SetZoom(step == 0 ? DefaultZoomPercent : _zoomPercent + step * ZoomStepPercent);
     }
 
     /// <summary>

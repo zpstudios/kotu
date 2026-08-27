@@ -11,7 +11,9 @@
          버튼에 걸린 단독 문자 키(A 100% · F Fit)는 A34에서 코드(SetupHotkeys)에 있다 —
          에디터(TextBox)에 포커스가 있으면 통과시켜야 해서 공용 통과 규칙을 거친다.
          A111(v0.133.0)에서 1:1 버튼이 사라져 A·F 둘 다 Fit 버튼에 걸린다(의미는 무변경).
-         O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화. -->
+         O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
+         A246: Ctrl+±·Ctrl+넘패드 * 문서 줌 액셀러레이터는 코드 등록(SetupZoomAccelerators) —
+         (VirtualKey)187/189 캐스트 키는 XAML로 표기할 수 없다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="S" Modifiers="Control" Invoked="OnSaveInvoked" />
     </UserControl.KeyboardAccelerators>

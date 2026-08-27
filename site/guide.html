@@ -476,12 +476,15 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>Files larger than 4 MB open read-only, showing the first 4 MB.</li>
           <li><kbd>Tab</kbd> inserts a tab character in the editor.</li>
           <li>The text fills the full width of the window. To make it larger or smaller, zoom with
-              <kbd>Ctrl</kbd>+wheel — 20% to 500% of the normal size, 10% per notch. The current level shows
+              <kbd>Ctrl</kbd>+wheel — 20% to 500% of the normal size, 10% per notch — or with
+              <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>-</kbd> on the same scale (the numpad keys
+              work too, holding a key repeats, and the keys work even while the cursor is in the editor);
+              <kbd>Ctrl</kbd>+numpad <kbd>*</kbd> puts the zoom back to 100%. The current level shows
               in the bottom bar, and one level applies everywhere: it is remembered across files, windows and
               restarts. Zooming never touches the file itself. <strong>The rendered Markdown view zooms with
-              the same <kbd>Ctrl</kbd>+wheel on the same scale</strong>, so switching between the preview and
-              the editor keeps the size you set; the text still wraps to the width of the view at every
-              level, so nothing scrolls sideways.</li>
+              the same keys and the same <kbd>Ctrl</kbd>+wheel on the same scale</strong>, so switching
+              between the preview and the editor keeps the size you set; the text still wraps to the width
+              of the view at every level, so nothing scrolls sideways.</li>
           <li>Very faint guide lines mark the top and bottom of each line of text, <code>¶</code> marks a line
               break and <code>·EOF</code> marks the end of the file. They are drawn over the text and never
               become part of it. <strong>Two toggle buttons at the right of the bottom bar, just before Fit,
@@ -529,7 +532,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>Pages scroll continuously in one column. The bottom bar shows <code>current / total</code> as you
               scroll. There are no page-forward or page-back buttons.</li>
           <li>The wheel scrolls; <kbd>Ctrl</kbd>+wheel zooms around the pointer, about 10% per notch. Touch
-              pinch-zoom works.</li>
+              pinch-zoom works. <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>-</kbd> zoom in the same
+              steps around the centre of the view (the numpad keys work too; hold to repeat), and
+              <kbd>Ctrl</kbd>+numpad <kbd>*</kbd> goes back to the actual size — the same as picking
+              <em>Original</em> from the Fit button.</li>
           <li><strong>Push the pages around</strong> by dragging with the left mouse button, whenever there
               is anything to scroll to. Mouse only — touch and pen pan the way they always did.</li>
           <li>The keyboard scrolls too: <kbd>↑</kbd> <kbd>↓</kbd> move about an eighth of the view,
@@ -666,8 +672,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print what you are looking at (picture, PDF or text document)</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>UI scale one step up / down (numpad <kbd>+</kbd> / <kbd>-</kbd> work too; hold to repeat)</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>reset the UI scale to <em>System default</em></td></tr>
           <tr><td><kbd>Browser Back</kbd></td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
         </table></div>
         <p><kbd>Alt</kbd>+<kbd>`</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd>, <kbd>F11</kbd> / <kbd>F12</kbd> and
@@ -675,8 +679,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            character of their own, and <kbd>Ctrl</kbd>+<kbd>P</kbd> mid-edit prints the document just as it
            stands.
            Plain <kbd>Enter</kbd> gives way to typing — in a text document it is a line break — and
-           <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well. The UI-scale keys <kbd>Ctrl</kbd>+<kbd>+</kbd> /
-           <kbd>-</kbd> give way too: while you are typing, they belong to the text editor and the system.
+           <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well.
            There is no keyboard shortcut for switching module or for opening Settings —
            both live in the menu at the bottom left. Switching module always arrives with both sidebars
            open; choosing the module you are already in changes nothing.</p>
@@ -732,6 +735,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Audio</td><td><kbd>L</kbd></td><td>loop options</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print the PDF or the text</td></tr>
+          <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>zoom one step in / out (numpad <kbd>+</kbd> / <kbd>-</kbd> work too; hold to repeat)</td></tr>
+          <tr><td>Document</td><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>back to 100%</td></tr>
           <tr><td>Document</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>Original / re-apply the last Fit option</td></tr>
           <tr><td>Document</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>scroll the PDF, about an eighth of the view</td></tr>
           <tr><td>Document</td><td><kbd>Page Up</kbd> <kbd>Page Down</kbd></td><td>scroll the PDF, about a full screen</td></tr>
@@ -1005,13 +1010,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            350% — overrides Windows for KOTU only, and nothing else on the desktop changes.</p>
         <p>A change takes effect in every open KOTU window immediately; there is nothing to restart. If the
            Windows scaling on your monitor is a value the list does not offer, a note under the list says so.</p>
-        <p>The scale can also be driven without opening Settings: <kbd>Ctrl</kbd>+<kbd>+</kbd> /
-           <kbd>Ctrl</kbd>+<kbd>-</kbd> step it up and down the same list (the numpad keys work too, and
-           holding the key repeats), <kbd>Ctrl</kbd>+numpad <kbd>*</kbd> resets it to <em>System default</em>,
-           and <kbd>Ctrl</kbd>+wheel over the bottom bar steps it as well. Over module content,
-           <kbd>Ctrl</kbd>+wheel keeps its usual meaning — zooming an image or a document, for instance —
-           and the scale does not move. If the setting is on <em>System default</em>, the first step starts
-           from the list entry closest to your current effective scale.</p>
+        <p>This list is the only way to change the scale — there is no keyboard shortcut for it.
+           <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>-</kbd> and <kbd>Ctrl</kbd>+wheel belong to
+           the content instead: in the Document module they zoom the document, and <kbd>Ctrl</kbd>+wheel
+           zooms an image or a PDF as it always did.</p>
 
         <h3 id="explorer-integration">Explorer integration</h3>
         <p>The file-type switches and the right-click-menu switch, described in full in

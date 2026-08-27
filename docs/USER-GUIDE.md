@@ -195,12 +195,14 @@ Seven modules. Switch between them from the menu at the bottom left.
 - Files larger than 4 MB open read-only, showing the first 4 MB.
 - `Tab` inserts a tab character in the editor.
 - The text fills the full width of the window. To make it larger or smaller, zoom with
-  `Ctrl`+wheel — 20% to 500% of the normal size, 10% per notch. The current level shows in the
-  bottom bar, and one level applies everywhere: it is remembered across files, windows and
-  restarts. Zooming never touches the file itself. **The rendered Markdown view zooms with the same
-  `Ctrl`+wheel on the same scale**, so switching between the preview and the editor keeps the size
-  you set; the text still wraps to the width of the view at every level, so nothing scrolls
-  sideways.
+  `Ctrl`+wheel — 20% to 500% of the normal size, 10% per notch — or with `Ctrl`+`+` / `Ctrl`+`-`
+  on the same scale (the numpad keys work too, holding a key repeats, and the keys work even while
+  the cursor is in the editor); `Ctrl`+numpad `*` puts the zoom back to 100%. The current level
+  shows in the bottom bar, and one level applies everywhere: it is remembered across files, windows
+  and restarts. Zooming never touches the file itself. **The rendered Markdown view zooms with the
+  same keys and the same `Ctrl`+wheel on the same scale**, so switching between the preview and the
+  editor keeps the size you set; the text still wraps to the width of the view at every level, so
+  nothing scrolls sideways.
 - Very faint guide lines mark the top and bottom of each line of text, `¶` marks a line break and
   `·EOF` marks the end of the file. They are drawn over the text and never become part of it.
   **Two toggle buttons at the right of the bottom bar, just before Fit, turn them off and on** — *Line guides* for
@@ -243,7 +245,10 @@ editor either way.
 
 - Pages scroll continuously in one column. The bottom bar shows `current / total` as you scroll.
   There are no page-forward or page-back buttons.
-- The wheel scrolls; `Ctrl`+wheel zooms around the pointer, about 10% per notch. Touch pinch-zoom works.
+- The wheel scrolls; `Ctrl`+wheel zooms around the pointer, about 10% per notch. Touch pinch-zoom
+  works. `Ctrl`+`+` / `Ctrl`+`-` zoom in the same steps around the centre of the view (the numpad
+  keys work too; hold to repeat), and `Ctrl`+numpad `*` goes back to the actual size — the same as
+  picking **Original** from the Fit button.
 - **Push the pages around** by dragging with the left mouse button, whenever there is anything to
   scroll to. Mouse only — touch and pen pan the way they always did.
 - The keyboard scrolls too: `↑` `↓` move about an eighth of the view, `Page Up` `Page Down` move
@@ -381,16 +386,12 @@ These work in every module.
 | `Shift+N` | new window of the module you are looking at |
 | `Ctrl+S` | save (text document) |
 | `Ctrl+P` | print what you are looking at (picture, PDF or text document) |
-| `Ctrl` + `+` / `-` | UI scale one step up / down (numpad `+` / `-` work too; hold to repeat) |
-| `Ctrl` + numpad `*` | reset the UI scale to *System default* |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
 
 ``Alt+` ``, `Alt`+`Enter`, `F11` / `F12` and `Ctrl+P` work even while you are typing in a text box.
 These keys produce no character of their own, so nothing is taken away from the text — pressing
 `Ctrl+P` mid-edit prints the document just as it stands. Plain `Enter` does
 give way to typing — in a text document it is a line break — and `Shift+N` gives way as well.
-The UI-scale keys `Ctrl`+`+` / `-` give way too: while you are typing, they belong to the text
-editor and the system.
 
 `Esc` undoes one layer per press: full screen first, then the Open file browser, then the file
 itself. Closing the file this way lands on the module's own browser with **both sidebars open** —
@@ -455,6 +456,8 @@ box or while you are typing to jump through the file list.
 | Audio | `L` | loop options |
 | Document | `Ctrl+S` | save |
 | Document | `Ctrl+P` | print the PDF or the text |
+| Document | `Ctrl` + `+` / `-` | zoom one step in / out (numpad `+` / `-` work too; hold to repeat) |
+| Document | `Ctrl` + numpad `*` | back to 100% |
 | Document | `A` | Original |
 | Document | `F` | re-apply the last Fit option |
 | Document | `↑` `↓` | scroll the PDF, about an eighth of the view |
@@ -735,12 +738,10 @@ for KOTU only, and nothing else on the desktop changes.
 A change takes effect in every open KOTU window immediately; there is nothing to restart. If the
 Windows scaling on your monitor is a value the list does not offer, a note under the list says so.
 
-The scale can also be driven without opening Settings: `Ctrl`+`+` / `Ctrl`+`-` step it up and down
-the same list (the numpad keys work too, and holding the key repeats), `Ctrl`+numpad `*` resets it
-to *System default*, and `Ctrl`+wheel over the bottom bar steps it as well. Over module content,
-`Ctrl`+wheel keeps its usual meaning — zooming an image or a document, for instance — and the scale
-does not move. If the setting is on *System default*, the first step starts from the list entry
-closest to your current effective scale.
+This list is the only way to change the scale — there is no keyboard shortcut for it. `Ctrl`+`+` /
+`Ctrl`+`-` and `Ctrl`+wheel belong to the content instead: in the Document module they zoom the
+document ([2.4](#24-document--plain-text)), and `Ctrl`+wheel zooms an image or a PDF as it
+always did.
 
 ### Explorer integration
 
