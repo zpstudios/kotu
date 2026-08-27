@@ -226,6 +226,7 @@ public sealed partial class MainWindow : Window
         ListOverlay.ViewChanged += (folder, entries) =>
         {
             RememberBrowsedFolder(folder); // A174 — 브라우징 위치도 전역 마지막 폴더로(같은 값이면 무동작)
+            RecordFolderHistory(folder);   // A244 — 폴더 실변경만 백스택 적재(정렬·감시 재발화는 무동작)
             // A200: 목록 재작성(폴더 이동·정렬·감시 재스캔)은 타일을 전부 새로 만든다 — 선택 축도
             // 여기서 확정 리셋한다(그리드 SelectionChanged가 Clear에서 안 와도 stale 경로가 우측
             // 정보에 남지 않게). 이미 없으면 무동작 — 재스캔마다 정보 패널을 다시 그리지 않는다.
@@ -326,6 +327,9 @@ public sealed partial class MainWindow : Window
         // handledEventsToo: 리스트·뷰가 눌림을 소비해도 전역 '뒤로'는 셸이 받아야 한다.
         RootLayout.AddHandler(UIElement.PointerPressedEvent,
             new PointerEventHandler(OnRootPointerBack), handledEventsToo: true);
+        // A244: 마우스 앞으로가기(XButton2) = 폴더 히스토리 '앞으로' — 위 '뒤로'(A112)와 동형 배선.
+        RootLayout.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler(OnRootPointerForward), handledEventsToo: true);
         // A186: 클릭·터치 탭 = 영상 하단 바 자동 숨김의 "입력"(재표시·재대기). '뒤로'와 역할이
         // 달라 핸들러를 분리해 얹는다 — 둘은 서로 독립이라 무해.
         RootLayout.AddHandler(UIElement.PointerPressedEvent,
@@ -2868,10 +2872,11 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Esc 분배(A151 — "한 단계 되돌리기" 일관. A186: 모드2 분기는 모드2 소멸로 자동 소진):
     /// ① 전체화면 = 복귀 스냅샷으로(창 모드 + 좌/우 패널 구성) ② S4 = 진입 전 상태로 복귀
-    /// ③ **콘텐츠 열림(무제 포함) = 닫기(A202)** — '뒤로' ③과 같은 실행부(TryCloseContent)를
+    /// ③ **콘텐츠 열림(무제 포함) = 닫기(A202)** — '뒤로' ④(A244 층 삽입 전 ③)와 같은 실행부(TryCloseContent)를
     /// 쓰되 defaultSidebars=true: 닫은 뒤 A109 기본 사이드바가 얹혀, 파일 인자 시작(A81
     /// 무사이드바)에서 Esc 하나로 아이콘 실행 기본 화면(좌/우 사이드바 + 센터 썸네일)이 된다
-    /// (사용자 문면). 검사 순서는 A112 '뒤로' 선례 그대로 — 전체화면 → S4 → 콘텐츠 한 층씩.
+    /// (사용자 문면). 검사 순서는 A112 '뒤로' 선례 그대로 — 전체화면 → S4 → 콘텐츠 한 층씩
+    /// (A244의 폴더 히스토리 pop 층은 '뒤로' 입력 전용 — Esc에는 없다).
     /// 원 기능 우선(먼저 소비하는 쪽이 이긴다 — e.Handled 존중): 이름변경 편집 취소
     /// (ExplorerRenameBox), 잘라내기 표시 해제(A94 — A202부터 지운 게 있을 때만 표면이 소비),
     /// 대화상자·플라이아웃(팝업 트리 — 셸에 키가 오지 않는다). 문서 더티 닫기는 ShowModule의
@@ -2915,7 +2920,8 @@ public sealed partial class MainWindow : Window
     /// 마우스 뒤로가기 판정(A112): PointerUpdateKind가 XButton1Pressed인 눌림 전이만 태운다 —
     /// 다른 버튼이 이미 눌린 채 겹쳐 온 눌림·뗌은 전이 종류가 달라 걸리지 않는다(press만, 구현 결정).
     /// handledEventsToo 구독이라 리스트·뷰가 소비한 눌림도 받는다(전역 '뒤로'는 셸 몫 —
-    /// 어디를 가리키고 눌러도 같아야 한다). XButton2(앞으로 가기)는 이번 범위 밖 — 매핑 없음.
+    /// 어디를 가리키고 눌러도 같아야 한다). XButton2(앞으로 가기)는 A244부터 아래
+    /// <see cref="OnRootPointerForward"/>가 동형으로 받는다(종전 "매핑 없음"의 개정).
     /// 동작했을 때만 소비한다(무동작이면 흘린다 — None 상태 셸 키들과 같은 무간섭 원칙).
     /// </summary>
     private void OnRootPointerBack(object sender, PointerRoutedEventArgs e)
@@ -2926,13 +2932,32 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 마우스 앞으로가기 판정(A244): XButton2Pressed 눌림 전이만 태운다 — 판정·구독 형태는
+    /// 위 <see cref="OnRootPointerBack"/>(A112)의 동형 복제다(handledEventsToo·전이 종류 대조·
+    /// 동작했을 때만 소비). '앞으로'는 층 구조가 없다 — 폴더 히스토리 forward 하나뿐이라
+    /// 분배기 없이 <see cref="TryNavigateForward"/>로 직행한다.
+    /// </summary>
+    private void OnRootPointerForward(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.GetCurrentPoint(RootLayout).Properties.PointerUpdateKind
+            != Microsoft.UI.Input.PointerUpdateKind.XButton2Pressed) return;
+        if (TryNavigateForward()) e.Handled = true;
+    }
+
+    /// <summary>
     /// '뒤로' 분배(A112 — XButton1·GoBack 공용): 한 번에 한 층씩 걷어낸다. 반환값 = 소비 여부.
     /// ① 표시 모드(A151 — A186: 모드2 층은 소멸) = Esc와 같은 한 단계 — 전체화면이면 복귀
     ///    스냅샷으로(RestoreFromFullScreen). 전체화면 검사가 S4보다 앞인 순서는 A90/A112 확정
     ///    그대로다("첫 층 = 전체화면 해제, 다음 층 = S4 복귀"). 하단 바 복원은 UpdateShellChrome
     ///    (모드 전이의 단일 크롬 지점)이 처리한다.
     /// ② S4('오픈 파일' 탐색) = 진입 전 상태로 복귀만 — Esc와 동일(같은 '뒤로' 의미론).
-    /// ③ 콘텐츠 열림(S2·S3 부류 = _currentFilePath 있음) = 콘텐츠 닫기 → 그 모듈의 빈 상태(S1).
+    /// ③ 탐색 중(S1) = 폴더 히스토리 pop(A244) — 이전 폴더로 NavigateList 복귀. 등재문의 조건은
+    ///    "S1/S4 탐색 중"이지만 S4는 위 ② 층이 먼저 소비한다(등재문 스스로 "전체화면·S4 복귀 층은
+    ///    앞 순서 유지"를 못 박아 실도달은 S1뿐 — 코드 우선 규칙으로 조건도 S1만 검사한다).
+    ///    복귀가 NavigateList 재사용이라 트리(SyncTreeToFolder)·좌 리스트·중앙 썸네일이 A93 단일
+    ///    깔때기로 자동 동기된다. 히스토리가 비면 층을 그냥 지나친다(S1은 아래 ④도 무동작 = ⑤).
+    ///    ※ A159(압축 열람 뒤로가기 — 보류)가 얹힐 분배 지점도 여기다(등재문 명시 — 주석 포인터만).
+    /// ④ 콘텐츠 열림(S2·S3 부류 = _currentFilePath 있음) = 콘텐츠 닫기 → 그 모듈의 빈 상태(S1).
     ///    새 해체 경로를 만들지 않고 모듈 전환과 같은 ShowModule(빈 컨텍스트) 재사용이다:
     ///    미저장 가드(A37 — 취소하면 아무것도 안 바뀐다)·재생 정지·파일 핸들 해제(뷰 Unloaded —
     ///    A59 검증 경로. All Readable은 호스트 Unloaded가 DetachChild로 자식까지 정리)·
@@ -2941,7 +2966,7 @@ public sealed partial class MainWindow : Window
     ///    defaultSidebars는 기본 false — A109의 사이드바 기본 재적용을 타지 않아
     ///    좌/우 열림·닫힘 상태가 닫기 직전 그대로 보존된다(A112 요구 — **Esc의 콘텐츠 닫기
     ///    (A202)는 반대로 true**: 두 입력의 문면이 달라 의도된 차이다. TryCloseContent 주석 참고).
-    /// ④ 콘텐츠 없음(S1·빈 셸·설정·정보 모듈·미지원 안내) = 무동작, 소비도 안 한다
+    /// ⑤ 콘텐츠 없음(S1 히스토리 소진·빈 셸·설정·정보 모듈·미지원 안내) = 무동작, 소비도 안 한다
     ///    (정보 모듈은 A119부터 패널 컨텍스트지만 닫을 콘텐츠(파일)가 없는 점은 그대로다).
     /// </summary>
     private bool TryNavigateBack()
@@ -2956,7 +2981,11 @@ public sealed partial class MainWindow : Window
             ExitOpenFileBrowsing(restore: true);
             return true;
         }
-        // A189: 무제 문서도 닫을 콘텐츠다 — 경로는 없지만 ③과 같은 "콘텐츠 닫기 → S1" 층.
+        // A244(③): S1 탐색 중이면 콘텐츠 닫기보다 폴더 히스토리 pop이 먼저다. 콘텐츠 열림(S2/S3)
+        // 중은 IsEmptyFileModule=false라 이 층에 안 들어와 종전대로 콘텐츠 닫기 우선이 유지된다.
+        // ※ A159(압축 열람 뒤로가기 — 보류): 압축 내부 백스택이 생기면 이 분배 지점에 얹는다.
+        if (IsEmptyFileModule && TryPopFolderHistory()) return true;
+        // A189: 무제 문서도 닫을 콘텐츠다 — 경로는 없지만 ④와 같은 "콘텐츠 닫기 → S1" 층.
         // 미저장 가드는 종전대로 ShowModule 안의 ConfirmDiscardAsync가 담당한다(취소 = 무변경).
         // A202: 닫기 실행부는 Esc 말단 층과 공용(TryCloseContent) — '뒤로'는 defaultSidebars=false
         // (좌/우 상태를 닫기 직전 그대로 보존 — A112 명시 요구라 Esc의 true와 다르다).
@@ -2964,11 +2993,11 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 콘텐츠 닫기 층의 단일 실행부(A112 '뒤로' ③ — A202에서 Esc 말단 층과 공용으로 추출):
+    /// 콘텐츠 닫기 층의 단일 실행부(A112 '뒤로' ④(A244 층 삽입 전 ③) — A202에서 Esc 말단 층과 공용으로 추출):
     /// 콘텐츠(파일 또는 무제 문서 A189)가 열려 있으면 그 모듈의 빈 상태(S1)로 돌아간다 —
     /// 새 해체 경로 없이 모듈 전환과 같은 ShowModule(빈 컨텍스트) 재사용이다(미저장 가드 A37 ·
     /// 재생 정지·파일 핸들 해제(뷰 Unloaded)·제목 복귀·트레이·하단 바·드라이브 줄 교체가 전부
-    /// 그 경로 몫 — 상세는 TryNavigateBack ③ 주석). 반환값 = 닫을 콘텐츠가 있었는가.
+    /// 그 경로 몫 — 상세는 TryNavigateBack ④ 주석). 반환값 = 닫을 콘텐츠가 있었는가.
     /// defaultSidebars: '뒤로'(A112) = false(좌/우 열림·닫힘 상태 보존 — 명시 요구) /
     /// Esc(A202) = true(A109 기본 사이드바 재적용 — 파일 인자 시작(A81 무사이드바)에서 닫아도
     /// 아이콘 실행 기본 화면과 동일해지는 것이 사용자 문면의 합격선).
@@ -2978,6 +3007,121 @@ public sealed partial class MainWindow : Window
         if ((_currentFilePath is null && !_untitledContent) || _currentModule is not { } module)
             return false;
         ShowModule(module, OpenContext.Empty, Branding.AppName, defaultSidebars);
+        return true;
+    }
+
+    // ---------- 폴더 항해 히스토리 (A244 — 마우스 XButton1 뒤로 · XButton2 앞으로) ----------
+
+    /// <summary>백스택·포워드 스택 공통 상한(A244 등재문 확정 50) — 초과 시 가장 오래된 항목 폐기.</summary>
+    private const int FolderHistoryLimit = 50;
+
+    /// <summary>
+    /// 셸 폴더 백스택(A244) — 세션 한정(비저장)·창별 1벌(인스턴스 필드). 원소는 이 창의 좌 리스트가
+    /// 실제로 거쳐 간 폴더 경로(마지막 원소 = 가장 최근의 이전 폴더). S1과 S4의 좌 리스트가 단일
+    /// ListOverlay 인스턴스라(A93 — v0.248.0 재확인) 히스토리도 자연히 상태 공용 1벌이다.
+    /// </summary>
+    private readonly List<string> _folderBackHistory = [];
+
+    /// <summary>포워드 스택(A244) — 뒤로 pop 시 떠나는 폴더가 쌓이고, 새 일반 항해가 비운다(표준 브라우저 규칙).</summary>
+    private readonly List<string> _folderForwardHistory = [];
+
+    /// <summary>
+    /// 히스토리가 아는 이 창의 현재 폴더 — <see cref="RecordFolderHistory"/>의 실변경 가드 기준값
+    /// (RememberBrowsedFolder의 _lastBrowsedFolder와 같은 역할·같은 판정. 필드를 공유하지 않는 이유:
+    /// 그쪽은 파일 열기(RememberLastFolder)가 ViewChanged 밖에서도 갱신해, 공유하면 파일 열기로
+    /// 폴더가 바뀌는 항해가 히스토리에서 새기 때문이다).
+    /// ViewChanged 도착으로만 갱신한다 — 화면에 실제로 도달한 폴더만 히스토리의 "현재"다.
+    /// </summary>
+    private string _historyFolder = "";
+
+    /// <summary>
+    /// pop/forward 복귀 항해의 기대 폴더(A244 재push 방지) — null이면 보류 중인 복귀 없음.
+    /// "다음 실변경 ViewChanged 1회"가 소비한다: 도착 폴더가 이 값과 일치하면 복귀 도착(push 억제·
+    /// forward 보존), 다르면 복귀가 새 항해에 추월당한 것(일반 항해로 처리)이다. 어느 쪽이든 그
+    /// 1회로 해제되므로 시간 기반 해제(타임아웃)가 필요 없다 — 스캔 실패 갈래도 ViewChanged(빈
+    /// 목록)를 발화해 여기로 오고, 발화 자체가 없는 갈래(추월로 인한 seq 폐기·워커 종료)는 다음
+    /// 항해의 ViewChanged가 불일치로 해제한다.
+    /// </summary>
+    private string? _historyNavTarget;
+
+    /// <summary>
+    /// 폴더 실변경 항해를 백스택에 적재한다(A244) — 배선은 생성자 ListOverlay.ViewChanged 한 곳
+    /// (RememberBrowsedFolder 바로 옆 — 리스트 항해의 모든 경로가 그리로 모인다). ViewChanged는
+    /// "표시 목록 재작성" 통지라 정렬(A5)·필터(A7)·감시 재스캔(A94 5차)에도 같은 폴더로 반복
+    /// 발화한다 — 실변경 가드(_historyFolder 대조)가 그 중복 push를 전부 거른다.
+    /// 경로 비교는 OrdinalIgnoreCase — ExplorerPane.NavigateToAsync의 folderChanged 판정과 같은
+    /// 기준이다(등재문은 RememberBrowsedFolder의 == 비교를 지목했지만 그건 케이스만 다른 같은
+    /// 폴더를 실변경으로 오판한다 — 코드 우선 규칙으로 항해 판정 쪽 기준을 따른다).
+    /// S1↔S4 전환으로 폴더가 실제 바뀌는 항해(S4 진입 = 현재 파일의 폴더)도 여기서 push된다 —
+    /// 위치 이동은 위치 이동이라는 등재 제안 채택.
+    /// </summary>
+    private void RecordFolderHistory(string folder)
+    {
+        if (folder.Length == 0 ||
+            string.Equals(folder, _historyFolder, StringComparison.OrdinalIgnoreCase)) return;
+        var previous = _historyFolder;
+        _historyFolder = folder;
+        if (_historyNavTarget is { } target)
+        {
+            _historyNavTarget = null; // 어느 갈래든 1회 소비 — 보류 복귀는 이 도착으로 끝난다
+            if (string.Equals(folder, target, StringComparison.OrdinalIgnoreCase))
+                return; // pop/forward 복귀 도착 — 재push 금지(왕복 방지)·forward 보존
+            // 기대와 다른 폴더 = 복귀가 새 항해에 추월당함 — 아래 일반 항해 규칙으로 처리
+        }
+        if (previous.Length > 0) PushHistory(_folderBackHistory, previous);
+        _folderForwardHistory.Clear(); // 일반 항해 = forward 무효(표준 브라우저 규칙)
+    }
+
+    /// <summary>스택 말단에 적재 + 상한 초과 시 최고참(0번) 폐기 — back/forward 공용(A244).</summary>
+    private static void PushHistory(List<string> stack, string folder)
+    {
+        stack.Add(folder);
+        if (stack.Count > FolderHistoryLimit) stack.RemoveAt(0);
+    }
+
+    /// <summary>
+    /// 백스택 pop → 이전 폴더로 복귀(A244 — TryNavigateBack ③ 층 본체). 반환값 = 소비 여부.
+    /// 소실 폴더(삭제·탈착)는 그 항목만 폐기하고 무동작으로 끝낸다 — 다음 항목 연쇄 시도 금지
+    /// (과주행 방지, 등재문 확정). 폐기도 입력 1회의 소비다(true) — 아래 층(콘텐츠 닫기)으로
+    /// 흘리지 않는다(S1이라 어차피 무동작이지만 층 의미를 지킨다).
+    /// 떠나는 폴더는 ListOverlay.CurrentFolder(리스트가 동기적으로 아는 현재 폴더)를 forward에
+    /// 적재한다 — _historyFolder(ViewChanged 확정값)가 아닌 이유: 복귀 스캔이 끝나기 전에 또
+    /// pop하는 연타에서 확정값은 아직 두 걸음 전 폴더라, 그걸 쓰면 forward에 같은 폴더가 중복
+    /// 적재되고 중간 폴더가 유실된다(연타 = 리스트 기준 현재가 정확하다).
+    /// </summary>
+    private bool TryPopFolderHistory()
+    {
+        if (_folderBackHistory.Count == 0) return false;
+        var index = _folderBackHistory.Count - 1;
+        var folder = _folderBackHistory[index];
+        _folderBackHistory.RemoveAt(index);
+        if (!Directory.Exists(folder)) return true; // 소실 항목 1건 폐기 — 항해 없음(과주행 금지)
+        if (ListOverlay.CurrentFolder is { Length: > 0 } current)
+            PushHistory(_folderForwardHistory, current);
+        _historyNavTarget = folder; // 복귀 항해의 재push 방지 — 도착 ViewChanged 1회가 소비
+        ListOverlay.NavigateList(folder); // 확장자 생략 = 모듈 필터 유지(썸네일 폴더 더블클릭과 동형)
+        return true;
+    }
+
+    /// <summary>
+    /// 포워드 스택 pop → 앞으로 복귀(A244 — 마우스 XButton2). 반환값 = 소비 여부.
+    /// 게이트 = S1 또는 S4 탐색 중(등재문 문면 — '뒤로'와 달리 앞 층이 없어 S4도 실제로 도달한다).
+    /// 콘텐츠 열림(S2/S3)·설정·정보 모듈·빈 셸에서는 무동작·무소비(무간섭 원칙).
+    /// 소실 폴더 폐기·떠나는 폴더의 back 적재·기대 폴더 대조는 <see cref="TryPopFolderHistory"/>와
+    /// 좌우 대칭이다(back↔forward만 뒤집힌 같은 규칙).
+    /// </summary>
+    private bool TryNavigateForward()
+    {
+        if (!IsEmptyFileModule && !IsOpenFileBrowsing) return false;
+        if (_folderForwardHistory.Count == 0) return false;
+        var index = _folderForwardHistory.Count - 1;
+        var folder = _folderForwardHistory[index];
+        _folderForwardHistory.RemoveAt(index);
+        if (!Directory.Exists(folder)) return true; // 소실 항목 1건 폐기 — 항해 없음(과주행 금지)
+        if (ListOverlay.CurrentFolder is { Length: > 0 } current)
+            PushHistory(_folderBackHistory, current);
+        _historyNavTarget = folder;
+        ListOverlay.NavigateList(folder);
         return true;
     }
 
