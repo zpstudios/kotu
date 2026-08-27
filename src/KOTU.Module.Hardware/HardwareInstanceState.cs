@@ -15,7 +15,7 @@ namespace KOTU.Module.Hardware;
 ///   커밋 깔때기는 항목별로 하나씩 — **둘 다 무통지**: 선택 커밋의 통지(구 TraySensors.Changed →
 ///   SensorTray)는 A101(v0.137.0)에서 소비자와 함께 삭제됐고(창별 트레이 표시는 뷰가 자기
 ///   인스턴스 상태로 직접 통지한다), 바 크기는 A70부터 무통지(창 간 동기화 사양 제거).
-/// - 변경(Toggle/CycleBarScale)은 UI 스레드에서만 — 이 앱은 모든 창이 한 UI 스레드를 쓴다.
+/// - 변경(Toggle/StepBarScale)은 UI 스레드에서만 — 이 앱은 모든 창이 한 UI 스레드를 쓴다.
 ///
 /// - A101(v0.137.0) 완료: 인스턴스 <see cref="Selection"/>을 HardwareView의 ITrayStatusProvider
 ///   구현이 읽어 창별 트레이 아이콘에 표시한다(전역 1벌은 저장·새 창 초기값 전용으로 남았다).
@@ -39,9 +39,10 @@ internal sealed class HardwareInstanceState
     private const string ChannelOrderSettingKey = "hardware.channelOrder";
 
     /// <summary>
-    /// 하단 바 표시 크기 단계(A62): S / M(기본) / L = 0.85 / 1.0 / 1.25배.
-    /// A61의 상시 표시 바에서 가독성을 확보하는 것이 목적이라 **하단 바 안 요소에만** 곱한다 —
-    /// 전역 UI 배율(A41)과는 별개의 배수다(UiScale은 건드리지 않는다).
+    /// 그래프 표시 크기 단계(A62): S / M(기본) / L = 0.85 / 1.0 / 1.25배 — 단계·설정 키는
+    /// A237에서도 불변(마이그레이션 0). A62 원안은 A61 상시 표시 바의 가독성 목적이라 하단 바
+    /// 안 요소 전용이었고, A237(v0.252.0)이 적용을 전 그래프 표면의 글씨·선 굵기로 확장했다
+    /// (표면 크기 산식은 불변). 전역 UI 배율과는 별개의 배수다(구 A41 UiScale — 설정 콤보 전용).
     /// 단계 표는 상수라 프로세스 공유가 맞다 — A70에서 HardwareModule에서 여기로 이관
     /// (barScale 상태의 나머지 전부가 이 파일로 왔으므로 표만 남기지 않았다).
     /// </summary>
@@ -219,16 +220,23 @@ internal sealed class HardwareInstanceState
         CommitOrder(_orderSnapshot);
     }
 
-    /// <summary>현재 단계 인덱스(<see cref="BarScaleSteps"/>) — 버튼 툴팁 표기에 쓴다.</summary>
-    internal int BarScaleIndex => _barScaleIndex;
-
     /// <summary>이 창의 현재 배수(0.85 / 1.0 / 1.25).</summary>
     internal double BarScale => BarScaleSteps[_barScaleIndex].Factor;
 
-    /// <summary>다음 단계로 순환(S → M → L → S) + 전역 1벌 커밋. 이 창만 바뀐다(A70).</summary>
-    internal void CycleBarScale()
+    /// <summary>
+    /// 단계 스텝(A237 — 구 CycleBarScale 순환의 후신): step +1 = 확대·-1 = 축소, 끝에서 클램프
+    /// (S에서 -, L에서 +는 무동작 — 랩 금지). step 0 = 기본 단계(M) 리셋(Ctrl+넘패드 '*' —
+    /// 문서 모듈 100% 리셋과 대칭). 휠은 여러 칸이 한 번에 올 수 있어 ±1 초과도 받는다.
+    /// 결과가 그대로면 커밋(설정 Save)도 생략한다 — 끝 단계에서 키를 꾹 눌러도(오토리피트)
+    /// 저장 난사가 없다. 이 창만 바뀌고 저장은 전역 1벌(A70)인 것은 종전 그대로.
+    /// </summary>
+    internal void StepBarScale(int step)
     {
-        _barScaleIndex = (_barScaleIndex + 1) % BarScaleSteps.Length;
-        CommitBarScale(_barScaleIndex);
+        var next = step == 0
+            ? DefaultBarScaleIndex
+            : Math.Clamp(_barScaleIndex + step, 0, BarScaleSteps.Length - 1);
+        if (next == _barScaleIndex) return;
+        _barScaleIndex = next;
+        CommitBarScale(next);
     }
 }

@@ -316,11 +316,16 @@ Controls:
 |---|---|---|
 | Copy all | `C` | puts the whole specification list plus every current sensor value on the clipboard as text |
 | Sensor refresh interval | `I` | 50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU |
-| Bottom bar size | `B` | cycles Small → Medium → Large |
+| Graph size | `Ctrl` + `+` / `-` | one step bigger / smaller text and lines on every graph, Small ↔ Medium ↔ Large (numpad `+` / `-` work too; `Ctrl`+wheel over the graphs does the same, wheel up = bigger) |
+| Graph size reset | `Ctrl` + numpad `*` | back to Medium |
 | Always on top | `P` | pins the window over other windows and collapses it down to just the bottom bar |
 | Full screen | `Enter` / `Alt`+`Enter` | full-screen dashboard, like every other module; `Esc` leaves it |
 
-The selected sensors are also what this window's tray icon displays. Selection, tile order and bar
+The graph size steps affect the text and line thickness of every graph — the two long graphs in the
+bottom bar, the ten centre tiles and the enlarged graphs in the left panel. The graphs themselves
+keep their sizes: tiles stay square at the width the grid gives them.
+
+The selected sensors are also what this window's tray icon displays. Selection, tile order and graph
 size belong to each window separately; the most recent change is what a newly opened window starts from.
 
 CPU temperature, CPU power, fan speed and drive temperature need administrator rights — and the CPU
@@ -469,7 +474,8 @@ box or while you are typing to jump through the file list.
 | Archive | `U` | up one level inside the archive |
 | H/W Info | `C` | Copy all |
 | H/W Info | `I` | sensor refresh interval |
-| H/W Info | `B` | bottom bar size |
+| H/W Info | `Ctrl` + `+` / `-` | graph size one step up / down (numpad `+` / `-` work too) |
+| H/W Info | `Ctrl` + numpad `*` | graph size back to Medium |
 | H/W Info | `P` | always on top |
 
 `Enter`, `Alt`+`Enter` and `Esc` behave the same in all seven modules — they belong to the window,
@@ -510,6 +516,7 @@ file list and in the thumbnails it selects the focused item instead.
 | PDF | left-button drag | push the pages around |
 | Text document | wheel | scroll |
 | Text document | `Ctrl`+wheel | zoom the text, 20%–500% — editor and Markdown view alike |
+| H/W Info graphs | `Ctrl`+wheel | graph size, Small ↔ Medium ↔ Large (wheel up = bigger) |
 | File browser, side panels | wheel | scroll |
 | File browser | double-click | open (folders: go in) |
 | File browser | `Shift`+double-click | open in a new window |

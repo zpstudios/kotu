@@ -30,7 +30,9 @@ namespace KOTU.Module.Hardware;
 /// SensorGrid가 SensorStrip으로 옮겨져 긴 그래프가 계속 보인다(v0.64.2 메커니즘 승계).
 /// A61(v0.111.0): 핀(A39)을 켜면 셸에 접기를 요청해 하단 바만 남는 상시 표시 바가 된다
 /// (IWindowCollapseSource) — 접힌 바에 긴 그래프 2개가 남는 것이 A72 흡수의 핵심 가치.
-/// A62: 그 바의 글씨·선 굵기·그래프 크기를 S/M/L로 키운다(바 안 요소 전용 배수).
+/// A62: 그 바의 글씨·선 굵기·그래프 크기를 S/M/L로 키운다 — A237(v0.252.0)에서 배수 적용이
+/// 전 그래프 표면(센터 타일·좌 대형)의 글씨·선 굵기로 확장됐고(표면 한 변 등 레이아웃 산식은
+/// A119 그대로 불변), 조작도 버튼 순환(B 키) 대신 Ctrl+± 키·콘텐츠 표면 Ctrl+휠 스텝이 됐다.
 /// A70(v0.131.0): 센서 선택(A18)·채널 순서(A60 3차)·바 크기(A62)는 창(인스턴스)별 독립 —
 /// 이 뷰가 HardwareInstanceState를 소유하고, 저장은 전역 1벌(마지막 커밋 우선)로만 남는다.
 /// A101(v0.137.0): 창별 트레이 아이콘(A54)이 **이 창의 선택값**을 직접 표시한다 —
@@ -112,7 +114,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         ToolTipService.SetToolTip(SpanText, "History window");
         BuildIntervalFlyout(); // 리프레시 주기 선택 (A29)
         SetupHotkeys();        // A34: 하단 바 버튼 핫키 + 툴팁 표기
-        ApplyBarScale();       // 하단 바 표시 크기 복원값 반영 (A62 — 바 크기 툴팁도 여기서)
+        SetupGraphScaleAccelerators(); // A237: Ctrl+± 그래프 크기 스텝(문서 모듈 A246 선례)
+        ApplyBarScale();       // 그래프 표시 크기 복원값 반영 (A62 → A237: 전 그래프 표면)
         Loaded += (_, _) =>
         {
             HookPresenterChanged();
@@ -178,6 +181,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         // 패널 실폭 추종(A119): 호스트 표시·창 리사이즈·도크 폭 변화가 전부 이 SizeChanged로
         // 모인다 — 한 변 재계산은 값이 바뀔 때만 적용(ApplySquareBigSizes의 조기 반환).
         BigGraphPanel.SizeChanged += (_, _) => ApplySquareBigSizes();
+        // A237: 좌 대형 그래프 위 Ctrl+휠 = 크기 스텝. 스크롤러 "안쪽" 콘텐츠에 걸어야
+        // ScrollViewer 내장 처리보다 먼저 소비된다(DocumentView OnZoomWheel의 A98 관용구 —
+        // 스크롤러 바깥(_leftPanelRoot)에 걸면 이미 소비된 뒤라 안 온다).
+        BigGraphPanel.PointerWheelChanged += OnGraphSurfaceWheel;
 
         _rightPanelRoot.Content = Root;
     }
@@ -249,7 +256,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     // 라벨·값은 A172 전까지 크기를 대입하지 않아 테마 기본을 쓰고 있었다 — 저장소에 근거가 되는
     // 기본값 리소스 선언이 없으므로 WinUI 기본 14를 기준으로 잡았다(14 × 0.8 = 11.2 → 11).
     // ※ **A172 실기기 미세조정 지점** — 세 폰트 값과 라벨 열 폭이 전부 이 네 상수에 모여 있다.
-    //   A62 바 배수·셸 전역 UiScale은 여기 안 걸린다(각각 하단 바 요소 전용·별개 축).
+    //   A62 배수(A237부터 그래프 표면 전용 — 우 패널 스펙 텍스트는 계속 비적용)·셸 전역
+    //   UiScale은 여기 안 걸린다(별개 축).
     private const double SpecTitleFontSize = 14;  // 섹션 제목: 18 → 14
     private const double SpecLabelFontSize = 11;  // 항목 라벨: 테마 기본(14) → 11
     private const double SpecValueFontSize = 11;  // 항목 값:  테마 기본(14) → 11
@@ -305,7 +313,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         return grid;
     }
 
-    // ---------- 하단 바 표시 크기 S/M/L (A62, v0.111.0) ----------
+    // ---------- 그래프 표시 크기 S/M/L (A62, v0.111.0 → A237, v0.252.0 전 그래프 확장) ----------
 
     // M(1.0) 기준 치수. 실제 값은 ApplyBarScale이 이 창의 배수(_state.BarScale, A70)를 곱해 정한다.
     // A60 3차: 적용 대상이 카드 10개에서 하단 긴 그래프 2개로 바뀌었다 — 상수 체계는 그대로다.
@@ -321,43 +329,43 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     private const double BaseValueFontSize = 13;   // 그래프 값
     private const double BaseSmallFontSize = 10;   // 타일 핀 아이콘(A18) + 축 라벨(A74)
     private const double BaseStrokeThickness = 1.5; // 스파크라인·맥박 선 굵기
-    private const double BaseBarIconFontSize = 18;  // 하단 바 아이콘(A27 규격 버튼 안)
 
     /// <summary>
-    /// 크기 버튼 클릭 = S → M → L → S 순환(A62). A70: **이 창만** 바뀐다 — 열려 있는 다른
-    /// 정보 창은 따라오지 않고, 저장은 전역 1벌(마지막 커밋 우선)로 남는다.
+    /// Ctrl+± 키·Ctrl+휠의 공용 진입로(A237 — 구 버튼 클릭·B 키의 후신): 인스턴스 단계 스텝
+    /// (+1 확대 / -1 축소 / 0 = 기본 M 리셋, 끝 클램프 — 랩 없음) + 이 창에 즉시 반영.
+    /// A70: **이 창만** 바뀐다 — 열려 있는 다른 정보 창은 따라오지 않고, 저장은 전역 1벌
+    /// (마지막 커밋 우선)로 남는다. 단계 피드백 UI는 없다 — 이 모듈에 ShowFeedback류 관용구가
+    /// 없고(영상 모듈 전용), 그래프 글씨 자체가 즉시 커져 결과가 바로 보인다.
     /// </summary>
-    private void OnBarScaleClick(object sender, RoutedEventArgs e) => CycleBarScaleLocal();
-
-    /// <summary>버튼 클릭과 B 키(A34)의 공용 진입로 — 인스턴스 단계 순환 + 이 창에 즉시 반영(A70).</summary>
-    private void CycleBarScaleLocal()
+    private void StepBarScaleLocal(int step)
     {
-        _state.CycleBarScale();
+        _state.StepBarScale(step);
         ApplyBarScale();
     }
 
     /// <summary>
-    /// 현재 단계를 하단 바 요소에 반영한다(A62). 바 두께 44는 불변(A40)이므로 **바 안 요소**의
-    /// 글씨 크기·선 굵기·그래프 높이(최대 32 — A97 → A106)만 바뀐다(긴 그래프 폭 152는 고정).
-    /// 축 라벨 임계(A74)가 배수를 타므로 마지막에 스파크라인을 다시 그린다.
-    /// 버튼 아이콘 크기도 단계를 따라 커져 툴팁 없이도 지금 단계가 보인다.
-    /// 전역 UI 배율(A41 UiScale)은 건드리지 않는다 — 별개의 배수(A62 확정).
-    /// 센터 타일·좌 대형 그래프는 하단 바 밖이라 배수 비적용 — A62의 목적이
-    /// "A61 상시 표시 바의 가독성"이라 바 안 요소 전용이 맞다.
+    /// 현재 단계를 화면에 반영한다(A62 → A237). A237부터 적용 범위 = **전 그래프 표면**
+    /// (하단 긴 그래프 2 + 센터 타일 10 + 좌 대형 ≤2)의 글씨 크기·선 굵기: 구 "바 안 요소 전용"
+    /// (A62 — A61 상시 표시 바의 가독성 목적)에서 사용자 지시로 확장했다.
+    /// **크기 축은 불변**: 타일 한 변·좌 대형 한 변은 레이아웃 산식(A119 ApplySquareTileSizes/
+    /// ApplySquareBigSizes)이 정하고 배수를 타지 않는다 — 여기서 표면 크기를 건드리면 안 된다.
+    /// 하단 긴 그래프만 종전대로 높이(상한 32 클램프)까지 배수 대상(ApplyScaleToLongGraph).
+    /// 축 라벨 표시 임계(AxisMinWidth 90)도 배수 비적용 유지(A128 승계).
+    /// 전역 UI 배율(구 A41 UiScale — A246부터 설정 콤보 전용)은 건드리지 않는다(별개 축).
+    /// 마지막에 스파크라인을 다시 그려 바뀐 선 굵기·표면 높이를 다음 스냅샷 전에 반영한다.
     /// </summary>
     private void ApplyBarScale()
     {
         var scale = _state.BarScale;
+        foreach (var graph in _tiles)
+            ApplyScaleToGraphText(graph, scale); // A237: 센터 타일 — 글씨·선만(한 변은 A119 몫)
+        foreach (var graph in _bigGraphs)
+            ApplyScaleToGraphText(graph, scale); // A237: 좌 대형 — 글씨·선만(한 변은 A119 몫)
         foreach (var graph in _longGraphs)
             ApplyScaleToLongGraph(graph, scale);
         SpanText.FontSize = BaseSmallFontSize * scale; // A146 기간 표기도 바 안 요소 — 같은 배수(폭 32는 고정)
         PulseHost.Height = Math.Min(MaxCardHeight, BaseCardHeight * scale); // 맥박도 같은 높이 유지 (v0.64.2 규격)
         PulseLine.StrokeThickness = BaseStrokeThickness * scale;
-        BarScaleIcon.FontSize = BaseBarIconFontSize * scale;
-        // A34: 표기는 키 상수에서 조립한다(단계 표시가 바뀌어도 키 표기는 어긋나지 않는다).
-        ToolTipService.SetToolTip(BarScaleButton, HotkeySupport.Tip(
-            $"Bottom bar size: {HardwareInstanceState.BarScaleSteps[_state.BarScaleIndex].Label}",
-            BarScaleKey));
 
         RerenderSparklines(); // 바뀐 표면 높이·선 굵기를 다음 스냅샷 전에 반영
                               // (A128 전에는 "축 라벨 표시 임계값(A74)에 곱한 배수"도 여기서 반영했다 —
@@ -365,9 +373,29 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     }
 
     /// <summary>
+    /// 그래프 표면 1개의 **글씨·선 굵기**에 현재 단계를 입힌다(A237 — 세 표면 공용).
+    /// 표면 크기(타일·좌 대형 한 변, 긴 그래프 폭·높이)는 여기서 건드리지 않는다 — 크기는
+    /// 각각 A119 산식과 ApplyScaleToLongGraph의 몫이다. 핀 배지(타일 전용)도 글씨 축이라 함께 탄다.
+    /// 축 라벨 두 개는 바 표면에서 늘 Collapsed(A128)지만 표면 구성이 공용(MakeGraph)이라
+    /// 배수만 계속 입혀 둔다(다시 보이게 할 일이 생겨도 크기가 어긋나지 않게).
+    /// ※ A146의 기간 표기는 이 대상이 아니다 — 표면 밖(바 레이아웃)의 SpanText이고 배수는
+    ///   ApplyBarScale이 직접 입힌다(표면당 1개가 아니라 바에 공통 1개라서).
+    /// </summary>
+    private static void ApplyScaleToGraphText(SensorGraph graph, double scale)
+    {
+        graph.TitleText.FontSize = BaseTitleFontSize * scale;
+        graph.ValueText.FontSize = BaseValueFontSize * scale;
+        if (graph.Pin is { } pin) pin.FontSize = BaseSmallFontSize * scale;
+        graph.YAxisText.FontSize = BaseSmallFontSize * scale;
+        graph.XAxisText.FontSize = BaseSmallFontSize * scale;
+        graph.Line.StrokeThickness = BaseStrokeThickness * scale;
+    }
+
+    /// <summary>
     /// 하단 긴 그래프 1개에 현재 단계(A62)를 반영한다 — 생성 직후(RebuildSelectionGraphs)와
-    /// 단계 순환(ApplyBarScale)의 공용 경로. 배수 적용 대상 = 글씨·선 굵기·높이(상한 32 클램프,
-    /// A106 — A40 바 두께 44 불변). **폭 152는 고정**(배수 비적용): 구 카드의 폭 배수는 "최소 폭
+    /// 단계 변경(ApplyBarScale)의 공용 경로. 배수 적용 대상 = 글씨·선 굵기(공용
+    /// ApplyScaleToGraphText)·높이(상한 32 클램프, A106 — A40 바 두께 44 불변).
+    /// **폭 152는 고정**(배수 비적용): 구 카드의 폭 배수는 "최소 폭
     /// × 개수 축소" 알고리즘의 하한이었고, 고정 2개인 긴 그래프가 폭까지 커지면 L 단계 ×
     /// 최소 창 720에서 star 칸(약 358px)을 넘친다 — 제목은 말줄임, 값은 152 안에 들어간다.
     /// </summary>
@@ -375,15 +403,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     {
         graph.Root.Height = Math.Min(MaxCardHeight, BaseCardHeight * scale);
         graph.Root.Width = LongCardWidth;
-        graph.TitleText.FontSize = BaseTitleFontSize * scale;
-        graph.ValueText.FontSize = BaseValueFontSize * scale;
-        // 축 라벨 두 개는 A128 이후 바 표면에서 늘 Collapsed다 — 표면 구성이 공용(MakeGraph)이라
-        // 배수만 계속 입혀 둔다(다시 보이게 할 일이 생겨도 크기가 어긋나지 않게).
-        // ※ A146의 기간 표기는 이 둘이 아니다 — 표면 밖(바 레이아웃)의 SpanText이고 배수는
-        //   ApplyBarScale이 직접 입힌다(표면당 1개가 아니라 바에 공통 1개라서).
-        graph.YAxisText.FontSize = BaseSmallFontSize * scale;
-        graph.XAxisText.FontSize = BaseSmallFontSize * scale;
-        graph.Line.StrokeThickness = BaseStrokeThickness * scale;
+        ApplyScaleToGraphText(graph, scale);
     }
 
     // ---------- 그래프 시간 창 (A60 3차 — A71 흡수: 3단 차등) ----------
@@ -478,11 +498,11 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// A97(v0.116.0)에서 1칸 버튼 40→36 · 간격 10→6, A106(v0.132.0)에서 1칸 버튼 36→32가 되어
     /// 그때마다 **재산정**했다. 값을 이월 계산하지 않는다 — A97 이전 값 458은 v0.94.0(A40)
     /// 산정치 1240에서 역산한 근사치라 실제 합보다 34 컸던 전력이 있다.
-    /// A151 재계수(⛶ 칸 제거 — BarGrid 7칸 중 star 칸인 SensorGrid c2만 제외):
-    ///   Copy c0 32 + Busy(ProgressRing) c1 20 + 맥박 c3 90 + 주기(2칸) c4 84
-    ///   + 크기 c5 32 + 핀 c6 32 = 290
-    ///   + ColumnSpacing 6 × 6칸 사이 = 36  →  **326**
-    ///   (이력: A97 = 380, A106 = 364 — 그때의 산식은 ⛶ 32 + 간격 6이 더 있었다.)
+    /// A237 재계수(크기 버튼 칸 제거 — BarGrid 6칸 중 star 칸인 SensorGrid c2만 제외):
+    ///   Copy c0 32 + Busy(ProgressRing) c1 20 + 맥박 c3 90 + 주기(2칸) c4 84 + 핀 c5 32 = 258
+    ///   + ColumnSpacing 6 × 5칸 사이 = 30  →  **288**
+    ///   (이력: A97 = 380, A106 = 364 — 그때의 산식은 ⛶ 32 + 간격 6이 더 있었다.
+    ///    A151 = 326(⛶ 칸 제거), A237 = 288 — 크기 버튼 32 + 간격 6이 빠졌다.)
     /// A146(v0.165.0) 재계수 결과 = **변화 없음**: 표시 기간 표기는 BarGrid에 칸을 새로 만들지 않고
     ///   star 칸(SensorGrid) 안 마지막 열로 들어갔다 — 늘어난 몫은 <see cref="LongGraphsWidth"/>에 있다
     ///   (전체화면에서 SensorGrid가 SensorStrip으로 옮겨질 때 표기도 함께 가야 해서 이 소속을 택했다).
@@ -490,7 +510,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     ///   버튼 2개 몫으로 12→82)은 여기 포함되지 않는다.
     /// HardwareView.xaml의 BarGrid 구성이 바뀌면 이 합도 함께 고칠 것.
     /// </summary>
-    private const double BarFixedWidth = 326;
+    private const double BarFixedWidth = 288;
 
     /// <summary>
     /// 하단 바 star 칸(SensorGrid)이 요구하는 폭 — 긴 그래프(≤2, 폭 고정·배수 비적용)와
@@ -506,13 +526,15 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// <summary>
     /// A40: 하단 바 폭이 좁으면 정보 가치가 낮은 것부터 내린다. 순서(A146에서 2단으로 확장) —
     /// ① 맥박 그래프(A29 = 장식) ② 표시 기간 표기(A146 = 보조 정보) ③ 긴 그래프는 끝까지 남긴다.
-    /// · 맥박 임계 = star 칸 요구 폭(2개 = 352) + 고정 요소 합(BarFixedWidth 326) = **678**
-    ///   (이력: A146 = 716, A151 = ⛶ 38 감소 + 셸 모드 버튼 몫으로 BarGrid 자체도 70 좁아짐 —
-    ///   최소 창 720에서 BarGrid는 약 556이라 맥박이 내려간다).
-    /// · 기간 표기 임계 = 그보다 맥박 몫(PulseSlotWidth 90)만큼 낮은 **588** — 맥박을 내려 되찾은
+    /// · 맥박 임계 = star 칸 요구 폭(2개 = 352) + 고정 요소 합(BarFixedWidth 288) = **640**
+    ///   (이력: A146 = 716, A151 = ⛶ 38 감소로 678 + 셸 모드 버튼 몫으로 BarGrid 자체도 70
+    ///   좁아짐, A237 = 크기 버튼 38 감소로 640 — 최소 창 720에서 BarGrid는 약 556이라
+    ///   여전히 맥박이 내려간다).
+    /// · 기간 표기 임계 = 그보다 맥박 몫(PulseSlotWidth 90)만큼 낮은 **550** — 맥박을 내려 되찾은
     ///   폭으로 그래프 2개 + 표기가 들어가는지 보는 값이다. 여기서도 모자라면 표기를 내려
-    ///   그래프 2개(312 + 표기 칸의 간격 8)를 지킨다 — 최소 창(BarGrid 약 556)에서는 맥박·표기가
-    ///   둘 다 내려가고 긴 그래프 2개(312)는 맥박 몫을 되찾은 star 폭(약 320)에 들어간다.
+    ///   그래프 2개(312 + 표기 칸의 간격 8)를 지킨다 — 최소 창(BarGrid 약 556 ≥ 550)에서는
+    ///   A237부터 표기가 **살아남는다**: 맥박만 내려가고 긴 그래프 2개 + 표기(352)는 맥박 몫을
+    ///   되찾은 star 폭(약 358)에 들어간다(A151 시절 "둘 다 내려감" 서술은 임계 588 기준이었다).
     /// 구 카드 10개의 "뒤 순서부터 숨김" 수 축소 로직은 소멸 — 긴 그래프는 2개 고정이라 접을 것이 없다.
     /// 두 판정 모두 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다(기존 그대로) — 숨김·표시가
     /// SensorGrid의 요구 폭을 바꿔도 star 칸이 흡수하고 BarGrid 폭은 셸이 정한다.
@@ -562,6 +584,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         // A119: 정사각형 한 변은 실폭 파생 — 창 리사이즈·도크 개폐(열 수 변화와 별개로 폭도
         // 변한다)를 이 SizeChanged 하나로 추종한다(A93 썸네일 열 수 재계산 선례).
         CenterGrid.SizeChanged += (_, _) => ApplySquareTileSizes();
+        // A237: 센터 타일 위 Ctrl+휠 = 그래프 크기 스텝. 좌 대형(BuildSidePanels)과 같은 배선 —
+        // 스크롤러 안쪽 콘텐츠에 걸어야 ScrollViewer 내장 처리보다 먼저 소비된다(A98 관용구).
+        // 하단 바(BarGrid) 위 휠은 손대지 않는다 — 셸 몫(A246 정책 그대로).
+        CenterGrid.PointerWheelChanged += OnGraphSurfaceWheel;
         LayoutCenterTiles();
     }
 
@@ -765,6 +791,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             if (SensorChannels.ById(id) is not { } channel) continue; // 미지 ID 방어(구 관례)
             var graph = MakeGraph(channel, BigWindowMaxMs, inBar: false, withPin: false);
             ToolTipService.SetToolTip(graph.Root, channel.Title);
+            ApplyScaleToGraphText(graph, _state.BarScale); // A237: 새 표면도 현재 단계의 글씨·선으로
             if (_bigSide >= 1)
             {
                 graph.Root.Width = _bigSide;
@@ -815,7 +842,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// <summary>
     /// 그래프 표면 1개를 만든다 — 구 카드 생성 코드의 골격을 타일·좌 대형·하단 긴 그래프가
     /// 공용한다(A60 3차). 그래프가 표면 전체를 채우고 제목·값이 그 위에 얹힌다(v0.64.2 컴팩트형).
-    /// 글씨·선 굵기는 M 기준값 — 하단 긴 그래프만 직후 ApplyScaleToLongGraph가 배수를 덮어쓴다(A62).
+    /// 글씨·선 굵기는 M 기준값 — A237부터 세 표면 모두 직후에 배수를 입는다(하단 긴 그래프 =
+    /// ApplyScaleToLongGraph, 좌 대형 = RebuildSelectionGraphs의 ApplyScaleToGraphText, 센터
+    /// 타일 = 생성자 ApplyBarScale 일괄 — 타일은 BuildCenterTiles 1회 생성이라 그걸로 족하다).
     /// 여기서는 크기를 지정하지 않는다 — 타일·좌 대형은 A119부터 정사각형 한 변을 바깥
     /// (ApplySquareTileSizes/ApplySquareBigSizes)이 명시 픽셀로 입히고, 하단 긴 그래프는
     /// ApplyScaleToLongGraph가 폭 152·높이 상한 32를 입힌다. 축 라벨·글꼴 축소 규칙(A74·A62)은
@@ -1568,14 +1597,13 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------
 
-    /// <summary>바 크기 순환 키 — 툴팁 표기(ApplyBarScale)와 액셀러레이터가 이 한 값을 함께 쓴다.</summary>
-    private const VirtualKey BarScaleKey = VirtualKey.B;
-
     /// <summary>
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// I(주기)는 누르면 선택 플라이아웃이 열리고, P(핀)는 누를 때마다 토글된다.
     /// A(1:1)·F(Fit)가 없는 모듈이라 A는 비워 두고 핀은 P(Pin)로 — 다른 모듈의 A와 뜻이 겹치지 않게 했다.
     /// 바 구성은 A60 3차(v0.138.0)에서 카드 10개 → 긴 그래프 2개로 개편됐다 — 키 배선은 그대로다.
+    /// B(바 크기 순환)는 A237에서 크기 버튼과 함께 소멸(버튼 소멸 = 키 소멸, A34 규칙·A99 선례) —
+    /// 그래프 크기는 아래 Ctrl+± 액셀러레이터·콘텐츠 표면 Ctrl+휠이 맡는다.
     /// </summary>
     private void SetupHotkeys()
     {
@@ -1585,6 +1613,83 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             "Sensor refresh interval", () => IntervalButton.Flyout?.ShowAt(IntervalButton));
         HotkeySupport.Bind(this, TopToggle, VirtualKey.P,
             "Always on top (collapses to the bar)", () => TopToggle.IsChecked = TopToggle.IsChecked != true);
-        HotkeySupport.Register(this, BarScaleButton, BarScaleKey, CycleBarScaleLocal);
+    }
+
+    // ---------- 그래프 크기 스텝 키·휠 (A237, v0.252.0) ----------
+
+    /// <summary>
+    /// A237: Ctrl+± = 그래프 크기 스텝(+ 확대 / - 축소, S↔M↔L 끝 클램프 — 순환 아님),
+    /// Ctrl+넘패드 '*' = 기본 단계(M) 리셋(문서 모듈의 100% 리셋과 대칭).
+    /// 키 집합은 A246이 셸에서 회수한 그 집합 그대로다(문서 모듈 SetupZoomAccelerators와 동일 —
+    /// 축소 금지): 넘패드 Add/Subtract·VK_OEM_PLUS(187)/VK_OEM_MINUS(189)·187/189의
+    /// Control|Shift 변형(주열 Ctrl+'+'는 실제로 Ctrl+Shift+'='(187)로 온다)·넘패드 Multiply.
+    /// **KeyboardAccelerator 코드 등록을 채택**한 이유(뷰 KeyDown 대비): ① '+'/'-'는 VirtualKey에
+    /// 이름이 없어 XAML 불가·코드 등록이 저장소 유일 선례(v0.251.0)고 ② 액셀러레이터는 뷰가
+    /// 트리에 있는 동안 창 전체에서 들려 포커스가 타일·패널 어디에 있어도 동작하며(뷰 KeyDown은
+    /// 포커스 요소가 소비하면 못 받는다) ③ 셸과의 간섭이 없다 — 셸 버블(OnRootKeyDown)은 A246
+    /// 이후 이 키들을 안 보고, 터널링(RootLayout.PreviewKeyDown, A226)은 F11/F12 전용이다.
+    /// 다른 모듈로 전환하면 뷰가 트리에서 내려가 자연 해제된다(문서 모듈과 같은 성질 — 두 모듈이
+    /// 같은 키를 등록하지만 동시에 트리에 있는 일이 없어 충돌하지 않는다).
+    /// HotkeySupport.ShouldPassThrough 양보(A32/A84 통과 규칙 — 텍스트 입력·탐색기 통과 표면
+    /// 포커스면 흘린다)는 셸 시절과 동일하게 지킨다 — 문서 모듈은 "에디터 포커스 중에도 발동"이
+    /// 사양이라 안 거르지만, 이 뷰의 키는 셸 A41 관례를 승계한다(A237 등재문 명기).
+    /// 오토리피트는 걸러내지 않는다(A41·A246과 동일) — 끝 단계에서는 클램프가 무동작으로 접는다.
+    /// </summary>
+    private void SetupGraphScaleAccelerators()
+    {
+        AddScaleAccelerator(VirtualKey.Add, VirtualKeyModifiers.Control, +1);
+        AddScaleAccelerator((VirtualKey)187, VirtualKeyModifiers.Control, +1);
+        AddScaleAccelerator((VirtualKey)187, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, +1);
+        AddScaleAccelerator(VirtualKey.Subtract, VirtualKeyModifiers.Control, -1);
+        AddScaleAccelerator((VirtualKey)189, VirtualKeyModifiers.Control, -1);
+        AddScaleAccelerator((VirtualKey)189, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, -1);
+        AddScaleAccelerator(VirtualKey.Multiply, VirtualKeyModifiers.Control, 0);
+    }
+
+    /// <summary>A237 등록 한 줄 — step: +1/-1 = 한 단계 확대/축소, 0 = 기본 단계(M) 리셋.</summary>
+    private void AddScaleAccelerator(VirtualKey key, VirtualKeyModifiers modifiers, int step)
+    {
+        var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
+        accelerator.Invoked += (_, args) => OnGraphScaleKey(step, args);
+        KeyboardAccelerators.Add(accelerator);
+    }
+
+    /// <summary>
+    /// A237 키 실행부: 통과 표면(텍스트 입력·탐색기 리스트)이 포커스면 Handled=false로 되돌려
+    /// 흘린다(HotkeySupport.Register와 같은 관용구 — KeyboardAcceleratorInvokedEventArgs.Handled
+    /// 기본값이 true라 명시적으로 되돌린다). 그 외에는 소비하고 스텝한다.
+    /// </summary>
+    private void OnGraphScaleKey(int step, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (HotkeySupport.ShouldPassThrough(this))
+        {
+            args.Handled = false;
+            return;
+        }
+        args.Handled = true;
+        StepBarScaleLocal(step);
+    }
+
+    /// <summary>정밀 휠(120 미만 delta) 잔여분 누적 — 문서 모듈 OnZoomWheel의 관용구 그대로.</summary>
+    private int _wheelDeltaAccum;
+
+    /// <summary>
+    /// A237: 콘텐츠 표면(센터 타일 CenterGrid·좌 대형 BigGraphPanel) 위 Ctrl+휠 = 그래프 크기
+    /// 스텝(위 = 확대). 휠 단독은 건드리지 않는다 — 스크롤이 원 기능(기본 처리)이다.
+    /// Ctrl+휠은 내장 처리(ScrollViewer의 Ctrl+휠 스크롤·줌)보다 먼저 소비한다(A98 관용구 —
+    /// 배선 지점이 스크롤러 안쪽 콘텐츠라 성립). 하단 바 위 휠은 배선하지 않아 종전 그대로
+    /// 셸 몫이다(A246 정책 — 하드웨어 예외는 콘텐츠 표면·키에 한정, A237 등재문).
+    /// </summary>
+    private void OnGraphSurfaceWheel(object sender, PointerRoutedEventArgs e)
+    {
+        if (!e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control)) return; // 휠 단독 = 스크롤(기본 처리)
+        e.Handled = true;
+        var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta; // 좌표는 안 쓴다 — delta만
+        if (delta == 0) return;
+        _wheelDeltaAccum += delta;
+        var notches = _wheelDeltaAccum / 120; // 0을 향해 자르는 정수 나눗셈 — 잔여분은 다음 이벤트로
+        if (notches == 0) return;
+        _wheelDeltaAccum -= notches * 120;
+        StepBarScaleLocal(notches); // 위(+) = 확대 — 여러 칸이면 한 번에 여러 스텝(클램프가 접는다)
     }
 }

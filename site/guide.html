@@ -606,13 +606,17 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><th>Control</th><th>Key</th><th>What it does</th></tr>
           <tr><td>Copy all</td><td><kbd>C</kbd></td><td>puts the whole specification list plus every current sensor value on the clipboard as text</td></tr>
           <tr><td>Refresh interval</td><td><kbd>I</kbd></td><td>50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU</td></tr>
-          <tr><td>Bottom bar size</td><td><kbd>B</kbd></td><td>cycles Small → Medium → Large</td></tr>
+          <tr><td>Graph size</td><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>one step bigger / smaller text and lines on every graph, Small ↔ Medium ↔ Large (numpad <kbd>+</kbd> / <kbd>-</kbd> work too; <kbd>Ctrl</kbd>+wheel over the graphs does the same, wheel up = bigger)</td></tr>
+          <tr><td>Graph size reset</td><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>back to Medium</td></tr>
           <tr><td>Always on top</td><td><kbd>P</kbd></td><td>pins the window over other windows and collapses it down to just the bottom bar</td></tr>
           <tr><td>Full screen</td><td><kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>full-screen dashboard, like every other module; <kbd>Esc</kbd> leaves it</td></tr>
         </table></div>
-        <p>The selected sensors are also what this window's tray icon displays. Selection, tile order and bar
-           size belong to each window separately; the most recent change is what a newly opened window starts
-           from.</p>
+        <p>The graph size steps affect the text and line thickness of every graph — the two long graphs in
+           the bottom bar, the ten centre tiles and the enlarged graphs in the left panel. The graphs
+           themselves keep their sizes: tiles stay square at the width the grid gives them.</p>
+        <p>The selected sensors are also what this window's tray icon displays. Selection, tile order and
+           graph size belong to each window separately; the most recent change is what a newly opened window
+           starts from.</p>
         <div class="note">CPU temperature, CPU power, fan speed and drive temperature need administrator
            rights — and the CPU and fan readings additionally need <strong>PawnIO</strong>, a separately
            installed signed kernel driver that LibreHardwareMonitor uses instead of bundling one of its own
@@ -747,7 +751,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Archive</td><td><kbd>U</kbd></td><td>up one level inside the archive</td></tr>
           <tr><td>H/W Info</td><td><kbd>C</kbd></td><td>Copy all</td></tr>
           <tr><td>H/W Info</td><td><kbd>I</kbd></td><td>sensor refresh interval</td></tr>
-          <tr><td>H/W Info</td><td><kbd>B</kbd></td><td>bottom bar size</td></tr>
+          <tr><td>H/W Info</td><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>graph size one step up / down (numpad <kbd>+</kbd> / <kbd>-</kbd> work too)</td></tr>
+          <tr><td>H/W Info</td><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>graph size back to Medium</td></tr>
           <tr><td>H/W Info</td><td><kbd>P</kbd></td><td>always on top</td></tr>
         </table></div>
         <p><kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd> and <kbd>Esc</kbd> behave the same in all seven
@@ -786,6 +791,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>PDF</td><td>left-button drag</td><td>push the pages around</td></tr>
           <tr><td>Text document</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>Text document</td><td><kbd>Ctrl</kbd>+wheel</td><td>zoom the text, 20%&ndash;500% &mdash; editor and Markdown view alike</td></tr>
+          <tr><td>H/W Info graphs</td><td><kbd>Ctrl</kbd>+wheel</td><td>graph size, Small ↔ Medium ↔ Large (wheel up = bigger)</td></tr>
           <tr><td>File browser, side panels</td><td>wheel</td><td>scroll</td></tr>
           <tr><td>File browser</td><td>double-click</td><td>open (folders: go in)</td></tr>
           <tr><td>File browser</td><td><kbd>Shift</kbd>+double-click</td><td>open in a new window</td></tr>
