@@ -20,14 +20,15 @@ internal static class SelectionQuickInfo
     /// 그 외 = 파일 기본 정보(ContentInfoOverlay.BuildBasicFileInfo) + 종류별 조각 한 행
     /// (zip 압축률 · PDF 페이지 수 · 텍스트 인코딩 · 영상/오디오 재생시간 — A199 상세 줄과 동일 소스).
     /// A175 방어선: 호출부(ContentInfoOverlay)가 placeholder를 걸러 오지만, 속성이 클라우드 전용으로
-    /// 판정되면(IsCloudPlaceholder) 여기서도 내용 조회를 생략한다 — 어떤 경로로도 하이드레이션 금지.
+    /// 판정되면(IsCloudPlaceholder) 여기서도 내용 조회를 생략한다 — 어떤 경로로도 하이드레이션 금지
+    /// (A239 ②: 그 경우에도 이미지면 EXIF 라벨은 나열한다 — BuildPlaceholderRows).
     /// </summary>
     public static IReadOnlyList<ContentInfoItem> Build(string path)
     {
         try
         {
             if (ExplorerListing.IsCloudPlaceholder(File.GetAttributes(path)))
-                return Overlays.ContentInfoOverlay.BuildBasicFileInfo(path);
+                return BuildPlaceholderRows(path);
         }
         catch
         {
@@ -43,6 +44,26 @@ internal static class SelectionQuickInfo
         {
             rows.Add(ContentInfoItem.Separator); // 파일 정보 / 종류별 조각 그룹 구분 (A150 관례)
             rows.Add(fragment);
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// A239 ②: placeholder(A175 — 클라우드 전용) 파일의 행 — 기본 4행(BuildBasicFileInfo:
+    /// FileInfo 메타데이터만 — 하이드레이션 없음, 조회 0회 유지) + **이미지 확장자면** EXIF
+    /// 16키 라벨(전부 빈칸)을 붙인다. 비이미지 placeholder는 기본 행만 — EXIF 절은 이미지
+    /// 전용이라 라벨 나열 대상이 아니다(등재문 "기본 4행 뒤 라벨 16행"은 EXIF 축 서술 —
+    /// 구현 시 해석). 조회가 없어 UI 스레드에서 불러도 된다 — ContentInfoOverlay의 placeholder
+    /// 갈래(워커 불경유)도 이 메서드를 쓴다.
+    /// </summary>
+    internal static IReadOnlyList<ContentInfoItem> BuildPlaceholderRows(string path)
+    {
+        var rows = new List<ContentInfoItem>(Overlays.ContentInfoOverlay.BuildBasicFileInfo(path));
+        if (ExplorerListing.MatchesExtension(Path.GetFileName(path),
+                KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions))
+        {
+            rows.Add(ContentInfoItem.Separator); // 파일 정보 / 촬영 정보 그룹 구분 (A150 관례)
+            rows.AddRange(KOTU.Module.Image.ImageQuickInfo.BlankExifRows());
         }
         return rows;
     }

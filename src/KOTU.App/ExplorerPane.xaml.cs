@@ -68,6 +68,23 @@ public sealed partial class ExplorerPane : UserControl
     public event Action<string, IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
 
     /// <summary>
+    /// A240: 리스트 선택 변경 — 셸이 우측 정보 패널의 "선택 우선" 표시(A200)에 쓴다. 인자 없음:
+    /// 셸이 <see cref="SelectedEntry"/>를 질의한다(ThumbnailExplorer의 A200 관용구와 동일 —
+    /// 선택 상태의 원본은 표면 컨트롤 하나). 목록 재작성(Fill의 Items.Clear)·다중 선택 조작에서도
+    /// 표면이 알아서 발화한다. A179가 철거한 "선택 → 체크 동기"(A157 거울)와 무관하다 —
+    /// 이것은 순수 관찰(선택 축)이고 체크 집합은 건드리지 않는다.
+    /// </summary>
+    public event Action? SelectionChanged;
+
+    /// <summary>
+    /// A241: 표시 목록 조립 완료(A192 FinishFill) 통지 — ViewChanged(조립 시작 시점)와 달리
+    /// 컨테이너 실체화·상세 로더 기동이 끝난 뒤에 온다. 셸이 우측 정보 패널의 폴더 단위 EXIF
+    /// 프리페치를 여기 걸어 뼈대 우선 원칙(A192)을 지킨다. 인자 = 표시 목록 전체(정렬·필터
+    /// 반영 — 실체화 상한 밖 항목 포함, ViewChanged와 같은 집합).
+    /// </summary>
+    public event Action<IReadOnlyList<ExplorerListing.Entry>>? FillCompleted;
+
+    /// <summary>
     /// 파일 조작(드랍 이동/복사·붙여넣기 — A94) 실패 안내 문구. 이 페인에는 상태 표시 줄이 없어
     /// 호스트(FileListOverlay)가 받아 A92류 일시 문구로 띄운다. 성공은 조용(뷰 갱신이 피드백).
     /// </summary>
@@ -210,6 +227,11 @@ public sealed partial class ExplorerPane : UserControl
         // 빈 영역이 히트 테스트되도록 XAML에서 Background=Transparent를 준 것과 한 쌍이다.
         IconGrid.ContextFlyout = MakeSurfaceMenu(IconGrid);
         ListPane.ContextFlyout = MakeSurfaceMenu(ListPane);
+        // A240: 선택 변경을 셸로 중계 — ThumbnailExplorer :206과 같은 얇은 래핑(선택 판정·해석은
+        // 셸 몫 — SelectedEntry 질의). 두 표면 어느 쪽 발화든 한 이벤트로 모은다(현행 유일
+        // 사용처는 리스트 전용 모드라 IconGrid는 접혀 항목이 안 만들어진다 — 실발화는 ListPane뿐).
+        IconGrid.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
+        ListPane.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
         // A94 4차: 잘라내기 표시(전역 1벌)가 바뀌면 이미 그려 둔 항목의 흐림만 다시 맞춘다.
         // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
         // (Unloaded로 워커를 정리하는 아래 관용구와 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
@@ -743,6 +765,10 @@ public sealed partial class ExplorerPane : UserControl
         _fillDone?.TrySetResult(true);
         _fillDone = null;
         _ = LoadDetailsAsync(seq);
+        // A241: 조립 완료 훅 — 셸이 우측 정보 패널의 EXIF 프리페치를 여기서 기동한다(뼈대 우선:
+        // 목록 조립·상세 로더 기동이 끝난 뒤에만 부가 스캔이 붙는다). 감시 재스캔의 재통지는
+        // 소비 쪽 캐시(경로+수정시각)가 흡수한다 — 여기서 거르지 않는다(ViewChanged와 같은 방침).
+        FillCompleted?.Invoke(entries);
     }
 
     /// <summary>
@@ -1477,6 +1503,17 @@ public sealed partial class ExplorerPane : UserControl
 
     private static string? PathOfSelection(object? item) =>
         item is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry } ? entry.Path : null;
+
+    /// <summary>
+    /// 선택된 항목(파일·폴더 불문) — 없으면 null (A240: 셸 선택 축 질의. ThumbnailExplorer.
+    /// SelectedEntry와 같은 계약 — 폴더/무선택의 해석(= 선택 축 null)은 셸 몫이다).
+    /// 상한 초과 안내 행(MakeOverflowNotice)은 Tag가 없어 패턴 매칭에서 자연 제외된다.
+    /// </summary>
+    internal ExplorerListing.Entry? SelectedEntry =>
+        EntryOfSelection(IconGrid.SelectedItem) ?? EntryOfSelection(ListPane.SelectedItem);
+
+    private static ExplorerListing.Entry? EntryOfSelection(object? item) =>
+        item is FrameworkElement { Tag: ExplorerListing.Entry entry } ? entry : null;
 
     // ---------- 다중 선택 일괄 열기 (A94 6차, v0.153.0) ----------
 

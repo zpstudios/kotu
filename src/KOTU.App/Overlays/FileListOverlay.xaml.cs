@@ -45,6 +45,27 @@ public sealed partial class FileListOverlay : UserControl
     /// </summary>
     public event Action<string, IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
 
+    /// <summary>
+    /// A240: 내부 리스트의 선택 변경 중계 — 셸이 우측 정보 패널의 "선택 우선"(A200) 갱신에 쓴다.
+    /// **떠 있을 때만 발화한다**(SelectedFilePath의 "보이지 않는 선택은 열지 않는다" 규칙과 동일
+    /// 축) — 닫힌 도크의 목록 재작성(NavigateList → Fill의 Items.Clear)이 만드는 선택 소멸이
+    /// null 발화가 되어 썸네일 축의 선택(마지막 발화 우선)을 지우는 사고를 막는다.
+    /// </summary>
+    public event Action? SelectionChanged;
+
+    /// <summary>
+    /// A241: 내부 리스트의 조립 완료(FinishFill) 중계 — 셸이 우측 정보 패널의 폴더 단위 EXIF
+    /// 프리페치를 기동한다. ViewChanged와 달리 표시 여부와 무관하게 흘린다(도크가 닫혀 있어도
+    /// 이 리스트가 폴더 상태의 단일 원본 — 캐시를 데워 두는 게 목적이라 가시성 조건이 없다).
+    /// </summary>
+    public event Action<IReadOnlyList<ExplorerListing.Entry>>? FillCompleted;
+
+    /// <summary>
+    /// 떠 있는 동안의 선택 항목(파일·폴더 불문) — 닫혀 있으면 null (A240 —
+    /// SelectedFilePath의 가시성 규칙과 동일. 해석은 셸 몫).
+    /// </summary>
+    public ExplorerListing.Entry? SelectedEntry => IsOpen ? _list?.SelectedEntry : null;
+
     /// <summary>정렬 키 저장용(A5) — 셸이 리스트 첫 생성 전에 주입한다. 없어도 동작(기본 이름순).</summary>
     public ISettingsService? Settings { get; set; }
 
@@ -126,6 +147,13 @@ public sealed partial class FileListOverlay : UserControl
                 ViewChanged?.Invoke(folder, entries); // A93 — 중앙 썸네일 동기화
                 SyncTreeToFolder(folder);             // A134 — 상단 트리 동기
             };
+            // A240: 닫힌 채의 선택 변화(재작성이 만드는 소멸 포함)는 발화하지 않는다 — 위
+            // SelectionChanged 계약 주석 참고. A241: 조립 완료는 가시성 무관 중계(캐시 데우기).
+            _list.SelectionChanged += () =>
+            {
+                if (IsOpen) SelectionChanged?.Invoke();
+            };
+            _list.FillCompleted += entries => FillCompleted?.Invoke(entries);
             _list.Notice += ShowTransientNotice; // A94 — 리스트 항목 드랍·클립보드 실패 안내
             _list.ShowHiddenChanged += RebuildTree; // A160 — 트리도 같은 표시 정책으로 다시 만든다
             ListHost.Content = _list;

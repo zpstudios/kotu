@@ -20,19 +20,19 @@ namespace KOTU.App.Overlays;
 /// 없거나 실패하면 파일 기본 정보로 대체한다. 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
 /// 애초에 ShowFor를 부르지 않는다(현행 동작 유지).
 /// 입력(A176: F12 단타 = 열기/닫기 토글, 핀 버튼 동일)은 셸(MainWindow)이 담당한다 —
-/// 이 컨트롤은 ShowFor/ShowForSelection(A200 — 썸네일 선택 파일)/ShowPlaceholder/Hide/
-/// SetPanelPercent만 받는다(구 SetState는 반투명 축과 함께 폐지 — 사이드바 안내·히트테스트는
-/// 표시 메서드가 직접 켠다).
+/// 이 컨트롤은 ShowFor/ShowForSelection(A200 — 브라우징 선택 파일)/ShowPlaceholder/Hide/
+/// SetPanelPercent/PrefetchSelectionInfo(A241 — 폴더 단위 EXIF 사전 스캔)만 받는다
+/// (구 SetState는 반투명 축과 함께 폐지 — 사이드바 안내·히트테스트는 표시 메서드가 직접 켠다).
 /// </summary>
 public sealed partial class ContentInfoOverlay : UserControl
 {
     private int _seq;             // 정보 로드 경쟁 방지 (기존 MainWindow._infoSeq)
     private string? _activePath;  // 마지막으로 요청된 파일 — 늦게 도착한 결과 폐기 판단
-    private string? _cachePath;   // 정보 캐시 (파일별 1회 로드 — 기존 _infoPath/_infoText)
-    private bool _cacheSelection; // A200: 캐시의 소스 축 — 선택 조회(true)/열린 콘텐츠 provider(false).
-                                  // 경로가 같아도 소스가 다르면 캐시 미스다: "같은 파일을 선택했다가 연"
-                                  // 경우 선택 조회 결과가 모듈 provider 결과를 가리면 안 된다.
-    private IReadOnlyList<ContentInfoItem>? _cacheItems; // A150: 문자열 → 라벨·값 행 목록
+    private string? _cachePath;   // 열린 콘텐츠(provider) 정보 캐시 — 마지막 1건 (기존 _infoPath/_infoText.
+                                  // A241: 선택 축은 _selectionCache(다건)로 분리 — 구 _cacheSelection
+                                  // 소스 축 판별 필드는 폐지됐다. 두 캐시가 물리적으로 갈려 "같은
+                                  // 파일을 선택했다가 연" 경우에도 소스가 섞일 길이 없다)
+    private IReadOnlyList<ContentInfoItem>? _cacheItems; // A150: 문자열 → 라벨·값 행 목록 (provider 축 전용)
     private ModuleWorker? _worker; // A200: 선택 조회(SelectionQuickInfo) 전용 — UI 스레드 금지(A42)
     private CancellationTokenSource? _selectionCts; // A200: 직전 선택 조회 취소 — 빠른 연속 선택
                                                     // (그리드 화살표 이동)이 직렬 워커 큐에 낡은
@@ -60,6 +60,12 @@ public sealed partial class ContentInfoOverlay : UserControl
         {
             _worker?.Dispose();
             _worker = null;
+            // A241: 보류 프리페치 전부 무산 — seq 선증가가 중요: 닫힌 풀의 Run은 취소 Task라
+            // 어차피 무해지만, 낡은 예약이 지연 재생성으로 새 풀을 되살리는 길을 이 한 줄이
+            // 막는다(ThumbnailExplorer A233과 같은 정리 규칙).
+            _prefetchSeq++;
+            _prefetchPool?.Dispose();
+            _prefetchPool = null;
         };
     }
 
@@ -78,18 +84,21 @@ public sealed partial class ContentInfoOverlay : UserControl
     }
 
     /// <summary>
-    /// A200: 썸네일뷰에서 **선택**(클릭, 열기 아님)된 파일의 정보 표시 — ShowFor의 선택 축 판본.
-    /// 모듈 뷰를 경유하지 않고 셸 조회기(SelectionQuickInfo)를 오버레이 전용 워커에서 돌린다
-    /// (UI 스레드 금지 — A42). isPlaceholder(A175 클라우드 전용 파일)면 조회 자체를 생략하고
-    /// 파일 기본 정보(이름·크기·날짜 — 열거로 이미 아는 것)만 그린다 — 원본을 여는 자동 조회는
-    /// 하이드레이션(전체 다운로드)을 일으키므로 금지.
+    /// A200: 브라우징 표면(썸네일 그리드·A240부터 좌 리스트)에서 **선택**(클릭, 열기 아님)된
+    /// 파일의 정보 표시 — ShowFor의 선택 축 판본. 모듈 뷰를 경유하지 않고 셸 조회기
+    /// (SelectionQuickInfo)를 오버레이 전용 워커에서 돌린다(UI 스레드 금지 — A42).
+    /// isPlaceholder(A175 클라우드 전용 파일)면 조회 자체를 생략하고 파일 기본 정보 +
+    /// (이미지면) EXIF 빈 라벨(A239 ②)만 그린다 — 원본을 여는 자동 조회는 하이드레이션
+    /// (전체 다운로드)을 일으키므로 금지. modifiedTicks(A241) = 목록 열거가 이미 아는
+    /// 수정시각 — 다건 캐시(_selectionCache)의 키 절반이다(경로 + 수정시각).
     /// </summary>
-    public void ShowForSelection(string path, bool isPlaceholder)
+    public void ShowForSelection(string path, bool isPlaceholder, long modifiedTicks)
     {
         Visibility = Visibility.Visible;
         OverlayBorder.IsHitTestVisible = true;
         ShowHint(OverlayHints.Docked(OverlayHints.InfoKey));
-        _ = LoadAsync(path, provider: null, selection: true, placeholder: isPlaceholder);
+        _ = LoadAsync(path, provider: null, selection: true, placeholder: isPlaceholder,
+            modifiedTicks: modifiedTicks);
     }
 
     public void Hide()
@@ -250,6 +259,10 @@ public sealed partial class ContentInfoOverlay : UserControl
     /// <summary>
     /// 파일·모듈이 바뀌었을 때 셸이 부른다 — 캐시를 비우고 진행 중 로드를 폐기해,
     /// 다음 표시에서 새 콘텐츠 기준으로 다시 읽게 한다(같은 경로 재오픈 포함).
+    /// A241: 선택 다건 캐시(_selectionCache)는 비우지 않는다 — 수정시각 키가 낡음을 스스로
+    /// 판별하므로 콘텐츠 전환과 무관하게 유효하고, 비우면 프리페치의 목적(폴더 단위 적중)이
+    /// 콘텐츠 전환마다 무너진다. 프리페치 무산도 여기 몫이 아니다(폴더 축 — 새 목록 통지가
+    /// seq를 올린다).
     /// </summary>
     public void InvalidateCache()
     {
@@ -260,17 +273,144 @@ public sealed partial class ContentInfoOverlay : UserControl
         _selectionCts?.Cancel(); // A200: 보류 중 선택 조회도 폐기 — 실행 전이면 워커 큐에서 건너뛴다
     }
 
+    // ---------- 선택 정보 다건 캐시 + 폴더 프리페치 (A241) ----------
+
+    /// <summary>프리페치 동시 발사 상한 — ExplorerPane.FetchConcurrency와 같은 값(A194 관용구·풀 워커 수와 동일).</summary>
+    private const int PrefetchConcurrency = 3;
+
+    /// <summary>선택 정보 캐시 상한 — ExplorerPane._infoCache의 4000 관용구와 동일(초과 시 Clear).</summary>
+    private const int SelectionCacheCap = 4000;
+
     /// <summary>
-    /// 모듈 제공 정보(IContentInfoProvider) 우선, 없으면 파일 기본 정보. 파일별 1회 캐시.
+    /// A241: 선택 정보 다건 캐시 — 경로 → (수정시각 ticks, 행 목록). 수정시각이 다르면 무효
+    /// (ExplorerPane._infoCache와 같은 꼴 — 종전 마지막 1건(_cachePath 겸용)에서 분리·확장).
+    /// 실패 결과(기본 행 폴백·빈 라벨)도 담는다 — 재시도하지 않고, 폴더 재진입 재스캔이
+    /// 수정시각 변화로만 갱신한다(구현 시 결정). <b>UI 스레드에서만 만진다</b>(A194 관용구 —
+    /// 워커 람다는 순수 조회뿐, 발사 루프와 후속부는 전부 UI 문맥).
+    /// </summary>
+    private readonly Dictionary<string, (long ModifiedTicks, IReadOnlyList<ContentInfoItem> Items)>
+        _selectionCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private ModuleWorkerPool? _prefetchPool; // A241: 프리페치 전용 풀(워커 3) — 선택 즉시 조회(Worker)와 분리
+    private int _prefetchSeq;                // A241: 새 목록 통지·언로드가 올린다 — 낡은 프리페치 무산
+
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다(Worker와 같은 규칙).</summary>
+    private ModuleWorkerPool PrefetchPool =>
+        _prefetchPool ??= new ModuleWorkerPool("KOTU info prefetch", PrefetchConcurrency);
+
+    /// <summary>
+    /// A241: 현재 폴더 목록의 **이미지 파일** 선택 정보를 미리 조회해 캐시를 데운다 — 셸이
+    /// 좌 리스트의 조립 완료 훅(ExplorerPane.FinishFill → FillCompleted)에서 부른다(A192 뼈대
+    /// 우선: 목록 조립이 끝난 뒤에만 부가 스캔이 붙는다). 이미지만인 이유 = EXIF가 목적 —
+    /// PDF 페이지 수·zip 압축률은 열기 비용이 커 온디맨드 유지(등재문 확정). placeholder 제외
+    /// (A175 하이드레이션 금지), 캐시 적중(경로+수정시각 일치)은 건너뛴다. 새 호출이 이전 호출을
+    /// 무산시킨다(폴더 전환·감시 재스캔 포함 — seq 관용구). 패널이 닫혀 있어도 돈다(Visibility는
+    /// Unloaded가 아니다 — ExplorerPane 감시와 같은 판단): 다음 열림·선택에서 즉시 적중이 목적이다.
+    /// </summary>
+    public void PrefetchSelectionInfo(IReadOnlyList<ExplorerListing.Entry> entries)
+    {
+        var seq = ++_prefetchSeq;
+        _ = PrefetchAsync(entries, seq);
+    }
+
+    /// <summary>
+    /// A194 관용구 그대로(ExplorerPane.LoadDetailInfoAsync 참조): UI 스레드의 SemaphoreSlim
+    /// 게이트로 동시 3건까지만 발사하고, 캐시 기록은 전부 UI 문맥에서 한다. 발사 상한 =
+    /// 캐시 상한(4000) — 초대형 폴더가 Clear를 반복 유발하며 캐시를 자기 앞부분으로 재세척하는
+    /// 낭비를 막는다(구현 시 결정).
+    /// </summary>
+    private async Task PrefetchAsync(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
+    {
+        using var gate = new SemaphoreSlim(PrefetchConcurrency); // 동시 발사 상한 (A194)
+        var running = new List<Task>();
+        var stop = false; // 풀이 닫힘(취소 Task) — 남은 발사 중단. UI 스레드에서만 읽고 쓴다.
+
+        // 항목 하나의 조회 + 캐시 기록. UI 스레드에서 시작하므로 await 후속부도 UI 스레드다.
+        async Task FetchIntoAsync(ExplorerListing.Entry entry)
+        {
+            try
+            {
+                IReadOnlyList<ContentInfoItem> items;
+                try
+                {
+                    items = await PrefetchPool.Run(_ => SelectionQuickInfo.Build(entry.Path));
+                }
+                catch (OperationCanceledException)
+                {
+                    stop = true; // 오버레이가 내려가며 풀이 닫힘 — 발사 루프도 멈춘다
+                    return;
+                }
+                catch
+                {
+                    return; // 방어 — Build는 실패를 행 폴백으로 삼키므로 여기 올 일은 드물다
+                }
+                if (seq != _prefetchSeq) return; // 폴더 전환·언로드 — 낡은 결과 폐기
+                StoreSelectionCache(entry.Path, entry.Modified.Ticks, items); // A239 확정 결과 그대로
+            }
+            finally
+            {
+                gate.Release(); // 예외·취소 경로 포함 — 누락되면 3건 뒤 조용히 멈춘다
+            }
+        }
+
+        var scheduled = 0;
+        foreach (var entry in entries)
+        {
+            if (stop || seq != _prefetchSeq || scheduled >= SelectionCacheCap) break;
+            if (entry.IsFolder || entry.IsPlaceholder) continue; // placeholder = 조회 자체가 하이드레이션(A175)
+            if (!ExplorerListing.MatchesExtension(
+                    entry.Name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions))
+                continue; // 이미지만 — 비이미지는 온디맨드 유지
+            if (_selectionCache.TryGetValue(entry.Path, out var hit) &&
+                hit.ModifiedTicks == entry.Modified.Ticks)
+                continue; // 캐시 적중 — 감시 재통지마다 다시 읽지 않는다(실패 결과 포함 — 재시도 없음)
+
+            await gate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
+            if (stop || seq != _prefetchSeq)
+            {
+                gate.Release(); // 획득만 하고 발사하지 않는 경로 — 누수 방지
+                break;
+            }
+            scheduled++;
+            running.Add(FetchIntoAsync(entry));
+        }
+        // 발사분 완주 대기 — using gate의 Dispose가 대기 중 Release보다 앞서지 않게 한다.
+        await Task.WhenAll(running);
+    }
+
+    /// <summary>A241: 캐시 기록 단일 지점 — 상한 초과 시 통째 Clear(ExplorerPane._infoCache 관용구).</summary>
+    private void StoreSelectionCache(string path, long modifiedTicks, IReadOnlyList<ContentInfoItem> items)
+    {
+        if (_selectionCache.Count > SelectionCacheCap) _selectionCache.Clear();
+        _selectionCache[path] = (modifiedTicks, items);
+    }
+
+    /// <summary>
+    /// 모듈 제공 정보(IContentInfoProvider) 우선, 없으면 파일 기본 정보.
     /// A200: selection=true면 provider 대신 셸 선택 조회기(SelectionQuickInfo)를 워커에서 돌리고,
-    /// placeholder=true면 조회 없이 파일 기본 정보만(A175 하이드레이션 금지). 캐시 적중은
-    /// 경로 + 소스 축(_cacheSelection)이 둘 다 일치해야 한다.
+    /// placeholder=true면 조회 없이 기본 정보 + (이미지면) EXIF 빈 라벨(A239 ② — A175
+    /// 하이드레이션 금지 불변)만 그린다. A241: 선택 결과는 경로+수정시각 키 다건 캐시
+    /// (_selectionCache — 프리페치와 공유)로, provider 결과는 종전대로 마지막 1건
+    /// (_cachePath/_cacheItems)으로 담는다. 캐시 적중 시에도 _seq를 올린다 — 진행 중이던 직전
+    /// 로드가 늦게 도착해 방금 그린 적중 결과를 덮는 역전 방지(적중이 흔해지는 A241에서
+    /// 실사고 경로가 된다 — 종전 단건 캐시의 잠복 구멍 수리).
     /// </summary>
     private async Task LoadAsync(string path, IContentInfoProvider? provider,
-        bool selection = false, bool placeholder = false)
+        bool selection = false, bool placeholder = false, long modifiedTicks = 0)
     {
-        if (_cachePath == path && _cacheSelection == selection && _cacheItems is not null)
+        if (selection && !placeholder &&
+            _selectionCache.TryGetValue(path, out var cached) && cached.ModifiedTicks == modifiedTicks)
         {
+            _seq++;
+            _activePath = path;
+            _selectionCts?.Cancel(); // 보류 중 선택 조회 폐기 — 적중 화면을 덮지 않게
+            RenderItems(cached.Items);
+            return;
+        }
+        if (!selection && _cachePath == path && _cacheItems is not null)
+        {
+            _seq++;
+            _activePath = path;
             RenderItems(_cacheItems);
             return;
         }
@@ -282,16 +422,21 @@ public sealed partial class ContentInfoOverlay : UserControl
         IReadOnlyList<ContentInfoItem>? items = null;
         try
         {
-            if (selection && !placeholder)
+            if (selection && placeholder)
+            {
+                // A239 ② + A175: 조회 0회 — FileInfo 메타데이터만이라 하이드레이션이 없고
+                // UI 스레드에서 즉시 만들어도 된다(워커 불경유. 캐시에도 담지 않는다 —
+                // placeholder는 프리페치 제외 대상이고 재조립이 값싸다).
+                items = SelectionQuickInfo.BuildPlaceholderRows(path);
+            }
+            else if (selection)
             {
                 _selectionCts?.Cancel(); // 직전 선택 조회는 폐기 대상 — 큐에서 실행 전이면 건너뛴다
                 var cts = _selectionCts = new CancellationTokenSource();
                 items = await Worker.Run(_ => SelectionQuickInfo.Build(path), cts.Token);
             }
-            else if (!selection && provider is not null)
+            else if (provider is not null)
                 items = await provider.GetContentInfoAsync();
-            // placeholder 선택은 조회하지 않는다 — 아래 파일 기본 정보로 바로 간다
-            // (FileInfo 메타데이터 읽기는 하이드레이션을 일으키지 않는다 — A175 계열 판단).
         }
         catch
         {
@@ -300,9 +445,13 @@ public sealed partial class ContentInfoOverlay : UserControl
         items ??= BuildBasicFileInfo(path);
 
         if (seq != _seq || _activePath != path) return; // 그새 파일이 바뀜
-        _cachePath = path;
-        _cacheSelection = selection;
-        _cacheItems = items;
+        if (selection && !placeholder)
+            StoreSelectionCache(path, modifiedTicks, items); // A241 — 실패 결과(기본 행 폴백)도 캐시
+        else if (!selection)
+        {
+            _cachePath = path;
+            _cacheItems = items;
+        }
         RenderItems(items);
     }
 

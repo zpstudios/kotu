@@ -80,16 +80,19 @@ public sealed partial class MainWindow : Window
     private ThumbnailExplorer? _s4Explorer;
 
     /// <summary>
-    /// A200: 중앙 썸네일뷰(S1/_thumbnailExplorer · S4/_s4Explorer)의 파일 선택 축 — 값이 있으면
-    /// 우측 정보 패널이 열린 콘텐츠 대신 **이 선택 파일**의 정보를 보여준다(탐색 중 문맥 우선,
-    /// 해제되면 종전 열린 콘텐츠 기준으로 복귀). 폴더 선택·무선택 = null(파일만 — 구현 결정).
-    /// IsPlaceholder(A175)를 같이 들고 다녀 선택 조회의 하이드레이션 가드에 쓴다.
+    /// A200: 브라우징 표면의 파일 선택 축 — 값이 있으면 우측 정보 패널이 열린 콘텐츠 대신
+    /// **이 선택 파일**의 정보를 보여준다(탐색 중 문맥 우선, 해제되면 종전 열린 콘텐츠 기준으로
+    /// 복귀). 표면 = 중앙 썸네일뷰(S1/_thumbnailExplorer · S4/_s4Explorer) + **좌 리스트
+    /// (A240 — ListOverlay, S1~S4 공용 단일 인스턴스)**. 두 표면 공존 시 **마지막 발화 우선**
+    /// (표면 간 조정 없음 — 나중에 클릭한 쪽이 이긴다). 폴더 선택·무선택 = null(파일만 — 구현
+    /// 결정). IsPlaceholder(A175)는 선택 조회의 하이드레이션 가드, ModifiedTicks(A241)는 선택
+    /// 정보 다건 캐시의 키 절반(경로+수정시각)이다 — 열거가 이미 아는 값이라 추가 조회가 없다.
     /// 세우는 곳 = OnBrowseSelectionChanged 하나, 내리는 곳 = 같은 메서드(해제) +
     /// SetContentState/OnContentOpened(열기 = 선택 축 리셋 — 열기 직후 선택이 열린 콘텐츠
     /// 정보를 가리는 역전 방지)/OnUntitledOpened/ExitOpenFileBrowsing/ViewChanged(목록 재작성 =
     /// 타일 전부 새로 만듦 — stale 경로 방지).
     /// </summary>
-    private (string Path, bool IsPlaceholder)? _selectedBrowse;
+    private (string Path, bool IsPlaceholder, long ModifiedTicks)? _selectedBrowse;
 
     // ---- 하단 바 드라이브 줄 (A22, v0.108.0) ----
     // 표시 컨트롤은 셸에 하나(공용 DriveStrip)만 두고 모듈 하단 바가 슬롯을 내준다(IDriveStripHost).
@@ -234,6 +237,13 @@ public sealed partial class MainWindow : Window
             if (_openFileBrowsing) _s4Explorer?.ShowEntries(folder, entries);
             else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(folder, entries);
         };
+        // A240: 좌 리스트 선택 → 우측 정보 패널(선택 우선 축). ListOverlay는 S1~S4 공용 단일
+        // 인스턴스라 배선도 이 한 곳뿐이다 — 썸네일 축(상태별 인스턴스 2개)과 달리 표면 분기가
+        // 없고, 닫힌 도크의 발화는 FileListOverlay가 원천에서 거른다(이중 발화·유령 발화 없음).
+        ListOverlay.SelectionChanged += () => OnBrowseSelectionChanged(fromList: true);
+        // A241: 목록 조립 완료(A192 FinishFill) 시 현재 폴더의 이미지 EXIF 프리페치 — 선택 즉시
+        // 캐시 적중이 목적. 패널이 닫혀 있어도 데운다(캐시·무산 관리는 오버레이 몫).
+        ListOverlay.FillCompleted += entries => InfoOverlay.PrefetchSelectionInfo(entries);
         // A93 드랍 규칙: 우측 인포 영역 드랍 = 그 파일 열기 — 콘텐츠가 없으면 OpenFile의
         // 라우터(A59)가 담당 모듈로 전환한 뒤 여는 기존 경로를 그대로 쓴다.
         InfoOverlay.FileDropped += OpenFile;
@@ -1868,7 +1878,8 @@ public sealed partial class MainWindow : Window
                 _thumbnailExplorer.FolderActivated += folder => ListOverlay.NavigateList(folder);
                 _thumbnailExplorer.FileActivated += OpenFileRouted;
                 _thumbnailExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow;
-                _thumbnailExplorer.SelectionChanged += OnBrowseSelectionChanged; // A200 — 선택 우선 정보
+                _thumbnailExplorer.SelectionChanged +=
+                    () => OnBrowseSelectionChanged(fromList: false); // A200 — 선택 우선 정보(A240 표면 인자)
                 ExplorerHost.Children.Add(_thumbnailExplorer);
             }
             // A174: 빈 모듈 전환은 좌 리스트의 현재 위치를 리셋하지 않는다 — ExplorerStartFolder가
@@ -3154,7 +3165,7 @@ public sealed partial class MainWindow : Window
     private void ApplyInfoOverlayContent(bool infoShow, bool hasFile)
     {
         if (infoShow && _selectedBrowse is { } selected)
-            InfoOverlay.ShowForSelection(selected.Path, selected.IsPlaceholder);
+            InfoOverlay.ShowForSelection(selected.Path, selected.IsPlaceholder, selected.ModifiedTicks);
         else if (infoShow && hasFile)
             InfoOverlay.ShowFor(_currentFilePath!, ModuleHost.Content as IContentInfoProvider);
         else if (infoShow)
@@ -3181,25 +3192,41 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A200: 중앙 썸네일 그리드의 선택 변경 — 지금 화면을 차지한 표면(S4 중이면 _s4Explorer,
-    /// 빈 모듈이면 _thumbnailExplorer)의 선택만 채택한다(내려간 표면의 잔존 이벤트 무시).
+    /// A200 → A240 표면 인자화: 브라우징 표면의 선택 변경. fromList=false(중앙 썸네일)는 지금
+    /// 화면을 차지한 인스턴스(S4 중이면 _s4Explorer, 빈 모듈이면 _thumbnailExplorer)의 선택만
+    /// 채택하고(내려간 표면의 잔존 이벤트 무시), fromList=true(좌 리스트)는 S1~S4 공용 단일
+    /// 인스턴스(ListOverlay)라 인스턴스 분기가 없다 — 닫힌 도크의 발화는 FileListOverlay가
+    /// 원천 차단하므로 여기 도달한 리스트 발화는 항상 "보이는 선택"이다. 두 표면의 발화가
+    /// 같은 축을 덮어쓰는 것이 곧 **마지막 발화 우선**(구현 장치 없음 — 등재문 확정 규칙).
     /// 파일 선택 = 선택 축 갱신, 폴더 선택·해제 = null(구현 결정 — 파일만). 같은 값이면 무동작 —
-    /// 목록 재작성이 만드는 중복 발화로 정보 패널을 다시 그리지 않는다.
+    /// 목록 재작성이 만드는 중복 발화로 정보 패널을 다시 그리지 않는다(A241: 수정시각까지
+    /// 비교해 같은 경로의 내용 변경은 갱신으로 통과시킨다).
     /// 더블클릭 열기와의 겹발화는 열기 경로(SetContentState·OnContentOpened)의 선택 축 리셋이
     /// 결박한다 — 선택 → 열기 순서라 열기가 항상 마지막에 축을 걷는다.
     /// </summary>
-    private void OnBrowseSelectionChanged()
+    private void OnBrowseSelectionChanged(bool fromList)
     {
-        var active = _openFileBrowsing ? _s4Explorer
-            : IsEmptyFileModule ? _thumbnailExplorer
-            : null;
-        if (active is null) return;
-        var next = active.SelectedEntry is { IsFolder: false } entry
-            ? ((string Path, bool IsPlaceholder)?)(entry.Path, entry.IsPlaceholder)
-            : null;
+        (string Path, bool IsPlaceholder, long ModifiedTicks)? next;
+        if (fromList)
+        {
+            next = ListOverlay.SelectedEntry is { IsFolder: false } picked
+                ? ((string, bool, long)?)(picked.Path, picked.IsPlaceholder, picked.Modified.Ticks)
+                : null;
+        }
+        else
+        {
+            var active = _openFileBrowsing ? _s4Explorer
+                : IsEmptyFileModule ? _thumbnailExplorer
+                : null;
+            if (active is null) return;
+            next = active.SelectedEntry is { IsFolder: false } entry
+                ? ((string, bool, long)?)(entry.Path, entry.IsPlaceholder, entry.Modified.Ticks)
+                : null;
+        }
         if (next is null && _selectedBrowse is null) return;
         if (next is { } n && _selectedBrowse is { } cur &&
-            n.Path == cur.Path && n.IsPlaceholder == cur.IsPlaceholder) return;
+            n.Path == cur.Path && n.IsPlaceholder == cur.IsPlaceholder &&
+            n.ModifiedTicks == cur.ModifiedTicks) return;
         _selectedBrowse = next;
         RefreshInfoOverlayForSelection();
     }
@@ -3492,7 +3519,8 @@ public sealed partial class MainWindow : Window
         // 새 창 열기(Shift+더블클릭·우클릭)는 이 창의 콘텐츠가 안 바뀌므로 S4를 유지한다(구현 결정 —
         // 다른 창에 하나 열고 계속 고르는 흐름이 자연스럽다).
         _s4Explorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow;
-        _s4Explorer.SelectionChanged += OnBrowseSelectionChanged; // A200 — S1 쪽과 동일 배선(선택 우선 정보)
+        _s4Explorer.SelectionChanged +=
+            () => OnBrowseSelectionChanged(fromList: false); // A200 — S1 쪽과 동일 배선(A240 표면 인자)
         S4CenterHost.Children.Add(_s4Explorer);
     }
 
