@@ -946,15 +946,17 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               module still shows its own progress and result; a module that is busy at that moment is
               skipped, and you can flip that one by hand afterwards. It reads as on only while every
               module is registered.</li>
-          <li>One switch per module — <em>Register KOTU-image file associations</em>, and the same for video,
-              audio, document and archive — with the extensions listed beside it. Turning a switch on also
-              tries to make KOTU the default app for those types. Windows protects a few types; for those, the
-              Windows default-apps page opens so you can confirm once, or you can use <em>Set default...</em>
-              for a single extension. The line under each switch tells you how many extensions KOTU is
-              currently the default for.</li>
           <li>One switch for the Explorer right-click entries: <em>Extract here with KOTU-archive</em> on
               archive files and <em>Compress with KOTU-archive</em> on everything. On Windows 11 both live
               under <em>Show more options</em> (<kbd>Shift</kbd>+<kbd>F10</kbd>).</li>
+          <li><strong>Show per-module options</strong> below that unfolds one switch per module —
+              <em>Register KOTU-image file associations</em>, and the same for video, audio, document and
+              archive — with the extensions listed beside it. They start folded away and unfold on their own
+              the moment you touch the switch at the top, so you can watch each module report its progress.
+              Turning a switch on also tries to make KOTU the default app for those types. Windows protects
+              a few types; for those, the Windows default-apps page opens so you can confirm once, or you can
+              use <em>Set default...</em> for a single extension. The line under each switch tells you how
+              many extensions KOTU is currently the default for.</li>
         </ul>
         <p>If KOTU's own folder moves — after an update, or after you move a portable copy — the registrations
            you turned on are repaired silently the next time it starts.</p>
