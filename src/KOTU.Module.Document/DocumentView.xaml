@@ -232,7 +232,10 @@
                      줌·페이지 뒤, Fit 조절기 앞(사용자 확정 순서 "배율 % → 라인 가이드 → ¶ → Fit").
                      노출 조건은 무변경: 에디터 표면(EditorBox 표시)일 때만 — A224 잠금 뷰도
                      에디터 표면이라 그대로 노출되고, 렌더 뷰·PDF·빈
-                     화면에서는 Collapsed(UpdateDecorToggles 단일 지점). 상태는 document.* 키 2개로
+                     화면에서는 Collapsed(UpdateDecorToggles 단일 지점).
+                     ⚠️ A249(v0.246.0) 확정 예외: "숨김 금지·비활성만" 정책에서 이 토글 2종은
+                     예외로 존치한다(2026-08-27 사용자 답변) — 에디터 표면에서만 뜻이 있는
+                     표시 설정이라 다른 표면에서는 비활성이 아니라 숨김이 맞다. 상태는 document.* 키 2개로
                      즉시 저장(A181 줌 관용구). 초기 IsChecked는 코드(생성자)가 설정값으로 맞춘다.
                      글리프: E7A5(가로줄 무리 — 가이드 근사) 대신 실존 확인이 쉬운 표준 글리프를
                      쓴다 — 가이드 = E8A9(AlignLeft류 가로줄), 마커 = 문자 '¶' 텍스트(글리프 탐색
@@ -264,22 +267,23 @@
                 <!-- A145→A214: 조절기는 콘텐츠가 있는 동안 보이고, PDF는 4옵션 전부·텍스트 갈래
                      (파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)는 Fit height만 뺀 3옵션이 활성이다
                      (높이 무한 — 2026-08-24 사용자 지시로 부록 B 67의 "텍스트 비활성"을 반전).
-                     A230(2026-08-25 사용자 지시): 빈 화면(중앙 = 셸 썸네일 탐색기)에서는 A145의
-                     "항상 보이되 비활성"을 부분 반전해 조절기 2개를 아예 접는다 — 초기
-                     Visibility=Collapsed가 그 기본 상태다(초기 상태 = 빈 화면이라 첫 프레임부터
-                     정합. 종전 초기 IsEnabled=False도 그대로 둔다 — 접힌 채로도 상태는 빈 화면 갈래).
-                     표시/활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍만 한다. -->
+                     A230(v0.234.0) → A249(v0.246.0, 정면 반전): 빈 화면(중앙 = 셸 썸네일 탐색기)
+                     에서 조절기 2개를 접던 것을 되돌려 A145의 "항상 보이되 비활성"으로 복귀했다
+                     (2026-08-27 사용자 지시 — 전 모듈 통일). 초기 IsEnabled=False가 그 기본
+                     상태다(초기 상태 = 빈 화면이라 첫 프레임부터 정합). A·F 키 차단은 가시성이
+                     아니라 IsEnabled가 진다 — HotkeySupport의 통과 게이트가 IsEnabled와
+                     Visibility를 함께 보기 때문이다(Shared/HotkeySupport.cs:61).
+                     활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍만 한다. -->
                 <StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
-                            CornerRadius="4,0,0,4" IsEnabled="False" Visibility="Collapsed"
+                            CornerRadius="4,0,0,4" IsEnabled="False"
                             Click="OnFitClicked">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     </Button>
                     <DropDownButton x:Name="FitOptionsButton"
                                     Width="32" Height="32" Padding="4"
                                     BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
-                                    VerticalAlignment="Center" IsEnabled="False"
-                                    Visibility="Collapsed">
+                                    VerticalAlignment="Center" IsEnabled="False">
                         <DropDownButton.Flyout>
                             <MenuFlyout Placement="Top">
                                 <!-- A231: 100% 항목은 아이콘을 두지 않는다(도형 폐기).

@@ -1096,6 +1096,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
                 : "CPU temperature, power, fan and drive sensors need administrator rights.";
         else if (needsPawnIo)
             AdminText.Text = "Install PawnIO to read CPU temperature, power and fan speed.";
+        // A249(v0.246.0) 확정 예외: "숨김 금지·비활성만" 정책에서 이 승격 버튼은 예외로 존치한다
+        // (2026-08-27 사용자 답변) — 관리자 권한이 필요한 상태에서만 뜻이 있는 안내 행의 일부라
+        // (AdminText·PawnIoLink와 한 몸) 평시에는 비활성이 아니라 숨김이 맞다.
         ElevateButton.Visibility = needsAdmin ? Visibility.Visible : Visibility.Collapsed;
         PawnIoLink.Visibility = (needsAdmin && pawnIoMissing) || needsPawnIo
             ? Visibility.Visible : Visibility.Collapsed;

@@ -153,26 +153,33 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// 최소 창 폭 720(바 폭 약 656)에서는 시크 슬라이더가 0으로 밀리고 우측 ⛶가 잘린다.
     /// 임계값 이력: A40 760(실측 오차 여유 포함) → A99에서 열기 버튼 제거로 42px(버튼 36 + 간격 6)
     /// 감소 → **718** → A106(v0.132.0)에서 1칸 버튼이 36→32가 되어 **698** →
-    /// A111(v0.133.0)에서 1:1 버튼이 사라져 **660** → A144에서 Fit이 84→64가 되어 **640**.
+    /// A111(v0.133.0)에서 1:1 버튼이 사라져 **660** → A144에서 Fit이 84→64가 되어 **640** →
+    /// A250(v0.246.0)에서 볼륨 슬라이더가 96→101이 되어 **645**.
     /// A144분 −20의 근거(TransportBar 요소 직접 계수 — 다른 요소의 폭은 무변경):
     ///   Fit 칸이 SplitButton 84 → 본체 32 + 화살표 32(같은 칸의 StackPanel, 간격 0) = 64.
     ///   지금 남은 고정 폭(칸 번호는 A216 재배열 이후): 루프 c0(32) · 재생 c1(32) ·
-    ///   음소거 c5(32) · 볼륨 c6(96) · 배속 c7(84) · 자막 c8(32) · Fit c9(64)
-    ///   + 시간 텍스트 c2/c4 + 간격 6×9 — 합 426(시간 텍스트 제외).
+    ///   음소거 c5(32) · 볼륨 c6(101) · 배속 c7(84) · 자막 c8(32) · Fit c9(64)
+    ///   + 시간 텍스트 c2/c4 + 간격 6×9 — 합 431(시간 텍스트 제외).
+    /// A250분 +5의 근거: 볼륨 슬라이더 96 → 101(0~100 = 값 101개. WinUI Slider 썸·패딩 때문에
+    ///   "1px = 1단위"는 명목치다 — XAML VolumeSlider 주석 참조). 다른 요소·간격은 무변경이라
+    ///   고정 폭 합과 임계가 나란히 +5다. 오디오 바도 같은 +5를 함께 받았다(아래 A217 항).
     /// ⚠️ A151이 전체화면 칸(버튼 32 + 간격 6 = 38)을 제거했을 때 이 임계는 내리지 않았고
     ///   (660 유지) A144도 자기 몫 −20만 반영해 그 38이 여유분으로 남아 있었는데,
     ///   **A11(v0.211.0)의 루프 칸(32 + 간격 6 = 38)이 그 여유를 정확히 소진**했다 —
-    ///   그래서 새 칸을 넣고도 임계는 640 그대로다(설계 docs/A11-playlist-design.md §4.1 판정).
-    ///   A216(칸 재배열)·A217(오디오 정렬)은 이 바의 폭을 안 바꿨다 — 임계 640 유지.
+    ///   그래서 새 칸을 넣고도 당시 임계는 640 그대로였다(설계 docs/A11-playlist-design.md §4.1 판정).
+    ///   A216(칸 재배열)·A217(오디오 정렬)은 이 바의 폭을 안 바꿨다 — 당시 임계 640 유지.
     /// A217(v0.229.0): 이 산식·임계·숨김 대상이 오디오 바의 정본이기도 하다 — 오디오도 고정 폭
-    ///   합이 426으로 맞춰졌고(스페이서 회계는 오디오 XAML 헤더 주석) 동형 축약을 이식했다.
+    ///   합이 같은 값(A250 이후 431)으로 맞춰졌고(스페이서 회계는 오디오 XAML 헤더 주석)
+    ///   동형 축약을 이식했다.
     ///   임계나 숨김 대상을 바꾸면 오디오 UpdateCompactTransport도 함께 바꿀 것 — 두 모듈이
     ///   다르게 숨기면 좁은 창에서 공통 클러스터 정렬이 다시 어긋난다.
     /// 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
     /// </summary>
     private void UpdateCompactTransport(double width)
     {
-        var visibility = width < 640 ? Visibility.Collapsed : Visibility.Visible;
+        // A249 예외: 폭 임계 축약은 "숨김 금지" 정책의 확정 예외다(공간 제약 — 2026-08-27 사용자
+        // 답변). 볼륨은 숨어도 ↑/↓·휠·음소거 버튼으로 접근이 유지된다.
+        var visibility = width < 645 ? Visibility.Collapsed : Visibility.Visible;
         VolumeSlider.Visibility = visibility;
         PositionText.Visibility = visibility;
         DurationText.Visibility = visibility;
@@ -269,9 +276,10 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (_filePath is null)
             PlaceholderText.Visibility = Visibility.Visible;
 
-        // A230: 빈 상태(_filePath 없음)면 Fit 조절기를 접은 채로 시작한다 — XAML 초기값이 이미
-        // Collapsed라 파일 인자가 없으면 무동작이고, 있으면 여기서 곧바로 펼친다(첫 프레임 정합).
-        UpdateFitVisibility();
+        // A230 → A249: 빈 상태(_filePath 없음)면 Fit 조절기를 비활성으로 시작한다 — XAML 초기값이
+        // 이미 IsEnabled=False라 파일 인자가 없으면 무동작이고, 있으면 여기서 곧바로 켠다
+        // (첫 프레임 정합. 버튼은 두 경우 모두 보인다).
+        UpdateFitEnabled();
 
         Vlc.Initialized += OnVlcInitialized;
         Loaded += (_, _) => Focus(FocusState.Programmatic);
@@ -518,10 +526,10 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         _filePath = path;
 
-        // A230: 빈 상태 → 재생 파일 확보 = Fit 조절기 복원. _filePath가 null이 아니게 되는 지점은
-        // 생성자와 여기 둘뿐이고(닫기 경로 없음 — EOF/Ended도 파일은 그대로다) 두 곳 다 갱신한다.
-        // 테스트 클립(A207 — 빈 상태 ▶)도 이 경로로 들어오므로 함께 펼쳐진다(재생 중인 콘텐츠다).
-        UpdateFitVisibility();
+        // A230 → A249: 빈 상태 → 재생 파일 확보 = Fit 조절기 활성. _filePath가 null이 아니게 되는
+        // 지점은 생성자와 여기 둘뿐이고(닫기 경로 없음 — EOF/Ended도 파일은 그대로다) 두 곳 다
+        // 갱신한다. 테스트 클립(A207 — 빈 상태 ▶)도 이 경로로 들어오므로 함께 켜진다(재생 중인 콘텐츠다).
+        UpdateFitEnabled();
 
         // A30: 재생 영상이 바뀌면 핏 옵션은 Contain으로 회귀 — 이번 실행 내에서도 기억하지 않는다
         // (사용자 확정, A83에서 재확인). Manual(Ctrl+휠 줌, A98)·100%도 같은 규칙으로 회귀한다 —
@@ -1149,21 +1157,23 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
 
     /// <summary>
-    /// A230(2026-08-25 사용자 지시): Fit 조절기 2개(본체 + 화살표)의 표시를 재판정한다 —
-    /// 빈 상태(재생 파일 없음)의 중앙은 셸 썸네일 탐색기(A93)라 하단 바에 Fit을 두지 않는다.
-    /// 판정 축 = <see cref="_filePath"/> 하나(이 뷰의 "파일 있음" 정본. EOF/Ended는 닫힘이 아니라
-    /// 파일이 그대로 걸려 있어 조절기도 그대로 남는다). 호출 지점 = 생성자 · OpenPath 두 곳이
-    /// 전부다(그 밖에 _filePath가 바뀌는 자리는 없다).
-    /// 부모 StackPanel이 아니라 버튼 각각을 접는 이유 = HotkeySupport의 통과 게이트가
-    /// <b>버튼 자신의</b> Visibility를 보기 때문이다(부모만 접으면 A·F 키가 보이지 않는 버튼에
-    /// 계속 걸린다). 두 버튼이 모두 접히면 StackPanel은 0폭이라 칸이 사라지는 결과는 같다.
+    /// A230(v0.234.0) → A249(v0.246.0, 정면 반전): Fit 조절기 2개(본체 + 화살표)를 빈 상태에서
+    /// 접던 것을 되돌려 <b>표시는 늘 유지하고 활성만</b> 재판정한다(2026-08-27 사용자 지시 —
+    /// "현재 모듈에서 쓰는 버튼류는 항상 표시, 사용 불가면 비활성으로만").
+    /// 판정 축은 A230 그대로 <see cref="_filePath"/> 하나(이 뷰의 "파일 있음" 정본. EOF/Ended는
+    /// 닫힘이 아니라 파일이 그대로 걸려 있어 조절기도 활성으로 남는다). 호출 지점 = 생성자 ·
+    /// OpenPath 두 곳이 전부다(그 밖에 _filePath가 바뀌는 자리는 없다).
+    /// A·F 키 차단은 가시성이 아니라 여기서 세우는 IsEnabled가 진다 — HotkeySupport의 통과
+    /// 게이트가 버튼의 <c>IsEnabled</c>와 <c>Visibility</c>를 <b>둘 다</b> 보기 때문에
+    /// (Shared/HotkeySupport.cs:61) 비활성만으로도 키가 새지 않는다(A230이 "부모가 아니라 버튼
+    /// 각각을 접는다"고 못 박았던 가시성 게이트 근거를 IsEnabled 게이트가 대체한다).
     /// 자막·루프·▶ 등 빈 상태에도 쓰이는 버튼(A207)은 범위 밖 — 손대지 않는다.
     /// </summary>
-    private void UpdateFitVisibility()
+    private void UpdateFitEnabled()
     {
-        var value = _filePath is not null ? Visibility.Visible : Visibility.Collapsed;
-        FitButton.Visibility = value;
-        FitOptionsButton.Visibility = value;
+        var enabled = _filePath is not null;
+        FitButton.IsEnabled = enabled;
+        FitOptionsButton.IsEnabled = enabled;
     }
 
     /// <summary>A30: 플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>

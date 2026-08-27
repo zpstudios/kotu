@@ -1326,12 +1326,11 @@ public sealed partial class DocumentView : UserControl,
     /// A145: PDF 모드 진입 — Fit 조절기(본체 + 화살표) 활성. 본체 내용·툴팁은 UpdateFitButton()이
     /// 마지막 옵션으로 맞춘다. 짝은 아래 ShowTextFitState() — 활성/비활성 전환은 이 한 쌍만 한다.
     /// A214: 텍스트 갈래가 꺼 둔 Fit height 항목도 여기서 되살린다(PDF는 4옵션 전부).
-    /// A230: 표시(Visibility) 전환도 이 한 쌍이 겸한다 — 콘텐츠 갈래이므로 여기서는 늘 Visible로
-    /// 되돌린다(빈 화면에서 접힌 채로 PDF를 열었을 때의 복원 지점).
+    /// A230이 여기에 얹었던 표시(Visibility) 전환은 A249(v0.246.0)에서 폐기됐다 — 조절기는 상태와
+    /// 무관하게 늘 보이고 활성만 갈린다(A145 원칙 복원).
     /// </summary>
     private void ShowPdfFitState()
     {
-        SetFitControlVisible(true); // A230: 콘텐츠 갈래 — 조절기 복원
         FitButton.IsEnabled = true;
         FitOptionsButton.IsEnabled = true;
         FitHeightItem.IsEnabled = true; // A214: 텍스트 갈래에서 꺼졌을 수 있다 — PDF는 항상 활성
@@ -1344,9 +1343,10 @@ public sealed partial class DocumentView : UserControl,
     /// 뒤집어(2026-08-24 사용자 지시 — 용지가 어떻게 보일 것이냐의 개념) 파일·무제가 있으면
     /// **활성**으로 재정의했다: 100%·Contain·Fit width 3옵션 + 본체(마지막 옵션 표시·재적용).
     /// Fit height만 비활성 — 텍스트는 높이가 무한이라 성립하지 않는다(사용자 명시).
-    /// 빈 화면(파일·무제 없음)은 A230부터 조절기를 <b>접는다</b> — 종전 비활성 "1/1" 표시는
-    /// 접힌 상태의 내용으로만 남는다(아래 주석 참고).
-    /// 활성/비활성·표시 전환은 ShowPdfFitState와 이 한 쌍만 한다(계약 무변경 — 제3 지점 금지).
+    /// 빈 화면(파일·무제 없음)은 A230이 조절기를 <b>접게</b> 했다가 A249(v0.246.0)가 되돌렸다 —
+    /// 다시 <b>보이되 비활성</b>이고, 그때 표시되는 내용이 아래의 "1/1"이다(A230 기간에 화면에
+    /// 닿지 않던 세 줄이 그대로 되살아난 것 — 의도된 복원).
+    /// 활성/비활성 전환은 ShowPdfFitState와 이 한 쌍만 한다(계약 무변경 — 제3 지점 금지).
     /// 활성이면 A·F 키도 HotkeySupport의 IsEnabled 게이트를 통과해 동작한다 — 단 에디터
     /// 타이핑 중에는 종전대로 글자가 우선이다(A32/A84 통과 규칙 — ShouldPassThrough).
     /// </summary>
@@ -1354,10 +1354,9 @@ public sealed partial class DocumentView : UserControl,
     {
         // 판정은 줌 표기(UpdateZoomText)와 같은 축 — 잘림(잠금 뷰)도 _path가 있어 활성이다.
         var active = _path is not null || _untitled;
-        // A230(2026-08-25 사용자 지시): 빈 화면 = 중앙이 셸 썸네일 탐색기인 상태 — 하단 바에
-        // Fit 조절기를 두지 않는다. 판정 축은 활성 판정과 같은 하나(_path·_untitled)라 표시와
-        // 활성이 어긋날 수 없다. New text file 등 다른 "보이되 비활성" 요소는 범위 밖(A189 유지).
-        SetFitControlVisible(active);
+        // A230 → A249(v0.246.0): 빈 화면에서 조절기를 접던 SetFitControlVisible(active) 호출은
+        // 없앴다 — 조절기는 늘 보이고 아래 IsEnabled 두 줄만 상태를 가른다(A145 원칙 복원,
+        // New text file 등 다른 "보이되 비활성" 요소와 같은 형).
         FitButton.IsEnabled = active;
         FitOptionsButton.IsEnabled = active;
         if (active)
@@ -1367,24 +1366,11 @@ public sealed partial class DocumentView : UserControl,
             UpdateFitButton();
             return;
         }
-        // A230 이후 이 세 줄은 화면에 닿지 않는다(접힌 상태의 내용) — 빈 화면 갈래의 정본 표시로
-        // 남겨 둔다. 표시 정책을 되돌리면 그대로 되살아난다.
+        // A230 기간에는 접힌 상태의 내용이라 화면에 닿지 않던 세 줄 — A249(v0.246.0)의 표시 정책
+        // 복원으로 다시 빈 화면 갈래의 실제 표시가 됐다(비활성 버튼에 "1/1" + "No document open").
         FitButton.Content = new TextBlock { Text = "1/1", FontSize = 13 };
         ToolTipService.SetToolTip(FitButton, "No document open");
         ToolTipService.SetToolTip(FitOptionsButton, "No document open");
-    }
-
-    /// <summary>
-    /// A230: Fit 조절기 2개(본체 + 화살표)의 표시를 함께 여닫는다. 부모 StackPanel이 아니라
-    /// 버튼 각각을 접는 이유 = HotkeySupport의 통과 게이트가 <b>버튼 자신의</b> Visibility를
-    /// 보기 때문이다(부모만 접으면 A·F 키가 보이지 않는 버튼에 계속 걸린다). 두 버튼이 모두
-    /// 접히면 StackPanel은 0폭이라 칸이 사라지는 결과는 같다.
-    /// </summary>
-    private void SetFitControlVisible(bool visible)
-    {
-        var value = visible ? Visibility.Visible : Visibility.Collapsed;
-        FitButton.Visibility = value;
-        FitOptionsButton.Visibility = value;
     }
 
     /// <summary>

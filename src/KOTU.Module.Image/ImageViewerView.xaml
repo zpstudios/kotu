@@ -69,25 +69,53 @@
                  걷어내고 부모 Grid의 ColumnSpacing 한 곳에서 정한다(다시 흩어지지 않게). -->
             <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
-                    <!-- 파일명·메타(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸.
+                    <!-- A252(v0.246.0) 칸 구성: c0 인쇄 · c1 파일명·메타(파일 있음) = 드라이브 줄
+                         (파일 없음, A22) 공용 star · c2 배율 · c3 회전 · c4 Fit 조절기.
+                         인쇄는 A211 배치 2(v0.221.0)에서 맨 끝(구 c4)에 붙였다가 A252에서 좌측
+                         정렬군 선두로 옮겼다 — 프린트 버튼을 전 모듈 좌측군으로 통일한 것
+                         (문서 바는 A223부터 이미 좌측군). 칸 하나가 앞뒤로 옮겨졌을 뿐 고정 폭
+                         합은 그대로라 폭 파생 수치가 없다 — 늘고 주는 폭은 star 칸(c1)이 흡수한다.
                          열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
                          1:1 버튼 칸은 A111에서 제거 — 100%가 Fit 플라이아웃 4옵션에 들어갔다. -->
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <!-- A211 배치 2(v0.221.0): 인쇄 버튼 칸(c4) — 아래 PrintButton 주석 참조. -->
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <!-- A27(v0.107.0): 하단 바 버튼은 1칸(32×32)·2칸(84×32) 두 규격만
                      (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
                      치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
                 <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
+                <!-- A211 배치 2(v0.221.0) → A252(v0.246.0): 인쇄 c0 — 규격은 셸 인쇄 절 주석
+                     (MainWindow.xaml.cs, 부록 B 78 확정)이 정본이다: 1칸(32×32) 버튼 ·
+                     툴팁 "Print (Ctrl+P)" · A34 문자 핫키는 배정하지 않는다(Ctrl+P 셸
+                     액셀러레이터가 유일한 키) · 활성 조건 = IPrintPageProvider.CanPrintNow.
+                     여기 IsEnabled="False"는 "파일 없음"으로 시작하는 초기값일 뿐이고, 이후 값의
+                     단일 출처는 코드의 UpdatePrintButton()이다. 클릭 = PrintRequested 발화 한 줄
+                     (셸이 ShowModule에서 구독해 MainWindow.RequestPrint로 흘린다).
+                     A252: 자리를 맨 끝(구 c4)에서 좌측 정렬군 선두(c0)로 옮겼다 — A211 배치 2의
+                     "새 칸은 오른쪽 끝" 결정을 뒤집은 것이고(전 모듈 좌측군 통일), 선언 순서도
+                     칸 순서에 맞춰 바 맨 앞으로 옮겼다(영상 A216 루프 칸 이동과 같은 형).
+                     ⚠️ 폭 계수: **이 바에는 재계수할 파생 수치가 없다.** 영상 바의 축약 임계
+                     (UpdateCompactTransport)는 고정 폭 요소 합에서 나온 수치인데, 이미지 바는
+                     애초에 폭 임계 축약 로직을 두지 않고 남는 폭에서 메타 텍스트를 말줄임으로
+                     흡수하는 설계다(아래 FileInfoPanel 주석). 버튼 32 + ColumnSpacing 6은
+                     자리가 어디든 * 칸(파일명·메타)에서 나온다. -->
+                <Button
+                    x:Name="PrintButton"
+                    Grid.Column="0"
+                    Style="{StaticResource BottomBarButtonStyle}"
+                    IsEnabled="False"
+                    ToolTipService.ToolTip="Print (Ctrl+P)"
+                    Click="OnPrintButtonClick">
+                    <FontIcon Glyph="&#xE749;" FontSize="18" />
+                </Button>
                 <!-- A9 → A149: 파일명 + 메타 요약이 남는 공간을 나눠 쓴다. 파일명이 우선(Auto),
                      메타는 남는 폭에서 말줄임(전체 텍스트는 툴팁 — 폭 임계 축약 로직은 두지 않는다).
                      A149 메타 순서 = 해상도 · 확장자(비트뎁스) · 용량 · 순번 · EXIF 요약
                      (A9의 용량·종류·EXIF 순서를 사용자 확정 순서로 재조립. 조립은 BuildMetaText). -->
-                <Grid x:Name="FileInfoPanel" Grid.Column="0">
+                <Grid x:Name="FileInfoPanel" Grid.Column="1">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -110,26 +138,34 @@
                      파일명·메타 칸과 같은 자리를 쓰고 둘은 서로 배타적으로 표시된다. -->
                 <ContentPresenter
                     x:Name="DriveStripHost"
-                    Grid.Column="0"
+                    Grid.Column="1"
                     HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Stretch"
                     VerticalAlignment="Center"
                     Visibility="Collapsed" />
-                <!-- A149: 현재 줌 레벨(Scroller.ZoomFactor를 퍼센트로). 칸 번호는 그대로 1 —
-                     이름만 InfoText에서 바꿨다(셸 ContentInfoOverlay.xaml에도 InfoText가 있어 grep이 오염된다).
+                <!-- A149: 현재 줌 레벨(Scroller.ZoomFactor를 퍼센트로). 이름만 InfoText에서 바꿨다
+                     (셸 ContentInfoOverlay.xaml에도 InfoText가 있어 grep이 오염된다).
+                     칸 번호는 A252에서 1 → 2(앞에 인쇄 칸이 들어와 한 칸씩 밀렸다).
                      Fit 버튼 본체는 "모드"(1:1/Contain/Fit width/Fit height), 여기는 "실제 배율"이라 역할이 다르다. -->
                 <TextBlock
                     x:Name="ZoomText"
-                    Grid.Column="1"
+                    Grid.Column="2"
                     VerticalAlignment="Center" />
                 <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate = 1칸, Fit = 1칸 버튼 2개
                      (A144에서 구 2칸 SplitButton 84×32를 32+32 = 64×32로 재구성).
                      1:1 별도 버튼은 A111에서 제거 — 100%가 Fit 플라이아웃 옵션이 됐다.
                      전체화면 ⛶은 A151에서 셸 하단 바 우측 모드 버튼 2개로 이관. -->
+                <!-- A251(v0.246.0): 회전은 볼 그림이 있을 때만 활성 — A249 정책("현재 모듈에서 쓰는
+                     버튼은 항상 표시, 사용 불가면 비활성")의 이미지 적용분이다. 여기 IsEnabled="False"는
+                     "파일 없음"으로 시작하는 초기값일 뿐이고 이후 값의 단일 출처는 코드의
+                     UpdateRotateButton()이다(판정 축 = Fit 조절기와 같은 _navigator.Current).
+                     R 키는 HotkeySupport가 버튼의 IsEnabled를 보고 자동으로 통과시킨다(:61 게이트) —
+                     비활성 버튼에 키가 새지 않는다. 칸 번호는 A252에서 2 → 3. -->
                 <Button
                     x:Name="RotateButton"
-                    Grid.Column="2"
+                    Grid.Column="3"
                     Style="{StaticResource BottomBarButtonStyle}"
+                    IsEnabled="False"
                     Click="OnRotateButtonClick">
                     <FontIcon Glyph="&#xE7AD;" FontSize="18" />
                 </Button>
@@ -143,16 +179,20 @@
                      기본 스타일이 없어 BasedOn 불가(v0.113.1 실기기 이력)라 구 SplitButton처럼
                      인라인 값으로 적는다. 화살표는 A34 키가 없어 툴팁을 XAML에 적고,
                      내용 없이 내장 셰브론만 표시한다(A키·F키는 본체 FitButton에 그대로). -->
-                <!-- A230(2026-08-25 사용자 지시): 빈 상태(볼 파일 없음 = 중앙이 셸 썸네일 탐색기)
-                     에서는 조절기 2개를 접는다. 초기 Visibility=Collapsed가 그 기본 상태다 —
-                     생성자는 파일 인자가 없으면 그대로 빈 상태고, 있으면 폴더 스캔·디코드가
-                     끝난 뒤 UpdateStatusBar가 펼친다(첫 프레임 깜빡임 방지. 3모듈 일관). -->
-                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- A230(v0.234.0) → A249(v0.246.0, 정면 반전): 빈 상태(볼 파일 없음 = 중앙이 셸
+                     썸네일 탐색기)에서 조절기 2개를 접던 것을 되돌려 **항상 표시 + 비활성**으로 간다
+                     (A145 "항상 보이되 비활성" 원칙의 전 모듈 복원 — 2026-08-27 사용자 지시).
+                     초기 IsEnabled=False가 그 기본 상태다: 생성자는 파일 인자가 없으면 그대로 빈
+                     상태고, 있으면 폴더 스캔·디코드가 끝난 뒤 UpdateStatusBar가 켠다(첫 프레임
+                     정합. 3모듈 일관). A·F 키 차단은 가시성이 아니라 IsEnabled가 진다 —
+                     HotkeySupport의 통과 게이트가 IsEnabled와 Visibility를 함께 보기 때문에
+                     (Shared/HotkeySupport.cs:61) 비활성만으로 키가 새지 않는다. 칸은 A252에서 3 → 4. -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button
                         x:Name="FitButton"
                         Style="{StaticResource BottomBarButtonStyle}"
                         CornerRadius="4,0,0,4"
-                        Visibility="Collapsed"
+                        IsEnabled="False"
                         Click="OnFitClick">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     </Button>
@@ -161,7 +201,7 @@
                         Width="32" Height="32" Padding="4"
                         BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
                         VerticalAlignment="Center"
-                        Visibility="Collapsed"
+                        IsEnabled="False"
                         ToolTipService.ToolTip="Fit options">
                         <DropDownButton.Flyout>
                             <MenuFlyout Placement="Top">
@@ -197,28 +237,7 @@
                         </DropDownButton.Flyout>
                     </DropDownButton>
                 </StackPanel>
-                <!-- A211 배치 2(v0.221.0): 인쇄 c4 — 규격은 셸 인쇄 절 주석(MainWindow.xaml.cs,
-                     부록 B 78 확정)이 정본이다: 1칸(32×32) 버튼 · 툴팁 "Print (Ctrl+P)" ·
-                     A34 문자 핫키는 배정하지 않는다(Ctrl+P 셸 액셀러레이터가 유일한 키) ·
-                     활성 조건 = IPrintPageProvider.CanPrintNow. 여기 IsEnabled="False"는
-                     "파일 없음"으로 시작하는 초기값일 뿐이고, 이후 값의 단일 출처는
-                     코드의 UpdatePrintButton()이다. 클릭 = PrintRequested 발화 한 줄
-                     (셸이 ShowModule에서 구독해 MainWindow.RequestPrint로 흘린다).
-                     A11(영상 루프 c9) 칸 추가 선례와 같은 형 — 새 칸은 오른쪽 끝에 붙인다.
-                     ⚠️ 폭 계수(A144·A11의 여유 산식에 해당하는 것): **이 바에는 재계수할 파생
-                     수치가 없다.** 영상 바의 축약 임계(UpdateCompactTransport 640)는 고정 폭
-                     요소 합에서 나온 수치인데, 이미지 바는 애초에 폭 임계 축약 로직을 두지 않고
-                     남는 폭에서 메타 텍스트를 말줄임으로 흡수하는 설계다(위 FileInfoPanel 주석).
-                     늘어난 38(버튼 32 + ColumnSpacing 6)은 * 칸(파일명·메타)에서 나온다. -->
-                <Button
-                    x:Name="PrintButton"
-                    Grid.Column="4"
-                    Style="{StaticResource BottomBarButtonStyle}"
-                    IsEnabled="False"
-                    ToolTipService.ToolTip="Print (Ctrl+P)"
-                    Click="OnPrintButtonClick">
-                    <FontIcon Glyph="&#xE749;" FontSize="18" />
-                </Button>
+                <!-- A252: 인쇄 버튼 선언은 바 맨 앞(c0)으로 옮겼다 — 위 PrintButton 주석 참조. -->
             </Grid>
         </Border>
     </Grid>

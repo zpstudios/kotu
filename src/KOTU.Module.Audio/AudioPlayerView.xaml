@@ -76,9 +76,12 @@
                    우군 등식: 영상 = 간격 6 + 자막 32 + 간격 6 + Fit 64 = 108
                              오디오 = 간격 6 + EQ 32 + 간격 6 + 장치 32 + 간격 6 + 스페이서 c10(26) = 108.
                  폭 재계수(A40 방식): 고정 폭 합 = 1칸 버튼 5개(루프·재생·음소거·EQ·장치) 160 +
-                 볼륨 96 + 배속 84 + 스페이서 26 + 간격 6×10 = 426 — 영상(426)과 정확히 같다
-                 (정렬의 목적 그대로). 종전 "비디오보다 32 작아 축약 불요" 판정은 그래서 소멸 —
-                 영상의 축약 로직(UpdateCompactTransport, 임계 640·볼륨/시간 숨김)을 동형 이식했다.
+                 볼륨 101 + 배속 84 + 스페이서 26 + 간격 6×10 = 431 — 영상(431)과 정확히 같다
+                 (정렬의 목적 그대로). A250(v0.246.0)에서 볼륨이 96→101이 되어 두 모듈이 나란히
+                 426 → 431이 됐다(스페이서 26·우군 등식은 불변 — 볼륨은 공통 클러스터 안이라
+                 양쪽이 같은 +5를 받아 정렬이 그대로 성립한다).
+                 종전 "비디오보다 32 작아 축약 불요" 판정은 그래서 소멸 —
+                 영상의 축약 로직(UpdateCompactTransport, 임계 645·볼륨/시간 숨김)을 동형 이식했다.
                  숨김 대상까지 같아야 좁은 창(축약 후)에서도 클러스터가 어긋나지 않는다. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -121,7 +124,12 @@
                        VerticalAlignment="Center" />
             <Button x:Name="MuteButton" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
                     Content="🔊" Click="OnMuteClicked" />
-            <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
+            <!-- A250(v0.246.0): 볼륨 슬라이더 폭 96 → 101(영상과 동일 값·동일 근거) — 0~100은
+                 값이 101개라 "1px = 1단위"로 잡은 폭이다(사용자 확정). WinUI Slider의 썸 크기·트랙
+                 좌우 패딩 때문에 실제 픽셀↔단위 대응은 1:1이 아니다 — 101은 명목치다.
+                 파생 재계수: 고정 폭 합 426 → 431(위 헤더 주석), 축약 임계 640 → 645
+                 (UpdateCompactTransport — 산식 정본은 영상 쪽 주석). -->
+            <Slider x:Name="VolumeSlider" Grid.Column="6" Width="101" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸, A97에서 84×36, A106에서 84×32) -->

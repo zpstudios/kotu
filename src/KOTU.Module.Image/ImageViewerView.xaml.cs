@@ -953,20 +953,34 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
 
     /// <summary>
-    /// A230(2026-08-25 사용자 지시): Fit 조절기 2개(본체 + 화살표)의 표시를 함께 여닫는다.
-    /// 빈 상태(볼 파일 없음)의 중앙은 셸 썸네일 탐색기(A93)라 하단 바에 Fit을 두지 않는다 —
-    /// A145의 "항상 보이되 비활성" 관용구를 Fit 조절기에 한해 부분 반전한 것이다(회전 버튼 등
-    /// 다른 요소는 범위 밖). 유일한 호출 지점 = UpdateStatusBar의 두 분기.
-    /// 부모 StackPanel이 아니라 버튼 각각을 접는 이유 = HotkeySupport의 통과 게이트가
-    /// <b>버튼 자신의</b> Visibility를 보기 때문이다(부모만 접으면 A·F 키가 보이지 않는 버튼에
-    /// 계속 걸린다). 두 버튼이 모두 접히면 StackPanel은 0폭이라 칸이 사라지는 결과는 같다.
+    /// A230(v0.234.0) → A249(v0.246.0, 정면 반전): Fit 조절기 2개(본체 + 화살표)를 빈 상태에서
+    /// 접던 것을 되돌려 <b>표시는 늘 유지하고 활성만</b> 여닫는다(2026-08-27 사용자 지시 —
+    /// "현재 모듈에서 쓰는 버튼류는 항상 표시, 사용 불가면 비활성으로만"). A145의 "항상 보이되
+    /// 비활성" 원칙이 이 조절기에도 다시 적용된 상태다.
+    /// 판정 축은 A230 그대로 = "볼 파일이 있는가"(<c>_navigator.Current</c>), 유일한 호출 지점도
+    /// 그대로 <see cref="UpdateStatusBar"/>의 두 분기다.
+    /// A·F 키 차단은 가시성이 아니라 여기서 세우는 IsEnabled가 진다 — HotkeySupport의 통과
+    /// 게이트가 버튼의 <c>IsEnabled</c>와 <c>Visibility</c>를 <b>둘 다</b> 보기 때문에
+    /// (Shared/HotkeySupport.cs:61) 비활성만으로도 키가 새지 않는다. 그래서 A230이 "부모가 아니라
+    /// 버튼 각각을 접는다"고 못 박았던 근거(가시성 게이트)는 IsEnabled 게이트가 그대로 대체한다.
     /// </summary>
-    private void SetFitControlVisible(bool visible)
+    private void SetFitControlEnabled(bool enabled)
     {
-        var value = visible ? Visibility.Visible : Visibility.Collapsed;
-        FitButton.Visibility = value;
-        FitOptionsButton.Visibility = value;
+        FitButton.IsEnabled = enabled;
+        FitOptionsButton.IsEnabled = enabled;
     }
+
+    /// <summary>
+    /// A251(v0.246.0): 회전 버튼 활성 = <b>볼 그림이 있는가</b>(Fit 조절기와 같은 축 —
+    /// <c>_navigator.Current</c>). 종전에는 IsEnabled 관리가 전무해 빈 상태(중앙 = 셸 썸네일
+    /// 탐색기)에서도 활성이었고, 클릭·R 키가 <c>_userRotation</c>만 무의미하게 돌렸다
+    /// (다음 로드에서 리셋되는 죽은 활성 버튼). A249 정책의 이미지 적용분이다.
+    /// R 키는 <see cref="HotkeySupport"/>의 IsEnabled 게이트가 자동으로 막는다(Bind 등록 —
+    /// 비활성이면 args.Handled를 false로 되돌려 그대로 흘려보낸다).
+    /// 두 분기(파일 있음·없음)에 공통이라 <see cref="UpdatePrintButton"/>과 나란히 분기 앞에서
+    /// 한 번만 부른다 — 판정은 이 메서드가 같은 축을 직접 읽는다.
+    /// </summary>
+    private void UpdateRotateButton() => RotateButton.IsEnabled = _navigator?.Current is not null;
 
     /// <summary>A30 규격: 플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.</summary>
     private void SelectFitOption(FitMode option)
@@ -1054,15 +1068,18 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         // 이 메서드는 표시 상태가 확정된 뒤에만 불린다(Source·_printBytes 대입 다음) — 호출 지점
         // 전수: 생성자 빈 상태 · LoadCurrentAsync 성공/빈 상태 · LoadViaMagickAsync 성공.
         // 예외는 로드 실패 경로 하나뿐이고 거기서는 직접 부른다(그쪽 주석 참조).
-        // A230: Fit 조절기의 표시 전환도 이 메서드의 두 분기가 겸한다 — 판정 축은 이미 여기 있는
-        // "현재 파일 경로"(_navigator.Current) 하나뿐이라 표시 지점을 새로 만들지 않는다.
-        // 로드 실패(위 예외 경로)는 파일 자체는 열려 있고 ←/→ 탐색도 유효하므로 조절기를 접지
+        // A230 → A249: Fit 조절기의 활성 전환도 이 메서드의 두 분기가 겸한다 — 판정 축은 이미
+        // 여기 있는 "현재 파일 경로"(_navigator.Current) 하나뿐이라 전환 지점을 새로 만들지 않는다.
+        // (A230은 같은 자리에서 Visibility를 여닫았고, A249가 그것을 IsEnabled로 되돌렸다.)
+        // 로드 실패(위 예외 경로)는 파일 자체는 열려 있고 ←/→ 탐색도 유효하므로 조절기를 끄지
         // 않는다 — 인쇄 버튼(CanPrintNow = 표시 중인 비트맵 축)과 판정 축이 다른 자리다.
+        // A251: 회전 버튼도 두 분기 공통이라 인쇄 버튼과 나란히 여기서 한 번 갱신한다.
         UpdatePrintButton();
+        UpdateRotateButton();
         var path = _navigator?.Current;
         if (path is null)
         {
-            SetFitControlVisible(false); // A230: 빈 상태 = 중앙이 셸 썸네일 탐색기 — 조절기를 접는다
+            SetFitControlEnabled(false); // A249: 빈 상태 = 중앙이 셸 썸네일 탐색기 — 보이되 비활성
             FileNameText.Text = "No file open";
             ZoomText.Text = string.Empty;
             MetaText.Text = string.Empty;
@@ -1070,7 +1087,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             return;
         }
 
-        SetFitControlVisible(true); // A230: 볼 파일이 있다 — 조절기 복원
+        SetFitControlEnabled(true); // A249: 볼 파일이 있다 — 조절기 활성
         FileNameText.Text = Path.GetFileName(path);
         // A149: 파일명 오른쪽에 나머지 정보를 한 덩어리로. 좁으면 말줄임되므로 전체는 툴팁으로.
         var meta = BuildMetaText();
@@ -1182,6 +1199,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// A(100%)·F(Fit)는 영상·문서 모듈과 같은 뜻으로 통일한 키 — A111부터 둘 다 Fit 버튼에 건다
     /// (버튼이 하나로 합쳐졌을 뿐, 키 동작은 무변경). 툴팁은 상태를 따라가므로 UpdateFitButton()이
     /// 두 키 표기를 함께 만든다(Bind 대신 Register + 자체 툴팁).
+    /// <para>
+    /// A249/A251: 세 키(R·A·F) 모두 빈 상태에서 <b>버튼 비활성</b>만으로 차단된다 —
+    /// HotkeySupport의 통과 게이트가 버튼의 IsEnabled와 Visibility를 둘 다 보기 때문이다
+    /// (Shared/HotkeySupport.cs:61). 버튼을 접지 않아도 키는 새지 않는다.
+    /// </para>
     /// </summary>
     private void SetupHotkeys()
     {

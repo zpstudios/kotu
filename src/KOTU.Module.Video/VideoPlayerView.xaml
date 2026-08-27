@@ -91,10 +91,9 @@
                  c1~c7)의 시작·끝 x가 오디오 바와 일치한다 — 좌군(루프) 32+간격 6 = 38,
                  우군(자막 32 + Fit 64 + 간격 2×6) = 108을 오디오가 스페이서로 맞춘 상태.
                  이 바의 양옆 구성·폭을 바꾸면 오디오 바(AudioPlayerView.xaml)도 함께 재계수할 것.
-                 A230: 이 등식은 "콘텐츠 열림 상태"에만 걸리는 계약이다 — 빈 상태에서는 Fit
-                 조절기(64 + 간격 6)가 접혀 우군이 38로 줄어 오디오와 어긋나지만, 오디오 자체가
-                 빈 상태의 비교 대상이 아니라(모듈 전환 없이 나란히 볼 일이 없다) 실익이 없다.
-                 빈 상태 대칭을 맞추려 오디오 스페이서(26)를 건드리지 말 것 — 과설계다. -->
+                 A249(v0.246.0): A230이 달아 둔 "이 등식은 콘텐츠 열림 상태에만 걸린다"는 한정은
+                 소멸했다 — 빈 상태에서도 Fit 조절기를 접지 않고 비활성으로만 두므로(항상 표시)
+                 우군 폭 108이 상태와 무관하게 유지된다. 등식은 다시 무조건 성립한다. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -116,8 +115,9 @@
                  항목(목록 루프 토글 + 현재 파일 반복 라디오 4택)은 코드(BuildLoopFlyout)가
                  1회 채우고, 본체 아이콘·툴팁(L 키 표기 포함)은 UpdateLoopButton()이 상태형으로
                  갱신한다 — 아래 FontIcon은 초기값일 뿐이다. 폭 계수: 이 칸(32+간격 6 = 38)은
-                 A151이 전체화면 칸을 제거하며 남긴 여유 38을 정확히 소진한다 — 축약 임계 640
-                 유지(UpdateCompactTransport 산식 주석 참조, 설계 A11-playlist-design.md §4.1).
+                 A151이 전체화면 칸을 제거하며 남긴 여유 38을 정확히 소진한다 — 그래서 당시 축약
+                 임계는 640 그대로였다(현재 값은 A250의 볼륨 +5로 645 — UpdateCompactTransport
+                 산식 주석이 정본, 설계 A11-playlist-design.md §4.1).
                  A216(2026-08-24): 위치를 c9(맨 끝)에서 재생 버튼 왼쪽(c0)으로 이동 — 총폭 불변. -->
             <Button x:Name="LoopButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}">
                 <FontIcon Glyph="&#xE8EE;" FontSize="18" />
@@ -137,7 +137,12 @@
                        VerticalAlignment="Center" />
             <Button x:Name="MuteButton" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
                     Content="🔊" Click="OnMuteClicked" />
-            <Slider x:Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="100"
+            <!-- A250(v0.246.0): 볼륨 슬라이더 폭 96 → 101 — 0~100은 값이 101개라 "1px = 1단위"로
+                 잡은 폭이다(사용자 확정). 다만 WinUI Slider는 썸 크기·트랙 좌우 패딩이 있어
+                 실제 픽셀↔단위 대응은 1:1이 아니다 — 101은 명목치다.
+                 파생 재계수: 고정 폭 합 426 → 431, 축약 임계 640 → 645
+                 (UpdateCompactTransport 주석이 정본). 오디오 바도 같은 +5를 함께 받는다. -->
+            <Slider x:Name="VolumeSlider" Grid.Column="6" Width="101" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(v0.49.0 사용자 요청 — 공간 절약).
@@ -168,21 +173,24 @@
                  없어 BasedOn 불가(v0.113.1 실기기 이력)라 구 SplitButton처럼 인라인 값으로 적는다.
                  화살표는 내용 없이 내장 셰브론만 표시하고 A34 키가 없어 툴팁을 XAML에 적는다. -->
             <!-- 본체 툴팁(키 표기 포함)은 UpdateFitButton()이 상태와 함께 갱신한다 — A34 -->
-            <!-- A230(2026-08-25 사용자 지시): 빈 상태(재생 파일 없음 = 중앙이 셸 썸네일 탐색기)
-                 에서는 조절기 2개를 접는다. 초기 Visibility=Collapsed가 그 기본 상태고,
-                 생성자의 UpdateFitVisibility()가 파일 인자 유무로 곧바로 확정한다
-                 (첫 프레임 깜빡임 방지. 3모듈 일관). 빈 상태 ▶ = 테스트 클립(A207) 등
-                 다른 버튼은 빈 상태에도 그대로 쓰이므로 손대지 않는다. -->
+            <!-- A230(v0.234.0) → A249(v0.246.0, 정면 반전): 빈 상태(재생 파일 없음 = 중앙이 셸
+                 썸네일 탐색기)에서 조절기 2개를 접던 것을 되돌려 **항상 표시 + 비활성**으로 간다
+                 (A145 "항상 보이되 비활성" 원칙의 전 모듈 복원 — 2026-08-27 사용자 지시).
+                 초기 IsEnabled=False가 그 기본 상태고, 생성자의 UpdateFitEnabled()가 파일 인자
+                 유무로 곧바로 확정한다(첫 프레임 정합. 3모듈 일관). A·F 키 차단은 가시성이 아니라
+                 IsEnabled가 진다 — HotkeySupport의 통과 게이트가 IsEnabled와 Visibility를 함께
+                 보기 때문이다(Shared/HotkeySupport.cs:61). 빈 상태 ▶ = 테스트 클립(A207) 등
+                 다른 버튼은 빈 상태에도 그대로 쓰이므로 종전대로 손대지 않는다. -->
             <StackPanel Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
-                        CornerRadius="4,0,0,4" Visibility="Collapsed" Click="OnFitClicked">
+                        CornerRadius="4,0,0,4" IsEnabled="False" Click="OnFitClicked">
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                 </Button>
                 <DropDownButton x:Name="FitOptionsButton"
                                 Width="32" Height="32" Padding="4"
                                 BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
                                 VerticalAlignment="Center"
-                                Visibility="Collapsed"
+                                IsEnabled="False"
                                 ToolTipService.ToolTip="Fit options">
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="Top">

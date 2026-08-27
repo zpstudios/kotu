@@ -618,6 +618,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     {
         _busy = busy;
         OperationProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        // A249(v0.246.0) 확정 예외: "숨김 금지·비활성만" 정책에서 이 취소 버튼은 예외로 존치한다
+        // (2026-08-27 사용자 답변) — 진행 중(busy)에만 존재하는 버튼이라 평시에는 비활성이 아니라
+        // 숨김이 맞다(진행 막대와 한 몸으로 뜨고 진다).
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         if (busy)
         {

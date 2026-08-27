@@ -155,15 +155,18 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
     /// <summary>
     /// A217(v0.229.0): 좁은 하단 바 축약 — 비디오 A40 로직의 동형 이식(임계·숨김 대상 동일).
-    /// A217의 공통 클러스터 정렬로 이 바의 고정 폭 합이 비디오와 같은 426이 됐다
-    /// (XAML TransportBar 헤더 주석의 재계수 참조 — 종전 394 시절의 "축약 불요" 판정 소멸).
-    /// 임계 640과 산식 계보는 비디오 UpdateCompactTransport 주석이 정본이다. 숨김 대상
-    /// (볼륨·시간 텍스트 2개)까지 비디오와 같아야 축약 후에도 클러스터 x가 일치한다.
+    /// A217의 공통 클러스터 정렬로 이 바의 고정 폭 합이 비디오와 같은 426이 됐고, A250(v0.246.0)의
+    /// 볼륨 슬라이더 96→101로 두 모듈이 나란히 <b>431</b>이 됐다(XAML TransportBar 헤더 주석의
+    /// 재계수 참조 — 종전 394 시절의 "축약 불요" 판정 소멸).
+    /// 임계 645(A250 이전 640)와 산식 계보는 비디오 UpdateCompactTransport 주석이 정본이다.
+    /// 숨김 대상(볼륨·시간 텍스트 2개)까지 비디오와 같아야 축약 후에도 클러스터 x가 일치한다.
     /// 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
     /// </summary>
     private void UpdateCompactTransport(double width)
     {
-        var visibility = width < 640 ? Visibility.Collapsed : Visibility.Visible;
+        // A249 예외: 폭 임계 축약은 "숨김 금지" 정책의 확정 예외다(공간 제약 — 2026-08-27 사용자
+        // 답변). 영상과 같은 임계·같은 대상이어야 정렬이 유지된다.
+        var visibility = width < 645 ? Visibility.Collapsed : Visibility.Visible;
         VolumeSlider.Visibility = visibility;
         PositionText.Visibility = visibility;
         DurationText.Visibility = visibility;
