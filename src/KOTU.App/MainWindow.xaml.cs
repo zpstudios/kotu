@@ -1612,6 +1612,7 @@ public sealed partial class MainWindow : Window
         RememberLastFolder(); // 전역 마지막 폴더 저장 (v0.55.0 모듈별 → A174 전역 1벌)
         UpdateEmptyExplorer();
         UpdateDriveStrip(); // A22: 파일 유무가 바뀌면 드라이브 줄도 함께 켜고 끈다
+        UpdateOpenFileButton(); // A236: 파일 컨텍스트 없는 화면에서 '오픈 파일' 버튼을 숨긴다
         // 사이드바 상태는 유지한 채 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 —
         // 기존 "상태는 콘텐츠를 넘어 유지" 규칙(A176: 홀드 판정 리셋은 상태 머신과 함께 소멸).
         ApplyOverlayStates();
@@ -1619,6 +1620,29 @@ public sealed partial class MainWindow : Window
         // A137: 파일 열기/닫기가 창 아이콘(32px 확장자/용량)도 바꾸므로 트레이만이 아니라
         // 셸 아이콘 전체를 갱신한다 — 창 쪽은 _windowIconKey 선비교로 무변경이면 무동작.
         RefreshShellIcons();
+    }
+
+    /// <summary>
+    /// 하단 바 '오픈 파일' 버튼(A90)의 표시 갱신 (A236 — 사용자 지시: 설정·하드웨어 모듈에 있으면
+    /// 안 된다). 판정은 **담당 확장자를 가진 모듈인가** 하나뿐이다: 파일 모듈(이미지·영상·오디오·
+    /// 문서·압축·All Readable)이면 보이고, 확장자 0건인 정보 모듈(하드웨어)과 모듈이 없는 화면
+    /// (설정·미지원 파일 안내·빈 셸)이면 숨는다. 파일이 열렸는지는 보지 않는다 — 빈 파일 모듈(S1)
+    /// 에서도 버튼은 A90-b "이미 열려 있음" 강조라는 실동작을 갖는다.
+    /// ※ A249("현재 모듈에서 쓰는 버튼은 숨기지 말고 비활성만")와 층이 다르다: 이 버튼은 해당
+    /// 화면에서 아예 쓰지 않는 셸 전역 버튼이라 노출 자체를 접는다(사용자 확정).
+    /// 호출은 SetContentState 한 곳 — 모듈 전환·설정 진입·파일 열기·미지원 안내가 전부 그 단일
+    /// 깔때기를 지난다. 콘텐츠가 아직 없는 빈 셸은 XAML 초기값(Collapsed)이 담당한다.
+    /// 판정에 <see cref="IsFileModule"/>(ID 열거)을 쓰지 않는 이유: 현재 결과는 같지만, 확장자를
+    /// 가진 모듈이 새로 붙어도 ID 목록 갱신 없이 따라오는 쪽이 안전해서다(등재문 확정 판정식).
+    /// </summary>
+    private void UpdateOpenFileButton()
+    {
+        var hasFileContext = _currentModule is { } module && module.SupportedExtensions.Count > 0;
+        OpenFileButton.Visibility = hasFileContext ? Visibility.Visible : Visibility.Collapsed;
+        // 파생 수치 동기: 모듈 바 좌측 여백(XAML 82)은 이 버튼 자리(32 + 간격 6)를 전제한 고정값이라
+        // 버튼이 숨으면 38px 구멍이 남는다 — 숨김일 때는 메뉴 버튼 기준(여백 6 + 버튼 32 + 간격 6 = 44)
+        // 으로 당긴다. 우측 44(셸 모드 버튼 1개 + 간격 + 여백)는 이 축과 무관해 고정.
+        ModuleBarHost.Margin = new Thickness(hasFileContext ? 82 : 44, 0, 44, 0);
     }
 
     /// <summary>
@@ -3370,6 +3394,8 @@ public sealed partial class MainWindow : Window
     /// A119: 정보 모듈은 S2/S3*로 분류되지만 파일 컨텍스트가 없어 EnterOpenFileBrowsing의
     /// 방어선이 걸러 준다 — 결과는 종전(None 시절)과 같은 무동작. A196: 설정·미지원 안내·
     /// 무제 문서도 같은 방어선이 걸러 준다(S4는 파일 콘텐츠 전용 — 사양 유지).
+    /// A236: 그중 담당 확장자가 없는 화면(설정·정보 모듈·미지원 안내·빈 셸)은 버튼이 아예 숨어
+    /// 여기 오지 않는다(UpdateOpenFileButton) — 남는 무동작 경로는 파일 모듈의 무제 문서뿐이다.
     /// 바가 숨은 동안(전체화면·영상 자동 숨김)은 이 버튼 자체를 누를 수 없고, 영상 자동 숨김
     /// 축에서 전체화면 중 바가 나타나 눌리면 S4가 전체화면 위에 뜬다 — Esc 순서는 종전 규칙
     /// 그대로(첫 Esc = 전체화면 해제, 다음 Esc = S4 복귀)라 특별 처리하지 않는다.
@@ -3410,6 +3436,9 @@ public sealed partial class MainWindow : Window
         if (_openFileBrowsing) return;
         // 파일 컨텍스트 전용 — A119부터 정보 모듈도 S2/S3*로 분류되므로 이 가드가 실동작한다
         // (파일이 없어 띄울 좌 리스트 폴더가 없다 — '오픈 파일'은 무동작).
+        // A236: 이제 그런 화면(설정·정보 모듈·미지원 안내·빈 셸)에서는 버튼 자체가 숨는다
+        // (UpdateOpenFileButton) — 이 가드는 버튼 외 진입(뷰 내부 신호·향후 키 배정)까지 받는
+        // 최종 방어선으로 존치한다.
         if (_currentFilePath is null || _currentModule is null) return;
         _s4Restore = (_listSide.State, _infoSide.State); // A176: 안정 상태 2종뿐이라 그대로 스냅샷
         if (_listSide.State == OverlayState.Closed) _listSide.State = OverlayState.OpaqueDocked;

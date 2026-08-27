@@ -178,7 +178,10 @@
                  + '오픈 파일' 버튼 32(A90) + 간격 6. 이력: A97(v0.116.0)에서 52→48,
                  A90이 버튼 하나를 더해 48→90, A106(v0.132.0)에서 버튼 36→32라 90→82.
                  우측 Margin 44 = 셸 모드 버튼 1개(Full screen 32) + 간격 6 + 가장자리 여백 6.
-                 이력: A151에서 12→82(버튼 2개), A186에서 Full window 버튼 삭제로 82→44. -->
+                 이력: A151에서 12→82(버튼 2개), A186에서 Full window 버튼 삭제로 82→44.
+                 A236: 좌측 82는 '오픈 파일' 버튼이 **보일 때**의 값이다 — 버튼이 숨는 화면
+                 (설정·하드웨어·미지원 안내)에서는 코드 UpdateOpenFileButton이 82→44로 당겨
+                 빈 구멍을 없앤다. 여기 값은 그 두 값 중 "보임" 쪽 기준선으로 남긴다. -->
             <ContentControl x:Name="ModuleBarHost"
                             IsTabStop="False"
                             Margin="82,0,44,0"
@@ -236,10 +239,15 @@
                  상태별 분배는 코드 OnOpenFileClick(keymap '오픈 파일' 행).
                  핫키는 배정하지 않는다: A34 키 맵 표(문자 키 전수 배정)가 확정된 뒤 신설된 버튼이라
                  표에 자리가 없다 — 키가 필요해지면 A34 표·keymap과 함께 재론. 그래서 툴팁도
-                 A34 "(키)" 표기 없이 설명만 단다. 글리프 E8E5 = 모듈 Open 버튼들과 같은 OpenFile. -->
+                 A34 "(키)" 표기 없이 설명만 단다. 글리프 E8E5 = 모듈 Open 버튼들과 같은 OpenFile.
+                 A236: 초기값이 Collapsed다 — 파일 컨텍스트 없는 화면(설정·하드웨어·미지원 안내)에서
+                 숨기는 판정은 코드 UpdateOpenFileButton(SetContentState 단일 깔때기)이 하고,
+                 아직 콘텐츠가 없는 빈 셸은 이 초기값이 담당한다. 같은 메서드가 ModuleBarHost의
+                 좌측 여백(위 선언의 82/44)도 함께 옮긴다. -->
             <Button x:Name="OpenFileButton"
                     Style="{StaticResource BottomBarButtonStyle}"
                     Margin="44,0,0,0"
+                    Visibility="Collapsed"
                     HorizontalAlignment="Left"
                     ToolTipService.ToolTip="Open file"
                     Click="OnOpenFileClick">
