@@ -113,6 +113,25 @@ public sealed class WindowManager
     }
 
     /// <summary>
+    /// A247: 문서 New 미저장 분기의 "Open in new instance" — 원래 창의 편집을 그대로 둔 채
+    /// 새 창에서 무제 문서를 연다(프로세스 스폰 아님 — 단일 프로세스 멀티윈도우).
+    /// 순서는 OpenFileInNewWindow와 동일(생성 → 콘텐츠 → Activate): 무제 개시가 Activate보다
+    /// 먼저다 — 빈 새 창의 모듈 열기는 미저장 가드(ConfirmDiscardAsync)가 완료 태스크를 돌려
+    /// await가 동기 연속이므로(TryRestoreSession의 경합 없음 근거와 동일) OpenUntitledDocument
+    /// 반환 시점에 문서 모듈·무제 상태가 이미 서 있다. 여러 창의 Activate 경합으로 마지막
+    /// 창만 포커스가 남는 것은 수용(A124 확정 — A228 전면 인지 관용구).
+    /// </summary>
+    public void OpenUntitledDocumentInNewWindow()
+    {
+        var window = Create();
+        window.OpenUntitledDocument();
+        // A81: 파일 없이 모듈로 여는 새 창 — OpenNewWindow와 같은 기본 도크 명시(같은 값
+        // 재대입이어도 "창 생성 진입의 기본 상태는 여기서 정한다"는 계약을 남긴다).
+        window.SetDockedState(listDocked: true, infoDocked: true);
+        window.Activate();
+    }
+
+    /// <summary>
     /// 새 창 열기(A24: Shift+N(A84 — 기존 Ctrl+N)·시작 메뉴). 현재 모듈의 빈 인스턴스로 시작한다(사용자 확정) —
     /// 모듈이 없는 창(설정·시작 직후)에서 부르면 기본 화면(하드웨어)으로.
     /// </summary>

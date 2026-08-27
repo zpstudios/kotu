@@ -925,6 +925,20 @@ public sealed partial class MainWindow : Window
         if (module is not null) OpenModule(module);
     }
 
+    /// <summary>
+    /// A247: 문서 모듈을 띄우고 곧바로 무제 문서를 개시한다 — WindowManager의
+    /// OpenUntitledDocumentInNewWindow 전용(빈 새 창에서만 부를 것: OpenUntitled는 미저장
+    /// 가드를 걸지 않는다 — IUntitledContentSource 계약 주석). 빈 창의 ShowModule은 미저장
+    /// 가드가 완료 태스크라 await가 동기 연속이므로(WindowManager.TryRestoreSession 근거)
+    /// OpenModuleById 반환 시점에 ModuleHost.Content가 문서 뷰다 — 무제 개시가 창 Activate보다
+    /// 먼저 끝나는 시점 계약의 근거.
+    /// </summary>
+    internal void OpenUntitledDocument()
+    {
+        OpenModuleById("document");
+        if (ModuleHost.Content is IUntitledContentSource source) source.OpenUntitled();
+    }
+
     // ---------- 시작 메뉴 (하단 바에서 위로 떠오르는 플라이아웃) ----------
 
     /// <summary>
@@ -1426,11 +1440,20 @@ public sealed partial class MainWindow : Window
         // A189: 무제 문서 진입(경로 없는 콘텐츠 — 문서 모듈 'New text file')도 셸과 동기화.
         // 뷰가 이미 교체됐으면 무시한다(아래 이벤트들과 같은 가드).
         if (view is IUntitledContentSource untitledSource)
+        {
             untitledSource.UntitledOpened += () => DispatcherQueue.TryEnqueue(() =>
             {
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnUntitledOpened();
             });
+            // A247: New 미저장 분기의 "Open in new instance" — 이 창(발화한 뷰)은 그대로 두고
+            // 새 창에서 무제를 연다. 같은 디스패치·교체 가드(위와 동일 관용구).
+            untitledSource.UntitledWindowRequested += () => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                _manager.OpenUntitledDocumentInNewWindow();
+            });
+        }
         // A186: 재생 상태 변화(재생/일시정지/정지) → 하단 바 자동 숨김 재평가.
         // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(A37과 같은 가드).
         if (view is IPlaybackStateSource playback)
@@ -1685,7 +1708,7 @@ public sealed partial class MainWindow : Window
         ApplyOverlayStates();
         _titleDirtyMark = false; // 진입 직후는 무변경(더티 기준 = 빈 문자열 — DocumentView)
         SetTitle($"{Branding.AppName} - Untitled");
-        RefreshShellIcons(); // 경로 없음 = 유휴 폴백으로 회귀(파일을 보다 무제로 오는 경로는 없지만 일관 갱신)
+        RefreshShellIcons(); // 경로 없음 = 유휴 폴백으로 회귀(A247부터 파일을 보다 New로 무제에 오는 경로가 실재한다)
     }
 
     // ---------- 하단 바 드라이브 줄 (A22, v0.108.0) ----------

@@ -12,4 +12,18 @@ public interface IUntitledContentSource
 {
     /// <summary>무제 콘텐츠로 표시를 시작하면 발생한다(UI 스레드 보장 없음).</summary>
     event Action? UntitledOpened;
+
+    /// <summary>
+    /// A247: "이 창은 그대로 두고 새 창에서 무제를 열어 달라"는 요청(UI 스레드 보장 없음) —
+    /// New 버튼 미저장 분기의 "Open in new instance" 선택. 소비자 = 셸(ShowModule 배선) →
+    /// WindowManager.OpenUntitledDocumentInNewWindow. 발화한 뷰의 편집 상태는 완전 무변경이다.
+    /// </summary>
+    event Action? UntitledWindowRequested;
+
+    /// <summary>
+    /// A247: 무제 콘텐츠 표시를 시작한다 — 셸→뷰 무제 개시 진입로(새 창 경로:
+    /// MainWindow.OpenUntitledDocument가 문서 모듈을 띄운 직후 부른다). 미저장 가드는 걸지
+    /// 않으므로 호출자 책임 = 빈 상태 뷰(새 창)에서만 부를 것. 성공하면 UntitledOpened가 난다.
+    /// </summary>
+    void OpenUntitled();
 }

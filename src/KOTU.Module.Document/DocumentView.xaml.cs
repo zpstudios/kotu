@@ -50,6 +50,10 @@ public sealed partial class DocumentView : UserControl,
     /// ContentOpened를 못 쓴다. 셸은 이걸로 빈 상태 탐색기를 내리고 제목을 무제 표기로 바꾼다.</summary>
     public event Action? UntitledOpened;
 
+    /// <summary>A247: New 미저장 분기의 "Open in new instance" — 이 창의 편집은 그대로 두고
+    /// 새 창에서 무제를 열어 달라는 요청(IUntitledContentSource). 소비자 = 셸 → WindowManager.</summary>
+    public event Action? UntitledWindowRequested;
+
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 텍스트·PDF 열기와 닫기,
     /// 페이지 이동(A138), 저장 성공(A137 — 셸의 작업표시줄 용량 갱신 훅) 시점.</summary>
     public event Action? TrayStatusChanged;
@@ -138,6 +142,7 @@ public sealed partial class DocumentView : UserControl,
     private long _diskLength;              // ⓓ: 디스크 스탬프(크기)
     private string _baselineText = string.Empty; // ⓒ: 더티 판정 기준(\n 정규화) — 저장 성공 시 재기준화
     private bool _saving;                  // 저장 흐름(대화상자 포함) 중복 진입 방지 — ContentDialog는 동시 1개
+    private bool _newFileConfirmInProgress; // A247: New 미저장 분기 다이얼로그 표시 중 — 위와 같은 이유의 가드
 
     /// <summary>
     /// A142 ①ⓑ: <c>TextBox.Text</c> 게터는 호출마다 전문을 마샬링 복사한다(4MB급에서 지배적 비용) —
@@ -715,7 +720,7 @@ public sealed partial class DocumentView : UserControl,
         _lastTextFitOption = PdfFitMode.ActualSize;
         ShowTextFitState();
         _shownPath = path;
-        UpdateNewFileButton(); // A189: 콘텐츠가 열렸다 — New text file 비활성
+        // A247: New 버튼은 상시 활성 — 종전의 콘텐츠 열림 비활성(UpdateNewFileButton)은 제거됐다.
         UpdatePrintButton(); // A211 배치 4: 텍스트 편집 대상 확보 — 인쇄 가능(예약 ⑤의 갈래 상태 변화 지점)
 
         // A190: 마크다운이면 기본 = 렌더 뷰(사양). 자격 = md 확장자 + 비잘림 + A177 임계 이하
@@ -735,20 +740,126 @@ public sealed partial class DocumentView : UserControl,
     // 셸 S4 'Open file'(A90)로 일원화. 미저장 가드(A37)는 이 경로가 아니라 셸 OpenFile 안에
     // 있으므로(ConfirmDiscardAsync) 셸 버튼으로 다른 파일을 열 때도 그대로 걸린다.
 
-    // ---------- 무제 문서 (A189) ----------
-
-    /// <summary>A189: 하단 바 'New text file' 클릭 — 무제 문서로 에디터 진입.</summary>
-    private void OnNewFileClick(object sender, RoutedEventArgs e) => StartUntitled();
+    // ---------- 무제 문서 (A189 → A247 상시 활성 + 미저장 3분기) ----------
+    // A247(2026-08-27): A189의 활성 조건("빈 상태에서만" — UpdateNewFileButton) 반전 — 버튼은
+    // 상시 활성이고(문서 열람·편집·PDF 열람 중 포함) 판정 메서드는 제거됐다(IsEnabled는 XAML
+    // 기본값 true 그대로). 대신 클릭이 미저장 분기를 지킨다(OnNewFileClick).
+    // 로딩 중(_shownPath 확정 전) 클릭은 종전처럼 StartUntitled의 _openSeq 증가가 진행 중
+    // 읽기·지연 대입(A177)을 자연 무산시킨다(경합 없음).
 
     /// <summary>
-    /// A189: 'New text file' 버튼 활성 판정 — 빈 상태(아무 콘텐츠도 표시 전)에서만 켠다.
-    /// 콘텐츠가 있으면 비활성(A145 Fit 조절기의 "항상 보이되 비활성" 관용구) — 눌리면 현재
-    /// 문서를 대체해야 해서 뷰 내부 미저장 가드가 필요해지는 경로 자체를 만들지 않는다.
-    /// 로딩 중(_shownPath 확정 전)에는 아직 활성인데, 그때의 클릭은 StartUntitled의
-    /// _openSeq 증가가 진행 중 읽기·지연 대입(A177)을 자연 무산시킨다(경합 없음).
+    /// A247: 하단 바 'New text file' 클릭 — 버튼이 상시 활성이라 분기는 여기서 갈린다.
+    /// 더티 아님(판정 = HasUnsavedChanges — 보류 중 ⓒ 디바운스 확정 포함. 보기/편집 모드 무관,
+    /// PDF·빈 화면은 편집 축이 없어 더티 자체가 불가) = 즉시 StartUntitled로 그 자리 교체.
+    /// 더티 = 4선택지 다이얼로그(ShowNewFileDialogAsync).
+    /// ※ A219("작성 중 문서를 밀어내지 않는다" — 창 재사용 규칙)와 층이 다르다: 그쪽은 외부
+    /// 파일 열기가 문서를 밀어내는 것을 막는 규칙이고, 여기의 그 자리 교체는 사용자 본인이
+    /// 이 창의 New 버튼으로 내린 명시 선택이다.
     /// </summary>
-    private void UpdateNewFileButton() =>
-        NewFileButton.IsEnabled = _shownPath is null && !_untitled;
+    private async void OnNewFileClick(object sender, RoutedEventArgs e)
+    {
+        // ContentDialog는 동시 1개 — 저장 흐름 대화상자(_saving)나 이 분기 자신이 떠 있으면
+        // 무시한다(SaveAsync·ConfirmCloseAsync의 같은 가드 관용구).
+        if (_saving || _newFileConfirmInProgress) return;
+        if (!HasUnsavedChanges)
+        {
+            StartUntitled(); // 빈 화면·PDF·보기 모드·편집 무변경 — 즉시 교체
+            return;
+        }
+        if (XamlRoot is null) return; // 다이얼로그를 못 띄운다 — 미저장 파기 위험이 있어 아무것도 안 한다
+                                      // (ConfirmCloseAsync의 "막지 않는다"와 다른 이유: 닫기는 사용자를
+                                      // 가둘 수 없지만 New는 무동작이 안전하고 잃는 것도 없다)
+
+        NewFileChoice choice;
+        _newFileConfirmInProgress = true;
+        try
+        {
+            choice = await ShowNewFileDialogAsync();
+        }
+        finally
+        {
+            _newFileConfirmInProgress = false; // 다이얼로그가 닫혔다 — 이후 갈래는 _saving이 지킨다
+        }
+        switch (choice)
+        {
+            case NewFileChoice.SaveThenNew:
+                // 저장(무제면 Save as 피커 — SaveCoreAsync) 실패·피커 취소·검증 실패 취소 =
+                // 새 파일 전이도 취소(SaveAsync false 관용구 — 더티 유지, 화면 무변경).
+                if (await SaveAsync()) StartUntitled();
+                break;
+            case NewFileChoice.DiscardThenNew:
+                StartUntitled();
+                break;
+            case NewFileChoice.NewInstance:
+                // 이 창의 편집·더티 상태는 완전 무변경 — 셸이 WindowManager로 새 창을 연다.
+                UntitledWindowRequested?.Invoke();
+                break;
+            // Cancel(버튼·Esc) = 아무것도 안 한다
+        }
+    }
+
+    /// <summary>A247: New 미저장 분기의 선택지 — 다이얼로그 3버튼 + Content 영역 새 인스턴스 버튼.</summary>
+    private enum NewFileChoice
+    {
+        SaveThenNew,
+        DiscardThenNew,
+        NewInstance,
+        Cancel,
+    }
+
+    /// <summary>
+    /// A247: 미저장 상태의 New 클릭 확인 다이얼로그. ContentDialog는 버튼 자리가 3개뿐이라
+    /// (Primary/Secondary/Close) 네 번째 선택지 "Open in new instance"는 Content 영역 버튼이다 —
+    /// 클릭 플래그를 세우고 Hide()하면 ShowAsync가 None으로 돌아오고, 해석이 플래그를 먼저 봐
+    /// 단일 결과로 수렴한다(ExplorerConflictDialog의 CloseButtonClick 플래그 관용구. UI 스레드
+    /// 직렬이라 버튼 핸들러와 ShowAsync 반환이 경합하지 않고, Hide 뒤에는 다른 버튼 클릭 자체가
+    /// 불가능하다). 닫기 가드 ConfirmCloseAsync와는 문구·선택지가 달라 별도 다이얼로그다
+    /// (그쪽 "Unsaved changes" 문구는 불변).
+    /// </summary>
+    private async Task<NewFileChoice> ShowNewFileDialogAsync()
+    {
+        var newInstance = false;
+        var body = new StackPanel { Spacing = 12 };
+        body.Children.Add(new TextBlock
+        {
+            Text = "The current document has unsaved changes.",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        var newInstanceButton = new Button { Content = "Open in new instance" };
+        body.Children.Add(newInstanceButton);
+
+        var dialog = new ContentDialog
+        {
+            Title = "New file",
+            Content = body,
+            PrimaryButtonText = "Save and new file",
+            SecondaryButtonText = "Discard and new file",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+        newInstanceButton.Click += (_, _) =>
+        {
+            newInstance = true;
+            dialog.Hide(); // ShowAsync가 None으로 돌아온다 — 아래 플래그 선판정이 수렴점
+        };
+
+        var result = await dialog.ShowAsync();
+        if (newInstance) return NewFileChoice.NewInstance;
+        return result switch
+        {
+            ContentDialogResult.Primary => NewFileChoice.SaveThenNew,
+            ContentDialogResult.Secondary => NewFileChoice.DiscardThenNew,
+            _ => NewFileChoice.Cancel, // Close 버튼·Esc·외부 닫힘
+        };
+    }
+
+    /// <summary>
+    /// A247: 셸→뷰 무제 개시 진입로(IUntitledContentSource) — WindowManager의 새 창 경로가
+    /// 문서 모듈을 띄운 직후 부른다. 미저장 가드는 걸지 않으므로 호출자 계약 = 빈 상태 뷰
+    /// (새 창)에서만 부를 것(StartUntitled 자체는 콘텐츠 위에서도 안전하지만 파기가 된다).
+    /// </summary>
+    public void OpenUntitled() => StartUntitled();
 
     /// <summary>
     /// A189: 무제 문서로 에디터 진입 — ApplyLoadedText와 같은 순서 계약(상태 세팅 → Text 대입 →
@@ -760,6 +871,8 @@ public sealed partial class DocumentView : UserControl,
     /// 셸 OpenFileIconInfo의 File.Exists 가드 → 유휴 이니셜) — 값 무변경이라 TrayStatusChanged도
     /// 쏘지 않는다(셸 갱신은 UntitledOpened 쪽 RefreshShellIcons가 겸한다). 첫 저장이 경로를
     /// 확정하면 CommitSave의 기존 배선(ContentOpened·TrayStatusChanged)이 전부 되살린다.
+    /// A247: 빈 상태만이 아니라 콘텐츠(파일 편집·PDF) 위에서도 호출된다 — 그 자리 교체는
+    /// 사용자 본인의 명시 선택이고(OnNewFileClick 분기 주석 참고), 미저장 가드는 호출자 몫이다.
     /// </summary>
     private void StartUntitled()
     {
@@ -799,7 +912,6 @@ public sealed partial class DocumentView : UserControl,
         // A214: 무제도 텍스트 갈래 — Fit 조절기 활성(ApplyLoadedText와 같은 회귀·재호출 이유).
         _lastTextFitOption = PdfFitMode.ActualSize;
         ShowTextFitState();
-        UpdateNewFileButton();
         UpdatePrintButton(); // A211 배치 4: 무제도 인쇄 대상(_untitled) — 작업명은 UntitledDisplayName
         // A224: 토글 재판정 — 위 ResetRenderState는 _untitled가 서기 전에 돌았다(직전이 PDF·빈
         // 화면이었으면 비활성으로 계산된 상태). 무제도 토글 활성(사양 — 일관성).
@@ -1281,13 +1393,11 @@ public sealed partial class DocumentView : UserControl,
             FileNameText.Text = "No file open";
             PlaceholderText.Visibility = Visibility.Visible;
             _shownPath = null;
-            UpdateNewFileButton(); // A189: 빈 상태로 복귀 — New text file 재활성
             TrayStatusChanged?.Invoke(); // A54: 열기 실패 → 유휴("DOC")
             return;
         }
 
         _shownPath = path;
-        UpdateNewFileButton(); // A189: 콘텐츠가 열렸다 — New text file 비활성
         UpdatePrintButton(); // A211 배치 3: PDF 로드 성공 — 인쇄 가능(버튼 활성·셸 Ctrl+P는 같은 판정을 직접 본다)
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = 현재/전체 페이지(LoadAsync가 (1, 전체)를 이미 쐈다)
@@ -1787,7 +1897,10 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private async Task<bool> SaveAsync()
     {
-        if (_saving) return false; // 저장 흐름이 이미 진행 중(대화상자 포함) — 완료를 주장하지 않는다
+        // 저장 흐름이 이미 진행 중(대화상자 포함)이거나 A247 New 분기 다이얼로그가 떠 있다 —
+        // 완료를 주장하지 않는다(ContentDialog는 동시 1개. New 분기의 저장 갈래는 다이얼로그를
+        // 닫고 플래그를 내린 뒤 부르므로 이 가드에 걸리지 않는다).
+        if (_saving || _newFileConfirmInProgress) return false;
         // 잘림·PDF·빈 화면 — 저장 대상이 없다(ⓐ~ⓓ 비적용). A189: 무제는 저장 대상이다 —
         // 경로 확정(Save as 피커)은 SaveCoreAsync 몫.
         if ((_path is null && !_untitled) || _truncated) return true;
@@ -1924,7 +2037,6 @@ public sealed partial class DocumentView : UserControl,
             _untitled = false; // A189: 경로가 확정됐다 — 무제 표지를 걷는다(이하 통지는 기존 배선)
             _shownPath = path; // 트레이 표기(A54)도 새 파일 기준
             FileNameText.Text = Path.GetFileName(path);
-            UpdateNewFileButton(); // A189: 무제 → 파일 전이 — 버튼은 계속 비활성(콘텐츠 있음)
             // A190: 경로가 바뀌었다 — 렌더 자격만 재판정(모드는 편집 유지 — 상태 전이표).
             // 현행 피커는 무제=.txt 고정·검증 실패 Save as=같은 확장자라 값이 바뀌는 경로는
             // 없지만, 자격의 단일 출처를 지키는 방어다(_truncated는 저장 가능이므로 항상 false).
@@ -2119,7 +2231,9 @@ public sealed partial class DocumentView : UserControl,
     public async Task<bool> ConfirmCloseAsync()
     {
         if (!HasUnsavedChanges) return true; // 보류 중 ⓒ 판정 확정 포함
-        if (_saving) return false; // 저장 흐름의 대화상자가 떠 있다 — ContentDialog는 동시 1개(닫기 보류)
+        // ContentDialog는 동시 1개 — 저장 흐름(_saving)이나 A247 New 분기 다이얼로그가 떠 있으면
+        // 닫기 보류(둘째 ShowAsync는 예외를 던진다 — X 닫기가 New 다이얼로그 위로 오는 경로 방어).
+        if (_saving || _newFileConfirmInProgress) return false;
         if (XamlRoot is null) return true; // 다이얼로그를 띄울 수 없으면 막지 않는다
 
         var dialog = new ContentDialog

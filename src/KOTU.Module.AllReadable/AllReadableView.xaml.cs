@@ -21,6 +21,9 @@ namespace KOTU.Module.AllReadable;
 ///    자식이 계약을 구현할 때만 HasPlaybackSurface가 참이 된다(문서·사진 자식이면 거짓).
 ///  · <see cref="IPrintPageProvider"/> — 인쇄(A211)도 자식 것을 그대로 중계. 자식이 계약을
 ///    구현하고 인쇄할 콘텐츠가 있을 때만 CanPrintNow가 참이다(계약 문서가 이 호스트를 명시한다).
+///  · <see cref="IUntitledContentSource"/> — A247: 문서 자식의 New 버튼이 상시 활성이 되면서
+///    이 화면에서도 무제 개시·새 인스턴스 요청이 실동작한다 — 두 이벤트를 그대로 중계한다
+///    (중계가 없으면 자식이 무제로 바뀌어도 셸 제목·오버레이가 옛 파일에 머문다).
 ///  · <see cref="IFileOpenTarget"/> — 셸이 "이 파일 네가 열래?"를 먼저 물어보는 지점(A24 유지).
 ///
 /// <b>워커 수명(A42)</b>: 자식 뷰의 워커·재생·구독은 자식이 <c>Unloaded</c>에서 스스로 정리한다.
@@ -30,7 +33,7 @@ namespace KOTU.Module.AllReadable;
 /// </summary>
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
-    IPlaybackStateSource, IPrintPageProvider
+    IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -51,6 +54,22 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>영상 자식의 재생 상태 변화를 그대로 중계한다(A186). 자식 교체 자체도 이 이벤트를 쏜다.</summary>
     public event Action? PlaybackStateChanged;
+
+    /// <summary>A247: 문서 자식의 무제 진입(A189)을 그대로 셸에 중계한다(IUntitledContentSource).</summary>
+    public event Action? UntitledOpened;
+
+    /// <summary>A247: 문서 자식의 "Open in new instance" 요청을 그대로 셸에 중계한다.</summary>
+    public event Action? UntitledWindowRequested;
+
+    /// <summary>
+    /// A247: 셸→뷰 무제 개시 진입로 — 자식이 계약을 구현할 때만 전달한다. 실사용 경로는
+    /// 문서 모듈 직행(WindowManager.OpenUntitledDocumentInNewWindow → MainWindow가 "document"
+    /// 모듈을 띄운다)이라 이 화면으로는 오지 않는다 — 계약 완결용 전달(빈 상태면 무동작).
+    /// </summary>
+    public void OpenUntitled()
+    {
+        if (_childView is IUntitledContentSource untitled) untitled.OpenUntitled();
+    }
 
     /// <summary>재생 표면(영상 자식)이 전면인가(A186) — 문서·사진 자식·빈 상태면 false.</summary>
     public bool HasPlaybackSurface => _childView is IPlaybackStateSource { HasPlaybackSurface: true };
@@ -158,6 +177,11 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         if (view is ITrayStatusProvider tray) tray.TrayStatusChanged += OnChildTrayStatusChanged;
         if (view is IPlaybackStateSource playback) playback.PlaybackStateChanged += OnChildPlaybackStateChanged;
         if (view is IPrintPageProvider print) print.PrintRequested += OnChildPrintRequested; // A211
+        if (view is IUntitledContentSource untitled) // A247
+        {
+            untitled.UntitledOpened += OnChildUntitledOpened;
+            untitled.UntitledWindowRequested += OnChildUntitledWindowRequested;
+        }
         UpdateBars();
         TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
         PlaybackStateChanged?.Invoke(); // A186: 자식 교체도 재생 상태 재평가 대상이다(트레이와 같은 이유)
@@ -176,6 +200,11 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         if (_childView is ITrayStatusProvider tray) tray.TrayStatusChanged -= OnChildTrayStatusChanged;
         if (_childView is IPlaybackStateSource playback) playback.PlaybackStateChanged -= OnChildPlaybackStateChanged;
         if (_childView is IPrintPageProvider print) print.PrintRequested -= OnChildPrintRequested; // A211
+        if (_childView is IUntitledContentSource untitled) // A247
+        {
+            untitled.UntitledOpened -= OnChildUntitledOpened;
+            untitled.UntitledWindowRequested -= OnChildUntitledWindowRequested;
+        }
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
@@ -200,6 +229,20 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     /// 행동 신호</b>라, 자식이 바뀌었다고 인쇄 대화상자가 떠서는 안 된다.
     /// </summary>
     private void OnChildPrintRequested() => PrintRequested?.Invoke();
+
+    /// <summary>
+    /// A247: 문서 자식이 무제로 전환됐다 — 자체 파일 표지를 걷고 셸에 중계한다(무제는 경로가
+    /// 없어 ContentOpened를 못 탄다). _filePath를 남겨 두면 트레이 폴백·빈 상태 바가 옛 파일을
+    /// 가리킨다. 첫 저장(Save as)이 경로를 확정하면 ContentOpened 중계가 도로 채운다.
+    /// </summary>
+    private void OnChildUntitledOpened()
+    {
+        _filePath = null;
+        UntitledOpened?.Invoke();
+    }
+
+    /// <summary>A247: 새 인스턴스 요청 — 행동 신호라 그대로 올리기만 한다(인쇄 중계와 같은 형).</summary>
+    private void OnChildUntitledWindowRequested() => UntitledWindowRequested?.Invoke();
 
     // A256(2026-08-27): A223의 열기 요청 중계(IOpenFileRequestSource · OnChildOpenFileRequested ·
     // OpenFileRequested)를 제거했다 — 문서 자식의 하단 바 Open 버튼이 사라져 중계할 신호 자체가

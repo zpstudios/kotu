@@ -170,8 +170,10 @@ Seven modules. Switch between them from the menu at the bottom left.
 - **The module brings four buttons of its own to the bottom bar**, just right of the window's menu
   and **Open file** buttons, in this order: **New text file**, **Save**, **Print** and the **view**
   toggle. Opening a document is the window's own **Open file** button — a document with unsaved
-  changes still asks before it gives way. *New text file* starts an empty `Untitled` document and
-  is available only while nothing is open.
+  changes still asks before it gives way. *New text file* is always available and starts an empty
+  `Untitled` document in place. If the current document has unsaved changes it asks first —
+  **Save and new file**, **Discard and new file**, **Open in new instance** (keeps your edits and
+  opens the new document in a new window) or **Cancel**.
 - Further right, past the file name, the bar shows the unsaved mark, the zoom percentage and the
   PDF page count, then the two display toggles (**Line guides** and **Paragraph marks**, editor
   only) and the **Fit** control.
