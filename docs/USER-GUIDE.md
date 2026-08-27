@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.238.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.256.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
