@@ -23,14 +23,9 @@ internal static class WindowMinSize
     public const int MinWidthDip = 720;
     public const int MinHeightDip = 540;
 
-    /// <summary>
-    /// 창별 최소 높이 임시 오버라이드(DIP, A61) — 하단 바만 남기는 접힘 동안에만 540보다 낮은
-    /// 하한을 허용한다. 이게 없으면 접힌 높이(타이틀바 + 44)가 540 하한에 걸려 기능이 통째로
-    /// 무동작이 된다. **폭 하한 720은 접힘 중에도 그대로**다 — 하단 바가 그 폭을 전제로
-    /// 축약 설계돼 있다(A40 — A60 3차부터 HardwareView.UpdateBarDensity의 맥박 숨김).
-    /// 값은 DIP로 들고 있어 모니터를 옮겨도 <see cref="MinPhysical"/>의 DPI 환산이 그대로 옳다.
-    /// </summary>
-    private static readonly Dictionary<IntPtr, double> s_minHeightOverrides = new();
+    // A238(v0.253.0): A61 접힘용 창별 최소 높이 오버라이드(s_minHeightOverrides·
+    // SetMinHeightOverride)는 접힘 폐기와 함께 제거됐다 — 하한은 다시 모든 창 공통
+    // 720×540 하나다(복원 참조 = A238 이전 git 이력).
 
     private const uint WmGetMinMaxInfo = 0x0024;
     private const uint WmNcDestroy = 0x0082;
@@ -56,26 +51,13 @@ internal static class WindowMinSize
         s_prevProcs[hwnd] = prev;
     }
 
-    /// <summary>
-    /// 접힘(A61) 동안 최소 높이를 낮춰 끼운다. heightDip이 null이면 기본값(540)으로 되돌린다.
-    /// 창마다 독립이며 창이 소멸하면(WM_NCDESTROY) 자동으로 지워진다.
-    /// UI 스레드에서만 부른다(WndProc도 같은 스레드 — 이 클래스 전체 규칙).
-    /// </summary>
-    public static void SetMinHeightOverride(Microsoft.UI.Xaml.Window window, double? heightDip)
-    {
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-        if (heightDip is { } dip && dip > 0) s_minHeightOverrides[hwnd] = dip;
-        else s_minHeightOverrides.Remove(hwnd);
-    }
-
-    /// <summary>현재 모니터 배율 기준 최소 물리 픽셀. 창 크기 복원(v0.55.0)의 하한에도 쓴다.</summary>
+    /// <summary>현재 모니터 배율 기준 최소 물리 픽셀. 창 크기 복원(v0.55.0)의 하한과
+    /// 핀의 1회 축소(A238 — MainWindow.ShrinkToMinimum)의 목표 크기에도 쓴다.</summary>
     public static (int Width, int Height) MinPhysical(IntPtr hwnd)
     {
         var dpi = GetDpiForWindow(hwnd);
         if (dpi == 0) dpi = 96; // 유효하지 않은 HWND 등 — 100%로 간주
-        // 높이만 오버라이드 대상(A61) — 폭은 언제나 720 DIP.
-        var minHeightDip = s_minHeightOverrides.TryGetValue(hwnd, out var dip) ? dip : MinHeightDip;
-        return ((int)Math.Round(MinWidthDip * dpi / 96.0), (int)Math.Round(minHeightDip * dpi / 96.0));
+        return ((int)Math.Round(MinWidthDip * dpi / 96.0), (int)Math.Round(MinHeightDip * dpi / 96.0));
     }
 
     private static IntPtr Hook(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
@@ -98,7 +80,6 @@ internal static class WindowMinSize
         else if (msg == WmNcDestroy)
         {
             s_prevProcs.Remove(hwnd); // 창 소멸 — 이후 이 HWND로 메시지는 오지 않는다
-            s_minHeightOverrides.Remove(hwnd); // 접힌 채 닫힌 창의 오버라이드도 함께 정리 (A61)
         }
         return result;
     }

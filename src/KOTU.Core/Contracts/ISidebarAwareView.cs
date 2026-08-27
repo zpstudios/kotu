@@ -11,7 +11,7 @@ namespace KOTU.Core.Contracts;
 /// 메인 폭을 줄이지 않으므로 셸이 세지 않는다(도크 상태만 계수 — A93 썸네일과 같은 해석).
 /// 모듈 프로젝트는 셸을 참조할 수 없으므로(App → 모듈 단방향) 계약은 Core에 두되, 값의 원본
 /// (사이드바 상태)이 셸에만 있어 방향은 <b>셸 → 뷰 푸시</b>다 — <see cref="ITrayStatusProvider"/>·
-/// <see cref="IWindowCollapseSource"/>(뷰 → 셸)와 같은 이유에서 나온 반대 방향.
+/// <see cref="IWindowShrinkSource"/>(뷰 → 셸)와 같은 이유에서 나온 반대 방향.
 /// 호출 지점은 사이드바 상태 변경의 단일 종착점(MainWindow.ApplyOverlayStates) 한 곳이고
 /// (F11/F12·2연타·Enter·경계 버튼·모듈 진입 기본(A109)이 전부 그리로 모여 재푸시된다),
 /// 미구현 뷰(다른 모듈·설정)는 셸 쪽 캐스트 실패로 no-op이다. UI 스레드에서 호출된다.

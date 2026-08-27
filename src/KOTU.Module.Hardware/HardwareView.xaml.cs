@@ -28,8 +28,10 @@ namespace KOTU.Module.Hardware;
 /// 10개 대체. 그 그래프 오른쪽 끝에 표시 기간 공통 1개(A146). Copy·그래프를
 /// 담은 하단 바는 셸이 TakeBottomBar()로 떼어간다. 전체화면 동안(셸 하단 바 숨김)은
 /// SensorGrid가 SensorStrip으로 옮겨져 긴 그래프가 계속 보인다(v0.64.2 메커니즘 승계).
-/// A61(v0.111.0): 핀(A39)을 켜면 셸에 접기를 요청해 하단 바만 남는 상시 표시 바가 된다
-/// (IWindowCollapseSource) — 접힌 바에 긴 그래프 2개가 남는 것이 A72 흡수의 핵심 가치.
+/// A238(v0.253.0): 핀(A39)을 켜면 셸에 "최소 크기(720×540)로 1회 축소"를 요청한다
+/// (IWindowShrinkSource) — 구 A61(v0.111.0)의 "하단 바만 남는 접힘"은 폐기됐고, 접힌 바에
+/// 긴 그래프 2개가 남던 상시 표시 바(A60 3차의 A72 흡수 핵심 가치)도 함께 소멸했다
+/// (A72류를 되살리려면 A238 이전 git 이력을 읽을 것).
 /// A62: 그 바의 글씨·선 굵기·그래프 크기를 S/M/L로 키운다 — A237(v0.252.0)에서 배수 적용이
 /// 전 그래프 표면(센터 타일·좌 대형)의 글씨·선 굵기로 확장됐고(표면 한 변 등 레이아웃 산식은
 /// A119 그대로 불변), 조작도 버튼 순환(B 키) 대신 Ctrl+± 키·콘텐츠 표면 Ctrl+휠 스텝이 됐다.
@@ -39,7 +41,7 @@ namespace KOTU.Module.Hardware;
 /// ITrayStatusProvider 구현. 센터 타일 클릭 토글 하나로 핀 배지·좌 대형·하단 긴 그래프·트레이가
 /// 전부 같은 선택(HardwareInstanceState.Selection)을 따른다(선택 단일화).
 /// </summary>
-public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWindowCollapseSource,
+public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWindowShrinkSource,
     ITrayStatusProvider, ISidebarAwareView, ISidePanelProvider
 {
     private IReadOnlyList<HardwareSection> _sections = [];
@@ -141,11 +143,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnPulseFrame;
             // A39: 토글 버튼은 인포 모듈에만 있으므로, 뷰가 내려가면(모듈 전환 등)
             // 끌 방법이 없는 상태가 남지 않게 항상 위 고정을 해제한다.
+            // (구 A61의 SendCollapse(false) 펼치기는 A238 접힘 폐기로 소멸 —
+            // 핀 축소는 보통의 창 크기라 뷰가 내려가도 되돌릴 것이 없다.)
             if (_appWindow?.Presenter is OverlappedPresenter presenter)
                 presenter.IsAlwaysOnTop = false;
-            // A61: 같은 이유로 접힘도 함께 푼다 — 접힌 채 다른 모듈로 넘어가면
-            // 펼 수단(핀 버튼)이 없는 납작한 창이 남는다.
-            SendCollapse(false);
             if (_appWindow is { } w) w.Changed -= OnAppWindowChanged;
             _appWindow = null;
         };
@@ -1357,8 +1358,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         PlaceSensorGrid(inBar: !_fullScreen);
         UpdateStripVisibility();
         if (!_fullScreen) ApplyAlwaysOnTop(); // 전체화면 복귀 시 새 OverlappedPresenter에 토글 상태 재적용 (A39)
-        // A61: 전체화면에서 나오면 핀이 여전히 켜져 있는 한 다시 접힌다(파생 상태 재계산).
-        ApplyCollapse();
+        // A238: 구 A61의 "복귀 시 재접힘"(ApplyCollapse)은 제거 — 전체화면 복귀는 진입 직전
+        // 크기·위치 그대로이고, 핀 상태여도 재축소하지 않는다(강제 축소는 핀 순간 1회 액션).
     }
 
     private bool _fullScreen;
@@ -1385,7 +1386,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
 
     // A151: ToggleFullScreen(⛶ 버튼·F11/Esc 액셀러레이터)은 제거 — 전체화면은 셸의 3단 모드
     // 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다. 종전 토글이 하던
-    // "접힌 채 전체화면 금지 = 먼저 펼치기(A61)"도 셸 SetViewMode가 SetPresenter 앞에서 수행한다.
+    // "접힌 채 전체화면 금지 = 먼저 펼치기(A61)"는 A238의 접힘 폐기로 갈 곳 자체가 사라졌다.
     // 이 뷰는 프레젠터 변화 감시(OnAppWindowChanged → UpdateViewMode)로만 따라간다.
 
     // ---------- 리프레시 주기 선택 + 맥박(EKG) 그래프 (A29) ----------
@@ -1521,12 +1522,19 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         PulseLine.Points = points;
     }
 
-    // ---------- Always on top (A39 — 사용자 확정: 인포 모듈 전용) + 접힘 (A61) ----------
+    // ---------- Always on top (A39 — 사용자 확정: 인포 모듈 전용) + 최소 크기 1회 축소 (A238) ----------
 
+    /// <summary>
+    /// 핀 토글의 단일 반응점. A238: 켜는 순간에만 셸에 최소 크기 1회 축소를 요청한다 —
+    /// 끄기는 always on top 해제뿐이고 창 기하는 해제 직전 그대로다. 구 A61의 파생 상태 계산
+    /// (ShouldCollapse = 핀 ON && 전체화면 아님)·중복 억제(_collapseSent)는 상태가 액션이
+    /// 되면서 함께 소멸했다. 전체화면 중 P 키로 켜면 셸이 요청을 무시한다(복귀 후에도
+    /// 재축소하지 않는다 — IWindowShrinkSource 주석과 동일).
+    /// </summary>
     private void OnTopToggleChanged(object sender, RoutedEventArgs e)
     {
         ApplyAlwaysOnTop();
-        ApplyCollapse(); // A61: 핀이 접힘의 단일 소스 — 별도 토글을 두지 않는다
+        if (TopToggle.IsChecked == true) ShrinkToMinRequested?.Invoke();
     }
 
     /// <summary>
@@ -1541,27 +1549,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             presenter.IsAlwaysOnTop = TopToggle.IsChecked == true;
     }
 
-    /// <summary>셸에 보내는 접기/펼치기 요청(A61 — IWindowCollapseSource). 실행은 셸이 한다.</summary>
-    public event Action<bool>? CollapseRequested;
-
-    /// <summary>셸에 마지막으로 보낸 값 — 같은 값을 반복해 보내지 않는다(셸 쪽도 멱등).</summary>
-    private bool _collapseSent;
-
-    /// <summary>
-    /// 접힘은 **"핀 ON && 전체화면 아님"으로 계산되는 파생 상태**다(A61 확정) —
-    /// 별도 플래그를 들고 다니지 않으므로 전체화면 왕복·핀 토글 어느 순서로도 어긋나지 않는다.
-    /// </summary>
-    private bool ShouldCollapse => TopToggle.IsChecked == true && !_fullScreen;
-
-    /// <summary>파생 상태를 다시 계산해 바뀌었으면 셸에 알린다(핀 토글·프레젠터 변화에서 호출).</summary>
-    private void ApplyCollapse() => SendCollapse(ShouldCollapse);
-
-    private void SendCollapse(bool collapse)
-    {
-        if (collapse == _collapseSent) return;
-        _collapseSent = collapse;
-        CollapseRequested?.Invoke(collapse);
-    }
+    /// <summary>셸에 보내는 최소 크기 1회 축소 요청(A238 — IWindowShrinkSource). 실행은 셸이 한다.</summary>
+    public event Action? ShrinkToMinRequested;
 
     // ---------- 조작 ----------
 
@@ -1612,7 +1601,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         HotkeySupport.Bind(this, IntervalButton, VirtualKey.I,
             "Sensor refresh interval", () => IntervalButton.Flyout?.ShowAt(IntervalButton));
         HotkeySupport.Bind(this, TopToggle, VirtualKey.P,
-            "Always on top (collapses to the bar)", () => TopToggle.IsChecked = TopToggle.IsChecked != true);
+            "Always on top (shrinks to the minimum size)", () => TopToggle.IsChecked = TopToggle.IsChecked != true);
     }
 
     // ---------- 그래프 크기 스텝 키·휠 (A237, v0.252.0) ----------

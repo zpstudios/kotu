@@ -318,7 +318,7 @@ Controls:
 | Sensor refresh interval | `I` | 50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU |
 | Graph size | `Ctrl` + `+` / `-` | one step bigger / smaller text and lines on every graph, Small ↔ Medium ↔ Large (numpad `+` / `-` work too; `Ctrl`+wheel over the graphs does the same, wheel up = bigger) |
 | Graph size reset | `Ctrl` + numpad `*` | back to Medium |
-| Always on top | `P` | pins the window over other windows and collapses it down to just the bottom bar |
+| Always on top | `P` | pins the window over other windows and shrinks it once to the smallest window size — grow it back freely; unpinning leaves the window as it is |
 | Full screen | `Enter` / `Alt`+`Enter` | full-screen dashboard, like every other module; `Esc` leaves it |
 
 The graph size steps affect the text and line thickness of every graph — the two long graphs in the

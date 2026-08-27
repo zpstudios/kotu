@@ -128,8 +128,9 @@
                      그래프 크기는 Ctrl+±(코드 등록 액셀러레이터)·콘텐츠 표면 Ctrl+휠 스텝이 대체한다.
                      버튼 소멸 = B 키 소멸(A34 규칙·A99 선례). -->
                 <!-- Always on top 토글(A39) — 바 우측 끝, 켜짐 상태가 보이는 ToggleButton.
-                     A61(v0.111.0): 켜면 메인 영역을 접어 하단 바만 남는다(툴팁도 그 동작으로 갱신).
-                     접힌 바에도 선택 긴 그래프 2개가 남는 것이 A60 3차(A72 흡수)의 핵심 가치다. -->
+                     A238(v0.253.0): 켜는 순간 창을 최소 크기(720×540)로 1회 줄인다(툴팁도 그 서술).
+                     구 A61 "하단 바만 남는 접힘"과, 접힌 바에 선택 긴 그래프 2개가 남던 상시 표시
+                     바(A60 3차의 A72 흡수 가치)는 함께 폐기됐다(되살릴 땐 A238 이전 git 이력). -->
                 <ToggleButton x:Name="TopToggle" Grid.Column="5"
                               Style="{StaticResource BottomBarToggleButtonStyle}"
                               Checked="OnTopToggleChanged" Unchecked="OnTopToggleChanged">

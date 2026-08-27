@@ -95,7 +95,7 @@ public sealed record TrayStatus
 /// 모듈 뷰가 "지금 트레이에 뭘 보여야 하는지"를 셸에 알리는 계약 (A54, v0.118.0).
 /// 모듈 프로젝트는 셸을 참조할 수 없으므로(App → 모듈 단방향) 계약을 Core에 두고
 /// 모듈은 값만 내준다 — <see cref="IBottomBarProvider"/>·<see cref="IDriveStripHost"/>·
-/// <see cref="IWindowCollapseSource"/>와 같은 방향이다. 아이콘 합성(GDI+)은 셸이 한다.
+/// <see cref="IWindowShrinkSource"/>와 같은 방향이다. 아이콘 합성(GDI+)은 셸이 한다.
 ///
 /// 구현하지 않는 화면(설정·미지원 파일 안내·정보 모듈처럼 표시 값이 상수인 경우)은
 /// 셸이 모듈 ID → 3자 표기 표로 유휴 아이콘을 그린다.
