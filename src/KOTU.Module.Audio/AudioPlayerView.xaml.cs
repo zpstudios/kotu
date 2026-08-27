@@ -215,22 +215,37 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU audio worker");
 
-    // ---------- A11(v0.212.0) 재생 목록 루프 상태 (설계 docs/A11-playlist-design.md §3) ----------
-    // 영상(v0.211.0)에 먼저 구현한 구조의 동형 이식이다 — 키 접두사만 audio.* 로 다르고
+    // ---------- A11(v0.212.0) → A255(v0.255.0) 재생 목록 루프 상태 (설계 docs/A11-playlist-design.md §3) ----------
+    // 영상에 먼저 구현한 구조의 동형 이식이다 — 키 접두사만 audio.* 로 다르고
     // 의미·기본값·우선순위는 한 글자도 다르지 않다(설계 §7 배치 ③).
-    // 설정 3축(부록 B 76 확정): 목록 루프(기본 켬·무한 고정) / 현재 파일 루프(기본 끔) /
-    // 루프 횟수(현재 파일 루프 전용 — "1" = 한 번 더 = 총 2회 재생, 확정 ⓐ 해석).
+    // A255(2026-08-27 사용자 확정): 구 2축(Loop list 체크 × Repeat this file 라디오 — 우선순위
+    // 결합)을 단일 모드(상호 배타)로 개편. 본체 클릭·L 키 = 루프 없음 → 목록 루프 → 한 파일
+    // 루프 순환(진입 시 횟수는 기본 ∞), 두 모드 모두 반복 횟수(1×/3×/∞)를 우클릭 플라이아웃에서
+    // 가진다. 기본값 = 루프 없음(구 "목록 루프 기본 켬" 폐기 — 일반 플레이어 관례).
+    // 저장 = 신 키 loopMode(off/list/file) + 모드별 횟수(loopCount = 한 파일 · loopListCount =
+    // 목록). 구 키 loopList·loopCurrent는 소비처만 제거하고 값은 무해 잔존(A174 선례) —
+    // 신 키가 없을 때만 생성자에서 1회 해석해 이행한다(그곳의 매핑 주석 참조).
     // 저장은 전역 1벌·즉시 Set+Save(EQ 선례), 창 간 실시간 전파 없음 — 상태는 로컬 소유(_muted 규칙).
 
-    private const string LoopListKey = "audio.loopList";
-    private const string LoopCurrentKey = "audio.loopCurrent";
-    private const string LoopCountKey = "audio.loopCount"; // 문자열 enum "1"·"3"·"infinite" — explorer.sort 관례
+    private const string LoopModeKey = "audio.loopMode";           // "off"·"list"·"file" — A255 신설
+    private const string LoopCountKey = "audio.loopCount";         // 한 파일 루프 횟수 "1"·"3"·"infinite" — 구 Repeat 횟수 키를 의미 그대로 재사용
+    private const string LoopListCountKey = "audio.loopListCount"; // 목록 루프 횟수 — A255 신설(같은 문자열 enum)
+    private const string LegacyLoopListKey = "audio.loopList";     // 구 키 — 이행 해석 전용(쓰기 없음)
+    private const string LegacyLoopCurrentKey = "audio.loopCurrent"; // 구 키 — 이행 해석 전용(쓰기 없음)
+
+    /// <summary>A255 단일 루프 모드(상호 배타) — 버튼 순환 순서 그대로 Off → List → File.</summary>
+    private enum LoopMode { Off, List, File }
 
     private FolderPlaylist? _playlist; // 같은 폴더 스냅샷 목록 — EnsurePlaylist가 워커에서 만든다
-    private bool _loopList;
-    private bool _loopCurrent;
-    private int _loopCountLimit; // 0 = 무한, 1·3 = "그만큼 한 번 더"(리핏 허용 횟수)
-    private int _loopPlays;      // 현재 파일에서 소진한 리핏 횟수 — PlayCurrent가 리셋, ReplayCurrent만 증가
+    private LoopMode _loopMode;
+    private int _fileLoopLimit; // 0 = 무한, 1·3 = "그만큼 한 번 더"(리핏 허용 횟수 — 구 Repeat 의미 그대로)
+    private int _listLoopLimit; // 0 = 무한, 1·3 = 목록 끝→처음 되감기 허용 횟수(같은 어휘 — "1×" = 한 번 더 = 목록 총 2회)
+    private int _loopPlays;     // 현재 파일에서 소진한 리핏 횟수 — PlayCurrent가 리셋, AdvanceAfterEnd 전이 1만 증가
+    private int _listLoops;     // 소진한 목록 되감기 횟수 — EOF 자동 진행만 소모하고, 수동 개입(파일 열기·모드 변경)이 리셋
+
+    // A255: 횟수 플라이아웃은 코드로 만들어 ContextFlyout으로 건다(이미지 표면 메뉴 관례 —
+    // 본체 클릭이 Button.Flyout이 아닌 모드 순환이 됐기 때문). Placement Top = 구 XAML 값 유지.
+    private readonly MenuFlyout _loopFlyout = new() { Placement = FlyoutPlacementMode.Top };
 
     /// <summary>"1"·"3"은 그 횟수, 그 외(기본 "infinite"·구버전 잔값 포함)는 전부 무한(0)으로 읽는다.</summary>
     private static int ParseLoopCount(string value) => value switch
@@ -238,6 +253,25 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         "1" => 1,
         "3" => 3,
         _ => 0,
+    };
+
+    /// <summary>횟수 저장값 — ParseLoopCount의 역방향(0 = 무한).</summary>
+    private static string CountKeyValue(int limit) => limit == 0 ? "infinite" : limit.ToString();
+
+    /// <summary>횟수 표기(UI 문자열) — 플라이아웃 라벨·툴팁이 같은 값에서 나온다.</summary>
+    private static string CountLabel(int limit) => limit switch
+    {
+        1 => "1×",
+        3 => "3×",
+        _ => "Infinite",
+    };
+
+    /// <summary>모드 저장값 — 생성자 로드 switch의 역방향.</summary>
+    private static string ModeKeyValue(LoopMode mode) => mode switch
+    {
+        LoopMode.List => "list",
+        LoopMode.File => "file",
+        _ => "off",
     };
 
     public AudioPlayerView(OpenContext context, ISettingsService settings)
@@ -251,12 +285,31 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             SpeedBox.Items.Add($"{s:0.##}×");
         SpeedBox.SelectedIndex = Array.IndexOf(Speeds, 1.0f);
 
-        // A11: 루프 설정 읽기(생성자 1회 — _muted 규칙)와 플라이아웃 구성은 SetupHotkeys보다
+        // A255: 루프 설정 읽기(생성자 1회 — _muted 규칙)와 플라이아웃 배선은 SetupHotkeys보다
         // 먼저다 — UpdateLoopButton(툴팁 초기값)이 상태를 읽는다(영상과 같은 순서).
-        _loopList = _settings.Get(LoopListKey, true);
-        _loopCurrent = _settings.Get(LoopCurrentKey, false);
-        _loopCountLimit = ParseLoopCount(_settings.Get(LoopCountKey, "infinite"));
-        BuildLoopFlyout();
+        // 신 키(loopMode)가 없으면 구 2키를 여기서 1회 해석해 이행한다(별도 마이그레이션 없음):
+        //   구 loopCurrent 켬(loopList 무관) → 한 파일 루프(구 전이표 ①>③ 우선순위 승계 · 횟수는
+        //                                     loopCount 키 재사용으로 자동 유지)
+        //   구 loopList 켬 단독             → 목록 루프(횟수 키 부재 = ∞)
+        //   둘 다 꺼짐 또는 미저장           → 루프 없음(신 기본값 — 구 기본값 "켬"은 폐기라
+        //                                     구 키를 일부러 false 기본으로 읽는다)
+        _loopMode = _settings.Get(LoopModeKey, string.Empty) switch
+        {
+            "list" => LoopMode.List,
+            "file" => LoopMode.File,
+            "off" => LoopMode.Off,
+            _ => _settings.Get(LegacyLoopCurrentKey, false) ? LoopMode.File
+                : _settings.Get(LegacyLoopListKey, false) ? LoopMode.List
+                : LoopMode.Off,
+        };
+        _fileLoopLimit = ParseLoopCount(_settings.Get(LoopCountKey, "infinite"));
+        _listLoopLimit = ParseLoopCount(_settings.Get(LoopListCountKey, "infinite"));
+
+        // A255: 횟수 플라이아웃은 우클릭(ContextFlyout — 이미지 표면 메뉴 관례)으로 연다. 본체
+        // 클릭은 모드 순환이 가져갔다. 체크 상태가 버튼 순환으로도 바뀌므로 항목은 열 때마다
+        // 새로 채운다(아래 장치 플라이아웃의 Opening 재구성 관례).
+        LoopButton.ContextFlyout = _loopFlyout;
+        _loopFlyout.Opening += (_, _) => BuildLoopFlyout();
 
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
@@ -416,14 +469,20 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         }
     }
 
-    /// <summary>현재 _filePath를 처음부터(또는 이어듣기 지점부터) 재생한다. 플레이어 준비 후에만 호출.</summary>
-    private void PlayCurrent()
+    /// <summary>
+    /// 현재 _filePath를 처음부터(또는 이어듣기 지점부터) 재생한다. 플레이어 준비 후에만 호출.
+    /// autoAdvance = EOF 자동 진행(AdvanceAfterEnd 전이 2·3)에서 온 호출 — A255 목록 순환
+    /// 카운터(_listLoops)를 잇는다. 그 외(셸 열기·드롭·▶ 재시작·샘플 곡)는 전부 수동 개입 =
+    /// 카운터 재출발(확정: 자동 진행만 순환 예산을 소모한다).
+    /// </summary>
+    private void PlayCurrent(bool autoAdvance = false)
     {
         if (_player is not { } p || _libVlc is not { } lib || _filePath is null) return;
 
         _durationMs = 0;
         _lastReportedMs = 0;
-        _loopPlays = 0; // A11: 재생 단위가 새로 시작되면 리핏 카운터 리셋 — ReplayCurrent만 증가시킨다
+        _loopPlays = 0; // A11: 재생 단위가 새로 시작되면 리핏 카운터 리셋 — AdvanceAfterEnd 전이 1만 증가시킨다
+        if (!autoAdvance) _listLoops = 0; // A255: 수동 개입 = 목록 순환 카운터 리셋(위 요약 주석)
         _pendingResumeMs = IsSampleTrack(_filePath)
             ? -1
             : _resumeStore.GetResumePositionMs(_filePath) ?? -1;
@@ -503,7 +562,8 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
 
-    private async void OpenPath(string path)
+    /// <summary>autoAdvance는 PlayCurrent로 중계만 한다(A255 — EOF 자동 진행 표시).</summary>
+    private async void OpenPath(string path, bool autoAdvance = false)
     {
         if (!File.Exists(path)) return;
 
@@ -519,7 +579,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         await EnsurePlayerAsync(); // 이미 있으면 즉시 반환 — 인스턴스 교체 없음(항상 시각화 켬)
         if (_tornDown || _filePath != path) return; // 그새 또 다른 파일로 전환됨
 
-        if (_player is not null) PlayCurrent();
+        if (_player is not null) PlayCurrent(autoAdvance);
         // 플레이어가 아직 없으면(스왑체인 준비 전) OnVlcInitialized에서 PlayCurrent()가 이어받는다.
     }
 
@@ -675,9 +735,16 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     }
 
     /// <summary>
-    /// A11: EOF 전이(설계 §3.3 전이표 — 위에서부터 첫 일치). 우선순위 = 현재 루프(횟수 내) >
-    /// 목록 진행 > 목록 루프(처음으로) > 정지(부록 B 76 확정 — repeat one이 repeat all을 가리는
-    /// 음악 플레이어 통례). 전이 1~4는 Ended에 머물지 않으므로 종전 EndReached UI 갱신
+    /// A255(v0.255.0): EOF 전이 재작성 — A11 전이표(설계 §3.3)·부록 B 76 "우선순위 결합"의
+    /// 공식 개정. 구 2축 결합 대신 단일 모드(상호 배타)로 판정한다:
+    ///   루프 없음    = 다음 파일 → 목록 끝이면 정지.
+    ///   목록 루프    = 다음 파일 → 목록 끝이면 처음으로(되감기 1회 소모 — 예산 소진 시 정지).
+    ///   한 파일 루프 = 같은 파일 재시작(횟수 소진 시 다음 파일로 진행 — 구 Repeat 소진 후
+    ///                  "목록 진행으로 낙하" 규칙 승계. 단 상호 배타라 목록 끝 되감기는 없다).
+    /// 횟수 어휘는 구 Repeat와 동일("1×" = 한 번 더): 한 파일 1× = 총 2회 재생, 목록 1× =
+    /// 끝→처음 되감기 1회 = 목록 총 2회 재생. 매 회 0:00 시작(이어듣기 무시 — ReplayCurrent와
+    /// EndReached의 기록 삭제 규칙 그대로 유지).
+    /// 전이 1~4는 Ended에 머물지 않으므로 종전 EndReached UI 갱신
     /// (▶ 표기·시크바 끝·트레이 타이머 정지)을 생략한다 — 곧 Playing이 덮어써 깜빡임만 만든다.
     /// 정지(전이 5)만 종전 갱신 그대로다. EncounteredError는 전이 트리거가 아니다(실패 파일
     /// 자동 스킵은 무한 실패 루프 위험 — 별도 설계 대상, §3.3). UI 스레드 전용.
@@ -692,15 +759,20 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (_player is not { } p || _filePath is null || _filePath != endedFile) return;
         if (p.State != VLCState.Ended) return;
 
-        // 전이 1: 현재 파일 루프 — 횟수 내면 같은 파일 재시작(0 = 무한. "1" = 한 번 더 = 총 2회).
-        if (_loopCurrent && (_loopCountLimit == 0 || _loopPlays < _loopCountLimit))
+        // 전이 1: 한 파일 루프 — 횟수 내면 같은 파일 재시작(0 = 무한. "1" = 한 번 더 = 총 2회).
+        // 소진하면 아래 목록 진행으로 낙하한다(구 규칙 승계) — 다음 파일에서는 PlayCurrent가
+        // _loopPlays를 리셋하므로 새 파일도 같은 횟수만큼 돈다.
+        if (_loopMode == LoopMode.File && (_fileLoopLimit == 0 || _loopPlays < _fileLoopLimit))
         {
             _loopPlays++;
             ReplayCurrent();
             return;
         }
 
-        // 전이 2·3: 다음 파일로 / 목록 끝이면 첫 파일로(목록 루프는 무한 고정 — 부록 B 76).
+        // 전이 2: 다음 파일로(모든 모드 공통 — 루프 없음·한 파일 횟수 소진 포함).
+        // 전이 3: 목록 루프 + 목록 끝 = 처음으로. 이 되감기가 "목록 1회 순환" 소모 시점이다
+        // (A255 확정: 마지막 파일 EOF에서 처음으로 갈 때 1회. 수동 개입은 PlayCurrent가
+        // _listLoops를 리셋하므로 자동 진행만 예산을 소모한다 — 카운트 기준점).
         // 그새 소실된 파일은 Remove로 목록에서 빼고 그다음 후보로 재시도한다(구현 시 결정).
         // OpenPath = 기존 완결 경로 재사용(설계 §2.2 경로 B) — 이어듣기 저장·PlayCurrent·
         // ContentOpened 셸 동기화(트레이·A174)까지 전부 따라온다. 신규 셸 배선 0(설계 §5).
@@ -708,8 +780,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         {
             while (true)
             {
-                var next = list.HasNext ? list.PeekNext
-                    : _loopList && list.Count > 1 ? list.PeekFirst
+                var wrapping = !list.HasNext; // Remove가 목록을 줄일 수 있어 매 회 재판정
+                var next = !wrapping ? list.PeekNext
+                    : _loopMode == LoopMode.List && list.Count > 1 &&
+                      (_listLoopLimit == 0 || _listLoops < _listLoopLimit) ? list.PeekFirst
                     : null;
                 if (next is null) break;
 
@@ -719,22 +793,33 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
                     continue;
                 }
 
-                if (list.HasNext) list.MoveNext();
-                else list.MoveFirst();
-                OpenPath(next);
+                if (wrapping)
+                {
+                    _listLoops++; // 되감기 확정 시점에만 소모(소실 파일 재시도는 소모 없음)
+                    list.MoveFirst();
+                }
+                else
+                {
+                    list.MoveNext();
+                }
+                OpenPath(next, autoAdvance: true);
                 return;
             }
 
-            // 전이 4: 목록 루프 켬 + 단일 파일 목록 = 같은 파일 재시작.
-            // _loopPlays와 무관하다 — 이것은 횟수 축이 없는 "목록 루프"의 축이다(설계 §3.3).
-            if (_loopList && list.Count == 1)
+            // 전이 4: 목록 루프 + 단일 파일 목록 = 같은 파일 재시작. 파일 1개가 곧 목록 전체라
+            // 이 재시작도 "되감기 1회"로 세어 같은 예산을 소모한다(A255 — 구판의 무한 고정 폐기).
+            if (_loopMode == LoopMode.List && list.Count == 1 &&
+                (_listLoopLimit == 0 || _listLoops < _listLoopLimit))
             {
+                _listLoops++;
                 ReplayCurrent();
                 return;
             }
         }
 
         // 전이 5: 정지 — 종전 EndReached UI 갱신 그대로(유일하게 Ended에 머무는 경로).
+        // A255: 루프 없음·목록 끝 외에 "횟수 소진"(목록 루프 되감기 예산 소진, 한 파일 소진 후
+        // 다음 파일 없음)도 이 경로로 온다.
         PlayButton.Content = "▶";
         PositionText.Text = TimeText.Format(_durationMs);
         _suppressSeekEvent = true;
@@ -1007,80 +1092,110 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         flyout.ShowAt(DevicesButton);
     }
 
-    // ---------- A11 루프 플라이아웃 (c9 — A163 EQ 칸과 같은 "버튼 + 라디오 플라이아웃" 규격) ----------
+    // ---------- A255 루프 모드·횟수 (본체 클릭 = 모드 순환 · 우클릭 플라이아웃 = 횟수) ----------
 
     /// <summary>
-    /// 루프 플라이아웃 구성(1회 — 항목이 정적이라 EQ·장치처럼 다시 채울 일이 없다).
-    /// 줄 1 = "Loop list" 토글(ToggleMenuFlyoutItem), 구분선 아래 = "Repeat this file" 라디오
-    /// 4택(끔/1×/3×/무한 — 현재 파일 루프와 그 횟수는 한 축으로 고른다. 끔을 골라도 저장된
-    /// 횟수는 남겨 다음 켬 때 되살아난다). 문구·구성은 영상과 동일하고 설정 키만 audio.* 다.
+    /// 루프 플라이아웃 구성 — A255: 본체 클릭이 모드 순환으로 바뀌어 플라이아웃은 우클릭
+    /// (ContextFlyout)으로 연다. 구 "Loop list 토글 + Repeat 라디오 4택"을 라디오 7택 한
+    /// 그룹(끔 1 + 모드 2 × 횟수 3)으로 바꿔 체크 하나가 곧 현재 상태다(상호 배타 그대로).
+    /// 버튼 순환·구 키 이행으로도 상태가 바뀌므로 매 열림(Opening)마다 다시 채운다 —
+    /// 장치 플라이아웃 관례(1회 구성이던 구판과 달라진 점). 문구·구성은 영상과 동일하고
+    /// 설정 키만 audio.* 다.
     /// </summary>
     private void BuildLoopFlyout()
     {
-        LoopFlyout.Items.Clear();
+        _loopFlyout.Items.Clear();
 
-        var listToggle = new ToggleMenuFlyoutItem { Text = "Loop list", IsChecked = _loopList };
-        listToggle.Click += (_, _) =>
-        {
-            // ToggleMenuFlyoutItem은 Click 시점에 IsChecked가 이미 뒤집혀 있다(A160 선례와 같은 성질).
-            _loopList = listToggle.IsChecked;
-            _settings.Set(LoopListKey, _loopList);
-            _settings.Save(); // 즉시 저장 — EQ 선례(전역 1벌)
-            UpdateLoopButton();
-        };
-        LoopFlyout.Items.Add(listToggle);
-        LoopFlyout.Items.Add(new MenuFlyoutSeparator());
-
-        AddLoopCurrentChoice("Repeat this file: Off", repeat: false, limit: 0);
-        AddLoopCurrentChoice("Repeat this file: 1×", repeat: true, limit: 1);
-        AddLoopCurrentChoice("Repeat this file: 3×", repeat: true, limit: 3);
-        AddLoopCurrentChoice("Repeat this file: Infinite", repeat: true, limit: 0);
+        AddLoopChoice("Loop: off", LoopMode.Off, 0);
+        _loopFlyout.Items.Add(new MenuFlyoutSeparator());
+        AddLoopChoice("Loop list: 1×", LoopMode.List, 1);
+        AddLoopChoice("Loop list: 3×", LoopMode.List, 3);
+        AddLoopChoice("Loop list: Infinite", LoopMode.List, 0);
+        _loopFlyout.Items.Add(new MenuFlyoutSeparator());
+        AddLoopChoice("Repeat this file: 1×", LoopMode.File, 1);
+        AddLoopChoice("Repeat this file: 3×", LoopMode.File, 3);
+        AddLoopChoice("Repeat this file: Infinite", LoopMode.File, 0);
     }
 
-    /// <summary>"Repeat this file" 라디오 1개 추가 — EQ의 AddEqualizerChoice 관용구.</summary>
-    private void AddLoopCurrentChoice(string label, bool repeat, int limit)
+    /// <summary>
+    /// 라디오 1개 추가 — EQ의 AddEqualizerChoice 관용구. 횟수를 고르면 그 모드로의 전환을
+    /// 겸한다(구현 시 결정 — 플라이아웃에서 "Loop list: 3×"를 고른 의도는 그 모드의 사용이다).
+    /// </summary>
+    private void AddLoopChoice(string label, LoopMode mode, int limit)
     {
         var item = new RadioMenuFlyoutItem
         {
             Text = label,
-            GroupName = "loop-current",
-            IsChecked = repeat == _loopCurrent && (!repeat || limit == _loopCountLimit),
+            GroupName = "loop",
+            IsChecked = mode == _loopMode &&
+                (mode == LoopMode.Off ||
+                 limit == (mode == LoopMode.List ? _listLoopLimit : _fileLoopLimit)),
         };
-        item.Click += (_, _) =>
-        {
-            _loopCurrent = repeat;
-            _settings.Set(LoopCurrentKey, _loopCurrent);
-            if (repeat)
-            {
-                _loopCountLimit = limit;
-                _settings.Set(LoopCountKey, limit == 0 ? "infinite" : limit.ToString());
-            }
-            _settings.Save();
-            UpdateLoopButton();
-        };
-        LoopFlyout.Items.Add(item);
+        item.Click += (_, _) => SetLoopState(mode, limit);
+        _loopFlyout.Items.Add(item);
     }
 
     /// <summary>
+    /// A255: 모드(+그 모드의 횟수)를 확정하고 저장·아이콘 갱신까지 한곳에서 한다.
+    /// 모드·횟수 변경은 전부 사용자 개입이므로 두 카운터를 재출발시킨다(PlayCurrent의
+    /// 수동 리셋과 같은 취지). 끔은 횟수 축이 없어 저장된 두 횟수를 건드리지 않는다.
+    /// </summary>
+    private void SetLoopState(LoopMode mode, int limit)
+    {
+        _loopMode = mode;
+        if (mode == LoopMode.List)
+        {
+            _listLoopLimit = limit;
+            _settings.Set(LoopListCountKey, CountKeyValue(limit));
+        }
+        else if (mode == LoopMode.File)
+        {
+            _fileLoopLimit = limit;
+            _settings.Set(LoopCountKey, CountKeyValue(limit));
+        }
+        _loopPlays = 0;
+        _listLoops = 0;
+        _settings.Set(LoopModeKey, ModeKeyValue(mode));
+        _settings.Save(); // 즉시 저장 — EQ 선례(전역 1벌)
+        UpdateLoopButton();
+    }
+
+    /// <summary>
+    /// A255: 본체 클릭·L 키 = 모드 순환(루프 없음 → 목록 루프 → 한 파일 루프 → 처음으로).
+    /// 순환으로 진입한 모드의 횟수는 기본값 ∞로 되돌린다(사용자 확정 — 세밀한 횟수는
+    /// 우클릭 플라이아웃의 몫이라 버튼만 쓰는 손에는 항상 "무한 루프"가 잡힌다).
+    /// </summary>
+    private void CycleLoopMode() => SetLoopState(
+        _loopMode switch
+        {
+            LoopMode.Off => LoopMode.List,
+            LoopMode.List => LoopMode.File,
+            _ => LoopMode.Off,
+        },
+        limit: 0);
+
+    /// <summary>XAML Click 배선(OnPlayClicked 관용구) — 본체 클릭 = 모드 순환.</summary>
+    private void OnLoopClicked(object sender, RoutedEventArgs e) => CycleLoopMode();
+
+    /// <summary>
     /// 루프 버튼 본체를 상태형으로 갱신 — 영상 UpdateLoopButton과 같은 규칙(아이콘 + 툴팁을
-    /// 상태에서 만든다). 글리프 E8EE(RepeatAll)/E8ED(RepeatOne)는 영상 c9와 같은 값이다.
-    /// 현재 파일 루프가 켜져 있으면 RepeatOne(우선순위 그대로 — 목록 루프를 가린다), 아니면
-    /// RepeatAll이고 끔 상태는 툴팁이 알린다. 툴팁 표기는 A34 규칙대로 키 상수에서 조립한다.
+    /// 상태에서 만든다). A255 3상태 표지: 루프 없음 = E8EE 흐림(Opacity 0.4 — 끔 표지 확정값.
+    /// 빗금 도형 안은 v0.174.1 Geometry 공유 크래시 함정이라 기각) / 목록 루프 = E8EE(RepeatAll)
+    /// 불투명 / 한 파일 루프 = E8ED(RepeatOne). 툴팁도 3상태 + 횟수 병기에 우클릭 안내를
+    /// 덧붙인다(횟수 플라이아웃 진입이 우클릭뿐이라 이 표기가 유일한 발견 경로다).
+    /// 표기는 A34 규칙대로 키 상수에서 조립한다.
     /// </summary>
     private void UpdateLoopButton()
     {
-        (string glyph, string state) = _loopCurrent
-            ? ("\uE8ED", _loopCountLimit switch
-            {
-                1 => "Repeat this file: 1×",
-                3 => "Repeat this file: 3×",
-                _ => "Repeat this file: Infinite",
-            })
-            : _loopList
-                ? ("\uE8EE", "Loop list")
-                : ("\uE8EE", "Loop: off");
-        LoopButton.Content = new FontIcon { Glyph = glyph, FontSize = 18 };
-        ToolTipService.SetToolTip(LoopButton, HotkeySupport.Tip(state, LoopKey));
+        (string glyph, double opacity, string state) = _loopMode switch
+        {
+            LoopMode.List => ("\uE8EE", 1.0, $"Loop list: {CountLabel(_listLoopLimit)}"),
+            LoopMode.File => ("\uE8ED", 1.0, $"Repeat this file: {CountLabel(_fileLoopLimit)}"),
+            _ => ("\uE8EE", 0.4, "Loop: off"),
+        };
+        LoopButton.Content = new FontIcon { Glyph = glyph, FontSize = 18, Opacity = opacity };
+        ToolTipService.SetToolTip(LoopButton,
+            HotkeySupport.Tip($"{state} · right-click for count", LoopKey));
     }
 
     // ---------- 입력 핸들러 ----------
@@ -1198,8 +1313,9 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     // ---------- 하단 바 버튼 핫키 (A34) ----------
 
     /// <summary>
-    /// A11 루프 키(설계 §4.1) — 플라이아웃 열기. 툴팁 표기(UpdateLoopButton)와 액셀러레이터가
-    /// 이 한 값을 함께 쓴다. 오디오 기사용 문자 키 M·S와 충돌 없고, 영상 모듈의 L과 같은 뜻이다
+    /// A11 루프 키(설계 §4.1) → A255: 플라이아웃 열기에서 모드 순환(본체 클릭과 동일)으로 개정.
+    /// 툴팁 표기(UpdateLoopButton)와 액셀러레이터가 이 한 값을 함께 쓴다. 오디오 기사용 문자 키
+    /// M·S와 충돌 없고, 영상 모듈의 L과 같은 뜻이다
     /// (같은 동작에 같은 키 규칙 — 두 뷰가 동시에 살아 있지 않으므로 스코프 충돌도 없다).
     /// </summary>
     private const VirtualKey LoopKey = VirtualKey.L;
@@ -1215,9 +1331,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         HotkeySupport.Bind(this, MuteButton, VirtualKey.M, "Mute", ToggleMute);
         HotkeySupport.Bind(this, SpeedBox, VirtualKey.S,
             "Playback speed", () => SpeedBox.IsDropDownOpen = true);
-        // A11: L = 루프 플라이아웃 열기(영상 c9와 같은 배선). 툴팁이 상태형이라 Bind가 아닌
-        // Register — 표기는 UpdateLoopButton()이 같은 키 상수(LoopKey)로 조립한다.
-        HotkeySupport.Register(this, LoopButton, LoopKey, () => LoopFlyout.ShowAt(LoopButton));
+        // A255: L = 루프 모드 순환(본체 클릭과 동일 — 구 "플라이아웃 열기"에서 개정. 횟수
+        // 플라이아웃은 우클릭 전용이 됐다). 툴팁이 상태형이라 Bind가 아닌 Register —
+        // 표기는 UpdateLoopButton()이 같은 키 상수(LoopKey)로 조립한다(영상과 같은 배선).
+        HotkeySupport.Register(this, LoopButton, LoopKey, CycleLoopMode);
         UpdateLoopButton(); // A11: 루프 아이콘·툴팁 초기값
     }
 }

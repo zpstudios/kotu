@@ -119,12 +119,13 @@ Seven modules. Switch between them from the menu at the bottom left.
 - **Resume**: if you watched more than 30 seconds and stopped before the last 3%, the position is
   remembered and playback continues there next time.
 - **The whole folder plays as a list.** When a video ends, the next file in the same folder starts
-  automatically (name order, hidden files skipped), and after the last one the list starts over —
-  that is **Loop list**, on by default. Press `L` or the loop button — the first button in the
-  bottom bar, immediately left of ▶ — for the options: turn
-  *Loop list* off to stop after the last file, or pick *Repeat this file* — once more, three more
-  times, or forever — which takes priority over the list while it lasts. Repeating never replays
-  from a resume point; every pass starts at 0:00.
+  automatically (name order, hidden files skipped), and playback stops after the last one by
+  default. Press `L` or the loop button — the first button in the bottom bar, immediately left
+  of ▶ — to cycle through the three loop modes: off (dimmed icon), **Loop list** (after the last
+  file the list starts over), and **Repeat this file** (the same file restarts). Right-click the
+  button to choose how often either mode repeats — once more, three more times, or forever;
+  cycling with the button always enters a mode at forever. Repeating never replays from a resume
+  point; every pass starts at 0:00.
 - **Zoom** with `Ctrl`+wheel, from 10% to 800%.
 - **Fit** — see [2.9](#29-the-fit-button). Each new file starts at Contain again.
 - `Enter` or `Alt`+`Enter` toggles full screen, and `Esc` leaves it.
@@ -154,12 +155,13 @@ Seven modules. Switch between them from the menu at the bottom left.
   labels are hidden.
 - **Resume** works exactly as in Video (over 30 seconds played, stopped before the last 3%).
 - **The whole folder plays as a list.** When a track ends, the next file in the same folder starts
-  automatically (name order, hidden files skipped), and after the last one the list starts over —
-  that is **Loop list**, on by default. Press `L` or the loop button — first in the bottom bar,
-  immediately left of ▶, as in Video — for the options: turn
-  *Loop list* off to stop after the last track, or pick *Repeat this file* — once more, three more
-  times, or forever — which takes priority over the list while it lasts. Repeating never replays
-  from a resume point; every pass starts at 0:00.
+  automatically (name order, hidden files skipped), and playback stops after the last one by
+  default. Press `L` or the loop button — first in the bottom bar, immediately left of ▶, as in
+  Video — to cycle through the three loop modes: off (dimmed icon), **Loop list** (after the last
+  track the list starts over), and **Repeat this file** (the same track restarts). Right-click the
+  button to choose how often either mode repeats — once more, three more times, or forever;
+  cycling with the button always enters a mode at forever. Repeating never replays from a resume
+  point; every pass starts at 0:00.
 - `Enter` or `Alt`+`Enter` toggles full screen, and `Esc` leaves it. The bottom bar stays put —
   the auto-hide above is a Video-module behaviour.
 - Press ▶ with nothing open to play a built-in 18-second sample tune.
@@ -452,7 +454,7 @@ box or while you are typing to jump through the file list.
 | Video | `M` | mute |
 | Video | `S` | playback speed |
 | Video | `C` | subtitles |
-| Video | `L` | loop options |
+| Video | `L` | cycle the loop mode (right-click the button for repeat counts) |
 | Video | `A` | Original |
 | Video | `F` | re-apply the last Fit option |
 | Audio | `Space` | play / pause |
@@ -460,7 +462,7 @@ box or while you are typing to jump through the file list.
 | Audio | `↑` `↓` | volume |
 | Audio | `M` | mute |
 | Audio | `S` | playback speed |
-| Audio | `L` | loop options |
+| Audio | `L` | cycle the loop mode (right-click the button for repeat counts) |
 | Document | `Ctrl+S` | save |
 | Document | `Ctrl+P` | print the PDF or the text |
 | Document | `Ctrl` + `+` / `-` | zoom one step in / out (numpad `+` / `-` work too; hold to repeat) |

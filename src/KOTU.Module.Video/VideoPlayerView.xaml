@@ -111,19 +111,21 @@
                  (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
                  치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
             <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
-            <!-- A11(v0.211.0) 루프 칸: A163 EQ 칸(자막 버튼+플라이아웃 규격)과 같은 1칸(32×32).
-                 항목(목록 루프 토글 + 현재 파일 반복 라디오 4택)은 코드(BuildLoopFlyout)가
-                 1회 채우고, 본체 아이콘·툴팁(L 키 표기 포함)은 UpdateLoopButton()이 상태형으로
-                 갱신한다 — 아래 FontIcon은 초기값일 뿐이다. 폭 계수: 이 칸(32+간격 6 = 38)은
-                 A151이 전체화면 칸을 제거하며 남긴 여유 38을 정확히 소진한다 — 그래서 당시 축약
-                 임계는 640 그대로였다(현재 값은 A250의 볼륨 +5로 645 — UpdateCompactTransport
-                 산식 주석이 정본, 설계 A11-playlist-design.md §4.1).
+            <!-- A11(v0.211.0) 루프 칸: A163 EQ 칸과 같은 1칸(32×32). A255(v0.255.0) 개편:
+                 본체 클릭·L 키 = 단일 모드 순환(루프 없음 → 목록 → 한 파일 — 상호 배타)이라
+                 Button.Flyout을 떼고 Click을 건다. 횟수(1×/3×/∞) 플라이아웃은 코드가 만들어
+                 ContextFlyout(우클릭)으로 걸고 열 때마다 채운다(생성자 배선·BuildLoopFlyout).
+                 본체 아이콘 3상태(끔 = E8EE 흐림 / 목록 = E8EE / 한 파일 = E8ED)·툴팁(L 키
+                 표기 포함)은 UpdateLoopButton()이 상태형으로 갱신한다 — 아래 FontIcon은
+                 초기값일 뿐이다. 폭 계수: 이 칸(32+간격 6 = 38)은 A151이 전체화면 칸을
+                 제거하며 남긴 여유 38을 정확히 소진한다 — 그래서 당시 축약 임계는 640
+                 그대로였다(현재 값은 A250의 볼륨 +5로 645 — UpdateCompactTransport
+                 산식 주석이 정본, 설계 A11-playlist-design.md §4.1). A255도 폭 불변(칸 규격
+                 유지 — 플라이아웃 진입만 우클릭으로 이동).
                  A216(2026-08-24): 위치를 c9(맨 끝)에서 재생 버튼 왼쪽(c0)으로 이동 — 총폭 불변. -->
-            <Button x:Name="LoopButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}">
+            <Button x:Name="LoopButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
+                    Click="OnLoopClicked">
                 <FontIcon Glyph="&#xE8EE;" FontSize="18" />
-                <Button.Flyout>
-                    <MenuFlyout x:Name="LoopFlyout" Placement="Top" />
-                </Button.Flyout>
             </Button>
             <Button x:Name="PlayButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
                     Content="▶"

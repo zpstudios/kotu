@@ -101,16 +101,17 @@
                  (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
                  치수·테두리·수직 중앙은 앱 전역 스타일(App.xaml)이 정한다. -->
             <!-- A34: 핫키가 붙은 버튼의 툴팁은 코드(SetupHotkeys)가 키와 함께 만든다. -->
-            <!-- A11(v0.212.0) 루프: 영상의 동형 이식(A163 EQ 칸과 같은 1칸 32×32 + 라디오
-                 플라이아웃 규격). 항목(목록 루프 토글 + 현재 파일 반복 라디오 4택)은 코드
-                 (BuildLoopFlyout)가 1회 채우고, 본체 아이콘·툴팁(L 키 표기 포함)은
-                 UpdateLoopButton()이 상태형으로 갱신한다 — 아래 FontIcon은 초기값일 뿐이다.
+            <!-- A11(v0.212.0) 루프: 영상의 동형 이식(A163 EQ 칸과 같은 1칸 32×32).
+                 A255(v0.255.0) 개편: 본체 클릭·L 키 = 단일 모드 순환(루프 없음 → 목록 →
+                 한 파일 — 상호 배타)이라 Button.Flyout을 떼고 Click을 건다. 횟수(1×/3×/∞)
+                 플라이아웃은 코드가 만들어 ContextFlyout(우클릭)으로 걸고 열 때마다 채운다
+                 (생성자 배선·BuildLoopFlyout). 본체 아이콘 3상태(끔 = E8EE 흐림 / 목록 = E8EE /
+                 한 파일 = E8ED)·툴팁(L 키 표기 포함)은 UpdateLoopButton()이 상태형으로
+                 갱신한다 — 아래 FontIcon은 초기값일 뿐이다. 칸 규격·폭은 불변(영상과 동형).
                  A217: 위치를 c9(맨 끝)에서 재생 버튼 왼쪽(c0)으로 이동(영상 A216과 동형) — 총폭 불변. -->
-            <Button x:Name="LoopButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}">
+            <Button x:Name="LoopButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
+                    Click="OnLoopClicked">
                 <FontIcon Glyph="&#xE8EE;" FontSize="18" />
-                <Button.Flyout>
-                    <MenuFlyout x:Name="LoopFlyout" Placement="Top" />
-                </Button.Flyout>
             </Button>
             <Button x:Name="PlayButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
                     Content="▶"

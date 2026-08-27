@@ -391,13 +391,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Resume</strong>: watch more than 30 seconds and stop before the last 3%, and playback
               continues from there next time.</li>
           <li><strong>The whole folder plays as a list.</strong> When a video ends, the next file in the same
-              folder starts automatically (name order, hidden files skipped), and after the last one the list
-              starts over — that is <em>Loop list</em>, on by default. Press <kbd>L</kbd> or the loop button —
+              folder starts automatically (name order, hidden files skipped), and playback stops after the
+              last one by default. Press <kbd>L</kbd> or the loop button —
               the first button in the bottom bar, immediately left of ▶ —
-              for the options: turn <em>Loop list</em> off to stop after the last file, or pick
-              <em>Repeat this file</em> — once more, three more times, or forever — which takes priority over
-              the list while it lasts. Repeating never replays from a resume point; every pass starts
-              at 0:00.</li>
+              to cycle through the three loop modes: off (dimmed icon), <em>Loop list</em> (after the last
+              file the list starts over), and <em>Repeat this file</em> (the same file restarts). Right-click
+              the button to choose how often either mode repeats — once more, three more times, or forever;
+              cycling with the button always enters a mode at forever. Repeating never replays from a resume
+              point; every pass starts at 0:00.</li>
           <li><strong>Zoom</strong> with <kbd>Ctrl</kbd>+wheel, from 10% to 800%.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Each new file starts at
               Contain again.</li>
@@ -430,13 +431,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               time labels are hidden.</li>
           <li><strong>Resume</strong> works exactly as in Video.</li>
           <li><strong>The whole folder plays as a list.</strong> When a track ends, the next file in the same
-              folder starts automatically (name order, hidden files skipped), and after the last one the list
-              starts over — that is <em>Loop list</em>, on by default. Press <kbd>L</kbd> or the loop button —
+              folder starts automatically (name order, hidden files skipped), and playback stops after the
+              last one by default. Press <kbd>L</kbd> or the loop button —
               first in the bottom bar, immediately left of ▶, as in Video —
-              for the options: turn <em>Loop list</em> off to stop after the last track, or pick
-              <em>Repeat this file</em> — once more, three more times, or forever — which takes priority over
-              the list while it lasts. Repeating never replays from a resume point; every pass starts
-              at 0:00.</li>
+              to cycle through the three loop modes: off (dimmed icon), <em>Loop list</em> (after the last
+              track the list starts over), and <em>Repeat this file</em> (the same track restarts). Right-click
+              the button to choose how often either mode repeats — once more, three more times, or forever;
+              cycling with the button always enters a mode at forever. Repeating never replays from a resume
+              point; every pass starts at 0:00.</li>
           <li><kbd>Enter</kbd> or <kbd>Alt</kbd>+<kbd>Enter</kbd> toggles full screen, and <kbd>Esc</kbd>
               leaves it. The bottom bar stays put — the auto-hide above is a Video-module behaviour.</li>
           <li>Press ▶ with nothing open to play a built-in 18-second sample tune.</li>
@@ -731,14 +733,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Video</td><td><kbd>M</kbd></td><td>mute</td></tr>
           <tr><td>Video</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
           <tr><td>Video</td><td><kbd>C</kbd></td><td>subtitles</td></tr>
-          <tr><td>Video</td><td><kbd>L</kbd></td><td>loop options</td></tr>
+          <tr><td>Video</td><td><kbd>L</kbd></td><td>cycle the loop mode (right-click the button for repeat counts)</td></tr>
           <tr><td>Video</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>Original / re-apply the last Fit option</td></tr>
           <tr><td>Audio</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
           <tr><td>Audio</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
           <tr><td>Audio</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>
           <tr><td>Audio</td><td><kbd>M</kbd></td><td>mute</td></tr>
           <tr><td>Audio</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
-          <tr><td>Audio</td><td><kbd>L</kbd></td><td>loop options</td></tr>
+          <tr><td>Audio</td><td><kbd>L</kbd></td><td>cycle the loop mode (right-click the button for repeat counts)</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print the PDF or the text</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>zoom one step in / out (numpad <kbd>+</kbd> / <kbd>-</kbd> work too; hold to repeat)</td></tr>
