@@ -242,6 +242,8 @@ public sealed partial class DocumentView : UserControl,
             // A193: 분할 조립 루프도 같은 static 이벤트 — 같은 해제 의무(남기면 뷰 누수 +
             // 닫힌 뷰의 RenderStack 조작).
             StopRenderAppendLoop();
+            // A248: WebView2는 별도 브라우저 프로세스 — Close 누락 = 프로세스 잔존(함정 ④).
+            CloseHtmlPane();
         };
 
         if (context.FilePath is { } path && File.Exists(path))
@@ -293,6 +295,7 @@ public sealed partial class DocumentView : UserControl,
     /// PDF 모드에는 아무 영향이 없다 — PdfPane은 별개 줌 체계(ZoomFactor·Fit)다.
     /// A225: ⓔ 렌더 판(ApplyRenderZoom — 같은 배율 축을 md 렌더 뷰에도 적용. 판이 내려가 있으면
     /// 무동작이고, 다음 표시(EnterRenderMode·SizeChanged)가 따라잡는다).
+    /// A248: ⓕ HTML 렌더 판(ApplyHtmlZoom — 같은 축을 WebView2에도 적용. 표시 중일 때만).
     /// </summary>
     private void ApplyZoom()
     {
@@ -302,6 +305,7 @@ public sealed partial class DocumentView : UserControl,
         UpdateEditorPadding();
         UpdateZoomText();
         ApplyRenderZoom();
+        ApplyHtmlZoom();
     }
 
     /// <summary>
@@ -930,8 +934,12 @@ public sealed partial class DocumentView : UserControl,
     //
     //   이벤트                        | 결과 상태
     //   ------------------------------+------------------------------------------------------------
-    //   열기 .txt/.log/.ini/.html/.htm| 편집(렌더 축 리셋 — _renderEligible=false. A224: 토글은
+    //   열기 .txt/.log/.ini           | 편집(렌더 축 리셋 — _renderEligible=false. A224: 토글은
     //                                 | 활성 — 누르면 잠금 뷰)
+    //   열기 .html/.htm               | 편집(위와 동일 — 기본 모드 무변경). A248: 토글로 뷰에
+    //                                 | 들어가면 WebView2 렌더(_htmlMode — 저장된 파일 기준
+    //                                 | file:// 항해, 스크립트 off). 런타임 부재·항해 실패는
+    //                                 | 잠금 뷰 자동 폴백 + 하단 바 안내 1줄
     //   열기 .md/.markdown (소용량)   | 렌더(기본 — 사양. 빈 파일은 편집으로 시작, 토글은 활성)
     //   열기 .md (A177 대용량)        | 편집(_renderEligible=false — 렌더 생략, A178 성능 원칙.
     //                                 | A224: 토글은 활성이되 잠금 뷰로 간다 — 비md와 일관)
@@ -952,7 +960,11 @@ public sealed partial class DocumentView : UserControl,
     //
     // 불변식: _renderMode이면 반드시 _renderEligible이고 _path는 md 파일이다(무변경 — 인쇄
     // 갈래 판정(_renderMode && md)이 이 축에 얹혀 있다). A224 추가 불변식: _renderMode이면
-    // 반드시 _viewMode다(렌더는 뷰 모드의 md 구현). 렌더 모드에서
+    // 반드시 _viewMode다(렌더는 뷰 모드의 md 구현). A248 추가 불변식: _htmlMode이면 반드시
+    // _viewMode이고 _path는 html 파일이다(_htmlMode는 뷰 모드의 HTML 구현 — _renderMode와
+    // 동시에 서지 않는다: md와 html은 확장자가 배타다). _htmlMode에서도 에디터 버퍼가 정본이고
+    // 인쇄는 원문 갈래 그대로다(_renderMode가 아니므로 CapturePrintSnapshot의 렌더 분기 밖 —
+    // A211 텍스트 인쇄 유지, 사양). 렌더 모드에서
     // 에디터는 Collapsed일 뿐 내용은 그대로다(렌더는 읽기 전용 표시일 뿐 — 더티·저장·A113 체계
     // 전부 에디터 버퍼가 정본). A225: 줌(A181)은 렌더 뷰에도 같은 축(_zoomPercent)이 적용된다
     // (ApplyRenderZoom — ZoomFactor + 랩 폭 보정. 편집과 렌더를 오가도 %가 이어진다).
@@ -1037,6 +1049,14 @@ public sealed partial class DocumentView : UserControl,
             || ext.Equals(".markdown", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>A248: HTML 확장자 판정 — 라우팅(DocumentModule.Extensions의 .html/.htm)과 같은 짝.</summary>
+    private static bool IsHtmlPath(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".html", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".htm", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>A190→A224: 하단 바 토글 클릭 — 편집 ↔ 뷰(형식 무관). 비활성 게이트(XAML
     /// IsEnabled)가 1차지만 방어 재확인. 게이트는 CanToggleViewMode다 — _renderEligible로 걸면
     /// 비md 토글이 죽는다(그 값은 EnterViewMode 안에서 "렌더 판이냐 잠금 뷰냐"만 가른다).</summary>
@@ -1049,8 +1069,11 @@ public sealed partial class DocumentView : UserControl,
 
     /// <summary>
     /// A224: 뷰 모드 진입 — md 렌더 자격이면 기존 렌더 판(EnterRenderMode — 그쪽이 _viewMode를
-    /// 함께 세운다), 아니면 잠금 뷰(에디터 표면 그대로 + IsReadOnly. 표시 전환이 없어 장식·
-    /// A215 표시 토글은 그대로 남는다 — 사양: 기준이 "편집 모드냐"에서 "에디터 표면이냐"가 됐다).
+    /// 함께 세운다), A248: HTML 렌더 자격이면 WebView2 판(EnterHtmlViewMode — 마찬가지로
+    /// _viewMode를 함께 세운다), 아니면 잠금 뷰(에디터 표면 그대로 + IsReadOnly. 표시 전환이
+    /// 없어 장식·A215 표시 토글은 그대로 남는다 — 사양: 기준이 "편집 모드냐"에서 "에디터
+    /// 표면이냐"가 됐다). HTML인데 자격이 없는 경우(런타임 부재·이 뷰에서 이미 실패)는 잠금
+    /// 뷰로 오면서 안내 1줄을 하단 바 파일명 칸에 덧붙인다(사양 — 폴백 고지).
     /// </summary>
     private void EnterViewMode()
     {
@@ -1059,14 +1082,23 @@ public sealed partial class DocumentView : UserControl,
             EnterRenderMode(); // md: 렌더 판(현행 A190 동작 그대로)
             return;
         }
+        if (IsHtmlRenderEligible && _path is { } htmlPath)
+        {
+            EnterHtmlViewMode(htmlPath); // A248: html — WebView2 렌더 판
+            return;
+        }
         _viewMode = true;
         UpdateEditorReadOnly();
         UpdateViewToggle();
+        // A248: HTML인데 렌더 갈래를 못 탄 잠금 뷰 = 폴백 상태 — 이유를 1줄로 알린다.
+        if (_path is { } fallbackPath && IsHtmlPath(fallbackPath))
+            ShowHtmlFallbackNotice(fallbackPath);
         EditorBox.Focus(FocusState.Programmatic); // 잠금 뷰도 에디터 표면 — 캐럿 탐색·복사 가능
     }
 
     /// <summary>A224: 뷰 모드 이탈 — md 렌더면 기존 편집 복귀(ExitRenderMode — _viewMode도 함께
-    /// 걷는다), 잠금 뷰면 IsReadOnly 해제뿐이다(표시 전환 없음).</summary>
+    /// 걷는다), A248: HTML 렌더면 판 내림 + 편집 복귀(ExitHtmlViewMode), 잠금 뷰면 IsReadOnly
+    /// 해제뿐이다(표시 전환 없음 — HTML 폴백 안내가 붙어 있었으면 함께 걷는다).</summary>
     private void ExitViewMode()
     {
         if (_renderMode)
@@ -1074,9 +1106,15 @@ public sealed partial class DocumentView : UserControl,
             ExitRenderMode(); // md: 편집 복귀(현행 A190 동작 그대로)
             return;
         }
+        if (_htmlMode)
+        {
+            ExitHtmlViewMode(); // A248: html — 판 내림 + 편집 복귀
+            return;
+        }
         _viewMode = false;
         UpdateEditorReadOnly();
         UpdateViewToggle();
+        ClearHtmlFallbackNotice(); // A248: 편집 복귀 — 파일명 칸을 원 표기로
         EditorBox.Focus(FocusState.Programmatic);
     }
 
@@ -1310,6 +1348,7 @@ public sealed partial class DocumentView : UserControl,
     {
         _renderSeq++; // 보류 중 파싱 무산(A193: 분할 조립 루프의 seq 대조도 이걸로 무산된다)
         StopRenderAppendLoop(); // A193: 루프 명시 해제 — 아래 Clear 이후 append가 성립할 수 없다
+        ResetHtmlViewState(); // A248: HTML 판도 같은 공통 선행 단계에서 함께 리셋한다(호출 전수 동일)
         _renderMode = false;
         _viewMode = false; // A224: 파일이 바뀌면 뷰 모드 초기화(사양 — md 기본 렌더 뷰는
                            // ApplyLoadedText의 EnterRenderMode 호출이 이 뒤에 다시 세운다)
@@ -1319,6 +1358,175 @@ public sealed partial class DocumentView : UserControl,
         RenderPane.Visibility = Visibility.Collapsed;
         RenderStack.Children.Clear();
         UpdateViewToggle();
+    }
+
+    // ---------- HTML 렌더 뷰 (A248 — 뷰 모드의 HTML 구현, WebView2) ----------
+    //
+    // A224의 "뷰 모드 표시 구현은 형식이 정한다" 축에 세 번째 구현이 얹혔다:
+    // md = 렌더 판(_renderMode) / html = WebView2 판(_htmlMode) / 그 외 = 잠금 뷰.
+    // 편집·저장·인쇄·미저장 가드는 전부 무변경이다 — 이 판은 저장된 파일의 읽기 전용
+    // 표시일 뿐(file:// 항해 — 더티 미저장 내용 미반영 수용, 사양), 정본은 에디터 버퍼다.
+    // 실패 갈래(런타임 부재·초기화 예외·항해 실패)는 전부 잠금 뷰 폴백 + 안내 1줄 —
+    // HTML 렌더가 안 되는 환경에서도 A224의 소스 뷰가 그대로 성립한다(최소 복구선과 동일).
+
+    private HtmlPane? _htmlPane; // 지연 생성 — HTML 뷰를 안 쓰는 세션에는 만들지 않는다(PdfPane 관용구)
+
+    /// <summary>true = HTML 렌더 판 표시 중(에디터 Collapsed — _renderMode의 html 판).
+    /// 세우고 걷는 곳 = EnterHtmlViewMode/ExitHtmlViewMode/ResetHtmlViewState/CloseHtmlPane 넷뿐이다.</summary>
+    private bool _htmlMode;
+
+    /// <summary>느린 항해가 토글·파일 전환 뒤에 낡은 폴백·상태를 만들지 않게(_renderSeq 관용구 —
+    /// HtmlPane 내부의 _loadSeq와 2중 방어다: 저쪽은 판 안의 낡은 항해, 이쪽은 뷰 상태 전이).</summary>
+    private int _htmlSeq;
+
+    /// <summary>이 뷰에서 HTML 렌더가 이미 실패했다(항해 실패 등 — 런타임 부재는 HtmlPane의
+    /// 정적 캐시가 세션 전체를 덮는다). 재진입은 시도 없이 잠금 뷰로 — 실패 반복 비용 억제(사양).</summary>
+    private bool _htmlViewFailed;
+
+    /// <summary>하단 바 파일명 칸에 폴백 안내가 덧붙어 있다 — 걷을 때 원 표기로 되돌리기 위한 표지.</summary>
+    private bool _htmlNoticeShown;
+
+    /// <summary>
+    /// A248: HTML 렌더 자격 — html 파일 + 비잘림(잘림은 토글 자체가 비활성이라 방어 중복) +
+    /// 이 뷰·이 세션에서 실패 이력 없음. _renderEligible(md)과 같은 층의 게이트로,
+    /// EnterViewMode 안에서 "WebView2 판이냐 잠금 뷰냐"만 가른다(토글 활성은 CanToggleViewMode
+    /// 그대로 — 자격이 없어도 잠금 뷰가 있으므로 토글은 살아 있다).
+    /// </summary>
+    private bool IsHtmlRenderEligible =>
+        _path is { } path && IsHtmlPath(path) && !_truncated
+        && !_htmlViewFailed && !HtmlPane.RuntimeUnavailable;
+
+    /// <summary>
+    /// A248: HTML 뷰 모드 진입 — 표시 전환은 즉시(EnterRenderMode와 같은 순서 계약), 내용은
+    /// WebView2 초기화·file:// 항해 완료 후 채워진다(그동안 빈 판 — md 파싱 대기와 동형).
+    /// 실패(런타임 부재 = LoadAsync false)면 잠금 뷰로 자동 폴백한다: _viewMode는 유지한 채
+    /// 판만 내리고 에디터(IsReadOnly)를 되살린다 — 사용자가 누른 "뷰"는 성립한 채 구현만
+    /// 소스 잠금 뷰로 강등되는 것이라 토글 상태(E70F Edit)와 어긋나지 않는다.
+    /// </summary>
+    private async void EnterHtmlViewMode(string path)
+    {
+        _htmlMode = true;
+        _viewMode = true; // A248 불변식: html 판은 뷰 모드의 구현 — 두 표지는 함께 선다
+        UpdateEditorReadOnly();
+        UpdateViewToggle();
+        EditorBox.Visibility = Visibility.Collapsed;
+        _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(렌더 판 관용구)
+        UpdateDecorToggles(); // A215→A224: 표시 토글 숨김(에디터 표면 전용)
+        EnsureHtmlPane();
+        // 지역 참조로 진행 — await 사이 CloseHtmlPane이 필드를 비워도(그쪽이 _htmlSeq를 올려
+        // 아래 대조가 걸러 준다) 이 흐름 안에서는 확정 인스턴스만 만진다.
+        var pane = _htmlPane!;
+        pane.Visibility = Visibility.Visible;
+        pane.SetZoomPercent(_zoomPercent); // A225 축: 편집 중 바뀐 배율을 판이 서자마자 반영
+        Focus(FocusState.Programmatic); // 포커스는 뷰 루트로(Collapsed 에디터에 남기지 않는다)
+
+        var seq = ++_htmlSeq;
+        bool ok;
+        try
+        {
+            ok = await pane.LoadAsync(path);
+        }
+        catch (Exception)
+        {
+            ok = false; // LoadAsync는 자체 격리가 계약이지만 최후 방어(async void — 새면 앱이 죽는다)
+        }
+        if (seq != _htmlSeq || !_htmlMode) return; // 그새 토글·파일 전환 — 상태는 후속 전이가 이미 정리했다
+        if (ok) return;
+
+        // 폴백: 잠금 뷰로 강등(_viewMode 유지). 실패 이력을 굳혀 재진입 재시도를 막는다(사양).
+        _htmlViewFailed = true;
+        _htmlMode = false;
+        pane.Visibility = Visibility.Collapsed;
+        EditorBox.Visibility = Visibility.Visible;
+        UpdateEditorReadOnly(); // _viewMode true — 잠금 뷰 산출 그대로(값 불변이지만 축 정합 재확인)
+        UpdateViewToggle();
+        _decor.Invalidate(); // 에디터 복귀 — 장식 재개
+        UpdateDecorToggles();
+        ShowHtmlFallbackNotice(path);
+        EditorBox.Focus(FocusState.Programmatic); // 잠금 뷰 관용구 — 캐럿 탐색·복사 가능
+    }
+
+    /// <summary>A248: HTML 뷰 이탈 — 판 내림 + 편집 복귀(ExitRenderMode와 같은 순서 계약).
+    /// 판 내용은 남겨 둔다(다음 진입 시 LoadAsync가 새로 항해 — md의 통째 교체와 동형).</summary>
+    private void ExitHtmlViewMode()
+    {
+        _htmlSeq++; // 보류 중 항해 결과 무산(폴백 지연 도착 방지)
+        _htmlMode = false;
+        _viewMode = false;
+        UpdateEditorReadOnly();
+        UpdateViewToggle();
+        if (_htmlPane is { } pane) pane.Visibility = Visibility.Collapsed;
+        EditorBox.Visibility = Visibility.Visible;
+        _decor.Invalidate(); // A115: 에디터 복귀 — 다음 레이아웃에서 장식 재개
+        UpdateDecorToggles(); // A215: 편집 복귀 — 표시 토글 재노출
+        EditorBox.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>A248: 판 지연 생성 + RootGrid 삽입(z 순서 맨 뒤 — PdfPane과 같은 자리 규칙.
+    /// 두 판은 동시에 보이지 않으므로(상태기계상 배타) 상대 순서는 무의미하다).</summary>
+    private void EnsureHtmlPane()
+    {
+        if (_htmlPane is not null) return;
+        _htmlPane = new HtmlPane { Visibility = Visibility.Collapsed };
+        RootGrid.Children.Insert(0, _htmlPane);
+    }
+
+    /// <summary>
+    /// A248: 파일·PDF·무제 전환의 공통 리셋(ResetRenderState에서 호출 — 호출 전수가 같다).
+    /// 진행 중 항해 무산 + 판 내림 + 실패 이력 초기화(새 파일은 새로 판정한다 — 단 런타임
+    /// 부재의 정적 캐시는 세션 유지, 사양). 에디터 Visibility는 만지지 않는다(각 열기 경로 몫).
+    /// </summary>
+    private void ResetHtmlViewState()
+    {
+        _htmlSeq++;
+        _htmlMode = false;
+        _htmlViewFailed = false;
+        _htmlNoticeShown = false; // 파일명 칸은 각 열기 경로가 새로 쓴다 — 표지만 걷으면 된다
+        if (_htmlPane is not { } pane) return;
+        pane.Visibility = Visibility.Collapsed;
+        pane.Clear(); // 이전 문서가 다음 표시 때 한 프레임 비치지 않게 빈 페이지로
+    }
+
+    /// <summary>A248: 뷰 언로드 정리 — 브라우저 프로세스까지 닫는다(HtmlPane.Close 주석).
+    /// 언로드 후 재부착(워커 부활 관용구)되면 판은 새로 만들어진다 — 그래서 참조도 버린다.</summary>
+    private void CloseHtmlPane()
+    {
+        _htmlSeq++; // 보류 중 항해 결과 무산
+        if (_htmlPane is not { } pane) return;
+        _htmlPane = null;
+        RootGrid.Children.Remove(pane);
+        pane.Close();
+        if (_htmlMode)
+        {
+            // 판이 사라졌다 — 재부착 대비로 잠금 뷰 상태(_viewMode 유지)로 정돈해 둔다.
+            _htmlMode = false;
+            EditorBox.Visibility = Visibility.Visible;
+            UpdateDecorToggles();
+        }
+    }
+
+    /// <summary>A248: 앱 줌 축(ApplyZoom ⓕ)의 HTML 판 절반 — 표시 중일 때만. 내려가 있으면
+    /// 무동작이고 다음 표시(EnterHtmlViewMode의 SetZoomPercent)가 따라잡는다(ApplyRenderZoom 관용구).</summary>
+    private void ApplyHtmlZoom()
+    {
+        if (_htmlPane is { } pane && pane.Visibility == Visibility.Visible)
+            pane.SetZoomPercent(_zoomPercent);
+    }
+
+    /// <summary>A248: 폴백 안내 1줄 — 하단 바 파일명 칸 관용구(사양 제안 채택: 새 UI 없이
+    /// 기존 표기 뒤에 덧붙인다). 편집 복귀(ExitViewMode)·다음 열기가 원 표기로 되돌린다.</summary>
+    private void ShowHtmlFallbackNotice(string path)
+    {
+        FileNameText.Text = Path.GetFileName(path) + " (HTML preview unavailable - showing source)";
+        _htmlNoticeShown = true;
+    }
+
+    /// <summary>A248: 안내 걷기 — 붙어 있을 때만 파일명을 원 표기로 되돌린다(멱등).</summary>
+    private void ClearHtmlFallbackNotice()
+    {
+        if (!_htmlNoticeShown) return;
+        _htmlNoticeShown = false;
+        if (_path is { } path) FileNameText.Text = Path.GetFileName(path);
     }
 
     // ---------- PDF (A16) ----------

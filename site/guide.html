@@ -461,8 +461,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Every text document has an edit mode and a view mode.</strong> The view button in the
               bottom bar switches between them. In view mode the editor is locked so nothing changes while
               you read — you can still move the caret, select and copy, and save any edits you made earlier.
-              For Markdown the view mode is the rendered preview described below. The button is greyed out
-              only when nothing is open, for PDFs (always view-only) and for files opened read-only
+              For Markdown and HTML the view mode is a rendered view, described below. The button is greyed
+              out only when nothing is open, for PDFs (always view-only) and for files opened read-only
               (over 4 MB).</li>
           <li><strong>Markdown is rendered.</strong> A <code>.md</code> or <code>.markdown</code> file opens
               as a formatted preview — headings, bold and italic, inline code and code blocks, lists, quotes,
@@ -471,6 +471,16 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               unsaved edits show up in it; anything the renderer does not know stays as it was written.
               Markdown files over about 1 MB of text open straight in the editor, and at that size the view
               button locks the editor instead of rendering the preview.</li>
+          <li><strong>HTML is rendered too.</strong> A <code>.html</code> or <code>.htm</code> file still
+              opens in the editor as source, and the view button shows it as a real web page instead of the
+              locked source view. The page is rendered from the saved file on disk — relative images and
+              stylesheets next to it work, and unsaved edits stay in the editor until you save and switch
+              again. It is a viewer, not a browser: scripts never run, links that lead outside your files
+              do nothing, and nothing opens a new window. The page follows the shared document zoom, and
+              printing stays the source text, exactly as in edit mode. Rendering uses the WebView2 runtime
+              that ships with Windows 11 (on older Windows 10 it may not be installed); without it the view
+              button falls back to the locked source view and the bottom bar says so after the file
+              name.</li>
           <li>The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
               as is the line ending style.</li>
           <li><kbd>Ctrl</kbd>+<kbd>S</kbd> saves. The save button stays disabled until there is something to
@@ -495,7 +505,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               turn them off and on</strong> — <em>Line guides</em> for the lines, <em>Paragraph marks</em> for <code>¶</code>
               and <code>·EOF</code>. Either one takes effect as you press it and is remembered for next time.
               The pair is there whenever the editor is on screen, view mode included, and steps aside for the
-              rendered Markdown view and for PDFs.</li>
+              rendered Markdown and HTML views and for PDFs.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Text and Markdown
               documents offer three of the four options.</li>
           <li><strong>Print</strong> with <kbd>Ctrl</kbd>+<kbd>P</kbd> or the print button in the bottom bar —

@@ -182,8 +182,8 @@ Seven modules. Switch between them from the menu at the bottom left.
 - **Every text document has an edit mode and a view mode.** The view button in the bottom bar
   switches between them. In view mode the editor is locked so nothing changes while you read —
   you can still move the caret, select and copy, and save any edits you made earlier. For
-  Markdown the view mode is the rendered preview described below. The button is greyed out only
-  when nothing is open, for PDFs (always view-only) and for files opened read-only (over 4 MB).
+  Markdown and HTML the view mode is a rendered view, described below. The button is greyed out
+  only when nothing is open, for PDFs (always view-only) and for files opened read-only (over 4 MB).
 - **Markdown is rendered.** A `.md` or `.markdown` file opens as a formatted preview — headings,
   bold and italic, inline code and code blocks, lists, quotes, horizontal rules and links — and the
   view button switches between that preview and the editor. The preview is built
@@ -191,6 +191,15 @@ Seven modules. Switch between them from the menu at the bottom left.
   renderer does not know stays as it was written. Markdown files over about 1 MB of text open
   straight in the editor, and at that size the view button locks the editor instead of rendering
   the preview.
+- **HTML is rendered too.** A `.html` or `.htm` file still opens in the editor as source, and the
+  view button shows it as a real web page instead of the locked source view. The page is rendered
+  from the saved file on disk — relative images and stylesheets next to it work, and unsaved edits
+  stay in the editor until you save and switch again. It is a viewer, not a browser: scripts never
+  run, links that lead outside your files do nothing, and nothing opens a new window. The page
+  follows the shared document zoom, and printing stays the source text, exactly as in edit mode.
+  Rendering uses the WebView2 runtime that ships with Windows 11 (on older Windows 10 it may not
+  be installed); without it the view button falls back to the locked source view and the bottom
+  bar says so after the file name.
 - The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
   as is the line ending style (CRLF or LF).
 - `Ctrl+S` saves. The save button stays disabled until there is something to save, and
@@ -212,7 +221,7 @@ Seven modules. Switch between them from the menu at the bottom left.
   **Two toggle buttons at the right of the bottom bar, just before Fit, turn them off and on** — *Line guides* for
   the lines, *Paragraph marks* for `¶` and `·EOF`. Either one takes effect as you press it and is
   remembered for next time. The pair is there whenever the editor is on screen, view mode included,
-  and steps aside for the rendered Markdown view and for PDFs.
+  and steps aside for the rendered Markdown and HTML views and for PDFs.
 - **Fit** — see [2.9](#29-the-fit-button). Text and Markdown documents offer three of the four
   options.
 - **Print** with `Ctrl+P` or the print button in the bottom bar — the same Windows print dialog as
