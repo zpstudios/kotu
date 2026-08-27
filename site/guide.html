@@ -632,21 +632,21 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>Image, Video, PDF and text documents share one Fit control with four options.</p>
         <div class="tbl"><table>
           <tr><th>Option</th><th>Result</th></tr>
-          <tr><td>100%</td><td>actual size, one image pixel per screen pixel. The button then reads <code>100%</code></td></tr>
+          <tr><td>Original</td><td>the original size, one image pixel per screen pixel. The button then reads <code>OR</code></td></tr>
           <tr><td>Contain</td><td>the whole thing fits in the view. Never enlarged — smaller files stay at their own size</td></tr>
           <tr><td>Fit width</td><td>fills the width; the other axis scrolls</td></tr>
           <tr><td>Fit height</td><td>fills the height</td></tr>
         </table></div>
         <p>Clicking the body of the button re-applies the option you last chose (<kbd>F</kbd>). Clicking the
-           arrow opens the list. <kbd>A</kbd> jumps straight to 100%. A new picture, video or PDF starts at
-           Contain.</p>
+           arrow opens the list. <kbd>A</kbd> jumps straight to <em>Original</em>. A new picture, video or PDF
+           starts at Contain.</p>
         <p><strong>In a text or Markdown document</strong> — while you edit, while you read the locked view,
            and in the rendered Markdown view alike — the first three options are live and <em>Fit height</em>
            is greyed out, since a document has no fixed height to fit. The text already wraps to the width of
            the view, so all three come to the same thing: the document goes back to 100%. Which one you picked
-           is what the button then shows, and a document opens showing 100%.</p>
-        <p>While nothing is open — the window is showing the file browser — the Fit control is not on the
-           bar at all; it appears when a file opens.</p>
+           is what the button then shows, and a document opens showing <em>Original</em>.</p>
+        <p>While nothing is open — the window is showing the file browser — the Fit control stays on the
+           bar but is greyed out; it comes alive when a file opens.</p>
       </section>
 
       <!-- ================= 3. SHORTCUTS ================= -->
@@ -711,7 +711,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <div class="tbl"><table>
           <tr><th>Module</th><th>Key</th><th>Action</th></tr>
           <tr><td>Image</td><td><kbd>R</kbd></td><td>rotate 90° clockwise</td></tr>
-          <tr><td>Image</td><td><kbd>A</kbd></td><td>100%</td></tr>
+          <tr><td>Image</td><td><kbd>A</kbd></td><td>Original</td></tr>
           <tr><td>Image</td><td><kbd>F</kbd></td><td>re-apply the last Fit option</td></tr>
           <tr><td>Image</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>previous / next file in the folder</td></tr>
           <tr><td>Image</td><td><kbd>Delete</kbd></td><td>move to the Recycle Bin</td></tr>
@@ -723,7 +723,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Video</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
           <tr><td>Video</td><td><kbd>C</kbd></td><td>subtitles</td></tr>
           <tr><td>Video</td><td><kbd>L</kbd></td><td>loop options</td></tr>
-          <tr><td>Video</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option</td></tr>
+          <tr><td>Video</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>Original / re-apply the last Fit option</td></tr>
           <tr><td>Audio</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
           <tr><td>Audio</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
           <tr><td>Audio</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>
@@ -732,7 +732,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Audio</td><td><kbd>L</kbd></td><td>loop options</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save</td></tr>
           <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print the PDF or the text</td></tr>
-          <tr><td>Document</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>100% / re-apply the last Fit option</td></tr>
+          <tr><td>Document</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>Original / re-apply the last Fit option</td></tr>
           <tr><td>Document</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>scroll the PDF, about an eighth of the view</td></tr>
           <tr><td>Document</td><td><kbd>Page Up</kbd> <kbd>Page Down</kbd></td><td>scroll the PDF, about a full screen</td></tr>
           <tr><td>Document</td><td><kbd>Home</kbd> <kbd>End</kbd></td><td>start / end of the PDF</td></tr>

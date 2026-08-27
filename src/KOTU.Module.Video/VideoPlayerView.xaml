@@ -194,19 +194,29 @@
                                 ToolTipService.ToolTip="Fit options">
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="Top">
-                            <!-- A231: 100% 항목은 아이콘을 두지 않는다(도형 폐기).
-                                 계보 = "1:1" 글자 도형(A143) → 네 모서리 꺾쇠 + 중앙 사각(A184) →
-                                 2026-08-25 "무슨 아이콘인지 알 수 없다"는 사용자 재보고로 3차 폐기.
-                                 확정 사양은 소형 텍스트 "100%"지만 MenuFlyoutItem.Icon은
-                                 IconElement 타입이라 TextBlock을 넣을 수 없고, 임의 문자열을 그리는
-                                 IconElement 선례가 저장소에 0건이다(FontIcon.Glyph는 단일 글리프
-                                 전제이고 기본 아이콘 폰트에는 라틴 글자가 없다. CLAUDE.md 규칙 =
-                                 실제 쓰이는 형태만 복제). 그래서 항목 텍스트 "100%"만 남기고,
-                                 판독성의 본체는 Fit 본체 버튼(UpdateFitButton)이 그리는 소형 텍스트
-                                 "100%"가 진다. 형제 3항목은 FontIcon을 유지하므로 이 항목만 아이콘
-                                 칸이 비어 텍스트 시작 x가 어긋날 수 있다(WinUI 런타임 정렬 —
-                                 혼재 수용 판정, 실기기 확인 포인트). -->
-                            <MenuFlyoutItem Text="100%" Click="OnFitActualSizeClicked" />
+                            <!-- 계보 = "1:1" 글자 도형(A143) → 네 모서리 꺾쇠 + 중앙 사각(A184) →
+                                 텍스트 "100%"·아이콘 없음(A231) → A253(4차·확정, 2026-08-27 사용자
+                                 지시): 항목 이름을 "Original"로 바꾸고 비어 있던 아이콘 칸을 채운다.
+                                 A231이 칸을 비운 이유(임의 문자열을 그리는 IconElement 선례 0건)는
+                                 그대로지만, 형제 3항목만 아이콘이 있는 혼재가 실제로 눈에 걸린다는
+                                 재보고가 들어와 채택형을 하나 고른 것이다.
+                                 채택형 = FontIcon에 본문 폰트를 명시하고 Glyph에 두 글자 "OR"를 넣기.
+                                 FontFamily 지정이 필수인 이유 = 기본 아이콘 폰트(Segoe Fluent Icons)에
+                                 라틴 글자가 없어 그대로 두면 두부가 된다. "Segoe UI"는 전 Windows에
+                                 들어 있는 시스템 UI 글꼴이라 폴백 걱정이 없다(리터럴 글꼴 이름 지정은
+                                 DocumentView.xaml·MainWindow.xaml 선례. ThemeResource 참조는 없는 키일
+                                 때 런타임 파스 실패로 앱이 죽어 리터럴이 더 안전하다).
+                                 ⚠ FontIcon.Glyph에 다문자 문자열을 넣는 형태는 저장소 선례 0건 =
+                                 이 배치의 1순위 위험 후보. 최소 복구법 = 아래 MenuFlyoutItem.Icon
+                                 블록만 지워 A231의 "아이콘 없음"으로 되돌리기(다른 변경 무관).
+                                 FontSize 12는 과대 렌더 방지용 보수값 — MenuFlyoutItem의 아이콘 칸은
+                                 16x16 Viewbox라 최종 크기는 칸이 정한다.
+                                 본체 버튼 표시는 UpdateFitButton()의 소형 텍스트 "OR"가 짝이다. -->
+                            <MenuFlyoutItem Text="Original" Click="OnFitActualSizeClicked">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon FontFamily="Segoe UI" Glyph="OR" FontSize="12" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                             <MenuFlyoutItem Text="Contain" Click="OnFitContainClicked">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE9A6;" />

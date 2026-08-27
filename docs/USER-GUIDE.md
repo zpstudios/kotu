@@ -345,22 +345,22 @@ Image, Video, PDF and text documents share one Fit control with four options:
 
 | Option | Result |
 |---|---|
-| **100%** | actual size, one image pixel per screen pixel. The button then reads `100%` |
+| **Original** | the original size, one image pixel per screen pixel. The button then reads `OR` |
 | **Contain** | the whole thing fits in the view. Never enlarged — smaller files stay at their own size |
 | **Fit width** | fills the width; the other axis scrolls |
 | **Fit height** | fills the height |
 
 Clicking the body of the button re-applies the option you last chose (`F`). Clicking the arrow opens
-the list. `A` jumps straight to 100%. A new picture, video or PDF starts at Contain.
+the list. `A` jumps straight to **Original**. A new picture, video or PDF starts at Contain.
 
 **In a text or Markdown document** — while you edit, while you read the locked view, and in the
 rendered Markdown view alike — the first three options are live and **Fit height** is greyed out,
 since a document has no fixed height to fit. The text already wraps to the width of the view, so
 all three come to the same thing: the document goes back to 100%. Which one you picked is what the
-button then shows, and a document opens showing 100%.
+button then shows, and a document opens showing **Original**.
 
-While nothing is open — the window is showing the file browser — the Fit control is not on the bar
-at all; it appears when a file opens.
+While nothing is open — the window is showing the file browser — the Fit control stays on the bar
+but is greyed out; it comes alive when a file opens.
 
 ---
 
@@ -433,7 +433,7 @@ box or while you are typing to jump through the file list.
 | Module | Key | Action |
 |---|---|---|
 | Image | `R` | rotate 90° clockwise |
-| Image | `A` | 100% |
+| Image | `A` | Original |
 | Image | `F` | re-apply the last Fit option |
 | Image | `←` `→` | previous / next file in the folder |
 | Image | `Delete` | move to the Recycle Bin |
@@ -445,7 +445,7 @@ box or while you are typing to jump through the file list.
 | Video | `S` | playback speed |
 | Video | `C` | subtitles |
 | Video | `L` | loop options |
-| Video | `A` | 100% |
+| Video | `A` | Original |
 | Video | `F` | re-apply the last Fit option |
 | Audio | `Space` | play / pause |
 | Audio | `←` `→` | back / forward 5 seconds |
@@ -455,7 +455,7 @@ box or while you are typing to jump through the file list.
 | Audio | `L` | loop options |
 | Document | `Ctrl+S` | save |
 | Document | `Ctrl+P` | print the PDF or the text |
-| Document | `A` | 100% |
+| Document | `A` | Original |
 | Document | `F` | re-apply the last Fit option |
 | Document | `↑` `↓` | scroll the PDF, about an eighth of the view |
 | Document | `Page Up` `Page Down` | scroll the PDF, about a full screen |

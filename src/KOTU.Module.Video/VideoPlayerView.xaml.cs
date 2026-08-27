@@ -1124,13 +1124,16 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// 이 메서드는 종전대로 본체(FitButton)만 만진다.
     /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
     /// A184: 그 PathIcon 도형을 글자 "1:1" 형상에서 꺾쇠 프레임으로 바꿨다.
-    /// A231(3차·확정): 도형 자체를 폐기하고 <b>소형 텍스트 "100%"</b>로 간다 — 2026-08-25
-    /// "무슨 아이콘인지 알 수 없다"는 사용자 재보고 때문이다. 오독이 불가능하고 플라이아웃
-    /// 항목 텍스트("100%")와 글자가 그대로 일치한다. 본체는 Button이라 Content에 TextBlock을
-    /// 넣을 수 있다(문서 모듈 A145의 비활성 "1/1" 표시와 같은 방식 — IconElement만 받는
-    /// MenuFlyoutItem.Icon과 다르다). FontSize 9 = 32×32 버튼에서 테두리 1 + Padding 2를 뺀
-    /// 26px 안에 네 글자가 들어가는 값(BottomBarButtonStyle 기준. 잘리면 8로 내릴 것).
-    /// 툴팁·키·동작은 무변경. 세 모듈(이미지·문서·영상) 동형이라 함께 고칠 것.
+    /// A231(3차): 도형 자체를 폐기하고 <b>소형 텍스트 "100%"</b>로 갔다 — 2026-08-25
+    /// "무슨 아이콘인지 알 수 없다"는 사용자 재보고 때문이다. 본체는 Button이라 Content에
+    /// TextBlock을 넣을 수 있다(문서 모듈 A145의 비활성 표시와 같은 방식 — IconElement만 받는
+    /// MenuFlyoutItem.Icon과 다르다).
+    /// A253(4차·확정): 옵션 이름을 "100%" → <b>"Original"</b>로 바꾸고(플라이아웃 항목 텍스트),
+    /// 본체 상태 표시는 그 약자 <b>"OR"</b> 두 글자로 간다(2026-08-27 사용자 지시). 괄호형
+    /// "(OR)"는 26px 폭에 빠듯해 기각. FontSize 9 = 32×32 버튼에서 테두리 1 + Padding 2를 뺀
+    /// 26px 기준값(BottomBarButtonStyle. A231이 네 글자로 잡은 값을 그대로 승계 — 잘리면 8로
+    /// 내릴 것). 툴팁도 "Actual size" → "Original size"로 간다. 키·동작은 무변경.
+    /// 세 모듈(이미지·문서·영상) 동형이라 함께 고칠 것.
     /// </summary>
     private void UpdateFitButton()
     {
@@ -1141,7 +1144,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             VideoFitMode.FitHeight =>
                 (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
             VideoFitMode.ActualSize =>
-                (new TextBlock { Text = "100%", FontSize = 9 }, "Actual size"),
+                (new TextBlock { Text = "OR", FontSize = 9 }, "Original size"),
             _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
                 "Contain - the whole video fits, never enlarged"),
         };
@@ -1150,11 +1153,12 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     }
 
     /// <summary>
-    /// 본체 툴팁 = "지금 표시 중인 옵션 (F) · 100% (A)" — 1:1 버튼이 사라져도 A 키 표기가
+    /// 본체 툴팁 = "지금 표시 중인 옵션 (F) · Original (A)" — 1:1 버튼이 사라져도 A 키 표기가
     /// 남게 병합한다(A111). 두 표기 모두 키 상수에서 조립한다(A34 표기 규칙).
+    /// A253: 뒤쪽 표기어가 "100%" → "Original"(플라이아웃 항목 이름과 같은 말로 통일).
     /// </summary>
     private static string FitTip(string description) =>
-        $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("100%", ActualSizeKey)}";
+        $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("Original", ActualSizeKey)}";
 
     /// <summary>
     /// A230(v0.234.0) → A249(v0.246.0, 정면 반전): Fit 조절기 2개(본체 + 화살표)를 빈 상태에서
