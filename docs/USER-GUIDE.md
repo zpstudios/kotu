@@ -167,12 +167,14 @@ Seven modules. Switch between them from the menu at the bottom left.
 ### 2.4 Document — plain text
 
 - `.txt .md .markdown .log .ini .html .htm` open in an editable text box.
-- **The module brings five buttons of its own to the bottom bar**, just right of the window's menu
-  and **Open file** buttons, in this order: **Open**, **New text file**, **Save**, the **view**
-  toggle and **Print**. *Open* is the one that does use the ordinary Windows file dialog, listing
-  the document types — PDFs included — and a document with unsaved changes still asks before it
-  gives way. *New text file* starts an empty `Untitled` document and is available only while
-  nothing is open.
+- **The module brings four buttons of its own to the bottom bar**, just right of the window's menu
+  and **Open file** buttons, in this order: **New text file**, **Save**, **Print** and the **view**
+  toggle. Opening a document is the window's own **Open file** button — a document with unsaved
+  changes still asks before it gives way. *New text file* starts an empty `Untitled` document and
+  is available only while nothing is open.
+- Further right, past the file name, the bar shows the unsaved mark, the zoom percentage and the
+  PDF page count, then the two display toggles (**Line guides** and **Paragraph marks**, editor
+  only) and the **Fit** control.
 - **Every text document has an edit mode and a view mode.** The view button in the bottom bar
   switches between them. In view mode the editor is locked so nothing changes while you read —
   you can still move the caret, select and copy, and save any edits you made earlier. For
@@ -201,7 +203,7 @@ Seven modules. Switch between them from the menu at the bottom left.
   sideways.
 - Very faint guide lines mark the top and bottom of each line of text, `¶` marks a line break and
   `·EOF` marks the end of the file. They are drawn over the text and never become part of it.
-  **Two toggle buttons in the middle of the bottom bar turn them off and on** — *Line guides* for
+  **Two toggle buttons at the right of the bottom bar, just before Fit, turn them off and on** — *Line guides* for
   the lines, *Paragraph marks* for `¶` and `·EOF`. Either one takes effect as you press it and is
   remembered for next time. The pair is there whenever the editor is on screen, view mode included,
   and steps aside for the rendered Markdown view and for PDFs.

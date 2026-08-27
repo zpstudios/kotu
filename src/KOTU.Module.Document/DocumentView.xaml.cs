@@ -41,7 +41,7 @@ namespace KOTU.Module.Document;
 /// </summary>
 public sealed partial class DocumentView : UserControl,
     IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
-    IUntitledContentSource, IPrintPageProvider, IOpenFileRequestSource
+    IUntitledContentSource, IPrintPageProvider
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -670,26 +670,10 @@ public sealed partial class DocumentView : UserControl,
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
     }
 
-    // ---------- 파일 열기 버튼 (A223) ----------
-
-    /// <summary>
-    /// A223: 하단 바 Open 클릭 — FileOpenPicker(PickSaveAsPathAsync와 같은 InitializeWithWindow +
-    /// GetHwnd 패턴, 선례 = ArchiveView 피커)로 문서 확장자를 고르게 하고, 실제 열기는
-    /// <see cref="OpenFileRequested"/>로 셸에 위임한다 — 미저장 가드(A37)·제목 갱신이 전부
-    /// 셸 OpenFile 경로에 있어 뷰가 직접 열면(OpenAny) 가드를 우회하게 된다(계약 주석 참고).
-    /// 피커 자체가 모달이라 재진입은 없고, 취소(null)는 무동작.
-    /// </summary>
-    private async void OnOpenFileClick(object sender, RoutedEventArgs e)
-    {
-        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
-        foreach (var ext in DocumentModule.Extensions) picker.FileTypeFilter.Add(ext);
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
-        var file = await picker.PickSingleFileAsync();
-        if (file?.Path is { Length: > 0 } path) OpenFileRequested?.Invoke(path);
-    }
-
-    /// <summary>A223: 열기 위임 이벤트(IOpenFileRequestSource) — 셸이 OpenFile 경로로 받는다.</summary>
-    public event Action<string>? OpenFileRequested;
+    // A256(2026-08-27): 하단 바 Open 버튼(A223)과 그 클릭 핸들러(FileOpenPicker) ·
+    // 위임 이벤트 OpenFileRequested(IOpenFileRequestSource 계약)를 제거했다 — 파일 열기는
+    // 셸 S4 'Open file'(A90)로 일원화. 미저장 가드(A37)는 이 경로가 아니라 셸 OpenFile 안에
+    // 있으므로(ConfirmDiscardAsync) 셸 버튼으로 다른 파일을 열 때도 그대로 걸린다.
 
     // ---------- 무제 문서 (A189) ----------
 

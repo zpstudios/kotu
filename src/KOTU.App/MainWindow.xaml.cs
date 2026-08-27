@@ -1481,15 +1481,10 @@ public sealed partial class MainWindow : Window
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnPlaybackStateChanged();
             });
-        // A223: 모듈 하단 바 Open 버튼(문서 모듈)의 열기 위임 — 셸 OpenFile 경로로 받는다.
-        // 이 경로가 미저장 가드(A37)·제목 갱신을 전부 갖고 있다(뷰 직접 열기의 우회 방지 —
-        // 계약 주석). 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 교체됐으면 무시한다.
-        if (view is IOpenFileRequestSource openRequest)
-            openRequest.OpenFileRequested += path => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                OpenFile(path);
-            });
+        // A256(2026-08-27): A223의 열기 위임 구독(IOpenFileRequestSource)을 제거했다 — 문서 모듈
+        // 하단 바 Open 버튼이 사라져 이 계약의 소비자가 0이 됐고, 계약 파일도 함께 폐기했다.
+        // 파일 열기는 셸 S4 'Open file'(A90) 한 곳이며, 그 경로가 쓰는 OpenFile이 미저장
+        // 가드(A37 ConfirmDiscardAsync)·제목 갱신을 그대로 갖고 있다(가드 손실 없음).
         // A211 배치 1: 모듈 하단 바 인쇄 버튼(배치 2~5에서 추가)의 신호 → 셸 인쇄 단일 경로.
         // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(위와 같은 가드).
         if (view is IPrintPageProvider printProvider)

@@ -445,13 +445,15 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <h3>Document — plain text</h3>
         <ul>
           <li><code>.txt .md .markdown .log .ini .html .htm</code> open in an editable text box.</li>
-          <li><strong>The module brings five buttons of its own to the bottom bar</strong>, just right of the
-              window's menu and <em>Open file</em> buttons, in this order: <em>Open</em>,
-              <em>New text file</em>, <em>Save</em>, the <em>view</em> toggle and <em>Print</em>.
-              <em>Open</em> is the one that does use the ordinary Windows file dialog, listing the document
-              types — PDFs included — and a document with unsaved changes still asks before it gives way.
+          <li><strong>The module brings four buttons of its own to the bottom bar</strong>, just right of the
+              window's menu and <em>Open file</em> buttons, in this order: <em>New text file</em>,
+              <em>Save</em>, <em>Print</em> and the <em>view</em> toggle. Opening a document is the window's
+              own <em>Open file</em> button — a document with unsaved changes still asks before it gives way.
               <em>New text file</em> starts an empty <code>Untitled</code> document and is available only
               while nothing is open.</li>
+          <li>Further right, past the file name, the bar shows the unsaved mark, the zoom percentage and the
+              PDF page count, then the two display toggles (<em>Line guides</em> and <em>Paragraph marks</em>,
+              editor only) and the <em>Fit</em> control.</li>
           <li><strong>Every text document has an edit mode and a view mode.</strong> The view button in the
               bottom bar switches between them. In view mode the editor is locked so nothing changes while
               you read — you can still move the caret, select and copy, and save any edits you made earlier.
@@ -482,8 +484,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               level, so nothing scrolls sideways.</li>
           <li>Very faint guide lines mark the top and bottom of each line of text, <code>¶</code> marks a line
               break and <code>·EOF</code> marks the end of the file. They are drawn over the text and never
-              become part of it. <strong>Two toggle buttons in the middle of the bottom bar turn them off and
-              on</strong> — <em>Line guides</em> for the lines, <em>Paragraph marks</em> for <code>¶</code>
+              become part of it. <strong>Two toggle buttons at the right of the bottom bar, just before Fit,
+              turn them off and on</strong> — <em>Line guides</em> for the lines, <em>Paragraph marks</em> for <code>¶</code>
               and <code>·EOF</code>. Either one takes effect as you press it and is remembered for next time.
               The pair is there whenever the editor is on screen, view mode included, and steps aside for the
               rendered Markdown view and for PDFs.</li>
