@@ -1446,8 +1446,10 @@ public sealed partial class MainWindow : Window
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnUntitledOpened();
             });
-            // A247: New 미저장 분기의 "Open in new instance" — 이 창(발화한 뷰)은 그대로 두고
-            // 새 창에서 무제를 연다. 같은 디스패치·교체 가드(위와 동일 관용구).
+            // A247 → A267: 콘텐츠 위 'New text file' — 이 창(발화한 뷰)은 그대로 두고 새 창에서
+            // 무제를 연다. A267에서 이 경로는 다이얼로그의 한 선택지가 아니라 콘텐츠 위 New의
+            // 유일한 동작이 됐다(빈 상태만 뷰가 자기 자리에서 개시). 배선은 무변경 —
+            // 같은 디스패치·교체 가드(위와 동일 관용구).
             untitledSource.UntitledWindowRequested += () => DispatcherQueue.TryEnqueue(() =>
             {
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;

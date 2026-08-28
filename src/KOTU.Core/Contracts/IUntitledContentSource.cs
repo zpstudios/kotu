@@ -14,8 +14,8 @@ public interface IUntitledContentSource
     event Action? UntitledOpened;
 
     /// <summary>
-    /// A247: "이 창은 그대로 두고 새 창에서 무제를 열어 달라"는 요청(UI 스레드 보장 없음) —
-    /// New 버튼 미저장 분기의 "Open in new instance" 선택. 소비자 = 셸(ShowModule 배선) →
+    /// A247 → A267: "이 창은 그대로 두고 새 창에서 무제를 열어 달라"는 요청(UI 스레드 보장 없음) —
+    /// 콘텐츠(파일·PDF·무제) 위에서 New 버튼을 누른 경우 전부. 소비자 = 셸(ShowModule 배선) →
     /// WindowManager.OpenUntitledDocumentInNewWindow. 발화한 뷰의 편집 상태는 완전 무변경이다.
     /// </summary>
     event Action? UntitledWindowRequested;
