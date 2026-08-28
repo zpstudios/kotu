@@ -28,6 +28,11 @@ namespace KOTU.Module.Document;
 /// ⑤ 가이드는 글자 상·하에서 GuideGap만큼 띄우고,
 /// 인접 줄과 겹침·역전이면 두 줄 경계의 중점에 한 선으로 병합한다.
 ///
+/// <b>A277 추가분</b>: 잠금 뷰(A224 — 에디터 그대로 + IsReadOnly) 동안은 위 2축(가이드·¶/EOF)을
+/// <b>표시만</b> 억제한다(SetViewSuppressed) — 사용자 토글 상태(_showGuides/_showMarks)와 설정 키는
+/// 건드리지 않으므로 편집 모드로 돌아오면 켜져 있던 그대로 되돌아온다. 행 번호 거터(A142 ③)는
+/// 축 밖이라 억제 대상이 아니다(읽기에 방해가 아니라 도움 — A277 사양 범위는 "편집 전용 시각 요소").
+///
 /// <b>실패 안전(설계 의무)</b>: 내부 ScrollViewer(템플릿 ContentElement) 취득은 기본 템플릿
 /// 구조 의존이라 WinAppSDK 업데이트에 깨질 수 있는 부류다(v0.113.1 지연 로딩 스타일 사례와
 /// 같은 급) — 취득 실패·렌더 중 예외는 장식만 조용히 끄고(Disable) 편집 본기능은 그대로 둔다.
@@ -120,6 +125,13 @@ internal sealed class EditorDecor
     private bool _showGuides = true;
     private bool _showMarks = true;
 
+    // A277(2026-08-28): 잠금 뷰 억제 축 — 위 2축과 AND로 걸린다(둘 다 켜져야 그린다). 사용자
+    // 토글과 별개 축이라 억제 중 토글을 만져도 값만 기록되고, 억제가 풀리면 그 값대로 되살아난다.
+    private bool _viewSuppressed;
+
+    private bool GuidesOn => _showGuides && !_viewSuppressed;
+    private bool MarksOn => _showMarks && !_viewSuppressed;
+
     private readonly List<Rectangle> _guides = [];  // 수평선 풀 — 패스마다 재사용
     private readonly List<TextBlock> _markers = []; // ¶·EOF 풀
     private readonly List<TextBlock> _numbers = []; // A142 ③: 행 번호 풀
@@ -197,6 +209,23 @@ internal sealed class EditorDecor
         _showGuides = guides;
         _showMarks = marks;
         Invalidate();
+    }
+
+    /// <summary>
+    /// A277: 잠금 뷰(뷰 모드) 표시 억제 — true면 사용자 토글과 무관하게 가이드·¶·EOF를 그리지
+    /// 않는다(거터는 축 밖이라 그대로). 소유자(DocumentView)의 뷰 모드 축 단일 산출 지점
+    /// (UpdateEditorReadOnly)이 모드 전환 전수에서 이 값을 다시 먹인다.
+    /// <para>SetDecorVisibility·SetScale과 달리 <b>즉시 1회 렌더까지</b> 한다: 잠금 뷰 전환은
+    /// IsReadOnly·포커스만 바뀌어 레이아웃 패스가 보장되지 않으므로, Invalidate(다음 LayoutUpdated
+    /// 대기)만 걸면 장식이 몇 프레임 남거나 아예 안 걷힐 수 있다(A277 최대 함정). Render는
+    /// 그 자체가 멱등한 전체 패스라 예약분과 겹쳐 돌아도 결과가 같다.</para>
+    /// </summary>
+    public void SetViewSuppressed(bool suppressed)
+    {
+        if (_disabled || suppressed == _viewSuppressed) return;
+        _viewSuppressed = suppressed;
+        Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
+        Render();     // 전환 즉시 반영 — 사라짐·재등장이 모드 전환과 같은 프레임에 보인다
     }
 
     /// <summary>
@@ -477,7 +506,8 @@ internal sealed class EditorDecor
 
     private void EmitGuide(double y, double vw, double vh, Thickness pad)
     {
-        if (!_showGuides) return; // A215: 가이드 토글 오프 — 병합 부기(pending)는 돌되 선은 안 긋는다
+        // A215 토글 오프 · A277 잠금 뷰 억제 — 병합 부기(pending)는 돌되 선은 안 긋는다
+        if (!GuidesOn) return;
         if (y < -1 - GuideGap || y > vh + 1 + GuideGap) return; // 뷰포트 밖(클립도 있지만 요소를 아낀다)
         var guide = TakeGuide();
         guide.Width = Math.Max(0, vw - pad.Left - pad.Right);
@@ -493,7 +523,7 @@ internal sealed class EditorDecor
 
     private void DrawMarker(string glyph, double x, double y, double vh)
     {
-        if (!_showMarks) return; // A215: 마커(¶·EOF) 토글 오프 — 단일 깔때기라 이 한 줄이 전부다
+        if (!MarksOn) return; // A215 토글 오프 · A277 잠금 뷰 억제 — 단일 깔때기라 이 한 줄이 전부다
         if (y > vh || y < -30) return;
         var marker = TakeMarker();
         marker.Text = glyph;

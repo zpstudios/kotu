@@ -9,7 +9,8 @@ namespace KOTU.Module.Document;
 /// 플레인 텍스트(txt·md·log·ini·html·htm)는 편집·저장, PDF는 보기(Windows.Data.Pdf 렌더).
 /// 마크다운(md·markdown)은 편집에 더해 렌더 뷰(자체 최소 렌더러 — MarkdownParser/Renderer)를
 /// 하단 바 토글로 오간다. A224: 비md 텍스트 형식의 뷰 모드는 잠금 뷰(에디터 그대로 +
-/// IsReadOnly — HTML 렌더는 후속 확인 대기). HWP·오픈오피스는 뷰어가 생기면 확장.
+/// IsReadOnly — HTML 렌더는 A248에서 붙었다). A277: 잠금 뷰는 편집 전용 시각 요소(캐럿·가이드·
+/// ¶·EOF)를 걷어 편집 화면과 구분된다. HWP·오픈오피스는 뷰어가 생기면 확장.
 /// </summary>
 public sealed class DocumentModule : IModule
 {

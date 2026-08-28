@@ -185,8 +185,10 @@ Seven modules. Switch between them from the menu at the bottom left.
   **Fit** control. The toggles and the zoom button are always there and simply grey out where they
   do not apply.
 - **Every text document has an edit mode and a view mode.** The view button in the bottom bar
-  switches between them. In view mode the editor is locked so nothing changes while you read —
-  you can still move the caret, select and copy, and save any edits you made earlier. For
+  switches between them. In view mode the editor is locked so nothing changes while you read, and
+  the editing marks go with it: **the caret, the guide lines and the `¶` marks all disappear** and
+  the two display toggles grey out until you switch back, which leaves the text on its own to read.
+  You can still select and copy, and save any edits you made earlier. For
   Markdown and HTML the view mode is a rendered view, described below. The button is greyed out
   only when nothing is open, for PDFs (always view-only) and for files opened read-only (over 4 MB).
 - **Markdown is rendered.** A `.md` or `.markdown` file opens as a formatted preview — headings,
@@ -228,8 +230,9 @@ Seven modules. Switch between them from the menu at the bottom left.
   **Two toggle buttons at the right of the bottom bar, just after the unsaved mark, turn them off
   and on** — *Line guides* for the lines, *Paragraph marks* for `¶` and `·EOF`. Either one takes
   effect as you press it and is remembered for next time. The pair is always in the bar; it works
-  whenever the editor is on screen, view mode included, and greys out for the rendered Markdown and
-  HTML views and for PDFs.
+  while you are editing and greys out everywhere the marks are not drawn — view mode, the rendered
+  Markdown and HTML views, and PDFs. What you set is kept while you read, so switching back to
+  editing brings the guides and marks back exactly as you left them.
 - **Fit** — see [2.9](#29-the-fit-button). Text and Markdown documents offer three of the four
   options.
 - **Print** with `Ctrl+P` or the print button in the bottom bar — the same Windows print dialog as

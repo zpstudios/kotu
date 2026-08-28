@@ -185,8 +185,9 @@ public sealed partial class DocumentView : UserControl,
         _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText);
 
         // A215: 저장된 표시 토글 2축(라인 가이드·¶ 마커 — 기본 둘 다 켜짐)을 장식기와 버튼에 반영.
-        // 토글 활성 자체(에디터 표면에서만 — A224: 잠금 뷰 포함)는 UpdateDecorToggles가 모드 전환
-        // 지점마다 맞춘다(A265에서 숨김 → 비활성으로 전환 — 버튼은 항상 보인다).
+        // 토글 활성 자체(편집 중인 에디터 표면에서만 — A277에서 잠금 뷰가 빠졌다)는
+        // UpdateDecorToggles가 모드 전환 지점마다 맞춘다(A265에서 숨김 → 비활성으로 전환 —
+        // 버튼은 항상 보인다). 여기서 읽은 설정값은 잠금 뷰를 오가도 보존된다(A277: 표시만 억제).
         _showGuides = settings.Get(DocumentModule.ShowGuidesSettingKey, true);
         _showMarks = settings.Get(DocumentModule.ShowMarksSettingKey, true);
         _decor.SetDecorVisibility(_showGuides, _showMarks);
@@ -1094,9 +1095,12 @@ public sealed partial class DocumentView : UserControl,
     //   열기 .pdf                     | PDF 뷰(렌더 축 리셋 — 편집 축이 없어 토글 비활성)
     //   New text file (A189 무제)     | 무제 편집(렌더 축 리셋 — 무제 md는 범위 밖. 토글 활성)
     //   토글 클릭 (뷰 중)             | 편집(md 렌더면 에디터 표시·포커스 — 보류 중 파싱은
-    //                                 | 시퀀스로 무산. 잠금 뷰면 IsReadOnly 해제뿐)
+    //                                 | 시퀀스로 무산. 잠금 뷰면 IsReadOnly 해제 + A277 시각
+    //                                 | 복원(장식·토글 활성·IsTabStop·에디터 포커스))
     //   토글 클릭 (편집 중)           | 뷰 — md 렌더 자격이면 렌더(현재 에디터 버퍼를 그 시점에
     //                                 | 재파싱. 미저장 변경도 렌더에 보인다), 아니면 잠금 뷰
+    //                                 | (A277: 잠금 뷰 = 캐럿·가이드·¶·EOF 없음 + 표시 토글 비활성.
+    //                                 | 사용자 토글 값은 보존 — 편집 복귀 시 그대로 되살아난다)
     //   저장 (Ctrl+S·버튼)            | 모드 불변 — 저장은 EditorText 기준이라 뷰 중에도 동작
     //                                 | (잠금은 "입력"만 막는다 — 더티가 있으면 저장 가능)
     //   Save as로 경로 변경(검증 실패)| 모드 불변 — 확장자는 피커가 동일하게 유지, 자격만 재판정
@@ -1216,9 +1220,12 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>
     /// A224: 뷰 모드 진입 — md 렌더 자격이면 기존 렌더 판(EnterRenderMode — 그쪽이 _viewMode를
     /// 함께 세운다), A248: HTML 렌더 자격이면 WebView2 판(EnterHtmlViewMode — 마찬가지로
-    /// _viewMode를 함께 세운다), 아니면 잠금 뷰(에디터 표면 그대로 + IsReadOnly. 표시 전환이
-    /// 없어 장식·A215 표시 토글은 그대로 남는다 — 사양: 기준이 "편집 모드냐"에서 "에디터
-    /// 표면이냐"가 됐다). HTML인데 자격이 없는 경우(런타임 부재·이 뷰에서 이미 실패)는 잠금
+    /// _viewMode를 함께 세운다), 아니면 잠금 뷰(에디터 표면 그대로 + IsReadOnly).
+    /// <para>A277(2026-08-28): 잠금 뷰는 표시 전환이 없어 편집 화면과 시각이 같았고("텍스트 뷰어가
+    /// 안 된다"는 인식의 실체), 그래서 <b>편집 전용 시각 요소를 걷는 것</b>으로 차별화한다 —
+    /// 장식 억제(가이드·¶·EOF)·표시 토글 비활성·포커스 회피(캐럿). A224가 "편집 모드냐 → 에디터
+    /// 표면이냐"로 옮겨 놓았던 기준이, 장식 축에 한해 다시 "편집 중이냐"로 돌아온 셈이다.</para>
+    /// HTML인데 자격이 없는 경우(런타임 부재·이 뷰에서 이미 실패)는 잠금
     /// 뷰로 오면서 안내 1줄을 하단 바 파일명 칸에 덧붙인다(사양 — 폴백 고지).
     /// </summary>
     private void EnterViewMode()
@@ -1234,12 +1241,18 @@ public sealed partial class DocumentView : UserControl,
             return;
         }
         _viewMode = true;
-        UpdateEditorReadOnly();
+        UpdateEditorReadOnly(); // A277: IsReadOnly + 장식 억제 + IsTabStop 해제(단일 산출 지점)
         UpdateViewToggle();
+        UpdateDecorToggles(); // A277: 잠금 뷰 = 표시 토글 비활성(Visibility는 안 바뀌므로 명시 호출)
         // A248: HTML인데 렌더 갈래를 못 탄 잠금 뷰 = 폴백 상태 — 이유를 1줄로 알린다.
         if (_path is { } fallbackPath && IsHtmlPath(fallbackPath))
             ShowHtmlFallbackNotice(fallbackPath);
-        EditorBox.Focus(FocusState.Programmatic); // 잠금 뷰도 에디터 표면 — 캐럿 탐색·복사 가능
+        // A277: 포커스를 에디터에 두지 않는다 — 캐럿을 숨길 공개 API가 없어(A115 ④ 판정: WinUI
+        // TextBox·RichEditBox 모두 캐럿 색·표시 API 없음) "포커스가 없으면 캐럿도 없다"가 유일한
+        // 수단이다. 렌더 뷰·HTML 뷰가 이미 쓰는 관용구(뷰 루트로 이동)와 같다. 클릭 포커스는 그대로
+        // 살아 있어 선택·복사는 유지된다(포커스 차단 금지 — 사양). 종전 주석의 "캐럿 탐색"은
+        // 클릭 이후에도 그대로 가능하다 — 잠금 뷰에 들어서자마자 캐럿이 깜빡이지 않을 뿐이다.
+        Focus(FocusState.Programmatic);
     }
 
     /// <summary>A224: 뷰 모드 이탈 — md 렌더면 기존 편집 복귀(ExitRenderMode — _viewMode도 함께
@@ -1258,8 +1271,9 @@ public sealed partial class DocumentView : UserControl,
             return;
         }
         _viewMode = false;
-        UpdateEditorReadOnly();
+        UpdateEditorReadOnly(); // A277: 억제 해제 — 장식이 사용자 토글 값 그대로 되살아난다
         UpdateViewToggle();
+        UpdateDecorToggles(); // A277: 편집 복귀 = 표시 토글 재활성(명시 호출 — 위와 같은 이유)
         ClearHtmlFallbackNotice(); // A248: 편집 복귀 — 파일명 칸을 원 표기로
         EditorBox.Focus(FocusState.Programmatic);
     }
@@ -1268,9 +1282,22 @@ public sealed partial class DocumentView : UserControl,
     /// A224: 에디터 IsReadOnly의 단일 산출 지점 = 잘림(영구 — 잘린 채 저장 사고 방지, A37) ∨
     /// 뷰 모드(잠금 뷰 — 입력만 막는다). 산발 대입 금지 — 원인 축이 둘이라 한쪽 대입이 다른
     /// 쪽을 지우면 회귀 1순위다. 호출 전수 = ApplyLoadedText·StartUntitled(상태 확정 직후)·
-    /// ResetRenderState(뷰 모드 리셋)·EnterRenderMode/ExitRenderMode·EnterViewMode/ExitViewMode.
+    /// ResetRenderState(뷰 모드 리셋)·EnterRenderMode/ExitRenderMode·EnterViewMode/ExitViewMode·
+    /// EnterHtmlViewMode(진입·폴백 강등)/ExitHtmlViewMode.
+    /// <para>A277(2026-08-28): 잠금 뷰의 <b>시각 차별화</b>도 여기에 실었다 — 축이 정확히
+    /// <c>_viewMode</c> 하나이고 호출 전수가 위 목록과 같기 때문이다(따로 부르게 하면 전환 한 곳을
+    /// 빠뜨려도 조용히 어긋난다 — 이 축에서 가장 비싼 실수). ⓐ 장식 억제(가이드·¶·EOF —
+    /// EditorDecor.SetViewSuppressed. 사용자 토글 값·설정 키는 안 건드리고 표시만 막으므로 편집
+    /// 복귀 시 그대로 되살아난다) ⓑ IsTabStop 해제(뷰 모드에서 Tab이 에디터로 들어가 캐럿을
+    /// 세우지 않게 — 클릭 포커스는 그대로라 선택·복사는 유지된다. 캐럿 자체를 숨기는 공개 API는
+    /// 없다: A115 ④ 판정 참고).</para>
     /// </summary>
-    private void UpdateEditorReadOnly() => EditorBox.IsReadOnly = _truncated || _viewMode;
+    private void UpdateEditorReadOnly()
+    {
+        EditorBox.IsReadOnly = _truncated || _viewMode;
+        EditorBox.IsTabStop = !_viewMode; // A277 ⓑ — 잘림(읽기 전용)은 편집 모드라 탭 진입 유지
+        _decor.SetViewSuppressed(_viewMode); // A277 ⓐ
+    }
 
     /// <summary>
     /// A190→A224: 토글 버튼 표시 갱신의 단일 지점 — 활성(CanToggleViewMode) + 글리프·툴팁
@@ -1292,9 +1319,9 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>A215: ¶·EOF 마커 표시 상태 — 위와 같은 3면 동기 축.</summary>
     private bool _showMarks = true;
 
-    /// <summary>A215→A224→A265: 토글 상태의 단일 지점 — 기준은 "에디터 표면이 보이는가"다(A224에서
-    /// "편집 모드인가"에서 재정의). 잠금 뷰(A224 — 에디터 그대로 + IsReadOnly)도 에디터 표면이라
-    /// 가이드·¶ 토글이 그대로 쓰인다(사양). md/HTML 렌더 뷰·PDF·빈 화면은 쓸 수 없다.
+    /// <summary>A215→A224→A265→A277: 토글 상태의 단일 지점 — 기준은 "편집 중인 에디터 표면인가"다
+    /// (A215 "편집 모드인가" → A224 "에디터 표면인가"(잠금 뷰 포함) → A277에서 잠금 뷰가 다시 빠져
+    /// 사실상 A215 기준으로 환원). md/HTML 렌더 뷰·PDF·빈 화면·잠금 뷰는 쓸 수 없다.
     /// <para>A265(v0.262.0): 그 "쓸 수 없다"의 표현을 <b>숨김(Visibility) → 비활성(IsEnabled)</b>으로
     /// 바꿨다. A249(v0.246.0)가 확정한 예외 4종 중 이 1종만 공식 해제한 것이다(2026-08-27 사용자
     /// 답변 "무조건 버튼들 다 보이게·사용 못하면 비활성" — 직전 예외 확정의 명시 개정이지 규칙 1.6의
@@ -1303,14 +1330,19 @@ public sealed partial class DocumentView : UserControl,
     /// IsEnabled는 Control의 속성이라 그룹 StackPanel(Panel)에는 없다 — 토글 2개에 각각 건다.
     /// 첫 프레임 정합: XAML 초기값이 Visible + IsEnabled=False이고, 초기 표면은 빈 화면이라
     /// 첫 상태 갱신(파일 열기·무제·PDF 진입 중 무엇이 오든)까지 그 값이 곧 정답이다.
-    /// 호출 시점 = EditorBox.Visibility가 바뀌는 모드 전환 5곳(파일 열기·무제·렌더 진입/복귀·PDF)
-    /// — 잠금 뷰 전환은 Visibility가 안 바뀌어 호출이 필요 없다.
+    /// <para>A277(2026-08-28): 판정이 "에디터 표면"에서 <b>"편집 중인 에디터 표면"</b>으로 좁아졌다 —
+    /// 잠금 뷰에서는 장식이 표시 억제되므로(UpdateEditorReadOnly ⓐ) 토글이 살아 있으면 눌러도
+    /// 아무 일이 없는 죽은 버튼이 된다. 등재문이 못 박은 "비활성 + 장식 off 한 세트"가 이것이다.
+    /// A265의 원칙(항상 보이고 활성만 갈린다)은 그대로 — 갈리는 조건만 바뀌었다.
+    /// 그래서 호출 시점도 EditorBox.Visibility가 바뀌는 5곳(파일 열기·무제·렌더 진입/복귀·PDF)에
+    /// <b>잠금 뷰 전환 2곳(EnterViewMode/ExitViewMode)</b>이 더해졌다 — Visibility는 안 바뀌지만
+    /// _viewMode가 바뀐다.</para>
     /// 이 토글 2종에는 A34 문자 핫키가 없어(SetupHotkeys 등록은 Fit 2건뿐) 비활성 시 막을 키도 없다.</summary>
     private void UpdateDecorToggles()
     {
-        var onEditorSurface = EditorBox.Visibility == Visibility.Visible;
-        GuideToggleButton.IsEnabled = onEditorSurface;
-        MarksToggleButton.IsEnabled = onEditorSurface;
+        var onEditableSurface = EditorBox.Visibility == Visibility.Visible && !_viewMode;
+        GuideToggleButton.IsEnabled = onEditableSurface;
+        MarksToggleButton.IsEnabled = onEditableSurface;
     }
 
     /// <summary>A215: 가이드 토글 클릭 — 즉시 적용 + 즉시 저장(A181 줌 관용구).</summary>
@@ -1603,7 +1635,9 @@ public sealed partial class DocumentView : UserControl,
         _decor.Invalidate(); // 에디터 복귀 — 장식 재개
         UpdateDecorToggles();
         ShowHtmlFallbackNotice(path);
-        EditorBox.Focus(FocusState.Programmatic); // 잠금 뷰 관용구 — 캐럿 탐색·복사 가능
+        // A277: 잠금 뷰 강등 — EnterViewMode와 같은 관용구로 포커스를 뷰 루트에 둔다(캐럿 없음).
+        // 위 1회 Focus 이후 포커스가 그대로여도 무해한 재확인이다(await 사이 이동 방어).
+        Focus(FocusState.Programmatic);
     }
 
     /// <summary>A248: HTML 뷰 이탈 — 판 내림 + 편집 복귀(ExitRenderMode와 같은 순서 계약).
