@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.256.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.257.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -693,20 +693,19 @@ administrator rights are needed, and switching a toggle off removes the registra
 
 In **Settings → Explorer integration**:
 
-- **Register all file associations** at the top — one switch that turns every module's file
-  association on or off in one go. It drives the module switches below, so each module still shows
-  its own progress and result; a module that is busy at that moment is skipped, and you can flip
-  that one by hand afterwards. It reads as on only while every module is registered.
-- One switch for the Explorer right-click entries: **Extract here with KOTU-archive** on archive
-  files and **Compress with KOTU-archive** on everything. On Windows 11 both live under
+- One switch at the top for the Explorer right-click entries: **Extract here with KOTU-archive** on
+  archive files and **Compress with KOTU-archive** on everything. On Windows 11 both live under
   **Show more options** (`Shift+F10`).
-- **Show per-module options** below that unfolds one switch per module — *Register KOTU-image file
-  associations*, and the same for video, audio, document and archive — with the extensions listed
-  beside it. They start folded away and unfold on their own the moment you touch the switch at the
-  top, so you can watch each module report its progress. Turning a switch on also tries to make KOTU
-  the default app for those types. Windows protects a few types; for those, the Windows
-  default-apps page opens so you can confirm once, or you can use **Set default...** for a single
-  extension. The line under each switch tells you how many extensions KOTU is currently the default for.
+- **Register all file associations** below it — one switch that turns every module's file
+  association on or off in one go. It drives the module switches under it, so each module still
+  shows its own progress and result; a module that is busy at that moment is skipped, and you can
+  flip that one by hand afterwards. It reads as on only while every module is registered.
+- Then one switch per module — *Register KOTU-image file associations*, and the same for video,
+  audio, document and archive — with the extensions listed beside it. Turning a switch on also
+  tries to make KOTU the default app for those types. Windows protects a few types; for those, the
+  Windows default-apps page opens so you can confirm once, or you can use **Set default...** for a
+  single extension. The line under each switch tells you how many extensions KOTU is currently the
+  default for.
 
 If KOTU's own folder moves — after an update, or after you move a portable copy — the registrations
 you turned on are repaired silently the next time it starts.

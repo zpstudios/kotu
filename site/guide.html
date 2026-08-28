@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.256.0</span>
+    <span class="asof">AS OF v0.257.0</span>
   </div>
 </section>
 
@@ -968,18 +968,16 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            administrator rights are needed, and switching a toggle off removes the registration completely.</p>
         <p>In <strong>Settings → Explorer integration</strong>:</p>
         <ul>
-          <li><strong>Register all file associations</strong> at the top — one switch that turns every
-              module's file association on or off in one go. It drives the module switches below, so each
+          <li>One switch at the top for the Explorer right-click entries: <em>Extract here with
+              KOTU-archive</em> on archive files and <em>Compress with KOTU-archive</em> on everything.
+              On Windows 11 both live under <em>Show more options</em> (<kbd>Shift</kbd>+<kbd>F10</kbd>).</li>
+          <li><strong>Register all file associations</strong> below it — one switch that turns every
+              module's file association on or off in one go. It drives the module switches under it, so each
               module still shows its own progress and result; a module that is busy at that moment is
               skipped, and you can flip that one by hand afterwards. It reads as on only while every
               module is registered.</li>
-          <li>One switch for the Explorer right-click entries: <em>Extract here with KOTU-archive</em> on
-              archive files and <em>Compress with KOTU-archive</em> on everything. On Windows 11 both live
-              under <em>Show more options</em> (<kbd>Shift</kbd>+<kbd>F10</kbd>).</li>
-          <li><strong>Show per-module options</strong> below that unfolds one switch per module —
-              <em>Register KOTU-image file associations</em>, and the same for video, audio, document and
-              archive — with the extensions listed beside it. They start folded away and unfold on their own
-              the moment you touch the switch at the top, so you can watch each module report its progress.
+          <li>Then one switch per module — <em>Register KOTU-image file associations</em>, and the same for
+              video, audio, document and archive — with the extensions listed beside it.
               Turning a switch on also tries to make KOTU the default app for those types. Windows protects
               a few types; for those, the Windows default-apps page opens so you can confirm once, or you can
               use <em>Set default...</em> for a single extension. The line under each switch tells you how

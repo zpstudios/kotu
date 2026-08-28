@@ -34,10 +34,10 @@ namespace KOTU.App;
 /// A227: 절 맨 위에 "Register all file associations" 마스터 스위치가 하나 더 선다 —
 /// 등록 경로를 새로 만들지 않고 <b>모듈 토글의 IsOn을 대신 눌러</b> 위 A77 흐름을 그대로 태운다.
 /// 표시 규칙은 "전부 켜짐일 때만 On"이고, 그 되계산은 <see cref="_suppressMasterToggle"/>이 감싼다.
-/// A235(2026-08-27): 이 절의 세로 순서는 설명 → Learn more → 마스터 그룹 → <b>우클릭 메뉴 그룹</b> →
-/// "Show per-module options" 링크 → <b>접힘 래퍼(모듈 그룹 5개)</b> → 공용 상태 줄이다.
-/// 모듈 스위치는 기본으로 접혀 있고(상태는 저장하지 않는다), 사람이 마스터를 만지면 자동으로 펼쳐진다 —
-/// 접힌 채로 다섯 그룹의 진행 링·결과 문구가 흐르는 것을 막는다. 그룹 사이 간격은 12 하나로 통일했다.
+/// A257(2026-08-28): 이 절의 세로 순서는 설명 → Learn more → <b>우클릭 메뉴 그룹</b> →
+/// <b>마스터 그룹</b> → <b>모듈 그룹 5개</b> → 공용 상태 줄이다(A235 ①의 마스터·메뉴 순서를 교환하고,
+/// A235 ②의 "Show per-module options" 접기는 폐지 — 모듈 스위치는 늘 펼쳐져 있다).
+/// 그룹 사이 간격은 12 하나로 통일했다(모듈 5그룹 사이는 그들을 담는 상자의 Spacing이 만든다).
 /// </summary>
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
@@ -156,127 +156,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             + $"{Branding.AppName}. If Windows blocks any other type, the Windows default-apps page "
             + "opens so you can confirm it once."));
 
-        // ── A235 ②(2026-08-27): 모듈별 파일 연결 스위치 다섯 개를 접어 두는 래퍼와 그것을 여는 링크.
-        // 관용구는 A182의 LearnMore(이 파일 아래쪽)를 그대로 복제했다 — HyperlinkButton Click에서
-        // 상세의 Visibility만 뒤집고 라벨을 갈아 끼운다. WinUI Expander는 저장소 선례가 0건이라
-        // A182에서 이미 기각했고 여기서도 쓰지 않는다.
-        // 요소를 절 맨 앞에서 미리 만드는 이유 — 바로 아래 마스터 토글 핸들러가 "사람이 마스터를
-        // 만지면 모듈 그룹을 자동으로 펼친다"로 이 둘을 붙잡아야 하는데, 람다와 지역 함수는
-        // 자기보다 앞에 선언된 지역만 붙잡을 수 있다. Root에 넣는 자리는 한참 아래(메뉴 그룹 다음)다.
-        // 접힘 여부는 저장하지 않는다 — 설정 키를 새로 만들지 않고 이 화면은 늘 접힌 채로 열린다.
-        var moduleOptions = new StackPanel
-        {
-            // 함정: 이 래퍼가 생기면서 모듈 그룹 사이는 Root의 Spacing 12가 닿지 않는 자리가 됐다.
-            // 그래서 같은 값을 래퍼에 이식한다(A235 ④가 정한 그룹 사이 간격과 같은 12).
-            Spacing = 12,
-            // 링크와 첫 그룹 사이도 같은 12. 접혀 있을 때는 Collapsed라 이 여백도 재지 않는다.
-            Margin = new Thickness(0, 12, 0, 0),
-            Visibility = Visibility.Collapsed,
-        };
-
-        var moduleOptionsToggle = new HyperlinkButton
-        {
-            Content = "Show per-module options",
-            FontSize = 12,
-            Padding = new Thickness(0),
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-
-        // 펼치기 전용 진입로(아래 마스터 토글이 부른다). 이미 펼쳐져 있으면 아무것도 하지 않는다.
-        void ExpandModuleOptions()
-        {
-            if (moduleOptions.Visibility == Visibility.Visible) return;
-            moduleOptions.Visibility = Visibility.Visible;
-            moduleOptionsToggle.Content = "Hide per-module options";
-        }
-
-        moduleOptionsToggle.Click += (_, _) =>
-        {
-            var expanding = moduleOptions.Visibility == Visibility.Collapsed;
-            moduleOptions.Visibility = expanding ? Visibility.Visible : Visibility.Collapsed;
-            moduleOptionsToggle.Content = expanding ? "Hide per-module options" : "Show per-module options";
-        };
-
-        // ── A227(2026-08-25): 모듈 스위치를 하나씩 누르지 않고 한 번에 켜고 끄는 마스터 스위치.
-        // 등록 경로를 새로 만들지 않는다 — 아래 모듈 토글들의 IsOn을 프로그램적으로 세팅해
-        // 기존 Toggled 흐름(A77: 재진입 방지·토글 잠금·진행 링·워커 등록/해제·실패 되돌리기)을
-        // 그대로 태운다. 그래서 이 그룹에는 제 진행 링도 제 결과 문구도 없다 — 진행과 결과는
-        // 종전대로 각 모듈 그룹이 제자리에서 말한다.
-        // 사정권: 파일 연결 모듈 토글만. 아래 우클릭 메뉴 토글(Extract here·Compress)은
-        // 파일 연결이 아니므로 이 스위치가 건드리지 않는다(사양 확정).
-        var masterToggle = new ToggleSwitch
-        {
-            // A197과 같은 문법 — 스위치가 제목 왼쪽, 내장 On/Off 문구 제거, MinWidth 0(기본 154 해제).
-            OnContent = string.Empty,
-            OffContent = string.Empty,
-            MinWidth = 0,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        // 아래 foreach가 만드는 모듈 토글이 순서대로 담긴다. 배선을 루프보다 먼저 해도 되는 이유 —
-        // 아래 두 핸들러는 사람이 스위치를 만지거나 워커 답이 온 뒤에야 도는데, 그때는 이미
-        // Build()가 끝나 목록이 다 차 있다(클로저가 리스트 자체를 잡고 있다).
-        var moduleToggles = new List<ToggleSwitch>();
-
-        // 마스터 표시 규칙 = "전부 켜짐일 때만 On". 모듈 토글이 값을 확정하는 세 시점
-        // (A195 초기 조회 반영 · 작업 성공 · 실패 되돌리기) 뒤에 불린다.
-        // 대입은 마스터 자신의 Toggled를 다시 발화시키므로 전용 가드로 감싼다(_suppressToggle 금지 —
-        // 필드 주석 참고: 그 플래그를 켜면 모듈 토글의 등록 흐름까지 막힌다).
-        void RecomputeMaster()
-        {
-            if (moduleToggles.Count == 0) return; // 연결 가능한 모듈이 없으면 "전부 켜짐"도 성립하지 않는다
-            var allOn = moduleToggles.All(t => t.IsOn);
-            if (masterToggle.IsOn == allOn) return;
-            _suppressMasterToggle = true;
-            masterToggle.IsOn = allOn;
-            _suppressMasterToggle = false;
-        }
-
-        masterToggle.Toggled += (_, _) =>
-        {
-            if (_suppressMasterToggle) return; // 위 되계산이 만든 발화 — 사람이 누른 게 아니다
-            // A235 ②: 사람이 마스터를 만졌다 = 지금부터 다섯 그룹이 한꺼번에 움직인다.
-            // 접힌 채로 두면 진행 링도 결과 문구도 보이지 않는 곳에서 흐르므로 여기서 펼쳐 준다.
-            // (_suppressMasterToggle이 걸린 프로그램적 발화는 위에서 이미 빠져나갔다 — 되계산으로는
-            // 펼쳐지지 않는다.)
-            ExpandModuleOptions();
-            var turnedOn = masterToggle.IsOn;  // 아래 대입이 되계산을 부를 수 있으니 목표값을 먼저 잡는다
-            foreach (var moduleToggle in moduleToggles)
-            {
-                // 이미 목표 상태면 그대로 둔다(IsOn 대입이 없으면 Toggled도 없다 = 헛작업 없음).
-                // 작업 중인 그룹(IsEnabled = false)은 건너뛴다 — 기다리지도, 따로 안내하지도 않는다.
-                // 그 그룹만 작업이 끝난 뒤 사용자가 다시 누르면 된다(사양 확정).
-                if (moduleToggle.IsEnabled && moduleToggle.IsOn != turnedOn) moduleToggle.IsOn = turnedOn;
-            }
-            // 다섯 그룹이 한꺼번에 워커 큐에 쌓이지만 워커는 직렬이라(A195) 서로의 레지스트리
-            // 쓰기를 지우지 않는다. 마스터 자신의 표시는 각 그룹이 끝날 때마다 RecomputeMaster가 잡는다.
-        };
-
-        // A220과 같은 그룹 문법(카드 없음 · 안쪽 Spacing 6 · 아래 여백은 A235 ④에서 0). 진행 링이 없어 두 칸이면 된다.
-        var masterHeaderRow = new Grid { ColumnSpacing = 8 };
-        masterHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        masterHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var masterTitle = new TextBlock
-        {
-            Text = "Register all file associations",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(masterToggle, 0);
-        Grid.SetColumn(masterTitle, 1);
-        masterHeaderRow.Children.Add(masterToggle);
-        masterHeaderRow.Children.Add(masterTitle);
-
-        // A235 ③: 부연 설명 줄("Turns every module's file association on or off in one go.")은 뺐다 —
-        // 제목이 이미 같은 말을 하는데 절만 길어졌다는 사용자 지시(2026-08-27). 지역 요소였으므로
-        // 남는 참조가 없다. 자식이 헤더 행 하나뿐이어도 묶음은 유지한다(절 안 다른 그룹과 같은 문법).
-        var masterCardBody = new StackPanel { Spacing = 6 };
-        masterCardBody.Children.Add(masterHeaderRow);
-        Root.Children.Add(masterCardBody);
-
-        // ── A235 ①(2026-08-27): 우클릭 메뉴 그룹은 절의 두 번째다(종전에는 맨 끝이었다).
-        // 마스터 바로 다음에 세워 두면 그 아래 접히는 모듈 스위치들이 마스터의 하위처럼 읽힌다.
+        // ── A257(2026-08-28): 우클릭 메뉴 그룹이 절의 첫 그룹이다(A235 ①의 "마스터 다음 두 번째"를
+        // 사용자 지시로 다시 교환 — 마스터는 이제 메뉴 그룹 다음, 모듈 5그룹 바로 위에 선다).
         // 이 블록은 A227 마스터의 사정권 밖이라(파일 연결이 아니다) 로직 의존이 0이고,
         // 아래 세 지역(archiveModule·archiveExts·archiveBrand)도 router만 보므로 자리를 옮겨도
         // 참조가 깨지지 않는다. 공용 _status 줄은 종전대로 절 맨 끝에 남는다.
@@ -287,23 +168,23 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         // 우클릭 메뉴 토글 통합(v0.30.0 사용자 요청): "여기에 풀기"(압축 파일)와
         // "압축하기"(모든 파일)를 하나의 스위치로 함께 등록/해제한다.
-        // A183: 이 토글도 같은 절에 있으므로 위 모듈 카드들과 같은 카드 체계에 편입한다
+        // A183: 이 토글도 같은 절에 있으므로 아래 모듈 카드들과 같은 카드 체계에 편입한다
         // (한 절 안에 카드와 맨 토글이 섞이면 구획이 다시 흐려진다). Header였던 긴 문구는
         // 제목 + 설명 줄로 나뉘고, 아래 "Show more options" 안내도 이 카드 안으로 들어온다.
         var menuToggle = new ToggleSwitch
         {
-            // A197: 위 모듈 카드와 같은 배치·같은 정리(스위치 = 제목 왼쪽, 내장 On/Off 문구 제거,
+            // A197: 아래 모듈 카드와 같은 배치·같은 정리(스위치 = 제목 왼쪽, 내장 On/Off 문구 제거,
             // MinWidth 0 유지). 한 절 안에서 카드마다 스위치 자리가 다르면 다시 흐려진다.
             OnContent = string.Empty,
             OffContent = string.Empty,
             MinWidth = 0,
-            // A195: 위 모듈 토글과 같은 이유로 IsOn 초기값을 여기서 읽지 않는다(아래 워커 조회).
+            // A195: 아래 모듈 토글과 같은 이유로 IsOn 초기값을 여기서 읽지 않는다(아래 워커 조회).
             VerticalAlignment = VerticalAlignment.Center,
         };
 
         // A195: 등록/해제(레지스트리 쓰기 + SHChangeNotify 셸 통지)를 워커로 옮긴다 —
         // 종전 Apply()는 이 전부를 UI 스레드에서 동기로 돌렸다(ARCHITECTURE §11.1 ①).
-        // 배선은 위 파일 연결 토글(A77)과 같은 관용구다: 재진입 플래그 → 토글 잠금 →
+        // 배선은 아래 파일 연결 토글(A77)과 같은 관용구다: 재진입 플래그 → 토글 잠금 →
         // 진행 문구 → await Worker.Run → UI 스레드 복귀 후 잠금 해제 → 실패면 IsOn 되돌리기.
         // 다른 점 둘 — ① 진행 링을 붙이지 않는다(A79 ⑤: 발바닥 스피너 적용 위치는 파일 연결
         // 토글 한 곳으로 못 박혀 있다) ② n/m 진행이 없어 문구가 한 줄로 끝난다.
@@ -353,7 +234,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             _status.Text = "Failed to apply: " + error;
         };
 
-        // A195: 메뉴 토글 초기값도 워커에서(위 모듈 토글과 같은 관용구).
+        // A195: 메뉴 토글 초기값도 워커에서(아래 모듈 토글과 같은 관용구).
         var menuStateDispatcher = DispatcherQueue;
         Worker.Post(() =>
         {
@@ -407,14 +288,89 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         });
         Root.Children.Add(menuCardBody);
 
-        // A235 ②: 링크와 접힘 래퍼를 StackPanel 하나로 묶어 Root에 넣는다(A182 LearnMore와 같은 이유).
-        // 따로 넣으면 Root의 Spacing 12가 접힌 래퍼 앞에도 붙어 빈 자리가 남는다 — 묶어 두면
-        // 접혔을 때 링크 한 줄만 남고, 펼쳤을 때의 간격은 래퍼 자신의 위 여백 12가 만든다.
-        // 래퍼 안은 아래 foreach가 채운다(요소를 나중에 더해도 화면에는 정상으로 나온다).
-        var moduleOptionsGroup = new StackPanel();
-        moduleOptionsGroup.Children.Add(moduleOptionsToggle);
-        moduleOptionsGroup.Children.Add(moduleOptions);
-        Root.Children.Add(moduleOptionsGroup);
+        // ── A227(2026-08-25): 모듈 스위치를 하나씩 누르지 않고 한 번에 켜고 끄는 마스터 스위치.
+        // 등록 경로를 새로 만들지 않는다 — 아래 모듈 토글들의 IsOn을 프로그램적으로 세팅해
+        // 기존 Toggled 흐름(A77: 재진입 방지·토글 잠금·진행 링·워커 등록/해제·실패 되돌리기)을
+        // 그대로 태운다. 그래서 이 그룹에는 제 진행 링도 제 결과 문구도 없다 — 진행과 결과는
+        // 종전대로 각 모듈 그룹이 제자리에서 말한다.
+        // 사정권: 파일 연결 모듈 토글만. 위 우클릭 메뉴 토글(Extract here·Compress)은
+        // 파일 연결이 아니므로 이 스위치가 건드리지 않는다(사양 확정).
+        // A257: 자리는 메뉴 그룹 다음·모듈 5그룹 바로 위다 — 대신 눌러 주는 대상 바로 위에 선다.
+        var masterToggle = new ToggleSwitch
+        {
+            // A197과 같은 문법 — 스위치가 제목 왼쪽, 내장 On/Off 문구 제거, MinWidth 0(기본 154 해제).
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        // 아래 foreach가 만드는 모듈 토글이 순서대로 담긴다. 배선을 루프보다 먼저 해도 되는 이유 —
+        // 아래 두 핸들러는 사람이 스위치를 만지거나 워커 답이 온 뒤에야 도는데, 그때는 이미
+        // Build()가 끝나 목록이 다 차 있다(클로저가 리스트 자체를 잡고 있다).
+        var moduleToggles = new List<ToggleSwitch>();
+
+        // 마스터 표시 규칙 = "전부 켜짐일 때만 On". 모듈 토글이 값을 확정하는 세 시점
+        // (A195 초기 조회 반영 · 작업 성공 · 실패 되돌리기) 뒤에 불린다.
+        // 대입은 마스터 자신의 Toggled를 다시 발화시키므로 전용 가드로 감싼다(_suppressToggle 금지 —
+        // 필드 주석 참고: 그 플래그를 켜면 모듈 토글의 등록 흐름까지 막힌다).
+        void RecomputeMaster()
+        {
+            if (moduleToggles.Count == 0) return; // 연결 가능한 모듈이 없으면 "전부 켜짐"도 성립하지 않는다
+            var allOn = moduleToggles.All(t => t.IsOn);
+            if (masterToggle.IsOn == allOn) return;
+            _suppressMasterToggle = true;
+            masterToggle.IsOn = allOn;
+            _suppressMasterToggle = false;
+        }
+
+        masterToggle.Toggled += (_, _) =>
+        {
+            if (_suppressMasterToggle) return; // 위 되계산이 만든 발화 — 사람이 누른 게 아니다
+            // A257: 모듈 그룹이 늘 펼쳐져 있으므로 A235 ②의 자동 펼침 호출은 사라졌다 —
+            // 다섯 그룹의 진행 링·결과 문구는 이제 언제나 보이는 자리에서 흐른다.
+            var turnedOn = masterToggle.IsOn;  // 아래 대입이 되계산을 부를 수 있으니 목표값을 먼저 잡는다
+            foreach (var moduleToggle in moduleToggles)
+            {
+                // 이미 목표 상태면 그대로 둔다(IsOn 대입이 없으면 Toggled도 없다 = 헛작업 없음).
+                // 작업 중인 그룹(IsEnabled = false)은 건너뛴다 — 기다리지도, 따로 안내하지도 않는다.
+                // 그 그룹만 작업이 끝난 뒤 사용자가 다시 누르면 된다(사양 확정).
+                if (moduleToggle.IsEnabled && moduleToggle.IsOn != turnedOn) moduleToggle.IsOn = turnedOn;
+            }
+            // 다섯 그룹이 한꺼번에 워커 큐에 쌓이지만 워커는 직렬이라(A195) 서로의 레지스트리
+            // 쓰기를 지우지 않는다. 마스터 자신의 표시는 각 그룹이 끝날 때마다 RecomputeMaster가 잡는다.
+        };
+
+        // A220과 같은 그룹 문법(카드 없음 · 안쪽 Spacing 6 · 아래 여백은 A235 ④에서 0). 진행 링이 없어 두 칸이면 된다.
+        var masterHeaderRow = new Grid { ColumnSpacing = 8 };
+        masterHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        masterHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var masterTitle = new TextBlock
+        {
+            Text = "Register all file associations",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(masterToggle, 0);
+        Grid.SetColumn(masterTitle, 1);
+        masterHeaderRow.Children.Add(masterToggle);
+        masterHeaderRow.Children.Add(masterTitle);
+
+        // A235 ③: 부연 설명 줄("Turns every module's file association on or off in one go.")은 뺐다 —
+        // 제목이 이미 같은 말을 하는데 절만 길어졌다는 사용자 지시(2026-08-27). 지역 요소였으므로
+        // 남는 참조가 없다. 자식이 헤더 행 하나뿐이어도 묶음은 유지한다(절 안 다른 그룹과 같은 문법).
+        var masterCardBody = new StackPanel { Spacing = 6 };
+        masterCardBody.Children.Add(masterHeaderRow);
+        Root.Children.Add(masterCardBody);
+
+        // A257: 모듈 5그룹을 담는 상자. A235 ②의 접힘 래퍼에서 링크·Visibility·위 여백만 걷어낸 것이라
+        // 그룹 사이 간격을 만드는 책임은 그대로 남는다 — Root의 Spacing 12는 이 상자의 바깥에만 닿으므로
+        // 안쪽 5그룹 사이는 이 Spacing 12가 만든다(A235 ④가 정한 값과 같다).
+        // 상자를 없애고 카드를 Root에 직접 넣지 않는 이유도 그것이다(카드 Add 지점 무변경 = diff 최소).
+        // 상자 안은 아래 foreach가 채운다(요소를 나중에 더해도 화면에는 정상으로 나온다).
+        var moduleOptions = new StackPanel { Spacing = 12 };
+        Root.Children.Add(moduleOptions);
 
         // 토글 순서(A35, 사용자 확정 2026-08-10): 이미지 → 비디오 → 오디오 → 문서 → 압축.
         // 시작 메뉴 번호 순서(1이미지 2영상 3오디오 4문서 5압축)와 일치시킨 것 —
@@ -582,12 +538,12 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             // Spacing 6)는 유지하고, 그룹 사이 구분은 테두리 대신 간격 차로 만든다.
             // A235 ④(2026-08-27): 그 간격이 너무 넓어 항목이 실제보다 많아 보인다는 사용자 보고 —
             // 아래 여백 8을 빼고 그룹 사이는 12 하나로 줄였다(그룹 안 6은 그대로 = 2:1 비율 유지).
-            // 여기서 12를 만드는 것은 Root의 Spacing이 아니라 접힘 래퍼(moduleOptions)의 Spacing이다.
+            // 여기서 12를 만드는 것은 Root의 Spacing이 아니라 모듈 그룹 상자(moduleOptions)의 Spacing이다.
             var cardBody = new StackPanel { Spacing = 6 };
             cardBody.Children.Add(headerRow);
             cardBody.Children.Add(extensionsText);
             cardBody.Children.Add(defaultsRow);
-            // A235 ②: Root가 아니라 접힘 래퍼에 담는다 — 이 다섯 그룹이 "Show per-module options"로 열린다.
+            // A257: Root가 아니라 모듈 그룹 상자에 담는다 — 그 상자가 다섯 그룹 사이 간격 12를 만든다.
             moduleOptions.Children.Add(cardBody);
 
             // 같은 모듈의 재진입 방지 플래그(A77). 작업 중에는 토글도 비활성이라 사람 조작으로는
