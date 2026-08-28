@@ -373,7 +373,7 @@ Image, Video, PDF and text documents share one Fit control with four options:
 
 | Option | Result |
 |---|---|
-| **Original** | the original size, one image pixel per screen pixel. The button then reads `OR` |
+| **Original** | the original size, one image pixel per screen pixel. The button then shows a small `1:1` box |
 | **Contain** | the whole thing fits in the view. Never enlarged — smaller files stay at their own size |
 | **Fit width** | fills the width; the other axis scrolls |
 | **Fit height** | fills the height |

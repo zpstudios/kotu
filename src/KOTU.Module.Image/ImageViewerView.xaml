@@ -206,26 +206,27 @@
                         <DropDownButton.Flyout>
                             <MenuFlyout Placement="Top">
                                 <!-- 계보 = "1:1" 글자 도형(A143) → 네 모서리 꺾쇠 + 중앙 사각(A184) →
-                                     텍스트 "100%"·아이콘 없음(A231) → A253(4차·확정, 2026-08-27 사용자
-                                     지시): 항목 이름을 "Original"로 바꾸고 비어 있던 아이콘 칸을 채운다.
-                                     A231이 칸을 비운 이유(임의 문자열을 그리는 IconElement 선례 0건)는
-                                     그대로지만, 형제 3항목만 아이콘이 있는 혼재가 실제로 눈에 걸린다는
-                                     재보고가 들어와 채택형을 하나 고른 것이다.
-                                     채택형 = FontIcon에 본문 폰트를 명시하고 Glyph에 두 글자 "OR"를 넣기.
-                                     FontFamily 지정이 필수인 이유 = 기본 아이콘 폰트(Segoe Fluent Icons)에
-                                     라틴 글자가 없어 그대로 두면 두부가 된다. "Segoe UI"는 전 Windows에
-                                     들어 있는 시스템 UI 글꼴이라 폴백 걱정이 없다(리터럴 글꼴 이름 지정은
-                                     DocumentView.xaml·MainWindow.xaml 선례. ThemeResource 참조는 없는 키일
-                                     때 런타임 파스 실패로 앱이 죽어 리터럴이 더 안전하다).
-                                     ⚠ FontIcon.Glyph에 다문자 문자열을 넣는 형태는 저장소 선례 0건 =
-                                     이 배치의 1순위 위험 후보. 최소 복구법 = 아래 MenuFlyoutItem.Icon
-                                     블록만 지워 A231의 "아이콘 없음"으로 되돌리기(다른 변경 무관).
-                                     FontSize 12는 과대 렌더 방지용 보수값 — MenuFlyoutItem의 아이콘 칸은
-                                     16x16 Viewbox라 최종 크기는 칸이 정한다.
-                                     본체 버튼 표시는 UpdateFitButton()의 소형 텍스트 "OR"가 짝이다. -->
+                                     텍스트 "100%"·아이콘 없음(A231) → FontIcon(Segoe UI, 두 글자 "OR")
+                                     (A253) → A260(5차·확정, 2026-08-27 사용자 지시).
+                                     A253의 다문자 Glyph는 저장소 선례 0건의 1순위 위험 후보였고 그대로
+                                     현실화됐다 — 실기기에서 아이콘 칸이 비어 나온다는 사용자 보고.
+                                     그래서 FontIcon 다문자 형태는 폐기하고 PathIcon 도형으로 간다.
+                                     도형 = 16x16 칸에 외곽 사각 링 + 안쪽 "1:1"(세로 막대 2 + 점 2).
+                                     전부 축정렬 사각형이라 저해상도에서 뭉개지지 않는다. 본체 버튼의
+                                     테두리 상자 + "1:1"(코드 BuildOriginalRatioBox)이 같은 그림의 짝이다.
+                                     링에 구멍이 남는 근거 = 바깥 사각과 안쪽 사각의 진행 방향을 반대로
+                                     잡았다. 짝홀·비영 어느 채움 규칙에서도 뚫리므로 FillRule 지정이
+                                     필요 없다(파스 위험 축 하나를 없앴다).
+                                     ⚠ Data 문자열은 사용처마다 새로 적는다 — Geometry를 공유 리소스로
+                                     두고 여러 PathIcon.Data에 걸면 런타임에 앱이 죽는다(v0.174.1 실사례.
+                                     App.xaml의 경고 주석 참고). 세 모듈이 같은 문자열을 각자 갖는 것은
+                                     그래서 의도적이다. Geometry 타입 속성에 거는 문자열 변환은 성립하는
+                                     형태다(PathGeometry.Figures에 미니언어를 넣는 쪽이 WMC0055로 막힌다).
+                                     최소 복구법 = 이 MenuFlyoutItem.Icon 블록만 지워 A231의 "아이콘 없음"
+                                     으로 되돌리기(다른 변경 무관). -->
                                 <MenuFlyoutItem Text="Original" Click="OnFitActualSizeClick">
                                     <MenuFlyoutItem.Icon>
-                                        <FontIcon FontFamily="Segoe UI" Glyph="OR" FontSize="12" />
+                                        <PathIcon Data="M1,1 L15,1 L15,15 L1,15 Z M2.5,2.5 L2.5,13.5 L13.5,13.5 L13.5,2.5 Z M4.5,5 L6,5 L6,11 L4.5,11 Z M10,5 L11.5,5 L11.5,11 L10,11 Z M7.5,6.25 L8.5,6.25 L8.5,7.25 L7.5,7.25 Z M7.5,8.75 L8.5,8.75 L8.5,9.75 L7.5,9.75 Z" />
                                     </MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                                 <MenuFlyoutItem Text="Contain" Click="OnFitContainClick">
