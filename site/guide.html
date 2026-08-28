@@ -459,9 +459,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               in place. If the current document has unsaved changes it asks first —
               <em>Save and new file</em>, <em>Discard and new file</em>, <em>Open in new instance</em>
               (keeps your edits and opens the new document in a new window) or <em>Cancel</em>.</li>
-          <li>Further right, past the file name, the bar shows the unsaved mark, the zoom percentage and the
-              PDF page count, then the two display toggles (<em>Line guides</em> and <em>Paragraph marks</em>,
-              editor only) and the <em>Fit</em> control.</li>
+          <li>Further right, past the file name, the bar shows the unsaved mark, then the two display
+              toggles (<em>Line guides</em> and <em>Paragraph marks</em>), the PDF page count, the zoom
+              percentage and the <em>Fit</em> control. The toggles and the zoom button are always there
+              and simply grey out where they do not apply.</li>
           <li><strong>Every text document has an edit mode and a view mode.</strong> The view button in the
               bottom bar switches between them. In view mode the editor is locked so nothing changes while
               you read — you can still move the caret, select and copy, and save any edits you made earlier.
@@ -498,18 +499,20 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>-</kbd> on the same scale (the numpad keys
               work too, holding a key repeats, and the keys work even while the cursor is in the editor);
               <kbd>Ctrl</kbd>+numpad <kbd>*</kbd> puts the zoom back to 100%. The current level shows
-              in the bottom bar, and one level applies everywhere: it is remembered across files, windows and
-              restarts. Zooming never touches the file itself. <strong>The rendered Markdown view zooms with
+              in the bottom bar as a button: press it for a list of set levels — 20%, 50%, 75%, 100%, 125%,
+              150%, 200% and 500% — and pick one. One level applies everywhere: it is remembered across
+              files, windows and restarts. Zooming never touches the file itself. <strong>The rendered Markdown view zooms with
               the same keys and the same <kbd>Ctrl</kbd>+wheel on the same scale</strong>, so switching
               between the preview and the editor keeps the size you set; the text still wraps to the width
               of the view at every level, so nothing scrolls sideways.</li>
           <li>Very faint guide lines mark the top and bottom of each line of text, <code>¶</code> marks a line
               break and <code>·EOF</code> marks the end of the file. They are drawn over the text and never
-              become part of it. <strong>Two toggle buttons at the right of the bottom bar, just before Fit,
-              turn them off and on</strong> — <em>Line guides</em> for the lines, <em>Paragraph marks</em> for <code>¶</code>
+              become part of it. <strong>Two toggle buttons at the right of the bottom bar, just after the
+              unsaved mark, turn them off and on</strong> — <em>Line guides</em> for the lines,
+              <em>Paragraph marks</em> for <code>¶</code>
               and <code>·EOF</code>. Either one takes effect as you press it and is remembered for next time.
-              The pair is there whenever the editor is on screen, view mode included, and steps aside for the
-              rendered Markdown and HTML views and for PDFs.</li>
+              The pair is always in the bar; it works whenever the editor is on screen, view mode included,
+              and greys out for the rendered Markdown and HTML views and for PDFs.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Text and Markdown
               documents offer three of the four options.</li>
           <li><strong>Print</strong> with <kbd>Ctrl</kbd>+<kbd>P</kbd> or the print button in the bottom bar —

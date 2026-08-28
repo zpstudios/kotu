@@ -181,9 +181,10 @@ Seven modules. Switch between them from the menu at the bottom left.
   `Untitled` document in place. If the current document has unsaved changes it asks first —
   **Save and new file**, **Discard and new file**, **Open in new instance** (keeps your edits and
   opens the new document in a new window) or **Cancel**.
-- Further right, past the file name, the bar shows the unsaved mark, the zoom percentage and the
-  PDF page count, then the two display toggles (**Line guides** and **Paragraph marks**, editor
-  only) and the **Fit** control.
+- Further right, past the file name, the bar shows the unsaved mark, then the two display toggles
+  (**Line guides** and **Paragraph marks**), the PDF page count, the zoom percentage and the
+  **Fit** control. The toggles and the zoom button are always there and simply grey out where they
+  do not apply.
 - **Every text document has an edit mode and a view mode.** The view button in the bottom bar
   switches between them. In view mode the editor is locked so nothing changes while you read —
   you can still move the caret, select and copy, and save any edits you made earlier. For
@@ -216,17 +217,19 @@ Seven modules. Switch between them from the menu at the bottom left.
   `Ctrl`+wheel — 20% to 500% of the normal size, 10% per notch — or with `Ctrl`+`+` / `Ctrl`+`-`
   on the same scale (the numpad keys work too, holding a key repeats, and the keys work even while
   the cursor is in the editor); `Ctrl`+numpad `*` puts the zoom back to 100%. The current level
-  shows in the bottom bar, and one level applies everywhere: it is remembered across files, windows
-  and restarts. Zooming never touches the file itself. **The rendered Markdown view zooms with the
+  shows in the bottom bar as a button: press it for a list of set levels — 20%, 50%, 75%, 100%,
+  125%, 150%, 200% and 500% — and pick one. One level applies everywhere: it is remembered across
+  files, windows and restarts. Zooming never touches the file itself. **The rendered Markdown view zooms with the
   same keys and the same `Ctrl`+wheel on the same scale**, so switching between the preview and the
   editor keeps the size you set; the text still wraps to the width of the view at every level, so
   nothing scrolls sideways.
 - Very faint guide lines mark the top and bottom of each line of text, `¶` marks a line break and
   `·EOF` marks the end of the file. They are drawn over the text and never become part of it.
-  **Two toggle buttons at the right of the bottom bar, just before Fit, turn them off and on** — *Line guides* for
-  the lines, *Paragraph marks* for `¶` and `·EOF`. Either one takes effect as you press it and is
-  remembered for next time. The pair is there whenever the editor is on screen, view mode included,
-  and steps aside for the rendered Markdown and HTML views and for PDFs.
+  **Two toggle buttons at the right of the bottom bar, just after the unsaved mark, turn them off
+  and on** — *Line guides* for the lines, *Paragraph marks* for `¶` and `·EOF`. Either one takes
+  effect as you press it and is remembered for next time. The pair is always in the bar; it works
+  whenever the editor is on screen, view mode included, and greys out for the rendered Markdown and
+  HTML views and for PDFs.
 - **Fit** — see [2.9](#29-the-fit-button). Text and Markdown documents offer three of the four
   options.
 - **Print** with `Ctrl+P` or the print button in the bottom bar — the same Windows print dialog as

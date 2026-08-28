@@ -126,8 +126,12 @@
              star 1개로 환원 — 표시 토글이 가운데를 떠나 우측 정렬군(줌·페이지 뒤, Fit 앞)으로
              옮겼기 때문이다. 남은 star 하나(파일명 칸)가 좌측군과 우측군 사이의 남는 폭을
              전부 흡수한다. 이 바는 폭 임계 축약 로직이 없어 폭 파생 수치는 없다.
-             수정됨(●)·줌·페이지의 상대 순서는 A245 전과 같다(현행 유지 — 등재문의 "배율 왼쪽"
-             서술과 달리 코드상 페이지 표기는 줌 오른쪽이었고, 무변경이 지시의 취지다). -->
+             A264(v0.262.0): 우측 정렬군의 순서를 사용자 확정대로 재부여했다 —
+             (좌→우) 언세이브드(c5·미저장 시에만) → 라인 가이드·¶(c6) → PDF 페이지(c7) →
+             배율 버튼(c8·A263) → Fit(c9). A245의 순서(수정됨·배율·페이지·가이드·¶·Fit)에서
+             표시 토글 그룹과 배율의 자리가 맞바뀐 것이 차분이고, 셸 전체화면 버튼은 이 바 밖
+             (셸 하단 바)이라 무관하다. 칸 수(10)·star 1개 구조는 그대로다(폭 파생 수치 없음 —
+             이 바에는 폭 임계 축약 로직이 없어 star 칸이 남는 폭을 전부 흡수한다). -->
         <Border x:Name="StatusBar" VerticalAlignment="Bottom" Padding="0,2,0,2">
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
             <Grid ColumnSpacing="6">
@@ -145,11 +149,11 @@
                     <ColumnDefinition Width="*" />
                     <!-- c5 수정됨(●) -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c6 줌 배율 % -->
+                    <!-- c6 A215→A245→A264: 표시 토글 그룹(가이드·¶) — 배율 앞으로 당겼다 -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c7 PDF 페이지 -->
+                    <!-- c7 PDF 페이지(A264에서도 같은 칸 — 토글과 배율 사이) -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c8 A215→A245: 표시 토글 그룹(가이드·¶) — 바 가운데에서 우측 정렬군으로 이관 -->
+                    <!-- c8 A264: 줌 배율 버튼(A263) — Fit 바로 앞 -->
                     <ColumnDefinition Width="Auto" />
                     <!-- c9 Fit 조절기 2버튼 -->
                     <ColumnDefinition Width="Auto" />
@@ -223,43 +227,80 @@
                 <TextBlock x:Name="ModifiedText" Grid.Column="5" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed"
                            Text="● Unsaved" />
-                <!-- A181: 현재 줌 배율(document.zoom을 퍼센트로) — 텍스트 문서가 열려 있는 동안
-                     항상 표시(100%도 표시 — 이미지 ZoomText/A149 관용구). PDF·빈 화면은 빈 문자열
-                     (PDF 줌은 별개 체계 — PdfPane의 ZoomFactor·Fit이 지배한다).
-                     갱신은 DocumentView.UpdateZoomText 한 곳. -->
-                <TextBlock x:Name="ZoomText" Grid.Column="6" VerticalAlignment="Center"
-                           FontSize="12" Opacity="0.8" />
-                <!-- PDF 현재 페이지/전체 (A16) — PDF가 열려 있을 때만 -->
-                <TextBlock x:Name="PageInfoText" Grid.Column="7" VerticalAlignment="Center"
-                           FontSize="12" Opacity="0.8" Visibility="Collapsed" />
-                <!-- A215(2026-08-24) → A245(2026-08-27): 편집 모드 표시 토글 2종 — ① 라인 가이드
-                     (줄 상/하단 선 — A115 ①) ② 펑츄에이션 마커(¶·EOF — A115 ②). A215의 자리는
-                     좌우 star 사이(바 가운데)였고, A245에서 우측 정렬군으로 이관했다 —
-                     줌·페이지 뒤, Fit 조절기 앞(사용자 확정 순서 "배율 % → 라인 가이드 → ¶ → Fit").
-                     노출 조건은 무변경: 에디터 표면(EditorBox 표시)일 때만 — A224 잠금 뷰도
-                     에디터 표면이라 그대로 노출되고, 렌더 뷰·PDF·빈
-                     화면에서는 Collapsed(UpdateDecorToggles 단일 지점).
-                     ⚠️ A249(v0.246.0) 확정 예외: "숨김 금지·비활성만" 정책에서 이 토글 2종은
-                     예외로 존치한다(2026-08-27 사용자 답변) — 에디터 표면에서만 뜻이 있는
-                     표시 설정이라 다른 표면에서는 비활성이 아니라 숨김이 맞다. 상태는 document.* 키 2개로
-                     즉시 저장(A181 줌 관용구). 초기 IsChecked는 코드(생성자)가 설정값으로 맞춘다.
+                <!-- A215(2026-08-24) → A245(2026-08-27) → A264/A265(2026-08-28): 편집 모드 표시
+                     토글 2종 — ① 라인 가이드(줄 상/하단 선 — A115 ①) ② 펑츄에이션 마커(¶·EOF —
+                     A115 ②). A215의 자리는 좌우 star 사이(바 가운데)였고, A245에서 우측 정렬군으로,
+                     A264에서 그 안의 배율·페이지 **앞**으로 옮겼다(사용자 확정 순서 "언세이브드 →
+                     라인 가이드 → ¶ → 배율 → Fit").
+                     ⚠️ A265(v0.262.0): A249 확정 예외 4종 중 이 1종을 **공식 해제**했다
+                     (2026-08-27 사용자 답변 — "무조건 버튼들 다 보이게·사용 못하면 비활성"의
+                     문서 적용. 직전 예외 확정의 명시 개정이지 재확인이 아니다). 그래서 이 그룹은
+                     이제 **항상 보이고 활성만 갈린다** — 에디터 표면(EditorBox 표시. A224 잠금 뷰
+                     포함)에서만 활성, 렌더 뷰·PDF·빈 화면에서는 비활성(UpdateDecorToggles 단일
+                     지점). 아래 IsEnabled="False"가 첫 프레임 값이다(초기 상태 = 빈 화면이라 정합.
+                     Fit 조절기의 초기 비활성과 같은 형). 활성 전환은 토글 2개에 각각 건다 —
+                     StackPanel(Panel)에는 IsEnabled가 없다(Control의 속성이다).
+                     상태는 document.* 키 2개로 즉시 저장(A181 줌 관용구). 초기 IsChecked는
+                     코드(생성자)가 설정값으로 맞춘다. 이 토글 2종에는 A34 문자 핫키가 없다 —
+                     따라서 비활성 시 차단할 키도 없다(HotkeySupport 게이트는 등록된 키에만 건다).
                      글리프: E7A5(가로줄 무리 — 가이드 근사) 대신 실존 확인이 쉬운 표준 글리프를
                      쓴다 — 가이드 = E8A9(AlignLeft류 가로줄), 마커 = 문자 '¶' 텍스트(글리프 탐색
                      불요 — 마커 자신이 최고의 아이콘이다). -->
-                <StackPanel x:Name="DecorTogglePanel" Grid.Column="8" Orientation="Horizontal"
-                            Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
+                <StackPanel x:Name="DecorTogglePanel" Grid.Column="6" Orientation="Horizontal"
+                            Spacing="6" VerticalAlignment="Center">
                     <ToggleButton x:Name="GuideToggleButton" Style="{StaticResource BottomBarToggleButtonStyle}"
+                                  IsEnabled="False"
                                   Click="OnGuideToggleClick"
                                   ToolTipService.ToolTip="Line guides">
                         <FontIcon Glyph="&#xE8A9;" FontSize="14" />
                     </ToggleButton>
                     <ToggleButton x:Name="MarksToggleButton" Style="{StaticResource BottomBarToggleButtonStyle}"
+                                  IsEnabled="False"
                                   Click="OnMarksToggleClick"
                                   ToolTipService.ToolTip="Paragraph marks">
                         <TextBlock Text="¶" FontSize="14" HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
                     </ToggleButton>
                 </StackPanel>
+                <!-- PDF 현재 페이지/전체 (A16) — PDF가 열려 있을 때만.
+                     A264: 칸 번호는 그대로(c7)지만 이웃이 바뀌었다 — 앞이 표시 토글, 뒤가 배율
+                     버튼이다(사용자 미언급 자리라 "¶ 뒤·배율 앞" 제안을 채택). -->
+                <TextBlock x:Name="PageInfoText" Grid.Column="7" VerticalAlignment="Center"
+                           FontSize="12" Opacity="0.8" Visibility="Collapsed" />
+                <!-- A181 → A263(v0.262.0): 현재 줌 배율(document.zoom을 퍼센트로).
+                     종전 표시 전용 TextBlock(ZoomText)을 프리셋 드롭다운으로 바꿨다 — 값 표기는
+                     그대로 하고, 누르면 프리셋 8종(20/50/75/100/125/150/200/500 — 전부 A229 범위
+                     20~500 안이라 접힘이 없다)을 고를 수 있다. 선택 = 코드 OnZoomPresetClick의
+                     SetZoom 한 줄이라 범위·적용·저장이 기존 단일 경로 그대로다(제3 경로 없음).
+                     A263: 표시는 **상시**다 — 종전 "PDF·빈 화면은 빈 문자열"은 폐기했다(값은
+                     전역 저장 배율이라 어느 표면에서든 참이다). 못 바꾸는 표면(PDF·빈 화면)은
+                     A249 정책대로 비활성으로만 가른다. PDF에 프리셋을 잇지는 않는다 — PDF 줌은
+                     PdfPane의 ZoomFactor·Fit이 지배하는 별개 체계다.
+                     내용·활성의 갱신은 DocumentView.UpdateZoomText 한 곳(이름 유지).
+                     스타일은 FitOptionsButton과 같은 인라인 값 관용구(높이 32) — DropDownButton은
+                     키 있는 기본 스타일이 없어 BasedOn을 쓸 수 없다(App.xaml v0.113.1 주석).
+                     폭만 Auto다(내용이 "20%"~"500%"로 가변). A34 문자 핫키 없음(FitOptionsButton과
+                     같은 부류 — 툴팁은 고정값). 아래 IsEnabled="False"가 첫 프레임 값이다
+                     (초기 상태 = 빈 화면). -->
+                <DropDownButton x:Name="ZoomButton" Grid.Column="8"
+                                Height="32" Padding="8,2" BorderThickness="1" CornerRadius="4"
+                                VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                IsEnabled="False"
+                                ToolTipService.ToolTip="Zoom">
+                    <TextBlock x:Name="ZoomText" FontSize="12" />
+                    <DropDownButton.Flyout>
+                        <MenuFlyout Placement="Top">
+                            <MenuFlyoutItem Text="20%" Tag="20" Click="OnZoomPresetClick" />
+                            <MenuFlyoutItem Text="50%" Tag="50" Click="OnZoomPresetClick" />
+                            <MenuFlyoutItem Text="75%" Tag="75" Click="OnZoomPresetClick" />
+                            <MenuFlyoutItem Text="100%" Tag="100" Click="OnZoomPresetClick" />
+                            <MenuFlyoutItem Text="125%" Tag="125" Click="OnZoomPresetClick" />
+                            <MenuFlyoutItem Text="150%" Tag="150" Click="OnZoomPresetClick" />
+                            <MenuFlyoutItem Text="200%" Tag="200" Click="OnZoomPresetClick" />
+                            <MenuFlyoutItem Text="500%" Tag="500" Click="OnZoomPresetClick" />
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
                 <!-- A30 상태형 Fit — 본체 = 마지막 옵션 표시·클릭 시 재적용, 화살표 = A83 4옵션.
                      내용·툴팁은 코드(ShowPdfFitState/ShowTextFitState/UpdateFitButton)가 갱신하므로
                      아래 FontIcon은 초기값일 뿐이다(생성자에서 곧바로 빈 화면 표시 "1:1" 상자가 된다 — A260).

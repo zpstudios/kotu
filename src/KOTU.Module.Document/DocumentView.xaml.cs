@@ -186,7 +186,8 @@ public sealed partial class DocumentView : UserControl,
         _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText);
 
         // A215: 저장된 표시 토글 2축(라인 가이드·¶ 마커 — 기본 둘 다 켜짐)을 장식기와 버튼에 반영.
-        // 토글 노출 자체(에디터 표면에서만 — A224: 잠금 뷰 포함)는 UpdateDecorToggles가 모드 전환 지점마다 맞춘다.
+        // 토글 활성 자체(에디터 표면에서만 — A224: 잠금 뷰 포함)는 UpdateDecorToggles가 모드 전환
+        // 지점마다 맞춘다(A265에서 숨김 → 비활성으로 전환 — 버튼은 항상 보인다).
         _showGuides = settings.Get(DocumentModule.ShowGuidesSettingKey, true);
         _showMarks = settings.Get(DocumentModule.ShowMarksSettingKey, true);
         _decor.SetDecorVisibility(_showGuides, _showMarks);
@@ -345,15 +346,35 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>
-    /// A181: 하단 바 % 표기(이미지 ZoomText/A149 관용구 — 같은 값이면 대입하지 않는다).
-    /// 텍스트 문서가 열려 있는 동안 항상 표시(100% 포함), PDF·빈 화면·대용량 지연 대입 대기
-    /// (A177 — 그동안 _path는 null)는 빈 문자열. A189: 무제 문서도 텍스트 편집이라 표시한다.
+    /// A181 → A263: 하단 바 배율 버튼(ZoomButton)의 표기와 활성 상태를 한자리에서 맞춘다.
+    /// <para>표기 = 항상 현재 배율 % 다(이미지 ZoomText/A149 관용구 — 같은 값이면 대입하지 않는다).
+    /// A263에서 종전의 "PDF·빈 화면은 빈 문자열"을 폐기했다: _zoomPercent는 전역 저장 배율이라
+    /// 문서가 없어도 참인 값이고, A249 정책(숨김 금지·비활성만)에도 빈 표기가 어긋난다.</para>
+    /// <para>활성 = 텍스트 편집 대상이 있을 때만(파일 또는 무제 — ShowTextFitState와 같은 축).
+    /// PDF는 별개 줌 체계(PdfPane의 ZoomFactor·Fit)라 프리셋을 잇지 않고 비활성이고, 빈 화면·
+    /// 대용량 지연 대입 대기(A177 — 그동안 _path는 null)도 비활성이다. A189: 무제 문서도
+    /// 텍스트 편집이라 활성.</para>
+    /// 호출 지점 = ApplyZoom(값 변화)과 표면 전환 3곳(파일 열기·무제 시작·PDF 진입) —
+    /// PDF 이탈(HidePdf)은 곧바로 이 셋 중 하나가 뒤따르거나(텍스트 전환) 빈 화면 그대로다.
     /// </summary>
     private void UpdateZoomText()
     {
-        var text = _path is not null || _untitled ? $"{_zoomPercent}%" : string.Empty;
+        ZoomButton.IsEnabled = _path is not null || _untitled;
+        var text = $"{_zoomPercent}%";
         if (ZoomText.Text == text) return;
         ZoomText.Text = text;
+    }
+
+    /// <summary>
+    /// A263: 배율 프리셋 선택(20/50/75/100/125/150/200/500 — XAML MenuFlyout의 Tag가 값이다).
+    /// 적용은 SetZoom 한 줄 — 범위 접기·적용·저장이 전부 그 단일 경로에 있다(A181/A229/A261).
+    /// 절대 목표라 A261 합치기(RequestZoom)를 거치지 않는다: SetZoom 선두가 보류 중 목표를
+    /// 무효화하므로 직전 휠 연타가 이 선택을 덮지 않는다(Fit·리셋과 같은 직행 부류).
+    /// </summary>
+    private void OnZoomPresetClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem { Tag: string tag } && int.TryParse(tag, out var percent))
+            SetZoom(percent);
     }
 
     /// <summary>
@@ -919,10 +940,10 @@ public sealed partial class DocumentView : UserControl,
 
         EditorBox.Visibility = Visibility.Visible;
         _decor.Invalidate(); // A115: 새 문서·표시 전환이 레이아웃에 반영된 뒤 장식을 다시 그린다
-        UpdateDecorToggles(); // A215: 편집 모드 진입 — 표시 토글 노출
+        UpdateDecorToggles(); // A215→A265: 편집 모드 진입 — 표시 토글 활성
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = Path.GetFileName(path);
-        UpdateZoomText(); // A181: _path가 잡혔다 — 하단 바에 현재 배율 표시(항상, 100% 포함)
+        UpdateZoomText(); // A181→A263: _path가 잡혔다 — 배율 버튼 활성 + 현재 % 표기
         // A214: 파일이 바뀌면 텍스트 갈래 Fit 표시는 100% 아이콘으로 회귀(A30 준용 — 기억 안 함.
         // 줌 %는 안 건드린다). 위 HidePdf의 ShowTextFitState는 _path가 서기 전이라(빈 화면 판정
         // 가능) 상태가 선 지금 다시 부른다 — 같은 동기 흐름 안이라 중간 표시는 그려지지 않는다.
@@ -1114,10 +1135,10 @@ public sealed partial class DocumentView : UserControl,
 
         EditorBox.Visibility = Visibility.Visible;
         _decor.Invalidate(); // A115: 표시 전환이 레이아웃에 반영된 뒤 장식을 다시 그린다
-        UpdateDecorToggles(); // A215: 무제도 편집 모드 — 표시 토글 노출
+        UpdateDecorToggles(); // A215→A265: 무제도 편집 모드 — 표시 토글 활성
         PlaceholderText.Visibility = Visibility.Collapsed;
         FileNameText.Text = UntitledDisplayName;
-        UpdateZoomText(); // A181: 무제도 텍스트 편집 — 배율 표시
+        UpdateZoomText(); // A181→A263: 무제도 텍스트 편집 — 배율 버튼 활성
         // A214: 무제도 텍스트 갈래 — Fit 조절기 활성(ApplyLoadedText와 같은 회귀·재호출 이유).
         _lastTextFitOption = PdfFitMode.ActualSize;
         ShowTextFitState();
@@ -1351,14 +1372,26 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>A215: ¶·EOF 마커 표시 상태 — 위와 같은 3면 동기 축.</summary>
     private bool _showMarks = true;
 
-    /// <summary>A215→A224: 토글 노출의 단일 지점 — 기준은 "에디터 표면이 보이는가"다(A224에서
+    /// <summary>A215→A224→A265: 토글 상태의 단일 지점 — 기준은 "에디터 표면이 보이는가"다(A224에서
     /// "편집 모드인가"에서 재정의). 잠금 뷰(A224 — 에디터 그대로 + IsReadOnly)도 에디터 표면이라
-    /// 가이드·¶ 토글이 그대로 노출된다(사양). md 렌더 뷰·PDF·빈 화면은 종전대로 숨김.
+    /// 가이드·¶ 토글이 그대로 쓰인다(사양). md/HTML 렌더 뷰·PDF·빈 화면은 쓸 수 없다.
+    /// <para>A265(v0.262.0): 그 "쓸 수 없다"의 표현을 <b>숨김(Visibility) → 비활성(IsEnabled)</b>으로
+    /// 바꿨다. A249(v0.246.0)가 확정한 예외 4종 중 이 1종만 공식 해제한 것이다(2026-08-27 사용자
+    /// 답변 "무조건 버튼들 다 보이게·사용 못하면 비활성" — 직전 예외 확정의 명시 개정이지 규칙 1.6의
+    /// 재확인이 아니다). 근거 = 문서 하단 바의 다른 버튼(New·Save·Print·View·Fit)이 전부 상시
+    /// 표시·비활성 형이라 이 둘만 사라지면 바의 우측군 폭이 표면마다 출렁였다.</para>
+    /// IsEnabled는 Control의 속성이라 그룹 StackPanel(Panel)에는 없다 — 토글 2개에 각각 건다.
+    /// 첫 프레임 정합: XAML 초기값이 Visible + IsEnabled=False이고, 초기 표면은 빈 화면이라
+    /// 첫 상태 갱신(파일 열기·무제·PDF 진입 중 무엇이 오든)까지 그 값이 곧 정답이다.
     /// 호출 시점 = EditorBox.Visibility가 바뀌는 모드 전환 5곳(파일 열기·무제·렌더 진입/복귀·PDF)
-    /// — 잠금 뷰 전환은 Visibility가 안 바뀌어 호출이 필요 없다.</summary>
-    private void UpdateDecorToggles() =>
-        DecorTogglePanel.Visibility = EditorBox.Visibility == Visibility.Visible
-            ? Visibility.Visible : Visibility.Collapsed;
+    /// — 잠금 뷰 전환은 Visibility가 안 바뀌어 호출이 필요 없다.
+    /// 이 토글 2종에는 A34 문자 핫키가 없어(SetupHotkeys 등록은 Fit 2건뿐) 비활성 시 막을 키도 없다.</summary>
+    private void UpdateDecorToggles()
+    {
+        var onEditorSurface = EditorBox.Visibility == Visibility.Visible;
+        GuideToggleButton.IsEnabled = onEditorSurface;
+        MarksToggleButton.IsEnabled = onEditorSurface;
+    }
 
     /// <summary>A215: 가이드 토글 클릭 — 즉시 적용 + 즉시 저장(A181 줌 관용구).</summary>
     private void OnGuideToggleClick(object sender, RoutedEventArgs e)
@@ -1398,7 +1431,7 @@ public sealed partial class DocumentView : UserControl,
         UpdateViewToggle();
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(OpenPdf 관용구)
-        UpdateDecorToggles(); // A215→A224: 렌더 뷰 — 표시 토글 숨김(에디터 표면 전용)
+        UpdateDecorToggles(); // A215→A265: 렌더 뷰 — 표시 토글 비활성(에디터 표면 전용)
         RenderPane.Visibility = Visibility.Visible;
         // A225: 편집 중 바뀐 배율을 판이 서자마자 따라잡는다(내려가 있는 동안 ApplyZoom ⓔ는
         // 무동작이었다). 뷰포트가 아직 0이면 여기서도 무동작 — SizeChanged가 이어받는다.
@@ -1540,7 +1573,7 @@ public sealed partial class DocumentView : UserControl,
         RenderPane.Visibility = Visibility.Collapsed;
         EditorBox.Visibility = Visibility.Visible;
         _decor.Invalidate(); // A115: 에디터 복귀 — 다음 레이아웃에서 장식 재개
-        UpdateDecorToggles(); // A215: 편집 모드 복귀 — 표시 토글 재노출
+        UpdateDecorToggles(); // A215→A265: 편집 모드 복귀 — 표시 토글 재활성
         EditorBox.Focus(FocusState.Programmatic);
     }
 
@@ -1618,7 +1651,7 @@ public sealed partial class DocumentView : UserControl,
         UpdateViewToggle();
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(렌더 판 관용구)
-        UpdateDecorToggles(); // A215→A224: 표시 토글 숨김(에디터 표면 전용)
+        UpdateDecorToggles(); // A215→A265: 표시 토글 비활성(에디터 표면 전용)
         EnsureHtmlPane();
         // 지역 참조로 진행 — await 사이 CloseHtmlPane이 필드를 비워도(그쪽이 _htmlSeq를 올려
         // 아래 대조가 걸러 준다) 이 흐름 안에서는 확정 인스턴스만 만진다.
@@ -1665,7 +1698,7 @@ public sealed partial class DocumentView : UserControl,
         if (_htmlPane is { } pane) pane.Visibility = Visibility.Collapsed;
         EditorBox.Visibility = Visibility.Visible;
         _decor.Invalidate(); // A115: 에디터 복귀 — 다음 레이아웃에서 장식 재개
-        UpdateDecorToggles(); // A215: 편집 복귀 — 표시 토글 재노출
+        UpdateDecorToggles(); // A215→A265: 편집 복귀 — 표시 토글 재활성
         EditorBox.Focus(FocusState.Programmatic);
     }
 
@@ -1782,8 +1815,8 @@ public sealed partial class DocumentView : UserControl,
         ResetRenderState(false); // A190: 렌더 축 리셋 — PDF 뷰에는 토글이 없다(비활성)
         EditorBox.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다
-        UpdateDecorToggles(); // A215→A224: PDF 뷰 — 표시 토글 숨김(에디터 표면 전용)
-        UpdateZoomText(); // A181: PDF는 별개 줌 체계 — 텍스트 배율 표기를 비운다(_path=null)
+        UpdateDecorToggles(); // A215→A265: PDF 뷰 — 표시 토글 비활성(에디터 표면 전용)
+        UpdateZoomText(); // A181→A263: PDF는 별개 줌 체계 — 표기는 유지하고 버튼만 비활성(_path=null)
         // A211 배치 4: 텍스트 갈래 이탈(편집 대상이 방금 비워졌다) — 첫 PDF 열기의 로드 동안
         // 버튼이 텍스트 시절 활성으로 남지 않게 즉시 재판정한다(같은 패널 재사용 PDF→PDF는
         // 직전 문서가 인쇄 대상으로 유지되는 배치 3 사양 그대로 — PdfPane.PrintPageCount 주석).
