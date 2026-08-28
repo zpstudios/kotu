@@ -28,8 +28,23 @@ namespace KOTU.App.Controls;
 /// </summary>
 public sealed partial class ThumbnailExplorer : UserControl
 {
-    /// <summary>이미지 미리보기 디코드 폭 상한(물리 px) — 원본 크기 디코드로 메모리가 폭주하지 않게.</summary>
-    private const int PreviewDecodeWidth = 256;
+    /// <summary>
+    /// 미리보기 요청 폭 상한(물리 px) — 원본 크기 디코드로 메모리가 폭주하지 않게.
+    /// 이 파일의 미리보기 3경로가 공유하는 유일한 수치다: ① 이미지 실디코드
+    /// (MakeImagePreview의 BitmapImage.DecodePixelWidth) ② placeholder 캐시 전용 셸 썸네일
+    /// (FillCachedThumbnailAsync) ③ 워커 지연 교체 셸 썸네일(FetchTilePreview) — 셋이 같은 값을
+    /// 써야 같은 파일이 경로에 따라 다른 선명도로 뜨는 일이 없다.
+    /// <b>A275(v0.272.0): 256 → 768.</b> 타일 한 변 = floor(중앙 실폭 ÷ 열수)라 큰 창·고DPI에서
+    /// 256은 업스케일이었다(예: 2560px 폭·4열이면 타일 640 → 256을 2.5배 늘려 그린다).
+    /// 768은 셸 썸네일 캐시가 실제로 굽는 버킷 상단(1024 아래 최대 상용 버킷)이라 요청이
+    /// 버킷에 맞아떨어지고, 3열~4열 배치의 타일 실크기를 대부분 덮는다. 메모리는 픽셀 수 기준
+    /// 대략 9배(768² ÷ 256²)로 늘지만 타일은 화면에 보이는 수십 장 규모라 수용한다.
+    /// 화면 폭·RasterizationScale로 매번 계산하는 동적 산식은 기각했다 — 요청 폭이 폴더·창마다
+    /// 흔들리면 셸 썸네일 캐시가 버킷마다 새로 구워져 첫 표시가 느려지고, 캐시 적중률이 떨어진다.
+    /// ※ 앱 .ico 자산(16~256 7종)과는 무관하다 — 이 상수는 파일 미리보기 전용이다.
+    /// ※ 창 아이콘 2프레임(16/32)의 DPI 추종은 이 항목 범위 밖(A275 ② 별건 후보).
+    /// </summary>
+    private const int PreviewDecodeWidth = 768;
 
     /// <summary>A233: 텍스트 프리뷰가 파일 앞에서 읽는 상한(바이트) — 타일에 이 이상 안 보이므로
     /// 전체 읽기는 낭비다(대형 파일 보호 — File.ReadAllText 금지, FileStream 부분 읽기).</summary>
@@ -1196,8 +1211,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 워커 스레드: 타일 지연 교체 1회분 — 셸 썸네일 바이트(A242)와 오디오 정보 텍스트(A270)를
     /// 한 번의 왕복으로 함께 읽는다(StorageFile 취득도 1회. 파일당 워커 왕복이 2회가 되면
     /// 게이트 상한이 사실상 반토막 나고 seq 대조도 두 벌이 된다 — 통합이 그 둘을 다 막는다).
-    /// 썸네일 = ExplorerPane.FetchThumbnail 이식·요청 크기만 256 = PreviewDecodeWidth(이미지
-    /// 실디코드 폭과 통일). StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는
+    /// 썸네일 = ExplorerPane.FetchThumbnail 이식·요청 크기만 PreviewDecodeWidth(이미지 실디코드
+    /// 폭과 통일 — A275에서 256 → 768). StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는
     /// 여기서 동기 대기한다(전용 스레드라 UI 교착 없음). cachedOnly(A175): 옵션 없는 호출은
     /// 캐시가 비면 시스템이 원본을 열어 생성하므로 placeholder에서는 하이드레이션(전체
     /// 다운로드)이 된다 — ReturnOnlyIfCached로 캐시에 없으면 null.
