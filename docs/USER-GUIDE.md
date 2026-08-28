@@ -149,11 +149,15 @@ Seven modules. Switch between them from the menu at the bottom left.
 
 - Same transport as Video: `Space`, `←` / `→` (±5 s), `↑` / `↓` and the wheel (volume ±5), `M` to
   mute, `S` for the same six speeds. Clicking the surface also toggles play/pause.
-- A live waveform fills the window while a track plays, with the track name above it.
+- A live visualization fills the window while a track plays, with the track name above it. The
+  **visualizer** button at the right-hand end of the bar picks the style — **Scope** (the default
+  waveform), **Spectrum**, **Spectrometer**, **VU meter**, or **Off** for a plain black surface —
+  and the choice sticks for next time. Changing the style mid-track re-opens the playback engine,
+  so the sound drops for an instant and then carries on from the same spot.
 - **The controls stand where Video puts them.** Loop, ▶, the position, the seek slider, the length,
   mute, the volume slider and the speed box occupy the same places in both modules, so nothing
-  shifts under the pointer when you go from a video to a track. Audio's own equalizer and
-  audio-device buttons take the right-hand end, where Video keeps subtitles and Fit. The
+  shifts under the pointer when you go from a video to a track. Audio's own equalizer, audio-device
+  and visualizer buttons take the right-hand end, where Video keeps subtitles and Fit. The
   narrow-window rule is the same too: below about 640 px of bar the volume slider and the two time
   labels are hidden.
 - **Resume** works exactly as in Video (over 30 seconds played, stopped before the last 3%).

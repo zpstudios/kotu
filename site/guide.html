@@ -424,11 +424,17 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>Same transport as Video: <kbd>Space</kbd>, <kbd>←</kbd> / <kbd>→</kbd> (±5 s), <kbd>↑</kbd> /
               <kbd>↓</kbd> and the wheel (volume ±5), <kbd>M</kbd> to mute, <kbd>S</kbd> for the same six
               speeds. Clicking the surface also toggles play/pause.</li>
-          <li>A live waveform fills the window while a track plays, with the track name above it.</li>
+          <li>A live visualization fills the window while a track plays, with the track name above it. The
+              <strong>visualizer</strong> button at the right-hand end of the bar picks the style —
+              <em>Scope</em> (the default waveform), <em>Spectrum</em>, <em>Spectrometer</em>,
+              <em>VU meter</em>, or <em>Off</em> for a plain black surface — and the choice sticks for next
+              time. Changing the style mid-track re-opens the playback engine, so the sound drops for an
+              instant and then carries on from the same spot.</li>
           <li><strong>The controls stand where Video puts them.</strong> Loop, ▶, the position, the seek
               slider, the length, mute, the volume slider and the speed box occupy the same places in both
               modules, so nothing shifts under the pointer when you go from a video to a track. Audio's own
-              equalizer and audio-device buttons take the right-hand end, where Video keeps subtitles and Fit.
+              equalizer, audio-device and visualizer buttons take the right-hand end, where Video keeps
+              subtitles and Fit.
               The narrow-window rule is the same too: below about 640 px of bar the volume slider and the two
               time labels are hidden.</li>
           <li><strong>Resume</strong> works exactly as in Video.</li>

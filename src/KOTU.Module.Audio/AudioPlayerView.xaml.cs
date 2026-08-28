@@ -20,9 +20,9 @@ namespace KOTU.Module.Audio;
 /// 음악 플레이어 화면 (A10 — 비디오 모듈에서 분리). 재생/일시정지, 시킹(슬라이더·←/→ 5초),
 /// 볼륨(↑/↓)·음소거(M), 배속, 이어듣기, 이퀄라이저 프리셋(A163)·오디오 장치 선택(A164)을 제공한다. 전체화면은 A151부터 셸의 3단 모드 체계
 /// (Enter 순환·Alt+Enter) 몫이다 — 이 뷰에는 진입 코드가 없다.
-/// 표면은 libvlc 파형 시각화(scope)가 채우고 상단에 ♪ + 파일명 오버레이를 띄운다.
-/// 파형 시각화는 인스턴스 옵션으로만 동작하므로(v0.12.0 실기기 확인) 항상 켠 인스턴스를
-/// 1회 생성해 재사용한다 — 비디오처럼 음악↔영상 교체 재생성이 필요 없다.
+/// 표면은 libvlc 시각화(A268 스타일 선택 — 기본 scope 파형)가 채우고 상단에 ♪ + 파일명 오버레이를 띄운다.
+/// 시각화는 인스턴스 옵션으로만 동작하므로(v0.12.0 실기기 확인) 인스턴스는 1회 생성해
+/// 재사용하되, 스타일이 바뀌는 순간만 예외로 폐기·재생성한다(RecreatePlayer — A268).
 /// 스레드 모델(A42): libvlc 생성·해제는 뷰 전용 워커에서 직렬로. libvlc 이벤트는
 /// libvlc 자체 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
@@ -215,6 +215,34 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// <summary>지연 생성. 이 뷰는 Unloaded가 곧 최종 해체(_tornDown)라 재생성될 일은 없다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU audio worker");
 
+    // ---------- 비주얼라이저 스타일 상태 (A268) ----------
+    // 재생 표면의 libvlc 시각화(visual 플러그인) 스타일. 시각화는 인스턴스 옵션 전용이라
+    // (v0.12.0 실기기 확인 — 클래스 주석) 스타일 변경 = 인스턴스 폐기·재생성(RecreatePlayer)이다.
+    // 저장 키는 전역 1벌·즉시 Set+Save(EQ 선례 — 설정 화면 노출 없음).
+    // goom·projectM 등 별도 플러그인 스타일은 배포본 동봉 여부 실기기 확인 후 2차 후보(등재문).
+    // ※ 싱크 참고(등재문에 흡수된 "파형과 음악 싱크 안 맞음" 보고): 시각화가 소리를 앞서는
+    // 어긋남은 libvlc가 시각화를 디코드 시점에 직접 렌더하면서 aout 버퍼 지연(출력까지의
+    // 수백 ms)을 보정하지 않는 알려진 동작이다 — 앱 타이머·폴링과 무관해 앱 측 수리 축이
+    // 없다. 스타일별 체감 오프셋은 실기기 계측 포인트(상수로 확인되면 보정 실험이 2차 후보).
+
+    private const string VisualizerKey = "audio.visualizer";
+    private const string VisualizerDefault = "scope"; // 현행 상시 파형(v0.12.0)과 같은 기본값
+
+    /// <summary>표기·저장값·libvlc effect-list 값의 단일 원본 — 배열 순서가 곧 플라이아웃 순서다.
+    /// Off는 시각화 옵션 자체를 뺀 인스턴스(영상 모듈의 옵션 구성과 동일 — 검은 표면만 남는다).
+    /// 저장값은 전부 소문자, effect-list 표기만 libvlc 철자(vuMeter)를 따른다.</summary>
+    private static readonly (string Label, string Key, string? Effect)[] VisualizerStyles =
+    [
+        ("Off", "off", null),
+        ("Scope", "scope", "scope"),
+        ("Spectrum", "spectrum", "spectrum"),
+        ("Spectrometer", "spectrometer", "spectrometer"),
+        ("VU meter", "vumeter", "vuMeter"),
+    ];
+
+    private string _visualizer;                           // 현재 선택(저장값) — 로컬 소유(_muted 규칙)
+    private string _playerVisualizer = VisualizerDefault; // 현재 인스턴스에 구워진 값 — 재생성 필요 판정 기준
+
     // ---------- A11(v0.212.0) → A255(v0.255.0) 재생 목록 루프 상태 (설계 docs/A11-playlist-design.md §3) ----------
     // 영상에 먼저 구현한 구조의 동형 이식이다 — 키 접두사만 audio.* 로 다르고
     // 의미·기본값·우선순위는 한 글자도 다르지 않다(설계 §7 배치 ③).
@@ -330,6 +358,14 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             FillInputDeviceMenu();
         };
 
+        // A268: 비주얼라이저 — 시작 시 로드해 첫 인스턴스 옵션(BuildPlayerOptions)에 굽는다.
+        // 알 수 없는 저장값(수동 편집 등)은 기본 scope로 접는다(EQ의 목록 밖 이름 폴백과
+        // 같은 규칙 — 설정 파일은 건드리지 않는다). 플라이아웃은 열 때마다 새로 채운다
+        // (위 장치 플라이아웃의 Opening 재구성 관례 — 폴백으로도 체크 표시가 어긋날 수 있다).
+        _visualizer = _settings.Get(VisualizerKey, VisualizerDefault);
+        if (!IsKnownVisualizer(_visualizer)) _visualizer = VisualizerDefault;
+        VisualizerFlyout.Opening += (_, _) => FillVisualizerFlyout();
+
         _suppressVolumeEvent = true;
         VolumeSlider.Value = Math.Clamp(_settings.Get("audio.volume", 80), 0, 100);
         _suppressVolumeEvent = false;
@@ -395,10 +431,9 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         {
             if (_tornDown || _player is not null) return;
 
-            // --no-video-title-show: 재생 시작 시 파일명이 화면에 오버레이되는 libvlc 기본 동작 끔.
-            // --audio-visual/--effect-list: 파형 시각화(scope) — 인스턴스 옵션으로만 동작(A10 이관).
-            string[] options =
-                [.. swapOptions, "--no-video-title-show", "--audio-visual=visual", "--effect-list=scope"];
+            // A268: 옵션 조립은 BuildPlayerOptions로 일원화 — 시각화 스타일을 인스턴스에 굽는다.
+            var style = _visualizer;
+            string[] options = BuildPlayerOptions(swapOptions, style);
 
             var (libVlc, player, presetNames) = await Worker.Run(_ =>
             {
@@ -442,6 +477,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
             _libVlc = libVlc;
             _player = player;
+            _playerVisualizer = style; // A268: 이 인스턴스에 구운 스타일 확정(RecreatePlayer의 판정 기준)
             Vlc.MediaPlayer = player;
 
             player.Volume = (int)VolumeSlider.Value;
@@ -882,7 +918,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (_player is not { } p) return;
 
         // 끝까지 재생된(Ended) 상태에서는 Play()만으로 재시작이 안 되므로 미디어를 다시 건다.
-        if (p.State == VLCState.Ended)
+        // A268: NothingSpecial도 같은 경로다 — 재생 중이 아닐 때 비주얼라이저를 바꾸면 미디어
+        // 없는 새 인스턴스만 남아(Play()가 무동작) ▶가 침묵하게 된다. 위치는 교체 때 이어듣기
+        // 저장에 실어 둬 PlayCurrent(_pendingResumeMs)가 복원한다(RecreatePlayer 주석).
+        if (p.State is VLCState.Ended or VLCState.NothingSpecial)
         {
             PlayCurrent();
             return;
@@ -1105,6 +1144,211 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             Placement = FlyoutPlacementMode.Top,
         };
         flyout.ShowAt(DevicesButton);
+    }
+
+    // ---------- 비주얼라이저 (A268) ----------
+
+    /// <summary>저장값이 스타일 목록에 있는가 — 생성자 로드의 폴백 판정.</summary>
+    private static bool IsKnownVisualizer(string style)
+    {
+        foreach (var (_, key, _) in VisualizerStyles)
+            if (string.Equals(key, style, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
+    /// <summary>저장값 → libvlc effect-list 값(null = 시각화 없음 = Off).</summary>
+    private static string? EffectListValue(string style)
+    {
+        foreach (var (_, key, effect) in VisualizerStyles)
+            if (string.Equals(key, style, StringComparison.Ordinal)) return effect;
+        return null;
+    }
+
+    /// <summary>
+    /// libvlc 인스턴스 옵션 조립 — 스타일을 인스턴스에 굽는 단일 지점(첫 생성·재생성 공용).
+    /// --no-video-title-show: 재생 시작 시 파일명이 화면에 오버레이되는 libvlc 기본 동작 끔.
+    /// --audio-visual/--effect-list: 시각화(visual 플러그인) — 인스턴스 옵션으로만 동작(A10 이관).
+    /// </summary>
+    private static string[] BuildPlayerOptions(string[] swapOptions, string style)
+    {
+        if (EffectListValue(style) is { } effect)
+            return [.. swapOptions, "--no-video-title-show", "--audio-visual=visual", $"--effect-list={effect}"];
+        return [.. swapOptions, "--no-video-title-show"]; // Off — 영상 모듈과 같은 옵션 구성
+    }
+
+    /// <summary>플라이아웃을 스타일 라디오 5택으로 채운다(EQ의 AddEqualizerChoice 관용구).</summary>
+    private void FillVisualizerFlyout()
+    {
+        VisualizerFlyout.Items.Clear();
+        foreach (var (label, key, _) in VisualizerStyles)
+        {
+            var item = new RadioMenuFlyoutItem
+            {
+                Text = label,
+                GroupName = "visualizer",
+                IsChecked = string.Equals(key, _visualizer, StringComparison.Ordinal),
+            };
+            item.Click += (_, _) => SelectVisualizer(key);
+            VisualizerFlyout.Items.Add(item);
+        }
+    }
+
+    /// <summary>
+    /// 스타일 선택: 로컬 상태 갱신 + 즉시 저장(EQ 선례) 후 인스턴스 재생성을 건다.
+    /// 같은 항목 재선택은 무동작 — 재생성은 소리가 한순간 끊기는 비용이 있어 공짜가 아니다.
+    /// </summary>
+    private void SelectVisualizer(string style)
+    {
+        if (string.Equals(style, _visualizer, StringComparison.Ordinal)) return;
+        _visualizer = style;
+        _settings.Set(VisualizerKey, style);
+        _settings.Save();
+        RecreatePlayer();
+    }
+
+    /// <summary>
+    /// A268: 스타일 반영을 위한 libvlc 인스턴스 재생성 — 시각화는 인스턴스 옵션 전용이라
+    /// 이 길밖에 없다. 흐름(전 구간 _playerGate 직렬 — EnsurePlayerAsync·연타 선택과 상호 배제):
+    ///   ① 상태 보관: 파일·재생 여부·위치. 위치는 이어듣기 저장에도 실어 둔다(OnUnloaded
+    ///      관용구) — 교체 중 창이 닫혀도, 재생 중이 아니어서 재장전을 생략해도 위치가
+    ///      살아남는 단일 경로다(샘플 곡은 이어듣기 제외라 0초 재시작 — 18초짜리라 수용).
+    ///   ② 교체 중 가드: 이벤트 해제 + _player/_libVlc 비움 — EOF·시크·볼륨·Space 등 모든
+    ///      핸들러가 기존 `_player is { } p` 가드에서 무동작으로 접힌다(별도 플래그 불요).
+    ///      재생 중이었으면 구 인스턴스를 여기서 일시정지한다 — 새 인스턴스 재장전과 소리가
+    ///      겹치면 같은 곡이 이중으로 들린다(이벤트는 이미 떼어 ▶ 표기는 흔들리지 않는다).
+    ///   ③ 새 인스턴스 생성(워커 — 첫 생성과 같은 배경 실행. Core.Initialize는 첫 생성이 마쳤다).
+    ///      실패하면 구 인스턴스로 원복하고 재생을 되살린다(설정값은 저장돼 있으므로 다음
+    ///      생성 기회가 다시 시도한다).
+    ///   ④ VideoView 재바인딩(Vlc.MediaPlayer 재대입 — 저장소 선례 0 = 실기기 1순위 확인
+    ///      포인트) + 재적용: 볼륨·음소거(_muted 로컬 소유 승계)·EQ. 배속·출력 장치는 기존
+    ///      Playing 핸들러가 재적용한다(aout 생성 후가 유효 적용점 — 기존 규칙 그대로).
+    ///   ⑤ 구 인스턴스 해제 — 같은 워커 직렬 큐라 ③ 뒤에 실행된다(A42 순서 보장). 창 닫힘
+    ///      경합: OnUnloaded는 ②에서 비워진 필드 때문에 아무것도 해제하지 않으므로 해제
+    ///      주체는 항상 이 메서드 한쪽이다(이중 해제 없음).
+    ///   ⑥ 재생 중이었고 파일이 그대로면 ReplayCurrent로 재장전 + _pendingResumeMs로 위치
+    ///      복원(Playing에서 적용 — 기존 이어듣기 관용구). 그새 다른 파일로 전환됐으면 그
+    ///      OpenPath가 게이트 뒤에 대기 중이라 여기서는 손대지 않는다.
+    /// 등재문의 "해제 → 생성" 대신 "생성 → 교체 → 해제" 순서를 택했다(설계 판단): 해제를
+    /// 먼저 하면 VideoView가 해제된 플레이어를 무는 구간이 생겨, 그 사이 리사이즈 등이 그
+    /// 핸들을 건드리면 죽는다. 산 것끼리 맞바꾸면 그 구간이 없다. 대신 생성 완료까지 구·신
+    /// 인스턴스가 같은 스왑체인 포인터(_swapChainOptions)를 잠깐 공유하는데, 구는 일시정지·
+    /// 신은 재생 전이라 동시 렌더 축이 없다 — 실기기 확인 포인트.
+    /// 최소 복구법(재바인딩이 실기기에서 불발일 때): 이 메서드 본문을 조기 return으로 비워
+    /// "다음 재생부터 적용" 다운그레이드 — SelectVisualizer의 저장은 남으므로 모듈 재진입
+    /// (뷰 재생성)의 EnsurePlayerAsync가 새 옵션을 쓴다.
+    /// </summary>
+    private async void RecreatePlayer()
+    {
+        if (_swapChainOptions is not { } swapOptions) return; // 첫 생성 전 — 생성 시점에 새 값이 구워진다
+
+        await _playerGate.WaitAsync();
+        try
+        {
+            if (_tornDown) return;
+            if (_player is not { } oldPlayer || _libVlc is not { } oldLib)
+                return; // 인스턴스 없음 — 다음 EnsurePlayerAsync가 현재 설정으로 만든다
+            var style = _visualizer;
+            if (string.Equals(_playerVisualizer, style, StringComparison.Ordinal))
+                return; // 연타·경합으로 이미 목표 상태 — 재생성 불요
+
+            // ① 상태 보관
+            var file = _filePath;
+            var wasPlaying = oldPlayer.IsPlaying;
+            var resumeMs = oldPlayer.Time;
+
+            // ② 교체 중 가드 (요약 주석 참고)
+            UnhookPlayerEvents(oldPlayer);
+            _player = null;
+            _libVlc = null;
+            if (wasPlaying && oldPlayer.CanPause) oldPlayer.Pause();
+            if (file is not null && !IsSampleTrack(file) && _durationMs > 0)
+            {
+                try { _resumeStore.Report(file, resumeMs, _durationMs); }
+                catch { /* 저장 실패가 교체를 막으면 안 된다 */ }
+            }
+
+            // ③ 새 인스턴스 생성
+            var options = BuildPlayerOptions(swapOptions, style);
+            LibVLC libVlc;
+            MediaPlayer player;
+            try
+            {
+                (libVlc, player) = await Worker.Run(_ =>
+                {
+                    var lib = new LibVLC(options);
+                    return (lib, new MediaPlayer(lib));
+                });
+            }
+            catch (Exception ex)
+            {
+                if (_tornDown)
+                {
+                    // 실패 + 창 닫힘 — 구 인스턴스만 남았다: OnUnloaded 몫을 여기서 대신한다.
+                    Worker.Post(() =>
+                    {
+                        oldPlayer.Stop();
+                        oldPlayer.Dispose();
+                        oldLib.Dispose();
+                    });
+                    return;
+                }
+                // 원복: 재생 유지가 우선 — _playerVisualizer는 구 값 그대로라 재선택하면 재시도된다.
+                _player = oldPlayer;
+                _libVlc = oldLib;
+                HookPlayerEvents(oldPlayer);
+                if (wasPlaying) oldPlayer.Play(); // ②의 일시정지 되돌림
+                ShowMessage($"Visualizer change failed: {ex.Message}");
+                return;
+            }
+
+            if (_tornDown)
+            {
+                // 교체 중 창 닫힘: 구·신 인스턴스 전부 여기서 해제한다(⑤ 요약 주석 — 이중 해제 없음).
+                Worker.Post(() =>
+                {
+                    oldPlayer.Stop();
+                    oldPlayer.Dispose();
+                    oldLib.Dispose();
+                    player.Dispose();
+                    libVlc.Dispose();
+                });
+                return;
+            }
+
+            // ④ 재바인딩 + 재적용
+            _libVlc = libVlc;
+            _player = player;
+            _playerVisualizer = style;
+            Vlc.MediaPlayer = player;
+
+            player.Volume = (int)VolumeSlider.Value; // EnsurePlayerAsync와 같은 적용점
+            if (_muted) player.Mute = true;          // A28: 로컬 소유 상태 승계(버튼 아이콘은 이미 맞다)
+            HookPlayerEvents(player);
+            ApplyEqualizer(player);                  // 프리셋 목록은 libvlc 빌드 불변 — 재열거 불요
+
+            // ⑤ 구 인스턴스 해제 (워커 직렬 — OnUnloaded의 해제 관용구 그대로)
+            Worker.Post(() =>
+            {
+                oldPlayer.Stop();
+                oldPlayer.Dispose();
+                oldLib.Dispose();
+            });
+
+            // ⑥ 재장전 + 위치 복원
+            if (wasPlaying && file is not null && string.Equals(file, _filePath, StringComparison.Ordinal))
+            {
+                ReplayCurrent();             // 셸 재동기화·카운터 리셋 없는 재장전(A11 변형 재사용)
+                _pendingResumeMs = resumeMs; // ReplayCurrent가 -1로 둔 값을 덮어써 위치 복원
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Visualizer change failed: {ex.Message}");
+        }
+        finally
+        {
+            _playerGate.Release();
+        }
     }
 
     // ---------- A255 루프 모드·횟수 (본체 클릭 = 모드 순환 · 우클릭 플라이아웃 = 횟수) ----------

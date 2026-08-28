@@ -28,7 +28,8 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 파형 표면: libvlc 파형 시각화가 채운다. 클릭 = 재생/일시정지, 휠 = 볼륨 (핸들러는 코드에서 연결) -->
+        <!-- 시각화 표면: libvlc 시각화(A268 스타일 선택 — 기본 scope 파형, Off면 검은 표면)가 채운다.
+             클릭 = 재생/일시정지, 휠 = 볼륨 (핸들러는 코드에서 연결) -->
         <Grid x:Name="AudioSurface" Grid.Row="0" Background="Black" Tapped="OnSurfaceTapped">
             <vlc:VideoView x:Name="Vlc" />
             <!-- 상단에 ♪ + 파일명 (파형이 표면을 채우므로 가리지 않게 작게, 입력 통과) -->
@@ -74,12 +75,16 @@
                  고정 폭을 영상 바와 등식으로 맞춘다(시크는 star 유지 — 체감 레이아웃 변화 최소).
                    좌군(두 모듈 동일): 루프 32 + 간격 6 = 38.
                    우군 등식: 영상 = 간격 6 + 자막 32 + 간격 6 + Fit 64 = 108
-                             오디오 = 간격 6 + EQ 32 + 간격 6 + 장치 32 + 간격 6 + 스페이서 c10(26) = 108.
+                             오디오(A268 전) = 간격 6 + EQ 32 + 간격 6 + 장치 32 + 간격 6 + 스페이서 c10(26) = 108.
                  폭 재계수(A40 방식): 고정 폭 합 = 1칸 버튼 5개(루프·재생·음소거·EQ·장치) 160 +
                  볼륨 101 + 배속 84 + 스페이서 26 + 간격 6×10 = 431 — 영상(431)과 정확히 같다
                  (정렬의 목적 그대로). A250(v0.246.0)에서 볼륨이 96→101이 되어 두 모듈이 나란히
                  426 → 431이 됐다(스페이서 26·우군 등식은 불변 — 볼륨은 공통 클러스터 안이라
                  양쪽이 같은 +5를 받아 정렬이 그대로 성립한다).
+                 ⚠️ A268 잠정: c10 스페이서(26)가 비주얼라이저 버튼(32)으로 바뀌어 오디오 우군
+                 108 → 114, 고정 폭 합 431 → 437 — 공통 클러스터가 영상과 6px 어긋난 상태다.
+                 재계수(영상 우군 끝 0폭 스페이서 추가·축약 임계 645→651)와 EQ↔장치 스왑은
+                 직렬 다음 배치 A269 몫(등재문 확정)이라 여기서는 칸만 확보했다.
                  종전 "비디오보다 32 작아 축약 불요" 판정은 그래서 소멸 —
                  영상의 축약 로직(UpdateCompactTransport, 임계 645·볼륨/시간 숨김)을 동형 이식했다.
                  숨김 대상까지 같아야 좁은 창(축약 후)에서도 클러스터가 어긋나지 않는다. -->
@@ -94,7 +99,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="26" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- A27(v0.107.0): 하단 바 버튼은 1칸(32×32)·2칸(84×32) 두 규격만
@@ -155,9 +160,19 @@
                     <MenuFlyout x:Name="DevicesFlyout" Placement="Top" />
                 </Button.Flyout>
             </Button>
-            <!-- c10 = A217 정렬 스페이서(요소 없는 고정 26 칸) — 영상 우군(자막+Fit = 108)과
-                 오디오 우군(EQ+장치 = 76)의 차 32에서 이 칸이 끌고 오는 간격 6을 뺀 값.
-                 위 헤더 주석의 우군 등식을 상수로 만든 것 — 우군 구성이 바뀌면 함께 재계수할 것. -->
+            <!-- A268: 비주얼라이저 스타일 — EQ 버튼 규격(1칸 32×32 + 라디오 플라이아웃 Top).
+                 c10은 구 A217 정렬 스페이서(고정 26) 자리로, A269 최종 배치(장치→EQ→비주얼라이저)의
+                 끝 칸을 미리 차지했다(스페이서 소멸 — 정렬 6px 어긋남·재계수는 위 헤더 주석의
+                 A268 잠정 단락 참고). 항목은 코드(FillVisualizerFlyout)가 열 때마다 채운다
+                 (선택 상태 반영 — 장치 플라이아웃의 Opening 재구성 관례). 항상 활성 — 선택은
+                 플레이어가 없어도 저장돼 첫 생성 인스턴스 옵션에 반영된다. -->
+            <Button x:Name="VisualizerButton" Grid.Column="10" Style="{StaticResource BottomBarButtonStyle}"
+                    ToolTipService.ToolTip="Visualizer">
+                <FontIcon Glyph="&#xE8D6;" FontSize="18" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="VisualizerFlyout" Placement="Top" />
+                </Button.Flyout>
+            </Button>
         </Grid>
     </Grid>
 </UserControl>
