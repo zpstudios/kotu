@@ -610,7 +610,9 @@ left, thumbnails in the centre, file information on the right. The thumbnails ar
 grid is 4 columns wide with both sidebars docked, 6 with one and 8 with none. Image files show a
 real miniature; text documents — `.txt .md .log .ini .html` and friends — show the first lines of
 their content, loaded in the background so the grid never waits; everything else shows its
-extension on the module's colour.
+extension on the module's colour. Audio files add their own facts under the tile — the playing
+length, the bit rate, the sample rate and the number of channels — printed on the album art when
+the file has one, and on the extension tile when it has not.
 
 - **Each row in the left panel is two lines** — the file name on the first, and on the second its
   size, one fact from the file's own module — playing length for video and audio, resolution for an

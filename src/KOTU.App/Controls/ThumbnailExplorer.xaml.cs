@@ -859,6 +859,9 @@ public sealed partial class ThumbnailExplorer : UserControl
             using var thumb = await file.GetThumbnailAsync(
                 ThumbnailMode.SingleItem, PreviewDecodeWidth, ThumbnailOptions.ReturnOnlyIfCached);
             if (thumb is null || thumb.Size == 0) return;
+            // A270 ③: 파일 종류 아이콘은 무정보다 — 확장자 타일을 덮지 않는다(FetchTilePreview와
+            // 같은 판정·같은 복구법: 이 줄만 지우면 종전 동작). 두 번째 GetThumbnailAsync 호출부.
+            if (thumb.Type == ThumbnailType.Icon) return;
 
             // 스트림 → 바이트 → BitmapImage: ExplorerPane.FetchThumbnail과 같은 변환 관용구
             // (검증된 형태만 복제 — thumb를 SetSourceAsync에 직접 넘기는 선례가 저장소에 없다).
@@ -926,6 +929,16 @@ public sealed partial class ThumbnailExplorer : UserControl
         !entry.IsPlaceholder
         && !string.Equals(Path.GetExtension(entry.Name), ".pdf", StringComparison.OrdinalIgnoreCase)
         && ExplorerListing.MatchesExtension(entry.Name, KOTU.Module.Document.DocumentModule.Extensions);
+
+    /// <summary>
+    /// 오디오 정보 표기(A270) 대상인지 — 오디오 모듈 담당 목록(AudioModule.Extensions)을 그대로
+    /// 재사용한다(ExplorerPane.InfoKindOf의 Audio 갈래와 같은 모듈 public static 참조 선례라
+    /// 목록 추가분을 자동 추종한다). 클라우드 전용(placeholder) 파일은 셸 속성 조회조차
+    /// 하이드레이션(전체 다운로드)을 부를 수 있어 제외한다(A175 — 확장자 타일 그대로).
+    /// </summary>
+    private static bool IsAudioInfoFile(ExplorerListing.Entry entry) =>
+        !entry.IsPlaceholder
+        && ExplorerListing.MatchesExtension(entry.Name, KOTU.Module.Audio.AudioModule.Extensions);
 
     /// <summary>
     /// 텍스트 파일 타일 (A233): 즉시 확장자 타일을 그려 두고, 워커 읽기가 끝나면 그 타일의
@@ -1086,7 +1099,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         host.Children.Add(MakeExtensionTile(entry));
         var badge = MakePendingBadge();
         host.Children.Add(badge);
-        _ = FillShellThumbnailAsync(host, badge, entry.Path, entry.IsPlaceholder, _showSeq);
+        // A270: 오디오면 같은 워커 왕복에서 셸 속성(길이·비트레이트·샘플레이트·채널)도 함께 읽는다.
+        _ = FillShellThumbnailAsync(host, badge, entry, IsAudioInfoFile(entry), _showSeq);
         return host;
     }
 
@@ -1112,29 +1126,41 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 교체한다 (A242 — FillTextPreviewAsync의 A194 발사 구조 그대로: UI 스레드에서 시작하므로
     /// await 후속부도 UI 스레드, 낡음 이중 방어 = ① 게이트 통과 시점 ② 완료 시점 seq 대조,
     /// host·badge는 이 타일 전용 클로저 캡처라 교체가 다른 타일로 갈 수 없고, Unloaded·
-    /// ShowLoading(A243)은 _showSeq를 올려 보류 전부를 무산시킨다). cachedOnly = 클라우드 전용
-    /// (placeholder) 파일 — 캐시·클라우드 제공 썸네일만 요청(A175 하이드레이션 금지 불변).
+    /// ShowLoading(A243)은 _showSeq를 올려 보류 전부를 무산시킨다). 클라우드 전용(placeholder)
+    /// 파일은 entry.IsPlaceholder가 그대로 워커의 cachedOnly가 되어 캐시·클라우드 제공 썸네일만
+    /// 요청한다(A175 하이드레이션 금지 불변 — 속성 조회도 IsAudioInfoFile이 미리 접는다).
     /// 추출 실패·썸네일 없음·비트맵 디코드 실패는 배지만 걷고 확장자 타일 유지(안내 없음).
+    /// A270: 한 워커 왕복이 썸네일과 오디오 정보를 함께 물어 오므로 seq 대조도 한 벌이다 —
+    /// 교체 없음(아이콘형·실패) 갈래에서는 확장자 타일 하단에 정보를 얹고(MakeAudioInfoText),
+    /// 앨범아트로 교체된 갈래에서는 아트 하단 반투명 띠로 같은 정보를 얹는다(MakeAudioInfoBand).
+    /// 배지는 어느 갈래에서든 정보 표기보다 먼저 걷히므로(교체 갈래는 Clear가 겸한다) 겹치지 않는다.
     /// </summary>
-    private async Task FillShellThumbnailAsync(Grid host, FontIcon badge, string path, bool cachedOnly, int seq)
+    private async Task FillShellThumbnailAsync(
+        Grid host, FontIcon badge, ExplorerListing.Entry entry, bool wantAudioInfo, int seq)
     {
         await _thumbFetchGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
         try
         {
             if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다(고아 host라 배지도 무의미)
-            byte[]? bytes;
+            (byte[]? Bytes, string? Info) result;
             try
             {
-                bytes = await ThumbPool.Run(_ => FetchShellThumbnail(path, cachedOnly));
+                result = await ThumbPool.Run(
+                    _ => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo));
             }
             catch
             {
-                bytes = null; // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로(배지 걷기)로
+                result = (null, null); // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로(배지 걷기)로
             }
             if (seq != _showSeq) return; // ② 완료 시점 재대조(이중 방어)
+            // 튜플을 지역 변수로 풀어 둔다 — 아래 null 판정·재사용이 종전(단일 bytes) 형태 그대로.
+            var bytes = result.Bytes;
+            var info = result.Info;
             if (bytes is null)
             {
-                host.Children.Remove(badge); // 실패·썸네일 없음 — 확장자 타일 유지(사양)
+                // 실패·썸네일 없음·아이콘형(A270 ③) — 확장자 타일 유지(사양). 정보가 있으면 얹는다.
+                host.Children.Remove(badge);
+                if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info));
                 return;
             }
             try
@@ -1151,10 +1177,13 @@ public sealed partial class ThumbnailExplorer : UserControl
                     Stretch = Stretch.Uniform,
                     Margin = new Thickness(4),
                 });
+                // A270 ②: 앨범아트 위 정보 띠 — 배지는 위 Clear가 이미 걷었다(겹침 없음).
+                if (info is not null) host.Children.Add(MakeAudioInfoBand(info));
             }
             catch
             {
                 host.Children.Remove(badge); // 손상 데이터 디코드 실패 — 확장자 타일 유지
+                if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info));
             }
         }
         finally
@@ -1164,28 +1193,158 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 워커 스레드: 셸 썸네일을 PNG/JPG 바이트로 추출한다 (A242 — ExplorerPane.FetchThumbnail
-    /// 이식·요청 크기만 256 = PreviewDecodeWidth(이미지 실디코드 폭과 통일)). 없으면 null.
-    /// StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는 여기서 동기 대기한다
-    /// (전용 스레드라 UI 교착 없음). cachedOnly(A175): 옵션 없는 호출은 캐시가 비면 시스템이
-    /// 원본을 열어 생성하므로 placeholder에서는 하이드레이션(전체 다운로드)이 된다 —
-    /// ReturnOnlyIfCached로 캐시에 없으면 null. 예외(잠김·삭제 경합)는 호출부 catch가 삼킨다.
+    /// 워커 스레드: 타일 지연 교체 1회분 — 셸 썸네일 바이트(A242)와 오디오 정보 텍스트(A270)를
+    /// 한 번의 왕복으로 함께 읽는다(StorageFile 취득도 1회. 파일당 워커 왕복이 2회가 되면
+    /// 게이트 상한이 사실상 반토막 나고 seq 대조도 두 벌이 된다 — 통합이 그 둘을 다 막는다).
+    /// 썸네일 = ExplorerPane.FetchThumbnail 이식·요청 크기만 256 = PreviewDecodeWidth(이미지
+    /// 실디코드 폭과 통일). StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는
+    /// 여기서 동기 대기한다(전용 스레드라 UI 교착 없음). cachedOnly(A175): 옵션 없는 호출은
+    /// 캐시가 비면 시스템이 원본을 열어 생성하므로 placeholder에서는 하이드레이션(전체
+    /// 다운로드)이 된다 — ReturnOnlyIfCached로 캐시에 없으면 null.
+    /// <b>A270 ③</b>: 셸이 돌려준 것이 파일 종류 아이콘(Type = Icon)이면 Bytes = null로 접는다 —
+    /// 무정보 제네릭 아이콘이 정보가 있는 확장자 타일을 덮는 반개선을 막는 전 파일 공통 규칙
+    /// (되돌리려면 Type 판정 한 줄만 지우면 A242 종전 동작으로 복귀한다).
+    /// 예외(잠김·삭제 경합)는 호출부 catch가 삼킨다.
     /// </summary>
-    private static byte[]? FetchShellThumbnail(string path, bool cachedOnly)
+    private static (byte[]? Bytes, string? Info) FetchTilePreview(
+        string path, bool cachedOnly, bool wantAudioInfo)
     {
         var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
+
+        string? info = null;
+        if (wantAudioInfo)
+        {
+            try
+            {
+                info = FetchAudioInfo(file);
+            }
+            catch
+            {
+                info = null; // 속성 핸들러 없음·조회 실패 — 정보 없이 썸네일만 간다(조각 전부 생략)
+            }
+        }
+
         using var thumb = (cachedOnly
                 ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth,
                     ThumbnailOptions.ReturnOnlyIfCached)
                 : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth))
             .AsTask().GetAwaiter().GetResult();
-        if (thumb is null || thumb.Size == 0) return null;
+        if (thumb is null || thumb.Size == 0) return (null, info);
+        if (thumb.Type == ThumbnailType.Icon) return (null, info); // A270 ③ — 교체 생략(복구 = 이 줄 삭제)
 
         using var stream = thumb.AsStreamForRead();
         using var buffer = new MemoryStream((int)thumb.Size);
         stream.CopyTo(buffer);
-        return buffer.ToArray();
+        return (buffer.ToArray(), info);
     }
+
+    // ---------- 오디오 타일 정보 (A270) ----------
+
+    /// <summary>
+    /// 워커 스레드: 오디오 셸 속성 4종을 읽어 타일 정보 2줄을 만든다 (A270) —
+    /// ExplorerPane.FetchDurationTicks(A6)와 같은 RetrievePropertiesAsync 관용구이고 키만
+    /// System.Media.Duration + System.Audio.* 3종이다. 표기 = "3:45 · 320 kbps" / "44.1 kHz · 2ch",
+    /// 값이 없는 조각은 빼고(속성 핸들러가 없는 컨테이너·손상 파일) 남는 조각이 없으면 null =
+    /// 표기 자체를 걸지 않는다(ExplorerPane 상세 줄의 조각 생략 규칙과 같은 폴백).
+    /// </summary>
+    private static string? FetchAudioInfo(StorageFile file)
+    {
+        var props = file.Properties.RetrievePropertiesAsync(
+                ["System.Media.Duration", "System.Audio.EncodingBitrate",
+                 "System.Audio.SampleRate", "System.Audio.ChannelCount"])
+            .AsTask().GetAwaiter().GetResult();
+
+        var ticks = props.TryGetValue("System.Media.Duration", out var d) ? (long)PropNumber(d) : 0L;
+        var duration = ticks > 0
+            ? ExplorerListing.FormatDuration(TimeSpan.FromTicks(ticks))
+            : string.Empty;
+        // bit/s · Hz · 채널 수 — 셸 속성 핸들러가 없는 컨테이너는 키가 통째로 빠진다(= 0 = 생략).
+        var bitrate = props.TryGetValue("System.Audio.EncodingBitrate", out var b) ? PropNumber(b) : 0UL;
+        var sampleRate = props.TryGetValue("System.Audio.SampleRate", out var s) ? PropNumber(s) : 0UL;
+        var channels = props.TryGetValue("System.Audio.ChannelCount", out var c) ? PropNumber(c) : 0UL;
+
+        // 1kbps 미만·1kHz 미만은 값이 아니라 잡음으로 보고 버린다(0 포함 — 조각 생략).
+        var top = JoinFragments(" · ", duration, bitrate >= 1000 ? $"{bitrate / 1000} kbps" : string.Empty);
+        var bottom = JoinFragments(" · ",
+            sampleRate >= 1000 ? $"{sampleRate / 1000.0:0.#} kHz" : string.Empty,
+            channels > 0 ? $"{channels}ch" : string.Empty);
+        var info = JoinFragments("\n", top, bottom);
+        return info.Length == 0 ? null : info;
+    }
+
+    /// <summary>
+    /// 셸 속성 값을 부호 없는 정수로 (A270). 속성 핸들러가 주는 실제 형은 키마다 다르고
+    /// (Duration = UInt64 100ns 틱, System.Audio.* 3종 = UInt32) 값 없음은 null로 들어오므로
+    /// 형 분기 + 그 밖 전부 = 0으로 눕힌다. 0 = "값 없음" = 호출부의 조각 생략.
+    /// 인자를 object로 받는 이유: 사전 자체를 넘기면 WinRT 투영 사전의 형 표기(원소 null 허용
+    /// 여부 포함)에 서명이 묶인다 — 값만 받으면 기존 조회 관용구(TryGetValue + 형 검사)를
+    /// 그대로 두고 형 분기만 한 곳에 모을 수 있다.
+    /// </summary>
+    private static ulong PropNumber(object? value) => value switch
+    {
+        ulong u => u,
+        uint ui => ui,
+        long l when l > 0 => (ulong)l,
+        int i when i > 0 => (ulong)i,
+        _ => 0UL,
+    };
+
+    /// <summary>빈 조각을 건너뛰는 두 조각 잇기 (A270) — 둘 다 비면 빈 문자열.</summary>
+    private static string JoinFragments(string separator, string first, string second) =>
+        first.Length == 0 ? second
+        : second.Length == 0 ? first
+        : first + separator + second;
+
+    /// <summary>
+    /// 확장자 타일 위 오디오 정보 표기 (A270 ①): 타일 하단 중앙 소형 2줄. 확장자 라벨은 타일
+    /// 중앙에 그대로 남고 이 텍스트만 아래에 겹친다 — 액센트 배경이면 라벨과 같은 흰 글자
+    /// (MakeExtensionTile의 대비 규칙 그대로). 히트 테스트 제외는 대기 배지(MakePendingBadge)와
+    /// 같은 이유다. 좁은 타일에서 줄이 넘치면 줄마다 말줄임(캡션과 같은 CharacterEllipsis).
+    /// </summary>
+    private UIElement MakeAudioInfoText(ExplorerListing.Entry entry, string info)
+    {
+        var text = new TextBlock
+        {
+            Text = info,
+            FontSize = 9,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(10, 0, 10, 16),
+            Opacity = 0.9,
+            IsHitTestVisible = false,
+        };
+        if (Branding.ModuleAccent(ModuleIdForFile?.Invoke(entry.Path)) is not null)
+            text.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        return text;
+    }
+
+    /// <summary>
+    /// 앨범아트 위 정보 띠 (A270 ②): 아트 하단에 반투명 검정 띠 + 흰 소형 2줄. 테마 브러시가
+    /// 아니라 고정 반투명 검정(FromArgb — MarkdownRenderer의 브러시 관용구)인 이유 = 띠가 아트
+    /// 위에 얹히므로 테마색으로는 대비가 보장되지 않는다. 아트와 같은 여백(4)이라 이미지 밖으로
+    /// 튀지 않고, 히트 테스트에서 빠지는 것도 정보 표기·배지와 같은 규칙이다.
+    /// </summary>
+    private static UIElement MakeAudioInfoBand(string info) => new Border
+    {
+        Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xB0, 0x00, 0x00, 0x00)),
+        Margin = new Thickness(4),
+        Padding = new Thickness(4, 2, 4, 2),
+        CornerRadius = new CornerRadius(0, 0, 4, 4),
+        VerticalAlignment = VerticalAlignment.Bottom,
+        IsHitTestVisible = false,
+        Child = new TextBlock
+        {
+            Text = info,
+            FontSize = 9,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+        },
+    };
 
     /// <summary>
     /// 항목 우클릭 메뉴 — ExplorerPane.AttachContextMenu와 같은 구성(A94 2차 신설 → 6차 확장).
