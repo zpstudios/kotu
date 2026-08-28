@@ -6,6 +6,59 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+**2026-08-28/29 세션 — A257~A277 21건 전량 완주: v0.257.0~v0.273.0 (17릴리스)**
+전부 서브에이전트 직렬 위임(항목 헤더의 권장 모델 지정 — Opus 다수·Fable 6건). 오케스트레이터는
+배치 정의·함정 선지목·diff 검수·커밋·push만 수행. 병렬 없음. 세션 중 **문서 다이어트가 병행 발생**
+(HANDOVER 2,001→215줄·REQUIREMENTS 3,763→약 2,400줄 — 세션 일지는 이 파일로, 실기기 누적분은
+DEVICE-CHECKS.md로 분리. 이후 배치들은 새 문서 분업 규칙 위에서 진행).
+- **v0.257.0 [A257]** 설정 Explorer integration 절 재재구성 — 접기 폐지(링크·ExpandModuleOptions·
+  래퍼 제거) + 절 순서 = 우클릭 메뉴 → 마스터 → 모듈 5그룹. A235 ② 반전·① 개정.
+- **v0.258.0 [A258]** 오토 넥스트 플레이 — 설정 **Playback 섹션 신설**(Updates 앞)·공용 키
+  `player.autoNext`(기본 true)·게이트는 EOF 전이 2 진입부 2줄(루프 없음일 때만)·영상/오디오 2벌.
+- **v0.259.0 [A259]** H/W 긴 그래프 전폭화 + 기간 표기 내장 — star 균등·152는 MinWidth 전환·
+  **xAxisText InBar 부활(A128 금지 주석 공식 개정)**·352→312·640→600·기간 임계 550 소멸(고아 0).
+- **v0.260.0 [A260]** Fit "1:1" — 본체 = Border + 9px 글자 코드 조립 / 플라이아웃 = PathIcon
+  **인라인 Data**(v0.174.1 공유 Geometry 금지 준수). A253 5차 전환 + FontIcon "OR" 렌더 실패 수리.
+- **v0.261.0 [A261+A262]** 문서 줌 성능 + 데드존 한 배치 — 목표 누적 + DispatcherQueue **Low 1건
+  예약**·Save 500ms 디바운스·렌더 정착 150ms 분리 / RootGrid 폴백 핸들러(handledEventsToo).
+  TryEnqueue(Low) 선례 0 = CI 후보.
+- **v0.262.0 [A263+A264+A265]** 문서 하단 바 개편 — 배율 DropDownButton + 프리셋 8종 / 우측군
+  재배열(A245 개정) / 가이드·¶ Visibility→IsEnabled(**A249 예외 1종 공식 해제**). Tag XAML
+  문자열 선례 0 = CI 후보.
+- **v0.263.0 [A266]** 언세이브드 ● → "N changed" — 증분 ChangeSpan 정렬 리스트(병합 역산 8케이스
+  검증)·전량 diff 기각·리셋 단일 지점 SetDirty(false)·타이틀바 ●(A136)은 별개 축.
+- **v0.264.0 [A267]** 문서 New 2분기화 — 빈 상태 = 자기 자리 / 그 외 = 새 인스턴스(미저장 무관).
+  **A247의 팝업·3분기를 전면 폐기**(ShowNewFileDialogAsync·NewFileChoice 제거·잔존 0 전수).
+- **v0.265.0 [A277]** 잠금 뷰 시각 차별화 — EditorDecor SetViewSuppressed(설정 키 불변) + 캐럿 =
+  **포커스 이관 방식**(클릭 시 재등장 한계 명기) + 토글은 뷰 모드 비활성.
+- **v0.266.0 [A268]** 오디오 비주얼라이저 5종 — 재생성 **생성→교체→해제 순**(해제 선행 시 VideoView
+  크래시 회피 = 설계 편차)·`_playerGate` 직렬·실패 시 원복·볼륨/음소거/EQ/장치 승계.
+  **Vlc.MediaPlayer 재대입 선례 0 = 이번 묶음 1순위 위험.**
+- **v0.267.0 [A269]** 오디오 우측군 재배치 + **A217 첫 재계수** — c8↔c9 스왑·영상 우군 끝 0폭
+  스페이서 칸 신설로 114 등식 재성립·431→437·645→651(교차검산 일치).
+- **v0.268.0 [A270]** 오디오 타일 정보 — FetchTilePreview 통합 왕복(1작업·게이트 1점유)·
+  System.Audio.* 키 3종 선례 0(조각 생략 폴백)·**Type=Icon 교체 생략(전 파일)**·placeholder는
+  속성 조회 자체 생략.
+- **v0.269.0 [A271]** 아카이브 하단 바 — c0 New archive는 상단 툴바에서 **이동(미러 아님)**·
+  글리프 F012·Print/Fit는 영구 비활성(B78·A144 규격)·x:Name 미부여(CS0414 회피).
+- **v0.270.0 [A272+A273]** 셸 소형 2건 — **MainWindow 훅 얽힘으로 파일 겹침 일괄**(v0.224.0 전례).
+  드랍 배지 Caption "Open" 2곳 / SetDockedState 리터럴 5곳 = 좌 열림·우 닫힘(A109·A81·A202 개정).
+- **v0.271.0 [A274]** Enter 터널링 승격 — OnRootPreviewKeyDown 이관 + **게이트 4종 능동 판정**
+  (등재문 3종에서 IsAnyPopupOpen 추가 — A234 선례 재사용) + A203 외부 전체화면 경로 보완.
+- **v0.272.0 [A275]** 썸네일 256→768 — PreviewDecodeWidth 상수 1개(동적 산식 기각·버킷 분산 우려)·
+  좌 리스트 96은 무접촉·2차(창 아이콘 DPI 추종)는 주석 포인터만.
+- **v0.273.0 [A276]** 좌 리스트 헤더 버튼화 — BottomBarButtonStyle **개별 속성 이식**(Style 직결은
+  32×32 강제라 기각 = 행 높이 +2px)·협폭은 전체 라벨 + Ellipsis + 기존 툴팁 존치(축약형 기각).
+
+**운용 메모**: ① 문서 다이어트가 릴리스 작업 중간에 끼어 들어 새 분업 규칙(HANDOVER §1 = 현재
+상태만·일지는 이 파일·실기기 누적분은 DEVICE-CHECKS.md)이 이 묶음부터 적용됐다. ② 파일 겹침
+일괄 커밋 1건(v0.270.0 — A272+A273). ③ 선례 0(CI 1순위 위험) 신고가 6건(A260 PathIcon·A261
+TryEnqueue(Low)·A263 Tag 문자열·A268 MediaPlayer 재대입·A270 System.Audio.*·A272 DragUIOverride)
+— 전부 최소 복구법을 커밋 메시지에 남겼다.
+
+
+
+> (아래는 2026-08-28 분리 시점의 원문 머리글 — 당시 최신은 v0.256.0이었다. 현재 상태는 HANDOVER §1.)
 
 앱 이름 **KOTU (King Of The Util)**, 저장소 **zpstudios/kotu**, 실행 파일 **KOTU.exe**, 최신 **v0.256.0**
 (push 완료).
