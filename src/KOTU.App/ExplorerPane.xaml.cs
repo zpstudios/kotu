@@ -310,14 +310,17 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>
     /// 리스트 컬럼 헤더 조립 (A155 → A199) — XAML의 빈 ListHeader 그리드에 정렬 5칸을 채운다
     /// (생성자에서 1회). 헤더는 정렬 버튼이 본체다: 값 표시는 A156의 2줄 행이 담당하므로
-    /// 열 정렬(칸 맞춤)은 없고, 25% 사이드바 폭에 맞춰 축약 라벨 + 잘림 허용(TextTrimming)으로 간다.
-    /// 버튼 모양은 MainWindow.MakeMenuItem의 투명 평면 버튼 관용구(배경 투명·테두리 0).
+    /// 열 정렬(칸 맞춤)은 없고, 25% 사이드바 폭에 맞춰 라벨 + 잘림 허용(TextTrimming)으로 간다.
+    /// A276(v0.273.0): 버튼 모양이 MainWindow.MakeMenuItem의 투명 평면 관용구(배경 투명·테두리 0)에서
+    /// 하단 바 버튼 관용구(BottomBarButtonStyle — 기본 배경·테두리 1·CornerRadius 4)로 바뀌었다.
+    /// 시각만 바뀌고 정렬 동작(A155 클릭·방향 토글·화살표 표시)은 전부 그대로다.
     /// A199: 표시 전용 Info 헤더(A155 — 부록 B 69 ④, 정렬 비대상·흐림 표시)는 제거됐다.
     /// 모듈별 속성 조각은 상세 줄(BuildDetailText)이 유일한 표시 자리다.
     /// </summary>
     private void BuildListHeader()
     {
-        // Name만 2* — 나머지 4칸은 1*(약어 라벨 기준. 좁으면 라벨이 잘리는 것을 허용한다).
+        // Name만 2* — 나머지 4칸은 1*. 좁으면 라벨이 잘리는 것을 허용한다(A276에서도 이 배분은
+        // 불변 — 1* 넷 중 하나만 넓히면 나머지가 더 좁아져 잘림 총량이 줄지 않는다).
         ListHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
         for (var i = 0; i < 4; i++)
             ListHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -331,7 +334,22 @@ public sealed partial class ExplorerPane : UserControl
         SyncSortHeaders();
     }
 
-    /// <summary>정렬 헤더 버튼 1개 — 라벨 + (활성일 때만) 방향 지표 아이콘.</summary>
+    /// <summary>
+    /// 정렬 헤더 버튼 1개 — 라벨 + (활성일 때만) 방향 지표 아이콘.
+    /// <b>A276</b>: 하단 바 버튼처럼 보이게 한다. 다만 BottomBarButtonStyle을 Style로 통째로 걸지
+    /// 않고 <b>시각 속성만 개별 이식</b>한다 — 그 스타일은 Width 32·Height 32를 못박아 32×32
+    /// 정사각을 강제하므로, 폭이 컬럼(2*:1*×4)을 따라야 하고 높이가 헤더 한 줄이어야 하는 여기서는
+    /// 쓸 수 없다(스타일을 걸면 헤더 행이 32px로 부풀고 라벨 칸이 32px로 잘린다).
+    /// 이식 대상 = 배경(기본 버튼 배경 — 종전의 투명 덮어쓰기를 걷어내 기본 스타일 값이 살아난다)·
+    /// BorderThickness 1(테두리 색도 기본 스타일의 ButtonBorderBrush가 그린다 — 코드에서
+    /// ThemeResource를 인덱서로 뒤지면 키 부재 시 던지므로 조회 자체를 만들지 않는다)·
+    /// CornerRadius 4. 이식하지 않는 것 = Width·Height·Padding·HorizontalContentAlignment
+    /// (좌정렬·Stretch·MinHeight 억제는 헤더 고유 규격이라 유지).
+    /// 높이 영향 = 테두리 상하 1+1 = 2px 증가뿐이다(행은 Auto 높이라 그만큼만 늘어난다).
+    /// 협폭 잘림 대응(A276 ②): 라벨은 <b>고정 전체 표기 유지</b>가 결론이다 — "Cr."/"Mod." 류
+    /// 축약형은 폭을 몇 px 벌자고 뜻을 잃어 기각했고, 대신 화살표(8px)까지 포함해 좁아지면
+    /// CharacterEllipsis로 잘리는 현행 + 아래 툴팁으로 전체 뜻이 늘 확인된다.
+    /// </summary>
     private void AddSortHeader(int column, string label, string tooltip, ExplorerListing.SortKey key)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
@@ -356,14 +374,17 @@ public sealed partial class ExplorerPane : UserControl
         {
             Content = content,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            BorderThickness = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Left, // 좌정렬은 A155부터 5칸 모두 성립 — 무변경
+            // A276: 배경은 종전의 투명 덮어쓰기를 지워 기본 버튼 스타일 값이 그대로 나오게 한다.
+            BorderThickness = new Thickness(1), // A276 — BottomBarButtonStyle과 같은 두께
+            CornerRadius = new CornerRadius(4), // A276 — BottomBarButtonStyle과 같은 반경
             Padding = new Thickness(4, 2, 4, 2),
             MinWidth = 0,
             MinHeight = 0, // 기본 MinHeight(32)가 헤더 한 줄 높이를 먹지 않게(A157 체크박스와 같은 이유)
         };
-        ToolTipService.SetToolTip(button, tooltip); // 라벨이 잘려도 전체 뜻 확인 가능(PathText 관용구)
+        // 라벨이 잘려도 전체 뜻 확인 가능(PathText 관용구). A276 ②: 축약 라벨을 쓰지 않는 대신
+        // 이 툴팁이 전체 라벨을 포함한 문장("Sort by date created" 등)으로 잘림을 보완한다.
+        ToolTipService.SetToolTip(button, tooltip);
         button.Click += (_, _) => OnSortHeaderClick(key);
         Grid.SetColumn(button, column);
         ListHeader.Children.Add(button);
