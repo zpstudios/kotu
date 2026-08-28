@@ -74,19 +74,23 @@
                  길이·음소거·볼륨·배속 = c1~c7)가 하단 바에서 같은 x에 오도록, 클러스터 양옆
                  고정 폭을 영상 바와 등식으로 맞춘다(시크는 star 유지 — 체감 레이아웃 변화 최소).
                    좌군(두 모듈 동일): 루프 32 + 간격 6 = 38.
-                   우군 등식: 영상 = 간격 6 + 자막 32 + 간격 6 + Fit 64 = 108
-                             오디오(A268 전) = 간격 6 + EQ 32 + 간격 6 + 장치 32 + 간격 6 + 스페이서 c10(26) = 108.
-                 폭 재계수(A40 방식): 고정 폭 합 = 1칸 버튼 5개(루프·재생·음소거·EQ·장치) 160 +
-                 볼륨 101 + 배속 84 + 스페이서 26 + 간격 6×10 = 431 — 영상(431)과 정확히 같다
-                 (정렬의 목적 그대로). A250(v0.246.0)에서 볼륨이 96→101이 되어 두 모듈이 나란히
-                 426 → 431이 됐다(스페이서 26·우군 등식은 불변 — 볼륨은 공통 클러스터 안이라
-                 양쪽이 같은 +5를 받아 정렬이 그대로 성립한다).
-                 ⚠️ A268 잠정: c10 스페이서(26)가 비주얼라이저 버튼(32)으로 바뀌어 오디오 우군
-                 108 → 114, 고정 폭 합 431 → 437 — 공통 클러스터가 영상과 6px 어긋난 상태다.
-                 재계수(영상 우군 끝 0폭 스페이서 추가·축약 임계 645→651)와 EQ↔장치 스왑은
-                 직렬 다음 배치 A269 몫(등재문 확정)이라 여기서는 칸만 확보했다.
-                 종전 "비디오보다 32 작아 축약 불요" 판정은 그래서 소멸 —
-                 영상의 축약 로직(UpdateCompactTransport, 임계 645·볼륨/시간 숨김)을 동형 이식했다.
+                   우군 등식(A269 재계수 후 — 양쪽 114):
+                     오디오 = 간격 6 + 장치 32 + 간격 6 + EQ 32 + 간격 6 + 비주얼라이저 32 = 114
+                     영상   = 간격 6 + 자막 32 + 간격 6 + Fit 64 + 간격 6 + 0폭 스페이서 c10 = 114
+                 A269(v0.267.0) 재배치: 우측군 순서를 (좌→우) 장치 → EQ → 비주얼라이저로 확정
+                 (c8↔c9 스왑 — A268이 c10에 미리 만들어 둔 비주얼라이저는 자리 유지)하고,
+                 A268이 남긴 6px 어긋남은 영상 우군 끝에 0폭 스페이서 칸을 더해 해소했다.
+                 A217 정렬 등식의 첫 개정 사례다 — 종전에는 오디오가 스페이서로 영상에 맞췄지만
+                 이번에는 오디오 우군이 영상보다 커져 스페이서를 두는 쪽이 반대가 됐다
+                 ("양쪽 우군 폭을 같게"라는 원칙 자체는 불변).
+                 폭 재계수(A40 방식): 고정 폭 합 = 1칸 버튼 6개(루프·재생·음소거·장치·EQ·
+                 비주얼라이저) 192 + 볼륨 101 + 배속 84 + 간격 6×10 = 437 — 영상(437)과 정확히
+                 같다(정렬의 목적 그대로). 계보: A217에서 두 모듈 426 → A250(볼륨 96→101)에서
+                 431 → A269(스페이서 26 소멸·비주얼라이저 32 + 영상 0폭 칸)에서 437.
+                 축약 임계도 나란히 645 → 651(영상·오디오 UpdateCompactTransport 동시 —
+                 산식 정본은 영상 쪽 주석).
+                 종전 "비디오보다 32 작아 축약 불요" 판정은 A217에서 소멸 —
+                 영상의 축약 로직(UpdateCompactTransport, 볼륨/시간 숨김)을 동형 이식했다.
                  숨김 대상까지 같아야 좁은 창(축약 후)에서도 클러스터가 어긋나지 않는다. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -133,37 +137,40 @@
             <!-- A250(v0.246.0): 볼륨 슬라이더 폭 96 → 101(영상과 동일 값·동일 근거) — 0~100은
                  값이 101개라 "1px = 1단위"로 잡은 폭이다(사용자 확정). WinUI Slider의 썸 크기·트랙
                  좌우 패딩 때문에 실제 픽셀↔단위 대응은 1:1이 아니다 — 101은 명목치다.
-                 파생 재계수: 고정 폭 합 426 → 431(위 헤더 주석), 축약 임계 640 → 645
-                 (UpdateCompactTransport — 산식 정본은 영상 쪽 주석). -->
+                 당시 파생 재계수: 고정 폭 합 426 → 431, 축약 임계 640 → 645
+                 (현재 값은 A269 재계수로 437·651 — 위 헤더 주석. UpdateCompactTransport의
+                 산식 정본은 영상 쪽 주석). -->
             <Slider x:Name="VolumeSlider" Grid.Column="6" Width="101" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸, A97에서 84×36, A106에서 84×32) -->
             <ComboBox x:Name="SpeedBox" Grid.Column="7" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
-            <!-- A163: 이퀄라이저 — libvlc 내장 프리셋 라디오 플라이아웃(비디오 자막 버튼 규격).
-                 항목은 코드(FillEqualizerFlyout)가 채운다 — 프리셋 열거가 libvlc 네이티브 호출이라
-                 플레이어 생성(EnsurePlayerAsync) 뒤에만 가능해서 그때까지 비활성이다. -->
-            <Button x:Name="EqButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
-                    IsEnabled="False" ToolTipService.ToolTip="Equalizer">
-                <FontIcon Glyph="&#xE9E9;" FontSize="18" />
-                <Button.Flyout>
-                    <MenuFlyout x:Name="EqFlyout" Placement="Top" />
-                </Button.Flyout>
-            </Button>
             <!-- A164: 오디오 장치 — 서브메뉴 2개(출력 / Windows 기본 입력)는 코드가 만들고
-                 목록은 열 때마다 새로 채운다(장치 꽂힘·뽑힘 추종 — 생성자 주석 참고). -->
-            <Button x:Name="DevicesButton" Grid.Column="9" Style="{StaticResource BottomBarButtonStyle}"
+                 목록은 열 때마다 새로 채운다(장치 꽂힘·뽑힘 추종 — 생성자 주석 참고).
+                 A269(v0.267.0): c9 → c8(EQ와 스왑) — 우측군은 (좌→우) 장치 → EQ → 비주얼라이저. -->
+            <Button x:Name="DevicesButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
                     ToolTipService.ToolTip="Audio devices">
                 <FontIcon Glyph="&#xE7F5;" FontSize="18" />
                 <Button.Flyout>
                     <MenuFlyout x:Name="DevicesFlyout" Placement="Top" />
                 </Button.Flyout>
             </Button>
+            <!-- A163: 이퀄라이저 — libvlc 내장 프리셋 라디오 플라이아웃(비디오 자막 버튼 규격).
+                 항목은 코드(FillEqualizerFlyout)가 채운다 — 프리셋 열거가 libvlc 네이티브 호출이라
+                 플레이어 생성(EnsurePlayerAsync) 뒤에만 가능해서 그때까지 비활성이다.
+                 A269(v0.267.0): c8 → c9(장치와 스왑 — 칸 규격·폭 불변이라 총폭 무변경). -->
+            <Button x:Name="EqButton" Grid.Column="9" Style="{StaticResource BottomBarButtonStyle}"
+                    IsEnabled="False" ToolTipService.ToolTip="Equalizer">
+                <FontIcon Glyph="&#xE9E9;" FontSize="18" />
+                <Button.Flyout>
+                    <MenuFlyout x:Name="EqFlyout" Placement="Top" />
+                </Button.Flyout>
+            </Button>
             <!-- A268: 비주얼라이저 스타일 — EQ 버튼 규격(1칸 32×32 + 라디오 플라이아웃 Top).
-                 c10은 구 A217 정렬 스페이서(고정 26) 자리로, A269 최종 배치(장치→EQ→비주얼라이저)의
-                 끝 칸을 미리 차지했다(스페이서 소멸 — 정렬 6px 어긋남·재계수는 위 헤더 주석의
-                 A268 잠정 단락 참고). 항목은 코드(FillVisualizerFlyout)가 열 때마다 채운다
+                 c10은 구 A217 정렬 스페이서(고정 26) 자리다 — A268이 칸을 차지하며 스페이서가
+                 소멸했고, A269가 그 6px 어긋남을 영상 쪽 0폭 스페이서로 갚아 정렬을 되돌렸다
+                 (재계수 = 위 헤더 주석). 항목은 코드(FillVisualizerFlyout)가 열 때마다 채운다
                  (선택 상태 반영 — 장치 플라이아웃의 Opening 재구성 관례). 항상 활성 — 선택은
                  플레이어가 없어도 저장돼 첫 생성 인스턴스 옵션에 반영된다. -->
             <Button x:Name="VisualizerButton" Grid.Column="10" Style="{StaticResource BottomBarButtonStyle}"

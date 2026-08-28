@@ -89,11 +89,20 @@
                  전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다.
                  A217(v0.229.0) 정렬 계약: 공통 클러스터(재생·위치·시크·길이·음소거·볼륨·배속 =
                  c1~c7)의 시작·끝 x가 오디오 바와 일치한다 — 좌군(루프) 32+간격 6 = 38,
-                 우군(자막 32 + Fit 64 + 간격 2×6) = 108을 오디오가 스페이서로 맞춘 상태.
+                 우군은 두 모듈이 같은 값이어야 한다.
                  이 바의 양옆 구성·폭을 바꾸면 오디오 바(AudioPlayerView.xaml)도 함께 재계수할 것.
                  A249(v0.246.0): A230이 달아 둔 "이 등식은 콘텐츠 열림 상태에만 걸린다"는 한정은
                  소멸했다 — 빈 상태에서도 Fit 조절기를 접지 않고 비활성으로만 두므로(항상 표시)
-                 우군 폭 108이 상태와 무관하게 유지된다. 등식은 다시 무조건 성립한다. -->
+                 우군 폭이 상태와 무관하게 유지된다. 등식은 다시 무조건 성립한다.
+                 A269(v0.267.0) 재계수(A217 등식의 첫 개정): 오디오 우군이 비주얼라이저 버튼
+                 신설(A268)로 108 → 114가 되어 이 바가 6 모자라졌다. 그래서 우군 끝에
+                 0폭 스페이서 칸 c10을 더해 ColumnSpacing 6만 받는다 — 종전 오디오가 쓰던
+                 "요소 없는 칸" 관용구를 방향만 바꿔 이쪽에 적용한 것이다.
+                   우군 등식(양쪽 114):
+                     영상   = 간격 6 + 자막 32 + 간격 6 + Fit 64 + 간격 6 + 0폭 c10 = 114
+                     오디오 = 간격 6 + 장치 32 + 간격 6 + EQ 32 + 간격 6 + 비주얼라이저 32 = 114
+                 고정 폭 합은 두 모듈 나란히 431 → 437, 축약 임계는 645 → 651
+                 (UpdateCompactTransport 주석이 산식 정본 — 오디오도 같은 값). -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -104,6 +113,11 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <!-- c10 = A269 정렬 스페이서. 요소를 두지 않으므로 칸 자체는 0폭이고,
+                     이 바가 얻는 것은 c9와의 ColumnSpacing 6뿐이다 — 오디오 우군이 비주얼라이저
+                     버튼(A268)으로 6 커진 만큼을 여기서 갚는다. 이 칸에 무엇이든 넣으면
+                     A217 정렬이 그 폭만큼 깨진다(넣어야 하면 양쪽 우군 등식을 함께 재계수할 것). -->
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
@@ -119,7 +133,7 @@
                  표기 포함)은 UpdateLoopButton()이 상태형으로 갱신한다 — 아래 FontIcon은
                  초기값일 뿐이다. 폭 계수: 이 칸(32+간격 6 = 38)은 A151이 전체화면 칸을
                  제거하며 남긴 여유 38을 정확히 소진한다 — 그래서 당시 축약 임계는 640
-                 그대로였다(현재 값은 A250의 볼륨 +5로 645 — UpdateCompactTransport
+                 그대로였다(현재 값은 A250의 볼륨 +5·A269의 스페이서 +6으로 651 — UpdateCompactTransport
                  산식 주석이 정본, 설계 A11-playlist-design.md §4.1). A255도 폭 불변(칸 규격
                  유지 — 플라이아웃 진입만 우클릭으로 이동).
                  A216(2026-08-24): 위치를 c9(맨 끝)에서 재생 버튼 왼쪽(c0)으로 이동 — 총폭 불변. -->
@@ -142,8 +156,9 @@
             <!-- A250(v0.246.0): 볼륨 슬라이더 폭 96 → 101 — 0~100은 값이 101개라 "1px = 1단위"로
                  잡은 폭이다(사용자 확정). 다만 WinUI Slider는 썸 크기·트랙 좌우 패딩이 있어
                  실제 픽셀↔단위 대응은 1:1이 아니다 — 101은 명목치다.
-                 파생 재계수: 고정 폭 합 426 → 431, 축약 임계 640 → 645
-                 (UpdateCompactTransport 주석이 정본). 오디오 바도 같은 +5를 함께 받는다. -->
+                 당시 파생 재계수: 고정 폭 합 426 → 431, 축약 임계 640 → 645
+                 (UpdateCompactTransport 주석이 정본). 오디오 바도 같은 +5를 함께 받았다.
+                 현재 값은 A269 재계수로 437·651 — 위 헤더 주석. -->
             <Slider x:Name="VolumeSlider" Grid.Column="6" Width="101" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />

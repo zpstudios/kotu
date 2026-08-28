@@ -109,7 +109,7 @@ Seven modules. Switch between them from the menu at the bottom left.
 - **Seek** ±5 seconds with `←` / `→`, or drag the seek slider. Seeking happens once, when you let go.
 - **Volume** ±5 with `↑` / `↓` or the mouse wheel. `M` mutes. The volume is remembered.
 - **Speed**: 0.5× · 0.75× · 1× · 1.25× · 1.5× · 2×.
-- **A narrow window drops what it can spare.** Below about 640 px of bottom bar the volume slider
+- **A narrow window drops what it can spare.** Below about 650 px of bottom bar the volume slider
   and the two time labels give up their room so the seek slider keeps its own. Volume is still on
   `↑` / `↓`, the wheel and `M`, and the position of the seek thumb still says where you are.
 - **Subtitles** are picked up automatically from the video's own folder — `.srt .smi .ass .ssa .sub .vtt`.
@@ -156,10 +156,10 @@ Seven modules. Switch between them from the menu at the bottom left.
   so the sound drops for an instant and then carries on from the same spot.
 - **The controls stand where Video puts them.** Loop, ▶, the position, the seek slider, the length,
   mute, the volume slider and the speed box occupy the same places in both modules, so nothing
-  shifts under the pointer when you go from a video to a track. Audio's own equalizer, audio-device
-  and visualizer buttons take the right-hand end, where Video keeps subtitles and Fit. The
-  narrow-window rule is the same too: below about 640 px of bar the volume slider and the two time
-  labels are hidden.
+  shifts under the pointer when you go from a video to a track. Audio's own buttons take the
+  right-hand end, where Video keeps subtitles and Fit — audio devices first, then the equalizer,
+  then the visualizer. The narrow-window rule is the same too: below about 650 px of bar the
+  volume slider and the two time labels are hidden.
 - **Resume** works exactly as in Video (over 30 seconds played, stopped before the last 3%).
 - **The whole folder plays as a list.** When a track ends, the next file in the same folder starts
   automatically (name order, hidden files skipped), and playback stops after the last one by
