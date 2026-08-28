@@ -304,12 +304,16 @@ editor either way.
 - **Extract...** (`T`) asks for a destination folder and unpacks only the selected rows — or
   everything, if nothing is selected.
 - **New archive** (`C`) creates a **ZIP** or a **7z**. A password is optional; 7z also encrypts the
-  file names inside, ZIP does not.
+  file names inside, ZIP does not. The button sits at the left end of the bottom bar, so it is
+  there even when no archive is open and the centre is showing the file thumbnails.
 - Drop files or folders onto the window to compress them — the same New archive dialog appears.
 - Archives that need a password ask for one when you list or extract them.
 - ZIP files with broken Korean file names are re-read as CP949 automatically.
 - Long operations show a progress bar and a **Cancel** button. When it finishes, the result is
   revealed in Windows Explorer.
+- The bottom bar keeps the same shape as in the other modules: the print button and the fit
+  controls sit in their usual places, on the left and at the right end. Neither applies to an
+  archive, so both stay greyed out here — they are there to keep the bar aligned across modules.
 - All eight listed formats can be extracted. Only ZIP and 7z can be created.
 
 ### 2.7 H/W Info

@@ -634,6 +634,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     private void UpdateToolbarState()
     {
+        // A271(v0.269.0): CreateButton은 상단 툴바에서 하단 바 c0으로 옮겨 갔다 — 이 판정은
+        // 자리와 무관하므로 그대로다(같은 x:Name·같은 활성 조건). 함께 신설한 Print·Fit은
+        // 영구 비활성이라 여기 올 줄이 없다(활성 갱신 코드 자체가 없는 것이 사양 — XAML 주석 참고).
         CreateButton.IsEnabled = !_busy;
         var hasArchive = !_busy && _root is not null;
         ExtractToButton.IsEnabled = hasArchive;
@@ -668,6 +671,10 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// 버튼이 비활성(작업 중·아카이브 없음)이면 키도 아무 일도 하지 않는다 — HotkeySupport가 판정한다.
     /// Cancel(진행 중에만 뜨는 버튼)에는 키를 주지 않았다: 스치듯 눌린 한 글자로 긴 작업이
     /// 중단되는 편이 손해가 크다.
+    /// A271(v0.269.0): C가 걸린 CreateButton이 상단 툴바에서 하단 바로 옮겨 갔지만 등록은
+    /// 그대로다 — 키 스코프가 창 전체(XamlRoot)라 하단 바가 셸로 넘어간 뒤에도 그대로 듣는다
+    /// (HotkeySupport.Bind 주석). 같이 신설한 Print·Fit 버튼에는 키를 배정하지 않았다
+    /// (영구 비활성이라 눌릴 일이 없고, 등록 0건이라 키 누출도 0이다).
     /// </summary>
     private void SetupHotkeys()
     {

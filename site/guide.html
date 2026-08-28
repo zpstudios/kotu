@@ -602,12 +602,18 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Extract...</strong> (<kbd>T</kbd>) asks for a destination folder and unpacks only the
               selected rows — or everything, if nothing is selected.</li>
           <li><strong>New archive</strong> (<kbd>C</kbd>) creates a ZIP or a 7z. A password is optional; 7z
-              also encrypts the file names inside, ZIP does not.</li>
+              also encrypts the file names inside, ZIP does not. The button sits at the left end of the
+              bottom bar, so it is there even when no archive is open and the centre is showing the file
+              thumbnails.</li>
           <li>Drop files or folders onto the window to compress them — the same New archive dialog appears.</li>
           <li>Archives that need a password ask for one when you list or extract them.</li>
           <li>ZIP files with broken Korean file names are re-read as CP949 automatically.</li>
           <li>Long operations show a progress bar and a <em>Cancel</em> button. When it finishes, the result is
               revealed in Windows Explorer.</li>
+          <li>The bottom bar keeps the same shape as in the other modules: the print button and the fit
+              controls sit in their usual places, on the left and at the right end. Neither applies to an
+              archive, so both stay greyed out here — they are there to keep the bar aligned across
+              modules.</li>
         </ul>
         <div class="note">All eight listed formats can be extracted. Only ZIP and 7z can be created.</div>
 
