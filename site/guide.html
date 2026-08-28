@@ -294,7 +294,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <strong>Open file</strong> button; at the right end the <strong>Full screen</strong> button;
               the rest belongs to whichever module is open.</li>
           <li><strong>Two side panels</strong> — a <strong>left</strong> panel (folder tree and file list) and a
-              <strong>right</strong> panel (information about the current file). Both stay hidden until you call them.</li>
+              <strong>right</strong> panel (information about the current file). Opening a module starts with the
+              left one open and the right one closed; opening a file directly hides both until you call them.</li>
         </ul>
         <p>The side panels are opaque <strong>sidebars</strong>: an open panel stands beside the content and
            makes the centre narrower. Either panel is 25% of the window width.</p>
@@ -725,11 +726,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            Plain <kbd>Enter</kbd> gives way to typing — in a text document it is a line break — and
            <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well.
            There is no keyboard shortcut for switching module or for opening Settings —
-           both live in the menu at the bottom left. Switching module always arrives with both sidebars
-           open; choosing the module you are already in changes nothing.</p>
+           both live in the menu at the bottom left. Switching module always arrives with the left sidebar
+           open and the right one closed; choosing the module you are already in changes nothing.</p>
         <p><kbd>Esc</kbd> undoes one layer per press: full screen first, then the Open file browser, then
-           the file itself. Closing the file this way lands on the module's own browser with both sidebars
-           open — the same screen as starting the module from the menu — so a file opened straight from
+           the file itself. Closing the file this way lands on the module's own browser with the left
+           sidebar open — the same screen as starting the module from the menu — so a file opened straight from
            Windows Explorer is one <kbd>Esc</kbd> away from the standard screen. A document with unsaved
            changes asks before closing. Where <kbd>Esc</kbd> already means something it keeps that meaning
            first: it cancels a rename, it clears the cut-mark in the file browser, and an open dialog takes
@@ -852,7 +853,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            module's own browser with the side panels as they were. With nothing left to undo they do nothing. The mouse button works
            everywhere; the key gives way to typing, like the letter keys. That last step is the one place
            going back and <kbd>Esc</kbd> differ: going back keeps the panels exactly as they were, while
-           closing with <kbd>Esc</kbd> arrives with both sidebars open — the standard module screen.</p>
+           closing with <kbd>Esc</kbd> arrives with the left sidebar open and the right one closed — the
+           standard module screen.</p>
       </section>
 
       <!-- ================= 4. PANELS ================= -->
@@ -874,17 +876,18 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            the window, near the bottom, and a small <strong>pin</strong> button appears just over the bottom
            bar. It opens that side as a sidebar, and closes it again if it already is one — the same toggle
            as the key.</p>
-        <p>Opening a module (rather than opening a file directly) starts with both sidebars open. A file
-           opened straight from Windows Explorer starts with no panels, so nothing covers what you came to
-           see. Press <kbd>Esc</kbd> when you are done and the file closes onto that standard screen —
-           sidebars and thumbnails — as if you had started the module from the menu.</p>
+        <p>Opening a module (rather than opening a file directly) starts with the left sidebar open and the
+           right one closed. A file opened straight from Windows Explorer starts with no panels, so nothing
+           covers what you came to see. Press <kbd>Esc</kbd> when you are done and the file closes onto that
+           standard screen — left sidebar and thumbnails — as if you had started the module from the menu.</p>
       </section>
 
       <!-- ================= 5. FILE BROWSER ================= -->
       <section id="browser">
         <h2><span class="num">5</span>The built-in file browser</h2>
         <p>Open a module without a file and the window becomes a file browser: folder tree and file list on the
-           left, thumbnails in the centre, file information on the right. Image files show a real miniature;
+           left, thumbnails in the centre, and file information on the right once you open that panel with
+           <kbd>F12</kbd>. Image files show a real miniature;
            text documents show the first lines of their content, loaded in the background; everything else
            shows its extension on the module's colour. Audio files add their own facts under the tile —
            the playing length, the bit rate, the sample rate and the number of channels — printed on the

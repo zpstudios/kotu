@@ -1235,7 +1235,8 @@ public sealed partial class MainWindow : Window
     };
 
     // A103: 모듈만 연 상태의 제목은 모듈명 없이 "KOTU"뿐 — 모듈 구분은 아이콘 링 색(A102)이 한다.
-    // A109(v0.136.0): 모듈 실행·전환은 좌·우 사이드바가 뜬 기본 상태로 시작한다(defaultSidebars) —
+    // A109(v0.136.0): 모듈 실행·전환은 사이드바 기본 상태로 시작한다(defaultSidebars —
+    // A273(v0.271.0)부터 좌 열림·우 닫힘) —
     // 파일을 여는 경로(OpenFile·OpenVerb → ShowModule 직접 호출)는 기본값 false라 종전 그대로다
     // (파일 인자 직접 열기 = 무사이드바, A81 유지).
     private void OpenModule(IModule module)
@@ -1374,8 +1375,16 @@ public sealed partial class MainWindow : Window
     private void OnWindowDragOver(object sender, DragEventArgs e)
     {
         if (e.Handled) return; // 압축 뷰 등 모듈이 이미 소비한 드래그
-        if (e.DataView.Contains(StandardDataFormats.StorageItems))
-            e.AcceptedOperation = DataPackageOperation.Copy;
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        // A272: 이 폴백도 실제 동작은 '열기'뿐(OnWindowDrop → OpenFile/새 창)이라 배지 문구만
+        // 덮는다. Copy 자체를 바꾸면 드랍이 거부되므로 표기만 고치는 것이다.
+        // ContentInfoOverlay.OnPanelDragOver에 같은 2줄이 한 벌 더 있다 — 함께 고칠 것.
+        if (e.DragUIOverride is { } dragUi)
+        {
+            dragUi.Caption = "Open";
+            dragUi.IsCaptionVisible = true;
+        }
     }
 
     private async void OnWindowDrop(object sender, DragEventArgs e)
@@ -1408,7 +1417,8 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 모듈 뷰 교체의 단일 종착점. defaultSidebars(A109, v0.136.0) = **모듈 실행·전환 경로**로 들어온
-    /// 호출인지 — true면 뷰 교체를 마친 뒤 좌·우 사이드바(불투명 도크) 기본 상태를 다시 적용한다
+    /// 호출인지 — true면 뷰 교체를 마친 뒤 사이드바(불투명 도크) 기본 상태를 다시 적용한다
+    /// (A273(v0.271.0)부터 그 기본 = 좌 열림·우 닫힘)
     /// (A81이 창 생성 1회에만 주던 상태를 모듈 전환마다 준다 = A81의 "이후 사용자 상태 유지" 대체).
     /// 파일을 여는 경로(OpenFile·OpenVerb)는 false로 두어 A81의 "파일 인자 직접 열기 = 무사이드바"가
     /// 그대로 성립한다. 미저장 가드(A37)에서 취소되면 여기서 조기 반환하므로 사이드바도 손대지 않는다.
@@ -1510,11 +1520,15 @@ public sealed partial class MainWindow : Window
                 RefreshShellIcons();
             });
         SetContentState(module, context.FilePath);
-        // A109(v0.136.0): 모듈 전환의 기본 화면 = 좌·우 사이드바.
+        // A109(v0.136.0): 모듈 전환의 기본 화면 = 사이드바.
+        // A273(v0.271.0 — A109·A81·A202 개정): 기본은 **좌 열림·우 닫힘**이다(종전 양측 열림).
+        // 전환 시점의 기본값만 바뀌었을 뿐 A176의 "상태는 콘텐츠를 넘어 유지" 규칙은 그대로다.
+        // Esc 콘텐츠 닫기(A202)도 TryCloseContent(defaultSidebars: true)로 이 줄을 지나므로
+        // 함께 좌 열림·우 닫힘으로 착지한다.
         // 반드시 SetContentState **뒤**다 — 그 안에서 S4('오픈 파일')가 먼저 자동 종료되고(A90),
         // 종료가 스냅샷(_s4Restore)을 버린 뒤에 사이드바 기본이 얹혀야 순서가 옳다.
         // (A151 모드 리셋도 SetContentState 안이라 이 사이드바 기본은 항상 모드1 위에 얹힌다.)
-        if (defaultSidebars) SetDockedState(listDocked: true, infoDocked: true);
+        if (defaultSidebars) SetDockedState(listDocked: true, infoDocked: false);
     }
 
     // ---------- 미저장 가드 (A37) ----------
@@ -2726,7 +2740,7 @@ public sealed partial class MainWindow : Window
     /// ① 전체화면 = 복귀 스냅샷으로(창 모드 + 좌/우 패널 구성) ② S4 = 진입 전 상태로 복귀
     /// ③ **콘텐츠 열림(무제 포함) = 닫기(A202)** — '뒤로' ④(A244 층 삽입 전 ③)와 같은 실행부(TryCloseContent)를
     /// 쓰되 defaultSidebars=true: 닫은 뒤 A109 기본 사이드바가 얹혀, 파일 인자 시작(A81
-    /// 무사이드바)에서 Esc 하나로 아이콘 실행 기본 화면(좌/우 사이드바 + 센터 썸네일)이 된다
+    /// 무사이드바)에서 Esc 하나로 아이콘 실행 기본 화면(A273 — 좌 사이드바 + 센터 썸네일)이 된다
     /// (사용자 문면). 검사 순서는 A112 '뒤로' 선례 그대로 — 전체화면 → S4 → 콘텐츠 한 층씩
     /// (A244의 폴더 히스토리 pop 층은 '뒤로' 입력 전용 — Esc에는 없다).
     /// 원 기능 우선(먼저 소비하는 쪽이 이긴다 — e.Handled 존중): 이름변경 편집 취소
@@ -2851,7 +2865,8 @@ public sealed partial class MainWindow : Window
     /// 재생 정지·파일 핸들 해제(뷰 Unloaded)·제목 복귀·트레이·하단 바·드라이브 줄 교체가 전부
     /// 그 경로 몫 — 상세는 TryNavigateBack ④ 주석). 반환값 = 닫을 콘텐츠가 있었는가.
     /// defaultSidebars: '뒤로'(A112) = false(좌/우 열림·닫힘 상태 보존 — 명시 요구) /
-    /// Esc(A202) = true(A109 기본 사이드바 재적용 — 파일 인자 시작(A81 무사이드바)에서 닫아도
+    /// Esc(A202) = true(A109 기본 사이드바 재적용 — A273(v0.271.0)부터 그 기본이 좌 열림·우 닫힘.
+    /// 파일 인자 시작(A81 무사이드바)에서 닫아도
     /// 아이콘 실행 기본 화면과 동일해지는 것이 사용자 문면의 합격선).
     /// </summary>
     private bool TryCloseContent(bool defaultSidebars)
@@ -3002,7 +3017,8 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 외부에서 좌/우 사이드바(불투명 도크 — A108 용어) 상태를 지정한다 — 시작 경로별 기본 표시
-    /// 상태(A81: 파일 인자 없이 모듈로 연 창은 양쪽 사이드바, 부록 B 30번)용 공개 API.
+    /// 상태(A81: 파일 인자 없이 모듈로 연 창은 사이드바 기본 = A273(v0.271.0)부터 좌 열림·우
+    /// 닫힘, 부록 B 30번)용 공개 API.
     /// 부르는 곳은 둘: WindowManager의 창 생성 진입(A81)과 **모듈 실행·전환**(A109, v0.136.0 —
     /// ShowModule의 defaultSidebars). A109가 A81의 "창 생성 뒤에는 사용자가 바꾼 상태를 그대로
     /// 유지(재적용 없음)"를 **모듈 전환에 한해 대체**한다 — 파일 열기는 여전히 재적용하지 않고,

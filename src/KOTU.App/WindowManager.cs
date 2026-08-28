@@ -57,11 +57,12 @@ public sealed class WindowManager
     {
         var window = Create();
         window.ShowDefaultModule();
-        // A81: 파일 인자 없이 모듈로 시작한 창은 좌·우 불투명 밀어내기가 기본(부록 B 30번).
+        // A81: 파일 인자 없이 모듈로 시작한 창은 좌 불투명 밀어내기가 기본(부록 B 30번).
+        // A273(v0.271.0 — A81 개정): 기본 = 좌 열림·우 닫힘(종전 양측 열림).
         // 기본 화면(H/W)에서는 오버레이가 숨겨진 채 상태만 남고, 파일 모듈로 전환하는 순간
         // 도크로 나타난다. 창 생성 시 주입은 이 진입 1회뿐 — 파일 열기 뒤에는 사용자가 바꾼 상태를
         // 존중한다. ※ A109(v0.136.0)부터 **모듈 전환**에서는 셸(ShowModule)이 같은 기본을 다시 준다.
-        window.SetDockedState(listDocked: true, infoDocked: true);
+        window.SetDockedState(listDocked: true, infoDocked: false);
         window.Activate();
         return window;
     }
@@ -127,7 +128,8 @@ public sealed class WindowManager
         window.OpenUntitledDocument();
         // A81: 파일 없이 모듈로 여는 새 창 — OpenNewWindow와 같은 기본 도크 명시(같은 값
         // 재대입이어도 "창 생성 진입의 기본 상태는 여기서 정한다"는 계약을 남긴다).
-        window.SetDockedState(listDocked: true, infoDocked: true);
+        // A273(v0.271.0): 기본 = 좌 열림·우 닫힘.
+        window.SetDockedState(listDocked: true, infoDocked: false);
         window.Activate();
     }
 
@@ -140,12 +142,13 @@ public sealed class WindowManager
         var window = Create();
         if (moduleId is not null) window.OpenModuleById(moduleId);
         else window.ShowDefaultModule();
-        // A81: 파일 없이 모듈로 여는 새 창도 "모듈 실행" 진입 — 양쪽 불투명 도크가 기본.
+        // A81: 파일 없이 모듈로 여는 새 창도 "모듈 실행" 진입 — 불투명 도크가 기본.
+        // A273(v0.271.0 — A81 개정): 기본 = 좌 열림·우 닫힘(종전 양측 열림).
         // 파일로 여는 새 창(OpenFileInNewWindow·FindReusable)은 기본이 닫힘이라 주입 없음.
         // ※ A109(v0.136.0) 이후에는 위 두 경로(OpenModuleById·ShowDefaultModule)가 모듈 실행이라
         // 같은 기본을 스스로 준다 — 이 줄은 결과가 겹치지만(같은 값 재대입, 부작용 없음)
         // "창 생성 진입의 기본 상태는 여기서 정한다"는 A81 계약을 명시로 남겨 두는 쪽을 택했다.
-        window.SetDockedState(listDocked: true, infoDocked: true);
+        window.SetDockedState(listDocked: true, infoDocked: false);
         window.Activate();
     }
 
@@ -255,7 +258,8 @@ public sealed class WindowManager
         {
             window.OpenModuleById(moduleId!);
             // A81: 파일 없이 모듈로 여는 창의 기본 상태 — OpenNewWindow와 동일하게 명시한다.
-            window.SetDockedState(listDocked: true, infoDocked: true);
+            // A273(v0.271.0): 기본 = 좌 열림·우 닫힘.
+            window.SetDockedState(listDocked: true, infoDocked: false);
         }
         window.Activate();
         return true;

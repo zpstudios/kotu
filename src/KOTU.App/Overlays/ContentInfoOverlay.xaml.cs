@@ -145,6 +145,14 @@ public sealed partial class ContentInfoOverlay : UserControl
     {
         if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
         e.AcceptedOperation = DataPackageOperation.Copy;
+        // A272: Copy는 유지하되(None이면 드랍 자체가 불가) OS가 그리는 배지 문구만 "Open"으로
+        // 덮는다 — 이 경로는 파일을 복사하지 않고 열기만 한다(OnPanelDrop → FileDropped).
+        // DragUIOverride는 드래그 원본이 UI 사용자 지정을 허용할 때만 오므로 null 가드를 둔다.
+        if (e.DragUIOverride is { } dragUi)
+        {
+            dragUi.Caption = "Open";
+            dragUi.IsCaptionVisible = true;
+        }
         e.Handled = true; // 창 전체 핸들러(콘텐츠 영역 규칙)가 다시 판정하지 않게
     }
 

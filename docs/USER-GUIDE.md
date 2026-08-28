@@ -31,7 +31,8 @@ Every KOTU window has the same three parts.
 - **Bottom bar** — one row, 44 px tall. On the left the **menu** button and the **Open file** button;
   at the right end the **Full screen** button; the rest belongs to whichever module is open.
 - **Two side panels** — a **left** panel (folder tree and file list) and a **right** panel
-  (information about the current file). Both are hidden until you call them.
+  (information about the current file). Opening a module starts with the left one open and the
+  right one closed; opening a file directly hides both until you call them.
 
 The side panels are opaque **sidebars**: an open panel stands beside the content and makes the
 centre narrower. Either panel is 25% of the window width.
@@ -431,14 +432,15 @@ These keys produce no character of their own, so nothing is taken away from the 
 give way to typing — in a text document it is a line break — and `Shift+N` gives way as well.
 
 `Esc` undoes one layer per press: full screen first, then the Open file browser, then the file
-itself. Closing the file this way lands on the module's own browser with **both sidebars open** —
+itself. Closing the file this way lands on the module's own browser with the **left sidebar open** —
 the same screen as starting the module from the menu — so a file opened straight from Windows
 Explorer is one `Esc` away from the standard screen. A document with unsaved changes asks before
 closing. Where `Esc` already means something it keeps that meaning first: it cancels a rename, it
 clears the cut-mark in the file browser, and an open dialog takes it for itself.
 
 There is no keyboard shortcut for switching module or for opening Settings — both live in the menu
-at the bottom left. Switching module from the menu always arrives with both sidebars open. Choosing
+at the bottom left. Switching module from the menu always arrives with the left sidebar open and
+the right one closed. Choosing
 the module you are already in changes nothing.
 
 ### 3.2 Panels: how `F11` and `F12` behave
@@ -575,7 +577,8 @@ With nothing left to undo they do nothing. The mouse button works everywhere; th
 typing, like the letter keys.
 
 Step 3 is the one place going back and `Esc` differ: going back keeps the panels exactly as they
-were, while closing with `Esc` arrives with both sidebars open — the standard module screen.
+were, while closing with `Esc` arrives with the left sidebar open and the right one closed — the
+standard module screen.
 
 ---
 
@@ -600,17 +603,18 @@ Ways to bring a panel up:
   bottom, and a small **pin** button appears just over the bottom bar. It opens that side as a
   sidebar, and closes it again if it already is one — the same toggle as the key.
 
-Opening a module (rather than opening a file directly) starts with both sidebars open. A file
-opened straight from Windows Explorer starts with no panels, so nothing covers what you came to
-see. Press `Esc` when you are done and the file closes onto that standard screen — sidebars and
-thumbnails — as if you had started the module from the menu.
+Opening a module (rather than opening a file directly) starts with the left sidebar open and the
+right one closed. A file opened straight from Windows Explorer starts with no panels, so nothing
+covers what you came to see. Press `Esc` when you are done and the file closes onto that standard
+screen — left sidebar and thumbnails — as if you had started the module from the menu.
 
 ---
 
 ## 5. The built-in file browser
 
 Open a module without a file and the window becomes a file browser: folder tree and file list on the
-left, thumbnails in the centre, file information on the right. The thumbnails are square, and the
+left, thumbnails in the centre, and file information on the right once you open that panel with
+`F12`. The thumbnails are square, and the
 grid is 4 columns wide with both sidebars docked, 6 with one and 8 with none. Image files show a
 real miniature; text documents — `.txt .md .log .ini .html` and friends — show the first lines of
 their content, loaded in the background so the grid never waits; everything else shows its
