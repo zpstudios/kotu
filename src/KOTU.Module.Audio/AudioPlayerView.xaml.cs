@@ -748,6 +748,9 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// (▶ 표기·시크바 끝·트레이 타이머 정지)을 생략한다 — 곧 Playing이 덮어써 깜빡임만 만든다.
     /// 정지(전이 5)만 종전 갱신 그대로다. EncounteredError는 전이 트리거가 아니다(실패 파일
     /// 자동 스킵은 무한 실패 루프 위험 — 별도 설계 대상, §3.3). UI 스레드 전용.
+    /// A258(v0.258.0): 위 "루프 없음 = 다음 파일"에 설정 게이트가 하나 붙었다 — 설정의
+    /// "Auto-play next file"을 끄면 <b>루프 없음일 때만</b> 목록 진행 대신 정지(전이 5)한다.
+    /// 루프 모드가 켜져 있으면 옵션과 무관하게 종전 전이 그대로다(아래 게이트 주석 참고).
     /// 영상 원본과 다른 점: 오디오에는 IPlaybackStateSource·PlaybackStateChanged가 없어
     /// (설계 §5.2 — A186 확대는 이번 범위 밖) 그 발화 줄이 통째로 빠지고, 대신 오디오만의
     /// 트레이 1초 타이머 정지(SetTrayTimer(false))·TrayStatusChanged가 정지 전이에 남는다.
@@ -769,6 +772,16 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             return;
         }
 
+        // A258(v0.258.0): 오토 넥스트 게이트 — 설정의 "Auto-play next file"(player.autoNext,
+        // 영상·오디오 공용 한 벌)을 끄면 목록 진행을 막고 정지(전이 5)로 보낸다. 유효 조건은
+        // **루프 모드가 '없음'일 때뿐**이다(확정): 목록 루프·한 파일 루프가 선택돼 있으면 그
+        // 모드가 이긴다. 특히 한 파일 루프의 "횟수 소진 후 목록 진행 낙하"는 이 지점에서도
+        // _loopMode가 여전히 File이라 게이트를 그냥 통과한다 — 소진 낙하는 종전대로 다음 파일로
+        // 간다(A255 규칙 불변). 값은 캐시하지 않고 EOF마다 라이브로 읽는다(설정 변경 즉시 반영·
+        // 이벤트 배선 0). 전이 1·4(같은 파일 재시작)는 이 게이트 앞뒤라 영향 없다.
+        var autoNext = _loopMode != LoopMode.Off
+            || _settings.Get(PlaybackSettings.AutoNextKey, PlaybackSettings.AutoNextDefault);
+
         // 전이 2: 다음 파일로(모든 모드 공통 — 루프 없음·한 파일 횟수 소진 포함).
         // 전이 3: 목록 루프 + 목록 끝 = 처음으로. 이 되감기가 "목록 1회 순환" 소모 시점이다
         // (A255 확정: 마지막 파일 EOF에서 처음으로 갈 때 1회. 수동 개입은 PlayCurrent가
@@ -776,7 +789,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         // 그새 소실된 파일은 Remove로 목록에서 빼고 그다음 후보로 재시도한다(구현 시 결정).
         // OpenPath = 기존 완결 경로 재사용(설계 §2.2 경로 B) — 이어듣기 저장·PlayCurrent·
         // ContentOpened 셸 동기화(트레이·A174)까지 전부 따라온다. 신규 셸 배선 0(설계 §5).
-        if (_playlist is { } list)
+        if (autoNext && _playlist is { } list)
         {
             while (true)
             {
@@ -820,6 +833,8 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         // 전이 5: 정지 — 종전 EndReached UI 갱신 그대로(유일하게 Ended에 머무는 경로).
         // A255: 루프 없음·목록 끝 외에 "횟수 소진"(목록 루프 되감기 예산 소진, 한 파일 소진 후
         // 다음 파일 없음)도 이 경로로 온다.
+        // A258: "루프 없음 + Auto-play next file 끔"도 이 경로다 — 목록 중간 파일이어도 여기서
+        // 멈추므로 아래 네 줄(▶ 표기·시크바 끝) + 오디오 전용 트레이 두 줄을 반드시 거쳐야 한다.
         PlayButton.Content = "▶";
         PositionText.Text = TimeText.Format(_durationMs);
         _suppressSeekEvent = true;

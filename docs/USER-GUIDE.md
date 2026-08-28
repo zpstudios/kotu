@@ -126,6 +126,9 @@ Seven modules. Switch between them from the menu at the bottom left.
   button to choose how often either mode repeats — once more, three more times, or forever;
   cycling with the button always enters a mode at forever. Repeating never replays from a resume
   point; every pass starts at 0:00.
+  To stop after every file instead, turn **Auto-play next file** off in
+  [Settings → Playback](#playback). It only applies while no loop mode is set — a loop mode plays
+  on regardless.
 - **Zoom** with `Ctrl`+wheel, from 10% to 800%.
 - **Fit** — see [2.9](#29-the-fit-button). Each new file starts at Contain again.
 - `Enter` or `Alt`+`Enter` toggles full screen, and `Esc` leaves it.
@@ -162,6 +165,8 @@ Seven modules. Switch between them from the menu at the bottom left.
   button to choose how often either mode repeats — once more, three more times, or forever;
   cycling with the button always enters a mode at forever. Repeating never replays from a resume
   point; every pass starts at 0:00.
+  **Auto-play next file** in [Settings → Playback](#playback) governs this here too — it is one
+  setting shared by Video and Audio.
 - `Enter` or `Alt`+`Enter` toggles full screen, and `Esc` leaves it. The bottom bar stays put —
   the auto-hide above is a Video-module behaviour.
 - Press ▶ with nothing open to play a built-in 18-second sample tune.
@@ -787,6 +792,18 @@ it with the built-in text editor.
 - Changes you make by hand apply after a restart — KOTU does not re-read the file while it runs.
 - Editing it incorrectly can break your settings. Nothing validates what you type; a malformed file
   is the one way to lose your preferences.
+
+### Playback
+
+**Auto-play next file** decides what happens when a video or a track reaches its end. On — the
+default — the next file in the same folder starts, which is how the folder plays as a list
+([2.2](#22-video), [2.3](#23-audio)). Off, playback simply stops at the end of each file.
+
+- It is one switch for both modules: Video and Audio share it.
+- It only has a say while the loop button is off. With **Loop list** or **Repeat this file** set,
+  that mode plays on and this switch is ignored — including the pass after a repeat count runs out,
+  which still moves to the next file.
+- Turning it off does not stop you moving on by hand: opening the next file works as always.
 
 ### Updates
 

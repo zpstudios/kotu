@@ -38,6 +38,8 @@ namespace KOTU.App;
 /// <b>마스터 그룹</b> → <b>모듈 그룹 5개</b> → 공용 상태 줄이다(A235 ①의 마스터·메뉴 순서를 교환하고,
 /// A235 ②의 "Show per-module options" 접기는 폐지 — 모듈 스위치는 늘 펼쳐져 있다).
 /// 그룹 사이 간격은 12 하나로 통일했다(모듈 5그룹 사이는 그들을 담는 상자의 Spacing이 만든다).
+/// A258(v0.258.0): 절 순서에 <b>Playback</b>이 하나 늘었다 — Explorer integration 절(딸린 머리글
+/// 없는 두 카드 포함)이 끝난 자리, Updates 바로 앞이다(<see cref="BuildPlaybackSection"/>).
 /// </summary>
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
@@ -677,6 +679,12 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         BuildShellDiagnosticsSection(); // A234: 설정 파일 안내 바로 위 — 셸 키 진단 오버레이 토글
         BuildSettingsFileSection(); // A36: 연결 섹션 아래 "Open settings.json"
 
+        // A258: Playback 절은 Explorer integration 절이 완전히 끝난 뒤·Updates 앞이다.
+        // 공용 상태 줄 바로 뒤가 아니라 여기인 이유 = 위 두 카드(셸 진단·설정 파일)는 머리글이
+        // 없어 Explorer integration 머리글에 딸려 읽힌다 — 그 사이에 새 머리글을 끼우면 두 카드가
+        // Playback 밑으로 밀려 들어간다.
+        BuildPlaybackSection();
+
         AddHeader("Updates");
         var currentVersion = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
         BuildUpdatesSection(currentVersion);
@@ -873,6 +881,62 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         cardBody.Children.Add(new TextBlock
         {
             Text = "Shows a live overlay with keyboard focus and key routing state. For troubleshooting only.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        Root.Children.Add(cardBody);
+    }
+
+    /// <summary>
+    /// A258(v0.258.0): Playback 절 — 영상·오디오 <b>공용</b> 재생 옵션. 지금은
+    /// "Auto-play next file" 토글 하나뿐이다(플레이어 바에는 대응 버튼을 두지 않는다 — A255
+    /// 루프 버튼과 뜻이 겹쳐 보이기 때문). 배선은 A234 셸 진단 토글의 최소형에서 알림 한 줄까지
+    /// 뺀 것이다: Set → Save로 끝난다 — 두 플레이어가 파일이 끝날 때마다 값을 새로 읽으므로
+    /// 열린 창에 전파할 이벤트가 없다(<see cref="PlaybackSettings"/> 주석). 레지스트리·워커와
+    /// 무관하므로 위 파일 연결 토글들의 busy·<see cref="_suppressToggle"/> 축은 쓰지 않는다.
+    /// 값이 <b>루프 모드가 '없음'일 때만</b> 효력이 있다는 사실은 아래 설명 줄이 고지한다.
+    /// 카드 문법은 A197/A220(스위치 왼쪽 + 제목 TextBlock, 내장 On/Off 문구 제거) 그대로다.
+    /// </summary>
+    private void BuildPlaybackSection()
+    {
+        AddHeader("Playback");
+
+        var toggle = new ToggleSwitch
+        {
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsOn = _settings.Get(PlaybackSettings.AutoNextKey, PlaybackSettings.AutoNextDefault),
+        };
+        toggle.Toggled += (_, _) =>
+        {
+            _settings.Set(PlaybackSettings.AutoNextKey, toggle.IsOn);
+            _settings.Save(); // 즉시 저장 — 재생 설정 관용구(EQ·루프 모드와 같은 축)
+        };
+
+        var headerRow = new Grid { ColumnSpacing = 8 };
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var title = new TextBlock
+        {
+            Text = "Auto-play next file",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(toggle, 0);
+        Grid.SetColumn(title, 1);
+        headerRow.Children.Add(toggle);
+        headerRow.Children.Add(title);
+
+        var cardBody = new StackPanel { Spacing = 6 };
+        cardBody.Children.Add(headerRow);
+        cardBody.Children.Add(new TextBlock
+        {
+            Text = "When a video or track ends, the next file in the same folder starts. "
+                + "A loop mode, when one is set, plays on regardless of this switch.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
