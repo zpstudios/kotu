@@ -209,7 +209,17 @@ public sealed partial class DocumentView : UserControl,
         RenderPane.LayoutUpdated += (_, _) => EnsureRenderZoomWheelHook();
         // A225: 뷰포트 폭이 바뀌면 랩 폭 보정(폭 = 뷰포트 나누기 배율)을 따라잡는다 —
         // PdfPane의 리사이즈 재적용(EnsureContentMinWidth)과 같은 필요.
-        RenderPane.SizeChanged += (_, _) => ApplyRenderZoom();
+        // A261: 리사이즈는 정착 절반(SettleRenderZoom) 직행 — 줌 제스처가 아니라 디바운스로
+        // 미룰 이유가 없고, 종전 동작(즉시 재랩)이 그대로다.
+        RenderPane.SizeChanged += (_, _) => SettleRenderZoom();
+        // A262: Ctrl+휠 데드존 폴백 — 프레젠터 훅 3곳(에디터·렌더 EnsureZoomWheelHook류,
+        // PdfPane.HookScroll)은 템플릿 내부 ScrollContentPresenter 한정이라 패딩 띠·스크롤바·
+        // 여백(RootGrid) 위에서는 핸들러가 안 불린다. 뷰 루트에서 handledEventsToo로 한 번 더
+        // 받아(핸들러 선두 e.Handled 선검사로 이중 소비 방지) 남는 자리를 전부 덮는다 —
+        // 템플릿 취득 3회 실패로 조용히 포기한 확률 구멍(EnsureZoomWheelHook)도 이게 덮는다.
+        // RootGrid Background=Transparent(XAML)가 히트테스트 성립의 짝 조건이다.
+        RootGrid.AddHandler(PointerWheelChangedEvent,
+            new PointerEventHandler(OnRootWheelFallback), handledEventsToo: true);
 
         // A121: PDF 키보드 스크롤의 키 수신 지점. **터널링**(PreviewKeyDown)이라 PdfPane 안쪽
         // ListView·ScrollViewer의 내장 키 내비게이션보다 먼저 온다 — 버블링 KeyDown이면 그것들이
@@ -232,6 +242,14 @@ public sealed partial class DocumentView : UserControl,
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
             _dirtyTimer?.Stop(); // A113 ⓒ: 뷰가 내려간 뒤 디바운스 판정이 발화하지 않게
+            // A261: 줌 합치기·디바운스 정리 — ① 보류 중 합치기 목표는 지금 적용(값 Set까지
+            // 확정 — 버리면 마지막 노치가 증발한다), ② 렌더 정착 타이머는 그냥 정지(내려가는
+            // 판의 재랩은 무의미), ③ 미뤄진 디스크 Save는 즉시 플러시(①이 Save를 다시 예약할
+            // 수 있어 타이머 정지·플러시가 ①보다 뒤라야 한다).
+            FlushPendingZoomApply();
+            _renderSettleTimer?.Stop();
+            _zoomSaveTimer?.Stop();
+            FlushZoomSave();
             // A177 ⓐ: 보류 중 지연 대입 해제 — CompositionTarget.Rendering은 static 이벤트라
             // 남기면 뷰가 누수된다(A88 규칙, HardwareView의 맥박 루프 해제와 같은 의무).
             if (_pendingApplyHandler is { } pendingApply)
@@ -294,7 +312,8 @@ public sealed partial class DocumentView : UserControl,
     /// 실시간 읽기)으로 자연히 따라온다.
     /// PDF 모드에는 아무 영향이 없다 — PdfPane은 별개 줌 체계(ZoomFactor·Fit)다.
     /// A225: ⓔ 렌더 판(ApplyRenderZoom — 같은 배율 축을 md 렌더 뷰에도 적용. 판이 내려가 있으면
-    /// 무동작이고, 다음 표시(EnterRenderMode·SizeChanged)가 따라잡는다).
+    /// 무동작이고, 다음 표시(EnterRenderMode·SizeChanged)가 따라잡는다. A261: 이 호출은 즉시
+    /// 절반(배율만) — 재랩 정착은 150ms 디바운스 뒤 SettleRenderZoom이 한다).
     /// A248: ⓕ HTML 렌더 판(ApplyHtmlZoom — 같은 축을 WebView2에도 적용. 표시 중일 때만).
     /// </summary>
     private void ApplyZoom()
@@ -338,26 +357,116 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>
-    /// A181: 배율 변경의 단일 경로 — 범위로 접고, 적용(ApplyZoom)하고, 즉시 저장한다
+    /// A181: 배율 변경의 단일 경로 — 범위로 접고, 적용(ApplyZoom)하고, 저장한다
     /// (전역 1벌 — 다음에 여는 문서·창부터 자연 반영. 살아 있는 다른 창에 밀어 넣는 전파는
     /// 만들지 않는다 — A171의 "실시간 전파 없음" 결정과 같은 이유).
+    /// A261: 값 Set은 종전대로 즉시, 디스크 Save만 500ms 디바운스로 미룬다(ScheduleZoomSave —
+    /// 매 노치 UI 스레드 동기 File.WriteAllText(전체 설정 JSON 직렬화)가 연속 줌 병목 1호였다.
+    /// 2026-08-27 사용자 승인 확정). 직행 호출(Fit·리셋 등)은 선두에서 보류 중 합치기 목표
+    /// (RequestZoom)를 무효화한다 — 마지막 지시가 이긴다.
     /// </summary>
     private void SetZoom(int percent)
     {
+        _zoomApplyQueued = false; // A261: 보류 중 합치기 목표 무효화 — 이 호출 값이 최종이다
         var clamped = Math.Clamp(percent, MinZoomPercent, MaxZoomPercent);
         if (clamped == _zoomPercent) return;
         _zoomPercent = clamped;
         ApplyZoom();
-        _settings.Set(DocumentModule.ZoomSettingKey, clamped);
-        _settings.Save(); // 즉시 저장(사양) — 설정 화면의 Set/Save 쌍과 같은 관용구
+        _settings.Set(DocumentModule.ZoomSettingKey, clamped); // 값은 즉시 — 미루는 건 디스크뿐
+        ScheduleZoomSave();
+    }
+
+    // ---------- A261: 노치 합치기(프레임당 1회 적용) + Save 디바운스 ----------
+
+    /// <summary>A261 합치기 목표(%) — _zoomApplyQueued가 서 있는 동안만 유효.</summary>
+    private int _pendingZoomPercent;
+
+    /// <summary>A261: 저순위 적용 1건이 큐에 예약돼 있다 — 서 있는 동안은 목표만 갱신한다.</summary>
+    private bool _zoomApplyQueued;
+
+    /// <summary>다음 스텝의 기준 배율 — 예약 중이면 목표(연타 누적), 아니면 현재값. 휠·키가
+    /// 같은 기준을 쓰므로 적용이 미뤄진 사이의 연타도 전부 목표에 쌓인다.</summary>
+    private int ZoomTargetPercent => _zoomApplyQueued ? _pendingZoomPercent : _zoomPercent;
+
+    /// <summary>
+    /// A261: 배율 변경 요청의 합치기 창구(휠·키 공용) — 목표만 갱신하고 실제 적용(SetZoom —
+    /// FontSize 재랩, 최대 1M 문자 재측정)은 DispatcherQueue 저순위 1건으로 예약한다. 저순위는
+    /// 렌더·입력 처리 뒤에 돌므로 한 프레임에 겹친 연속 노치(오토리피트 포함)는 재랩 1회로
+    /// 합쳐진다(종전 = 노치마다 동기 재랩 — 프레임보다 빨리 중첩되던 병목 2호). 예약 중이면
+    /// 목표만 갱신하고 돌아간다. 큐를 못 잡는 극단은 종전 즉시 적용으로 폴백.
+    /// </summary>
+    private void RequestZoom(int percent)
+    {
+        _pendingZoomPercent = Math.Clamp(percent, MinZoomPercent, MaxZoomPercent);
+        if (_zoomApplyQueued) return;
+        if (DispatcherQueue is { } queue && queue.TryEnqueue(
+                Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, ApplyPendingZoom))
+            _zoomApplyQueued = true;
+        else
+            SetZoom(_pendingZoomPercent);
+    }
+
+    /// <summary>A261 예약 소화 — SetZoom 직행(Fit·리셋)이나 Unloaded 플러시가 먼저 소진해
+    /// 표지가 내려가 있으면 무동작(낡은 예약 1건이 큐에 남았던 경우).</summary>
+    private void ApplyPendingZoom()
+    {
+        if (!_zoomApplyQueued) return;
+        SetZoom(_pendingZoomPercent); // SetZoom 선두가 _zoomApplyQueued를 내린다
+    }
+
+    /// <summary>Unloaded: 보류 목표를 지금 적용한다(값 Set·Save 예약까지 확정) — 버리면
+    /// 마지막 노치가 증발한다. 뷰가 내려간 뒤 낡은 예약이 돌아도 표지가 내려가 있어 무해.</summary>
+    private void FlushPendingZoomApply()
+    {
+        if (!_zoomApplyQueued) return;
+        SetZoom(_pendingZoomPercent);
+    }
+
+    /// <summary>A261 Save 디바운스 간격 — 사용자 승인 확정치 500ms.</summary>
+    private const int ZoomSaveDebounceMs = 500;
+
+    private DispatcherTimer? _zoomSaveTimer; // UI 스레드 타이머(_dirtyTimer와 같은 방식)
+
+    /// <summary>디스크 Save가 미뤄져 있다 — 타이머 발화나 Unloaded 플러시가 소진한다.</summary>
+    private bool _zoomSavePending;
+
+    /// <summary>지연 생성 — 줌을 한 번도 안 바꾼 세션에는 만들지 않는다(DirtyTimer 관용구).</summary>
+    private DispatcherTimer ZoomSaveTimer => _zoomSaveTimer ??= CreateZoomSaveTimer();
+
+    private DispatcherTimer CreateZoomSaveTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ZoomSaveDebounceMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop(); // 반복 타이머 — 1회 발화용이라 즉시 멈춘다(CreateDirtyTimer 관용구)
+            FlushZoomSave();
+        };
+        return timer;
+    }
+
+    /// <summary>A261: 500ms 재시작 디바운스 — 연속 줌 동안 디스크 쓰기를 마지막 1회로 미룬다.</summary>
+    private void ScheduleZoomSave()
+    {
+        _zoomSavePending = true;
+        ZoomSaveTimer.Stop(); // 반복 타이머 — Stop 후 Start로 확실히 되감는다(전 모듈 관용구)
+        ZoomSaveTimer.Start();
+    }
+
+    /// <summary>보류 중 디스크 Save를 지금 확정한다 — 타이머 발화와 Unloaded가 같은 경로다.</summary>
+    private void FlushZoomSave()
+    {
+        if (!_zoomSavePending) return;
+        _zoomSavePending = false;
+        _settings.Save();
     }
 
     /// <summary>
     /// A181: Ctrl+휠 배선 — TextBox 내장 ScrollViewer의 콘텐츠 프레젠터에 건다(버블 순서상
     /// ScrollViewer보다 먼저 받아 기본 스크롤을 대체할 수 있는 지점 — A98/PdfPane.HookScroll과
     /// 같은 이유·같은 방식). 템플릿 구조 의존이라 취득 실패는 EditorDecor.EnsureScrollHook과
-    /// 같은 폴백을 쓴다: 표시 후 레이아웃 3회까지 재시도하고 그래도 없으면 조용히 포기
-    /// (휠 줌만 비활성 — 편집 본기능 무영향).
+    /// 같은 폴백을 쓴다: 표시 후 레이아웃 3회까지 재시도하고 그래도 없으면 조용히 포기.
+    /// A262: 포기해도 휠 줌이 죽지는 않는다 — RootGrid 폴백(OnRootWheelFallback)이 같은 이벤트를
+    /// handledEventsToo로 받아 덮는다(이 훅이 살아 있으면 Handled를 세워 폴백은 무동작).
     /// </summary>
     private void EnsureZoomWheelHook()
     {
@@ -376,8 +485,8 @@ public sealed partial class DocumentView : UserControl,
     /// A225: 렌더 판(RenderPane) 쪽 Ctrl+휠 배선 — 에디터(EnsureZoomWheelHook)와 같은 지점
     /// (내장 ScrollViewer의 콘텐츠 프레젠터 — 버블 순서상 ScrollViewer의 내장 Ctrl+휠 처리보다
     /// 먼저 받는다, A98/PdfPane.HookScroll 관용구)·같은 폴백(표시 후 레이아웃 3회 재시도, 실패
-    /// 시 조용히 포기 — 휠 줌만 비활성, 렌더 표시 본기능 무영향). 핸들러는 에디터와 공유한다
-    /// (OnZoomWheel — 두 표면이 같은 줌 축이므로 노치 누적도 공유가 맞다).
+    /// 시 조용히 포기 — A262: 포기 자리는 RootGrid 폴백이 덮는다, EnsureZoomWheelHook 주석 참고).
+    /// 핸들러는 에디터와 공유한다(OnZoomWheel — 두 표면이 같은 줌 축이므로 노치 누적도 공유가 맞다).
     /// </summary>
     private void EnsureRenderZoomWheelHook()
     {
@@ -399,18 +508,58 @@ public sealed partial class DocumentView : UserControl,
     /// 수정키 조합도 기본 처리에 양보한다.
     /// 정밀 터치패드(120 미만 delta)는 한 노치만큼 모일 때까지 누적한다 — 부호만 보면 미세
     /// 이벤트마다 10%씩 튀어 과속한다.
+    /// A261: 적용은 SetZoom 직행이 아니라 RequestZoom(합치기 창구) — 한 프레임에 겹친 연속
+    /// 노치는 재랩 1회로 합쳐진다. Handled는 종전대로 즉시 세운다(합치기가 미뤄도 이벤트
+    /// 소비는 이 자리의 몫 — 내장 Ctrl+휠 처리로 새면 안 된다).
     /// </summary>
     private void OnZoomWheel(object sender, PointerRoutedEventArgs e)
     {
         if (!e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control)) return; // 휠 단독 = 스크롤(기본 처리)
         e.Handled = true; // 내장 처리(Ctrl+휠 스크롤·줌)보다 먼저 소비 — A98 관용구
-        var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta; // 좌표는 안 쓴다 — delta만
-        if (delta == 0) return;
-        _wheelDeltaAccum += delta;
-        var notches = _wheelDeltaAccum / 120; // 0을 향해 자르는 정수 나눗셈 — 잔여분은 다음 이벤트로
+        var notches = TakeWheelNotches(e);
         if (notches == 0) return;
-        _wheelDeltaAccum -= notches * 120;
-        SetZoom(_zoomPercent + notches * ZoomStepPercent);
+        RequestZoom(ZoomTargetPercent + notches * ZoomStepPercent);
+    }
+
+    /// <summary>휠 노치 추출(구 OnZoomWheel 본문 — A262에서 폴백과 공용화). 정밀 휠(120 미만
+    /// delta)은 한 노치가 될 때까지 누적(_wheelDeltaAccum — 0을 향해 자르는 정수 나눗셈,
+    /// 잔여분은 다음 이벤트로). 좌표는 안 쓴다 — delta만.</summary>
+    private int TakeWheelNotches(PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
+        if (delta == 0) return 0;
+        _wheelDeltaAccum += delta;
+        var notches = _wheelDeltaAccum / 120;
+        if (notches != 0) _wheelDeltaAccum -= notches * 120;
+        return notches;
+    }
+
+    /// <summary>
+    /// A262: Ctrl+휠 데드존 폴백(배선 = 생성자 RootGrid.AddHandler, handledEventsToo:true) —
+    /// 프레젠터 훅 3곳(에디터·렌더 OnZoomWheel·PdfPane.OnPresenterWheel)이 못 받는 자리
+    /// (ScrollViewer 패딩 띠·세로 스크롤바·RootGrid 여백)를 뷰 루트에서 받는다.
+    /// 선두 e.Handled 선검사 = 이중 소비 방지 — 프레젠터 훅 3곳은 전부 Ctrl 갈래에서
+    /// Handled=true를 세우므로(전수 확인), 여기 도달한 Handled 이벤트는 이미 처리된 것이다.
+    /// 갈래: PDF 표시 중 = StepZoom(중앙 앵커 — A246 키 줌과 동일 축. 폴백 자리에는 페이지
+    /// 좌표 기준 앵커가 무의미해 포인터 앵커를 흉내 내지 않는다) / 텍스트·렌더 = 노치 합치기
+    /// 경로(OnZoomWheel과 동일) / 빈 화면 = 줌 대상 없음(OnZoomKey와 같은 판정 — 기본 처리로
+    /// 흘려보낸다). 노치 누적기는 프레젠터 훅과 공유한다(같은 줌 제스처의 연장이다).
+    /// </summary>
+    private void OnRootWheelFallback(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.Handled) return; // 프레젠터 훅이 이미 소비 — 이중 소비 방지(선두 고정)
+        if (!e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control)) return; // 휠 단독 = 기본 처리
+        if (IsPdfFitBranch)
+        {
+            e.Handled = true;
+            var pdfNotches = TakeWheelNotches(e);
+            if (pdfNotches != 0) _pdfPane?.StepZoom(pdfNotches);
+            return;
+        }
+        if (_path is null && !_untitled) return; // 빈 화면(PDF도 아님) — 줌 대상 없음
+        e.Handled = true;
+        var notches = TakeWheelNotches(e);
+        if (notches != 0) RequestZoom(ZoomTargetPercent + notches * ZoomStepPercent);
     }
 
     /// <summary>
@@ -453,6 +602,9 @@ public sealed partial class DocumentView : UserControl,
     /// SetZoom ±10%p(Ctrl+휠과 같은 단계·A229 범위 20~500은 SetZoom이 접는다), 리셋 = SetZoom(100).
     /// 빈 화면(파일 없음·무제 아님)은 줌 대상이 없어 흘려보낸다(Handled=false — 기본값 true를
     /// 명시적으로 되돌리는 HotkeySupport.Register 관용구. 셸 분기도 A246으로 비어 무동작이 된다).
+    /// A261: 텍스트 갈래 스텝은 휠과 같은 합치기 경로(RequestZoom)로 통일 — 오토리피트 연타도
+    /// 프레임당 재랩 1회의 수혜를 받는다. 리셋(100%)은 직행 SetZoom — 절대 목표라 합칠 게 없고,
+    /// 보류 중 상대 스텝은 SetZoom 선두가 무효화한다(마지막 지시가 이긴다).
     /// </summary>
     private void OnZoomKey(int step, KeyboardAcceleratorInvokedEventArgs args)
     {
@@ -469,24 +621,91 @@ public sealed partial class DocumentView : UserControl,
             return;
         }
         args.Handled = true;
-        SetZoom(step == 0 ? DefaultZoomPercent : _zoomPercent + step * ZoomStepPercent);
+        if (step == 0) SetZoom(DefaultZoomPercent);
+        else RequestZoom(ZoomTargetPercent + step * ZoomStepPercent);
     }
 
     /// <summary>
-    /// A225: 현재 배율을 md 렌더 판에 적용한다 — 편집 모드(ApplyZoom ⓐ~ⓓ)와 같은 축(_zoomPercent)
-    /// 의 렌더 쪽 절반. 방식 = ScrollViewer ZoomFactor + 랩 폭 보정(RenderStack.Width =
-    /// 뷰포트 폭 나누기 배율 — 배율을 곱하면 정확히 뷰포트 폭이라 가로 스크롤이 생기지 않는다.
-    /// PdfPane EnsureContentMinWidth(A188)·셸 LayoutUiScale의 역수 크기 관용구). 재조립 방식을
-    /// 기각한 이유: 치수(마진·들여쓰기)가 빌더 각처에 흩어져 배율 인자 인입이 크고, 줌마다
-    /// A193 분할 조립 루프를 재기동해야 해 재진입 면이 넓어진다 — ZoomFactor 방식은 조립물·
-    /// 루프·모델(_renderBlocks) 전부 무접촉이고 인쇄(BuildPrintBlock 신조립)에도 배율이 새지
-    /// 않는다. 스크롤은 뷰포트 세로 중앙의 콘텐츠 비율 위치를 유지한다(재랩으로 높이 분포가
-    /// 달라져 정확 유지는 성립하지 않는다 — 비율 유지가 대체 유지의 정의. ApplyFitAt의
-    /// UpdateLayout 후 ChangeView 관용구).
-    /// 판이 내려가 있거나 뷰포트가 아직 0이면 무동작 — EnterRenderMode 직후 호출과 SizeChanged
-    /// (0 → 실폭 전이 포함)가 표시 시점을 놓치지 않고 따라잡는다.
+    /// A225→A261: 현재 배율의 렌더 판 즉시 절반 — ZoomFactor 반영만 한다. 매 단계 동기
+    /// UpdateLayout(전 블록 재측정 — 연속 줌 병목 3호)이던 랩 폭 보정·앵커 복원은
+    /// SettleRenderZoom으로 갈라 제스처 종료 150ms 디바운스로 미룬다(ScheduleRenderZoomSettle).
+    /// 중간에는 배율만 먼저 보인다 — 랩 폭이 옛 배율 기준이라 확대 중 가로가 잠시 어긋나는
+    /// (잘리거나 남는) 것은 의도된 일시 수용이다(150ms 뒤 정착이 바로잡는다).
+    /// 판이 내려가 있거나 뷰포트가 아직 0이면 무동작 — EnterRenderMode(정착 직행)와
+    /// SizeChanged(0 → 실폭 전이 포함)가 표시 시점을 놓치지 않고 따라잡는다.
     /// </summary>
     private void ApplyRenderZoom()
+    {
+        if (RenderPane.Visibility != Visibility.Visible) return;
+        if (RenderPane.ViewportWidth <= 0) return;
+        var scale = _zoomPercent / 100.0;
+        if (Math.Abs(RenderPane.ZoomFactor - scale) > 0.001)
+        {
+            PinRenderZoomFactor(scale);
+            // 오프셋 무이동(null) — 앵커 복원은 정착 절반의 몫(여기서 하면 낡은 랩 폭 기준이다)
+            RenderPane.ChangeView(null, null, (float)scale, disableAnimation: true);
+        }
+        ScheduleRenderZoomSettle();
+    }
+
+    /// <summary>Min = Max = 목표 배율 핀 고정(XAML 주석) — 대입 순서는 Min 이하 Max 불변식이
+    /// 중간 상태에서도 성립하는 쪽부터(구 ApplyRenderZoom 본문에서 추출 — 즉시·정착 공용).</summary>
+    private void PinRenderZoomFactor(double scale)
+    {
+        if (scale <= RenderPane.MaxZoomFactor)
+        {
+            RenderPane.MinZoomFactor = (float)scale;
+            RenderPane.MaxZoomFactor = (float)scale;
+        }
+        else
+        {
+            RenderPane.MaxZoomFactor = (float)scale;
+            RenderPane.MinZoomFactor = (float)scale;
+        }
+    }
+
+    /// <summary>A261 렌더 정착 디바운스 간격 — 등재 확정치 150ms(제스처 종료 판정).</summary>
+    private const int RenderSettleDebounceMs = 150;
+
+    private DispatcherTimer? _renderSettleTimer; // UI 스레드 타이머(_dirtyTimer와 같은 방식)
+
+    /// <summary>지연 생성 — 렌더 뷰 줌을 안 쓰는 세션에는 만들지 않는다(DirtyTimer 관용구).</summary>
+    private DispatcherTimer RenderSettleTimer => _renderSettleTimer ??= CreateRenderSettleTimer();
+
+    private DispatcherTimer CreateRenderSettleTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(RenderSettleDebounceMs) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop(); // 반복 타이머 — 1회 발화용이라 즉시 멈춘다(CreateDirtyTimer 관용구)
+            SettleRenderZoom(); // 판이 그새 내려갔으면 선두 가드가 무동작으로 거른다
+        };
+        return timer;
+    }
+
+    /// <summary>A261: 150ms 재시작 디바운스 — 줌이 이어지는 동안 정착(재랩)을 계속 미룬다.</summary>
+    private void ScheduleRenderZoomSettle()
+    {
+        RenderSettleTimer.Stop(); // 반복 타이머 — Stop 후 Start로 확실히 되감는다(전 모듈 관용구)
+        RenderSettleTimer.Start();
+    }
+
+    /// <summary>
+    /// A225: 현재 배율을 md 렌더 판에 확정 적용한다(정착 절반 — 구 ApplyRenderZoom 본문 전체.
+    /// 편집 모드(ApplyZoom ⓐ~ⓓ)와 같은 축 _zoomPercent의 렌더 쪽). 방식 = ScrollViewer
+    /// ZoomFactor + 랩 폭 보정(RenderStack.Width = 뷰포트 폭 나누기 배율 — 배율을 곱하면 정확히
+    /// 뷰포트 폭이라 가로 스크롤이 생기지 않는다. PdfPane EnsureContentMinWidth(A188)·셸
+    /// LayoutUiScale의 역수 크기 관용구). 재조립 방식을 기각한 이유: 치수(마진·들여쓰기)가
+    /// 빌더 각처에 흩어져 배율 인자 인입이 크고, 줌마다 A193 분할 조립 루프를 재기동해야 해
+    /// 재진입 면이 넓어진다 — ZoomFactor 방식은 조립물·루프·모델(_renderBlocks) 전부 무접촉이고
+    /// 인쇄(BuildPrintBlock 신조립)에도 배율이 새지 않는다. 스크롤은 뷰포트 세로 중앙의 콘텐츠
+    /// 비율 위치를 유지한다(재랩으로 높이 분포가 달라져 정확 유지는 성립하지 않는다 — 비율
+    /// 유지가 대체 유지의 정의. ApplyFitAt의 UpdateLayout 후 ChangeView 관용구).
+    /// 호출 = 정착 타이머 발화·EnterRenderMode(초기 표시는 랩 폭까지 즉시)·SizeChanged(리사이즈
+    /// 재랩 — 종전 동작 유지). 줌 제스처 중간은 즉시 절반(ApplyRenderZoom)이 배율만 세워 두고
+    /// 이쪽을 디바운스로 미룬다(A261).
+    /// </summary>
+    private void SettleRenderZoom()
     {
         if (RenderPane.Visibility != Visibility.Visible) return;
         var viewportW = RenderPane.ViewportWidth;
@@ -505,21 +724,7 @@ public sealed partial class DocumentView : UserControl,
             : 0.0;
 
         if (widthChanged) RenderStack.Width = width;
-        if (zoomChanged)
-        {
-            // Min = Max = 목표 배율 핀 고정(XAML 주석) — 대입 순서는 Min 이하 Max 불변식이
-            // 중간 상태에서도 성립하는 쪽부터.
-            if (scale <= RenderPane.MaxZoomFactor)
-            {
-                RenderPane.MinZoomFactor = (float)scale;
-                RenderPane.MaxZoomFactor = (float)scale;
-            }
-            else
-            {
-                RenderPane.MaxZoomFactor = (float)scale;
-                RenderPane.MinZoomFactor = (float)scale;
-            }
-        }
+        if (zoomChanged) PinRenderZoomFactor(scale);
         // 새 폭의 재랩·배율 반영을 확정한 뒤의 ExtentHeight라야 아래 복원이 이번 배율의 실제
         // 높이를 읽는다(낡은 값 방지 — PdfPane.ApplyFitAt의 UpdateLayout 선례).
         RenderPane.UpdateLayout();
@@ -1197,7 +1402,9 @@ public sealed partial class DocumentView : UserControl,
         RenderPane.Visibility = Visibility.Visible;
         // A225: 편집 중 바뀐 배율을 판이 서자마자 따라잡는다(내려가 있는 동안 ApplyZoom ⓔ는
         // 무동작이었다). 뷰포트가 아직 0이면 여기서도 무동작 — SizeChanged가 이어받는다.
-        ApplyRenderZoom();
+        // A261: 초기 표시는 정착 절반 직행 — 랩 폭까지 즉시 세워야 첫 그림부터 맞는다(디바운스는
+        // 연속 줌 제스처 전용).
+        SettleRenderZoom();
         Focus(FocusState.Programmatic);
 
         var seq = ++_renderSeq;

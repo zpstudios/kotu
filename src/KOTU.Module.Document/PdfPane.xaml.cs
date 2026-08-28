@@ -480,6 +480,8 @@ public sealed partial class PdfPane : UserControl
     /// A246: 키 줌 한 단계(direction: +1 확대 / -1 축소) — ZoomAtPointer와 같은 ×1.1 단계·같은
     /// 수동 줌 규칙(Fit 추종 해제 A49·최소 폭 추종 A188·무애니메이션)이고, 키에는 포인터가 없어
     /// 앵커만 뷰포트 중앙이다(고정점 산식은 ZoomAtPointer와 동일 — pt만 중앙 좌표).
+    /// A262: 문서 뷰의 데드존 폴백(OnRootWheelFallback)이 합쳐진 노치 수를 ±n으로 넘긴다 —
+    /// 산식이 1.1의 direction 제곱이라 n단계 합성과 항등이다(별도 반복 호출 불요).
     /// 미확보 스크롤러는 한 번 더 잡아 본다(TryHandleNavKey의 지연 HookScroll 관용구) —
     /// 그래도 없거나 PDF 미로드면 무동작(호출부 DocumentView.OnZoomKey가 PDF 갈래에서만 부른다).
     /// </summary>

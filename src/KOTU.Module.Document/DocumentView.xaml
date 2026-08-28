@@ -18,7 +18,10 @@
         <KeyboardAccelerator Key="S" Modifiers="Control" Invoked="OnSaveInvoked" />
     </UserControl.KeyboardAccelerators>
 
-    <Grid x:Name="RootGrid">
+    <!-- A262: Background=Transparent는 폴백 휠 배선(OnRootWheelFallback)의 히트테스트 성립
+         조건이다 — 배경 null인 Grid는 자기 영역이 히트테스트에 안 잡혀, 자식이 없는 여백에서
+         PointerWheelChanged가 아예 발생하지 않는다. 지우면 여백 데드존이 되살아난다. -->
+    <Grid x:Name="RootGrid" Background="Transparent">
         <!-- A37: 뷰어 → 에디터 승격. TextBox 하나가 표시·편집을 겸한다.
              A80(v0.91.0): 구 "MaxWidth 900 + HorizontalAlignment Left"(v0.44.0 뷰어 유래)를
              제거 — 900px보다 넓은 창에서 포커스된 TextBox 배경이 좌측 900px에만 그려져

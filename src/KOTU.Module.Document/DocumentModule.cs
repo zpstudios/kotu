@@ -22,7 +22,8 @@ public sealed class DocumentModule : IModule
     // ---------- A181: 본문 줌 설정 (A171 폭 설정 대체) ----------
     // A171(v0.173.0)의 폭 설정 상수 3종(키 document.editorMaxWidth·기본 900·선택지)은 A181에서
     // 제거됐다 — 본문은 이제 항상 창 폭을 꽉 채우고, 크기 조절은 줌(Ctrl+휠)이 대신한다.
-    // 이 키는 설정 화면 UI가 없다(Ctrl+휠로만 바뀌고 즉시 저장된다) — 셸이 참조하지 않지만
+    // 이 키는 설정 화면 UI가 없다(Ctrl+휠·Ctrl+± 로만 바뀐다. 값 Set은 즉시, 디스크 Save는
+    // A261부터 500ms 디바운스 — DocumentView.ScheduleZoomSave) — 셸이 참조하지 않지만
     // `document.*` 키의 정의처를 한곳에 모으는 A171의 배치는 유지한다.
 
     /// <summary>
