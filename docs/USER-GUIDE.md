@@ -94,6 +94,13 @@ Seven modules. Switch between them from the menu at the bottom left.
   without cropping it, and the rotation you are looking at — from EXIF or from `R` — is printed the
   same way. Zoom and Fit are screen settings and change nothing on paper. The button is greyed out
   while no picture is open.
+- **Set as desktop background** — right-click the picture and choose it. KOTU writes a PNG copy of
+  the current file to `%AppData%\KOTU\wallpaper.png` and hands that to Windows with the Fill style,
+  which puts the same picture on every monitor; the file itself is untouched, and the rotation you
+  are looking at — from EXIF or from `R` — along with zoom and Fit are screen settings that are not
+  carried over. The bottom bar reports success or failure in place of the file name until you open
+  or move to another picture. The menu appears over the picture only, and the item is greyed out
+  while no picture is open.
 - Animated GIFs play.
 - The bottom bar carries one run of text on the left: the file name, then `width×height`, the kind
   (`JPG 24-bit`), the size, `position/total`, and an EXIF summary (date taken, camera, exposure,

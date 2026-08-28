@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KOTU — King of the Utilities</title>
-<meta name="description" content="Photo, video, archive, documents. All the Windows software you must install, in one no-bloat package. 100% offline, open source, free.">
+<meta name="description" content="Photos, video, music, documents, archives and hardware info. All the Windows software you must install, in one no-bloat package. 100% offline, open source, free.">
 <meta name="theme-color" content="#0b1521">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 
@@ -143,6 +143,7 @@ h1,h2,h3,h4{font-family:'Archivo','Arial Black','Helvetica Neue',Arial,sans-seri
 .cat{display:flex;align-items:center;gap:9px;font-weight:700;font-size:clamp(14px,1.35vw,19px);letter-spacing:.055em}
 .cat svg{width:1.15em;height:1.15em}
 .cat.c1{color:var(--mint)} .cat.c2{color:var(--pink)} .cat.c3{color:var(--amber)} .cat.c4{color:var(--blue)}
+.cat.c5{color:var(--violet)} .cat.c6{color:#5ec8c0}
 .mission{font-size:clamp(15px,1.5vw,19px);font-weight:600;letter-spacing:.04em;color:#dfe7ee;max-width:46ch;margin:0 0 30px}
 .mission em{font-style:normal;color:var(--mint);font-weight:700}
 .mission .n{color:var(--pink);font-weight:700}
@@ -400,6 +401,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <span class="cat c2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4.5" width="19" height="15" rx="4"/><path d="M10.2 9.2l5 2.8-5 2.8z" fill="currentColor" stroke="none"/></svg>VIDEO</span>
         <span class="cat c3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="5" rx="1.6"/><path d="M4.5 9v9.5a2 2 0 002 2h11a2 2 0 002-2V9"/><path d="M10 13.5h4"/></svg>ARCHIVE</span>
         <span class="cat c4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13.5 2.8H7a2.5 2.5 0 00-2.5 2.5v13.4A2.5 2.5 0 007 21.2h10a2.5 2.5 0 002.5-2.5V8.8z"/><path d="M13.5 2.8v6h6"/></svg>DOCUMENTS</span>
+        <span class="cat c5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5.5l11-2v12"/><circle cx="6.4" cy="18" r="2.6"/><circle cx="17.4" cy="15.5" r="2.6"/></svg>MUSIC</span>
+        <span class="cat c6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="8.5" y="8.5" width="7" height="7" rx="1.4"/><path d="M9.5 1.8v2.2M14.5 1.8v2.2M9.5 20v2.2M14.5 20v2.2M1.8 9.5h2.2M1.8 14.5h2.2M20 9.5h2.2M20 14.5h2.2"/></svg>HARDWARE</span>
       </div>
 
       <p class="mission">… ALL YOU MUST INSTALL WINDOWS SOFTWARE<br>IN <span class="n">1 NO BLOAT</span> PACKAGE.</p>
@@ -429,11 +432,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           SEE WHAT IT DOES
         </a>
       </div>
-      <p class="verline">v0.159.0 · For Windows 10 / 11 (64-bit) · Free &amp; open source</p>
+      <p class="verline">v0.273.0 · For Windows 10 / 11 (64-bit) · Free &amp; open source</p>
     </div>
 
   </div>
-  <!-- TODO(art): 마스코트 확정되면 아래 <object>를 교체
+  <!-- TODO(art): 마스코트 확정되면 아래 <img class="skyline">를 교체
        <img src="assets/hero-art.png" alt="…" width="900" height="522" fetchpriority="high">
        (불투명·투명 어느 쪽이든 됨. 좌·하단 페이드는 .hero-art > * 의 mask가 처리) -->
   <div class="hero-art">
@@ -445,9 +448,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 <section class="sec" id="features">
   <div class="wrap">
     <div class="sec-head rv">
-      <span class="eyebrow">SIX MODULES · ONE WINDOW</span>
+      <span class="eyebrow">SEVEN MODULES · ONE WINDOW</span>
       <h2 class="sec-title">EVERYTHING YOU NEED. <span class="hl">NOTHING YOU DON'T.</span></h2>
-      <p class="sec-sub">Double-click any file and the right module opens in the same window. No app switching, no installer roulette, no toolbars.</p>
+      <p class="sec-sub">Double-click any file and the right module opens in the same window. The shell stays put — only the centre view and the bottom bar change. No app switching, no installer roulette, no toolbars.</p>
     </div>
 
     <div class="cards">
@@ -457,9 +460,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <h3>IMAGE</h3>
         <p>View, browse &amp; organize photos</p>
         <ul>
-          <li>Arrow-key folder browsing</li>
-          <li>Zoom, pan, rotate, fullscreen</li>
-          <li>EXIF orientation &amp; info bar</li>
+          <li>jpg · png · gif · webp · psd</li>
+          <li>Arrow-key browsing, zoom &amp; pan</li>
+          <li>EXIF orientation, info &amp; print</li>
           <li>Animated GIF · trash delete</li>
         </ul>
       </article>
@@ -473,7 +476,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>libvlc engine, bundled</li>
           <li>Subtitles (srt · smi, CP949)</li>
           <li>Speed, seek, resume playback</li>
-          <li>Fullscreen HUD feedback</li>
+          <li>Folder plays on · loop modes</li>
         </ul>
       </article>
 
@@ -483,9 +486,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>Music without the media library</p>
         <ul>
           <li>mp3 · flac · wav · m4a · ogg</li>
-          <li>Live waveform visualisation</li>
-          <li>Resume where you stopped</li>
-          <li>Built-in speaker test clip</li>
+          <li>Four live visualizer styles</li>
+          <li>Output device &amp; equalizer</li>
+          <li>Resume · folder plays as a list</li>
         </ul>
       </article>
 
@@ -493,12 +496,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <!-- TODO(art): <img class="card-mascot" src="assets/mascot-docs.png" alt="" loading="lazy"> -->
         <span class="card-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13.5 2.8H7a2.5 2.5 0 00-2.5 2.5v13.4A2.5 2.5 0 007 21.2h10a2.5 2.5 0 002.5-2.5V8.8z"/><path d="M13.5 2.8v6h6"/></svg></span>
         <h3>DOCUMENT</h3>
-        <p>Read PDFs, edit plain text</p>
+        <p>Read PDFs, edit and render text</p>
         <ul>
           <li>PDF viewer, continuous scroll</li>
-          <li>Ctrl+wheel zoom · page counter</li>
+          <li>Markdown &amp; HTML rendered views</li>
           <li>Text editor with Ctrl+S</li>
-          <li>Keeps encoding &amp; line endings</li>
+          <li>Keeps encoding · prints pages</li>
         </ul>
       </article>
 
@@ -508,7 +511,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <h3>ARCHIVE</h3>
         <p>Compress, extract &amp; peek inside</p>
         <ul>
-          <li>zip · 7z · rar · tar · gz</li>
+          <li>zip · 7z · rar · tar · gz · xz</li>
           <li>Browse without extracting</li>
           <li>Password-protected zip / 7z</li>
           <li>Fixes broken CP949 filenames</li>
@@ -521,11 +524,18 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>Know what's inside your PC</p>
         <ul>
           <li>CPU · RAM · GPU · disks · net</li>
-          <li>Live sensor graphs</li>
+          <li>Ten live sensor tiles &amp; graphs</li>
           <li>Two sensors pinned to the tray</li>
           <li>Copy full spec sheet in a click</li>
         </ul>
       </article>
+    </div>
+
+    <div class="trust rv">
+      <div class="trust-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--mint)" stroke-width="2"><path d="M12 2.8l9 4.6-9 4.6-9-4.6z"/><path d="M3 12l9 4.6L21 12"/><path d="M3 16.6l9 4.6 9-4.6"/></svg>
+        <span><b>PLUS: ALL READABLE</b><span>A seventh module that opens every file type the other six handle — pictures, video, music, documents and archives — without ever leaving it. It claims no file associations on purpose, so double-clicking a file in Explorer still lands in its own dedicated module.</span></span>
+      </div>
     </div>
 
     <div class="trust rv">
@@ -579,7 +589,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
     <div class="sec-head rv" style="margin-bottom:34px">
       <h3 class="sec-title" style="font-size:clamp(21px,2.6vw,30px)">Powered by engines you already trust</h3>
-      <p class="sec-sub" style="font-size:15.5px">Every one of them ships inside the download — nothing is fetched at runtime.</p>
+      <p class="sec-sub" style="font-size:15.5px">Everything not marked OS built-in ships inside the download — nothing is fetched at runtime.</p>
     </div>
 
     <div class="engines rv">
@@ -587,6 +597,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
       <div class="eng"><b>libvlc</b><span>Video &amp; audio playback, all codecs</span><i>LGPL</i></div>
       <div class="eng"><b>LibreHardwareMonitor</b><span>Temperature, fan &amp; power sensors</span><i>MPL-2.0</i></div>
       <div class="eng"><b>Windows.Data.Pdf</b><span>PDF rendering, built into Windows</span><i>OS BUILT-IN</i></div>
+      <div class="eng"><b>Magick.NET</b><span>Formats Windows cannot decode, such as psd</span><i>APACHE-2.0</i></div>
+      <div class="eng"><b>WebView2</b><span>The rendered HTML view, shipped with Windows 11</span><i>OS BUILT-IN</i></div>
       <div class="eng"><b>WinUI 3 · .NET 8</b><span>Native Windows 11 look and feel</span><i>MIT</i></div>
       <div class="eng"><b>Velopack</b><span>One-file setup &amp; auto-update</span><i>MIT</i></div>
     </div>
@@ -635,14 +647,17 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
       <details class="q"><summary>Is it really free?</summary>
         <div class="a">Yes. KOTU's own code is MIT-licensed and the source is public. There is no paid tier, no account, and no telemetry.</div></details>
 
+      <details class="q"><summary>Can I build it from source?</summary>
+        <div class="a">The source is public and MIT-licensed, so you are welcome to read it. KOTU itself is distributed and supported only as the official builds on the Releases page — self-built copies are not supported, and no build instructions are published.</div></details>
+
       <details class="q"><summary>What does it cost me in disk space?</summary>
         <div class="a">One user-scope install, engines included. Because everything shares a single process and modules are loaded on demand, it replaces a folder full of separate utilities with one entry in your Start menu.</div></details>
 
       <details class="q"><summary>Do I need administrator rights?</summary>
-        <div class="a">No. The installer writes to your user profile, so no UAC prompt is needed to install or update. Only live hardware sensors (temperature, fan speed, power) need elevation — KOTU offers a one-click <em>Restart as admin</em> when you open that panel.</div></details>
+        <div class="a">No. The installer writes to your user profile, so no UAC prompt is needed to install or update. Only live hardware sensors (temperature, fan speed, power) need elevation — KOTU offers a one-click <em>Restart as admin</em> when you open that panel, and says on screen when a reading additionally needs the separately installed PawnIO driver.</div></details>
 
       <details class="q"><summary>Will it take over my file associations?</summary>
-        <div class="a">Only if you ask it to. File associations and the Explorer right-click entries are off by default and live behind per-module toggles in Settings, so you can hand over just images and leave everything else alone.</div></details>
+        <div class="a">Only if you ask it to. File associations and the Explorer right-click entries are off by default and live behind per-module toggles in Settings, so you can hand over just images and leave everything else alone — or flip them all at once with <em>Register all file associations</em>. Every registration is written under your own user account, and turning a toggle off removes it completely.</div></details>
 
       <details class="q"><summary>Does it work offline?</summary>
         <div class="a">Completely. Every engine — <code>7z.dll</code>, <code>libvlc</code>, the sensor library — ships inside the download. The only thing that touches the network is the optional update check.</div></details>
@@ -651,10 +666,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <div class="a">Yes — <code>KOTU-win-Portable.zip</code>. Unzip it anywhere, including a USB stick, and run it. It updates itself the same way the installed build does.</div></details>
 
       <details class="q"><summary>Which Windows versions are supported?</summary>
-        <div class="a">Windows 10 version 1809 or newer, and Windows 11 — 64-bit (x64) only. No separate .NET install is required.</div></details>
+        <div class="a">Windows 10 version 1809 or newer, and Windows 11 — 64-bit (x64) only. No separate .NET install is required. The rendered HTML view uses the WebView2 runtime that comes with Windows 11; where it is missing, that view falls back to showing the source.</div></details>
 
       <details class="q"><summary>How finished is it?</summary>
-        <div class="a">KOTU is in active development. All six modules work and every build passes CI on Windows, but real-world polish is still landing release by release — expect frequent updates.</div></details>
+        <div class="a">KOTU is in active development. All seven modules work and every release is built and unit-tested on Windows CI, but real-world polish is still landing release by release — expect frequent updates. Found something broken? <a href="https://github.com/zpstudios/kotu/issues" rel="noopener" style="color:var(--mint)">Open an issue</a>.</div></details>
     </div>
   </div>
 </section>
@@ -665,7 +680,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
     <div class="sec-head rv">
       <span class="eyebrow">DOWNLOAD</span>
       <h2 class="sec-title">GRAB IT. <span class="hl">IT'S FREE.</span></h2>
-      <p class="sec-sub">Windows 10 / 11 · 64-bit · v0.159.0</p>
+      <p class="sec-sub">Windows 10 / 11 · 64-bit · v0.273.0</p>
     </div>
 
     <div class="dl-grid rv">
@@ -699,7 +714,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
       </div>
     </div>
 
-    <p class="dl-note">Both builds include every engine and work straight away. The other files on the release page (<code>.nupkg</code> and friends) are used by the updater — you don't need them.</p>
+    <p class="dl-note">Both builds include every engine and work straight away. The other files on the release page (<code>.nupkg</code> and friends) are used by the updater — you don't need them. Updates are checked and applied from <em>Settings → Updates</em> inside the app. These official builds are the only supported way to run KOTU; the source is public to read, but self-built copies are not supported.</p>
   </div>
 </section>
 
@@ -716,6 +731,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         </span>
       </a>
       <nav class="foot-links">
+        <a href="guide.html">User guide</a>
         <a href="https://github.com/zpstudios/kotu" rel="noopener">GitHub</a>
         <a href="https://github.com/zpstudios/kotu/releases" rel="noopener">Releases</a>
         <a href="https://github.com/zpstudios/kotu/blob/master/ARCHITECTURE.md" rel="noopener">Architecture</a>

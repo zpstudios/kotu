@@ -357,6 +357,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               the printable area of that page allows without cropping it, and the rotation you are looking at
               — from EXIF or from <kbd>R</kbd> — is printed the same way. Zoom and Fit are screen settings and
               change nothing on paper. The button is greyed out while no picture is open.</li>
+          <li><strong>Set as desktop background</strong> — right-click the picture and choose it. KOTU writes
+              a PNG copy of the current file to <code>%AppData%\KOTU\wallpaper.png</code> and hands that to
+              Windows with the Fill style, which puts the same picture on every monitor; the file itself is
+              untouched, and the rotation you are looking at — from EXIF or from <kbd>R</kbd> — along with
+              zoom and Fit are screen settings that are not carried over. The bottom bar reports success or
+              failure in place of the file name until you open or move to another picture. The menu appears
+              over the picture only, and the item is greyed out while no picture is open.</li>
           <li>Animated GIFs play.</li>
           <li>The bottom bar carries one run of text on the left: the file name, then
               <code>width×height</code>, the kind (<code>JPG 24-bit</code>), the size,
@@ -1164,6 +1171,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         </span>
       </a>
       <nav class="foot-links">
+        <a href="guide.html">User guide</a>
         <a href="https://github.com/zpstudios/kotu" rel="noopener">GitHub</a>
         <a href="https://github.com/zpstudios/kotu/releases" rel="noopener">Releases</a>
         <a href="https://github.com/zpstudios/kotu/blob/master/ARCHITECTURE.md" rel="noopener">Architecture</a>

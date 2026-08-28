@@ -68,4 +68,4 @@ dotnet publish src/KOTU.App -c Release -p:Platform=x64 -r win-x64 --self-contain
 
 ## 6. 검증 현황
 
-CI(GitHub Actions, windows-latest)에서 빌드·단위 테스트가 통과하며, v0.5.x 포터블 배포본으로 Windows 실기기 실행이 확인되었습니다. 남은 리스크는 [ARCHITECTURE.md](../ARCHITECTURE.md) 6장 참고. 문제를 발견하면 이슈로 남겨주세요.
+모든 릴리스는 CI(GitHub Actions, windows-latest)에서 빌드·단위 테스트를 통과한 뒤 태그·발행됩니다. 실기기 확인이 필요한 항목의 정본은 [docs/HANDOVER.md](HANDOVER.md)와 [docs/DEVICE-CHECKS.md](DEVICE-CHECKS.md)입니다. 초안 시점 리스크의 결말은 [ARCHITECTURE.md](../ARCHITECTURE.md) 6장 참고. 문제를 발견하면 이슈로 남겨주세요.
