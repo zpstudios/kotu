@@ -36,8 +36,9 @@ public sealed partial class MainWindow : Window
     // 계보: A58 Alt/Shift → A86 Z/X → A107 Alt+Z/X → A118 F1/F2 → A158 F11/F12.
     // 단독 F키는 문자를 만들지 않아 문자 입력·리스트 첫 글자 점프와
     // 원천 무충돌 — 텍스트 입력 중에도 동작한다. 키 정본 = SideForKey 위 LeftPanelKey/RightPanelKey.
-    // 수신 층(A226): F11/F12만 터널링(RootLayout.PreviewKeyDown — OnRootPreviewKeyDown)으로
-    //   내장 소비보다 앞서 받고, 그 밖의 셸 키는 종전대로 버블(OnRootKeyDown)이다.
+    // 수신 층(A226 → A274): F11/F12(A226)와 Enter·Alt+Enter(A274)는 터널링
+    //   (RootLayout.PreviewKeyDown — OnRootPreviewKeyDown)으로 내장 소비보다 앞서 받고,
+    //   그 밖의 셸 키(Esc·Alt·GoBack)는 종전대로 버블(OnRootKeyDown)이다.
     // **A176(반투명 오버레이 폐지)**: 사이드마다 2상태 — Closed(닫힘) /
     //   OpaqueDocked(사이드바 — 불투명 + 메인을 반대쪽으로 축소. 폭은 전 상태 공통
     //   SidebarPercent(A116): 한쪽 25:75, 양쪽 25:50:25). **키 단타 = 그 쪽 토글**이 전부다.
@@ -188,8 +189,9 @@ public sealed partial class MainWindow : Window
     /// 전체화면 복귀 스냅샷(A151 — Enter/Alt+Enter/Esc/버튼 공용): 진입 직전의 좌/우 패널 상태.
     /// A186: 모드 축이 2단이 되어 스냅샷의 모드 항목은 제거(복귀 = 항상 창 모드) —
     /// A176: 패널 축도 2상태(닫힘/도크)로 축소. A90 <see cref="_s4Restore"/>와 같은 관용구.
-    /// 외부 경로 전체화면 해제·모드 리셋(모듈 전환·파일 열기)이 버린다.
-    /// null이면(외부 경로 진입) 복귀는 패널 무변경으로 창 모드 폴백.
+    /// A274(A203 보완): 외부 경로 전체화면(이미지 더블클릭 등 — AppWindow.Changed 동기)도
+    /// 진입 시 기록·해제 시 복원한다(내부 Enter/Esc와 완전 대칭). 버리는 곳은 모드 리셋
+    /// (모듈 전환·파일 열기 — SetContentState)뿐이다. null이면 복귀는 패널 무변경으로 창 모드 폴백.
     /// </summary>
     private (OverlayState List, OverlayState Info)? _fullScreenRestore;
 
@@ -315,12 +317,16 @@ public sealed partial class MainWindow : Window
         // 복제한다. F키는 문자를 만들지 않아 선취해도 뺏을 텍스트 입력이 없다(A118 확정 취지 —
         // 그래서 IsTextInputFocused 게이트를 여기 두지 않는다. 두면 에디터 포커스 중 패널이
         // 안 열려 A118의 목적이 무너진다).
+        // A274: Enter·Alt+Enter도 이 터널링 층이다 — 포커스된 버튼의 내장 Enter=클릭(Handled
+        // 선점)이 버블 수신을 무산시키던 갈래의 봉쇄(F11/F12와 같은 수리). Enter는 문자 키와
+        // 달리 뺏을 원 기능이 있어(에디터 줄바꿈·탐색기 선택 열기) 게이트를 자기 분기 안에서
+        // 능동 판정한다(OnShellEnter 주석 참조 — F키의 "게이트 불요"와 다른 이유로 같은 층).
         RootLayout.PreviewKeyDown += OnRootPreviewKeyDown;
-        // 그 밖의 셸 키(Esc·Enter·Alt·GoBack 등) 감지(A176 단타 토글 — v0.25.0 Alt/Ctrl 홀드 →
+        // 그 밖의 셸 키(Esc·Alt·GoBack 등) 감지(A176 단타 토글 — v0.25.0 Alt/Ctrl 홀드 →
         // A58 → A86 → A107 → A118 → A158 계보의 홀드/2연타 판정 기계는 A176에서 철거):
         // 포커스가 모듈 뷰 안에 있어도 받도록 창 루트에서 handledEventsToo로 구독한다.
         // Alt(Menu) down/up도 같은 KeyDown/KeyUp 층으로 온다(A58 실증 — SystemKey도 이 핸들러가 받는다).
-        // A226: F11/F12 분기는 위 터널링으로 이관돼 이 버블 층에는 더 없다.
+        // A226·A274: F11/F12·Enter·Alt+Enter 분기는 위 터널링으로 이관돼 이 버블 층에는 더 없다.
         RootLayout.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         RootLayout.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler(OnRootKeyUp), handledEventsToo: true);
         // A112: 마우스 뒤로가기(XButton1) = '뒤로'(전체화면 해제 → S4 복귀 → 콘텐츠 닫기 → S1).
@@ -391,18 +397,30 @@ public sealed partial class MainWindow : Window
         // A151: 프레젠터 변화 → 모드 동기화. 하단 바 가시성은 여기서 직접 만지지 않는다 —
         // 표시는 UpdateShellChrome 한 함수만 정한다(구 v0.21.0의 "전체화면이면 바 숨김"
         // 직접 대입을 대체). 셸 밖 경로(이미지 더블클릭 토글 등)로 프레젠터가 바뀌어도 모드가 따라온다.
+        // A274(A203 보완): 외부 경로 진입도 내부(Enter·버튼)와 같은 대접 — 구 "모드만 동기"는
+        // 패널을 안 닫는 구멍이었다(이미지 더블클릭 전체화면에서 사이드바 잔존). 진입 =
+        // EnterFullScreenRemembering 재사용(스냅샷 기록 + 양 패널 닫기), 해제 =
+        // RestoreFromFullScreen 재사용(스냅샷 복원 — Esc 대칭). 이중 실행 방어 3겹:
+        // ① 내부 전이(ToggleFullScreen 계열)는 SetViewMode가 _viewMode를 **SetPresenter보다
+        //    먼저** 맞추므로, 그 전이가 낳는 Changed에선 아래 두 분기 조건(모드 불일치)이 거짓 —
+        //    스냅샷이 다시 잡히지 않는다(발화 시점이 동기든 지연이든 무관).
+        // ② 외부 전이에서 재사용 호출이 다시 SetViewMode를 불러도 프레젠터가 이미 목표 상태라
+        //    SetPresenter를 안 만져 Changed가 재발화하지 않는다.
+        // ③ 각 함수 선두의 모드 가드(진입: FullScreen이면 return / 복귀: 스냅샷 소진)가 최후 방어.
         AppWindow.Changed += (sender, args) =>
         {
             if (!args.DidPresenterChange) return;
             var full = sender.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
             if (full && _viewMode != ShellViewMode.FullScreen)
             {
-                _viewMode = ShellViewMode.FullScreen; // 외부 진입 — 스냅샷 없음(복귀는 창 모드 폴백)
+                // 외부 진입 — 자동 숨김 재평가·크롬 갱신은 SetViewMode가 겸한다(아래 공통부 불요)
+                EnterFullScreenRemembering();
+                return;
             }
-            else if (!full && _viewMode == ShellViewMode.FullScreen)
+            if (!full && _viewMode == ShellViewMode.FullScreen)
             {
-                _viewMode = ShellViewMode.Windowed; // 외부 해제 — 패널 복원 없이 창 모드로
-                _fullScreenRestore = null;
+                RestoreFromFullScreen(); // 외부 해제 — 스냅샷 복원(없으면 패널 무변경 폴백)
+                return;
             }
             ReevaluateBarAutoHide(); // A186: 전체화면 진입/해제 = 자동 숨김 재평가(표시 상태에서 재대기)
             UpdateShellChrome();
@@ -1975,19 +1993,14 @@ public sealed partial class MainWindow : Window
         // 터널링이 소비한 키가 handledEventsToo 구독 탓에 여기로도 와 죽은 이중 경로가 된다 —
         // 깔끔히 제거. 이 핸들러에 F11/F12가 도착해도 아래 분기 어디에도 안 걸려 무동작이다).
 
-        // A151(A186 승계): Alt+Enter = 상황 무관 전체화면 토글. 텍스트 입력 판정보다 **앞**이다 —
-        // 문서 편집 중(Enter = 줄바꿈이라 토글 불가)에도 전체화면 진입로가 있어야 한다.
-        // Alt 조합 키가 이 핸들러로 오는 것은 A58 실증(위 구독 주석)·MarkAltUseIfConsumed의
-        // 전제 그대로다. 소비하면 Alt 단독 up도 조건 소비된다(OS 메뉴 모드 회피, A107).
-        if (e.Key == VirtualKey.Enter && IsAltDown())
-        {
-            OnShellAltEnter(e);
-            MarkAltUseIfConsumed(e);
-            return;
-        }
+        // A274: Enter·Alt+Enter 분기는 여기 없다 — 터널링(OnRootPreviewKeyDown)으로 이관됐다
+        // (A226의 F11/F12와 같은 승격. 버블 분기를 남기면 터널링이 소비한 키가 handledEventsToo
+        // 구독 탓에 여기로도 와 죽은 이중 경로가 된다 — 깔끔히 제거. 이 핸들러에 Enter가
+        // 도착해도 아래 분기 어디에도 안 걸려 무동작이다).
 
         // A86 포커스 예외 ①(A32 통과 규칙 재사용): 텍스트 입력 컨트롤에 포커스가 있으면
-        // Enter 등 입력이 우선이다(문서 에디터의 Enter 줄바꿈을 뺏으면 안 된다 — A151 ④ⓐ 재확인).
+        // 문자 입력이 우선이다(A151 ④ⓐ 재확인 — A274 뒤 이 게이트의 실수요는 GoBack뿐이다:
+        // 타이핑 중 Browser Back 키로 콘텐츠가 닫히면 안 된다).
         // Esc는 위에서 따로 처리했다(전체화면·S4는 텍스트 입력 중에도 Esc가 통해야 한다).
         if (IsTextInputFocused()) return;
 
@@ -1996,15 +2009,6 @@ public sealed partial class MainWindow : Window
         // 셸에서 비어 있다: 문서 모듈이 Ctrl+± 문서 줌으로(DocumentView 코드 등록 액셀러레이터),
         // [A237]이 하드웨어 뷰의 그래프 크기 조절로 각각 **모듈 수준**에서 쓴다 — 셸에 같은 키의
         // 전역 분기를 되살리면 모듈 소비와 다시 충돌하니 여기서 재점유하지 말 것.
-
-        if (e.Key == VirtualKey.Enter)
-        {
-            OnShellEnter(e); // A186: Alt+Enter와 동일한 전체화면 토글 — 원 기능 우선 판정 포함
-            // A107: Alt를 쥔 채 Enter를 셸이 소비하면 OS는 "Alt 중 눌린 키"를 못 본다
-            // — Alt 액셀러레이터와 같은 이유로 이 Alt의 단독 up도 소비 대상이다.
-            MarkAltUseIfConsumed(e);
-            return;
-        }
 
         if (e.Key == VirtualKey.GoBack)
         {
@@ -2017,7 +2021,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A226: F11/F12 전용 터널링 수신 지점 — RootLayout.PreviewKeyDown(생성자 구독, DocumentView
+    /// A226(→ A274에서 Enter 합류): 셸 터널링 수신 지점 — RootLayout.PreviewKeyDown(생성자 구독, DocumentView
     /// A121 선례 형태)이라 포커스 요소·WinUI 컨트롤 내장 KeyDown보다 먼저 온다. 계기: A212가
     /// 앱 코드 선소비 0건을 전수 증빙했는데도 "특정 영역 한 번 클릭 후 F11/F12 무반응"이 전
     /// 모듈에서 재보고됐다(2026-08-25) — 남는 축은 컨트롤 내장 처리의 Handled 선점이고, 그
@@ -2029,6 +2033,16 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        // A274: Enter(+Alt+Enter)도 이 터널링 층이다 — F11/F12와 키가 겹치지 않아 분기 순서는
+        // 동작 무관하지만, 아래 SideForKey 조기 반환 형태를 보존하려 Enter를 먼저 가른다.
+        // Alt 판정은 버블 시절(OnRootKeyDown의 구 분기)과 같은 IsAltDown 스냅샷 — 게이트 유무가
+        // 갈리므로(Alt+Enter = 직행) 핸들러 안에서 다시 보지 않고 여기서 한 번에 분배한다.
+        if (e.Key == VirtualKey.Enter)
+        {
+            if (IsAltDown()) OnShellAltEnter(e);
+            else OnShellEnter(e);
+            return;
+        }
         if (SideForKey(e.Key) is not { } side) return; // 그 밖의 키는 전부 종전 경로(버블) 몫
         // A234 계측의 핵심 신호: 클릭 후 F11을 눌러도 이 카운트가 안 오르면 라우팅 키 이벤트
         // 자체가 미발화(포커스 null 또는 RootLayout 밖) = 갈래 ⓐ/ⓑ 확정이다. 값만 기록하고
@@ -2118,34 +2132,72 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Enter = **Alt+Enter와 동일한 전체화면 토글**(A186 ① — A151의 3단 순환 폐지).
-    /// 원 기능 우선 예외(A151 ④ 그대로 — 3종 세트):
+    /// A274: 호출 층이 버블(OnRootKeyDown)에서 터널링(OnRootPreviewKeyDown)으로 승격됐다 —
+    /// 포커스된 WinUI 버튼의 내장 Enter=클릭(Handled 선점)이 버블 수신을 무산시키던 갈래의
+    /// 봉쇄(F11/F12의 A226과 같은 수리). 터널링에선 앞선 소비자가 없어 e.Handled 양보가
+    /// 성립하지 않으므로(A226와 같은 근거로 구 e.Handled 검사 삭제) 원 기능 우선 예외
+    /// (A151 ④)는 전부 **능동 판정**이다:
     /// ① 오토리피트 무시(꾹 누르면 왕복 연사되면 안 된다)
-    /// ② 텍스트 입력(문서 에디터 줄바꿈)은 호출 전에 걸러진다(OnRootKeyDown의 IsTextInputFocused —
-    ///    PDF·4MB 잘림 읽기 전용 문서는 텍스트 포커스가 아니라 토글 대상이다)
-    /// ③ 탐색기 표면 포커스(중앙 썸네일·좌 트리·좌 리스트·S4 그리드) = 선택 열기 우선 —
-    ///    표면이 선택을 직접 열어 소비하면 위 Handled에서 끝나고, 선택이 없어 안 삼킨 Enter도
-    ///    통과 표면 판정(ShouldPassThrough — PassThroughTag)으로 양보한다.
+    /// ② 텍스트 입력(IsTextInputFocused) = 양보 — 문서 에디터 줄바꿈 보존(구 호출부
+    ///    OnRootKeyDown이 걸러 주던 것을 이 안으로 이식. PDF·4MB 잘림 읽기 전용 문서는
+    ///    텍스트 포커스가 아니라 종전대로 토글 대상이다)
+    /// ③ 탐색기 통과 표면(ShouldPassThrough — PassThroughTag 4표면: 중앙 썸네일 S1/S4 그리드·
+    ///    좌 트리·좌 리스트) = 양보 — 선택 열기 우선. 셸이 비소비로 물러나면 KeyDown이 정상
+    ///    라우팅되어 각 표면의 핸들러(ThumbnailExplorer.OnGridKeyDown·ExplorerPane)가 받아
+    ///    열고, 선택이 없으면 표면도 비소비라 종전과 같은 무동작이다(A151 확정 유지).
+    /// ④ 열린 팝업(IsAnyPopupOpen) = 양보 — 팝업 트리(대화상자·플라이아웃·콤보 드롭다운) 안
+    ///    포커스는 애초에 RootLayout으로 라우팅되지 않아 대화상자 기본 버튼이 자연 보존되지만
+    ///    (실측 불가 축 — 실기기 확인 포인트), 포커스가 메인 트리에 남은 채 팝업이 열려 있는
+    ///    갈래(콤보 열림 등)에서 확정 Enter를 뺏지 않기 위한 보수 게이트다(A234
+    ///    GetOpenPopupsForXamlRoot 선례 재사용).
+    /// 그 밖(셸 크롬 버튼·설정의 닫힌 콤보·토글 등 일반 포커스)은 소비하고 토글한다 —
+    /// **버튼 포커스 중 Enter = 전체화면이 사양이다**(클릭은 Space·마우스 — A274 확정).
     /// 영상 모듈도 이 경로다 — 영상 전용 Enter=전체화면 액셀러레이터는 A151에서 제거된 그대로다.
     /// </summary>
     private void OnShellEnter(KeyRoutedEventArgs e)
     {
-        if (e.KeyStatus.WasKeyDown) return; // 오토리피트 — 토글이 연사되면 안 된다
-        if (e.Handled) return; // 탐색기 그리드(Enter = 선택 항목 열기)가 이미 소비 — 원 기능 우선
-        if (HotkeySupport.ShouldPassThrough(RootLayout)) return; // 탐색기 표면 포커스 — 선택 열기 우선
+        if (e.KeyStatus.WasKeyDown) return; // ① 오토리피트 — 토글이 연사되면 안 된다
+        if (IsTextInputFocused()) return; // ② 에디터 줄바꿈 보존
+        if (HotkeySupport.ShouldPassThrough(RootLayout)) return; // ③ 탐색기 표면 — 선택 열기 우선
+        if (IsAnyPopupOpen()) return; // ④ 팝업 열림 — 확정 Enter 보존
         e.Handled = true;
         ToggleFullScreen();
     }
 
     /// <summary>
     /// Alt+Enter(A151 ② — A186에서 Enter와 한 실행부로 수렴): 전체화면 토글 + 복귀 지점 기억.
-    /// 텍스트 입력·탐색기 표면 양보 없이 동작한다(직행 단축키 — 호출부가 텍스트 입력 판정보다
-    /// 앞에서 부른다). 오토리피트는 무시(연사로 왕복하지 않게).
+    /// 텍스트 입력·탐색기 표면 양보 없이 동작한다(직행 단축키 — A274로 호출 층이 터널링이 되어
+    /// 이 무양보가 내장 처리보다도 앞선다). 오토리피트만 무시(연사로 왕복하지 않게) — 구 버블
+    /// 시절의 e.Handled 양보 검사는 터널링엔 앞선 소비자가 없어 삭제(A226와 같은 근거).
+    /// 소비하면 이 Alt의 단독 up도 소비 대상이다(OS 메뉴 모드 회피 — A107, 버블 시절 호출부의
+    /// MarkAltUseIfConsumed를 이 안으로 이식).
     /// </summary>
     private void OnShellAltEnter(KeyRoutedEventArgs e)
     {
-        if (e.KeyStatus.WasKeyDown || e.Handled) return;
+        if (e.KeyStatus.WasKeyDown) return;
         e.Handled = true;
         ToggleFullScreen();
+        MarkAltUseIfConsumed(e);
+    }
+
+    /// <summary>
+    /// A274 게이트 ④: 이 창의 XAML 트리에 열린 팝업이 하나라도 있는가 — 셸 Enter가 콤보
+    /// 드롭다운·플라이아웃의 확정 동작을 뺏지 않기 위한 양보 판정. 취득 실패·XamlRoot 부재는
+    /// "열림"으로 보수 처리한다(모르면 개입하지 않는 쪽이 안전 — GetShellFocusState의
+    /// InPopup=true와 같은 방향. GetOpenPopupsForXamlRoot의 try/catch 격리·컴파일·런타임
+    /// 실증은 A234 배치 1 참조).
+    /// </summary>
+    private bool IsAnyPopupOpen()
+    {
+        if (RootLayout.XamlRoot is not { } xr) return true; // 판정 불가 — 무개입 쪽으로
+        try
+        {
+            return VisualTreeHelper.GetOpenPopupsForXamlRoot(xr).Count > 0;
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     /// <summary>

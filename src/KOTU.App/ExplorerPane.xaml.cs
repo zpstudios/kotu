@@ -1709,7 +1709,7 @@ public sealed partial class ExplorerPane : UserControl
             case Windows.System.VirtualKey.Enter: // A85 — 선택 항목 열기(원 기능 우선: 셸 OnShellEnter가
                 // "탐색기 리스트 포커스 = 선택 항목 열기 우선"으로 양보하는 표면 쪽 구현.
                 // ThumbnailExplorer.OnGridKeyDown의 Enter와 같은 구성): 폴더 = 진입, 파일 = 열기.
-                // 선택이 없으면 삼키지 않는다 — 셸(OnShellEnter)이 상태별로 받는다.
+                // 선택이 없으면 삼키지 않는다 — 셸도 이 표면엔 양보(ShouldPassThrough)라 무동작(A151·A274 유지).
                 if (owner.SelectedItem is not SelectorItem { Tag: ExplorerListing.Entry entry }) return;
                 e.Handled = true;
                 _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게

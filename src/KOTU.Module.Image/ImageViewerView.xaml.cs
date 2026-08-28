@@ -1101,7 +1101,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     // ---------- 전체화면 ----------
     // A151: F11/Esc 액셀러레이터·⛶ 버튼은 제거 — 전체화면은 셸의 3단 모드 체계
     // (Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다. 이 뷰에는 더블클릭 토글만 남는다
-    // (뷰 고유 입력 — 셸이 AppWindow.Changed로 프레젠터 변화를 보고 모드를 동기화한다).
+    // (뷰 고유 입력 — 셸이 AppWindow.Changed로 프레젠터 변화를 보고 모드를 동기화한다.
+    // A274: 그 동기화가 모드만이 아니라 복귀 스냅샷·양 패널 닫기·해제 시 복원까지 내부
+    // Enter 경로와 동형으로 처리하므로, 이 뷰는 종전대로 프레젠터만 만지면 된다).
 
     private void ToggleFullScreen()
     {

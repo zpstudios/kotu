@@ -267,7 +267,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (e.Key == VirtualKey.Enter)
         {
             if (SelectedEntry is not { } entry) return; // 선택 없음 — 비소비(A151: 탐색기 표면 포커스의 Enter는 셸도 양보라 무동작)
-            e.Handled = true; // 셸 루트 핸들러의 이중 처리 방지 — OnShellEnter는 Handled면 물러난다
+            e.Handled = true; // 다른 버블 수신자 방지 — 셸(A274 터널링 OnShellEnter)은 ShouldPassThrough로 이 표면에 이미 양보했다
             _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
             // A94 6차: 다중 선택이면 선택된 '파일' 전부를 연다(폴더는 일괄 열기에서 제외).
             // 선택에 파일이 하나도 없으면(폴더만 다중) 아래 현행 첫 항목 동작으로 떨어진다.
