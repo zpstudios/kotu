@@ -489,7 +489,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
               as is the line ending style.</li>
           <li><kbd>Ctrl</kbd>+<kbd>S</kbd> saves. The save button stays disabled until there is something to
-              save, and <em>● Unsaved</em> appears in the bottom bar while there is.</li>
+              save, and <em>N changed</em> (e.g. <em>12 changed</em>) appears in the bottom bar while there
+              is &mdash; N sums, over each edited spot, the larger of the characters removed and inserted
+              there.</li>
           <li>Closing or switching away with unsaved changes asks first: <em>Save</em> / <em>Don't save</em> /
               <em>Cancel</em>.</li>
           <li>Files larger than 4 MB open read-only, showing the first 4 MB.</li>

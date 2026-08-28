@@ -2333,14 +2333,19 @@ public sealed partial class DocumentView : UserControl,
     /// A113 ⓒ: 더티 = "기준 텍스트(로드·저장 시점)와 실제로 다른가". 길이가 다르면 그 자체가
     /// 증거라 즉시 확정한다 — 대용량(잘림 한계 4MB 직전) 파일에서 키 입력마다 전체 비교를 하지
     /// 않기 위한 빠른 경로. 길이가 같으면(1글자 치환, undo로 원복) 250ms 조용해진 뒤 내용 비교로
-    /// 판정한다 — 그래서 undo로 원본과 같아지면 ●가 꺼진다(사양). 에디터 줄바꿈('\r')과
+    /// 판정한다 — 그래서 undo로 원본과 같아지면 표시가 꺼진다(사양). 에디터 줄바꿈('\r')과
     /// 기준('\n')은 1글자끼리 대응하므로 원시 길이 비교가 유효하다.
+    /// A266: 변경 구간 추적(TrackEdit)은 이벤트마다 즉시다 — 더티 해제(ⓒ 디바운스)와 축이
+    /// 다르다. 표시 문자열 갱신이 아래 SetDirty(true)의 가시화보다 먼저라 보일 때는 항상 최신 N이다.
     /// </summary>
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
     {
         _textSnapshot = null; // A142 ①ⓑ: 어떤 편집이든 스냅샷부터 무효화 — 조기 반환보다 먼저
         if (_loadingText || (_path is null && !_untitled) || _truncated) return; // A189: 무제도 더티 추적
-        if (EditorText.Length != _baselineText.Length)
+        var text = EditorText; // 새 스냅샷 1회(A142 ①ⓑ) — 추적·길이 비교가 같은 인스턴스를 쓴다
+        TrackEdit(_changePrevText, text); // A266: 직전 텍스트와의 트림으로 이번 편집을 구간에 병합
+        _changePrevText = text;
+        if (text.Length != _baselineText.Length)
         {
             _dirtyTimer?.Stop(); // 보류 중 판정 불필요 — 결과가 이미 확정이다
             SetDirty(true);
@@ -2369,6 +2374,120 @@ public sealed partial class DocumentView : UserControl,
         if (_dirtyTimer is { IsEnabled: true }) RecomputeDirty();
     }
 
+    // ---------- A266 변경 폭 추적 ("N changed") ----------
+
+    /// <summary>
+    /// A266: baseline 좌표계의 변경 구간 1개 — BaseStart/BaseLen은 기준 텍스트(재기준화 시점의
+    /// 에디터 원문) 안의 범위, CurLen은 그 범위를 대체하고 있는 현재 텍스트의 길이.
+    /// N = Σ max(BaseLen, CurLen). 형태 = readonly record struct(셸 ShellFocusState 선례).
+    /// </summary>
+    private readonly record struct ChangeSpan(int BaseStart, int BaseLen, int CurLen);
+
+    /// <summary>A266: BaseStart 오름차순·서로 비인접(간격 ≥ 1) 불변식의 구간 목록 —
+    /// 병합(MergeEdit)이 겹침·인접을 그때그때 흡수하므로 붙은 구간이 남지 않는다.</summary>
+    private readonly List<ChangeSpan> _changeSpans = [];
+
+    private int _changeTotal; // Σ max(BaseLen, CurLen) — 표시 문자열 "N changed"의 N
+
+    /// <summary>
+    /// A266: 직전 TextChanged 시점의 에디터 원문 — 접두·접미 트림의 old 쪽. 기존 보관 문자열은
+    /// "지금"(_textSnapshot — 편집마다 무효화)과 "기준"(_baselineText — \n 정규화)뿐이라 "직전"은
+    /// 재사용할 수 없어 별도로 든다(A177 임계급 문자열 1벌 추가 — _baselineText·_printText가
+    /// 상시 전문을 쥐는 기존 메모리 자세와 동급으로 수용).
+    /// </summary>
+    private string _changePrevText = string.Empty;
+
+    /// <summary>
+    /// A266: 편집 1회를 구간 목록에 반영한다. old/new의 공통 접두·접미를 걷어내면 단일 편집은
+    /// 항상 연속 구간 하나 — (offset, 제거 폭, 삽입 폭)로 확정된다(전량 diff(LCS)는 4MB에서
+    /// 기각 — A177. 트림 문자 비교는 편집 지점 양끝에서 멈추고, 상한이어도 이벤트마다 이미
+    /// 일어나는 전문 마샬링 복사(A142 ①ⓑ)와 같은 차수다). 전체 교체처럼 연속 1군데가 아닌
+    /// 편집도 트림 결과가 "큰 구간 하나"로 수렴해 별도 갈래가 없다 — 프로그램적 대입은
+    /// _loadingText 가드가 걸러 애초에 여기 오지 않고(재기준화 = ResetChangeTracking 경로),
+    /// IME 조합(한글)의 중간 발화는 같은 자리 연속 편집이라 병합으로 자연 흡수된다.
+    /// </summary>
+    private void TrackEdit(string oldText, string newText)
+    {
+        var oldLen = oldText.Length;
+        var newLen = newText.Length;
+        var shorter = Math.Min(oldLen, newLen);
+        var prefix = 0;
+        while (prefix < shorter && oldText[prefix] == newText[prefix]) prefix++;
+        if (prefix == oldLen && prefix == newLen) return; // 내용 동일 — 셀 것이 없다
+        var suffixMax = shorter - prefix; // 접두와 겹치지 않게 상한
+        var suffix = 0;
+        while (suffix < suffixMax && oldText[oldLen - 1 - suffix] == newText[newLen - 1 - suffix]) suffix++;
+        MergeEdit(prefix, oldLen - prefix - suffix, newLen - prefix - suffix);
+        UpdateChangedText();
+    }
+
+    /// <summary>
+    /// A266 병합 본체: 편집(현재 좌표 offset에서 removed 제거·inserted 삽입)을 구간 목록에
+    /// 넣는다. 각 구간의 현재 시작 = BaseStart + (앞 구간들의 CurLen−BaseLen 누적)이라 앞에서부터
+    /// 누적(shift)하며 위치를 파생한다. 편집 범위와 겹치거나 인접한 구간들을 편집과 함께 하나로
+    /// 합치고, 합집합의 baseline 범위는 "변경 밖 무변경 지대의 현재↔기준 1:1 대응"으로 역산한다:
+    /// 병합 시작은 첫 흡수 구간 앞 지대라 −shiftBefore, 병합 끝은 마지막 흡수 구간 뒤 지대라
+    /// −shift(흡수분까지 누적된 값). 뒤에 남는 구간들의 BaseStart는 baseline 좌표라 그대로다 —
+    /// 현재 위치는 다음 파생 때 이번 편집분(inserted−removed)이 누적에 실려 자동 시프트된다.
+    /// base·cur 폭이 모두 0으로 수렴한 구간(삽입 직후 그 삽입분만 정확히 삭제)은 버린다.
+    /// 비용 = O(구간 수) — 타이핑 1회당 목록 1회 순회.
+    /// </summary>
+    private void MergeEdit(int offset, int removed, int inserted)
+    {
+        var editEnd = offset + removed; // 편집 범위 [offset, editEnd) — 삽입 전의 현재 좌표
+        var shift = 0;
+        var first = 0;
+        while (first < _changeSpans.Count)
+        {
+            var span = _changeSpans[first];
+            if (span.BaseStart + shift + span.CurLen >= offset) break; // 겹침·인접(끝 == 시작 포함)
+            shift += span.CurLen - span.BaseLen;
+            first++;
+        }
+        var shiftBefore = shift; // 병합 시작 앞 무변경 지대의 현재→기준 보정
+        var mergedCurStart = offset;
+        var mergedCurEnd = editEnd;
+        var last = first;
+        while (last < _changeSpans.Count)
+        {
+            var span = _changeSpans[last];
+            var curStart = span.BaseStart + shift;
+            if (curStart > editEnd) break; // 인접(== editEnd)까지는 흡수
+            mergedCurStart = Math.Min(mergedCurStart, curStart);
+            mergedCurEnd = Math.Max(mergedCurEnd, curStart + span.CurLen);
+            shift += span.CurLen - span.BaseLen;
+            last++;
+        }
+        var baseStart = mergedCurStart - shiftBefore;       // 앞 무변경 지대 1:1 대응
+        var baseLen = mergedCurEnd - shift - baseStart;     // 뒤 무변경 지대 1:1 대응
+        var curLen = mergedCurEnd - mergedCurStart - removed + inserted;
+        _changeSpans.RemoveRange(first, last - first);
+        if (baseLen > 0 || curLen > 0)
+            _changeSpans.Insert(first, new ChangeSpan(baseStart, baseLen, curLen));
+        var total = 0;
+        foreach (var span in _changeSpans) total += Math.Max(span.BaseLen, span.CurLen);
+        _changeTotal = total;
+    }
+
+    /// <summary>A266 표시 갱신 — 가시성은 SetDirty(더티 축)가 쥐고 여기는 문자열만 쓴다.
+    /// UI 문자열은 영어(전 모듈 규칙).</summary>
+    private void UpdateChangedText() => ModifiedText.Text = $"{_changeTotal} changed";
+
+    /// <summary>
+    /// A266 리셋 — 구간 목록을 비우고 old 스냅샷을 현 에디터 텍스트로 다시 잡는다. 호출 =
+    /// 더티 해제 전부(SetDirty(false) — 재기준화 3경로(ApplyLoadedText·StartUntitled·OpenPdf)와
+    /// A113 ⓒ 디바운스의 "baseline과 동일" 판정이 전부 여길 지난다) + 저장 성공(CommitSave —
+    /// 새 baseline 기준 재계산). EditorText는 이들 지점 대부분에서 스냅샷이 데워져 있어 참조
+    /// 복사다(A142 ①ⓑ).
+    /// </summary>
+    private void ResetChangeTracking()
+    {
+        _changeSpans.Clear();
+        _changeTotal = 0;
+        _changePrevText = EditorText;
+        UpdateChangedText(); // 숨김 상태지만 즉시 동기 — 낡은 N이 다음 가시화로 새지 않게
+    }
+
     /// <summary>Tab이 포커스 이동 대신 탭 문자를 넣게 한다(에디터 기본기). Shift+Tab은 포커스 이동 유지.</summary>
     private void OnEditorKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -2386,6 +2505,9 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>양방향(A113 ⓒ): 켜기만이 아니라 undo 원복·재판정으로 꺼지기도 한다.</summary>
     private void SetDirty(bool dirty)
     {
+        // A266: 더티 해제 = 변경 구간도 소멸 — ⓒ 디바운스의 "baseline과 동일" 판정과 재기준화
+        // 3경로(ApplyLoadedText·StartUntitled·OpenPdf)가 전부 이 한 지점을 지난다(함정 ③).
+        if (!dirty) ResetChangeTracking();
         ModifiedText.Visibility = dirty ? Visibility.Visible : Visibility.Collapsed;
         SaveButton.IsEnabled = dirty;
         if (_dirty == dirty) return; // 값 무변경(파일 전환 직후 UI 초기화, ⓒ 재판정의 재확인) — 셸 통지 생략
@@ -2560,8 +2682,13 @@ public sealed partial class DocumentView : UserControl,
         _diskLength = stamp.Length;
 
         // ⓒ: 쓰는 동안 새 입력이 있었으면 기준과 다르다 — 무조건 끄지 않고 내용 비교로 재판정한다
-        // (종전에는 저장 완료가 무조건 더티 해제였다 — 그 사이 입력이 ● 없이 새는 창이 있었다).
+        // (종전에는 저장 완료가 무조건 더티 해제였다 — 그 사이 입력이 표시 없이 새는 창이 있었다).
+        // A266: 저장 성공 = 구간 리셋(새 baseline 기준 재계산). 재판정이 더티로 남으면(저장 중
+        // 입력) 새 기준 대비 단일 구간을 트림으로 재파종한다 — 둘 다 \n 정규화본이라 좌표는
+        // 에디터 원문과 1:1이다(TextBox 줄바꿈 '\r' ↔ 기준 '\n' — ⓒ 길이 비교와 같은 전제).
+        ResetChangeTracking();
         RecomputeDirty();
+        if (_dirty) TrackEdit(_baselineText, NormalizeNewlines(_changePrevText));
 
         // A137: 저장 성공 1회 통지 — 저장으로 파일 크기가 바뀌면 셸이 작업표시줄 32px 아이콘의
         // 용량 표기를 다시 그린다(타이핑 중 실시간 갱신은 하지 않는다 — 부록 B 69 확정. 여기는

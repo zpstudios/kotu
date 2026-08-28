@@ -209,7 +209,8 @@ Seven modules. Switch between them from the menu at the bottom left.
 - The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
   as is the line ending style (CRLF or LF).
 - `Ctrl+S` saves. The save button stays disabled until there is something to save, and
-  **● Unsaved** appears in the bottom bar while there is.
+  **N changed** (e.g. `12 changed`) appears in the bottom bar while there is — N sums, over
+  each edited spot, the larger of the characters removed and inserted there.
 - Closing or switching away with unsaved changes asks first: **Save** / **Don't save** / **Cancel**.
 - Files larger than 4 MB open read-only, showing the first 4 MB.
 - `Tab` inserts a tab character in the editor.

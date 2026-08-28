@@ -223,10 +223,12 @@
                 <ContentPresenter x:Name="DriveStripHost" Grid.Column="4"
                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                   VerticalAlignment="Center" Visibility="Collapsed" />
-                <!-- 수정됨 표시(A37) — 창 제목의 ●는 셸이 UnsavedChanged로 단다 -->
+                <!-- 수정됨 표시(A37 → A266) — 미저장 시에만 "N changed"(N = 변경 구간별
+                     max(제거 폭, 삽입 폭)의 합 — 문자열은 코드(UpdateChangedText)가 편집마다
+                     채우므로 여기 Text는 없다). 창 제목의 ●는 셸이 UnsavedChanged로 다는
+                     별개 축(A136)이라 이번 개편과 무관하게 그대로다. -->
                 <TextBlock x:Name="ModifiedText" Grid.Column="5" VerticalAlignment="Center"
-                           FontSize="12" Opacity="0.8" Visibility="Collapsed"
-                           Text="● Unsaved" />
+                           FontSize="12" Opacity="0.8" Visibility="Collapsed" />
                 <!-- A215(2026-08-24) → A245(2026-08-27) → A264/A265(2026-08-28): 편집 모드 표시
                      토글 2종 — ① 라인 가이드(줄 상/하단 선 — A115 ①) ② 펑츄에이션 마커(¶·EOF —
                      A115 ②). A215의 자리는 좌우 star 사이(바 가운데)였고, A245에서 우측 정렬군으로,
