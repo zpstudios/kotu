@@ -111,9 +111,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         BuildSidePanels();         // 좌/우 패널 루트 조립 (A119 — 셸 호스트에 얹힐 분리 요소)
         BuildCenterTiles();        // 센터 그리드 타일 10개 (A60 3차 — 구 하단 카드의 후신)
         RebuildSelectionGraphs();  // 좌 대형·하단 긴 그래프 = 현재 선택(저장 복원값, ≤2)
-        // A146: 표시 기간 표기의 툴팁은 고정 문구라 여기서 1회만 붙인다(글자·표시 여부는
-        // RerenderSparklines·UpdateBarDensity가 갱신한다). 사용자 노출 문자열이라 영어.
-        ToolTipService.SetToolTip(SpanText, "History window");
+        // A259: 구 A146 기간 표기(SpanText — 바깥 공통 1개 + "History window" 툴팁)는 소멸 —
+        // 표기는 각 그래프 표면 안 xAxisText(A74 경로)가 맡는다.
         BuildIntervalFlyout(); // 리프레시 주기 선택 (A29)
         SetupHotkeys();        // A34: 하단 바 버튼 핫키 + 툴팁 표기
         SetupGraphScaleAccelerators(); // A237: Ctrl+± 그래프 크기 스텝(문서 모듈 A246 선례)
@@ -324,7 +323,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     // 44px 바(A40 불변) 안에도 그대로 들어간다.
     // ※ 결과: 상한(32)이 기준 높이(36)보다 작아져 **M·L 두 단계 모두 그래프 높이는 32**로 잘린다
     //   (S만 36 × 0.85 = 30.6으로 상한 아래). A62의 L은 이제 글씨·선 굵기만 키운다 —
-    //   높이로 커지는 여지는 바 두께 44가 원래부터 막고 있었다(폭 152도 고정 — A60 3차).
+    //   높이로 커지는 여지는 바 두께 44가 원래부터 막고 있었다(폭은 A259부터 star 칸 몫 —
+    //   배수와 무관한 것은 그대로다).
     private const double MaxCardHeight = 32;
     private const double BaseTitleFontSize = 11;   // 그래프 초단축 제목
     private const double BaseValueFontSize = 13;   // 그래프 값
@@ -364,7 +364,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             ApplyScaleToGraphText(graph, scale); // A237: 좌 대형 — 글씨·선만(한 변은 A119 몫)
         foreach (var graph in _longGraphs)
             ApplyScaleToLongGraph(graph, scale);
-        SpanText.FontSize = BaseSmallFontSize * scale; // A146 기간 표기도 바 안 요소 — 같은 배수(폭 32는 고정)
+        // A259: 구 SpanText(A146 기간 표기) 배수 대입은 소멸 — 표기가 표면 안 xAxisText로 들어가
+        // 위 ApplyScaleToLongGraph(공용 ApplyScaleToGraphText)가 같은 배수를 이미 입힌다.
         PulseHost.Height = Math.Min(MaxCardHeight, BaseCardHeight * scale); // 맥박도 같은 높이 유지 (v0.64.2 규격)
         PulseLine.StrokeThickness = BaseStrokeThickness * scale;
 
@@ -377,10 +378,11 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 그래프 표면 1개의 **글씨·선 굵기**에 현재 단계를 입힌다(A237 — 세 표면 공용).
     /// 표면 크기(타일·좌 대형 한 변, 긴 그래프 폭·높이)는 여기서 건드리지 않는다 — 크기는
     /// 각각 A119 산식과 ApplyScaleToLongGraph의 몫이다. 핀 배지(타일 전용)도 글씨 축이라 함께 탄다.
-    /// 축 라벨 두 개는 바 표면에서 늘 Collapsed(A128)지만 표면 구성이 공용(MakeGraph)이라
-    /// 배수만 계속 입혀 둔다(다시 보이게 할 일이 생겨도 크기가 어긋나지 않게).
-    /// ※ A146의 기간 표기는 이 대상이 아니다 — 표면 밖(바 레이아웃)의 SpanText이고 배수는
-    ///   ApplyBarScale이 직접 입힌다(표면당 1개가 아니라 바에 공통 1개라서).
+    /// 축 라벨 배수는 표면 구성이 공용(MakeGraph)이라 늘 입혀 둔다 — A259부터 바 표면에서도
+    /// x축(기간 표기)이 실제로 보이므로 이 대입이 다시 실사용이다(y축은 바에서 계속 Collapsed —
+    /// A128 잔존분 — 지만 크기가 어긋나지 않게 같이 입힌다).
+    /// ※ 구 A146의 바깥 기간 표기(SpanText)는 A259에서 소멸 — 표기가 표면 안 xAxisText로
+    ///   내장되어 배수도 이 공용 경로 하나로 끝난다.
     /// </summary>
     private static void ApplyScaleToGraphText(SensorGraph graph, double scale)
     {
@@ -396,14 +398,15 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 하단 긴 그래프 1개에 현재 단계(A62)를 반영한다 — 생성 직후(RebuildSelectionGraphs)와
     /// 단계 변경(ApplyBarScale)의 공용 경로. 배수 적용 대상 = 글씨·선 굵기(공용
     /// ApplyScaleToGraphText)·높이(상한 32 클램프, A106 — A40 바 두께 44 불변).
-    /// **폭 152는 고정**(배수 비적용): 구 카드의 폭 배수는 "최소 폭
-    /// × 개수 축소" 알고리즘의 하한이었고, 고정 2개인 긴 그래프가 폭까지 커지면 L 단계 ×
-    /// 최소 창 720에서 star 칸(약 358px)을 넘친다 — 제목은 말줄임, 값은 152 안에 들어간다.
+    /// A259: 구 "폭 152 고정" 대입은 제거 — 폭은 star 균등 분할(RebuildSelectionGraphs)이 정하고
+    /// 152는 MinWidth(하한)로만 남는다. 구 A62의 "폭 배수를 적용하면 L 단계 × 최소 창 720에서
+    /// star 칸을 넘친다" 논거는 star 전환으로 자연 소멸(폭 자체가 칸을 따라간다) — 배수는 여전히
+    /// 폭에 곱하지 않는다(곱할 고정 폭이 없다).
     /// </summary>
     private void ApplyScaleToLongGraph(SensorGraph graph, double scale)
     {
         graph.Root.Height = Math.Min(MaxCardHeight, BaseCardHeight * scale);
-        graph.Root.Width = LongCardWidth;
+        graph.Root.MinWidth = LongCardWidth; // A259: 하한만 — 실폭은 star 칸이 정한다
         ApplyScaleToGraphText(graph, scale);
     }
 
@@ -437,6 +440,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 이유로 바 표면에만 배수를 곱한 별도 임계(AxisMinWidthNow)를 뒀었다. **A128에서 바 표면이
     /// 축 라벨을 아예 표시하지 않게 되면서 배수를 적용할 지점 자체가 소멸**해 그 프로퍼티를 걷었다 —
     /// 남은 사용처는 배수 밖인 센터 타일·좌 대형뿐이라 이 상수 하나로 충분하다.
+    /// A259: 바 표면 x축(기간 표기)이 부활해 이 임계를 다시 지나지만 배수 없는 이 상수 그대로다 —
+    /// 바 긴 그래프는 MinWidth 152라 90을 늘 넘어, 실질은 비-바 전용 판정으로 남는다.
     /// A127로 y축 라벨이 "max " 접두만큼 길어졌지만 임계는 유지한다
     /// (잘림이 보이면 임계 상향이 아니라 실기기 확인 후 판단, A127 함정 항목).
     /// A168(v0.165.0)로 최대 열 수가 8이 됐어도 임계는 그대로다 — 사이드바가 각 25%를 먹는 구조라
@@ -450,48 +455,18 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     // ---------- 센터 그래프 그리드 (A60 3차 — 전 채널 타일·선택·드래그 순서) ----------
 
     /// <summary>
-    /// 하단 긴 그래프 폭 = 구 카드 최소 폭 76의 2배(사용자 확정 "기존 카드의 2배 정도").
-    /// A62 단계와 무관하게 고정 — 이유는 ApplyScaleToLongGraph 주석 참조.
+    /// 하단 긴 그래프의 **최소** 폭(A259에서 의미 전환 — 구 고정 폭). 값 152 = 구 카드 최소 폭
+    /// 76의 2배(사용자 확정 "기존 카드의 2배 정도")를 하한으로 승계. 실폭은 star 균등 분할이
+    /// 정한다 — 이유는 ApplyScaleToLongGraph 주석 참조. A62 단계와 무관.
     /// </summary>
     private const double LongCardWidth = 152;
 
     /// <summary>SensorGrid의 ColumnSpacing과 같은 값 — 맥박 숨김 임계 폭 계산에 쓴다.</summary>
     private const double CardSpacing = 8;
 
-    /// <summary>
-    /// 표시 기간 표기(A146)의 고정 폭. 내용은 "5m" 2글자(FormatSpan)이고 글꼴은 A62 배수를 타
-    /// 최대 12.5px(L 단계)라 실측 폭은 20px 남짓이다 — 32로 잡아 "2.5m" 급 4글자에도 여유를 두면서
-    /// 폭 회계(<see cref="LongGraphsWidth"/>)를 상수로 확정한다(Auto 폭이면 회계가 불가).
-    /// </summary>
-    private const double SpanLabelWidth = 32;
-
-    /// <summary>
-    /// 맥박 칸(HardwareView.xaml PulseHost Width 90)이 <see cref="BarFixedWidth"/>에서 차지하는 몫 —
-    /// 숨기면 이만큼이 star 칸으로 돌아온다. **간격 6은 안 돌아온다**: Grid.ColumnSpacing은 폭 0인
-    /// 칸 사이에도 그대로 들어가므로 회수액은 96이 아니라 90이다(구 주석의 96은 과대 추정).
-    /// </summary>
-    private const double PulseSlotWidth = 90;
-
-    /// <summary>
-    /// 하단 바 긴 그래프의 **표시 기간 공통 표기 1개**(A146, v0.165.0 — 긴 그래프 2개가 같은 창이라
-    /// 하나로 족하다). 소속은 **바 레이아웃(SensorGrid의 마지막 칸)**이고 그래프 표면(MakeGraph)
-    /// 밖이다 — A128이 바 표면의 축 라벨을 걷은 이유가 32px 바에서 채널명·현재값과 겹쳐 안 읽힌
-    /// 것이라, 같은 자리(표면 우하단)로 되돌리면 그 문제가 그대로 재발한다.
-    /// 값은 <see cref="RenderSparkline"/>과 같은 계산(FormatSpan(WindowFor(LongWindowMaxMs)))이라
-    /// 하드코딩이 없다 — 주기가 바뀌면 갱신 경로(<see cref="RerenderSparklines"/>)가 다시 채운다.
-    /// 표시 여부는 <see cref="UpdateBarDensity"/>가 정한다(선택 0개 또는 바가 너무 좁을 때 숨김).
-    /// SensorGrid 안에 두었으므로 전체화면 동안 SensorStrip으로 옮겨질 때도 그래프와 함께 간다
-    /// (PlaceSensorGrid는 SensorGrid를 통째로 옮긴다).
-    /// </summary>
-    private readonly TextBlock SpanText = new()
-    {
-        Width = SpanLabelWidth,
-        FontSize = BaseSmallFontSize,
-        Opacity = 0.55,
-        TextAlignment = TextAlignment.Right,
-        VerticalAlignment = VerticalAlignment.Bottom,
-        Visibility = Visibility.Collapsed, // UpdateBarDensity가 첫 배치에서 정한다
-    };
+    // A259: 구 A146의 바깥 기간 표기 3종(SpanText 필드·SpanLabelWidth 32·맥박 회수 몫
+    // PulseSlotWidth 90 — 기간 표기 임계 계산 전용이었다)은 소멸 — "5m"는 각 그래프 표면 안
+    // xAxisText(RenderSparkline의 A74 경로)가 표시하고, 폭 회계에서도 표기 몫이 빠졌다.
 
     /// <summary>
     /// 하단 바(BarGrid)에서 긴 그래프 칸(star)을 뺀 **고정 요소들의 폭 합**. A62 배수와 무관하다 —
@@ -505,8 +480,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     ///   (이력: A97 = 380, A106 = 364 — 그때의 산식은 ⛶ 32 + 간격 6이 더 있었다.
     ///    A151 = 326(⛶ 칸 제거), A237 = 288 — 크기 버튼 32 + 간격 6이 빠졌다.)
     /// A146(v0.165.0) 재계수 결과 = **변화 없음**: 표시 기간 표기는 BarGrid에 칸을 새로 만들지 않고
-    ///   star 칸(SensorGrid) 안 마지막 열로 들어갔다 — 늘어난 몫은 <see cref="LongGraphsWidth"/>에 있다
-    ///   (전체화면에서 SensorGrid가 SensorStrip으로 옮겨질 때 표기도 함께 가야 해서 이 소속을 택했다).
+    ///   star 칸(SensorGrid) 안 마지막 열로 들어갔다 — 늘어난 몫은 <see cref="LongGraphsWidth"/>에 있었다.
+    /// A259(v0.259.0) 재계수 결과 = **역시 변화 없음**: 그 표기가 표면 안(xAxisText)으로 내장되며
+    ///   star 칸 몫에서도 빠졌다(<see cref="LongGraphsWidth"/> 352→312) — 고정 요소 합은 그대로다.
     /// ⚠️ BarGrid.ActualWidth 기준이므로 셸의 ModuleBarHost Margin(A151에서 82/82 — 우측이 셸 모드
     ///   버튼 2개 몫으로 12→82)은 여기 포함되지 않는다.
     /// HardwareView.xaml의 BarGrid 구성이 바뀌면 이 합도 함께 고칠 것.
@@ -514,38 +490,32 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     private const double BarFixedWidth = 288;
 
     /// <summary>
-    /// 하단 바 star 칸(SensorGrid)이 요구하는 폭 — 긴 그래프(≤2, 폭 고정·배수 비적용)와
-    /// **표시 기간 표기 1개**(A146)의 합이다. 선택 0개면 그래프도 표기도 없으므로 0.
-    /// 예: 2개 = 152×2 + 간격 8 + (간격 8 + 표기 32) = **352**(구 312).
+    /// 하단 바 star 칸(SensorGrid)이 요구하는 **최소** 폭(A259에서 의미 전환 — 구 "고정 요구 폭").
+    /// 긴 그래프(≤2)가 각 MinWidth 152로 버티는 하한의 합이다 — 실폭은 star가 남는 만큼 더 준다.
+    /// 선택 0개면 0. 예: 2개 = 152×2 + 간격 8 = **312**(A259 — 구 352: 표기 몫 8+32는 표기가
+    /// 표면 안으로 내장되며 소멸).
     /// </summary>
     private double LongGraphsWidth
         => _longGraphs.Count == 0
             ? 0
-            : LongCardWidth * _longGraphs.Count + CardSpacing * (_longGraphs.Count - 1)
-                + CardSpacing + SpanLabelWidth;
+            : LongCardWidth * _longGraphs.Count + CardSpacing * (_longGraphs.Count - 1);
 
     /// <summary>
-    /// A40: 하단 바 폭이 좁으면 정보 가치가 낮은 것부터 내린다. 순서(A146에서 2단으로 확장) —
-    /// ① 맥박 그래프(A29 = 장식) ② 표시 기간 표기(A146 = 보조 정보) ③ 긴 그래프는 끝까지 남긴다.
-    /// · 맥박 임계 = star 칸 요구 폭(2개 = 352) + 고정 요소 합(BarFixedWidth 288) = **640**
+    /// A40: 하단 바 폭이 좁으면 정보 가치가 낮은 것부터 내린다. A259에서 다시 1단 —
+    /// ① 맥박 그래프(A29 = 장식)만 내리고 ② 긴 그래프는 끝까지 남긴다(구 A146의 2단째
+    /// "기간 표기 내림"은 표기가 표면 안으로 내장되며 판정 자체가 소멸 — 임계 550 계열 폐기).
+    /// · 맥박 임계 = star 칸 최소 요구 폭(2개 = 312) + 고정 요소 합(BarFixedWidth 288) = **600**
     ///   (이력: A146 = 716, A151 = ⛶ 38 감소로 678 + 셸 모드 버튼 몫으로 BarGrid 자체도 70
-    ///   좁아짐, A237 = 크기 버튼 38 감소로 640 — 최소 창 720에서 BarGrid는 약 556이라
-    ///   여전히 맥박이 내려간다).
-    /// · 기간 표기 임계 = 그보다 맥박 몫(PulseSlotWidth 90)만큼 낮은 **550** — 맥박을 내려 되찾은
-    ///   폭으로 그래프 2개 + 표기가 들어가는지 보는 값이다. 여기서도 모자라면 표기를 내려
-    ///   그래프 2개(312 + 표기 칸의 간격 8)를 지킨다 — 최소 창(BarGrid 약 556 ≥ 550)에서는
-    ///   A237부터 표기가 **살아남는다**: 맥박만 내려가고 긴 그래프 2개 + 표기(352)는 맥박 몫을
-    ///   되찾은 star 폭(약 358)에 들어간다(A151 시절 "둘 다 내려감" 서술은 임계 588 기준이었다).
+    ///   좁아짐, A237 = 크기 버튼 38 감소로 640, A259 = 표기 몫 40 감소로 600 — 최소 창 720에서
+    ///   BarGrid는 약 556이라 여전히 맥박이 내려간다).
     /// 구 카드 10개의 "뒤 순서부터 숨김" 수 축소 로직은 소멸 — 긴 그래프는 2개 고정이라 접을 것이 없다.
-    /// 두 판정 모두 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다(기존 그대로) — 숨김·표시가
+    /// 판정은 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다(기존 그대로) — 숨김·표시가
     /// SensorGrid의 요구 폭을 바꿔도 star 칸이 흡수하고 BarGrid 폭은 셸이 정한다.
     /// </summary>
     private void UpdateBarDensity(double width)
     {
         var needed = LongGraphsWidth + BarFixedWidth;
         PulseHost.Visibility = width >= needed ? Visibility.Visible : Visibility.Collapsed;
-        SpanText.Visibility = _longGraphs.Count > 0 && width >= needed - PulseSlotWidth
-            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>센터 그리드 열 수 — 셸 도크 수 신호(ISidebarAwareView, A119 개정)가 정한다.
@@ -581,7 +551,18 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     {
         foreach (var channel in SensorChannels.All)
             _tiles.Add(MakeTileGraph(channel));
-        BarGrid.SizeChanged += (_, e) => UpdateBarDensity(e.NewSize.Width);
+        // A259: 긴 그래프 폭이 star(가변)가 되어 바 폭 변화마다 재렌더가 필요하다 — RenderSparkline은
+        // ActualWidth 실측이라 재렌더 트리거만 있으면 된다. 밀도 갱신(맥박 숨김/복귀)이 star 폭을
+        // 다시 바꾸므로 그 결과를 동기 실체화(UpdateLayout — RebuildSelectionGraphs 선례)한 뒤
+        // 그린다(안 하면 다음 스냅샷까지 최대 5초 옛 폭 그림이 남는다). 주기·배수 변경 경로의
+        // RerenderSparklines와 중복 발화할 수 있지만 무해하다(같은 이력으로 같은 그림).
+        // 레이아웃 전(폭 0·미측정)은 RenderSparkline의 w<=2 조기 반환이 거른다.
+        BarGrid.SizeChanged += (_, e) =>
+        {
+            UpdateBarDensity(e.NewSize.Width);
+            SensorGrid.UpdateLayout();
+            RerenderSparklines();
+        };
         // A119: 정사각형 한 변은 실폭 파생 — 창 리사이즈·도크 개폐(열 수 변화와 별개로 폭도
         // 변한다)를 이 SizeChanged 하나로 추종한다(A93 썸네일 열 수 재계산 선례).
         CenterGrid.SizeChanged += (_, _) => ApplySquareTileSizes();
@@ -805,8 +786,9 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         }
         BigGraphHint.Visibility = _bigGraphs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // 하단 긴 그래프(A71·A72 흡수의 하단 축): 폭 152 고정, SensorGrid(가운데 정렬) 안.
-        // 선택 0개면 바 중앙은 조용히 빈다(안내 없음 — 확정 사양).
+        // 하단 긴 그래프(A71·A72 흡수의 하단 축): A259 — star 균등 분할로 SensorGrid 전폭을
+        // 나눠 갖는다(구 Auto 칸 + 폭 152 고정 폐기. 152는 ApplyScaleToLongGraph가 MinWidth로
+        // 입힌다). 선택 0개면 바 중앙은 조용히 빈다(안내 없음 — 확정 사양).
         SensorGrid.Children.Clear();
         SensorGrid.ColumnDefinitions.Clear();
         _longGraphs.Clear();
@@ -816,21 +798,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             var graph = MakeGraph(channel, LongWindowMaxMs, inBar: true, withPin: false);
             ToolTipService.SetToolTip(graph.Root, channel.Title);
             ApplyScaleToLongGraph(graph, _state.BarScale); // 생성 직후 현재 단계 반영(A62)
-            SensorGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            SensorGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(graph.Root, _longGraphs.Count);
             SensorGrid.Children.Add(graph.Root);
             _longGraphs.Add(graph);
         }
-        // A146: 표시 기간 표기는 긴 그래프 오른쪽 끝에 공통 1개 — 그래프가 있을 때만 칸을 만든다.
-        // 위 Clear로 이미 부모에서 빠져 있으므로 재-Add에 이중 Add 문제가 없다(§3.4: 필드 참조는
-        // 부모에서 떼어도 유효하다 — SensorGrid 자체의 reparent와 같은 관례).
-        if (_longGraphs.Count > 0)
-        {
-            SensorGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(SpanText, _longGraphs.Count);
-            SensorGrid.Children.Add(SpanText);
-        }
-        UpdateBarDensity(BarGrid.ActualWidth); // 그래프 개수(0~2)에 따라 맥박·기간 표기 임계가 달라진다
+        // A259: 구 A146의 기간 표기 칸(SpanText — 마지막 Auto 열)은 소멸 — "5m"는 각 표면 안
+        // xAxisText가 표시한다(RenderSparkline의 A128 개정 참조).
+        UpdateBarDensity(BarGrid.ActualWidth); // 그래프 개수(0~2)에 따라 맥박 임계가 달라진다
         // 새 표면은 레이아웃 전이라 ActualWidth가 0이다 — 동기로 한 번 실체화해야 아래의 즉시
         // 렌더가 헛돌지 않는다(ThumbnailExplorer.ShowEntries의 UpdateLayout 선례. 5000ms 주기에서
         // 다음 스냅샷까지 최대 5초를 빈 그래프로 기다리지 않기 위해서다). 뷰가 트리 밖(생성자)이면
@@ -848,8 +823,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 타일 = 생성자 ApplyBarScale 일괄 — 타일은 BuildCenterTiles 1회 생성이라 그걸로 족하다).
     /// 여기서는 크기를 지정하지 않는다 — 타일·좌 대형은 A119부터 정사각형 한 변을 바깥
     /// (ApplySquareTileSizes/ApplySquareBigSizes)이 명시 픽셀로 입히고, 하단 긴 그래프는
-    /// ApplyScaleToLongGraph가 폭 152·높이 상한 32를 입힌다. 축 라벨·글꼴 축소 규칙(A74·A62)은
-    /// 표면 크기와 무관하게 기존 그대로다.
+    /// ApplyScaleToLongGraph가 최소 폭 152·높이 상한 32를 입힌다(A259 — 실폭은 star 칸).
+    /// 축 라벨·글꼴 축소 규칙(A74·A62)은 표면 크기와 무관하게 기존 그대로다.
     /// </summary>
     private SensorGraph MakeGraph(SensorChannel channel, double windowMaxMs, bool inBar, bool withPin)
     {
@@ -905,7 +880,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         // 축 스케일 라벨(A74): 눈금선·축선은 그리지 않는다(작은 셀이 지저분해진다).
         // 좌상단 = y 최대값 + 단위("max 100°C" — A127 접두), 우하단 = x 시간 범위("30s").
         // y 하한 0은 자명해 생략. 값·표시 여부는 RenderSparkline이 채운다 — 여기선 빈 채로 만들어
-        // 둔다. A128 이후 하단 바 표면(inBar)에서는 끝까지 Collapsed로 남는다(표면 구성은 공용).
+        // 둔다. 하단 바 표면(inBar)은 y축만 끝까지 Collapsed(A128 잔존분) — x축(기간)은 A259부터
+        // 바에서도 보인다(RenderSparkline의 A128 개정 참조. 표면 구성은 공용).
         var yAxisText = new TextBlock
         {
             FontSize = BaseSmallFontSize,
@@ -1221,28 +1197,28 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         graph.Line.Points = linePoints;
         graph.Area.Points = areaPoints;
 
-        // 축 라벨(A74): 좌상단 y 최대값 + 단위, 우하단 x 시간 범위. 숨기는 조건 셋 —
-        // ① A128: 하단 바 표면(InBar)은 y·x축 라벨을 아예 그리지 않는다. 32px 바 높이에서 채널명·
-        //    현재값과 겹쳐 읽히지 않았고, 바는 흐름 확인용이라 최대치·시간축은 센터 타일·좌 대형이
-        //    담당한다(폭 임계는 이제 비-바 전용).
-        //    ※ A146(v0.165.0) 정정 — A128 당시 이 자리에 "x축 5m 표기도 바에서는 함께 소멸"이라고
-        //      적었지만, **기간 표기는 되살아났다**. 단 이 표면(MakeGraph가 만드는 그래프 안)이
-        //      아니라 **바 레이아웃 소속 TextBlock(SpanText — SensorGrid 마지막 칸)**으로 옮겨졌다:
-        //      긴 그래프 2개가 같은 창이라 공통 1개면 되고, 표면 우하단으로 되돌리면 A128의 겹침이
-        //      그대로 재발한다. y축("max …")은 바에서 계속 숨김이므로 아래 판정은 무변경이다 —
-        //      **이 줄에 InBar 예외를 다시 넣지 말 것.**
-        // ② 표면이 좁을 때(그래프 폭이 AxisMinWidth 미만).
+        // 축 라벨(A74): 좌상단 y 최대값 + 단위, 우하단 x 시간 범위.
+        // ① A128 → **A259(v0.259.0) 공식 개정**: 구 금지("InBar 예외를 다시 넣지 말 것" —
+        //    A146이 이 자리에 남겼던 문구)는 A259가 뒤집는다. 근거 = 긴 그래프가 star 전폭이
+        //    되며 구 A146의 바깥 공통 표기(SpanText)가 폭 회계에서 걷혔고, 사용자 지시(2026-08-27)
+        //    가 "기간 표기를 각 그래프 안쪽으로"를 명시 확정 — x축(기간 "5m")은 InBar에서도
+        //    표시한다. A128의 원 우려(32px 바에서 겹침)에 대한 완화 = 라벨은 이미 최소 사양
+        //    (BaseSmallFontSize·Opacity 0.55·우하단)이고, InBar 헤더는 수직 중앙(MakeGraph)이라
+        //    우하단과 어긋난다 — 잔여 겹침은 실기기 확인 포인트.
+        //    **y축("max …")은 InBar에서 계속 숨김** — 32px에서 채널명과 같은 좌측을 쓰는 겹침
+        //    (A128의 핵심 사례)은 그대로 유효하고, 최대치는 센터 타일·좌 대형이 담당한다.
+        // ② 표면이 좁을 때(그래프 폭이 AxisMinWidth 미만 — InBar도 MinWidth 152라 보통 통과).
         // ③ 값이 한 번도 없던 채널(축만 떠 있으면 오히려 오해를 준다).
-        var showAxis = !graph.InBar && w >= AxisMinWidth && scale.HasEverHadValue;
-        if (showAxis)
-        {
+        var showXAxis = w >= AxisMinWidth && scale.HasEverHadValue;
+        var showYAxis = showXAxis && !graph.InBar;
+        if (showYAxis)
             // A127: 헤더 우측의 현재값과 형식이 같아 최대치가 현재값으로 오독됐다 — "max " 접두로
             // 축 상한임을 못 박는다(예: "max 100%", "max 100°C"). 사용자 노출 문자열이라 영어.
             graph.YAxisText.Text = $"max {max:0}{graph.Channel.AxisUnit}";
+        if (showXAxis)
             graph.XAxisText.Text = FormatSpan(window);
-        }
-        graph.YAxisText.Visibility = showAxis ? Visibility.Visible : Visibility.Collapsed;
-        graph.XAxisText.Visibility = showAxis ? Visibility.Visible : Visibility.Collapsed;
+        graph.YAxisText.Visibility = showYAxis ? Visibility.Visible : Visibility.Collapsed;
+        graph.XAxisText.Visibility = showXAxis ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>그릴 게 없을 때: 선·면과 축 라벨(A74)을 함께 비운다.</summary>
@@ -1357,6 +1333,12 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         _fullScreen = _appWindow?.Presenter.Kind == AppWindowPresenterKind.FullScreen;
         PlaceSensorGrid(inBar: !_fullScreen);
         UpdateStripVisibility();
+        // A259: 긴 그래프 폭이 star(가변)가 되어 reparent 직후 실폭이 크게 달라진다(바 star 칸 ↔
+        // 스트립 전폭 — StackPanel 수직은 자식을 가로 Stretch로 편다). 다음 스냅샷(최대 5초)을
+        // 기다리지 않고 동기 실체화 후 즉시 다시 그린다(RebuildSelectionGraphs의 관례).
+        // 스트립 표시 전환(위 줄) 뒤에 실체화해야 새 부모의 실폭이 0이 아니다.
+        SensorGrid.UpdateLayout();
+        RerenderSparklines();
         if (!_fullScreen) ApplyAlwaysOnTop(); // 전체화면 복귀 시 새 OverlappedPresenter에 토글 상태 재적용 (A39)
         // A238: 구 A61의 "복귀 시 재접힘"(ApplyCollapse)은 제거 — 전체화면 복귀는 진입 직전
         // 크기·위치 그대로이고, 핀 상태여도 재축소하지 않는다(강제 축소는 핀 순간 1회 액션).
@@ -1434,14 +1416,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// 주기 변경 직후(A74): 그래프 창 길이가 주기에 묶여 있으므로(WindowFor) 다음 스냅샷을
     /// 기다리지 않고 다시 그린다 — 5000ms를 고르면 최대 5초 동안 옛 x축 표기가 남기 때문.
     /// A51의 RerenderPulse와 같은 계열. A60 3차: 세 표면(타일·좌 대형·하단 긴) 전부를 돈다 —
-    /// 선택 변경(RebuildSelectionGraphs)·크기 변경(ApplyBarScale)의 즉시 반영도 이 경로를 쓴다.
-    /// A146: 하단 바의 표시 기간 표기도 같은 이유로 여기서 다시 계산한다 — 주기 변경·바 크기
-    /// 변경·선택 변경·타일 리사이즈가 전부 이 한 경로로 모이므로 배선이 이 한 줄로 끝난다
-    /// (스냅샷 도착 경로에는 넣지 않는다 — 창 길이는 주기가 바뀔 때만 달라진다).
+    /// 선택 변경(RebuildSelectionGraphs)·크기 변경(ApplyBarScale)·바 폭 변경(A259
+    /// BarGrid.SizeChanged)의 즉시 반영도 이 경로를 쓴다.
+    /// A259: 구 A146의 바깥 기간 표기(SpanText) 갱신 줄은 소멸 — 표기가 표면 안 xAxisText로
+    /// 내장되어 아래 RenderSparkline 루프가 값(FormatSpan(WindowFor(…)) — 하드코딩 없음)까지
+    /// 함께 다시 채운다.
     /// </summary>
     private void RerenderSparklines()
     {
-        SpanText.Text = FormatSpan(WindowFor(LongWindowMaxMs)); // A146: 값은 계산값(하드코딩 금지)
         var history = SensorService.History();
         foreach (var graph in _tiles) RenderSparkline(graph, history);
         foreach (var graph in _bigGraphs) RenderSparkline(graph, history);

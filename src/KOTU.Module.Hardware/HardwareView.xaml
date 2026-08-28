@@ -72,7 +72,9 @@
 
         <!-- 하단 바: 셸이 TakeBottomBar()로 떼어가 한 줄에 얹는다(v0.42.0).
              가운데 공간(SensorGrid)에는 선택 긴 그래프 2개가 산다(A60 3차 — A17 카드 10개 대체,
-             각 폭 152 = 구 카드 최소 폭 76의 2배, 시간 창 5분, 가운데 정렬). A40(하단 바 두께
+             시간 창 5분). A259(v0.259.0): 구 "각 폭 152 고정(구 카드 최소 폭 76의 2배)·가운데
+             정렬"을 "star 균등 분할로 전폭 사용·최소 폭 152"로 전환 — 152는 이제 MinWidth다.
+             A40(하단 바 두께
              고정 44): 항상 1줄 — 창이 좁으면 맥박 그래프부터 숨긴다(UpdateBarDensity).
              우측 끝 ⛶(전체화면)은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다. -->
         <Border x:Name="ControlBar" Grid.Row="2" Padding="0,2,0,2">
@@ -101,11 +103,12 @@
                 <!-- Busy 링: 첫 로드에서 첫 스냅샷이 올 때까지만 돈다 (A75 이후 수동 Refresh 경로 없음) -->
                 <ProgressRing x:Name="Busy" Grid.Column="1" IsActive="False"
                               Width="20" Height="20" VerticalAlignment="Center" />
-                <!-- 선택 긴 그래프 2개(A60 3차)의 자리 — star 칸 안에서 가운데 정렬.
+                <!-- 선택 긴 그래프 2개(A60 3차)의 자리 — A259: star 칸을 전폭으로 채운다
+                     (구 가운데 정렬 + 폭 152 고정 폐기 — 안쪽 그래프 칸도 star 균등 분할).
                      칸·내용은 코드 RebuildSelectionGraphs가 채우고, 크기는 ApplyBarScale(A62)이 정한다.
                      전체화면 동안은 PlaceSensorGrid가 이 그리드를 통째로 SensorStrip으로 옮긴다. -->
                 <Grid x:Name="SensorGrid" Grid.Column="2" ColumnSpacing="8"
-                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                 <!-- 맥박(EKG) 그래프(A29): 폴링 스냅샷이 실제 도착한 타이밍마다 스파이크 —
                      주기를 바꾸면 박동 간격이 눈에 보이게 달라진다. 긴 그래프와 같은 32px 높이
                      (A106/v0.132.0에서 36→32 — 높이 상한 MaxCardHeight를 따라간다).

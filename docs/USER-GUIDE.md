@@ -315,8 +315,8 @@ The centre of the window is the sensor grid; the two side panels carry the rest.
 - **Right panel** — the specification list, scrollable: CPU, GPU, RAM, Motherboard, Storage,
   Network, System.
 - **Bottom bar** — two long graphs of the same selected sensors, covering the last 5 minutes at
-  every refresh setting. The length of that window is written once at the right-hand end of the
-  two graphs.
+  every refresh setting. The graphs stretch to share the full width of the bar, and each writes
+  the length of that window in its bottom-right corner.
 
 The two panels are the ordinary side panels: `F11`, `F12` and the edge buttons drive them exactly
 as in the file modules, and the module opens with both docked. Close them and the sensor
@@ -325,8 +325,8 @@ grid takes the whole window.
 Every graph writes its channel name and its current value along the top. Where there is room for
 them, the tiles and the enlarged graphs also label the top of the scale, prefixed so it cannot be
 misread as the current value — `max 100%`, `max 100°C`, `max 5000MHz` — and the length of the time
-window in the bottom right corner. The two graphs in the bottom bar are too shallow to carry labels
-of their own: they show the name and the value, and the shared window length sits beside them.
+window in the bottom right corner. The two graphs in the bottom bar are too shallow for the scale
+label, but they do carry the window length in the same bottom-right corner.
 
 Controls:
 
