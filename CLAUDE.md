@@ -69,7 +69,15 @@
 - **master push만으로 태그+릴리스 자동**(release.yml이 `Directory.Build.props`의 Version을 읽어
   멱등 발행). 작업 완료 = 버전 올린 커밋 + push 1회.
 - push 인증은 저장소 로컬 git 설정에 이미 구성돼 있음(비밀 값은 저장소에 없음). 401이 나면
-  사용자에게 토큰 재발급 요청.
+  사용자에게 토큰 재발급 요청. **새 PC에 clone하면 두 가지를 로컬 설정에 직접 넣어야 샌드박스가
+  커밋·push할 수 있다(2026-08-29 GitHub Desktop PC 실사례)**: ① identity — 샌드박스 리눅스 git은
+  Windows 전역 `.gitconfig`를 못 봐서 `user.name`·`user.email`이 빈 값이다(`ZP Studios` /
+  `zpstudiosdev@gmail.com`을 `--local`로 박을 것. 안 하면 커밋 자체가 거부된다) ② PAT — Windows
+  자격 증명 관리자도 못 읽으므로 remote URL에 토큰을 넣는다(`https://<PAT>@github.com/zpstudios/kotu.git`
+  — 소스트리는 remote 설정, GitHub Desktop은 Repository settings → Remote). 검증은
+  `git push --dry-run origin master`(401/403이 아니면 인증 성공).
+  저장소가 OneDrive 안이라 토큰이 담긴 `.git/config`가 클라우드로 동기화된다 — PAT는 fine-grained로
+  `zpstudios/kotu` 한 저장소·Contents Read/write까지만 좁혀 발급할 것.
 - CI 로그는 web_fetch로 못 읽음 — 사용자 Chrome(브라우저 MCP)으로 Actions 잡 페이지를 열어 읽는다.
   사용자의 활성 탭을 뺏지 말 것.
 - 샌드박스 git이 `.git/*.lock` 삭제에 "Operation not permitted"로 막히면 파일 삭제 권한 도구
