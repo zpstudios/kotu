@@ -25,8 +25,8 @@ namespace KOTU.Module.Document;
 /// 일절 건드리지 않으므로 A115의 "EditorBox·DecorLayer 같은 제약 = 같은 원점" 계약이
 /// 그대로다(자리가 모자라면 거터만 숨긴다. A181: 폭 제한 폐지로 그 자리는 컬럼 왼쪽 여백이
 /// 아니라 소유자가 왼쪽 패딩에 예약한 구간이 됐다 — GutterReserveWidth 주석 참고).
-/// ⑤ 가이드는 글자 상·하에서 GuideGap만큼 띄우고,
-/// 인접 줄과 겹침·역전이면 두 줄 경계의 중점에 한 선으로 병합한다.
+/// ⑤ 가이드는 글자 상·하에서 GuideGap만큼 띄우고, 인접 줄과 겹침·역전이면 윗줄 밑변+GuideGap
+/// 위치에 한 선으로 병합한다(A283 — 경계선은 em 박스를 꽉 채우는 한글 글립을 파고들었다).
 ///
 /// <b>A277 추가분</b>: 잠금 뷰(A224 — 에디터 그대로 + IsReadOnly) 동안은 위 2축(가이드·¶/EOF)을
 /// <b>표시만</b> 억제한다(SetViewSuppressed) — 사용자 토글 상태(_showGuides/_showMarks)와 설정 키는
@@ -52,7 +52,8 @@ internal sealed class EditorDecor
     // A142 ⑤(부록 B 69 확정): 가이드를 글자 상·하에서 이만큼(px) 띄운다 — 윗변 −gap / 밑변 +gap.
     // 실기기에서 1px로 낮추기 쉽게 한 곳 상수다. gap을 적용하면 인접 줄에서 윗줄 밑변+gap이
     // 아랫줄 윗변−gap보다 아래로 "역전"되므로, 병합 판정은 gap 적용 후 좌표로 다시 하고(아래
-    // AddTopGuide) 겹침·역전이면 두 줄 경계의 중점에 한 선만 긋는다.
+    // AddTopGuide) 겹침·역전이면 윗줄 밑변+gap 위치에 한 선만 긋는다 — 아랫줄 ascent 여백에
+    // 놓여 윗줄 한글 글립에서 떨어진다(A283. 종전의 줄 경계선은 글자를 파고들었다).
     private const double GuideGap = 2;
     private const double GuideMergeEpsilon = 0.75; // gap 적용 후에도 이 이내로 맞닿으면 같은 선
 
@@ -112,7 +113,6 @@ internal sealed class EditorDecor
     // A142 ⑤: 아직 긋지 않고 보류 중인 직전 줄 밑변 가이드 — 다음 줄 윗변과의 병합 판정을 위해
     // 그리기를 한 박자 미룬다(AddTopGuide가 소비, 패스 끝은 FlushPendingGuide가 마감).
     private double _pendingGuideY = double.NaN; // gap 적용 후 y
-    private double _pendingGuideRawY;           // 원좌표(줄 박스 밑변) — 병합 시 경계 중점 계산용
 
     // A142 ③: 논리 줄 시작 인덱스(0 포함, 오름차순) — 텍스트 버전당 1회 스캔 캐시.
     // 스냅샷(_textProvider)이 편집당 1회 새 인스턴스를 주므로 참조 비교로 재빌드를 판정한다.
@@ -379,6 +379,7 @@ internal sealed class EditorDecor
         else
         {
             var trailing = RectOfTrailing(len - 1); // 마지막 문자의 뒤쪽 모서리 = 줄 끝
+            if (trailing.Height <= 0) return; // A283 ⓒ: rect를 못 얻은 패스는 EOF 생략(어설픈 근사 배치 금지 — 사양 ③, DrawNewlineGlyph 선례)
             DrawMarker(EofGlyph, trailing.X + 4, trailing.Y, vh);
         }
     }
@@ -474,15 +475,16 @@ internal sealed class EditorDecor
 
     /// <summary>
     /// A142 ⑤: 줄 윗변 가이드(원좌표 −GuideGap). 보류 중인 직전 줄 밑변 가이드(+GuideGap)와
-    /// 겹치거나 역전되면 — 인접 줄에서는 항상 그렇다 — 두 선 대신 두 줄 경계의 중점(인접 줄이면
-    /// 곧 경계선)에 한 선만 긋는다. gap 적용 "후" 좌표로 판정하는 것이 핵심이다.
+    /// 겹치거나 역전되면 — 인접 줄에서는 항상 그렇다 — 두 선 대신 보류해 둔 밑변+gap 위치에
+    /// 한 선만 긋는다(A283 — 줄 경계에서 gap만큼 내려 아랫줄 ascent 여백에 둔다).
+    /// gap 적용 "후" 좌표로 판정하는 것이 핵심이다.
     /// </summary>
     private void AddTopGuide(double rawTop, double vw, double vh, Thickness pad)
     {
         var y = rawTop - GuideGap;
         if (!double.IsNaN(_pendingGuideY) && y <= _pendingGuideY + GuideMergeEpsilon)
         {
-            EmitGuide((_pendingGuideRawY + rawTop) / 2, vw, vh, pad);
+            EmitGuide(_pendingGuideY, vw, vh, pad);
             _pendingGuideY = double.NaN;
             return;
         }
@@ -494,7 +496,6 @@ internal sealed class EditorDecor
     private void AddBottomGuide(double rawBottom)
     {
         _pendingGuideY = rawBottom + GuideGap;
-        _pendingGuideRawY = rawBottom;
     }
 
     private void FlushPendingGuide(double vw, double vh, Thickness pad)
@@ -509,6 +510,9 @@ internal sealed class EditorDecor
         // A215 토글 오프 · A277 잠금 뷰 억제 — 병합 부기(pending)는 돌되 선은 안 긋는다
         if (!GuidesOn) return;
         if (y < -1 - GuideGap || y > vh + 1 + GuideGap) return; // 뷰포트 밖(클립도 있지만 요소를 아낀다)
+        // A283 ⓑ: 첫 줄 윗변(rawTop−gap)은 클립 상변(UpdateClip — pad.Top) 위라 잘려 안 보였다 —
+        // 뷰포트 컷 통과분만 클립 안 최소 y로 클램프한다(+0.5는 클립 회피용 최소값 — 조정 지점 아님).
+        y = Math.Max(y, pad.Top + 0.5);
         var guide = TakeGuide();
         guide.Width = Math.Max(0, vw - pad.Left - pad.Right);
         Canvas.SetLeft(guide, pad.Left);
