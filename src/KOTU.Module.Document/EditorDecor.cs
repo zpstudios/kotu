@@ -25,8 +25,9 @@ namespace KOTU.Module.Document;
 /// 일절 건드리지 않으므로 A115의 "EditorBox·DecorLayer 같은 제약 = 같은 원점" 계약이
 /// 그대로다(자리가 모자라면 거터만 숨긴다. A181: 폭 제한 폐지로 그 자리는 컬럼 왼쪽 여백이
 /// 아니라 소유자가 왼쪽 패딩에 예약한 구간이 됐다 — GutterReserveWidth 주석 참고).
-/// ⑤ 가이드는 글자 상·하에서 GuideGap만큼 띄우고, 인접 줄과 겹침·역전이면 윗줄 밑변+GuideGap
-/// 위치에 한 선으로 병합한다(A283 — 경계선은 em 박스를 꽉 채우는 한글 글립을 파고들었다).
+/// ⑤ 가이드는 글자 상·하에서 GuideGap(× 배율 — A284)만큼 띄우고, 인접 줄과 겹침·역전이면 윗줄
+/// 밑변+gap 위치에 한 선으로 병합한다(A283 — 경계선은 em 박스를 꽉 채우는 한글 글립을 파고들었다).
+/// 첫 줄 윗변은 그리지 않는다(클립 상변과 글자 top이 같아 공간 없음 — 2026-08-29 사용자 확정, A284).
 ///
 /// <b>A277 추가분</b>: 잠금 뷰(A224 — 에디터 그대로 + IsReadOnly) 동안은 위 2축(가이드·¶/EOF)을
 /// <b>표시만</b> 억제한다(SetViewSuppressed) — 사용자 토글 상태(_showGuides/_showMarks)와 설정 키는
@@ -49,19 +50,24 @@ internal sealed class EditorDecor
     private const string NewlineGlyph = "¶";
     private const string EofGlyph = "·EOF";
 
-    // A142 ⑤(부록 B 69 확정): 가이드를 글자 상·하에서 이만큼(px) 띄운다 — 윗변 −gap / 밑변 +gap.
-    // 실기기에서 1px로 낮추기 쉽게 한 곳 상수다. gap을 적용하면 인접 줄에서 윗줄 밑변+gap이
-    // 아랫줄 윗변−gap보다 아래로 "역전"되므로, 병합 판정은 gap 적용 후 좌표로 다시 하고(아래
-    // AddTopGuide) 겹침·역전이면 윗줄 밑변+gap 위치에 한 선만 긋는다 — 아랫줄 ascent 여백에
-    // 놓여 윗줄 한글 글립에서 떨어진다(A283. 종전의 줄 경계선은 글자를 파고들었다).
-    private const double GuideGap = 2;
-    private const double GuideMergeEpsilon = 0.75; // gap 적용 후에도 이 이내로 맞닿으면 같은 선
+    // A142 ⑤(부록 B 69 확정): 가이드를 글자 상·하에서 이만큼 띄운다 — 윗변 −gap / 밑변 +gap.
+    // 실기기 왕복으로 정하는 값 — 2026-08-29 2→6(과하면 줄인다. A284: 2에서도 한 줄 밑변 가이드가
+    // 한글 글립에 닿았다 = GetRectFromCharacterIndex의 줄 박스가 글립 잉크보다 짧다).
+    // gap을 적용하면 인접 줄에서 윗줄 밑변+gap이 아랫줄 윗변−gap보다 아래로 "역전"되므로,
+    // 병합 판정은 gap 적용 후 좌표로 다시 하고(아래 AddTopGuide) 겹침·역전이면 윗줄 밑변+gap
+    // 위치에 한 선만 긋는다 — 아랫줄 ascent 여백에 놓여 윗줄 한글 글립에서 떨어진다(A283).
+    private const double GuideGap = 6; // 100% 기준값 — 실사용은 전부 ScaledGuideGap(× _scale)
+    private const double GuideMergeEpsilon = 0.75; // gap 적용 후에도 이 이내로 맞닿으면 같은 선(배율 무관)
+
+    // A284: gap이 고정 px면 A181 줌 확대에서 상대적으로 얇아져 겹침이 확대 상태에서 더 심해진다 —
+    // 본문 배율에 비례시킨다. _scale은 필드라 상수 식이 못 되므로 읽기 전용 프로퍼티다.
+    private double ScaledGuideGap => GuideGap * _scale;
 
     // A142 ③: 행 번호 거터. 불투명도는 본문(1.0)보다 옅고 가이드(0.08)보다 진한 중간값(0.4 확정).
     // 폭 = 최대 줄 번호 자릿수 × GutterDigitWidth(우측 정렬 고정 폭이라 별도 측정이 필요 없다).
     // A181: 아래 세 치수(폰트·자릿폭·간격)는 100% 기준값이다 — 실값은 전부 × _scale(본문과 같은
-    // 배율로 함께 커지고 작아진다). GuideGap·GuideOpacity 등 나머지는 배율과 무관하다(헤어라인
-    // 미학 — 가이드 위치·높이는 어차피 실측 rect가 배율을 반영한다).
+    // 배율로 함께 커지고 작아진다). GuideGap도 배율 비례다(A284 — ScaledGuideGap). GuideOpacity 등
+    // 나머지는 배율과 무관하다(헤어라인 미학 — 가이드 위치·높이는 어차피 실측 rect가 배율을 반영한다).
     private const double GutterOpacity = 0.4;
     private const double GutterFontSize = 12;
     private const double GutterDigitWidth = 8;  // 자릿수당 예약 폭(px) — 12px 폰트 숫자에 여유 포함
@@ -378,9 +384,14 @@ internal sealed class EditorDecor
         }
         else
         {
-            var trailing = RectOfTrailing(len - 1); // 마지막 문자의 뒤쪽 모서리 = 줄 끝
-            if (trailing.Height <= 0) return; // A283 ⓒ: rect를 못 얻은 패스는 EOF 생략(어설픈 근사 배치 금지 — 사양 ③, DrawNewlineGlyph 선례)
-            DrawMarker(EofGlyph, trailing.X + 4, trailing.Y, vh);
+            // A284 ⓒ: trailingEdge(GetRectFromCharacterIndex 두 번째 인자 true) 경로 폐기 — 파일 내
+            // 유일한 true 호출이라 검증된 적이 없었고, 실기기에서 X·Y가 0으로 나와 EOF가 좌상단에
+            // 찍혔다(Height는 정상이라 A283의 Height 가드로는 못 걸렀다). 전 파일이 쓰는 leading
+            // 관용구(RectOf)로 줄 끝을 구한다 — 마지막 문자 왼끝 + 폭 = 줄 끝.
+            var last = RectOf(len - 1);
+            if (last.Height <= 0) return; // rect를 못 얻은 패스는 EOF 생략(어설픈 근사 배치 금지 — 사양 ③)
+            if (last.Y < lastLine.Y - YEpsilon) return; // 마지막 줄 범위 밖 = 이상값 — 좌상단 오배치 재발 방지
+            DrawMarker(EofGlyph, last.X + last.Width + 4, last.Y, vh);
         }
     }
 
@@ -474,14 +485,14 @@ internal sealed class EditorDecor
     // ---------- 그리기(요소 풀 재사용) ----------
 
     /// <summary>
-    /// A142 ⑤: 줄 윗변 가이드(원좌표 −GuideGap). 보류 중인 직전 줄 밑변 가이드(+GuideGap)와
+    /// A142 ⑤: 줄 윗변 가이드(원좌표 −ScaledGuideGap). 보류 중인 직전 줄 밑변 가이드(+ScaledGuideGap)와
     /// 겹치거나 역전되면 — 인접 줄에서는 항상 그렇다 — 두 선 대신 보류해 둔 밑변+gap 위치에
     /// 한 선만 긋는다(A283 — 줄 경계에서 gap만큼 내려 아랫줄 ascent 여백에 둔다).
     /// gap 적용 "후" 좌표로 판정하는 것이 핵심이다.
     /// </summary>
     private void AddTopGuide(double rawTop, double vw, double vh, Thickness pad)
     {
-        var y = rawTop - GuideGap;
+        var y = rawTop - ScaledGuideGap;
         if (!double.IsNaN(_pendingGuideY) && y <= _pendingGuideY + GuideMergeEpsilon)
         {
             EmitGuide(_pendingGuideY, vw, vh, pad);
@@ -495,7 +506,7 @@ internal sealed class EditorDecor
     /// <summary>A142 ⑤: 줄 밑변 가이드는 즉시 긋지 않고 보류한다 — 다음 줄 윗변과의 병합 판정용.</summary>
     private void AddBottomGuide(double rawBottom)
     {
-        _pendingGuideY = rawBottom + GuideGap;
+        _pendingGuideY = rawBottom + ScaledGuideGap;
     }
 
     private void FlushPendingGuide(double vw, double vh, Thickness pad)
@@ -509,10 +520,13 @@ internal sealed class EditorDecor
     {
         // A215 토글 오프 · A277 잠금 뷰 억제 — 병합 부기(pending)는 돌되 선은 안 긋는다
         if (!GuidesOn) return;
-        if (y < -1 - GuideGap || y > vh + 1 + GuideGap) return; // 뷰포트 밖(클립도 있지만 요소를 아낀다)
-        // A283 ⓑ: 첫 줄 윗변(rawTop−gap)은 클립 상변(UpdateClip — pad.Top) 위라 잘려 안 보였다 —
-        // 뷰포트 컷 통과분만 클립 안 최소 y로 클램프한다(+0.5는 클립 회피용 최소값 — 조정 지점 아님).
-        y = Math.Max(y, pad.Top + 0.5);
+        if (y < -1 - ScaledGuideGap || y > vh + 1 + ScaledGuideGap) return; // 뷰포트 밖(클립도 있지만 요소를 아낀다)
+        // A284 ⓑ: 클립 상변(UpdateClip — pad.Top) 위 = 첫 줄 윗변(첫 줄 글자 top도 pad.Top이라
+        // 그릴 공간이 물리적으로 없다) — 조용히 생략한다(2026-08-29 사용자 확정: 첫 줄 위 선은
+        // 필수가 아니고, 클립 확장은 거터·마커까지 영향 범위가 커 하지 않는다. A283의 클램프는
+        // 선을 글자 top에 붙일 뿐이라 "위에 그은 선"으로 보이지 않았다). 위로 스크롤돼 클립 밖으로
+        // 나간 줄의 가이드도 같은 조건에 걸려 생략되는데, 그게 올바른 동작이다(요소도 아낀다).
+        if (y < pad.Top) return;
         var guide = TakeGuide();
         guide.Width = Math.Max(0, vw - pad.Left - pad.Right);
         Canvas.SetLeft(guide, pad.Left);
@@ -710,12 +724,6 @@ internal sealed class EditorDecor
     private Rect RectOf(int index)
     {
         var rect = _editor.GetRectFromCharacterIndex(index, false);
-        return new Rect(rect.X, rect.Y + _yShift, rect.Width, rect.Height);
-    }
-
-    private Rect RectOfTrailing(int index)
-    {
-        var rect = _editor.GetRectFromCharacterIndex(index, true);
         return new Rect(rect.X, rect.Y + _yShift, rect.Width, rect.Height);
     }
 
