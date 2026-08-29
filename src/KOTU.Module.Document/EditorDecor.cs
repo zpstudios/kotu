@@ -34,6 +34,12 @@ namespace KOTU.Module.Document;
 /// 건드리지 않으므로 편집 모드로 돌아오면 켜져 있던 그대로 되돌아온다. 행 번호 거터(A142 ③)는
 /// 축 밖이라 억제 대상이 아니다(읽기에 방해가 아니라 도움 — A277 사양 범위는 "편집 전용 시각 요소").
 ///
+/// <b>A286 좌표 계약(실측 확정)</b>: GetRectFromCharacterIndex가 주는 Rect는 ① <b>캐럿 상자</b>라
+/// Width가 항상 0이고(글자 폭이 아니다 — 줄 끝은 "마지막 글자 rect + 폭"이 아니라 인덱스 len의
+/// rect다) ② X가 <b>본문 기준 상대 좌표</b>라 캔버스에 찍을 땐 pad.Left를 더해야 한다. Y는 그대로
+/// 쓴다(가이드가 실기기에서 정합). X를 쓰는 것은 마커 2종(¶·EOF)뿐이다 — 가이드는 가로 전체
+/// 사각형이라 Canvas.SetLeft(pad.Left)로, 거터는 pad.Left에서 역산한 자체 x로 앉는다.
+///
 /// <b>실패 안전(설계 의무)</b>: 내부 ScrollViewer(템플릿 ContentElement) 취득은 기본 템플릿
 /// 구조 의존이라 WinAppSDK 업데이트에 깨질 수 있는 부류다(v0.113.1 지연 로딩 스타일 사례와
 /// 같은 급) — 취득 실패·렌더 중 예외는 장식만 조용히 끄고(Disable) 편집 본기능은 그대로 둔다.
@@ -155,7 +161,10 @@ internal sealed class EditorDecor
     private Border? _diagPanel;   // 1개 재사용(풀 관용구) — 패스마다 새로 만들지 않는다
     private TextBlock? _diagText;
     private bool _diagEndReached; // 이번 패스에 DrawEnd가 실제로 불렸는가(마지막 줄이 뷰포트 안)
-    private Rect _diagLastRect;   // 이번 패스의 RectOf(len-1)
+    private Rect _diagLastRect;   // 이번 패스에 EOF 배치에 실제로 쓴 rect
+    // A286: 그 rect를 어느 인덱스로 쟀는지 — 끝 캐럿(len)인지 폴백(len-1)인지. 종전에는 라벨이
+    // "RectOf(len-1)" 고정이었는데 이제 분기마다 인덱스가 달라 라벨이 거짓말을 하게 된다.
+    private string _diagRectSrc = "len-1";
     private Rect _diagLastLine;   // 이번 패스에 DrawEnd로 넘어온 마지막 시각적 줄 rect
     private string _diagEof = ""; // "x,y"(실제 그린 좌표) 또는 "skipped(가드 이름)"
 
@@ -394,7 +403,7 @@ internal sealed class EditorDecor
             // 다음 줄 직전 문자가 개행이면 하드 개행(¶), 아니면 자동 줄바꿈(표시 없음 — 실제 바이트가 아니다)
             if (IsNewline(text[next - 1]))
             {
-                DrawNewlineGlyph(RectOf(next - 1), vh);
+                DrawNewlineGlyph(RectOf(next - 1), vh, pad);
                 line++; // 하드 개행 = 다음 논리 줄(자동 줄바꿈은 같은 줄이라 번호가 늘지 않는다)
             }
             idx = next;
@@ -414,12 +423,12 @@ internal sealed class EditorDecor
             // 파일이 개행으로 끝난다 — 캐럿이 갈 수 있는 빈 마지막 줄이 하나 더 있다.
             // 빈 줄에는 잴 문자가 없어 개행 문자의 셀 높이로 근사한다(혼재 글꼴 줄이면 수 px 오차 허용).
             var newlineRect = RectOf(len - 1);
-            DrawNewlineGlyph(newlineRect, vh);
+            DrawNewlineGlyph(newlineRect, vh, pad);
             var top = lastLine.Y + lastLine.Height;
             var height = newlineRect.Height > 0 ? newlineRect.Height : lastLine.Height;
             AddTopGuide(top, vw, vh, pad); // 빈 줄 윗변 — 직전 줄 밑변과 역전이라 경계 한 선으로 병합(A142 ⑤)
             AddBottomGuide(top + height);  // 빈 줄 밑변 — 패스 끝 FlushPendingGuide가 긋는다
-            if (_diagOn) RecordEofAttempt(newlineRect, lastLine, pad.Left + 2, top, vh); // A285
+            if (_diagOn) RecordEofAttempt(newlineRect, lastLine, "len-1", pad.Left + 2, top, vh); // A285
             DrawMarker(EofGlyph, pad.Left + 2, top, vh);
         }
         else
@@ -427,22 +436,52 @@ internal sealed class EditorDecor
             // A284 ⓒ: trailingEdge(GetRectFromCharacterIndex 두 번째 인자 true) 경로 폐기 — 파일 내
             // 유일한 true 호출이라 검증된 적이 없었고, 실기기에서 X·Y가 0으로 나와 EOF가 좌상단에
             // 찍혔다(Height는 정상이라 A283의 Height 가드로는 못 걸렀다). 전 파일이 쓰는 leading
-            // 관용구(RectOf)로 줄 끝을 구한다 — 마지막 문자 왼끝 + 폭 = 줄 끝.
-            var last = RectOf(len - 1);
-            if (last.Height <= 0)
+            // 관용구(RectOf)로 줄 끝을 구한다.
+            //
+            // A286(v0.277.0): A285 계측이 두 가지를 실측으로 확정했다.
+            // ① GetRectFromCharacterIndex는 캐럿 상자를 준다 — Width가 항상 0이다(한 글자씩 넣으며
+            //    3연속 확인: X가 0→14→28로 전진하는 동안 W는 세 번 다 0.0). 그래서 A284의
+            //    "마지막 글자 왼끝 + 폭"은 줄 끝이 아니라 마지막 글자 앞을 가리켰다. 인덱스
+            //    len(= 마지막 글자 다음 캐럿 자리)이 곧 줄 끝이므로 그 자리를 직접 잰다.
+            // ② rect의 X는 본문 기준 상대 좌표다(실측 eof=4.0인데 본문 왼끝은 pad.Left) —
+            //    캔버스 좌표로 쓰려면 pad.Left를 더해야 한다. 위 개행 종료 분기가 pad.Left + 2로
+            //    더하고 있었고 그 분기만 실기기에서 정상이었던 것이 같은 사실의 반증이다.
+            // 인덱스 len은 "마지막 글자 다음 캐럿 자리"로 통용되지만 이 저장소에 선례가 0건이라,
+            // 범위 밖으로 보고 던지는 구현일 가능성을 여기서 국소적으로 막는다 — 밖으로 새면
+            // Render의 포괄 catch가 Disable()을 불러 가이드·거터·마커가 뷰 수명 동안 통째로
+            // 사라진다(마커 오배치보다 훨씬 나쁜 회귀다). 던지면 아래 폴백과 같은 길로 합류한다.
+            Rect caret;
+            try
+            {
+                caret = RectOf(len);
+            }
+            catch
+            {
+                caret = default;
+            }
+            var rectSrc = "len";
+            if (caret.Height <= 0)
+            {
+                // 폴백 — 끝 캐럿 자리를 못 재는 환경이면 마지막 글자 자리로 물러선다.
+                // X가 한 글자만큼 왼쪽이지만 줄은 맞으므로 좌상단 오배치보다 낫다.
+                caret = RectOf(len - 1);
+                rectSrc = "len-1";
+            }
+            if (caret.Height <= 0)
             {
                 // rect를 못 얻은 패스는 EOF 생략(어설픈 근사 배치 금지 — 사양 ③)
-                if (_diagOn) RecordEofSkip(last, lastLine, "skipped(height)"); // A285: 어느 가드였는지
+                if (_diagOn) RecordEofSkip(caret, lastLine, rectSrc, "skipped(height)"); // A285: 어느 가드였는지
                 return;
             }
-            if (last.Y < lastLine.Y - YEpsilon)
+            if (caret.Y < lastLine.Y - YEpsilon)
             {
-                // 마지막 줄 범위 밖 = 이상값 — 좌상단 오배치 재발 방지
-                if (_diagOn) RecordEofSkip(last, lastLine, "skipped(lastLine)"); // A285
+                // 마지막 줄 범위 밖 = 이상값 — 좌상단 오배치 재발 방지(A284 가드 유지)
+                if (_diagOn) RecordEofSkip(caret, lastLine, rectSrc, "skipped(lastLine)"); // A285
                 return;
             }
-            if (_diagOn) RecordEofAttempt(last, lastLine, last.X + last.Width + 4, last.Y, vh); // A285
-            DrawMarker(EofGlyph, last.X + last.Width + 4, last.Y, vh);
+            var eofX = pad.Left + caret.X + 4;
+            if (_diagOn) RecordEofAttempt(caret, lastLine, rectSrc, eofX, caret.Y, vh); // A285
+            DrawMarker(EofGlyph, eofX, caret.Y, vh);
         }
     }
 
@@ -584,10 +623,15 @@ internal sealed class EditorDecor
         Canvas.SetTop(guide, Math.Round(y));
     }
 
-    private void DrawNewlineGlyph(Rect rect, double vh)
+    /// <summary>
+    /// A286: rect.X는 본문 기준 상대 좌표라 캔버스 좌표로 쓰려면 pad.Left를 더해야 한다
+    /// (EOF 마커와 같은 결함이었다 — A285 실측). X를 쓰는 요소는 마커 2종뿐이라 가이드·거터는
+    /// 무관하다(가이드는 가로 전체 사각형이라 Canvas.SetLeft(pad.Left)로 따로 앉힌다).
+    /// </summary>
+    private void DrawNewlineGlyph(Rect rect, double vh, Thickness pad)
     {
         if (rect.Height <= 0) return; // rect를 못 얻은 개행은 건너뛴다(어설픈 근사 배치 금지 — 사양 ③)
-        DrawMarker(NewlineGlyph, rect.X + 1, rect.Y, vh);
+        DrawMarker(NewlineGlyph, pad.Left + rect.X + 1, rect.Y, vh);
     }
 
     private void DrawMarker(string glyph, double x, double y, double vh)
@@ -705,11 +749,15 @@ internal sealed class EditorDecor
     /// A285: DrawEnd가 DrawMarker(EofGlyph)에 실제로 넘긴 좌표를 기록한다. DrawMarker 안의 두
     /// 가드(<b>!MarksOn / y &gt; vh || y &lt; -30</b>)를 여기서 미러링해 "계산은 했으나 안 그린"
     /// 경우를 사유와 함께 남긴다 — DrawMarker의 가드를 고치면 이 미러도 함께 고칠 것(동기 의무).
+    /// <para>A286: x는 <b>pad.Left를 더한 최종 캔버스 좌표</b>다 — 두 호출부 모두 바로 아래
+    /// DrawMarker에 넘기는 것과 같은 식을 넘긴다(개행 분기 pad.Left + 2 / else 분기 eofX).
+    /// 여기에 보정 전 값을 넘기면 계측이 거짓말을 한다 — 호출부를 고칠 땐 두 줄을 함께 볼 것.</para>
     /// </summary>
-    private void RecordEofAttempt(Rect lastRect, Rect lastLine, double x, double y, double vh)
+    private void RecordEofAttempt(Rect lastRect, Rect lastLine, string rectSrc, double x, double y, double vh)
     {
         _diagEndReached = true;
         _diagLastRect = lastRect;
+        _diagRectSrc = rectSrc;
         _diagLastLine = lastLine;
         _diagEof = !MarksOn ? "skipped(marksOff)"
             : y > vh || y < -30 ? "skipped(viewport)"
@@ -717,10 +765,11 @@ internal sealed class EditorDecor
     }
 
     /// <summary>A285: DrawEnd의 자체 가드(height·lastLine 대조)에 걸려 EOF를 생략한 패스의 기록.</summary>
-    private void RecordEofSkip(Rect lastRect, Rect lastLine, string reason)
+    private void RecordEofSkip(Rect lastRect, Rect lastLine, string rectSrc, string reason)
     {
         _diagEndReached = true;
         _diagLastRect = lastRect;
+        _diagRectSrc = rectSrc;
         _diagLastLine = lastLine;
         _diagEof = reason;
     }
@@ -754,8 +803,8 @@ internal sealed class EditorDecor
         }
         // DrawEnd에 못 간 패스(마지막 줄이 뷰포트 밖 등)는 rect 값이 없다 — "-"로 표시한다.
         var rectLine = _diagEndReached
-            ? $"RectOf(len-1)={_diagLastRect.X:F1},{_diagLastRect.Y:F1},{_diagLastRect.Width:F1},{_diagLastRect.Height:F1}"
-            : "RectOf(len-1)=-";
+            ? $"RectOf({_diagRectSrc})={_diagLastRect.X:F1},{_diagLastRect.Y:F1},{_diagLastRect.Width:F1},{_diagLastRect.Height:F1}"
+            : "RectOf(?)=-";
         var lastLineLine = _diagEndReached
             ? $"lastLine={_diagLastLine.Y:F1},{_diagLastLine.Height:F1}"
             : "lastLine=-";
@@ -765,6 +814,9 @@ internal sealed class EditorDecor
             lastLineLine + "\n" +
             $"yShift={_yShift:F1}  contentRel={_contentRelative}\n" +
             $"eof={_diagEof}\n" +
+            // A286: 마커 X 보정값(pad.Left)을 화면에 띄운다 — 수리 후 스크린샷에서
+            // "eof.x - pad.Left"가 본문 상대 좌표와 맞는지 사용자가 바로 대조할 수 있어야 한다.
+            $"pad={pad.Left:F1},{pad.Top:F1}\n" +
             $"lineStarts={_lineStarts.Length}  scale={_scale:F2}";
         _diagPanel.Visibility = Visibility.Visible;
         // 오른쪽 위 구석 정렬 — 폭은 트리 밖 Measure/DesiredSize 실측(DocumentView 인쇄 프로브 관용구).
