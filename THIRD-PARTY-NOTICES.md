@@ -11,7 +11,7 @@ KOTU는 아래 외부 구성요소를 사용합니다. 각 구성요소는 자�
 | [SharpCompress](https://github.com/adamhathcock/sharpcompress) | zip CP949 인코딩 경로 | MIT | NuGet |
 | [libvlc](https://www.videolan.org/vlc/libvlc.html) (VideoLAN.LibVLC.Windows) | 동영상 재생 엔진 | LGPL-2.1 | 별도 dll 동적 링크, 원본 그대로 동봉. 소스는 videolan.org에서 제공 |
 | [LibVLCSharp / LibVLCSharp.WinUI](https://code.videolan.org/videolan/LibVLCSharp) | libvlc .NET 래퍼 | LGPL-2.1 | NuGet, 동적 링크 |
-| [Magick.NET](https://github.com/dlemstra/Magick.NET) (Magick.NET-Q8-x64) | WIC가 못 읽는 이미지 포맷(psd 등) 디코드 | Apache-2.0 (ImageMagick License) | NuGet |
+| [Magick.NET](https://github.com/dlemstra/Magick.NET) (Magick.NET-Q8-x64) | WIC가 못 읽는 이미지 포맷(psd 등) 디코드 | Apache-2.0 (동봉 네이티브 [ImageMagick](https://imagemagick.org/script/license.php)은 ImageMagick License) | NuGet |
 | Microsoft Windows App SDK / WinUI 3 | UI 프레임워크 (HTML 렌더 뷰의 WebView2 컨트롤 포함, A248) | MIT | NuGet |
 | System.Drawing.Common | 트레이·창 아이콘 GDI+ 합성(브랜드 표식) | MIT | NuGet |
 | Microsoft.Extensions.* (DI, Logging) | 공통 인프라 | MIT | NuGet |
