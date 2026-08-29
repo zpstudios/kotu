@@ -43,20 +43,22 @@ namespace KOTU.Module.Document;
 internal sealed class EditorDecor
 {
     // ---- 체감 조정 지점(색·불투명도·글리프 전부 여기 한 곳) ----
-    // 가이드는 본문 위에 얹히는 레이어라 아주 옅어야 한다(사양 ③) — 0.08이면 읽기 방해 없음 판정.
-    private const double GuideOpacity = 0.08;
+    // 가이드는 본문 위에 얹히는 레이어라 아주 옅어야 한다(사양 ③). 0.08은 글자 위에서 대비가
+    // 죽어 "글자 있는 데만 선이 끊겨 보인다"는 실기기 보고 — 2026-08-29 실기기 왕복 3차: 0.08→0.14.
+    private const double GuideOpacity = 0.14;
     private const double MarkerOpacity = 0.25;
     private const double MarkerFontSize = 12;
     private const string NewlineGlyph = "¶";
     private const string EofGlyph = "·EOF";
 
     // A142 ⑤(부록 B 69 확정): 가이드를 글자 상·하에서 이만큼 띄운다 — 윗변 −gap / 밑변 +gap.
-    // 실기기 왕복으로 정하는 값 — 2026-08-29 2→6(과하면 줄인다. A284: 2에서도 한 줄 밑변 가이드가
+    // 실기기 왕복으로 정하는 값 — 2026-08-29 실기기 왕복 3차: 6→8(불투명도를 0.08→0.14로 올려
+    // 겹침이 더 눈에 띄므로 간격을 함께 벌린다. A284: 2에서도 한 줄 밑변 가이드가
     // 한글 글립에 닿았다 = GetRectFromCharacterIndex의 줄 박스가 글립 잉크보다 짧다).
     // gap을 적용하면 인접 줄에서 윗줄 밑변+gap이 아랫줄 윗변−gap보다 아래로 "역전"되므로,
     // 병합 판정은 gap 적용 후 좌표로 다시 하고(아래 AddTopGuide) 겹침·역전이면 윗줄 밑변+gap
     // 위치에 한 선만 긋는다 — 아랫줄 ascent 여백에 놓여 윗줄 한글 글립에서 떨어진다(A283).
-    private const double GuideGap = 6; // 100% 기준값 — 실사용은 전부 ScaledGuideGap(× _scale)
+    private const double GuideGap = 8; // 100% 기준값 — 실사용은 전부 ScaledGuideGap(× _scale)
     private const double GuideMergeEpsilon = 0.75; // gap 적용 후에도 이 이내로 맞닿으면 같은 선(배율 무관)
 
     // A284: gap이 고정 px면 A181 줌 확대에서 상대적으로 얇아져 겹침이 확대 상태에서 더 심해진다 —
@@ -144,6 +146,18 @@ internal sealed class EditorDecor
     private int _guidesUsed;
     private int _markersUsed;
     private int _numbersUsed;
+
+    // ---------- A285: EOF 오배치 계측(diag.editorDecor — 기본 꺼짐) ----------
+    // A283·A284 2연속 블라인드 수리 실패 뒤의 계측 시설 — ShellDiagnostics(A234)와 같은 이유·같은
+    // 태도("스크린샷 1장으로 원인 확정"). 꺼져 있으면(기본) 아래 어떤 요소도 만들지 않고 문자열
+    // 조립도 하지 않는다 — 렌더 핫 패스에 남는 비용은 _diagOn 플래그 검사뿐이다.
+    private bool _diagOn;
+    private Border? _diagPanel;   // 1개 재사용(풀 관용구) — 패스마다 새로 만들지 않는다
+    private TextBlock? _diagText;
+    private bool _diagEndReached; // 이번 패스에 DrawEnd가 실제로 불렸는가(마지막 줄이 뷰포트 안)
+    private Rect _diagLastRect;   // 이번 패스의 RectOf(len-1)
+    private Rect _diagLastLine;   // 이번 패스에 DrawEnd로 넘어온 마지막 시각적 줄 rect
+    private string _diagEof = ""; // "x,y"(실제 그린 좌표) 또는 "skipped(가드 이름)"
 
     public EditorDecor(FrameworkElement themeSource, TextBox editor, Canvas canvas,
         Func<string> textProvider)
@@ -235,6 +249,21 @@ internal sealed class EditorDecor
     }
 
     /// <summary>
+    /// A285: EOF 계측 오버레이 토글(diag.editorDecor) — 소유자(DocumentView)가 초기 1회 +
+    /// EditorDecorDiagnostics.Changed마다 먹인다. SetViewSuppressed와 같은 관용구(같은 값 조기
+    /// 반환 + Invalidate + 즉시 Render — 설정 토글은 레이아웃 패스를 보장하지 않으므로 Invalidate만
+    /// 걸면 오버레이가 다음 편집·스크롤까지 안 나타나거나 안 걷힌다). 폴백 오프(_disabled)면 무동작.
+    /// </summary>
+    public void SetDiagnostics(bool on)
+    {
+        if (_disabled || on == _diagOn) return;
+        _diagOn = on;
+        if (!on && _diagPanel is { } panel) panel.Visibility = Visibility.Collapsed;
+        Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
+        Render();     // 전환 즉시 반영 — 켜는 순간 오버레이가 바로 보인다
+    }
+
+    /// <summary>
     /// A177 ⓑ: 대용량 문서(임계 = DocumentView.LargeDocumentChars) — 장식(가이드·거터·¶/EOF)을
     /// 뷰 수명 동안 통째로 끈다. 실패 폴백(Disable)과 같은 기계의 재사용이다: 이후 Invalidate·
     /// Render는 전부 무동작이고, Text 대입 전에 불리면 스크롤 훅(ViewChanged)을 걸기도 전이라
@@ -307,6 +336,13 @@ internal sealed class EditorDecor
         }
 
         BeginPass();
+        if (_diagOn)
+        {
+            // A285: 계측 초기화 — DrawEnd가 안 불리면(마지막 줄이 뷰포트 밖·이상값 중단·MaxLines)
+            // 이 값이 그대로 남아 "이번 패스는 EOF 분기까지 못 갔다"를 화면에 말해 준다.
+            _diagEndReached = false;
+            _diagEof = "skipped(notReached)";
+        }
         var len = text.Length;
         var pad = _editor.Padding;
 
@@ -365,6 +401,9 @@ internal sealed class EditorDecor
         }
         FlushPendingGuide(vw, vh, pad); // A142 ⑤: 마지막 줄 밑변 가이드 마감
         EndPass();
+        // A285: 계측 오버레이는 패스마다 갱신 — RenderCore 안(= Render의 try 경계 안)이라
+        // 문자열 조립·측정에서 예외가 나도 기존 폴백(Disable — 장식만 끄고 편집 무영향)이 받는다.
+        if (_diagOn) UpdateDiagPanel(text, len, vw, vh, pad);
     }
 
     /// <summary>문서 마지막 시각적 줄: 끝 개행의 ¶ + (개행으로 끝나면) 빈 마지막 줄 가이드 + EOF 표지.</summary>
@@ -380,6 +419,7 @@ internal sealed class EditorDecor
             var height = newlineRect.Height > 0 ? newlineRect.Height : lastLine.Height;
             AddTopGuide(top, vw, vh, pad); // 빈 줄 윗변 — 직전 줄 밑변과 역전이라 경계 한 선으로 병합(A142 ⑤)
             AddBottomGuide(top + height);  // 빈 줄 밑변 — 패스 끝 FlushPendingGuide가 긋는다
+            if (_diagOn) RecordEofAttempt(newlineRect, lastLine, pad.Left + 2, top, vh); // A285
             DrawMarker(EofGlyph, pad.Left + 2, top, vh);
         }
         else
@@ -389,8 +429,19 @@ internal sealed class EditorDecor
             // 찍혔다(Height는 정상이라 A283의 Height 가드로는 못 걸렀다). 전 파일이 쓰는 leading
             // 관용구(RectOf)로 줄 끝을 구한다 — 마지막 문자 왼끝 + 폭 = 줄 끝.
             var last = RectOf(len - 1);
-            if (last.Height <= 0) return; // rect를 못 얻은 패스는 EOF 생략(어설픈 근사 배치 금지 — 사양 ③)
-            if (last.Y < lastLine.Y - YEpsilon) return; // 마지막 줄 범위 밖 = 이상값 — 좌상단 오배치 재발 방지
+            if (last.Height <= 0)
+            {
+                // rect를 못 얻은 패스는 EOF 생략(어설픈 근사 배치 금지 — 사양 ③)
+                if (_diagOn) RecordEofSkip(last, lastLine, "skipped(height)"); // A285: 어느 가드였는지
+                return;
+            }
+            if (last.Y < lastLine.Y - YEpsilon)
+            {
+                // 마지막 줄 범위 밖 = 이상값 — 좌상단 오배치 재발 방지
+                if (_diagOn) RecordEofSkip(last, lastLine, "skipped(lastLine)"); // A285
+                return;
+            }
+            if (_diagOn) RecordEofAttempt(last, lastLine, last.X + last.Width + 4, last.Y, vh); // A285
             DrawMarker(EofGlyph, last.X + last.Width + 4, last.Y, vh);
         }
     }
@@ -643,7 +694,94 @@ internal sealed class EditorDecor
     {
         BeginPass();
         EndPass();
+        // A285: 장식이 안 그려지는 상태(빈 문서·PDF 모드·폴백 오프)면 계측 오버레이도 걷는다 —
+        // 낡은 값이 화면에 남으면 계측이 거짓말을 한다. 요소는 남겨 재사용한다(풀 관용구).
+        if (_diagPanel is { } panel) panel.Visibility = Visibility.Collapsed;
     }
+
+    // ---------- A285: EOF 계측 오버레이(diag.editorDecor 켜짐일 때만 — 호출부 전부 _diagOn 가드) ----------
+
+    /// <summary>
+    /// A285: DrawEnd가 DrawMarker(EofGlyph)에 실제로 넘긴 좌표를 기록한다. DrawMarker 안의 두
+    /// 가드(<b>!MarksOn / y &gt; vh || y &lt; -30</b>)를 여기서 미러링해 "계산은 했으나 안 그린"
+    /// 경우를 사유와 함께 남긴다 — DrawMarker의 가드를 고치면 이 미러도 함께 고칠 것(동기 의무).
+    /// </summary>
+    private void RecordEofAttempt(Rect lastRect, Rect lastLine, double x, double y, double vh)
+    {
+        _diagEndReached = true;
+        _diagLastRect = lastRect;
+        _diagLastLine = lastLine;
+        _diagEof = !MarksOn ? "skipped(marksOff)"
+            : y > vh || y < -30 ? "skipped(viewport)"
+            : $"{x:F1},{y:F1}";
+    }
+
+    /// <summary>A285: DrawEnd의 자체 가드(height·lastLine 대조)에 걸려 EOF를 생략한 패스의 기록.</summary>
+    private void RecordEofSkip(Rect lastRect, Rect lastLine, string reason)
+    {
+        _diagEndReached = true;
+        _diagLastRect = lastRect;
+        _diagLastLine = lastLine;
+        _diagEof = reason;
+    }
+
+    /// <summary>
+    /// A285: 계측 오버레이 갱신 — 렌더 패스 끝마다 1회(RenderCore 말미, Render의 try 경계 안).
+    /// 요소는 1개를 재사용하고(풀 관용구 — 패스마다 새로 만들지 않는다) 편집 영역 오른쪽 위
+    /// 구석에 붙인다(IsHitTestVisible=false — 포커스·입력 무관, A115 계약 그대로).
+    /// 판은 어두운 반투명 고정색(테마 무관 — ThumbnailExplorer 배지 판과 같은 관용구),
+    /// 글자는 등폭 11px 고정(셸 DiagStrip과 같은 치수 — 줌 배율과 무관하게 읽혀야 한다).
+    /// </summary>
+    private void UpdateDiagPanel(string text, int len, double vw, double vh, Thickness pad)
+    {
+        if (_diagPanel is null)
+        {
+            _diagText = new TextBlock
+            {
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Colors.White),
+                TextWrapping = TextWrapping.NoWrap,
+            };
+            _diagPanel = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xB0, 0x00, 0x00, 0x00)),
+                Padding = new Thickness(6, 4, 6, 4),
+                IsHitTestVisible = false,
+                Child = _diagText,
+            };
+            _canvas.Children.Add(_diagPanel);
+        }
+        // DrawEnd에 못 간 패스(마지막 줄이 뷰포트 밖 등)는 rect 값이 없다 — "-"로 표시한다.
+        var rectLine = _diagEndReached
+            ? $"RectOf(len-1)={_diagLastRect.X:F1},{_diagLastRect.Y:F1},{_diagLastRect.Width:F1},{_diagLastRect.Height:F1}"
+            : "RectOf(len-1)=-";
+        var lastLineLine = _diagEndReached
+            ? $"lastLine={_diagLastLine.Y:F1},{_diagLastLine.Height:F1}"
+            : "lastLine=-";
+        _diagText!.Text =
+            $"len={len}  last='{DescribeChar(text[len - 1])}'\n" +
+            rectLine + "\n" +
+            lastLineLine + "\n" +
+            $"yShift={_yShift:F1}  contentRel={_contentRelative}\n" +
+            $"eof={_diagEof}\n" +
+            $"lineStarts={_lineStarts.Length}  scale={_scale:F2}";
+        _diagPanel.Visibility = Visibility.Visible;
+        // 오른쪽 위 구석 정렬 — 폭은 트리 밖 Measure/DesiredSize 실측(DocumentView 인쇄 프로브 관용구).
+        // 클립(UpdateClip)의 우변 = vw - pad.Right, 상변 = pad.Top 안쪽에 4px 여유로 앉힌다.
+        _diagPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(_diagPanel, Math.Max(pad.Left, vw - pad.Right - _diagPanel.DesiredSize.Width - 4));
+        Canvas.SetTop(_diagPanel, pad.Top + 4);
+    }
+
+    /// <summary>A285: text[len-1]의 사람이 읽는 표기 — 개행은 \r \n, 제어 문자는 U+ 코드로.</summary>
+    private static string DescribeChar(char c) => c switch
+    {
+        '\r' => "\\r",
+        '\n' => "\\n",
+        '\t' => "\\t",
+        _ => char.IsControl(c) ? $"U+{(int)c:X4}" : c.ToString(),
+    };
 
     // ---------- 내부 ScrollViewer 훅·스로틀·클립·rect 헬퍼 ----------
 

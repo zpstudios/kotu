@@ -194,6 +194,14 @@ public sealed partial class DocumentView : UserControl,
         GuideToggleButton.IsChecked = _showGuides;
         MarksToggleButton.IsChecked = _showMarks;
 
+        // A285: 에디터 장식 EOF 계측 오버레이(diag.editorDecor, 기본 꺼짐) — ShellDiagnostics(A234)
+        // 관용구 복제. 초기 1회는 저장값을 바로 먹이고, 이후는 설정 화면의 NotifyChanged가 부르는
+        // Changed 구독으로 즉시 반영한다. static 이벤트라 Unloaded에서 반드시 해제한다(A88 규칙 —
+        // SettingsView의 UiScale.Changed 구독과 같은 자리·같은 형태의 해제).
+        _decor.SetDiagnostics(settings.Get(EditorDecorDiagnostics.SettingKey, false));
+        EditorDecorDiagnostics.Changed += ApplyEditorDecorDiagnostics;
+        Unloaded += (_, _) => EditorDecorDiagnostics.Changed -= ApplyEditorDecorDiagnostics;
+
         // A181: 저장된 줌 배율(전역 1벌)을 XAML 기본값(FontSize 14 = 100%) 위에 얹는다.
         // 파일을 열기 전에 적용해야 대용량 텍스트의 랩 계산이 최종 폰트로 한 번에 끝난다(A177).
         // 손으로 고친 settings.json의 범위 밖 값은 조용히 범위로 접는다(A171 음수 방어와 같은 태도).
@@ -1361,6 +1369,21 @@ public sealed partial class DocumentView : UserControl,
         _decor.SetDecorVisibility(_showGuides, _showMarks);
         _settings.Set(DocumentModule.ShowMarksSettingKey, _showMarks);
         _settings.Save();
+    }
+
+    /// <summary>
+    /// A285: 계측 오버레이 설정 반영(생성자 배선: 초기 1회는 직접, 이후 EditorDecorDiagnostics.Changed).
+    /// 다른 창의 설정 화면(다른 UI 스레드)에서 발화할 수 있어 MainWindow.ApplyShellDiagnostics와
+    /// 같은 자가 마샬링을 거친다 — 값 산출은 저장된 설정 재독 한 줄이라 무게가 없다.
+    /// </summary>
+    private void ApplyEditorDecorDiagnostics()
+    {
+        if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+        {
+            dq.TryEnqueue(ApplyEditorDecorDiagnostics);
+            return;
+        }
+        _decor.SetDiagnostics(_settings.Get(EditorDecorDiagnostics.SettingKey, false));
     }
 
     /// <summary>
