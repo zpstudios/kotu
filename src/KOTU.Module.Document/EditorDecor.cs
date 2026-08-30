@@ -34,11 +34,15 @@ namespace KOTU.Module.Document;
 /// 건드리지 않으므로 편집 모드로 돌아오면 켜져 있던 그대로 되돌아온다. 행 번호 거터(A142 ③)는
 /// 축 밖이라 억제 대상이 아니다(읽기에 방해가 아니라 도움 — A277 사양 범위는 "편집 전용 시각 요소").
 ///
-/// <b>A286 좌표 계약(실측 확정)</b>: GetRectFromCharacterIndex가 주는 Rect는 ① <b>캐럿 상자</b>라
+/// <b>A286·A288 좌표 계약(실측 확정)</b>: GetRectFromCharacterIndex가 주는 Rect는 ① <b>캐럿 상자</b>라
 /// Width가 항상 0이고(글자 폭이 아니다 — 줄 끝은 "마지막 글자 rect + 폭"이 아니라 인덱스 len의
-/// rect다) ② X가 <b>본문 기준 상대 좌표</b>라 캔버스에 찍을 땐 pad.Left를 더해야 한다. Y는 그대로
-/// 쓴다(가이드가 실기기에서 정합). X를 쓰는 것은 마커 2종(¶·EOF)뿐이다 — 가이드는 가로 전체
-/// 사각형이라 Canvas.SetLeft(pad.Left)로, 거터는 pad.Left에서 역산한 자체 x로 앉는다.
+/// rect다) ② X도 Y도 <b>본문(Padding 안쪽) 기준 상대 좌표</b>라 캔버스에 찍으려면 각각 pad.Left ·
+/// pad.Top을 더해야 한다. A286은 X만 마커 호출부에서 개별로 더했고, 남은 Y 누락이 장식 전체를
+/// pad.Top만큼 위로 밀고 있었다(A285 계측: 1번 줄 rect.Y=0 · 2번 줄 16인데 화면은 16 · 32).
+/// <b>A288(v0.279.0)에서 두 축의 보정을 RectOf/TopOf 한 곳으로 모았다</b> — 그 둘이 돌려주는 값은
+/// 이제 캔버스 절대 좌표이고, <b>호출부는 pad를 다시 더하지 않는다</b>. 캔버스 좌표를 rect가 아니라
+/// 패딩에서 직접 세우는 지점만 pad를 쓴다: 가이드는 가로 전체 사각형이라 Canvas.SetLeft(pad.Left),
+/// 거터는 pad.Left에서 역산한 자체 x, DrawEnd 개행 분기의 줄 머리(pad.Left + 2), 진단 판 위치.
 ///
 /// <b>실패 안전(설계 의무)</b>: 내부 ScrollViewer(템플릿 ContentElement) 취득은 기본 템플릿
 /// 구조 의존이라 WinAppSDK 업데이트에 깨질 수 있는 부류다(v0.113.1 지연 로딩 스타일 사례와
@@ -419,7 +423,7 @@ internal sealed class EditorDecor
             // 다음 줄 직전 문자가 개행이면 하드 개행(¶), 아니면 자동 줄바꿈(표시 없음 — 실제 바이트가 아니다)
             if (IsNewline(text[next - 1]))
             {
-                DrawNewlineGlyph(RectOf(next - 1), vh, pad);
+                DrawNewlineGlyph(RectOf(next - 1), vh);
                 line++; // 하드 개행 = 다음 논리 줄(자동 줄바꿈은 같은 줄이라 번호가 늘지 않는다)
             }
             prevLineY = rect.Y; // A287: 다음 반복이 이 줄과의 Y 차이로 간격을 잰다
@@ -446,11 +450,15 @@ internal sealed class EditorDecor
             // 파일이 개행으로 끝난다 — 캐럿이 갈 수 있는 빈 마지막 줄이 하나 더 있다.
             // 빈 줄에는 잴 문자가 없어 개행 문자의 셀 높이로 근사한다(혼재 글꼴 줄이면 수 px 오차 허용).
             var newlineRect = RectOf(len - 1);
-            DrawNewlineGlyph(newlineRect, vh, pad);
+            DrawNewlineGlyph(newlineRect, vh);
             var top = lastLine.Y + lineStep; // A287 ⓑ: 실측 줄 간격 — 밑변 합산 산식 폐기
             var height = newlineRect.Height > 0 ? newlineRect.Height : lastLine.Height;
             AddTopGuide(top, vw, vh, pad); // 빈 줄 윗변 — 직전 줄 밑변과 역전이라 경계 한 선으로 병합(A142 ⑤)
             AddBottomGuide(top + height);  // 빈 줄 밑변 — 패스 끝 FlushPendingGuide가 긋는다
+            // A288: 이 분기의 x는 rect의 X를 쓰지 않고 줄 머리 위치를 직접 세우는 식이다 —
+            // 본문 왼끝의 캔버스 좌표가 곧 pad.Left이므로 보정을 RectOf로 옮긴 뒤에도 pad.Left + 2가
+            // 그대로 맞다(이중 가산이 아니다). else 분기의 caret.X + 4가 줄 머리에서 같은 값을 내는
+            // 것이 대조 증거다(줄 머리 캐럿의 caret.X = pad.Left + 0).
             if (_diagOn) RecordEofAttempt(newlineRect, lastLine, "len-1", pad.Left + 2, top, vh); // A285
             DrawMarker(EofGlyph, pad.Left + 2, top, vh);
         }
@@ -469,6 +477,9 @@ internal sealed class EditorDecor
             // ② rect의 X는 본문 기준 상대 좌표다(실측 eof=4.0인데 본문 왼끝은 pad.Left) —
             //    캔버스 좌표로 쓰려면 pad.Left를 더해야 한다. 위 개행 종료 분기가 pad.Left + 2로
             //    더하고 있었고 그 분기만 실기기에서 정상이었던 것이 같은 사실의 반증이다.
+            //    A288(v0.279.0): 같은 사실이 Y에도 있었다(pad.Top 누락) — 이제 두 축의 보정을
+            //    RectOf/TopOf 한 곳에 모았으므로 caret은 이미 캔버스 절대 좌표다. 여기서
+            //    pad.Left를 다시 더하면 이중 가산이라 A286의 가산을 걷어 냈다(eofX 참고).
             // 인덱스 len은 "마지막 글자 다음 캐럿 자리"로 통용되지만 이 저장소에 선례가 0건이라,
             // 범위 밖으로 보고 던지는 구현일 가능성을 여기서 국소적으로 막는다 — 밖으로 새면
             // Render의 포괄 catch가 Disable()을 불러 가이드·거터·마커가 뷰 수명 동안 통째로
@@ -502,7 +513,7 @@ internal sealed class EditorDecor
                 if (_diagOn) RecordEofSkip(caret, lastLine, rectSrc, "skipped(lastLine)"); // A285
                 return;
             }
-            var eofX = pad.Left + caret.X + 4;
+            var eofX = caret.X + 4; // A288: caret.X는 이미 pad.Left가 실린 캔버스 좌표다
             if (_diagOn) RecordEofAttempt(caret, lastLine, rectSrc, eofX, caret.Y, vh); // A285
             DrawMarker(EofGlyph, eofX, caret.Y, vh);
         }
@@ -510,7 +521,12 @@ internal sealed class EditorDecor
 
     // ---------- 줄 탐색(뷰포트 한정 — 전 문서를 걷지 않는다) ----------
 
-    /// <summary>뷰포트에 조금이라도 보이는 첫 문자 인덱스(이진 탐색 — y는 인덱스에 대해 단조).</summary>
+    /// <summary>뷰포트에 조금이라도 보이는 첫 문자 인덱스(이진 탐색 — y는 인덱스에 대해 단조).
+    /// <para>A288: RectOf가 캔버스 절대 좌표를 주게 되면서 이 판정(밑변 &gt; 0)은 실제 클립 상변
+    /// (pad.Top)보다 pad.Top만큼 <b>너그러운</b> 컷이 됐다 — 화면 위로 딱 한 줄 더 이른 인덱스에서
+    /// 시작할 수 있다. 의도적으로 그대로 둔다: 너그러운 쪽은 줄을 <b>빠뜨리지 않는</b> 방향이고,
+    /// 넘치는 줄의 가이드는 EmitGuide의 y &lt; pad.Top 컷이, 번호·마커는 캔버스 Clip이 걷는다.
+    /// pad.Top으로 조이는 것은 렌더 루프 시작점을 건드리는 변경이라 이 배치의 범위 밖이다.</para></summary>
     private int FirstVisibleIndex(int len)
     {
         int lo = 0, hi = len - 1, first = -1;
@@ -647,6 +663,9 @@ internal sealed class EditorDecor
         // 필수가 아니고, 클립 확장은 거터·마커까지 영향 범위가 커 하지 않는다. A283의 클램프는
         // 선을 글자 top에 붙일 뿐이라 "위에 그은 선"으로 보이지 않았다). 위로 스크롤돼 클립 밖으로
         // 나간 줄의 가이드도 같은 조건에 걸려 생략되는데, 그게 올바른 동작이다(요소도 아낀다).
+        // A288: y가 캔버스 절대 좌표가 되면서 이 비교가 비로소 문자 그대로 성립한다(종전에는 본문
+        // 상대 y를 클립 상변과 견줬다). 첫 줄 윗변은 pad.Top - ScaledGuideGap < pad.Top이라
+        // 보정 후에도 여전히 생략된다 — 사양(2026-08-29 사용자 확정) 유지.
         if (y < pad.Top) return;
         var guide = TakeGuide();
         guide.Width = Math.Max(0, vw - pad.Left - pad.Right);
@@ -655,14 +674,15 @@ internal sealed class EditorDecor
     }
 
     /// <summary>
-    /// A286: rect.X는 본문 기준 상대 좌표라 캔버스 좌표로 쓰려면 pad.Left를 더해야 한다
-    /// (EOF 마커와 같은 결함이었다 — A285 실측). X를 쓰는 요소는 마커 2종뿐이라 가이드·거터는
-    /// 무관하다(가이드는 가로 전체 사각형이라 Canvas.SetLeft(pad.Left)로 따로 앉힌다).
+    /// 개행 자리의 ¶. A288: rect는 이미 캔버스 절대 좌표다(RectOf가 pad.Left·pad.Top을 실어 준다)
+    /// — 여기서 pad를 다시 더하면 이중 가산이라 A286이 넣었던 pad.Left 가산과 pad 매개변수를
+    /// 함께 걷어 냈다. X를 rect에서 받는 요소는 마커 2종뿐이고, 가이드는 가로 전체 사각형이라
+    /// Canvas.SetLeft(pad.Left)로, 거터는 pad.Left에서 역산한 자체 x로 따로 앉는다.
     /// </summary>
-    private void DrawNewlineGlyph(Rect rect, double vh, Thickness pad)
+    private void DrawNewlineGlyph(Rect rect, double vh)
     {
         if (rect.Height <= 0) return; // rect를 못 얻은 개행은 건너뛴다(어설픈 근사 배치 금지 — 사양 ③)
-        DrawMarker(NewlineGlyph, pad.Left + rect.X + 1, rect.Y, vh);
+        DrawMarker(NewlineGlyph, rect.X + 1, rect.Y, vh);
     }
 
     private void DrawMarker(string glyph, double x, double y, double vh)
@@ -780,9 +800,11 @@ internal sealed class EditorDecor
     /// A285: DrawEnd가 DrawMarker(EofGlyph)에 실제로 넘긴 좌표를 기록한다. DrawMarker 안의 두
     /// 가드(<b>!MarksOn / y &gt; vh || y &lt; -30</b>)를 여기서 미러링해 "계산은 했으나 안 그린"
     /// 경우를 사유와 함께 남긴다 — DrawMarker의 가드를 고치면 이 미러도 함께 고칠 것(동기 의무).
-    /// <para>A286: x는 <b>pad.Left를 더한 최종 캔버스 좌표</b>다 — 두 호출부 모두 바로 아래
-    /// DrawMarker에 넘기는 것과 같은 식을 넘긴다(개행 분기 pad.Left + 2 / else 분기 eofX).
-    /// 여기에 보정 전 값을 넘기면 계측이 거짓말을 한다 — 호출부를 고칠 땐 두 줄을 함께 볼 것.</para>
+    /// <para>A286: x는 <b>최종 캔버스 좌표</b>다 — 두 호출부 모두 바로 아래 DrawMarker에 넘기는 것과
+    /// 같은 식을 넘긴다(개행 분기 pad.Left + 2 / else 분기 eofX). 여기에 보정 전 값을 넘기면 계측이
+    /// 거짓말을 한다 — 호출부를 고칠 땐 두 줄을 함께 볼 것.</para>
+    /// <para>A288: lastRect·lastLine도 이제 RectOf가 준 <b>캔버스 절대 좌표</b>다 — 화면에 찍히는
+    /// Y가 A287까지의 스크린샷보다 pad.Top(기본 16)만큼 크다. 옛 실측값과 대조할 때 주의할 것.</para>
     /// </summary>
     private void RecordEofAttempt(Rect lastRect, Rect lastLine, string rectSrc, double x, double y, double vh)
     {
@@ -832,6 +854,10 @@ internal sealed class EditorDecor
             };
             _canvas.Children.Add(_diagPanel);
         }
+        // A288 계측 표기 주의: 아래 RectOf(...)·lastLine·eof의 좌표는 전부 "보정 후 캔버스 절대
+        // 좌표"다(RectOf가 pad.Left·pad.Top을 실어 준다) — A287까지의 스크린샷과 견주면 X는
+        // pad.Left, Y는 pad.Top(기본 52 / 16)만큼 커 보이는 것이 정상이다. 본문 상대 좌표가 필요하면
+        // 아래 pad= 줄의 값을 빼면 된다.
         // DrawEnd에 못 간 패스(마지막 줄이 뷰포트 밖 등)는 rect 값이 없다 — "-"로 표시한다.
         var rectLine = _diagEndReached
             ? $"RectOf({_diagRectSrc})={_diagLastRect.X:F1},{_diagLastRect.Y:F1},{_diagLastRect.Width:F1},{_diagLastRect.Height:F1}"
@@ -845,8 +871,9 @@ internal sealed class EditorDecor
             lastLineLine + "\n" +
             $"yShift={_yShift:F1}  contentRel={_contentRelative}\n" +
             $"eof={_diagEof}\n" +
-            // A286: 마커 X 보정값(pad.Left)을 화면에 띄운다 — 수리 후 스크린샷에서
-            // "eof.x - pad.Left"가 본문 상대 좌표와 맞는지 사용자가 바로 대조할 수 있어야 한다.
+            // A286: 좌표 보정값(pad)을 화면에 띄운다 — 수리 후 스크린샷에서 "eof - pad"가 본문
+            // 상대 좌표와 맞는지 사용자가 바로 대조할 수 있어야 한다. A288: 이제 X·Y 두 축 다
+            // 이 값만큼 실려 있다(위 계측 표기 주의 참고).
             $"pad={pad.Left:F1},{pad.Top:F1}\n" +
             // A287 ⓒ: step = 이번 패스 실측 줄 간격(인접 시각적 줄 Y 차이) — 윗변 판정·lineStep
             // 수리의 검증 창구다(기대: 캐럿 상자 Height보다 작거나 같은 값. n/a = 한 줄뿐이라 못 잼).
@@ -945,13 +972,31 @@ internal sealed class EditorDecor
             : null;
     }
 
+    /// <summary>
+    /// A288(v0.279.0): GetRectFromCharacterIndex가 주는 Rect를 <b>캔버스 절대 좌표</b>로 바꿔
+    /// 돌려준다 — X에 pad.Left, Y에 pad.Top을 더한다(둘 다 본문 기준 상대 좌표다).
+    /// A286이 X만 마커 호출부 3곳에서 개별로 더했고 세로축은 손대지 않아, 모든 장식이
+    /// pad.Top만큼 위로 밀려 있었다(A285 계측 실측 2026-08-29: 1번 줄 rect.Y=0 · 2번 줄 16인데
+    /// 화면에서는 각각 캔버스 16 · 32에 그려진다. 원 증상 "가이드선이 글자를 파고든다"(A283)도
+    /// 이것이다 — 1번 줄 밑변 가이드 0+24=24가 캔버스 16~32를 차지하는 글자 한가운데를 지났다).
+    /// <para>보정을 이 한 곳으로 모았으므로 <b>호출부에서 다시 더하지 말 것</b> — A286이 넣었던
+    /// 마커 쪽 pad.Left 가산 3곳은 이 배치에서 함께 걷어 냈다(이중 가산 = 가로 두 배 밀림).
+    /// 캔버스 좌표를 rect가 아니라 패딩에서 직접 세우는 지점(가이드의 Canvas.SetLeft(pad.Left),
+    /// 거터 x 산식, DrawEnd 개행 분기의 pad.Left + 2, 진단 판 위치)은 보정 대상이 아니다.</para>
+    /// <para>pad는 매개변수로 받지 않고 _editor.Padding을 직접 읽는다 — RenderCore가 패스 처음에
+    /// 읽는 값과 같은 출처이고, 한 렌더 패스 중에는 패딩이 바뀌지 않으므로 일관된다.
+    /// _yShift는 별개 축(콘텐츠 기준 좌표 환경의 스크롤 보정)이라 그대로 함께 실린다.</para>
+    /// </summary>
     private Rect RectOf(int index)
     {
         var rect = _editor.GetRectFromCharacterIndex(index, false);
-        return new Rect(rect.X, rect.Y + _yShift, rect.Width, rect.Height);
+        var pad = _editor.Padding;
+        return new Rect(rect.X + pad.Left, rect.Y + _yShift + pad.Top, rect.Width, rect.Height);
     }
 
-    private double TopOf(int index) => _editor.GetRectFromCharacterIndex(index, false).Y + _yShift;
+    /// <summary>A288: RectOf와 같은 보정의 Y 전용 경로(줄 탐색 NextLineStart 전용) — 캔버스 절대 Y.</summary>
+    private double TopOf(int index) =>
+        _editor.GetRectFromCharacterIndex(index, false).Y + _yShift + _editor.Padding.Top;
 
     /// <summary>WinUI TextBox는 줄바꿈을 '\r'로 정규화한다(A113 확인) — '\n'은 방어적 겸용.</summary>
     private static bool IsNewline(char c) => c is '\r' or '\n';
