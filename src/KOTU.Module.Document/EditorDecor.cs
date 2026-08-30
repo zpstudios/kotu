@@ -44,6 +44,13 @@ namespace KOTU.Module.Document;
 /// 패딩에서 직접 세우는 지점만 pad를 쓴다: 가이드는 가로 전체 사각형이라 Canvas.SetLeft(pad.Left),
 /// 거터는 pad.Left에서 역산한 자체 x, DrawEnd 개행 분기의 줄 머리(pad.Left + 2), 진단 판 위치.
 ///
+/// <b>A289(v0.280.0)</b>: 캐럿 상자의 세 번째 함정 — Height도 실제 줄 간격보다 크다(실측 24 vs 16).
+/// "밑변 = Y + Height" 산술의 마지막 사용처(밑변 가이드·빈 마지막 줄 높이)를 걷어냈다: 줄의 진짜
+/// 밑변은 다음 줄의 윗변이고(경계 병합선은 AddTopGuide가 그 값으로 긋는다), 다음 줄이 없는 자리는
+/// 실측 줄 간격(이번 패스 → 캐시 → Height 폴백 — ResolveLineStep)으로 근사한다. EOF 폴백(len-1)은
+/// 직전 글자와의 X 차이로 잰 진출 폭을 더해 마지막 글자 뒤에 선다. rect.Height를 줄 간격처럼 쓰는
+/// 산술을 새로 넣지 말 것 — 유효성·가시성 가드로만 쓴다.
+///
 /// <b>실패 안전(설계 의무)</b>: 내부 ScrollViewer(템플릿 ContentElement) 취득은 기본 템플릿
 /// 구조 의존이라 WinAppSDK 업데이트에 깨질 수 있는 부류다(v0.113.1 지연 로딩 스타일 사례와
 /// 같은 급) — 취득 실패·렌더 중 예외는 장식만 조용히 끄고(Disable) 편집 본기능은 그대로 둔다.
@@ -68,7 +75,10 @@ internal sealed class EditorDecor
     // gap을 적용하면 인접 줄에서 윗줄 밑변+gap이 아랫줄 윗변−gap보다 아래로 "역전"되므로,
     // 병합 판정은 gap 적용 후 좌표로 다시 하고(아래 AddTopGuide) 겹침·역전이면 윗줄 밑변+gap
     // 위치에 한 선만 긋는다 — 아랫줄 ascent 여백에 놓여 윗줄 한글 글립에서 떨어진다(A283).
-    private const double GuideGap = 8; // 100% 기준값 — 실사용은 전부 ScaledGuideGap(× _scale)
+    // A289: 원 설계값 2로 복귀 — 2→6→8 상향은 실은 Y축 pad.Top 누락(A288)과 밑변의 캐럿 상자
+    // 높이 합산(A289)이 선을 글자 속으로 밀던 것을 간격으로 밀어내려던 것이었고, 두 원인이 모두
+    // 사라져 되돌린다("2에서도 한글 글립에 닿았다"던 위 A284 관찰도 같은 버그의 증상이었다).
+    private const double GuideGap = 2; // 100% 기준값 — 실사용은 전부 ScaledGuideGap(× _scale)
     private const double GuideMergeEpsilon = 0.75; // gap 적용 후에도 이 이내로 맞닿으면 같은 선(배율 무관)
 
     // A284: gap이 고정 px면 A181 줌 확대에서 상대적으로 얇아져 겹침이 확대 상태에서 더 심해진다 —
@@ -130,7 +140,17 @@ internal sealed class EditorDecor
 
     // A142 ⑤: 아직 긋지 않고 보류 중인 직전 줄 밑변 가이드 — 다음 줄 윗변과의 병합 판정을 위해
     // 그리기를 한 박자 미룬다(AddTopGuide가 소비, 패스 끝은 FlushPendingGuide가 마감).
+    // A289: 값은 "윗변 + 줄 간격(ResolveLineStep) + gap"의 추정치다 — 병합 시 실제 위치는
+    // AddTopGuide가 다음 줄 윗변(진짜 경계)으로 다시 잡고, 이 값은 병합 판정과 마지막 줄
+    // 마감(FlushPendingGuide — 다음 줄이 없어 추정치가 최선)에만 쓰인다.
     private double _pendingGuideY = double.NaN; // gap 적용 후 y
+
+    // A289 ⓓ: 마지막으로 성공적으로 잰 줄 간격(인접 시각적 줄의 Y 차이) 캐시 — 뷰포트에 시각적
+    // 줄이 하나뿐인 패스(예: 엔터만 친 문서)는 이번 패스 실측(stepHere)이 NaN이라 캐럿 상자
+    // Height(실측 24 vs 실제 간격 16)로 폴백해 아래 산술이 8px씩 밀렸다. 폴백 순서 =
+    // 이번 패스 실측 → 이 캐시 → rect.Height(ResolveLineStep). 줌이 바뀌면 줄 간격도 바뀌므로
+    // SetScale이 무효화한다(NaN).
+    private double _cachedLineStep = double.NaN;
 
     // A142 ③: 논리 줄 시작 인덱스(0 포함, 오름차순) — 텍스트 버전당 1회 스캔 캐시.
     // 스냅샷(_textProvider)이 편집당 1회 새 인스턴스를 주므로 참조 비교로 재빌드를 판정한다.
@@ -229,6 +249,7 @@ internal sealed class EditorDecor
     {
         if (_disabled || Math.Abs(scale - _scale) < 0.0001) return;
         _scale = scale;
+        _cachedLineStep = double.NaN; // A289 ⓓ: 배율이 바뀌면 줄 간격도 바뀐다 — 낡은 캐시 무효화
         foreach (var marker in _markers) marker.FontSize = MarkerFontSize * scale;
         foreach (var number in _numbers) number.FontSize = GutterFontSize * scale;
         Invalidate();
@@ -397,21 +418,29 @@ internal sealed class EditorDecor
             if (rect.Height <= 0 || rect.Height > vh * 2) break; // 이상값 방어 — 이번 패스 중단
             if (rect.Y >= vh) break;                             // 뷰포트 아래 — 끝
             var stepHere = double.IsNaN(prevLineY) ? double.NaN : rect.Y - prevLineY; // A287 실측 줄 간격
+            if (!double.IsNaN(stepHere)) _cachedLineStep = stepHere; // A289 ⓓ: 못 재는 패스가 쓸 캐시
             if (_diagOn && !double.IsNaN(stepHere)) _diagLineStep = stepHere; // A287 ⓒ: step= 표시용
+            // A289 ⓐ: 이 줄 아래 산술(밑변 가이드·DrawEnd)이 공유하는 줄 간격. rect.Height는 캐럿
+            // 상자 높이라 실제 줄 간격보다 크다(실측 24 vs 16) — 줄의 진짜 밑변은 "다음 줄의 윗변"
+            // 이고, 그걸 모르는 지점만 이 값(실측 간격 → 캐시 → Height 폴백)으로 근사한다.
+            var lineStep = ResolveLineStep(stepHere, rect.Height);
             // A142 ③: 번호는 논리 줄의 첫 시각적 줄에만 — 자동 줄바꿈 연속 줄은 비워 둔다.
             if (gutterVisible && idx == _lineStarts[line])
                 DrawLineNumber(line + 1, gutterX, gutterWidth, rect.Y, vh);
             AddTopGuide(rect.Y, vw, vh, pad);
-            AddBottomGuide(rect.Y + rect.Height);
+            // A289 ⓐ: 종전 rect.Y + rect.Height는 캐럿 상자 높이(24)만큼 내려간 자리라 병합선이
+            // 줄 경계가 아니라 다음 줄 바닥에 그어졌다("줄 사이에 선이 없다" — 사용자 실기기 보고).
+            // 밑변 추정 = 윗변 + 줄 간격. 병합 시 실제 위치는 AddTopGuide가 다음 줄 윗변으로 다시
+            // 잡으므로 이 추정치는 병합 판정과 마지막 줄 마감에만 쓰인다(_pendingGuideY 주석 참고).
+            AddBottomGuide(rect.Y + lineStep);
 
             // A287: 기준은 현재 줄의 윗변(rect.Y)이다 — 밑변(rect.Y + rect.Height)을 넘기면 캐럿
             // 상자 높이 > 줄 간격인 환경에서 다음 줄을 영원히 못 찾는다(NextLineStart 주석 참고).
             var next = NextLineStart(idx, rect.Y, len);
             if (next < 0)
             {
-                // A287 ⓑ: 마지막 줄 아래 산술은 실측 줄 간격 우선 — 뷰포트에 이 줄뿐이라 못 쟀으면
-                // 캐럿 상자 높이로 폴백한다(수 px 아래로 밀릴 수 있지만 잴 값이 그것뿐이다).
-                var lineStep = double.IsNaN(stepHere) ? rect.Height : stepHere;
+                // A287 ⓑ·A289 ⓓ: 마지막 줄 아래 산술은 위에서 구한 줄 간격(실측 → 캐시 → Height)을
+                // 그대로 쓴다 — 캐럿 상자 높이 폴백은 수 px 아래로 밀리므로 최후 순위다.
                 DrawEnd(text, len, rect, lineStep, vw, vh, pad); // 문서 마지막 줄 — 끝 개행 ¶·EOF
                 // A142 ③: 파일이 개행으로 끝나면 캐럿이 갈 수 있는 빈 마지막 줄이 하나 더 있다
                 // (DrawEnd가 가이드를 긋는 그 줄) — 번호도 단다. 윗변 산술은 DrawEnd와 같다(A287:
@@ -438,10 +467,11 @@ internal sealed class EditorDecor
 
     /// <summary>
     /// 문서 마지막 시각적 줄: 끝 개행의 ¶ + (개행으로 끝나면) 빈 마지막 줄 가이드 + EOF 표지.
-    /// lineStep = 호출부(렌더 루프)가 실측한 줄 간격(직전 줄과의 Y 차이 — 못 쟀으면 캐럿 상자
-    /// 높이 폴백). 빈 마지막 줄의 윗변은 lastLine.Y + lineStep이다 — lastLine.Y + lastLine.Height는
-    /// "밑변 = 다음 줄 윗변" 전제라 캐럿 상자 높이 &gt; 줄 간격인 환경에서 아래로 밀린다
-    /// (2026-08-29 실측: 높이 24 vs 간격 16으로 8px 밀림, A287).
+    /// lineStep = 호출부(렌더 루프)가 구한 줄 간격(이번 패스 실측 → 캐시 → 캐럿 상자 높이 —
+    /// A289 ⓓ ResolveLineStep). 빈 마지막 줄의 윗변은 lastLine.Y + lineStep이다 —
+    /// lastLine.Y + lastLine.Height는 "밑변 = 다음 줄 윗변" 전제라 캐럿 상자 높이 &gt; 줄 간격인
+    /// 환경에서 아래로 밀린다(2026-08-29 실측: 높이 24 vs 간격 16으로 8px 밀림, A287).
+    /// 빈 줄의 밑변도 같은 이유로 캐럿 상자 높이가 아니라 윗변 + lineStep이다(A289 ⓐ).
     /// </summary>
     private void DrawEnd(string text, int len, Rect lastLine, double lineStep, double vw, double vh, Thickness pad)
     {
@@ -452,9 +482,8 @@ internal sealed class EditorDecor
             var newlineRect = RectOf(len - 1);
             DrawNewlineGlyph(newlineRect, vh);
             var top = lastLine.Y + lineStep; // A287 ⓑ: 실측 줄 간격 — 밑변 합산 산식 폐기
-            var height = newlineRect.Height > 0 ? newlineRect.Height : lastLine.Height;
             AddTopGuide(top, vw, vh, pad); // 빈 줄 윗변 — 직전 줄 밑변과 역전이라 경계 한 선으로 병합(A142 ⑤)
-            AddBottomGuide(top + height);  // 빈 줄 밑변 — 패스 끝 FlushPendingGuide가 긋는다
+            AddBottomGuide(top + lineStep); // A289 ⓐ: 빈 줄 밑변도 줄 간격 기준 — 캐럿 상자 높이(newlineRect.Height) 폐기
             // A288: 이 분기의 x는 rect의 X를 쓰지 않고 줄 머리 위치를 직접 세우는 식이다 —
             // 본문 왼끝의 캔버스 좌표가 곧 pad.Left이므로 보정을 RectOf로 옮긴 뒤에도 pad.Left + 2가
             // 그대로 맞다(이중 가산이 아니다). else 분기의 caret.X + 4가 줄 머리에서 같은 값을 내는
@@ -514,6 +543,23 @@ internal sealed class EditorDecor
                 return;
             }
             var eofX = caret.X + 4; // A288: caret.X는 이미 pad.Left가 실린 캔버스 좌표다
+            if (rectSrc == "len-1")
+            {
+                // A289 ⓒ: 폴백 rect는 마지막 글자의 "앞쪽" 캐럿 자리다(캐럿 상자라 Width가 0이라
+                // 폭을 못 더한다 — A286) — EOF가 마지막 글자에 겹친다. lineStep을 잰 것과 같은
+                // 요령으로 마지막 글자의 진출 폭(advance)을 직전 글자와의 X 차이로 실측해 더한다.
+                // 같은 줄이 아니거나(직전이 개행) 못 재면 실측 줄 간격으로 근사한다(한글 글립은
+                // 대체로 정사각에 가까워 줄 간격과 비슷하다 — 못 재는 것보다 낫다).
+                // RectOf(len)이 유효한 환경(rectSrc == "len")은 이미 끝 캐럿이라 더하면 안 된다.
+                var advance = lineStep;
+                if (len >= 2)
+                {
+                    var prev = RectOf(len - 2);
+                    if (Math.Abs(prev.Y - caret.Y) <= YEpsilon) advance = caret.X - prev.X;
+                }
+                if (!(advance > 0)) advance = 0; // 음수·NaN 클램프 — EOF가 왼쪽으로 튀면 안 된다
+                eofX += advance;
+            }
             if (_diagOn) RecordEofAttempt(caret, lastLine, rectSrc, eofX, caret.Y, vh); // A285
             DrawMarker(EofGlyph, eofX, caret.Y, vh);
         }
@@ -591,6 +637,18 @@ internal sealed class EditorDecor
         return high;
     }
 
+    /// <summary>
+    /// A289 ⓓ: 이 줄에서 쓸 줄 간격 — ① 이번 패스 실측(stepHere: 직전 시각적 줄과의 Y 차이)
+    /// ② 마지막으로 성공한 실측 캐시(_cachedLineStep — 뷰포트에 한 줄뿐인 패스를 구제)
+    /// ③ 캐럿 상자 높이(rect.Height — 실제 간격보다 커서 수 px 밀리지만 잴 값이 그것뿐인 최후 폴백).
+    /// </summary>
+    private double ResolveLineStep(double measured, double caretBoxHeight)
+    {
+        if (!double.IsNaN(measured)) return measured;
+        if (!double.IsNaN(_cachedLineStep)) return _cachedLineStep;
+        return caretBoxHeight;
+    }
+
     // ---------- 논리 줄 색인 (A142 ③ — 텍스트 버전당 1회 스캔) ----------
 
     /// <summary>
@@ -623,16 +681,21 @@ internal sealed class EditorDecor
 
     /// <summary>
     /// A142 ⑤: 줄 윗변 가이드(원좌표 −ScaledGuideGap). 보류 중인 직전 줄 밑변 가이드(+ScaledGuideGap)와
-    /// 겹치거나 역전되면 — 인접 줄에서는 항상 그렇다 — 두 선 대신 보류해 둔 밑변+gap 위치에
+    /// 겹치거나 역전되면 — 인접 줄에서는 항상 그렇다 — 두 선 대신 윗줄 밑변+gap 위치에
     /// 한 선만 긋는다(A283 — 줄 경계에서 gap만큼 내려 아랫줄 ascent 여백에 둔다).
     /// gap 적용 "후" 좌표로 판정하는 것이 핵심이다.
+    /// <para>A289: 병합선의 위치는 보류값(_pendingGuideY — 윗줄 밑변의 <b>추정치</b>+gap)이 아니라
+    /// rawTop + gap으로 긋는다. 보류 가이드는 언제나 바로 윗줄의 것이고, 윗줄의 진짜 밑변은
+    /// 정의상 이 줄의 윗변(rawTop)이다 — 여기가 렌더 패스에서 줄 경계를 정확히 아는 유일한
+    /// 지점이다. 종전에는 rect.Y + rect.Height(캐럿 상자 높이 24 &gt; 실제 간격 16) 보류값을 그대로
+    /// 그어 병합선이 줄 경계가 아니라 아랫줄 바닥에 놓였다("줄 사이에 선이 없다" 실기기 보고).</para>
     /// </summary>
     private void AddTopGuide(double rawTop, double vw, double vh, Thickness pad)
     {
         var y = rawTop - ScaledGuideGap;
         if (!double.IsNaN(_pendingGuideY) && y <= _pendingGuideY + GuideMergeEpsilon)
         {
-            EmitGuide(_pendingGuideY, vw, vh, pad);
+            EmitGuide(rawTop + ScaledGuideGap, vw, vh, pad); // A289: 진짜 경계(rawTop) 기준
             _pendingGuideY = double.NaN;
             return;
         }
@@ -640,7 +703,10 @@ internal sealed class EditorDecor
         EmitGuide(y, vw, vh, pad);
     }
 
-    /// <summary>A142 ⑤: 줄 밑변 가이드는 즉시 긋지 않고 보류한다 — 다음 줄 윗변과의 병합 판정용.</summary>
+    /// <summary>A142 ⑤: 줄 밑변 가이드는 즉시 긋지 않고 보류한다 — 다음 줄 윗변과의 병합 판정용.
+    /// A289: rawBottom은 "윗변 + 줄 간격"의 추정치다(호출부 2곳 모두) — 병합되면 실제 위치는
+    /// AddTopGuide가 다음 줄 윗변으로 다시 잡고, 이 값이 그대로 그어지는 것은 다음 줄이 없는
+    /// 마지막 줄(FlushPendingGuide)뿐이다.</summary>
     private void AddBottomGuide(double rawBottom)
     {
         _pendingGuideY = rawBottom + ScaledGuideGap;
@@ -865,6 +931,12 @@ internal sealed class EditorDecor
         var lastLineLine = _diagEndReached
             ? $"lastLine={_diagLastLine.Y:F1},{_diagLastLine.Height:F1}"
             : "lastLine=-";
+        // A287 ⓒ: step = 이번 패스 실측 줄 간격. A289 ⓓ: 이번 패스에 못 쟀고 캐시가 살아 있으면
+        // 렌더 산술이 그 캐시를 썼다는 뜻이다 — 값 뒤에 (cached)로 표시해 폴백 경로를 화면에서
+        // 바로 가려낼 수 있게 한다. n/a = 실측도 캐시도 없음(캐럿 상자 Height 최후 폴백이 돌았다).
+        var stepLine = !double.IsNaN(_diagLineStep) ? _diagLineStep.ToString("F1")
+            : !double.IsNaN(_cachedLineStep) ? $"{_cachedLineStep:F1}(cached)"
+            : "n/a";
         _diagText!.Text =
             $"len={len}  last='{DescribeChar(text[len - 1])}'\n" +
             rectLine + "\n" +
@@ -875,9 +947,7 @@ internal sealed class EditorDecor
             // 상대 좌표와 맞는지 사용자가 바로 대조할 수 있어야 한다. A288: 이제 X·Y 두 축 다
             // 이 값만큼 실려 있다(위 계측 표기 주의 참고).
             $"pad={pad.Left:F1},{pad.Top:F1}\n" +
-            // A287 ⓒ: step = 이번 패스 실측 줄 간격(인접 시각적 줄 Y 차이) — 윗변 판정·lineStep
-            // 수리의 검증 창구다(기대: 캐럿 상자 Height보다 작거나 같은 값. n/a = 한 줄뿐이라 못 잼).
-            $"step={(double.IsNaN(_diagLineStep) ? "n/a" : _diagLineStep.ToString("F1"))}\n" +
+            $"step={stepLine}\n" +
             $"lineStarts={_lineStarts.Length}  scale={_scale:F2}";
         _diagPanel.Visibility = Visibility.Visible;
         // 오른쪽 위 구석 정렬 — 폭은 트리 밖 Measure/DesiredSize 실측(DocumentView 인쇄 프로브 관용구).
