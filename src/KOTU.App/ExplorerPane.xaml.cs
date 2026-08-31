@@ -2165,6 +2165,21 @@ public sealed partial class ExplorerPane : UserControl
             NavigateTo(parent.FullName, _extensions);
     }
 
+    /// <summary>
+    /// 홈으로 이동 (A282) — 홈 = 사용자 프로필 폴더(%UserProfile%, 설정 키 없음).
+    /// 이동은 위로 가기(OnUpClicked)와 같은 내부 경로(NavigateTo + 현재 담당 확장자)를 그대로 쓴다.
+    /// 이미 홈이거나 홈 경로를 못 얻으면 무동작 — 버튼을 비활성화하지는 않는다(사용자 확정:
+    /// 깜빡이며 켜졌다 꺼지는 것보다 눌러도 아무 일이 없는 편이 낫다). 폴더 비교는 NavigateToAsync의
+    /// 폴더 변경 판정과 같은 OrdinalIgnoreCase(윈도우 경로 관례).
+    /// </summary>
+    private void OnHomeClicked(object sender, RoutedEventArgs e)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (home.Length == 0) return; // 프로필 경로를 못 얻는 환경 — 조용히 무동작
+        if (string.Equals(home, _folder, StringComparison.OrdinalIgnoreCase)) return;
+        NavigateTo(home, _extensions);
+    }
+
     // ---------- 폴더 감시 (A94 5차, v0.152.0) — 외부 변경 자동 갱신 ----------
 
     /// <summary>감시 디바운스(ms) — 마지막 이벤트 기준 병합, 만료 시 전체 재스캔 1회(사양 확정 수치).</summary>

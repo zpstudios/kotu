@@ -14,10 +14,14 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 경로 바: 위로 이동 + 현재 경로(우측 정렬 — 리스트 쪽, A8) + 필터(A7).
-             정렬(A5)은 A155에서 드롭다운(SortButton)을 리스트 컬럼 헤더로 대체해 이 줄에서 빠졌다 -->
+        <!-- 경로 바: 위로 이동 + 홈(A282) + 현재 경로(우측 정렬 — 리스트 쪽, A8) + 필터(A7).
+             정렬(A5)은 A155에서 드롭다운(SortButton)을 리스트 컬럼 헤더로 대체해 이 줄에서 빠졌다.
+             A282(홈 버튼)는 그 빈자리에 열 1개를 새로 끼웠다 — 뒤 열(경로·필터)은 한 칸씩 밀렸다.
+             버튼은 반드시 이 PathBar 안에 둔다: 이 줄은 통째로 떼어져 오버레이로 옮겨 가므로
+             (DetachPathBar, A91) 밖에 두면 홈 버튼만 옛 자리에 남는다. -->
         <Grid x:Name="PathBar" Grid.Row="0" ColumnSpacing="8" Padding="10,8">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -25,11 +29,16 @@
             <Button x:Name="UpButton" Click="OnUpClicked" ToolTipService.ToolTip="Up one folder">
                 <FontIcon Glyph="&#xE74A;" FontSize="13" />
             </Button>
-            <TextBlock x:Name="PathText" Grid.Column="1" VerticalAlignment="Center"
+            <!-- A282: 사용자 프로필 폴더로 한 번에 복귀. 비활성화하지 않는다(이미 홈이면 무동작) -->
+            <Button x:Name="HomeButton" Grid.Column="1" Click="OnHomeClicked"
+                    ToolTipService.ToolTip="Home">
+                <FontIcon Glyph="&#xE80F;" FontSize="13" />
+            </Button>
+            <TextBlock x:Name="PathText" Grid.Column="2" VerticalAlignment="Center"
                        HorizontalAlignment="Right" TextAlignment="Right"
                        Opacity="0.75" FontSize="12" TextTrimming="CharacterEllipsis" />
             <!-- 항목은 담당 확장자에 따라 코드에서 채운다(EnsureFilterFlyout) -->
-            <DropDownButton x:Name="FilterButton" Grid.Column="2" Padding="8,5"
+            <DropDownButton x:Name="FilterButton" Grid.Column="3" Padding="8,5"
                             ToolTipService.ToolTip="Filter file types">
                 <FontIcon x:Name="FilterIcon" Glyph="&#xE71C;" FontSize="13" />
             </DropDownButton>
