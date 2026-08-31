@@ -77,6 +77,11 @@
       소스 링크로 공유한다(어셈블리마다 internal 사본). 모듈 프로젝트 전부가 같은 항목을 갖는다.
     -->
     <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
+    <!--
+      A305(배치 2): 셸 하단 바의 사이드바 접기 버튼 아이콘도 A300 코드 조립 팩토리를 쓴다.
+      오디오 모듈이 이미 같은 항목을 갖는다(어셈블리마다 internal 사본이라 이름 충돌 없음).
+    -->
+    <Compile Include="..\Shared\MediaIcons.cs" Link="MediaIcons.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />

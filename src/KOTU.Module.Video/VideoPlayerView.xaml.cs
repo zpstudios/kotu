@@ -181,6 +181,13 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     ///   임계나 숨김 대상을 바꾸면 오디오 UpdateCompactTransport도 함께 바꿀 것 — 두 모듈이
     ///   다르게 숨기면 좁은 창에서 공통 클러스터 정렬이 다시 어긋난다.
     /// 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
+    /// ⚠️ 임계는 <b>TransportBar 자신의 폭</b> 기준이라(SizeChanged의 NewSize.Width) 셸의
+    /// ModuleBarHost Margin은 이 값에 들어가지 않는다 — 여백이 바뀌어도 임계는 재계수 대상이 아니고,
+    /// 바뀌는 것은 "창 폭 얼마에서 축약이 시작되는가"라는 파생 사실뿐이다.
+    /// A305 배치 2 검산: 셸 모드 버튼이 2개가 되어 우측 여백 44→82 → 파일 모듈의 여백 합 82+82=164 →
+    /// 축약 시작 창 폭이 약 777(651+126)에서 약 <b>815</b>(651+164)로 올라간다.
+    /// 최소 창 720에서는 바 폭이 약 556이라 전후 모두 축약 상태다(동작 변화 없음).
+    /// 위 첫 문단의 "최소 창 폭 720(바 폭 약 656)"은 여백 합이 64이던 A40 당시의 실측 기록이다.
     /// </summary>
     private void UpdateCompactTransport(double width)
     {

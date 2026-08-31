@@ -8,6 +8,7 @@ using Windows.System;
 using KOTU.App.Controls;
 using KOTU.App.Overlays;
 using KOTU.Input;
+using KOTU.Ui; // A305 배치 2: 셸 모드 버튼 아이콘 코드 조립(MediaIcons — Shared 소스 링크)
 using KOTU.Core.Cli;
 using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
@@ -289,6 +290,11 @@ public sealed partial class MainWindow : Window
         // 배경·힌트·상태 규칙은 파일 오버레이와 동일하게 호스트가 재현한다(SidePanelHost 참조).
         LeftPanelHost.Initialize(panelOnRight: false);
         RightPanelHost.Initialize(panelOnRight: true);
+
+        // A305 배치 2: 셸 모드 버튼 ⓐ(사이드바 접기)의 아이콘은 코드 조립이다 — XAML에 넣을 수
+        // 없어(호출마다 새 인스턴스가 규칙 — v0.174.1 실사고) 여기서 한 번 물린다.
+        // 오디오 모듈이 EqButton/VisualizerButton에 쓰는 것과 같은 관용구.
+        PanellessButton.Content = MediaIcons.BuildSidePanelsHiddenIcon();
 
         BuildStartMenu();
         RegisterShortcuts(); // `·숫자 단독 키(A32) + Shift+N 새 창(A84 — 기존 Ctrl+N 전환)
@@ -1702,8 +1708,13 @@ public sealed partial class MainWindow : Window
         OpenFileButton.Visibility = hasFileContext ? Visibility.Visible : Visibility.Collapsed;
         // 파생 수치 동기: 모듈 바 좌측 여백(XAML 82)은 이 버튼 자리(32 + 간격 6)를 전제한 고정값이라
         // 버튼이 숨으면 38px 구멍이 남는다 — 숨김일 때는 메뉴 버튼 기준(여백 6 + 버튼 32 + 간격 6 = 44)
-        // 으로 당긴다. 우측 44(셸 모드 버튼 1개 + 간격 + 여백)는 이 축과 무관해 고정.
-        ModuleBarHost.Margin = new Thickness(hasFileContext ? 82 : 44, 0, 44, 0);
+        // 으로 당긴다.
+        // 우측 82 = 셸 모드 버튼 **2개**(A305 배치 2) 기준 재계수 — 버튼 32 + 버튼 사이 간격 6 +
+        // 버튼 32 + 모듈 바와의 간격 6 + 가장자리 여백 6. 이 축(파일 컨텍스트)과는 무관해 고정이다
+        // (모드 버튼은 어느 화면에서도 숨지 않고 비활성만 된다 — A249). XAML ModuleBarHost.Margin의
+        // 우측 값과 반드시 같아야 한다: 이 대입이 XAML 값을 통째로 덮어쓰므로, 한쪽만 고치면
+        // 화면에서는 조용히 되돌아간다(A305 배치 1이 배치 2에 넘긴 함정).
+        ModuleBarHost.Margin = new Thickness(hasFileContext ? 82 : 44, 0, 82, 0);
     }
 
     /// <summary>
@@ -2298,19 +2309,21 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    // ---------- 하단 바 모드 버튼 진입점 (A305 — 배치 2가 얹힐 훅) ----------
-    // 배치 2 사양: 하단 바의 기존 "Full screen" 버튼 자리에 버튼 2종을 둔다 —
-    //   ⓐ 1 → 2 전환 버튼 = EnterPanellessMode()  ⓑ 2 → 3 전환 버튼 = EnterFullScreenMode()
+    // ---------- 하단 바 모드 버튼 진입점 (A305) ----------
+    // 하단 바 우측에 버튼 2종이 좌 → 우로 선다(배치 2에서 신설·배선 완료) —
+    //   ⓐ 1 → 2 전환 버튼(PanellessButton) = EnterPanellessMode()
+    //   ⓑ 2 → 3 전환 버튼(FullScreenButton) = EnterFullScreenMode()
     //   (ⓑ는 커스텀 일반 → 커스텀 전체에도 같은 버튼을 쓴다 — 사용자 사양).
-    // 배치 1에서는 기존 버튼 하나를 ⓑ에 연결만 해 뒀다(OnFullScreenClick). 버튼 신설·모듈 바
-    // 여백 재계수(XAML ModuleBarHost.Margin 우측 44 = 버튼 1개 기준 · UpdateOpenFileButton의
-    // 좌측 82/44 대칭 값)는 배치 2 몫이다 — 이 두 메서드는 그 배치가 그대로 Click에 물릴 수 있게
-    // internal로 열어 둔다(호출부가 늘어도 상태 전이 규칙은 여기 한 곳에 남는다).
+    // 활성/비활성은 UpdateViewModeButtons 한 곳이 정한다 — 아래 두 메서드의 가드를 뒤집은 식이라
+    // "눌러도 아무 일이 없는 버튼"이 살아 있는 척하지 않는다(A249).
+    // 두 메서드가 internal인 것은 배치 1이 배치 2의 Click 배선을 위해 열어 둔 자국이다 —
+    // 호출부가 늘어도 상태 전이 규칙은 여기 한 곳에 남는다(같은 어셈블리라 private로 좁혀도
+    // 되지만, 훅으로 못 박아 둔 계약이라 그대로 둔다).
 
     /// <summary>
-    /// 모드 1 → 모드 2 직행(A305 — 배치 2의 ⓐ 버튼 진입점). 계단이 아니라 목적지 지정이라
+    /// 모드 1 → 모드 2 직행(A305 — 하단 바 ⓐ 버튼 진입점). 계단이 아니라 목적지 지정이라
     /// 모드3에서는 무동작이다(내려가는 길은 Esc·Enter 계단 몫). 오버라이드 뒤에는 모드2가
-    /// 도달 불가라 역시 무동작 — 배치 2는 그 상태에서 버튼을 비활성으로 두면 된다.
+    /// 도달 불가라 역시 무동작 — 그 상태에서 버튼은 비활성이다(UpdateViewModeButtons).
     /// </summary>
     internal void EnterPanellessMode()
     {
@@ -2320,7 +2333,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 전체화면 직행(A305 — 하단 바 전체화면 버튼 · 배치 2의 ⓑ 버튼 진입점).
+    /// 전체화면 직행(A305 — 하단 바 ⓑ 버튼 진입점).
     /// **단방향이 사양이다**: 일반(모드1·모드2·커스텀 일반) → 전체화면만 하고, 전체화면에서
     /// 다시 누르는 해제는 없다(해제는 Enter 계단과 Esc). 그래서 A186의 토글(구 ToggleFullScreen)이
     /// 아니라 진입 전용이고, 이미 전체화면이면 조용히 무동작이다 —
@@ -2391,13 +2404,40 @@ public sealed partial class MainWindow : Window
     private void UpdateShellChrome()
     {
         BottomBar.Visibility = BarVisible ? Visibility.Visible : Visibility.Collapsed;
-        // A305: 전체화면 버튼은 **단방향**(일반 → 전체)이라 이미 전체화면이면 할 일이 없다 —
-        // 영상 자동 숨김 축에서는 전체화면에도 바가 떠 버튼이 보이므로(A186), 눌러도 아무 일이
-        // 없는 버튼을 살아 있는 척 두지 않고 비활성으로 내린다(A249·A265의 "숨기지 말고 비활성"
-        // 관용구). 해제 경로는 Enter 계단과 Esc다.
-        FullScreenButton.IsEnabled = _viewMode != ShellViewMode.FullScreen;
+        UpdateViewModeButtons(); // A305: 모드가 바뀌면 두 모드 버튼의 활성 여부도 바뀐다
         UpdateEdgeButtons();
         RecoverChromeFocusOrphan(); // A209: 바 붕괴 축 포커스 고아 방어 — 표시 반영 직후
+    }
+
+    /// <summary>
+    /// 셸 모드 버튼 2종(A305 배치 2)의 활성/비활성 단일 판정 — **숨기지 않고 비활성**이다
+    /// (A249·A265 관용구: 이 버튼들은 셸 전역이라 어느 화면에서도 자리를 지킨다.
+    /// 노출 자체를 접는 것은 화면에서 아예 쓰지 않는 '오픈 파일' 버튼 쪽 층이다 —
+    /// <see cref="UpdateOpenFileButton"/> 주석의 층 구분).
+    /// <list type="bullet">
+    /// <item>ⓐ <c>PanellessButton</c>(모드1 → 모드2) = <see cref="EnterPanellessMode"/>의 가드를
+    ///   그대로 뒤집은 식이다 — 콘텐츠가 있고 · 오버라이드 전이며 · 지금이 모드1일 때만 활성.
+    ///   오버라이드(F11/F12·경계 핀) 뒤에는 모드1/2 구분 자체가 소멸하므로(사양) 영구 비활성이고,
+    ///   모드2·모드3에서는 진입점이 무동작이라 비활성이다(내려가는 길은 Enter 계단·Esc).</item>
+    /// <item>ⓑ <c>FullScreenButton</c>(→ 모드3) = 단방향이라 이미 전체화면이면 할 일이 없다.
+    ///   영상 자동 숨김 축에서는 전체화면에도 바가 떠 버튼이 보이므로(A186), 눌러도 아무 일이
+    ///   없는 버튼을 살아 있는 척 두지 않는다. 해제 경로는 Enter 계단과 Esc다.</item>
+    /// </list>
+    /// 호출 지점은 둘 — ① <see cref="UpdateShellChrome"/>(모드 축: 모드 전이·외부 프레젠터 동기·
+    /// A186 자동 숨김이 전부 여기를 지난다) ② <see cref="ApplyOverlayStates"/> 말미
+    /// (나머지 두 축: 콘텐츠 유무는 SetContentState·OnContentOpened·OnUntitledOpened 셋이 모두
+    /// 그 종착점을 부르고, 오버라이드는 그것을 세우는 유일한 경로 ToggleOpaqueDock이 곧바로
+    /// 부른다). 모드 축만 보는 ①로는 ②의 두 축이 모드 전이 없이 바뀔 때를 놓친다 — 예: 모드1에서
+    /// F11로 오버라이드를 세우면 <see cref="MarkSidebarOverride"/>의 ③(모드2 → 모드1 접기)이
+    /// 발화하지 않아 ①이 돌지 않는다. 두 번 불려도 대입 2개뿐이라 멱등·무해하다.
+    /// 콘텐츠가 아직 없는 빈 셸의 초기값은 XAML(IsEnabled="False")이 담당한다 — 프로퍼티 대입만
+    /// 하는 이 메서드에는 "아직 안 불렸다" 구간이 남는데, ⓐ의 그 구간 값이 곧 비활성이라 맞다.
+    /// </summary>
+    private void UpdateViewModeButtons()
+    {
+        PanellessButton.IsEnabled =
+            HasOpenContent && !_sidebarOverride && _viewMode == ShellViewMode.Windowed;
+        FullScreenButton.IsEnabled = _viewMode != ShellViewMode.FullScreen;
     }
 
     /// <summary>
@@ -2745,9 +2785,14 @@ public sealed partial class MainWindow : Window
             + $"  DET={_diagDetachLast}  GUARD={_diagGuardLast}  CTX={(HasPanelContext ? "Y" : "N")}  S4={(IsOpenFileBrowsing ? "Y" : "N")}";
     }
 
-    /// <summary>하단 바 우측 "Full screen" 버튼 — A305에서 **전체화면 직행(단방향)**이 됐다
-    /// (A186의 토글 폐지, 사용자 사양: "작업표시줄의 전체화면 버튼은 일반→전체 단방향만").
-    /// 배치 2가 이 자리에 버튼 2종(1→2 · 2→3)을 놓을 때 이 핸들러가 ⓑ의 것이 된다.</summary>
+    /// <summary>하단 바 우측 셸 모드 버튼 ⓐ "Hide side panels"(A305 배치 2) — 모드1 → 모드2 직행.
+    /// 진입점의 가드가 곧 버튼의 활성 조건이라(<see cref="UpdateViewModeButtons"/>) 여기서
+    /// 다시 거르지 않는다 — 눌릴 수 없는 상태에서 눌려도 <see cref="EnterPanellessMode"/>가
+    /// 조용히 무동작이다(이중 안전).</summary>
+    private void OnPanellessClick(object sender, RoutedEventArgs e) => EnterPanellessMode();
+
+    /// <summary>하단 바 우측 셸 모드 버튼 ⓑ "Full screen" — A305에서 **전체화면 직행(단방향)**이 됐다
+    /// (A186의 토글 폐지, 사용자 사양: "작업표시줄의 전체화면 버튼은 일반→전체 단방향만").</summary>
     private void OnFullScreenClick(object sender, RoutedEventArgs e) => EnterFullScreenMode();
 
     // ---------- 영상 하단 바 자동 숨김 (A186 ②) ----------
@@ -3389,6 +3434,11 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다 (S4에서는 숨김 — A90)
+        // A305 배치 2: 셸 모드 버튼 ⓐ의 나머지 두 입력 축(콘텐츠 유무·오버라이드)이 이 종착점으로
+        // 모인다 — 콘텐츠 전환 3경로(SetContentState·OnContentOpened·OnUntitledOpened)와 오버라이드를
+        // 세우는 유일한 경로(ToggleOpaqueDock)가 모두 여기를 지난다. 모드 축은 UpdateShellChrome이
+        // 따로 본다(그쪽은 모드 전이 없이 이 메서드만 도는 경우를 못 보고, 이쪽은 반대라 둘 다 필요).
+        UpdateViewModeButtons();
 
         // A135 2차(방어 수리): 표시 반영이 끝난 뒤의 포커스 후처리. 포커스가 방금 화면에서 내려간
         // 좌/우 패널(파일 패널·모듈 패널 호스트 4표면) 안에 남아 있으면 모듈 뷰(중앙 콘텐츠)로
