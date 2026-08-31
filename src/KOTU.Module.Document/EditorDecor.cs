@@ -63,6 +63,14 @@ namespace KOTU.Module.Document;
 /// 그 값을 빈 줄 밑변 산술에 즉시 쓰고 줄 간격 캐시(_cachedLineStep)에도 먹인다 — 캐럿 상자 높이
 /// 폴백(24)이 실제 간격(16)을 대신하던 마지막 경로가 이것으로 닫힌다.
 ///
+/// <b>A291(v0.282.0)</b>: A284가 폐기했던 trailingEdge 경로(GetRectFromCharacterIndex 두 번째
+/// 인자 true)의 재시험 — 그 폐기 판정("X·Y가 0인 쓰레기")은 좌표 결함 3건(A286 X의 pad.Left
+/// 누락 · A288 Y의 pad.Top 누락 · A287 줄 탐색의 첫 줄 정지)이 전부 살아 있던 시점의 것이라
+/// 오염됐을 가능성이 높다. RectOfTrailing(pad 보정은 RectOf와 동일)을 되살려 DrawEnd 두 분기
+/// (EOF x · 빈 마지막 줄 윗변)의 1순위 좌표원으로 걸되, 유효성 가드를 통과할 때만 채택하고
+/// 무효면 v0.281.0의 폴백이 문자 그대로 받는다(계측 먼저 원칙 — 채택 여부와 원시 실측값을
+/// 진단 eofSrc= · endLine= · trail=이 찍어 스크린샷 한 장으로 판별된다).
+///
 /// <b>실패 안전(설계 의무)</b>: 내부 ScrollViewer(템플릿 ContentElement) 취득은 기본 템플릿
 /// 구조 의존이라 WinAppSDK 업데이트에 깨질 수 있는 부류다(v0.113.1 지연 로딩 스타일 사례와
 /// 같은 급) — 취득 실패·렌더 중 예외는 장식만 조용히 끄고(Disable) 편집 본기능은 그대로 둔다.
@@ -207,13 +215,24 @@ internal sealed class EditorDecor
     // 줄뿐). 수리(윗변 판정·lineStep)가 맞았는지 다음 스크린샷에서 바로 대조하기 위한 값이다.
     private double _diagLineStep = double.NaN;
     // A290 ⓒ: 빈 마지막 줄(개행으로 끝나는 문서)의 윗변을 무엇으로 정했는가 —
+    // trailing(개행 문자의 뒤쪽 모서리 RectOfTrailing(len-1) — A291 1순위) /
     // endCaret(끝 캐럿 RectOf(len)) / step(이번 패스 실측 줄 간격) / cached(줄 간격 캐시) /
     // height(캐럿 상자 높이 최후 폴백) / n/a(개행으로 끝나지 않는 문서 · DrawEnd 미도달).
     private string _diagEndLineSrc = "n/a";
-    // A290 ⓓ: 끝 캐럿으로 실측한 줄 간격(endCaret.Y − lastLine.Y) — 채택된 패스에만 실린다.
-    // NaN = 이번 패스에 그 경로를 못 탔다(끝 캐럿 무효·이상값·상식 범위 밖). step= 표기가
-    // 이 값을 (endCaret)으로 구분해 보여 준다 — 캐시 폴백(cached)과 헷갈리면 안 된다.
+    // A290 ⓓ: 빈 줄 윗변으로 실측한 줄 간격(top − lastLine.Y — A291부터 trailing·endCaret 두
+    // 경로가 다 실을 수 있다) — 채택된 패스에만 실린다. NaN = 이번 패스에 그 경로를 못 탔다
+    // (무효·이상값·상식 범위 밖). step= 표기가 이 값을 좌표원 이름(endLine=과 같은 값)으로
+    // 구분해 보여 준다 — 캐시 폴백(cached)과 헷갈리면 안 된다.
     private double _diagEndStep = double.NaN;
+    // A291 ⓓ: 이번 패스의 원시 trailing 실측값(RectOfTrailing(len-1) — 캔버스 절대 좌표).
+    // "X,Y,W,H" / "n/a"(미측정 — DrawEnd 미도달·선행 가드에서 생략) / "err"(호출이 던졌다).
+    // 채택 여부와 무관하게 찍는다 — 기각됐어도 왜 기각됐는지 이 값으로 판별한다(이 API를
+    // 되살릴 수 있는가가 A291의 질문이라, 이것이 이번 배치의 핵심 계측물이다).
+    private string _diagTrail = "n/a";
+    // A291 ⓓ: EOF x의 좌표원 — trailing(뒤쪽 모서리 실측) / caret(끝 캐럿 RectOf(len) 자리) /
+    // advance(직전 글자와의 X 차이 실측 — A289) / step(줄 간격 근사 폴백) / head(개행 분기 —
+    // 줄 머리 고정 pad.Left + 2) / n/a(EOF 미도달·생략).
+    private string _diagEofSrc = "n/a";
 
     public EditorDecor(FrameworkElement themeSource, TextBox editor, Canvas canvas,
         Func<string> textProvider)
@@ -402,6 +421,8 @@ internal sealed class EditorDecor
             _diagLineStep = double.NaN; // A287 ⓒ: 이번 패스 실측치만 보인다 — 낡은 값 잔존 금지
             _diagEndLineSrc = "n/a";    // A290 ⓒ: 개행 분기까지 가야 값이 실린다(그 외는 무의미)
             _diagEndStep = double.NaN;  // A290 ⓓ: 끝 캐럿 실측도 이번 패스 값만 보인다(잔존 금지)
+            _diagTrail = "n/a";         // A291 ⓓ: 원시 trailing 실측도 이번 패스 값만(같은 규칙)
+            _diagEofSrc = "n/a";        // A291 ⓓ: EOF x 좌표원도 이번 패스 값만(같은 규칙)
         }
         var len = text.Length;
         var pad = _editor.Padding;
@@ -499,12 +520,14 @@ internal sealed class EditorDecor
     /// <para>A290: <b>반환값 = 빈 마지막 줄의 윗변(캔버스 y)</b>이다 — 개행으로 끝나지 않는 문서는
     /// 그런 줄이 없으므로 NaN. 호출부(렌더 루프)의 줄 번호가 이 값을 그대로 써서 ·EOF·가이드와
     /// 같은 한 좌표를 공유한다(종전에는 호출부가 같은 산식을 따로 계산해 어긋날 수 있었다).</para>
-    /// <para>윗변 결정 순서(A290): ① 끝 캐럿 RectOf(len)의 Y — 커서가 실제로 서는 자리라 컨트롤이
-    /// 아는 좌표다 ② lastLine.Y + lineStep(A287 ⓑ — 밑변 합산 산식은 폐기됐다. lastLine.Y +
+    /// <para>윗변 결정 순서(A290 · A291): ① 개행 문자의 뒤쪽 모서리 RectOfTrailing(len - 1)의 Y —
+    /// 개행의 trailing 자리가 곧 다음(빈) 줄의 시작일 수 있다(A291 재시험 — RectOfTrailing 주석
+    /// 참고) ② 끝 캐럿 RectOf(len)의 Y — 커서가 실제로 서는 자리라 컨트롤이
+    /// 아는 좌표다 ③ lastLine.Y + lineStep(A287 ⓑ — 밑변 합산 산식은 폐기됐다. lastLine.Y +
     /// lastLine.Height는 "밑변 = 다음 줄 윗변" 전제라 캐럿 상자 높이 &gt; 줄 간격인 환경에서
     /// 아래로 밀린다 — 2026-08-29 실측: 높이 24 vs 간격 16으로 8px 밀림).
     /// 빈 줄의 밑변은 캐럿 상자 높이가 아니라 윗변 + 줄 간격이다(A289 ⓐ).</para>
-    /// <para>A290 ⓓ: ①이 성립한 패스에서는 <b>top − lastLine.Y가 진짜 줄 간격의 실측치</b>다
+    /// <para>A290 ⓓ: ①·②가 성립한 패스에서는 <b>top − lastLine.Y가 진짜 줄 간격의 실측치</b>다
     /// (두 줄의 윗변을 둘 다 알았다). 빈 줄 밑변은 호출부가 준 lineStep이 아니라 이 실측치를
     /// 쓰고, 같은 값을 줄 간격 캐시에도 먹여 <b>다음 패스부터 마지막 글자 줄의 밑변 가이드까지</b>
     /// 캐럿 상자 높이 폴백에서 벗어나게 한다. 채택 조건 = 양수 &amp;&amp; 캐럿 상자 높이 이하.</para>
@@ -519,11 +542,30 @@ internal sealed class EditorDecor
             // 뒤로 이미 사실이 아니었다 — 아래 윗변 결정 사슬이 실제 산식이다.)
             var newlineRect = RectOf(len - 1);
             DrawNewlineGlyph(newlineRect, vh);
+            // A291 ⓒ 계측: 개행 문자(len-1)의 뒤쪽 모서리(trailingEdge) — 그 자리가 곧 다음(빈)
+            // 줄의 시작일 수 있다(A284 폐기 판정 재시험 — RectOfTrailing 주석 참고). try/catch는
+            // 아래 endCaret과 같은 이유 — 밖으로 새면 Render의 포괄 catch가 Disable()을 불러
+            // 장식 전체가 뷰 수명 동안 사라진다. 원시 실측값은 채택 여부와 무관하게 진단(trail=)에
+            // 남긴다 — 기각됐어도 왜 기각됐는지 알아야 한다(A291의 핵심 계측물).
+            Rect trailing;
+            try
+            {
+                trailing = RectOfTrailing(len - 1);
+                if (_diagOn) _diagTrail =
+                    $"{trailing.X:F1},{trailing.Y:F1},{trailing.Width:F1},{trailing.Height:F1}";
+            }
+            catch
+            {
+                trailing = default;
+                if (_diagOn) _diagTrail = "err";
+            }
             // A290: 이 줄에는 글자가 없어 줄 간격을 잴 기회가 한 번도 없다 — "엔터만 친" 흐름은
             // 뷰포트에 시각적 줄이 하나뿐이라 이번 패스 실측(stepHere)도 캐시도 비고, lineStep이
             // 캐럿 상자 높이까지 폴백해 윗변이 실제보다 아래로 밀렸다(v0.280.0 실기기 계측:
             // 커서는 캔버스 32인데 EOF는 40 — 8px). 그런데 커서는 그 빈 줄에 정확히 서 있다
-            // = 컨트롤이 그 좌표를 안다. 그래서 1순위로 끝 캐럿(RectOf(len))을 직접 잰다.
+            // = 컨트롤이 그 좌표를 안다. 그래서 끝 캐럿(RectOf(len))을 직접 잰다(A290 — A291부터는
+            // 위 trailing이 1순위, 이 끝 캐럿이 2순위다. v0.281.0 실측에서 RectOf(len)은 이 분기
+            // 에서도 무효였다 — 이 길이 닫힌 환경이 trailing 재시험의 동기다).
             // A286이 RectOf(len)을 무효로 판정한 것은 아래 else 분기(개행으로 끝나지 않는 문서)의
             // 실측이었고, 이 분기에서는 시험된 적이 없다 — 무효·이상값이면 종전 산식으로 내려간다.
             // 호출은 else 분기와 같은 관용구로 try/catch에 싼다: 인덱스 len을 범위 밖으로 보고
@@ -540,14 +582,35 @@ internal sealed class EditorDecor
             }
             var top = lastLine.Y + lineStep; // A287 ⓑ: 실측 줄 간격 — 밑변 합산 산식 폐기
             var topSrc = stepSrc;
-            // A290 ⓓ: 이 줄 아래 산술(밑변 가이드)이 쓸 줄 간격. 끝 캐럿이 유효하면 아래에서
-            // 실측치로 승격된다 — 그 전까지는 호출부가 준 값(실측 → 캐시 → 캐럿 상자 높이)이다.
+            // A290 ⓓ: 이 줄 아래 산술(밑변 가이드)이 쓸 줄 간격. trailing 또는 끝 캐럿이 유효하면
+            // 아래에서 실측치로 승격된다 — 그 전까지는 호출부가 준 값(실측 → 캐시 → 캐럿 상자 높이)이다.
             var endStep = lineStep;
-            // 이상값 가드: 빈 줄은 마지막 글자 줄의 바로 아랫줄이라 그 사이(lastLine.Y 초과 ~
-            // lastLine.Y + lineStep × 3 이하)를 벗어날 수 없다 — 벗어나면 2순위로 내려간다
-            // (A284의 좌상단 오배치처럼 X·Y가 0으로 나오는 환경 방어. 아래 경계의 YEpsilon은
-            // 이 파일이 같은 줄 판정에 쓰는 허용 오차와 같다 — 빈 줄은 한 줄 간격 아래라 무해하다).
-            if (endCaret.Height > 0
+            // A291 ⓒ 1순위: trailing이 유효하면 그 Y가 곧 빈 줄의 윗변이다. 유효성 가드는 아래
+            // endCaret에 걸린 것(A290)과 같은 형태 — 빈 줄은 마지막 글자 줄의 바로 아랫줄이라
+            // 그 사이(lastLine.Y 초과 ~ lastLine.Y + lineStep × 3 이하)를 벗어날 수 없다.
+            // 무효면 A290의 현행 사슬(끝 캐럿 → lastLine.Y + lineStep)이 그대로 받는다.
+            if (trailing.Height > 0
+                && trailing.Y > lastLine.Y + YEpsilon
+                && trailing.Y <= lastLine.Y + lineStep * 3)
+            {
+                top = trailing.Y;
+                topSrc = "trailing";
+                // A290 ⓓ와 같은 승격 — 두 줄의 윗변을 둘 다 알았다 = 그 차이가 진짜 줄 간격의
+                // 실측치다. 같은 가드(양수이고 캐럿 상자 높이 이하)로 빈 줄 밑변과 캐시에 먹인다.
+                var measuredStep = top - lastLine.Y;
+                if (measuredStep > 0 && measuredStep <= lastLine.Height)
+                {
+                    endStep = measuredStep;
+                    _cachedLineStep = measuredStep;
+                    if (_diagOn) _diagEndStep = measuredStep; // step= 표기가 좌표원 이름과 함께 보인다
+                }
+            }
+            // 이상값 가드(A290 — A291부터 2순위): 빈 줄은 마지막 글자 줄의 바로 아랫줄이라 그 사이
+            // (lastLine.Y 초과 ~ lastLine.Y + lineStep × 3 이하)를 벗어날 수 없다 — 벗어나면 다음
+            // 순위로 내려간다(A284의 좌상단 오배치처럼 X·Y가 0으로 나오는 환경 방어. 아래 경계의
+            // YEpsilon은 이 파일이 같은 줄 판정에 쓰는 허용 오차와 같다 — 빈 줄은 한 줄 간격 아래라
+            // 무해하다).
+            else if (endCaret.Height > 0
                 && endCaret.Y > lastLine.Y + YEpsilon
                 && endCaret.Y <= lastLine.Y + lineStep * 3)
             {
@@ -566,16 +629,17 @@ internal sealed class EditorDecor
                     // 캐시에도 먹인다 — 다음 패스부터는 마지막 글자 줄(1번 줄)의 lineStep도
                     // 이 값이 되어 캐럿 상자 높이 폴백이 렌더 산술에서 완전히 사라진다.
                     _cachedLineStep = measuredStep;
-                    if (_diagOn) _diagEndStep = measuredStep; // ⓒ: step= 표기를 (endCaret)으로
+                    if (_diagOn) _diagEndStep = measuredStep; // ⓒ: step= 표기가 좌표원 이름과 함께 보인다
                 }
             }
             if (_diagOn) _diagEndLineSrc = topSrc; // A290 ⓒ: 좌표원 표기(endLine=)
             AddTopGuide(top, vw, vh, pad); // 빈 줄 윗변 — 직전 줄 밑변과 역전이라 경계 한 선으로 병합(A142 ⑤)
-            AddBottomGuide(top + endStep); // A289 ⓐ·A290 ⓓ: 빈 줄 밑변 = 윗변 + 줄 간격(끝 캐럿 실측 우선)
+            AddBottomGuide(top + endStep); // A289 ⓐ·A290 ⓓ·A291: 빈 줄 밑변 = 윗변 + 줄 간격(실측 우선)
             // A288: 이 분기의 x는 rect의 X를 쓰지 않고 줄 머리 위치를 직접 세우는 식이다 —
             // 본문 왼끝의 캔버스 좌표가 곧 pad.Left이므로 보정을 RectOf로 옮긴 뒤에도 pad.Left + 2가
             // 그대로 맞다(이중 가산이 아니다). else 분기의 caret.X + 4가 줄 머리에서 같은 값을 내는
             // 것이 대조 증거다(줄 머리 캐럿의 caret.X = pad.Left + 0).
+            if (_diagOn) _diagEofSrc = "head"; // A291 ⓓ: 이 분기의 x는 줄 머리 고정(pad.Left + 2)
             if (_diagOn) RecordEofAttempt(newlineRect, lastLine, "len-1", pad.Left + 2, top, vh); // A285
             DrawMarker(EofGlyph, pad.Left + 2, top, vh);
             return top; // A290 ⓑ: 호출부의 줄 번호가 같은 좌표를 쓴다
@@ -586,6 +650,9 @@ internal sealed class EditorDecor
             // 유일한 true 호출이라 검증된 적이 없었고, 실기기에서 X·Y가 0으로 나와 EOF가 좌상단에
             // 찍혔다(Height는 정상이라 A283의 Height 가드로는 못 걸렀다). 전 파일이 쓰는 leading
             // 관용구(RectOf)로 줄 끝을 구한다.
+            // A291: 그 폐기 판정은 좌표 결함 3건(A286·A287·A288)이 전부 살아 있던 시점의 것이라
+            // 오염됐을 가능성이 높다 — 아래에서 유효성 가드를 걸고 1순위로 재시험한다
+            // (RectOfTrailing 주석 참고. 무효면 현행 폴백이 문자 그대로 받는다).
             //
             // A286(v0.277.0): A285 계측이 두 가지를 실측으로 확정했다.
             // ① GetRectFromCharacterIndex는 캐럿 상자를 준다 — Width가 항상 0이다(한 글자씩 넣으며
@@ -631,8 +698,36 @@ internal sealed class EditorDecor
                 if (_diagOn) RecordEofSkip(caret, lastLine, rectSrc, "skipped(lastLine)"); // A285
                 return double.NaN; // A290: 이 분기에는 빈 마지막 줄이 없다
             }
+            // A291 ⓑ 계측: 마지막 글자(len-1)의 뒤쪽 모서리(trailingEdge) — 유효하면 그 X가 곧
+            // 마지막 글자의 뒤쪽 모서리 = 줄 끝이다(A284 폐기 판정 재시험 — 이 분기 첫머리 주석과
+            // RectOfTrailing 주석 참고). try/catch는 위 caret과 같은 이유(밖으로 새면 Disable 회귀).
+            // 원시 실측값은 채택 여부와 무관하게 진단(trail=)에 남긴다 — A291의 핵심 계측물.
+            Rect trailing;
+            try
+            {
+                trailing = RectOfTrailing(len - 1);
+                if (_diagOn) _diagTrail =
+                    $"{trailing.X:F1},{trailing.Y:F1},{trailing.Width:F1},{trailing.Height:F1}";
+            }
+            catch
+            {
+                trailing = default;
+                if (_diagOn) _diagTrail = "err";
+            }
             var eofX = caret.X + 4; // A288: caret.X는 이미 pad.Left가 실린 캔버스 좌표다
-            if (rectSrc == "len-1")
+            var eofSrc = "caret";   // A291 ⓓ: EOF x 좌표원(진단 eofSrc=) — 기본 = 끝 캐럿 자리
+            // A291 ⓑ 1순위 유효성 가드: 같은 줄(caret과 Y 일치) 그리고 뒤쪽 모서리라 caret보다
+            // 앞설 수 없고(trailing.X가 caret.X 이상), 터무니없이 멀면 기각(lineStep × 3 이내).
+            // 무효면 현행 로직(A289 advance 실측 → lineStep 폴백)이 문자 그대로 받는다.
+            if (trailing.Height > 0
+                && Math.Abs(trailing.Y - caret.Y) <= YEpsilon
+                && trailing.X >= caret.X
+                && trailing.X <= caret.X + lineStep * 3)
+            {
+                eofX = trailing.X + 4;
+                eofSrc = "trailing";
+            }
+            else if (rectSrc == "len-1")
             {
                 // A289 ⓒ: 폴백 rect는 마지막 글자의 "앞쪽" 캐럿 자리다(캐럿 상자라 Width가 0이라
                 // 폭을 못 더한다 — A286) — EOF가 마지막 글자에 겹친다. lineStep을 잰 것과 같은
@@ -641,14 +736,20 @@ internal sealed class EditorDecor
                 // 대체로 정사각에 가까워 줄 간격과 비슷하다 — 못 재는 것보다 낫다).
                 // RectOf(len)이 유효한 환경(rectSrc == "len")은 이미 끝 캐럿이라 더하면 안 된다.
                 var advance = lineStep;
+                eofSrc = "step"; // A291 ⓓ: 줄 간격 근사 폴백(아래 실측이 성립하면 advance로)
                 if (len >= 2)
                 {
                     var prev = RectOf(len - 2);
-                    if (Math.Abs(prev.Y - caret.Y) <= YEpsilon) advance = caret.X - prev.X;
+                    if (Math.Abs(prev.Y - caret.Y) <= YEpsilon)
+                    {
+                        advance = caret.X - prev.X;
+                        eofSrc = "advance"; // A291 ⓓ: 직전 글자와의 X 차이 실측(A289)
+                    }
                 }
                 if (!(advance > 0)) advance = 0; // 음수·NaN 클램프 — EOF가 왼쪽으로 튀면 안 된다
                 eofX += advance;
             }
+            if (_diagOn) _diagEofSrc = eofSrc; // A291 ⓓ
             if (_diagOn) RecordEofAttempt(caret, lastLine, rectSrc, eofX, caret.Y, vh); // A285
             DrawMarker(EofGlyph, eofX, caret.Y, vh);
             return double.NaN; // A290: 개행으로 끝나지 않는 문서 = 빈 마지막 줄이 없다
@@ -1035,11 +1136,13 @@ internal sealed class EditorDecor
         // A287 ⓒ: step = 이번 패스 실측 줄 간격. A289 ⓓ: 이번 패스에 못 쟀고 캐시가 살아 있으면
         // 렌더 산술이 그 캐시를 썼다는 뜻이다 — 값 뒤에 (cached)로 표시해 폴백 경로를 화면에서
         // 바로 가려낼 수 있게 한다. n/a = 실측도 캐시도 없음(캐럿 상자 Height 최후 폴백이 돌았다).
-        // A290 ⓓ: 그 둘 사이에 끝 캐럿 실측(endCaret.Y − lastLine.Y)이 들어간다 — 이번 패스에
+        // A290 ⓓ: 그 둘 사이에 빈 줄 윗변 실측(top − lastLine.Y)이 들어간다 — 이번 패스에
         // 잰 값이라 (cached)로 표기하면 거짓말이 된다(캐시에도 방금 먹였으므로 표기를 안 나누면
-        // 낡은 캐시를 쓴 패스와 구분이 안 된다). 우선순위는 인접 줄 실측 > 끝 캐럿 실측 > 캐시.
+        // 낡은 캐시를 쓴 패스와 구분이 안 된다). 우선순위는 인접 줄 실측 > 빈 줄 윗변 실측 > 캐시.
+        // A291: 그 실측의 좌표원이 trailing·endCaret 둘이 됐다 — 접미는 endLine=과 같은 이름
+        // (_diagEndLineSrc)을 그대로 쓴다(_diagEndStep이 실리는 패스에는 항상 그 값이 좌표원이다).
         var stepLine = !double.IsNaN(_diagLineStep) ? _diagLineStep.ToString("F1")
-            : !double.IsNaN(_diagEndStep) ? $"{_diagEndStep:F1}(endCaret)"
+            : !double.IsNaN(_diagEndStep) ? $"{_diagEndStep:F1}({_diagEndLineSrc})"
             : !double.IsNaN(_cachedLineStep) ? $"{_cachedLineStep:F1}(cached)"
             : "n/a";
         _diagText!.Text =
@@ -1047,7 +1150,11 @@ internal sealed class EditorDecor
             rectLine + "\n" +
             lastLineLine + "\n" +
             $"yShift={_yShift:F1}  contentRel={_contentRelative}\n" +
-            $"eof={_diagEof}\n" +
+            // A291 ⓓ: eofSrc = EOF x의 좌표원(trailing/caret/advance/step/head/n/a) · trail =
+            // 원시 trailing 실측값(RectOfTrailing(len-1), 캔버스 절대 좌표 — 채택 여부와 무관하게
+            // 찍는다. 기각된 패스는 이 값과 가드 조건을 대조해 기각 사유를 판별한다).
+            $"eof={_diagEof}  eofSrc={_diagEofSrc}\n" +
+            $"trail={_diagTrail}\n" +
             // A286: 좌표 보정값(pad)을 화면에 띄운다 — 수리 후 스크린샷에서 "eof - pad"가 본문
             // 상대 좌표와 맞는지 사용자가 바로 대조할 수 있어야 한다. A288: 이제 X·Y 두 축 다
             // 이 값만큼 실려 있다(위 계측 표기 주의 참고).
@@ -1169,6 +1276,24 @@ internal sealed class EditorDecor
     private Rect RectOf(int index)
     {
         var rect = _editor.GetRectFromCharacterIndex(index, false);
+        var pad = _editor.Padding;
+        return new Rect(rect.X + pad.Left, rect.Y + _yShift + pad.Top, rect.Width, rect.Height);
+    }
+
+    /// <summary>
+    /// A291: RectOf의 trailingEdge 판 — GetRectFromCharacterIndex(index, true)로 그 문자의
+    /// <b>뒤쪽 모서리</b> 캐럿 자리를 재고, RectOf와 같은 보정(X + pad.Left · Y + _yShift +
+    /// pad.Top)으로 캔버스 절대 좌표를 돌려준다. A284가 "X·Y가 0인 쓰레기를 준다"고 판정하고
+    /// 폐기했던 경로인데, 그 판정은 좌표 결함 3건(A286 X의 pad.Left 누락 · A288 Y의 pad.Top
+    /// 누락 · A287 줄 탐색의 첫 줄 정지)이 전부 살아 있던 시점의 것이라 오염됐을 가능성이
+    /// 높다 — A291에서 재시험한다. 채택은 DrawEnd 두 분기의 유효성 가드가 정하고, 무효면
+    /// 현행 폴백이 그대로 받는다(계측 먼저 원칙 — 어느 쪽이 쓰였는지는 진단 eofSrc= ·
+    /// endLine= · trail=이 찍는다). 호출부는 반드시 try/catch로 싼다(RectOf(len)과 같은 이유 —
+    /// 밖으로 새면 Render의 포괄 catch가 Disable()을 불러 장식 전체가 사라진다).
+    /// </summary>
+    private Rect RectOfTrailing(int index)
+    {
+        var rect = _editor.GetRectFromCharacterIndex(index, true);
         var pad = _editor.Padding;
         return new Rect(rect.X + pad.Left, rect.Y + _yShift + pad.Top, rect.Width, rect.Height);
     }
