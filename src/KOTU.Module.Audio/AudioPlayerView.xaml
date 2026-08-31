@@ -82,6 +82,29 @@
                     Foreground="White"
                     TextWrapping="NoWrap" />
             </Border>
+            <!-- A302: 비주얼라이저 변경 세러모니 칩. 정지(일시정지 포함) 상태에서 스타일을
+                 바꾸면 재생 전까지 표면이 그대로라 바뀐 신호가 없다 → 선택 직후 여기에
+                 "Visualizer: 표시명"을 1.5초 표시한다(표시·소멸은 코드 ShowCeremony —
+                 영상 A12 시작 오버레이 칩 규격: 반투명 판 + 흰 13px, 입력 통과).
+                 자리 근거: 중앙 상단 = TitleOverlay, 중앙 = PlaceholderText, 우상단 =
+                 DiagPanel(A301 진단 판 — 개발용·별개 요소)이라 중앙 하단부가 비어 있다.
+                 사용자 기능·항상 켜짐이며 진단 판과 서로 영향이 없다. -->
+            <Border
+                x:Name="CeremonyOverlay"
+                Visibility="Collapsed"
+                IsHitTestVisible="False"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="0,0,0,24"
+                CornerRadius="4"
+                Background="#CC202020"
+                Padding="10,6">
+                <TextBlock
+                    x:Name="CeremonyText"
+                    Foreground="White"
+                    FontSize="13"
+                    TextAlignment="Center" />
+            </Border>
         </Grid>
 
         <!-- 트랜스포트 바 — 셸이 TakeBottomBar()로 떼어가 하단 바(44px) 한 줄에 얹는다(비디오와 동일).

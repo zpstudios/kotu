@@ -38,6 +38,13 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// <summary>트레이 표시 값이 바뀌었다 — 재생 중에는 1초 타이머가, 그 밖에는 상태 전이가 쏜다.</summary>
     public event Action? TrayStatusChanged;
 
+    /// <summary>
+    /// 지금 재생 중인가 — 영상 IsPlaying(A186·A306)과 같은 정의(libvlc IsPlaying 위임).
+    /// _player가 없거나(생성 전) 일시정지·정지·미디어 없음은 전부 "재생 중 아님"이다.
+    /// A302: 세러모니 게이트·트레이 이퀄라이저 판정이 이 한 곳을 쓴다(판정 일원화).
+    /// </summary>
+    private bool IsPlaying => _player is { IsPlaying: true };
+
     /// <summary>이퀄라이저 막대 개수(16px 아래 줄에 들어가는 한계).</summary>
     private const int EqualizerBars = 4;
 
@@ -57,7 +64,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         if (_filePath is null) return TrayStatus.Idle("AUD");
 
-        var playing = _player is { IsPlaying: true };
+        var playing = IsPlaying; // A302: 판정 일원화(공용 IsPlaying — 종전과 같은 식)
         var position = _player?.Time ?? 0;
         var bars = new double[EqualizerBars];
         for (var i = 0; i < bars.Length; i++)
@@ -658,6 +665,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         _tornDown = true;
         SetTrayTimer(false); // A54: 뷰가 내려가면 1초 타이머도 반드시 멈춘다
+        _ceremonyTimer?.Stop(); // A302: 해체 후 틱 방지(영상 A12·A13과 같은 자리·같은 형태)
         var player = _player;
         var libVlc = _libVlc;
         _player = null;
@@ -1209,6 +1217,15 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         return null;
     }
 
+    /// <summary>저장값 → 플라이아웃 표시명 — A302 세러모니가 같은 표기를 재사용한다.
+    /// 목록 밖 값은 오지 않지만(호출부가 목록에서 만든 키만 넘긴다) 저장값 폴백으로 방어한다.</summary>
+    private static string VisualizerLabel(string style)
+    {
+        foreach (var (label, key, _) in VisualizerStyles)
+            if (string.Equals(key, style, StringComparison.Ordinal)) return label;
+        return style;
+    }
+
     /// <summary>
     /// libvlc 인스턴스 옵션 조립 — 스타일을 인스턴스에 굽는 단일 지점(첫 생성·재생성 공용).
     /// --no-video-title-show: 재생 시작 시 파일명이 화면에 오버레이되는 libvlc 기본 동작 끔.
@@ -1244,6 +1261,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// A301: 교체 진행 중(_recreating)의 재선택은 조용히 무시한다(구현 시 결정 — 큐잉 불요).
     /// 저장도 하지 않으므로 상태는 일관되고, 플라이아웃은 열 때마다 _visualizer로 다시
     /// 채워져(Opening 재구성) 체크 표시도 어긋나지 않는다.
+    /// A302: 정지(일시정지 포함) 상태에서만 세러모니 칩을 띄운다 — 재생 전까지 표면이
+    /// 그대로라 이 칩이 유일한 변경 신호다(재생 중 변경은 시각화 자체가 바뀌어 보이므로
+    /// 대상 아님 — 사용자 확정). 표시 시점은 선택 직후(RecreatePlayer 완료 대기 없음 —
+    /// 누른 순간의 피드백이 목적이고, 재생성 실패 안내는 기존 ShowMessage가 맡는다).
     /// </summary>
     private void SelectVisualizer(string style)
     {
@@ -1252,7 +1273,40 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _visualizer = style;
         _settings.Set(VisualizerKey, style);
         _settings.Save();
+        if (!IsPlaying) ShowCeremony(VisualizerLabel(style)); // A302: 정지 상태에서만
         RecreatePlayer();
+    }
+
+    // ---------- A302: 비주얼라이저 변경 세러모니 ----------
+
+    /// <summary>세러모니 자동 소멸 타이머(1.5초 1회성) — 영상 A12 _startOverlayTimer 관용구
+    /// (지연 생성 · Tick에서 Stop · Unloaded에서 Stop).</summary>
+    private DispatcherTimer? _ceremonyTimer;
+
+    /// <summary>
+    /// A302: "Visualizer: 표시명"을 표면 중앙 하단(CeremonyOverlay — XAML 자리 근거 주석)에
+    /// 1.5초 표시한다. 연속 변경은 문구 교체 + 타이머 재시작(영상 A12 "연속 전환 시 표시
+    /// 시간 리셋" 그대로 — 이전 표시가 즉시 새 문구로 바뀌고 겹침이 없다). 페이드 없음:
+    /// 저장소 오버레이 칩(영상 A12·A13)이 전부 즉시 표시·즉시 숨김이라 같은 관용구를 따른다.
+    /// UI 스레드 전용(플라이아웃 Click에서만 호출).
+    /// </summary>
+    private void ShowCeremony(string label)
+    {
+        CeremonyText.Text = $"Visualizer: {label}";
+        CeremonyOverlay.Visibility = Visibility.Visible;
+
+        if (_ceremonyTimer is not { } timer)
+        {
+            timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                CeremonyOverlay.Visibility = Visibility.Collapsed;
+            };
+            _ceremonyTimer = timer;
+        }
+        timer.Stop(); // 연속 변경 시 표시 시간 리셋
+        timer.Start();
     }
 
     /// <summary>
