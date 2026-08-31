@@ -81,6 +81,52 @@ public static class ExplorerIntegration
         RemoveLegacyCapabilities();
     }
 
+    /// <summary>
+    /// A292: 확장자 하나를 Capabilities에 병합 등록 — <see cref="RegisterCapabilities"/>(모듈 전체)의
+    /// 확장자 단위 판. 앱 등록(ApplicationName·RegisteredApplications)은 모듈 판과 같은 값을 다시 써
+    /// 멱등이다.
+    /// </summary>
+    private static void RegisterCapabilityExtension(IModule module, string ext)
+    {
+        using (var cap = Registry.CurrentUser.CreateSubKey(CapabilitiesKeyPath))
+        {
+            cap.SetValue("ApplicationName", Brand);
+            cap.SetValue("ApplicationDescription", Brand + " - archives, images, video, music, documents");
+            using var fa = cap.CreateSubKey("FileAssociations");
+            fa.SetValue(ext, ExtProgId(module, ext));
+        }
+        using var registered = Registry.CurrentUser.CreateSubKey(@"Software\RegisteredApplications");
+        registered.SetValue(Brand, CapabilitiesKeyPath);
+        RemoveLegacyCapabilities();
+    }
+
+    /// <summary>
+    /// A292: 확장자 하나를 Capabilities에서 제거 — <see cref="UnregisterCapabilities"/>(모듈 전체)의
+    /// 확장자 단위 판. 남는 연결이 없으면 모듈 판과 같은 규칙으로 앱 등록 자체를 걷어낸다.
+    /// </summary>
+    private static void UnregisterCapabilityExtension(string ext)
+    {
+        using (var fa = Registry.CurrentUser.OpenSubKey(
+                   CapabilitiesKeyPath + @"\FileAssociations", writable: true))
+        {
+            fa?.DeleteValue(ext, throwOnMissingValue: false);
+        }
+        CollapseCapabilitiesIfEmpty();
+        RemoveLegacyCapabilities();
+    }
+
+    /// <summary>연결이 하나도 안 남았으면 앱 등록(Capabilities·RegisteredApplications)을 걷어낸다.</summary>
+    private static void CollapseCapabilitiesIfEmpty()
+    {
+        using var remaining = Registry.CurrentUser.OpenSubKey(CapabilitiesKeyPath + @"\FileAssociations");
+        if (remaining is not null && remaining.ValueCount > 0) return;
+        // 이 키는 여기서만 만든다(앱 설정은 설정 파일) — 통째로 정리해도 안전.
+        Registry.CurrentUser.DeleteSubKeyTree($@"Software\{Brand}", throwOnMissingSubKey: false);
+        using var registered = Registry.CurrentUser.OpenSubKey(
+            @"Software\RegisteredApplications", writable: true);
+        registered?.DeleteValue(Brand, throwOnMissingValue: false);
+    }
+
     /// <summary>구 브랜드의 Capabilities·RegisteredApplications 등록을 걷어낸다(A46 리브랜딩 청소).</summary>
     private static void RemoveLegacyCapabilities()
     {
@@ -107,15 +153,7 @@ public static class ExplorerIntegration
             }
         }
 
-        using var remaining = Registry.CurrentUser.OpenSubKey(CapabilitiesKeyPath + @"\FileAssociations");
-        if (remaining is null || remaining.ValueCount == 0)
-        {
-            // 이 키는 여기서만 만든다(앱 설정은 설정 파일) — 통째로 정리해도 안전.
-            Registry.CurrentUser.DeleteSubKeyTree($@"Software\{Brand}", throwOnMissingSubKey: false);
-            using var registered = Registry.CurrentUser.OpenSubKey(
-                @"Software\RegisteredApplications", writable: true);
-            registered?.DeleteValue(Brand, throwOnMissingValue: false);
-        }
+        CollapseCapabilitiesIfEmpty(); // A292에서 확장자 단위 판과 공유하도록 추출 — 규칙은 종전 그대로
         RemoveLegacyCapabilities();
     }
 
@@ -253,6 +291,27 @@ public static class ExplorerIntegration
     }
 
     /// <summary>
+    /// A292: 확장자 하나를 KOTU 기본 앱으로 강제 지정 시도 — <see cref="SetAsDefault"/>(모듈 전체)의
+    /// 확장자 단위 판. 반드시 <see cref="RegisterExtensionAssociation"/> 이후 호출.
+    /// UCPD 보호 확장자(A166)는 커널이 되돌리므로 시도하지 않고 false — 호출 측이
+    /// <see cref="IsProtectedExtension"/>으로 "확인 필요" 안내와 일반 실패를 구분한다.
+    /// </summary>
+    /// <returns>지정에 성공했으면 true. false면 A25 폴백('연결 프로그램' 대화상자 등) 대상.</returns>
+    public static bool SetAsDefaultForExtension(IModule module, string ext)
+    {
+        if (IsProtectedExtension(ext)) return false;
+
+        string sid;
+        try { sid = WindowsIdentity.GetCurrent().User?.Value ?? string.Empty; }
+        catch { sid = string.Empty; }
+        if (string.IsNullOrEmpty(sid)) return false;
+
+        if (!TrySetDefaultForExtension(ext, ExtProgId(module, ext), sid)) return false;
+        NotifyShell(); // 바뀐 것이 있을 때만 — 모듈 판의 "하나라도 바뀌었으면"과 같은 규칙
+        return true;
+    }
+
+    /// <summary>
     /// 확장자 하나를 UserChoice 직접 쓰기로 기본 앱 지정하고 실제 LastWrite 기준으로 검증.
     /// 최신 빌드는 UserChoice 값 쓰기를 ACL로 막으므로, 부모에서 하위 키를 지우고 새로 만들면
     /// 새 키는 쓰기 가능한 기본 ACL을 얻는다(SetUserFTA/Mozilla와 동일한 우회).
@@ -333,6 +392,23 @@ public static class ExplorerIntegration
     }
 
     /// <summary>
+    /// A292: 확장자 하나의 등록 여부 — <see cref="IsAssociationRegistered"/>(모듈 전체)의 확장자 단위 판.
+    /// 정본은 레지스트리다(설정 파일 키 없음) — 모듈 토글이 그랬던 것과 같은 원칙.
+    /// 구 형태(모듈 단일 ProgID) 폴백은 클래스 키 유무가 아니라 <b>이 확장자의 OpenWithProgids에
+    /// 그 ProgID가 걸려 있는지</b>로 본다 — 클래스 키는 모듈 공유라 확장자 하나를 끈 뒤에도 남아
+    /// '켜짐'으로 오판하게 되기 때문이다. 구 브랜드는 세지 않는다(A46 — 모듈 판과 같은 규칙).
+    /// </summary>
+    public static bool IsExtensionAssociationRegistered(IModule module, string ext)
+    {
+        using var extProg = Registry.CurrentUser.OpenSubKey(
+            $@"Software\Classes\{ExtProgId(module, ext)}");
+        if (extProg is not null) return true;
+
+        using var extKey = Registry.CurrentUser.OpenSubKey($@"Software\Classes\{ext}\OpenWithProgids");
+        return extKey?.GetValueNames().Contains(ProgId(module), StringComparer.OrdinalIgnoreCase) == true;
+    }
+
+    /// <summary>
     /// 구 브랜드(ZP·WinUtil)로 등록됐던 파일 연결·우클릭 메뉴 흔적을 전부 지운다 (A46, v0.86.0).
     /// 리브랜딩으로 ProgID가 바뀌면 구 키는 동작하지 않는 유령이 되므로 앱 시작 시 1회 청소한다.
     /// 실패해도 앱 동작에는 영향이 없다.
@@ -374,6 +450,9 @@ public static class ExplorerIntegration
     /// 확장자마다 전용 ProgID를 만들어 등록한다(A23) — DefaultIcon이 확장자별 아이콘
     /// (모듈 색 + 확장자 글씨 + kotu 표식)을 가리킨다. OpenWithProgids 등록이라 기본 앱
     /// 강탈이 아니라 후보 등록 — 기본 앱 지정은 Windows 설정에서 사용자가 한다.
+    /// A292: 설정 화면·exe 이동 재등록은 이제 확장자 단위 판
+    /// (<see cref="RegisterExtensionAssociation"/>)을 쓴다 — 이 모듈 일괄 판은 호출처가 없지만
+    /// 확장자 판의 원형이자 일괄 등록 진입로로 남긴다(해제 판도 같다).
     /// </summary>
     /// <param name="module">대상 모듈.</param>
     /// <param name="progress">확장자 하나를 끝낼 때마다 n/m을 보고할 곳 (A77, v0.106.0). 없으면 보고 안 함.</param>
@@ -383,22 +462,7 @@ public static class ExplorerIntegration
         var done = 0;
         foreach (var ext in module.SupportedExtensions)
         {
-            var progId = ExtProgId(module, ext);
-            using (var progKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}"))
-            {
-                progKey.SetValue(null, $"{module.BrandName} {ext.TrimStart('.').ToUpperInvariant()} file");
-                using (var icon = progKey.CreateSubKey("DefaultIcon"))
-                    icon.SetValue(null, FileIconPath(ext) is { } ico ? $"\"{ico}\"" : $"\"{ExePath}\",0");
-                using (var command = progKey.CreateSubKey(@"shell\open\command"))
-                    command.SetValue(null, $"\"{ExePath}\" \"%1\"");
-            }
-
-            using (var extKey = Registry.CurrentUser.CreateSubKey(
-                       $@"Software\Classes\{ext}\OpenWithProgids"))
-            {
-                extKey.SetValue(progId, Array.Empty<byte>(), RegistryValueKind.None);
-            }
-
+            WriteExtensionClassKeys(module, ext);
             progress?.Report(new AssociationProgress(++done, total, AssociationProgress.Registering));
         }
 
@@ -407,6 +471,59 @@ public static class ExplorerIntegration
         foreach (var legacyProgId in LegacyProgIds(module))
             RemoveAssociationKeys(module, legacyProgId, removeExtProgIds: true);
         RegisterCapabilities(module); // 설정 '기본 앱' 목록 노출 (A25, v0.61.0)
+        NotifyShell();
+    }
+
+    /// <summary>확장자 하나의 클래스 키 기록(전용 ProgID + DefaultIcon + open command + OpenWithProgids 후보 등록).
+    /// <see cref="RegisterAssociation"/>의 루프 본문을 A292에서 확장자 단위 판과 공유하도록 추출한 것 — 내용 무변경.</summary>
+    private static void WriteExtensionClassKeys(IModule module, string ext)
+    {
+        var progId = ExtProgId(module, ext);
+        using (var progKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{progId}"))
+        {
+            progKey.SetValue(null, $"{module.BrandName} {ext.TrimStart('.').ToUpperInvariant()} file");
+            using (var icon = progKey.CreateSubKey("DefaultIcon"))
+                icon.SetValue(null, FileIconPath(ext) is { } ico ? $"\"{ico}\"" : $"\"{ExePath}\",0");
+            using (var command = progKey.CreateSubKey(@"shell\open\command"))
+                command.SetValue(null, $"\"{ExePath}\" \"%1\"");
+        }
+
+        using (var extKey = Registry.CurrentUser.CreateSubKey(
+                   $@"Software\Classes\{ext}\OpenWithProgids"))
+        {
+            extKey.SetValue(progId, Array.Empty<byte>(), RegistryValueKind.None);
+        }
+    }
+
+    /// <summary>
+    /// A292: 확장자 하나를 등록 — <see cref="RegisterAssociation"/>(모듈 전체)의 확장자 단위 판.
+    /// 구 형태·구 브랜드 청소도 <b>이 확장자 범위만</b> 한다(모듈 공유 클래스 키는 남긴다 —
+    /// 다른 확장자가 아직 기대고 있을 수 있고, 구 브랜드 잔재는 앱 시작 시
+    /// <see cref="CleanUpLegacyBrandRegistrations"/>가 마저 지운다).
+    /// </summary>
+    public static void RegisterExtensionAssociation(IModule module, string ext)
+    {
+        WriteExtensionClassKeys(module, ext);
+
+        // 이 확장자 범위의 구 형태(모듈 단일 ProgID)·구 브랜드 청소 — RemoveAssociationKeys의
+        // 루프 본문과 같은 코드(RemoveExtensionAssociationKeys)를 확장자 하나에만 적용한다.
+        RemoveExtensionAssociationKeys(ProgId(module), ext, removeExtProgId: false);
+        foreach (var legacyProgId in LegacyProgIds(module))
+            RemoveExtensionAssociationKeys(legacyProgId, ext, removeExtProgId: true);
+        RegisterCapabilityExtension(module, ext); // 설정 '기본 앱' 목록 노출 (A25, v0.61.0)
+        NotifyShell();
+    }
+
+    /// <summary>
+    /// A292: 확장자 하나를 해제 — <see cref="UnregisterAssociation"/>(모듈 전체)의 확장자 단위 판.
+    /// UserChoice(기본 앱 선택)는 모듈 판과 같이 건드리지 않는다.
+    /// </summary>
+    public static void UnregisterExtensionAssociation(IModule module, string ext)
+    {
+        RemoveExtensionAssociationKeys(ProgId(module), ext, removeExtProgId: true);
+        foreach (var legacyProgId in LegacyProgIds(module))
+            RemoveExtensionAssociationKeys(legacyProgId, ext, removeExtProgId: true);
+        UnregisterCapabilityExtension(ext); // (A25, v0.61.0)
         NotifyShell();
     }
 
@@ -433,24 +550,33 @@ public static class ExplorerIntegration
         var done = 0;
         foreach (var ext in module.SupportedExtensions)
         {
-            using var extKey = Registry.CurrentUser.OpenSubKey(
-                $@"Software\Classes\{ext}\OpenWithProgids", writable: true);
-            if (extKey?.GetValueNames().Contains(progId, StringComparer.OrdinalIgnoreCase) == true)
-                extKey.DeleteValue(progId, throwOnMissingValue: false);
-
-            if (removeExtProgIds)
-            {
-                var extProgId = progId + ext;
-                if (extKey?.GetValueNames().Contains(extProgId, StringComparer.OrdinalIgnoreCase) == true)
-                    extKey.DeleteValue(extProgId, throwOnMissingValue: false);
-                Registry.CurrentUser.DeleteSubKeyTree(
-                    $@"Software\Classes\{extProgId}", throwOnMissingSubKey: false);
-            }
-
+            RemoveExtensionAssociationKeys(progId, ext, removeExtProgIds);
             progress?.Report(new AssociationProgress(++done, total, AssociationProgress.Unregistering));
         }
 
         Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{progId}", throwOnMissingSubKey: false);
+    }
+
+    /// <summary>
+    /// progId가 확장자 하나에 남긴 등록 흔적(OpenWithProgids 값 + — 요청 시 — 파생 ProgID 클래스 키)을
+    /// 지운다. <see cref="RemoveAssociationKeys"/>의 루프 본문을 A292에서 확장자 단위 판과 공유하도록
+    /// 추출한 것 — 내용 무변경. 모듈 단일 ProgID 클래스 키(모듈 공유)는 여기서 지우지 않는다.
+    /// </summary>
+    private static void RemoveExtensionAssociationKeys(string progId, string ext, bool removeExtProgId)
+    {
+        using var extKey = Registry.CurrentUser.OpenSubKey(
+            $@"Software\Classes\{ext}\OpenWithProgids", writable: true);
+        if (extKey?.GetValueNames().Contains(progId, StringComparer.OrdinalIgnoreCase) == true)
+            extKey.DeleteValue(progId, throwOnMissingValue: false);
+
+        if (removeExtProgId)
+        {
+            var extProgId = progId + ext;
+            if (extKey?.GetValueNames().Contains(extProgId, StringComparer.OrdinalIgnoreCase) == true)
+                extKey.DeleteValue(extProgId, throwOnMissingValue: false);
+            Registry.CurrentUser.DeleteSubKeyTree(
+                $@"Software\Classes\{extProgId}", throwOnMissingSubKey: false);
+        }
     }
 
     // ---------- 우클릭 메뉴: 압축 파일 → "Extract here with {압축 모듈 BrandName}" ----------
@@ -569,9 +695,16 @@ public static class ExplorerIntegration
             foreach (var module in modules.Where(m => m.SupportedExtensions.Count > 0
                                                       && m.RegistersFileAssociations))
             {
-                if (!IsAssociationRegistered(module)) continue;
+                // A292: 등록 단위가 확장자가 되면서 재등록도 <b>지금 등록돼 있는 확장자만</b> 다시 쓴다 —
+                // 종전 RegisterAssociation(모듈 전체)을 그대로 부르면 사용자가 꺼 둔 확장자까지
+                // 되살아난다("이미 켜 둔 등록만 대상" 원칙 유지). 검사는 종전대로 대표 1개
+                // (AssociationCommandIsCurrent)로 충분하다 — 등록 시점이 같아 함께 어긋난다.
+                var registeredExts = module.SupportedExtensions
+                    .Where(ext => IsExtensionAssociationRegistered(module, ext)).ToList();
+                if (registeredExts.Count == 0) continue;
                 if (AssociationCommandIsCurrent(module)) continue;
-                RegisterAssociation(module); // 전 확장자의 command·DefaultIcon·Capabilities 재기록
+                foreach (var ext in registeredExts)
+                    RegisterExtensionAssociation(module, ext); // command·DefaultIcon·Capabilities 재기록
             }
 
             var archiveExts = modules.FirstOrDefault(m => m.Id == "archive")?.SupportedExtensions
