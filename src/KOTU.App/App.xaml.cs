@@ -90,6 +90,13 @@ public partial class App : Application
         // 호출은 셸에만 둔다. UI 스레드(플라이아웃 클릭)에서 불리고 실패는 전부 false로
         // 접힌다 — 안내 문구는 모듈이 띄운다.
         KOTU.Core.Integration.DefaultAudioInputHook.Setter = Integration.DefaultAudioInput.TrySetDefault;
+        // A306(v0.290.0): 영상 재생 중 화면보호기·디스플레이 꺼짐 억제 훅 배선 — 같은 이유(모듈은
+        // Core에만 의존 + 모듈 프로젝트에 DllImport 0)로 kernel32 SetThreadExecutionState는
+        // 셸에만 둔다. 이 API는 스레드 단위라 반드시 UI 스레드에서 걸고 풀어야 하는데, 호출은
+        // 영상 뷰의 재생 상태 전이(전부 UI 스레드)에서만 오고 창이 여럿이어도 UI 스레드는
+        // 하나라(WindowManager 주석) 그 조건이 구조적으로 성립한다. 창별 요구 개수 세기는
+        // 훅이 한다 — 여기 구현은 "걸어라/풀어라"만 받는다.
+        KOTU.Core.Integration.DisplayAwakeHook.Setter = Integration.DisplayAwake.Set;
 
         // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
         // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당

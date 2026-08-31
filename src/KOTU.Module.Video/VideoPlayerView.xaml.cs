@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Core.Integration;
 using KOTU.Core.Navigation;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
@@ -344,6 +345,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         Loaded += (_, _) => Focus(FocusState.Programmatic);
         Unloaded += OnUnloaded;
 
+        // A306: 화면 꺼짐 억제 설정이 바뀌면 재생 중이어도 그 자리에서 반영한다(다음 재생부터가
+        // 아니다). 알림은 다른 창의 설정 화면에서 오지만 UI 스레드가 하나라 그대로 이 스레드다
+        // (SettingsView의 UiScale.Changed 구독과 같은 형태 — 해제는 OnUnloaded에서).
+        PlaybackSettings.KeepDisplayAwakeChanged += UpdateDisplayAwake;
+
         // 휠 = 볼륨 (플레이어 관례), Ctrl+휠 = 줌 (A98). 자식 요소가 소비해도 받도록 handledEventsToo.
         VideoSurface.AddHandler(PointerWheelChangedEvent,
             new PointerEventHandler(OnSurfaceWheel), handledEventsToo: true);
@@ -652,6 +658,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         _startOverlayTimer?.Stop(); // A12: 해체 후 틱 방지
         _feedbackTimer?.Stop();     // A13
 
+        // A306: 정적 이벤트 구독 해제(안 하면 해체된 뷰가 산다)와 억제 해제. _tornDown이 이미
+        // 서 있어 UpdateDisplayAwake는 무조건 "해제"로 판정한다 — 걸어 둔 적이 없으면 무동작이다.
+        PlaybackSettings.KeepDisplayAwakeChanged -= UpdateDisplayAwake;
+        UpdateDisplayAwake();
+
         _settings.Set("video.volume", (int)VolumeSlider.Value);
         _settings.Save();
 
@@ -717,6 +728,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     {
         PlayButton.Content = "❚❚";
         PlaybackStateChanged?.Invoke(); // A186: 재생 시작 — 셸이 자동 숨김 카운트를 시작한다
+        UpdateDisplayAwake();           // A306: 재생 중 = 화면 꺼짐 억제(설정이 켜져 있을 때)
 
         // A12: 새 미디어의 첫 Playing에서만 (일시정지 해제 Playing 제외)
         if (_pendingStartOverlay)
@@ -754,6 +766,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         {
             PlayButton.Content = "▶";
             PlaybackStateChanged?.Invoke(); // A186: 일시정지 = 바 상시 표시
+            UpdateDisplayAwake();           // A306: 일시정지 = 억제 해제
         });
 
     private void OnPlayerEndReached(object? sender, EventArgs e)
@@ -884,6 +897,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         SeekSlider.Value = SeekSlider.Maximum;
         _suppressSeekEvent = false;
         PlaybackStateChanged?.Invoke(); // A186: 재생 종료(Ended) = 바 상시 표시
+        UpdateDisplayAwake();           // A306: 정지 = 억제 해제(루프·목록 진행 전이는 곧 Playing이라 여기 안 온다)
     }
 
     /// <summary>
@@ -914,7 +928,11 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private void OnPlayerError(object? sender, EventArgs e)
     {
         ShowMessage($"Playback failed: {Path.GetFileName(_filePath ?? string.Empty)}");
-        Dispatch(() => PlaybackStateChanged?.Invoke()); // A186: 재생 실패 = 정지와 동일(바 상시 표시)
+        Dispatch(() =>
+        {
+            PlaybackStateChanged?.Invoke(); // A186: 재생 실패 = 정지와 동일(바 상시 표시)
+            UpdateDisplayAwake();           // A306: 같은 취급 — 억제 해제
+        });
     }
 
     private void Dispatch(Action action)
@@ -931,6 +949,42 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         PlaceholderText.Text = text;
         PlaceholderText.Visibility = Visibility.Visible;
     });
+
+    // ---------- A306 화면보호기·디스플레이 꺼짐 억제 ----------
+
+    /// <summary>
+    /// A306: 이 뷰가 지금 억제를 걸어 두었는가. 훅(<see cref="DisplayAwakeHook"/>)은 개수만 세므로
+    /// Acquire/Release를 1:1로 짝지을 책임은 이 플래그에 있다 — 모든 전이는
+    /// <see cref="UpdateDisplayAwake"/> 한 곳을 지나며 이 값과 목표 상태를 대조해
+    /// <b>필요한 호출만</b> 낸다(재생 → 일시정지 → 재생을 반복해도 카운트가 새지 않는다).
+    /// </summary>
+    private bool _displayAwakeHeld;
+
+    /// <summary>
+    /// A306: "설정이 켜져 있고 + 지금 실제로 재생 중"이면 억제를 걸고, 아니면 푼다.
+    /// 호출 지점(전부 UI 스레드 — SetThreadExecutionState가 스레드 단위라 필수 조건이다):
+    ///   ① Playing 디스패치      — 재생 시작·일시정지 해제·다음 파일·루프 재시작 전부 여기로 온다
+    ///   ② Paused 디스패치       — 일시정지
+    ///   ③ EOF 정지 전이(전이 5) — 루프·목록 진행 전이는 곧 Playing이 오므로 건드리지 않는다
+    ///                             (여기서 풀었다 곧바로 다시 거는 깜빡임을 만들지 않기 위함)
+    ///   ④ EncounteredError      — 실패 = 정지와 같은 취급(A186 규칙과 같은 축)
+    ///   ⑤ Unloaded              — 뷰(창) 해체. _tornDown이 이미 서 있어 무조건 해제로 판정된다
+    ///   ⑥ 설정 변경 알림        — 재생 중에 꺼도 그 자리에서 풀린다(다음 재생부터가 아니다)
+    /// 값은 캐시하지 않고 전이마다 라이브로 읽는다(설정 절의 관례).
+    /// 재생 여부는 <see cref="IsPlaying"/>(libvlc IsPlaying) — Playing/Paused/EndReached 디스패치
+    /// 시점에는 상태가 이미 반영돼 있다(그 속성 주석의 A186 근거 그대로).
+    /// </summary>
+    private void UpdateDisplayAwake()
+    {
+        var want = !_tornDown && IsPlaying &&
+            _settings.Get(PlaybackSettings.KeepDisplayAwakeKey,
+                PlaybackSettings.KeepDisplayAwakeDefault);
+        if (want == _displayAwakeHeld) return;
+
+        _displayAwakeHeld = want;
+        if (want) DisplayAwakeHook.Acquire();
+        else DisplayAwakeHook.Release();
+    }
 
     // ---------- 자막 ----------
 

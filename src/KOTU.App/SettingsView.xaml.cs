@@ -943,14 +943,19 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     }
 
     /// <summary>
-    /// A258(v0.258.0): Playback 절 — 영상·오디오 <b>공용</b> 재생 옵션. 지금은
-    /// "Auto-play next file" 토글 하나뿐이다(플레이어 바에는 대응 버튼을 두지 않는다 — A255
+    /// A258(v0.258.0): Playback 절 — 영상·오디오 <b>공용</b> 재생 옵션. 첫 항목은
+    /// "Auto-play next file" 토글이다(플레이어 바에는 대응 버튼을 두지 않는다 — A255
     /// 루프 버튼과 뜻이 겹쳐 보이기 때문). 배선은 A234 셸 진단 토글의 최소형에서 알림 한 줄까지
     /// 뺀 것이다: Set → Save로 끝난다 — 두 플레이어가 파일이 끝날 때마다 값을 새로 읽으므로
     /// 열린 창에 전파할 이벤트가 없다(<see cref="PlaybackSettings"/> 주석). 레지스트리·워커와
     /// 무관하므로 위 파일 연결 토글들의 busy·<see cref="_suppressToggle"/> 축은 쓰지 않는다.
     /// 값이 <b>루프 모드가 '없음'일 때만</b> 효력이 있다는 사실은 아래 설명 줄이 고지한다.
     /// 카드 문법은 A197/A220(스위치 왼쪽 + 제목 TextBlock, 내장 On/Off 문구 제거) 그대로다.
+    /// A306(v0.290.0): 둘째 항목 "Keep the display awake while a video plays"가 그 아래 선다.
+    /// 카드 문법은 같지만 <b>알림 한 줄이 되살아난다</b>(Set → Save → NotifyKeepDisplayAwakeChanged)
+    /// — 재생 도중에 끄면 그 자리에서 억제가 풀려야 하기 때문이다(A258 키처럼 EOF에 읽는 값이
+    /// 아니다). 구독자는 열린 영상 뷰들이다(UiScale.Changed → MainWindow와 같은 축).
+    /// 카드 사이 간격은 Root의 Spacing 12가 만든다 — 카드에 아래 여백을 따로 두지 않는다.
     /// </summary>
     private void BuildPlaybackSection()
     {
@@ -996,6 +1001,53 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             TextWrapping = TextWrapping.Wrap,
         });
         Root.Children.Add(cardBody);
+
+        // A306: 화면보호기·화면 꺼짐 억제 토글. 위 카드와 같은 문법이고, 저장 뒤 알림 한 줄만 더 붙는다.
+        var awakeToggle = new ToggleSwitch
+        {
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsOn = _settings.Get(PlaybackSettings.KeepDisplayAwakeKey,
+                PlaybackSettings.KeepDisplayAwakeDefault),
+        };
+        awakeToggle.Toggled += (_, _) =>
+        {
+            _settings.Set(PlaybackSettings.KeepDisplayAwakeKey, awakeToggle.IsOn);
+            _settings.Save(); // 즉시 저장 — 재생 설정 관용구(EQ·루프 모드와 같은 축)
+            // 재생 중에 끄면 그 자리에서 억제가 풀려야 한다 — 열린 영상 뷰들이 이 알림을 듣는다.
+            PlaybackSettings.NotifyKeepDisplayAwakeChanged();
+        };
+
+        var awakeHeaderRow = new Grid { ColumnSpacing = 8 };
+        awakeHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        awakeHeaderRow.ColumnDefinitions.Add(
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var awakeTitle = new TextBlock
+        {
+            Text = "Keep the display awake while a video plays",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(awakeToggle, 0);
+        Grid.SetColumn(awakeTitle, 1);
+        awakeHeaderRow.Children.Add(awakeToggle);
+        awakeHeaderRow.Children.Add(awakeTitle);
+
+        var awakeCardBody = new StackPanel { Spacing = 6 };
+        awakeCardBody.Children.Add(awakeHeaderRow);
+        awakeCardBody.Children.Add(new TextBlock
+        {
+            Text = "The screen saver and display timeout stay off while a video is actually "
+                + "playing, and come back as soon as it is paused, stopped or closed. "
+                + "Audio playback is not affected.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        Root.Children.Add(awakeCardBody);
     }
 
     /// <summary>
