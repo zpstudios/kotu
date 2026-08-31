@@ -47,8 +47,11 @@ public sealed partial class MainWindow : Window
     //   철거됐다(반투명 표시 축 자체가 소멸). F11+F12를 이어 누르면 각 down이 독립 토글이라
     //   구 "동시 호출"도 자연 성립한다(특례 코드 불요).
     // 셸 수준 구성 상태(S1~S4, ShellState)는 '오픈 파일' 버튼·경계 버튼의 분배 기준 — 아래 CurrentShellState.
-    // A186(모드2 폐지): Enter는 A151의 3단 순환에서 **Alt+Enter와 동일한 전체화면 토글**로
-    // 단순화됐다 — 아래 ShellViewMode/_viewMode 절 참고.
+    // A305(모드2 부활 + 오버라이드): A186이 "Enter = 전체화면 토글"로 단순화한 것을 되뒤집어,
+    //   콘텐츠가 열려 있으면 Enter가 **모드1 → 모드2 → 모드3 → 모드1** 계단을 돈다(토글 아님).
+    //   그 위에 F11/F12(좌/우 사이드바 개별 토글)를 한 번이라도 쓰면 **사이드바 오버라이드**가
+    //   서고, 그 뒤로는 모드1/2 구분이 사라져 커스텀 일반 ↔ 커스텀 전체화면 2단이 된다.
+    //   상세 = 아래 ShellViewMode/_viewMode/_sidebarOverride 절과 EffectiveSidebarStates.
     // A119(v0.145.0): 패널 컨텍스트에 "패널 제공 뷰"(ISidePanelProvider — 정보 모듈)가 추가됐다.
     //   그 뷰에서는 좌/우 패널 자리에 파일 리스트/정보 대신 모듈 고유 콘텐츠(SidePanelHost 호스트)가
     //   뜨고, 키·힌트·경계 버튼은 전부 같은 경로다. A196(게이트 완화)부터는 설정·미지원 안내·
@@ -126,7 +129,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// S4 진입 직전의 좌/우 패널 상태 스냅샷(A90) — Esc/'오픈 파일' 재누름 복귀의 원본(A176: 2상태).
-    /// A151 <see cref="_fullScreenRestore"/>(모드3 복귀 스냅샷)와는 별개 개념이라 섞지 않는다.
+    /// A305: 전체화면 복귀 스냅샷(구 _fullScreenRestore, A151·A203·A274)이 폐지돼 이제 셸의
+    /// 패널 스냅샷은 이것 하나다 — 모드에 따른 사이드바 숨김은 저장이 아니라 계산이 됐다
+    /// (<see cref="EffectiveSidebarStates"/>). 스냅샷은 S4의 "빌려 연 구획만 되돌리기"에만 남는다.
     /// 파일이 열려 S4가 자동 종료되면 버린다(복귀 없음 — 새 콘텐츠가 화면을 차지).
     /// </summary>
     private (OverlayState List, OverlayState Info)? _s4Restore;
@@ -146,8 +151,11 @@ public sealed partial class MainWindow : Window
             // A205: 설정 화면은 게이트에서 빠져 A196 이전 분류(None)로 복귀한다 — 빈 셸과 같은
             // 행이라 경계 버튼·'오픈 파일' 버튼 분배가 keymap 표 밖으로 돌아간다.
             if (!HasPanelContext) return ShellState.None;
-            var left = _listSide.State != OverlayState.Closed;
-            var right = _infoSide.State != OverlayState.Closed;
+            // A305: "지금 화면 구성"이 기준이므로 요청 상태가 아니라 **실효 상태**를 본다 —
+            // 모드2·모드3(오버라이드 없음)에서는 사이드바가 화면에 없으니 S2로 분류된다.
+            var (effList, effInfo) = EffectiveSidebarStates();
+            var left = effList != OverlayState.Closed;
+            var right = effInfo != OverlayState.Closed;
             return (left, right) switch
             {
                 (true, true) => ShellState.S3B,
@@ -170,30 +178,43 @@ public sealed partial class MainWindow : Window
     private readonly OverlaySide _infoSide = new(); // 우측 정보 (F12)
 
     /// <summary>
-    /// 셸 표시 모드(A151 3단 → **A186 2단**): Windowed = 창 + 하단 바 / FullScreen = 전체화면
-    /// (작업표시줄까지 없음). A151의 FullWindow(모드2 — 바·패널만 숨김)는 A186에서 폐지됐고,
-    /// Enter·Alt+Enter·Full screen 버튼이 전부 같은 전체화면 토글(ToggleFullScreen — 진입 시
-    /// 복귀 스냅샷 기억)이다. A86의 "Enter = 좌/우 일괄 토글"은 A151이 폐지했다(부록 B 67).
+    /// 셸 표시 모드(A151 3단 → A186 2단 → **A305에서 다시 3단**):
+    /// <list type="bullet">
+    /// <item>Windowed = **모드 1** — 창 + 제목표시줄 + 하단 바 + 사이드바(요청 상태 그대로).
+    ///   오버라이드 뒤에는 같은 값이 **커스텀 일반 화면**을 뜻한다.</item>
+    /// <item>Panelless = **모드 2**(A305 신설) — 좌/우 사이드바만 사라지고 제목표시줄·하단 바는
+    ///   그대로, **창 크기·프레젠터도 그대로**다(모드1과의 유일한 차이가 사이드바 억제다).
+    ///   A151의 구 FullWindow와 이름·의미가 다르다: 그쪽은 바까지 숨겼고 A186에서 폐지됐다.
+    ///   오버라이드가 서면 이 값은 **도달 불가**가 된다(모드1/2 구분 소멸 — 사양).</item>
+    /// <item>FullScreen = **모드 3** — 프레젠터 전체화면(작업표시줄까지 없음). 오버라이드 뒤에는
+    ///   같은 값이 **커스텀 전체화면**(사이드바 유지한 채 전체화면)을 뜻한다.</item>
+    /// </list>
+    /// 모드 축과 오버라이드 축이 만나 실효 사이드바를 정한다 — <see cref="EffectiveSidebarStates"/>.
+    /// A86의 "Enter = 좌/우 일괄 토글"은 A151이 폐지했다(부록 B 67).
     /// </summary>
-    private enum ShellViewMode { Windowed, FullScreen }
+    private enum ShellViewMode { Windowed, Panelless, FullScreen }
 
     /// <summary>
     /// 현재 셸 표시 모드 — 창별 상태·저장하지 않는다(A151 ⑥, A110 상태 소유 규칙 정합).
     /// 하단 바 가시성의 두 입력 축(모드, A186 자동 숨김) 중 하나다: 바를 켜고 끄는 코드는
     /// <see cref="UpdateShellChrome"/> 하나뿐이고, 프레젠터 변화(생성자 AppWindow.Changed 구독)는
     /// 이 값을 동기화한 뒤 같은 함수를 부른다(외부 경로 전체화면과 되밟지 않게).
+    /// A305: 실효 사이드바의 입력 축이기도 해서, 전이의 단일 실행점(<see cref="SetViewMode"/>)이
+    /// 모드가 실제로 바뀌었을 때 <see cref="ApplyOverlayStates"/>를 겸해 부른다.
     /// </summary>
     private ShellViewMode _viewMode = ShellViewMode.Windowed;
 
     /// <summary>
-    /// 전체화면 복귀 스냅샷(A151 — Enter/Alt+Enter/Esc/버튼 공용): 진입 직전의 좌/우 패널 상태.
-    /// A186: 모드 축이 2단이 되어 스냅샷의 모드 항목은 제거(복귀 = 항상 창 모드) —
-    /// A176: 패널 축도 2상태(닫힘/도크)로 축소. A90 <see cref="_s4Restore"/>와 같은 관용구.
-    /// A274(A203 보완): 외부 경로 전체화면(이미지 더블클릭 등 — AppWindow.Changed 동기)도
-    /// 진입 시 기록·해제 시 복원한다(내부 Enter/Esc와 완전 대칭). 버리는 곳은 모드 리셋
-    /// (모듈 전환·파일 열기 — SetContentState)뿐이다. null이면 복귀는 패널 무변경으로 창 모드 폴백.
+    /// A305 **사이드바 오버라이드** — 사용자가 F11/F12(또는 같은 전이인 경계 핀 버튼)로 사이드바를
+    /// 직접 만진 적이 있는가. 한 번 서면 **이 창이 닫힐 때까지 내려가지 않는다**(취소 수단 없음 —
+    /// 사용자 사양). 서는 곳은 <see cref="MarkSidebarOverride"/> 하나, 내리는 곳은 없다.
+    /// 효과 두 가지: ① 모드1/2 구분 소멸(모드2는 도달 불가, Enter는 커스텀 일반 ↔ 커스텀 전체
+    /// 양방향 토글) ② 사이드바가 모드 억제를 받지 않는다(전체화면에서도 요청 상태 그대로).
+    /// ⓓ 저장하지 않는다 — 설정 키 없음. 창별 독립이라 <b>static이 아니다</b>(다중 창 무간섭).
+    /// A151·A203·A274의 전체화면 복귀 스냅샷(구 _fullScreenRestore)은 이 축이 흡수해 폐지됐다:
+    /// "진입 때 닫고 복귀 때 되돌리기"를 저장하는 대신 실효 상태를 매번 계산한다.
     /// </summary>
-    private (OverlayState List, OverlayState Info)? _fullScreenRestore;
+    private bool _sidebarOverride;
 
     /// <summary>지금 보여주는 모듈 ID. 빈 셸·설정·미지원 파일 안내면 null. 창 재사용 판단에 쓴다.</summary>
     public string? CurrentModuleId { get; private set; }
@@ -405,28 +426,30 @@ public sealed partial class MainWindow : Window
         // 표시는 UpdateShellChrome 한 함수만 정한다(구 v0.21.0의 "전체화면이면 바 숨김"
         // 직접 대입을 대체). 셸 밖 경로(이미지 더블클릭 토글 등)로 프레젠터가 바뀌어도 모드가 따라온다.
         // A274(A203 보완): 외부 경로 진입도 내부(Enter·버튼)와 같은 대접 — 구 "모드만 동기"는
-        // 패널을 안 닫는 구멍이었다(이미지 더블클릭 전체화면에서 사이드바 잔존). 진입 =
-        // EnterFullScreenRemembering 재사용(스냅샷 기록 + 양 패널 닫기), 해제 =
-        // RestoreFromFullScreen 재사용(스냅샷 복원 — Esc 대칭). 이중 실행 방어 3겹:
-        // ① 내부 전이(ToggleFullScreen 계열)는 SetViewMode가 _viewMode를 **SetPresenter보다
-        //    먼저** 맞추므로, 그 전이가 낳는 Changed에선 아래 두 분기 조건(모드 불일치)이 거짓 —
-        //    스냅샷이 다시 잡히지 않는다(발화 시점이 동기든 지연이든 무관).
-        // ② 외부 전이에서 재사용 호출이 다시 SetViewMode를 불러도 프레젠터가 이미 목표 상태라
-        //    SetPresenter를 안 만져 Changed가 재발화하지 않는다.
-        // ③ 각 함수 선두의 모드 가드(진입: FullScreen이면 return / 복귀: 스냅샷 소진)가 최후 방어.
+        // 패널을 안 닫는 구멍이었다(이미지 더블클릭 전체화면에서 사이드바 잔존).
+        // A305: 그 대칭이 **저장 없이 성립**한다 — 사이드바는 모드에서 계산되므로(억제 = 모드 축)
+        // 외부 진입도 SetViewMode 한 줄이면 패널이 함께 물러나고, 외부 해제도 한 줄이면
+        // 요청 상태가 그대로 되살아난다(구 EnterFullScreenRemembering/RestoreFromFullScreen 폐지).
+        // 외부 해제의 착지는 **모드 1**이다(Esc·'뒤로'와 같은 한 단계 되돌리기 — 모드2로 내려앉지
+        // 않는다). 이중 실행 방어 3겹:
+        // ① 내부 전이는 SetViewMode가 _viewMode를 **SetPresenter보다 먼저** 맞추므로, 그 전이가
+        //    낳는 Changed에선 아래 두 분기 조건(모드 불일치)이 거짓이다(동기·지연 무관).
+        // ② 외부 전이에서 부르는 SetViewMode는 프레젠터가 이미 목표 상태라 SetPresenter를 안
+        //    만져 Changed가 재발화하지 않는다.
+        // ③ SetViewMode 자신이 모드 무변경이면 ApplyOverlayStates를 건너뛴다(최후 방어).
         AppWindow.Changed += (sender, args) =>
         {
             if (!args.DidPresenterChange) return;
             var full = sender.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
             if (full && _viewMode != ShellViewMode.FullScreen)
             {
-                // 외부 진입 — 자동 숨김 재평가·크롬 갱신은 SetViewMode가 겸한다(아래 공통부 불요)
-                EnterFullScreenRemembering();
+                // 외부 진입 — 자동 숨김 재평가·크롬 갱신·패널 재적용은 SetViewMode가 겸한다
+                SetViewMode(ShellViewMode.FullScreen);
                 return;
             }
             if (!full && _viewMode == ShellViewMode.FullScreen)
             {
-                RestoreFromFullScreen(); // 외부 해제 — 스냅샷 복원(없으면 패널 무변경 폴백)
+                SetViewMode(ShellViewMode.Windowed); // 외부 해제 — Esc와 같은 착지(모드 1)
                 return;
             }
             ReevaluateBarAutoHide(); // A186: 전체화면 진입/해제 = 자동 숨김 재평가(표시 상태에서 재대기)
@@ -1624,14 +1647,17 @@ public sealed partial class MainWindow : Window
     private void SetContentState(IModule? module, string? filePath)
     {
         // A151 ⑤: 모드 리셋 — 모듈 전환·파일 열기(설정 진입·미지원 안내 포함, 전부 이 경로)는
-        // 창 모드로 돌아간다. 새 창은 인스턴스 필드 초기값이 이미 창 모드다. 복귀 스냅샷도 버린다.
+        // 창 모드로 돌아간다. 새 창은 인스턴스 필드 초기값이 이미 창 모드다.
         // 뷰 내부 탐색(◀/▶ 다음 파일 등 — OnContentOpened)은 같은 콘텐츠 세션의 연속으로 보고
         // 리셋하지 않는다(전체화면 슬라이드쇼가 화살표마다 풀리면 안 된다 — 구현 결정).
         // A186: 자동 숨김도 리셋 — 타이머 정지·바 복원(모듈 전환과의 경합 방지. 새 뷰의 재생이
         // 시작되면 PlaybackStateChanged가 다시 카운트를 연다).
-        _fullScreenRestore = null;
+        // A305: 모드 리셋은 모드2(Panelless)까지 함께 걷는다 — 콘텐츠가 바뀌면 계단은 항상 1층부터다.
+        // refresh:false = 바로 아래 ExitOpenFileBrowsing과 같은 관용구(이 메서드 말미의
+        // ApplyOverlayStates가 곧 다시 그린다 — 콘텐츠 필드가 갱신되기 전에 미리 그리는 낭비 방지).
+        // 오버라이드(_sidebarOverride)는 여기서 내리지 않는다 — 인스턴스 수명 축이다(사양: 취소 불가).
         ResetBarAutoHide();
-        if (_viewMode != ShellViewMode.Windowed) SetViewMode(ShellViewMode.Windowed);
+        if (_viewMode != ShellViewMode.Windowed) SetViewMode(ShellViewMode.Windowed, refresh: false);
         // A90: 콘텐츠·모듈이 바뀌면 S4('오픈 파일' 탐색)는 자동 종료 — 파일 열기(더블클릭·Enter·인포
         // 드랍)는 물론 숫자 키 모듈 전환·설정 진입도 같은 경로로 닫힌다. 새 콘텐츠가 화면을 차지하므로
         // 복귀 스냅샷은 버리고(restore:false), 좌/우는 지금 상태 그대로 A86 "상태는 콘텐츠를 넘어 유지"
@@ -2122,6 +2148,9 @@ public sealed partial class MainWindow : Window
     /// 사이드 키(A158: F11/F12) 최초 down(오토리피트 제외) = **그 쪽 사이드바 토글**
     /// (A176 확정, 부록 B 72 — A58 계보의 홀드/2초 승격/2연타 전이 전면 폐지).
     /// 양쪽 사이드가 각자 독립 토글이라 F11+F12를 이어 눌러도 자연히 동시 호출이 성립한다.
+    /// A305: 이 키가 **사이드바 오버라이드**를 세우는 두 입구 중 하나다(다른 하나 = 같은 전이인
+    /// 경계 핀 버튼). 실행부는 <see cref="ToggleOpaqueDock"/> 하나로 합쳤다 — 키와 버튼이 늘 같은
+    /// 결과를 낸다는 A176 규칙을 오버라이드 표지에도 그대로 적용하기 위해서다.
     /// </summary>
     private void OnOverlaySideDown(OverlaySide side)
     {
@@ -2132,10 +2161,7 @@ public sealed partial class MainWindow : Window
         // A196부터 컨텍스트에 포함 — 기본 도크를 키로 닫고 다시 여는 입력이 성립해야 한다.
         if (!HasPanelContext) return;
 
-        side.State = side.State == OverlayState.OpaqueDocked
-            ? OverlayState.Closed
-            : OverlayState.OpaqueDocked;
-        ApplyOverlayStates();
+        ToggleOpaqueDock(side);
     }
 
     private void OnRootKeyUp(object sender, KeyRoutedEventArgs e)
@@ -2167,7 +2193,7 @@ public sealed partial class MainWindow : Window
     // 회수로 제거됐다 — UI 배율의 변경 깔때기는 설정 콤보(SettingsView.BuildDisplaySection) 하나다.
     // UiScale 적용 축 자체(ApplyUiScale·UiScale.Changed 구독)는 존치.
 
-    // ---------- 셸 표시 모드 토글 (A151 3단 순환 → A186 전체화면 토글로 단순화) ----------
+    // ---------- 셸 표시 모드 (A151 3단 → A186 2단 토글 → **A305에서 3단 계단 + 오버라이드**) ----------
 
     /// <summary>
     /// Enter = **Alt+Enter와 동일한 전체화면 토글**(A186 ① — A151의 3단 순환 폐지).
@@ -2189,33 +2215,37 @@ public sealed partial class MainWindow : Window
     ///    (실측 불가 축 — 실기기 확인 포인트), 포커스가 메인 트리에 남은 채 팝업이 열려 있는
     ///    갈래(콤보 열림 등)에서 확정 Enter를 뺏지 않기 위한 보수 게이트다(A234
     ///    GetOpenPopupsForXamlRoot 선례 재사용).
-    /// 그 밖(셸 크롬 버튼·설정의 닫힌 콤보·토글 등 일반 포커스)은 소비하고 토글한다 —
-    /// **버튼 포커스 중 Enter = 전체화면이 사양이다**(클릭은 Space·마우스 — A274 확정).
+    /// 그 밖(셸 크롬 버튼·설정의 닫힌 콤보·토글 등 일반 포커스)은 소비하고 모드를 옮긴다 —
+    /// **버튼 포커스 중 Enter = 모드 전환이 사양이다**(클릭은 Space·마우스 — A274 확정).
     /// 영상 모듈도 이 경로다 — 영상 전용 Enter=전체화면 액셀러레이터는 A151에서 제거된 그대로다.
+    /// A305: 실행부가 전체화면 토글에서 **모드 계단**(<see cref="AdvanceViewMode"/>)으로 바뀌었다 —
+    /// 게이트 4종(①~④)은 그대로다.
     /// </summary>
     private void OnShellEnter(KeyRoutedEventArgs e)
     {
-        if (e.KeyStatus.WasKeyDown) return; // ① 오토리피트 — 토글이 연사되면 안 된다
+        if (e.KeyStatus.WasKeyDown) return; // ① 오토리피트 — 계단이 연사되면 안 된다
         if (IsTextInputFocused()) return; // ② 에디터 줄바꿈 보존
         if (HotkeySupport.ShouldPassThrough(RootLayout)) return; // ③ 탐색기 표면 — 선택 열기 우선
         if (IsAnyPopupOpen()) return; // ④ 팝업 열림 — 확정 Enter 보존
         e.Handled = true;
-        ToggleFullScreen();
+        AdvanceViewMode();
     }
 
     /// <summary>
-    /// Alt+Enter(A151 ② — A186에서 Enter와 한 실행부로 수렴): 전체화면 토글 + 복귀 지점 기억.
+    /// Alt+Enter(A151 ② — A186에서 Enter와 한 실행부로 수렴): 모드 계단 진행.
     /// 텍스트 입력·탐색기 표면 양보 없이 동작한다(직행 단축키 — A274로 호출 층이 터널링이 되어
     /// 이 무양보가 내장 처리보다도 앞선다). 오토리피트만 무시(연사로 왕복하지 않게) — 구 버블
     /// 시절의 e.Handled 양보 검사는 터널링엔 앞선 소비자가 없어 삭제(A226와 같은 근거).
     /// 소비하면 이 Alt의 단독 up도 소비 대상이다(OS 메뉴 모드 회피 — A107, 버블 시절 호출부의
     /// MarkAltUseIfConsumed를 이 안으로 이식).
+    /// A305 ⓑ(오케스트레이터 확정): **Alt+Enter = Enter와 동일**한 계단이다 — 현행 동치를 새
+    /// 3단 계단에도 그대로 잇는다(양보 유무만 다르고 실행부는 하나).
     /// </summary>
     private void OnShellAltEnter(KeyRoutedEventArgs e)
     {
         if (e.KeyStatus.WasKeyDown) return;
         e.Handled = true;
-        ToggleFullScreen();
+        AdvanceViewMode();
         MarkAltUseIfConsumed(e);
     }
 
@@ -2240,66 +2270,96 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 전체화면 토글의 단일 실행부(A186): Enter·Alt+Enter·하단 바 "Full screen" 버튼이 전부
-    /// 이 한 함수로 수렴한다 — 창 모드면 진입(복귀 스냅샷 기억), 전체화면이면 스냅샷 복귀.
+    /// **A305 모드 계단의 단일 실행부** — Enter·Alt+Enter가 여기로 수렴한다(하단 바 버튼은
+    /// 계단이 아니라 목적지 직행이라 아래 <see cref="EnterFullScreenMode"/> 몫이다).
+    /// <list type="bullet">
+    /// <item>기본(오버라이드 없음) + 콘텐츠 열림 = **모드1 → 모드2 → 모드3 → 모드1** 순환.
+    ///   모드3 다음이 모드1인 것이 핵심이다 — 창↔전체 토글이 아니다(사용자 사양 ③).</item>
+    /// <item>오버라이드 뒤 = 커스텀 일반 ↔ 커스텀 전체화면 **양방향 토글**(모드2 없음 — 사양).</item>
+    /// <item>ⓔ 콘텐츠가 없으면(썸네일 뷰 S1·설정·정보 모듈·미지원 안내) **A274 현행 동작 유지** =
+    ///   전체화면 토글. 새 계단은 "컨텐츠 오픈 상태에서만"이 오케스트레이터 확정이다.</item>
+    /// </list>
     /// </summary>
-    private void ToggleFullScreen()
+    private void AdvanceViewMode()
     {
-        if (_viewMode == ShellViewMode.FullScreen) RestoreFromFullScreen();
-        else EnterFullScreenRemembering();
+        if (!HasOpenContent || _sidebarOverride)
+        {
+            // 2단 토글(커스텀 2모드 · 콘텐츠 없는 화면의 현행 동작)
+            SetViewMode(_viewMode == ShellViewMode.FullScreen
+                ? ShellViewMode.Windowed
+                : ShellViewMode.FullScreen);
+            return;
+        }
+        SetViewMode(_viewMode switch
+        {
+            ShellViewMode.Windowed => ShellViewMode.Panelless,   // 모드1 → 모드2
+            ShellViewMode.Panelless => ShellViewMode.FullScreen, // 모드2 → 모드3
+            _ => ShellViewMode.Windowed,                          // 모드3 → **모드1**(복귀, 토글 아님)
+        });
+    }
+
+    // ---------- 하단 바 모드 버튼 진입점 (A305 — 배치 2가 얹힐 훅) ----------
+    // 배치 2 사양: 하단 바의 기존 "Full screen" 버튼 자리에 버튼 2종을 둔다 —
+    //   ⓐ 1 → 2 전환 버튼 = EnterPanellessMode()  ⓑ 2 → 3 전환 버튼 = EnterFullScreenMode()
+    //   (ⓑ는 커스텀 일반 → 커스텀 전체에도 같은 버튼을 쓴다 — 사용자 사양).
+    // 배치 1에서는 기존 버튼 하나를 ⓑ에 연결만 해 뒀다(OnFullScreenClick). 버튼 신설·모듈 바
+    // 여백 재계수(XAML ModuleBarHost.Margin 우측 44 = 버튼 1개 기준 · UpdateOpenFileButton의
+    // 좌측 82/44 대칭 값)는 배치 2 몫이다 — 이 두 메서드는 그 배치가 그대로 Click에 물릴 수 있게
+    // internal로 열어 둔다(호출부가 늘어도 상태 전이 규칙은 여기 한 곳에 남는다).
+
+    /// <summary>
+    /// 모드 1 → 모드 2 직행(A305 — 배치 2의 ⓐ 버튼 진입점). 계단이 아니라 목적지 지정이라
+    /// 모드3에서는 무동작이다(내려가는 길은 Esc·Enter 계단 몫). 오버라이드 뒤에는 모드2가
+    /// 도달 불가라 역시 무동작 — 배치 2는 그 상태에서 버튼을 비활성으로 두면 된다.
+    /// </summary>
+    internal void EnterPanellessMode()
+    {
+        if (_sidebarOverride || !HasOpenContent) return; // 모드1/2 구분이 없는 세계 · 계단 밖 화면
+        if (_viewMode != ShellViewMode.Windowed) return;
+        SetViewMode(ShellViewMode.Panelless);
     }
 
     /// <summary>
-    /// 전체화면 진입 + 복귀 스냅샷(A151 ②③ — **A203 개정**): 스냅샷 = 진입 직전 좌/우 패널 상태
-    /// (A176: 닫힘/도크 2상태 — A186: 모드 항목은 2단화로 소멸, 복귀는 항상 창 모드).
-    /// A203: 진입하면서 **양쪽 패널을 닫는다**(콘텐츠 전용 화면 — 구 "패널은 건드리지 않는다"
-    /// 폐지). 스냅샷 기록이 반드시 닫기보다 먼저다 — 뒤집으면 복귀가 항상 "닫힘"이 된다.
-    /// 전체화면 중 F11/F12 패널 조작은 그대로 살아 있고(A153/A196 불변), 그렇게 바꾼 구성도
-    /// 복귀(Esc/Enter/Alt+Enter/'뒤로'/버튼)가 이 스냅샷으로 되돌린다. 상태 적용은
-    /// RestoreFromFullScreen과 같은 순서(State 대입 → SetViewMode → ApplyOverlayStates 단일 종착점).
+    /// 전체화면 직행(A305 — 하단 바 전체화면 버튼 · 배치 2의 ⓑ 버튼 진입점).
+    /// **단방향이 사양이다**: 일반(모드1·모드2·커스텀 일반) → 전체화면만 하고, 전체화면에서
+    /// 다시 누르는 해제는 없다(해제는 Enter 계단과 Esc). 그래서 A186의 토글(구 ToggleFullScreen)이
+    /// 아니라 진입 전용이고, 이미 전체화면이면 조용히 무동작이다 —
+    /// 버튼 쪽은 <see cref="UpdateShellChrome"/>이 그때 IsEnabled=false로 내려 무동작을 눈에 보이게 한다.
     /// </summary>
-    private void EnterFullScreenRemembering()
+    internal void EnterFullScreenMode()
     {
-        if (_viewMode == ShellViewMode.FullScreen) return; // 버튼 연타 등 재진입 방어
-        _fullScreenRestore = (_listSide.State, _infoSide.State); // 닫기 전에 기록 — A203의 핵심 순서
-        _listSide.State = OverlayState.Closed;
-        _infoSide.State = OverlayState.Closed;
+        if (_viewMode == ShellViewMode.FullScreen) return; // 단방향 — 연타·재진입 방어를 겸한다
         SetViewMode(ShellViewMode.FullScreen);
-        ApplyOverlayStates();
     }
 
     /// <summary>
-    /// 전체화면에서 복귀(A151 — Esc·Enter/Alt+Enter 재누름·'뒤로'·버튼 공용): 창 모드로 돌아가며
-    /// 스냅샷의 좌/우 패널 구성을 되돌린다. 스냅샷이 없으면(외부 경로로 전체화면에 들어온 경우)
-    /// 패널 무변경으로 창 모드만. 패널 상태 적용은 반드시 ApplyOverlayStates(단일 종착점)를 거친다.
+    /// 모드 계단 한 단 내리기(A305 — Esc·'뒤로' 공용 층): 모드2·모드3(커스텀 전체 포함) 어디서든
+    /// **한 번에 모드 1**로 착지한다(사용자 사양 ④ — 모드3에서 모드2로 내려앉지 않는다).
+    /// 반환값 = 소비 여부(이미 모드1이면 false — 아래 층(S4·콘텐츠 닫기)이 이어받는다).
     /// </summary>
-    private void RestoreFromFullScreen()
+    private bool ExitToWindowedMode()
     {
-        var restore = _fullScreenRestore;
-        _fullScreenRestore = null;
-        if (restore is { } r)
-        {
-            _listSide.State = r.List;
-            _infoSide.State = r.Info;
-            SetViewMode(ShellViewMode.Windowed);
-            ApplyOverlayStates();
-        }
-        else
-        {
-            SetViewMode(ShellViewMode.Windowed);
-        }
+        if (_viewMode == ShellViewMode.Windowed) return false;
+        SetViewMode(ShellViewMode.Windowed);
+        return true;
     }
 
     /// <summary>
-    /// 모드 전이의 단일 실행점(A151): 프레젠터(전체화면 = FullScreen, 창 = Default)와 셸 크롬
+    /// 모드 전이의 단일 실행점(A151): 프레젠터(전체화면 = FullScreen, 그 외 = Default)와 셸 크롬
     /// (하단 바·경계 버튼 여백)을 함께 맞춘다. 프레젠터는 실제로 다를 때만 만진다 — 최대화 등
     /// OverlappedPresenter 상태를 불필요하게 건드리지 않는다(기존 토글들과 같은 판단).
+    /// 모드1 ↔ 모드2는 프레젠터가 둘 다 Default라 창 크기·위치가 전혀 움직이지 않는다(사양 ②).
     /// A238: 전체화면 진입 전의 "A61 접힘 먼저 펼치기"는 접힘 폐기와 함께 제거 — 핀 축소는
     /// 보통의 창 크기라 전체화면 왕복(진입 직전 크기·위치로 복귀)과 상호작용이 없다.
     /// A186: 모드가 바뀌면 영상 하단 바 자동 숨김도 재평가한다(표시 상태에서 카운트 재시작).
+    /// A305: 모드는 **실효 사이드바의 입력 축**이라 실제로 바뀌었을 때 패널 단일 종착점
+    /// (<see cref="ApplyOverlayStates"/>)까지 여기서 태운다 — 전이마다 호출부가 잊을 수 없게.
+    /// refresh=false는 호출부가 곧바로 그 종착점을 부르는 경로용(SetContentState —
+    /// ExitOpenFileBrowsing의 같은 이름 인자와 같은 관용구).
     /// </summary>
-    private void SetViewMode(ShellViewMode mode)
+    private void SetViewMode(ShellViewMode mode, bool refresh = true)
     {
+        var changed = _viewMode != mode;
         _viewMode = mode;
         var wantFull = mode == ShellViewMode.FullScreen;
         var isFull = AppWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
@@ -2313,12 +2373,15 @@ public sealed partial class MainWindow : Window
         }
         ReevaluateBarAutoHide(); // A186: 전체화면 진입/해제 = 자동 숨김 상태 재평가
         UpdateShellChrome();
+        // A305: 실효 사이드바가 모드에 딸려 바뀐다 — 무변경 전이에서는 건너뛴다(외부 프레젠터
+        // 동기의 이중 실행 방어 ③ 겸용. 좌 리스트 Show가 폴더 재스캔을 부르는 비용 회피).
+        if (changed && refresh) ApplyOverlayStates();
     }
 
     /// <summary>
     /// 하단 바 가시성의 단일 결정 지점(A151 — A186 개정): 입력 축 = (모드, 영상 자동 숨김).
     /// 실제 판정은 <see cref="BarVisible"/> 하나 — 영상 재생 표면이면 자동 숨김 축이,
-    /// 아니면 모드 축(창 모드에서만 표시)이 정한다.
+    /// 아니면 모드 축(A305: 전체화면이 아닐 때 표시 — 모드 2는 바를 남긴다)이 정한다.
     /// A152: 바가 콘텐츠 위 오버레이가 되면서(행 분할 폐지) 종전의 행 높이 0 조작
     /// (BottomBarRow.Height)은 소멸했다 — 콘텐츠 영역(CenterArea)은 모드와 무관하게 창 전체라
     /// 바를 숨겨도 콘텐츠 중앙이 움직이지 않는다(A152의 목적). Visibility 토글 하나만 남는다.
@@ -2328,6 +2391,11 @@ public sealed partial class MainWindow : Window
     private void UpdateShellChrome()
     {
         BottomBar.Visibility = BarVisible ? Visibility.Visible : Visibility.Collapsed;
+        // A305: 전체화면 버튼은 **단방향**(일반 → 전체)이라 이미 전체화면이면 할 일이 없다 —
+        // 영상 자동 숨김 축에서는 전체화면에도 바가 떠 버튼이 보이므로(A186), 눌러도 아무 일이
+        // 없는 버튼을 살아 있는 척 두지 않고 비활성으로 내린다(A249·A265의 "숨기지 말고 비활성"
+        // 관용구). 해제 경로는 Enter 계단과 Esc다.
+        FullScreenButton.IsEnabled = _viewMode != ShellViewMode.FullScreen;
         UpdateEdgeButtons();
         RecoverChromeFocusOrphan(); // A209: 바 붕괴 축 포커스 고아 방어 — 표시 반영 직후
     }
@@ -2677,9 +2745,10 @@ public sealed partial class MainWindow : Window
             + $"  DET={_diagDetachLast}  GUARD={_diagGuardLast}  CTX={(HasPanelContext ? "Y" : "N")}  S4={(IsOpenFileBrowsing ? "Y" : "N")}";
     }
 
-    /// <summary>하단 바 우측 "Full screen" 버튼 = Enter/Alt+Enter와 같은 전체화면 토글(A186 —
-    /// 영상 자동 숨김 축에서는 전체화면에서도 바가 보일 수 있어 직행이 아니라 토글이어야 한다).</summary>
-    private void OnFullScreenClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
+    /// <summary>하단 바 우측 "Full screen" 버튼 — A305에서 **전체화면 직행(단방향)**이 됐다
+    /// (A186의 토글 폐지, 사용자 사양: "작업표시줄의 전체화면 버튼은 일반→전체 단방향만").
+    /// 배치 2가 이 자리에 버튼 2종(1→2 · 2→3)을 놓을 때 이 핸들러가 ⓑ의 것이 된다.</summary>
+    private void OnFullScreenClick(object sender, RoutedEventArgs e) => EnterFullScreenMode();
 
     // ---------- 영상 하단 바 자동 숨김 (A186 ②) ----------
     // 신호원 = IPlaybackStateSource(영상 뷰·All Readable 중계 — ShowModule 배선), 판단·타이머 =
@@ -2709,9 +2778,12 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 하단 바 실표시(A186 — UpdateShellChrome·EdgeButtonsBottomInset 공용 판정):
     /// 영상 재생 표면이면 자동 숨김 축(재생 중 무입력이면 숨김, 일시정지·정지면 상시 표시 —
-    /// 전체화면에서도 동일), 아니면 모드 축(창 모드에서만 표시 — A151 승계).
+    /// 전체화면에서도 동일), 아니면 모드 축(**전체화면이 아닐 때** 표시).
+    /// A305: 모드 축 조건이 "창 모드일 때"에서 "전체화면이 아닐 때"로 넓어졌다 — 모드 2는
+    /// "제목표시줄 + 하단 자체 작업표시줄만 남는다"가 사양이라 바가 그대로 떠 있어야 한다
+    /// (사라지는 것은 좌/우 사이드바뿐이다). 모드 3만 종전대로 바를 내린다.
     /// </summary>
-    private bool BarVisible => VideoBarContext ? !_barAutoHidden : _viewMode == ShellViewMode.Windowed;
+    private bool BarVisible => VideoBarContext ? !_barAutoHidden : _viewMode != ShellViewMode.FullScreen;
 
     /// <summary>포인터가 하단 가장자리 띠(바 44 + 근접 여유 EdgeProximity) 안에 있는가 —
     /// 시크바를 노리고 내려온 손 밑에서 바가 꺼지지 않게 틱 시점에 유예한다(경계 버튼 근접
@@ -2824,11 +2896,13 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => RecoverChromeFocusOrphan()); // 람다 = 셸 TryEnqueue 관용구 그대로
     }
 
-    // ---------- Esc (A151 전체화면 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기) ----------
+    // ---------- Esc (A305 모드 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기) ----------
 
     /// <summary>
-    /// Esc 분배(A151 — "한 단계 되돌리기" 일관. A186: 모드2 분기는 모드2 소멸로 자동 소진):
-    /// ① 전체화면 = 복귀 스냅샷으로(창 모드 + 좌/우 패널 구성) ② S4 = 진입 전 상태로 복귀
+    /// Esc 분배(A151 — "한 단계 되돌리기" 일관. A305에서 모드2가 부활해 ① 층이 넓어졌다):
+    /// ① **모드2·모드3(커스텀 전체 포함) = 모드 1로**(ExitToWindowedMode — 한 번에 1층까지가
+    ///    사용자 사양 ④다. 사이드바는 요청 상태가 계산으로 되살아난다 — 스냅샷 불요)
+    /// ② S4 = 진입 전 상태로 복귀
     /// ③ **콘텐츠 열림(무제 포함) = 닫기(A202)** — '뒤로' ④(A244 층 삽입 전 ③)와 같은 실행부(TryCloseContent)를
     /// 쓰되 defaultSidebars=true: 닫은 뒤 A109 기본 사이드바가 얹혀, 파일 인자 시작(A81
     /// 무사이드바)에서 Esc 하나로 아이콘 실행 기본 화면(A273 — 좌 사이드바 + 센터 썸네일)이 된다
@@ -2843,10 +2917,9 @@ public sealed partial class MainWindow : Window
     private void OnShellEscape(KeyRoutedEventArgs e)
     {
         if (e.KeyStatus.WasKeyDown || e.Handled) return;
-        if (_viewMode == ShellViewMode.FullScreen)
+        if (ExitToWindowedMode()) // A305 ①: 모드2·모드3 → 모드 1(전체화면 해제 층의 확장)
         {
             e.Handled = true;
-            RestoreFromFullScreen();
             return;
         }
         if (IsOpenFileBrowsing)
@@ -2903,10 +2976,10 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// '뒤로' 분배(A112 — XButton1·GoBack 공용): 한 번에 한 층씩 걷어낸다. 반환값 = 소비 여부.
-    /// ① 표시 모드(A151 — A186: 모드2 층은 소멸) = Esc와 같은 한 단계 — 전체화면이면 복귀
-    ///    스냅샷으로(RestoreFromFullScreen). 전체화면 검사가 S4보다 앞인 순서는 A90/A112 확정
-    ///    그대로다("첫 층 = 전체화면 해제, 다음 층 = S4 복귀"). 하단 바 복원은 UpdateShellChrome
-    ///    (모드 전이의 단일 크롬 지점)이 처리한다.
+    /// ① 표시 모드(A151 — **A305에서 모드2 부활**) = Esc와 같은 한 단계 — 모드2·모드3(커스텀
+    ///    전체 포함)이면 모드 1로(ExitToWindowedMode). 모드 검사가 S4보다 앞인 순서는 A90/A112
+    ///    확정 그대로다("첫 층 = 모드 해제, 다음 층 = S4 복귀"). 하단 바 복원은 UpdateShellChrome
+    ///    (모드 전이의 단일 크롬 지점)이, 사이드바 복원은 ApplyOverlayStates가 처리한다.
     /// ② S4('오픈 파일' 탐색) = 진입 전 상태로 복귀만 — Esc와 동일(같은 '뒤로' 의미론).
     /// ③ 탐색 중(S1) = 폴더 히스토리 pop(A244) — 이전 폴더로 NavigateList 복귀. 등재문의 조건은
     ///    "S1/S4 탐색 중"이지만 S4는 위 ② 층이 먼저 소비한다(등재문 스스로 "전체화면·S4 복귀 층은
@@ -2929,11 +3002,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private bool TryNavigateBack()
     {
-        if (_viewMode == ShellViewMode.FullScreen)
-        {
-            RestoreFromFullScreen(); // Esc와 동일 — A151 파생(A186: 모드2 층 소멸)
-            return true;
-        }
+        // A305: Esc ①층과 같은 실행부 — 모드2·모드3 어디서든 한 번에 모드 1로 내려온다.
+        if (ExitToWindowedMode()) return true;
         if (IsOpenFileBrowsing)
         {
             ExitOpenFileBrowsing(restore: true);
@@ -3145,6 +3215,66 @@ public sealed partial class MainWindow : Window
         RightPanelHost.ClearContent();
     }
 
+    // ---------- 실효 사이드바 계산 (A305 — 모드 축 × 오버라이드 축) ----------
+    // 설계 핵심: 좌/우 사이드바를 놓고 여러 주인(A81·A109 기본값 · F11/F12 · 경계 버튼 · S4 ·
+    // 모드 전이)이 같은 변수를 고쳐 쓰던 구조를 끝낸다. 이제 축이 둘로 갈린다 —
+    //   ⓐ **요청 상태**(_listSide.State/_infoSide.State) = "사용자·기본값이 원하는 구성".
+    //      쓰는 곳은 종전 그대로(SetDockedState · ToggleOpaqueDock · S4 진입/복귀).
+    //   ⓑ **실효 상태**(아래 EffectiveSidebarStates) = "지금 화면에 실제로 있는 구성" =
+    //      f(요청 상태, 모드, 오버라이드). **읽기 전용 계산**이라 아무도 못 덮어쓴다.
+    // 모드 전이는 요청 상태를 건드리지 않는다 — 그래서 A203·A274의 "전체화면 진입 때 닫고 나올 때
+    // 되돌리기" 스냅샷(_fullScreenRestore)이 통째로 필요 없어졌다(그 왕복이 곧 이 계산이다).
+
+    /// <summary>
+    /// 모드가 사이드바를 억제하는 중인가 — 오버라이드가 없고, 모드1이 아니며, S4도 아닐 때.
+    /// <list type="bullet">
+    /// <item>오버라이드(A305)가 서면 억제는 영구히 사라진다 — 커스텀 전체화면에서도 사용자가
+    ///   F11/F12로 만든 구성이 그대로 남는 것이 사양이다.</item>
+    /// <item>S4('오픈 파일' 탐색)는 예외다: 진입이 양쪽을 강제로 여는 화면이라 억제를 걸면
+    ///   탐색 자체가 불가능해진다(전체화면 위 S4는 A90/A236 주석이 명시한 기존 동작 —
+    ///   영상 자동 숨김 축에서 바가 떠 버튼을 누를 수 있다). 억제 없이도 종료(ExitOpenFileBrowsing)가
+    ///   스냅샷으로 요청 상태를 되돌리므로 모드 억제는 그다음 다시 걸린다.</item>
+    /// </list>
+    /// </summary>
+    private bool SidebarsSuppressed
+        => !_sidebarOverride && _viewMode != ShellViewMode.Windowed && !IsOpenFileBrowsing;
+
+    /// <summary>
+    /// **실효 좌/우 사이드바 상태의 단일 계산 함수**(A305). 소비처는 넷 — 표시 종착점
+    /// (<see cref="ApplyOverlayStates"/>), 구성 상태 요약(<see cref="CurrentShellState"/>),
+    /// 우측 정보 부분 갱신(<see cref="RefreshInfoOverlayForSelection"/>), 경계 버튼 글리프
+    /// (<see cref="UpdateEdgeButtons"/>). 넷이 같은 함수를 보므로 "키는 죽었는데 패널은 뜨는"
+    /// 어긋남이 원천적으로 생기지 않는다.
+    /// </summary>
+    private (OverlayState List, OverlayState Info) EffectiveSidebarStates()
+        => SidebarsSuppressed
+            ? (OverlayState.Closed, OverlayState.Closed)
+            : (_listSide.State, _infoSide.State);
+
+    /// <summary>
+    /// 사이드바 오버라이드 확정(A305) — F11/F12·경계 핀 버튼이 토글 **직전에** 부른다.
+    /// 세 가지를 한 번에 한다:
+    /// ① 억제 중이었다면 **실효 상태를 요청 상태로 승계**한다 — 화면에 없던 사이드바가 요청
+    ///    상태로는 열려 있을 수 있는데, 그대로 토글하면 "F11을 눌렀는데 아무것도 안 나타나는"
+    ///    첫 입력이 된다(모드2·모드3에서 반드시 재현되는 함정). 보이던 것을 기준으로 삼는다.
+    /// ② 표지를 세운다 — 내리는 경로는 없다(인스턴스 종료까지, 사용자 사양).
+    /// ③ 모드2에 있었다면 모드1로 접는다 — 오버라이드 뒤에는 모드1/2 구분이 없어(사양) 그 값이
+    ///    남으면 Enter 토글의 출발점이 모호해진다. 프레젠터가 둘 다 Default라 창은 미동도 없다.
+    /// 표시 갱신은 호출부(ToggleOpaqueDock)가 토글 뒤에 ApplyOverlayStates로 한 번만 한다 —
+    /// 여기 ③의 SetViewMode도 모드가 실제로 바뀌면 같은 종착점을 부르지만, 그 시점의 실효 상태는
+    /// 이미 최종값과 같아(억제 해제 + 승계 완료) 화면이 두 번 튀지 않는다.
+    /// </summary>
+    private void MarkSidebarOverride()
+    {
+        if (_sidebarOverride) return;
+        var (effList, effInfo) = EffectiveSidebarStates(); // ① 승계 — 반드시 표지보다 먼저 읽는다
+        _listSide.State = effList;
+        _infoSide.State = effInfo;
+        _sidebarOverride = true;                           // ②
+        if (_viewMode == ShellViewMode.Panelless)          // ③
+            SetViewMode(ShellViewMode.Windowed);
+    }
+
     /// <summary>
     /// 사이드바(불투명 도크)가 차지하는 전폭 대비 % — 전 상태 공통 25 (양쪽이면 3구획 25:50:25).
     /// A116(v0.135.0): 종전에는 "S1 = 25 / 콘텐츠 상태 = 30(A57의 3:4:3 유산)"의 상태별 2값이라,
@@ -3184,8 +3314,11 @@ public sealed partial class MainWindow : Window
         // 플레이스홀더다. 패널 제공 뷰(정보 모듈)와는 상호 배타(모듈 유무로 갈린다).
         // A205: 설정 화면은 IsPanelFallbackView가 이미 걸러낸다(산식 3곳 공용 입력).
         var fallback = _untitledContent || IsPanelFallbackView;
-        var listShow = (hasFile || emptyModule || fallback) && _listSide.State == OverlayState.OpaqueDocked;
-        var infoShow = (hasFile || emptyModule || fallback) && _infoSide.State == OverlayState.OpaqueDocked;
+        // A305: 여기가 실효 상태의 **유일한 적용 지점**이다 — 요청 상태(_listSide/_infoSide)를
+        // 직접 보지 않고 모드·오버라이드까지 반영된 계산값을 받는다.
+        var (effList, effInfo) = EffectiveSidebarStates();
+        var listShow = (hasFile || emptyModule || fallback) && effList == OverlayState.OpaqueDocked;
+        var infoShow = (hasFile || emptyModule || fallback) && effInfo == OverlayState.OpaqueDocked;
 
         if (listShow) ShowListOverlay();
         else ListOverlay.Hide();
@@ -3194,11 +3327,11 @@ public sealed partial class MainWindow : Window
 
         // A119: 패널 제공 뷰(정보 모듈) — 같은 좌/우 상태를 모듈 콘텐츠 호스트로 표시한다.
         // 콘텐츠(그래프·스펙)는 뷰가 생성·소유하고(같은 인스턴스 반복 반환) 셸은 얹기만 한다.
-        if (panelView is not null && _listSide.State == OverlayState.OpaqueDocked)
+        if (panelView is not null && effList == OverlayState.OpaqueDocked)
             LeftPanelHost.ShowContent(panelView.GetLeftPanel() as UIElement);
         else
             LeftPanelHost.Hide();
-        if (panelView is not null && _infoSide.State == OverlayState.OpaqueDocked)
+        if (panelView is not null && effInfo == OverlayState.OpaqueDocked)
             RightPanelHost.ShowContent(panelView.GetRightPanel() as UIElement);
         else
             RightPanelHost.Hide();
@@ -3306,7 +3439,7 @@ public sealed partial class MainWindow : Window
         var hasFile = _currentFilePath is not null;
         var fallback = _untitledContent || IsPanelFallbackView;
         var infoShow = (hasFile || IsEmptyFileModule || fallback)
-                       && _infoSide.State == OverlayState.OpaqueDocked;
+                       && EffectiveSidebarStates().Info == OverlayState.OpaqueDocked; // A305 — 산식 공용
         ApplyInfoOverlayContent(infoShow, hasFile);
     }
 
@@ -3428,8 +3561,11 @@ public sealed partial class MainWindow : Window
         RightEdgeButtons.Margin =
             new Thickness(0, 0, Math.Max(0, width - _rightEdgeX - EdgeButtonOverlap), bottomInset);
         // 글리프 = 누르면 일어날 일의 방향: 사이드바가 아니면 "사이드바로 세우기"(안쪽), 사이드바면 닫기(바깥쪽).
-        LeftEdgeGlyph.Glyph = _listSide.State == OverlayState.OpaqueDocked ? "\uE76B" : "\uE76C";
-        RightEdgeGlyph.Glyph = _infoSide.State == OverlayState.OpaqueDocked ? "\uE76C" : "\uE76B";
+        // A305: 기준은 실효 상태다 — 억제 중(모드2·모드3)이면 화면에 없으니 "세우기"로 그린다.
+        // 그 버튼을 실제로 누르면 오버라이드가 서면서 억제가 풀려 정말로 세워진다(예고 = 결과).
+        var (glyphList, glyphInfo) = EffectiveSidebarStates();
+        LeftEdgeGlyph.Glyph = glyphList == OverlayState.OpaqueDocked ? "\uE76B" : "\uE76C";
+        RightEdgeGlyph.Glyph = glyphInfo == OverlayState.OpaqueDocked ? "\uE76C" : "\uE76B";
     }
 
     /// <summary>
@@ -3487,9 +3623,15 @@ public sealed partial class MainWindow : Window
     // A176: 순간 표시(peek) 버튼 일습(A154 — BeginPeek/EndPeek·PeekRestore·Peek 버튼 핸들러 4종)은
     // 반투명 축과 함께 철거 — 경계 버튼 스택에는 핀 하나만 남는다.
 
-    /// <summary>사이드바(불투명 도크) 토글 (Q7) — F11/F12 단타(OnOverlaySideDown)와 동일 전이.</summary>
+    /// <summary>
+    /// 사이드바(불투명 도크) 토글 (Q7) — F11/F12 단타(OnOverlaySideDown)와 경계 핀 버튼의 공용 실행부.
+    /// A305: 사용자가 사이드바를 직접 만진 유일한 입구라, 토글 **직전에** 오버라이드를 세운다
+    /// (<see cref="MarkSidebarOverride"/> — 순서가 중요하다: 그 안에서 요청 상태가 실효 상태로
+    /// 승계되므로, 억제 중이었다면 이 토글이 "보이던 상태(닫힘)의 반대"인 열기가 된다).
+    /// </summary>
     private void ToggleOpaqueDock(OverlaySide side)
     {
+        MarkSidebarOverride();
         side.State = side.State == OverlayState.OpaqueDocked
             ? OverlayState.Closed
             : OverlayState.OpaqueDocked;
@@ -3585,6 +3727,12 @@ public sealed partial class MainWindow : Window
         // (UpdateOpenFileButton) — 이 가드는 버튼 외 진입(뷰 내부 신호·향후 키 배정)까지 받는
         // 최종 방어선으로 존치한다.
         if (_currentFilePath is null || _currentModule is null) return;
+        // A305: 모드 2에서 들어왔으면 먼저 모드 1로 접는다. 모드 2의 정의가 "사이드바 없음"인데
+        // S4는 정의상 양쪽 사이드바를 쓰는 화면이라, 그대로 두면 모드만 남아 Esc 첫 타가 아무 변화
+        // 없이 소비되는 죽은 층이 된다(모드 2 → 모드 1 전이가 화면상 무변화). 전체화면(모드 3)은
+        // 건드리지 않는다 — 전체화면 위 S4와 그 Esc 순서는 A90/A236이 문서화한 기존 동작이다.
+        // refresh:false = 아래 ApplyOverlayStates가 곧 그린다(SetContentState와 같은 관용구).
+        if (_viewMode == ShellViewMode.Panelless) SetViewMode(ShellViewMode.Windowed, refresh: false);
         _s4Restore = (_listSide.State, _infoSide.State); // A176: 안정 상태 2종뿐이라 그대로 스냅샷
         if (_listSide.State == OverlayState.Closed) _listSide.State = OverlayState.OpaqueDocked;
         if (_infoSide.State == OverlayState.Closed) _infoSide.State = OverlayState.OpaqueDocked;

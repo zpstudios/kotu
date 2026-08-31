@@ -259,12 +259,17 @@
                  남는다 — 9색 팔레트(구 InstanceIcon.ColorFor)도 소비처가 사라져 함께 지웠다. -->
 
             <!-- A186 셸 모드 버튼 1개 — A151의 2개(Full window/Full screen)에서 모드2 폐지로
-                 Full window 버튼(E73F)을 삭제했다. 남은 Full screen 버튼 = Enter/Alt+Enter와
-                 동일 의미론(전체화면 토글 — 복귀 스냅샷 기억, OnFullScreenClick).
+                 Full window 버튼(E73F)을 삭제했다.
+                 A305: 남은 Full screen 버튼이 **전체화면 직행(단방향)**이 됐다 — 사용자 사양
+                 "작업표시줄의 전체화면 버튼은 일반→전체 단방향만"(OnFullScreenClick →
+                 EnterFullScreenMode). 전체화면에서 해제하는 길은 Enter 계단과 Esc뿐이고,
+                 영상 재생 표면(A186 자동 숨김 축)처럼 전체화면에서도 바가 뜨는 화면에서는
+                 코드(UpdateShellChrome)가 이 버튼을 IsEnabled=False로 내려 무동작을 눈에 보이게 한다.
                  규격 = 기존 ⛶와 같은 1칸 32×32(BottomBarButtonStyle)·우측 여백 6.
-                 전체화면에서 바가 숨으면 함께 숨지만, 영상 재생 표면(A186 자동 숨김 축)에서는
-                 전체화면에서도 바와 함께 나타난다 — 그때는 이 버튼이 전체화면 해제 경로가 된다
-                 (그래서 직행이 아니라 토글이다). -->
+                 ※ 배치 2(A305 후속)가 이 자리에 버튼 2종을 놓는다 — ⓐ 1→2 전환(EnterPanellessMode)
+                 ⓑ 2→3 전환(지금의 이 버튼). 그때 아래 StackPanel에 버튼 하나가 늘어나므로
+                 ModuleBarHost의 우측 Margin 44(= 버튼 1개 32 + 간격 6 + 가장자리 여백 6)를
+                 함께 재계수할 것. -->
             <StackPanel x:Name="ViewModeButtons" Orientation="Horizontal" Spacing="6"
                         Margin="0,0,6,0"
                         HorizontalAlignment="Right" VerticalAlignment="Center">
