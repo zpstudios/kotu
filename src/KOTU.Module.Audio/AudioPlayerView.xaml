@@ -159,10 +159,12 @@
             <!-- A163: 이퀄라이저 — libvlc 내장 프리셋 라디오 플라이아웃(비디오 자막 버튼 규격).
                  항목은 코드(FillEqualizerFlyout)가 채운다 — 프리셋 열거가 libvlc 네이티브 호출이라
                  플레이어 생성(EnsurePlayerAsync) 뒤에만 가능해서 그때까지 비활성이다.
-                 A269(v0.267.0): c8 → c9(장치와 스왑 — 칸 규격·폭 불변이라 총폭 무변경). -->
+                 A269(v0.267.0): c8 → c9(장치와 스왑 — 칸 규격·폭 불변이라 총폭 무변경).
+                 A300: 아이콘을 글리프 E9E9에서 코드 조립 도형(세로 슬라이더 3개 — 생성자의
+                 MediaIcons.BuildEqualizerIcon)으로 교체 — 모양만 보고 이퀄라이징이 읽히게.
+                 버튼 상자·플라이아웃·핸들러는 무접촉(Content만 코드가 채운다). -->
             <Button x:Name="EqButton" Grid.Column="9" Style="{StaticResource BottomBarButtonStyle}"
                     IsEnabled="False" ToolTipService.ToolTip="Equalizer">
-                <FontIcon Glyph="&#xE9E9;" FontSize="18" />
                 <Button.Flyout>
                     <MenuFlyout x:Name="EqFlyout" Placement="Top" />
                 </Button.Flyout>
@@ -172,10 +174,11 @@
                  소멸했고, A269가 그 6px 어긋남을 영상 쪽 0폭 스페이서로 갚아 정렬을 되돌렸다
                  (재계수 = 위 헤더 주석). 항목은 코드(FillVisualizerFlyout)가 열 때마다 채운다
                  (선택 상태 반영 — 장치 플라이아웃의 Opening 재구성 관례). 항상 활성 — 선택은
-                 플레이어가 없어도 저장돼 첫 생성 인스턴스 옵션에 반영된다. -->
+                 플레이어가 없어도 저장돼 첫 생성 인스턴스 옵션에 반영된다.
+                 A300: 아이콘을 글리프 E8D6에서 코드 조립 도형(스펙트럼 막대 5개 — 생성자의
+                 MediaIcons.BuildVisualizerIcon)으로 교체 — 음파의 그래프화가 읽히게. -->
             <Button x:Name="VisualizerButton" Grid.Column="10" Style="{StaticResource BottomBarButtonStyle}"
                     ToolTipService.ToolTip="Visualizer">
-                <FontIcon Glyph="&#xE8D6;" FontSize="18" />
                 <Button.Flyout>
                     <MenuFlyout x:Name="VisualizerFlyout" Placement="Top" />
                 </Button.Flyout>

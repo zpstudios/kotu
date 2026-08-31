@@ -19,6 +19,8 @@
   <ItemGroup>
     <!-- A34(v0.112.0): 버튼 핫키 공용 지원(키 등록·툴팁 표기·통과 판정). KOTU.Core는 UI 비의존이라 소스 링크로 공유한다. -->
     <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
+    <!-- A300: EQ·비주얼라이저 코드 조립 아이콘 팩토리(FitIcons의 A298 소스 링크 공유와 같은 방식). -->
+    <Compile Include="..\Shared\MediaIcons.cs" Link="MediaIcons.cs" />
   </ItemGroup>
   <ItemGroup>
     <!--

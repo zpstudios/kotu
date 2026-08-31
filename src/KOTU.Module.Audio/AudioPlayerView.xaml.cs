@@ -13,6 +13,7 @@ using KOTU.Core.Navigation;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
 using KOTU.Input;
+using KOTU.Ui;
 
 namespace KOTU.Module.Audio;
 
@@ -343,6 +344,13 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _loopFlyout.Opening += (_, _) => BuildLoopFlyout();
 
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
+
+        // A300: EQ·비주얼라이저 아이콘 — 글리프(E9E9·E8D6)가 기능을 드러내지 못한다는 사용자
+        // 보고로 코드 조립 도형으로 교체(Shared/MediaIcons — FitIcons의 A298 공용화·A299 전경
+        // 동기 관용구를 그대로 승계. 도형 산술·비활성 회색 근거는 그 파일 주석).
+        // 버튼 상자·플라이아웃·핸들러·툴팁은 무접촉 — Content만 갈아 끼운다.
+        EqButton.Content = MediaIcons.BuildEqualizerIcon();
+        VisualizerButton.Content = MediaIcons.BuildVisualizerIcon();
 
         _eqPreset = _settings.Get("audio.equalizer", string.Empty);
         _outputDeviceId = _settings.Get("audio.outputDevice", string.Empty);
