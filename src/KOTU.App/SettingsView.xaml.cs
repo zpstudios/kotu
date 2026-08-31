@@ -6,6 +6,7 @@ using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
+using KOTU.Module.Audio;
 using KOTU.Module.Document;
 
 namespace KOTU.App;
@@ -679,6 +680,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         BuildShellDiagnosticsSection(); // A234: 설정 파일 안내 바로 위 — 셸 키 진단 오버레이 토글
         BuildEditorDecorDiagnosticsSection(); // A285: 그 바로 옆 — 에디터 장식 EOF 계측 토글
+        BuildAudioSwapDiagnosticsSection(); // A301: 그 바로 옆 — 오디오 비주얼라이저 교체 계측 토글
         BuildSettingsFileSection(); // A36: 연결 섹션 아래 "Open settings.json"
 
         // A258: Playback 절은 Explorer integration 절이 완전히 끝난 뒤·Updates 앞이다.
@@ -935,6 +937,58 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         cardBody.Children.Add(new TextBlock
         {
             Text = "Shows live end-of-file marker geometry inside the document editor. For troubleshooting only.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        Root.Children.Add(cardBody);
+    }
+
+    /// <summary>
+    /// A301: 오디오 비주얼라이저 교체 계측 토글 — 위 A285 카드(BuildEditorDecorDiagnosticsSection)
+    /// 바로 옆·같은 방식이다. 배선도 그대로 최소형(Set → Save → NotifyChanged 세 줄 — 열린
+    /// 오디오 뷰의 AudioPlayerView가 AudioDiagnostics.Changed를 구독한다). busy·
+    /// <see cref="_suppressToggle"/> 축 불사용·되돌아오는 동기화 구독 없음(변경 진입로가 이 토글
+    /// 하나뿐)·카드 문법 A197/A220까지 전부 A285 카드와 같은 근거·같은 형태다.
+    /// </summary>
+    private void BuildAudioSwapDiagnosticsSection()
+    {
+        var toggle = new ToggleSwitch
+        {
+            // A197과 같은 문법 — 스위치가 제목 왼쪽, 내장 On/Off 문구 제거, MinWidth 0(기본 154 해제).
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsOn = _settings.Get(AudioDiagnostics.SettingKey, false), // 파일 저장 — 재시작 후에도 유지
+        };
+        toggle.Toggled += (_, _) =>
+        {
+            _settings.Set(AudioDiagnostics.SettingKey, toggle.IsOn);
+            _settings.Save();
+            AudioDiagnostics.NotifyChanged(); // 열린 오디오 뷰의 오버레이가 즉시 켜지고 꺼진다
+        };
+
+        var headerRow = new Grid { ColumnSpacing = 8 };
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var title = new TextBlock
+        {
+            Text = "Audio visualizer diagnostics",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(toggle, 0);
+        Grid.SetColumn(title, 1);
+        headerRow.Children.Add(toggle);
+        headerRow.Children.Add(title);
+
+        var cardBody = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 8) };
+        cardBody.Children.Add(headerRow);
+        cardBody.Children.Add(new TextBlock
+        {
+            Text = "Shows visualizer style swap timing inside the audio player. For troubleshooting only.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,

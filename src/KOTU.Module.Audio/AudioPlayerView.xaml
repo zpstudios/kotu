@@ -60,6 +60,28 @@
                 TextAlignment="Center"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center" />
+            <!-- A301: 비주얼라이저 교체 계측 오버레이(diag.audioSwap, 기본 꺼짐) 표시 판.
+                 EditorDecor(A285) 계측 판의 최소형: 어두운 반투명 고정 배경(오버레이 판 관례
+                 = ContentInfoOverlay #CC202020) + 등폭 11px 흰 글씨, 입력 통과. 오른쪽 위
+                 구석 = 중앙 상단 TitleOverlay와 겹치지 않는 자리. 값 갱신·표시는
+                 코드(OnPlayerPlaying의 교체 계측)가 한다. -->
+            <Border
+                x:Name="DiagPanel"
+                Visibility="Collapsed"
+                IsHitTestVisible="False"
+                Background="#CC202020"
+                CornerRadius="4"
+                Padding="6,4,6,4"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,8,8,0">
+                <TextBlock
+                    x:Name="DiagText"
+                    FontFamily="Consolas"
+                    FontSize="11"
+                    Foreground="White"
+                    TextWrapping="NoWrap" />
+            </Border>
         </Grid>
 
         <!-- 트랜스포트 바 — 셸이 TakeBottomBar()로 떼어가 하단 바(44px) 한 줄에 얹는다(비디오와 동일).

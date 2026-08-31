@@ -247,6 +247,18 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     private string _visualizer;                           // 현재 선택(저장값) — 로컬 소유(_muted 규칙)
     private string _playerVisualizer = VisualizerDefault; // 현재 인스턴스에 구워진 값 — 재생성 필요 판정 기준
 
+    // ---------- A301: 교체 직렬화 가드 · 계측 ----------
+    // _recreating: RecreatePlayer 진행 중 표시 — 교체 중 스타일 재선택은 조용히 무시한다
+    // (구현 시 결정: 마지막 요청 큐잉 불요 — 무시가 단순). _playerGate만으로는 뒤에 줄을 서서
+    // "교체 뒤 또 교체"가 되므로 이 플래그가 그 줄서기 자체를 막는다.
+    private bool _recreating;
+
+    // 계측(diag.audioSwap — A285 EditorDecor 계측의 최소형): 재생성 시작(RecreatePlayer의
+    // 실제 교체 개시)→신 인스턴스 Playing 도달까지 ms를 오버레이에 key=value로 찍는다.
+    // 시계는 DateTime.UtcNow(ExplorerFileOps 등 저장소 경과 시간 관례) — MinValue = 계측 없음.
+    private bool _diagOn;
+    private DateTime _swapStartedUtc = DateTime.MinValue;
+
     // ---------- A11(v0.212.0) → A255(v0.255.0) 재생 목록 루프 상태 (설계 docs/A11-playlist-design.md §3) ----------
     // 영상에 먼저 구현한 구조의 동형 이식이다 — 키 접두사만 audio.* 로 다르고
     // 의미·기본값·우선순위는 한 글자도 다르지 않다(설계 §7 배치 ③).
@@ -376,6 +388,14 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _visualizer = _settings.Get(VisualizerKey, VisualizerDefault);
         if (!IsKnownVisualizer(_visualizer)) _visualizer = VisualizerDefault;
         VisualizerFlyout.Opening += (_, _) => FillVisualizerFlyout();
+
+        // A301: 교체 계측 오버레이(diag.audioSwap, 기본 꺼짐) — EditorDecorDiagnostics(A285)
+        // 관용구 복제. 초기 1회는 저장값을 바로 읽고, 이후는 설정 화면의 NotifyChanged가 부르는
+        // Changed 구독으로 즉시 반영한다. static 이벤트라 Unloaded에서 반드시 해제한다
+        // (A88 규칙 — DocumentView의 같은 자리·같은 형태의 해제).
+        _diagOn = settings.Get(AudioDiagnostics.SettingKey, false);
+        AudioDiagnostics.Changed += ApplyAudioDiagnostics;
+        Unloaded += (_, _) => AudioDiagnostics.Changed -= ApplyAudioDiagnostics;
 
         _suppressVolumeEvent = true;
         VolumeSlider.Value = Math.Clamp(_settings.Get("audio.volume", 80), 0, 100);
@@ -756,6 +776,20 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
         SetTrayTimer(true); // A54: 재생 중에만 1초마다 트레이(시간·이퀄라이저)를 갱신한다
         TrayStatusChanged?.Invoke();
+
+        // A301: 교체 계측 소비 — RecreatePlayer ⑥이 실어 둔 개시 시각으로 "재생성 시작→
+        // Playing 도달" ms를 계산해 오버레이에 찍는다(표시는 diag.audioSwap 켜짐일 때만 —
+        // 잰 값은 1회성이라 바로 비운다. 교체가 아닌 일반 재생 시작은 MinValue라 무동작).
+        if (_swapStartedUtc != DateTime.MinValue)
+        {
+            var swapMs = (long)(DateTime.UtcNow - _swapStartedUtc).TotalMilliseconds;
+            _swapStartedUtc = DateTime.MinValue;
+            if (_diagOn)
+            {
+                DiagText.Text = $"swap={swapMs}ms";
+                DiagPanel.Visibility = Visibility.Visible;
+            }
+        }
     });
 
     private void OnPlayerPaused(object? sender, EventArgs e) =>
@@ -1207,14 +1241,35 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// <summary>
     /// 스타일 선택: 로컬 상태 갱신 + 즉시 저장(EQ 선례) 후 인스턴스 재생성을 건다.
     /// 같은 항목 재선택은 무동작 — 재생성은 소리가 한순간 끊기는 비용이 있어 공짜가 아니다.
+    /// A301: 교체 진행 중(_recreating)의 재선택은 조용히 무시한다(구현 시 결정 — 큐잉 불요).
+    /// 저장도 하지 않으므로 상태는 일관되고, 플라이아웃은 열 때마다 _visualizer로 다시
+    /// 채워져(Opening 재구성) 체크 표시도 어긋나지 않는다.
     /// </summary>
     private void SelectVisualizer(string style)
     {
+        if (_recreating) return;
         if (string.Equals(style, _visualizer, StringComparison.Ordinal)) return;
         _visualizer = style;
         _settings.Set(VisualizerKey, style);
         _settings.Save();
         RecreatePlayer();
+    }
+
+    /// <summary>
+    /// A301: 계측 오버레이 토글 반영 — DocumentView.ApplyEditorDecorDiagnostics(A285)와 같은
+    /// 형태(설정 화면 스레드에서 올 수 있어 디스패처 경유 가드). 끌 때만 즉시 숨긴다 —
+    /// 켤 때는 다음 계측값이 와야 보인다(낡은 값 잔존 금지 — EditorDecor A287 규칙).
+    /// </summary>
+    private void ApplyAudioDiagnostics()
+    {
+        if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+        {
+            dq.TryEnqueue(ApplyAudioDiagnostics);
+            return;
+        }
+        if (_tornDown) return;
+        _diagOn = _settings.Get(AudioDiagnostics.SettingKey, false);
+        if (!_diagOn) DiagPanel.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -1233,12 +1288,29 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     ///   ④ VideoView 재바인딩(Vlc.MediaPlayer 재대입 — 저장소 선례 0 = 실기기 1순위 확인
     ///      포인트) + 재적용: 볼륨·음소거(_muted 로컬 소유 승계)·EQ. 배속·출력 장치는 기존
     ///      Playing 핸들러가 재적용한다(aout 생성 후가 유효 적용점 — 기존 규칙 그대로).
-    ///   ⑤ 구 인스턴스 해제 — 같은 워커 직렬 큐라 ③ 뒤에 실행된다(A42 순서 보장). 창 닫힘
+    ///      A301: _player/_libVlc <b>필드 대입만</b> ⑤ 해제 완료 뒤로 미룬다 — ②의 가드
+    ///      (필드 비움 = 핸들러 무동작)가 ⑤의 대기 구간까지 이어져, Space·클릭이 신
+    ///      인스턴스를 해제 완료 전에 재생시키는 길을 막는다(재적용 순서 자체는 무변경).
+    ///   ⑤ 구 인스턴스 해제 — A301: 종전 Post(fire-and-forget)를 Worker.Run <b>await</b>로
+    ///      바꿔 해제 <b>완료</b>를 기다린다(③이 이미 쓰는 await 관용구 — 같은 워커 직렬 큐).
+    ///      종전에는 "③ 뒤 실행"(큐 순서)만 보장되고 ⑥의 Play가 UI 스레드에서 먼저 나가
+    ///      구 인스턴스가 오디오 장치·vout을 문 채 신 인스턴스가 시작하는 경합 창이 있었다
+    ///      (A303 조사 — 교체 버벅임·독립 창 폴백(H1)의 원인 후보). UI 스레드는 await로만
+    ///      기다린다(동기 대기 금지 — 교체 중 입력은 ②의 가드가 이미 접는다). 창 닫힘
     ///      경합: OnUnloaded는 ②에서 비워진 필드 때문에 아무것도 해제하지 않으므로 해제
-    ///      주체는 항상 이 메서드 한쪽이다(이중 해제 없음).
+    ///      주체는 항상 이 메서드 한쪽이다(이중 해제 없음). 해제 실패 무시는 종전 Post의
+    ///      계약 그대로(람다 안 try/catch — "실패해도 그만"인 정리).
     ///   ⑥ 재생 중이었고 파일이 그대로면 ReplayCurrent로 재장전 + _pendingResumeMs로 위치
-    ///      복원(Playing에서 적용 — 기존 이어듣기 관용구). 그새 다른 파일로 전환됐으면 그
-    ///      OpenPath가 게이트 뒤에 대기 중이라 여기서는 손대지 않는다.
+    ///      복원(Playing에서 적용 — 기존 이어듣기 관용구. 복원 위치는 ①에서 잡은 값이고 구
+    ///      인스턴스는 ②에서 일시정지라 ⑤ 대기 시간만큼 밀리지 않는다). 그새 다른 파일로
+    ///      전환됐으면 그 OpenPath가 게이트 뒤에 대기 중이라 여기서는 손대지 않는다.
+    ///      ⑤의 대기 중 창이 닫혔으면(_tornDown) 재장전 없이 신 인스턴스를 여기서 해제한다
+    ///      — ④의 대입 연기로 필드가 아직 비어 있어 OnUnloaded는 신 인스턴스를 못 봤다
+    ///      (③ 실패 경로와 같은 대리 해제 — 이중 해제 없음 원칙은 그대로).
+    /// A301 재진입 가드(_recreating): 교체 중 스타일 재선택은 SelectVisualizer가 조용히
+    /// 무시한다 — _playerGate만으로는 뒤에 줄을 서서 "교체 뒤 또 교체"가 되기 때문.
+    /// A301 계측(diag.audioSwap): 실제 교체 개시(①)→신 인스턴스 Playing 도달 ms를
+    /// OnPlayerPlaying이 오버레이에 swap=NNNms로 찍는다(직렬화의 체감 효과는 실기기 판정).
     /// 등재문의 "해제 → 생성" 대신 "생성 → 교체 → 해제" 순서를 택했다(설계 판단): 해제를
     /// 먼저 하면 VideoView가 해제된 플레이어를 무는 구간이 생겨, 그 사이 리사이즈 등이 그
     /// 핸들을 건드리면 죽는다. 산 것끼리 맞바꾸면 그 구간이 없다. 대신 생성 완료까지 구·신
@@ -1252,6 +1324,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         if (_swapChainOptions is not { } swapOptions) return; // 첫 생성 전 — 생성 시점에 새 값이 구워진다
 
+        _recreating = true; // A301: 여기부터 finally까지 SelectVisualizer 재선택을 조용히 무시
         await _playerGate.WaitAsync();
         try
         {
@@ -1262,7 +1335,8 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             if (string.Equals(_playerVisualizer, style, StringComparison.Ordinal))
                 return; // 연타·경합으로 이미 목표 상태 — 재생성 불요
 
-            // ① 상태 보관
+            // ① 상태 보관 (+ A301: 교체 계측 개시 시각 — 실제 교체가 확정된 이 지점부터 잰다)
+            var swapStartUtc = DateTime.UtcNow;
             var file = _filePath;
             var wasPlaying = oldPlayer.IsPlaying;
             var resumeMs = oldPlayer.Time;
@@ -1326,10 +1400,11 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
                 return;
             }
 
-            // ④ 재바인딩 + 재적용
-            _libVlc = libVlc;
-            _player = player;
-            _playerVisualizer = style;
+            // ④ 재바인딩 + 재적용 — A301: 필드(_player/_libVlc) 대입만 ⑤ 해제 완료 뒤로
+            // 미룬다. ②의 가드(필드 비움 = Space·클릭 등 모든 핸들러 무동작)가 ⑤의 대기
+            // 구간까지 이어져, 그 사이 사용자 입력이 신 인스턴스를 해제 완료 전에 재생시키는
+            // 길이 없다(경합 창 봉쇄의 일부). VideoView 바인딩·볼륨·음소거·EQ·이벤트 훅은
+            // 종전 그대로 이 지점 = Play 전 적용이라는 순서가 불변이다.
             Vlc.MediaPlayer = player;
 
             player.Volume = (int)VolumeSlider.Value; // EnsurePlayerAsync와 같은 적용점
@@ -1337,17 +1412,44 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             HookPlayerEvents(player);
             ApplyEqualizer(player);                  // 프리셋 목록은 libvlc 빌드 불변 — 재열거 불요
 
-            // ⑤ 구 인스턴스 해제 (워커 직렬 — OnUnloaded의 해제 관용구 그대로)
-            Worker.Post(() =>
+            // ⑤ 구 인스턴스 해제 — A301: await로 해제 완료 뒤에만 ⑥이 나가게 직렬화
+            // (③의 Worker.Run await 관용구 — 요약 주석 ⑤). 실패 무시는 종전 Post 계약 승계.
+            await Worker.Run(_ =>
             {
-                oldPlayer.Stop();
-                oldPlayer.Dispose();
-                oldLib.Dispose();
+                try
+                {
+                    oldPlayer.Stop();
+                    oldPlayer.Dispose();
+                    oldLib.Dispose();
+                }
+                catch
+                {
+                    // 뒷정리 실패는 무시 — Worker.Post의 예외 차단 계약을 여기서 승계한다
+                }
             });
 
-            // ⑥ 재장전 + 위치 복원
+            if (_tornDown)
+            {
+                // ⑤ 대기 중 창 닫힘 — 필드가 아직 비어 있어 OnUnloaded는 신 인스턴스를 못
+                // 봤다: ③ 실패 경로처럼 여기서 대신 해제한다(구는 ⑤가 이미 해제했다.
+                // 워커가 닫혔으면 Post가 스레드풀로 폴백해 해제 실행은 보장된다).
+                UnhookPlayerEvents(player);
+                Worker.Post(() =>
+                {
+                    player.Dispose();
+                    libVlc.Dispose();
+                });
+                return;
+            }
+
+            _libVlc = libVlc;
+            _player = player;
+            _playerVisualizer = style;
+
+            // ⑥ 재장전 + 위치 복원 — ⑤가 끝난 뒤라 구 인스턴스는 장치·vout을 이미 놓았다
             if (wasPlaying && file is not null && string.Equals(file, _filePath, StringComparison.Ordinal))
             {
+                _swapStartedUtc = swapStartUtc; // A301: Playing 도달 시 OnPlayerPlaying이 소비
                 ReplayCurrent();             // 셸 재동기화·카운터 리셋 없는 재장전(A11 변형 재사용)
                 _pendingResumeMs = resumeMs; // ReplayCurrent가 -1로 둔 값을 덮어써 위치 복원
             }
@@ -1358,6 +1460,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         }
         finally
         {
+            _recreating = false;
             _playerGate.Release();
         }
     }
