@@ -475,20 +475,25 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// A97(v0.116.0)에서 1칸 버튼 40→36 · 간격 10→6, A106(v0.132.0)에서 1칸 버튼 36→32가 되어
     /// 그때마다 **재산정**했다. 값을 이월 계산하지 않는다 — A97 이전 값 458은 v0.94.0(A40)
     /// 산정치 1240에서 역산한 근사치라 실제 합보다 34 컸던 전력이 있다.
-    /// A237 재계수(크기 버튼 칸 제거 — BarGrid 6칸 중 star 칸인 SensorGrid c2만 제외):
-    ///   Copy c0 32 + Busy(ProgressRing) c1 20 + 맥박 c3 90 + 주기(2칸) c4 84 + 핀 c5 32 = 258
-    ///   + ColumnSpacing 6 × 5칸 사이 = 30  →  **288**
+    /// A293 재계수(Busy 링 칸 제거 — BarGrid 5칸 중 star 칸인 SensorGrid c1만 제외):
+    ///   Copy c0 32 + 맥박 c2 90 + 주기(2칸) c3 84 + 핀 c4 32 = 238
+    ///   + ColumnSpacing 6 × 4칸 사이 = 24  →  **262**
     ///   (이력: A97 = 380, A106 = 364 — 그때의 산식은 ⛶ 32 + 간격 6이 더 있었다.
-    ///    A151 = 326(⛶ 칸 제거), A237 = 288 — 크기 버튼 32 + 간격 6이 빠졌다.)
+    ///    A151 = 326(⛶ 칸 제거), A237 = 288 — 크기 버튼 32 + 간격 6이 빠졌다.
+    ///    A293 = 262 — Busy 링 20 + 간격 6이 빠졌다: 링은 칸을 버리고 star 칸 위 겹침이 됐다.)
     /// A146(v0.165.0) 재계수 결과 = **변화 없음**: 표시 기간 표기는 BarGrid에 칸을 새로 만들지 않고
     ///   star 칸(SensorGrid) 안 마지막 열로 들어갔다 — 늘어난 몫은 <see cref="LongGraphsWidth"/>에 있었다.
     /// A259(v0.259.0) 재계수 결과 = **역시 변화 없음**: 그 표기가 표면 안(xAxisText)으로 내장되며
     ///   star 칸 몫에서도 빠졌다(<see cref="LongGraphsWidth"/> 352→312) — 고정 요소 합은 그대로다.
-    /// ⚠️ BarGrid.ActualWidth 기준이므로 셸의 ModuleBarHost Margin(A151에서 82/82 — 우측이 셸 모드
-    ///   버튼 2개 몫으로 12→82)은 여기 포함되지 않는다.
+    /// A293(v0.287.0)에서 <see cref="LongGraphsWidth"/>는 무변경(312) — 하한이 MinWidth 152 × 2 +
+    ///   간격 8이라 star 칸이 26 넓어져도 하한 자체는 그대로다. 넓어진 26은 실폭(그래프 2개가
+    ///   각 13씩)으로만 간다.
+    /// ⚠️ BarGrid.ActualWidth 기준이므로 셸의 ModuleBarHost Margin은 여기 포함되지 않는다
+    ///   (A151에서 82/82 → A186이 우측 82→44 → A236이 하드웨어 화면 좌측 82→44: 지금 이 모듈에서는
+    ///   44/44다. A293에서 확인 — 값은 셸 MainWindow.UpdateOpenFileButton이 정한다).
     /// HardwareView.xaml의 BarGrid 구성이 바뀌면 이 합도 함께 고칠 것.
     /// </summary>
-    private const double BarFixedWidth = 288;
+    private const double BarFixedWidth = 262;
 
     /// <summary>
     /// 하단 바 star 칸(SensorGrid)이 요구하는 **최소** 폭(A259에서 의미 전환 — 구 "고정 요구 폭").
@@ -505,10 +510,16 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     /// A40: 하단 바 폭이 좁으면 정보 가치가 낮은 것부터 내린다. A259에서 다시 1단 —
     /// ① 맥박 그래프(A29 = 장식)만 내리고 ② 긴 그래프는 끝까지 남긴다(구 A146의 2단째
     /// "기간 표기 내림"은 표기가 표면 안으로 내장되며 판정 자체가 소멸 — 임계 550 계열 폐기).
-    /// · 맥박 임계 = star 칸 최소 요구 폭(2개 = 312) + 고정 요소 합(BarFixedWidth 288) = **600**
+    /// · 맥박 임계 = star 칸 최소 요구 폭(2개 = 312) + 고정 요소 합(BarFixedWidth 262) = **574**
     ///   (이력: A146 = 716, A151 = ⛶ 38 감소로 678 + 셸 모드 버튼 몫으로 BarGrid 자체도 70
-    ///   좁아짐, A237 = 크기 버튼 38 감소로 640, A259 = 표기 몫 40 감소로 600 — 최소 창 720에서
-    ///   BarGrid는 약 556이라 여전히 맥박이 내려간다).
+    ///   좁아짐, A237 = 크기 버튼 38 감소로 640, A259 = 표기 몫 40 감소로 600, A293 = Busy 링 칸
+    ///   26 감소로 **574**.)
+    /// ※ A293에서 함께 검산한 "최소 창에서의 결과": 종전 주석의 "최소 창 720에서 BarGrid 약 556"은
+    ///   셸 ModuleBarHost 여백이 82/82이던 시절(A151) 값이라 **이미 낡아 있었다** — A186이 우측을
+    ///   82→44로, A236이 하드웨어 화면의 좌측을 82→44로 당겨(오픈 파일 버튼 숨김) 지금은 여백 합이
+    ///   88이다. 최소 창 720 기준 BarGrid는 약 632 → 임계 600이던 A259 시점부터 이미 맥박이
+    ///   **내려가지 않는** 상태였고, 574가 되며 여유만 32 → 58로 늘었다. 판정식·코드는 무변경이고
+    ///   달라진 것은 이 주석의 사실관계뿐이다(실기기 확인 포인트: 최소 창에서 맥박이 보이는지).
     /// 구 카드 10개의 "뒤 순서부터 숨김" 수 축소 로직은 소멸 — 긴 그래프는 2개 고정이라 접을 것이 없다.
     /// 판정은 BarGrid(부모가 정하는 폭) 기준이라 피드백 루프가 없다(기존 그대로) — 숨김·표시가
     /// SensorGrid의 요구 폭을 바꿔도 star 칸이 흡수하고 BarGrid 폭은 셸이 정한다.
@@ -879,10 +890,16 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         var area = new Polygon { Fill = fill };
 
         // 축 스케일 라벨(A74): 눈금선·축선은 그리지 않는다(작은 셀이 지저분해진다).
-        // 좌상단 = y 최대값 + 단위("max 100°C" — A127 접두), 우하단 = x 시간 범위("30s").
+        // 좌상단 = y 최대값 + 단위("max 100°C" — A127 접두), 하단 = x 시간 범위("30s").
         // y 하한 0은 자명해 생략. 값·표시 여부는 RenderSparkline이 채운다 — 여기선 빈 채로 만들어
         // 둔다. 하단 바 표면(inBar)은 y축만 끝까지 Collapsed(A128 잔존분) — x축(기간)은 A259부터
         // 바에서도 보인다(RenderSparkline의 A128 개정 참조. 표면 구성은 공용).
+        // A293: x축 가로 위치가 표면 종류로 갈린다 — **하단 바(inBar)는 가운데**(사용자 지시
+        // "기간 표시를 각 그래프의 가로 중앙으로"), 센터 타일·좌 대형은 종전 우하단 그대로다.
+        // 정렬 기준이 각 표면의 graphHost(Grid)라 그래프 개수·star 칸 폭·전체화면 스트립 이동과
+        // 무관하게 늘 "그 그래프 하나의 중앙"이다(바 전체 중앙이 아니다 — 사양 그대로).
+        // Grid 자식이라 HorizontalAlignment가 그대로 먹는다(Canvas였다면 좌표 계산이 필요했다).
+        // 세로(Bottom)·글꼴(BaseSmallFontSize)·투명도(0.55)는 현행 유지 — 가로만 바뀐다.
         var yAxisText = new TextBlock
         {
             FontSize = BaseSmallFontSize,
@@ -895,7 +912,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         {
             FontSize = BaseSmallFontSize,
             Opacity = 0.55,
-            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalAlignment = inBar ? HorizontalAlignment.Center : HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Bottom,
             Visibility = Visibility.Collapsed,
         };
@@ -1198,7 +1215,8 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         graph.Line.Points = linePoints;
         graph.Area.Points = areaPoints;
 
-        // 축 라벨(A74): 좌상단 y 최대값 + 단위, 우하단 x 시간 범위.
+        // 축 라벨(A74): 좌상단 y 최대값 + 단위, 하단 x 시간 범위(가로 위치는 MakeGraph가 정한다 —
+        // A293부터 바 표면만 가운데, 나머지는 우하단. 여기서는 글자·표시 여부만 만진다).
         // ① A128 → **A259(v0.259.0) 공식 개정**: 구 금지("InBar 예외를 다시 넣지 말 것" —
         //    A146이 이 자리에 남겼던 문구)는 A259가 뒤집는다. 근거 = 긴 그래프가 star 전폭이
         //    되며 구 A146의 바깥 공통 표기(SpanText)가 폭 회계에서 걷혔고, 사용자 지시(2026-08-27)
@@ -1359,7 +1377,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         if (target.Children.Contains(SensorGrid)) return;
         Panel other = inBar ? StripPanel : BarGrid;
         other.Children.Remove(SensorGrid); // 없으면 무동작 — 첫 호출(초기 배치는 XAML)에도 안전
-        target.Children.Add(SensorGrid); // Grid.Column=2는 요소에 붙어 있어 바로 복귀해도 유효
+        target.Children.Add(SensorGrid); // Grid.Column=1(A293 재번호)은 요소에 붙어 있어 바로 복귀해도 유효
     }
 
     /// <summary>SensorStrip은 내용(비관리자 안내 또는 전체화면 동안의 긴 그래프)이 있을 때만 보인다.</summary>
