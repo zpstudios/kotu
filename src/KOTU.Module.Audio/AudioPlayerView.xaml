@@ -32,6 +32,82 @@
              클릭 = 재생/일시정지, 휠 = 볼륨 (핸들러는 코드에서 연결) -->
         <Grid x:Name="AudioSurface" Grid.Row="0" Background="Black" Tapped="OnSurfaceTapped">
             <vlc:VideoView x:Name="Vlc" />
+            <!-- A304: 자체 렌더 VU 미터(스타일 = VU meter일 때만 표시 — 코드 UpdateVuMeter가
+                 판정). libvlc vuMeter effect는 폐기: 인스턴스 옵션이 Off 상당이 되어 표면은
+                 검정으로 남고 이 오버레이가 레벨을 그린다. 레벨 소스 = WASAPI 루프백
+                 (VuMeterEngine — 시스템 출력 미러링. 계산·캡처는 워커, 여기는 UI 반영뿐 —
+                 주기 작업 UI 스레드 금지 규칙). 스테레오 L/R 가로 바 2줄: 채움 = RMS(색 구간
+                 60/25/15% = 녹/황/적 미터 관례), 흰 3px 막대 = 피크 홀드. 색 하드코딩 근거:
+                 표면이 항상 검정(AudioSurface Background)이라 테마 무관 — 기존 오버레이 판
+                 (#CC202020·White)과 같은 성질. 채움 폭은 코드가 Clip(RectangleGeometry —
+                 사용처마다 새 인스턴스, v0.174.1 규칙)으로 조절하고 피크는 TranslateTransform
+                 이동이다(DriveStrip 관용구). 입력 통과(표면 클릭 = 재생/일시정지 유지). -->
+            <Grid
+                x:Name="VuOverlay"
+                Visibility="Collapsed"
+                IsHitTestVisible="False"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Stretch"
+                MaxWidth="760"
+                Margin="48,0"
+                RowSpacing="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="L" Foreground="Gray" FontSize="13"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Grid x:Name="VuTrackL" Grid.Column="1" Height="24" Background="#26FFFFFF">
+                        <Grid x:Name="VuFillL">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="60*" />
+                                <ColumnDefinition Width="25*" />
+                                <ColumnDefinition Width="15*" />
+                            </Grid.ColumnDefinitions>
+                            <Rectangle Grid.Column="0" Fill="#2EBD6B" />
+                            <Rectangle Grid.Column="1" Fill="#E8C33C" />
+                            <Rectangle Grid.Column="2" Fill="#E0524A" />
+                        </Grid>
+                        <Rectangle x:Name="VuPeakL" Width="3" Fill="#F2F2F2" Visibility="Collapsed"
+                                   HorizontalAlignment="Left">
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform x:Name="VuPeakShiftL" />
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+                    </Grid>
+                </Grid>
+                <Grid Grid.Row="1" ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="R" Foreground="Gray" FontSize="13"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Grid x:Name="VuTrackR" Grid.Column="1" Height="24" Background="#26FFFFFF">
+                        <Grid x:Name="VuFillR">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="60*" />
+                                <ColumnDefinition Width="25*" />
+                                <ColumnDefinition Width="15*" />
+                            </Grid.ColumnDefinitions>
+                            <Rectangle Grid.Column="0" Fill="#2EBD6B" />
+                            <Rectangle Grid.Column="1" Fill="#E8C33C" />
+                            <Rectangle Grid.Column="2" Fill="#E0524A" />
+                        </Grid>
+                        <Rectangle x:Name="VuPeakR" Width="3" Fill="#F2F2F2" Visibility="Collapsed"
+                                   HorizontalAlignment="Left">
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform x:Name="VuPeakShiftR" />
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+                    </Grid>
+                </Grid>
+            </Grid>
             <!-- 상단에 ♪ + 파일명 (파형이 표면을 채우므로 가리지 않게 작게, 입력 통과) -->
             <StackPanel
                 x:Name="TitleOverlay"

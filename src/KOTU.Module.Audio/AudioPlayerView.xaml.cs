@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.Devices.Enumeration;
 using Windows.Media.Devices;
 using Windows.System;
@@ -22,6 +23,8 @@ namespace KOTU.Module.Audio;
 /// 볼륨(↑/↓)·음소거(M), 배속, 이어듣기, 이퀄라이저 프리셋(A163)·오디오 장치 선택(A164)을 제공한다. 전체화면은 A151부터 셸의 3단 모드 체계
 /// (Enter 순환·Alt+Enter) 몫이다 — 이 뷰에는 진입 코드가 없다.
 /// 표면은 libvlc 시각화(A268 스타일 선택 — 기본 scope 파형)가 채우고 상단에 ♪ + 파일명 오버레이를 띄운다.
+/// 예외 하나(A304): VU meter 스타일은 libvlc effect가 아니라 자체 렌더다 — WASAPI 루프백
+/// 레벨(VuMeterEngine)을 검은 표면 위 VuOverlay에 그린다(수명 판정은 UpdateVuMeter 한곳).
 /// 시각화는 인스턴스 옵션으로만 동작하므로(v0.12.0 실기기 확인) 인스턴스는 1회 생성해
 /// 재사용하되, 스타일이 바뀌는 순간만 예외로 폐기·재생성한다(RecreatePlayer — A268).
 /// 스레드 모델(A42): libvlc 생성·해제는 뷰 전용 워커에서 직렬로. libvlc 이벤트는
@@ -241,18 +244,38 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
     /// <summary>표기·저장값·libvlc effect-list 값의 단일 원본 — 배열 순서가 곧 플라이아웃 순서다.
     /// Off는 시각화 옵션 자체를 뺀 인스턴스(영상 모듈의 옵션 구성과 동일 — 검은 표면만 남는다).
-    /// 저장값은 전부 소문자, effect-list 표기만 libvlc 철자(vuMeter)를 따른다.</summary>
+    /// 저장값은 전부 소문자다. A304: VU meter는 libvlc vuMeter effect("너무 촌스럽다" —
+    /// 사용자 확정)를 버리고 자체 렌더로 전환 — Effect가 null이라 인스턴스 옵션은 Off와 같고,
+    /// 표시는 VuOverlay + VuMeterEngine(WASAPI 루프백)이 맡는다. off↔vumeter 전환도 키가
+    /// 달라 재생성을 타지만(옵션은 동일 — 불필요 재생성 1회) 재생성 경로 무접촉이라는 구조
+    /// 최소 변경(구현 시 결정)을 우선했다.</summary>
     private static readonly (string Label, string Key, string? Effect)[] VisualizerStyles =
     [
         ("Off", "off", null),
         ("Scope", "scope", "scope"),
         ("Spectrum", "spectrum", "spectrum"),
         ("Spectrometer", "spectrometer", "spectrometer"),
-        ("VU meter", "vumeter", "vuMeter"),
+        ("VU meter", VuMeterStyleKey, null),
     ];
 
     private string _visualizer;                           // 현재 선택(저장값) — 로컬 소유(_muted 규칙)
     private string _playerVisualizer = VisualizerDefault; // 현재 인스턴스에 구워진 값 — 재생성 필요 판정 기준
+
+    // ---------- A304: 자체 렌더 VU 미터 상태 ----------
+    // 경로 선택 근거·스레드 지도는 VuMeterEngine 헤더 주석이 정본이다. 여기는 뷰 쪽 배선만:
+    // 오버레이 표시 = VU 스타일 + 파일 열림 + 안내문 없음, 캡처 = 표시 + 재생 중(그 외 즉시
+    // 정지 — 배터리·CPU). 모든 전이는 UpdateVuMeter 한곳을 지난다(그곳 주석의 전이표 참고).
+
+    /// <summary>VU meter 스타일의 저장값 키 — 스타일 표(VisualizerStyles)와 판정(IsVuStyle)의 단일 원본.</summary>
+    private const string VuMeterStyleKey = "vumeter";
+
+    /// <summary>현재 선택이 VU meter인가 — 자체 렌더 분기(A304)의 단일 판정.</summary>
+    private bool IsVuStyle => string.Equals(_visualizer, VuMeterStyleKey, StringComparison.Ordinal);
+
+    private VuMeterEngine? _vuEngine; // 지연 생성 — VU 스타일로 실제 재생해야 만든다
+    private bool _vuActive;           // UI 스레드 소유 렌더 게이트 — Stop 뒤 비행 중이던 틱을 걸러낸다
+    private readonly RectangleGeometry _vuClipL = new(); // 채움 클립 — 사용처마다 새 인스턴스(v0.174.1 규칙)
+    private readonly RectangleGeometry _vuClipR = new();
 
     // ---------- A301: 교체 직렬화 가드 · 계측 ----------
     // _recreating: RecreatePlayer 진행 중 표시 — 교체 중 스타일 재선택은 조용히 무시한다
@@ -396,6 +419,13 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (!IsKnownVisualizer(_visualizer)) _visualizer = VisualizerDefault;
         VisualizerFlyout.Opening += (_, _) => FillVisualizerFlyout();
 
+        // A304: VU 미터 채움 클립 배선 + 초기 0 레벨. 오버레이 표시·캡처 여부는 UpdateVuMeter가
+        // 상태 전이(재생·일시정지·정지·스타일 변경·안내문)마다 다시 판정한다.
+        VuFillL.Clip = _vuClipL;
+        VuFillR.Clip = _vuClipR;
+        ResetVuBars();
+        UpdateVuMeter();
+
         // A301: 교체 계측 오버레이(diag.audioSwap, 기본 꺼짐) — EditorDecorDiagnostics(A285)
         // 관용구 복제. 초기 1회는 저장값을 바로 읽고, 이후는 설정 화면의 NotifyChanged가 부르는
         // Changed 구독으로 즉시 반영한다. static 이벤트라 Unloaded에서 반드시 해제한다
@@ -449,6 +479,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         {
             PlaceholderText.Text = "Preparing playback...";
             PlaceholderText.Visibility = Visibility.Visible;
+            UpdateVuMeter(); // A304: 준비 안내문과 미터가 겹치지 않게(표시 조건이 안내문 유무를 본다)
         }
 
         await EnsurePlayerAsync();
@@ -569,6 +600,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         TitleText.Text = Path.GetFileNameWithoutExtension(_filePath);
         ContentOpened?.Invoke(_filePath); // 셸 동기화
         TrayStatusChanged?.Invoke();      // A54: 유휴("AUD") → 열림(시간 · 이퀄라이저)
+        UpdateVuMeter(); // A304: 파일이 열리면 VU 오버레이 표시(캡처는 Playing 전이가 켠다)
     }
 
     /// <summary>
@@ -666,6 +698,9 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _tornDown = true;
         SetTrayTimer(false); // A54: 뷰가 내려가면 1초 타이머도 반드시 멈춘다
         _ceremonyTimer?.Stop(); // A302: 해체 후 틱 방지(영상 A12·A13과 같은 자리·같은 형태)
+        _vuActive = false;
+        _vuEngine?.Dispose(); // A304: 캡처·표시 타이머 정지(뒷정리는 스레드풀 — UI 비의존)
+        _vuEngine = null;
         var player = _player;
         var libVlc = _libVlc;
         _player = null;
@@ -784,6 +819,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
         SetTrayTimer(true); // A54: 재생 중에만 1초마다 트레이(시간·이퀄라이저)를 갱신한다
         TrayStatusChanged?.Invoke();
+        UpdateVuMeter(); // A304: 재생 시작 = 캡처 켬(VU 스타일일 때만 실동작 — 전이표)
 
         // A301: 교체 계측 소비 — RecreatePlayer ⑥이 실어 둔 개시 시각으로 "재생성 시작→
         // Playing 도달" ms를 계산해 오버레이에 찍는다(표시는 diag.audioSwap 켜짐일 때만 —
@@ -806,6 +842,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             PlayButton.Content = "▶";
             SetTrayTimer(false); // A54: 멈추면 타이머도 멈춘다 — 막대는 낮게 고정
             TrayStatusChanged?.Invoke();
+            UpdateVuMeter(); // A304: 일시정지 = 캡처 즉시 정지(배터리·CPU — 오버레이는 0 레벨로 남는다)
         });
 
     private void OnPlayerEndReached(object? sender, EventArgs e)
@@ -931,6 +968,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _suppressSeekEvent = false;
         SetTrayTimer(false); // A54: 멈추면 타이머도 멈춘다 — 막대는 낮게 고정
         TrayStatusChanged?.Invoke();
+        UpdateVuMeter(); // A304: EOF 정지(전이 5) = 캡처 정지(전이 1~4는 Playing 전이가 잇는다)
     }
 
     private void OnPlayerError(object? sender, EventArgs e) =>
@@ -949,6 +987,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         PlaceholderText.Text = text;
         PlaceholderText.Visibility = Visibility.Visible;
+        UpdateVuMeter(); // A304: 안내문과 미터가 겹치지 않게(재생 실패 시 캡처도 여기서 멎는다)
     });
 
     // ---------- 조작 ----------
@@ -1121,6 +1160,14 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         {
             // 장치 유실 등 — 재생은 기존 장치로 계속된다.
         }
+
+        // A304: 루프백 캡처는 출력 장치를 미러링하므로 장치 변경을 따라간다(정지 후 재시작 —
+        // 엔진의 세대 번호가 비동기 초기화 경합을 정리한다). 비활성이면 다음 시작이 새 값을 쓴다.
+        if (_vuActive && _vuEngine is { } engine)
+        {
+            engine.Stop();
+            engine.Start(deviceId);
+        }
     }
 
     /// <summary>
@@ -1274,7 +1321,86 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _settings.Set(VisualizerKey, style);
         _settings.Save();
         if (!IsPlaying) ShowCeremony(VisualizerLabel(style)); // A302: 정지 상태에서만
+        UpdateVuMeter(); // A304: VU 진입 = 오버레이 즉시 표시 / 이탈 = 오버레이·캡처 즉시 정리
         RecreatePlayer();
+    }
+
+    // ---------- A304: 자체 렌더 VU 미터 ----------
+
+    /// <summary>
+    /// VU 미터 수명의 단일 판정점 — 모든 전이가 이 한곳을 지나게 해 누수 축을 없앤다(A306
+    /// 전이표 방식). 판정: 오버레이 표시 = VU 스타일 + 파일 열림 + 안내문 없음, 캡처(엔진) =
+    /// 표시 + 재생 중. 전이표(호출 지점 → 기대 상태):
+    ///   생성자                         → 표시만(파일이 컨텍스트로 왔으면), 캡처 없음
+    ///   OnVlcInitialized 준비 안내문   → 안내문 우선 = 오버레이 잠깐 숨김(PlayCurrent가 복원)
+    ///   PlayCurrent(열기·드롭·▶ 재시작) → 표시(캡처는 곧 오는 Playing 전이가 켠다)
+    ///   Playing(재개·리핏·교체 재장전 포함) → 캡처 켬
+    ///   Paused                         → 캡처 끔 + 막대 0 리셋(오버레이는 남는다)
+    ///   EOF 정지(AdvanceAfterEnd 전이 5) → 캡처 끔(전이 1~4는 Playing이 다시 켠다)
+    ///   ShowMessage(재생 실패 등)       → 오버레이 숨김 + 캡처 끔
+    ///   SelectVisualizer(진입/이탈)     → 즉시 표시/정리(재생성 완료 대기 없음)
+    ///   OnUnloaded                     → 이 판정을 거치지 않고 엔진을 직접 Dispose(해체 전용)
+    /// UI 스레드 전용. 같은 상태 재판정은 무해(엔진 Start/Stop 멱등). 캡처 실패는 엔진이
+    /// 조용히 삼켜 빈 미터로 남는다(크래시 금지 요건 — VuMeterEngine 주석).
+    /// </summary>
+    private void UpdateVuMeter()
+    {
+        var overlay = !_tornDown && IsVuStyle && _filePath is not null &&
+            PlaceholderText.Visibility == Visibility.Collapsed;
+        VuOverlay.Visibility = overlay ? Visibility.Visible : Visibility.Collapsed;
+
+        if (overlay && IsPlaying)
+        {
+            _vuActive = true;
+            _vuEngine ??= new VuMeterEngine(levels => Dispatch(() => ApplyVuLevels(levels)));
+            _vuEngine.Start(_outputDeviceId);
+        }
+        else
+        {
+            _vuActive = false;
+            _vuEngine?.Stop();
+            ResetVuBars();
+        }
+    }
+
+    /// <summary>엔진 40ms 틱의 UI 반영(디스패치 후) — 속성 대입뿐이다(계산은 전부 엔진 워커).
+    /// 채움은 Clip 폭, 피크는 3px 막대의 X 이동. 트랙 폭은 매 틱 ActualWidth를 읽으므로
+    /// 창 리사이즈에 별도 배선 없이 추종한다.</summary>
+    private void ApplyVuLevels(VuLevels levels)
+    {
+        if (!_vuActive) return; // Stop 직후 비행 중이던 틱 — 리셋된 막대를 되살리지 않는다
+        ApplyVuChannel(VuTrackL, _vuClipL, VuPeakL, VuPeakShiftL, levels.RmsL, levels.PeakL);
+        ApplyVuChannel(VuTrackR, _vuClipR, VuPeakR, VuPeakShiftR, levels.RmsR, levels.PeakR);
+    }
+
+    /// <summary>채널 하나 반영. peak는 XAML의 3px Rectangle인데 형식은 FrameworkElement로
+    /// 받는다 — Shapes를 using하면 Path가 System.IO.Path와 모호해져서다(Width·Visibility만 쓴다).</summary>
+    private static void ApplyVuChannel(Grid track, RectangleGeometry clip,
+        FrameworkElement peak, TranslateTransform peakShift, double rms, double peakLevel)
+    {
+        var width = track.ActualWidth;
+        var height = track.ActualHeight;
+        if (width <= 0 || height <= 0) return; // 첫 레이아웃 전 — 다음 틱(40ms)이 곧 온다
+
+        clip.Rect = new Windows.Foundation.Rect(0, 0, Math.Clamp(rms, 0, 1) * width, height);
+
+        if (peakLevel <= 0.004)
+        {
+            peak.Visibility = Visibility.Collapsed; // 무음 — 왼쪽 끝에 피크 조각을 남기지 않는다
+            return;
+        }
+        peak.Visibility = Visibility.Visible;
+        peakShift.X = Math.Clamp(peakLevel * width - peak.Width, 0, Math.Max(0, width - peak.Width));
+    }
+
+    /// <summary>막대를 0 레벨로 되돌린다(캡처 정지·초기화 공용) — 정지 순간의 레벨이 얼어붙어
+    /// 남지 않게. UI 스레드 전용.</summary>
+    private void ResetVuBars()
+    {
+        _vuClipL.Rect = new Windows.Foundation.Rect(0, 0, 0, 0);
+        _vuClipR.Rect = new Windows.Foundation.Rect(0, 0, 0, 0);
+        VuPeakL.Visibility = Visibility.Collapsed;
+        VuPeakR.Visibility = Visibility.Collapsed;
     }
 
     // ---------- A302: 비주얼라이저 변경 세러모니 ----------

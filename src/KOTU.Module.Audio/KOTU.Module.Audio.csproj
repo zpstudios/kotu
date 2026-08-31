@@ -12,6 +12,10 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
     <PackageReference Include="LibVLCSharp.WinUI" Version="3.10.0" />
+    <!-- A304: 자체 렌더 VU 미터의 레벨 소스 — WASAPI 루프백 캡처(NAudio.Wasapi, 종속 NAudio.Core).
+         버전은 정확 고정(재현 빌드 — 구현 시 결정: 안정 최신 2.2.x). libvlc 오디오 콜백 축은
+         aout 자체를 대체해(소리를 앱이 직접 출력해야 함) 기각 — 근거는 VuMeterEngine 헤더 주석. -->
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
