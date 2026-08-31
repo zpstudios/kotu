@@ -41,10 +41,14 @@ namespace KOTU.Module.Document;
 /// </summary>
 public sealed partial class DocumentView : UserControl,
     IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
-    IUntitledContentSource, IPrintPageProvider
+    IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>A279: 편집 대상 파일이 갈렸다(Save as...·무제 첫 저장 — IContentPathChangedSource).
+    /// 셸은 이걸로 창 제목을 새 파일 이름으로 다시 만든다. 덮어쓰기 저장은 발화하지 않는다.</summary>
+    public event Action<string>? ContentPathChanged;
 
     /// <summary>A189: 무제 문서로 에디터에 진입했다(IUntitledContentSource) — 경로가 없어
     /// ContentOpened를 못 쓴다. 셸은 이걸로 빈 상태 탐색기를 내리고 제목을 무제 표기로 바꾼다.</summary>
@@ -2646,9 +2650,12 @@ public sealed partial class DocumentView : UserControl,
             _renderEligible = IsMarkdownPath(path) && !_truncated
                 && EditorText.Length <= LargeDocumentChars;
             UpdateViewToggle();
-            // 창 제목 갱신은 셸 몫 — OnContentOpened가 무제 전이(A189)에 한해 새 경로로 바꾼다
-            // (기존 파일 Save as의 제목 미갱신은 A113 알려진 한계 그대로 — 이번 범위 밖).
+            // 창 제목 갱신은 셸 몫 — A279부터 경로가 갈리는 저장(Save as...·무제 첫 저장)을
+            // ContentPathChanged로 따로 알려 셸이 제목을 새 파일 이름으로 다시 만든다
+            // (종전에는 무제 전이(A189)만 갱신돼 기존 파일 Save as는 옛 이름이 남았다).
             ContentOpened?.Invoke(path); // 셸 동기화 — 기준 경로·드라이브 줄·오버레이(기존 배선)
+            // 순서 주의: 제목은 위 ContentOpened가 셸 상태(기준 경로)를 옮긴 뒤에 잇는다.
+            ContentPathChanged?.Invoke(path); // A279 — 창 제목만 담당(저장 자체와 무관한 후속 통지)
         }
 
         _originalBytes = bytes;         // ⓑ: 이제 디스크의 원본 = 방금 쓴 바이트

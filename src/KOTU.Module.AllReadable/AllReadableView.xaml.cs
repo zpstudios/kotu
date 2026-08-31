@@ -33,7 +33,7 @@ namespace KOTU.Module.AllReadable;
 /// </summary>
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
-    IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource
+    IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -45,6 +45,10 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>자식이 파일을 열면(첫 로드·자식 내부 ◀/▶ 탐색 포함) 셸에 그대로 중계한다.</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>A279: 문서 자식의 편집 대상 파일이 갈렸다는 통지(Save as...)를 그대로 셸에 중계한다 —
+    /// 셸은 이걸로 창 제목을 새 파일 이름으로 다시 만든다(IContentPathChangedSource).</summary>
+    public event Action<string>? ContentPathChanged;
 
     /// <summary>자식(문서 편집)의 미저장 상태 변화를 셸에 중계한다 — 창 제목 ● 표시(A37).</summary>
     public event Action<bool>? UnsavedChanged;
@@ -182,6 +186,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             untitled.UntitledOpened += OnChildUntitledOpened;
             untitled.UntitledWindowRequested += OnChildUntitledWindowRequested;
         }
+        if (view is IContentPathChangedSource pathChanged) // A279
+            pathChanged.ContentPathChanged += OnChildContentPathChanged;
         UpdateBars();
         TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
         PlaybackStateChanged?.Invoke(); // A186: 자식 교체도 재생 상태 재평가 대상이다(트레이와 같은 이유)
@@ -205,6 +211,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             untitled.UntitledOpened -= OnChildUntitledOpened;
             untitled.UntitledWindowRequested -= OnChildUntitledWindowRequested;
         }
+        if (_childView is IContentPathChangedSource pathChanged) // A279
+            pathChanged.ContentPathChanged -= OnChildContentPathChanged;
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
@@ -243,6 +251,13 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>A247: 새 인스턴스 요청 — 행동 신호라 그대로 올리기만 한다(인쇄 중계와 같은 형).</summary>
     private void OnChildUntitledWindowRequested() => UntitledWindowRequested?.Invoke();
+
+    /// <summary>
+    /// A279: 문서 자식이 Save as...로 편집 대상 파일을 갈았다 — 그대로 셸로 올린다(중계만).
+    /// 자체 상태(_filePath·하단 바)는 같은 저장에서 먼저 오는 ContentOpened 중계가 이미 옮긴다.
+    /// 표시를 직접 만지지 않으므로 디스패치도 셸에 맡긴다(인쇄·재생 중계와 같은 형).
+    /// </summary>
+    private void OnChildContentPathChanged(string path) => ContentPathChanged?.Invoke(path);
 
     // A256(2026-08-27): A223의 열기 요청 중계(IOpenFileRequestSource · OnChildOpenFileRequested ·
     // OpenFileRequested)를 제거했다 — 문서 자식의 하단 바 Open 버튼이 사라져 중계할 신호 자체가

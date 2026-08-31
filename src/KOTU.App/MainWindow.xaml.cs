@@ -1484,6 +1484,15 @@ public sealed partial class MainWindow : Window
                 _manager.OpenUntitledDocumentInNewWindow();
             });
         }
+        // A279: 열려 있는 콘텐츠의 파일이 갈렸다(문서 Save as...·무제 첫 저장) → 창 제목 재조립.
+        // 같은 디스패치·교체 가드(위와 동일 관용구). 이 저장은 ContentOpened도 함께 쏘므로
+        // 기준 경로·오버레이는 그쪽이 옮기고 여기서는 제목만 잇는다.
+        if (view is IContentPathChangedSource pathChangedSource)
+            pathChangedSource.ContentPathChanged += path => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                OnContentPathChanged(path);
+            });
         // A186: 재생 상태 변화(재생/일시정지/정지) → 하단 바 자동 숨김 재평가.
         // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(A37과 같은 가드).
         if (view is IPlaybackStateSource playback)
@@ -1708,7 +1717,10 @@ public sealed partial class MainWindow : Window
         UpdateDriveStrip();   // A22: 뷰가 파일을 열었다 → 드라이브 줄을 숨긴다
         ApplyOverlayStates(); // 폴더·정보가 바뀌었을 수 있다 — 떠 있는 오버레이·도크 갱신
         // A189: 무제 → 저장 전이는 창 제목도 새 경로로("KOTU - Untitled" → "KOTU - 파일명").
-        // 기존 파일 Save as의 제목 미갱신(A113 알려진 한계)은 그대로다 — 이번 수리는 무제 경로만.
+        // A279: 기존 파일 Save as의 제목 갱신은 별도 통지(ContentPathChanged → OnContentPathChanged)가
+        // 맡는다 — 이 경로를 넓히면 뷰 내부 ◀/▶ 탐색의 제목까지 바뀌어(부록 A-2 27번 별건) 범위를
+        // 벗어난다. 무제 분기는 그때 제목이 "Untitled"라 여기서 즉시 잇는 편이 자연스러워 남긴다
+        // (같은 저장의 ContentPathChanged가 뒤이어 같은 값으로 한 번 더 세팅해도 무해하다).
         // ● 표시는 건드리지 않는다: 저장 성공의 더티 해제(UnsavedChanged)가 같은 디스패처 큐에서
         // 이 호출 직후 도착해 끈다(DocumentView.CommitSave의 통지 순서).
         if (wasUntitled) SetTitle(FileTitle(path));
@@ -1716,6 +1728,16 @@ public sealed partial class MainWindow : Window
         // A137: 뷰 내부 열기(◀/▶ 등)도 창 32px의 확장자/용량을 바꾸므로 셸 아이콘 전체 갱신.
         RefreshShellIcons();
     }
+
+    /// <summary>
+    /// A279: 열려 있는 콘텐츠의 파일이 갈렸다는 알림(IContentPathChangedSource — 문서 모듈
+    /// 'Save as...'·무제 첫 저장). 창 제목만 새 파일 이름으로 다시 만든다 — 조립은 파일 열기
+    /// 경로(OpenFile·ShowModule)와 같은 <see cref="FileTitle"/>이라 형식(● · 인스턴스 번호 ·
+    /// "KOTU - 파일명")이 저절로 일치한다. 나머지 셸 상태(기준 경로·드라이브 줄·오버레이·아이콘)는
+    /// 같은 저장이 함께 쏘는 ContentOpened(<see cref="OnContentOpened"/>)가 이미 옮겼다.
+    /// ● 표시는 여기서도 건드리지 않는다(저장 성공의 UnsavedChanged가 끈다 — OnContentOpened와 동일).
+    /// </summary>
+    private void OnContentPathChanged(string path) => SetTitle(FileTitle(path));
 
     /// <summary>
     /// A189: 뷰가 무제 문서(경로 없는 콘텐츠)로 에디터에 진입했다는 알림(IUntitledContentSource) —
