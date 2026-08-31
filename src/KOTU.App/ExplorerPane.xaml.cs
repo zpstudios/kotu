@@ -319,10 +319,14 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private void BuildListHeader()
     {
-        // Name만 2* — 나머지 4칸은 1*. 좁으면 라벨이 잘리는 것을 허용한다(A276에서도 이 배분은
-        // 불변 — 1* 넷 중 하나만 넓히면 나머지가 더 좁아져 잘림 총량이 줄지 않는다).
-        ListHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-        for (var i = 0; i < 4; i++)
+        // A297: 5칸 전부 1* — 헤더 버튼 상자를 같은 크기로 맞춘다. 종전엔 Name만 2*라 Name 버튼
+        // 하나만 폭이 2배였고, 그것이 "헤더 버튼 크기가 제각각"으로 보인 유일한 차이였다
+        // (높이·상하 패딩·수직 정렬·글꼴은 AddSortHeader 한 곳이 만들어 A276 때부터 5칸이 이미 동일하다).
+        // 이 칸 폭은 데이터 열과 맞물리지 않는다 — 리스트 행은 A156의 2줄이고 상세는 TextBlock 1개
+        // (열 분할 없음)이라 헤더 칸은 정렬 버튼이 앉는 자리일 뿐이다. 균등화해도 정렬 표시·동작은
+        // 그대로다. 부수 효과로 협폭 잘림(A276 ②)이 완화된다 — 가장 긴 라벨(Created·Modified)이
+        // 종전의 절반 칸에서 균등 칸으로 넓어지고, 짧은 Name은 균등 칸으로도 넉넉하다.
+        for (var i = 0; i < 5; i++)
             ListHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         AddSortHeader(0, "Name", "Sort by name", ExplorerListing.SortKey.Name);
@@ -349,6 +353,11 @@ public sealed partial class ExplorerPane : UserControl
     /// 협폭 잘림 대응(A276 ②): 라벨은 <b>고정 전체 표기 유지</b>가 결론이다 — "Cr."/"Mod." 류
     /// 축약형은 폭을 몇 px 벌자고 뜻을 잃어 기각했고, 대신 화살표(8px)까지 포함해 좁아지면
     /// CharacterEllipsis로 잘리는 현행 + 아래 툴팁으로 전체 뜻이 늘 확인된다.
+    /// <b>A297</b>: 헤더 버튼 5개의 크기 속성은 <b>전부 이 한 곳에서만</b> 정한다 — 버튼별로
+    /// 값을 따로 주면 다시 제각각이 된다(호출부 AddSortHeader 5줄은 열 번호·라벨·툴팁·키만 다르다).
+    /// 세로는 VerticalAlignment=Stretch로 못박아 헤더 행(자식 중 가장 큰 높이)을 5개가 똑같이
+    /// 채우게 한다 — 정렬 화살표는 활성 칸에만 보이지만(SyncSortHeaders) 라벨(11px)보다 작은
+    /// 8px이고, 설령 더 컸더라도 행 높이는 5개가 공유하므로 <b>화살표 유무로 높이가 갈리지 않는다</b>.
     /// </summary>
     private void AddSortHeader(int column, string label, string tooltip, ExplorerListing.SortKey key)
     {
@@ -374,6 +383,7 @@ public sealed partial class ExplorerPane : UserControl
         {
             Content = content,
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch, // A297 — 5개가 헤더 행을 똑같이 채운다(기본값 명시)
             HorizontalContentAlignment = HorizontalAlignment.Left, // 좌정렬은 A155부터 5칸 모두 성립 — 무변경
             // A276: 배경은 종전의 투명 덮어쓰기를 지워 기본 버튼 스타일 값이 그대로 나오게 한다.
             BorderThickness = new Thickness(1), // A276 — BottomBarButtonStyle과 같은 두께
