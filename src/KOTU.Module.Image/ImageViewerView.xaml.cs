@@ -11,6 +11,7 @@ using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 using KOTU.Core.Threading;
 using KOTU.Input;
+using KOTU.Ui;
 
 namespace KOTU.Module.Image;
 
@@ -928,10 +929,12 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// 본체 상태 표시는 그 약자 "OR" 두 글자로 갔다(2026-08-27 사용자 지시).
     /// A260(5차·확정): 그 "OR"을 <b>테두리 상자 안의 "1:1"</b>로 바꾼다(2026-08-27 사용자 지시 —
     /// 약자보다 배율 기호가 즉시 읽힌다. A143의 "1:1" 글자가 상자를 얻어 돌아온 형태다).
-    /// 조립은 <see cref="BuildOriginalRatioBox"/> 한 곳 — 본체는 Button이라 Content에 임의
+    /// 조립은 <see cref="FitIcons.BuildOriginalRatioBox"/> 한 곳 — 본체는 Button이라 Content에 임의
     /// UIElement를 넣을 수 있다(IconElement만 받는 MenuFlyoutItem.Icon과 다르다).
     /// 툴팁 "Original size"·항목 이름 "Original"·A 키 표기는 A253 그대로 무변경.
-    /// 세 모듈(이미지·문서·영상) 동형이라 함께 고칠 것.
+    /// A298: 그 조립을 세 모듈이 복제해 갖던 것을 공용 파일 하나로 모았다(Shared/FitIcons.cs —
+    /// csproj Compile Link 공유. HotkeySupport와 같은 방식). 디자인을 고칠 곳은 이제 그 한 곳이다.
+    /// A299: 비활성일 때 테두리도 글자와 함께 회색이 된다(수리 내용은 그 팩토리 주석).
     /// </summary>
     private void UpdateFitButton()
     {
@@ -942,61 +945,12 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             FitMode.FitHeight =>
                 (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
             FitMode.ActualSize =>
-                (BuildOriginalRatioBox(), "Original size"),
+                (FitIcons.BuildOriginalRatioBox(), "Original size"),
             _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
                 "Contain - the whole image fits, never enlarged"),
         };
         FitButton.Content = content;
         ToolTipService.SetToolTip(FitButton, FitTip(tip)); // A34: 표기는 키 상수에서
-    }
-
-    /// <summary>
-    /// A260: 원본 배율(Original) 본체 표시 = 테두리 상자 안의 "1:1". 호출할 때마다 <b>새
-    /// 인스턴스</b>를 만든다 — 만들어 둔 UIElement를 돌려쓰면 두 번째 부모 붙이기에서 죽는다
-    /// (v0.174.1 실사례의 일반형). 세 모듈이 각자 같은 메서드를 가진다(모듈 간 공유 금지).
-    /// 치수 근거: 32×32 버튼의 내용 칸 26px(BottomBarButtonStyle의 테두리 1 + Padding 2를 뺀 값)
-    /// 안에 테두리 2 + 좌우 Padding 4 + 글자 "1:1"(9px에서 대략 13) = 대략 19라 여유가 있다
-    /// (실기기에서 잘리면 FontSize 8로 내릴 것).
-    /// </summary>
-    private static Border BuildOriginalRatioBox()
-    {
-        var label = new TextBlock
-        {
-            Text = "1:1",
-            FontSize = 9,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        return new Border
-        {
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(2),
-            Padding = new Thickness(2, 0, 2, 0),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            // 테두리 색은 글자와 같은 계열 — 조회 실패면 그 TextBlock의 기본 브러시로 떨어진다.
-            BorderBrush = OriginalRatioBoxBrush() ?? label.Foreground,
-            Child = label,
-        };
-    }
-
-    /// <summary>
-    /// A260: 상자 테두리 브러시 조회. XAML의 ThemeResource 참조는 키가 없을 때 런타임 파스
-    /// 실패로 앱이 죽으므로 코드에서 감싸 가져온다(DriveStrip.ThemeBrush와 같은 관용구 —
-    /// 인덱서는 키가 없으면 던진다). 실패하면 null을 돌려 호출부가 TextBlock 기본 Foreground를
-    /// 쓰게 한다. Brush 인스턴스는 공유해도 안전하다(부모가 하나뿐인 것은 Geometry·UIElement).
-    /// </summary>
-    private static Brush? OriginalRatioBoxBrush()
-    {
-        try
-        {
-            if (Application.Current.Resources["TextFillColorPrimaryBrush"] is Brush brush) return brush;
-        }
-        catch
-        {
-            // 키 없음 — 호출부 폴백
-        }
-        return null;
     }
 
     /// <summary>

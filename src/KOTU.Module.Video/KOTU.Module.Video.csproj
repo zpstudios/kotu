@@ -21,6 +21,8 @@
   <ItemGroup>
     <!-- A34(v0.112.0): 버튼 핫키 공용 지원(키 등록·툴팁 표기·통과 판정). KOTU.Core는 UI 비의존이라 소스 링크로 공유한다. -->
     <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
+    <!-- A298: Fit 원본 배율 "1:1" 상자 조립 팩토리(A260 디자인 한 벌). 같은 이유로 소스 링크 공유. -->
+    <Compile Include="..\Shared\FitIcons.cs" Link="FitIcons.cs" />
   </ItemGroup>
   <ItemGroup>
     <!--
