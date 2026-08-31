@@ -219,6 +219,9 @@ public sealed partial class DocumentView : UserControl,
         // ScrollViewer 훅과 같은 사정이라 같은 방식(레이아웃마다 재시도·상한 후 조용히 포기)을 쓴다.
         // 플래그 검사뿐이라 상시 구독 비용은 없다(EnsureZoomWheelHook 주석 참고).
         EditorBox.LayoutUpdated += (_, _) => EnsureZoomWheelHook();
+        // A294: 보류 중 에디터 포커스 재시도 — 위 줌 훅과 같은 "표지 검사뿐" 상시 훅(비용 0).
+        // 표지(_editorFocusPending)는 FocusEditorForEditing의 즉시 시도가 실패했을 때만 선다.
+        EditorBox.LayoutUpdated += (_, _) => RetryPendingEditorFocus();
         // A225: 렌더 판 쪽 Ctrl+휠 배선 — 같은 사정(프레젠터는 표시 후에야 잡힌다)·같은 관용구.
         RenderPane.LayoutUpdated += (_, _) => EnsureRenderZoomWheelHook();
         // A225: 뷰포트 폭이 바뀌면 랩 폭 보정(폭 = 뷰포트 나누기 배율)을 따라잡는다 —
@@ -250,7 +253,20 @@ public sealed partial class DocumentView : UserControl,
         // 더는 버튼들을 밀어내지 않는다(넘치면 줄 자체가 스크롤한다). 게다가 이제는
         // 파일이 열려 있지 않을 때만 뜨는데, 그때는 페이지·Fit 표시가 아예 없어 자리도 넉넉하다.
 
-        Loaded += (_, _) => Focus(FocusState.Programmatic);
+        // A294: 뷰 루트 Loaded 포커스의 편집 표면 분기 — 새 창 무제 분기(WindowManager.
+        // OpenUntitledDocumentInNewWindow)에서는 StartUntitled가 창 Activate·트리 로드보다 먼저
+        // 돌아 그쪽의 EditorBox.Focus가 무효(로드 전 Focus = false 반환)였고, 그 뒤 이 Loaded
+        // 포커스가 뷰 루트를 잡아 "마지막 승자"가 되면서 캐럿이 없었다(A277의 뷰 모드 오발동이
+        // 아니다 — StartUntitled는 _viewMode=false·IsReadOnly=false로 정상 편집 진입한다).
+        // 편집 표면이 이미 서 있으면(EditorBox Visible + !_viewMode — UpdateDecorToggles의
+        // onEditableSurface와 같은 판정) 루트가 아니라 에디터로 앉힌다. 파일 열기는 워커
+        // 비동기라 Loaded 시점엔 에디터가 아직 Collapsed = 종전대로 뷰 루트(무회귀)이고,
+        // 뷰 모드·PDF·빈 화면도 종전 그대로 뷰 루트다(A277 "포커스 없음 = 캐럿 없음" 유지).
+        Loaded += (_, _) =>
+        {
+            if (EditorBox.Visibility == Visibility.Visible && !_viewMode) FocusEditorForEditing();
+            else Focus(FocusState.Programmatic);
+        };
         Unloaded += (_, _) =>
         {
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
@@ -1081,7 +1097,47 @@ public sealed partial class DocumentView : UserControl,
         // 화면이었으면 비활성으로 계산된 상태). 무제도 토글 활성(사양 — 일관성).
         UpdateViewToggle();
         UntitledOpened?.Invoke(); // 셸 동기화 — 탐색기 내림·드라이브 줄 숨김·제목 "KOTU - Untitled"
-        EditorBox.Focus(FocusState.Programmatic); // 곧바로 타이핑 가능하게
+        // A294: 곧바로 타이핑 가능하게. 종전의 직접 EditorBox.Focus는 두 분기 모두에서 무효였다 —
+        // ① 새 창 분기: 트리 로드 전 호출(Focus = false), ② 자기 자리 분기: EditorBox가 Collapsed로
+        // 시작해(XAML) "막 Visible로 바꾼 직후·레이아웃 전" 호출. 실패하면 재시도 표지를 세워
+        // LayoutUpdated 훅이 레이아웃이 실제로 돈 뒤 다시 앉힌다(메서드 주석 참고).
+        FocusEditorForEditing();
+    }
+
+    // ---------- 에디터 포커스 (A294 — 무제 캐럿 수리) ----------
+
+    /// <summary>
+    /// A294: 보류 중 에디터 포커스 재시도의 대기 표지. 세우는 곳 = <see cref="FocusEditorForEditing"/>
+    /// (즉시 시도 실패), 걷는 곳 = <see cref="RetryPendingEditorFocus"/>(성공 또는 철회).
+    /// </summary>
+    private bool _editorFocusPending;
+
+    /// <summary>
+    /// A294: 편집 진입 시 에디터 포커스의 단일 창구 — 즉시 시도하고, 실패(false)면 표지만 세운다.
+    /// 원인 정조준: WinUI의 <c>Focus(FocusState.Programmatic)</c>는 요소가 아직 로드·레이아웃되지
+    /// 않았으면 false를 돌려주고 끝난다(반환값을 버리면 조용히 무산 — VideoPlayerView가 생성자
+    /// 대신 Loaded에서 포커스하는 이유와 같은 성질). StartUntitled의 직접 Focus가 정확히 그
+    /// 자리였다. 재시도는 EditorBox.LayoutUpdated 상시 훅(생성자 배선 — EnsureZoomWheelHook과
+    /// 같은 "표지 검사뿐" 관용구)이 레이아웃이 실제로 돈 뒤 수행한다 — 새 창 분기는 창 표시 후
+    /// 첫 레이아웃, 자기 자리 분기는 Visible 전환 직후 레이아웃이 그 계기다.
+    /// </summary>
+    private void FocusEditorForEditing() =>
+        _editorFocusPending = !EditorBox.Focus(FocusState.Programmatic);
+
+    /// <summary>
+    /// A294: LayoutUpdated마다 도는 재시도 — 표지가 없으면 즉시 반환(상시 비용 0). 표면이 그새
+    /// 편집이 아니게 바뀌었으면(뷰 모드 진입·PDF/렌더 전환으로 에디터 Collapsed) 낡은 재시도가
+    /// 포커스를 뺏지 않게 철회한다 — A277 잠금 뷰의 "포커스 없음 = 캐럿 없음" 계약 무손상.
+    /// </summary>
+    private void RetryPendingEditorFocus()
+    {
+        if (!_editorFocusPending) return;
+        if (EditorBox.Visibility != Visibility.Visible || _viewMode)
+        {
+            _editorFocusPending = false; // 편집 표면이 아니다 — 재시도 철회(포커스 강탈 금지)
+            return;
+        }
+        if (EditorBox.Focus(FocusState.Programmatic)) _editorFocusPending = false;
     }
 
     // ---------- 편집/뷰 모드 (A190 마크다운 렌더 → A224 전 형식화) ----------
