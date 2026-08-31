@@ -296,15 +296,22 @@ internal sealed class EditorDecor
 
     /// <summary>
     /// A215: 표시 토글 — guides = 라인 가이드(줄 상/하단 선), marks = ¶·EOF 마커.
-    /// SetScale과 같은 관용구(같은 값 조기 반환 + Invalidate — 다음 레이아웃에서 반영).
     /// 폴백 오프(_disabled) 상태에서는 무동작 — 켤 것이 없다.
+    /// <para>A295(2026-08-31 사용자 보고 수리): 관용구를 SetScale형(Invalidate만 — 다음
+    /// LayoutUpdated 대기)에서 SetViewSuppressed·SetDiagnostics형(Invalidate + 즉시 Render)으로
+    /// 올렸다. 하단 바 토글 클릭은 레이아웃 패스를 보장하지 않아(IsChecked·브러시 시각 상태만
+    /// 바뀐다) Invalidate만 걸면 예약(_pending)이 다음 편집·스크롤·리사이즈까지 소비되지 않고,
+    /// 그동안 토글이 "눌리지만 화면 무반응"이 된다 — A277·A285가 각자 자리에서 이미 확정한
+    /// 같은 함정이며 이 setter만 A215 시점 형태로 남아 있었다. Render는 멱등한 전체 패스라
+    /// 예약분과 겹쳐 돌아도 결과가 같다(SetViewSuppressed와 같은 근거).</para>
     /// </summary>
     public void SetDecorVisibility(bool guides, bool marks)
     {
         if (_disabled || (guides == _showGuides && marks == _showMarks)) return;
         _showGuides = guides;
         _showMarks = marks;
-        Invalidate();
+        Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
+        Render();     // A295: 클릭 즉시 반영 — 토글과 같은 프레임에 그리거나 걷는다
     }
 
     /// <summary>
