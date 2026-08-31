@@ -71,6 +71,19 @@ namespace KOTU.Module.Document;
 /// 무효면 v0.281.0의 폴백이 문자 그대로 받는다(계측 먼저 원칙 — 채택 여부와 원시 실측값을
 /// 진단 eofSrc= · endLine= · trail=이 찍어 스크린샷 한 장으로 판별된다).
 ///
+/// <b>A307</b>: "빈 마지막 줄 + 줄 간격 실측 불가"의 남은 한 조합 — 뷰포트에 글자 줄이 하나뿐이고
+/// 캐시도 비었으며(예: "동해물과" + 엔터 직후) trailing은 이전 줄 Y를 줘 기각, RectOf(len)도 무효인
+/// 환경에서는 A290~A291의 좌표원 사슬이 전부 막혀 lineStep이 캐럿 상자 높이(24)까지 떨어지고
+/// 빈 줄의 네 요소가 캐럿(32)보다 8px 아래(40)에 그려졌다(2026-08-31 실기기 진단 전사 — eofSrc=head
+/// · endLine=height · step=n/a). ResolveLineStep에 <b>폰트 메트릭 프로브 단계</b>를 추가한다:
+/// 트리 밖 프로브 TextBlock(에디터와 같은 FontFamily·FontSize — 줌이 이미 실린 값) 2줄·1줄
+/// DesiredSize 높이 차 = 주 글꼴의 줄 전진(FontLineStep). TextBox는 한글 폴백 글꼴이 섞인 줄에서도
+/// 주 글꼴 간격을 균일 적용한다는 것이 실측 근거다(v0.282.0 진단: 한글 줄인데 step=16.0 =
+/// Consolas 14px 자연 줄 간격). 우선순위 = 이번 패스 실측 &gt; 캐시 &gt; 폰트 프로브 &gt; 캐럿 상자
+/// 높이 — 실측·캐시가 있는 패스는 산술이 한 자리도 변하지 않는다. 프로브 값은 좌표가 아니라
+/// 순수 간격이라 pad 보정과 무관하다(종전 캐럿 상자 높이 폴백과 같은 좌표계에 같은 방식으로
+/// 더해진다). 어느 단계가 쓰였는지는 신설 진단 stepSrc=가 "출처:값"으로 찍는다.
+///
 /// <b>실패 안전(설계 의무)</b>: 내부 ScrollViewer(템플릿 ContentElement) 취득은 기본 템플릿
 /// 구조 의존이라 WinAppSDK 업데이트에 깨질 수 있는 부류다(v0.113.1 지연 로딩 스타일 사례와
 /// 같은 급) — 취득 실패·렌더 중 예외는 장식만 조용히 끄고(Disable) 편집 본기능은 그대로 둔다.
@@ -168,9 +181,18 @@ internal sealed class EditorDecor
     // A289 ⓓ: 마지막으로 성공적으로 잰 줄 간격(인접 시각적 줄의 Y 차이) 캐시 — 뷰포트에 시각적
     // 줄이 하나뿐인 패스(예: 엔터만 친 문서)는 이번 패스 실측(stepHere)이 NaN이라 캐럿 상자
     // Height(실측 24 vs 실제 간격 16)로 폴백해 아래 산술이 8px씩 밀렸다. 폴백 순서 =
-    // 이번 패스 실측 → 이 캐시 → rect.Height(ResolveLineStep). 줌이 바뀌면 줄 간격도 바뀌므로
-    // SetScale이 무효화한다(NaN).
+    // 이번 패스 실측 → 이 캐시 → 폰트 프로브(A307) → rect.Height(ResolveLineStep). 줌이 바뀌면
+    // 줄 간격도 바뀌므로 SetScale이 무효화한다(NaN).
     private double _cachedLineStep = double.NaN;
+
+    // A307: 폰트 메트릭 프로브 캐시 — 줄 간격을 한 번도 실측하지 못한 패스(빈 마지막 줄 하나짜리
+    // 문서 등)가 캐럿 상자 높이(실측 24 vs 실제 간격 16 — 8px 과대)로 떨어지기 전의 완충 폴백.
+    // 키 = 측정에 쓴 에디터 FontSize(줌이 이미 곱해진 값 — ApplyZoom(DocumentView)이 FontSize를
+    // 먼저 덮어쓰므로 렌더 시점에 읽으면 항상 현재 배율이 실려 있고, SetScale 무효화가 필요 없다).
+    // _probeStep NaN = 측정 실패 — 같은 FontSize 동안 재시도하지 않고(패스마다 프로브 재생성 금지)
+    // 캐럿 상자 높이 폴백으로 내려간다(FontLineStep 주석 참고).
+    private double _probeStep = double.NaN;
+    private double _probeFontSize = double.NaN;
 
     // A142 ③: 논리 줄 시작 인덱스(0 포함, 오름차순) — 텍스트 버전당 1회 스캔 캐시.
     // 스냅샷(_textProvider)이 편집당 1회 새 인스턴스를 주므로 참조 비교로 재빌드를 판정한다.
@@ -217,7 +239,8 @@ internal sealed class EditorDecor
     // A290 ⓒ: 빈 마지막 줄(개행으로 끝나는 문서)의 윗변을 무엇으로 정했는가 —
     // trailing(개행 문자의 뒤쪽 모서리 RectOfTrailing(len-1) — A291 1순위) /
     // endCaret(끝 캐럿 RectOf(len)) / step(이번 패스 실측 줄 간격) / cached(줄 간격 캐시) /
-    // height(캐럿 상자 높이 최후 폴백) / n/a(개행으로 끝나지 않는 문서 · DrawEnd 미도달).
+    // font(폰트 메트릭 프로브 — A307) / height(캐럿 상자 높이 최후 폴백) /
+    // n/a(개행으로 끝나지 않는 문서 · DrawEnd 미도달).
     private string _diagEndLineSrc = "n/a";
     // A290 ⓓ: 빈 줄 윗변으로 실측한 줄 간격(top − lastLine.Y — A291부터 trailing·endCaret 두
     // 경로가 다 실을 수 있다) — 채택된 패스에만 실린다. NaN = 이번 패스에 그 경로를 못 탔다
@@ -233,6 +256,11 @@ internal sealed class EditorDecor
     // advance(직전 글자와의 X 차이 실측 — A289) / step(줄 간격 근사 폴백) / head(개행 분기 —
     // 줄 머리 고정 pad.Left + 2) / n/a(EOF 미도달·생략).
     private string _diagEofSrc = "n/a";
+    // A307 ⓓ: DrawEnd(마지막 줄 산술)에 실제로 들어간 lineStep의 "출처:값" — 출처는 ResolveLineStep
+    // 단계 이름 그대로(step = 이번 패스 실측 / cached = 캐시 / font = 폰트 프로브(A307 신설) /
+    // height = 캐럿 상자 높이 최후 폴백). 새 폴백이 채택됐는지, 여전히 height로 떨어졌는지
+    // 스크린샷 한 장으로 판별하는 A307의 판정 계측물이다. "n/a" = DrawEnd 미도달.
+    private string _diagStepSrc = "n/a";
 
     public EditorDecor(FrameworkElement themeSource, TextBox editor, Canvas canvas,
         Func<string> textProvider)
@@ -430,6 +458,7 @@ internal sealed class EditorDecor
             _diagEndStep = double.NaN;  // A290 ⓓ: 끝 캐럿 실측도 이번 패스 값만 보인다(잔존 금지)
             _diagTrail = "n/a";         // A291 ⓓ: 원시 trailing 실측도 이번 패스 값만(같은 규칙)
             _diagEofSrc = "n/a";        // A291 ⓓ: EOF x 좌표원도 이번 패스 값만(같은 규칙)
+            _diagStepSrc = "n/a";       // A307 ⓓ: 마지막 줄 lineStep 출처도 이번 패스 값만(같은 규칙)
         }
         var len = text.Length;
         var pad = _editor.Padding;
@@ -472,7 +501,8 @@ internal sealed class EditorDecor
             if (_diagOn && !double.IsNaN(stepHere)) _diagLineStep = stepHere; // A287 ⓒ: step= 표시용
             // A289 ⓐ: 이 줄 아래 산술(밑변 가이드·DrawEnd)이 공유하는 줄 간격. rect.Height는 캐럿
             // 상자 높이라 실제 줄 간격보다 크다(실측 24 vs 16) — 줄의 진짜 밑변은 "다음 줄의 윗변"
-            // 이고, 그걸 모르는 지점만 이 값(실측 간격 → 캐시 → Height 폴백)으로 근사한다.
+            // 이고, 그걸 모르는 지점만 이 값(실측 간격 → 캐시 → 폰트 프로브(A307) → Height 폴백)
+            // 으로 근사한다.
             // A290 ⓒ: 이 값이 어느 단계에서 나왔는지(step/cached/height)를 함께 받아 DrawEnd로
             // 넘긴다 — 빈 마지막 줄 윗변의 좌표원 표기(진단 endLine=)에 쓰인다.
             var lineStep = ResolveLineStep(stepHere, rect.Height, out var stepSrc);
@@ -491,8 +521,9 @@ internal sealed class EditorDecor
             var next = NextLineStart(idx, rect.Y, len);
             if (next < 0)
             {
-                // A287 ⓑ·A289 ⓓ: 마지막 줄 아래 산술은 위에서 구한 줄 간격(실측 → 캐시 → Height)을
-                // 그대로 쓴다 — 캐럿 상자 높이 폴백은 수 px 아래로 밀리므로 최후 순위다.
+                // A287 ⓑ·A289 ⓓ·A307: 마지막 줄 아래 산술은 위에서 구한 줄 간격(실측 → 캐시 →
+                // 폰트 프로브 → Height)을 그대로 쓴다 — 캐럿 상자 높이 폴백은 수 px 아래로
+                // 밀리므로 최후 순위다.
                 var endTop = DrawEnd(text, len, rect, lineStep, stepSrc, vw, vh, pad); // 끝 개행 ¶·EOF
                 // A142 ③: 파일이 개행으로 끝나면 캐럿이 갈 수 있는 빈 마지막 줄이 하나 더 있다
                 // (DrawEnd가 가이드를 긋는 그 줄) — 번호도 단다.
@@ -522,8 +553,8 @@ internal sealed class EditorDecor
 
     /// <summary>
     /// 문서 마지막 시각적 줄: 끝 개행의 ¶ + (개행으로 끝나면) 빈 마지막 줄 가이드 + EOF 표지.
-    /// lineStep = 호출부(렌더 루프)가 구한 줄 간격(이번 패스 실측 → 캐시 → 캐럿 상자 높이 —
-    /// A289 ⓓ ResolveLineStep), stepSrc = 그 값이 나온 단계 이름(진단 표기용).
+    /// lineStep = 호출부(렌더 루프)가 구한 줄 간격(이번 패스 실측 → 캐시 → 폰트 프로브(A307) →
+    /// 캐럿 상자 높이 — A289 ⓓ·A307 ResolveLineStep), stepSrc = 그 값이 나온 단계 이름(진단 표기용).
     /// <para>A290: <b>반환값 = 빈 마지막 줄의 윗변(캔버스 y)</b>이다 — 개행으로 끝나지 않는 문서는
     /// 그런 줄이 없으므로 NaN. 호출부(렌더 루프)의 줄 번호가 이 값을 그대로 써서 ·EOF·가이드와
     /// 같은 한 좌표를 공유한다(종전에는 호출부가 같은 산식을 따로 계산해 어긋날 수 있었다).</para>
@@ -542,6 +573,9 @@ internal sealed class EditorDecor
     private double DrawEnd(string text, int len, Rect lastLine, double lineStep, string stepSrc,
         double vw, double vh, Thickness pad)
     {
+        // A307 ⓓ: 이 패스의 마지막 줄 산술이 받은 lineStep과 그 출처 — 아래 두 분기 공통이라
+        // 분기 전에 기록한다(DrawEnd 미도달 패스는 BeginPass가 초기화한 "n/a"가 남는다).
+        if (_diagOn) _diagStepSrc = $"{stepSrc}:{lineStep:F1}";
         if (IsNewline(text[len - 1]))
         {
             // 파일이 개행으로 끝난다 — 캐럿이 갈 수 있는 빈 마지막 줄이 하나 더 있다.
@@ -838,9 +872,13 @@ internal sealed class EditorDecor
     /// <summary>
     /// A289 ⓓ: 이 줄에서 쓸 줄 간격 — ① 이번 패스 실측(stepHere: 직전 시각적 줄과의 Y 차이)
     /// ② 마지막으로 성공한 실측 캐시(_cachedLineStep — 뷰포트에 한 줄뿐인 패스를 구제)
-    /// ③ 캐럿 상자 높이(rect.Height — 실제 간격보다 커서 수 px 밀리지만 잴 값이 그것뿐인 최후 폴백).
-    /// <para>A290 ⓒ: 어느 단계에서 나왔는지를 source로 함께 돌려준다("step" / "cached" / "height") —
-    /// 빈 마지막 줄의 좌표원 표기(진단 endLine=)가 이 이름을 그대로 쓴다.</para>
+    /// ③ 폰트 메트릭 프로브(A307 — FontLineStep: 실측·캐시가 다 없는 패스의 완충. 조건 = 양수이고
+    /// 캐럿 상자 높이 이하 — 줄 간격이 캐럿 상자 높이보다 클 수 없다는 확정 사실(A286·A289)로
+    /// 검증하며, DrawEnd의 실측 승격 가드와 같은 형태다)
+    /// ④ 캐럿 상자 높이(rect.Height — 실제 간격보다 커서 수 px 밀리지만 잴 값이 그것뿐인 최후 폴백).
+    /// <para>A290 ⓒ: 어느 단계에서 나왔는지를 source로 함께 돌려준다("step" / "cached" / "font" /
+    /// "height") — 빈 마지막 줄의 좌표원 표기(진단 endLine=)와 A307의 stepSrc=가 이 이름을 그대로
+    /// 쓴다.</para>
     /// </summary>
     private double ResolveLineStep(double measured, double caretBoxHeight, out string source)
     {
@@ -854,8 +892,73 @@ internal sealed class EditorDecor
             source = "cached";
             return _cachedLineStep;
         }
+        // A307: 실측도 캐시도 없는 패스("동해물과"+엔터 직후처럼 뷰포트에 글자 줄이 하나뿐인 문서)
+        // 전용 완충 — 무효(NaN 포함: 아래 비교가 거짓)·이상값이면 종전 최후 폴백이 문자 그대로 받는다.
+        var font = FontLineStep();
+        if (font > 0 && font <= caretBoxHeight)
+        {
+            source = "font";
+            return font;
+        }
         source = "height";
         return caretBoxHeight;
+    }
+
+    /// <summary>
+    /// A307: 주 글꼴의 줄 전진(한 줄 윗변에서 다음 줄 윗변까지의 Y 간격) 실측 — 트리 밖 프로브
+    /// TextBlock의 2줄·1줄 DesiredSize 높이 차(DocumentView.MeasurePrintMetrics·NewPrintProbe와
+    /// 같은 관용구). 캐럿 상자 높이(실측 24)는 실제 줄 간격(16)보다 커서 폴백 산술을 8px씩
+    /// 밀었다(A289~A291) — 이 값이 그 자리를 대신한다.
+    /// <para>프로브 텍스트는 ASCII만 쓴다: TextBox는 한글 폴백 글꼴이 섞인 줄에서도 주 글꼴
+    /// (Consolas)의 간격을 균일 적용한다는 것이 실측 근거인데(v0.282.0 진단: 한글 줄인데
+    /// step=16.0 = Consolas 14px 자연 줄 간격), TextBlock에 한글을 섞으면 그 줄 높이가 폴백
+    /// 글꼴 쪽으로 커져(인쇄 프로브 "0한"의 실측이 그 예다) TextBox의 균일 간격과 어긋난다.</para>
+    /// <para>키 = 에디터 FontSize(ApplyZoom이 줌을 이미 곱해 둔 값이라 배율이 자동으로 실린다 —
+    /// SetScale 무효화 불요·호출 순서 무관). 성공·실패를 함께 캐시한다 — 실패(NaN)도 같은
+    /// FontSize 동안 재시도하지 않는다(실측·캐시가 있는 정상 패스는 ResolveLineStep이 여기 오기
+    /// 전에 반환하므로 프로브 비용 자체가 없다). 반환값은 좌표가 아니라 순수 간격이라 pad 보정과
+    /// 무관하다(호출부가 캔버스 절대 좌표(lastLine.Y 등)에 더한다 — 종전 캐럿 상자 높이 폴백과
+    /// 같은 좌표계·같은 용법). 예외는 밖으로 내보내지 않는다(측정 실패 = NaN = 다음 폴백 —
+    /// 인쇄 프로브와 같은 태도. 밖으로 새면 Render의 포괄 catch가 Disable()을 불러 장식 전체가
+    /// 사라진다).</para>
+    /// </summary>
+    private double FontLineStep()
+    {
+        var fontSize = _editor.FontSize;
+        if (Math.Abs(fontSize - _probeFontSize) < 0.0001) return _probeStep; // 성공·실패 공히 캐시
+        _probeFontSize = fontSize;
+        _probeStep = double.NaN;
+        try
+        {
+            // 문자열당 새 요소(NewPrintProbe 관용구 — 프로퍼티 변경·재측정 무효화 문제 회피).
+            // 줄바꿈은 '\n' — TextBlock이 확실히 줄로 꺾는 문자다(에디터 내부 정규화 '\r'는
+            // TextBox 사정이라 프로브와 무관하다). 꺾이지 않는 환경이면 차가 0이 되어 아래
+            // 가드가 기각하고 캐럿 상자 높이 폴백으로 내려간다(조용한 열화 — 크래시 없음).
+            var one = NewFontProbe(fontSize, "0").DesiredSize.Height;
+            var two = NewFontProbe(fontSize, "0\n0").DesiredSize.Height;
+            var step = two - one;
+            if (step > 0 && !double.IsNaN(step) && !double.IsInfinity(step)) _probeStep = step;
+        }
+        catch
+        {
+            // 측정 실패 — NaN 캐시 유지(캐럿 상자 높이 폴백으로. 인쇄 프로브와 같은 태도)
+        }
+        return _probeStep;
+    }
+
+    /// <summary>A307: 측정 프로브 — 글꼴은 에디터의 값을 그대로 참조(주 글꼴과 자동 동기),
+    /// 폭 무한 측정이라 랩 무관(NoWrap은 방어 명시).</summary>
+    private TextBlock NewFontProbe(double fontSize, string text)
+    {
+        var probe = new TextBlock
+        {
+            Text = text,
+            FontFamily = _editor.FontFamily, // XAML EditorBox의 Consolas(A142 ②) — 값 복제 대신 참조
+            FontSize = fontSize,
+            TextWrapping = TextWrapping.NoWrap,
+        };
+        probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return probe;
     }
 
     // ---------- 논리 줄 색인 (A142 ③ — 텍스트 버전당 1회 스캔) ----------
@@ -1167,9 +1270,15 @@ internal sealed class EditorDecor
             // 이 값만큼 실려 있다(위 계측 표기 주의 참고).
             $"pad={pad.Left:F1},{pad.Top:F1}\n" +
             $"step={stepLine}\n" +
-            // A290 ⓒ: 빈 마지막 줄 윗변의 좌표원 — endCaret(끝 캐럿) / step / cached / height /
-            // n/a(개행으로 끝나지 않는 문서 · DrawEnd 미도달). 이 줄의 ·EOF·줄 번호·가이드는
-            // 전부 같은 한 값을 쓰므로, endCaret이면 커서와 정확히 같은 자리다.
+            // A307 ⓓ: 마지막 줄 산술(DrawEnd)에 실제로 들어간 lineStep의 "출처:값" — step(이번
+            // 패스 실측) / cached(캐시) / font(폰트 프로브 — A307 신설) / height(캐럿 상자 높이
+            // 최후 폴백). 수리 판정 = 빈 마지막 줄에서 font:16.0류가 보이고 eof y가 커서와
+            // 일치하면 채택, 여전히 height면 프로브가 기각·실패한 것이다.
+            $"stepSrc={_diagStepSrc}\n" +
+            // A290 ⓒ: 빈 마지막 줄 윗변의 좌표원 — trailing(A291) / endCaret(끝 캐럿) / step /
+            // cached / font(A307) / height / n/a(개행으로 끝나지 않는 문서 · DrawEnd 미도달).
+            // 이 줄의 ·EOF·줄 번호·가이드는 전부 같은 한 값을 쓰므로, trailing·endCaret이면 실측
+            // 자리, font면 프로브 근사 자리다(커서와의 일치 여부는 스크린샷에서 대조).
             $"endLine={_diagEndLineSrc}\n" +
             $"lineStarts={_lineStarts.Length}  scale={_scale:F2}";
         _diagPanel.Visibility = Visibility.Visible;
