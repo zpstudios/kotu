@@ -368,6 +368,13 @@ public sealed partial class MainWindow : Window
                 // 창이 500ms마다 자기 모듈 뷰에 포커스를 꽂는 오작동이 된다. 트레이 숨김·최소화도
                 // 비활성화를 동반하므로 이 한 곳이 그 갈래까지 덮는다(활성 복귀 시 아래서 재개).
                 _focusWatchTimer?.Stop();
+                // A280(A110 낙수): 경계 버튼이 비활성 창에 남아 보이는 문제. 기존 숨김 경로는
+                // 포인터 이탈(RootLayout.PointerExited)뿐이라, 포인터가 창 위에 머문 채
+                // Alt+Tab·다른 창 클릭으로 비활성이 되면 버튼이 그대로 떠 있었다. 비활성 전이 =
+                // 즉시 숨김(스택 단위 — HideEdgeButtons). 재활성 시 강제 재표시는 하지 않는다:
+                // 표시 경로는 근접 판정(OnRootPointerMoved) 하나뿐이고 그 판정은 활성 여부를
+                // 보지 않으므로, 포인터가 다시 움직이면 원래 조건대로 되살아난다.
+                HideEdgeButtons();
             }
             else
             {
@@ -3445,7 +3452,11 @@ public sealed partial class MainWindow : Window
                 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>경계 버튼 감추기 — 대상은 버튼 개별이 아니라 스택 단위다(A154).</summary>
+    /// <summary>경계 버튼 감추기 — 대상은 버튼 개별이 아니라 스택 단위다(A154).
+    /// 호출처 4곳: 포인터 이탈(RootLayout.PointerExited) · 컨텍스트 소멸(UpdateEdgeButtons ·
+    /// OnRootPointerMoved의 가드) · 창 비활성 전이(생성자 Activated 배선 — A280).
+    /// 표시는 근접 판정(OnRootPointerMoved) 한 곳에서만 하므로, 여기서 감춘 뒤에도
+    /// 포인터가 다시 움직이면 원래 조건대로 되살아난다.</summary>
     private void HideEdgeButtons()
     {
         LeftEdgeButtons.Visibility = Visibility.Collapsed;
