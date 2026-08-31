@@ -37,10 +37,17 @@ public sealed class ArchiveRow
 /// 창이 여러 개면 워커도 창마다 하나라 서로의 압축/해제를 기다리지 않는다.
 /// </summary>
 public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.IContentStateSource,
-    IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider
+    IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider,
+    IContentCloseRequestSource
 {
     /// <summary>아카이브를 열면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>
+    /// A159: 루트에서 Back 클릭 — 셸에 "콘텐츠를 닫아 달라"고 요청한다(IContentCloseRequestSource).
+    /// 셸이 Esc 말단 층(A202)과 같은 실행부(TryCloseContent)로 아카이브를 닫고 탐색기(S1)로 되돌린다.
+    /// </summary>
+    public event Action? ContentCloseRequested;
 
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 열기·작업 시작/진행/종료 시점.</summary>
     public event Action? TrayStatusChanged;
@@ -257,9 +264,20 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         RefreshRows();
     }
 
-    private void OnBackClick(object sender, RoutedEventArgs e) => NavigateBack();
+    /// <summary>
+    /// A159(A296에서 하단 바로 이동): Back 버튼 클릭 — 폴더 안이면 한 층 위(NavigateBack),
+    /// 루트(내부 백스택 소진)면 셸에 콘텐츠 닫기를 요청한다(Esc 말단 층과 같은 결과 —
+    /// 아카이브가 없는 빈 상태에서는 셸 쪽 실행부가 무동작이라 요청을 그냥 흘려도 안전하다).
+    /// U 키(A34)는 이 분기를 타지 않고 NavigateBack만 부른다 — '위로'는 루트 특례가 없는 것이
+    /// 사양이라(스택이 비면 무동작) 클릭과 키의 말단 동작이 다르다.
+    /// </summary>
+    private void OnBackClick(object sender, RoutedEventArgs e)
+    {
+        if (_navStack.Count > 0) NavigateBack();
+        else ContentCloseRequested?.Invoke();
+    }
 
-    /// <summary>상위 폴더로. 버튼과 U 키(A34)가 공유한다.</summary>
+    /// <summary>상위 폴더로. U 키(A34)와 폴더 안에서의 Back 클릭이 공유한다(루트 분기는 OnBackClick).</summary>
     private void NavigateBack()
     {
         if (_navStack.Count == 0) return;
@@ -634,14 +652,17 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     private void UpdateToolbarState()
     {
-        // A271(v0.269.0): CreateButton은 상단 툴바에서 하단 바 c0으로 옮겨 갔다 — 이 판정은
-        // 자리와 무관하므로 그대로다(같은 x:Name·같은 활성 조건). 함께 신설한 Print·Fit은
-        // 영구 비활성이라 여기 올 줄이 없다(활성 갱신 코드 자체가 없는 것이 사양 — XAML 주석 참고).
+        // A296: 상단 툴바의 잔여 버튼(Back·Extract 2종)도 하단 바로 옮겨 갔다(A271의 CreateButton에
+        // 이어 전부) — 이 판정은 자리와 무관하므로 그대로다(같은 x:Name·같은 활성 조건).
+        // A271이 신설했던 Print·Fit(영구 비활성)은 A296에서 제거됐다(갱신 코드가 처음부터 없던
+        // 버튼들이라 여기서는 지울 줄도 없었다 — XAML 주석 참고).
+        // BackButton은 A159부터 **항상 활성**이라 여기서 갱신하지 않는다(XAML 초기값 = 기본 활성) —
+        // 루트·빈 상태의 클릭은 닫기 요청(무해)이고, busy 중 닫기도 Esc가 이미 허용하는 동작과
+        // 같다(OnBackClick 주석).
         CreateButton.IsEnabled = !_busy;
         var hasArchive = !_busy && _root is not null;
         ExtractToButton.IsEnabled = hasArchive;
         ExtractHereButton.IsEnabled = hasArchive;
-        BackButton.IsEnabled = !_busy && _navStack.Count > 0;
     }
 
     // ---------- 창 핸들 ----------
@@ -671,10 +692,11 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// 버튼이 비활성(작업 중·아카이브 없음)이면 키도 아무 일도 하지 않는다 — HotkeySupport가 판정한다.
     /// Cancel(진행 중에만 뜨는 버튼)에는 키를 주지 않았다: 스치듯 눌린 한 글자로 긴 작업이
     /// 중단되는 편이 손해가 크다.
-    /// A271(v0.269.0): C가 걸린 CreateButton이 상단 툴바에서 하단 바로 옮겨 갔지만 등록은
-    /// 그대로다 — 키 스코프가 창 전체(XamlRoot)라 하단 바가 셸로 넘어간 뒤에도 그대로 듣는다
-    /// (HotkeySupport.Bind 주석). 같이 신설한 Print·Fit 버튼에는 키를 배정하지 않았다
-    /// (영구 비활성이라 눌릴 일이 없고, 등록 0건이라 키 누출도 0이다).
+    /// A271(v0.269.0) → A296: 키가 걸린 버튼 전부(C·E·T·U)가 상단 툴바에서 하단 바로 옮겨 갔지만
+    /// 등록은 그대로다 — 키 스코프가 창 전체(XamlRoot)라 하단 바가 셸로 넘어간 뒤에도 그대로
+    /// 듣는다(HotkeySupport.Bind 주석). U는 계속 NavigateBack(순수 '위로')에 묶인다 — Back 버튼
+    /// 클릭의 루트 분기(닫기 요청, A159)는 키에 얹지 않았다(OnBackClick 주석).
+    /// A271이 신설했던 Print·Fit은 키 배정 없이 A296에서 제거됐다(키 누출 0 그대로).
     /// </summary>
     private void SetupHotkeys()
     {

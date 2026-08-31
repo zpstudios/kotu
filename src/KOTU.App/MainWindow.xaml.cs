@@ -1500,6 +1500,16 @@ public sealed partial class MainWindow : Window
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnContentPathChanged(path);
             });
+        // A159: 모듈 뷰의 "콘텐츠를 닫아 달라" 요청(압축 하단 바 Back의 루트 클릭이 유일한 발화
+        // 지점) → Esc 말단 층(A202)과 같은 실행부·같은 사이드바 기본(defaultSidebars: true)으로
+        // 닫는다. 닫을 콘텐츠가 없으면(S1) TryCloseContent가 false를 돌려주고 아무 일도 없다.
+        // 같은 디스패치·교체 가드(위와 동일 관용구).
+        if (view is IContentCloseRequestSource closeRequestSource)
+            closeRequestSource.ContentCloseRequested += () => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                TryCloseContent(defaultSidebars: true);
+            });
         // A186: 재생 상태 변화(재생/일시정지/정지) → 하단 바 자동 숨김 재평가.
         // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(A37과 같은 가드).
         if (view is IPlaybackStateSource playback)
@@ -2903,7 +2913,8 @@ public sealed partial class MainWindow : Window
     ///    앞 순서 유지"를 못 박아 실도달은 S1뿐 — 코드 우선 규칙으로 조건도 S1만 검사한다).
     ///    복귀가 NavigateList 재사용이라 트리(SyncTreeToFolder)·좌 리스트·중앙 썸네일이 A93 단일
     ///    깔때기로 자동 동기된다. 히스토리가 비면 층을 그냥 지나친다(S1은 아래 ④도 무동작 = ⑤).
-    ///    ※ A159(압축 열람 뒤로가기 — 보류)가 얹힐 분배 지점도 여기다(등재문 명시 — 주석 포인터만).
+    ///    ※ A159는 셸 '뒤로'가 아니라 압축 모듈 하단 바 Back이 담당하는 형태로 구현됐다
+    ///    (IContentCloseRequestSource — ShowModule 배선 참고. 이 분배에 새 층은 얹지 않았다).
     /// ④ 콘텐츠 열림(S2·S3 부류 = _currentFilePath 있음) = 콘텐츠 닫기 → 그 모듈의 빈 상태(S1).
     ///    새 해체 경로를 만들지 않고 모듈 전환과 같은 ShowModule(빈 컨텍스트) 재사용이다:
     ///    미저장 가드(A37 — 취소하면 아무것도 안 바뀐다)·재생 정지·파일 핸들 해제(뷰 Unloaded —
@@ -2930,7 +2941,8 @@ public sealed partial class MainWindow : Window
         }
         // A244(③): S1 탐색 중이면 콘텐츠 닫기보다 폴더 히스토리 pop이 먼저다. 콘텐츠 열림(S2/S3)
         // 중은 IsEmptyFileModule=false라 이 층에 안 들어와 종전대로 콘텐츠 닫기 우선이 유지된다.
-        // ※ A159(압축 열람 뒤로가기 — 보류): 압축 내부 백스택이 생기면 이 분배 지점에 얹는다.
+        // ※ A159: 압축 내부의 '뒤로'는 모듈 하단 바 Back(루트 = 닫기 요청)이 담당하게 구현됐다 —
+        // 이 분배 지점에는 얹지 않았다(ShowModule의 IContentCloseRequestSource 배선 참고).
         if (IsEmptyFileModule && TryPopFolderHistory()) return true;
         // A189: 무제 문서도 닫을 콘텐츠다 — 경로는 없지만 ④와 같은 "콘텐츠 닫기 → S1" 층.
         // 미저장 가드는 종전대로 ShowModule 안의 ConfirmDiscardAsync가 담당한다(취소 = 무변경).
