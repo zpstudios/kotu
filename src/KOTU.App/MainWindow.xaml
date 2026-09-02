@@ -288,6 +288,28 @@
                     Click="OnViewModeButtonClick" />
         </Grid>
 
+        <!-- A313: S4('오픈 파일' 탐색) 하단 바 모달 덮개. S4는 "열린 콘텐츠 + 좌/우 사이드 패널 +
+             하단 작업줄" 레이어 위에 덮인 추가 레이어라(사용자 지시 2026-09-02), 아래 레이어인
+             하단 바는 보이되 누를 수 없어야 한다. BottomBar보다 나중 선언 = 위 z순서: 바 띠(44px)의
+             히트 테스트를 이 덮개가 통째로 가로채, 전체화면·'Hide side panels' 얼굴의 모드 버튼은
+             물론 '오픈 파일' 재누름·시작 메뉴·모듈 바 버튼까지 전부 포인터가 닿지 않는다.
+             버튼별 IsEnabled 조작이 아니라 레이어로 덮는 이유(오케스트레이터 확정): 사용자의
+             "레이어" 해석과 구조가 일치하고, 바에 새 버튼이 생겨도 자동 차단되며, A305/A312의
+             버튼 활성 규칙 단일 원천을 건드리지 않는다. 포인터 이벤트는 이 덮개가 삼켜도
+             RootLayout의 handledEventsToo 구독(A186 자동 숨김 입력·A112 '뒤로')에는 그대로
+             닿으므로 A311 부상 판정은 산다. 반투명 값 = 아래 DiagStrip과 동일 계열
+             (SolidBackgroundFillColorBase + Opacity 0.85): A176이 S4 반투명 축을 철거해 "기존 S4
+             반투명 값"은 현존하지 않아, 이 파일에 실존하는 반투명 덮개 선례를 복제했다(새 값
+             발명 금지 규칙). 높이 44 = BottomBar와 동일(코드 상수 BottomBarHeight와 짝 — 한쪽만
+             고치면 덮개가 바에서 어긋난다). 가시성은 코드 UpdateS4BarScrim 한 곳(S4 중 + 바
+             실표시일 때만 — 바가 자동 숨김(A311)으로 내려가 있으면 덮을 것도 없다). -->
+        <Border x:Name="S4BarScrim"
+                Height="44" VerticalAlignment="Bottom"
+                HorizontalAlignment="Stretch"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                Opacity="0.85"
+                Visibility="Collapsed" />
+
         <!-- A234 배치 1: 셸 포커스 앵커 — RecoverChromeFocusOrphan 2단 복구의 최후 착지점.
              RootLayout(Grid)은 Control이 아니라 IsTabStop이 없어 포커스 대상이 될 수 없다
              (UIElement.Focus는 있어도 런타임에 false만 돌아온다) → Control 파생인 ContentControl을

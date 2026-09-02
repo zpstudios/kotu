@@ -2241,8 +2241,12 @@ public sealed partial class MainWindow : Window
     /// A305: 실행부가 전체화면 토글에서 **모드 계단**(<see cref="AdvanceViewMode"/>)으로 바뀌었다 —
     /// 게이트 4종(①~④)은 그대로다.
     /// A312: 계단이 시나리오별(A 1→2→3→1 / B·C 1↔3)로 갈리게 됐지만 이 게이트들은 여전히
-    /// 무변경이다 — 특히 ③(탐색기 표면 양보 = A274 게이트)은 시나리오 B(무컨텐츠 S1·S4)에서도
+    /// 무변경이다 — 특히 ③(탐색기 표면 양보 = A274 게이트)은 무컨텐츠 S1·S4에서도
     /// 그대로 산다: 탐색기 표면에 포커스가 있으면 Enter는 "선택 열기"이고 모드 전이가 아니다.
+    /// A313: S4는 계단 없음(모달 레이어) — ③을 통과한(탐색기 표면 밖 포커스) S4의 Enter는
+    /// 여기서 소비되지만 AdvanceViewMode의 S4 게이트가 전이를 죽여 무동작이다. 소비는 그대로
+    /// 필요하다(비소비면 포커스된 버튼의 내장 Enter=클릭으로 새어 시작 메뉴 등이 열린다).
+    /// S4 탐색기의 "선택 열기"(③ 양보 = A274 정본)는 무변경으로 산다.
     /// </summary>
     private void OnShellEnter(KeyRoutedEventArgs e)
     {
@@ -2264,6 +2268,8 @@ public sealed partial class MainWindow : Window
     /// 시절의 e.Handled 양보 검사는 터널링엔 앞선 소비자가 없어 삭제(A226와 같은 근거).
     /// 소비하면 이 Alt의 단독 up도 소비 대상이다(OS 메뉴 모드 회피 — A107, 버블 시절 호출부의
     /// MarkAltUseIfConsumed를 이 안으로 이식).
+    /// A313: S4 중에는 키를 소비하되(Alt up 소비 포함 — 종전 그대로) JumpViewMode의 S4 게이트가
+    /// 전이를 죽여 무동작이다(S4는 계단 없음 — 직행도 없다).
     /// </summary>
     private void OnShellAltEnter(KeyRoutedEventArgs e)
     {
@@ -2296,19 +2302,23 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// A312 **시나리오 판정의 단일 원천** — 지금 계단이 2단(모드1 ↔ 모드3, 모드2 도달 불가)인가.
     /// <list type="bullet">
-    /// <item>시나리오 B(무컨텐츠 또는 S4): <c>!HasOpenContent || IsOpenFileBrowsing</c>.
-    ///   **S4는 <c>HasOpenContent == true</c>인 채 성립**하므로(진입 가드가 파일 콘텐츠 전용 —
-    ///   <see cref="EnterOpenFileBrowsing"/>) IsOpenFileBrowsing 항을 빼면 S4에서 모드2가 열려
-    ///   사용자 사양("S4는 컨텐츠 미오픈 상태와 사실상 동일")이 깨진다 — 이 항목의 최대 함정 ②.
-    ///   접어도 볼 컨텐츠가 없는 화면이라 모드2 자체가 무의미하다.</item>
+    /// <item>시나리오 B(무컨텐츠): <c>!HasOpenContent</c> — 접어도 볼 컨텐츠가 없는 화면이라
+    ///   모드2 자체가 무의미하다.</item>
     /// <item>시나리오 C(오버라이드): <c>_sidebarOverride</c> — 커스텀 일반 ↔ 커스텀 전체 2상태
     ///   (컨텐츠 유무 무관 — A305 사양 그대로).</item>
     /// </list>
+    /// **A313 개정 — A312가 "이 항목의 최대 함정 ②"라며 일부러 넣었던 <c>IsOpenFileBrowsing</c>
+    /// 항을 이번에 의도적으로 걷었다(다음 세션 재조사 금지)**: 그 항의 존재 이유는 "S4에서 모드2가
+    /// 열리는 것 방지"(S4를 2단 계단으로 취급)였는데, A313 사용자 지시로 S4는 2단 계단조차 아닌
+    /// **계단 없음**(모달 레이어 — 모드 전이 입력 자체가 무동작)이 되어, 방지하려던 전이가 세
+    /// 실행부(<see cref="AdvanceViewMode"/>·<see cref="JumpViewMode"/>·
+    /// <see cref="StepDownViewMode"/>)의 S4 게이트에서 원천 차단된다. 항을 남기면 "S4 = 2단
+    /// 계단"이라는 죽은 사양이 판정에 남아 소비처(버튼 얼굴 등)를 오도한다.
     /// 계단 정의는 이 판정 하나에서 나오고, 네 입력(Enter·Alt+Enter·Esc·모드 버튼)과 버튼
     /// 아이콘·툴팁이 전부 그 계단 위에 표현된다 — 분기를 따로 쓰면 "시나리오 B에서 모드2 아이콘"
     /// 같은 어긋남이 나므로 새 소비처도 반드시 이 프로퍼티를 볼 것.
     /// </summary>
-    private bool IsTwoStepModeLadder => !HasOpenContent || IsOpenFileBrowsing || _sidebarOverride;
+    private bool IsTwoStepModeLadder => !HasOpenContent || _sidebarOverride;
 
     /// <summary>
     /// A312 계단의 **다음 칸**(끝이면 첫 칸으로 순환) — Enter·모드 버튼의 목적지이자, 버튼
@@ -2332,19 +2342,33 @@ public sealed partial class MainWindow : Window
     /// **A305 모드 계단의 단일 실행부(A312 개정)** — Enter와 하단 바 모드 버튼이 여기로 수렴한다
     /// (전이표 3종에서 두 입력의 행이 전 칸 동일한 것이 사양이다 — 버튼은 게이트만 없다).
     /// Alt+Enter는 계단이 아니라 직행이라 <see cref="JumpViewMode"/> 몫이다(A312에서 분리).
+    /// A313: S4('오픈 파일' 탐색)는 **계단 없음** — 모달 레이어(사용자 지시 2026-09-02)라 모드
+    /// 전이 자체가 없다. 게이트를 호출부가 아니라 여기(실행부)에 두는 이유: Enter(OnShellEnter가
+    /// 소비 후 호출 — 포커스된 버튼의 내장 Enter=클릭 탈취 방지에 소비는 그대로 필요하다)와
+    /// 모드 버튼(OnViewModeButtonClick — 덮개 S4BarScrim이 포인터를 막지만 포커스 잔류 +
+    /// Space 활성화는 히트 테스트 밖이다)이 한 게이트로 함께 죽는다.
     /// </summary>
-    private void AdvanceViewMode() => SetViewMode(NextViewMode());
+    private void AdvanceViewMode()
+    {
+        if (IsOpenFileBrowsing) return; // A313: S4는 계단 없음 — 위 요약
+        SetViewMode(NextViewMode());
+    }
 
     /// <summary>
     /// A312 신설: **Alt+Enter = 모드1 ↔ 모드3 직행**(꼭대기 칸으로, 이미 꼭대기면 첫 칸으로).
     /// 시나리오 A에서 모드2를 건너뛰는 것이 존재 이유고(모드2에서는 모드3으로 — 오케스트레이터
     /// 확정), 2단 계단(시나리오 B·C)에서는 결과적으로 Enter와 같은 왕복이 된다 — 세 시나리오
     /// 모두 "전체화면이면 모드1, 아니면 모드3"이라 판정식은 시나리오 무관 단일식이다.
+    /// A313: S4 중에는 직행도 없다(계단 없음 — <see cref="AdvanceViewMode"/>와 같은 게이트).
+    /// 호출부(OnShellAltEnter)의 키 소비·Alt up 소비(A107)는 그대로 두고 전이만 죽인다.
     /// </summary>
     private void JumpViewMode()
-        => SetViewMode(_viewMode == ShellViewMode.FullScreen
+    {
+        if (IsOpenFileBrowsing) return; // A313: S4는 계단 없음
+        SetViewMode(_viewMode == ShellViewMode.FullScreen
             ? ShellViewMode.Windowed
             : ShellViewMode.FullScreen);
+    }
 
     /// <summary>
     /// 모드 계단 **한 칸 내리기**(Esc·'뒤로' 공용 층 — A312 개정: 구 ExitToWindowedMode의
@@ -2354,9 +2378,14 @@ public sealed partial class MainWindow : Window
     /// 반환값 = 소비 여부(이미 모드1이면 false — 아래 층(S4 복귀·콘텐츠 닫기)이 이어받는다).
     /// 내려온 칸의 사이드바는 여전히 저장이 아니라 계산으로 되살아난다
     /// (<see cref="EffectiveSidebarStates"/> — A305 구조 무변경, 스냅샷 재도입 없음).
+    /// A313: S4 중에는 이 층 자체가 없다(계단 없음) — false를 돌려 Esc·'뒤로'가 곧장 다음 층
+    /// (S4 복귀 = ExitOpenFileBrowsing)으로 내려가게 한다. 그 결과 **전체화면 위 S4에서도 Esc
+    /// 1회로 S4를 나간다**(A90/A236의 "첫 Esc = 전체화면 해제, 다음 Esc = S4 복귀" 순서를 A313이
+    /// 개정 — 레이어 걷기(S4)가 모드 전이보다 먼저다. 전체화면은 S4를 나간 뒤 다음 Esc 몫).
     /// </summary>
     private bool StepDownViewMode()
     {
+        if (IsOpenFileBrowsing) return false; // A313: S4는 계단 없음 — 다음 층(S4 복귀)이 이어받는다
         if (_viewMode == ShellViewMode.Windowed) return false;
         SetViewMode(_viewMode == ShellViewMode.FullScreen && !IsTwoStepModeLadder
             ? ShellViewMode.Panelless // 시나리오 A: 모드3 → 모드2(한 단계)
@@ -2411,10 +2440,29 @@ public sealed partial class MainWindow : Window
     private void UpdateShellChrome()
     {
         BottomBar.Visibility = BarVisible ? Visibility.Visible : Visibility.Collapsed;
+        UpdateS4BarScrim(); // A313: 바 실표시가 바뀌면 S4 모달 덮개도 따라온다(자동 숨김 부상·재숨김 포함)
         UpdateViewModeButton(); // A312: 모드가 바뀌면 모드 버튼의 얼굴(아이콘·툴팁)도 바뀐다
         UpdateEdgeButtons();
         RecoverChromeFocusOrphan(); // A209: 바 붕괴 축 포커스 고아 방어 — 표시 반영 직후
     }
+
+    /// <summary>
+    /// A313: S4('오픈 파일' 탐색) 하단 바 모달 덮개(XAML S4BarScrim)의 표시 판정 단일 지점 —
+    /// S4 중이고 바가 실표시(<see cref="BarVisible"/>)일 때만 덮는다. 바가 자동 숨김(A311)으로
+    /// 내려가 있으면 덮을 것도 없다 — Collapsed인 바는 이미 히트 테스트 밖이라(유령 클릭 없음,
+    /// BarVisible 주석) 덮개까지 내려 화면을 비운다. 차단 자체는 XAML 덮개가 한다(BottomBar보다
+    /// 위 z순서 — 히트 테스트 가로채기. 각 버튼 IsEnabled 조작 아님, XAML 주석 참고).
+    /// 호출 지점은 둘(<see cref="UpdateViewModeButton"/>의 2호출 구조와 같은 이유):
+    /// ① <see cref="UpdateShellChrome"/> — 바 가시성의 단일 결정 지점(모드 전이·A311 자동 숨김
+    ///   부상/재숨김이 전부 지난다) ② <see cref="ApplyOverlayStates"/> 말미 — S4 진입/종료
+    ///   (EnterOpenFileBrowsing/ExitOpenFileBrowsing)가 모드 전이 없이 지나는 종착점
+    ///   (refresh:false 종료 경로도 호출부(SetContentState 등)가 곧 이 종착점을 부른다 —
+    ///   덮개가 걷히는 경로에 구멍이 없다). 대입 하나뿐이라 중복 호출은 멱등·무해하다.
+    /// </summary>
+    private void UpdateS4BarScrim()
+        => S4BarScrim.Visibility = _openFileBrowsing && BarVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
     /// <summary>
     /// 모드 버튼의 세 얼굴(A312) — 지금 상태에서 버튼이 무엇으로 보이고 무엇을 하는가.
@@ -3016,6 +3064,9 @@ public sealed partial class MainWindow : Window
     /// 무사이드바)에서 Esc 하나로 아이콘 실행 기본 화면(A273 — 좌 사이드바 + 센터 썸네일)이 된다
     /// (사용자 문면). 검사 순서는 A112 '뒤로' 선례 그대로 — 전체화면 → S4 → 콘텐츠 한 층씩
     /// (A244의 폴더 히스토리 pop 층은 '뒤로' 입력 전용 — Esc에는 없다).
+    /// A313: S4 중에는 ① 층이 게이트로 비어(StepDownViewMode가 false — S4는 계단 없음) Esc가
+    /// 곧장 ②로 떨어진다 — 전체화면 위 S4에서도 Esc 1회 = S4 복귀(레이어 걷기가 모드 전이보다
+    /// 먼저. 전체화면 해제는 그다음 Esc 몫 — StepDownViewMode의 S4 게이트 주석 참고).
     /// 원 기능 우선(먼저 소비하는 쪽이 이긴다 — e.Handled 존중): 이름변경 편집 취소
     /// (ExplorerRenameBox), 잘라내기 표시 해제(A94 — A202부터 지운 게 있을 때만 표면이 소비),
     /// 대화상자·플라이아웃(팝업 트리 — 셸에 키가 오지 않는다). 문서 더티 닫기는 ShowModule의
@@ -3091,6 +3142,8 @@ public sealed partial class MainWindow : Window
     ///    모드 검사가 S4보다 앞인 순서는 A90/A112
     ///    확정 그대로다("첫 층 = 모드 해제, 다음 층 = S4 복귀"). 하단 바 복원은 UpdateShellChrome
     ///    (모드 전이의 단일 크롬 지점)이, 사이드바 복원은 ApplyOverlayStates가 처리한다.
+    ///    A313: 단 S4 중에는 이 층이 게이트로 빈다(StepDownViewMode의 S4 게이트 — S4는 계단
+    ///    없음) — '뒤로'도 Esc처럼 곧장 ②(S4 복귀)로 떨어져, S4 중 모드 전이는 성립하지 않는다.
     /// ② S4('오픈 파일' 탐색) = 진입 전 상태로 복귀만 — Esc와 동일(같은 '뒤로' 의미론).
     /// ③ 탐색 중(S1) = 폴더 히스토리 pop(A244) — 이전 폴더로 NavigateList 복귀. 등재문의 조건은
     ///    "S1/S4 탐색 중"이지만 S4는 위 ② 층이 먼저 소비한다(등재문 스스로 "전체화면·S4 복귀 층은
@@ -3343,7 +3396,8 @@ public sealed partial class MainWindow : Window
     ///   F11/F12로 만든 구성이 그대로 남는 것이 사양이다.</item>
     /// <item>S4('오픈 파일' 탐색)는 예외다: 진입이 양쪽을 강제로 여는 화면이라 억제를 걸면
     ///   탐색 자체가 불가능해진다(전체화면 위 S4는 A90/A236 주석이 명시한 기존 동작 —
-    ///   영상 자동 숨김 축에서 바가 떠 버튼을 누를 수 있다). 억제 없이도 종료(ExitOpenFileBrowsing)가
+    ///   A313부터 그때 자동 숨김 축으로 바가 떠도 모달 덮개(S4BarScrim)가 버튼 눌림은 막는다).
+    ///   억제 없이도 종료(ExitOpenFileBrowsing)가
     ///   스냅샷으로 요청 상태를 되돌리므로 모드 억제는 그다음 다시 걸린다.</item>
     /// </list>
     /// </summary>
@@ -3500,13 +3554,15 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다 (S4에서는 숨김 — A90)
-        // A312: 셸 모드 버튼 얼굴의 모드 외 입력 축(콘텐츠 유무·오버라이드·S4 — 셋 다 계단 모양을
-        // 바꾼다, IsTwoStepModeLadder)이 이 종착점으로 모인다 — 콘텐츠 전환 3경로(SetContentState·
+        // A312: 셸 모드 버튼 얼굴의 모드 외 입력 축(콘텐츠 유무·오버라이드 — 계단 모양을 바꾼다,
+        // IsTwoStepModeLadder. S4 항은 A313이 걷었다: S4는 계단 없음 — 그 프로퍼티 주석 참고)이
+        // 이 종착점으로 모인다 — 콘텐츠 전환 3경로(SetContentState·
         // OnContentOpened·OnUntitledOpened)와 오버라이드를 세우는 유일한 경로(ToggleOpaqueDock),
         // S4 진입·종료(EnterOpenFileBrowsing/ExitOpenFileBrowsing)가 모두 여기를 지난다. 모드 축은
         // UpdateShellChrome이 따로 본다(그쪽은 모드 전이 없이 이 메서드만 도는 경우를 못 보고,
         // 이쪽은 반대라 둘 다 필요). 얼굴 무변경이면 캐시 비교로 무동작이다.
         UpdateViewModeButton();
+        UpdateS4BarScrim(); // A313: S4 진입/종료가 모드 전이 없이 지나는 종착점 — 덮개도 여기서 따라온다
 
         // A135 2차(방어 수리): 표시 반영이 끝난 뒤의 포커스 후처리. 포커스가 방금 화면에서 내려간
         // 좌/우 패널(파일 패널·모듈 패널 호스트 4표면) 안에 남아 있으면 모듈 뷰(중앙 콘텐츠)로
@@ -3801,9 +3857,13 @@ public sealed partial class MainWindow : Window
     /// 무제 문서도 같은 방어선이 걸러 준다(S4는 파일 콘텐츠 전용 — 사양 유지).
     /// A236: 그중 담당 확장자가 없는 화면(설정·정보 모듈·미지원 안내·빈 셸)은 버튼이 아예 숨어
     /// 여기 오지 않는다(UpdateOpenFileButton) — 남는 무동작 경로는 파일 모듈의 무제 문서뿐이다.
-    /// 바가 숨은 동안(전체화면·영상 자동 숨김)은 이 버튼 자체를 누를 수 없고, 영상 자동 숨김
-    /// 축에서 전체화면 중 바가 나타나 눌리면 S4가 전체화면 위에 뜬다 — Esc 순서는 종전 규칙
-    /// 그대로(첫 Esc = 전체화면 해제, 다음 Esc = S4 복귀)라 특별 처리하지 않는다.
+    /// 바가 숨은 동안(전체화면·영상 자동 숨김)은 이 버튼 자체를 누를 수 없고, 자동 숨김
+    /// 축에서 전체화면 중 바가 나타나 눌리면 S4가 전체화면 위에 뜬다.
+    /// A313: S4 중에는 모달 덮개(S4BarScrim)가 하단 바 전체를 덮어 이 버튼도 포인터로는 닿지
+    /// 않는다 — 아래 S4 갈래(재누름 = 복귀)는 키보드 활성화(포커스 잔류 + Space)의 방어로만
+    /// 남는다(복귀 = Esc와 같은 레이어 걷기라 무해). Esc 순서도 A313에서 개정 — S4 복귀 층이
+    /// 모드 계단보다 먼저라(StepDownViewMode의 S4 게이트) 전체화면 위 S4에서도 Esc 1회로 S4를
+    /// 나가고, 전체화면 해제는 그다음 Esc 몫이다.
     /// </summary>
     private void OnOpenFileClick(object sender, RoutedEventArgs e)
     {
@@ -3835,6 +3895,8 @@ public sealed partial class MainWindow : Window
     /// 파일 폴더 기준 — "보던 파일 근처에서 다음 파일을 고른다"가 자연스러워서다. S2·S3*에서만
     /// 진입하므로 파일은 항상 있고, 폴더가 사라진 경우만 모듈 시작 폴더로 폴백).
     /// 목록 원본은 S1과 같은 좌 리스트 하나 — 결과가 ViewChanged로 S4 그리드로 흐른다(생성자 배선).
+    /// A313: 하단 바 모달 덮개(S4BarScrim)도 아래 ApplyOverlayStates 경유(UpdateS4BarScrim)로
+    /// 함께 올라간다 — S4는 아래 레이어(하단 작업줄 포함) 접근 불가가 사양이다.
     /// </summary>
     private void EnterOpenFileBrowsing()
     {
@@ -3846,9 +3908,11 @@ public sealed partial class MainWindow : Window
         // 최종 방어선으로 존치한다.
         if (_currentFilePath is null || _currentModule is null) return;
         // A305: 모드 2에서 들어왔으면 먼저 모드 1로 접는다. 모드 2의 정의가 "사이드바 없음"인데
-        // S4는 정의상 양쪽 사이드바를 쓰는 화면이라, 그대로 두면 모드만 남아 Esc 첫 타가 아무 변화
-        // 없이 소비되는 죽은 층이 된다(모드 2 → 모드 1 전이가 화면상 무변화). 전체화면(모드 3)은
-        // 건드리지 않는다 — 전체화면 위 S4와 그 Esc 순서는 A90/A236이 문서화한 기존 동작이다.
+        // S4는 정의상 양쪽 사이드바를 쓰는 화면이라, 그대로 두면 모드만 남는다(A312까지는 죽은
+        // Esc 층 문제였고, A313부터는 S4 중 모드 전이 자체가 없어 나갈 때까지 모드 2가 박제되는
+        // 문제다 — 진입 시 접는 이 정규화는 그래서 그대로 필요하다). 전체화면(모드 3)은
+        // 건드리지 않는다 — 전체화면 위 S4는 A90/A236이 문서화한 기존 동작이다(단 그 Esc 순서는
+        // A313이 개정: S4 복귀가 먼저다 — StepDownViewMode의 S4 게이트 주석 참고).
         // refresh:false = 아래 ApplyOverlayStates가 곧 그린다(SetContentState와 같은 관용구).
         if (_viewMode == ShellViewMode.Panelless) SetViewMode(ShellViewMode.Windowed, refresh: false);
         _s4Restore = (_listSide.State, _infoSide.State); // A176: 안정 상태 2종뿐이라 그대로 스냅샷
@@ -3870,6 +3934,9 @@ public sealed partial class MainWindow : Window
     /// 곧 "추가분만 되돌리기"와 같다. restore=false(콘텐츠 전환 = SetContentState/OnContentOpened) =
     /// 스냅샷을 버리고 좌/우는 지금 상태 그대로 A86 "상태는 콘텐츠를 넘어 유지" 규칙을 탄다.
     /// refresh=false는 호출부가 곧바로 ApplyOverlayStates를 부르는 경로(콘텐츠 전환)용.
+    /// A313: 하단 바 모달 덮개(S4BarScrim)는 두 경로 모두에서 확실히 걷힌다 — refresh=true는
+    /// 아래 ApplyOverlayStates가, refresh=false는 호출부가 곧 잇는 같은 종착점이
+    /// UpdateS4BarScrim을 지난다(_openFileBrowsing이 이미 false라 Collapsed로 떨어진다).
     /// </summary>
     private void ExitOpenFileBrowsing(bool restore, bool refresh = true)
     {
