@@ -135,6 +135,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     public ImageViewerView(OpenContext context)
     {
         InitializeComponent();
+        // A310: 플라이아웃 "Original" 항목의 아이콘도 본체 1:1 상자와 같은 파일(Shared/FitIcons)이
+        // 그린다 — 종전에는 XAML 인라인 도형이라 본체와 미세하게 다른 그림이었다(사용자 보고).
+        // MenuFlyoutItem.Icon은 IconElement만 받아 본체의 Border를 못 꽂으므로, 같은 치수표로
+        // 그린 PathIcon 판본을 받는다. 호출마다 새 인스턴스라 v0.174.1의 공유 크래시와 무관하다.
+        FitOriginalItem.Icon = FitIcons.BuildOriginalRatioIcon();
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
         // 키 입력을 받기 위해 로드 시 포커스 확보 (IsTabStop은 XAML에서 설정)
@@ -935,6 +940,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// A298: 그 조립을 세 모듈이 복제해 갖던 것을 공용 파일 하나로 모았다(Shared/FitIcons.cs —
     /// csproj Compile Link 공유. HotkeySupport와 같은 방식). 디자인을 고칠 곳은 이제 그 한 곳이다.
     /// A299: 비활성일 때 테두리도 글자와 함께 회색이 된다(수리 내용은 그 팩토리 주석).
+    /// A310: 플라이아웃 "Original" 항목도 같은 파일의 PathIcon 판본
+    /// (<see cref="FitIcons.BuildOriginalRatioIcon"/>)을 쓴다 — 대입은 생성자 한 줄이다.
     /// </summary>
     private void UpdateFitButton()
     {

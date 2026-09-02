@@ -213,29 +213,24 @@
                         <MenuFlyout Placement="Top">
                             <!-- 계보 = "1:1" 글자 도형(A143) → 네 모서리 꺾쇠 + 중앙 사각(A184) →
                                  텍스트 "100%"·아이콘 없음(A231) → FontIcon(Segoe UI, 두 글자 "OR")
-                                 (A253) → A260(5차·확정, 2026-08-27 사용자 지시).
+                                 (A253) → A260(5차·확정, 2026-08-27 사용자 지시) → A310(본체와 통일).
                                  A253의 다문자 Glyph는 저장소 선례 0건의 1순위 위험 후보였고 그대로
                                  현실화됐다 — 실기기에서 아이콘 칸이 비어 나온다는 사용자 보고.
-                                 그래서 FontIcon 다문자 형태는 폐기하고 PathIcon 도형으로 간다.
-                                 도형 = 16x16 칸에 외곽 사각 링 + 안쪽 "1:1"(세로 막대 2 + 점 2).
-                                 전부 축정렬 사각형이라 저해상도에서 뭉개지지 않는다. 본체 버튼의
-                                 테두리 상자 + "1:1"(코드 Shared/FitIcons.BuildOriginalRatioBox — A298에서 공용화)이
-                                 같은 그림의 짝이다.
-                                 링에 구멍이 남는 근거 = 바깥 사각과 안쪽 사각의 진행 방향을 반대로
-                                 잡았다. 짝홀·비영 어느 채움 규칙에서도 뚫리므로 FillRule 지정이
-                                 필요 없다(파스 위험 축 하나를 없앴다).
-                                 ⚠ Data 문자열은 사용처마다 새로 적는다 — Geometry를 공유 리소스로
-                                 두고 여러 PathIcon.Data에 걸면 런타임에 앱이 죽는다(v0.174.1 실사례.
-                                 App.xaml의 경고 주석 참고). 세 모듈이 같은 문자열을 각자 갖는 것은
-                                 그래서 의도적이다. Geometry 타입 속성에 거는 문자열 변환은 성립하는
-                                 형태다(PathGeometry.Figures에 미니언어를 넣는 쪽이 WMC0055로 막힌다).
-                                 최소 복구법 = 이 MenuFlyoutItem.Icon 블록만 지워 A231의 "아이콘 없음"
-                                 으로 되돌리기(다른 변경 무관). -->
-                            <MenuFlyoutItem Text="Original" Click="OnFitActualSizeClicked">
-                                <MenuFlyoutItem.Icon>
-                                    <PathIcon Data="M1,1 L15,1 L15,15 L1,15 Z M2.5,2.5 L2.5,13.5 L13.5,13.5 L13.5,2.5 Z M4.5,5 L6,5 L6,11 L4.5,11 Z M10,5 L11.5,5 L11.5,11 L10,11 Z M7.5,6.25 L8.5,6.25 L8.5,7.25 L7.5,7.25 Z M7.5,8.75 L8.5,8.75 L8.5,9.75 L7.5,9.75 Z" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
+                                 그래서 FontIcon 다문자 형태는 폐기하고 PathIcon 도형으로 갔다.
+                                 A310: 그 PathIcon의 Data 인라인 문자열(정사각 링 + 세로 막대 2 + 점 2)을
+                                 지우고 아이콘 자체를 코드에서 대입한다 — 도형이 본체 버튼의 상자와
+                                 달라 "위아래 1:1이 미세하게 다르다"는 사용자 보고가 났기 때문이다.
+                                 이제 두 그림 모두 Shared/FitIcons 한 파일이 그린다
+                                 (본체 = BuildOriginalRatioBox · 여기 = BuildOriginalRatioIcon).
+                                 x:Name은 그 대입을 위해 붙였다(대입 지점 = 생성자 한 줄.
+                                 문서 모듈의 FitHeightItem과 같은 형태다).
+                                 ⚠ 아이콘은 항목마다 새 인스턴스여야 한다 — Geometry·요소를 공유
+                                 리소스로 두고 여러 부모에 걸면 런타임에 앱이 죽는다(v0.174.1 실사례.
+                                 App.xaml의 경고 주석 참고). 팩토리가 호출마다 새로 만들어 돌려주므로
+                                 그 규칙은 지켜진다.
+                                 최소 복구법 = 생성자의 Icon 대입 한 줄을 지우기(A231의 "아이콘 없음"
+                                 으로 되돌아간다. 다른 변경 무관). -->
+                            <MenuFlyoutItem x:Name="FitOriginalItem" Text="Original" Click="OnFitActualSizeClicked" />
                             <MenuFlyoutItem Text="Contain" Click="OnFitContainClicked">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE9A6;" />
