@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
+using Windows.Foundation;
 
 namespace KOTU.Ui;
 
@@ -13,7 +14,9 @@ namespace KOTU.Ui;
 /// 한곳에 두어 소비처가 늘어도 갈라질 여지를 없앤다.
 /// 사용처: 오디오 모듈(EQ·비주얼라이저 — 영상 하단 바에는 그 두 버튼이 없다. 우측군은 자막·Fit)과
 /// <b>셸 하단 바</b>(A305 배치 2의 사이드바 접기 + A312의 전체화면 해제 — 1개 3상태 모드 버튼의
-/// 얼굴 ⓐ·ⓒ. KOTU.App도 이 파일을 소스 링크로 받는다).
+/// 얼굴 ⓐ·ⓒ. KOTU.App도 이 파일을 소스 링크로 받는다)와
+/// <b>영상·오디오 하단 바의 루프 버튼 "반복 안함" 얼굴</b>(A318 — 글리프 위에 금지 사선을
+/// 얹는 합성이라 순수 도형 조립은 아니지만, 디자인 정본을 한 파일에 두는 이유는 같다).
 ///
 /// <b>인스턴스 공유 금지(v0.174.1 실사고)</b>: WinUI 요소는 부모가 하나뿐이라 만들어 둔
 /// UIElement를 여러 버튼에 물리면 런타임에 앱이 죽는다. 그래서 이 팩토리도 FitIcons처럼
@@ -107,6 +110,95 @@ internal static class MediaIcons
             Bar(5, 1, 10, 1), Bar(14, 1, 1, 10), // 뒤 창 위 변·오른 변
             Bar(5, 1, 1, 4), Bar(11, 10, 4, 1),  // 뒤 창 왼 변 토막·아래 변 토막
         });
+    }
+
+    /// <summary>
+    /// A318: 루프 <b>"반복 안함"</b> 얼굴 = <b>반복 글리프 + 그 위에 겹친 금지 사선</b>.
+    /// 종전 표지는 같은 글리프를 Opacity 0.4로 흐리게 그린 것이라 사용자가 "이 버튼 지금
+    /// 못 누르나?"로 읽었다(실기기 보고). 그래서 <b>밝기·전경색은 다른 두 상태와 똑같이 두고</b>
+    /// (= 활성으로 보인다) 뜻만 형상으로 옮긴다.
+    /// 글리프를 통째로 도형으로 다시 그리지 않는 이유: 목록 루프(E8EE)·한 파일 루프(E8ED)가
+    /// FontIcon이라 선 굵기·비율이 어긋난다. 세 상태가 <b>같은 도상 가족</b>으로 남아야 서로
+    /// 비교돼 읽히므로, 호출부가 쓰는 그 글리프를 인자로 받아 그대로 얹고 사선만 더한다.
+    ///
+    /// <b>사선을 Path 채움 사각띠로 그리는 이유</b>: RotateTransform은 렌더 변환이라 저해상도에서
+    /// 위치가 픽셀 격자에서 밀리고, 회전 중심 계산이 글꼴 크기에 얽힌다. 대신 FitIcons와 같은
+    /// PathGeometry 조립(닫힌 네 꼭짓점 = 기울어진 띠)으로 좌표를 <b>산술로 확정</b>한다.
+    /// 대각선이라 축정렬은 불가능하지만(A260·A300 도형과 다른 점), 띠 두께를 <b>2</b>로 잡아
+    /// 글리프 획(18px 기준 대략 1.3)보다 굵게 만들어 16px대에서도 사선이 먼저 읽히게 했다.
+    /// 좌표는 17.4×17.4 칸의 (0.7,0.7)→(16.7,16.7) 중심선에 두께 2를 수직으로 편 것이다
+    /// (왼쪽 위 → 오른쪽 아래 — Segoe 계열 "끔" 표지의 방향). 글리프 잉크보다 살짝 넘치게
+    /// 뻗어 "위에 그은 선"으로 읽힌다.
+    ///
+    /// <b>전경 동기(A299 관용구)</b>: Path.Fill도 Rectangle.Fill과 같아 상속을 못 받으므로
+    /// 이 파일의 센티널 장치를 그대로 쓴다(버튼이 비활성이면 사선도 함께 회색이 된다).
+    /// FontIcon 쪽은 Foreground 상속이 살아 있어 손댈 것이 없다.
+    ///
+    /// <b>인스턴스 공유 금지(v0.174.1 실사고)</b>: 호출마다 새 Grid·새 FontIcon·새 Path·
+    /// <b>새 Geometry</b>를 만든다(정적 캐시 없음). A255 당시 "빗금 도형은 Geometry 공유 크래시
+    /// 함정이라 기각"으로 남아 있던 판단은 <b>공유</b>가 원인이었고, 이 팩토리처럼 매번 새로
+    /// 조립하면 성립한다 — 상태가 바뀔 때마다 UpdateLoopButton이 이 메서드를 다시 부른다.
+    /// </summary>
+    /// <param name="glyph">목록 루프 상태가 쓰는 것과 같은 반복 글리프(도상 가족 유지).</param>
+    internal static Grid BuildLoopOffIcon(string glyph)
+    {
+        // 상속 전경색 센티널 — Assemble과 같은 이유·같은 관용구(0×0이라 레이아웃 무영향).
+        var sentinel = new TextBlock { Text = string.Empty, Width = 0, Height = 0 };
+        var icon = new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = LoopGlyphFontSize,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var slash = new Path
+        {
+            Data = BuildSlashGeometry(),
+            Stretch = Stretch.None, // 도형 좌표 그대로 — 칸에 맞춰 늘리면 두께가 흐트러진다
+            Fill = InitialIconBrush() ?? sentinel.Foreground,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var root = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        root.Children.Add(sentinel);
+        root.Children.Add(icon);
+        root.Children.Add(slash); // 마지막 = 글리프 위에 그려진다
+        sentinel.RegisterPropertyChangedCallback(
+            TextBlock.ForegroundProperty,
+            (sender, _) => slash.Fill = ((TextBlock)sender).Foreground);
+        root.Loaded += (_, _) => slash.Fill = sentinel.Foreground;
+        return root;
+    }
+
+    /// <summary>
+    /// 루프 글리프의 글꼴 크기 — 하단 바 세 상태가 같은 값이어야 크기가 튀지 않는다
+    /// (호출부 XAML·UpdateLoopButton의 FontSize 18과 같은 값).
+    /// </summary>
+    private const double LoopGlyphFontSize = 18;
+
+    /// <summary>
+    /// 금지 사선 한 줄 = 닫힌 네 꼭짓점의 기울어진 띠(호출마다 새 Geometry — 부모가 하나뿐이다).
+    /// 중심선 (0.7,0.7)→(16.7,16.7)에 두께 2를 수직(법선 (1,-1)/루트2 방향으로 ±0.7)으로 편 값이라
+    /// 네 꼭짓점이 (0,1.4)·(1.4,0)·(17.4,16)·(16,17.4)가 된다 — 경계 상자는 17.4 정사각이다.
+    /// </summary>
+    private static PathGeometry BuildSlashGeometry()
+    {
+        var figure = new PathFigure
+        {
+            StartPoint = new Point(0, 1.4),
+            IsClosed = true,
+            Segments = new PathSegmentCollection(),
+        };
+        figure.Segments.Add(new LineSegment { Point = new Point(1.4, 0) });
+        figure.Segments.Add(new LineSegment { Point = new Point(17.4, 16) });
+        figure.Segments.Add(new LineSegment { Point = new Point(16, 17.4) });
+        var geometry = new PathGeometry { Figures = new PathFigureCollection() };
+        geometry.Figures.Add(figure);
+        return geometry;
     }
 
     /// <summary>

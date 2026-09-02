@@ -23,6 +23,8 @@
     <Compile Include="..\Shared\HotkeySupport.cs" Link="HotkeySupport.cs" />
     <!-- A298: Fit 원본 배율 "1:1" 상자 조립 팩토리(A260 디자인 한 벌). 같은 이유로 소스 링크 공유. -->
     <Compile Include="..\Shared\FitIcons.cs" Link="FitIcons.cs" />
+    <!-- A318: 루프 "반복 안함" 얼굴(글리프 + 금지 사선) 팩토리. 오디오와 같은 디자인 정본을 쓰려고 같은 방식으로 링크한다. -->
+    <Compile Include="..\Shared\MediaIcons.cs" Link="MediaIcons.cs" />
   </ItemGroup>
   <ItemGroup>
     <!--
