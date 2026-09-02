@@ -447,15 +447,25 @@ public sealed partial class MainWindow : Window
         // 외부 해제의 착지는 **모드 1**이다 — A312에서 Esc는 한 단계(시나리오 A에서 모드3 → 모드2)가
         // 됐지만, 외부 해제는 계단 입력이 아니라 "프레젠터가 이미 풀렸다"는 사실 동기라 창 모드로
         // 확정 착지한다(모드2로 내려앉으면 외부 주체가 만든 화면과 셸 상태가 어긋난다 — 구현 결정).
-        // 이중 실행 방어 3겹:
+        // 이중 실행 방어 — ⓪(2026-09-02 신설)이 정본, ①~③은 종전 겹:
+        // ⓪ **우리 전이 표지**(_shellPresenterTransition): SetViewMode가 SetPresenter를 부르는
+        //    동안 참 — 그 호출이 동기 발화시키는 Changed는 아래 분기에 들어가지 않는다. ①의
+        //    값 비교만으로는 프레젠터 전환 도중 Changed가 낡은 Kind로(또는 겹으로) 도착하는
+        //    갈래를 못 막았고, 그때 첫 분기가 모드를 전체화면으로 되돌린 뒤 둘째 분기가 창
+        //    모드로 확정해 **Esc의 모드3 → 모드2 한 단계가 모드1로 관측**됐다(실기기 결함 —
+        //    Enter·Alt+Enter의 3→1은 최종 목적지가 우연히 같아 같은 왕복이 증상으로 안 보였다).
+        //    가드가 끊어도 잃는 것이 없다: 크롬·자동 숨김·패널 갱신은 SetPresenter 직후
+        //    SetViewMode 본문이 어차피 전부 수행한다. 지연 도착(가드 해제 뒤) 갈래는 ①이 그대로
+        //    받는다 — 그때는 Kind가 확정돼 있어 모드와 일치, 두 분기 모두 거짓이다.
         // ① 내부 전이는 SetViewMode가 _viewMode를 **SetPresenter보다 먼저** 맞추므로, 그 전이가
-        //    낳는 Changed에선 아래 두 분기 조건(모드 불일치)이 거짓이다(동기·지연 무관).
+        //    낳는 Changed에선 아래 두 분기 조건(모드 불일치)이 거짓이다(Kind가 확정 상태일 때).
         // ② 외부 전이에서 부르는 SetViewMode는 프레젠터가 이미 목표 상태라 SetPresenter를 안
         //    만져 Changed가 재발화하지 않는다.
         // ③ SetViewMode 자신이 모드 무변경이면 ApplyOverlayStates를 건너뛴다(최후 방어).
         AppWindow.Changed += (sender, args) =>
         {
             if (!args.DidPresenterChange) return;
+            if (_shellPresenterTransition) return; // ⓪ 우리 전이 — 외부 동기 분기 진입 금지(위 주석)
             var full = sender.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
             if (full && _viewMode != ShellViewMode.FullScreen)
             {
@@ -2275,7 +2285,9 @@ public sealed partial class MainWindow : Window
     ///    포커스는 애초에 RootLayout으로 라우팅되지 않아 대화상자 기본 버튼이 자연 보존되지만
     ///    (실측 불가 축 — 실기기 확인 포인트), 포커스가 메인 트리에 남은 채 팝업이 열려 있는
     ///    갈래(콤보 열림 등)에서 확정 Enter를 뺏지 않기 위한 보수 게이트다(A234
-    ///    GetOpenPopupsForXamlRoot 선례 재사용).
+    ///    GetOpenPopupsForXamlRoot 선례 재사용. 2026-09-02: 툴팁 팝업은 제외 — 버튼 위
+    ///    포인터의 툴팁만으로 이 게이트가 참이 되면 포커스된 버튼의 내장 Enter=클릭이
+    ///    살아나 A274 사양이 깨진다. IsAnyPopupOpen 주석 참고).
     /// 그 밖(셸 크롬 버튼·설정의 닫힌 콤보·토글 등 일반 포커스)은 소비하고 모드를 옮긴다 —
     /// **버튼 포커스 중 Enter = 모드 전환이 사양이다**(클릭은 Space·마우스 — A274 확정).
     /// 영상 모듈도 이 경로다 — 영상 전용 Enter=전체화면 액셀러레이터는 A151에서 제거된 그대로다.
@@ -2326,13 +2338,27 @@ public sealed partial class MainWindow : Window
     /// "열림"으로 보수 처리한다(모르면 개입하지 않는 쪽이 안전 — GetShellFocusState의
     /// InPopup=true와 같은 방향. GetOpenPopupsForXamlRoot의 try/catch 격리·컴파일·런타임
     /// 실증은 A234 배치 1 참조).
+    /// 2026-09-02 실기기 결함 수리: **툴팁 팝업은 세지 않는다.** 하단 바 버튼 위에 포인터를
+    /// 올려 두면 ToolTipService 툴팁이 열리는데(열린 팝업 목록에 Child가 ToolTip인 Popup으로
+    /// 잡힌다), 종전의 개수 검사는 그것만으로 참이 되어 셸이 Enter를 양보했고, 그 사이 직전
+    /// 클릭으로 포커스를 쥔 버튼의 내장 Enter=클릭이 발화했다(실기기 관측: 영상 재생/일시정지
+    /// 버튼 위에 포인터를 두면 Enter가 클릭으로 동작, 포인터를 비끼면 툴팁이 닫혀 모드 계단
+    /// 정상 — A274가 봉쇄한 바로 그 갈래가 툴팁 하나로 되열리던 것). 툴팁은 포커스를 받지
+    /// 않고 Enter 확정 동작도 없어 지킬 원 기능이 없다 — 반면 콤보 드롭다운·플라이아웃·
+    /// 대화상자(Child가 ToolTip이 아닌 팝업)는 종전 그대로 양보한다. 셸 게이트 한 곳의
+    /// 수리라 전 모듈 하단 바 버튼(툴팁은 HotkeySupport.Tip 규칙으로 전부 달려 있다)에 공통
+    /// 적용된다. Child 검사 순회는 GetShellFocusState의 p.Child 선례 형태다.
     /// </summary>
     private bool IsAnyPopupOpen()
     {
         if (RootLayout.XamlRoot is not { } xr) return true; // 판정 불가 — 무개입 쪽으로
         try
         {
-            return VisualTreeHelper.GetOpenPopupsForXamlRoot(xr).Count > 0;
+            foreach (var p in VisualTreeHelper.GetOpenPopupsForXamlRoot(xr))
+            {
+                if (p.Child is not ToolTip) return true; // 툴팁 외 팝업 — 확정 Enter 보존(양보)
+            }
+            return false; // 팝업 없음 또는 전부 툴팁 — 게이트 통과(Enter = 모드 계단)
         }
         catch
         {
@@ -2435,6 +2461,16 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 셸 자신의 <see cref="SetViewMode"/>가 프레젠터를 바꾸는 동안만 참인 재진입 가드
+    /// (2026-09-02 실기기 결함 수리 — 생성자 AppWindow.Changed 구독의 ⓪ 가드 주석 참고).
+    /// 외부 주체의 프레젠터 변화(이미지 뷰 더블클릭 토글의 SetPresenter 직행 등)는 이 표지
+    /// 밖에서 오므로 종전대로 외부 동기 분기(진입 = 모드3 동기, 해제 = 모드1 확정 착지)를 탄다.
+    /// 저장하는 것은 "지금 우리가 프레젠터를 만지는 중"이라는 사실 하나뿐 — 복귀 목적지나
+    /// 이전 모드를 기억하지 않는다(A305의 스냅샷 폐지 구조 무훼손).
+    /// </summary>
+    private bool _shellPresenterTransition;
+
+    /// <summary>
     /// 모드 전이의 단일 실행점(A151): 프레젠터(전체화면 = FullScreen, 그 외 = Default)와 셸 크롬
     /// (하단 바·경계 버튼 여백)을 함께 맞춘다. 프레젠터는 실제로 다를 때만 만진다 — 최대화 등
     /// OverlappedPresenter 상태를 불필요하게 건드리지 않는다(기존 토글들과 같은 판단).
@@ -2453,13 +2489,21 @@ public sealed partial class MainWindow : Window
         _viewMode = mode;
         var wantFull = mode == ShellViewMode.FullScreen;
         var isFull = AppWindow.Presenter.Kind == Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen;
+        // 2026-09-02 실기기 결함 수리: SetPresenter가 동기 발화시키는 AppWindow.Changed가 외부
+        // 동기 분기(생성자 구독)에 들어가 모드를 덮어쓰지 않도록, 호출 구간만 표지를 세운다
+        // (⓪ 가드 — 생성자 Changed 구독 주석 참고). finally 해제라 프레젠터 조작이 던져도
+        // 표지가 남지 않는다. 상태 변수는 이 재진입 가드성 bool 하나뿐이다(스냅샷류 재도입 없음).
         if (wantFull && !isFull)
         {
-            AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
+            _shellPresenterTransition = true;
+            try { AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen); }
+            finally { _shellPresenterTransition = false; }
         }
         else if (!wantFull && isFull)
         {
-            AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
+            _shellPresenterTransition = true;
+            try { AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default); }
+            finally { _shellPresenterTransition = false; }
         }
         ReevaluateBarAutoHide(); // A186: 전체화면 진입/해제 = 자동 숨김 상태 재평가
         UpdateShellChrome();
