@@ -1763,7 +1763,11 @@ public sealed partial class MainWindow : Window
     {
         // A90: 뷰 내부 열기도 "새 콘텐츠가 화면을 차지"이므로 S4 자동 종료(SetContentState와 동일 규칙).
         ExitOpenFileBrowsing(restore: false, refresh: false);
-        ResetBarAutoHide(); // A186: 콘텐츠 교체 = 타이머 정지·바 복원(새 재생이 다시 연다)
+        ResetBarAutoHide(); // A186: 콘텐츠 교체 = 타이머 정지·바 복원(재생 표면은 PlaybackStateChanged가 다시 연다)
+        // A311: 이 경로는 SetContentState와 달리 모드를 리셋하지 않는다(전체화면 슬라이드쇼 유지 —
+        // 위 주석). 전체화면 유지 항해(◀/▶ 등)에서 재생 신호가 없는 표면은 다시 열어 줄 이벤트가
+        // 없으므로 여기서 즉시 재무장한다 — 창 모드·비무장 상태면 무동작이라 종전 경로에 무해하다.
+        ArmBarAutoHide();
         var wasUntitled = _untitledContent; // A189: 무제 → 첫 저장(Save as)의 경로 확정 전이인지
         _untitledContent = false;
         _currentFilePath = path;
@@ -2395,9 +2399,9 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 하단 바 가시성의 단일 결정 지점(A151 — A186 개정): 입력 축 = (모드, 영상 자동 숨김).
-    /// 실제 판정은 <see cref="BarVisible"/> 하나 — 영상 재생 표면이면 자동 숨김 축이,
-    /// 아니면 모드 축(A305: 전체화면이 아닐 때 표시 — 모드 2는 바를 남긴다)이 정한다.
+    /// 하단 바 가시성의 단일 결정 지점(A151 — A186 개정): 입력 축 = (모드, 자동 숨김).
+    /// 실제 판정은 <see cref="BarVisible"/> 하나 — 자동 숨김 컨텍스트(영상 재생 표면 또는
+    /// 전체화면 — A311)면 자동 숨김 축이, 아니면 상시 표시(A305: 모드 2는 바를 남긴다)다.
     /// A152: 바가 콘텐츠 위 오버레이가 되면서(행 분할 폐지) 종전의 행 높이 0 조작
     /// (BottomBarRow.Height)은 소멸했다 — 콘텐츠 영역(CenterArea)은 모드와 무관하게 창 전체라
     /// 바를 숨겨도 콘텐츠 중앙이 움직이지 않는다(A152의 목적). Visibility 토글 하나만 남는다.
@@ -2827,12 +2831,15 @@ public sealed partial class MainWindow : Window
     /// 가드가 필요 없다 — 어느 상태에서도 갈 곳이 있어 상시 활성이다.</summary>
     private void OnViewModeButtonClick(object sender, RoutedEventArgs e) => AdvanceViewMode();
 
-    // ---------- 영상 하단 바 자동 숨김 (A186 ②) ----------
+    // ---------- 하단 바 자동 숨김 (A186 ② — A311에서 전체화면 전 표면으로 확대) ----------
     // 신호원 = IPlaybackStateSource(영상 뷰·All Readable 중계 — ShowModule 배선), 판단·타이머 =
-    // 셸. 규칙: 재생 표면 + 재생 중 + 무입력 3초 = 숨김 / 재표시 = 포인터 이동·터치(클릭)·
-    // 하단 가장자리 근접(틱 시점 유예)·일시정지·정지. 전체화면에서도 동일(플레이어 UX) —
-    // 반대로 말하면 영상 재생 표면에서는 전체화면에서도 입력이 오면 바가 나타난다.
-    // 커서 숨김은 하지 않는다(등재 후보 — A186 구현 시 결정).
+    // 셸. 규칙(A186 — 창 모드의 영상 축): 재생 표면 + 재생 중 + 무입력 3초 = 숨김 / 재표시 =
+    // 포인터 이동·터치(클릭)·하단 가장자리 근접(틱 시점 유예)·일시정지·정지.
+    // A311(전체화면 축): 전체화면(모드3·커스텀 전체)에서는 표면 종류·재생 상태와 무관하게 같은
+    // 기구가 돈다 — 진입 직후 바가 떠 있다가 3초 무입력 뒤 숨고, 같은 트리거로 부상한다
+    // (부상해야 A312 모드 버튼의 "빠져나가기" 얼굴을 쓸 수 있다). 두 축의 판정은
+    // BarAutoHideContext(대상)·BarAutoHideArmable(무장·발화 공용 게이트) 두 속성 하나씩뿐이다.
+    // 커서 숨김은 하지 않는다(등재 후보 — A186 구현 시 결정. 창 모드 확대와 함께 낙수 15 존치).
 
     /// <summary>자동 숨김까지의 무입력 시간(ms) — 사양 상수 한 곳(A186, 제안값 3s 채택).</summary>
     private const int BarAutoHideIdleMs = 3000;
@@ -2852,15 +2859,33 @@ public sealed partial class MainWindow : Window
     private bool VideoBarContext => _currentFilePath is not null
         && PlaybackView is { HasPlaybackSurface: true };
 
+    /// <summary>자동 숨김 축이 바 가시성을 지배하는 컨텍스트인가(A186 영상 축 + A311 전체화면 축):
+    /// 영상 재생 표면(모드 무관 — A186 그대로) 또는 전체화면(표면 종류 무관 — A311 확장).
+    /// 이 밖(비영상 표면의 모드1·모드2)에서는 자동 숨김이 없고 바가 상시 표시다.</summary>
+    private bool BarAutoHideContext => VideoBarContext || _viewMode == ShellViewMode.FullScreen;
+
+    /// <summary>지금 무입력 카운트를 돌려도 되는가 — <see cref="ArmBarAutoHide"/>(무장 게이트)와
+    /// 타이머 Tick(발화 게이트)이 **같은 판정 하나를 공유**한다(A311 — 두 게이트가 갈라지면
+    /// "무장은 되는데 숨지 않는" 형태가 된다). 전체화면이면 표면·재생 상태와 무관하게 무조건
+    /// 무장(일시정지 이미지·문서 열람도 3초 뒤 숨김 — 일시정지·정지 "이벤트"는
+    /// <see cref="OnPlaybackStateChanged"/>가 일단 부상시킨 뒤 다시 무장한다). 창 모드(모드1·2)
+    /// 에서는 종전 영상 축 그대로 — 재생 표면 + 재생 중일 때만 무장(일시정지·정지면 상시 표시).</summary>
+    private bool BarAutoHideArmable => _viewMode == ShellViewMode.FullScreen
+        || (VideoBarContext && PlaybackView is { IsPlaying: true });
+
     /// <summary>
     /// 하단 바 실표시(A186 — UpdateShellChrome·EdgeButtonsBottomInset 공용 판정):
-    /// 영상 재생 표면이면 자동 숨김 축(재생 중 무입력이면 숨김, 일시정지·정지면 상시 표시 —
-    /// 전체화면에서도 동일), 아니면 모드 축(**전체화면이 아닐 때** 표시).
+    /// 자동 숨김 컨텍스트(<see cref="BarAutoHideContext"/> — 영상 재생 표면 또는 전체화면)면
+    /// 자동 숨김 축(무입력이면 숨김, 입력·재생 상태 전이에 부상), 아니면 상시 표시.
     /// A305: 모드 축 조건이 "창 모드일 때"에서 "전체화면이 아닐 때"로 넓어졌다 — 모드 2는
     /// "제목표시줄 + 하단 자체 작업표시줄만 남는다"가 사양이라 바가 그대로 떠 있어야 한다
-    /// (사라지는 것은 좌/우 사이드바뿐이다). 모드 3만 종전대로 바를 내린다.
+    /// (사라지는 것은 좌/우 사이드바뿐이다).
+    /// A311: 전체화면의 "바 영구 숨김"(구 모드 축 상수 거짓)이 자동 숨김 축으로 바뀌었다 —
+    /// 전체화면 진입 직후에는 바가 떠 있고(ReevaluateBarAutoHide가 표시 상태로 되돌린 뒤 무장)
+    /// 3초 무입력 뒤 내려간다. 숨김은 종전대로 Visibility.Collapsed라(UpdateShellChrome)
+    /// 숨은 바의 버튼은 히트 테스트에서 빠진다(유령 클릭 없음).
     /// </summary>
-    private bool BarVisible => VideoBarContext ? !_barAutoHidden : _viewMode != ShellViewMode.FullScreen;
+    private bool BarVisible => !BarAutoHideContext || !_barAutoHidden;
 
     /// <summary>포인터가 하단 가장자리 띠(바 44 + 근접 여유 EdgeProximity) 안에 있는가 —
     /// 시크바를 노리고 내려온 손 밑에서 바가 꺼지지 않게 틱 시점에 유예한다(경계 버튼 근접
@@ -2880,16 +2905,18 @@ public sealed partial class MainWindow : Window
         UpdateShellChrome();
     }
 
-    /// <summary>재생 중이면 무입력 카운트를 (재)시작한다 — 아니면 무동작(타이머는 정지 상태 유지).</summary>
+    /// <summary>무장 가능하면(<see cref="BarAutoHideArmable"/> — 재생 중 또는 전체화면) 무입력
+    /// 카운트를 (재)시작한다 — 아니면 무동작(타이머는 정지 상태 유지).</summary>
     private void ArmBarAutoHide()
     {
-        if (!VideoBarContext || PlaybackView is not { IsPlaying: true }) return;
+        if (!BarAutoHideArmable) return;
         _barAutoHideTimer ??= MakeBarAutoHideTimer();
         _barAutoHideTimer.Stop(); // DispatcherTimer 되감기 관용구(Stop 후 Start)
         _barAutoHideTimer.Start();
     }
 
-    /// <summary>모드 전환·외부 프레젠터 변화의 재평가: 표시 상태로 되돌리고 재생 중이면 재대기.
+    /// <summary>모드 전환·외부 프레젠터 변화의 재평가: 표시 상태로 되돌리고 무장 가능하면 재대기
+    /// (A311: 전체화면 진입이면 표면 무관 무장 = 진입 직후 3초 떠 있다 숨는 사양이 여기서 성립).
     /// UpdateShellChrome은 호출부가 곧 잇는다(중복 갱신 방지 — SetViewMode·AppWindow.Changed).</summary>
     private void ReevaluateBarAutoHide()
     {
@@ -2899,7 +2926,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>재생 상태 전이(재생/일시정지/정지 — ShowModule 배선의 디스패치 종착점):
-    /// 어느 쪽이든 일단 바를 되살리고, 재생 중이면 카운트를 다시 연다.</summary>
+    /// 어느 쪽이든 일단 바를 되살리고, 무장 가능하면(재생 중 또는 전체화면 — A311) 카운트를
+    /// 다시 연다. 전체화면의 일시정지·정지는 그래서 "부상 후 3초 뒤 재숨김"이 된다(사양).</summary>
     private void OnPlaybackStateChanged()
     {
         ResetBarAutoHide();
@@ -2911,7 +2939,7 @@ public sealed partial class MainWindow : Window
     /// 정상 동작한다, A153).</summary>
     private void NotifyBarAutoHideInput()
     {
-        if (!VideoBarContext) return;
+        if (!BarAutoHideContext) return;
         if (_barAutoHidden)
         {
             _barAutoHidden = false;
@@ -2926,7 +2954,7 @@ public sealed partial class MainWindow : Window
         timer.Tick += (_, _) =>
         {
             timer.Stop(); // 반복 타이머 — Tick에서 반드시 멈춘다(MakeS1FlashTimer 관용구)
-            if (!VideoBarContext || PlaybackView is not { IsPlaying: true }) return; // 그새 정지·전환
+            if (!BarAutoHideArmable) return; // 그새 정지·전환·전체화면 해제 — 무장 게이트와 동일 판정(A311)
             if (PointerNearBottomEdge)
             {
                 timer.Start(); // 바 근처에 손이 있다 — 숨기지 않고 재대기
