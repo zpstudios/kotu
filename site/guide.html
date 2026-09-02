@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KOTU — User Guide</title>
-<meta name="description" content="How to use KOTU: modules, the full shortcut list, side panels, file associations, multiple windows, settings and the tray icon.">
+<meta name="description" content="How to use KOTU: modules, the full shortcut list, side panels, file associations, multiple windows, settings and the three window icons.">
 <meta name="theme-color" content="#0b1521">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 
@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/USER-GUIDE.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.273.0</span>
+    <span class="asof">AS OF v0.310.1</span>
   </div>
 </section>
 
@@ -278,7 +278,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <li><a href="#associations">File types and the Start menu</a></li>
         <li><a href="#windows">Several windows at once</a></li>
         <li><a href="#settings">Settings</a></li>
-        <li><a href="#tray">The tray icon</a></li>
+        <li><a href="#tray">The three icons</a></li>
       </ol>
     </aside>
 
@@ -290,32 +290,65 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>Every KOTU window has the same three parts.</p>
         <ul>
           <li><strong>Centre</strong> — the module view: the photo, the video, the PDF, the archive listing.</li>
-          <li><strong>Bottom bar</strong> — one row. On the left the <strong>menu</strong> button and the
-              <strong>Open file</strong> button; at the right end the <strong>Full screen</strong> button;
-              the rest belongs to whichever module is open.</li>
+          <li><strong>Bottom bar</strong> — one row, 44 px tall. On the left the <strong>menu</strong> button
+              and the <strong>Open file</strong> button; at the right end the <strong>screen mode</strong>
+              button; the rest belongs to whichever module is open.</li>
           <li><strong>Two side panels</strong> — a <strong>left</strong> panel (folder tree and file list) and a
-              <strong>right</strong> panel (information about the current file). Opening a module starts with the
-              left one open and the right one closed; opening a file directly hides both until you call them.</li>
+              <strong>right</strong> panel (information about the current file). Opening a module starts with
+              <strong>both</strong> of them open; opening a file directly hides both until you call them.</li>
         </ul>
         <p>The side panels are opaque <strong>sidebars</strong>: an open panel stands beside the content and
            makes the centre narrower. Either panel is 25% of the window width.</p>
-        <p><strong>Full screen.</strong> <kbd>Enter</kbd> and <kbd>Alt</kbd>+<kbd>Enter</kbd> both toggle
-           full screen: the window fills the screen, taskbar included, the bottom bar goes away, and both
-           side panels close so the content stands alone — press <kbd>F11</kbd> or <kbd>F12</kbd> if you
-           want a panel back while you are there. Leaving
-           full screen — with <kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd> or <kbd>Esc</kbd> — brings
-           back the window, the bottom bar and the panel arrangement you had when you went in. The
-           <strong>Full screen</strong> button at the right end of the bottom bar does the same as the keys.
-           While a video is playing the bottom bar hides itself after a few seconds and the full-screen rule
-           bends a little — see the Video module. Opening a file, or switching module, always leaves
-           full screen.</p>
+
+        <h3 id="screen-modes">Screen modes</h3>
+        <p>The window has three screen modes, and you step through them rather than flipping a single
+           switch.</p>
+        <div class="tbl"><table>
+          <tr><th>Mode</th><th>What you see</th></tr>
+          <tr><td>1</td><td>everything — title bar, side panels, bottom bar. This is where a window starts</td></tr>
+          <tr><td>2</td><td>the side panels step aside; the title bar and the bottom bar stay</td></tr>
+          <tr><td>3</td><td>full screen: the window fills the screen, taskbar included, and the panels stay away</td></tr>
+        </table></div>
+        <ul>
+          <li><kbd>Enter</kbd> moves to the <strong>next</strong> mode and wraps around: 1 → 2 → 3 → 1.</li>
+          <li><kbd>Alt</kbd>+<kbd>Enter</kbd> goes <strong>straight to full screen</strong>, and straight back
+              to mode 1 from there. It skips mode 2, and it works while you are typing, where plain
+              <kbd>Enter</kbd> is a line break.</li>
+          <li><kbd>Esc</kbd> and the mouse back button step <strong>one mode down</strong> — 3 → 2 → 1 — and
+              then carry on to the next thing they can undo (see
+              <a class="inl" href="#back">Going back</a>).</li>
+          <li>The <strong>screen mode</strong> button at the right end of the bottom bar is one button with
+              three faces. It always does what <kbd>Enter</kbd> would do next, and its icon and tooltip say
+              so: <em>Hide side panels</em>, <em>Full screen</em>, <em>Exit full screen</em>.</li>
+        </ul>
+        <p><strong>With nothing open</strong> — the module's own file browser, before you pick a file — mode 2
+           has nothing to offer, so the ladder is just mode 1 ↔ mode 3.</p>
+        <p><strong>In full screen the bottom bar gets out of the way.</strong> After three seconds without
+           mouse or touch input it slides out of sight, whatever you are looking at; move the pointer, tap,
+           or bring the pointer near the bottom edge and it comes back. The same auto-hide runs in a window
+           while a video is playing — see the Video module. The mouse pointer itself is never hidden.</p>
+        <p>Switching module keeps the mode you are in, except that mode 2 falls back to mode 1 when the
+           module you arrive at has nothing open yet.</p>
+        <p><strong><kbd>F11</kbd> and <kbd>F12</kbd> override all of this.</strong> The moment you drive a
+           panel yourself, the window stops applying the modes to the panels and keeps exactly the
+           arrangement you asked for, in every mode, full screen included. Mode 2 is then no longer a
+           separate step, so <kbd>Enter</kbd> becomes a straight toggle between your arrangement and full
+           screen. The override lasts until you switch to another module, which restores the default (both
+           panels open).</p>
+        <p><strong>Opening a file</strong> does not change the mode. Opening the <strong>Open file</strong>
+           browser suspends the modes entirely — see
+           <a class="inl" href="#open-file">the Open file button</a>.</p>
+
+        <h3>The title bar</h3>
         <p>The title bar shows <code>1-KOTU</code>, or <code>1-KOTU - filename</code> once a file is open. The
            number in front is the window number: the first window is <code>1-KOTU</code>, the second
-           <code>2-KOTU - holiday.jpg</code>. A leading <code>●</code> means that window has unsaved changes.
-           The module is not named in the title — the window icon carries a coloured ring instead, one colour
-           per module, and at the larger size Windows uses for <kbd>Alt</kbd>+<kbd>Tab</kbd> it also carries
-           the module's three letters.</p>
-        <p><strong>Opening a file.</strong> Double-click it in Windows Explorer (if you registered the file
+           <code>2-KOTU - holiday.jpg</code>, and so on. A leading <code>●</code> means the document in that
+           window has unsaved changes. The module is not named in the title — the icons carry that, along
+           with a running fact or two about what is open. What each of the three icons shows is in
+           <a class="inl" href="#tray">the three icons</a>.</p>
+
+        <h3>Opening a file</h3>
+        <p>Double-click it in Windows Explorer (if you registered the file
            type), drop it onto the KOTU window, or use the <strong>Open file</strong> button in the bottom bar.
            Dropping a file whose type does not belong to the module you are looking at opens it in a new window.</p>
       </section>
@@ -346,7 +379,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               double-clicking for full screen still works. Mouse only — touch and pen pan the way they
               always did.</li>
           <li><strong>Rotate</strong> 90° clockwise with the rotate button or <kbd>R</kbd>. Rotation is not
-              saved to the file and resets on the next picture. Orientation stored in EXIF is applied automatically.</li>
+              saved to the file and resets when you move to the next picture. Orientation stored in EXIF is
+              applied automatically.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. The Image module keeps
               your choice while you browse the folder.</li>
           <li><strong>Delete</strong> moves the current file to the Recycle Bin and shows the next picture.
@@ -373,8 +407,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>To the right of that run sits the current zoom level — <code>100%</code>. The Fit options
               resize the picture without touching that figure, so it stays at 100% until you zoom with the
               wheel or a pinch.</li>
-          <li>A double-click goes full screen, and <kbd>Enter</kbd> or <kbd>Alt</kbd>+<kbd>Enter</kbd> does
-              the same from the keyboard; <kbd>Esc</kbd> leaves it.</li>
+          <li>A double-click on the picture goes straight to full screen, as does
+              <kbd>Alt</kbd>+<kbd>Enter</kbd>; <kbd>Enter</kbd> steps through the screen modes and
+              <kbd>Esc</kbd> steps back down (<a class="inl" href="#screen-modes">screen modes</a>).</li>
         </ul>
 
         <h3>Video</h3>
@@ -396,14 +431,16 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               UTF-8 are converted from CP949 before playback, so Korean <code>.srt</code> and <code>.smi</code>
               files display correctly. Press <kbd>C</kbd> or the subtitle button to switch track or choose
               <em>No subtitles</em>.</li>
-          <li><strong>Resume</strong>: watch more than 30 seconds and stop before the last 3%, and playback
-              continues from there next time.</li>
+          <li><strong>Resume</strong>: if you watched more than 30 seconds and stopped before the last 3%,
+              the position is remembered and playback continues there next time.</li>
           <li><strong>The whole folder plays as a list.</strong> When a video ends, the next file in the same
               folder starts automatically (name order, hidden files skipped), and playback stops after the
               last one by default. Press <kbd>L</kbd> or the loop button —
               the first button in the bottom bar, immediately left of ▶ —
-              to cycle through the three loop modes: off (dimmed icon), <em>Loop list</em> (after the last
-              file the list starts over), and <em>Repeat this file</em> (the same file restarts). Right-click
+              to cycle through the three loop modes: <strong>off</strong> (the loop icon with a slash through
+              it, at the same brightness as the other two — the button is always live),
+              <strong>Loop list</strong> (after the last
+              file the list starts over), and <strong>Repeat this file</strong> (the same file restarts). Right-click
               the button to choose how often either mode repeats — once more, three more times, or forever;
               cycling with the button always enters a mode at forever. Repeating never replays from a resume
               point; every pass starts at 0:00. To stop after every file instead, turn
@@ -412,15 +449,20 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Zoom</strong> with <kbd>Ctrl</kbd>+wheel, from 10% to 800%.</li>
           <li><strong>Fit</strong> — see <a class="inl" href="#fit">the Fit button</a>. Each new file starts at
               Contain again.</li>
-          <li><kbd>Enter</kbd> or <kbd>Alt</kbd>+<kbd>Enter</kbd> toggles full screen, and <kbd>Esc</kbd>
-              leaves it. In full screen, play, pause, seek, volume, mute and zoom each flash a short caption
-              in the middle.</li>
+          <li><kbd>Alt</kbd>+<kbd>Enter</kbd> goes straight to full screen and back; <kbd>Enter</kbd> steps
+              through the screen modes and <kbd>Esc</kbd> steps back down
+              (<a class="inl" href="#screen-modes">screen modes</a>). In full screen, play, pause, seek,
+              volume, mute and zoom each flash a short caption in the middle of the picture.</li>
           <li><strong>The bottom bar keeps out of the way while you watch.</strong> Once a video has been
               playing for 3 seconds without any mouse or touch input, the whole bar — seek slider included —
               slides out of sight. Move the pointer, tap the screen, or bring the pointer near the bottom
-              edge and it comes back; pause or let the video end and it stays visible. The same rule applies
-              in full screen — move the mouse and the controls appear, hold still and they hide again. The
-              mouse pointer itself is never hidden.</li>
+              edge and it comes back. In a window, pausing or letting the video end brings the bar back and
+              keeps it there. <strong>In full screen it does not</strong>: pausing surfaces the bar, and
+              three seconds later it hides again, the same as for every other kind of content in full
+              screen. The mouse pointer itself is never hidden.</li>
+          <li><strong>The display stays awake while a video plays</strong> — no screen saver, no display
+              timeout. Turn it off with <em>Keep the display awake while a video plays</em> in
+              <a class="inl" href="#playback">Settings → Playback</a>. Audio playback is not affected.</li>
           <li>Press ▶ with nothing open to play a built-in 32-second display-and-speaker test clip.</li>
           <li>When playback actually stops at the end — looping is off and the list is done — resizing the
               window clears the picture to black instead of rescaling the last frame. Press play to start it
@@ -437,7 +479,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <em>Scope</em> (the default waveform), <em>Spectrum</em>, <em>Spectrometer</em>,
               <em>VU meter</em>, or <em>Off</em> for a plain black surface — and the choice sticks for next
               time. Changing the style mid-track re-opens the playback engine, so the sound drops for an
-              instant and then carries on from the same spot.</li>
+              instant and then carries on from the same spot. Change it while nothing is playing and a small
+              chip — <em>Visualizer: Spectrum</em> — appears at the bottom of the surface for a second and a
+              half, so the choice is visible even with no sound to show it.</li>
+          <li><strong>VU meter</strong> is drawn by KOTU itself rather than by the playback engine: two
+              horizontal bars, left and right, with a peak mark that hangs behind the level for a moment. It
+              reads the sound the way Windows mixes it for your chosen output device, so anything else
+              playing on the system shows up in it too; it runs only while a track is actually playing.</li>
           <li><strong>The controls stand where Video puts them.</strong> Loop, ▶, the position, the seek
               slider, the length, mute, the volume slider and the speed box occupy the same places in both
               modules, so nothing shifts under the pointer when you go from a video to a track. Audio's own
@@ -445,20 +493,25 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               then the equalizer, then the visualizer.
               The narrow-window rule is the same too: below about 650 px of bar the volume slider and the two
               time labels are hidden.</li>
-          <li><strong>Resume</strong> works exactly as in Video.</li>
+          <li><strong>Resume</strong> works exactly as in Video (over 30 seconds played, stopped before the
+              last 3%).</li>
           <li><strong>The whole folder plays as a list.</strong> When a track ends, the next file in the same
               folder starts automatically (name order, hidden files skipped), and playback stops after the
               last one by default. Press <kbd>L</kbd> or the loop button —
               first in the bottom bar, immediately left of ▶, as in Video —
-              to cycle through the three loop modes: off (dimmed icon), <em>Loop list</em> (after the last
-              track the list starts over), and <em>Repeat this file</em> (the same track restarts). Right-click
+              to cycle through the three loop modes: <strong>off</strong> (the loop icon with a slash through
+              it, at the same brightness as the other two), <strong>Loop list</strong> (after the last
+              track the list starts over), and <strong>Repeat this file</strong> (the same track restarts). Right-click
               the button to choose how often either mode repeats — once more, three more times, or forever;
               cycling with the button always enters a mode at forever. Repeating never replays from a resume
               point; every pass starts at 0:00. <strong>Auto-play next file</strong> in
               <a class="inl" href="#playback">Settings → Playback</a> governs this here too — it is one
               setting shared by Video and Audio.</li>
-          <li><kbd>Enter</kbd> or <kbd>Alt</kbd>+<kbd>Enter</kbd> toggles full screen, and <kbd>Esc</kbd>
-              leaves it. The bottom bar stays put — the auto-hide above is a Video-module behaviour.</li>
+          <li><kbd>Alt</kbd>+<kbd>Enter</kbd> goes straight to full screen and back; <kbd>Enter</kbd> steps
+              through the screen modes and <kbd>Esc</kbd> steps back down
+              (<a class="inl" href="#screen-modes">screen modes</a>). In a window the bottom bar stays put —
+              the playing-video auto-hide above is a Video-module behaviour — but in full screen it hides
+              after three seconds like everywhere else, and only the pointer brings it back.</li>
           <li>Press ▶ with nothing open to play a built-in 18-second sample tune.</li>
         </ul>
 
@@ -504,7 +557,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               button falls back to the locked source view and the bottom bar says so after the file
               name.</li>
           <li>The encoding is detected (UTF-8 with or without BOM, UTF-16, otherwise CP949) and kept on save,
-              as is the line ending style.</li>
+              as is the line ending style (CRLF or LF).</li>
           <li><kbd>Ctrl</kbd>+<kbd>S</kbd> saves. The save button stays disabled until there is something to
               save, and <em>N changed</em> (e.g. <em>12 changed</em>) appears in the bottom bar while there
               is &mdash; N sums, over each edited spot, the larger of the characters removed and inserted
@@ -598,10 +651,20 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         </ul>
 
         <h3>Archive</h3>
+        <p><strong>The module keeps all its buttons in the bottom bar</strong> — there is no toolbar over the
+           listing, so the listing gets that height. From the left: <strong>Back</strong>,
+           <strong>New archive</strong>, <strong>Extract...</strong> and <strong>Extract here</strong>, then
+           the status text and, during a long job, the progress bar and <strong>Cancel</strong>. The current
+           location inside the archive is written above the listing. Print and Fit are not in this bar at
+           all; neither applies to an archive.</p>
         <ul>
           <li><strong>Browse without extracting</strong>: open an archive and its contents are listed with
               <em>Name</em>, <em>Size</em> and <em>Modified</em>. Double-click a folder to go in, <kbd>U</kbd>
-              or the up button to come back out.</li>
+              or the <strong>Back</strong> button to come back out.</li>
+          <li><strong>Back</strong> is always available. Inside a folder it goes up one level; at the top of
+              the archive it closes the archive and returns you to the module's file browser. (<kbd>U</kbd>
+              only ever means "up one level", so at the top of the archive the key does nothing while the
+              button still closes.)</li>
           <li>Double-click a file inside the archive to open it with your default Windows app. Only that one
               file is extracted, to a temporary folder.</li>
           <li><strong>Extract here</strong> (<kbd>E</kbd>) unpacks the whole archive next to itself, into a
@@ -609,19 +672,15 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               folder is made. If the target name is taken, <code> (2)</code>, <code> (3)</code> … is appended.</li>
           <li><strong>Extract...</strong> (<kbd>T</kbd>) asks for a destination folder and unpacks only the
               selected rows — or everything, if nothing is selected.</li>
-          <li><strong>New archive</strong> (<kbd>C</kbd>) creates a ZIP or a 7z. A password is optional; 7z
-              also encrypts the file names inside, ZIP does not. The button sits at the left end of the
-              bottom bar, so it is there even when no archive is open and the centre is showing the file
-              thumbnails.</li>
+          <li><strong>New archive</strong> (<kbd>C</kbd>) creates a <strong>ZIP</strong> or a
+              <strong>7z</strong>. A password is optional; 7z
+              also encrypts the file names inside, ZIP does not. It is in the bottom bar, so it is there
+              even when no archive is open and the centre is showing the file thumbnails.</li>
           <li>Drop files or folders onto the window to compress them — the same New archive dialog appears.</li>
           <li>Archives that need a password ask for one when you list or extract them.</li>
           <li>ZIP files with broken Korean file names are re-read as CP949 automatically.</li>
           <li>Long operations show a progress bar and a <em>Cancel</em> button. When it finishes, the result is
               revealed in Windows Explorer.</li>
-          <li>The bottom bar keeps the same shape as in the other modules: the print button and the fit
-              controls sit in their usual places, on the left and at the right end. Neither applies to an
-              archive, so both stay greyed out here — they are there to keep the bar aligned across
-              modules.</li>
         </ul>
         <div class="note">All eight listed formats can be extracted. Only ZIP and 7z can be created.</div>
 
@@ -638,8 +697,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Right panel</strong> — the specification list, scrollable: CPU, GPU, RAM, Motherboard,
               Storage, Network, System.</li>
           <li><strong>Bottom bar</strong> — two long graphs of the same selected sensors, covering the last
-              5 minutes at every refresh setting. The graphs stretch to share the full width of the bar,
-              and each writes the length of that window in its bottom-right corner.</li>
+              5 minutes at every refresh setting. The graphs stretch to share the full width of the bar —
+              nothing is reserved to the left of them — and each writes the length of that window centred
+              underneath.</li>
         </ul>
         <p>The two panels are the ordinary side panels: <kbd>F11</kbd>, <kbd>F12</kbd> and the edge buttons
            drive them exactly as in the file modules, and the module opens with both docked.
@@ -648,16 +708,16 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            them, the tiles and the enlarged graphs also label the top of the scale, prefixed so it cannot be
            misread as the current value — <code>max 100%</code>, <code>max 100°C</code>,
            <code>max 5000MHz</code> — and the length of the time window in the bottom right corner. The two
-           graphs in the bottom bar are too shallow for the scale label, but they do carry the window length
-           in the same bottom-right corner.</p>
+           graphs in the bottom bar are too shallow for the scale label, but they do carry the window length,
+           centred rather than in the corner.</p>
         <div class="tbl"><table>
           <tr><th>Control</th><th>Key</th><th>What it does</th></tr>
           <tr><td>Copy all</td><td><kbd>C</kbd></td><td>puts the whole specification list plus every current sensor value on the clipboard as text</td></tr>
-          <tr><td>Refresh interval</td><td><kbd>I</kbd></td><td>50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU</td></tr>
+          <tr><td>Sensor refresh interval</td><td><kbd>I</kbd></td><td>50 · 200 · 500 · 1000 · 2000 · 5000 ms. Default 500 ms. 50 ms costs noticeably more CPU</td></tr>
           <tr><td>Graph size</td><td><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd></td><td>one step bigger / smaller text and lines on every graph, Small ↔ Medium ↔ Large (numpad <kbd>+</kbd> / <kbd>-</kbd> work too; <kbd>Ctrl</kbd>+wheel over the graphs does the same, wheel up = bigger)</td></tr>
           <tr><td>Graph size reset</td><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>back to Medium</td></tr>
           <tr><td>Always on top</td><td><kbd>P</kbd></td><td>pins the window over other windows and shrinks it once to the smallest window size — grow it back freely; unpinning leaves the window as it is</td></tr>
-          <tr><td>Full screen</td><td><kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>full-screen dashboard, like every other module; <kbd>Esc</kbd> leaves it</td></tr>
+          <tr><td>Screen mode</td><td><kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd> / <kbd>Esc</kbd></td><td>the same three-mode ladder as every other module (<a class="inl" href="#screen-modes">screen modes</a>) — a full-screen dashboard at the top of it</td></tr>
         </table></div>
         <p>The graph size steps affect the text and line thickness of every graph — the two long graphs in
            the bottom bar, the ten centre tiles and the enlarged graphs in the left panel. The graphs
@@ -718,9 +778,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Alt</kbd>+<kbd>`</kbd></td><td>open the menu (bottom left)</td></tr>
           <tr><td><kbd>F11</kbd></td><td>left panel open / closed</td></tr>
           <tr><td><kbd>F12</kbd></td><td>right panel open / closed</td></tr>
-          <tr><td><kbd>Enter</kbd></td><td>full screen and back again</td></tr>
-          <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>full screen and back again — the same toggle, typing-proof (see below)</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>one step back: out of full screen, out of the Open file browser, or close the open file</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>next screen mode (<a class="inl" href="#screen-modes">screen modes</a>)</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>full screen and back again, in one step — typing-proof (see below)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>one step back: one screen mode down, out of the Open file browser, or close the open file</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>new window of the module you are looking at</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>save (text document)</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print what you are looking at (picture, PDF or text document)</td></tr>
@@ -731,33 +791,47 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            character of their own, and <kbd>Ctrl</kbd>+<kbd>P</kbd> mid-edit prints the document just as it
            stands.
            Plain <kbd>Enter</kbd> gives way to typing — in a text document it is a line break — and
-           <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well.
-           There is no keyboard shortcut for switching module or for opening Settings —
-           both live in the menu at the bottom left. Switching module always arrives with the left sidebar
-           open and the right one closed; choosing the module you are already in changes nothing.</p>
-        <p><kbd>Esc</kbd> undoes one layer per press: full screen first, then the Open file browser, then
-           the file itself. Closing the file this way lands on the module's own browser with the left
-           sidebar open — the same screen as starting the module from the menu — so a file opened straight from
+           <kbd>Shift</kbd>+<kbd>N</kbd> gives way as well.</p>
+        <p><kbd>Esc</kbd> undoes one layer per press: the screen mode first — one step down, so from full
+           screen you land in mode 2 and need another press to get back to mode 1 — then the Open file
+           browser, then the file itself. Closing the file this way lands on the module's own browser with
+           <strong>both sidebars open</strong> — the same screen as starting the module from the menu — so a
+           file opened straight from
            Windows Explorer is one <kbd>Esc</kbd> away from the standard screen. A document with unsaved
            changes asks before closing. Where <kbd>Esc</kbd> already means something it keeps that meaning
            first: it cancels a rename, it clears the cut-mark in the file browser, and an open dialog takes
            it for itself.</p>
+        <p>While the <strong>Open file</strong> browser is up, <kbd>Esc</kbd> skips the screen mode step and
+           closes the browser first, even from full screen — the browser is a layer over everything else,
+           and it comes off before anything underneath it moves.</p>
+        <p>There is no keyboard shortcut for switching module or for opening Settings —
+           both live in the menu at the bottom left. Switching module from the menu always arrives with both
+           sidebars open. Choosing the module you are already in changes nothing.</p>
 
-        <h3>Panels: how F11 and F12 behave</h3>
+        <h3 id="panel-keys">Panels: how F11 and F12 behave</h3>
         <p><kbd>F11</kbd> drives the left panel, <kbd>F12</kbd> the right one. One press opens the panel as
            a sidebar; the next press closes it. That is the whole story — there is no hold, double-press or
            translucent variant. Press both keys and both sides toggle, in any order.</p>
+        <p><strong>The first press also takes the panels off the screen modes.</strong> From then on the
+           window keeps exactly the arrangement you set, in every mode and in full screen, and
+           <kbd>Enter</kbd> becomes a straight toggle between that arrangement and full screen rather than a
+           three-step ladder. Whatever was on screen when you pressed is what the key toggles, so the first
+           press never appears to do nothing. The arrangement is handed back to the modes when you switch to
+           another module, which reopens both panels; there is no way to release it from the keyboard.</p>
         <p>When a panel opens, a short hint appears next to it on a small dark plate, so it stays readable
            over whatever is behind it — <em>Sidebar - press F11 or the pin button to close</em> — and fades
            after a couple of seconds. The panels answer these keys in every view mode, full screen included —
            and on almost every screen: the unsupported-file notice and a new unsaved document included.
            With no file open the left panel shows the folder you last browsed — on the notice
-           it lists files of every type — and the right panel says <em>No file open</em>.
-           Inside the Open file browser, <kbd>F11</kbd> and <kbd>F12</kbd> do nothing; <kbd>Esc</kbd> gets
-           you out.</p>
+           it lists files of every type — and the right panel says <em>No file open</em>.</p>
         <p><strong>Settings is the one exception.</strong> It has no side panels at all: <kbd>F11</kbd>,
            <kbd>F12</kbd> and the edge buttons do nothing there, and any panel that was open slides away
-           when you enter Settings. Leave Settings and your previous panel layout comes back.</p>
+           when you enter Settings. The only way out is to pick a module, which starts that module the
+           standard way — both sidebars open.</p>
+        <p>Inside the Open file browser, <kbd>F11</kbd> and <kbd>F12</kbd> do nothing; <kbd>Esc</kbd> gets
+           you out.</p>
+        <p><kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd>, <kbd>Esc</kbd> and the screen mode button
+           behave the same in all seven modules — they belong to the window, not to the module.</p>
 
         <h3>Letter keys, per module</h3>
         <p>Only one module is on screen at a time, so the same letter can mean different things in different
@@ -803,8 +877,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>H/W Info</td><td><kbd>Ctrl</kbd>+numpad <kbd>*</kbd></td><td>graph size back to Medium</td></tr>
           <tr><td>H/W Info</td><td><kbd>P</kbd></td><td>always on top</td></tr>
         </table></div>
-        <p><kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd> and <kbd>Esc</kbd> behave the same in all seven
-           modules — they belong to the window, not to the module.</p>
         <p><kbd>Space</kbd> gives way in the same manner as the letter keys. While the file list, the folder
            tree or the centre thumbnails have the focus it no longer starts or stops playback in Video and
            Audio; in the file list and in the thumbnails it selects the focused item instead.</p>
@@ -820,7 +892,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd></td><td>copy / cut / paste</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>select all</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></td><td>new folder</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>clear the dimming left by <kbd>Ctrl</kbd>+<kbd>X</kbd> (the clipboard keeps its contents); with nothing to clear, the window rule applies — one step back</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>clear the dimming left by <kbd>Ctrl</kbd>+<kbd>X</kbd> (the clipboard keeps its contents); with nothing to clear, the window rule applies — see <a class="inl" href="#shortcuts">Global</a></td></tr>
         </table></div>
 
         <h3>Mouse and wheel</h3>
@@ -848,19 +920,30 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>File browser</td><td>right-click empty space</td><td>New folder · Paste · Refresh</td></tr>
           <tr><td>File browser</td><td>drag</td><td>move within a drive, copy across drives. <kbd>Ctrl</kbd> forces copy, <kbd>Shift</kbd> forces move</td></tr>
           <tr><td>Anywhere</td><td>back button (the thumb button)</td><td>go back one step — see <a class="inl" href="#back">Going back</a></td></tr>
-          <tr><td>Near the bottom of the window edge</td><td>move the pointer</td><td>a narrow edge button appears — see <a class="inl" href="#panels">Side panels</a></td></tr>
+          <tr><td>Anywhere</td><td>forward button (the other thumb button)</td><td>while browsing, return to the folder you came back from</td></tr>
+          <tr><td>Near the bottom of the left or right window edge</td><td>move the pointer</td><td>a narrow edge button appears — see <a class="inl" href="#panels">Side panels</a></td></tr>
         </table></div>
         <p>The wheel never zooms thumbnails, and it never zooms while the pointer is over a side panel — it
            scrolls there.</p>
 
         <h3 id="back">Going back</h3>
         <p>The mouse back button, and the <kbd>Browser Back</kbd> key on keyboards that have one, undo one
-           step at a time, in this order: step back out of full screen, then leave the Open
-           file browser (returning to the arrangement you had), then close the file and go back to the
-           module's own browser with the side panels as they were. With nothing left to undo they do nothing. The mouse button works
-           everywhere; the key gives way to typing, like the letter keys. That last step is the one place
-           going back and <kbd>Esc</kbd> differ: going back keeps the panels exactly as they were, while
-           closing with <kbd>Esc</kbd> arrives with the left sidebar open and the right one closed — the
+           step at a time, in this order:</p>
+        <ul>
+          <li>step <strong>one screen mode down</strong>
+              (<a class="inl" href="#screen-modes">screen modes</a>);</li>
+          <li>leave the Open file browser, returning to the arrangement you had;</li>
+          <li>while browsing with nothing open, go back to the folder you were in before;</li>
+          <li>close the file and go back to the module's own browser, keeping the side panels as they
+              were.</li>
+        </ul>
+        <p>With nothing left to undo they do nothing. The mouse button works everywhere; the key gives way
+           to typing, like the letter keys. The <strong>forward</strong> thumb button undoes the third step —
+           it returns to the folder you came back from — and has nothing to do with the other steps.</p>
+        <p>While the Open file browser is up, the first step is skipped and the browser comes off first,
+           exactly as with <kbd>Esc</kbd>.</p>
+        <p>The last step is the one place going back and <kbd>Esc</kbd> differ: going back keeps the panels
+           exactly as they were, while closing with <kbd>Esc</kbd> arrives with both sidebars open — the
            standard module screen.</p>
       </section>
 
@@ -869,33 +952,43 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <h2><span class="num">4</span>Side panels</h2>
         <p><strong>The left panel</strong> holds, from top to bottom:</p>
         <ul>
-          <li>the path bar, with the <em>Up</em> button, the current folder, a <em>Filter</em> list and a
-              <em>Sort</em> list;</li>
+          <li>the path bar, with the <strong>Up</strong> button, a <strong>Home</strong> button, the current
+              folder and a <strong>Filter</strong> list;</li>
           <li>a tree of drives and folders, opened at the folder of the file you have open;</li>
+          <li>a row of five column headers — <strong>Name</strong>, <strong>Type</strong>,
+              <strong>Size</strong>, <strong>Created</strong>, <strong>Modified</strong> — all the same
+              width;</li>
           <li>the file list for that folder.</li>
         </ul>
+        <p><strong>Home</strong> goes to your user folder. It is always live, and does nothing when you are
+           already there.</p>
         <p><strong>The right panel</strong> describes the file you have open — whatever the module knows about
            it, or otherwise its name, size, date and folder. You can drop a file onto this panel to open it.</p>
         <p>In H/W Info the same two panels carry that module's own content instead — the enlarged graphs on
            the left, the specification list on the right. Everything below applies there unchanged.</p>
-        <p>Ways to bring a panel up: <kbd>F11</kbd> / <kbd>F12</kbd> as described
-           above; or the <strong>edge button</strong> — move the pointer close to the left or right edge of
+        <p>Ways to bring a panel up: <kbd>F11</kbd> / <kbd>F12</kbd>, as described in
+           <a class="inl" href="#panel-keys">how F11 and F12 behave</a>; or the <strong>edge button</strong> — move the pointer close to the left or right edge of
            the window, near the bottom, and a small <strong>pin</strong> button appears just over the bottom
            bar. It opens that side as a sidebar, and closes it again if it already is one — the same toggle
            as the key.</p>
-        <p>Opening a module (rather than opening a file directly) starts with the left sidebar open and the
-           right one closed. A file opened straight from Windows Explorer starts with no panels, so nothing
+        <p>Opening a module (rather than opening a file directly) starts with <strong>both sidebars
+           open</strong>. A file opened straight from Windows Explorer starts with no panels, so nothing
            covers what you came to see. Press <kbd>Esc</kbd> when you are done and the file closes onto that
-           standard screen — left sidebar and thumbnails — as if you had started the module from the menu.</p>
+           standard screen — both sidebars and thumbnails — as if you had started the module from the
+           menu.</p>
+        <p>Screen modes 2 and 3 put the panels away (<a class="inl" href="#screen-modes">screen modes</a>),
+           and <kbd>F11</kbd> / <kbd>F12</kbd> take them back off the modes for as long as you stay in that
+           module (<a class="inl" href="#panel-keys">how F11 and F12 behave</a>).</p>
       </section>
 
       <!-- ================= 5. FILE BROWSER ================= -->
       <section id="browser">
         <h2><span class="num">5</span>The built-in file browser</h2>
         <p>Open a module without a file and the window becomes a file browser: folder tree and file list on the
-           left, thumbnails in the centre, and file information on the right once you open that panel with
-           <kbd>F12</kbd>. Image files show a real miniature;
-           text documents show the first lines of their content, loaded in the background; everything else
+           left, thumbnails in the centre, and file information on the right — both panels are open to start
+           with. Image files show a real miniature;
+           text documents — <code>.txt .md .log .ini .html</code> and friends — show the first lines of their
+           content, loaded in the background so the grid never waits; everything else
            shows its extension on the module's colour. Audio files add their own facts under the tile —
            the playing length, the bit rate, the sample rate and the number of channels — printed on the
            album art when the file has one, and on the extension tile when it has not. The thumbnails are
@@ -912,8 +1005,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               selected. Ticking or unticking it selects or deselects the file, and <kbd>Space</kbd> does the
               same to whichever item has the focus. It is one selection, not two — the boxes only make it
               visible.</li>
-          <li><strong>Sort</strong> by <em>Name</em>, <em>Size</em>, <em>Date modified</em> or
-              <em>Date created</em>. Your choice is remembered.</li>
+          <li><strong>Sort</strong> with the five column headers over the list — <em>Name</em>,
+              <em>Type</em>, <em>Size</em>, <em>Created</em>, <em>Modified</em>. Clicking one sorts by it;
+              clicking the one you are already sorted by reverses the order, and a small arrow in the header
+              says which way. Names count up, sizes and dates count down. Your choice, direction included,
+              is remembered.</li>
           <li><strong>Filter</strong> by extension, or <em>Show all</em>. The Filter button says how many files
               are hidden.</li>
           <li><strong>Show hidden and system files</strong> sits at the bottom of the same Filter menu, below
@@ -989,11 +1085,22 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            within about half a second, without a Refresh. If the folder itself is deleted or unplugged, the
            view moves up to the nearest folder that still exists.</p>
 
-        <h3>The Open file button</h3>
+        <h3 id="open-file">The Open file button</h3>
         <p>The button beside the menu in the bottom bar — tooltip <em>Open file</em> — is how you open a file
            without leaving what you are looking at. It does not open the Windows file dialog. Instead the file
            browser takes over the window: whichever panels were already open stay as they
            are, the missing ones are added, and the centre becomes a thumbnail browser.</p>
+        <p><strong>It is a layer over what you were doing, and nothing underneath it can be reached while it
+           is up.</strong> The bottom bar is covered and its buttons cannot be pressed, and the screen mode
+           keys and the mode button all do nothing — <kbd>Esc</kbd> and the back button take the layer off
+           first, and only then carry on down their usual order.</p>
+        <p><strong>It shows through.</strong> The browser is drawn on a translucent ground, so the picture,
+           the video or the document you already had open stays visible behind it and you can tell that you
+           are choosing a replacement rather than starting from nothing. Thumbnails and file names themselves
+           stay solid. In modes 2 and 3 — where the panels were away — the side panels come back
+           <strong>floating over</strong> the content, translucent like the rest of the layer, and the
+           content keeps its full width instead of being squeezed. In mode 1 the panels are the ordinary
+           opaque sidebars they always were.</p>
         <p>Press <kbd>Esc</kbd>, or the button again, to go back to exactly the arrangement you had. Choosing a
            file also ends it. If the browser is already what you are looking at, the button flashes the centre
            view instead of opening anything.</p>
@@ -1009,18 +1116,24 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li>One switch at the top for the Explorer right-click entries: <em>Extract here with
               KOTU-archive</em> on archive files and <em>Compress with KOTU-archive</em> on everything.
               On Windows 11 both live under <em>Show more options</em> (<kbd>Shift</kbd>+<kbd>F10</kbd>).</li>
-          <li><strong>Register all file associations</strong> below it — one switch that turns every
-              module's file association on or off in one go. It drives the module switches under it, so each
-              module still shows its own progress and result; a module that is busy at that moment is
-              skipped, and you can flip that one by hand afterwards. It reads as on only while every
-              module is registered.</li>
-          <li>Then one switch per module — <em>Register KOTU-image file associations</em>, and the same for
-              video, audio, document and archive — with the extensions listed beside it.
-              Turning a switch on also tries to make KOTU the default app for those types. Windows protects
-              a few types; for those, the Windows default-apps page opens so you can confirm once, or you can
-              use <em>Set default...</em> for a single extension. The line under each switch tells you how
-              many extensions KOTU is currently the default for.</li>
+          <li><strong>Register all file associations</strong> below it — one switch that turns every file
+              type KOTU can claim on or off in one go. It reads as on only while every one of them is
+              registered, and it leaves the right-click-menu switch alone.</li>
+          <li><strong>Advanced options</strong> under that — a link rather than a switch. Open it and the
+              file types appear <strong>one extension at a time</strong>, grouped under the module that owns
+              them: KOTU-image, KOTU-video, KOTU-audio, KOTU-document, KOTU-archive. Each extension has its
+              own switch, so you can hand KOTU <code>.png</code> and leave <code>.gif</code> to something
+              else. The master switch above drives every one of them. The list starts closed each time you
+              open Settings.</li>
+          <li>Under each module's heading, a line says how many of that module's extensions KOTU is
+              currently the default app for, next to a <em>Set default...</em> button that opens the Windows
+              "open with" dialog for a single extension you pick.</li>
         </ul>
+        <p>Turning an extension on also tries to make KOTU the default app for it. Windows protects a few
+           types and can refuse; when it does, the status line under the section says so and points you at
+           <em>Set default...</em>, which is the way through. Nothing opens the Windows default-apps page on
+           its own — with 48 extensions behind one master switch, that would mean dozens of pages at
+           once.</p>
         <p>If KOTU's own folder moves — after an update, or after you move a portable copy — the registrations
            you turned on are repaired silently the next time it starts.</p>
         <p><strong>The Start menu</strong> is the button at the bottom-left corner
@@ -1054,11 +1167,18 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
       <!-- ================= 8. SETTINGS =================
            The h3 ids below are the anchors the app's own "Learn more" links point at.
-           They must stay identical to the heading slugs of section 8 in docs/USER-GUIDE.md. -->
+           They must stay identical to the heading slugs of section 8 in docs/USER-GUIDE.md:
+           #ui-scale, #explorer-integration, #playback, #troubleshooting, #the-settings-file,
+           #updates, #about — in that order, which is the order of the Settings screen itself. -->
       <section id="settings">
         <h2><span class="num">8</span>Settings</h2>
         <p>The last entry in the menu at the bottom left. Each setting on that screen carries a one-line
-           description and a <strong>Learn more</strong> link; this is what those links point at.</p>
+           description and a <strong>Learn more</strong> link; this is what those links point at. The screen
+           reads, from the top: <strong>Display</strong>, <strong>Explorer integration</strong>,
+           <strong>Playback</strong>, <strong>Troubleshooting</strong>, <strong>Updates</strong>,
+           <strong>About</strong>.</p>
+        <p>Settings is the one screen with no side panels — <kbd>F11</kbd>, <kbd>F12</kbd> and the edge
+           buttons do nothing there, and whatever was open slides away while you are on it.</p>
 
         <h3 id="ui-scale">UI scale</h3>
         <p>Under <strong>Display</strong>. <em>System default</em> follows the Windows display scaling for
@@ -1068,35 +1188,27 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            Windows scaling on your monitor is a value the list does not offer, a note under the list says so.</p>
         <p>This list is the only way to change the scale — there is no keyboard shortcut for it.
            <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>-</kbd> and <kbd>Ctrl</kbd>+wheel belong to
-           the content instead: in the Document module they zoom the document, and <kbd>Ctrl</kbd>+wheel
+           the content instead: in the Document module they zoom the document
+           (<a class="inl" href="#modules">Document — plain text</a>), and <kbd>Ctrl</kbd>+wheel
            zooms an image or a PDF as it always did.</p>
 
         <h3 id="explorer-integration">Explorer integration</h3>
         <p>The file-type switches and the right-click-menu switch, described in full in
            <a class="inl" href="#associations">file types and the Start menu</a>. In short:</p>
         <ul>
-          <li><strong>Register all file associations</strong> at the top flips every module switch at once.
-              It reads as on only while every module is registered, and it leaves the right-click-menu
+          <li><strong>Register all file associations</strong> at the top flips every file type at once.
+              It reads as on only while every one of them is registered, and it leaves the right-click-menu
               switch alone.</li>
+          <li><strong>Advanced options</strong> opens the list of individual extensions under it, grouped by
+              module, each with its own switch. It starts closed.</li>
           <li>Everything is registered under <strong>your own user account only</strong>, so no administrator
               rights are needed, and turning a switch off removes the registration completely — nothing is
               left behind.</li>
-          <li>Turning a switch on also tries to make KOTU the <strong>default app</strong> for those file
-              types, so double-clicking one in Windows Explorer opens KOTU.</li>
-          <li>Windows protects a few file types and can refuse that last step. When it does, the Windows
-              default-apps page opens so you can confirm the change once by hand. You can also set a single
-              extension at a time with <em>Set default...</em> beside each switch. The line under each switch
-              says how many of that module's extensions KOTU is currently the default for.</li>
-        </ul>
-
-        <h3 id="the-settings-file">The settings file</h3>
-        <p><strong>Open settings.json</strong> opens the settings file itself in a new KOTU window, so you
-           can read or edit it with the built-in text editor.</p>
-        <ul>
-          <li>It lives in <code>%AppData%\KOTU\settings.json</code>.</li>
-          <li>Changes you make by hand apply after a restart — KOTU does not re-read the file while it runs.</li>
-          <li>Editing it incorrectly can break your settings. Nothing validates what you type; a malformed
-              file is the one way to lose your preferences.</li>
+          <li>Turning a switch on also tries to make KOTU the <strong>default app</strong> for that file
+              type, so double-clicking one in Windows Explorer opens KOTU.</li>
+          <li>Windows protects a few file types and can refuse that last step. When it does, the status line
+              says so and you set that one type by hand with <em>Set default...</em>. The line under each
+              module's heading says how many of its extensions KOTU is currently the default for.</li>
         </ul>
 
         <h3 id="playback">Playback</h3>
@@ -1110,6 +1222,28 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               pass after a repeat count runs out, which still moves to the next file.</li>
           <li>Turning it off does not stop you moving on by hand: opening the next file works as always.</li>
         </ul>
+        <p><strong>Keep the display awake while a video plays</strong> is the second switch, on by default.
+           While it is on and a video is actually playing, the screen saver stays away and the display does
+           not time out; pausing, stopping or closing the video releases that immediately. Audio playback is
+           not affected. Turning the switch while a video is playing takes effect at once.</p>
+
+        <h3 id="troubleshooting">Troubleshooting</h3>
+        <p>Three diagnostic switches, all off by default, that paint a small read-out over the window:
+           <strong>Shell key diagnostics</strong> (what the window keys are doing), <strong>Editor decor
+           diagnostics</strong> (the text editor's line measurements) and <strong>Audio visualizer
+           diagnostics</strong> (how long a visualizer change takes). They exist so that a bug report can
+           carry a screenshot instead of a description; leave them off unless you are chasing something. The
+           settings file, below, closes the same section.</p>
+
+        <h3 id="the-settings-file">The settings file</h3>
+        <p><strong>Open settings.json</strong> opens the settings file itself in a new KOTU window, so you
+           can read or edit it with the built-in text editor.</p>
+        <ul>
+          <li>It lives in <code>%AppData%\KOTU\settings.json</code>.</li>
+          <li>Changes you make by hand apply after a restart — KOTU does not re-read the file while it runs.</li>
+          <li>Editing it incorrectly can break your settings. Nothing validates what you type; a malformed
+              file is the one way to lose your preferences.</li>
+        </ul>
 
         <h3 id="updates">Updates</h3>
         <ul>
@@ -1122,9 +1256,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               check. Nothing pops up when a new version is found — the Updates section is the only place it
               is announced.</li>
           <li>When there is one, an <em>Update to vX.Y.Z</em> button appears. It downloads with a progress
-              figure, then asks to close and restart. <em>Install and restart</em> applies it immediately;
+              figure, then asks: <em>KOTU will close and restart to finish installing.</em>
+              <em>Install and restart</em> applies it immediately;
               <em>Later</em> keeps the download ready for the next time you press the button.</li>
-          <li>Updates need the Setup.exe installation or the portable build from the releases page. A build
+          <li>Updates need the Setup.exe installation or the Velopack portable build. A build
               unpacked by hand says so, leaves the section disabled, and shows no countdown.</li>
         </ul>
 
@@ -1133,21 +1268,65 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            screen has a link to the project's Patreon page.</p>
       </section>
 
-      <!-- ================= 9. TRAY ================= -->
+      <!-- ================= 9. THE THREE ICONS ================= -->
       <section id="tray">
-        <h2><span class="num">9</span>The tray icon</h2>
-        <p>Every open window puts one small icon in the notification area, and keeps it there for as long as
-           the window lives.</p>
+        <h2><span class="num">9</span>The three icons</h2>
+        <p>A KOTU window is represented by three icons, and none of them is a plain logo. Each is drawn on
+           the spot and each says something different: the one in the <strong>title bar</strong> says which
+           window this is, the one in the <strong>taskbar</strong> says how big the open file is, and the one
+           in the <strong>notification area</strong> says what the module is doing right now.</p>
+        <p>They share one palette. Every module has a colour — Image green, Video red, Audio teal, Document
+           purple, Archive amber, H/W Info blue, All Readable magenta — and that is the colour these icons
+           use.</p>
+
+        <h3>The title bar — 16 px</h3>
+        <p><strong>The window number, and nothing else.</strong> It is the same number the title bar spells
+           out in front of the name, so <code>3-KOTU - holiday.jpg</code> has a <code>3</code> in its icon.
+           It does <strong>not</strong> change from module to module or from file to file; only its colours
+           move:</p>
         <ul>
-          <li><strong>Idle</strong> — the whole icon is filled with the module's colour and carries one line
-              in white: <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>DOC</code>,
-              <code>ARC</code> or <code>ALL</code>. H/W Info is the exception: it has no open-or-closed state,
-              so it keeps its own muted <code>INF</code> on a dark badge.</li>
-          <li><strong>With a file open</strong> — a dark badge with a thin border in the module's colour, and
-              two lines in that colour: what it is on top, a value
-              underneath. An image shows its format and size, a video its resolution and bitrate, an archive
-              its type and compression, and the Audio module shows a small level display. H/W Info shows the
-              sensors you selected in that window.</li>
+          <li><strong>Nothing open</strong> — the module's colour fills the tile, with the number in
+              white.</li>
+          <li><strong>A file open</strong> — a dark tile with the number in the module's colour, lit up.</li>
+        </ul>
+        <p>Settings, the unsupported-file notice and H/W Info sit outside that rule and use a dark tile with
+           a white number, since they have no open-or-closed state to show.</p>
+
+        <h3>The taskbar and Alt+Tab — 32 px</h3>
+        <p><strong>What is open and how big it is</strong> — two lines, the file's extension over its size:
+           <code>TXT</code> over <code>40K</code>, <code>JPG</code> over <code>2.4M</code>. This one is the
+           same in every module, because it is read from the file rather than from the module.</p>
+        <p>With nothing open the tile is filled with the module's colour and carries its three letters —
+           <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>DOC</code>, <code>ARC</code>,
+           <code>ALL</code>. H/W Info and the module-less screens instead show the KOTU icon proper with a
+           ring in the module's colour and a three-letter band under it.</p>
+        <p>Each window stands on its own in the taskbar rather than stacking into one group, so the numbers
+           and these tiles are how you tell them apart there and in <kbd>Alt</kbd>+<kbd>Tab</kbd>.</p>
+
+        <h3>The notification area — 16 px</h3>
+        <p>Every open window puts one small icon in the notification area and keeps it there for as long as
+           the window lives. <strong>This is the one that differs per module</strong>, and it keeps up with
+           what you are doing.</p>
+        <ul>
+          <li><strong>Nothing open</strong> — the module's colour fills the icon, with its three letters in
+              white: <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>DOC</code>,
+              <code>ARC</code> or <code>ALL</code>.</li>
+          <li><strong>Something open</strong> — a dark badge bordered in the module's colour, carrying that
+              module's own two values in the same colour.</li>
+        </ul>
+        <div class="tbl"><table>
+          <tr><th>Module</th><th>Idle</th><th>With something open</th></tr>
+          <tr><td>Image</td><td><code>IMG</code></td><td>the picture's <strong>width</strong> over its <strong>height</strong> in pixels — <code>4032</code> over <code>3024</code>. The two swap when what you are looking at is turned a quarter turn, whether by EXIF or by <kbd>R</kbd>. Five figures and up are shortened (<code>12k</code>)</td></tr>
+          <tr><td>Video</td><td><code>VID</code></td><td>the <strong>resolution</strong> (<code>1080p</code>) over the <strong>average bit rate</strong> (<code>4.2M</code>) — average over the whole file, not the moment</td></tr>
+          <tr><td>Audio</td><td><code>AUD</code></td><td>the <strong>playing position</strong> over <strong>four small bars</strong>. The bars move once a second while a track plays and sit low and still when it is paused or stopped. They are a sign of life, not a spectrum analysis</td></tr>
+          <tr><td>Document</td><td><code>DOC</code></td><td>the page you are on and the page count, split <strong>diagonally</strong> — current in the upper left, total in the lower right. PDFs count real pages; text and Markdown have none, so they read <code>1</code> and <code>1</code>. Four figures and up show as <code>999+</code></td></tr>
+          <tr><td>Archive</td><td><code>ARC</code></td><td>the <strong>kind</strong> (<code>ZIP</code>, <code>7Z</code>) over the <strong>compression ratio</strong> (<code>0.42</code>). While a compress or extract job is running, the lower line becomes its <strong>progress</strong> (<code>45%</code>) instead</td></tr>
+          <tr><td>All Readable</td><td><code>ALL</code></td><td>whatever the module handling the file would show — open a photo and you get Image's two lines, open a video and you get Video's</td></tr>
+          <tr><td>H/W Info</td><td><code>INF</code></td><td>the two sensors selected in that window, one per line, <strong>each in its own channel colour</strong>. Select one and the second line is a dash; select none and it stays <code>INF</code></td></tr>
+          <tr><td>Settings, the unsupported-file notice, an empty window</td><td>—</td><td>no values — the plain KOTU icon</td></tr>
+        </table></div>
+        <p>A line whose value cannot be read is drawn as a dash.</p>
+        <ul>
           <li>The icon's tooltip is the window's title.</li>
           <li><strong>Left-click</strong> brings that window to the front.</li>
           <li><strong>Right-click</strong> opens a menu: <em>Activate window</em> · <em>Minimize to tray</em>
