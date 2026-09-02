@@ -307,6 +307,8 @@ public sealed partial class MainWindow : Window
         // A316: S4 레이어 반투명의 단일 출처 적용 — 중앙 backdrop과 하단 바 덮개(A313)가
         // 같은 값을 쓴다(XAML에는 Opacity를 두지 않는다: 값이 두 곳으로 갈리면 "바만 반투명,
         // 중앙은 불투명"이던 이번 증상이 재발한다). 조정은 상수 S4TranslucentOpacity 한 곳.
+        // A317: 세 번째 소비처(모드2·3 S4의 부유 사이드바 바탕)는 상태에 따라 1.0과 오가므로
+        // 생성자 1회가 아니라 ApplyOverlayStates가 같은 상수로 대입한다.
         S4CenterBackdrop.Opacity = S4TranslucentOpacity;
         S4BarScrim.Opacity = S4TranslucentOpacity;
 
@@ -2544,6 +2546,9 @@ public sealed partial class MainWindow : Window
     /// A316: S4('오픈 파일' 탐색) 레이어 반투명의 **단일 출처** — 중앙 backdrop(S4CenterBackdrop)과
     /// 하단 바 모달 덮개(S4BarScrim, A313)가 생성자에서 이 값 하나를 함께 받는다(사양: 값이
     /// 갈리면 "바만 반투명, 중앙은 불투명" 증상이 재발한다 — XAML에는 Opacity를 두지 않는다).
+    /// A317: 세 번째 소비처 — 모드2·3의 S4에서 부유하는 좌/우 사이드바 바탕(각 오버레이의
+    /// PanelBackdrop)도 같은 값이다(적용은 ApplyOverlayStates의 SetBackdropOpacity — 상태에 따라
+    /// 1.0과 오가므로 생성자 1회 대입이 아니라 종착점 대입이다. 새 값 금지 사양은 동일).
     /// 값 0.65의 근거: 사용자 요구 = "뒤에서 미디어가 열려 있다는 걸 인식할 수 있어야 한다" —
     /// A313의 0.85(DiagStrip 계열)로는 사실상 불투명하게 보였으므로 확실히 낮춘 0.6~0.7 계열의
     /// 중간값. 뒤 콘텐츠의 윤곽·색이 비치되 S4 썸네일·파일명(불투명 타일·텍스트가 이 backdrop
@@ -3517,6 +3522,16 @@ public sealed partial class MainWindow : Window
     // 되돌리기" 스냅샷(_fullScreenRestore)이 통째로 필요 없어졌다(그 왕복이 곧 이 계산이다).
 
     /// <summary>
+    /// 모드 축이 사이드바 억제를 요구하는가 — 오버라이드가 없고 모드1이 아닐 때(A305 억제
+    /// 산식에서 S4 항을 뺀 공통 핵 — A317에서 추출). 두 소비처가 나눠 쓴다:
+    /// <see cref="SidebarsSuppressed"/>(S4 밖 = 실제 억제)와 <see cref="S4SidebarsFloat"/>
+    /// (S4 안 = 억제 대신 표시 방식 전환). 산식을 한 곳에 두는 이유 — 두 판정이 갈리면
+    /// "모드2의 S4에서 사이드바가 도크로 서서 컨텐츠를 밀어내는" A317 증상이 재발한다.
+    /// </summary>
+    private bool ModeSuppressesSidebars
+        => !_sidebarOverride && _viewMode != ShellViewMode.Windowed;
+
+    /// <summary>
     /// 모드가 사이드바를 억제하는 중인가 — 오버라이드가 없고, 모드1이 아니며, S4도 아닐 때.
     /// <list type="bullet">
     /// <item>오버라이드(A305)가 서면 억제가 사라진다 — 커스텀 전체화면에서도 사용자가
@@ -3526,11 +3541,31 @@ public sealed partial class MainWindow : Window
     ///   탐색 자체가 불가능해진다(전체화면 위 S4는 A90/A236 주석이 명시한 기존 동작 —
     ///   A313부터 그때 자동 숨김 축으로 바가 떠도 모달 덮개(S4BarScrim)가 버튼 눌림은 막는다).
     ///   억제 없이도 종료(ExitOpenFileBrowsing)가
-    ///   스냅샷으로 요청 상태를 되돌리므로 모드 억제는 그다음 다시 걸린다.</item>
+    ///   스냅샷으로 요청 상태를 되돌리므로 모드 억제는 그다음 다시 걸린다.
+    ///   A317: 그 예외 동안 모드2·3이면 사이드바가 도크 대신 **떠 있는 반투명 표면**으로
+    ///   그려진다(<see cref="S4SidebarsFloat"/> — 상태 축이 아니라 그리기 축).</item>
     /// </list>
     /// </summary>
     private bool SidebarsSuppressed
-        => !_sidebarOverride && _viewMode != ShellViewMode.Windowed && !IsOpenFileBrowsing;
+        => ModeSuppressesSidebars && !IsOpenFileBrowsing;
+
+    /// <summary>
+    /// A317(2026-09-02 사용자 지시): S4 사이드바의 **표시 방식** 판정 — S4 중이고 모드 축이
+    /// 억제를 요구하는 상태(모드2·모드3, 오버라이드 없음)면 사이드바를 도크(도크 컬럼 확장 =
+    /// 컨텐츠 축소) 대신 **컨텐츠 위에 떠 있는 반투명 표면**으로 그린다. 근거 = "뒤에 무엇이
+    /// 있느냐": 모드1(과 오버라이드 선 모드3 = 커스텀 전체화면)은 S4 뒤에 실제 도크가 있어
+    /// 불투명이 맞고(뒤 도크와 내용이 달라도 글자 겹침이 안 드러난다 — 사용자 "현재가 맞음"),
+    /// 모드2·3은 뒤가 전폭 컨텐츠라 비쳐야 하고 도크가 컨텐츠를 밀어내면 안 된다.
+    /// A108/A176이 폐지한 "밀어내지 않는 반투명 오버레이" 축의 S4 한정 부활이되 방식이 다르다 —
+    /// 홀드/피닝/2연타 상태 기계 없이(폐지 사유 ①은 그대로 유효) 기존 축들의 순수 계산이고,
+    /// 아크릴·스왑체인 폴백(폐지 사유 ② — A129) 대신 A316이 실기기로 판정한 "불투명 테마
+    /// 브러시 + 요소 Opacity" 관용구다(그 판정 승계). 상태 축이 아니라 **그리기 축**이다:
+    /// 실효 상태(<see cref="EffectiveSidebarStates"/>)는 그대로 양쪽 열림이고(A305 구조 무변경),
+    /// 소비처는 표시 종착점 <see cref="ApplyOverlayStates"/> **한 곳**뿐이다(분기가 흩어지면
+    /// 증상 재발 — A317 최대 함정 ③). 반투명 값 = A316 단일 출처
+    /// <see cref="S4TranslucentOpacity"/>(새 값 금지 — 값이 갈리면 A316 증상 재발).
+    /// </summary>
+    private bool S4SidebarsFloat => IsOpenFileBrowsing && ModeSuppressesSidebars;
 
     /// <summary>
     /// **실효 좌/우 사이드바 상태의 단일 계산 함수**(A305). 소비처는 넷 — 표시 종착점
@@ -3644,8 +3679,20 @@ public sealed partial class MainWindow : Window
         InfoOverlay.SetPanelPercent(dockPercent);
         LeftPanelHost.SetPanelPercent(dockPercent);
         RightPanelHost.SetPanelPercent(dockPercent);
-        var left = LeftPanelIsOpen ? dockPercent / 10 : 0;
-        var right = RightPanelIsOpen ? dockPercent / 10 : 0;
+        // A317: S4 사이드바 표시 방식 분기의 **단일 적용 지점** — 모드2·3의 S4(S4SidebarsFloat)는
+        // 사이드바가 컨텐츠를 밀어내지 않는다: 도크 컬럼을 0으로 두어 중앙(ModuleHost)이 전폭을
+        // 유지하고, 패널은 ColumnSpan=3 내부 분할(같은 25% — 전폭 기준이라 도크 컬럼 없이도 같은
+        // 자리)로 컨텐츠 위에 **떠서** 그려지며, 바탕만 반투명으로 낮춘다(SetBackdropOpacity —
+        // 리스트·글자는 불투명하게 남는 A316 중앙과 같은 층 구조. 값 = 단일 출처
+        // S4TranslucentOpacity). 그 외 전부(모드1의 S4·오버라이드 S4·S1~S3)는 1.0 = 종전 불투명
+        // 도크 그대로다. 대입이 무조건이라 S4 종료·모드 복귀 경로에서 반투명이 잔존할 구멍이 없다
+        // (이 메서드가 상태 변경의 단일 종착점 — S4BarScrim과 같은 보장).
+        var s4Float = S4SidebarsFloat;
+        var backdropOpacity = s4Float ? S4TranslucentOpacity : 1.0;
+        ListOverlay.SetBackdropOpacity(backdropOpacity);
+        InfoOverlay.SetBackdropOpacity(backdropOpacity);
+        var left = !s4Float && LeftPanelIsOpen ? dockPercent / 10 : 0;
+        var right = !s4Float && RightPanelIsOpen ? dockPercent / 10 : 0;
         LeftDockColumn.Width = new GridLength(left, GridUnitType.Star);
         RightDockColumn.Width = new GridLength(right, GridUnitType.Star);
         CenterColumn.Width = new GridLength(10 - left - right, GridUnitType.Star);
@@ -3670,8 +3717,11 @@ public sealed partial class MainWindow : Window
         // A90 S4: 중앙 썸네일 영역을 좌/우 패널 폭만큼 비켜 세운다. S4 호스트는 ColumnSpan=3
         // 전폭이라 도크 컬럼과 별개로 같은 %의 스페이서를 스스로 잡아야 패널과 픽셀 정렬된다
         // (SetPanelPercent 산식). A176: S4가 추가하는 패널도 사이드바(도크)라 스페이서와 도크
-        // 컬럼이 같은 25%로 일치한다. A213: 열 수는 A93 규칙 준용(8 − 2×열린 패널 수 = 4/6/8) —
-        // S4는 양쪽을 항상 채우므로 통상 4, 폴더 소실로 한쪽이 못 뜬 경우(IsOpen=false)에만
+        // 컬럼이 같은 25%로 일치한다. A317: 부유 표시(s4Float — 도크 컬럼 0)에서도 이 산식은
+        // 그대로 맞는다 — 패널(ColumnSpan=3 내부 분할)과 이 스페이서가 **둘 다 전폭 기준 같은
+        // %**라, 도크 컬럼이 폭을 차지하든(도크) 안 하든(부유) 패널 경계와 픽셀 단위로 일치한다
+        // (도크 컬럼은 ModuleHost 폭에만 관여). A213: 열 수는 A93 규칙 준용(8 − 2×열린 패널 수 =
+        // 4/6/8) — S4는 양쪽을 항상 채우므로 통상 4, 폴더 소실로 한쪽이 못 뜬 경우(IsOpen=false)에만
         // 6 또는 8로 넓어진다.
         if (_openFileBrowsing)
         {
@@ -4022,6 +4072,8 @@ public sealed partial class MainWindow : Window
     /// 추가는 반투명 축 폐지로 소멸 — 남은 유일한 표시 상태 재사용), 중앙 콘텐츠는 썸네일
     /// 탐색기(S4 전용 인스턴스 — A176 불투명화를 A316이 반투명으로 재개정: 중앙 바탕은
     /// XAML S4CenterBackdrop + 코드 상수 S4TranslucentOpacity 단일 출처)로 덮는다.
+    /// A317: 모드는 유지된다(구 모드2 접기 폐지 — 본문 주석). 모드2·3 진입이면 그 사이드바가
+    /// 도크가 아니라 컨텐츠 위 반투명 부유 표면으로 그려진다(S4SidebarsFloat — 컨텐츠 크기 불변).
     /// 포커스는 썸네일 그리드로.
     /// 좌 리스트는 **현재 콘텐츠 파일의 폴더**로 항해한다(ApplyOverlayStates → ShowListOverlay가
     /// 파일 폴더 기준 — "보던 파일 근처에서 다음 파일을 고른다"가 자연스러워서다. S2·S3*에서만
@@ -4039,14 +4091,15 @@ public sealed partial class MainWindow : Window
         // (UpdateOpenFileButton) — 이 가드는 버튼 외 진입(뷰 내부 신호·향후 키 배정)까지 받는
         // 최종 방어선으로 존치한다.
         if (_currentFilePath is null || _currentModule is null) return;
-        // A305: 모드 2에서 들어왔으면 먼저 모드 1로 접는다. 모드 2의 정의가 "사이드바 없음"인데
-        // S4는 정의상 양쪽 사이드바를 쓰는 화면이라, 그대로 두면 모드만 남는다(A312까지는 죽은
-        // Esc 층 문제였고, A313부터는 S4 중 모드 전이 자체가 없어 나갈 때까지 모드 2가 박제되는
-        // 문제다 — 진입 시 접는 이 정규화는 그래서 그대로 필요하다). 전체화면(모드 3)은
-        // 건드리지 않는다 — 전체화면 위 S4는 A90/A236이 문서화한 기존 동작이다(단 그 Esc 순서는
-        // A313이 개정: S4 복귀가 먼저다 — StepDownViewMode의 S4 게이트 주석 참고).
-        // refresh:false = 아래 ApplyOverlayStates가 곧 그린다(SetContentState와 같은 관용구).
-        if (_viewMode == ShellViewMode.Panelless) SetViewMode(ShellViewMode.Windowed, refresh: false);
+        // A317(2026-09-02 사용자 지시): 모드를 접지 않는다 — A305가 넣고 A313 주석이 "그대로
+        // 필요하다"고 판정했던 모드2 → 모드1 정규화(SetViewMode(Windowed))를 걷었다. 사용자
+        // 관측("모드2에서 '파일 열기'를 하면 모드1로 복귀한 뒤 반투명을 띄운다")의 정체가 바로
+        // 이 접기였다. 이제 모드2·모드3 그대로 진입하고, 그 동안 사이드바는 도크 대신 컨텐츠
+        // 위에 떠 있는 반투명 표면으로 그려진다(S4SidebarsFloat — 분기는 ApplyOverlayStates 한 곳).
+        // 구 A305 우려 "죽은 Esc 층"(모드2가 남으면 Esc 한 타가 화면 변화 없이 소비)은 A313이
+        // S4를 계단 없음으로 만들며 소멸했다: S4 중 Esc는 모드 계단을 건너뛰고 곧장 S4 복귀로
+        // 떨어지므로(StepDownViewMode의 S4 게이트), 유지된 모드2가 죽은 층이 될 자리가 없다.
+        // 전체화면(모드 3) 위 S4는 A90/A236 문서화 그대로다(Esc 순서만 A313 개정 — S4 복귀가 먼저).
         _s4Restore = (_listSide.State, _infoSide.State); // A176: 안정 상태 2종뿐이라 그대로 스냅샷
         if (_listSide.State == OverlayState.Closed) _listSide.State = OverlayState.OpaqueDocked;
         if (_infoSide.State == OverlayState.Closed) _infoSide.State = OverlayState.OpaqueDocked;
@@ -4069,6 +4122,9 @@ public sealed partial class MainWindow : Window
     /// A313: 하단 바 모달 덮개(S4BarScrim)는 두 경로 모두에서 확실히 걷힌다 — refresh=true는
     /// 아래 ApplyOverlayStates가, refresh=false는 호출부가 곧 잇는 같은 종착점이
     /// UpdateS4BarScrim을 지난다(_openFileBrowsing이 이미 false라 Collapsed로 떨어진다).
+    /// A317: 모드는 진입이 접지 않으므로 종료도 만질 것이 없다 — 모드2·3에서 들어왔으면 그 모드
+    /// 그대로 착지하고, 사이드바는 실효 계산(EffectiveSidebarStates)이 도로 억제하며, 부유
+    /// 반투명 바탕도 같은 종착점의 무조건 대입(SetBackdropOpacity 1.0)으로 걷힌다(잔존 구멍 없음).
     /// </summary>
     private void ExitOpenFileBrowsing(bool restore, bool refresh = true)
     {

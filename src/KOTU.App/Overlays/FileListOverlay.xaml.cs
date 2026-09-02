@@ -184,6 +184,14 @@ public sealed partial class FileListOverlay : UserControl
     }
 
     /// <summary>
+    /// A317: 패널 바탕(PanelBackdrop)의 불투명도 지정 — 셸이 표시 종착점(ApplyOverlayStates)에서
+    /// 모드2·3의 S4는 S4TranslucentOpacity(A316 단일 출처), 그 외 전부는 1.0을 넘긴다.
+    /// 바탕만 낮춘다(요소 Opacity — S4CenterBackdrop과 같은 관용구): 리스트·트리·글자는 이 바탕
+    /// **위**에 불투명하게 남아 읽힌다. ContentInfoOverlay에도 같은 메서드가 있다.
+    /// </summary>
+    public void SetBackdropOpacity(double opacity) => PanelBackdrop.Opacity = opacity;
+
+    /// <summary>
     /// 좌 패널 드래그 = 현재 폴더로 이동/복사 (A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로
     /// 전환. ThumbnailExplorer의 중앙 영역 핸들러와 같은 규칙). 폴더 항목 위는 내부 리스트
     /// (ExplorerPane)의 항목 핸들러가 먼저 Handled로 받아 그 폴더가 대상이 된다.

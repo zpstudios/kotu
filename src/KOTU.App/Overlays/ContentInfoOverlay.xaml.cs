@@ -138,6 +138,14 @@ public sealed partial class ContentInfoOverlay : UserControl
     }
 
     /// <summary>
+    /// A317: 패널 바탕(PanelBackdrop)의 불투명도 지정 — 셸이 표시 종착점(ApplyOverlayStates)에서
+    /// 모드2·3의 S4는 S4TranslucentOpacity(A316 단일 출처), 그 외 전부는 1.0을 넘긴다.
+    /// 바탕만 낮춘다(요소 Opacity — S4CenterBackdrop과 같은 관용구): 정보 글자는 이 바탕
+    /// **위**에 불투명하게 남아 읽힌다. FileListOverlay에도 같은 메서드가 있다.
+    /// </summary>
+    public void SetBackdropOpacity(double opacity) => PanelBackdrop.Opacity = opacity;
+
+    /// <summary>
     /// 인포 영역 드랍 = 그 파일 열기 (A93 드랍 규칙). 좌·중(탐색기 영역)의 무동작과 달리
     /// 여기만 실제 동작이 있다. A176: 떠 있는 동안은 항상 히트테스트 가능(홀드 반투명 소멸).
     /// </summary>

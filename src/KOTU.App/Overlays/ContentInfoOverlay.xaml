@@ -13,6 +13,11 @@
          정보 항목은 모듈 뷰(IContentInfoProvider)가 주입하고, 없으면 파일 기본 정보로 대체.
          배경 = 불투명(SolidBackgroundFillColorBase — A176에서 아크릴(A33)·스왑체인 폴백(A129)
          일습을 철거한 자리의 기존 사이드바 배경 관용구).
+         A317(2026-09-02): 그 배경을 별도 바탕(PanelBackdrop)으로 분리 — 모드2·3의 S4에서
+         사이드바가 컨텐츠 위에 떠야 해서, 셸이 SetBackdropOpacity로 바탕만 반투명으로 낮춘다
+         (값 = 셸 단일 출처 S4TranslucentOpacity — 바탕만 비치고 정보 글자는 불투명하게 남는
+         S4CenterBackdrop과 같은 층 구조). OverlayBorder는 히트테스트·드랍 표면과 구분선만 남아
+         Transparent 배경이 됐다(FileListOverlay PanelBorder와 대칭 — 한쪽을 고치면 함께 고칠 것).
          IsHitTestVisible은 코드가 표시와 함께 켠다(ShowFor/ShowPlaceholder) — 구 홀드 반투명의
          클릭 통과가 사라져, 떠 있는 동안은 항상 스크롤·드랍(FileDropped = 그 파일 열기)이 된다. -->
     <Grid>
@@ -20,8 +25,11 @@
             <ColumnDefinition x:Name="RestColumn" Width="70*" />
             <ColumnDefinition x:Name="PanelColumn" Width="30*" />
         </Grid.ColumnDefinitions>
-        <Border x:Name="OverlayBorder" Grid.Column="1"
+        <Border x:Name="PanelBackdrop" Grid.Column="1"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                IsHitTestVisible="False" />
+        <Border x:Name="OverlayBorder" Grid.Column="1"
+                Background="Transparent"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="1,0,0,0"
                 Padding="16" IsHitTestVisible="False"

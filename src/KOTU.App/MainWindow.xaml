@@ -138,9 +138,11 @@
                  아래 backdrop Border가 중앙 컬럼의 유일한 바탕이다(ThumbnailExplorer의 LayoutRoot는
                  A316부터 Transparent — 그쪽 XAML 주석 참고). Opacity는 XAML에 두지 않는다:
                  코드 상수 S4TranslucentOpacity(단일 출처)가 생성자에서 S4BarScrim과 함께 대입한다.
-                 좌/우 사이드바는 반투명 대상이 아니다 — S4의 사이드바는 별도 표면이 아니라
-                 S1~S3 공용 도크(ListOverlay/InfoOverlay) 그대로이고, 도크가 열리면 중앙 미디어가
-                 옆으로 줄어들어 그 뒤에 비칠 콘텐츠 자체가 없다(비치는 건 창 바탕뿐). -->
+                 좌/우 사이드바(S1~S3 공용 도크 ListOverlay/InfoOverlay 재사용)는 A316이 반투명
+                 대상에서 제외했었으나("도크가 열리면 뒤에 비칠 콘텐츠가 없다") A317이 모드별로
+                 갈랐다: 모드1의 S4는 종전대로 불투명 도크(뒤에 실제 도크 — 현행 유지), 모드2·3의
+                 S4는 도크 컬럼을 키우지 않고 컨텐츠 위에 떠서 바탕만 같은 값으로 반투명이다
+                 (S4SidebarsFloat + 각 오버레이 PanelBackdrop — 분기는 ApplyOverlayStates 한 곳). -->
             <Grid x:Name="S4Host" Grid.ColumnSpan="3" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="S4LeftSpacer" Width="0" />

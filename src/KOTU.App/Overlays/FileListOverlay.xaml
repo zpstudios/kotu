@@ -17,6 +17,12 @@
          스플리터 없이 1*/3* 고정. 트리 선택은 코드에서 ExplorerPane.NavigateTo로 이어진다.
          배경 = 불투명(ExplorerHost·셸 하단 바와 같은 SolidBackgroundFillColorBase — A176에서
          아크릴(A33)·스왑체인 폴백(A129) 일습을 철거한 자리의 기존 사이드바 배경 관용구).
+         A317(2026-09-02): 그 배경을 별도 바탕(PanelBackdrop)으로 분리 — 모드2·3의 S4에서
+         사이드바가 컨텐츠 위에 떠야 해서, 셸이 SetBackdropOpacity로 바탕만 반투명으로 낮춘다
+         (값 = 셸 단일 출처 S4TranslucentOpacity — S4CenterBackdrop과 같은 "불투명 테마 브러시 +
+         요소 Opacity" 관용구·같은 층 구조: 바탕만 비치고 리스트·글자는 불투명하게 남는다).
+         PanelBorder는 히트테스트·드랍 표면과 구분선(divider)만 남아 Transparent 배경이 됐다
+         (Transparent = 히트테스트 성립 — ThumbnailExplorer LayoutRoot·DocumentView RootGrid 선례).
          패널 드랍(A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로 전환): 빈 영역·파일 항목·
          트리 영역 = 현재 폴더로 이동/복사(OnPanelDrop), 리스트의 폴더 항목 위 = 그 폴더로
          (ExplorerPane이 항목 컨테이너에 건다). 폴더 트리는 Single·드래그 불가 유지. -->
@@ -25,8 +31,11 @@
             <ColumnDefinition x:Name="PanelColumn" Width="30*" />
             <ColumnDefinition x:Name="RestColumn" Width="70*" />
         </Grid.ColumnDefinitions>
-        <Border x:Name="PanelBorder" Grid.Column="0"
+        <Border x:Name="PanelBackdrop" Grid.Column="0"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                IsHitTestVisible="False" />
+        <Border x:Name="PanelBorder" Grid.Column="0"
+                Background="Transparent"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                 BorderThickness="0,0,1,0"
                 AllowDrop="True" DragOver="OnPanelDragOver" Drop="OnPanelDrop">
