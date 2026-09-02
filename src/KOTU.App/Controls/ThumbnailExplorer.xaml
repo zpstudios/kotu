@@ -16,9 +16,16 @@
          같다(GridView 자체는 AllowDrop 기본 false). SelectionMode=Extended = 다중선택(A94).
          NoticeText = 조작 실패 일시 안내(A92류 — 타이머+Visibility, Storyboard 없음: A90 선례). -->
     <!-- A176: S4('오픈 파일' 탐색) 인스턴스의 반투명 배경 교체(구 UseTranslucentBackground)는
-         반투명 축과 함께 철거 — S1·S4 모두 이 불투명 기본 배경 그대로다. -->
+         반투명 축과 함께 철거됐고, A316부터는 방향이 반대다: 이 컨트롤 자체는 배경을 갖지 않고
+         (Transparent — DocumentView RootGrid와 같은 형태) 바탕은 호스트가 댄다.
+         S1 = ExplorerHost(불투명 SolidBackgroundFillColorBase, MainWindow.xaml) /
+         S4 = S4CenterBackdrop(같은 브러시 + 코드 상수 S4TranslucentOpacity 반투명 — 뒤에 열린
+         미디어가 비치는 게 사양이다). 인스턴스별 분기 없이 XAML 한 벌이 양쪽에 성립한다.
+         Transparent는 null 배경과 달리 히트 테스트에 잡힌다 — 빈 영역 우클릭 메뉴·눌림 구독·드랍
+         ("배경 있는 LayoutRoot가 원본" — 코드 A212 주석의 히트 보장)이 종전대로 유지되고,
+         S4에서 아래 레이어(미디어)로 포인터가 새지 않는 모달 차단(A313)도 그대로다. -->
     <Grid x:Name="LayoutRoot" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
-          Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+          Background="Transparent">
         <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 콘텐츠 영역이 창 전체가 되면서(행 분할 폐지)
              모드1에서는 이 그리드의 하단 44px가 바에 덮인다 — 마지막 타일 줄이 바 뒤에 숨지
              않게 스크롤 끝 여백으로 보정한다(모드 불변 상수 — ExplorerPane과 같은 규칙).

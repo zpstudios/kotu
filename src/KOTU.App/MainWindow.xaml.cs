@@ -304,6 +304,12 @@ public sealed partial class MainWindow : Window
         // 빈 셸(콘텐츠 없음)은 시나리오 B(1↔3)라 초기 얼굴은 ⓑ "Full screen"이 된다.
         UpdateViewModeButton();
 
+        // A316: S4 레이어 반투명의 단일 출처 적용 — 중앙 backdrop과 하단 바 덮개(A313)가
+        // 같은 값을 쓴다(XAML에는 Opacity를 두지 않는다: 값이 두 곳으로 갈리면 "바만 반투명,
+        // 중앙은 불투명"이던 이번 증상이 재발한다). 조정은 상수 S4TranslucentOpacity 한 곳.
+        S4CenterBackdrop.Opacity = S4TranslucentOpacity;
+        S4BarScrim.Opacity = S4TranslucentOpacity;
+
         BuildStartMenu();
         RegisterShortcuts(); // `·숫자 단독 키(A32) + Shift+N 새 창(A84 — 기존 Ctrl+N 전환)
         RestoreWindowBounds(); // 마지막 창 크기·위치 복원 + 닫을 때 저장 (v0.55.0 크기, A55 위치·최대화)
@@ -1929,6 +1935,9 @@ public sealed partial class MainWindow : Window
 
     // A176: 스왑체인 반투명 폴백 판별(A129 — IsSwapChainModule/IsSwapChainContent)은 반투명
     // 표시 축과 함께 철거 — 패널·S4 배경이 전부 불투명이라 아크릴 배경 샘플 문제 자체가 없다.
+    // A316: S4 중앙·바 덮개가 다시 반투명이 됐지만 이 판별은 되살리지 않는다 — 반투명 방식이
+    // 아크릴이 아니라 "불투명 테마 브러시 + 요소 Opacity"(XAML 합성 알파)라 스왑체인 위에서도
+    // 폴백 없이 성립한다(A313 S4BarScrim이 재생 중 미디어 위에서 반투명으로 보인 실기기 관측).
 
     /// <summary>
     /// 현재 뷰가 좌/우 패널 콘텐츠를 직접 내주는 뷰(ISidePanelProvider — A119, 지금은 정보 모듈뿐)면
@@ -2530,6 +2539,21 @@ public sealed partial class MainWindow : Window
         UpdateEdgeButtons();
         RecoverChromeFocusOrphan(); // A209: 바 붕괴 축 포커스 고아 방어 — 표시 반영 직후
     }
+
+    /// <summary>
+    /// A316: S4('오픈 파일' 탐색) 레이어 반투명의 **단일 출처** — 중앙 backdrop(S4CenterBackdrop)과
+    /// 하단 바 모달 덮개(S4BarScrim, A313)가 생성자에서 이 값 하나를 함께 받는다(사양: 값이
+    /// 갈리면 "바만 반투명, 중앙은 불투명" 증상이 재발한다 — XAML에는 Opacity를 두지 않는다).
+    /// 값 0.65의 근거: 사용자 요구 = "뒤에서 미디어가 열려 있다는 걸 인식할 수 있어야 한다" —
+    /// A313의 0.85(DiagStrip 계열)로는 사실상 불투명하게 보였으므로 확실히 낮춘 0.6~0.7 계열의
+    /// 중간값. 뒤 콘텐츠의 윤곽·색이 비치되 S4 썸네일·파일명(불투명 타일·텍스트가 이 backdrop
+    /// **위에** 그려진다)은 읽힌다. ⚠️ 실기기에서 눈으로 보고 조정하는 단일 지점이다 —
+    /// 더 비치게 하려면 낮추고, 안 읽히면 올린다(다른 곳은 손대지 말 것).
+    /// 방식 주의: 반투명은 "불투명 테마 브러시 + 요소 Opacity"뿐이다(라이트/다크 양 테마 자동) —
+    /// 구 A33 아크릴은 스왑체인(영상) 위 배경 샘플 문제로 A129 폴백까지 필요했던 축이라
+    /// 되살리지 않는다(A176 철거 사유 중 지금도 유효한 부분).
+    /// </summary>
+    private const double S4TranslucentOpacity = 0.65;
 
     /// <summary>
     /// A313: S4('오픈 파일' 탐색) 하단 바 모달 덮개(XAML S4BarScrim)의 표시 판정 단일 지점 —
@@ -3996,7 +4020,9 @@ public sealed partial class MainWindow : Window
     /// S4 진입 (A90, keymap "S4 구성 규칙" — A176 개정): 이미 떠 있는 구획은 그대로 두고
     /// (다시 얹지 않음), 없는 구획만 **사이드바(OpaqueDocked)**로 추가하고(구 반투명 고정
     /// 추가는 반투명 축 폐지로 소멸 — 남은 유일한 표시 상태 재사용), 중앙 콘텐츠는 썸네일
-    /// 탐색기(S4 전용 인스턴스 — A176부터 불투명)로 덮는다. 포커스는 썸네일 그리드로.
+    /// 탐색기(S4 전용 인스턴스 — A176 불투명화를 A316이 반투명으로 재개정: 중앙 바탕은
+    /// XAML S4CenterBackdrop + 코드 상수 S4TranslucentOpacity 단일 출처)로 덮는다.
+    /// 포커스는 썸네일 그리드로.
     /// 좌 리스트는 **현재 콘텐츠 파일의 폴더**로 항해한다(ApplyOverlayStates → ShowListOverlay가
     /// 파일 폴더 기준 — "보던 파일 근처에서 다음 파일을 고른다"가 자연스러워서다. S2·S3*에서만
     /// 진입하므로 파일은 항상 있고, 폴더가 사라진 경우만 모듈 시작 폴더로 폴백).
@@ -4075,7 +4101,10 @@ public sealed partial class MainWindow : Window
             ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
         };
         // A176: 구 "중앙을 반투명으로 덮는다"(A90 원문)의 반투명 배경 교체(A129 폴백 포함)는
-        // 반투명 축과 함께 철거 — S4도 S1과 같은 불투명 기본 배경으로 덮는다.
+        // 반투명 축과 함께 철거됐었다. A316: S4 중앙은 다시 반투명이다 — 단 인스턴스별 배경
+        // 교체 API(구 UseTranslucentBackground)를 되살리지 않고, 셸 XAML의 S4CenterBackdrop
+        // (테마 브러시 + S4TranslucentOpacity)이 바탕을 대고 ThumbnailExplorer 자체 배경은
+        // 양 인스턴스 공통 Transparent다(S1 불투명은 ExplorerHost 배경이 담당 — 그쪽 XAML 주석).
         _s4Explorer.FolderActivated += folder => ListOverlay.NavigateList(folder);
         _s4Explorer.FileActivated += OpenFileRouted; // 열리면 SetContentState가 S4를 자동 종료한다
         // 새 창 열기(Shift+더블클릭·우클릭)는 이 창의 콘텐츠가 안 바뀌므로 S4를 유지한다(구현 결정 —

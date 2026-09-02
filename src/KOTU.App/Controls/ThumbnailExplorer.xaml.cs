@@ -259,7 +259,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     // A176: 구 UseTranslucentBackground(S4 중앙 반투명 — A33 아크릴/A129 스왑체인 폴백)는
-    // 반투명 축과 함께 철거 — S4 인스턴스도 S1과 같은 불투명 기본 배경(XAML LayoutRoot)을 쓴다.
+    // 반투명 축과 함께 철거됐다. A316: S4 중앙 반투명이 돌아왔지만 이 API는 되살리지 않는다 —
+    // 배경은 이제 호스트 몫이다(LayoutRoot = Transparent 공통 1벌, S1은 ExplorerHost 불투명 /
+    // S4는 셸 S4CenterBackdrop 반투명 — XAML LayoutRoot 주석 참고). 인스턴스 상태 분기 0.
 
     /// <summary>썸네일 그리드로 포커스 이동 (A90: S4 진입 시) — 실패해도 무해(포커스만 안 옮겨진다).</summary>
     public void FocusGrid() => TileGrid.Focus(FocusState.Programmatic);
