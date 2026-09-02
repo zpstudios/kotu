@@ -53,6 +53,10 @@ public sealed partial class MainWindow : Window
     //   그 위에 F11/F12(좌/우 사이드바 개별 토글)를 한 번이라도 쓰면 **사이드바 오버라이드**가
     //   서고, 그 뒤로는 모드1/2 구분이 사라져 커스텀 일반 ↔ 커스텀 전체화면 2단이 된다.
     //   상세 = 아래 ShellViewMode/_viewMode/_sidebarOverride 절과 EffectiveSidebarStates.
+    // A314(2026-09-02): 사이드바 기본 = **좌·우 모두 열림**(A273 재개정 — 단일 출처
+    //   ResetSidebarsToDefault). 오버라이드는 **모듈 전환에서 해제**되고(A305 "취소 불가" 개정 —
+    //   같은 모듈 안 콘텐츠 교체·S4·모드 전이는 유지), 모드2·3은 모듈 전환을 넘어 유지된다
+    //   (무콘텐츠 착지면 모드2만 모드1로 강등 — SetContentState 주석).
     // A119(v0.145.0): 패널 컨텍스트에 "패널 제공 뷰"(ISidePanelProvider — 정보 모듈)가 추가됐다.
     //   그 뷰에서는 좌/우 패널 자리에 파일 리스트/정보 대신 모듈 고유 콘텐츠(SidePanelHost 호스트)가
     //   뜨고, 키·힌트·경계 버튼은 전부 같은 경로다. A196(게이트 완화)부터는 설정·미지원 안내·
@@ -207,8 +211,11 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// A305 **사이드바 오버라이드** — 사용자가 F11/F12(또는 같은 전이인 경계 핀 버튼)로 사이드바를
-    /// 직접 만진 적이 있는가. 한 번 서면 **이 창이 닫힐 때까지 내려가지 않는다**(취소 수단 없음 —
-    /// 사용자 사양). 서는 곳은 <see cref="MarkSidebarOverride"/> 하나, 내리는 곳은 없다.
+    /// 직접 만진 적이 있는가. 서는 곳은 <see cref="MarkSidebarOverride"/> 하나, 내리는 곳은
+    /// **모듈 전환**(A314 — <see cref="SetContentState"/>의 모듈 변경 분기) 하나다: A305의
+    /// "인스턴스 종료까지 취소 불가"를 A314(2026-09-02)가 개정해, 같은 모듈 안에서는 콘텐츠(파일)가
+    /// 바뀌어도 유지되지만 **다른 모듈로 넘어가면 해제**되고 요청 상태도 기본(좌·우 열림)으로
+    /// 복귀한다. S4 진입/복귀·모드 전이는 모듈 전환이 아니므로 유지.
     /// 효과 두 가지: ① 모드1/2 구분 소멸(모드2는 도달 불가, Enter는 커스텀 일반 ↔ 커스텀 전체
     /// 양방향 토글) ② 사이드바가 모드 억제를 받지 않는다(전체화면에서도 요청 상태 그대로).
     /// ⓓ 저장하지 않는다 — 설정 키 없음. 창별 독립이라 <b>static이 아니다</b>(다중 창 무간섭).
@@ -1293,7 +1300,7 @@ public sealed partial class MainWindow : Window
 
     // A103: 모듈만 연 상태의 제목은 모듈명 없이 "KOTU"뿐 — 모듈 구분은 아이콘 링 색(A102)이 한다.
     // A109(v0.136.0): 모듈 실행·전환은 사이드바 기본 상태로 시작한다(defaultSidebars —
-    // A273(v0.271.0)부터 좌 열림·우 닫힘) —
+    // A314(2026-09-02)부터 좌·우 모두 열림. A273의 좌 열림·우 닫힘 재개정) —
     // 파일을 여는 경로(OpenFile·OpenVerb → ShowModule 직접 호출)는 기본값 false라 종전 그대로다
     // (파일 인자 직접 열기 = 무사이드바, A81 유지).
     private void OpenModule(IModule module)
@@ -1332,8 +1339,12 @@ public sealed partial class MainWindow : Window
         UpdateModeIndicator(null, isSettings: true);
         // A205: 설정은 좌/우 사이드바 전면 배제 화면이다 — 아래 SetContentState가 부르는
         // ApplyOverlayStates에서 게이트(IsPanelFallbackView 제외)가 꺼져, 진입 직전에 떠 있던
-        // 사이드바가 함께 내려간다. _listSide/_infoSide 상태 자체는 건드리지 않으므로
-        // 설정을 나가면(모듈 복귀) 직전 구성이 그대로 복원된다.
+        // 사이드바가 함께 내려간다.
+        // A314: 설정 진입은 모듈 식별자가 null로 바뀌는 "모듈 전환"이다(SetContentState 분기의
+        // 구현 결정) — 사이드바 오버라이드가 내려가고 요청 상태도 기본(좌·우 열림)으로 돌아간다.
+        // A205의 "설정을 나가면 직전 구성 복원"은 이로써 소멸: 설정을 나가는 길(모듈 선택)도
+        // 어차피 모듈 전환이라 같은 기본으로 착지한다. 모드는 콘텐츠가 없어 모드2만 강등,
+        // 모드3(전체화면)은 설정에서도 유지된다.
         SetContentState(null, null);
     }
 
@@ -1475,7 +1486,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 모듈 뷰 교체의 단일 종착점. defaultSidebars(A109, v0.136.0) = **모듈 실행·전환 경로**로 들어온
     /// 호출인지 — true면 뷰 교체를 마친 뒤 사이드바(불투명 도크) 기본 상태를 다시 적용한다
-    /// (A273(v0.271.0)부터 그 기본 = 좌 열림·우 닫힘)
+    /// (A314(2026-09-02)부터 그 기본 = 좌·우 모두 열림 — A273의 좌 열림·우 닫힘 재개정)
     /// (A81이 창 생성 1회에만 주던 상태를 모듈 전환마다 준다 = A81의 "이후 사용자 상태 유지" 대체).
     /// 파일을 여는 경로(OpenFile·OpenVerb)는 false로 두어 A81의 "파일 인자 직접 열기 = 무사이드바"가
     /// 그대로 성립한다. 미저장 가드(A37)에서 취소되면 여기서 조기 반환하므로 사이드바도 손대지 않는다.
@@ -1597,14 +1608,17 @@ public sealed partial class MainWindow : Window
             });
         SetContentState(module, context.FilePath);
         // A109(v0.136.0): 모듈 전환의 기본 화면 = 사이드바.
-        // A273(v0.271.0 — A109·A81·A202 개정): 기본은 **좌 열림·우 닫힘**이다(종전 양측 열림).
+        // A314(2026-09-02 — A273 재개정): 기본은 **좌·우 모두 열림**이다(값의 단일 출처 =
+        // ResetSidebarsToDefault). 모듈이 실제로 바뀐 전환은 SetContentState의 모듈 전환 분기가
+        // 이미 오버라이드 해제와 함께 기본으로 되돌려 그렸으므로 이 줄은 무변경 가드로 조용히
+        // 지나가고, **같은 모듈로의 콘텐츠 닫기**(Esc — A202의 TryCloseContent(defaultSidebars:
+        // true))에서만 실동작한다(그 경로는 모듈 전환이 아니라 오버라이드는 유지된다 — A314 사양).
         // 전환 시점의 기본값만 바뀌었을 뿐 A176의 "상태는 콘텐츠를 넘어 유지" 규칙은 그대로다.
-        // Esc 콘텐츠 닫기(A202)도 TryCloseContent(defaultSidebars: true)로 이 줄을 지나므로
-        // 함께 좌 열림·우 닫힘으로 착지한다.
         // 반드시 SetContentState **뒤**다 — 그 안에서 S4('오픈 파일')가 먼저 자동 종료되고(A90),
         // 종료가 스냅샷(_s4Restore)을 버린 뒤에 사이드바 기본이 얹혀야 순서가 옳다.
-        // (A151 모드 리셋도 SetContentState 안이라 이 사이드바 기본은 항상 모드1 위에 얹힌다.)
-        if (defaultSidebars) SetDockedState(listDocked: true, infoDocked: false);
+        // (A314: 모드는 여기서 리셋되지 않는다 — 유지된 모드2·3에서는 실효 계산(EffectiveSidebarStates)
+        // 이 이 기본을 억제한 채 요청 상태로만 남긴다.)
+        if (defaultSidebars) ApplyDefaultSidebars();
     }
 
     // ---------- 미저장 가드 (A37) ----------
@@ -1655,22 +1669,43 @@ public sealed partial class MainWindow : Window
     /// <summary>현재 모듈·파일 상태를 바꾸고 탐색기/오버레이 표시를 갱신한다.</summary>
     private void SetContentState(IModule? module, string? filePath)
     {
-        // A151 ⑤: 모드 리셋 — 모듈 전환·파일 열기(설정 진입·미지원 안내 포함, 전부 이 경로)는
-        // 창 모드로 돌아간다. 새 창은 인스턴스 필드 초기값이 이미 창 모드다.
-        // 뷰 내부 탐색(◀/▶ 다음 파일 등 — OnContentOpened)은 같은 콘텐츠 세션의 연속으로 보고
-        // 리셋하지 않는다(전체화면 슬라이드쇼가 화살표마다 풀리면 안 된다 — 구현 결정).
-        // A186: 자동 숨김도 리셋 — 타이머 정지·바 복원(모듈 전환과의 경합 방지. 새 뷰의 재생이
-        // 시작되면 PlaybackStateChanged가 다시 카운트를 연다).
-        // A305: 모드 리셋은 모드2(Panelless)까지 함께 걷는다 — 콘텐츠가 바뀌면 계단은 항상 1층부터다.
+        // A314(2026-09-02 — A151 ⑤·A305 "계단은 항상 1층부터" 개정): 콘텐츠 전환은 더 이상 모드를
+        // 일괄 리셋하지 않는다 — **모드2·모드3은 모듈을 넘어도 유지**된다(사용자 지시 ③).
+        // 단 전환 결과 볼 콘텐츠가 없으면 모드2(Panelless)만 모드1로 강등한다: 모드2의 정의가
+        // "사이드바를 접고 콘텐츠를 본다"라 무콘텐츠에선 성립하지 않고, A312 시나리오 B(무콘텐츠 =
+        // 모드1↔모드3 2단 계단·모드2 도달 불가)와도 이 강등이 정합한다. 모드3(전체화면)은 콘텐츠
+        // 유무와 무관하게 유지된다(시나리오 B에도 모드3은 있다).
+        // 판정 입력은 filePath 하나다 — _untitledContent는 아래에서 항상 걷히고, 무제 개시는 이
+        // 메서드 뒤 별도 이벤트(OnUntitledOpened)로 온다.
+        // 뷰 내부 탐색(◀/▶ 다음 파일 등 — OnContentOpened)이 모드를 유지하는 것은 A311 그대로다.
+        // A186: 자동 숨김은 종전대로 리셋 — 타이머 정지·바 복원(모듈 전환과의 경합 방지. 재무장은
+        // 말미 ArmBarAutoHide — 전체화면 유지 전환에서 바가 영구히 떠 있지 않게. A311의
+        // OnContentOpened 재무장과 같은 이유·같은 무해성(비무장 상태면 무동작)이다).
         // refresh:false = 바로 아래 ExitOpenFileBrowsing과 같은 관용구(이 메서드 말미의
         // ApplyOverlayStates가 곧 다시 그린다 — 콘텐츠 필드가 갱신되기 전에 미리 그리는 낭비 방지).
-        // 오버라이드(_sidebarOverride)는 여기서 내리지 않는다 — 인스턴스 수명 축이다(사양: 취소 불가).
         ResetBarAutoHide();
-        if (_viewMode != ShellViewMode.Windowed) SetViewMode(ShellViewMode.Windowed, refresh: false);
+        if (_viewMode == ShellViewMode.Panelless && filePath is null)
+            SetViewMode(ShellViewMode.Windowed, refresh: false);
+        // A314: **모듈 전환 = 사이드바 오버라이드(A305)의 유일한 해제 지점** — 표지를 내리고 요청
+        // 상태를 기본값(좌·우 열림)으로 되돌린다. 판정식 = "모듈이 있던 창에서 다른 식별자로 넘어감"
+        // (설정·미지원 안내로의 이탈 = 식별자 null도 전환으로 취급 — 구현 결정. 반대로 **이전 모듈이
+        // null인 첫 착지는 전환이 아니다**: 새 창의 파일 인자 열기(null → 모듈)가 여기 걸리면 A81
+        // "파일 인자 직접 열기 = 무사이드바"가 깨진다 — 모듈 실행 경로의 기본값은 ShowModule의
+        // defaultSidebars가 종전대로 준다). 같은 모듈 안 콘텐츠 교체(A59 자식 교체·S4 열기로 같은
+        // 모듈에 착지)는 식별자가 같아 여기 안 걸리고, S4 진입/복귀·모드 전이는 이 메서드 자체를
+        // 지나지 않는다 — 전부 오버라이드 유지(사양).
+        // 표시 갱신은 말미 ApplyOverlayStates 한 번뿐이다(요청 상태 필드만 만지고 새 스냅샷·새
+        // 상태 변수는 없다 — A305 축 이분 무훼손).
+        if (_currentModule is not null && module?.Id != _currentModule.Id)
+        {
+            _sidebarOverride = false;
+            ResetSidebarsToDefault();
+        }
         // A90: 콘텐츠·모듈이 바뀌면 S4('오픈 파일' 탐색)는 자동 종료 — 파일 열기(더블클릭·Enter·인포
         // 드랍)는 물론 숫자 키 모듈 전환·설정 진입도 같은 경로로 닫힌다. 새 콘텐츠가 화면을 차지하므로
         // 복귀 스냅샷은 버리고(restore:false), 좌/우는 지금 상태 그대로 A86 "상태는 콘텐츠를 넘어 유지"
-        // 규칙을 탄다(자연 상태). 표시 갱신은 아래 ApplyOverlayStates가 하므로 여기서는 생략(refresh:false).
+        // 규칙을 탄다(자연 상태 — 모듈 전환이면 위 A314 분기가 방금 되돌린 기본값이 곧 "지금 상태"다).
+        // 표시 갱신은 아래 ApplyOverlayStates가 하므로 여기서는 생략(refresh:false).
         ExitOpenFileBrowsing(restore: false, refresh: false);
         HideS1Flash(); // A90-b 강조가 콘텐츠 전환 뒤까지 남지 않게
         _currentModule = module;
@@ -1683,9 +1718,12 @@ public sealed partial class MainWindow : Window
         UpdateEmptyExplorer();
         UpdateDriveStrip(); // A22: 파일 유무가 바뀌면 드라이브 줄도 함께 켜고 끈다
         UpdateOpenFileButton(); // A236: 파일 컨텍스트 없는 화면에서 '오픈 파일' 버튼을 숨긴다
-        // 사이드바 상태는 유지한 채 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 —
-        // 기존 "상태는 콘텐츠를 넘어 유지" 규칙(A176: 홀드 판정 리셋은 상태 머신과 함께 소멸).
+        // 사이드바 상태는 새 콘텐츠(파일·모듈) 기준으로 다시 그린다 — 같은 모듈 안에서는 "상태는
+        // 콘텐츠를 넘어 유지" 규칙(A86·A176) 그대로고, 모듈 전환이면 위 A314 분기가 되돌린 기본값이다.
         ApplyOverlayStates();
+        // A314: 모드 유지 전환(위 주석)에서 전체화면이 남았으면 자동 숨김을 재무장한다 —
+        // OnContentOpened의 A311 재무장과 동일 관용구(무장 불가 상태면 무동작이라 종전 경로 무해).
+        ArmBarAutoHide();
         // A54: 모듈 전환·설정 전환·A59 안에서의 파일 교체까지 이 한 지점으로 모인다.
         // A137: 파일 열기/닫기가 창 아이콘(32px 확장자/용량)도 바꾸므로 트레이만이 아니라
         // 셸 아이콘 전체를 갱신한다 — 창 쪽은 _windowIconKey 선비교로 무변경이면 무동작.
@@ -1764,9 +1802,12 @@ public sealed partial class MainWindow : Window
         // A90: 뷰 내부 열기도 "새 콘텐츠가 화면을 차지"이므로 S4 자동 종료(SetContentState와 동일 규칙).
         ExitOpenFileBrowsing(restore: false, refresh: false);
         ResetBarAutoHide(); // A186: 콘텐츠 교체 = 타이머 정지·바 복원(재생 표면은 PlaybackStateChanged가 다시 연다)
-        // A311: 이 경로는 SetContentState와 달리 모드를 리셋하지 않는다(전체화면 슬라이드쇼 유지 —
-        // 위 주석). 전체화면 유지 항해(◀/▶ 등)에서 재생 신호가 없는 표면은 다시 열어 줄 이벤트가
-        // 없으므로 여기서 즉시 재무장한다 — 창 모드·비무장 상태면 무동작이라 종전 경로에 무해하다.
+        // A311: 이 경로는 모드를 리셋하지 않는다(전체화면 슬라이드쇼 유지 — A314부터는
+        // SetContentState도 콘텐츠가 있으면 모드를 유지하므로 두 경로가 같은 방향이다. 차이는
+        // 무콘텐츠 강등·오버라이드 해제 분기가 이 경로엔 아예 없다는 것뿐 — 여기는 항상 콘텐츠가
+        // 생기는 통지고 모듈도 안 바뀐다). 전체화면 유지 항해(◀/▶ 등)에서 재생 신호가 없는 표면은
+        // 다시 열어 줄 이벤트가 없으므로 여기서 즉시 재무장한다 — 창 모드·비무장 상태면 무동작이라
+        // 종전 경로에 무해하다.
         ArmBarAutoHide();
         var wasUntitled = _untitledContent; // A189: 무제 → 첫 저장(Save as)의 경로 확정 전이인지
         _untitledContent = false;
@@ -3061,7 +3102,7 @@ public sealed partial class MainWindow : Window
     /// ② S4 = 진입 전 상태로 복귀
     /// ③ **콘텐츠 열림(무제 포함) = 닫기(A202)** — '뒤로' ④(A244 층 삽입 전 ③)와 같은 실행부(TryCloseContent)를
     /// 쓰되 defaultSidebars=true: 닫은 뒤 A109 기본 사이드바가 얹혀, 파일 인자 시작(A81
-    /// 무사이드바)에서 Esc 하나로 아이콘 실행 기본 화면(A273 — 좌 사이드바 + 센터 썸네일)이 된다
+    /// 무사이드바)에서 Esc 하나로 아이콘 실행 기본 화면(A314 — 좌·우 사이드바 + 센터 썸네일)이 된다
     /// (사용자 문면). 검사 순서는 A112 '뒤로' 선례 그대로 — 전체화면 → S4 → 콘텐츠 한 층씩
     /// (A244의 폴더 히스토리 pop 층은 '뒤로' 입력 전용 — Esc에는 없다).
     /// A313: S4 중에는 ① 층이 게이트로 비어(StepDownViewMode가 false — S4는 계단 없음) Esc가
@@ -3192,9 +3233,11 @@ public sealed partial class MainWindow : Window
     /// 재생 정지·파일 핸들 해제(뷰 Unloaded)·제목 복귀·트레이·하단 바·드라이브 줄 교체가 전부
     /// 그 경로 몫 — 상세는 TryNavigateBack ④ 주석). 반환값 = 닫을 콘텐츠가 있었는가.
     /// defaultSidebars: '뒤로'(A112) = false(좌/우 열림·닫힘 상태 보존 — 명시 요구) /
-    /// Esc(A202) = true(A109 기본 사이드바 재적용 — A273(v0.271.0)부터 그 기본이 좌 열림·우 닫힘.
+    /// Esc(A202) = true(A109 기본 사이드바 재적용 — A314(2026-09-02)부터 그 기본이 좌·우 모두 열림.
     /// 파일 인자 시작(A81 무사이드바)에서 닫아도
     /// 아이콘 실행 기본 화면과 동일해지는 것이 사용자 문면의 합격선).
+    /// A314: 같은 모듈로의 닫기라 모듈 전환이 아니다 — 사이드바 오버라이드 표지는 여기서
+    /// 유지된다(true는 요청 상태만 기본으로 되돌린다. 해제는 모듈 전환 분기 몫 — SetContentState).
     /// </summary>
     private bool TryCloseContent(bool defaultSidebars)
     {
@@ -3343,27 +3386,42 @@ public sealed partial class MainWindow : Window
     // 리셋)·CancelHoldCore(홀드 세션 종료 — peek 스냅샷 정리 포함)는 A58 상태 머신과 함께 철거.
 
     /// <summary>
-    /// 외부에서 좌/우 사이드바(불투명 도크 — A108 용어) 상태를 지정한다 — 시작 경로별 기본 표시
-    /// 상태(A81: 파일 인자 없이 모듈로 연 창은 사이드바 기본 = A273(v0.271.0)부터 좌 열림·우
-    /// 닫힘, 부록 B 30번)용 공개 API.
-    /// 부르는 곳은 둘: WindowManager의 창 생성 진입(A81)과 **모듈 실행·전환**(A109, v0.136.0 —
-    /// ShowModule의 defaultSidebars). A109가 A81의 "창 생성 뒤에는 사용자가 바꾼 상태를 그대로
-    /// 유지(재적용 없음)"를 **모듈 전환에 한해 대체**한다 — 파일 열기는 여전히 재적용하지 않고,
-    /// 세션 간 저장도 없다(A55 미포함).
-    /// true = OpaqueDocked, false = 닫힘.
-    /// ⚠️ 이미 요청과 같은 상태면 <b>다시 그리지 않는다</b>(A109에서 추가한 가드):
-    /// <see cref="ApplyOverlayStates"/>는 좌 리스트를 매번 Show → 폴더 재스캔까지 시키므로,
-    /// A109의 재적용이 모듈 전환마다 같은 폴더를 두 번 훑는 낭비를 막는다
-    /// (SetContentState가 방금 같은 상태로 그려 놓은 직후에 불리는 자리라 결과는 동일하다).
-    /// A176: 구 "홀드 세션 정리" 조건·CancelHoldCore 호출은 상태 머신과 함께 철거.
+    /// A314: **기본 사이드바 구성(좌·우 모두 열림)의 단일 출처** — 요청 상태 필드만 기본값으로
+    /// 되돌린다(표시 갱신 없음 — 호출부가 잇는다). A273(v0.271.0)의 "좌 열림·우 닫힘"을
+    /// A314(2026-09-02 사용자 지시 ①)가 재개정했다: 앱 실행 기본(모드1)은 좌·우가 둘 다 열려
+    /// 있어야 한다. 종전에는 이 값이 다섯 호출부(WindowManager 4곳 + ShowModule)에 리터럴로
+    /// 흩어져 있었다 — 기본값을 다시 바꿀 일이 생기면 **여기 한 곳만** 고칠 것.
+    /// 부르는 곳: <see cref="ApplyDefaultSidebars"/>(그리기 겸용 공개 경로)와
+    /// <see cref="SetContentState"/>의 모듈 전환 분기(오버라이드 해제와 한 몸 — 말미
+    /// ApplyOverlayStates가 그린다).
     /// </summary>
-    public void SetDockedState(bool listDocked, bool infoDocked)
+    private void ResetSidebarsToDefault()
     {
-        var list = listDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
-        var info = infoDocked ? OverlayState.OpaqueDocked : OverlayState.Closed;
-        if (_listSide.State == list && _infoSide.State == info) return;
-        _listSide.State = list;
-        _infoSide.State = info;
+        _listSide.State = OverlayState.OpaqueDocked; // 좌 열림
+        _infoSide.State = OverlayState.OpaqueDocked; // 우 열림
+    }
+
+    /// <summary>
+    /// 좌/우 사이드바(불투명 도크 — A108 용어)를 기본 구성으로 되돌리고 그린다 — 시작 경로별
+    /// 기본 표시 상태(A81: 파일 인자 없이 모듈로 연 창의 기본, 부록 B 30번)용 공개 API.
+    /// A314(구 SetDockedState 대체): 호출부 전부가 같은 기본값(좌·우 열림)만 넘기고 있어 임의
+    /// 조합 인자를 걷고 기본값 적용 전용으로 좁혔다 — 값은 <see cref="ResetSidebarsToDefault"/>
+    /// 한 곳에만 있다.
+    /// 부르는 곳은 둘: WindowManager의 창 생성 진입(A81)과 **모듈 실행·전환**(A109, v0.136.0 —
+    /// ShowModule의 defaultSidebars. Esc 콘텐츠 닫기(A202)도 TryCloseContent(defaultSidebars:
+    /// true)로 이 경로다). A109가 A81의 "창 생성 뒤에는 사용자가 바꾼 상태를 그대로 유지(재적용
+    /// 없음)"를 **모듈 전환에 한해 대체**한다 — 파일 열기는 여전히 재적용하지 않고, 세션 간
+    /// 저장도 없다(A55 미포함).
+    /// ⚠️ 이미 기본 상태면 <b>다시 그리지 않는다</b>(A109에서 추가한 가드 승계):
+    /// <see cref="ApplyOverlayStates"/>는 좌 리스트를 매번 Show → 폴더 재스캔까지 시키므로,
+    /// 재적용이 모듈 전환마다 같은 폴더를 두 번 훑는 낭비를 막는다(A314부터는 모듈 전환이
+    /// SetContentState 안에서 이미 기본으로 되돌려 그린 직후라 이 가드가 항상 실동작한다).
+    /// </summary>
+    public void ApplyDefaultSidebars()
+    {
+        var (list, info) = (_listSide.State, _infoSide.State);
+        ResetSidebarsToDefault();
+        if (_listSide.State == list && _infoSide.State == info) return; // 무변경 — 재스캔 낭비 방지
         ApplyOverlayStates();
     }
 
@@ -3383,7 +3441,8 @@ public sealed partial class MainWindow : Window
     // 설계 핵심: 좌/우 사이드바를 놓고 여러 주인(A81·A109 기본값 · F11/F12 · 경계 버튼 · S4 ·
     // 모드 전이)이 같은 변수를 고쳐 쓰던 구조를 끝낸다. 이제 축이 둘로 갈린다 —
     //   ⓐ **요청 상태**(_listSide.State/_infoSide.State) = "사용자·기본값이 원하는 구성".
-    //      쓰는 곳은 종전 그대로(SetDockedState · ToggleOpaqueDock · S4 진입/복귀).
+    //      쓰는 곳은 기본값 적용(ResetSidebarsToDefault — ApplyDefaultSidebars와 모듈 전환
+    //      리셋(A314)이 공유) · ToggleOpaqueDock · S4 진입/복귀다.
     //   ⓑ **실효 상태**(아래 EffectiveSidebarStates) = "지금 화면에 실제로 있는 구성" =
     //      f(요청 상태, 모드, 오버라이드). **읽기 전용 계산**이라 아무도 못 덮어쓴다.
     // 모드 전이는 요청 상태를 건드리지 않는다 — 그래서 A203·A274의 "전체화면 진입 때 닫고 나올 때
@@ -3392,8 +3451,9 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 모드가 사이드바를 억제하는 중인가 — 오버라이드가 없고, 모드1이 아니며, S4도 아닐 때.
     /// <list type="bullet">
-    /// <item>오버라이드(A305)가 서면 억제는 영구히 사라진다 — 커스텀 전체화면에서도 사용자가
-    ///   F11/F12로 만든 구성이 그대로 남는 것이 사양이다.</item>
+    /// <item>오버라이드(A305)가 서면 억제가 사라진다 — 커스텀 전체화면에서도 사용자가
+    ///   F11/F12로 만든 구성이 그대로 남는 것이 사양이다. A314: "영구히"는 개정됐다 — 모듈
+    ///   전환이 오버라이드를 내리면(SetContentState) 억제도 그 자리에서 되살아난다.</item>
     /// <item>S4('오픈 파일' 탐색)는 예외다: 진입이 양쪽을 강제로 여는 화면이라 억제를 걸면
     ///   탐색 자체가 불가능해진다(전체화면 위 S4는 A90/A236 주석이 명시한 기존 동작 —
     ///   A313부터 그때 자동 숨김 축으로 바가 떠도 모달 덮개(S4BarScrim)가 버튼 눌림은 막는다).
@@ -3422,7 +3482,9 @@ public sealed partial class MainWindow : Window
     /// ① 억제 중이었다면 **실효 상태를 요청 상태로 승계**한다 — 화면에 없던 사이드바가 요청
     ///    상태로는 열려 있을 수 있는데, 그대로 토글하면 "F11을 눌렀는데 아무것도 안 나타나는"
     ///    첫 입력이 된다(모드2·모드3에서 반드시 재현되는 함정). 보이던 것을 기준으로 삼는다.
-    /// ② 표지를 세운다 — 내리는 경로는 없다(인스턴스 종료까지, 사용자 사양).
+    /// ② 표지를 세운다 — 내리는 경로는 **모듈 전환 하나**다(A314가 A305의 "인스턴스 종료까지
+    ///    취소 불가"를 개정 — SetContentState의 모듈 전환 분기. 같은 모듈 안 콘텐츠 교체·S4·
+    ///    모드 전이에서는 그대로 유지된다).
     /// ③ 모드2에 있었다면 모드1로 접는다 — 오버라이드 뒤에는 모드1/2 구분이 없어(사양) 그 값이
     ///    남으면 Enter 토글의 출발점이 모호해진다. 프레젠터가 둘 다 Default라 창은 미동도 없다.
     /// 표시 갱신은 호출부(ToggleOpaqueDock)가 토글 뒤에 ApplyOverlayStates로 한 번만 한다 —
@@ -3602,7 +3664,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// A200: 선택 축 변경 시 우측 정보 패널만 다시 판정한다 — 전체 ApplyOverlayStates를 부르지
-    /// 않는 이유는 그 경로가 좌 리스트를 매번 Show → 폴더 재스캔까지 시키기 때문(SetDockedState의
+    /// 않는 이유는 그 경로가 좌 리스트를 매번 Show → 폴더 재스캔까지 시키기 때문(ApplyDefaultSidebars의
     /// A109 가드와 같은 근거). 패널이 닫혀 있으면 무동작 — 다음 열림 때 ApplyOverlayStates 경로가
     /// 선택 축을 판정한다(구현 결정). infoShow 산식은 ApplyOverlayStates와 동일해야 한다
     /// (A205: 두 산식의 폴백 입력이 IsPanelFallbackView 하나라 설정 제외가 자동으로 함께 간다).
