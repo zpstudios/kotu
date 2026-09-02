@@ -151,7 +151,10 @@ internal static class MediaIcons
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var slash = new Path
+        // 타입 이름을 완전 수식한다: ImplicitUsings가 System.IO를 넣어 주므로 짧은 이름 Path는
+        // Microsoft.UI.Xaml.Shapes.Path와 System.IO.Path 사이에서 모호해진다(v0.310.0 CI 실패 실사례 —
+        // 이 파일은 using System.IO를 적지 않았는데도 암시적 using이 같은 결과를 만든다).
+        var slash = new Microsoft.UI.Xaml.Shapes.Path
         {
             Data = BuildSlashGeometry(),
             Stretch = Stretch.None, // 도형 좌표 그대로 — 칸에 맞춰 늘리면 두께가 흐트러진다
