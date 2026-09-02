@@ -291,10 +291,11 @@ public sealed partial class MainWindow : Window
         LeftPanelHost.Initialize(panelOnRight: false);
         RightPanelHost.Initialize(panelOnRight: true);
 
-        // A305 배치 2: 셸 모드 버튼 ⓐ(사이드바 접기)의 아이콘은 코드 조립이다 — XAML에 넣을 수
-        // 없어(호출마다 새 인스턴스가 규칙 — v0.174.1 실사고) 여기서 한 번 물린다.
-        // 오디오 모듈이 EqButton/VisualizerButton에 쓰는 것과 같은 관용구.
-        PanellessButton.Content = MediaIcons.BuildSidePanelsHiddenIcon();
+        // A312: 셸 모드 버튼(1개 3상태)의 초기 얼굴을 코드가 그린다 — 아이콘·툴팁·동작이 전부
+        // 코드 단일 원천(UpdateViewModeButton)이라 XAML에는 빈 버튼만 있다(이중 원천 금지 —
+        // A305 배치 2가 여백에서 겪은 함정을 버튼 내용물에서 재발시키지 않기 위함).
+        // 빈 셸(콘텐츠 없음)은 시나리오 B(1↔3)라 초기 얼굴은 ⓑ "Full screen"이 된다.
+        UpdateViewModeButton();
 
         BuildStartMenu();
         RegisterShortcuts(); // `·숫자 단독 키(A32) + Shift+N 새 창(A84 — 기존 Ctrl+N 전환)
@@ -436,8 +437,10 @@ public sealed partial class MainWindow : Window
         // A305: 그 대칭이 **저장 없이 성립**한다 — 사이드바는 모드에서 계산되므로(억제 = 모드 축)
         // 외부 진입도 SetViewMode 한 줄이면 패널이 함께 물러나고, 외부 해제도 한 줄이면
         // 요청 상태가 그대로 되살아난다(구 EnterFullScreenRemembering/RestoreFromFullScreen 폐지).
-        // 외부 해제의 착지는 **모드 1**이다(Esc·'뒤로'와 같은 한 단계 되돌리기 — 모드2로 내려앉지
-        // 않는다). 이중 실행 방어 3겹:
+        // 외부 해제의 착지는 **모드 1**이다 — A312에서 Esc는 한 단계(시나리오 A에서 모드3 → 모드2)가
+        // 됐지만, 외부 해제는 계단 입력이 아니라 "프레젠터가 이미 풀렸다"는 사실 동기라 창 모드로
+        // 확정 착지한다(모드2로 내려앉으면 외부 주체가 만든 화면과 셸 상태가 어긋난다 — 구현 결정).
+        // 이중 실행 방어 3겹:
         // ① 내부 전이는 SetViewMode가 _viewMode를 **SetPresenter보다 먼저** 맞추므로, 그 전이가
         //    낳는 Changed에선 아래 두 분기 조건(모드 불일치)이 거짓이다(동기·지연 무관).
         // ② 외부 전이에서 부르는 SetViewMode는 프레젠터가 이미 목표 상태라 SetPresenter를 안
@@ -455,7 +458,7 @@ public sealed partial class MainWindow : Window
             }
             if (!full && _viewMode == ShellViewMode.FullScreen)
             {
-                SetViewMode(ShellViewMode.Windowed); // 외부 해제 — Esc와 같은 착지(모드 1)
+                SetViewMode(ShellViewMode.Windowed); // 외부 해제 — 창 모드 확정 착지(위 주석 — 계단 아님)
                 return;
             }
             ReevaluateBarAutoHide(); // A186: 전체화면 진입/해제 = 자동 숨김 재평가(표시 상태에서 재대기)
@@ -1709,12 +1712,12 @@ public sealed partial class MainWindow : Window
         // 파생 수치 동기: 모듈 바 좌측 여백(XAML 82)은 이 버튼 자리(32 + 간격 6)를 전제한 고정값이라
         // 버튼이 숨으면 38px 구멍이 남는다 — 숨김일 때는 메뉴 버튼 기준(여백 6 + 버튼 32 + 간격 6 = 44)
         // 으로 당긴다.
-        // 우측 82 = 셸 모드 버튼 **2개**(A305 배치 2) 기준 재계수 — 버튼 32 + 버튼 사이 간격 6 +
-        // 버튼 32 + 모듈 바와의 간격 6 + 가장자리 여백 6. 이 축(파일 컨텍스트)과는 무관해 고정이다
-        // (모드 버튼은 어느 화면에서도 숨지 않고 비활성만 된다 — A249). XAML ModuleBarHost.Margin의
+        // 우측 44 = 셸 모드 버튼 **1개**(A312 — A305 배치 2의 2개를 되돌림) 기준 재계수 —
+        // 버튼 32 + 모듈 바와의 간격 6 + 가장자리 여백 6 = 44. 이 축(파일 컨텍스트)과는 무관해
+        // 고정이다(모드 버튼은 어느 화면에서도 숨지 않는다 — A249). XAML ModuleBarHost.Margin의
         // 우측 값과 반드시 같아야 한다: 이 대입이 XAML 값을 통째로 덮어쓰므로, 한쪽만 고치면
-        // 화면에서는 조용히 되돌아간다(A305 배치 1이 배치 2에 넘긴 함정).
-        ModuleBarHost.Margin = new Thickness(hasFileContext ? 82 : 44, 0, 82, 0);
+        // 화면에서는 조용히 되돌아간다(A305 배치 2가 실제로 걸렸던 함정).
+        ModuleBarHost.Margin = new Thickness(hasFileContext ? 82 : 44, 0, 44, 0);
     }
 
     /// <summary>
@@ -2204,10 +2207,12 @@ public sealed partial class MainWindow : Window
     // 회수로 제거됐다 — UI 배율의 변경 깔때기는 설정 콤보(SettingsView.BuildDisplaySection) 하나다.
     // UiScale 적용 축 자체(ApplyUiScale·UiScale.Changed 구독)는 존치.
 
-    // ---------- 셸 표시 모드 (A151 3단 → A186 2단 토글 → **A305에서 3단 계단 + 오버라이드**) ----------
+    // ---------- 셸 표시 모드 (A151 3단 → A186 2단 토글 → A305 3단 계단 + 오버라이드
+    //            → **A312 시나리오별 계단 + Alt+Enter 직행 + Esc 한 단계**) ----------
 
     /// <summary>
-    /// Enter = **Alt+Enter와 동일한 전체화면 토글**(A186 ① — A151의 3단 순환 폐지).
+    /// Enter = **모드 계단의 다음 칸**(A312 — <see cref="AdvanceViewMode"/>. A186 ①의
+    /// "Alt+Enter와 동일" 동치는 A312가 깼다: Alt+Enter는 직행 <see cref="JumpViewMode"/> 몫이다).
     /// A274: 호출 층이 버블(OnRootKeyDown)에서 터널링(OnRootPreviewKeyDown)으로 승격됐다 —
     /// 포커스된 WinUI 버튼의 내장 Enter=클릭(Handled 선점)이 버블 수신을 무산시키던 갈래의
     /// 봉쇄(F11/F12의 A226과 같은 수리). 터널링에선 앞선 소비자가 없어 e.Handled 양보가
@@ -2231,6 +2236,9 @@ public sealed partial class MainWindow : Window
     /// 영상 모듈도 이 경로다 — 영상 전용 Enter=전체화면 액셀러레이터는 A151에서 제거된 그대로다.
     /// A305: 실행부가 전체화면 토글에서 **모드 계단**(<see cref="AdvanceViewMode"/>)으로 바뀌었다 —
     /// 게이트 4종(①~④)은 그대로다.
+    /// A312: 계단이 시나리오별(A 1→2→3→1 / B·C 1↔3)로 갈리게 됐지만 이 게이트들은 여전히
+    /// 무변경이다 — 특히 ③(탐색기 표면 양보 = A274 게이트)은 시나리오 B(무컨텐츠 S1·S4)에서도
+    /// 그대로 산다: 탐색기 표면에 포커스가 있으면 Enter는 "선택 열기"이고 모드 전이가 아니다.
     /// </summary>
     private void OnShellEnter(KeyRoutedEventArgs e)
     {
@@ -2243,20 +2251,21 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Alt+Enter(A151 ② — A186에서 Enter와 한 실행부로 수렴): 모드 계단 진행.
+    /// Alt+Enter(A151 ② — A186에서 Enter와 수렴 → **A312에서 다시 분리**): 모드1 ↔ 모드3 직행
+    /// (<see cref="JumpViewMode"/> — 모드2를 건너뛴다. A305까지의 "Enter와 동일" 동치는 A312가
+    /// 사용자 재지시로 깼다: Enter는 계단, Alt+Enter는 전체화면 직행·복귀다. 모드2에서의
+    /// Alt+Enter는 모드3으로 — 사용자 명시가 없어 오케스트레이터가 꼭대기 직행 규칙으로 확정).
     /// 텍스트 입력·탐색기 표면 양보 없이 동작한다(직행 단축키 — A274로 호출 층이 터널링이 되어
     /// 이 무양보가 내장 처리보다도 앞선다). 오토리피트만 무시(연사로 왕복하지 않게) — 구 버블
     /// 시절의 e.Handled 양보 검사는 터널링엔 앞선 소비자가 없어 삭제(A226와 같은 근거).
     /// 소비하면 이 Alt의 단독 up도 소비 대상이다(OS 메뉴 모드 회피 — A107, 버블 시절 호출부의
     /// MarkAltUseIfConsumed를 이 안으로 이식).
-    /// A305 ⓑ(오케스트레이터 확정): **Alt+Enter = Enter와 동일**한 계단이다 — 현행 동치를 새
-    /// 3단 계단에도 그대로 잇는다(양보 유무만 다르고 실행부는 하나).
     /// </summary>
     private void OnShellAltEnter(KeyRoutedEventArgs e)
     {
         if (e.KeyStatus.WasKeyDown) return;
         e.Handled = true;
-        AdvanceViewMode();
+        JumpViewMode();
         MarkAltUseIfConsumed(e);
     }
 
@@ -2281,79 +2290,73 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// **A305 모드 계단의 단일 실행부** — Enter·Alt+Enter가 여기로 수렴한다(하단 바 버튼은
-    /// 계단이 아니라 목적지 직행이라 아래 <see cref="EnterFullScreenMode"/> 몫이다).
+    /// A312 **시나리오 판정의 단일 원천** — 지금 계단이 2단(모드1 ↔ 모드3, 모드2 도달 불가)인가.
     /// <list type="bullet">
-    /// <item>기본(오버라이드 없음) + 콘텐츠 열림 = **모드1 → 모드2 → 모드3 → 모드1** 순환.
-    ///   모드3 다음이 모드1인 것이 핵심이다 — 창↔전체 토글이 아니다(사용자 사양 ③).</item>
-    /// <item>오버라이드 뒤 = 커스텀 일반 ↔ 커스텀 전체화면 **양방향 토글**(모드2 없음 — 사양).</item>
-    /// <item>ⓔ 콘텐츠가 없으면(썸네일 뷰 S1·설정·정보 모듈·미지원 안내) **A274 현행 동작 유지** =
-    ///   전체화면 토글. 새 계단은 "컨텐츠 오픈 상태에서만"이 오케스트레이터 확정이다.</item>
+    /// <item>시나리오 B(무컨텐츠 또는 S4): <c>!HasOpenContent || IsOpenFileBrowsing</c>.
+    ///   **S4는 <c>HasOpenContent == true</c>인 채 성립**하므로(진입 가드가 파일 콘텐츠 전용 —
+    ///   <see cref="EnterOpenFileBrowsing"/>) IsOpenFileBrowsing 항을 빼면 S4에서 모드2가 열려
+    ///   사용자 사양("S4는 컨텐츠 미오픈 상태와 사실상 동일")이 깨진다 — 이 항목의 최대 함정 ②.
+    ///   접어도 볼 컨텐츠가 없는 화면이라 모드2 자체가 무의미하다.</item>
+    /// <item>시나리오 C(오버라이드): <c>_sidebarOverride</c> — 커스텀 일반 ↔ 커스텀 전체 2상태
+    ///   (컨텐츠 유무 무관 — A305 사양 그대로).</item>
     /// </list>
+    /// 계단 정의는 이 판정 하나에서 나오고, 네 입력(Enter·Alt+Enter·Esc·모드 버튼)과 버튼
+    /// 아이콘·툴팁이 전부 그 계단 위에 표현된다 — 분기를 따로 쓰면 "시나리오 B에서 모드2 아이콘"
+    /// 같은 어긋남이 나므로 새 소비처도 반드시 이 프로퍼티를 볼 것.
     /// </summary>
-    private void AdvanceViewMode()
-    {
-        if (!HasOpenContent || _sidebarOverride)
-        {
-            // 2단 토글(커스텀 2모드 · 콘텐츠 없는 화면의 현행 동작)
-            SetViewMode(_viewMode == ShellViewMode.FullScreen
-                ? ShellViewMode.Windowed
-                : ShellViewMode.FullScreen);
-            return;
-        }
-        SetViewMode(_viewMode switch
+    private bool IsTwoStepModeLadder => !HasOpenContent || IsOpenFileBrowsing || _sidebarOverride;
+
+    /// <summary>
+    /// A312 계단의 **다음 칸**(끝이면 첫 칸으로 순환) — Enter·모드 버튼의 목적지이자, 버튼
+    /// 아이콘·툴팁이 가리키는 곳(<see cref="UpdateViewModeButton"/>)이다. 세 소비처가 같은 값을
+    /// 보므로 "아이콘 따로 동작 따로"가 원천적으로 성립하지 않는다.
+    /// 시나리오 A(3단) = 1→2→3→1 / 시나리오 B·C(2단) = 1↔3.
+    /// 2단 계단의 Panelless 갈래(도달 불가 상태 — 방어)는 전체화면 쪽으로 흡수된다.
+    /// </summary>
+    private ShellViewMode NextViewMode() => IsTwoStepModeLadder
+        ? (_viewMode == ShellViewMode.FullScreen
+            ? ShellViewMode.Windowed
+            : ShellViewMode.FullScreen)
+        : _viewMode switch
         {
             ShellViewMode.Windowed => ShellViewMode.Panelless,   // 모드1 → 모드2
             ShellViewMode.Panelless => ShellViewMode.FullScreen, // 모드2 → 모드3
-            _ => ShellViewMode.Windowed,                          // 모드3 → **모드1**(복귀, 토글 아님)
-        });
-    }
-
-    // ---------- 하단 바 모드 버튼 진입점 (A305) ----------
-    // 하단 바 우측에 버튼 2종이 좌 → 우로 선다(배치 2에서 신설·배선 완료) —
-    //   ⓐ 1 → 2 전환 버튼(PanellessButton) = EnterPanellessMode()
-    //   ⓑ 2 → 3 전환 버튼(FullScreenButton) = EnterFullScreenMode()
-    //   (ⓑ는 커스텀 일반 → 커스텀 전체에도 같은 버튼을 쓴다 — 사용자 사양).
-    // 활성/비활성은 UpdateViewModeButtons 한 곳이 정한다 — 아래 두 메서드의 가드를 뒤집은 식이라
-    // "눌러도 아무 일이 없는 버튼"이 살아 있는 척하지 않는다(A249).
-    // 두 메서드가 internal인 것은 배치 1이 배치 2의 Click 배선을 위해 열어 둔 자국이다 —
-    // 호출부가 늘어도 상태 전이 규칙은 여기 한 곳에 남는다(같은 어셈블리라 private로 좁혀도
-    // 되지만, 훅으로 못 박아 둔 계약이라 그대로 둔다).
+            _ => ShellViewMode.Windowed,                          // 모드3 → **모드1**(순환, 토글 아님)
+        };
 
     /// <summary>
-    /// 모드 1 → 모드 2 직행(A305 — 하단 바 ⓐ 버튼 진입점). 계단이 아니라 목적지 지정이라
-    /// 모드3에서는 무동작이다(내려가는 길은 Esc·Enter 계단 몫). 오버라이드 뒤에는 모드2가
-    /// 도달 불가라 역시 무동작 — 그 상태에서 버튼은 비활성이다(UpdateViewModeButtons).
+    /// **A305 모드 계단의 단일 실행부(A312 개정)** — Enter와 하단 바 모드 버튼이 여기로 수렴한다
+    /// (전이표 3종에서 두 입력의 행이 전 칸 동일한 것이 사양이다 — 버튼은 게이트만 없다).
+    /// Alt+Enter는 계단이 아니라 직행이라 <see cref="JumpViewMode"/> 몫이다(A312에서 분리).
     /// </summary>
-    internal void EnterPanellessMode()
-    {
-        if (_sidebarOverride || !HasOpenContent) return; // 모드1/2 구분이 없는 세계 · 계단 밖 화면
-        if (_viewMode != ShellViewMode.Windowed) return;
-        SetViewMode(ShellViewMode.Panelless);
-    }
+    private void AdvanceViewMode() => SetViewMode(NextViewMode());
 
     /// <summary>
-    /// 전체화면 직행(A305 — 하단 바 ⓑ 버튼 진입점).
-    /// **단방향이 사양이다**: 일반(모드1·모드2·커스텀 일반) → 전체화면만 하고, 전체화면에서
-    /// 다시 누르는 해제는 없다(해제는 Enter 계단과 Esc). 그래서 A186의 토글(구 ToggleFullScreen)이
-    /// 아니라 진입 전용이고, 이미 전체화면이면 조용히 무동작이다 —
-    /// 버튼 쪽은 <see cref="UpdateShellChrome"/>이 그때 IsEnabled=false로 내려 무동작을 눈에 보이게 한다.
+    /// A312 신설: **Alt+Enter = 모드1 ↔ 모드3 직행**(꼭대기 칸으로, 이미 꼭대기면 첫 칸으로).
+    /// 시나리오 A에서 모드2를 건너뛰는 것이 존재 이유고(모드2에서는 모드3으로 — 오케스트레이터
+    /// 확정), 2단 계단(시나리오 B·C)에서는 결과적으로 Enter와 같은 왕복이 된다 — 세 시나리오
+    /// 모두 "전체화면이면 모드1, 아니면 모드3"이라 판정식은 시나리오 무관 단일식이다.
     /// </summary>
-    internal void EnterFullScreenMode()
-    {
-        if (_viewMode == ShellViewMode.FullScreen) return; // 단방향 — 연타·재진입 방어를 겸한다
-        SetViewMode(ShellViewMode.FullScreen);
-    }
+    private void JumpViewMode()
+        => SetViewMode(_viewMode == ShellViewMode.FullScreen
+            ? ShellViewMode.Windowed
+            : ShellViewMode.FullScreen);
 
     /// <summary>
-    /// 모드 계단 한 단 내리기(A305 — Esc·'뒤로' 공용 층): 모드2·모드3(커스텀 전체 포함) 어디서든
-    /// **한 번에 모드 1**로 착지한다(사용자 사양 ④ — 모드3에서 모드2로 내려앉지 않는다).
-    /// 반환값 = 소비 여부(이미 모드1이면 false — 아래 층(S4·콘텐츠 닫기)이 이어받는다).
+    /// 모드 계단 **한 칸 내리기**(Esc·'뒤로' 공용 층 — A312 개정: 구 ExitToWindowedMode의
+    /// "어디서든 한 번에 모드1"을 사용자가 같은 날 재개정해 한 단계씩이 됐다. Alt+Enter 직행이
+    /// 신설되며 "한 번에 내려가기" 수요가 그쪽으로 흡수됐기 때문이다 — 부록 B 81).
+    /// 시나리오 A = 모드3 → 모드2 → 모드1 / 시나리오 B·C(2단) = 모드3(커스텀 전체) → 모드1.
+    /// 반환값 = 소비 여부(이미 모드1이면 false — 아래 층(S4 복귀·콘텐츠 닫기)이 이어받는다).
+    /// 내려온 칸의 사이드바는 여전히 저장이 아니라 계산으로 되살아난다
+    /// (<see cref="EffectiveSidebarStates"/> — A305 구조 무변경, 스냅샷 재도입 없음).
     /// </summary>
-    private bool ExitToWindowedMode()
+    private bool StepDownViewMode()
     {
         if (_viewMode == ShellViewMode.Windowed) return false;
-        SetViewMode(ShellViewMode.Windowed);
+        SetViewMode(_viewMode == ShellViewMode.FullScreen && !IsTwoStepModeLadder
+            ? ShellViewMode.Panelless // 시나리오 A: 모드3 → 모드2(한 단계)
+            : ShellViewMode.Windowed);
         return true;
     }
 
@@ -2404,40 +2407,71 @@ public sealed partial class MainWindow : Window
     private void UpdateShellChrome()
     {
         BottomBar.Visibility = BarVisible ? Visibility.Visible : Visibility.Collapsed;
-        UpdateViewModeButtons(); // A305: 모드가 바뀌면 두 모드 버튼의 활성 여부도 바뀐다
+        UpdateViewModeButton(); // A312: 모드가 바뀌면 모드 버튼의 얼굴(아이콘·툴팁)도 바뀐다
         UpdateEdgeButtons();
         RecoverChromeFocusOrphan(); // A209: 바 붕괴 축 포커스 고아 방어 — 표시 반영 직후
     }
 
     /// <summary>
-    /// 셸 모드 버튼 2종(A305 배치 2)의 활성/비활성 단일 판정 — **숨기지 않고 비활성**이다
-    /// (A249·A265 관용구: 이 버튼들은 셸 전역이라 어느 화면에서도 자리를 지킨다.
-    /// 노출 자체를 접는 것은 화면에서 아예 쓰지 않는 '오픈 파일' 버튼 쪽 층이다 —
-    /// <see cref="UpdateOpenFileButton"/> 주석의 층 구분).
-    /// <list type="bullet">
-    /// <item>ⓐ <c>PanellessButton</c>(모드1 → 모드2) = <see cref="EnterPanellessMode"/>의 가드를
-    ///   그대로 뒤집은 식이다 — 콘텐츠가 있고 · 오버라이드 전이며 · 지금이 모드1일 때만 활성.
-    ///   오버라이드(F11/F12·경계 핀) 뒤에는 모드1/2 구분 자체가 소멸하므로(사양) 영구 비활성이고,
-    ///   모드2·모드3에서는 진입점이 무동작이라 비활성이다(내려가는 길은 Enter 계단·Esc).</item>
-    /// <item>ⓑ <c>FullScreenButton</c>(→ 모드3) = 단방향이라 이미 전체화면이면 할 일이 없다.
-    ///   영상 자동 숨김 축에서는 전체화면에도 바가 떠 버튼이 보이므로(A186), 눌러도 아무 일이
-    ///   없는 버튼을 살아 있는 척 두지 않는다. 해제 경로는 Enter 계단과 Esc다.</item>
-    /// </list>
-    /// 호출 지점은 둘 — ① <see cref="UpdateShellChrome"/>(모드 축: 모드 전이·외부 프레젠터 동기·
-    /// A186 자동 숨김이 전부 여기를 지난다) ② <see cref="ApplyOverlayStates"/> 말미
-    /// (나머지 두 축: 콘텐츠 유무는 SetContentState·OnContentOpened·OnUntitledOpened 셋이 모두
-    /// 그 종착점을 부르고, 오버라이드는 그것을 세우는 유일한 경로 ToggleOpaqueDock이 곧바로
-    /// 부른다). 모드 축만 보는 ①로는 ②의 두 축이 모드 전이 없이 바뀔 때를 놓친다 — 예: 모드1에서
-    /// F11로 오버라이드를 세우면 <see cref="MarkSidebarOverride"/>의 ③(모드2 → 모드1 접기)이
-    /// 발화하지 않아 ①이 돌지 않는다. 두 번 불려도 대입 2개뿐이라 멱등·무해하다.
-    /// 콘텐츠가 아직 없는 빈 셸의 초기값은 XAML(IsEnabled="False")이 담당한다 — 프로퍼티 대입만
-    /// 하는 이 메서드에는 "아직 안 불렸다" 구간이 남는데, ⓐ의 그 구간 값이 곧 비활성이라 맞다.
+    /// 모드 버튼의 세 얼굴(A312) — 지금 상태에서 버튼이 무엇으로 보이고 무엇을 하는가.
+    /// 값의 결정은 <see cref="UpdateViewModeButton"/> 한 곳뿐이고, 필드
+    /// <see cref="_viewModeButtonFace"/>는 무변경 재호출에서 아이콘을 다시 만들지 않기 위한
+    /// 캐시다(얼굴이 실제로 바뀔 때만 새 인스턴스 — v0.174.1 인스턴스 규칙과 양립).
     /// </summary>
-    private void UpdateViewModeButtons()
+    private enum ViewModeButtonFace { ToPanelless, ToFullScreen, ExitFullScreen }
+
+    /// <summary>마지막으로 그린 모드 버튼 얼굴 — null = 아직 안 그림(생성자가 첫 호출로 채운다).</summary>
+    private ViewModeButtonFace? _viewModeButtonFace;
+
+    /// <summary>
+    /// 셸 모드 버튼(A312 — 1개 3상태)의 **아이콘·툴팁 단일 결정 지점**. 동작은 항상
+    /// <see cref="AdvanceViewMode"/> 하나라(Enter 순환과 동일 실행부 — 게이트만 없음) 여기서
+    /// 갈리는 것은 "다음 칸이 어디인가"의 표시뿐이다. 얼굴 규칙(전이표 3종의 아이콘 행):
+    /// <list type="bullet">
+    /// <item>지금이 전체화면(모드3·커스텀 전체) = ⓒ **빠져나가기**(Exit full screen —
+    ///   글리프 선례 0건이라 MediaIcons 코드 조립. E73F는 저장소 사용례가 없어 실재 증빙 불가).</item>
+    /// <item>다음 칸이 모드2 = ⓐ **사이드바 접기**(Hide side panels — 시나리오 A 모드1에서만).</item>
+    /// <item>다음 칸이 모드3(커스텀 전체 포함) = ⓑ **전체화면**(글리프 E740 — 현행 유지).</item>
+    /// </list>
+    /// 아이콘·툴팁이 같은 switch 한 곳에서 함께 대입되므로 "아이콘만 바뀌고 툴팁이 남는" 이중
+    /// 원천 어긋남이 성립하지 않고, 얼굴이 <see cref="NextViewMode"/>의 함수라 시나리오 B에서
+    /// 모드2 아이콘이 뜨는 어긋남도 성립하지 않는다(같은 계단 정의 — 최대 함정 ①·⑤).
+    /// XAML 쪽 버튼 선언에는 아이콘도 툴팁도 없다(빈 버튼 — 코드 전담). 버튼은 **상시 활성**이다:
+    /// 1개가 되며 어느 상태에서도 갈 곳이 생겨 A305의 IsEnabled 판정이 통째로 소멸했다
+    /// (A249·A265 "숨기지 않고 자리를 지킨다"는 그대로 — 노출을 접는 '오픈 파일' 버튼과 층이 다르다).
+    /// 아이콘 인스턴스는 얼굴이 바뀔 때마다 새로 만든다(정적 캐시 금지 — v0.174.1 실사고).
+    /// 호출 지점은 둘 — ① <see cref="UpdateShellChrome"/>(모드 축: 모드 전이·외부 프레젠터 동기·
+    /// A186 자동 숨김이 전부 여기를 지난다) ② <see cref="ApplyOverlayStates"/> 말미(나머지 축:
+    /// 콘텐츠 유무 3경로·오버라이드 확정·S4 진입/종료가 전부 그 종착점을 지난다 — 모드 전이 없이
+    /// 계단 모양만 바뀌는 경우를 ①이 못 본다). 얼굴 무변경 재호출은 캐시 비교로 무동작이라
+    /// 두 번 불려도 멱등·무해하다. + 생성자 1회(빈 셸 초기 얼굴 = ⓑ).
+    /// </summary>
+    private void UpdateViewModeButton()
     {
-        PanellessButton.IsEnabled =
-            HasOpenContent && !_sidebarOverride && _viewMode == ShellViewMode.Windowed;
-        FullScreenButton.IsEnabled = _viewMode != ShellViewMode.FullScreen;
+        var face = _viewMode == ShellViewMode.FullScreen
+            ? ViewModeButtonFace.ExitFullScreen
+            : NextViewMode() == ShellViewMode.Panelless
+                ? ViewModeButtonFace.ToPanelless
+                : ViewModeButtonFace.ToFullScreen;
+        if (face == _viewModeButtonFace) return; // 무변경 — 아이콘 재생성·툴팁 재대입 생략
+        _viewModeButtonFace = face;
+        switch (face)
+        {
+            case ViewModeButtonFace.ToPanelless:
+                ViewModeButton.Content = MediaIcons.BuildSidePanelsHiddenIcon();
+                ToolTipService.SetToolTip(ViewModeButton, "Hide side panels");
+                break;
+            case ViewModeButtonFace.ToFullScreen:
+                // E740(FullScreen) — 구 FullScreenButton의 XAML 인라인 글리프를 코드로 이관
+                // (FontSize 16 = 하단 바 1칸 버튼 규격, StartButton·OpenFileButton과 동일).
+                ViewModeButton.Content = new FontIcon { Glyph = "\uE740", FontSize = 16 };
+                ToolTipService.SetToolTip(ViewModeButton, "Full screen");
+                break;
+            default:
+                ViewModeButton.Content = MediaIcons.BuildExitFullScreenIcon();
+                ToolTipService.SetToolTip(ViewModeButton, "Exit full screen");
+                break;
+        }
     }
 
     /// <summary>
@@ -2785,15 +2819,13 @@ public sealed partial class MainWindow : Window
             + $"  DET={_diagDetachLast}  GUARD={_diagGuardLast}  CTX={(HasPanelContext ? "Y" : "N")}  S4={(IsOpenFileBrowsing ? "Y" : "N")}";
     }
 
-    /// <summary>하단 바 우측 셸 모드 버튼 ⓐ "Hide side panels"(A305 배치 2) — 모드1 → 모드2 직행.
-    /// 진입점의 가드가 곧 버튼의 활성 조건이라(<see cref="UpdateViewModeButtons"/>) 여기서
-    /// 다시 거르지 않는다 — 눌릴 수 없는 상태에서 눌려도 <see cref="EnterPanellessMode"/>가
-    /// 조용히 무동작이다(이중 안전).</summary>
-    private void OnPanellessClick(object sender, RoutedEventArgs e) => EnterPanellessMode();
-
-    /// <summary>하단 바 우측 셸 모드 버튼 ⓑ "Full screen" — A305에서 **전체화면 직행(단방향)**이 됐다
-    /// (A186의 토글 폐지, 사용자 사양: "작업표시줄의 전체화면 버튼은 일반→전체 단방향만").</summary>
-    private void OnFullScreenClick(object sender, RoutedEventArgs e) => EnterFullScreenMode();
+    /// <summary>하단 바 우측 셸 모드 버튼(A312 — 1개 3상태) 클릭 = **Enter 순환과 동일한 실행부**
+    /// (<see cref="AdvanceViewMode"/> — 전이표 3종에서 "모드 버튼" 행과 "Enter" 행이 전 칸
+    /// 동일한 것이 사양이다. 다른 점은 게이트뿐: 버튼 클릭에는 A274 4게이트가 걸리지 않는다 —
+    /// 클릭은 오토리피트·텍스트 입력·탐색기 표면·팝업과 겹칠 원 기능이 없다).
+    /// 버튼의 아이콘·툴팁이 늘 다음 칸을 가리키므로(<see cref="UpdateViewModeButton"/>) 별도
+    /// 가드가 필요 없다 — 어느 상태에서도 갈 곳이 있어 상시 활성이다.</summary>
+    private void OnViewModeButtonClick(object sender, RoutedEventArgs e) => AdvanceViewMode();
 
     // ---------- 영상 하단 바 자동 숨김 (A186 ②) ----------
     // 신호원 = IPlaybackStateSource(영상 뷰·All Readable 중계 — ShowModule 배선), 판단·타이머 =
@@ -2944,9 +2976,12 @@ public sealed partial class MainWindow : Window
     // ---------- Esc (A305 모드 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기) ----------
 
     /// <summary>
-    /// Esc 분배(A151 — "한 단계 되돌리기" 일관. A305에서 모드2가 부활해 ① 층이 넓어졌다):
-    /// ① **모드2·모드3(커스텀 전체 포함) = 모드 1로**(ExitToWindowedMode — 한 번에 1층까지가
-    ///    사용자 사양 ④다. 사이드바는 요청 상태가 계산으로 되살아난다 — 스냅샷 불요)
+    /// Esc 분배(A151 — "한 단계 되돌리기" 일관. A305에서 모드2가 부활해 ① 층이 넓어졌고,
+    /// A312에서 ① 층이 **한 칸씩**이 됐다):
+    /// ① **모드 계단 한 칸 아래로**(StepDownViewMode — 시나리오 A는 모드3 → 모드2 → 모드1,
+    ///    시나리오 B·C(2단 계단)는 모드3(커스텀 전체) → 모드1. A305의 "한 번에 모드1"을
+    ///    사용자가 재개정했다 — Alt+Enter 직행 신설로 불필요해짐, 부록 B 81.
+    ///    사이드바는 요청 상태가 계산으로 되살아난다 — 스냅샷 불요)
     /// ② S4 = 진입 전 상태로 복귀
     /// ③ **콘텐츠 열림(무제 포함) = 닫기(A202)** — '뒤로' ④(A244 층 삽입 전 ③)와 같은 실행부(TryCloseContent)를
     /// 쓰되 defaultSidebars=true: 닫은 뒤 A109 기본 사이드바가 얹혀, 파일 인자 시작(A81
@@ -2962,7 +2997,7 @@ public sealed partial class MainWindow : Window
     private void OnShellEscape(KeyRoutedEventArgs e)
     {
         if (e.KeyStatus.WasKeyDown || e.Handled) return;
-        if (ExitToWindowedMode()) // A305 ①: 모드2·모드3 → 모드 1(전체화면 해제 층의 확장)
+        if (StepDownViewMode()) // A312 ①: 모드 계단 한 칸 아래(시나리오 A는 3→2→1, B·C는 3→1)
         {
             e.Handled = true;
             return;
@@ -3021,8 +3056,11 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// '뒤로' 분배(A112 — XButton1·GoBack 공용): 한 번에 한 층씩 걷어낸다. 반환값 = 소비 여부.
-    /// ① 표시 모드(A151 — **A305에서 모드2 부활**) = Esc와 같은 한 단계 — 모드2·모드3(커스텀
-    ///    전체 포함)이면 모드 1로(ExitToWindowedMode). 모드 검사가 S4보다 앞인 순서는 A90/A112
+    /// ① 표시 모드(A151 — A305에서 모드2 부활, **A312에서 한 칸씩**) = Esc와 같은 한 단계 —
+    ///    모드 계단 한 칸 아래(StepDownViewMode: 시나리오 A는 모드3 → 모드2 → 모드1, 시나리오
+    ///    B·C(2단 계단)는 모드3 → 모드1). '뒤로'와 Esc가 같은 실행부를 쓰는 것은 A305 그대로다
+    ///    (두 입력의 "한 단계 되돌리기" 의미론이 같다 — A312 개정도 함께 받는다).
+    ///    모드 검사가 S4보다 앞인 순서는 A90/A112
     ///    확정 그대로다("첫 층 = 모드 해제, 다음 층 = S4 복귀"). 하단 바 복원은 UpdateShellChrome
     ///    (모드 전이의 단일 크롬 지점)이, 사이드바 복원은 ApplyOverlayStates가 처리한다.
     /// ② S4('오픈 파일' 탐색) = 진입 전 상태로 복귀만 — Esc와 동일(같은 '뒤로' 의미론).
@@ -3047,8 +3085,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private bool TryNavigateBack()
     {
-        // A305: Esc ①층과 같은 실행부 — 모드2·모드3 어디서든 한 번에 모드 1로 내려온다.
-        if (ExitToWindowedMode()) return true;
+        // A312: Esc ①층과 같은 실행부 — 모드 계단 한 칸 아래(시나리오 A는 3→2→1, B·C는 3→1).
+        if (StepDownViewMode()) return true;
         if (IsOpenFileBrowsing)
         {
             ExitOpenFileBrowsing(restore: true);
@@ -3434,11 +3472,13 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateEdgeButtons(); // A86 경계 버튼 — 경계 x·글리프가 상태를 따라온다 (S4에서는 숨김 — A90)
-        // A305 배치 2: 셸 모드 버튼 ⓐ의 나머지 두 입력 축(콘텐츠 유무·오버라이드)이 이 종착점으로
-        // 모인다 — 콘텐츠 전환 3경로(SetContentState·OnContentOpened·OnUntitledOpened)와 오버라이드를
-        // 세우는 유일한 경로(ToggleOpaqueDock)가 모두 여기를 지난다. 모드 축은 UpdateShellChrome이
-        // 따로 본다(그쪽은 모드 전이 없이 이 메서드만 도는 경우를 못 보고, 이쪽은 반대라 둘 다 필요).
-        UpdateViewModeButtons();
+        // A312: 셸 모드 버튼 얼굴의 모드 외 입력 축(콘텐츠 유무·오버라이드·S4 — 셋 다 계단 모양을
+        // 바꾼다, IsTwoStepModeLadder)이 이 종착점으로 모인다 — 콘텐츠 전환 3경로(SetContentState·
+        // OnContentOpened·OnUntitledOpened)와 오버라이드를 세우는 유일한 경로(ToggleOpaqueDock),
+        // S4 진입·종료(EnterOpenFileBrowsing/ExitOpenFileBrowsing)가 모두 여기를 지난다. 모드 축은
+        // UpdateShellChrome이 따로 본다(그쪽은 모드 전이 없이 이 메서드만 도는 경우를 못 보고,
+        // 이쪽은 반대라 둘 다 필요). 얼굴 무변경이면 캐시 비교로 무동작이다.
+        UpdateViewModeButton();
 
         // A135 2차(방어 수리): 표시 반영이 끝난 뒤의 포커스 후처리. 포커스가 방금 화면에서 내려간
         // 좌/우 패널(파일 패널·모듈 패널 호스트 4표면) 안에 남아 있으면 모듈 뷰(중앙 콘텐츠)로

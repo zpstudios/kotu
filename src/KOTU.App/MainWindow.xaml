@@ -177,19 +177,20 @@
             <!-- 좌측 Margin 82 = 바 좌측 가장자리 여백 6 + 메뉴 버튼 32(A106) + 간격 6
                  + '오픈 파일' 버튼 32(A90) + 간격 6. 이력: A97(v0.116.0)에서 52→48,
                  A90이 버튼 하나를 더해 48→90, A106(v0.132.0)에서 버튼 36→32라 90→82.
-                 우측 Margin 82 = 셸 모드 버튼 2개(A305 배치 2) 기준 재계수 —
-                 버튼 32 + 버튼 사이 간격 6(StackPanel Spacing) + 버튼 32 + 모듈 바와의 간격 6
-                 + 가장자리 여백 6(StackPanel Margin) = 82. 좌측과 같은 값이 된 것은 우연이다
-                 (좌측은 버튼 2개 + 간격 3벌, 우측은 버튼 2개 + 간격 2벌 + 가장자리 6 — 합만 같다).
+                 우측 Margin 44 = 셸 모드 버튼 1개(A312 — A305 배치 2의 2개를 되돌림) 기준 재계수 —
+                 버튼 32 + 모듈 바와의 간격 6 + 가장자리 여백 6(버튼 Margin) = 44.
                  이력: A151에서 12→82(버튼 2개), A186에서 Full window 버튼 삭제로 82→44,
-                 A305 배치 2에서 버튼이 다시 2개가 되어 44→82(이월이 아니라 전수 재산정).
+                 A305 배치 2에서 버튼이 다시 2개가 되어 44→82, A312에서 버튼 1개 3상태로
+                 재통합되어 82→44(배치 2 이전 값으로의 복귀 — 이월이 아니라 전수 재산정).
                  A236: 좌측 82는 '오픈 파일' 버튼이 **보일 때**의 값이다 — 버튼이 숨는 화면
                  (설정·하드웨어·미지원 안내)에서는 코드 UpdateOpenFileButton이 82→44로 당겨
                  빈 구멍을 없앤다. 여기 값은 그 두 값 중 "보임" 쪽 기준선으로 남긴다.
-                 우측은 모드 버튼이 어느 화면에서도 숨지 않으므로(비활성만 된다 — A249) 고정이다. -->
+                 우측은 모드 버튼이 어느 화면에서도 숨지 않으므로(A249) 고정이다 — 단 코드
+                 UpdateOpenFileButton의 대입이 이 Margin을 통째로 덮으므로 우측 값도 그쪽과
+                 반드시 함께 고칠 것(한쪽만 고치면 화면에서 조용히 되돌아간다 — A305 배치 2 실사례). -->
             <ContentControl x:Name="ModuleBarHost"
                             IsTabStop="False"
-                            Margin="82,0,82,0"
+                            Margin="82,0,44,0"
                             HorizontalAlignment="Stretch" VerticalAlignment="Center"
                             HorizontalContentAlignment="Stretch" />
 
@@ -263,42 +264,28 @@
                  A141(v0.162.0)에서 제거했다. 번호 표기는 창 제목 접두(A103/A136 "1-KOTU") 한 곳만
                  남는다 — 9색 팔레트(구 InstanceIcon.ColorFor)도 소비처가 사라져 함께 지웠다. -->
 
-            <!-- 셸 모드 버튼 2개 (A305 배치 2 — A186의 1개에서 복귀. A151의 구 2개
-                 Full window/Full screen과 이름만 닮았을 뿐 역할이 다르다: 그때는 "모드 지정
-                 2가지"였고 지금은 **계단의 두 단을 각각 올라가는 진입점**이다).
-                 좌 → 우 순서 = ⓐ 1→2 → ⓑ 2→3. 계단 방향(위로)과 좌→우가 같아 나란히 읽힌다.
-                 ⓐ PanellessButton — 모드1 → 모드2(EnterPanellessMode). 좌/우 사이드바만 접고
-                   제목표시줄·하단 바는 남긴다. 아이콘은 글리프가 아니라 코드 조립
-                   (MediaIcons.BuildSidePanelsHiddenIcon — 코드가 Content에 넣는다. 사이드바·패널
-                   계열 글리프는 저장소 사용례가 0건이라 코드포인트를 증빙할 수 없다).
-                   IsEnabled 초기값 False = 빈 셸(콘텐츠 없음)에서의 값이다 — OpenFileButton의
-                   Visibility 초기값과 같은 관용구. 이후 갱신은 코드 UpdateViewModeButtons.
-                 ⓑ FullScreenButton — 전체화면 직행(단방향). 사용자 사양 "작업표시줄의 전체화면
-                   버튼은 일반→전체 단방향만"(OnFullScreenClick → EnterFullScreenMode).
-                   전체화면 해제는 Enter 계단과 Esc뿐이고, 영상 재생 표면(A186 자동 숨김 축)처럼
-                   전체화면에서도 바가 뜨는 화면에서는 코드가 IsEnabled=False로 내려 무동작을
-                   눈에 보이게 한다(A249·A265 "숨기지 말고 비활성").
-                 규격 = 둘 다 1칸 32×32(BottomBarButtonStyle)·버튼 간격 6·우측 여백 6.
+            <!-- 셸 모드 버튼 1개 3상태 (A312 — A305 배치 2의 2개(PanellessButton +
+                 FullScreenButton)를 되돌림. 사용자 사양 "Hide side panels를 따로 두지 말 것":
+                 버튼은 하나이고 아이콘·툴팁·동작이 상태에 따라 바뀐다).
+                 여기는 **빈 버튼**이다 — 아이콘도 툴팁도 XAML에 두지 않는다. 세 얼굴
+                 (ⓐ 사이드바 접기 = MediaIcons 코드 조립 / ⓑ 전체화면 = 글리프 E740 /
+                 ⓒ 전체화면 해제 = MediaIcons 코드 조립)의 전환은 코드 UpdateViewModeButton
+                 한 곳이 전담한다. XAML 인라인 값과 코드 대입이 이중 원천이 되면 한쪽만 고쳤을 때
+                 화면에서 조용히 되돌아가기 때문이다(A305 배치 2가 여백에서 겪은 함정 유형).
+                 동작도 한 곳: 클릭 = Enter 순환과 같은 실행부(OnViewModeButtonClick →
+                 AdvanceViewMode — 게이트만 없다). 상시 활성이라 IsEnabled 조작도 없다
+                 (어느 상태에서도 갈 곳이 있다 — 코드 UpdateViewModeButton 주석).
+                 규격 = 1칸 32×32(BottomBarButtonStyle)·우측 가장자리 여백 6.
                  툴팁에 키 표기(A34)를 붙이지 않는 이유: A34의 "(키)" 표기는 **문자 핫키를 가진
                  모듈 바 버튼** 전용이고, 셸 모드 키(Enter·Alt+Enter)는 그 표에 없다 —
                  종전 Full screen 버튼도 표기가 없었다(OpenFileButton 주석과 같은 판단).
-                 ※ 버튼이 1개 → 2개가 되어 ModuleBarHost의 우측 Margin을 44 → 82로 재계수했다
+                 ※ 버튼이 2개 → 1개가 되어 ModuleBarHost의 우측 Margin을 82 → 44로 재계수했다
                  (위 ModuleBarHost 선언 주석의 산식 · 코드 UpdateOpenFileButton의 같은 값). -->
-            <StackPanel x:Name="ViewModeButtons" Orientation="Horizontal" Spacing="6"
-                        Margin="0,0,6,0"
-                        HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button x:Name="PanellessButton"
-                        Style="{StaticResource BottomBarButtonStyle}"
-                        IsEnabled="False"
-                        ToolTipService.ToolTip="Hide side panels"
-                        Click="OnPanellessClick" />
-                <Button x:Name="FullScreenButton"
-                        Style="{StaticResource BottomBarButtonStyle}"
-                        ToolTipService.ToolTip="Full screen"
-                        Click="OnFullScreenClick">
-                    <FontIcon Glyph="&#xE740;" FontSize="16" />
-                </Button>
-            </StackPanel>
+            <Button x:Name="ViewModeButton"
+                    Style="{StaticResource BottomBarButtonStyle}"
+                    Margin="0,0,6,0"
+                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Click="OnViewModeButtonClick" />
         </Grid>
 
         <!-- A234 배치 1: 셸 포커스 앵커 — RecoverChromeFocusOrphan 2단 복구의 최후 착지점.
