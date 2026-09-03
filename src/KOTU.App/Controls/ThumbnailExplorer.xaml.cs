@@ -176,13 +176,17 @@ public sealed partial class ThumbnailExplorer : UserControl
         TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry entry } ? entry : null;
 
     /// <summary>A233: 지연 생성 — Unloaded로 정리된 뒤 다시 로드돼도 되살아난다
-    /// (ExplorerPane.FetchPool과 같은 규칙. 워커 수 = 동시 읽기 상한).</summary>
+    /// (ExplorerPane.FetchPool과 같은 규칙. 워커 수 = 동시 읽기 상한).
+    /// A333: 우선순위 BelowNormal — 타일 내용은 이미 그려진 타일에 뒤늦게 얹히는 배경성 작업이다
+    /// (근거·불변식은 ExplorerPane.FetchPool 주석 한 곳에 모아 뒀다).</summary>
     private ModuleWorkerPool TextPool =>
-        _textPool ??= new ModuleWorkerPool("KOTU tile text", TextPreviewConcurrency);
+        _textPool ??= new ModuleWorkerPool(
+            "KOTU tile text", TextPreviewConcurrency, ThreadPriority.BelowNormal);
 
-    /// <summary>A242: 지연 생성 — TextPool과 같은 규칙(워커 수 = 동시 추출 상한).</summary>
+    /// <summary>A242: 지연 생성 — TextPool과 같은 규칙(워커 수 = 동시 추출 상한, A333 우선순위 포함).</summary>
     private ModuleWorkerPool ThumbPool =>
-        _thumbPool ??= new ModuleWorkerPool("KOTU tile thumb", ThumbFetchConcurrency);
+        _thumbPool ??= new ModuleWorkerPool(
+            "KOTU tile thumb", ThumbFetchConcurrency, ThreadPriority.BelowNormal);
 
     public ThumbnailExplorer()
     {

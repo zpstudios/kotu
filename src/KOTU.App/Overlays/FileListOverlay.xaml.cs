@@ -170,9 +170,10 @@ public sealed partial class FileListOverlay : UserControl
         // 중복 억제(_hintVisible)가 반복 Show(ApplyOverlayStates 경유 다회 호출)를 걸러 준다.
         ShowHint(OverlayHints.Docked(OverlayHints.ListKey));
 
-        // A323: 상단 트리 쪽도 같은 조건으로 묶는다 — EnsureDriveRoots는 DriveInfo.GetDrives(네트워크
+        // A323: 상단 트리 쪽도 같은 조건으로 묶는다 — 루트 재구성은 DriveInfo.GetDrives(네트워크
         // 드라이브면 블로킹)를, ExpandToFolderAsync는 ScrollTreeTo(트리 튐)를 부른다. 연속 항해
-        // (키 반복)마다 이것들이 돌면 안 된다.
+        // (키 반복)마다 이것들이 돌면 안 된다. (A333: 그 열거 자체는 워커로 옮겼지만 조건은 유지 —
+        // 비용이 사라진 게 아니라 UI 스레드 밖으로 나갔을 뿐이고, 불필요한 재구성은 여전히 낭비다.)
         // A324(수리): **트리 동기 자체는 이 조건에서 뺀다.** A323은 EnsureDriveRoots와 트리 동기를
         // 한 덩어리로 묶어 "같은 폴더 재표시면 트리도 이미 그 자리"라고 가정했는데, 트리가 그 폴더에
         // 도달하지 못한 채(자동 펼침 취소·숨김 경로·루트 재구성으로 선택 소실) 남아 있으면 그 가정이
@@ -182,8 +183,32 @@ public sealed partial class FileListOverlay : UserControl
         // 가리키고 있으면 문자열 비교 두 번으로 끝나고 펼침·스크롤은 일어나지 않는다(A323의 이득 유지).
         // EnsureDriveRoots(GetDrives)만 종전 조건 그대로 두어 연속 항해에서 0회를 지킨다 —
         // 루트가 아직 없을 때(트리 최초 구성·열거 실패 후 재시도)만 한 갈래를 더 연다.
+        // A333: 루트 재구성은 이제 비동기다(드라이브 열거를 워커로 뺐다 — EnsureDriveRootsAsync).
+        // 트리 동기는 반드시 "루트가 선 뒤에" 와야 한다: 루트가 비어 있는 채로 ExpandToFolderAsync가
+        // 돌면 시작 노드를 못 찾아 "이 폴더에 대해 트리가 할 일 없음"(_treeFolder = folder)으로
+        // 기억해 버려, 그 폴더로는 다시 펼치지 않는다(A324 계약). 그래서 두 갈래로 나눈다 —
+        // 재구성이 필요하면 완료 후 동기, 아니면 종전대로 즉시 동기.
         if (!sameView || reopened || FolderTree.RootNodes.Count == 0)
-            EnsureDriveRoots(); // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
+            _ = EnsureDriveRootsThenSyncAsync(folder); // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
+        else
+            SyncTreeToFolder(folder);
+    }
+
+    /// <summary>A333: 루트 재구성 → 트리 동기의 직렬 연결(위 Show의 갈래 하나). 발사 후 망각이지만
+    /// 본문이 전부 예외를 삼키므로(EnsureDriveRootsAsync의 catch · SyncTreeToFolder의 조기 반환)
+    /// 소비되지 않는 예외가 남지 않는다.
+    /// <para>
+    /// 늦은 완료 폐기: 종전 동기 호출과 달리 이 사이에 다른 폴더로 Show/항해가 끼어들 수 있다 —
+    /// 그때 이 옛 폴더로 트리를 펼치면 트리가 뒤로 되감긴다. 리스트의 현재 폴더(항해 시작 즉시
+    /// 갱신되는 단일 원본 — ExplorerPane.CurrentFolder)와 다르면 조용히 접는다. 새 폴더 쪽은
+    /// 자기 Show가 자기 갈래로 동기하므로 동기가 통째로 빠지는 일은 없다.
+    /// </para></summary>
+    private async Task EnsureDriveRootsThenSyncAsync(string folder)
+    {
+        await EnsureDriveRootsAsync();
+        if (_list is { } list && !string.Equals(TrimSep(list.CurrentFolder), TrimSep(folder),
+                StringComparison.OrdinalIgnoreCase))
+            return;
         SyncTreeToFolder(folder);
     }
 
@@ -407,13 +432,22 @@ public sealed partial class FileListOverlay : UserControl
     /// <summary>
     /// 루트(드라이브) 노드를 채운다. 이미 같은 드라이브 구성이면 그대로 두어(펼침 상태 유지),
     /// 탈착 등으로 구성이 바뀌었을 때만 다시 만든다. 드라이브는 이름+종류만 간단 표기.
+    /// <para>
+    /// <b>A333</b>: 드라이브 열거를 UI 스레드에서 뺐다(CLAUDE.md 1.8 — 주기·블로킹 작업은 워커).
+    /// <see cref="DriveInfo.GetDrives"/>와 그 뒤의 <c>DriveType</c>·<c>RootDirectory</c> 조회는
+    /// 네트워크 드라이브·미준비 미디어(탈착식·광학)에서 초 단위로 막힐 수 있고, 이 메서드는 좌
+    /// 패널 표시 종착점(Show)에서 <b>폴더가 바뀔 때마다</b> 불린다 — 즉 사용자가 폴더를 여는
+    /// 바로 그 순간의 UI 스레드였다. 워커에서 (경로, 표기) 쌍까지 다 만들어 오고
+    /// (<see cref="ListDriveRoots"/>) UI 스레드는 <b>노드 비교·생성만</b> 한다.
+    /// 판정식·재구성 조건·A324의 기억 비우기는 전부 종전 그대로다.
+    /// </para>
     /// </summary>
-    private void EnsureDriveRoots()
+    private async Task EnsureDriveRootsAsync()
     {
-        DriveInfo[] drives;
+        (string Root, string Display)[] drives;
         try
         {
-            drives = DriveInfo.GetDrives();
+            drives = await Task.Run(ListDriveRoots); // 워커 — 완료 후속부는 UI 스레드로 복귀
         }
         catch
         {
@@ -425,7 +459,7 @@ public sealed partial class FileListOverlay : UserControl
             .Where(p => p is not null)
             .ToList();
         if (current.Count == drives.Length &&
-            drives.Select(d => d.RootDirectory.FullName)
+            drives.Select(d => d.Root)
                   .All(p => current.Contains(p, StringComparer.OrdinalIgnoreCase)))
             return;
 
@@ -434,23 +468,34 @@ public sealed partial class FileListOverlay : UserControl
         _treeFolder = null;
         FolderTree.RootNodes.Clear();
         foreach (var drive in drives)
+            FolderTree.RootNodes.Add(new TreeViewNode
+            {
+                Content = new FolderNode(drive.Root, drive.Display),
+                HasUnrealizedChildren = true, // 하위는 펼칠 때 로드
+            });
+    }
+
+    /// <summary>
+    /// A333 — 워커 스레드: 드라이브 열거와 표기 조립. 종전 EnsureDriveRoots 안에 있던
+    /// <c>GetDrives</c> + 드라이브별 try/continue 루프를 그대로 옮긴 것이다(접근 불가 드라이브는
+    /// 조용히 생략 — 같은 규칙). UI 요소를 일절 만지지 않는다.
+    /// </summary>
+    private static (string Root, string Display)[] ListDriveRoots()
+    {
+        var result = new List<(string Root, string Display)>();
+        foreach (var drive in DriveInfo.GetDrives())
         {
-            string root, display;
             try
             {
-                root = drive.RootDirectory.FullName;
-                display = $"{drive.Name.TrimEnd('\\')} ({DriveKind(drive.DriveType)})";
+                result.Add((drive.RootDirectory.FullName,
+                    $"{drive.Name.TrimEnd('\\')} ({DriveKind(drive.DriveType)})"));
             }
             catch
             {
-                continue; // 접근 불가 드라이브는 조용히 생략
+                // 접근 불가 드라이브는 조용히 생략
             }
-            FolderTree.RootNodes.Add(new TreeViewNode
-            {
-                Content = new FolderNode(root, display),
-                HasUnrealizedChildren = true, // 하위는 펼칠 때 로드
-            });
         }
+        return result.ToArray();
     }
 
     private static string DriveKind(DriveType type) => type switch
@@ -652,7 +697,16 @@ public sealed partial class FileListOverlay : UserControl
     {
         _treeFolder = null; // A324: 트리를 버린다 — 가리키던 폴더 기억도 함께(드라이브 열거 실패 대비 명시)
         FolderTree.RootNodes.Clear();
-        EnsureDriveRoots();
+        // A333: 루트 재구성이 비동기가 되면서 펼침도 그 뒤로 밀린다(Show와 같은 사정 — 루트가
+        // 서기 전에 펼치면 A324 기억이 잘못 확정된다). 여기서 SyncTreeToFolder를 쓰지 않는 이유는
+        // 종전과 같다: 닫혀 있어도 다시 만들어야 한다(그쪽은 !IsOpen 조기 반환).
+        _ = RebuildTreeAsync();
+    }
+
+    /// <summary>A333: RebuildTree의 비동기 본체 — 루트 재구성 완료 후 현재 폴더까지 다시 펼친다.</summary>
+    private async Task RebuildTreeAsync()
+    {
+        await EnsureDriveRootsAsync();
         if (_list?.CurrentFolder is { Length: > 0 } folder) _ = ExpandToFolderAsync(folder);
     }
 

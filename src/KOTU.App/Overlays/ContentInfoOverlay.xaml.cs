@@ -328,9 +328,12 @@ public sealed partial class ContentInfoOverlay : UserControl
     private ModuleWorkerPool? _prefetchPool; // A241: 프리페치 전용 풀(워커 3) — 선택 즉시 조회(Worker)와 분리
     private int _prefetchSeq;                // A241: 새 목록 통지·언로드가 올린다 — 낡은 프리페치 무산
 
-    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다(Worker와 같은 규칙).</summary>
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다(Worker와 같은 규칙).
+    /// A333: 우선순위 BelowNormal — 프리페치는 사용자가 결과를 기다리지 않는 순수 배경성 작업이다
+    /// (선택 즉시 조회 Worker는 Normal 유지. 근거는 ExplorerPane.FetchPool 주석).</summary>
     private ModuleWorkerPool PrefetchPool =>
-        _prefetchPool ??= new ModuleWorkerPool("KOTU info prefetch", PrefetchConcurrency);
+        _prefetchPool ??= new ModuleWorkerPool(
+            "KOTU info prefetch", PrefetchConcurrency, ThreadPriority.BelowNormal);
 
     /// <summary>
     /// A241: 현재 폴더 목록의 **이미지 파일** 선택 정보를 미리 조회해 캐시를 데운다 — 셸이
