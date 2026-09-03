@@ -6,3 +6,6 @@ TestResults/
 *.binlog
 __pycache__/
 .DS_Store
+
+# A333/A334 성능 테스트용 대량 파일(로컬 전용 — 커밋 대상 아님)
+_perftest/
