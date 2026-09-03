@@ -930,6 +930,13 @@ public sealed partial class ThumbnailExplorer : UserControl
             var bitmap = new BitmapImage();
             await bitmap.SetSourceAsync(buffer.AsRandomAccessStream());
 
+            // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
+            // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
+            // 썸네일) 어디서 먼저 와도 첫 것만 남는다. 이 마크가 필요한 이유: A334 실측의
+            // 정지(343ms → 파일 1만 개에서 1,289ms)가 마지막 마크 <b>이후</b>로 잡혀
+            // "모든 반영이 끝난 뒤"까지만 알 수 있었다 — 그 구간이 내용 얹기인지 그보다
+            // 뒤인지 가르는 자가 없었다. 이제 정지 라벨이 prev0 앞뒤로 갈린다.
+            NavDiagnostics.Mark("prev0");
             host.Children.Clear();
             host.Children.Add(new Image
             {
@@ -1038,6 +1045,13 @@ public sealed partial class ThumbnailExplorer : UserControl
                 return; // 읽기 실패·풀 닫힘(취소 Task) — 확장자 타일 유지
             }
             if (seq != _showSeq || text is null) return; // ② 완료 시점 재대조(이중 방어)
+            // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
+            // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
+            // 썸네일) 어디서 먼저 와도 첫 것만 남는다. 이 마크가 필요한 이유: A334 실측의
+            // 정지(343ms → 파일 1만 개에서 1,289ms)가 마지막 마크 <b>이후</b>로 잡혀
+            // "모든 반영이 끝난 뒤"까지만 알 수 있었다 — 그 구간이 내용 얹기인지 그보다
+            // 뒤인지 가르는 자가 없었다. 이제 정지 라벨이 prev0 앞뒤로 갈린다.
+            NavDiagnostics.Mark("prev0");
             host.Children.Clear();
             host.Children.Add(MakeTextPreviewBlock(text));
         }
@@ -1264,6 +1278,13 @@ public sealed partial class ThumbnailExplorer : UserControl
                 using (var stream = new MemoryStream(bytes))
                     await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
                 if (seq != _showSeq) return;
+                // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
+                // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
+                // 썸네일) 어디서 먼저 와도 첫 것만 남는다. 이 마크가 필요한 이유: A334 실측의
+                // 정지(343ms → 파일 1만 개에서 1,289ms)가 마지막 마크 <b>이후</b>로 잡혀
+                // "모든 반영이 끝난 뒤"까지만 알 수 있었다 — 그 구간이 내용 얹기인지 그보다
+                // 뒤인지 가르는 자가 없었다. 이제 정지 라벨이 prev0 앞뒤로 갈린다.
+                NavDiagnostics.Mark("prev0");
                 host.Children.Clear();
                 host.Children.Add(new Image
                 {
@@ -1449,9 +1470,26 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// Rename은 플라이아웃이 닫히며 포커스를 되돌린 '뒤'에 진입해야 편집 상자가 곧장 LostFocus
     /// 커밋으로 닫혀 버리지 않는다 — 디스패처로 한 박자 미룬다.
     /// </summary>
+    /// <remarks>
+    /// A335: 타일이 만들어질 때는 <b>빈 MenuFlyout 하나만</b> 달고 내용은 <b>열릴 때</b> 채운다 —
+    /// 좌 리스트(ExplorerPane.AttachContextMenu)와 같은 수리이고 근거도 같다(그 주석이 정본).
+    /// 요지: 종전에는 타일마다 메뉴를 통째로 조립해 항목 1개당 XAML 객체가 열 개 남짓 늘었고,
+    /// A334 계측판이 그 비용을 <c>clay&gt;fillN 8,539ms</c>(파일 10,000개)로 찍었다.
+    /// </remarks>
     private void AttachContextMenu(GridViewItem item, ExplorerListing.Entry entry)
     {
         var flyout = new MenuFlyout();
+        flyout.Opening += (_, _) => BuildTileContextMenu(flyout, item, entry);
+        item.ContextFlyout = flyout;
+    }
+
+    /// <summary>
+    /// A335: 타일 메뉴의 실제 내용 — 열릴 때마다 새로 채운다(구성·순서·활성 조건·대상 규칙은
+    /// 종전 그대로, 옮긴 것은 <b>시점</b>뿐). 매번 비우므로 두 번째 우클릭에 겹쳐 쌓이지 않는다.
+    /// </summary>
+    private void BuildTileContextMenu(MenuFlyout flyout, GridViewItem item, ExplorerListing.Entry entry)
+    {
+        flyout.Items.Clear();
         if (!entry.IsFolder)
         {
             var open = new MenuFlyoutItem
@@ -1478,7 +1516,6 @@ public sealed partial class ThumbnailExplorer : UserControl
         };
         delete.Click += async (_, _) => await DeleteWithNoticeAsync(PathsFor(entry));
         flyout.Items.Add(delete);
-        item.ContextFlyout = flyout;
     }
 
     /// <summary>
@@ -1513,8 +1550,10 @@ public sealed partial class ThumbnailExplorer : UserControl
                 Icon = new FontIcon { Glyph = "\uE77F" }, // Paste
             };
             pasteItem.Click += async (_, _) => await PasteIntoAsync(entry.Path);
+            // A335: 조립 자체가 Opening 안에서 도므로 지금 판정이 곧 "열리는 순간의 판정"이다 —
+            // 종전처럼 Opening을 더 구독하면 열 때마다 죽은 핸들러가 쌓인다(좌 리스트와 같은 사정).
+            pasteItem.IsEnabled = ExplorerFileOps.CanPasteFromClipboard();
             flyout.Items.Add(pasteItem);
-            flyout.Opening += (_, _) => pasteItem.IsEnabled = ExplorerFileOps.CanPasteFromClipboard();
         }
         flyout.Items.Add(new MenuFlyoutSeparator());
     }

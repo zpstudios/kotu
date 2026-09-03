@@ -948,9 +948,32 @@ public sealed partial class ExplorerPane : UserControl
     /// Rename은 플라이아웃이 닫히며 포커스를 되돌린 '뒤'에 진입해야 편집 상자가 곧장 LostFocus
     /// 커밋으로 닫혀 버리지 않는다 — 디스패처로 한 박자 미룬다(BeginRenameOf).
     /// </summary>
+    /// <remarks>
+    /// A335: 항목이 만들어질 때는 <b>빈 MenuFlyout 하나만</b> 달고, 내용은 <b>열릴 때</b> 채운다
+    /// (Opening 재구성 — 오디오 하단 바 플라이아웃 3종·이 파일의 표면 메뉴와 같은 관용구).
+    /// 종전에는 항목마다 메뉴를 통째로 조립했다: 항목 1개당 MenuFlyoutItem 4~5개 + FontIcon
+    /// 같은 수 + 구분선까지 열 개 남짓의 XAML 객체다. 파일 10,000개 폴더에서는 그것이 10만 개가
+    /// 되고, A334 계측판이 그 구간을 <c>clay&gt;fillN 8,539ms</c>로 찍었다(항목당 비용이 개수에
+    /// 그대로 비례하는 유일한 큰 항). 실제로 열리는 메뉴는 사람이 우클릭한 하나뿐이다.
+    /// 첫 우클릭에서 메뉴를 놓치지 않는 근거: ContextFlyout은 <b>Opening을 먼저 발화시키고</b>
+    /// 그 결과를 띄우므로, 그 시점에 채우면 같은 우클릭에서 그대로 보인다(위 3종 선례와 동일).
+    /// </remarks>
     private void AttachContextMenu(SelectorItem item, ExplorerListing.Entry entry, ListViewBase owner)
     {
         var flyout = new MenuFlyout();
+        flyout.Opening += (_, _) => BuildItemContextMenu(flyout, item, entry, owner);
+        item.ContextFlyout = flyout;
+    }
+
+    /// <summary>
+    /// A335: 항목 메뉴의 실제 내용 — 열릴 때마다 새로 채운다(항목 구성·순서·활성 조건·다중 선택
+    /// 대상 규칙은 종전 그대로. 옮긴 것은 <b>시점</b>뿐이다). 매번 비우고 다시 만들므로 두 번째
+    /// 우클릭에 항목이 겹쳐 쌓이지 않는다.
+    /// </summary>
+    private void BuildItemContextMenu(
+        MenuFlyout flyout, SelectorItem item, ExplorerListing.Entry entry, ListViewBase owner)
+    {
+        flyout.Items.Clear();
         if (!entry.IsFolder) AddOpenInNewInstance(flyout, entry);
         AddClipboardItems(flyout, entry, owner); // A94 6차 — Cut·Copy·(폴더면 Paste) + 구분선
         var rename = new MenuFlyoutItem
@@ -967,7 +990,6 @@ public sealed partial class ExplorerPane : UserControl
         };
         delete.Click += async (_, _) => await DeleteWithNoticeAsync(PathsForDrag(owner, entry));
         flyout.Items.Add(delete);
-        item.ContextFlyout = flyout;
     }
 
     /// <summary>파일 전용 "Open in new instance"(A24)를 메뉴 맨 위에 + 구분선 (A94 2차 재배치).</summary>
@@ -1015,8 +1037,11 @@ public sealed partial class ExplorerPane : UserControl
                 Icon = new FontIcon { Glyph = "\uE77F" }, // Paste
             };
             pasteItem.Click += async (_, _) => await PasteIntoAsync(entry.Path);
+            // A335: 종전에는 여기서 flyout.Opening을 하나 더 구독해 활성을 정했다. 이제 이 조립
+            // 자체가 Opening 안에서 돌므로 지금 판정이 곧 "열리는 순간의 판정"이고, 구독을 남기면
+            // 열 때마다 핸들러가 쌓인다(이미 버려진 항목을 만지는 죽은 구독이 된다).
+            pasteItem.IsEnabled = ExplorerFileOps.CanPasteFromClipboard();
             flyout.Items.Add(pasteItem);
-            flyout.Opening += (_, _) => pasteItem.IsEnabled = ExplorerFileOps.CanPasteFromClipboard();
         }
         flyout.Items.Add(new MenuFlyoutSeparator());
     }
