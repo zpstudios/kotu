@@ -640,8 +640,14 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>폴더로 이동해 내용을 채운다. 목록 스캔은 백그라운드, UI 채우기는 이어서.</summary>
-    public void NavigateTo(string folder, IReadOnlyList<string> extensions) =>
+    public void NavigateTo(string folder, IReadOnlyList<string> extensions)
+    {
+        // 항해 계측(diag.navTiming, 기본 꺼짐)의 합류점 — 세 진입 경로(트리 선택·리스트 활성화·
+        // 중앙 썸네일 더블클릭)가 전부 이 메서드로 모인다. 출처만 각 진입점이 미리 적어 둔다
+        // (NavDiagnostics.NoteSource). 꺼져 있으면 Begin이 앞단 게이트에서 즉시 반환한다.
+        NavDiagnostics.Begin();
         _ = NavigateToAsync(folder, extensions); // 발사 후 망각 — 본문이 예외를 스스로 처리(종전 async void와 동일 소비)
+    }
 
     /// <summary>
     /// NavigateTo의 대기 가능형 (A94 2차) — 새 폴더 생성 직후 "재스캔 '완료 후' 그 항목으로
@@ -661,6 +667,9 @@ public sealed partial class ExplorerPane : UserControl
         ToolTipService.SetToolTip(PathText, folder); // 잘려도 전체 경로 확인 가능(A8)
         UpButton.IsEnabled = Directory.GetParent(folder) is not null;
         EnsureWatch(folder); // A94 5차 — 폴더 전환 즉시 재대상(스캔 완료 전의 변경도 디바운스로 잡힌다)
+        // 계측 pre: 여기까지가 "스캔 전 준비" 전부다(필터 재구성·부모 계산·감시자 재대상).
+        // nav>pre가 크면 정지는 스캔이 아니라 이 준비 구간에 있다는 뜻이다.
+        NavDiagnostics.Mark("pre");
 
         var seq = ++_loadSeq;
         // A243: 폴더 실변경이면 스캔 완료를 기다리지 않고 즉시 옛 폴더 화면을 지우고 로딩 문구를
@@ -680,12 +689,30 @@ public sealed partial class ExplorerPane : UserControl
             ListPane.Items.Clear();
             EmptyText.Text = "Loading...";
             EmptyText.Visibility = Visibility.Visible;
+            // 계측 load: "Loading..." 대입 직후 = 사용자가 보게 될 화면 상태가 정해진 시점.
+            // 중앙 썸네일 중계(아래 NavigationStarted)보다 앞에 둬야 좌/중앙 비용이 분리된다.
+            NavDiagnostics.Mark("load");
             NavigationStarted?.Invoke(folder); // 셸이 중앙 썸네일에도 같은 로딩 화면을 중계(A93 경로)
+        }
+        else
+        {
+            // 계측 same: 같은 폴더 재스캔(감시 디바운스·조작 후 갱신) — Clear도 로딩 문구도 없다.
+            // load 자리에 이 마크가 보이면 "화면을 지우지 않은 갱신"이라는 뜻이다(오해 방지).
+            NavDiagnostics.Mark("same");
         }
         // A160: 표시 정책은 스캔 시작 시점에 스냅샷해 워커로 넘긴다 — 워커 스레드에서 UI 필드를
         // 읽지 않는다(스캔 도중 토글이 바뀌면 그 토글이 자기 재스캔을 다시 건다).
         var includeHidden = _showHidden;
         IReadOnlyList<ExplorerListing.Entry> entries;
+        // 계측 yield: UI 스레드가 **메시지 루프로 실제로 돌아온** 시점을 잰다. await 뒤에서는
+        // 잴 수 없다(그건 결과 도착이다) — await 직전에 큐에 넣어 두면 UI 스레드가 풀리는
+        // 즉시 이 콜백이 먼저 돌고(같은 우선순위 FIFO, await 재개보다 앞서 큐에 든다),
+        // load>yield가 크면 "await로 넘겼는데도 UI 스레드가 풀리지 않았다"가 확정된다.
+        if (NavDiagnostics.Enabled)
+        {
+            var navSession = NavDiagnostics.Session; // 그새 다른 항해가 시작되면 이 마크는 버려진다
+            DispatcherQueue.TryEnqueue(() => NavDiagnostics.MarkFor(navSession, "yield"));
+        }
         try
         {
             entries = await Worker.Run(_ =>
@@ -706,8 +733,16 @@ public sealed partial class ExplorerPane : UserControl
             EmptyText.Text = "Cannot read this folder: " + ex.Message;
             EmptyText.Visibility = Visibility.Visible;
             ViewChanged?.Invoke(folder, []); // A93 — 썸네일 뷰도 옛 폴더 목록을 남기지 않는다
+            // 계측 fail: 실패로 끝난 항해도 반드시 한 번은 조립돼 화면에 남는다
+            // (렌더 프레임 마크까지 가지 못하는 유일한 정상 경로다).
+            NavDiagnostics.Mark("fail");
+            NavDiagnostics.ArmPaint("paint");
             return;
         }
+
+        // 계측 scan: 폴더 열거 결과 도착(= 워커 왕복 완료). yield>scan이 크면 정지의 원인은
+        // 워커 쪽 열거 시간이고, load>yield가 크면 UI 스레드가 애초에 풀리지 않은 것이다.
+        NavDiagnostics.Mark("scan");
 
         if (seq != _loadSeq) return; // 그새 다른 폴더로 이동함
 
@@ -748,10 +783,15 @@ public sealed partial class ExplorerPane : UserControl
 
         IconGrid.Items.Clear();
         ListPane.Items.Clear();
+        // 계측 clr: 대량 Items.Clear의 비용을 첫 조각 생성과 분리해 본다(둘 다 UI 스레드 동기다).
+        NavDiagnostics.Mark("clr");
 
         var cap = Math.Min(entries.Count, MaterializeLimit);
         var first = Math.Min(FillChunkItems, cap);
         AppendFillRange(entries, 0, first);
+        // 계측 fill0: 첫 조각(즉시 생성분) 반영 완료 — 나머지는 프레임 틱 분할이라 여기부터
+        // fillN까지가 "조각 반영에 걸린 프레임 수"다.
+        NavDiagnostics.Mark("fill0");
 
         EmptyText.Text = "No matching files here";
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -843,6 +883,9 @@ public sealed partial class ExplorerPane : UserControl
     private void FinishFill(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
     {
         if (seq != _loadSeq) return; // 방어 — 낡은 완료가 로더를 기동하지 않게
+        // 계측 fillN: 마지막 조각까지 붙은 시점(로더 기동 직전). 뒤이어 무장하는 paint는
+        // 이 목록이 실제 화면 프레임에 올라간 시점을 잰다.
+        NavDiagnostics.Mark("fillN");
         if (entries.Count > MaterializeLimit)
         {
             var hidden = entries.Count - MaterializeLimit;
@@ -857,6 +900,9 @@ public sealed partial class ExplorerPane : UserControl
         // 셸의 선택 축은 바로 앞 ViewChanged가 이미 null로 리셋했으므로(MainWindow 생성자 배선)
         // 이 재적용이 사용자 선택을 덮는 일이 없다 — 두 축의 순서 계약(A200)이 그대로 성립한다.
         ApplyCurrentFileSelection();
+        // 계측 paint: 조립 완료 후 첫 렌더 프레임 — 로더 기동보다 앞에 무장해 둔다(무장 자체는
+        // 이벤트 구독 한 줄이라 순서가 비용에 영향을 주지 않는다).
+        NavDiagnostics.ArmPaint("paint");
         _ = LoadDetailsAsync(seq);
         // A241: 조립 완료 훅 — 셸이 우측 정보 패널의 EXIF 프리페치를 여기서 기동한다(뼈대 우선:
         // 목록 조립·상세 로더 기동이 끝난 뒤에만 부가 스캔이 붙는다). 감시 재스캔의 재통지는
@@ -1849,7 +1895,11 @@ public sealed partial class ExplorerPane : UserControl
                 // A94 6차: 다중 선택이면 선택된 '파일' 전부를 연다(폴더는 일괄 열기에서 제외).
                 // 선택에 파일이 하나도 없으면(폴더만 다중) 아래 현행 첫 항목 동작으로 떨어진다.
                 if (owner.SelectedItems.Count > 1 && OpenFiles(SelectedFilePathsOf(owner))) return;
-                if (entry.IsFolder) NavigateTo(entry.Path, _extensions);
+                if (entry.IsFolder)
+                {
+                    NavDiagnostics.NoteSource("list"); // 계측 출처 — 리스트 Enter 활성화
+                    NavigateTo(entry.Path, _extensions);
+                }
                 else FileActivated?.Invoke(entry.Path);
                 return;
             // A158: 셸 패널 키가 F11/F12로 옮겨가 F2 충돌 소멸 — 이름변경은 F2 유지(사용자 확정),
@@ -2258,6 +2308,7 @@ public sealed partial class ExplorerPane : UserControl
 
         if (entry.IsFolder)
         {
+            NavDiagnostics.NoteSource("list"); // 계측 출처 — 리스트 항목 더블클릭
             NavigateTo(entry.Path, _extensions);
             return;
         }

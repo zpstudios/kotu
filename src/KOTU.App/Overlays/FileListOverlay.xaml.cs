@@ -165,6 +165,11 @@ public sealed partial class FileListOverlay : UserControl
                            StringComparison.OrdinalIgnoreCase)
                        && _extensions.SequenceEqual(extensions, StringComparer.OrdinalIgnoreCase);
         if (!sameView) NavigateList(folder, extensions);
+        // 계측(diag.navTiming): 여기서 재항해를 생략했다는 사실 자체를 남긴다 — 안 남기면
+        // "느리다"는 보고에 대해 스트립이 옛 항해 값을 그대로 보여 오해를 부른다.
+        // 출처가 적혀 있을 때만 발화하므로(NoteSkipped 주석) 모드 전환마다 도는 이 경로가
+        // 스트립을 덮어쓰지는 않는다.
+        else NavDiagnostics.NoteSkipped();
         Visibility = Visibility.Visible;
         // A176: 사이드바(유일한 열림 상태) 안내 — 구 SetState의 자리. ShowHint의 동일 문구
         // 중복 억제(_hintVisible)가 반복 Show(ApplyOverlayStates 경유 다회 호출)를 걸러 준다.
@@ -743,6 +748,7 @@ public sealed partial class FileListOverlay : UserControl
             // A324: 사용자가 트리에서 고른 자리가 곧 "트리가 가리키는 폴더"다 — 기억을 여기서
             // 맞춰 두지 않으면 옛 값이 남아, 나중에 그 옛 폴더로 Show될 때 동기가 통째로 걸러진다.
             _treeFolder = folder.Path;
+            NavDiagnostics.NoteSource("tree"); // 계측 출처 — 트리 선택
             _list.NavigateTo(folder.Path, _extensions);
         }
     }

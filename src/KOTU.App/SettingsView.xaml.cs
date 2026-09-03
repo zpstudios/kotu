@@ -668,6 +668,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         BuildShellDiagnosticsSection(); // A234: 설정 파일 안내 바로 위 — 셸 키 진단 오버레이 토글
         BuildEditorDecorDiagnosticsSection(); // A285: 그 바로 옆 — 에디터 장식 EOF 계측 토글
         BuildAudioSwapDiagnosticsSection(); // A301: 그 바로 옆 — 오디오 비주얼라이저 교체 계측 토글
+        BuildNavTimingDiagnosticsSection(); // 그 바로 옆 — 폴더 항해 계측판 토글
         BuildSettingsFileSection(); // A36: "Open settings.json"(A292부터 Troubleshooting 절 끝)
 
         AddHeader("Updates");
@@ -970,6 +971,59 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         cardBody.Children.Add(new TextBlock
         {
             Text = "Shows visualizer style swap timing inside the audio player. For troubleshooting only.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        Root.Children.Add(cardBody);
+    }
+
+    /// <summary>
+    /// 폴더 항해 계측판 토글 — 위 A301 카드(BuildAudioSwapDiagnosticsSection) 바로 옆·같은
+    /// 방식이다. 배선도 그대로 최소형(Set → Save → NotifyChanged 세 줄 — 열린 모든 창의
+    /// MainWindow가 NavDiagnostics.Changed를 구독해 스트립과 하트비트를 즉시 켜고 끈다).
+    /// busy·<see cref="_suppressToggle"/> 축 불사용·되돌아오는 동기화 구독 없음(변경 진입로가
+    /// 이 토글 하나뿐)·카드 문법 A197/A220까지 앞 세 진단 카드와 같은 근거·같은 형태다.
+    /// </summary>
+    private void BuildNavTimingDiagnosticsSection()
+    {
+        var toggle = new ToggleSwitch
+        {
+            // A197과 같은 문법 — 스위치가 제목 왼쪽, 내장 On/Off 문구 제거, MinWidth 0(기본 154 해제).
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsOn = _settings.Get(NavDiagnostics.SettingKey, false), // 파일 저장 — 재시작 후에도 유지
+        };
+        toggle.Toggled += (_, _) =>
+        {
+            _settings.Set(NavDiagnostics.SettingKey, toggle.IsOn);
+            _settings.Save();
+            NavDiagnostics.NotifyChanged(); // 열린 모든 창의 계측판이 즉시 켜지고 꺼진다
+        };
+
+        var headerRow = new Grid { ColumnSpacing = 8 };
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var title = new TextBlock
+        {
+            Text = "Folder navigation timing",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(toggle, 0);
+        Grid.SetColumn(title, 1);
+        headerRow.Children.Add(toggle);
+        headerRow.Children.Add(title);
+
+        var cardBody = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 8) };
+        cardBody.Children.Add(headerRow);
+        cardBody.Children.Add(new TextBlock
+        {
+            Text = "Shows how long each stage of a folder change takes, and the longest gap the "
+                + "interface stayed frozen. For troubleshooting only.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,

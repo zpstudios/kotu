@@ -364,6 +364,36 @@
                        FontSize="11"
                        TextWrapping="NoWrap" />
         </Border>
+
+        <!-- 폴더 항해 계측판 — 설정의 숨김 토글(diag.navTiming, 기본 꺼짐)로만 켜진다.
+             셸 키 진단 스트립(위)과 같은 문법·같은 이유의 시설이지만 자리를 아래로 둔다:
+             둘을 동시에 켜도 겹치지 않고, 재는 대상(폴더 목록)이 화면 위쪽이라 가리지 않는다.
+             하단 바(44) 위로 띄우려고 Margin 하단 48. IsHitTestVisible=False 필수 —
+             계측판이 클릭을 가로채면 재현 조건(리스트·타일 조작) 자체가 바뀐다.
+             본문 2줄: 1줄 = 구간별 경과 ms(최대 구간은 대괄호), 2줄 = UI 스레드 최대 정지.
+             2줄의 강조색은 코드(ApplyNavDiagnostics)가 리소스 조회 후 넣는다 — XAML
+             ThemeResource 직접 참조는 실패해도 CI가 못 잡고 런타임에 죽기 때문이다. -->
+        <Border x:Name="NavDiagStrip"
+                Visibility="Collapsed"
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="Stretch"
+                IsHitTestVisible="False"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                Opacity="0.9"
+                Margin="0,0,0,48"
+                Padding="6">
+            <StackPanel Spacing="2">
+                <TextBlock x:Name="NavDiagText"
+                           FontFamily="Consolas"
+                           FontSize="11"
+                           TextWrapping="Wrap" />
+                <TextBlock x:Name="NavDiagStallText"
+                           FontFamily="Consolas"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
     </Grid>
     </Grid>
 </Window>

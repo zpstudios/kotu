@@ -344,6 +344,17 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => _diagTimer?.Stop();
         ApplyShellDiagnostics(); // 저장된 값의 초기 적용 — 재시작 후에도 켠 상태가 유지된다(사양)
 
+        // 폴더 항해 계측판(diag.navTiming, 기본 꺼짐) — 배선은 바로 위 A234 관용구 복제.
+        // Changed = 설정 토글, Updated = 계측 값이 새로 조립됨(항해가 돈 UI 스레드에서 발화하므로
+        // 핸들러가 스스로 자기 창의 큐로 마샬링한다). 하트비트 타이머 정지 책임은
+        // ApplyNavDiagnostics의 끄기 분기 + 여기 Closed 두 곳뿐이다(누수 금지).
+        NavDiagnostics.Changed += ApplyNavDiagnostics;
+        Closed += (_, _) => NavDiagnostics.Changed -= ApplyNavDiagnostics;
+        NavDiagnostics.Updated += OnNavDiagnosticsUpdated;
+        Closed += (_, _) => NavDiagnostics.Updated -= OnNavDiagnosticsUpdated;
+        Closed += (_, _) => _navBeatTimer?.Stop();
+        ApplyNavDiagnostics();
+
         // A206(v0.215.0): 업데이트 자동 확인은 '설정 화면 열림' 참조 카운트가 0이 아닌 동안에만
         // 돈다. 카운트를 놓는 정상 경로는 SettingsView의 Unloaded지만, 설정을 띄운 채 창을 닫으면
         // Unloaded가 오지 않을 수 있어(A41에서 확인된 한계) 카운트가 샌다 — 그러면 아무도 보지
@@ -2063,7 +2074,11 @@ public sealed partial class MainWindow : Window
                 };
                 // 폴더 더블클릭 = 좌 리스트를 같은 폴더로 항해 — 결과가 ViewChanged로 돌아와
                 // 양쪽이 함께 이동한다(A93 상태 공유). 파일 열기는 기존 라우팅 그대로(A24).
-                _thumbnailExplorer.FolderActivated += folder => ListOverlay.NavigateList(folder);
+                _thumbnailExplorer.FolderActivated += folder =>
+                {
+                    NavDiagnostics.NoteSource("grid"); // 계측 출처 — 중앙 썸네일 더블클릭
+                    ListOverlay.NavigateList(folder);
+                };
                 _thumbnailExplorer.FileActivated += OpenFileRouted;
                 _thumbnailExplorer.FileActivatedNewWindow += _manager.OpenFileInNewWindow;
                 _thumbnailExplorer.SelectionChanged +=
@@ -2981,6 +2996,78 @@ public sealed partial class MainWindow : Window
         // 정지 책임 = ApplyShellDiagnostics의 끄기 분기 + 생성자 Closed 배선 두 곳뿐이다.
         timer.Tick += (_, _) => UpdateDiagStrip();
         return timer;
+    }
+
+    // ---------- 폴더 항해 계측판 (diag.navTiming) ----------
+    // 대용량 폴더 진입 정지의 추측 수리가 두 번 빗나간 뒤의 계측 선행 — 배선·수명 관용구는
+    // 바로 위 A234 진단 오버레이와 같고, 재는 대상만 다르다(NavDiagnostics 클래스 주석 참고).
+
+    /// <summary>UI 스레드 하트비트 주기(ms) — 시스템 타이머 해상도(약 15.6ms)에 맞춘 값이라
+    /// 실질 최소 주기다. 이보다 짧게 잡아도 더 자주 오지 않고, 우리가 재려는 것은 초 단위
+    /// 정지라 이 해상도로 충분하다(고정값).</summary>
+    private const int NavBeatMs = 15;
+
+    /// <summary>하트비트 타이머 — 계측이 켜져 있을 때만 돈다(끄면 Stop, 창 닫힘도 Stop —
+    /// 생성자 Closed 배선). _diagTimer와 같은 지연 생성 관용구.</summary>
+    private DispatcherTimer? _navBeatTimer;
+
+    /// <summary>
+    /// 설정 토글 반영(생성자 배선: 초기 1회 + NavDiagnostics.Changed) — 다른 창의 설정 화면
+    /// (다른 UI 스레드)에서 발화할 수 있어 ApplyShellDiagnostics와 같은 자가 마샬링을 거친다.
+    /// 켜면 계측 게이트 개방 + 스트립 표시 + 하트비트 시작, 끄면 그 역순이다.
+    /// </summary>
+    private void ApplyNavDiagnostics()
+    {
+        if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+        {
+            dq.TryEnqueue(ApplyNavDiagnostics);
+            return;
+        }
+        var on = _settings.Get(NavDiagnostics.SettingKey, false);
+        NavDiagnostics.SetEnabled(on); // 마크·하트비트의 앞단 게이트(꺼짐 = 비용 0)
+        if (on)
+        {
+            // 강조색은 여기서 넣는다 — 리소스가 없으면 기본 전경색 그대로 둔다(UpdateFilterVisual과
+            // 같은 방어 형태). XAML ThemeResource 직접 참조는 실패 시 런타임에 죽는데 CI가 못 잡는다.
+            if (Application.Current.Resources["AccentTextFillColorPrimaryBrush"] is Brush accent)
+                NavDiagStallText.Foreground = accent;
+            NavDiagStrip.Visibility = Visibility.Visible;
+            _navBeatTimer ??= MakeNavBeatTimer();
+            _navBeatTimer.Stop(); // DispatcherTimer 되감기 관용구(Stop 후 Start)
+            _navBeatTimer.Start();
+            UpdateNavDiagStrip();
+        }
+        else
+        {
+            _navBeatTimer?.Stop(); // 꺼짐 = 하트비트 정지(상시 주기 작업을 만들지 않는다)
+            NavDiagStrip.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private DispatcherTimer MakeNavBeatTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(NavBeatMs) };
+        // 반복 틱 — 정지 책임은 ApplyNavDiagnostics의 끄기 분기 + 생성자 Closed 배선 두 곳뿐이다.
+        // Tick 본문은 타임스탬프 하나와 비교뿐이라 조립·표시 갱신을 하지 않는다(계측 왜곡 방지).
+        timer.Tick += (_, _) => NavDiagnostics.Beat();
+        return timer;
+    }
+
+    /// <summary>계측 값 재조립 통지 — 항해가 돈 UI 스레드에서 오므로 자기 창의 큐로 넘긴다.</summary>
+    private void OnNavDiagnosticsUpdated()
+    {
+        if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+        {
+            dq.TryEnqueue(OnNavDiagnosticsUpdated);
+            return;
+        }
+        UpdateNavDiagStrip();
+    }
+
+    private void UpdateNavDiagStrip()
+    {
+        NavDiagText.Text = NavDiagnostics.SegmentsLine;
+        NavDiagStallText.Text = NavDiagnostics.StallLine;
     }
 
     /// <summary>

@@ -505,9 +505,15 @@ public sealed partial class ThumbnailExplorer : UserControl
             TileGrid.Items.Add(MakeTile(entries[i]));
         EmptyText.Text = "No matching files here"; // A243 — ShowLoading의 "Loading..."을 원문구로 복원
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        // 계측 cfill0: 중앙 첫 조각(최대 60타일) 생성 완료 — 바로 아래 동기 레이아웃 패스와
+        // 비용을 분리하려고 UpdateLayout 앞에 둔다.
+        NavDiagnostics.Mark("cfill0");
 
         TileGrid.UpdateLayout(); // 첫 조각(상한 60타일)의 패널 실체화 — 아래 타일 크기 반영이 헛돌지 않게
         ApplyTileSize();
+        // 계측 clay: UpdateLayout(동기 레이아웃 패스)의 비용 — UI 스레드를 통째로 잡는 유일한
+        // 명시 호출이라 따로 잰다.
+        NavDiagnostics.Mark("clay");
 
         if (first < cap) StartTileAppendLoop(seq, entries, first, cap);
         else FinishShowEntries(entries, seq); // 소형 폴더 — 조립이 여기서 동기 완료(종전 동작 동일)
@@ -531,6 +537,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         TileGrid.Items.Clear();
         EmptyText.Text = "Loading...";
         EmptyText.Visibility = Visibility.Visible;
+        // 계측 cload: 중앙 썸네일 쪽 로딩 화면 전환 완료(좌 리스트의 load 바로 뒤 — 두 표면의
+        // 비용을 갈라 본다). diag.navTiming이 꺼져 있으면 즉시 반환한다.
+        NavDiagnostics.Mark("cload");
     }
 
     /// <summary>
@@ -600,6 +609,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     private void FinishShowEntries(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
     {
         if (seq != _showSeq) return; // 방어 — 낡은 완료가 편집 진입을 훔치지 않게
+        // 계측 cfillN / cpaint: 중앙 타일 조립 완료와 그 뒤 첫 렌더 프레임(좌 리스트의 fillN·
+        // paint와 대응). 좌·중앙 중 늦게 끝난 쪽이 사용자가 보는 "확 바뀌는" 순간이다.
+        NavDiagnostics.Mark("cfillN");
+        NavDiagnostics.ArmPaint("cpaint");
         if (entries.Count > MaterializeLimit)
             TileGrid.Items.Add(MakeOverflowNotice(entries.Count - MaterializeLimit));
         ApplyTileSize();
