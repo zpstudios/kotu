@@ -2679,9 +2679,11 @@ public sealed partial class MainWindow : Window
     /// skip(alive)로 끝나고, 모듈 전환·전체화면 전이 중 "옛 뷰가 트리에서 빠지는 찰나"의 발동은
     /// ModuleHost.Content가 이미 새 뷰로 교체된 뒤라(ShowModule이 교체 후 SetContentState 순)
     /// 새 모듈 뷰 재포커스 = 의도된 동작이다(A201 Loaded 자기 포커스와 같은 방향 — Focus가
-    /// false면 앵커로 안전). 호출 지점은 3곳 — UpdateShellChrome 말미(전이 시점) + 클릭 한 틱 뒤
-    /// (OnRootPointerFocusGuard) + **500ms 주기 감시(_focusWatchTimer — A234 배치 3)**. 배치 3의
-    /// 계기: v0.240.0 실기기에서 판정은 옳은데(RECOV=0·GUARD=skip(alive)·스트립 inRoot=N 병존)
+    /// false면 앵커로 안전). 호출 지점은 4곳 — UpdateShellChrome 말미(전이 시점) + 클릭 한 틱 뒤
+    /// (OnRootPointerFocusGuard) + **500ms 주기 감시(_focusWatchTimer — A234 배치 3)** +
+    /// ApplyOverlayStates 말미의 null 갈래(A309 — 모드 전이 없이 패널만 닫는 순수 F11/F12 경로는
+    /// UpdateShellChrome을 지나지 않아 전이 시점 호출이 없다. 그 자리에서 조건부로만 부른다).
+    /// 배치 3의 계기: v0.240.0 실기기에서 판정은 옳은데(RECOV=0·GUARD=skip(alive)·스트립 inRoot=N 병존)
     /// 두 호출 시점 모두 detach **이전**이라 발동 기회가 없었다 — 판정 로직은 무변경, 부르는
     /// 시점만 늘렸다(고아가 지속되면 매 틱 재시도 — 복구가 성공하면 다음 틱은 skip(alive)로
     /// 자연 종료). 실행 결과는 진단 오버레이의 GUARD 값(skip 2갈래 구분 +
@@ -3761,6 +3763,27 @@ public sealed partial class MainWindow : Window
             (!RightPanelHost.IsOpen && IsFocusWithin(RightPanelHost));
         if (focusOrphaned)
             (ModuleHost.Content as Control)?.Focus(FocusState.Programmatic);
+        // A309: 위 A135 판정은 IsFocusWithin(비-null 전제)이라 **포커스가 아예 null이 된 형태**를
+        // 못 잡는다 — 닫히는 패널 안 요소가 화면에서 내려가며 포커스가 아무 데도 남지 않는 갈래다.
+        // 그리고 순수 F11/F12 경로(OnOverlaySideDown → ToggleOpaqueDock → MarkSidebarOverride →
+        // 여기)는 UpdateShellChrome을 지나지 않아 그 말미의 A209 방어(RecoverChromeFocusOrphan)
+        // 밖이다. A305로 그 키가 사이드바 오버라이드까지 세우므로, 포커스를 잃으면 셸 라우팅 키가
+        // 전부 죽은 채 창이 그 구성에 고정된다(오버라이드 해제는 모듈 전환뿐 — A314).
+        // 그래서 null 축 하나만 여기서 이어 준다. 판정·복구·에지 기록(_focusWasOrphan)은 전부
+        // RecoverChromeFocusOrphan 안에서만 한다는 A234 배치 3 규칙을 지켜 그 함수를 그대로
+        // 재사용한다(2단 복구 = 모듈 뷰 → ShellFocusAnchor. RootLayout은 Control이 아니라 포커스
+        // 대상이 될 수 없다 — MainWindow.xaml 앵커 주석). null 판정도 단일 산출 지점
+        // (GetShellFocusState)을 쓴다 — 포커스가 null이면 그 헬퍼는 팝업 조회 전에 즉시 반환하므로
+        // 이 종착점에 붙는 비용은 포커스 조회 1회다.
+        // 과잉 발동 없음: 위 분기와 상호 배타(IsFocusWithin이 참이면 포커스는 null이 아니다)이고,
+        // 포커스가 null이면 빼앗을 대상 자체가 없다("null = 무조건 고아" — A234 판정 규칙 그대로).
+        // 살아 있는 포커스·열린 팝업 안 포커스는 그 함수가 skip(alive)/skip(popup)으로 무개입이라
+        // 이 종착점을 지나는 다른 경로(모드 전이·S4 진입/종료·콘텐츠 교체·기본값 적용)에서도
+        // 정상 포커스를 건드리지 않는다. XamlRoot가 아직 없는 로드 전 호출은 그 함수의 첫 가드가
+        // 무동작으로 받는다(여기서도 한 번 더 거른다 — 판정 헬퍼가 XamlRoot를 요구한다).
+        else if (RootLayout.XamlRoot is { } focusRoot
+                 && GetShellFocusState(focusRoot).Focused is null)
+            RecoverChromeFocusOrphan();
     }
 
     /// <summary>
