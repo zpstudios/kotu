@@ -8,6 +8,10 @@
 ![UI](https://img.shields.io/badge/UI-WinUI%203-41b883)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+### 📖 User Guide — **[한국어](docs/USER-GUIDE.ko.md)** · **[English](docs/USER-GUIDE.md)**
+
+모듈별 조작법과 단축키 전체 표. 처음이라면 여기부터.
+
 파일을 더블클릭하면 확장자에 맞는 모듈이 **같은 창**에서 열립니다. 사진이면 뷰어, 동영상이면 플레이어,
 PDF면 문서 뷰어, 압축 파일이면 내부 탐색. 창의 껍데기(사이드 패널·하단 바·트레이 아이콘)는 그대로 있고
 가운데 화면과 하단 바만 바뀝니다. 재생·해제 같은 무거운 일은 검증된 엔진(7-Zip, libvlc,
@@ -41,7 +45,8 @@ LibreHardwareMonitor)에 맡기고, KOTU는 **하나로 묶인 경험**에 집�
   관리자 권한이 필요 없고, 스위치를 끄면 흔적 없이 해제됩니다.
 - **UI 배율** — 시스템 기본 또는 100~350% 고정(KOTU 창에만 적용).
 
-자세한 조작법과 단축키 전체 표는 **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)** — 웹 게시본은 `site/guide.html`.
+자세한 조작법과 단축키 전체 표는 위의 **User Guide**([한국어](docs/USER-GUIDE.ko.md) · [English](docs/USER-GUIDE.md))
+— 웹 게시본은 `site/guide.ko.html` · `site/guide.html`.
 
 ## 다운로드
 
