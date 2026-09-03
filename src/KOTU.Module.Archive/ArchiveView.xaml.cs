@@ -38,7 +38,7 @@ public sealed class ArchiveRow
 /// </summary>
 public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.IContentStateSource,
     IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider,
-    IContentCloseRequestSource
+    IContentCloseRequestSource, IContentInfoProvider
 {
     /// <summary>아카이브를 열면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -76,6 +76,65 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             // 크기를 못 읽으면 압축률 줄만 "—"가 된다.
         }
         return TrayStatus.Open(kind, TrayFormat.Ratio(packed, _root.Size));
+    }
+
+    /// <summary>
+    /// 정보 오버레이용 압축 정보 (A329) — 단일 빌더(ArchiveQuickInfo)를 쓴다: 파일 기본 3행 +
+    /// 내용 통계(항목 수·폴더 수·원본 크기·압축률). 셸의 선택 조회(SelectionQuickInfo)와
+    /// <b>같은 빌더</b>를 써야 열림 축·선택 축 표시가 어긋나지 않는다(A200 원칙).
+    /// 종전에는 이 계약 자체가 없어 열림 축이 셸 폴백 4행(File·Size·Modified·Folder)뿐이었고,
+    /// 선택 축만 zip 압축률 한 행을 냈다.
+    /// 열림 축은 <b>이미 읽어 둔 트리</b>에서 통계를 만들어 넘긴다 — 목록을 다시 읽지 않고,
+    /// zip이 아닌 포맷(7z·rar·tar 등)에서도 값이 채워진다(선택 축은 zip만 — A155 사양 승계.
+    /// 행 집합은 두 축이 같고 값만 열림 축에서 더 채워진다).
+    /// 파일 크기 조회가 I/O라 뷰 워커에서 돌린다(A42·규칙 1.8 — UI 스레드 I/O 금지).
+    /// </summary>
+    public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
+    {
+        if (_archivePath is not { } path) return null;
+        var stats = _root is { } root ? StatsOf(root) : null; // UI 스레드에서 스냅샷(트리는 UI 상태)
+
+        IReadOnlyList<ContentInfoItem> rows;
+        try
+        {
+            rows = await Worker.Run(_ => ArchiveQuickInfo.BuildRows(path, stats));
+        }
+        catch
+        {
+            return null; // 오버레이 정보는 부가 기능 — 실패하면 셸 기본 정보로 대신한다
+        }
+        // 그새 다른 압축 파일로 넘어갔으면 버린다(오버레이 seq에 더한 2중 방어 — A328과 같은 규칙).
+        return _archivePath == path ? rows : null;
+    }
+
+    /// <summary>
+    /// 트리 전수 순회로 항목 수·폴더 수를 센다 — 원본 크기 합은 루트가 이미 누적해 둔 값
+    /// (ArchiveEntryTree.Build의 누적 크기. 트레이 압축률도 같은 값을 쓴다).
+    /// 목록 크기만큼의 순회라 UI 스레드에서 돌려도 되는 비용이고, 트리는 UI 스레드 상태라
+    /// 워커로 넘기기 전에 여기서 스냅샷을 만든다.
+    /// </summary>
+    private static ArchiveQuickInfo.ContentStats StatsOf(ArchiveEntryNode root)
+    {
+        var files = 0;
+        var folders = 0;
+        var stack = new Stack<ArchiveEntryNode>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            foreach (var child in stack.Pop().Children)
+            {
+                if (child.IsDirectory)
+                {
+                    folders++;
+                    stack.Push(child);
+                }
+                else
+                {
+                    files++;
+                }
+            }
+        }
+        return new ArchiveQuickInfo.ContentStats(files, folders, root.Size);
     }
 
     /// <summary>

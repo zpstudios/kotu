@@ -39,10 +39,12 @@ namespace KOTU.Module.Document;
 /// 기반 산술 페이지네이터로 공급한다(줌 무관 14pt Consolas, 대용량(A177 임계)은 안내 1장).
 /// A211 배치 5(v0.224.0): 마크다운 렌더 갈래 — md를 렌더 모드로 보고 있으면 인쇄물도 렌더
 /// 모습이다(파싱 모델 재사용 + 블록 단위 페이지 팩킹). 편집 모드·렌더 불가는 원문 텍스트 폴백.
+/// A329: 정보 공급자(<see cref="IContentInfoProvider"/>) — 우측 정보 패널의 열림 축.
+/// 행 조립은 셸의 선택 축과 공유하는 단일 빌더(<see cref="DocumentQuickInfo"/>)가 전담한다.
 /// </summary>
 public sealed partial class DocumentView : UserControl,
     IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
-    IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource
+    IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource, IContentInfoProvider
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -91,6 +93,38 @@ public sealed partial class DocumentView : UserControl,
             ? TrayStatus.OpenDiagonal(
                 TrayFormat.PageNumber(_pdfCurrentPage), TrayFormat.PageNumber(_pdfTotalPages))
             : TrayStatus.OpenDiagonal(TrayFormat.PageNumber(1), TrayFormat.PageNumber(1));
+    }
+
+    /// <summary>
+    /// 정보 오버레이용 문서 정보 (A329) — 단일 빌더(DocumentQuickInfo)를 쓴다: 파일 기본 3행 +
+    /// 갈래별 절(PDF = 포맷이 정의하는 속성 키 전부 / 텍스트 = 우리가 계산하는 값 — 인코딩·
+    /// 줄바꿈·줄 수·글자 수). 셸의 선택 조회(SelectionQuickInfo)와 <b>같은 빌더</b>를 써야
+    /// 열림 축·선택 축 표시가 어긋나지 않는다(A200 원칙 — 이미지·오디오·영상 축 선례).
+    /// 종전에는 이 계약 자체가 없어 열림 축이 셸 폴백 4행(File·Size·Modified·Folder)뿐이었다.
+    /// PDF는 이미 열어 둔 문서의 페이지 수를 넘겨 <b>빈칸 행을 채우는 데만</b> 쓴다
+    /// (행 집합 불변 — 암호 PDF처럼 다시 열 수 없는 문서에서도 페이지 수가 나온다).
+    /// 기준 경로는 <c>_shownPath</c>다 — PDF는 <c>_path</c>가 null이라(뷰 전용) 그쪽을 보면
+    /// PDF 갈래에서 항상 null이 된다. 무제 문서(A189)는 파일이 없어 null을 돌려주고 셸이
+    /// 기본 정보로 대신한다. 조회는 파일 I/O라 뷰 워커에서 돌린다(A42·규칙 1.8 — UI 스레드 I/O 금지).
+    /// </summary>
+    public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
+    {
+        if (_shownPath is not { } path) return null;
+        // PdfPane이 이미 연 문서의 페이지 수(텍스트 갈래는 0 = 모름 — 빌더가 텍스트 절로 간다).
+        var pageCount = IsPdfFitBranch ? _pdfPane?.PrintPageCount ?? 0 : 0;
+
+        IReadOnlyList<ContentInfoItem> rows;
+        try
+        {
+            rows = await Worker.Run(_ => DocumentQuickInfo.BuildRows(path, pageCount));
+        }
+        catch
+        {
+            return null; // 오버레이 정보는 부가 기능(ImageViewerView·VideoPlayerView와 같은 폴백)
+        }
+        // 항해가 빨라 그새 다른 파일로 넘어갔으면 버린다 — 오버레이도 seq로 거르지만(A200)
+        // 여기서 한 번 더 끊어 낡은 결과가 새 파일 화면에 닿을 길을 남기지 않는다.
+        return _shownPath == path ? rows : null;
     }
 
     /// <summary>미저장 상태 변화(A37) — 셸이 창 제목 ● 표시에 쓴다.</summary>
