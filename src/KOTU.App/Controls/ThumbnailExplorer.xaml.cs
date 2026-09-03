@@ -175,6 +175,25 @@ public sealed partial class ThumbnailExplorer : UserControl
     public ExplorerListing.Entry? SelectedEntry =>
         TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry entry } ? entry : null;
 
+    /// <summary>
+    /// A336: 선택 표시를 걷는다 — 셸이 <b>다른 표면</b>(좌 리스트)에서 선택이 일어났을 때 부른다.
+    /// 선택 축은 하나뿐이고(A200 _selectedBrowse) 우측 정보 패널도 한 파일만 보여 주므로,
+    /// 표시도 한 표면에만 남아야 한다(사용자 확정 — "이 때 썸네일 뷰 속 선택 표시는 사라져야 함").
+    /// <para>
+    /// 이 대입은 GridView의 SelectionChanged를 발화시켜 셸의 <c>SelectionChanged</c> 중계까지
+    /// 올라간다 — 그 되먹임은 <b>셸 쪽 표지</b>(MainWindow._syncingBrowseSelection)가 끊는다.
+    /// 여기서 끊지 않는 이유: 두 표면을 동기화하는 주체가 셸이라 표지도 셸이 들고 있어야 축이
+    /// 한 곳에서만 판정된다(표면끼리 직접 지우는 양방향 결선을 피한 A336의 설계 근거).
+    /// </para>
+    /// 이 표면에는 A323의 "열린 콘텐츠 표시"가 없다 — 중앙 썸네일 뷰는 콘텐츠가 없을 때(S1)만
+    /// 뜨고, S4 그리드는 탐색 전용이다. 그래서 좌 리스트와 달리 되돌릴 표시가 없고 비우면 끝이다.
+    /// </summary>
+    internal void ClearSelection()
+    {
+        if (TileGrid.SelectedItems.Count == 0) return; // 이미 없음 — 잉여 발화도 만들지 않는다
+        TileGrid.SelectedItems.Clear();
+    }
+
     /// <summary>A233: 지연 생성 — Unloaded로 정리된 뒤 다시 로드돼도 되살아난다
     /// (ExplorerPane.FetchPool과 같은 규칙. 워커 수 = 동시 읽기 상한).
     /// A333: 우선순위 BelowNormal — 타일 내용은 이미 그려진 타일에 뒤늦게 얹히는 배경성 작업이다
@@ -756,6 +775,11 @@ public sealed partial class ThumbnailExplorer : UserControl
         tile.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         tile.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         tile.Children.Add(preview);
+        // A337: 클라우드 전용(placeholder) 파일 표시 — 이 줄이 없으면 "썸네일이 안 나온다"가
+        // 사용자에게 고장으로 읽힌다(실기기 문의: 같은 폴더의 PNG 두 개가 갈렸다). 원인은 A175
+        // 사양이다 — 원본을 열면 하이드레이션(전체 다운로드)이 일어나므로 캐시된 썸네일만
+        // 시도하고 실패하면 확장자 타일을 유지한다. 그 사실을 타일이 스스로 밝힌다.
+        if (!entry.IsFolder && entry.IsPlaceholder) tile.Children.Add(MakeCloudBadge());
 
         var caption = new TextBlock
         {
@@ -1154,6 +1178,42 @@ public sealed partial class ThumbnailExplorer : UserControl
         Margin = new Thickness(0, 0, 12, 12),
         IsHitTestVisible = false,
     };
+
+    /// <summary>
+    /// A337: 클라우드 전용(온라인 전용) 파일 배지 — 대기 배지(<see cref="MakePendingBadge"/>)와
+    /// 같은 한 벌(FontIcon·소형·반투명)이고 <b>자리만 반대쪽 위</b>다: 대기
+    /// 배지는 우하단이라 겹치지 않고, 둘이 동시에 보이는 순간(클라우드 파일의 캐시 썸네일을
+    /// 기다리는 동안)에도 서로를 가리지 않는다.
+    /// <para>
+    /// <b>썸네일이 성공해도 남는다</b>: 이 배지가 말하는 것은 "미리보기가 없다"가 아니라
+    /// "이 파일은 로컬에 없다"이고, 그 사실은 캐시 썸네일을 찾았는지와 무관하다. 열면 다운로드가
+    /// 일어난다는 예고이기도 하다.
+    /// </para>
+    /// 글리프 <c>E753</c> = Segoe Fluent Icons의 Cloud — 윈도우 탐색기가 같은 상태에 쓰는
+    /// 그림이라 사용자가 이미 아는 기호다(별도 학습이 필요 없다).
+    /// <para>
+    /// 대기 배지와 <b>다른 점 하나</b>: 히트 테스트에서 빼지 않는다 — 툴팁이 이 배지의 존재
+    /// 이유(왜 미리보기가 없는지)를 설명하는 유일한 자리이고, 히트 테스트를 끄면 툴팁이
+    /// 뜨지 않는다. 포인터 이벤트는 조상으로 버블링되므로 타일 선택·더블클릭은 그대로다
+    /// (타일 히트 판정도 조상 탐색 EntryFromSource라 영향이 없다).
+    /// </para>
+    /// <b>클라우드 전용 파일에만</b> 만든다 — 로컬 파일은 객체가 0개 늘어난다(타일 조립이
+    /// 개수에 비례하는 병목이라: A334 실측 clay&gt;fillN).
+    /// </summary>
+    private static FontIcon MakeCloudBadge()
+    {
+        var badge = new FontIcon
+        {
+            Glyph = "\uE753",
+            FontSize = 10,
+            Opacity = 0.55,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 12, 12, 0),
+        };
+        ToolTipService.SetToolTip(badge, "Online-only file — preview needs a download");
+        return badge;
+    }
 
     /// <summary>
     /// 게이트(동시 ThumbFetchConcurrency건) 획득 후 워커에서 셸 썸네일을 추출해 타일 내용을

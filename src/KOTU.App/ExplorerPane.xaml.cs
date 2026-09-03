@@ -1684,6 +1684,35 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
+    /// A336: 선택 표시를 <b>열린 콘텐츠 표시(A323) 상태로 되돌린다</b> — 셸이 다른 표면(중앙
+    /// 썸네일·S4 그리드)에서 선택이 일어났을 때 부른다. 선택 축은 하나뿐이라(A200) 표시도 한
+    /// 표면에만 남아야 한다(사용자 확정).
+    /// <para>
+    /// 중앙 표면의 <c>ClearSelection</c>과 달리 <b>그냥 비울 수 없다</b>: 이 목록의 선택 표시는
+    /// A323에서 "지금 열려 있는 파일"을 가리키는 표시로도 쓰인다(새 시각 요소를 만들지 않고 선택
+    /// 기구를 재사용한 것이 그 사양). 그래서 일단 비우고, 열린 콘텐츠가 있으면 그 항목을 다시
+    /// 건다 — 결과는 "사용자 선택은 사라지고 열린 파일 표시는 남는다"다.
+    /// </para>
+    /// 되먹임 차단은 두 겹이다: 여기서 <see cref="_syncingCurrent"/>로 중계를 막고(A323의 표지를
+    /// 그대로 재사용 — 목적이 같다: 표시용 대입은 선택 축을 건드리지 않는다), 셸도 자기 표지로
+    /// 같은 구간을 막는다(MainWindow._syncingBrowseSelection).
+    /// </summary>
+    internal void RevertSelectionToCurrentFile()
+    {
+        _syncingCurrent = true;
+        try
+        {
+            IconGrid.SelectedItems.Clear();
+            ListPane.SelectedItems.Clear();
+        }
+        finally
+        {
+            _syncingCurrent = false; // 예외가 나도 표지가 남으면 이후 사용자 선택이 통째로 침묵한다
+        }
+        ApplyCurrentFileSelection(); // 열린 콘텐츠가 있으면 그 표시만 되살린다(없으면 무동작 = 빈 선택)
+    }
+
+    /// <summary>
     /// A323: 기억해 둔 열린 콘텐츠 경로를 지금 목록에 반영한다. 호출부 = <see cref="SetCurrentFile"/>
     /// (셸 통지 시점) + <see cref="FinishFill"/>(목록 재작성 후 — 폴더가 바뀐 경우에도 새 목록에서
     /// 표시가 맞게). 이미 그 항목이 선택돼 있으면 무동작이라 연속 항해(키 반복)에서도

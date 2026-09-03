@@ -119,6 +119,12 @@ public sealed partial class FileListOverlay : UserControl
     public void SetCurrentFile(string? path) => _list?.SetCurrentFile(path);
 
     /// <summary>
+    /// A336: 좌 리스트의 선택 표시를 열린 콘텐츠 표시(A323) 상태로 되돌린다 — 셸이 중앙 표면에서
+    /// 선택이 일어났을 때 부른다(중계만 — 근거는 ExplorerPane.RevertSelectionToCurrentFile).
+    /// </summary>
+    public void RevertSelectionToCurrentFile() => _list?.RevertSelectionToCurrentFile();
+
+    /// <summary>
     /// 떠 있는 동안의 선택 파일 경로 (A86 — 셸 Enter의 "선택 파일 있으면 열기" 판정).
     /// 닫혀 있거나(보이지 않는 선택은 열지 않는다) 선택이 폴더·없음이면 null.
     /// ※ A94 6차(v0.153.0)부터 일괄 열기는 <see cref="OpenSelectedFiles"/> —

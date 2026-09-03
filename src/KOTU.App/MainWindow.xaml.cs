@@ -3963,6 +3963,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnBrowseSelectionChanged(bool fromList)
     {
+        if (_syncingBrowseSelection) return; // A336 — 표면 동기화가 만든 발화(아래 표지 주석)
         (string Path, bool IsPlaceholder, long ModifiedTicks)? next;
         if (fromList)
         {
@@ -3985,8 +3986,55 @@ public sealed partial class MainWindow : Window
             n.Path == cur.Path && n.IsPlaceholder == cur.IsPlaceholder &&
             n.ModifiedTicks == cur.ModifiedTicks) return;
         _selectedBrowse = next;
+        if (next is not null) SyncBrowseSelectionSurfaces(fromList); // A336 — 표시는 한 표면만
         RefreshInfoOverlayForSelection();
     }
+
+    /// <summary>
+    /// A336: 선택 표시를 <b>방금 선택이 일어난 표면 하나에만</b> 남긴다 — 반대쪽 표면의 선택
+    /// 표시를 걷는다. 사용자 보고: 중앙 썸네일에서 고른 뒤 좌 리스트에서 고르면 우측 정보는
+    /// 좌 리스트 파일을 보여 주는데 <b>중앙 타일의 파란 테두리가 그대로 남아</b> "선택 표시 둘,
+    /// 정보 하나"가 됐다.
+    /// <para>
+    /// 왜 셸이 하는가: 선택 축은 <see cref="_selectedBrowse"/> 하나이고 그 축을 판정하는 자리가
+    /// <see cref="OnBrowseSelectionChanged"/> 하나다. 표면끼리 직접 지우게 하면(양방향 결선)
+    /// 어느 쪽이 진짜 축인지가 코드에서 사라진다 — 축은 셸이 들고 표면이 따라간다.
+    /// </para>
+    /// <para>
+    /// 두 표면의 처리가 다른 이유: 중앙 썸네일·S4 그리드는 탐색 전용이라 비우면 끝이지만, 좌
+    /// 리스트의 선택 표시는 A323에서 "지금 열린 파일" 표시로도 쓰인다 — 그래서 비우는 대신
+    /// <b>그 상태로 되돌린다</b>(열린 파일이 있으면 그 항목만 다시 걸린다).
+    /// </para>
+    /// 되먹임: 이 안의 대입은 각 표면의 SelectionChanged를 발화시켜 이 함수까지 되올라온다 —
+    /// <see cref="_syncingBrowseSelection"/>이 그 구간의 재진입을 끊는다(끊지 않으면 반대쪽의
+    /// "선택 없음"이 방금 세운 축을 null로 덮어쓴다). 표면 쪽 표지(_syncingCurrent)와 이중 방어다.
+    /// </summary>
+    private void SyncBrowseSelectionSurfaces(bool fromList)
+    {
+        _syncingBrowseSelection = true;
+        try
+        {
+            if (fromList)
+            {
+                _thumbnailExplorer?.ClearSelection();
+                _s4Explorer?.ClearSelection();
+            }
+            else
+            {
+                ListOverlay.RevertSelectionToCurrentFile();
+            }
+        }
+        finally
+        {
+            _syncingBrowseSelection = false; // 표지가 남으면 이후 사용자 선택이 통째로 침묵한다
+        }
+    }
+
+    /// <summary>
+    /// A336: 위 표면 동기화가 도는 동안 선택 축 판정을 침묵시키는 표지 —
+    /// 배선 지점 = <see cref="OnBrowseSelectionChanged"/> 첫 줄(그 주석에 근거).
+    /// </summary>
+    private bool _syncingBrowseSelection;
 
     // ---------- 경계 버튼 (A86 keymap Q7) ----------
 
