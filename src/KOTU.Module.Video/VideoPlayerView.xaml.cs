@@ -850,6 +850,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// A258(v0.258.0): 위 "루프 없음 = 다음 파일"에 설정 게이트가 하나 붙었다 — 설정의
     /// "Auto-play next file"을 끄면 <b>루프 없음일 때만</b> 목록 진행 대신 정지(전이 5)한다.
     /// 루프 모드가 켜져 있으면 옵션과 무관하게 종전 전이 그대로다(아래 게이트 주석 참고).
+    /// A330 ⓒ: 전이 4(목록 루프 + 다음 파일 없음 = 같은 파일 재시작)를 재생 목록 블록 밖으로
+    /// 꺼냈다 — 목록이 아직·끝내 만들어지지 않은 회차에도 성립해야 한다(그 자리 주석이 정본).
     /// [오디오 동형 이식 완료 — v0.255.0 / A258 게이트도 동형 이식 — v0.258.0]
     /// 오디오에는 PlaybackStateChanged가 없다 — 그 줄만 빼고 복제.
     /// </summary>
@@ -917,16 +919,26 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
                 OpenPath(next, autoAdvance: true);
                 return;
             }
+        }
 
-            // 전이 4: 목록 루프 + 단일 파일 목록 = 같은 파일 재시작. 파일 1개가 곧 목록 전체라
-            // 이 재시작도 "되감기 1회"로 세어 같은 예산을 소모한다(A255 — 구판의 무한 고정 폐기).
-            if (_loopMode == LoopMode.List && list.Count == 1 &&
-                (_listLoopLimit == 0 || _listLoops < _listLoopLimit))
-            {
-                _listLoops++;
-                ReplayCurrent();
-                return;
-            }
+        // 전이 4: 목록 루프인데 진행할 다음 파일이 없다 = 지금 파일이 곧 목록 전체다 →
+        // 같은 파일 재시작. 이 재시작도 "되감기 1회"로 세어 같은 예산을 소모한다
+        // (A255 — 구판의 무한 고정 폐기).
+        // **A330 ⓒ 개정**(오디오 실기기 보고의 동형 이식 — 영상에도 같은 결함이 있었다):
+        // 종전에는 이 판정이 위 `_playlist is { } list` 블록 **안**에 `list.Count == 1`
+        // 조건으로 있어, 목록이 **만들어지지 않은** 회차에는 목록 루프가 통째로 정지(전이 5)로
+        // 떨어졌다 — _playlist가 null이 되는 길은 셋이다: ⓐ 폴더 스캔 실패(EnsurePlaylist의
+        // catch) ⓑ 스캔이 끝나기 전에 EOF(그 주석의 "다음 EOF부터 정상"은 정지 전이에서는
+        // 성립하지 않는다 — 정지는 EOF를 더 만들지 않는다) ⓒ 내장 테스트 클립(목록 대상 제외).
+        // 이제 목록이 없거나 항목이 하나뿐이면 같은 뜻으로 본다.
+        // 모드 배타·A258 오토넥스트 게이트는 무영향이다(둘 다 루프 없음 축이고 여기는 목록 루프
+        // 전용). Count > 1인데 여기까지 왔다면 되감기 예산 소진이므로 종전대로 정지다.
+        if (_loopMode == LoopMode.List && _playlist is not { Count: > 1 } &&
+            (_listLoopLimit == 0 || _listLoops < _listLoopLimit))
+        {
+            _listLoops++;
+            ReplayCurrent();
+            return;
         }
 
         // 전이 5: 정지 — 종전 EndReached UI 갱신 그대로(유일하게 Ended에 머무는 경로 —

@@ -383,6 +383,12 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _eqPreset = _settings.Get("audio.equalizer", string.Empty);
         _outputDeviceId = _settings.Get("audio.outputDevice", string.Empty);
 
+        // A330 ⓑ: EQ 플라이아웃도 열 때마다 채운다(장치·비주얼라이저와 같은 Opening 재구성).
+        // 종전에는 플레이어 생성 워커가 1회 채우며 버튼 활성화까지 겸했는데, 프리셋 열거가
+        // 실패하면 버튼이 영구 비활성으로 굳어 "아이콘만 어둡고 흐리다"로 보였다
+        // (FillEqualizerFlyout 주석의 판정 근거). 버튼은 이제 항상 활성이다.
+        EqFlyout.Opening += (_, _) => FillEqualizerFlyout();
+
         // A164: 장치 플라이아웃 뼈대 — 서브메뉴 2개(출력 / Windows 기본 입력)는 코드로 만든다
         // (MenuFlyoutSubItem은 XAML 선례가 없어 코드 구성만 쓴다 — 탐색기 우클릭 메뉴와 같은 방식).
         // 목록은 열 때마다 새로 채운다: 오디오 장치는 꽂힘·뽑힘이 잦아 시점 캐시가 무의미하다
@@ -547,7 +553,8 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             _eqPresetNames = presetNames;
             if (_eqPreset.Length > 0 && Array.IndexOf(_eqPresetNames, _eqPreset) < 0)
                 _eqPreset = string.Empty; // 저장 이름이 이 libvlc 목록에 없다 — Off 폴백(설정 파일은 유지)
-            FillEqualizerFlyout();
+            // A330 ⓑ: 여기서 플라이아웃을 채우던 호출은 뺐다 — 목록은 열 때마다 이 배열에서
+            // 다시 만들어지고(생성자의 EqFlyout.Opening), 버튼 활성화 축도 사라졌다.
             ApplyEqualizer(player);
         }
         catch (Exception ex)
@@ -863,6 +870,8 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// A258(v0.258.0): 위 "루프 없음 = 다음 파일"에 설정 게이트가 하나 붙었다 — 설정의
     /// "Auto-play next file"을 끄면 <b>루프 없음일 때만</b> 목록 진행 대신 정지(전이 5)한다.
     /// 루프 모드가 켜져 있으면 옵션과 무관하게 종전 전이 그대로다(아래 게이트 주석 참고).
+    /// A330 ⓒ: 전이 4(목록 루프 + 다음 파일 없음 = 같은 파일 재시작)를 재생 목록 블록 밖으로
+    /// 꺼냈다 — 목록이 아직·끝내 만들어지지 않은 회차에도 성립해야 한다(그 자리 주석이 정본).
     /// 영상 원본과 다른 점: 오디오에는 IPlaybackStateSource·PlaybackStateChanged가 없어
     /// (설계 §5.2 — A186 확대는 이번 범위 밖) 그 발화 줄이 통째로 빠지고, 대신 오디오만의
     /// 트레이 1초 타이머 정지(SetTrayTimer(false))·TrayStatusChanged가 정지 전이에 남는다.
@@ -930,16 +939,30 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
                 OpenPath(next, autoAdvance: true);
                 return;
             }
+        }
 
-            // 전이 4: 목록 루프 + 단일 파일 목록 = 같은 파일 재시작. 파일 1개가 곧 목록 전체라
-            // 이 재시작도 "되감기 1회"로 세어 같은 예산을 소모한다(A255 — 구판의 무한 고정 폐기).
-            if (_loopMode == LoopMode.List && list.Count == 1 &&
-                (_listLoopLimit == 0 || _listLoops < _listLoopLimit))
-            {
-                _listLoops++;
-                ReplayCurrent();
-                return;
-            }
+        // 전이 4: 목록 루프인데 진행할 다음 파일이 없다 = 지금 파일이 곧 목록 전체다 →
+        // 같은 파일 재시작. 이 재시작도 "되감기 1회"로 세어 같은 예산을 소모한다
+        // (A255 — 구판의 무한 고정 폐기).
+        // **A330 ⓒ 개정**: 종전에는 이 판정이 위 `_playlist is { } list` 블록 **안**에
+        // `list.Count == 1` 조건으로 있었다. 그래서 목록이 **만들어지지 않은** 회차에는
+        // 목록 루프가 통째로 정지(전이 5)로 떨어졌다 — _playlist가 null이 되는 길은 셋이다:
+        //   ⓐ 폴더 스캔 실패(EnsurePlaylist의 catch — 권한·IO 예외가 _playlist를 null로 남긴다)
+        //   ⓑ 스캔이 끝나기 전에 EOF(EnsurePlaylist 주석이 "다음 EOF부터 정상"이라고 적어 둔
+        //      경합. 그러나 정지 전이는 EOF를 더 만들지 않으므로 그 자가 복구는 성립하지 않는다)
+        //   ⓒ 내장 샘플 곡(목록 대상 제외 — PlayCurrent가 _playlist를 null로 둔다)
+        // 실기기 보고 = "폴더에 음악 파일 1개인데 전체 반복이 안 된다". 이제 목록이 없거나
+        // 항목이 하나뿐이면 같은 뜻으로 본다.
+        // 모드 배타는 그대로다: 루프 없음·한 파일 루프는 이 분기에 들어오지 못하므로
+        // "루프 없음에서 무한 재생"은 생기지 않고, A258 오토넥스트 게이트도 무관하다
+        // (그 게이트는 루프 없음일 때만 유효하고 여기는 목록 루프 전용이다).
+        // Count > 1인데 여기까지 왔다면 되감기 예산 소진이므로 종전대로 정지다.
+        if (_loopMode == LoopMode.List && _playlist is not { Count: > 1 } &&
+            (_listLoopLimit == 0 || _listLoops < _listLoopLimit))
+        {
+            _listLoops++;
+            ReplayCurrent();
+            return;
         }
 
         // 전이 5: 정지 — 종전 EndReached UI 갱신 그대로(유일하게 Ended에 머무는 경로).
@@ -1037,7 +1060,19 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
     /// <summary>
     /// EQ 플라이아웃을 Off + libvlc 내장 프리셋 목록으로 채운다(자막 플라이아웃과 같은
-    /// 라디오 구성). 프리셋 목록은 libvlc 수명 동안 불변이라 플레이어 생성 후 1회면 된다.
+    /// 라디오 구성).
+    /// <b>A330 ⓑ 개정</b>: 종전에는 플레이어 생성 워커가 이 함수를 1회 부르며
+    /// <c>EqButton.IsEnabled = 프리셋 있음</c>까지 겸했다. 그래서 프리셋 열거가 실패하면
+    /// (EnsurePlayerAsync의 try/catch가 빈 배열을 남긴다) 버튼이 <b>영구 비활성</b>으로
+    /// 굳었고, 실기기에서는 "EQ 아이콘만 어둡고 흐리다"로 보였다 — 흐림의 정체는 아이콘
+    /// 렌더가 아니라 <b>버튼의 Disabled 전경색</b>이다(옆 비주얼라이저 버튼이 같은
+    /// MediaIcons 팩토리·같은 A299 전경 동기를 쓰는데 멀쩡하다는 것이 그 증거이고,
+    /// EQ 도형의 잉크량 138px²는 비주얼라이저 88px²보다 오히려 많다).
+    /// 이제 버튼은 <b>항상 활성</b>이고(비주얼라이저 버튼 선례 — "선택은 플레이어가 없어도
+    /// 저장된다") 목록은 <b>열 때마다</b> 다시 채운다(장치·비주얼라이저 플라이아웃의 Opening
+    /// 재구성 관례). 프리셋을 아직·끝내 못 읽은 상태에서 열면 Off 한 줄이 나오고, 그 Off는
+    /// 실제로 동작하는 선택이라 막다른 길이 아니다(UnsetEqualizer).
+    /// 프리셋 목록은 libvlc 빌드 수명 동안 불변이라 재열거 비용은 없다(문자열 배열 순회).
     /// </summary>
     private void FillEqualizerFlyout()
     {
@@ -1045,7 +1080,6 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         AddEqualizerChoice("Off", string.Empty);
         foreach (var name in _eqPresetNames)
             AddEqualizerChoice(name, name);
-        EqButton.IsEnabled = _eqPresetNames.Length > 0;
     }
 
     private void AddEqualizerChoice(string label, string presetName)
@@ -1271,6 +1305,33 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         return [.. swapOptions, "--no-video-title-show"]; // Off — 영상 모듈과 같은 옵션 구성
     }
 
+    /// <summary>
+    /// A330 ⓐ: 표면(vout 스왑체인)에 남은 <b>구 인스턴스의 마지막 프레임</b>을 지운다.
+    /// libvlc 시각화는 vout이 스왑체인에 Present한 그림이라 인스턴스를 갈아 끼워도 표면이
+    /// 저절로 비워지지 않는다 — 새 인스턴스가 다시 그릴 때 덮일 뿐이다. 그래서 <b>libvlc가
+    /// 아예 그리지 않는 스타일</b>(Off · VU meter — 둘 다 Effect가 null이라 인스턴스 옵션이
+    /// 같다)로 바꾸면 구 파형이 영구히 남는다(실기기 보고: Scope → VU meter 전환 시 미터
+    /// 뒤로 파란·빨간 파형이 그대로 보인다. 사용자 추측대로 다른 전환은 새 그림이 덮어
+    /// 가렸던 것뿐이고, <b>Off 전환도 같은 잔상</b>이다).
+    /// 지우개는 영상 모듈 A130이 쓰는 것과 같은 관용구다 — VideoView.Clear()(LibVLCSharp
+    /// 3.10.0, vlc 이슈 23667 공식 워크어라운드)가 백버퍼를 검정으로 칠해 Present한다.
+    /// 표면 배경도 검정(XAML AudioSurface)이라 이음새가 없고, A304 VU 오버레이·A302 세러모니
+    /// 칩·A301 진단 판은 전부 XAML 자식이라 이 지우개에 지워지지 않는다(스왑체인 밖).
+    /// <b>VideoView를 숨기지 않는 이유</b>: 감추면 Scope·Spectrum·Spectrometer가 함께
+    /// 사라진다 — 표면 가시성은 다섯 스타일 전부에서 그대로 두고 내용만 지운다.
+    /// </summary>
+    private void ClearVisualizerSurface()
+    {
+        try
+        {
+            Vlc.Clear();
+        }
+        catch
+        {
+            // 표면 정리 실패가 교체를 막으면 안 된다 — 최악이라도 구 프레임이 남을 뿐이다.
+        }
+    }
+
     /// <summary>플라이아웃을 스타일 라디오 5택으로 채운다(EQ의 AddEqualizerChoice 관용구).</summary>
     private void FillVisualizerFlyout()
     {
@@ -1466,6 +1527,9 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     ///      경합: OnUnloaded는 ②에서 비워진 필드 때문에 아무것도 해제하지 않으므로 해제
     ///      주체는 항상 이 메서드 한쪽이다(이중 해제 없음). 해제 실패 무시는 종전 Post의
     ///      계약 그대로(람다 안 try/catch — "실패해도 그만"인 정리).
+    ///   ⑤-b A330 ⓐ: 표면 잔상 정리(ClearVisualizerSurface) — 구 인스턴스가 스왑체인에
+    ///      Present해 둔 마지막 프레임은 인스턴스를 갈아도 남는다. 신 인스턴스가 곧 덮어
+    ///      그리는 경우(효과 있는 스타일 + ⑥ 재장전)만 건너뛴다(깜빡임 회피 — 그 자리 주석).
     ///   ⑥ 재생 중이었고 파일이 그대로면 ReplayCurrent로 재장전 + _pendingResumeMs로 위치
     ///      복원(Playing에서 적용 — 기존 이어듣기 관용구. 복원 위치는 ①에서 잡은 값이고 구
     ///      인스턴스는 ②에서 일시정지라 ⑤ 대기 시간만큼 밀리지 않는다). 그새 다른 파일로
@@ -1612,8 +1676,19 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             _player = player;
             _playerVisualizer = style;
 
+            // A330 ⓐ: 잔상 정리 — 구 인스턴스는 ⑤에서 해제됐고 표면에는 그 마지막 프레임이
+            // 그대로 남아 있다. 신 인스턴스가 곧 다시 그리는 경우(효과 있는 스타일 + 아래 ⑥
+            // 재장전)만 건너뛴다: 어차피 덮이는 자리에 검정을 한 번 끼우면 그 자체가 깜빡임이
+            // 된다(A301 계측 기준 교체는 85ms대). 그 밖은 전부 지운다 —
+            //   ⓐ Off·VU meter(Effect null) = 신 인스턴스가 영영 그리지 않는다.
+            //   ⓑ 정지·일시정지 중 교체 = 재장전이 없어 다음 재생까지 구 그림이 남는다
+            //      (A302 세러모니 칩이 "바뀌었다"고 알리는데 화면은 구 스타일이던 어긋남).
+            var replays = wasPlaying && file is not null &&
+                string.Equals(file, _filePath, StringComparison.Ordinal);
+            if (!replays || EffectListValue(style) is null) ClearVisualizerSurface();
+
             // ⑥ 재장전 + 위치 복원 — ⑤가 끝난 뒤라 구 인스턴스는 장치·vout을 이미 놓았다
-            if (wasPlaying && file is not null && string.Equals(file, _filePath, StringComparison.Ordinal))
+            if (replays)
             {
                 _swapStartedUtc = swapStartUtc; // A301: Playing 도달 시 OnPlayerPlaying이 소비
                 ReplayCurrent();             // 셸 재동기화·카운터 리셋 없는 재장전(A11 변형 재사용)
