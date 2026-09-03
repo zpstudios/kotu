@@ -453,7 +453,8 @@ Image, Video, PDF and text documents share one Fit control with four options:
 | **Fit height** | fills the height |
 
 Clicking the body of the button re-applies the option you last chose (`F`). Clicking the arrow opens
-the list. `A` jumps straight to **Original**. A new picture, video or PDF starts at Contain.
+the list. `A` jumps straight to **Original**. A new picture or video starts at Contain; a new PDF
+starts at Original.
 
 **In a text or Markdown document** — while you edit, while you read the locked view, and in the
 rendered Markdown view alike — the first three options are live and **Fit height** is greyed out,
