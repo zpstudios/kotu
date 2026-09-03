@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KOTU — 사용자 가이드</title>
+<meta name="description" content="KOTU 사용법: 모듈, 전체 단축키 목록, 사이드 패널, 파일 연결, 여러 창 동시에 쓰기, Settings, 그리고 세 가지 창 아이콘.">
+<meta name="theme-color" content="#0b1521">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+
+<meta property="og:type" content="article">
+<meta property="og:title" content="KOTU — 사용자 가이드">
+<meta property="og:description" content="KOTU가 할 수 있는 모든 것과 그것을 다루는 방법 — 전체 키보드 단축키 목록 포함.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   KOTU 사용자 가이드(한국어) — 단일 파일, 빌드 단계 없음.
+   이 페이지 내용의 정본은 저장소의 docs/USER-GUIDE.ko.md이고,
+   그 문서의 정본은 영어판 docs/USER-GUIDE.md다.
+   토큰·내비게이션·푸터·스타일 블록은 guide.html(영어)과 동일하게
+   유지한다 — 고칠 때는 양쪽을 함께 고치거나 어느 쪽도 고치지 않는다.
+   ============================================================ */
+:root{
+  --bg:          #0b1521;
+  --bg-deep:     #060d18;
+  --bg-card:     #121b28;
+  --line:        #1e2b3c;
+
+  --mint:        #86d3a5;
+  --mint-deep:   #5eb884;
+  --pink:        #ee8ca3;
+  --amber:       #f5c56b;
+  --blue:        #7bb8d6;
+  --violet:      #b39ae0;
+
+  --ink:         #f2e9e0;
+  --ink-dim:     #a8b8c6;
+  --ink-faint:   #7e91a4;
+
+  --maxw:        1240px;
+  --r:           18px;
+  --ease:        cubic-bezier(.22,.61,.36,1);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:96px;-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:17px;line-height:1.6;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4{font-family:'Archivo','Arial Black','Helvetica Neue',Arial,sans-serif;margin:0;line-height:1.05;letter-spacing:-.01em}
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 28px}
+
+/* ---------- nav (identical to index.html) ---------- */
+.nav{
+  position:sticky;top:0;z-index:60;
+  background:rgba(6,13,24,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid transparent;transition:border-color .3s var(--ease),background .3s var(--ease);
+}
+.nav.scrolled{border-bottom-color:var(--line);background:rgba(6,13,24,.9)}
+.nav-in{display:flex;align-items:center;gap:26px;height:76px}
+.brand{display:flex;align-items:center;gap:11px;flex-shrink:0}
+.brand img{width:40px;height:40px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+.brand-txt{display:flex;flex-direction:column;line-height:1}
+.brand-name{font-family:'Archivo',Arial,sans-serif;font-weight:900;font-size:25px;color:var(--mint);letter-spacing:.02em}
+.brand-sub{font-size:9.5px;font-weight:600;letter-spacing:.19em;color:var(--ink-faint);margin-top:4px}
+
+.nav-links{display:flex;gap:30px;margin-left:auto}
+.nav-links a{
+  font-size:13px;font-weight:600;letter-spacing:.11em;color:var(--ink-dim);
+  padding:6px 0;position:relative;transition:color .2s var(--ease);white-space:nowrap;
+}
+.nav-links a::after{
+  content:"";position:absolute;left:0;right:100%;bottom:0;height:2px;
+  background:var(--pink);transition:right .3s var(--ease);
+}
+.nav-links a:hover{color:var(--ink)}
+.nav-links a:hover::after,.nav-links a.active::after{right:0}
+.nav-links a.active{color:var(--ink)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  font-family:'Barlow',system-ui,sans-serif;font-weight:700;font-size:14px;letter-spacing:.09em;
+  padding:13px 26px;border-radius:999px;border:1px solid transparent;cursor:pointer;
+  transition:transform .2s var(--ease),box-shadow .25s var(--ease),background .2s var(--ease);
+  white-space:nowrap;
+}
+.btn svg{width:17px;height:17px;flex:0 0 auto}
+.btn-primary{background:linear-gradient(180deg,#9adfb5,#6fbf90);color:#08301d;box-shadow:0 6px 20px -8px rgba(134,211,165,.65)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 28px -10px rgba(134,211,165,.8)}
+.btn-ghost{background:rgba(255,255,255,.035);color:var(--ink);border-color:rgba(255,255,255,.16)}
+.btn-ghost:hover{background:rgba(255,255,255,.09);transform:translateY(-2px)}
+.nav .btn{padding:11px 22px;font-size:12.5px}
+
+.burger{display:none;margin-left:auto;background:none;border:0;color:var(--ink);padding:8px;cursor:pointer}
+.burger svg{width:26px;height:26px}
+
+/* ---------- page head ---------- */
+.ghead{background:linear-gradient(180deg,#060d18 0%,#0a1220 62%,#0b1521 100%);padding:66px 0 54px;border-bottom:1px solid var(--line)}
+.eyebrow{
+  display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.22em;color:var(--mint);
+  margin-bottom:16px;
+}
+.ghead h1{font-weight:900;font-size:clamp(32px,5vw,58px);letter-spacing:.005em}
+.ghead h1 .hl{color:var(--pink)}
+.ghead p{color:var(--ink-dim);margin:16px 0 0;font-size:16.5px;max-width:70ch}
+.asof{
+  display:inline-block;margin-top:22px;font-size:12px;font-weight:700;letter-spacing:.14em;
+  color:var(--mint);border:1px solid rgba(134,211,165,.32);border-radius:6px;padding:5px 11px;
+}
+
+/* ---------- layout: table of contents + article ---------- */
+.gbody{padding:52px 0 96px}
+.gcols{display:grid;grid-template-columns:230px minmax(0,1fr);gap:56px;align-items:start}
+@media (max-width:960px){.gcols{grid-template-columns:1fr;gap:34px}}
+
+.toc{position:sticky;top:100px}
+@media (max-width:960px){
+  .toc{position:static;border:1px solid var(--line);border-radius:14px;background:var(--bg-card);padding:20px 22px}
+}
+.toc h2{font-size:11.5px;font-weight:800;letter-spacing:.2em;color:var(--ink-faint);margin-bottom:14px}
+.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+.toc li{counter-increment:toc;margin-bottom:9px}
+.toc a{
+  display:block;font-size:14px;color:var(--ink-dim);padding-left:26px;position:relative;
+  transition:color .2s var(--ease);
+}
+.toc a::before{
+  content:counter(toc);position:absolute;left:0;top:0;width:18px;text-align:right;
+  font-size:11.5px;font-weight:700;color:var(--ink-faint);line-height:1.9;
+}
+.toc a:hover{color:var(--mint)}
+
+article h2{
+  font-size:clamp(22px,2.8vw,32px);font-weight:900;letter-spacing:.005em;
+  margin:0 0 18px;padding-top:8px;
+}
+article h2 .num{color:var(--pink);margin-right:12px}
+article h3{
+  font-size:18.5px;font-weight:800;letter-spacing:.03em;color:var(--mint);
+  margin:34px 0 12px;
+}
+article section + section{margin-top:64px;padding-top:44px;border-top:1px solid var(--line)}
+article p{margin:0 0 16px;color:#d3dde6}
+article ul{margin:0 0 18px;padding:0;list-style:none}
+article li{font-size:15.5px;color:#c7d3de;padding-left:17px;position:relative;margin-bottom:9px}
+article li::before{content:"";position:absolute;left:0;top:.66em;width:5px;height:5px;border-radius:50%;background:var(--mint-deep)}
+article strong{color:var(--ink);font-weight:700}
+article em{font-style:normal;color:var(--ink-dim)}
+article a.inl{color:var(--mint);border-bottom:1px solid rgba(134,211,165,.35)}
+article a.inl:hover{border-bottom-color:var(--mint)}
+
+.note{
+  border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:12px;
+  background:rgba(255,255,255,.017);padding:16px 20px;margin:0 0 22px;
+  font-size:15px;color:var(--ink-dim);
+}
+
+kbd{
+  font-family:'Barlow',system-ui,sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.03em;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-bottom-width:2px;
+  border-radius:6px;padding:2px 7px;color:var(--ink);white-space:nowrap;
+}
+code{
+  background:rgba(255,255,255,.06);padding:2px 7px;border-radius:5px;
+  font-size:13.5px;color:var(--mint);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+.tbl{overflow-x:auto;margin:0 0 24px;border:1px solid var(--line);border-radius:14px;background:var(--bg-card)}
+table{border-collapse:collapse;width:100%;min-width:460px}
+th,td{text-align:left;padding:11px 16px;font-size:14.5px;border-bottom:1px solid var(--line);vertical-align:top}
+th{
+  font-family:'Archivo',Arial,sans-serif;font-weight:700;font-size:11.5px;letter-spacing:.14em;
+  color:var(--ink-faint);text-transform:uppercase;background:rgba(255,255,255,.02);
+}
+td{color:#c7d3de}
+td:first-child{color:var(--ink);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+
+/* ---------- footer (identical to index.html) ---------- */
+footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0 40px}
+.foot{display:flex;flex-wrap:wrap;gap:26px;align-items:center;justify-content:space-between}
+.foot-links{display:flex;flex-wrap:wrap;gap:24px}
+.foot-links a{font-size:13.5px;color:var(--ink-dim);transition:color .2s var(--ease)}
+.foot-links a:hover{color:var(--mint)}
+.foot-legal{font-size:12.5px;color:var(--ink-faint);margin-top:24px;line-height:1.7}
+
+/* ---------- responsive ---------- */
+@media (max-width:1080px){
+  .nav-links{gap:20px}
+  .nav-links a{font-size:12px;letter-spacing:.08em}
+}
+@media (max-width:900px){
+  .nav-links,.nav .btn{display:none}
+  .nav.open .nav-links{
+    display:flex;position:absolute;top:76px;left:0;right:0;flex-direction:column;gap:0;
+    background:rgba(6,13,24,.98);border-bottom:1px solid var(--line);padding:8px 28px 22px;
+  }
+  .nav.open .nav-links a{padding:14px 0;font-size:14px;border-bottom:1px solid rgba(255,255,255,.05)}
+  .burger{display:block}
+  .ghead{padding:52px 0 42px}
+}
+@media (max-width:520px){
+  body{font-size:16px}
+  .wrap{padding-left:20px;padding-right:20px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="index.html#home">
+      <img src="assets/logo-mark.svg" alt="" width="64" height="64">
+      <span class="brand-txt">
+        <span class="brand-name">KOTU</span>
+        <span class="brand-sub">KING OF THE UTILITIES</span>
+      </span>
+    </a>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <nav class="nav-links" id="navlinks">
+      <a href="index.html#home">HOME</a>
+      <a href="index.html#features">FEATURES</a>
+      <a href="index.html#inside">WHAT'S INSIDE</a>
+      <a href="index.html#screenshots">SCREENSHOTS</a>
+      <a class="active" href="guide.ko.html">GUIDE</a>
+      <a href="guide.html" hreflang="en" lang="en">ENGLISH</a>
+      <a href="index.html#faq">FAQ</a>
+      <a href="index.html#download">DOWNLOAD</a>
+    </nav>
+    <a class="btn btn-primary" href="index.html#download">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M3.5 17.5V19a2 2 0 002 2h13a2 2 0 002-2v-1.5"/></svg>
+      DOWNLOAD KOTU
+    </a>
+  </div>
+</header>
+
+<!-- ============ PAGE HEAD ============ -->
+<section class="ghead">
+  <div class="wrap">
+    <span class="eyebrow">사용자 가이드</span>
+    <h1>무엇을 할 수 있는가. <span class="hl">그리고 어떻게 쓰는가.</span></h1>
+    <p>KOTU는 사진·동영상·음악·문서·압축 파일과 하드웨어 정보를 하나의 창에서 엽니다. 파일을 더블클릭하면
+       확장자에 맞는 모듈이 창 가운데와 하단 바를 넘겨받습니다. 이 페이지는 저장소의
+       <code>docs/USER-GUIDE.ko.md</code>를 게시한 것입니다.</p>
+    <span class="asof">기준 버전 v0.310.1</span>
+  </div>
+</section>
+
+<!-- ============ BODY ============ -->
+<div class="gbody">
+  <div class="wrap gcols">
+
+    <!-- ---- table of contents ---- -->
+    <aside class="toc">
+      <h2>목차</h2>
+      <ol>
+        <li><a href="#window">창</a></li>
+        <li><a href="#modules">모듈</a></li>
+        <li><a href="#shortcuts">키보드 단축키</a></li>
+        <li><a href="#panels">사이드 패널</a></li>
+        <li><a href="#browser">내장 파일 브라우저</a></li>
+        <li><a href="#associations">파일 연결과 시작 메뉴</a></li>
+        <li><a href="#windows">여러 창 동시에 쓰기</a></li>
+        <li><a href="#settings">Settings</a></li>
+        <li><a href="#tray">세 가지 아이콘</a></li>
+      </ol>
+    </aside>
+
+    <article>
+
+      <div class="note">
+        이 문서는 영어 정본
+        <a class="inl" href="guide.html" hreflang="en" lang="en">User Guide</a>의 한국어판입니다. 사양이
+        바뀌면 <strong>영어 정본이 먼저 갱신</strong>되고 한국어판이 그 뒤를 따릅니다. 두 문서가 어긋나
+        보이면 영어 정본이 기준입니다. 앱 UI가 영어이므로 <strong>버튼 이름·메뉴 항목·설정 이름·단축키
+        표기는 영어 원문 그대로</strong> 두었고, 뜻이 필요한 곳에만 괄호로 덧붙였습니다.
+        KOTU는 활발히 개발 중이며, 이 문서가 다시 발행되지 않은 채 기능이 추가·변경될 수 있습니다.
+      </div>
+
+      <!-- ================= 1. THE WINDOW ================= -->
+      <section id="window">
+        <h2><span class="num">1</span>창</h2>
+        <p>모든 KOTU 창은 같은 세 부분으로 이루어져 있습니다.</p>
+        <ul>
+          <li><strong>가운데</strong> — 모듈 화면입니다. 사진, 동영상, PDF, 압축 파일 목록이 여기에 나옵니다.</li>
+          <li><strong>하단 바</strong> — 높이 44 px의 한 줄입니다. 왼쪽에 <strong>메뉴</strong> 버튼과
+              <strong>Open file</strong>(파일 열기) 버튼, 오른쪽 끝에 <strong>화면 모드</strong> 버튼이
+              있고, 나머지는 열려 있는 모듈의 몫입니다.</li>
+          <li><strong>좌우 사이드 패널</strong> — <strong>왼쪽</strong> 패널(폴더 트리와 파일 목록)과
+              <strong>오른쪽</strong> 패널(현재 파일 정보)입니다. 모듈을 열면 <strong>둘 다 열린
+              상태</strong>로 시작하고, 파일을 바로 열면 부를 때까지 둘 다 숨어 있습니다.</li>
+        </ul>
+        <p>사이드 패널은 불투명한 <strong>사이드바</strong>입니다. 열린 패널은 내용 옆에 나란히 서고 그만큼
+           가운데가 좁아집니다. 패널 하나의 폭은 창 너비의 25%입니다.</p>
+
+        <h3 id="screen-modes">화면 모드</h3>
+        <p>창에는 세 가지 화면 모드가 있고, 스위치 하나를 켜고 끄는 대신 순서대로 넘어가며 씁니다.</p>
+        <div class="tbl"><table>
+          <tr><th>모드</th><th>보이는 것</th></tr>
+          <tr><td>1</td><td>전부 — 제목 표시줄, 사이드 패널, 하단 바. 창은 여기서 시작합니다</td></tr>
+          <tr><td>2</td><td>사이드 패널이 물러납니다. 제목 표시줄과 하단 바는 그대로입니다</td></tr>
+          <tr><td>3</td><td>전체 화면: 작업 표시줄까지 덮어 창이 화면을 가득 채우고, 패널은 계속 물러나 있습니다</td></tr>
+        </table></div>
+        <ul>
+          <li><kbd>Enter</kbd>는 <strong>다음</strong> 모드로 넘어가고 한 바퀴 돕니다: 1 → 2 → 3 → 1.</li>
+          <li><kbd>Alt</kbd>+<kbd>Enter</kbd>는 <strong>곧바로 전체 화면</strong>으로 갔다가 거기서 바로
+              모드 1로 돌아옵니다. 모드 2를 건너뛰고, 글자를 입력하는 중에도 동작합니다(그 자리에서 그냥
+              <kbd>Enter</kbd>는 줄바꿈입니다).</li>
+          <li><kbd>Esc</kbd>와 마우스 뒤로 버튼은 <strong>한 모드씩 내려갑니다</strong> — 3 → 2 → 1 —
+              그리고 그다음으로 되돌릴 수 있는 것으로 이어집니다
+              (<a class="inl" href="#back">뒤로 가기</a> 참고).</li>
+          <li>하단 바 오른쪽 끝의 <strong>화면 모드</strong> 버튼은 얼굴이 셋인 버튼 하나입니다. 언제나
+              <kbd>Enter</kbd>가 다음에 할 일을 그대로 하고, 아이콘과 툴팁이 그것을 알려 줍니다 —
+              <em>Hide side panels</em>, <em>Full screen</em>, <em>Exit full screen</em>.</li>
+        </ul>
+        <p><strong>아무것도 열지 않았을 때</strong> — 파일을 고르기 전, 모듈 자체의 파일 브라우저 화면 —
+           는 모드 2에 보여 줄 것이 없으므로 모드 1 ↔ 모드 3만 오갑니다.</p>
+        <p><strong>전체 화면에서는 하단 바가 비켜섭니다.</strong> 마우스나 터치 입력이 3초간 없으면 무엇을
+           보고 있든 바가 미끄러져 사라지고, 포인터를 움직이거나 화면을 두드리거나 포인터를 아래 가장자리
+           가까이 가져가면 다시 나옵니다. 창 상태에서도 동영상이 재생 중이면 같은 자동 숨김이 동작합니다 —
+           Video 모듈을 참고하십시오. 마우스 포인터 자체는 절대 숨기지 않습니다.</p>
+        <p>모듈을 바꿔도 지금 있는 모드를 유지하지만, 새로 도착한 모듈에 아직 열린 파일이 없으면 모드 2는
+           모드 1로 내려앉습니다.</p>
+        <p><strong><kbd>F11</kbd>과 <kbd>F12</kbd>는 이 모든 것을 무시합니다.</strong> 패널을 직접 조작한
+           순간부터 창은 모드에 따라 패널을 여닫는 일을 그만두고, 전체 화면을 포함한 모든 모드에서 사용자가
+           만든 배치를 그대로 유지합니다. 그러면 모드 2가 별도의 단계가 아니게 되므로 <kbd>Enter</kbd>는 그
+           배치와 전체 화면을 오가는 단순 토글이 됩니다. 이 무시 상태는 다른 모듈로 옮길 때까지 이어지고,
+           옮기면 기본값(양쪽 패널 열림)으로 돌아갑니다.</p>
+        <p><strong>파일을 열어도</strong> 모드는 바뀌지 않습니다. <strong>Open file</strong> 브라우저를
+           열면 모드가 통째로 멈춥니다 — <a class="inl" href="#open-file">Open file 버튼</a> 참고.</p>
+
+        <h3>제목 표시줄</h3>
+        <p>제목 표시줄에는 <code>1-KOTU</code>가, 파일을 열면 <code>1-KOTU - filename</code>이 나옵니다.
+           앞의 숫자는 창 번호입니다. 첫 번째 창은 <code>1-KOTU</code>, 두 번째는
+           <code>2-KOTU - holiday.jpg</code> 식입니다. 맨 앞의 <code>●</code>는 그 창의 문서에 저장하지 않은
+           변경이 있다는 뜻입니다. 모듈 이름은 제목에 쓰지 않습니다 — 아이콘이 그 몫을 하고, 지금 열려 있는
+           것에 대한 정보도 한두 가지 함께 보여 줍니다. 세 아이콘이 각각 무엇을 보여 주는지는
+           <a class="inl" href="#tray">세 가지 아이콘</a>에 있습니다.</p>
+
+        <h3>파일 열기</h3>
+        <p>Windows 탐색기에서 더블클릭하거나(해당 형식을 등록해 두었다면), KOTU 창에 끌어다 놓거나, 하단
+           바의 <strong>Open file</strong> 버튼을 씁니다. 지금 보고 있는 모듈에 속하지 않는 형식을 끌어다
+           놓으면 새 창에서 열립니다.</p>
+      </section>
+
+      <!-- ================= 2. MODULES ================= -->
+      <section id="modules">
+        <h2><span class="num">2</span>모듈</h2>
+        <p>모듈은 일곱 개입니다. 왼쪽 아래 메뉴에서 전환합니다.</p>
+        <div class="tbl"><table>
+          <tr><th>#</th><th>모듈</th><th>여는 형식</th></tr>
+          <tr><td>1</td><td>All Readable</td><td>다른 파일 모듈이 열 수 있는 모든 것</td></tr>
+          <tr><td>2</td><td>Image</td><td><code>.jpg .jpeg .png .gif .bmp .webp .tif .tiff .ico .psd</code></td></tr>
+          <tr><td>3</td><td>Video</td><td><code>.mp4 .mkv .avi .webm .mov .wmv .m4v .mpg .mpeg .ts .m2ts .flv .3gp .ogv</code></td></tr>
+          <tr><td>4</td><td>Audio</td><td><code>.mp3 .flac .wav .ogg .opus .m4a .aac .wma</code></td></tr>
+          <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .html .htm .pdf</code></td></tr>
+          <tr><td>6</td><td>Archive</td><td><code>.zip .7z .rar .tar .gz .tgz .bz2 .xz</code></td></tr>
+          <tr><td>7</td><td>H/W Info</td><td>파일 없음 — 실시간 하드웨어 정보</td></tr>
+        </table></div>
+
+        <h3>Image</h3>
+        <ul>
+          <li><kbd>←</kbd>와 <kbd>→</kbd>로 폴더 안을 이동합니다. 자연 정렬이라 <code>img2</code>가
+              <code>img10</code>보다 앞에 옵니다.</li>
+          <li>마우스 휠로 10%에서 800%까지 <strong>확대·축소</strong>합니다. 포인터 아래의 지점은 제자리에
+              남습니다. 터치 핀치 줌도 됩니다. 사진이 화면보다 커지면 스크롤 막대가 나타납니다.</li>
+          <li>왼쪽 마우스 버튼으로 끌어 <strong>사진을 밀 수 있습니다.</strong> 사진이 화면보다 클 때만,
+              그리고 포인터가 실제로 움직인 뒤에만 시작하므로 전체 화면으로 가는 더블클릭은 그대로
+              동작합니다. 마우스 전용입니다 — 터치와 펜의 이동 동작은 종전과 같습니다.</li>
+          <li>회전 버튼이나 <kbd>R</kbd>로 시계 방향 90° <strong>회전</strong>합니다. 회전은 파일에 저장되지
+              않고 다음 사진으로 넘어가면 풀립니다. EXIF에 들어 있는 방향은 자동으로 적용됩니다.</li>
+          <li><strong>Fit</strong> — <a class="inl" href="#fit">Fit 버튼</a> 참고. Image 모듈은 폴더를 넘겨
+              보는 동안 선택한 옵션을 유지합니다.</li>
+          <li><strong>Delete</strong>는 현재 파일을 휴지통으로 보내고 다음 사진을 보여 줍니다. 확인 대화
+              상자도, 툴바 버튼도 없습니다 — <kbd>Delete</kbd> 키가 유일한 방법입니다.</li>
+          <li><kbd>Ctrl</kbd>+<kbd>P</kbd>나 하단 바의 인쇄 버튼으로 사진을 <strong>인쇄</strong>합니다.
+              Windows가 자체 미리 보기를 갖춘 인쇄 대화 상자를 띄우고, 프린터·용지·매수는 거기서 고릅니다.
+              사진은 한 장에 들어가고, 잘리지 않는 선에서 그 용지의 인쇄 가능 영역만큼 크게 확대됩니다. 지금
+              보고 있는 회전 상태는 — EXIF에서 온 것이든 <kbd>R</kbd>로 돌린 것이든 — 그대로 인쇄됩니다.
+              줌과 Fit은 화면 설정이라 종이에는 영향을 주지 않습니다. 사진이 열려 있지 않으면 버튼은
+              비활성입니다.</li>
+          <li><strong>Set as desktop background</strong>(바탕 화면으로 지정) — 사진을 우클릭해 고릅니다.
+              KOTU가 현재 파일의 PNG 사본을 <code>%AppData%\KOTU\wallpaper.png</code>에 쓰고 Fill 스타일로
+              Windows에 넘기므로 모든 모니터에 같은 사진이 깔립니다. 원본 파일은 건드리지 않고, 지금 보고
+              있는 회전(EXIF 또는 <kbd>R</kbd>)과 줌·Fit은 화면 설정이라 반영되지 않습니다. 성공했는지
+              실패했는지는 하단 바가 파일 이름 자리에 알려 주며, 다른 사진을 열거나 넘어갈 때까지 남습니다.
+              메뉴는 사진 위에서만 나오고, 사진이 열려 있지 않으면 항목은 비활성입니다.</li>
+          <li>움직이는 GIF가 재생됩니다.</li>
+          <li>하단 바 왼쪽에는 한 줄로 이어진 정보가 나옵니다: 파일 이름, <code>width×height</code>,
+              종류(<code>JPG 24-bit</code>), 크기, <code>position/total</code>, 그리고 형식이 지원하면 EXIF
+              요약(촬영 날짜, 카메라, 노출, 조리개, ISO, 초점 거리). 창이 좁으면 잘리므로 파일 이름 뒤의
+              내용은 툴팁에도 그대로 나옵니다.</li>
+          <li>그 오른쪽에는 현재 확대 배율 — <code>100%</code> — 이 있습니다. Fit 옵션은 이 수치를 건드리지
+              않고 사진 크기만 바꾸므로, 휠이나 핀치로 직접 확대하기 전까지는 100%에 머뭅니다.</li>
+          <li>사진을 더블클릭하면 곧바로 전체 화면이 됩니다(<kbd>Alt</kbd>+<kbd>Enter</kbd>도 같습니다).
+              <kbd>Enter</kbd>는 화면 모드를 한 단계씩 넘기고 <kbd>Esc</kbd>는 한 단계씩 내려옵니다
+              (<a class="inl" href="#screen-modes">화면 모드</a>).</li>
+        </ul>
+
+        <h3>Video</h3>
+        <ul>
+          <li>재생은 동봉된 libvlc 엔진이 맡습니다. 코덱 팩이 필요 없습니다.</li>
+          <li><kbd>Space</kbd>, ▶ 버튼, 또는 화면 클릭으로 <strong>재생/일시정지</strong>합니다.</li>
+          <li><kbd>←</kbd> / <kbd>→</kbd>로 ±5초 <strong>탐색</strong>하거나 탐색 슬라이더를 끕니다. 탐색은
+              손을 뗄 때 한 번만 일어납니다.</li>
+          <li><kbd>↑</kbd> / <kbd>↓</kbd> 또는 마우스 휠로 <strong>볼륨</strong>을 ±5씩 조절합니다.
+              <kbd>M</kbd>은 음소거입니다. 볼륨은 기억됩니다.</li>
+          <li><strong>배속</strong>: 0.5× · 0.75× · 1× · 1.25× · 1.5× · 2×.</li>
+          <li><strong>창이 좁아지면 덜 중요한 것부터 내려놓습니다.</strong> 하단 바가 약 650 px 아래로
+              좁아지면 볼륨 슬라이더와 두 개의 시간 표시가 자리를 내주어 탐색 슬라이더가 제 폭을 지킵니다.
+              볼륨은 여전히 <kbd>↑</kbd> / <kbd>↓</kbd>와 휠, <kbd>M</kbd>으로 조절할 수 있고, 탐색 손잡이
+              위치가 어디쯤인지 알려 줍니다.</li>
+          <li><strong>자막</strong>은 동영상과 같은 폴더에서 자동으로 찾습니다 —
+              <code>.srt .smi .ass .ssa .sub .vtt</code>. 동영상과 이름이 정확히 같은 파일이 접미사가 붙은
+              것보다 우선합니다(<code>movie.ko.srt</code>보다 <code>movie.srt</code>). UTF-8이 아닌 자막은
+              재생 전에 CP949에서 변환하므로 한국어 <code>.srt</code>·<code>.smi</code> 파일이 제대로
+              나옵니다. <kbd>C</kbd>나 자막 버튼으로 트랙을 바꾸거나 <strong>No subtitles</strong>를
+              고릅니다.</li>
+          <li><strong>이어보기</strong>: 30초 넘게 보았고 마지막 3% 이전에 멈췄다면 위치를 기억해 다음에 그
+              자리에서 이어 재생합니다.</li>
+          <li><strong>폴더 전체가 하나의 목록으로 재생됩니다.</strong> 동영상이 끝나면 같은 폴더의 다음
+              파일이 자동으로 시작하고(이름 순서, 숨김 파일 제외), 기본값으로는 마지막 파일 뒤에 멈춥니다.
+              <kbd>L</kbd>이나 루프 버튼 — 하단 바의 첫 번째 버튼으로 ▶ 바로 왼쪽에 있습니다 — 을 눌러 세
+              가지 루프 모드를 순환합니다: <strong>off</strong>(빗금이 그어진 루프 아이콘. 나머지 둘과 같은
+              밝기입니다 — 버튼은 항상 살아 있습니다), <strong>Loop list</strong>(마지막 파일 뒤에 목록을
+              처음부터 다시 시작), <strong>Repeat this file</strong>(같은 파일을 다시 재생). 버튼을
+              우클릭하면 두 모드의 반복 횟수를 고를 수 있습니다 — 한 번 더, 세 번 더, 또는 무한. 버튼으로
+              순환해 들어갈 때는 언제나 무한으로 시작합니다. 반복은 이어보기 지점에서 다시 재생하지
+              않습니다 — 매번 0:00에서 시작합니다. 파일마다 멈추게 하려면
+              <a class="inl" href="#playback">Settings → Playback</a>에서
+              <strong>Auto-play next file</strong>을 끄십시오. 이 설정은 루프 모드가 없을 때만 적용됩니다 —
+              루프 모드가 걸려 있으면 그대로 이어 재생합니다.</li>
+          <li><kbd>Ctrl</kbd>+휠로 10%에서 800%까지 <strong>확대·축소</strong>합니다.</li>
+          <li><strong>Fit</strong> — <a class="inl" href="#fit">Fit 버튼</a> 참고. 새 파일은 다시
+              Contain에서 시작합니다.</li>
+          <li><kbd>Alt</kbd>+<kbd>Enter</kbd>는 곧바로 전체 화면을 오가고, <kbd>Enter</kbd>는 화면 모드를 한
+              단계씩 넘기며 <kbd>Esc</kbd>는 한 단계씩 내려옵니다
+              (<a class="inl" href="#screen-modes">화면 모드</a>). 전체 화면에서는 재생·일시정지·탐색·볼륨·
+              음소거·확대가 각각 화면 가운데에 짧은 안내 문구를 번쩍 띄웁니다.</li>
+          <li><strong>보는 동안 하단 바는 비켜서 있습니다.</strong> 동영상이 재생되는 상태로 마우스·터치
+              입력 없이 3초가 지나면 탐색 슬라이더를 포함한 바 전체가 미끄러져 사라집니다. 포인터를
+              움직이거나 화면을 두드리거나 포인터를 아래 가장자리 가까이 가져가면 돌아옵니다. 창 상태에서는
+              일시정지하거나 동영상이 끝나면 바가 돌아와 그대로 머뭅니다. <strong>전체 화면에서는 그렇지
+              않습니다</strong>: 일시정지하면 바가 드러나고 3초 뒤 다시 숨습니다. 전체 화면의 다른 모든
+              내용과 같습니다. 마우스 포인터 자체는 절대 숨기지 않습니다.</li>
+          <li><strong>동영상이 재생되는 동안 화면은 꺼지지 않습니다</strong> — 화면 보호기도, 화면 절전도
+              동작하지 않습니다. <a class="inl" href="#playback">Settings → Playback</a>의
+              <strong>Keep the display awake while a video plays</strong>로 끌 수 있습니다. 오디오 재생에는
+              적용되지 않습니다.</li>
+          <li>아무것도 열지 않은 상태에서 ▶를 누르면 내장된 32초짜리 화면·스피커 테스트 영상을
+              재생합니다.</li>
+          <li>재생이 실제로 끝까지 가서 멈추면 — 루프가 꺼져 있고 목록도 끝났을 때 — 창 크기를 바꿔도 마지막
+              프레임을 다시 늘리는 대신 화면이 검게 지워집니다. 재생을 누르면 새 크기로 화면이
+              돌아옵니다.</li>
+        </ul>
+
+        <h3>Audio</h3>
+        <ul>
+          <li>조작은 Video와 같습니다: <kbd>Space</kbd>, <kbd>←</kbd> / <kbd>→</kbd>(±5초),
+              <kbd>↑</kbd> / <kbd>↓</kbd>와 휠(볼륨 ±5), <kbd>M</kbd>으로 음소거, <kbd>S</kbd>로 같은 여섯
+              가지 배속. 화면을 클릭해도 재생/일시정지가 전환됩니다.</li>
+          <li>트랙이 재생되는 동안 실시간 비주얼라이저가 창을 채우고 그 위에 트랙 이름이 나옵니다. 바
+              오른쪽 끝의 <strong>visualizer</strong> 버튼으로 스타일을 고릅니다 —
+              <strong>Scope</strong>(기본 파형), <strong>Spectrum</strong>, <strong>Spectrometer</strong>,
+              <strong>VU meter</strong>, 또는 검은 화면만 남기는 <strong>Off</strong> — 선택은 다음에도
+              유지됩니다. 재생 중에 스타일을 바꾸면 재생 엔진을 다시 여느라 소리가 순간 끊겼다가 같은
+              지점에서 이어집니다. 아무것도 재생되지 않을 때 바꾸면 화면 아래에 작은 칩 —
+              <em>Visualizer: Spectrum</em> — 이 1.5초간 나타나므로, 보여 줄 소리가 없어도 무엇을 골랐는지
+              알 수 있습니다.</li>
+          <li><strong>VU meter</strong>는 재생 엔진이 아니라 KOTU가 직접 그립니다: 좌·우 두 개의 가로 막대와,
+              레벨 뒤에 잠시 머무는 피크 표시가 있습니다. 선택한 출력 장치로 Windows가 섞어 내보내는 소리를
+              읽으므로 시스템에서 재생 중인 다른 소리도 함께 나타납니다. 트랙이 실제로 재생되는 동안에만
+              동작합니다.</li>
+          <li><strong>컨트롤은 Video와 같은 자리에 있습니다.</strong> 루프, ▶, 재생 위치, 탐색 슬라이더,
+              길이, 음소거, 볼륨 슬라이더, 배속 상자가 두 모듈에서 같은 자리를 차지하므로, 동영상에서
+              음악으로 옮겨도 포인터 아래의 것이 움직이지 않습니다. Audio 자체의 버튼은 Video가 자막과 Fit을
+              두는 오른쪽 끝을 씁니다 — 오디오 장치가 먼저, 그다음 이퀄라이저, 그다음 비주얼라이저입니다.
+              좁은 창 규칙도 같습니다: 바가 약 650 px 아래로 좁아지면 볼륨 슬라이더와 두 시간 표시가
+              숨습니다.</li>
+          <li><strong>이어보기</strong>는 Video와 똑같이 동작합니다(30초 넘게 재생, 마지막 3% 이전에
+              중단).</li>
+          <li><strong>폴더 전체가 하나의 목록으로 재생됩니다.</strong> 트랙이 끝나면 같은 폴더의 다음 파일이
+              자동으로 시작하고(이름 순서, 숨김 파일 제외), 기본값으로는 마지막 파일 뒤에 멈춥니다. Video와
+              마찬가지로 하단 바의 첫 번째 버튼이자 ▶ 바로 왼쪽에 있는 <kbd>L</kbd> 또는 루프 버튼을 눌러 세
+              가지 루프 모드를 순환합니다: <strong>off</strong>(빗금이 그어진 루프 아이콘. 나머지 둘과 같은
+              밝기입니다), <strong>Loop list</strong>(마지막 트랙 뒤에 목록을 처음부터 다시 시작),
+              <strong>Repeat this file</strong>(같은 트랙을 다시 재생). 버튼을 우클릭하면 두 모드의 반복
+              횟수를 고를 수 있습니다 — 한 번 더, 세 번 더, 또는 무한. 버튼으로 순환해 들어갈 때는 언제나
+              무한으로 시작합니다. 반복은 이어보기 지점에서 다시 재생하지 않습니다 — 매번 0:00에서
+              시작합니다. <a class="inl" href="#playback">Settings → Playback</a>의
+              <strong>Auto-play next file</strong>이 여기서도 그대로 적용됩니다 — Video와 Audio가 하나의
+              설정을 공유합니다.</li>
+          <li><kbd>Alt</kbd>+<kbd>Enter</kbd>는 곧바로 전체 화면을 오가고, <kbd>Enter</kbd>는 화면 모드를 한
+              단계씩 넘기며 <kbd>Esc</kbd>는 한 단계씩 내려옵니다
+              (<a class="inl" href="#screen-modes">화면 모드</a>). 창 상태에서는 하단 바가 그대로 있고 —
+              위에서 말한 재생 중 자동 숨김은 Video 모듈의 동작입니다 — 전체 화면에서는 다른 곳과
+              마찬가지로 3초 뒤 숨으며, 포인터로만 되돌릴 수 있습니다.</li>
+          <li>아무것도 열지 않은 상태에서 ▶를 누르면 내장된 18초짜리 샘플 음악을 재생합니다.</li>
+        </ul>
+
+        <h3>Document — 일반 텍스트</h3>
+        <ul>
+          <li><code>.txt .md .markdown .log .ini .html .htm</code>은 편집 가능한 텍스트 상자에서
+              열립니다.</li>
+          <li><strong>이 모듈은 하단 바에 자체 버튼 네 개를 가져옵니다.</strong> 창의 메뉴·<strong>Open
+              file</strong> 버튼 바로 오른쪽에 <strong>New text file</strong>, <strong>Save</strong>,
+              <strong>Print</strong>, 그리고 <strong>view</strong> 토글 순으로 놓입니다. 문서를 여는 것은 창
+              자체의 <strong>Open file</strong> 버튼이며, 저장하지 않은 변경이 있는 문서는 자리를 내주기
+              전에 물어봅니다. <em>New text file</em>은 언제나 쓸 수 있습니다. 아무것도 열려 있지 않으면 그
+              자리에서 빈 <code>Untitled</code> 문서를 시작하고, 문서나 PDF가 열려 있으면 그 창은 편집
+              내용까지 그대로 둔 채 새 창에 <code>Untitled</code> 문서를 엽니다.</li>
+          <li>그보다 오른쪽, 파일 이름 뒤로는 저장하지 않은 변경 표시, 두 개의 표시 토글(<strong>Line
+              guides</strong>와 <strong>Paragraph marks</strong>), PDF 페이지 수, 확대 배율, 그리고
+              <strong>Fit</strong> 컨트롤이 이어집니다. 토글과 배율 버튼은 항상 자리에 있고, 해당되지 않는
+              곳에서는 그냥 비활성이 됩니다.</li>
+          <li><strong>모든 텍스트 문서에는 편집 모드와 보기 모드가 있습니다.</strong> 하단 바의 view 버튼이
+              둘을 전환합니다. 보기 모드에서는 읽는 동안 내용이 바뀌지 않도록 편집기가 잠기고, 편집용 표시도
+              함께 사라집니다. <strong>커서, 가이드 선, <code>¶</code> 표시가 모두 사라지고</strong> 두 표시
+              토글은 편집 모드로 돌아올 때까지 비활성이 되어 텍스트만 남습니다. 선택과 복사는 그대로 되고,
+              앞서 편집한 내용을 저장할 수도 있습니다. Markdown과 HTML의 보기 모드는 렌더링된 화면이며
+              아래에서 설명합니다. 이 버튼은 아무것도 열려 있지 않을 때, PDF일 때(항상 보기 전용), 그리고
+              읽기 전용으로 열린 파일(4 MB 초과)일 때만 비활성입니다.</li>
+          <li><strong>Markdown은 렌더링됩니다.</strong> <code>.md</code>나 <code>.markdown</code> 파일은
+              서식이 적용된 미리 보기로 열리고 — 제목, 굵게와 기울임, 인라인 코드와 코드 블록, 목록, 인용,
+              가로줄, 링크 — view 버튼이 그 미리 보기와 편집기를 전환합니다. 미리 보기는 전환하는 순간
+              편집기에 들어 있는 내용으로 만들어지므로 저장하지 않은 편집도 반영되고, 렌더러가 모르는 표기는
+              쓰인 그대로 남습니다. 텍스트가 약 1 MB를 넘는 Markdown 파일은 바로 편집기에서 열리며, 그
+              크기에서는 view 버튼이 미리 보기를 만드는 대신 편집기를 잠급니다.</li>
+          <li><strong>HTML도 렌더링됩니다.</strong> <code>.html</code>이나 <code>.htm</code> 파일은 여전히
+              편집기에서 소스로 열리고, view 버튼이 잠긴 소스 보기 대신 실제 웹 페이지로 보여 줍니다. 페이지는
+              디스크에 저장된 파일로 렌더링하므로 옆에 있는 상대 경로 이미지와 스타일시트가 동작하고,
+              저장하지 않은 편집은 저장한 뒤 다시 전환할 때까지 편집기에 머뭅니다. 브라우저가 아니라
+              뷰어입니다 — 스크립트는 실행되지 않고, 파일 밖으로 나가는 링크는 아무 일도 하지 않으며, 새
+              창도 열리지 않습니다. 페이지는 문서 공통 확대 배율을 따르고, 인쇄는 편집 모드와 똑같이 소스
+              텍스트로 나갑니다. 렌더링에는 Windows 11에 기본 포함된 WebView2 런타임을 씁니다(구형
+              Windows 10에는 설치되어 있지 않을 수 있습니다). 없으면 view 버튼은 잠긴 소스 보기로 대체되고
+              하단 바가 파일 이름 뒤에 그 사실을 알립니다.</li>
+          <li>인코딩은 자동으로 판별하고(BOM이 있거나 없는 UTF-8, UTF-16, 그 밖에는 CP949) 저장할 때
+              유지합니다. 줄바꿈 방식(CRLF 또는 LF)도 마찬가지입니다.</li>
+          <li><kbd>Ctrl</kbd>+<kbd>S</kbd>로 저장합니다. 저장할 것이 없으면 저장 버튼은 비활성이고, 있으면
+              하단 바에 <strong>N changed</strong>(예: <code>12 changed</code>)가 나옵니다. N은 편집된
+              지점마다 지워진 글자 수와 삽입된 글자 수 중 큰 쪽을 더한 값입니다.</li>
+          <li>저장하지 않은 변경이 있는 채로 닫거나 다른 곳으로 옮기려 하면 먼저 물어봅니다:
+              <strong>Save</strong> / <strong>Don't save</strong> / <strong>Cancel</strong>.</li>
+          <li>4 MB보다 큰 파일은 앞의 4 MB만 읽기 전용으로 엽니다.</li>
+          <li><kbd>Tab</kbd>은 편집기에 탭 문자를 넣습니다.</li>
+          <li>텍스트는 창의 전체 폭을 채웁니다. 크게 하거나 작게 하려면 <kbd>Ctrl</kbd>+휠로 확대·축소하거나
+              — 기본 크기의 20%에서 500%까지, 한 칸에 10%씩 — 같은 눈금으로 동작하는
+              <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>-</kbd>를 씁니다(숫자 키패드 키도 되고,
+              누르고 있으면 반복되며, 커서가 편집기 안에 있어도 동작합니다). <kbd>Ctrl</kbd>+숫자 키패드
+              <kbd>*</kbd>는 배율을 100%로 되돌립니다. 현재 배율은 하단 바에 버튼으로 나오고, 누르면 미리
+              정해진 배율 목록 — 20%, 50%, 75%, 100%, 125%, 150%, 200%, 500% — 에서 고를 수 있습니다.
+              배율은 하나로 어디에나 적용됩니다: 파일·창·재시작을 넘어 기억됩니다. 확대·축소는 파일 자체를
+              건드리지 않습니다. <strong>렌더링된 Markdown 화면도 같은 키와 같은 <kbd>Ctrl</kbd>+휠로 같은
+              눈금만큼 확대·축소되므로</strong>, 미리 보기와 편집기를 오가도 설정한 크기가 유지됩니다. 어느
+              배율에서든 텍스트는 화면 폭에 맞춰 줄바꿈되므로 가로로 스크롤할 일이 없습니다.</li>
+          <li>아주 흐린 가이드 선이 각 줄의 위아래를 표시하고, <code>¶</code>는 줄바꿈을,
+              <code>·EOF</code>는 파일의 끝을 표시합니다. 이들은 텍스트 위에 그려질 뿐 텍스트의 일부가 되지
+              않습니다. <strong>하단 바 오른쪽, 저장하지 않은 변경 표시 바로 뒤에 있는 토글 버튼 두 개가
+              이들을 켜고 끕니다</strong> — 선은 <em>Line guides</em>, <code>¶</code>와 <code>·EOF</code>는
+              <em>Paragraph marks</em>입니다. 둘 다 누르는 즉시 적용되고 다음에도 기억됩니다. 이 한 쌍은
+              항상 바에 있습니다. 편집하는 동안 동작하고, 표시가 그려지지 않는 곳 — 보기 모드, 렌더링된
+              Markdown·HTML 화면, PDF — 에서는 비활성이 됩니다. 설정한 값은 읽는 동안에도 유지되므로
+              편집으로 돌아오면 가이드와 표시가 두고 간 그대로 돌아옵니다.</li>
+          <li><strong>Fit</strong> — <a class="inl" href="#fit">Fit 버튼</a> 참고. 텍스트와 Markdown
+              문서에서는 네 옵션 중 셋을 쓸 수 있습니다.</li>
+          <li><kbd>Ctrl</kbd>+<kbd>P</kbd>나 하단 바의 인쇄 버튼으로 <strong>인쇄</strong>합니다 —
+              사진·PDF와 같은 Windows 인쇄 대화 상자이며, 자체 미리 보기와 같은 페이지 범위 옵션을 갖추고
+              있습니다. 텍스트는 편집기의 고정폭 글꼴로 기본 크기에서 인쇄되고 — 화면 확대 배율은 인쇄물에
+              영향을 주지 않습니다 — 머리글·바닥글·페이지 번호 없이 선택한 용지의 인쇄 가능 영역을 채웁니다.
+              긴 줄은 편집기에서처럼 줄바꿈되고, 탭은 공백으로 인쇄되며, 긴 파일은 그대로 다음 장으로
+              이어집니다. 인쇄되는 것은 저장 여부와 무관하게 편집기에 들어 있는 텍스트입니다: 저장하지 않은
+              새 문서도 <code>Untitled</code>이라는 이름으로 인쇄됩니다. 아주 큰 파일(텍스트 약 1 MB 초과)은
+              문서 대신 안내 한 장을 인쇄합니다.</li>
+          <li><strong>Markdown은 보고 있는 그대로 인쇄됩니다.</strong> 미리 보기에서 인쇄하면 렌더링된
+              모습으로 나갑니다 — 제목 크기, 코드 블록 배경, 목록 들여쓰기, 인용 막대가 유지되고, 종이에서는
+              누를 것이 없으므로 링크는 평범한 검은 글자로 인쇄됩니다. 각 블록은 한 페이지 안에서 나뉘지
+              않고, 한 페이지보다 긴 코드 블록만 다음 장으로 이어집니다. 편집기에서 인쇄하면 위에서 설명한
+              일반 텍스트로 나갑니다. 인쇄를 시작한 쪽의 화면이 인쇄 작업 전체에 적용되며, 인쇄 대화 상자가
+              열려 있는 동안 화면을 전환해도 마찬가지입니다. 미리 보기를 쓸 수 없거나 만들 수 없을 때는 —
+              예를 들어 아주 긴 파일 — 위의 일반 텍스트 규칙이 적용됩니다.</li>
+        </ul>
+        <p><strong>쓰기 전에.</strong> 조심할 것이 있으면 저장을 멈추고 먼저 물어봅니다:</p>
+        <ul>
+          <li>파일을 연 뒤 디스크에서 파일이 바뀐 경우 — <em>File changed on disk</em>,
+              <strong>Overwrite</strong> 또는 <strong>Cancel</strong>(기본값은 Cancel);</li>
+          <li>파일에 CRLF와 LF가 섞여 있거나 해독할 수 없는 바이트가 들어 있어 원래 바이트를 그대로 재현할
+              수 없는 경우 — <em>Saving will normalize this file</em>, <strong>Save anyway</strong> 또는
+              <strong>Cancel</strong>;</li>
+          <li>텍스트가 파일 원래의 CP949 인코딩에 더 이상 들어가지 않는 경우 —
+              <em>Encoding change required</em>, <strong>Save as UTF-8</strong> 또는
+              <strong>Cancel</strong>.</li>
+        </ul>
+        <p>쓰고 난 뒤 KOTU는 파일을 다시 읽어 비교합니다. 디스크의 사본이 일치하지 않으면
+           <em>Save verification failed</em>가 <strong>Retry</strong>, <strong>Save as...</strong>,
+           <strong>Cancel</strong>을 제시합니다 — 어느 쪽이든 텍스트는 편집기에 남습니다.</p>
+
+        <h3>Document — PDF</h3>
+        <ul>
+          <li>페이지는 한 열로 이어서 스크롤됩니다. 스크롤하는 동안 하단 바가 <code>current / total</code>을
+              보여 줍니다. 다음 페이지·이전 페이지 버튼은 없습니다.</li>
+          <li>휠은 스크롤하고, <kbd>Ctrl</kbd>+휠은 포인터를 중심으로 한 칸에 약 10%씩 확대·축소합니다. 터치
+              핀치 줌도 됩니다. <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>-</kbd>는 화면 중앙을
+              중심으로 같은 폭만큼 확대·축소하고(숫자 키패드 키도 되며 누르고 있으면 반복됩니다),
+              <kbd>Ctrl</kbd>+숫자 키패드 <kbd>*</kbd>는 실제 크기로 되돌립니다 — Fit 버튼에서
+              <em>Original</em>을 고르는 것과 같습니다.</li>
+          <li>스크롤할 곳이 있을 때는 언제나 왼쪽 마우스 버튼으로 끌어 <strong>페이지를 밀 수
+              있습니다.</strong> 마우스 전용입니다 — 터치와 펜의 이동 동작은 종전과 같습니다.</li>
+          <li>키보드로도 스크롤합니다: <kbd>↑</kbd> <kbd>↓</kbd>는 화면의 약 8분의 1,
+              <kbd>Page Up</kbd> <kbd>Page Down</kbd>은 약 한 화면만큼 움직이고,
+              <kbd>Home</kbd> <kbd>End</kbd>는 문서의 처음과 끝으로 갑니다. 키를 누르고 있으면 계속
+              스크롤됩니다. 확대 배율은 바뀌지 않으며, <kbd>←</kbd> <kbd>→</kbd>는 쓰지 않습니다.</li>
+          <li><strong>Fit</strong> — <a class="inl" href="#fit">Fit 버튼</a> 참고. 직접 확대·축소하면 Fit이
+              풀립니다.</li>
+          <li><kbd>Ctrl</kbd>+<kbd>P</kbd>나 하단 바의 인쇄 버튼으로 <strong>인쇄</strong>합니다 — 사진과
+              같은 Windows 인쇄 대화 상자이며 자체 미리 보기가 있습니다. 기본값은 전체 페이지 인쇄이고, 대화
+              상자에 <strong>page range</strong>(예: <code>2-5, 8</code>)를 적으면 그 페이지만
+              인쇄됩니다(미리 보기는 계속 문서 전체를 보여 줍니다). PDF 한 페이지가 한 장에 들어가고, 선택한
+              용지의 인쇄 가능 영역에 맞게 확대·축소되며, 화면의 줌이나 Fit과 무관하게 인쇄용으로 최대
+              300 DPI까지 렌더링됩니다. 페이지는 한 번에 하나씩 준비하므로 수백 쪽짜리 문서도 전부 메모리에
+              올리지 않고 인쇄되고, 암호가 걸린 PDF도 열려 있는 동안에는 암호를 다시 묻지 않습니다. 인쇄할
+              것이 없으면 버튼은 비활성입니다.</li>
+        </ul>
+
+        <h3>Archive</h3>
+        <p><strong>이 모듈은 모든 버튼을 하단 바에 둡니다</strong> — 목록 위에 툴바가 없으므로 그 높이만큼
+           목록이 넓어집니다. 왼쪽부터 <strong>Back</strong>, <strong>New archive</strong>,
+           <strong>Extract...</strong>, <strong>Extract here</strong>, 그다음 상태 문구, 그리고 오래 걸리는
+           작업 중에는 진행 막대와 <strong>Cancel</strong>이 나옵니다. 압축 파일 안의 현재 위치는 목록 위에
+           표시됩니다. Print와 Fit은 이 바에 아예 없습니다 — 압축 파일에는 둘 다 해당되지 않습니다.</p>
+        <ul>
+          <li><strong>풀지 않고 탐색</strong>: 압축 파일을 열면 내용이 <strong>Name</strong>,
+              <strong>Size</strong>, <strong>Modified</strong>와 함께 나열됩니다. 폴더를 더블클릭하면 들어가고,
+              <kbd>U</kbd>나 <strong>Back</strong> 버튼으로 나옵니다.</li>
+          <li><strong>Back</strong>은 항상 쓸 수 있습니다. 폴더 안에서는 한 단계 위로 가고, 압축 파일의
+              최상위에서는 압축 파일을 닫고 모듈의 파일 브라우저로 돌아갑니다. (<kbd>U</kbd>는 언제나 "한
+              단계 위로"만 뜻하므로, 최상위에서는 키는 아무 일도 하지 않고 버튼만 닫습니다.)</li>
+          <li>압축 파일 안의 파일을 더블클릭하면 Windows 기본 앱으로 열립니다. 그 파일 하나만 임시 폴더로
+              풀립니다.</li>
+          <li><strong>Extract here</strong>(<kbd>E</kbd>)는 압축 파일 전체를 그 옆에, 파일 이름을 딴 폴더에
+              풉니다. 압축 파일 안에 이미 최상위 폴더가 하나뿐이면 감싸는 폴더를 따로 만들지 않습니다. 대상
+              이름이 이미 쓰이고 있으면 <code> (2)</code>, <code> (3)</code> …이 붙습니다.</li>
+          <li><strong>Extract...</strong>(<kbd>T</kbd>)는 대상 폴더를 묻고 선택된 항목만 풉니다 — 아무것도
+              선택되지 않았으면 전부 풉니다.</li>
+          <li><strong>New archive</strong>(<kbd>C</kbd>)는 <strong>ZIP</strong> 또는 <strong>7z</strong>를
+              만듭니다. 암호는 선택 사항이며, 7z는 내부 파일 이름까지 암호화하지만 ZIP은 그러지 않습니다.
+              하단 바에 있으므로 압축 파일을 열지 않고 가운데에 썸네일이 보이는 상태에서도 쓸 수
+              있습니다.</li>
+          <li>창에 파일이나 폴더를 끌어다 놓으면 압축합니다 — 같은 New archive 대화 상자가 나옵니다.</li>
+          <li>암호가 필요한 압축 파일은 목록을 보거나 풀 때 암호를 묻습니다.</li>
+          <li>한글 파일 이름이 깨진 ZIP 파일은 자동으로 CP949로 다시 읽습니다.</li>
+          <li>오래 걸리는 작업에는 진행 막대와 <strong>Cancel</strong> 버튼이 나옵니다. 끝나면 결과를
+              Windows 탐색기에서 보여 줍니다.</li>
+          <li>나열된 여덟 가지 형식은 모두 풀 수 있습니다. 만들 수 있는 것은 ZIP과 7z뿐입니다.</li>
+        </ul>
+
+        <h3>H/W Info</h3>
+        <p>창 가운데는 센서 격자이고, 나머지는 좌우 사이드 패널이 맡습니다.</p>
+        <ul>
+          <li><strong>가운데</strong> — 센서마다 타일 하나씩 열 개가 있고, 각각 지난 30초를 보여 줍니다:
+              CPU Temp, CPU Power, CPU Load, CPU Clock, GPU Temp, GPU Power, GPU Load, RAM, Fan, SSD Temp.
+              타일을 <strong>클릭</strong>하면 선택됩니다 — 한 번에 두 개까지이며, 세 번째를 고르면 가장
+              오래된 것이 풀립니다. 타일을 <strong>끌어</strong> 격자 순서를 바꿉니다. 타일은 정사각형이고,
+              격자는 사이드바가 둘 다 열려 있으면 4열, 하나면 6열, 없으면 8열입니다.</li>
+          <li><strong>왼쪽 패널</strong> — 선택한 센서마다 하나씩, 최대 두 개의 확대 그래프가 지난 10초를
+              보여 줍니다.</li>
+          <li><strong>오른쪽 패널</strong> — 스크롤되는 사양 목록: CPU, GPU, RAM, Motherboard, Storage,
+              Network, System.</li>
+          <li><strong>하단 바</strong> — 같은 선택 센서의 긴 그래프 두 개로, 갱신 주기와 무관하게 지난 5분을
+              보여 줍니다. 두 그래프는 바의 전체 폭을 나눠 쓰도록 늘어나며 — 왼쪽에 따로 비워 두는 자리가
+              없습니다 — 각각 그 시간 범위의 길이를 아래 가운데에 적습니다.</li>
+        </ul>
+        <p>두 패널은 평범한 사이드 패널입니다: <kbd>F11</kbd>, <kbd>F12</kbd>, 가장자리 버튼이 파일
+           모듈에서와 똑같이 동작하고, 모듈은 둘 다 열린 상태로 시작합니다. 닫으면 센서 격자가 창 전체를
+           차지합니다.</p>
+        <p>모든 그래프는 위쪽에 채널 이름과 현재 값을 적습니다. 자리가 있으면 타일과 확대 그래프는 눈금의
+           최댓값도 표시하는데, 현재 값으로 오해되지 않도록 접두어를 붙입니다 — <code>max 100%</code>,
+           <code>max 100°C</code>, <code>max 5000MHz</code> — 그리고 오른쪽 아래 구석에 시간 범위의 길이를
+           적습니다. 하단 바의 두 그래프는 높이가 낮아 눈금 표시를 넣지 못하지만, 시간 범위는 구석이 아니라
+           가운데에 적습니다.</p>
+        <p>조작:</p>
+        <div class="tbl"><table>
+          <tr><th>조작</th><th>키</th><th>하는 일</th></tr>
+          <tr><td>Copy all</td><td><kbd>C</kbd></td><td>사양 목록 전체와 현재 센서 값 전부를 텍스트로 클립보드에 넣습니다</td></tr>
+          <tr><td>Sensor refresh interval</td><td><kbd>I</kbd></td><td>50 · 200 · 500 · 1000 · 2000 · 5000 ms. 기본값 500 ms. 50 ms는 CPU를 눈에 띄게 더 씁니다</td></tr>
+          <tr><td>Graph size</td><td><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd></td><td>모든 그래프의 글자와 선을 한 단계 크게 / 작게, Small ↔ Medium ↔ Large (숫자 키패드 <kbd>+</kbd> / <kbd>-</kbd>도 되고, 그래프 위에서 <kbd>Ctrl</kbd>+휠도 같습니다. 휠 위 = 크게)</td></tr>
+          <tr><td>Graph size reset</td><td><kbd>Ctrl</kbd> + 숫자 키패드 <kbd>*</kbd></td><td>Medium으로 되돌리기</td></tr>
+          <tr><td>Always on top</td><td><kbd>P</kbd></td><td>창을 다른 창 위에 고정하고 한 번 최소 창 크기로 줄입니다 — 이후 자유롭게 키울 수 있고, 고정을 풀어도 창 크기는 그대로입니다</td></tr>
+          <tr><td>Screen mode</td><td><kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd> / <kbd>Esc</kbd></td><td>다른 모듈과 같은 3단 화면 모드(<a class="inl" href="#screen-modes">화면 모드</a>) — 그 꼭대기가 전체 화면 대시보드입니다</td></tr>
+        </table></div>
+        <p>그래프 크기 단계는 모든 그래프의 글자와 선 굵기에 적용됩니다 — 하단 바의 긴 그래프 둘, 가운데
+           타일 열 개, 왼쪽 패널의 확대 그래프까지. 그래프 자체의 크기는 그대로입니다: 타일은 격자가 주는
+           폭에서 정사각형을 유지합니다.</p>
+        <p>선택한 센서는 그 창의 트레이 아이콘에도 표시됩니다. 선택, 타일 순서, 그래프 크기는 창마다 따로
+           관리되고, 새로 연 창은 가장 최근에 바뀐 값에서 시작합니다.</p>
+        <p>CPU 온도, CPU 전력, 팬 속도, 드라이브 온도는 관리자 권한이 필요하고, CPU와 팬 값은 추가로
+           <strong>PawnIO</strong>가 필요합니다. PawnIO는 LibreHardwareMonitor가 자체 드라이버를 동봉하는
+           대신 사용하는, 따로 설치하는 서명된 커널 드라이버입니다(KOTU가 대신 설치해 주지는 않습니다). 이
+           센서들을 읽을 수 없으면 하단 바 바로 위에 이유를 알리는 줄이 나옵니다. 관리자 권한이 없으면
+           <strong>Restart as admin</strong>을, 이미 관리자 권한으로 실행 중인데 PawnIO가 없으면
+           <strong>Get PawnIO</strong> 다운로드 링크를 제시합니다. CPU 클럭만은 예외로, 직접 읽을 수 없을 때
+           KOTU가 Windows 성능 카운터에 기반한 근삿값으로 대체합니다. 이 값은 관리자 권한도 PawnIO도 필요
+           없습니다.</p>
+        <p>재시작은 프로그램 전체가 대상입니다 — 모든 KOTU 창이 닫히고 프로그램이 관리자 권한으로 다시
+           시작합니다 — 그래서 KOTU는 어떤 창이 열려 있었는지 기록해 같은 구성으로 되살립니다: 같은 모듈,
+           같은 파일, 같은 위치와 크기. Windows의 권한 요청을 취소하면 아무것도 바뀌지 않습니다.</p>
+
+        <h3>All Readable</h3>
+        <p>다른 모듈이 다루는 모든 형식을 여는 하나의 모듈입니다. 파일을 열면 가운데 화면과 하단 바가 그
+           모듈의 것으로 바뀌지만, 창과 사이드 패널, 트레이 아이콘은 All Readable에 남습니다. 텍스트 파일의
+           <kbd>Ctrl</kbd>+<kbd>S</kbd>, 압축 파일의 <kbd>E</kbd> 같은 것들은 그대로 동작합니다.</p>
+        <p>All Readable은 의도적으로 파일 연결을 등록하지 않습니다 — Windows 탐색기에서 파일을 더블클릭하면
+           여전히 전용 모듈이 열립니다.</p>
+
+        <h3 id="fit">Fit 버튼</h3>
+        <p>Image, Video, PDF, 텍스트 문서가 네 가지 옵션을 가진 하나의 Fit 컨트롤을 공유합니다.</p>
+        <div class="tbl"><table>
+          <tr><th>옵션</th><th>결과</th></tr>
+          <tr><td>Original</td><td>원래 크기. 이미지 픽셀 하나가 화면 픽셀 하나입니다. 이때 버튼에는 작은 <code>1:1</code> 상자가 나옵니다</td></tr>
+          <tr><td>Contain</td><td>전체가 화면 안에 들어옵니다. 확대는 하지 않으므로 작은 파일은 자기 크기 그대로입니다</td></tr>
+          <tr><td>Fit width</td><td>폭을 채웁니다. 다른 축은 스크롤됩니다</td></tr>
+          <tr><td>Fit height</td><td>높이를 채웁니다</td></tr>
+        </table></div>
+        <p>버튼의 몸통을 클릭하면 마지막으로 고른 옵션을 다시 적용합니다(<kbd>F</kbd>). 화살표를 클릭하면
+           목록이 열립니다. <kbd>A</kbd>는 곧바로 <em>Original</em>로 갑니다. 새 사진과 동영상은 Contain에서,
+           새 PDF는 Original에서 시작합니다.</p>
+        <p><strong>텍스트나 Markdown 문서에서는</strong> — 편집 중이든, 잠긴 보기 화면이든, 렌더링된
+           Markdown 화면이든 — 앞의 세 옵션이 살아 있고 <em>Fit height</em>는 비활성입니다. 문서에는 맞출
+           고정 높이가 없기 때문입니다. 텍스트는 이미 화면 폭에 맞춰 줄바꿈되므로 세 옵션의 결과는 모두
+           같습니다: 문서가 100%로 돌아갑니다. 그중 무엇을 골랐는지가 버튼에 표시되고, 문서를 열면
+           <em>Original</em>이 표시된 상태로 시작합니다.</p>
+        <p>아무것도 열려 있지 않을 때는 — 창이 파일 브라우저를 보여 주는 상태 — Fit 컨트롤이 바에 남아 있되
+           비활성입니다. 파일을 열면 살아납니다.</p>
+      </section>
+
+      <!-- ================= 3. SHORTCUTS ================= -->
+      <section id="shortcuts">
+        <h2><span class="num">3</span>키보드 단축키</h2>
+
+        <h3>전역</h3>
+        <p>모든 모듈에서 동작합니다.</p>
+        <div class="tbl"><table>
+          <tr><th>키</th><th>동작</th></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>`</kbd></td><td>메뉴 열기(왼쪽 아래)</td></tr>
+          <tr><td><kbd>F11</kbd></td><td>왼쪽 패널 열기 / 닫기</td></tr>
+          <tr><td><kbd>F12</kbd></td><td>오른쪽 패널 열기 / 닫기</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>다음 화면 모드(<a class="inl" href="#screen-modes">화면 모드</a>)</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>Enter</kbd></td><td>한 번에 전체 화면으로 갔다가 돌아오기 — 입력 중에도 동작(아래 참고)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>한 단계 뒤로: 화면 모드 한 칸 내리기, Open file 브라우저 나가기, 또는 열린 파일 닫기</td></tr>
+          <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>지금 보고 있는 모듈의 새 창</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>저장(텍스트 문서)</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>지금 보고 있는 것 인쇄(사진, PDF, 텍스트 문서)</td></tr>
+          <tr><td><kbd>Browser Back</kbd></td><td>한 단계 뒤로 — <a class="inl" href="#back">뒤로 가기</a> 참고</td></tr>
+        </table></div>
+        <p><kbd>Alt</kbd>+<kbd>`</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd>, <kbd>F11</kbd> / <kbd>F12</kbd>,
+           <kbd>Ctrl</kbd>+<kbd>P</kbd>는 텍스트 상자에 입력하는 중에도 동작합니다. 이 키들은 그 자체로
+           글자를 만들지 않으므로 텍스트에서 무엇도 빼앗기지 않습니다 — 편집 도중
+           <kbd>Ctrl</kbd>+<kbd>P</kbd>를 누르면 문서가 지금 상태 그대로 인쇄됩니다. 그냥 <kbd>Enter</kbd>는
+           입력에 자리를 내주고(텍스트 문서에서는 줄바꿈입니다), <kbd>Shift</kbd>+<kbd>N</kbd>도
+           마찬가지입니다.</p>
+        <p><kbd>Esc</kbd>는 한 번에 한 겹씩 되돌립니다. 화면 모드가 먼저인데 한 칸씩 내려가므로 전체
+           화면에서는 모드 2에 닿고, 모드 1로 돌아오려면 한 번 더 눌러야 합니다. 그다음이 Open file
+           브라우저, 그다음이 파일입니다. 이렇게 파일을 닫으면 모듈 자체의 브라우저에 <strong>양쪽 사이드바가
+           열린 채로</strong> 도착합니다 — 메뉴에서 모듈을 시작한 것과 같은 화면입니다 — 그래서 Windows
+           탐색기에서 바로 연 파일도 <kbd>Esc</kbd> 한 번이면 표준 화면이 됩니다. 저장하지 않은 변경이 있는
+           문서는 닫기 전에 물어봅니다. <kbd>Esc</kbd>가 이미 다른 뜻을 가진 곳에서는 그 뜻이 먼저입니다:
+           이름 바꾸기를 취소하고, 파일 브라우저의 잘라내기 표시를 지우며, 열려 있는 대화 상자가
+           가져갑니다.</p>
+        <p><strong>Open file</strong> 브라우저가 떠 있는 동안에는 <kbd>Esc</kbd>가 화면 모드 단계를 건너뛰고
+           브라우저를 먼저 닫습니다. 전체 화면에서도 그렇습니다 — 브라우저는 다른 모든 것 위에 덮인 층이고,
+           아래의 무엇이 움직이기 전에 그 층부터 걷힙니다.</p>
+        <p>모듈 전환과 Settings 열기에는 단축키가 없습니다 — 둘 다 왼쪽 아래 메뉴에 있습니다. 메뉴에서
+           모듈을 바꾸면 언제나 양쪽 사이드바가 열린 채로 도착합니다. 이미 있는 모듈을 고르면 아무것도
+           바뀌지 않습니다.</p>
+
+        <h3 id="panel-keys">패널: F11과 F12의 동작</h3>
+        <p><kbd>F11</kbd>은 왼쪽 패널, <kbd>F12</kbd>는 오른쪽 패널을 조작합니다. 한 번 누르면 패널이
+           사이드바로 열리고, 다시 누르면 닫힙니다. 그게 전부입니다 — 길게 누르기나 두 번 누르기, 반투명
+           변형 같은 것은 없습니다. 두 키를 다 누르면 양쪽이 각각 토글되며, 순서는 상관없습니다.</p>
+        <p><strong>첫 번째 누름은 패널을 화면 모드에서 떼어내기도 합니다.</strong> 그때부터 창은 전체 화면을
+           포함한 모든 모드에서 설정한 배치를 그대로 유지하고, <kbd>Enter</kbd>는 3단 계단 대신 그 배치와
+           전체 화면을 오가는 단순 토글이 됩니다. 누른 순간 화면에 있던 상태가 그 키가 토글하는
+           대상이므로, 첫 누름이 아무 일도 하지 않는 것처럼 보이는 일은 없습니다. 다른 모듈로 옮기면 배치가
+           다시 모드에 넘어가고 양쪽 패널이 열립니다. 키보드로 이 상태를 푸는 방법은 없습니다.</p>
+        <p>패널이 열리면 그 옆에 작고 어두운 판에 짧은 안내가 나타나 뒤의 배경과 관계없이 읽히도록 하고 —
+           <em>Sidebar - press F11 or the pin button to close</em> — 몇 초 뒤 사라집니다.</p>
+        <p>패널은 전체 화면을 포함한 모든 화면 모드에서, 그리고 거의 모든 화면에서 이 키들에 응답합니다.
+           지원하지 않는 파일 안내 화면이나 저장하지 않은 새 문서에서도 마찬가지입니다. 파일이 열려 있지
+           않으면 왼쪽 패널은 마지막으로 탐색하던 폴더를 보여 주고(안내 화면에서는 모든 형식의 파일을
+           나열합니다), 오른쪽 패널은 <em>No file open</em>이라고 표시합니다.</p>
+        <p><strong>Settings만 예외입니다.</strong> Settings에는 사이드 패널이 아예 없습니다: <kbd>F11</kbd>,
+           <kbd>F12</kbd>, 가장자리 버튼이 아무 일도 하지 않고, 열려 있던 패널은 Settings로 들어가는 순간
+           물러납니다. 나가는 유일한 방법은 모듈을 고르는 것이고, 그러면 그 모듈이 표준 방식 — 양쪽 사이드바
+           열림 — 으로 시작합니다.</p>
+        <p>Open file 브라우저 안에서는 <kbd>F11</kbd>과 <kbd>F12</kbd>가 아무 일도 하지 않습니다.
+           <kbd>Esc</kbd>로 나갑니다.</p>
+        <p><kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd>, <kbd>Esc</kbd>, 화면 모드 버튼은 일곱
+           모듈에서 모두 똑같이 동작합니다 — 모듈이 아니라 창에 속한 것이기 때문입니다.</p>
+
+        <h3>모듈별 문자 키</h3>
+        <p>한 번에 한 모듈만 화면에 있으므로 같은 글자가 모듈마다 다른 뜻을 가질 수 있습니다. 문자 키는
+           입력에 자리를 내줍니다: 텍스트 커서가 편집 가능한 상자에 있거나 파일 목록에서 글자를 눌러 항목을
+           찾는 중에는 아무 일도 하지 않습니다.</p>
+        <div class="tbl"><table>
+          <tr><th>모듈</th><th>키</th><th>동작</th></tr>
+          <tr><td>Image</td><td><kbd>R</kbd></td><td>시계 방향 90° 회전</td></tr>
+          <tr><td>Image</td><td><kbd>A</kbd></td><td>Original</td></tr>
+          <tr><td>Image</td><td><kbd>F</kbd></td><td>마지막 Fit 옵션 다시 적용</td></tr>
+          <tr><td>Image</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>폴더의 이전 / 다음 파일</td></tr>
+          <tr><td>Image</td><td><kbd>Delete</kbd></td><td>휴지통으로 보내기</td></tr>
+          <tr><td>Image</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>사진 인쇄</td></tr>
+          <tr><td>Video</td><td><kbd>Space</kbd></td><td>재생 / 일시정지</td></tr>
+          <tr><td>Video</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>5초 뒤로 / 앞으로</td></tr>
+          <tr><td>Video</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>볼륨</td></tr>
+          <tr><td>Video</td><td><kbd>M</kbd></td><td>음소거</td></tr>
+          <tr><td>Video</td><td><kbd>S</kbd></td><td>재생 배속</td></tr>
+          <tr><td>Video</td><td><kbd>C</kbd></td><td>자막</td></tr>
+          <tr><td>Video</td><td><kbd>L</kbd></td><td>루프 모드 순환(반복 횟수는 버튼 우클릭)</td></tr>
+          <tr><td>Video</td><td><kbd>A</kbd></td><td>Original</td></tr>
+          <tr><td>Video</td><td><kbd>F</kbd></td><td>마지막 Fit 옵션 다시 적용</td></tr>
+          <tr><td>Audio</td><td><kbd>Space</kbd></td><td>재생 / 일시정지</td></tr>
+          <tr><td>Audio</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>5초 뒤로 / 앞으로</td></tr>
+          <tr><td>Audio</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>볼륨</td></tr>
+          <tr><td>Audio</td><td><kbd>M</kbd></td><td>음소거</td></tr>
+          <tr><td>Audio</td><td><kbd>S</kbd></td><td>재생 배속</td></tr>
+          <tr><td>Audio</td><td><kbd>L</kbd></td><td>루프 모드 순환(반복 횟수는 버튼 우클릭)</td></tr>
+          <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>저장</td></tr>
+          <tr><td>Document</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>PDF 또는 텍스트 인쇄</td></tr>
+          <tr><td>Document</td><td><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd></td><td>한 단계 확대 / 축소(숫자 키패드 <kbd>+</kbd> / <kbd>-</kbd>도 되고, 누르고 있으면 반복)</td></tr>
+          <tr><td>Document</td><td><kbd>Ctrl</kbd> + 숫자 키패드 <kbd>*</kbd></td><td>100%로 되돌리기</td></tr>
+          <tr><td>Document</td><td><kbd>A</kbd></td><td>Original</td></tr>
+          <tr><td>Document</td><td><kbd>F</kbd></td><td>마지막 Fit 옵션 다시 적용</td></tr>
+          <tr><td>Document</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>PDF 스크롤, 화면의 약 8분의 1</td></tr>
+          <tr><td>Document</td><td><kbd>Page Up</kbd> <kbd>Page Down</kbd></td><td>PDF 스크롤, 약 한 화면</td></tr>
+          <tr><td>Document</td><td><kbd>Home</kbd> <kbd>End</kbd></td><td>PDF의 처음 / 끝</td></tr>
+          <tr><td>Archive</td><td><kbd>E</kbd></td><td>Extract here</td></tr>
+          <tr><td>Archive</td><td><kbd>T</kbd></td><td>Extract...(폴더 고르기)</td></tr>
+          <tr><td>Archive</td><td><kbd>C</kbd></td><td>New archive</td></tr>
+          <tr><td>Archive</td><td><kbd>U</kbd></td><td>압축 파일 안에서 한 단계 위로</td></tr>
+          <tr><td>H/W Info</td><td><kbd>C</kbd></td><td>Copy all</td></tr>
+          <tr><td>H/W Info</td><td><kbd>I</kbd></td><td>센서 갱신 주기</td></tr>
+          <tr><td>H/W Info</td><td><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd></td><td>그래프 크기 한 단계 위 / 아래(숫자 키패드 <kbd>+</kbd> / <kbd>-</kbd>도 됨)</td></tr>
+          <tr><td>H/W Info</td><td><kbd>Ctrl</kbd> + 숫자 키패드 <kbd>*</kbd></td><td>그래프 크기를 Medium으로</td></tr>
+          <tr><td>H/W Info</td><td><kbd>P</kbd></td><td>항상 위</td></tr>
+        </table></div>
+        <p><kbd>Space</kbd>도 문자 키와 같은 방식으로 입력에 자리를 내줍니다. 파일 목록, 폴더 트리, 가운데
+           썸네일에 포커스가 있는 동안에는 Video와 Audio에서 재생을 시작하거나 멈추지 않으며, 파일 목록과
+           썸네일에서는 대신 포커스가 있는 항목을 선택합니다.</p>
+
+        <h3>파일 브라우저에서</h3>
+        <div class="tbl"><table>
+          <tr><th>키</th><th>동작</th></tr>
+          <tr><td><kbd>Enter</kbd></td><td>선택한 항목 열기 — 파일 여러 개를 선택했으면 전부</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>포커스가 있는 항목 선택 / 선택 해제</td></tr>
+          <tr><td><kbd>F2</kbd></td><td>선택한 항목 이름 바꾸기(선택된 것이 없으면 아무 일도 하지 않음)</td></tr>
+          <tr><td><kbd>Delete</kbd></td><td>휴지통으로 보내기</td></tr>
+          <tr><td><kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>확인 후 완전히 삭제</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>복사 / 잘라내기 / 붙여넣기</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>전체 선택</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></td><td>새 폴더</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td><kbd>Ctrl</kbd>+<kbd>X</kbd>가 남긴 흐린 표시 지우기(클립보드 내용은 유지). 지울 것이 없으면 창 규칙이 적용됩니다 — <a class="inl" href="#shortcuts">전역</a> 참고</td></tr>
+        </table></div>
+
+        <h3>마우스와 휠</h3>
+        <div class="tbl"><table>
+          <tr><th>위치</th><th>입력</th><th>동작</th></tr>
+          <tr><td>Image</td><td>휠</td><td>확대·축소, 10%~800%</td></tr>
+          <tr><td>Image</td><td>왼쪽 버튼 드래그</td><td>확대된 사진 밀기</td></tr>
+          <tr><td>Image</td><td>더블클릭</td><td>전체 화면</td></tr>
+          <tr><td>Video</td><td>휠</td><td>볼륨</td></tr>
+          <tr><td>Video</td><td><kbd>Ctrl</kbd>+휠</td><td>확대·축소, 10%~800%</td></tr>
+          <tr><td>Video</td><td>클릭</td><td>재생 / 일시정지</td></tr>
+          <tr><td>Audio</td><td>휠</td><td>볼륨</td></tr>
+          <tr><td>Audio</td><td>클릭</td><td>재생 / 일시정지</td></tr>
+          <tr><td>PDF</td><td>휠</td><td>스크롤</td></tr>
+          <tr><td>PDF</td><td><kbd>Ctrl</kbd>+휠</td><td>확대·축소</td></tr>
+          <tr><td>PDF</td><td>왼쪽 버튼 드래그</td><td>페이지 밀기</td></tr>
+          <tr><td>텍스트 문서</td><td>휠</td><td>스크롤</td></tr>
+          <tr><td>텍스트 문서</td><td><kbd>Ctrl</kbd>+휠</td><td>텍스트 확대·축소, 20%~500% — 편집기와 Markdown 화면 모두</td></tr>
+          <tr><td>H/W Info 그래프</td><td><kbd>Ctrl</kbd>+휠</td><td>그래프 크기, Small ↔ Medium ↔ Large (휠 위 = 크게)</td></tr>
+          <tr><td>파일 브라우저, 사이드 패널</td><td>휠</td><td>스크롤</td></tr>
+          <tr><td>파일 브라우저</td><td>더블클릭</td><td>열기(폴더는 들어가기)</td></tr>
+          <tr><td>파일 브라우저</td><td><kbd>Shift</kbd>+더블클릭</td><td>새 창에서 열기</td></tr>
+          <tr><td>파일 브라우저</td><td>파일 우클릭</td><td>Open in new instance · Cut · Copy · Rename · Delete</td></tr>
+          <tr><td>파일 브라우저</td><td>폴더 우클릭</td><td>Cut · Copy · Paste · Rename · Delete</td></tr>
+          <tr><td>파일 브라우저</td><td>빈 공간 우클릭</td><td>New folder · Paste · Refresh</td></tr>
+          <tr><td>파일 브라우저</td><td>드래그</td><td>같은 드라이브 안에서는 이동, 드라이브를 넘으면 복사. <kbd>Ctrl</kbd>은 복사, <kbd>Shift</kbd>는 이동으로 고정</td></tr>
+          <tr><td>어디서나</td><td>뒤로 버튼(엄지 버튼)</td><td>한 단계 뒤로 — <a class="inl" href="#back">뒤로 가기</a> 참고</td></tr>
+          <tr><td>어디서나</td><td>앞으로 버튼(반대쪽 엄지 버튼)</td><td>탐색 중일 때, 뒤로 나온 폴더로 돌아가기</td></tr>
+          <tr><td>창의 왼쪽·오른쪽 가장자리 아래쪽</td><td>포인터 이동</td><td>좁은 가장자리 버튼이 나타납니다 — <a class="inl" href="#panels">사이드 패널</a> 참고</td></tr>
+        </table></div>
+        <p>휠은 썸네일을 확대·축소하지 않고, 포인터가 사이드 패널 위에 있을 때도 확대·축소하지 않습니다 —
+           그곳에서는 스크롤합니다.</p>
+
+        <h3 id="back">뒤로 가기</h3>
+        <p>마우스 뒤로 버튼과, 키보드에 있다면 <kbd>Browser Back</kbd> 키는 다음 순서로 한 번에 한 단계씩
+           되돌립니다:</p>
+        <ul>
+          <li><strong>화면 모드 한 칸 내리기</strong>(<a class="inl" href="#screen-modes">화면 모드</a>);</li>
+          <li>Open file 브라우저에서 나가 원래 배치로 돌아가기;</li>
+          <li>아무것도 열지 않고 탐색 중이면 직전에 있던 폴더로 돌아가기;</li>
+          <li>파일을 닫고 모듈 자체의 브라우저로 돌아가되 사이드 패널은 그대로 두기.</li>
+        </ul>
+        <p>되돌릴 것이 남지 않으면 아무 일도 하지 않습니다. 마우스 버튼은 어디서나 동작하고, 키는 문자
+           키처럼 입력에 자리를 내줍니다. <strong>앞으로</strong> 엄지 버튼은 3단계를 되돌립니다 — 뒤로 나온
+           폴더로 돌아갑니다 — 나머지 단계와는 관계가 없습니다.</p>
+        <p>Open file 브라우저가 떠 있는 동안에는 <kbd>Esc</kbd>와 똑같이 1단계를 건너뛰고 브라우저부터
+           걷힙니다.</p>
+        <p>4단계는 뒤로 가기와 <kbd>Esc</kbd>가 갈리는 유일한 지점입니다: 뒤로 가기는 패널을 그대로 두고,
+           <kbd>Esc</kbd>로 닫으면 양쪽 사이드바가 열린 표준 모듈 화면에 도착합니다.</p>
+      </section>
+
+      <!-- ================= 4. SIDE PANELS ================= -->
+      <section id="panels">
+        <h2><span class="num">4</span>사이드 패널</h2>
+        <p><strong>왼쪽 패널</strong>은 위에서 아래로 이렇게 이루어져 있습니다:</p>
+        <ul>
+          <li><strong>Up</strong> 버튼, <strong>Home</strong> 버튼, 현재 폴더, <strong>Filter</strong> 목록이
+              있는 경로 줄;</li>
+          <li>지금 열려 있는 파일의 폴더가 펼쳐진 드라이브·폴더 트리;</li>
+          <li>폭이 모두 같은 다섯 개의 열 머리글 — <strong>Name</strong>, <strong>Type</strong>,
+              <strong>Size</strong>, <strong>Created</strong>, <strong>Modified</strong>;</li>
+          <li>그 폴더의 파일 목록.</li>
+        </ul>
+        <p><strong>Home</strong>은 사용자 폴더로 갑니다. 항상 살아 있고, 이미 그곳에 있으면 아무 일도 하지
+           않습니다.</p>
+        <p><strong>오른쪽 패널</strong>은 열려 있는 파일을 설명합니다 — 모듈이 아는 내용, 그것이 없으면
+           이름·크기·날짜·폴더. 이 패널에 파일을 끌어다 놓아 열 수도 있습니다.</p>
+        <p>H/W Info에서는 같은 두 패널이 그 모듈의 내용을 대신 담습니다 — 왼쪽은 확대 그래프, 오른쪽은 사양
+           목록. 아래 내용은 거기서도 그대로 적용됩니다.</p>
+        <p>패널을 부르는 방법: <a class="inl" href="#panel-keys">F11과 F12의 동작</a>에서 설명한
+           <kbd>F11</kbd> / <kbd>F12</kbd>; 또는 <strong>가장자리 버튼</strong> — 포인터를 창의 왼쪽이나
+           오른쪽 가장자리 아래쪽 가까이로 가져가면 하단 바 바로 위에 작은 <strong>핀</strong> 버튼이
+           나타납니다. 그쪽을 사이드바로 열고, 이미 열려 있으면 닫습니다 — 키와 같은 토글입니다.</p>
+        <p>(파일을 바로 여는 것이 아니라) 모듈을 열면 <strong>양쪽 사이드바가 열린 상태</strong>로
+           시작합니다. Windows 탐색기에서 바로 연 파일은 패널 없이 시작하므로 보러 온 것을 아무것도 가리지
+           않습니다. 다 보고 <kbd>Esc</kbd>를 누르면 파일이 닫히면서 그 표준 화면 — 양쪽 사이드바와 썸네일 —
+           으로 도착합니다. 메뉴에서 모듈을 시작한 것과 같습니다.</p>
+        <p>화면 모드 2와 3은 패널을 물립니다(<a class="inl" href="#screen-modes">화면 모드</a>).
+           <kbd>F11</kbd> / <kbd>F12</kbd>는 그 모듈에 머무는 동안 패널을 모드에서 떼어냅니다
+           (<a class="inl" href="#panel-keys">F11과 F12의 동작</a>).</p>
+      </section>
+
+      <!-- ================= 5. FILE BROWSER ================= -->
+      <section id="browser">
+        <h2><span class="num">5</span>내장 파일 브라우저</h2>
+        <p>파일 없이 모듈을 열면 창이 파일 브라우저가 됩니다. 왼쪽에 폴더 트리와 파일 목록, 가운데에 썸네일,
+           오른쪽에 파일 정보가 나오고 두 패널 모두 열린 상태로 시작합니다. 썸네일은 정사각형이고, 격자는
+           사이드바가 둘 다 열려 있으면 4열, 하나면 6열, 없으면 8열입니다. 이미지 파일은 실제 축소판을
+           보여 주고, 텍스트 문서 — <code>.txt .md .log .ini .html</code> 등 — 는 내용의 첫 줄들을
+           보여 주는데 백그라운드에서 읽으므로 격자가 기다리는 일이 없습니다. 그 밖의 파일은 모듈 색 위에
+           확장자를 보여 줍니다. 오디오 파일은 타일 아래에 재생 길이, 비트레이트, 샘플레이트, 채널 수를
+           덧붙이는데, 앨범 아트가 있으면 그 위에, 없으면 확장자 타일 위에 적습니다.</p>
+        <ul>
+          <li><strong>왼쪽 패널의 각 행은 두 줄입니다</strong> — 첫 줄에 파일 이름, 둘째 줄에 크기와 그
+              파일이 속한 모듈의 대표 정보 하나 — 동영상과 오디오는 재생 길이, 이미지는 해상도, PDF는 페이지
+              수, 문서는 텍스트 인코딩, ZIP은 압축률 — 그리고 만든 날짜와 마지막으로 수정한 날짜가
+              <code>26-08-19</code> 형태로 들어갑니다. 행을 가리키면 툴팁이 같은 값을 <strong>Size:</strong>,
+              <strong>Length:</strong>, <strong>Created:</strong>, <strong>Modified:</strong> 같은 이름표와
+              함께 되풀이하고 날짜는 전체로 적으므로, 두 날짜를 혼동할 일이 없습니다.</li>
+          <li><strong>각 행 오른쪽 끝의 체크 상자</strong>가 그 파일이 선택되었는지 보여 줍니다. 체크하거나
+              해제하면 파일이 선택·해제되고, <kbd>Space</kbd>는 포커스가 있는 항목에 같은 일을 합니다.
+              선택은 하나뿐이고 상자는 그것을 눈에 보이게 할 뿐입니다.</li>
+          <li>목록 위의 다섯 열 머리글 — <strong>Name</strong>, <strong>Type</strong>,
+              <strong>Size</strong>, <strong>Created</strong>, <strong>Modified</strong> — 로
+              <strong>정렬</strong>합니다. 머리글을 클릭하면 그 기준으로 정렬하고, 이미 그 기준으로 정렬되어
+              있으면 순서가 뒤집히며, 머리글의 작은 화살표가 방향을 알려 줍니다. 이름은 오름차순, 크기와
+              날짜는 내림차순입니다. 선택한 기준과 방향은 기억됩니다.</li>
+          <li>확장자로 <strong>필터</strong>하거나 <strong>Show all</strong>을 고릅니다. Filter 버튼은 숨겨진
+              파일이 몇 개인지 알려 줍니다.</li>
+          <li><strong>Show hidden and system files</strong>는 같은 Filter 메뉴의 맨 아래, 구분선 아래에
+              있습니다. 처음에는 꺼져 있고, 기억되며, 파일 목록과 폴더 트리에 모두 적용됩니다.</li>
+          <li><kbd>Ctrl</kbd>+클릭, <kbd>Shift</kbd>+클릭, <kbd>Ctrl</kbd>+<kbd>A</kbd>로 파일 여러 개를
+              <strong>선택</strong>합니다.</li>
+          <li><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd>로
+              <strong>복사·잘라내기·붙여넣기</strong>합니다. 잘라낸 항목은 붙여넣을 때까지 모든 KOTU 창에서
+              반투명해지고, <kbd>Esc</kbd>는 클립보드를 비우지 않은 채 그 표시만 지웁니다.</li>
+          <li>파일을 다른 폴더나 다른 KOTU 창, Windows 탐색기로 <strong>끌 수</strong> 있습니다. 같은 드라이브
+              안에서는 이동하고 드라이브를 넘으면 복사합니다. <kbd>Ctrl</kbd>을 누르면 복사,
+              <kbd>Shift</kbd>를 누르면 이동으로 고정됩니다.</li>
+          <li><kbd>F2</kbd>나 우클릭 메뉴로 <strong>이름을 바꿉니다</strong>. <kbd>Enter</kbd>가 확정하고
+              <kbd>Esc</kbd>가 취소합니다. 비어 있거나, 이미 쓰이고 있거나, Windows가 거부하는 문자가 든
+              이름은 적용되지 않습니다 — 원래 이름이 돌아오고 짧은 메시지가 이유를 알려 줍니다.</li>
+          <li><kbd>Delete</kbd> 키나 우클릭 메뉴로 <strong>삭제</strong>합니다. 파일은 확인 없이 휴지통으로
+              갑니다.</li>
+          <li><kbd>Shift</kbd>+<kbd>Delete</kbd>로 <strong>완전히 삭제</strong>합니다. 이것만은 물어봅니다 —
+              <em>Permanently delete this item?</em> 또는 <em>these n items?</em> — <strong>Delete</strong>와
+              <strong>Cancel</strong> 중 <kbd>Enter</kbd>가 누르는 것은 Cancel입니다. 우클릭 메뉴에는 없고
+              키가 유일한 방법입니다.</li>
+          <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>이나 빈 공간 우클릭 메뉴로 <strong>새
+              폴더</strong>를 만듭니다. 만들어지는 즉시 이름 바꾸기 상태로 들어갑니다.</li>
+          <li><kbd>Shift</kbd>+더블클릭이나 우클릭 메뉴의 <strong>Open in new instance</strong>로 <strong>새
+              창에서 엽니다</strong>.</li>
+          <li><strong>여러 개를 한 번에 열기</strong>: 파일 몇 개를 선택해 <kbd>Enter</kbd>를 누르거나 그중
+              하나를 더블클릭합니다. 첫 파일은 한 개를 열 때처럼 열리고 나머지는 각자 창을 하나씩 받습니다.
+              한 번에 열 개가 한도이며, 그보다 많으면 KOTU가 앞의 열 개만 열고 그 사실을 알립니다. 폴더는 이
+              규칙에서 빠집니다 — 폴더만 선택한 경우는 종전과 같이 동작합니다.</li>
+        </ul>
+
+        <h3>복사·이동과 이름 충돌</h3>
+        <p>아래 내용은 드래그, <kbd>Ctrl</kbd>+<kbd>V</kbd>, <strong>Paste</strong> 항목에 모두 똑같이
+           적용됩니다.</p>
+        <ul>
+          <li>대상에 같은 이름이 이미 있으면 KOTU가 물어봅니다 — <em>Replace or skip files</em>,
+              <strong>Replace</strong>, <strong>Keep both</strong>, <strong>Skip</strong>.
+              <kbd>Enter</kbd>는 Replace를 고릅니다. 폴더의 경우 Replace는 폴더를 먼저 비우는 대신 내용을
+              합치고, 안의 파일들에도 같은 세 가지 선택지가 주어집니다. Keep both는 여느 때처럼
+              <code> (2)</code>, <code> (3)</code> …를 붙입니다.</li>
+          <li>충돌이 더 남아 있으면 <strong>Do this for all remaining conflicts</strong>가 나타납니다.
+              누르는 버튼이 무엇이든 거기에 적용되고, 그 작업 하나에만 유효합니다.</li>
+          <li><kbd>Esc</kbd>는 취소합니다. 이미 옮기거나 복사한 것은 그 자리에 남고, 짧은 메시지가 어디까지
+              진행됐는지 알려 줍니다 — <em>Move cancelled - 3 of 12 completed</em>.</li>
+          <li>항목이 셋 이상이면 진행 상황을 세는 메시지가 나옵니다 — <em>Copying 3 of 12...</em>. 한두 개는
+              너무 빨리 끝나서 표시하지 않습니다.</li>
+          <li>Windows가 권한을 거부해 작업할 수 없으면 KOTU가 <em>Access denied</em>라고 알리고
+              <strong>Restart as admin</strong>을 제시합니다. 이것은 프로그램을 관리자 권한으로 다시
+              시작하고 창들을 되살립니다. 자동으로 다시 시도하지는 않으므로 재시작 후 직접 작업을
+              반복하십시오.</li>
+          <li>그 밖의 실패는 항목 수와 첫 오류를 담은 짧은 메시지로 알립니다. 하나가 실패해도 나머지는 멈추지
+              않습니다.</li>
+          <li>잘라내기와 복사는 Windows 탐색기와 오갑니다. 탐색기에서 잘라낸 것을 KOTU에서 붙여넣으면 복사가
+              아니라 이동이 되고, KOTU도 자기 잘라내기를 같은 방식으로 표시하므로 탐색기가 그것을 이동으로
+              읽습니다.</li>
+        </ul>
+
+        <h3>우클릭 메뉴</h3>
+        <ul>
+          <li><strong>파일 위</strong> — Open in new instance · Cut · Copy · Rename · Delete.</li>
+          <li><strong>폴더 위</strong> — Cut · Copy · Paste · Rename · Delete. Paste는 지금 보고 있는 폴더가
+              아니라 그 폴더 안에 붙여넣습니다.</li>
+          <li><strong>빈 공간</strong> — New folder · Paste · Refresh. 붙여넣을 것이 없으면 Paste는
+              비활성입니다.</li>
+        </ul>
+        <p>Cut, Copy, Delete는 드래그와 같은 규칙을 따릅니다: 우클릭한 것이 선택에 포함되어 있으면 선택
+           전체에, 아니면 그 항목 하나에만 적용됩니다.</p>
+
+        <h3>폴더 변화 따라가기</h3>
+        <p>KOTU는 보고 있는 폴더를 감시합니다. 다른 프로그램이 파일을 추가·삭제·이름 변경하면 Refresh 없이
+           약 0.5초 안에 반영됩니다. 폴더 자체가 삭제되거나 분리되면 화면은 아직 존재하는 가장 가까운 상위
+           폴더로 올라갑니다.</p>
+
+        <h3 id="open-file">Open file 버튼</h3>
+        <p>하단 바에서 메뉴 옆에 있는 버튼 — 툴팁 <strong>Open file</strong> — 은 보고 있는 것을 떠나지 않고
+           파일을 여는 방법입니다. Windows 파일 대화 상자를 열지 않습니다. 대신 파일 브라우저가 창을
+           넘겨받습니다: 이미 열려 있던 패널은 그대로 두고 없는 것은 채워 넣으며, 가운데는 썸네일 브라우저가
+           됩니다.</p>
+        <p><strong>이것은 하던 일 위에 덮인 층이고, 떠 있는 동안에는 아래의 무엇에도 닿을 수
+           없습니다.</strong> 하단 바는 가려지고 버튼도 누를 수 없으며, 화면 모드 키와 모드 버튼도 모두 아무
+           일을 하지 않습니다 — <kbd>Esc</kbd>와 뒤로 버튼이 이 층을 먼저 걷어낸 뒤에야 평소의 순서를
+           이어갑니다.</p>
+        <p><strong>비쳐 보입니다.</strong> 브라우저는 반투명한 바탕 위에 그려지므로 이미 열어 두었던
+           사진·동영상·문서가 뒤로 계속 보이고, 처음부터 새로 시작하는 것이 아니라 바꿔 열고 있다는 것을 알
+           수 있습니다. 썸네일과 파일 이름 자체는 불투명하게 남습니다. 패널이 물러나 있던 모드 2와 3에서는
+           사이드 패널이 내용 위에 <strong>떠 있는 상태로</strong> 돌아오며 나머지 층과 마찬가지로
+           반투명하고, 내용은 좁아지지 않고 전체 폭을 유지합니다. 모드 1에서는 패널이 늘 그렇듯 불투명한
+           사이드바입니다.</p>
+        <p><kbd>Esc</kbd>를 누르거나 버튼을 다시 누르면 원래 배치로 정확히 돌아갑니다. 파일을 고르는 것으로도
+           끝납니다. 이미 브라우저를 보고 있는 상태라면 버튼은 무엇을 여는 대신 가운데 화면을 한 번
+           번쩍입니다.</p>
+      </section>
+
+      <!-- ================= 6. ASSOCIATIONS ================= -->
+      <section id="associations">
+        <h2><span class="num">6</span>파일 연결과 시작 메뉴</h2>
+        <p>KOTU는 요청하기 전에는 아무것도 등록하지 않습니다. 모든 등록은 사용자 계정 범위에서 이루어지므로
+           관리자 권한이 필요 없고, 스위치를 끄면 등록이 완전히 제거됩니다.</p>
+        <p><strong>Settings → Explorer integration</strong>에서:</p>
+        <ul>
+          <li>맨 위에 탐색기 우클릭 항목을 위한 스위치가 하나 있습니다: 압축 파일에 붙는 <strong>Extract here
+              with KOTU-archive</strong>와 모든 파일에 붙는 <strong>Compress with KOTU-archive</strong>입니다.
+              Windows 11에서는 둘 다 <strong>Show more options</strong>(<kbd>Shift</kbd>+<kbd>F10</kbd>)
+              아래에 있습니다.</li>
+          <li>그 아래 <strong>Register all file associations</strong> — KOTU가 가져갈 수 있는 모든 형식을 한
+              번에 켜고 끄는 스위치 하나입니다. 전부 등록되어 있을 때만 켜짐으로 표시되고, 우클릭 메뉴
+              스위치는 건드리지 않습니다.</li>
+          <li>그 아래 <strong>Advanced options</strong> — 스위치가 아니라 링크입니다. 열면 형식이
+              <strong>확장자 하나씩</strong> 나오고, 각각을 소유한 모듈로 묶여 있습니다: KOTU-image,
+              KOTU-video, KOTU-audio, KOTU-document, KOTU-archive. 확장자마다 스위치가 있으므로
+              <code>.png</code>는 KOTU에 주고 <code>.gif</code>는 다른 앱에 남길 수 있습니다. 위의 마스터
+              스위치가 이들 전부를 조종합니다. 이 목록은 Settings를 열 때마다 닫힌 상태로 시작합니다.</li>
+          <li>각 모듈 제목 아래에는 그 모듈의 확장자 중 몇 개에 대해 KOTU가 현재 기본 앱인지 알려 주는 줄이
+              있고, 그 옆의 <strong>Set default...</strong> 버튼은 고른 확장자 하나에 대한 Windows "연결
+              프로그램" 대화 상자를 엽니다.</li>
+        </ul>
+        <p>확장자를 켜면 그 형식의 기본 앱을 KOTU로 만드는 것도 함께 시도합니다. Windows는 몇몇 형식을
+           보호하고 거부할 수 있는데, 그럴 때는 해당 절 아래 상태 줄이 그 사실을 알리고
+           <strong>Set default...</strong>로 안내합니다. 그것이 통과하는 방법입니다. Windows 기본 앱 페이지를
+           저절로 여는 일은 없습니다 — 마스터 스위치 하나 뒤에 확장자가 48개나 있으므로 그랬다가는 페이지
+           수십 개가 한꺼번에 열립니다.</p>
+        <p>KOTU의 폴더가 옮겨지면 — 업데이트 후, 또는 무설치판을 다른 곳으로 옮긴 뒤 — 켜 두었던 등록은
+           다음에 시작할 때 조용히 복구됩니다.</p>
+        <p><strong>시작 메뉴</strong>는 왼쪽 아래 구석의 버튼입니다(<kbd>Alt</kbd>+<kbd>`</kbd>). 바에서
+           위로 솟아오르며 아래에서부터 Min to tray, 그다음 All Readable, Image, Video, Audio, Document,
+           Archive, H/W Info, 그다음 Settings를 나열합니다. 여기에 Exit 항목은 없습니다 — 마지막 창을 닫으면
+           앱이 끝나고, 트레이 메뉴에 <strong>Exit KOTU</strong>가 있습니다.</p>
+      </section>
+
+      <!-- ================= 7. SEVERAL WINDOWS ================= -->
+      <section id="windows">
+        <h2><span class="num">7</span>여러 창 동시에 쓰기</h2>
+        <p>KOTU는 하나의 프로그램으로 동작하며 창은 원하는 만큼 열 수 있습니다.</p>
+        <p>새 창을 얻는 방법:</p>
+        <ul>
+          <li><kbd>Shift</kbd>+<kbd>N</kbd> — 지금 보고 있는 모듈의 비어 있는 새 창;</li>
+          <li>내장 파일 브라우저에서 파일을 <kbd>Shift</kbd>+더블클릭;</li>
+          <li>그곳에서 파일을 우클릭해 <strong>Open in new instance</strong> 고르기.</li>
+        </ul>
+        <p>그 밖의 경우, 파일을 열면 같은 모듈의 기존 창을 다시 씁니다.</p>
+        <p>창은 각각 독립적입니다: 자기 모듈, 자기 파일, 자기 사이드 패널, 자기 트레이 아이콘, 자기 작업
+           표시줄 버튼, 자기 H/W Info 선택을 가집니다. 모든 창은 제목 표시줄 앞에 번호를 달고 있으므로 작업
+           표시줄과 <kbd>Alt</kbd>+<kbd>Tab</kbd>에서 구별할 수 있습니다.</p>
+        <p>새 창은 마지막으로 닫은 창의 크기와 위치를 물려받습니다.</p>
+        <p><strong>최소화</strong>는 Windows의 표준 방식대로 동작합니다 — 창은 작업 표시줄에 남습니다. 창을
+           완전히 숨기려면 메뉴 맨 아래의 <strong>Min to tray</strong> 항목이나, 그 창의 트레이 아이콘 우클릭
+           메뉴에 있는 같은 명령(<em>Minimize to tray</em>로 풀어 적혀 있습니다)을 씁니다. 숨겨진 창은 작업
+           표시줄과 <kbd>Alt</kbd>+<kbd>Tab</kbd>에서 사라지지만 트레이 아이콘은 남습니다 — 그것을 클릭하면
+           돌아옵니다.</p>
+      </section>
+
+      <!-- ================= 8. SETTINGS ================= -->
+      <section id="settings">
+        <h2><span class="num">8</span>Settings</h2>
+        <p>왼쪽 아래 메뉴의 마지막 항목입니다. 그 화면의 설정마다 한 줄 설명과 <strong>Learn more</strong>
+           링크가 붙어 있는데, 그 링크가 가리키는 것이 이 문서입니다. 화면은 위에서부터
+           <strong>Display</strong>, <strong>Explorer integration</strong>, <strong>Playback</strong>,
+           <strong>Troubleshooting</strong>, <strong>Updates</strong>, <strong>About</strong> 순입니다.</p>
+        <p>Settings는 사이드 패널이 없는 유일한 화면입니다 — <kbd>F11</kbd>, <kbd>F12</kbd>, 가장자리 버튼이
+           아무 일도 하지 않고, 열려 있던 것은 이 화면에 있는 동안 물러나 있습니다.</p>
+
+        <h3 id="ui-scale">UI scale</h3>
+        <p><strong>Display</strong> 아래에 있습니다. <em>System default</em>는 이 모니터의 Windows 화면
+           배율을 따르고, 목록은 그것이 현재 어느 항목인지 표시합니다. 고정 값 — 100%에서 350%까지 — 을
+           고르면 KOTU에 대해서만 Windows 설정을 덮어쓰며, 바탕 화면의 다른 것은 바뀌지 않습니다.</p>
+        <p>변경은 열려 있는 모든 KOTU 창에 즉시 적용됩니다. 다시 시작할 필요가 없습니다. 모니터의 Windows
+           배율이 목록에 없는 값이면 목록 아래 안내가 그 사실을 알립니다.</p>
+        <p>배율을 바꾸는 방법은 이 목록뿐입니다 — 단축키는 없습니다. <kbd>Ctrl</kbd>+<kbd>+</kbd> /
+           <kbd>Ctrl</kbd>+<kbd>-</kbd>와 <kbd>Ctrl</kbd>+휠은 내용 쪽에 속합니다: Document 모듈에서는 문서를
+           확대·축소하고(<a class="inl" href="#modules">Document — 일반 텍스트</a>), <kbd>Ctrl</kbd>+휠은
+           종전대로 이미지나 PDF를 확대·축소합니다.</p>
+
+        <h3 id="explorer-integration">Explorer integration</h3>
+        <p>파일 형식 스위치와 우클릭 메뉴 스위치입니다. 전체 설명은
+           <a class="inl" href="#associations">파일 연결과 시작 메뉴</a>에 있습니다. 요약하면:</p>
+        <ul>
+          <li>맨 위의 <strong>Register all file associations</strong>는 모든 형식을 한 번에 뒤집습니다. 전부
+              등록되어 있을 때만 켜짐으로 표시되고, 우클릭 메뉴 스위치는 건드리지 않습니다.</li>
+          <li><strong>Advanced options</strong>는 그 아래에 개별 확장자 목록을 모듈별로 묶어 펼치며, 각각
+              자기 스위치를 가집니다. 닫힌 상태로 시작합니다.</li>
+          <li>모든 등록은 <strong>사용자 계정 범위에서만</strong> 이루어지므로 관리자 권한이 필요 없고,
+              스위치를 끄면 등록이 완전히 제거되어 아무것도 남지 않습니다.</li>
+          <li>스위치를 켜면 그 형식의 <strong>기본 앱</strong>을 KOTU로 만드는 것도 시도하므로, Windows
+              탐색기에서 더블클릭하면 KOTU가 열립니다.</li>
+          <li>Windows는 몇몇 형식을 보호하고 그 마지막 단계를 거부할 수 있습니다. 그럴 때는 상태 줄이 알려
+              주고, <strong>Set default...</strong>로 그 형식 하나를 직접 설정합니다. 각 모듈 제목 아래의
+              줄은 그 모듈의 확장자 중 몇 개에 대해 KOTU가 현재 기본 앱인지 알려 줍니다.</li>
+        </ul>
+
+        <h3 id="playback">Playback</h3>
+        <p><strong>Auto-play next file</strong>은 동영상이나 트랙이 끝에 도달했을 때 무슨 일이 일어날지
+           정합니다. 기본값인 켜짐 상태에서는 같은 폴더의 다음 파일이 시작되며, 이것이 폴더가 하나의 목록으로
+           재생되는 방식입니다(<a class="inl" href="#modules">Video와 Audio</a>). 꺼져 있으면 파일마다
+           끝에서 그냥 멈춥니다.</p>
+        <ul>
+          <li>두 모듈이 공유하는 스위치 하나입니다: Video와 Audio가 함께 씁니다.</li>
+          <li>루프 버튼이 off일 때만 발언권을 가집니다. <strong>Loop list</strong>나 <strong>Repeat this
+              file</strong>이 설정되어 있으면 그 모드가 계속 재생하고 이 스위치는 무시됩니다 — 반복 횟수가 다
+              소진된 뒤의 재생까지 포함해서이며, 그때도 다음 파일로 넘어갑니다.</li>
+          <li>꺼 두어도 직접 넘어가는 것은 막지 않습니다: 다음 파일을 여는 것은 언제나처럼 동작합니다.</li>
+        </ul>
+        <p><strong>Keep the display awake while a video plays</strong>는 두 번째 스위치이고 기본값은
+           켜짐입니다. 켜져 있고 동영상이 실제로 재생 중인 동안에는 화면 보호기가 나오지 않고 화면도 꺼지지
+           않습니다. 일시정지하거나 정지하거나 동영상을 닫으면 즉시 해제됩니다. 오디오 재생에는 적용되지
+           않습니다. 동영상이 재생되는 중에 스위치를 바꾸면 곧바로 반영됩니다.</p>
+
+        <h3 id="troubleshooting">Troubleshooting</h3>
+        <p>기본값이 모두 꺼짐인 진단 스위치 세 개로, 창 위에 작은 표시를 그립니다: <strong>Shell key
+           diagnostics</strong>(창 키가 무엇을 하고 있는지), <strong>Editor decor diagnostics</strong>(텍스트
+           편집기의 줄 측정값), <strong>Audio visualizer diagnostics</strong>(비주얼라이저 전환에 걸리는
+           시간). 버그 보고에 설명 대신 스크린샷을 담을 수 있도록 만든 것이니, 무언가를 추적하는 중이
+           아니라면 꺼 두십시오. 아래에 나오는 설정 파일 항목이 같은 절을 마무리합니다.</p>
+
+        <h3 id="the-settings-file">설정 파일</h3>
+        <p><strong>Open settings.json</strong>은 설정 파일 자체를 새 KOTU 창에서 열어, 내장 텍스트 편집기로
+           읽거나 편집할 수 있게 합니다.</p>
+        <ul>
+          <li>파일은 <code>%AppData%\KOTU\settings.json</code>에 있습니다.</li>
+          <li>직접 고친 내용은 다시 시작한 뒤에 적용됩니다 — KOTU는 실행 중에 이 파일을 다시 읽지
+              않습니다.</li>
+          <li>잘못 편집하면 설정이 망가질 수 있습니다. 입력한 내용을 검사하는 장치는 없으며, 형식이 깨진
+              파일이 설정을 잃는 유일한 경로입니다.</li>
+        </ul>
+
+        <h3 id="updates">Updates</h3>
+        <ul>
+          <li><strong>Current version</strong>과 <strong>Latest version</strong>, 그리고 마지막 확인 시각과
+              다음 확인까지 남은 시간이 나옵니다 — <em>Next check in 1:23</em>처럼 카운트다운합니다. 확인이
+              진행 중일 때는 그 줄이 대신 그 사실을 알립니다.</li>
+          <li>KOTU는 Settings를 열 때마다 한 번 업데이트를 확인하고, 이 화면에 머무는 동안 2분마다 다시
+              확인합니다. Settings를 떠나면 확인도 멈추므로 작업하는 동안 백그라운드에서 도는 것이 없습니다.
+              직접 확인하는 버튼은 없습니다 — 이 화면을 여는 것이 곧 확인입니다. 새 버전을 찾아도 팝업은 뜨지
+              않습니다 — Updates 절만이 그것을 알리는 유일한 곳입니다.</li>
+          <li>새 버전이 있으면 <strong>Update to vX.Y.Z</strong> 버튼이 나타납니다. 진행률을 보여 주며 내려받은
+              뒤 물어봅니다: <em>KOTU will close and restart to finish installing.</em>
+              <strong>Install and restart</strong>는 즉시 적용하고, <strong>Later</strong>는 내려받은 것을
+              다음에 버튼을 누를 때까지 준비된 상태로 둡니다.</li>
+          <li>업데이트는 Setup.exe 설치본이나 Velopack 무설치판에서만 동작합니다. 직접 압축을 푼 빌드는 그
+              사실을 알리고, 이 절을 비활성으로 두며, 카운트다운도 표시하지 않습니다.</li>
+        </ul>
+
+        <h3 id="about">About</h3>
+        <p>버전, 저장소 링크, 그리고 프로젝트의 지향점이 있습니다.</p>
+        <p>Settings 화면의 하단 바에는 프로젝트 Patreon 페이지 링크가 있습니다.</p>
+      </section>
+
+      <!-- ================= 9. THE THREE ICONS ================= -->
+      <section id="tray">
+        <h2><span class="num">9</span>세 가지 아이콘</h2>
+        <p>KOTU 창은 세 개의 아이콘으로 표현되고, 그중 어느 것도 단순한 로고가 아닙니다. 각각은 그때그때
+           그려지며 서로 다른 것을 말합니다. <strong>제목 표시줄</strong>의 것은 이 창이 몇 번인지를,
+           <strong>작업 표시줄</strong>의 것은 열린 파일이 얼마나 큰지를, <strong>알림 영역</strong>의 것은
+           모듈이 지금 무엇을 하고 있는지를 알려 줍니다.</p>
+        <p>셋은 하나의 색 팔레트를 씁니다. 모듈마다 색이 있고 — Image 초록, Video 빨강, Audio 청록,
+           Document 보라, Archive 호박색, H/W Info 파랑, All Readable 자홍 — 아이콘은 그 색을 씁니다.</p>
+
+        <h3>제목 표시줄 — 16 px</h3>
+        <p><strong>창 번호, 그것뿐입니다.</strong> 제목 표시줄이 이름 앞에 적는 것과 같은 번호이므로
+           <code>3-KOTU - holiday.jpg</code>의 아이콘에는 <code>3</code>이 들어 있습니다. 모듈이나 파일이
+           바뀌어도 이 숫자는 <strong>바뀌지 않고</strong>, 색만 움직입니다:</p>
+        <ul>
+          <li><strong>아무것도 열려 있지 않을 때</strong> — 타일이 모듈 색으로 채워지고 숫자는
+              흰색입니다.</li>
+          <li><strong>파일이 열려 있을 때</strong> — 어두운 타일에 모듈 색으로 밝게 빛나는 숫자가
+              들어갑니다.</li>
+        </ul>
+        <p>Settings, 지원하지 않는 파일 안내 화면, H/W Info는 이 규칙 밖에 있어 어두운 타일에 흰 숫자를
+           씁니다. 보여 줄 열림/닫힘 상태가 없기 때문입니다.</p>
+
+        <h3>작업 표시줄과 Alt+Tab — 32 px</h3>
+        <p><strong>무엇이 열려 있고 얼마나 큰가</strong> — 파일의 확장자 위에 크기를 얹은 두 줄입니다:
+           <code>TXT</code> 위에 <code>40K</code>, <code>JPG</code> 위에 <code>2.4M</code>. 모듈이 아니라
+           파일에서 읽어 오므로 이것만은 모든 모듈에서 같습니다.</p>
+        <p>아무것도 열려 있지 않으면 타일이 모듈 색으로 채워지고 세 글자가 들어갑니다 — <code>IMG</code>,
+           <code>VID</code>, <code>AUD</code>, <code>DOC</code>, <code>ARC</code>, <code>ALL</code>.
+           H/W Info와 모듈이 없는 화면은 대신 KOTU 아이콘 본체에 모듈 색 고리를 두르고 그 아래에 세 글자
+           띠를 답니다.</p>
+        <p>작업 표시줄에서 창은 하나로 묶이지 않고 각자 서므로, 번호와 이 타일이 작업 표시줄과
+           <kbd>Alt</kbd>+<kbd>Tab</kbd>에서 창을 구별하는 수단이 됩니다.</p>
+
+        <h3>알림 영역 — 16 px</h3>
+        <p>열려 있는 모든 창은 알림 영역에 작은 아이콘을 하나씩 두고 창이 살아 있는 동안 유지합니다.
+           <strong>모듈마다 다른 것이 바로 이 아이콘이며</strong>, 지금 하고 있는 일을 따라갑니다.</p>
+        <ul>
+          <li><strong>아무것도 열려 있지 않을 때</strong> — 모듈 색이 아이콘을 채우고 세 글자가 흰색으로
+              들어갑니다: <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>DOC</code>,
+              <code>ARC</code>, <code>ALL</code>.</li>
+          <li><strong>무언가 열려 있을 때</strong> — 모듈 색으로 테두리를 두른 어두운 배지에, 그 모듈 고유의
+              값 두 개가 같은 색으로 들어갑니다.</li>
+        </ul>
+        <div class="tbl"><table>
+          <tr><th>모듈</th><th>대기 상태</th><th>무언가 열려 있을 때</th></tr>
+          <tr><td>Image</td><td><code>IMG</code></td><td>사진의 <strong>가로</strong> 위에 <strong>세로</strong> 픽셀 — <code>4032</code> 위에 <code>3024</code>. EXIF든 <kbd>R</kbd>이든 사분의 일 바퀴 돌아간 상태를 보고 있으면 둘이 바뀝니다. 다섯 자리부터는 줄여 적습니다(<code>12k</code>)</td></tr>
+          <tr><td>Video</td><td><code>VID</code></td><td><strong>해상도</strong>(<code>1080p</code>) 위에 <strong>평균 비트레이트</strong>(<code>4.2M</code>) — 그 순간이 아니라 파일 전체의 평균입니다</td></tr>
+          <tr><td>Audio</td><td><code>AUD</code></td><td><strong>재생 위치</strong> 위에 <strong>작은 막대 네 개</strong>. 막대는 트랙이 재생되는 동안 1초에 한 번 움직이고, 일시정지·정지 상태에서는 낮게 멈춰 있습니다. 스펙트럼 분석이 아니라 살아 있다는 표시입니다</td></tr>
+          <tr><td>Document</td><td><code>DOC</code></td><td>현재 페이지와 전체 페이지 수를 <strong>대각선으로</strong> 나눠 — 현재는 왼쪽 위, 전체는 오른쪽 아래. PDF는 실제 페이지를 세고, 텍스트와 Markdown은 페이지가 없으므로 <code>1</code>과 <code>1</code>로 나옵니다. 네 자리부터는 <code>999+</code>로 표시합니다</td></tr>
+          <tr><td>Archive</td><td><code>ARC</code></td><td><strong>종류</strong>(<code>ZIP</code>, <code>7Z</code>) 위에 <strong>압축률</strong>(<code>0.42</code>). 압축·해제 작업이 진행 중이면 아랫줄이 대신 <strong>진행률</strong>(<code>45%</code>)이 됩니다</td></tr>
+          <tr><td>All Readable</td><td><code>ALL</code></td><td>그 파일을 다루는 모듈이 보여 줄 것을 그대로 — 사진을 열면 Image의 두 줄이, 동영상을 열면 Video의 두 줄이 나옵니다</td></tr>
+          <tr><td>H/W Info</td><td><code>INF</code></td><td>그 창에서 선택한 두 센서를 한 줄에 하나씩, <strong>각자의 채널 색으로</strong>. 하나만 고르면 둘째 줄은 대시가 되고, 아무것도 고르지 않으면 <code>INF</code>로 남습니다</td></tr>
+          <tr><td>Settings, 지원하지 않는 파일 안내 화면, 빈 창</td><td>—</td><td>값 없음 — 기본 KOTU 아이콘</td></tr>
+        </table></div>
+        <p>값을 읽을 수 없는 줄은 대시로 그립니다.</p>
+        <ul>
+          <li>아이콘의 툴팁은 그 창의 제목입니다.</li>
+          <li><strong>왼쪽 클릭</strong>은 그 창을 앞으로 가져옵니다.</li>
+          <li><strong>오른쪽 클릭</strong>은 메뉴를 엽니다: <em>Activate window</em> · <em>Minimize to
+              tray</em> · <em>Close this window</em> · <em>Exit KOTU</em>. 마지막 항목은 모든 창을
+              닫습니다.</li>
+        </ul>
+      </section>
+
+    </article>
+  </div>
+</div>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="brand" href="index.html#home">
+        <img src="assets/logo-mark.svg" alt="" width="64" height="64" loading="lazy">
+        <span class="brand-txt">
+          <span class="brand-name" style="font-size:22px">KOTU</span>
+          <span class="brand-sub">KING OF THE UTILITIES</span>
+        </span>
+      </a>
+      <nav class="foot-links">
+        <a href="guide.html">User guide</a>
+        <a href="https://github.com/zpstudios/kotu" rel="noopener">GitHub</a>
+        <a href="https://github.com/zpstudios/kotu/releases" rel="noopener">Releases</a>
+        <a href="https://github.com/zpstudios/kotu/blob/master/ARCHITECTURE.md" rel="noopener">Architecture</a>
+        <a href="https://github.com/zpstudios/kotu/blob/master/THIRD-PARTY-NOTICES.md" rel="noopener">Third-party notices</a>
+        <a href="https://github.com/zpstudios/kotu/issues" rel="noopener">Report a bug</a>
+      </nav>
+    </div>
+    <p class="foot-legal">
+      &copy; 2026 ZP Studios. KOTU is MIT-licensed. Bundled components keep their own licences — 7-Zip and libvlc (LGPL), LibreHardwareMonitor (MPL-2.0).<br>
+      Windows is a trademark of Microsoft Corporation. All other product names are trademarks of their respective owners and are referenced for comparison only.
+    </p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var nav=document.getElementById('nav'), burger=document.getElementById('burger');
+
+  /* nav shadow on scroll — same behaviour as index.html */
+  var onScroll=function(){ nav.classList.toggle('scrolled', window.scrollY>12); };
+  onScroll(); addEventListener('scroll',onScroll,{passive:true});
+
+  /* mobile menu */
+  burger.addEventListener('click',function(){
+    var open=nav.classList.toggle('open');
+    burger.setAttribute('aria-expanded',open?'true':'false');
+  });
+  document.querySelectorAll('#navlinks a').forEach(function(a){
+    a.addEventListener('click',function(){ nav.classList.remove('open'); burger.setAttribute('aria-expanded','false'); });
+  });
+})();
+</script>
+</body>
+</html>
