@@ -3573,6 +3573,71 @@
       데우려면 **조건 한 줄**만 넓히면 된다. 현재는 **온디맨드 유지**(부록 A-2 낙수 33).
   - **실기기 확인 포인트는 HANDOVER §4의 v0.315.0~v0.316.0 블록**.
 
+- ※ A328(**영상 정보 패널에 포맷상 정의된 속성 전부 나열**(없는 값은 빈칸 행), v0.317.0) 완료 — 결번.
+
+  - **사용자 지시(2026-09-03)** — *"영상도 당연히 바꿔야지."* A327 완주 직후 올려 둔 확인 질문
+    (부록 B "확인 필요")에 대한 답이고, **그 자리에서 착수·완주**했다. 같은 지시가 **일반 원칙**
+    (*"우측 사이드 패널의 정보는 해당 파일 포맷의 정의 상 존재할 수 있는 모든 속성에 대한 키들을 전부
+    표시해야 함."*)까지 확정해 **부록 B 98**로 등재됐다.
+  - ⚠️ **이 배치의 성격 = 설계가 아니라 이식이다.** A327의 `AudioQuickInfo`가 형틀이고,
+    신설한 **`VideoQuickInfo`**(`src/KOTU.Module.Video/VideoQuickInfo.cs`)는 그 뼈대를 그대로 옮긴 것이다
+    — 라벨 규칙·두 축 공유·워커·3단 폴백·경합 방어에 **새로 내린 판단이 거의 없다**.
+    **갈린 곳은 단 하나**(아래 `FourCC` 판정)이고, 그것이 이 절에서 유일하게 새 기록이 필요한 항목이다.
+  - **행 구성 = 파일 기본 3행 + 3절 36키.**
+    **메타데이터 16키**(`System.Title`·`System.Media.SubTitle`·`System.Video.Director`·
+    `System.Media.Producer`/`Writer`/`Publisher`/`ContentDistributor`/`Year`/`DateReleased`/
+    `CreatorApplication`/`CreatorApplicationVersion`/`EncodedBy`/`EncodingSettings`/`ProtectionType` ·
+    `System.Comment`·`System.Copyright`) ·
+    **비디오 15키**(`System.Media.DateEncoded`/`Duration` · `System.Video.FrameWidth`/`FrameHeight`/
+    `HorizontalAspectRatio`/`VerticalAspectRatio`/`FrameRate`/`Orientation`/`EncodingBitrate`/
+    `TotalBitrate`/`SampleSize`/`Compression`/`FourCC`/`IsStereo`/`IsSpherical`) ·
+    **오디오 5키**(`System.Audio.EncodingBitrate`/`IsVariableBitRate`/`SampleRate`/`SampleSize`/`ChannelCount`).
+    **값이 없어도 라벨 행을 남긴다**(부록 B 98 ① — 숨기는 최적화 금지).
+  - ⚠️ **두 축 불일치 해소가 절반의 목적이었다.** 종전 영상 모듈은
+    **열림 축**(`GetContentInfoAsync`) = `File`·`Size`·`Modified`·`Duration` + **재생 중에만** libvlc 3~4행,
+    **선택 축**(`SelectionQuickInfo`) = **`Length` 한 줄뿐**이라 **A200이 분리한 두 축이 서로 다른 것을
+    보여 주고 있었다**(오디오가 A327 이전에 있던 상태보다 더 빈약했다). 이제 **같은 빌더 하나를 공유**해
+    **항목·순서가 물리적으로 동일**하다. 부수로 `SelectionQuickInfo`의 **영상 `Length` 조각 갈래를 제거**했다
+    (사문화 방지 — 그 경로는 이제 도달하지 않는다).
+  - **`System.Audio.*` 5종을 포함한 근거** = **영상 컨테이너가 오디오 스트림을 포맷 정의로 갖는다**
+    (A270이 오디오 타일에서 같은 계열 키를 쓰는 선례). 비디오 절에 **동명 항목**(`EncodingBitrate`·
+    `SampleSize`)이 있으므로 **절 구분 + `Audio ` 라벨 접두**로 갈랐다.
+  - ⚠️ **A327과 갈린 판정 1건(이 절의 핵심) — `System.Video.Compression`·`System.Video.FourCC`.**
+    이 둘은 **A327이 오디오에서 키째 제외한 GUID·코덱 식별자 부류**다. 그런데 영상은
+    **읽히는 값(4글자)이 실제로 오는 컨테이너가 존재**하고, 이 둘이 **"코덱 이름이 속성 키로 나오는가"의
+    유일한 답**이라 **키는 남기고 값만 거르는 쪽**으로 갈랐다 — 값이 GUID로 오면 `Guid.TryParse`로
+    눕혀 **GUID 노출이 구조적으로 불가능**하다.
+    **일반화한 규칙은 부록 B 98 ④**(적용 조건 = "그 포맷에서 사람이 읽을 값이 실제로 오는 갈래가 있는가").
+    ⚠️ **규칙에 예외가 생기면 그 예외의 조건을 함께 적는다** — 안 적으면 세 번째 모듈(A329)이 헷갈린다.
+  - ⚠️ **libvlc 트랙 행은 폐지하되 값은 살렸다**(A327과 갈리지 않는, 그러나 더 정교해진 판단).
+    셸 속성 핸들러가 약한 **mkv/webm에서 속성 키가 빈칸으로 올 수 있어**, `FillFromPlayer`를
+    **빈칸 행만 채우는 보조 축**으로 강등했다 — **행 집합·순서는 두 축이 동일하게 유지**되고
+    재생이 멈춰도 **행이 사라지지 않는다**(종전에는 재생 중에만 나타났다 = 불일치의 원인).
+    `FourCc`는 **`string?` 반환으로 개조**해 존치했다(글자로 안 풀리면 채우지 않는다 — 종전 `?` 채움 폐지).
+  - **제외 근거 전수**(다음 세션이 "왜 이건 빠졌나"를 다시 조사하지 않게):
+    ① **스트림 배열 키** — `System.Video.StreamName`·`StreamNumber`
+    ② **식별자 GUID 9종** — `System.Media.ClassPrimaryID`·`ClassSecondaryID`·`CollectionID`·
+    `CollectionGroupID`·`ContentID`·`DVDID`·`MCDI`·`UniqueFileIdentifier`·`SubscriptionContentId`
+    ③ **셸·서비스 합성 키** — `System.Media.MetadataContentProvider`·`ProviderStyle`·`AuthorUrl`·
+    `PromotionUrl`·`UserWebUrl`·`UserNoAutoInfo`·`AverageLevel`·`System.Video.TranscodedForSync`
+    ④ **평점** — `System.Rating`·`System.Media.ProviderRating`(포맷 정의값이 아니라 사용자/서비스 평가값)
+    ⑤ ⚠️ **`System.RecordedTV.*` 계열 전체** — **방송 메타이지 파일 포맷 정의값이 아니다**
+    ⑥ `System.Media.FrameCount` — 정의가 **이미지 다중 프레임 축**이다
+    ⑦ `System.GPS.*` — **부록 B 69 개인정보 예외**(이미지·오디오와 동일).
+  - **A327에서 그대로 승계한 것** — 조회는 **전부 워커**(동기 빌더 + "UI 스레드 호출 금지" 계약 ·
+    CLAUDE.md 규칙 1.8) · **실패 3단 폴백**(일괄 → 키별 개별 → 라벨만) ·
+    **항해 경합 3중 방어**(오버레이 `_seq` · 선택 축 취소 토큰 · 열림 축 경로 재검사) ·
+    **placeholder(A175) 갈래도 라벨만 나열**(조회 0회 — 하이드레이션 없음).
+  - **무접촉** — **A270의 타일·트레이 축**(좁은 타일은 "값 없는 조각 생략"이 계속 옳다 · 부록 B 98 ⑥) ·
+    **A200의 두 축 분리 계약** · **A323의 좌 리스트 가드**.
+  - **CI 1순위로 적어 둔 것** = **`System.Video.*` 12종 선례 0**. 다만 **런타임 축**이고 **키별 폴백이
+    갈라 내므로** 최악이라도 결과는 **"일부 행이 빈칸"** 이다(컴파일 위험은 키 문자열이라 0).
+  - **변경 파일 4개** — `Directory.Build.props`(버전) · `src/KOTU.Module.Video/VideoQuickInfo.cs`(신설 311줄) ·
+    `src/KOTU.Module.Video/VideoPlayerView.xaml.cs`(열림 축 + `FillFromPlayer` 강등) ·
+    `src/KOTU.App/SelectionQuickInfo.cs`(선택 축 분기 + placeholder 라벨 + 영상 조각 갈래 제거).
+  - **낙수** = **문서·압축 모듈의 실태 점검 → A329**(부록 B 98의 잔여 두 모듈).
+  - **실기기 확인 포인트는 HANDOVER §4의 v0.317.0 블록**.
+
 
 ---
 
