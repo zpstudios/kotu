@@ -25,6 +25,10 @@ namespace KOTU.Module.AllReadable;
 ///    이 화면에서도 무제 개시·새 인스턴스 요청이 실동작한다 — 두 이벤트를 그대로 중계한다
 ///    (중계가 없으면 자식이 무제로 바뀌어도 셸 제목·오버레이가 옛 파일에 머문다).
 ///  · <see cref="IFileOpenTarget"/> — 셸이 "이 파일 네가 열래?"를 먼저 물어보는 지점(A24 유지).
+///  · <see cref="IContentFilterSource"/> — A331: 좌 리스트 필터를 <b>지금 자식</b>의 담당 확장자로
+///    좁힌다. 이 모듈의 SupportedExtensions는 전 모듈 합집합이라, 그대로 두면 음악 파일을 열어
+///    센터·하단 바가 오디오 자식으로 갈린 뒤에도 리스트에 사진·문서가 남는다(사용자 보고).
+///    자식이 없는 빈 상태에서는 null을 돌려줘 종전(합집합)으로 되돌아간다.
 ///
 /// <b>워커 수명(A42)</b>: 자식 뷰의 워커·재생·구독은 자식이 <c>Unloaded</c>에서 스스로 정리한다.
 /// 그래서 자식 교체는 "이전 자식을 비주얼 트리에서 떼는 것"이 곧 정리다 —
@@ -33,12 +37,14 @@ namespace KOTU.Module.AllReadable;
 /// </summary>
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
-    IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource
+    IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
+    IContentFilterSource
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
 
     private UIElement? _childView;   // 지금 센터에 얹힌 자식 뷰 (null = 빈 상태)
+    private IModule? _childModule;   // A331: 그 자식 뷰를 만든 모듈 — 좌 리스트 필터의 출처
     private string? _filePath;       // 지금 보고 있는 파일
     private bool _driveStripShown;   // 셸이 지정한 드라이브 줄 표시 여부 (A22)
     private bool _childDirty;        // 자식이 알린 마지막 미저장 상태 (A37 — 자식 교체 시 되돌리기용)
@@ -74,6 +80,18 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     {
         if (_childView is IUntitledContentSource untitled) untitled.OpenUntitled();
     }
+
+    /// <summary>
+    /// A331(좌 리스트 필터): 지금 자식 모듈의 담당 확장자 — 자식이 없으면 null이라
+    /// 셸이 종전대로 이 모듈의 합집합(A59)을 쓴다. 자식이 있을 때만 좁아지므로
+    /// "빈 All Readable = 전부 / 파일을 연 뒤 = 그 형식만"이 된다.
+    /// 자식 교체는 언제나 셸의 콘텐츠 전환이 뒤따르므로 별도 통지 이벤트를 두지 않는다
+    /// (계약 주석의 재진입 방지 규칙).
+    /// </summary>
+    public IReadOnlyList<string>? ContentExtensions =>
+        _childModule is { } module && module.SupportedExtensions.Count > 0
+            ? module.SupportedExtensions
+            : null;
 
     /// <summary>재생 표면(영상 자식)이 전면인가(A186) — 문서·사진 자식·빈 상태면 false.</summary>
     public bool HasPlaybackSurface => _childView is IPlaybackStateSource { HasPlaybackSurface: true };
@@ -170,6 +188,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
         if (module.CreateView(context) is not UIElement view) return; // 계약 위반 방어 — 빈 상태 유지
         _childView = view;
+        _childModule = module; // A331 — 좌 리스트 필터를 이 모듈의 담당 확장자로 좁힌다
         _filePath = context.FilePath;
 
         ChildHost.Content = view;
@@ -216,6 +235,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
+        _childModule = null; // A331 — 자식이 없으면 필터는 다시 합집합(셸이 모듈 기본값으로 폴백)
 
         if (_childDirty)
         {

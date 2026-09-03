@@ -1960,6 +1960,18 @@ public sealed partial class MainWindow : Window
     private ISidePanelProvider? PanelProviderView => ModuleHost.Content as ISidePanelProvider;
 
     /// <summary>
+    /// A331: 지금 뷰가 스스로 정하는 좌 리스트 필터(IContentFilterSource) — 없으면 null이라
+    /// 호출부가 종전대로 모듈의 담당 확장자(A57 ③)로 떨어진다. 유일한 구현은 All Readable
+    /// (A59)이고, 그 안에서 파일을 연 동안만 값이 있다(빈 상태면 null = 합집합 유지).
+    /// 판별을 모듈 축이 아니라 <b>뷰 타입</b>으로 하는 이유는 IsSettingsView 주석과 같다 —
+    /// 필터를 갈아야 하는 사정은 모듈 식별자가 아니라 지금 얹힌 콘텐츠가 만든다.
+    /// 값이 갈리는 시점(자식 교체)은 언제나 콘텐츠 전환(SetContentState → ApplyOverlayStates)이
+    /// 뒤따르므로 통지 이벤트가 없다 — 읽는 쪽이 표시 종착점이라 재진입 고리가 생기지 않는다.
+    /// </summary>
+    private IReadOnlyList<string>? ContentFilterExtensions =>
+        (ModuleHost.Content as IContentFilterSource)?.ContentExtensions;
+
+    /// <summary>
     /// A205(v0.208.0): 지금 중앙이 설정 화면인지 — 설정은 좌/우 사이드바를 **전면 배제**한다
     /// (사용자 확정: "설정 모듈은 좌우 사이드바 안 떠야 해"). 판별을 모듈 축(_currentModule is null)이
     /// 아니라 **뷰 타입**으로 하는 이유: 모듈 축으로 거르면 같은 폴백 화면인 미지원 파일 안내까지
@@ -4044,7 +4056,8 @@ public sealed partial class MainWindow : Window
         // 모듈 개념이 없어 담당 확장자가 없다(등재문 확정). 빈 셸(폴백도 아님)만 종전대로 숨김.
         // A205: 설정 화면은 폴백이 아니다 — 애초에 listShow가 false라 여기까지 오지 않지만,
         // 와도 extensions가 null이라 숨김으로 떨어진다(이중 안전).
-        var extensions = _currentModule?.SupportedExtensions
+        var extensions = ContentFilterExtensions
+            ?? _currentModule?.SupportedExtensions
             ?? (IsPanelFallbackView ? ExplorerListing.AllFiles : null);
         if (extensions is null)
         {
@@ -4154,7 +4167,9 @@ public sealed partial class MainWindow : Window
         S4Host.Visibility = Visibility.Visible;
         ApplyOverlayStates(); // ShowListOverlay가 현재 파일의 폴더로 Show → (폴더가 바뀌면) ViewChanged → S4 그리드 채움
         if (!ListOverlay.IsOpen) // 파일 폴더 소실(드라이브 탈착 등) — 시작 폴더(A174)로라도 목록을 만든다
-            ListOverlay.NavigateList(ExplorerStartFolder(), _currentModule.SupportedExtensions);
+            // A331: 필터는 ShowListOverlay와 같은 산출(뷰 우선 → 모듈)이어야 두 경로가 어긋나지 않는다.
+            ListOverlay.NavigateList(ExplorerStartFolder(),
+                ContentFilterExtensions ?? _currentModule.SupportedExtensions);
         // A323: 좌 리스트가 이미 그 폴더면 Show가 재항해를 건너뛰어 ViewChanged가 오지 않는다 —
         // 방금 만든 S4 그리드가 빈 채로 남지 않게 지금 목록을 직접 얹는다(재스캔 없음).
         // 스캔이 도는 중(위 Show나 폴더 소실 폴백이 실제 항해를 걸었다)이면 하지 않는다:
