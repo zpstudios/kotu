@@ -108,6 +108,24 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>현재 폴더 경로 (A94 — 호스트의 패널 드랍·붙여넣기 대상). 항해 전이면 빈 문자열.</summary>
     internal string CurrentFolder => _folder;
 
+    /// <summary>
+    /// A323: 지금 표시 중인 목록(정렬 A5·필터 A7 반영 = 마지막 ViewChanged와 같은 집합).
+    /// 셸이 <b>재스캔 없이</b> 새 표면(S4 그리드)을 시드할 때 읽는다 — Show가 같은 폴더 재항해를
+    /// 건너뛰면 ViewChanged가 오지 않기 때문이다(MainWindow.EnterOpenFileBrowsing 주석).
+    /// </summary>
+    internal IReadOnlyList<ExplorerListing.Entry> DisplayEntries => _display;
+
+    /// <summary>
+    /// A323: 위 <see cref="DisplayEntries"/>가 속한 폴더 — <see cref="CurrentFolder"/>(항해 시작
+    /// 즉시 새 폴더로 바뀐다)와 달리 **마지막으로 실제 표시까지 간** 폴더다. 둘이 다르면
+    /// 스캔이 도는 중(목록은 아직 옛 폴더 것)이라는 뜻이라, 셸의 시드는 두 값이 같을 때만 한다 —
+    /// 그렇지 않으면 로딩 화면(A243)을 옛 폴더 타일로 덮어 버린다.
+    /// </summary>
+    internal string DisplayFolder => _displayFolder;
+
+    /// <summary>A323: <see cref="DisplayFolder"/>의 실값 — 갱신은 RefreshView 한 곳(_display와 같은 자리).</summary>
+    private string _displayFolder = string.Empty;
+
     // "name"/"size"/"modified"/"created"(A117)/"type"(A155) — SortKey.ToString().ToLowerInvariant()와
     // 수동 동기. 모르는 값(구 버전·손편집)은 이름순으로 폴백한다(아래 switch의 _ 분기).
     private const string SortSettingKey = "explorer.sort";
@@ -238,8 +256,10 @@ public sealed partial class ExplorerPane : UserControl
         // A240: 선택 변경을 셸로 중계 — ThumbnailExplorer :206과 같은 얇은 래핑(선택 판정·해석은
         // 셸 몫 — SelectedEntry 질의). 두 표면 어느 쪽 발화든 한 이벤트로 모은다(현행 유일
         // 사용처는 리스트 전용 모드라 IconGrid는 접혀 항목이 안 만들어진다 — 실발화는 ListPane뿐).
-        IconGrid.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
-        ListPane.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
+        // A323: 열린 콘텐츠 표시용 프로그램 선택(SetCurrentFile)은 중계하지 않는다 — 그 선택은
+        // **열림 축**의 표시일 뿐이라 셸의 **선택 축**(A200 _selectedBrowse)을 세우면 안 된다.
+        IconGrid.SelectionChanged += (_, _) => { if (!_syncingCurrent) SelectionChanged?.Invoke(); };
+        ListPane.SelectionChanged += (_, _) => { if (!_syncingCurrent) SelectionChanged?.Invoke(); };
         // A94 4차: 잘라내기 표시(전역 1벌)가 바뀌면 이미 그려 둔 항목의 흐림만 다시 맞춘다.
         // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
         // (Unloaded로 워커를 정리하는 아래 관용구와 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
@@ -456,6 +476,7 @@ public sealed partial class ExplorerPane : UserControl
         var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
         var arranged = ExplorerListing.Arrange(input, _sortKey, _sortDesc, _hiddenExts);
         _display = arranged; // A204 — 다음 정렬 변경의 입력(현재 표시 순서)
+        _displayFolder = _folder; // A323 — 이 목록이 속한 폴더(셸 시드의 정합 판정용)
         Fill(arranged, seq); // A192 — 첫 조각 즉시 + 나머지는 프레임 분할(완료 시 FinishFill)
         ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
         // A192: 소형 폴더(첫 조각 이하)는 조립이 위 Fill에서 동기로 끝났다 — 종전 순서 그대로
@@ -823,6 +844,11 @@ public sealed partial class ExplorerPane : UserControl
         }
         _fillDone?.TrySetResult(true);
         _fillDone = null;
+        // A323: 목록 재작성은 선택을 지운다 — 열린 콘텐츠 표시를 조립 완료 시점에 다시 건다.
+        // 여기여야 하는 이유: 분할 조립(A192)에서 해당 항목이 뒤 조각에 있을 수 있다.
+        // 셸의 선택 축은 바로 앞 ViewChanged가 이미 null로 리셋했으므로(MainWindow 생성자 배선)
+        // 이 재적용이 사용자 선택을 덮는 일이 없다 — 두 축의 순서 계약(A200)이 그대로 성립한다.
+        ApplyCurrentFileSelection();
         _ = LoadDetailsAsync(seq);
         // A241: 조립 완료 훅 — 셸이 우측 정보 패널의 EXIF 프리페치를 여기서 기동한다(뼈대 우선:
         // 목록 조립·상세 로더 기동이 끝난 뒤에만 부가 스캔이 붙는다). 감시 재스캔의 재통지는
@@ -1573,6 +1599,69 @@ public sealed partial class ExplorerPane : UserControl
 
     private static ExplorerListing.Entry? EntryOfSelection(object? item) =>
         item is FrameworkElement { Tag: ExplorerListing.Entry entry } ? entry : null;
+
+    // ---------- 열린 콘텐츠 표시 (A323) ----------
+
+    /// <summary>
+    /// A323: 셸이 알려 준 "지금 열려 있는 콘텐츠 파일" — 목록 재작성(Fill이 선택을 지운다) 후
+    /// 다시 걸어야 하므로 필드로 기억한다. null = 표시할 열린 콘텐츠 없음.
+    /// </summary>
+    private string? _currentFile;
+
+    /// <summary>
+    /// A323: 위 표시용 선택 대입이 도는 동안 <see cref="SelectionChanged"/> 중계를 억제하는 표지.
+    /// 배선 지점 = 생성자의 두 SelectionChanged 람다(그 주석에 근거).
+    /// </summary>
+    private bool _syncingCurrent;
+
+    /// <summary>
+    /// A323: 열린 콘텐츠 파일을 리스트에 **선택 표시**로 보여준다(사용자 요구 — 클릭했을 때와
+    /// 같은 테두리. 새 시각 요소를 만들지 않고 기존 선택 표시 기구를 그대로 쓴다).
+    /// 목록 밖(다른 폴더·A7 필터 밖·실체화 상한 초과)이면 지금 선택을 그대로 둔다 —
+    /// 지우면 사용자가 방금 고른 항목의 표시가 사라진다(FindItemByPath 미매칭 = 무동작 관례).
+    /// 선택 축과의 분리: 이 대입은 SelectionChanged를 발화시키지 않으므로(_syncingCurrent)
+    /// 셸의 선택 축(A200 _selectedBrowse — 우측 정보 패널의 "선택 우선")은 서지 않는다.
+    /// 우측 정보는 종전대로 열린 콘텐츠(provider) 기준을 유지한다.
+    /// </summary>
+    internal void SetCurrentFile(string? path)
+    {
+        _currentFile = path;
+        ApplyCurrentFileSelection();
+    }
+
+    /// <summary>
+    /// A323: 기억해 둔 열린 콘텐츠 경로를 지금 목록에 반영한다. 호출부 = <see cref="SetCurrentFile"/>
+    /// (셸 통지 시점) + <see cref="FinishFill"/>(목록 재작성 후 — 폴더가 바뀐 경우에도 새 목록에서
+    /// 표시가 맞게). 이미 그 항목이 선택돼 있으면 무동작이라 연속 항해(키 반복)에서도
+    /// 스크롤이 되풀이되지 않는다.
+    /// </summary>
+    private void ApplyCurrentFileSelection()
+    {
+        if (_currentFile is not { Length: > 0 } path) return;
+        _syncingCurrent = true;
+        try
+        {
+            SelectCurrentIn(IconGrid, path);
+            SelectCurrentIn(ListPane, path);
+        }
+        finally
+        {
+            _syncingCurrent = false; // 예외가 나도 표지가 남으면 이후 사용자 선택이 통째로 침묵한다
+        }
+    }
+
+    /// <summary>
+    /// A323: 한 표면에서 경로에 해당하는 항목을 선택하고 보이게 스크롤한다 —
+    /// 대입·스크롤 관용구는 CreateFolderThenRenameAsync와 같은 한 벌(SelectedItem + ScrollIntoView).
+    /// 리스트 전용 모드(좌 오버레이)에서는 IconGrid에 항목이 없어 자연 무동작이다.
+    /// </summary>
+    private static void SelectCurrentIn(ListViewBase owner, string path)
+    {
+        if (FindItemByPath(owner, path) is not { } item) return;
+        if (ReferenceEquals(owner.SelectedItem, item)) return; // 이미 그 항목 — 스크롤도 되풀이하지 않는다
+        owner.SelectedItem = item;
+        owner.ScrollIntoView(item);
+    }
 
     // ---------- 다중 선택 일괄 열기 (A94 6차, v0.153.0) ----------
 

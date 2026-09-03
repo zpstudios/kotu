@@ -88,6 +88,26 @@ public sealed partial class FileListOverlay : UserControl
     public string? CurrentFolder => _list?.CurrentFolder is { Length: > 0 } folder ? folder : null;
 
     /// <summary>
+    /// A323: 지금 표시 중인 목록(정렬·필터 반영) — 리스트 미생성이면 빈 목록.
+    /// 셸이 재스캔 없이 S4 그리드를 시드할 때만 읽는다(ExplorerPane.DisplayEntries 주석 참고).
+    /// </summary>
+    public IReadOnlyList<ExplorerListing.Entry> CurrentEntries => _list?.DisplayEntries ?? [];
+
+    /// <summary>
+    /// A323: <see cref="CurrentEntries"/>가 속한 폴더 — 스캔이 도는 중이면 <see cref="CurrentFolder"/>와
+    /// 다르다(ExplorerPane.DisplayFolder 주석). 셸의 시드는 두 값이 같을 때만 한다.
+    /// </summary>
+    public string? DisplayFolder => _list?.DisplayFolder is { Length: > 0 } folder ? folder : null;
+
+    /// <summary>
+    /// A323: 셸이 "지금 열려 있는 콘텐츠 파일"을 알려 준다 — 내부 리스트가 그 항목을 선택
+    /// 표시로 보여주고, 필요하면 보이도록 스크롤한다(ExplorerPane.SetCurrentFile).
+    /// 선택 축(A200)은 세우지 않는다 — 그쪽 계약은 그 메서드 주석에 있다.
+    /// 리스트가 아직 없으면 무동작이다(호출부 ShowListOverlay가 Show 뒤에 부르므로 항상 있다).
+    /// </summary>
+    public void SetCurrentFile(string? path) => _list?.SetCurrentFile(path);
+
+    /// <summary>
     /// 떠 있는 동안의 선택 파일 경로 (A86 — 셸 Enter의 "선택 파일 있으면 열기" 판정).
     /// 닫혀 있거나(보이지 않는 선택은 열지 않는다) 선택이 폴더·없음이면 null.
     /// ※ A94 6차(v0.153.0)부터 일괄 열기는 <see cref="OpenSelectedFiles"/> —
@@ -120,14 +140,33 @@ public sealed partial class FileListOverlay : UserControl
     /// </summary>
     public void Show(string folder, IReadOnlyList<string> extensions)
     {
-        NavigateList(folder, extensions);
+        // A323(깜빡임 수리): 같은 폴더·같은 필터면 목록을 **다시 만들지 않는다**.
+        // 종전에는 표시 종착점(ApplyOverlayStates)이 이 메서드를 부를 때마다 NavigateList →
+        // ExplorerPane.NavigateToAsync가 무조건 재스캔하고 Fill이 Items.Clear로 항목을 통째로
+        // 새로 만들었다 — 뷰 내부 ◀/▶ 항해(OnContentOpened → ApplyOverlayStates)가 매번 그 경로를
+        // 타서 ⓐ 리스트가 "리프레시"되는 깜빡임 ⓑ 열린 파일의 선택 표시 소멸이 함께 났다.
+        // 외부 변경은 폴더 감시(A94 5차 — 도크가 닫혀 있어도 살아 있다)가 같은 재스캔 경로로
+        // 반영하므로 여기서 재스캔을 걸러도 목록이 낡지 않는다.
+        // 폴더·필터가 실제로 바뀌면 종전대로 재항해한다(그때의 재작성은 정상 — A323 사양 ④).
+        var reopened = !IsOpen; // 숨김 → 표시 전이(드라이브 구성·트리 동기를 한 번은 확인한다)
+        var sameView = _list is not null
+                       && string.Equals(TrimSep(_list.CurrentFolder), TrimSep(folder),
+                           StringComparison.OrdinalIgnoreCase)
+                       && _extensions.SequenceEqual(extensions, StringComparer.OrdinalIgnoreCase);
+        if (!sameView) NavigateList(folder, extensions);
         Visibility = Visibility.Visible;
         // A176: 사이드바(유일한 열림 상태) 안내 — 구 SetState의 자리. ShowHint의 동일 문구
         // 중복 억제(_hintVisible)가 반복 Show(ApplyOverlayStates 경유 다회 호출)를 걸러 준다.
         ShowHint(OverlayHints.Docked(OverlayHints.ListKey));
 
-        EnsureDriveRoots(); // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
-        _ = ExpandToFolderAsync(folder);
+        // A323: 상단 트리 쪽도 같은 조건으로 묶는다 — EnsureDriveRoots는 DriveInfo.GetDrives(네트워크
+        // 드라이브면 블로킹)를, ExpandToFolderAsync는 ScrollTreeTo(트리 튐)를 부른다. 연속 항해
+        // (키 반복)마다 이것들이 돌면 안 된다. 같은 폴더 재표시는 트리도 이미 그 자리다.
+        if (!sameView || reopened)
+        {
+            EnsureDriveRoots();  // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
+            SyncTreeToFolder(folder); // 같은 폴더면 그 안에서 조기 반환(종전 무조건 펼침의 대체)
+        }
     }
 
     /// <summary>

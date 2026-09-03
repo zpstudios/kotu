@@ -3488,7 +3488,8 @@ public sealed partial class MainWindow : Window
     /// 없음)"를 **모듈 전환에 한해 대체**한다 — 파일 열기는 여전히 재적용하지 않고, 세션 간
     /// 저장도 없다(A55 미포함).
     /// ⚠️ 이미 기본 상태면 <b>다시 그리지 않는다</b>(A109에서 추가한 가드 승계):
-    /// <see cref="ApplyOverlayStates"/>는 좌 리스트를 매번 Show → 폴더 재스캔까지 시키므로,
+    /// <see cref="ApplyOverlayStates"/>는 좌 리스트를 매번 Show시키므로(A323부터 같은 폴더·같은
+    /// 필터면 그 Show가 재스캔을 건너뛰지만, 이 가드는 무변경 재적용 자체를 막는 앞단이다),
     /// 재적용이 모듈 전환마다 같은 폴더를 두 번 훑는 낭비를 막는다(A314부터는 모듈 전환이
     /// SetContentState 안에서 이미 기본으로 되돌려 그린 직후라 이 가드가 항상 실동작한다).
     /// </summary>
@@ -3805,8 +3806,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// A200: 선택 축 변경 시 우측 정보 패널만 다시 판정한다 — 전체 ApplyOverlayStates를 부르지
-    /// 않는 이유는 그 경로가 좌 리스트를 매번 Show → 폴더 재스캔까지 시키기 때문(ApplyDefaultSidebars의
-    /// A109 가드와 같은 근거). 패널이 닫혀 있으면 무동작 — 다음 열림 때 ApplyOverlayStates 경로가
+    /// 않는 이유는 그 경로가 좌 리스트를 매번 Show시키기 때문(ApplyDefaultSidebars의 A109 가드와
+    /// 같은 근거. A323부터 같은 폴더 Show는 재스캔을 건너뛰지만, 이 경로는 여전히 정보 패널만
+    /// 만지는 편이 맞다 — 열림 축 선택 표시를 사용자 선택 위에 덮어쓰지 않는다). 패널이 닫혀 있으면 무동작 — 다음 열림 때 ApplyOverlayStates 경로가
     /// 선택 축을 판정한다(구현 결정). infoShow 산식은 ApplyOverlayStates와 동일해야 한다
     /// (A205: 두 산식의 폴백 입력이 IsPanelFallbackView 하나라 설정 제외가 자동으로 함께 간다).
     /// </summary>
@@ -4046,6 +4048,15 @@ public sealed partial class MainWindow : Window
             return;
         }
         ListOverlay.Show(folder, extensions);
+        // A323: 좌 리스트에 **열린 콘텐츠 파일**을 선택 표시로 보여준다(사용자 요구 — 모드1에서
+        // 지금 보는 파일이 무엇인지 리스트에 표시). Show 뒤에 부르는 이유: 폴더가 바뀐 경우
+        // Show가 건 재항해의 조립 완료(FinishFill)가 새 목록에서 같은 값을 다시 걸어 준다.
+        // 항해로 파일만 바뀐 경우(같은 폴더 — 위 Show가 재작성을 건너뛴다)는 이 호출이 곧
+        // "선택만 옮기기"다(A323 사양 ③). 선택 축(_selectedBrowse)은 서지 않는다 —
+        // ExplorerPane.SetCurrentFile이 SelectionChanged 중계를 억제한다(두 축 분리 유지).
+        // 전 모듈 공통: 좌 리스트는 S1~S4·모든 파일 모듈이 공유하는 단일 인스턴스라
+        // 이 한 지점이 곧 전 모듈 적용이다.
+        ListOverlay.SetCurrentFile(_currentFilePath);
     }
 
     // ---------- '오픈 파일' 버튼 · S4 탐색 모드 (A90) ----------
@@ -4129,9 +4140,18 @@ public sealed partial class MainWindow : Window
         _openFileBrowsing = true;
         EnsureS4Explorer();
         S4Host.Visibility = Visibility.Visible;
-        ApplyOverlayStates(); // ShowListOverlay가 현재 파일의 폴더로 Show → ViewChanged → S4 그리드 채움
+        ApplyOverlayStates(); // ShowListOverlay가 현재 파일의 폴더로 Show → (폴더가 바뀌면) ViewChanged → S4 그리드 채움
         if (!ListOverlay.IsOpen) // 파일 폴더 소실(드라이브 탈착 등) — 시작 폴더(A174)로라도 목록을 만든다
             ListOverlay.NavigateList(ExplorerStartFolder(), _currentModule.SupportedExtensions);
+        // A323: 좌 리스트가 이미 그 폴더면 Show가 재항해를 건너뛰어 ViewChanged가 오지 않는다 —
+        // 방금 만든 S4 그리드가 빈 채로 남지 않게 지금 목록을 직접 얹는다(재스캔 없음).
+        // 스캔이 도는 중(위 Show나 폴더 소실 폴백이 실제 항해를 걸었다)이면 하지 않는다:
+        // DisplayFolder(목록이 속한 폴더)와 CurrentFolder(항해 시작 즉시 바뀐다)가 어긋나 있고,
+        // 그때는 A243 로딩 화면을 옛 폴더 타일로 덮으면 안 된다 — 곧 도착할 ViewChanged가 채운다.
+        if (ListOverlay.DisplayFolder is { } shownFolder &&
+            shownFolder == ListOverlay.CurrentFolder &&
+            ListOverlay.CurrentEntries is { Count: > 0 } shownEntries)
+            _s4Explorer?.ShowEntries(shownFolder, shownEntries);
         _s4Explorer?.FocusGrid();
     }
 
