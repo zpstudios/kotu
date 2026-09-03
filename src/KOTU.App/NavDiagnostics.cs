@@ -79,6 +79,25 @@ public static class NavDiagnostics
     private static long _tickCGap;
     private static int _tickCGapAt = -1;
 
+    // A342 배치 2 — 틱 body 최대값이 났을 때 그 틱 동안의 GC 정지(ms).
+    // body가 큰데 이 값도 크면 그 틱을 잡아먹은 것은 조립이 아니라 GC다.
+    private static long _tickLBodyPause;
+    private static long _tickCBodyPause;
+
+    // A342 배치 2 — GC 축. 항해 시작(Begin) 시점의 세대별 수집 횟수와 누적 GC 정지를 스냅샷해
+    // 두고, 조립 때 "항해 이후 델타"로 찍는다. 정지 위치가 릴리스마다 옮겨 다니는 증상이
+    // GC 때문인지 가리는 증거다. 정지 시간의 단위는 ms(GetTotalPauseDuration은 TimeSpan이라
+    // Stopwatch 틱과 절대 섞지 않는다).
+    private static int _gc0;
+    private static int _gc1;
+    private static int _gc2;
+    private static long _gcPauseMs;
+
+    // A342 배치 2 — 상세 캐시 히트 버스트(ExplorerPane.LoadDetailInfoAsync). 같은 폴더 재진입이면
+    // await 없이 ApplyDetail이 수천 회 연속으로 돈다 — 그 건수와 누적 소요(틱)를 모은다.
+    private static int _detHits;
+    private static long _detTicks;
+
     /// <summary>스레드별 마지막 하트비트 시각(틱) — 위 클래스 주석의 "창마다 따로" 근거.</summary>
     [ThreadStatic] private static long _lastBeat;
 
@@ -128,6 +147,11 @@ public static class NavDiagnostics
             _stallStamp = 0;
             _stallAfter = -1;
             ResetTicksLocked(); // A342 — 틱 계측도 함께 비운다(낡은 값이 남지 않게)
+            // A342 배치 2 — GC 스냅샷·상세 히트도 함께 비운다(다시 켰을 때 낡은 델타가 나오지 않게)
+            _gc0 = 0;
+            _gc1 = 0;
+            _gc2 = 0;
+            _gcPauseMs = 0;
             _segmentsLine = string.Empty;
             _stallLine = string.Empty;
         }
@@ -144,6 +168,10 @@ public static class NavDiagnostics
         _tickCBodyAt = -1;
         _tickCGap = 0;
         _tickCGapAt = -1;
+        _tickLBodyPause = 0;   // A342 배치 2
+        _tickCBodyPause = 0;   // A342 배치 2
+        _detHits = 0;          // A342 배치 2 — 상세 캐시 히트 누적
+        _detTicks = 0;
     }
 
     /// <summary>
@@ -194,6 +222,11 @@ public static class NavDiagnostics
             _stallStamp = 0;
             _stallAfter = -1;
             ResetTicksLocked(); // A342 — 항해마다 틱 최대값을 새로 잰다
+            // A342 배치 2 — 이번 항해의 GC 기준점. 조립 때 현재값에서 빼 델타로 찍는다.
+            _gc0 = GC.CollectionCount(0);
+            _gc1 = GC.CollectionCount(1);
+            _gc2 = GC.CollectionCount(2);
+            _gcPauseMs = PauseMs();
             _lastPublish = now;
         }
         // 하트비트 기준점도 여기서 다시 잡는다 — 직전 틱이 언제였든 이번 항해의 첫 구간은
@@ -250,7 +283,8 @@ public static class NavDiagnostics
     /// <param name="lastIndex">그 틱이 붙인 마지막 항목 인덱스.</param>
     /// <param name="bodyTicks">틱 핸들러 본문 소요(Stopwatch 틱).</param>
     /// <param name="gapTicks">직전 틱 시작부터 이번 틱 시작까지(첫 틱은 0 — 무시한다).</param>
-    public static void NoteTick(char loop, int lastIndex, long bodyTicks, long gapTicks)
+    /// <param name="pauseMs">A342 배치 2: 그 틱 동안 늘어난 누적 GC 정지(ms — 틱 단위가 아니다).</param>
+    public static void NoteTick(char loop, int lastIndex, long bodyTicks, long gapTicks, long pauseMs)
     {
         if (!_enabled) return;
         lock (Gate)
@@ -262,6 +296,7 @@ public static class NavDiagnostics
                 {
                     _tickLBody = bodyTicks;
                     _tickLBodyAt = lastIndex;
+                    _tickLBodyPause = pauseMs; // A342 배치 2 — 최대 body와 같은 틱의 GC 정지
                 }
                 if (gapTicks > 0 && (_tickLGapAt < 0 || gapTicks > _tickLGap))
                 {
@@ -275,6 +310,7 @@ public static class NavDiagnostics
                 {
                     _tickCBody = bodyTicks;
                     _tickCBodyAt = lastIndex;
+                    _tickCBodyPause = pauseMs; // A342 배치 2 — 최대 body와 같은 틱의 GC 정지
                 }
                 if (gapTicks > 0 && (_tickCGapAt < 0 || gapTicks > _tickCGap))
                 {
@@ -284,6 +320,30 @@ public static class NavDiagnostics
             }
         }
     }
+
+    /// <summary>
+    /// A342 배치 2 — 상세 캐시 히트 버스트 1회분 기록(ExplorerPane.LoadDetailInfoAsync가
+    /// foreach를 마친 직후 한 번 부른다). 캐시 히트 경로는 await가 없어 UI 스레드를 통째로
+    /// 점유한다 — 같은 폴더 재진입이면 수천 회가 한 덩어리로 돈다. 그 덩어리가 정지의 주인인지
+    /// 가리려고 건수와 ApplyDetail 누적 소요를 함께 받는다.
+    /// </summary>
+    /// <param name="count">캐시 히트로 즉시 반영한 항목 수.</param>
+    /// <param name="ticks">그 반영에 쓴 누적 시간(Stopwatch 틱).</param>
+    public static void NoteDetailHits(int count, long ticks)
+    {
+        if (!_enabled) return;
+        lock (Gate)
+        {
+            if (!_active) return;
+            _detHits += count;
+            _detTicks += ticks;
+        }
+    }
+
+    /// <summary>A342 배치 2 — 프로세스 시작 이후 누적 GC 정지(ms). GetTotalPauseDuration은
+    /// TimeSpan을 돌려주므로 Stopwatch 틱과 섞이지 않게 이 한 곳에서 ms로 못 박는다
+    /// (ToMs에 넣으면 안 되는 값이다). 호출부(두 조립 루프)도 이 메서드만 쓴다.</summary>
+    public static long PauseMs() => (long)GC.GetTotalPauseDuration().TotalMilliseconds;
 
     /// <summary>
     /// 축 B — UI 스레드 하트비트 1틱. MainWindow의 DispatcherTimer가 켜져 있는 동안만 부른다.
@@ -410,14 +470,29 @@ public static class NavDiagnostics
         // A342: 정지 라인 뒤에 틱 계측을 덧붙인다 — 정지가 "not observed"여도 붙인다
         // (틱 쪽에만 증거가 남는 경우가 있기 때문). 조립은 여기 한 곳뿐이라는 계약 그대로다.
         var ticks = new StringBuilder(" · tick ");
-        AppendTickLocked(ticks, 'L', _tickLBody, _tickLBodyAt, _tickLGap, _tickLGapAt);
+        AppendTickLocked(ticks, 'L', _tickLBody, _tickLBodyAt, _tickLGap, _tickLGapAt, _tickLBodyPause);
         ticks.Append(" · ");
-        AppendTickLocked(ticks, 'C', _tickCBody, _tickCBodyAt, _tickCGap, _tickCGapAt);
+        AppendTickLocked(ticks, 'C', _tickCBody, _tickCBodyAt, _tickCGap, _tickCGapAt, _tickCBodyPause);
+
+        // A342 배치 2 — GC 축: 항해 시작 이후의 세대별 수집 횟수 델타와 누적 정지 시간 델타.
+        // 틱 body 240ms의 주인이 GC인지 여기서 먼저 걸러진다(0/0/0 pause 0ms면 GC는 무죄).
+        ticks.Append(" · gc ")
+            .Append(GC.CollectionCount(0) - _gc0).Append('/')
+            .Append(GC.CollectionCount(1) - _gc1).Append('/')
+            .Append(GC.CollectionCount(2) - _gc2)
+            .Append(" pause ").Append(PauseMs() - _gcPauseMs).Append("ms");
+
+        // A342 배치 2 — 상세 캐시 히트 버스트(같은 폴더 재진입이면 await 없이 수천 회 연속).
+        if (_detHits > 0)
+            ticks.Append(" · det hit ").Append(_detHits).Append(' ').Append(ToMs(_detTicks)).Append("ms");
+        else
+            ticks.Append(" · det none");
+
         _stallLine += ticks.ToString();
     }
 
     /// <summary>A342: 루프 하나의 틱 요약 1토막 — 기록이 없으면 "L none"으로만 적는다.</summary>
-    private static void AppendTickLocked(StringBuilder text, char loop, long body, int bodyAt, long gap, int gapAt)
+    private static void AppendTickLocked(StringBuilder text, char loop, long body, int bodyAt, long gap, int gapAt, long bodyPause)
     {
         text.Append(loop);
         if (bodyAt < 0)
@@ -425,7 +500,9 @@ public static class NavDiagnostics
             text.Append(" none");
             return;
         }
-        text.Append(" body ").Append(ToMs(body)).Append("ms@#").Append(bodyAt);
+        // A342 배치 2 — 최대 body 틱의 GC 정지를 괄호로 덧붙인다(단위는 이미 ms다).
+        text.Append(" body ").Append(ToMs(body)).Append("ms@#").Append(bodyAt)
+            .Append("(gc ").Append(bodyPause).Append("ms)");
         if (gapAt < 0)
         {
             text.Append(" gap none"); // 틱이 하나뿐이라 간격을 잴 수 없었다

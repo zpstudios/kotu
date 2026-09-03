@@ -838,6 +838,9 @@ public sealed partial class ExplorerPane : UserControl
             // A342: 정지 487ms가 prev0>fillN 구간에서 나는데 미리보기 개수와 무관해, 어느 틱이
             // 주인인지 틱 단위로 좁힌다. 진단이 꺼져 있으면 여기서 비용이 0이다(0 = 미계측 표지).
             var tickStart = NavDiagnostics.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
+            // A342 배치 2: 이 틱 동안 늘어난 GC 정지를 함께 잰다 — 240ms짜리 틱의 주인이
+            // 조립인지 GC인지 가르는 값이다(ms 단위 — Stopwatch 틱과 섞지 않는다).
+            var pauseStart = tickStart == 0 ? 0L : NavDiagnostics.PauseMs();
             try
             {
                 if (seq != _loadSeq)
@@ -861,7 +864,8 @@ public sealed partial class ExplorerPane : UserControl
                         'L',
                         next - 1,
                         System.Diagnostics.Stopwatch.GetTimestamp() - tickStart,
-                        lastTickStart == 0 ? 0 : tickStart - lastTickStart);
+                        lastTickStart == 0 ? 0 : tickStart - lastTickStart,
+                        NavDiagnostics.PauseMs() - pauseStart);
                     lastTickStart = tickStart;
                 }
             }
@@ -1420,6 +1424,11 @@ public sealed partial class ExplorerPane : UserControl
         var items = ListPane.Items.ToList(); // 스냅샷 — await 중 컬렉션 변경 대비
         using var gate = new SemaphoreSlim(FetchConcurrency); // 동시 발사 상한 (A194)
         var running = new List<Task>();
+        // A342 배치 2 — 캐시 히트 경로는 await 없이 ApplyDetail을 연속 호출한다(같은 폴더
+        // 재진입이면 수천 회가 한 덩어리). 그 덩어리가 UI 정지의 주인인지 재려고 건수와
+        // 누적 소요(Stopwatch 틱)를 모아 foreach 직후 한 번에 넘긴다.
+        var detHits = 0;
+        var detTicks = 0L;
         var stop = false; // 풀이 닫힘(취소 Task) — 남은 발사 중단. UI 스레드에서만 읽고 쓴다.
 
         // 항목 하나의 fetch + UI 반영. UI 스레드에서 시작하므로 await 후속부도 UI 스레드다.
@@ -1470,7 +1479,21 @@ public sealed partial class ExplorerPane : UserControl
 
             if (_infoCache.TryGetValue(entry.Path, out var hit) && hit.Modified == entry.Modified)
             {
-                if (hit.Details.Info.Length > 0) ApplyDetail(item, entry, hit.Details);
+                if (hit.Details.Info.Length > 0)
+                {
+                    if (NavDiagnostics.Enabled)
+                    {
+                        // A342 배치 2 — 계측은 진단이 켜져 있을 때만(꺼짐이면 종전 호출 그대로다).
+                        var detStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                        ApplyDetail(item, entry, hit.Details);
+                        detTicks += System.Diagnostics.Stopwatch.GetTimestamp() - detStart;
+                        detHits++;
+                    }
+                    else
+                    {
+                        ApplyDetail(item, entry, hit.Details);
+                    }
+                }
                 continue; // 캐시 히트는 워커 없이 즉시 반영 (종전 동작)
             }
 
@@ -1482,6 +1505,8 @@ public sealed partial class ExplorerPane : UserControl
             }
             running.Add(FetchIntoAsync(item, entry, kind));
         }
+        // A342 배치 2 — 이번 조립의 캐시 히트 버스트를 계측판에 넘긴다(꺼짐이면 무동작).
+        if (NavDiagnostics.Enabled) NavDiagnostics.NoteDetailHits(detHits, detTicks);
         // 발사분 완주 대기 — using gate의 Dispose가 대기 중 Release보다 앞서지 않게 한다.
         await Task.WhenAll(running);
     }

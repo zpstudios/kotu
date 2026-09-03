@@ -634,6 +634,9 @@ public sealed partial class ThumbnailExplorer : UserControl
             // A342: 정지 487ms가 prev0>fillN 구간에서 나는데 미리보기 개수와 무관해, 어느 틱이
             // 주인인지 틱 단위로 좁힌다. 진단이 꺼져 있으면 여기서 비용이 0이다(0 = 미계측 표지).
             var tickStart = NavDiagnostics.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
+            // A342 배치 2: 이 틱 동안 늘어난 GC 정지를 함께 잰다 — 240ms짜리 틱의 주인이
+            // 조립인지 GC인지 가르는 값이다(ms 단위 — Stopwatch 틱과 섞지 않는다).
+            var pauseStart = tickStart == 0 ? 0L : NavDiagnostics.PauseMs();
             try
             {
                 if (seq != _showSeq)
@@ -658,7 +661,8 @@ public sealed partial class ThumbnailExplorer : UserControl
                         'C',
                         next - 1,
                         System.Diagnostics.Stopwatch.GetTimestamp() - tickStart,
-                        lastTickStart == 0 ? 0 : tickStart - lastTickStart);
+                        lastTickStart == 0 ? 0 : tickStart - lastTickStart,
+                        NavDiagnostics.PauseMs() - pauseStart);
                     lastTickStart = tickStart;
                 }
             }
