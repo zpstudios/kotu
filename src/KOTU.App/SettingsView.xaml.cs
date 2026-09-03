@@ -41,11 +41,19 @@ namespace KOTU.App;
 /// A235 ②의 "Show per-module options" 접기는 폐지). 그룹 사이 간격 12 통일은 지금도 유효하다.
 /// A292: 모듈 그룹 5개가 <b>"Advanced options" 펼침</b> 안의 <b>확장자 개별 토글</b>로 흡수·대체됐다
 /// (등록 단위가 모듈 → 확장자로 — 정본은 종전과 같이 레지스트리다. 설정 파일 키는 만들지 않았으므로
-/// 마이그레이션도 없다). 펼침은 저장하지 않고 늘 닫힌 채 시작한다. 절 순서도 하나 움직였다:
+/// 마이그레이션도 없다. <b>A326(2026-09-03)이 이 입도를 다시 모듈 단위로 되돌렸다</b> — 아래 참조).
+/// 펼침은 저장하지 않고 늘 닫힌 채 시작한다. 절 순서도 하나 움직였다:
 /// <b>Playback</b> 절(A258/v0.258.0이 Updates 바로 앞에 넣었던 것)이 이 절 바로 아래로 올라와
 /// 마스터·Advanced 링크·Playback이 대부분 한 화면에 함께 보인다. 그 이동으로 머리글 없이 이 절에
 /// 딸려 읽히던 네 카드(진단 3장 + 설정 파일)가 Playback 밑으로 읽히게 되어 <b>Troubleshooting</b>
 /// 머리글을 신설해 그 아래로 묶었다(카드 자체·Updates와의 상대 순서는 무변경).
+/// A326(2026-09-03): A292의 <b>입도 개정</b> — "Advanced options" 펼침 안의 토글이 확장자 48개에서
+/// <b>모듈 5개</b>로 돌아갔다(사용자 정정: A292의 "모듈별 확장자 등록 개별화" 지시는 <b>모듈 단위</b>가
+/// 의도였다. A235 ②의 접기 → A257 철회 → A292 확장자 개별화로 이어진 이력의 종착점이다).
+/// 펼침 구조·마스터 스위치·모듈 소제목·"Default app for n/m extensions" 줄·"Set default..."는 그대로다.
+/// 모듈 스위치의 semantics는 마스터와 같은 하이브리드다 — <b>그 모듈의 확장자가 전부 등록됐을 때만 On</b>,
+/// 누르면 <b>그 모듈의 전 확장자를 워커에서 직렬로 일괄 등록/해제</b>(부분 등록은 Off로 보인다).
+/// 레지스트리 층은 무접촉 — A292가 만든 확장자 단위 API를 모듈 스위치가 루프로 부를 뿐이다.
 /// </summary>
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
@@ -302,9 +310,12 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // 그대로 태운다. 그래서 이 그룹에는 제 진행 표시도 제 결과 문구도 없다.
         // A292: 대신 눌러 주는 대상이 모듈 토글 5개에서 아래 Advanced 펼침 안의 확장자 토글
         // 전부로 바뀌었다 — 마스터의 semantics(상태형 표시 + 대행 누름)와 "전부 켜짐일 때만 On"
-        // 되계산 규칙은 A227 그대로다. 마스터 off가 확장자 토글을 비활성(그레이)으로 만들지도
+        // 되계산 규칙은 A227 그대로다. 마스터 off가 하위 토글을 비활성(그레이)으로 만들지도
         // 않는다 — A227이 모듈 토글을 그레이 처리하지 않던 것과 같은 결이다.
-        // 사정권: 파일 연결 확장자 토글만. 위 우클릭 메뉴 토글(Extract here·Compress)은
+        // A326: 대행 대상이 다시 모듈 토글 5개다(확장자 48개 → 모듈 5개). 마스터 자신의 코드는
+        // 대상 목록의 이름만 바뀌었을 뿐 A227/A292 그대로다 — 하위 토글의 IsOn을 대신 눌러
+        // 그쪽 Toggled를 태우고, 하위가 값을 확정할 때마다 RecomputeMaster가 표시를 다시 잰다.
+        // 사정권: 파일 연결 모듈 토글만. 위 우클릭 메뉴 토글(Extract here·Compress)은
         // 파일 연결이 아니므로 이 스위치가 건드리지 않는다(사양 확정).
         // A257: 자리는 메뉴 그룹 다음 — 대신 눌러 주는 대상(Advanced 펼침) 바로 위에 선다.
         var masterToggle = new ToggleSwitch
@@ -316,19 +327,20 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        // 아래 foreach가 만드는 확장자 토글이 화면 순서대로 담긴다. 배선을 루프보다 먼저 해도 되는 이유 —
-        // 아래 두 핸들러는 사람이 스위치를 만지거나 워커 답이 온 뒤에야 도는데, 그때는 이미
-        // Build()가 끝나 목록이 다 차 있다(클로저가 리스트 자체를 잡고 있다).
-        var extensionToggles = new List<ToggleSwitch>();
+        // 아래 foreach가 만드는 모듈 토글이 화면 순서대로 담긴다(A326 — A292의 확장자 토글 목록을
+        // 대체). 배선을 루프보다 먼저 해도 되는 이유 — 아래 두 핸들러는 사람이 스위치를 만지거나
+        // 워커 답이 온 뒤에야 도는데, 그때는 이미 Build()가 끝나 목록이 다 차 있다
+        // (클로저가 리스트 자체를 잡고 있다).
+        var moduleToggles = new List<ToggleSwitch>();
 
-        // 마스터 표시 규칙 = "전부 켜짐일 때만 On". 확장자 토글이 값을 확정하는 세 시점
-        // (초기 조회 반영 · 작업 성공 · 실패 되돌리기) 뒤에 불린다.
+        // 마스터 표시 규칙 = "전부 켜짐일 때만 On". 모듈 토글이 값을 확정하는 두 시점
+        // (초기 조회 반영 · 일괄 작업 종료 후 실제 레지스트리 상태로 재동기) 뒤에 불린다.
         // 대입은 마스터 자신의 Toggled를 다시 발화시키므로 전용 가드로 감싼다(_suppressToggle 금지 —
-        // 필드 주석 참고: 그 플래그를 켜면 확장자 토글의 등록 흐름까지 막힌다).
+        // 필드 주석 참고: 그 플래그를 켜면 모듈 토글의 등록 흐름까지 막힌다).
         void RecomputeMaster()
         {
-            if (extensionToggles.Count == 0) return; // 연결 가능한 확장자가 없으면 "전부 켜짐"도 성립하지 않는다
-            var allOn = extensionToggles.All(t => t.IsOn);
+            if (moduleToggles.Count == 0) return; // 연결 가능한 모듈이 없으면 "전부 켜짐"도 성립하지 않는다
+            var allOn = moduleToggles.All(t => t.IsOn);
             if (masterToggle.IsOn == allOn) return;
             _suppressMasterToggle = true;
             masterToggle.IsOn = allOn;
@@ -341,16 +353,17 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             // A292: 펼침이 닫혀 있어도 펼치지 않는다 — A235 ②의 자동 펼침을 A257이 걷어낸 뒤로
             // 마스터는 화면 상태를 만지지 않는다. 결과는 defaults 줄·공용 상태 줄이 말한다.
             var turnedOn = masterToggle.IsOn;  // 아래 대입이 되계산을 부를 수 있으니 목표값을 먼저 잡는다
-            foreach (var extensionToggle in extensionToggles)
+            foreach (var moduleToggle in moduleToggles)
             {
                 // 이미 목표 상태면 그대로 둔다(IsOn 대입이 없으면 Toggled도 없다 = 헛작업 없음).
                 // 작업 중인 토글(IsEnabled = false)은 건너뛴다 — 기다리지도, 따로 안내하지도 않는다.
                 // 그 토글만 작업이 끝난 뒤 사용자가 다시 누르면 된다(A227 사양 확정 그대로).
-                if (extensionToggle.IsEnabled && extensionToggle.IsOn != turnedOn)
-                    extensionToggle.IsOn = turnedOn;
+                if (moduleToggle.IsEnabled && moduleToggle.IsOn != turnedOn)
+                    moduleToggle.IsOn = turnedOn;
             }
-            // 수십 개 작업이 한꺼번에 워커 큐에 쌓이지만 워커는 직렬이라(A195) 서로의 레지스트리
-            // 쓰기를 지우지 않는다. 마스터 자신의 표시는 토글 하나가 끝날 때마다 RecomputeMaster가 잡는다.
+            // 모듈 5개 × 확장자 10~14개가 한꺼번에 워커 큐에 쌓이지만 워커는 직렬이라(A195) 서로의
+            // 레지스트리 쓰기를 지우지 않는다. 마스터 자신의 표시는 모듈 하나가 끝날 때마다
+            // RecomputeMaster가 잡는다.
         };
 
         // A220과 같은 그룹 문법(카드 없음 · 안쪽 Spacing 6 · 아래 여백은 A235 ④에서 0). 진행 링이 없어 두 칸이면 된다.
@@ -376,9 +389,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         masterCardBody.Children.Add(masterHeaderRow);
         Root.Children.Add(masterCardBody);
 
-        // ── A292: "Advanced options" 링크 + 펼침. 펼치면 모듈별 소제목 아래 그 모듈의 확장자
-        // 개별 토글이 나온다(종전 모듈 단위 스위치 행은 이 안으로 흡수·대체됐다 — A257의 상시
-        // 펼침 5그룹을 다시 접은 셈이지만 단위가 확장자로 내려갔다).
+        // ── A292: "Advanced options" 링크 + 펼침. 펼치면 모듈 블록 5개가 나온다(A257의 상시 펼침
+        // 5그룹을 다시 접은 셈이다).
+        // A326: 펼침 안의 단위가 확장자에서 다시 모듈로 돌아왔다 — 링크·닫힘 시작·비저장은 무변경.
         // 컨트롤 선례: WinUI Expander는 저장소 선례 0건이라 쓰지 않는다(A182와 같은 판단) —
         // LearnMore와 같은 HyperlinkButton + Visibility 토글 문법을 그대로 쓴다.
         // 펼침 상태는 저장하지 않는다(사양 확정 — 세션마다 닫힘으로 시작).
@@ -428,22 +441,46 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         foreach (var module in associationModules)
         {
-            // A292: 모듈 하나 = Advanced 펼침 안의 블록 하나(소제목 + defaults 줄 + 확장자 토글 나열).
-            // A183의 카드·A197의 헤더 행(모듈 스위치·진행 링·확장자 목록 줄)은 확장자 개별 토글로
-            // 대체돼 사라졌다 — 복원 참조 = A292 직전 git 이력.
+            // A326: 모듈 하나 = Advanced 펼침 안의 블록 하나(헤더 행[스위치 + 소제목] + defaults 줄).
+            // A292의 확장자 토글 나열은 이 헤더 행의 스위치 하나로 접혔다 — 복원 참조 = A326 직전 git 이력.
+            // 카드(A183)·진행 링(A197)은 A292가 걷어낸 뒤로 돌아오지 않았다: 진행은 공용 상태 줄이 말한다.
             var moduleBlock = new StackPanel { Spacing = 6 };
 
+            // 헤더 행 문법 = A197 최소형(스위치가 제목 왼쪽 · 내장 On/Off 문구 제거 · MinWidth 0).
             // 소제목 = 모듈 BrandName(A52 계보 — 우클릭 메뉴 라벨과 같은 출처).
-            moduleBlock.Children.Add(new TextBlock
+            var moduleToggle = new ToggleSwitch
+            {
+                OnContent = string.Empty,
+                OffContent = string.Empty,
+                MinWidth = 0,
+                // A195와 같은 이유로 IsOn 초기값을 여기서 읽지 않는다(아래 워커 조회).
+                // 답이 오기 전·읽기 실패는 둘 다 Off로 보인다 — 종전 폴백과 같은 표시.
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            moduleToggles.Add(moduleToggle); // A227/A326: 마스터가 대신 눌러 줄 대상 — 화면 순서 그대로
+
+            var moduleHeaderRow = new Grid { ColumnSpacing = 8 };
+            moduleHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            moduleHeaderRow.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var moduleTitle = new TextBlock
             {
                 Text = module.BrandName,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
-            });
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(moduleToggle, 0);
+            Grid.SetColumn(moduleTitle, 1);
+            moduleHeaderRow.Children.Add(moduleToggle);
+            moduleHeaderRow.Children.Add(moduleTitle);
+            moduleBlock.Children.Add(moduleHeaderRow);
 
             // A25(v0.61.0): 현재 기본 앱 현황(n/m) + 확장자별 '연결 프로그램' 대화상자 진입 —
             // 모듈 카드에서 그대로 옮겨 왔다(A292). "Set default..."는 보호 확장자(.pdf 등)의
-            // 유일한 앱 내 지정 진입로라 확장자 토글과 함께 이 블록에 남아야 한다.
+            // 유일한 앱 내 지정 진입로라 이 블록에 남아야 한다.
+            // A326: 이 줄은 모듈 스위치가 부분 등록을 Off로 감출 때 실제 상태를 드러내는 안전판이기도
+            // 하다 — 일괄 작업이 끝날 때마다(ModuleOutcome.Defaults) 다시 세어 넣는다.
             var defaultsText = new TextBlock
             {
                 FontSize = 12,
@@ -492,8 +529,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             }
             setDefaultButton.Flyout = flyout;
 
-            // A292: 진행 문구 칸(구 progressText)이 빠져 두 칸이면 된다 — 확장자 하나의 작업은
-            // 순식간이라 진행 표시가 없고, 결과는 공용 상태 줄이 말한다.
+            // A292: 진행 문구 칸(구 progressText)이 빠져 두 칸이면 된다 — 진행도 결과도 공용 상태
+            // 줄이 말한다(A326의 일괄 처리 n/m 진행 문구도 같은 줄에 쓴다).
             var defaultsRow = new Grid { ColumnSpacing = 12 };
             defaultsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             defaultsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -503,139 +540,119 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             defaultsRow.Children.Add(setDefaultButton);
             moduleBlock.Children.Add(defaultsRow);
 
-            // 확장자 토글 나열 — 카드 없이 촘촘한 행(A292 사양: 확장자 수가 많다 — 카드 남발 금지).
-            // 행 안 문법은 A197 최소형(스위치 왼쪽 · 내장 On/Off 문구 제거 · MinWidth 0)이다.
-            var extensionRows = new StackPanel { Spacing = 2 };
-            foreach (var ext in module.SupportedExtensions)
+            // 같은 모듈의 재진입 방지 플래그(A77 계보). 작업 중에는 토글도 비활성이라 사람
+            // 조작으로는 도달하지 않지만, 표시 재동기나 마스터의 프로그램적 변경까지 막아 준다.
+            var busy = false;
+            var extensionCount = module.SupportedExtensions.Count;
+
+            moduleToggle.Toggled += async (_, _) =>
             {
-                var extToggle = new ToggleSwitch
-                {
-                    OnContent = string.Empty,
-                    OffContent = string.Empty,
-                    MinWidth = 0,
-                    // A195와 같은 이유로 IsOn 초기값을 여기서 읽지 않는다(아래 워커 조회).
-                    // 답이 오기 전·읽기 실패는 둘 다 Off로 보인다 — 종전 폴백과 같은 표시.
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                extensionToggles.Add(extToggle); // A227: 마스터가 대신 눌러 줄 대상 — 화면 순서 그대로
+                if (_suppressToggle || busy) return;
+                var turnedOn = moduleToggle.IsOn;
 
-                var extRow = new Grid { ColumnSpacing = 8 };
-                extRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                extRow.ColumnDefinitions.Add(
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                var extLabel = new TextBlock
-                {
-                    Text = ext,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                Grid.SetColumn(extToggle, 0);
-                Grid.SetColumn(extLabel, 1);
-                extRow.Children.Add(extToggle);
-                extRow.Children.Add(extLabel);
-                extensionRows.Children.Add(extRow);
+                // A326: 모듈 하나 = 확장자 10~14개의 레지스트리 작업이라 진행이 눈에 보인다.
+                // 진행 링(A197)은 되살리지 않고 공용 상태 줄에 n/m을 쓴다 — 진행·결과 창구가 하나다.
+                // 반영 트리거는 종전 관례 그대로 토글 즉시 1회다(스로틀 없음 — 연타는 잠금이 막는다).
+                busy = true;
+                moduleToggle.IsEnabled = false;
 
-                // 같은 확장자의 재진입 방지 플래그(A77 계보). 작업 중에는 토글도 비활성이라 사람
-                // 조작으로는 도달하지 않지만, 실패 되돌리기나 마스터의 프로그램적 변경까지 막아 준다.
-                var busy = false;
+                var progressDispatcher = DispatcherQueue;
+                var verb = turnedOn ? "registering" : "removing";
+                _status.Text = $"{module.BrandName}: {verb} {extensionCount} file associations...";
 
-                extToggle.Toggled += async (_, _) =>
-                {
-                    if (_suppressToggle || busy) return;
-                    var turnedOn = extToggle.IsOn;
-
-                    // 확장자 하나 = 레지스트리 쓰기 몇 건이라 진행 링 없이 잠금만 건다(A79 ⑤의
-                    // 발바닥 스피너는 모듈 단위 일괄 등록에 붙던 것 — 그 자리가 사라졌다).
-                    // 반영 트리거는 종전 관례 그대로 토글 즉시 1회다(스로틀 없음 — 연타는 잠금이 막는다).
-                    busy = true;
-                    extToggle.IsEnabled = false;
-                    _status.Text = string.Empty;
-
-                    ExtensionOutcome outcome;
-                    try
+                // 워커 스레드에서 불린다 — UI 대입은 반드시 디스패처를 거친다(ARCHITECTURE §11.1).
+                void ReportProgress(int done, int total) =>
+                    progressDispatcher.TryEnqueue(() =>
                     {
-                        outcome = await Worker.Run(ctx => ApplyExtensionAssociation(module, ext, turnedOn));
-                    }
-                    catch (Exception ex)
-                    {
-                        // 워커가 이미 닫혔거나(뷰 이탈) 예상 못 한 실패 — 모듈 판과 같은 실패 처리.
-                        // 개수는 세어 보지도 못했으므로 -1 = "모름"으로 두고 화면 숫자는 건드리지 않는다.
-                        outcome = new ExtensionOutcome(false, ex.Message, false, -1);
-                    }
-
-                    // 여기부터는 UI 스레드. 화면을 떠났어도 잠금은 풀어 둔다(다시 로드되면 그대로 쓰인다).
-                    busy = false;
-                    extToggle.IsEnabled = true;
-                    if (!_uiAlive) return;
-
-                    if (outcome.Defaults >= 0) ShowDefaults(outcome.Defaults);
-
-                    if (!outcome.Ok)
-                    {
-                        // 실패 동작은 모듈 판 그대로: 토글을 원위치로 되돌리고 이유를 표시한다.
-                        _suppressToggle = true;
-                        extToggle.IsOn = !extToggle.IsOn;
-                        _suppressToggle = false;
-                        _status.Text = "Failed to apply: " + outcome.Error;
-                        RecomputeMaster(); // A227: 되돌린 값까지 마스터 표시에 반영(전부 켜짐이 깨졌다)
-                        return;
-                    }
-
-                    // A227: 여기부터 extToggle.IsOn은 더 바뀌지 않는다 — 성공 경로의 되계산은 이 한 곳이면 된다.
-                    RecomputeMaster();
-
-                    if (!turnedOn) return; // 해제는 할 말이 없다(defaults 줄이 이미 갱신됐다)
-
-                    // 켤 때만: A38 — 기본 앱까지 자동 지정 시도(ApplyExtensionAssociation 안에서 끝났다).
-                    // A166의 두 갈래 안내(보호 확장자/일반 실패)는 유지하되 설정 딥링크 자동 열기는
-                    // 하지 않는다 — 마스터가 확장자 토글 수십 개를 연달아 누르면 설정 페이지가
-                    // 연발로 열리기 때문이다(A292 확정. "Set default..." 진입로는 위 defaults 줄에 있다).
-                    if (outcome.DefaultSet)
-                    {
-                        _status.Text = $"{module.BrandName}: set as the default app for {ext}.";
-                    }
-                    else if (ExplorerIntegration.IsProtectedExtension(ext))
-                    {
-                        _status.Text = $"Windows requires confirmation for {ext}. Use \"Set default...\" "
-                                     + $"and choose {module.BrandName}, or pick it in Windows Settings.";
-                    }
-                    else
-                    {
-                        _status.Text = $"Windows kept the current default app for {ext}. Use "
-                                     + $"\"Set default...\" and choose {module.BrandName}, or pick it in "
-                                     + "Windows Settings.";
-                    }
-                };
-
-                // A195: 토글 초기값(레지스트리 읽기)도 워커에서 — 관용구는 위 RefreshDefaultsAsync와
-                // 같다: 워커에서 읽고, DispatcherQueue로 돌아와 대입한다. 같은 워커 큐라 등록/해제
-                // 작업과 순서가 보장되고(직렬), 화면을 떠난 뒤 도착한 답은 _uiAlive가 막는다.
-                // Toggled를 다시 발화시키지 않도록 _suppressToggle로 감싼다.
-                // 이름이 dispatcher가 아닌 이유 — RefreshDefaultsAsync 안의 지역 변수와 이름이 겹친다.
-                var stateDispatcher = DispatcherQueue;
-                Worker.Post(() =>
-                {
-                    var registered = Safe(() =>
-                        ExplorerIntegration.IsExtensionAssociationRegistered(module, ext));
-                    stateDispatcher.TryEnqueue(() =>
-                    {
-                        // busy = 답이 오기 전에 사람이 먼저 토글했다 — 그 작업 결과가 우선이다.
-                        if (!_uiAlive || busy) return;
-                        _suppressToggle = true;
-                        extToggle.IsOn = registered;
-                        _suppressToggle = false;
-                        // A227: 초기 조회는 확장자마다 따로 도착한다 — 도착할 때마다 마스터를 다시 잰다.
-                        // 다 도착하기 전에는 아직 안 읽은 토글이 Off로 보이므로 마스터도 Off가 자연스럽다.
-                        RecomputeMaster();
+                        if (!_uiAlive) return;
+                        _status.Text = $"{module.BrandName}: {verb} {done}/{total} file associations...";
                     });
+
+                ModuleOutcome outcome;
+                try
+                {
+                    outcome = await Worker.Run(ctx => ApplyModuleAssociation(module, turnedOn, ReportProgress));
+                }
+                catch (Exception ex)
+                {
+                    // 워커가 이미 닫혔거나(뷰 이탈) 예상 못 한 실패 — 아무것도 쓰지 못했다고 본다.
+                    // 표시는 누르기 전 값(!turnedOn)으로 되돌리고, 개수는 -1 = "모름"으로 둔다.
+                    outcome = new ModuleOutcome(false, ex.Message, 0, !turnedOn, -1);
+                }
+
+                // 여기부터는 UI 스레드. 화면을 떠났어도 잠금은 풀어 둔다(다시 로드되면 그대로 쓰인다).
+                busy = false;
+                moduleToggle.IsEnabled = true;
+                if (!_uiAlive) return;
+
+                if (outcome.Defaults >= 0) ShowDefaults(outcome.Defaults);
+
+                // A326: 표시는 늘 "그 모듈의 확장자가 전부 등록됐는가"로 다시 맞춘다(사양 3 — 부분
+                // 등록은 Off). 일괄 처리는 부분 실패가 가능해서, A292의 확장자 판처럼 그냥 원위치로
+                // 되돌리면(한 건짜리라 그것으로 충분했다) 화면이 레지스트리와 어긋난다.
+                // 대입은 _suppressToggle로 감싼다 — 이 핸들러의 재귀 발화를 막는 표지다.
+                if (moduleToggle.IsOn != outcome.AllRegistered)
+                {
+                    _suppressToggle = true;
+                    moduleToggle.IsOn = outcome.AllRegistered;
+                    _suppressToggle = false;
+                }
+                // A227: 모듈 토글 값이 확정된 뒤 한 번 — 성공·실패 어느 쪽이든 여기 한 곳이면 된다.
+                RecomputeMaster();
+
+                if (!outcome.Ok)
+                {
+                    _status.Text = "Failed to apply: " + outcome.Error;
+                    return;
+                }
+
+                if (!turnedOn)
+                {
+                    _status.Text = $"{module.BrandName}: removed {extensionCount} file associations.";
+                    return;
+                }
+
+                // 켤 때만: A38 — 기본 앱까지 자동 지정 시도(ApplyModuleAssociation 안에서 끝났다).
+                // A166의 안내는 유지하되 설정 딥링크 자동 열기는 하지 않는다 — 마스터가 모듈을
+                // 연달아 누르면 설정 페이지가 연발로 열리기 때문이다(A292 확정. "Set default..."
+                // 진입로는 위 defaults 줄에 있다). 확장자별 두 갈래(보호 확장자/일반)는 일괄 처리라
+                // 한 문장으로 합쳤다 — 어느 확장자가 걸렸는지는 defaults 줄의 n/m이 말한다.
+                _status.Text = outcome.DefaultsSet >= extensionCount
+                    ? $"{module.BrandName}: registered {extensionCount} extensions and set as the default app for all of them."
+                    : $"{module.BrandName}: registered {extensionCount} extensions. Windows kept the current "
+                      + $"default app for some of them. Use \"Set default...\" and choose {module.BrandName}, "
+                      + "or pick it in Windows Settings.";
+            };
+
+            // A195: 토글 초기값(레지스트리 읽기)도 워커에서 — 관용구는 위 RefreshDefaultsAsync와
+            // 같다: 워커에서 읽고, DispatcherQueue로 돌아와 대입한다. 같은 워커 큐라 등록/해제
+            // 작업과 순서가 보장되고(직렬), 화면을 떠난 뒤 도착한 답은 _uiAlive가 막는다.
+            // Toggled를 다시 발화시키지 않도록 _suppressToggle로 감싼다.
+            // 이름이 dispatcher가 아닌 이유 — RefreshDefaultsAsync 안의 지역 변수와 이름이 겹친다.
+            var stateDispatcher = DispatcherQueue;
+            Worker.Post(() =>
+            {
+                var registered = AllExtensionsRegistered(module);
+                stateDispatcher.TryEnqueue(() =>
+                {
+                    // busy = 답이 오기 전에 사람이 먼저 토글했다 — 그 작업 결과가 우선이다.
+                    if (!_uiAlive || busy) return;
+                    _suppressToggle = true;
+                    moduleToggle.IsOn = registered;
+                    _suppressToggle = false;
+                    // A227: 초기 조회는 모듈마다 따로 도착한다 — 도착할 때마다 마스터를 다시 잰다.
+                    // 다 도착하기 전에는 아직 안 읽은 토글이 Off로 보이므로 마스터도 Off가 자연스럽다.
+                    RecomputeMaster();
                 });
-            }
-            moduleBlock.Children.Add(extensionRows);
+            });
+
             // A257의 moduleOptions와 같은 책임 이동 — 이제 Advanced 펼침 본문이 블록 사이 간격 12를 만든다.
             advancedBody.Children.Add(moduleBlock);
         }
 
-        // 공용 상태 줄은 그룹 밖에 남는다 — 확장자 토글과 이 메뉴 토글이 함께 쓰는 한 줄이라
-        // 어느 그룹에도 속하지 않는다(A292: 모듈별 progressText가 사라져 이제 결과는 전부 이 줄이 말한다).
+        // 공용 상태 줄은 그룹 밖에 남는다 — 모듈 토글과 이 메뉴 토글이 함께 쓰는 한 줄이라
+        // 어느 그룹에도 속하지 않는다(A292: 모듈별 progressText가 사라져 이제 진행·결과가 전부 이
+        // 줄로 온다. A326의 일괄 처리 n/m 진행 문구도 여기다).
         Root.Children.Add(_status);
 
         // A292: Playback 절이 Explorer integration 바로 아래로 올라왔다(A258의 "Updates 바로 앞"을
@@ -1454,40 +1471,86 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     }
 
     /// <summary>
-    /// 확장자 토글 한 번의 결과 (A292 — A77의 <c>AssociationOutcome</c>을 확장자 단위로 바꾼 것).
-    /// 워커에서 만들어 UI 스레드로 통째로 건너온다.
+    /// 모듈 토글 한 번(= 그 모듈의 전 확장자 일괄 처리)의 결과
+    /// (A326 — A292의 <c>ExtensionOutcome</c>을 다시 모듈 단위로 되돌린 것. 계보는 A77의
+    /// <c>AssociationOutcome</c>). 워커에서 만들어 UI 스레드로 통째로 건너온다.
     /// </summary>
-    /// <param name="Ok">등록/해제 자체가 성공했는지. false면 토글을 원위치로 되돌린다.</param>
-    /// <param name="Error">실패 사유(성공이면 null).</param>
-    /// <param name="DefaultSet">기본 앱 지정(A38)까지 성공했는지 — 실패해도 토글은 되돌리지 않는다(A77 확정).</param>
+    /// <param name="Ok">확장자 전부가 실패 없이 처리됐는지. false면 <paramref name="Error"/>를 표시한다
+    /// (표시 값은 되돌리지 않고 <paramref name="AllRegistered"/>로 다시 맞춘다 — 부분 실패가 가능하다).</param>
+    /// <param name="Error">첫 실패 사유(전부 성공이면 null).</param>
+    /// <param name="DefaultsSet">기본 앱 지정(A38)까지 성공한 확장자 수 — 실패해도 토글은 되돌리지 않는다(A77 확정).</param>
+    /// <param name="AllRegistered">작업 후 레지스트리를 다시 읽어 판정한 "이 모듈의 확장자가 전부 등록됨".
+    /// 모듈 토글의 표시 규칙(사양 3 — 부분 등록은 Off)이 이 값 하나로 정해진다.</param>
     /// <param name="Defaults">작업 후 다시 센 모듈의 "기본 앱인 확장자" 개수. 세지 못했으면 -1(화면 숫자 유지).</param>
-    private readonly record struct ExtensionOutcome(bool Ok, string? Error, bool DefaultSet, int Defaults);
+    private readonly record struct ModuleOutcome(
+        bool Ok, string? Error, int DefaultsSet, bool AllRegistered, int Defaults);
 
     /// <summary>
-    /// 워커 스레드 전용 (A292 — A77 <c>ApplyAssociation</c>의 확장자 단위 판) — 확장자 하나의
-    /// 등록/해제 + (켤 때만) 기본 앱 지정 + 모듈 개수 조회를 한 작업으로 묶어 처리한다.
-    /// UI 요소는 일절 건드리지 않는다. 진행률 보고는 없다 — 확장자 하나는 레지스트리 쓰기 몇 건이라
-    /// n/m을 셀 것이 없다(모듈 판의 DispatcherProgress 마샬러도 함께 은퇴 — 복원 참조 = A292 직전 git 이력).
+    /// 워커 스레드 전용 (A326) — 모듈 하나의 <b>전 확장자</b> 등록/해제 + (켤 때만) 기본 앱 지정 +
+    /// 등록 재판정 + 기본 앱 개수 조회를 한 작업으로 묶어 처리한다. UI 요소는 일절 건드리지 않고
+    /// 진행은 <paramref name="report"/> 콜백(n/m)으로만 알린다 — 호출 측이 디스패처로 마샬링한다.
+    /// 레지스트리 층은 무접촉이다: A292가 만든 확장자 단위 API를 확장자 수만큼 직렬로 부를 뿐이다.
+    /// 확장자 하나가 실패해도 <b>멈추지 않고</b> 나머지를 마저 처리한다 — 그래야 화면의 "n/m" 줄과
+    /// 토글 표시가 레지스트리의 실제 상태와 어긋나지 않는다(첫 실패 사유만 남긴다).
     /// </summary>
-    private static ExtensionOutcome ApplyExtensionAssociation(IModule module, string ext, bool turnOn)
+    private static ModuleOutcome ApplyModuleAssociation(IModule module, bool turnOn, Action<int, int> report)
+    {
+        var total = module.SupportedExtensions.Count;
+        var done = 0;
+        string? error = null;
+        var defaultsSet = 0;
+
+        foreach (var ext in module.SupportedExtensions)
+        {
+            try
+            {
+                if (turnOn)
+                {
+                    ExplorerIntegration.RegisterExtensionAssociation(module, ext);
+                    // A38: 켤 때만 기본 앱까지 지정 시도. 지정 실패는 등록 성공을 무르지 않는다(A77 확정) —
+                    // 보호 확장자(A166)는 아예 시도하지 않고 false를 돌려준다.
+                    try
+                    {
+                        if (ExplorerIntegration.SetAsDefaultForExtension(module, ext)) defaultsSet++;
+                    }
+                    catch
+                    {
+                        // 기본 앱 지정 실패는 안내 문구로만 다룬다("Set default..." 진입로).
+                    }
+                }
+                else
+                {
+                    ExplorerIntegration.UnregisterExtensionAssociation(module, ext);
+                }
+            }
+            catch (Exception ex)
+            {
+                error ??= ex.Message; // 첫 사유만 — 뒤 확장자는 계속 처리한다
+            }
+            report(++done, total);
+        }
+
+        return new ModuleOutcome(
+            error is null, error, defaultsSet, AllExtensionsRegistered(module), SafeCountDefaults(module));
+    }
+
+    /// <summary>
+    /// A326: "이 모듈의 확장자가 <b>전부</b> 등록됐는가" — 모듈 토글의 표시 판정(사양 4·마스터의
+    /// '전부 켜짐일 때만 On'을 한 층 아래에 적용). 정본은 레지스트리다(설정 파일 키 없음).
+    /// 조회 실패는 <see cref="Safe"/>와 같은 규칙으로 '꺼짐'으로 본다. 워커에서만 호출한다.
+    /// </summary>
+    private static bool AllExtensionsRegistered(IModule module)
     {
         try
         {
-            if (turnOn) ExplorerIntegration.RegisterExtensionAssociation(module, ext);
-            else ExplorerIntegration.UnregisterExtensionAssociation(module, ext);
+            return module.SupportedExtensions.Count > 0
+                && module.SupportedExtensions.All(
+                    ext => ExplorerIntegration.IsExtensionAssociationRegistered(module, ext));
         }
-        catch (Exception ex)
+        catch
         {
-            return new ExtensionOutcome(false, ex.Message, false, SafeCountDefaults(module));
+            return false;
         }
-
-        var defaultSet = false;
-        if (turnOn)
-        {
-            try { defaultSet = ExplorerIntegration.SetAsDefaultForExtension(module, ext); }
-            catch { defaultSet = false; }
-        }
-        return new ExtensionOutcome(true, null, defaultSet, SafeCountDefaults(module));
     }
 
     /// <summary>기본 앱인 확장자 개수 — 조회 실패는 0으로 본다(워커에서만 호출).</summary>
