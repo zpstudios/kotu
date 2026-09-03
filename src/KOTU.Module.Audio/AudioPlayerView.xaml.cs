@@ -100,61 +100,47 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     }
 
     /// <summary>
-    /// 정보 오버레이용 미디어 정보: 파일·시간·오디오 트랙. A150에서 라벨·값 행 목록으로
-    /// 이식했다(값 포맷은 유지). 값이 없는 행은 생략한다.
+    /// 정보 오버레이용 미디어 정보 (A327) — 단일 빌더(AudioQuickInfo)로 옮겼다: 파일 기본 3행 +
+    /// 포맷상 정의된 태그·스트림 키 전부(값 없으면 빈칸 행). 셸의 선택 조회(SelectionQuickInfo)와
+    /// **같은 빌더**를 써야 열림 축·선택 축 표시가 어긋나지 않는다(A200 원칙 — 이미지 축 선례).
+    /// 종전의 libvlc 트랙 한 행("2 ch · 44,100 Hz · mpga")은 폐지 — 같은 정보가 스트림 절의
+    /// Channels·Sample rate 행으로 들어갔고, 재생 중에만 나와 두 축 불일치를 만들던 축이다.
+    /// 조회는 파일 I/O라 뷰 워커에서 돌린다(A42·규칙 1.8 — UI 스레드 I/O 금지).
     /// </summary>
-    public Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
+    public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
     {
-        if (_filePath is not { } path) return Task.FromResult<IReadOnlyList<ContentInfoItem>?>(null);
+        if (_filePath is not { } path) return null;
 
-        var rows = new List<ContentInfoItem> { new("File", Path.GetFileName(path)) };
+        IReadOnlyList<ContentInfoItem> rows;
         try
         {
-            var info = new FileInfo(path);
-            rows.Add(new ContentInfoItem("Size", $"{info.Length / 1024.0 / 1024.0:0.##} MB"));
-            rows.Add(new ContentInfoItem("Modified", $"{info.LastWriteTime:yyyy-MM-dd HH:mm}"));
+            rows = await Worker.Run(_ => AudioQuickInfo.BuildRows(path));
         }
         catch
         {
-            // 크기·날짜는 없어도 된다.
+            return null; // 오버레이 정보는 부가 기능(ImageViewerView와 같은 폴백)
         }
-
-        if (_durationMs > 0)
-            rows.Add(new ContentInfoItem("Duration", TimeText.Format(_durationMs)));
-
-        try
-        {
-            // 재생 중이면 libvlc가 파싱한 트랙 정보를 그대로 읽는다 (별도 Parse 불필요).
-            // Media 게터는 새 래퍼를 만들어 참조를 늘리므로 쓰고 바로 해제한다.
-            using var media = _player?.Media;
-            foreach (var track in media?.Tracks ?? [])
-            {
-                if (track.TrackType == TrackType.Audio)
-                {
-                    var a = track.Data.Audio;
-                    rows.Add(new ContentInfoItem("Audio",
-                        $"{a.Channels} ch · {a.Rate:N0} Hz · {FourCc(track.Codec)}"));
-                }
-            }
-        }
-        catch
-        {
-            // 트랙 정보 실패는 기본 정보만 보여준다.
-        }
-
-        return Task.FromResult<IReadOnlyList<ContentInfoItem>?>(rows);
+        // 항해가 빨라 그새 다른 곡으로 넘어갔으면 버린다 — 오버레이도 seq로 거르지만(A200)
+        // 여기서 한 번 더 끊어 낡은 결과가 새 파일 화면에 닿을 길을 남기지 않는다.
+        if (_filePath != path) return null;
+        return FillDurationFromPlayer(rows);
     }
 
-    /// <summary>libvlc 코덱 FourCC(uint) → 사람이 읽는 문자열.</summary>
-    private static string FourCc(uint codec)
+    /// <summary>
+    /// A327: 셸 속성 핸들러가 길이를 못 주는 컨테이너(설치 코덱에 따라 opus·flac 등)라도 재생
+    /// 중이면 libvlc가 이미 아는 길이(_durationMs)로 Duration 행만 채운다 — **행 집합은 그대로**라
+    /// 선택 축과 항목·순서가 어긋나지 않는다(값만 열림 축에서 더 채워진다).
+    /// UI 스레드 전용(_durationMs는 UI 상태) — await 복귀 뒤에만 부른다.
+    /// </summary>
+    private IReadOnlyList<ContentInfoItem> FillDurationFromPlayer(IReadOnlyList<ContentInfoItem> rows)
     {
-        Span<char> chars = stackalloc char[4];
-        for (var i = 0; i < 4; i++)
-        {
-            var c = (char)((codec >> (8 * i)) & 0xFF);
-            chars[i] = char.IsLetterOrDigit(c) ? c : '?';
-        }
-        return new string(chars);
+        if (_durationMs <= 0) return rows;
+        var filled = new List<ContentInfoItem>(rows.Count);
+        foreach (var row in rows)
+            filled.Add(row.Label == "Duration" && row.Value.Length == 0
+                ? new ContentInfoItem(row.Label, TimeText.Format(_durationMs))
+                : row);
+        return filled;
     }
 
     /// <summary>트랜스포트 바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(비디오와 동일 규격).</summary>

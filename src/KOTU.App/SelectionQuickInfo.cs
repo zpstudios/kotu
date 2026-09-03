@@ -8,8 +8,8 @@ namespace KOTU.App;
 /// 썸네일뷰 **선택** 파일(열지 않음)의 우측 정보 패널 행 빌더 (A200) — 모듈 뷰를 경유할 수 없는
 /// 선택 경로용 셸 조회기. ContentInfoOverlay.ShowForSelection이 오버레이 전용 워커에서 돌린다.
 /// 종류 판정·조각 취득은 탐색기 상세 줄(ExplorerPane.InfoKindOf/FetchDetailInfo — A155·A199)과
-/// 같은 소스·같은 규칙이고, 이미지는 열린 콘텐츠와 같은 단일 빌더(ImageQuickInfo — 두 경로
-/// 표시 불일치 금지)를 그대로 쓴다. 셸이 모듈 public static을 직접 참조하는 선례 =
+/// 같은 소스·같은 규칙이고, 이미지·오디오는 열린 콘텐츠와 같은 단일 빌더(ImageQuickInfo ·
+/// A327의 AudioQuickInfo — 두 경로 표시 불일치 금지)를 그대로 쓴다. 셸이 모듈 public static을 직접 참조하는 선례 =
 /// ArchiveQuickInfo·DocumentQuickInfo·AudioModule.Extensions.
 /// 동기 메서드 — 워커 전용(A42: WinRT 비동기 동기 대기). UI 스레드 호출 금지.
 /// </summary>
@@ -17,8 +17,9 @@ internal static class SelectionQuickInfo
 {
     /// <summary>
     /// 선택 파일의 정보 행: 이미지 = ImageQuickInfo.BuildRows 전체(파일 기본 + EXIF 키 전부),
+    /// **오디오 = AudioQuickInfo.BuildRows 전체(파일 기본 + 태그·스트림 키 전부 — A327)**,
     /// 그 외 = 파일 기본 정보(ContentInfoOverlay.BuildBasicFileInfo) + 종류별 조각 한 행
-    /// (zip 압축률 · PDF 페이지 수 · 텍스트 인코딩 · 영상/오디오 재생시간 — A199 상세 줄과 동일 소스).
+    /// (zip 압축률 · PDF 페이지 수 · 텍스트 인코딩 · 영상 재생시간 — A199 상세 줄과 동일 소스).
     /// A175 방어선: 호출부(ContentInfoOverlay)가 placeholder를 걸러 오지만, 속성이 클라우드 전용으로
     /// 판정되면(IsCloudPlaceholder) 여기서도 내용 조회를 생략한다 — 어떤 경로로도 하이드레이션 금지
     /// (A239 ②: 그 경우에도 이미지면 EXIF 라벨은 나열한다 — BuildPlaceholderRows).
@@ -38,6 +39,8 @@ internal static class SelectionQuickInfo
         var name = Path.GetFileName(path);
         if (ExplorerListing.MatchesExtension(name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions))
             return KOTU.Module.Image.ImageQuickInfo.BuildRows(path); // 단일 빌더 — 열린 콘텐츠와 동일 출력
+        if (ExplorerListing.MatchesExtension(name, KOTU.Module.Audio.AudioModule.Extensions))
+            return KOTU.Module.Audio.AudioQuickInfo.BuildRows(path); // A327 — 오디오도 단일 빌더(같은 규칙)
 
         var rows = new List<ContentInfoItem>(Overlays.ContentInfoOverlay.BuildBasicFileInfo(path));
         if (BuildFragment(path, name) is { } fragment)
@@ -51,19 +54,25 @@ internal static class SelectionQuickInfo
     /// <summary>
     /// A239 ②: placeholder(A175 — 클라우드 전용) 파일의 행 — 기본 4행(BuildBasicFileInfo:
     /// FileInfo 메타데이터만 — 하이드레이션 없음, 조회 0회 유지) + **이미지 확장자면** EXIF
-    /// 16키 라벨(전부 빈칸)을 붙인다. 비이미지 placeholder는 기본 행만 — EXIF 절은 이미지
-    /// 전용이라 라벨 나열 대상이 아니다(등재문 "기본 4행 뒤 라벨 16행"은 EXIF 축 서술 —
-    /// 구현 시 해석). 조회가 없어 UI 스레드에서 불러도 된다 — ContentInfoOverlay의 placeholder
+    /// 16키 라벨(전부 빈칸), **오디오 확장자면 태그·스트림 키 라벨**(A327 — 전부 빈칸)을 붙인다.
+    /// 그 밖의 placeholder는 기본 행만 — 라벨 나열 대상인 절이 없다(등재문 "기본 4행 뒤 라벨
+    /// 16행"은 EXIF 축 서술 — 구현 시 해석). 조회가 없어 UI 스레드에서 불러도 된다 — ContentInfoOverlay의 placeholder
     /// 갈래(워커 불경유)도 이 메서드를 쓴다.
     /// </summary>
     internal static IReadOnlyList<ContentInfoItem> BuildPlaceholderRows(string path)
     {
+        var name = Path.GetFileName(path);
         var rows = new List<ContentInfoItem>(Overlays.ContentInfoOverlay.BuildBasicFileInfo(path));
-        if (ExplorerListing.MatchesExtension(Path.GetFileName(path),
-                KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions))
+        if (ExplorerListing.MatchesExtension(name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions))
         {
             rows.Add(ContentInfoItem.Separator); // 파일 정보 / 촬영 정보 그룹 구분 (A150 관례)
             rows.AddRange(KOTU.Module.Image.ImageQuickInfo.BlankExifRows());
+        }
+        else if (ExplorerListing.MatchesExtension(name, KOTU.Module.Audio.AudioModule.Extensions))
+        {
+            // A327: 오디오 placeholder도 라벨은 나열한다 — 조회 0회라 하이드레이션이 없다(A175 불변).
+            rows.Add(ContentInfoItem.Separator); // 파일 정보 / 오디오 정보 그룹 구분
+            rows.AddRange(KOTU.Module.Audio.AudioQuickInfo.BlankPropertyRows());
         }
         return rows;
     }
@@ -76,8 +85,9 @@ internal static class SelectionQuickInfo
     {
         try
         {
-            if (ExplorerListing.MatchesExtension(name, KOTU.Module.Video.VideoModule.Extensions) ||
-                ExplorerListing.MatchesExtension(name, KOTU.Module.Audio.AudioModule.Extensions))
+            // A327: 오디오는 위 단일 빌더(AudioQuickInfo)가 전담하므로 여기 오지 않는다 — 영상만 남았다
+            // (영상은 아직 조각 한 행 체계. 같은 전환을 할지는 별도 판단 — A327 등재문 "전 모듈 점검").
+            if (ExplorerListing.MatchesExtension(name, KOTU.Module.Video.VideoModule.Extensions))
             {
                 // 재생시간 — 셸 미디어 속성(System.Media.Duration, 100ns 틱) 조회.
                 // ExplorerPane.FetchDurationTicks와 같은 관용구(A6 계보).
