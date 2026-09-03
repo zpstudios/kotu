@@ -73,6 +73,57 @@ public sealed partial class ThumbnailExplorer : UserControl
     private const int TileChunkItems = 60;
 
     /// <summary>
+    /// A339: 미리보기를 <b>즉시</b> 만드는 앞쪽 타일 수 — 첫 조각(<see cref="TileChunkItems"/>)과
+    /// 같은 값이다. 첫 화면은 뷰포트 이벤트를 기다리지 않고 곧바로 채워야 체감이 종전과 같고,
+    /// 뷰포트 이벤트가 어떤 이유로 오지 않아도 첫 화면은 항상 채워진다(방어).
+    /// </summary>
+    private const int EagerPreviewCount = TileChunkItems;
+
+    /// <summary>
+    /// A339: 뷰포트 밖 타일을 미리 채우기 시작하는 거리(DIP) — 스크롤을 시작하는 순간 이미
+    /// 만들어져 있게 하는 선반입 여유다. 0으로 두면 화면에 들어온 뒤에야 읽기가 시작돼
+    /// 스크롤 중 빈 타일이 눈에 띈다.
+    /// </summary>
+    private const double PreviewPrefetchDip = 600;
+
+    /// <summary>
+    /// A339: 타일 미리보기 생성을 <b>보이는 것(과 곧 보일 것)만</b>으로 미룬다.
+    /// <para>
+    /// 왜: 실체화 상한(<see cref="MaterializeLimit"/>) 2,000개 타일이 전부 파일을 읽어 미리보기를
+    /// 만들고 있었지만 화면에 보이는 것은 열여섯 개 남짓이다. A334 계측판이 그 비용을 실측했다 —
+    /// txt 10,000개 폴더에서 <c>prev0&gt;fillN 3,703ms</c>(목록 항목 생성과 미리보기 얹기가 같은
+    /// 구간에서 겹쳐 돈다)와 <c>UI stall max 488ms @prev0&gt;fillN</c>. 나머지 1,984개는 스크롤하지
+    /// 않으면 아무도 보지 않는다.
+    /// </para>
+    /// <para>
+    /// 앞쪽 <see cref="EagerPreviewCount"/>개는 종전대로 즉시 채운다 — 판정은 지금 몇 번째 타일을
+    /// 만드는 중인가이고, 그 값이 곧 <c>TileGrid.Items.Count</c>다(타일은 순서대로 append되고
+    /// 이 함수는 Add <b>앞에서</b> 불린다). 별도 인덱스를 네 갈래에 흘려 넣지 않아도 되는 이유다.
+    /// </para>
+    /// 나머지는 <c>EffectiveViewportChanged</c>로 미룬다: 뷰포트까지 남은 거리가
+    /// <see cref="PreviewPrefetchDip"/> 이내로 들어오면 채우고 <b>구독을 즉시 해제</b>한다
+    /// (한 타일당 한 번만 채운다 — 스크롤을 오갈 때 같은 타일을 다시 읽지 않는다).
+    /// 낡음 방어는 종전 그대로다: 채우는 쪽 클로저가 <c>_showSeq</c>를 들고 있어 폴더가 바뀌면
+    /// 그 완료가 버려지고, 타일 자체도 <c>ShowEntries</c>가 전량 새로 만든다.
+    /// </summary>
+    private void DeferPreview(Grid host, Action fill)
+    {
+        if (TileGrid.Items.Count < EagerPreviewCount)
+        {
+            fill();
+            return;
+        }
+        void OnViewport(FrameworkElement sender, EffectiveViewportChangedEventArgs args)
+        {
+            if (args.BringIntoViewDistanceX > PreviewPrefetchDip ||
+                args.BringIntoViewDistanceY > PreviewPrefetchDip) return;
+            host.EffectiveViewportChanged -= OnViewport;
+            fill();
+        }
+        host.EffectiveViewportChanged += OnViewport;
+    }
+
+    /// <summary>
     /// A192: 타일 실체화 상한(ExplorerPane.MaterializeLimit와 같은 값) — 초과분은 타일을 만들지
     /// 않고 말미에 비상호작용 안내 1타일만 붙인다(MakeOverflowNotice). 상한은 컨테이너 실체화에만
     /// 걸린다 — ShowEntries로 받는 Entry 목록 자체는 전체 그대로다(원본은 좌 리스트, A93).
@@ -865,28 +916,37 @@ public sealed partial class ThumbnailExplorer : UserControl
         // 일으킨다 — 원본은 절대 열지 않고, 캐시·클라우드 제공 썸네일만 비동기로 시도한다.
         if (entry.IsPlaceholder) return MakePlaceholderPreview(entry);
 
+        // A339: 확장자 타일을 먼저 깔고 원본 디코드는 보이는 타일만 시작한다(다른 세 갈래와 같은
+        // 구조가 됐다 — 종전에는 이 갈래만 조립 시점에 BitmapImage를 걸어 2,000장 디코드를
+        // 한꺼번에 예약했다). 실패·예외 폴백이 이제 "확장자 타일로 되돌리기"가 아니라
+        // "확장자 타일을 그대로 두기"라 host.Children.Clear()가 필요 없다.
         var host = new Grid();
-        try
+        var fallback = MakeExtensionTile(entry);
+        host.Children.Add(fallback);
+        DeferPreview(host, () =>
         {
-            var bitmap = new BitmapImage { DecodePixelWidth = PreviewDecodeWidth };
-            bitmap.UriSource = new Uri(entry.Path);
-            var image = new Image
+            try
             {
-                Source = bitmap,
-                Stretch = Stretch.Uniform,
-                Margin = new Thickness(4),
-            };
-            image.ImageFailed += (_, _) =>
+                var bitmap = new BitmapImage { DecodePixelWidth = PreviewDecodeWidth };
+                bitmap.UriSource = new Uri(entry.Path);
+                var image = new Image
+                {
+                    Source = bitmap,
+                    Stretch = Stretch.Uniform,
+                    Margin = new Thickness(4),
+                };
+                // 성공하면 확장자 타일을 걷는다 — 그냥 겹쳐 두면 **투명 PNG의 투명한 부분으로
+                // 아래 타일이 비쳐 보인다**(종전에는 host에 이미지만 있었으므로 없던 문제다).
+                // 실패(ImageFailed)에는 걷지 않아 확장자 타일이 그대로 남는다 = 종전 폴백과 같은 결과.
+                image.ImageOpened += (_, _) => host.Children.Remove(fallback);
+                image.ImageFailed += (_, _) => host.Children.Remove(image);
+                host.Children.Add(image);
+            }
+            catch
             {
-                host.Children.Clear();
-                host.Children.Add(MakeExtensionTile(entry));
-            };
-            host.Children.Add(image);
-        }
-        catch
-        {
-            host.Children.Add(MakeExtensionTile(entry)); // 경로가 Uri가 못 되는 극단 케이스
-        }
+                // 경로가 Uri가 못 되는 극단 케이스 — 확장자 타일 그대로.
+            }
+        });
         return host;
     }
 
@@ -899,7 +959,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     {
         var host = new Grid();
         host.Children.Add(MakeExtensionTile(entry));
-        _ = FillCachedThumbnailAsync(host, entry.Path);
+        DeferPreview(host, () => _ = FillCachedThumbnailAsync(host, entry.Path)); // A339
         return host;
     }
 
@@ -1014,7 +1074,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     {
         var host = new Grid();
         host.Children.Add(MakeExtensionTile(entry));
-        _ = FillTextPreviewAsync(host, entry.Path, _showSeq);
+        // A339: _showSeq는 예약 시점이 아니라 실제 발사 시점의 값을 잡아야 한다 — 미룬 사이에
+        // 폴더가 바뀌었으면 이 타일은 이미 버려진 목록의 것이고, 그 회차의 seq로 발사하면
+        // 낡음 판정(FillTextPreviewAsync의 seq 대조)이 제 몫을 한다.
+        DeferPreview(host, () => _ = FillTextPreviewAsync(host, entry.Path, _showSeq));
         return host;
     }
 
@@ -1169,10 +1232,15 @@ public sealed partial class ThumbnailExplorer : UserControl
     {
         var host = new Grid();
         host.Children.Add(MakeExtensionTile(entry));
-        var badge = MakePendingBadge();
-        host.Children.Add(badge);
+        // A339: 대기 배지도 미루는 안쪽에서 만든다 — 미리보기를 아직 요청하지도 않은 타일에
+        // "기다리는 중" 표시가 붙어 있으면 거짓말이 되고, 배지 객체도 안 만든 만큼 아낀다.
         // A270: 오디오면 같은 워커 왕복에서 셸 속성(길이·비트레이트·샘플레이트·채널)도 함께 읽는다.
-        _ = FillShellThumbnailAsync(host, badge, entry, IsAudioInfoFile(entry), _showSeq);
+        DeferPreview(host, () =>
+        {
+            var badge = MakePendingBadge();
+            host.Children.Add(badge);
+            _ = FillShellThumbnailAsync(host, badge, entry, IsAudioInfoFile(entry), _showSeq);
+        });
         return host;
     }
 
