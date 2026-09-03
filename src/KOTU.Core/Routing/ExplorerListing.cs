@@ -173,6 +173,10 @@ public static class ExplorerListing
     /// 다른 집합을 보이는 것이 이 항목의 최악 회귀라, 새 열거 지점도 반드시 여기를 거칠 것.
     /// includeHidden = true면 숨김·시스템을 함께 보여 준다(OS 탐색기는 2개 옵션이지만
     /// KOTU는 1단계에서 하나로 묶는다 — 사용자 확정).
+    /// A324(2026-09-03)의 예외 1건: 폴더 트리는 <b>지금 보고 있는 폴더로 가는 길목</b>의 폴더
+    /// 한 칸만 이 판정을 거치지 않고 노드로 만든다(FileListOverlay.AddPathNode) — %AppData%처럼
+    /// 숨김 폴더를 지나는 경로에서 트리가 하단 리스트와 어긋나기 때문이다. 열거가 아니라
+    /// 이미 아는 한 경로를 실체화하는 것이라 <b>집합</b>(형제 목록)은 종전 그대로다.
     /// </summary>
     public static bool ShouldShow(FileAttributes attributes, bool includeHidden) =>
         includeHidden || !IsHiddenOrSystem(attributes);

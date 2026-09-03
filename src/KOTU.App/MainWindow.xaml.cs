@@ -1827,7 +1827,6 @@ public sealed partial class MainWindow : Window
         // 다시 열어 줄 이벤트가 없으므로 여기서 즉시 재무장한다 — 창 모드·비무장 상태면 무동작이라
         // 종전 경로에 무해하다.
         ArmBarAutoHide();
-        var wasUntitled = _untitledContent; // A189: 무제 → 첫 저장(Save as)의 경로 확정 전이인지
         _untitledContent = false;
         _currentFilePath = path;
         _selectedBrowse = null; // A200: 뷰 내부 열기(◀/▶ 등)도 열기 — 선택 축 리셋(SetContentState와 동일 규칙)
@@ -1836,14 +1835,24 @@ public sealed partial class MainWindow : Window
         UpdateEmptyExplorer();
         UpdateDriveStrip();   // A22: 뷰가 파일을 열었다 → 드라이브 줄을 숨긴다
         ApplyOverlayStates(); // 폴더·정보가 바뀌었을 수 있다 — 떠 있는 오버레이·도크 갱신
-        // A189: 무제 → 저장 전이는 창 제목도 새 경로로("KOTU - Untitled" → "KOTU - 파일명").
-        // A279: 기존 파일 Save as의 제목 갱신은 별도 통지(ContentPathChanged → OnContentPathChanged)가
-        // 맡는다 — 이 경로를 넓히면 뷰 내부 ◀/▶ 탐색의 제목까지 바뀌어(부록 A-2 27번 별건) 범위를
-        // 벗어난다. 무제 분기는 그때 제목이 "Untitled"라 여기서 즉시 잇는 편이 자연스러워 남긴다
-        // (같은 저장의 ContentPathChanged가 뒤이어 같은 값으로 한 번 더 세팅해도 무해하다).
-        // ● 표시는 건드리지 않는다: 저장 성공의 더티 해제(UnsavedChanged)가 같은 디스패처 큐에서
-        // 이 호출 직후 도착해 끈다(DocumentView.CommitSave의 통지 순서).
-        if (wasUntitled) SetTitle(FileTitle(path));
+        // A325(2026-09-03): **뷰 내부 항해로 콘텐츠가 바뀌면 창 제목도 따라간다.** 종전에는 무제
+        // 전이(A189)일 때만 갱신해, ◀/▶로 다음 파일을 봐도 제목·트레이 툴팁이 처음 연 파일 이름에
+        // 멈춰 있었다(정보 패널·하단 바는 맞는데 제목만 어긋남 — 사용자 보고). A279가 "그 조건을
+        // 넓히면 뷰 내부 탐색의 제목까지 갱신된다"고 적어 둔 별건(부록 A-2 27)이 이것이다.
+        // 조립은 파일 열기 경로(OpenFile·ShowModule)와 같은 FileTitle 한 벌이라
+        // 인스턴스 번호("1-KOTU")·● 순서·구분자 형식이 저절로 맞는다(ApplyTitle이 붙인다).
+        // 트레이 툴팁도 같은 축이다 — ApplyTitle이 창 제목과 함께 SetTooltip으로 밀어 준다.
+        // 이 통지는 항상 실제 파일 경로를 동반하므로(IContentStateSource 계약 — 모든 발화가
+        // 열기에 성공한 경로다) 파일 없는 화면(설정·미지원 안내·무제·빈 모듈)의 제목은 이 경로를
+        // 지나지 않아 무영향이다.
+        // A279 경로(ContentPathChanged → OnContentPathChanged)는 **그대로 둔다**: 현행 유일한
+        // 발화처(DocumentView.CommitSave)가 ContentOpened를 바로 앞서 쏘므로 이제 같은 값이 한 번
+        // 더 세팅될 뿐이라 무해하고, "경로만 갈렸다"는 계약(콘텐츠를 다시 열지 않는 경로 변경)은
+        // 이 경로가 계속 담당한다 — 여기 갈래에 얹혀 사라지면 안 되는 축이다.
+        // ● 표시는 여기서 건드리지 않는다(A279와 같은 규칙): 저장 성공의 더티 해제(UnsavedChanged)가
+        // 같은 디스패처 큐에서 이 호출 직후 도착해 끄고(DocumentView.CommitSave의 통지 순서),
+        // 다른 파일로의 항해는 뷰가 더티를 스스로 정리한 뒤에만 성립한다.
+        SetTitle(FileTitle(path));
         // A54: 유휴(3자) → 열림(2줄) 전환도 이 경로로 걸린다.
         // A137: 뷰 내부 열기(◀/▶ 등)도 창 32px의 확장자/용량을 바꾸므로 셸 아이콘 전체 갱신.
         RefreshShellIcons();
@@ -1856,6 +1865,9 @@ public sealed partial class MainWindow : Window
     /// "KOTU - 파일명")이 저절로 일치한다. 나머지 셸 상태(기준 경로·드라이브 줄·오버레이·아이콘)는
     /// 같은 저장이 함께 쏘는 ContentOpened(<see cref="OnContentOpened"/>)가 이미 옮겼다.
     /// ● 표시는 여기서도 건드리지 않는다(저장 성공의 UnsavedChanged가 끈다 — OnContentOpened와 동일).
+    /// A325(2026-09-03): <see cref="OnContentOpened"/>도 이제 항상 제목을 다시 만들므로, 현행
+    /// 발화처(둘을 연달아 쏘는 DocumentView.CommitSave)에서는 같은 값이 한 번 더 들어올 뿐이다.
+    /// 그래도 이 경로는 남긴다 — "콘텐츠를 다시 열지 않고 경로만 갈린다"는 계약의 담당 축이다.
     /// </summary>
     private void OnContentPathChanged(string path) => SetTitle(FileTitle(path));
 

@@ -31,6 +31,17 @@ public sealed partial class FileListOverlay : UserControl
     private IReadOnlyList<string> _extensions = []; // 마지막 Show()의 모듈 필터 — 트리 이동에 재사용
     private int _expandSeq; // 연속 Show() 시 늦은 자동 펼침 폐기
 
+    /// <summary>
+    /// A324: 상단 트리가 <b>지금 가리키고 있는</b> 폴더 — 자동 펼침(ExpandToFolderAsync)이
+    /// 취소되지 않고 끝났을 때와 사용자가 트리에서 폴더를 고를 때만 갱신된다.
+    /// 트리를 다시 세우면(EnsureDriveRoots 재구성·RebuildTree) null로 되돌린다.
+    /// "같은 폴더인가"가 아니라 "트리가 이미 그 폴더를 가리키는가"로 동기 여부를 판정하기 위한
+    /// 기억이다(TreeReflects) — 선택 노드 비교만으로는 <b>끝까지 가지 못한 경로</b>를 구분할 수
+    /// 없다: 숨김 폴더를 지나거나(A324 AddPathNode 이전 동작) 다른 볼륨(UNC)이면 선택 노드가
+    /// 목표와 영원히 달라, 항해 때마다 헛된 재펼침·스크롤이 돈다(A323이 없앤 트리 튐의 재발).
+    /// </summary>
+    private string? _treeFolder;
+
     /// <summary>파일 더블클릭 열기 — 셸이 재사용 규칙(A24)을 적용해 라우팅한다.</summary>
     public event Action<string>? FileActivated;
 
@@ -161,12 +172,19 @@ public sealed partial class FileListOverlay : UserControl
 
         // A323: 상단 트리 쪽도 같은 조건으로 묶는다 — EnsureDriveRoots는 DriveInfo.GetDrives(네트워크
         // 드라이브면 블로킹)를, ExpandToFolderAsync는 ScrollTreeTo(트리 튐)를 부른다. 연속 항해
-        // (키 반복)마다 이것들이 돌면 안 된다. 같은 폴더 재표시는 트리도 이미 그 자리다.
-        if (!sameView || reopened)
-        {
-            EnsureDriveRoots();  // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
-            SyncTreeToFolder(folder); // 같은 폴더면 그 안에서 조기 반환(종전 무조건 펼침의 대체)
-        }
+        // (키 반복)마다 이것들이 돌면 안 된다.
+        // A324(수리): **트리 동기 자체는 이 조건에서 뺀다.** A323은 EnsureDriveRoots와 트리 동기를
+        // 한 덩어리로 묶어 "같은 폴더 재표시면 트리도 이미 그 자리"라고 가정했는데, 트리가 그 폴더에
+        // 도달하지 못한 채(자동 펼침 취소·숨김 경로·루트 재구성으로 선택 소실) 남아 있으면 그 가정이
+        // 깨져 리스트와 트리가 영영 어긋난다(사용자 보고 — 리스트는 AppData 아래인데 트리는 상위에
+        // 멈춤). 종전에는 Show마다 무조건 다시 펼쳐 저절로 복구됐다.
+        // 그래서 SyncTreeToFolder는 늘 부르되, **판정을 그 안(TreeReflects)에 둔다** — 이미 그 폴더를
+        // 가리키고 있으면 문자열 비교 두 번으로 끝나고 펼침·스크롤은 일어나지 않는다(A323의 이득 유지).
+        // EnsureDriveRoots(GetDrives)만 종전 조건 그대로 두어 연속 항해에서 0회를 지킨다 —
+        // 루트가 아직 없을 때(트리 최초 구성·열거 실패 후 재시도)만 한 갈래를 더 연다.
+        if (!sameView || reopened || FolderTree.RootNodes.Count == 0)
+            EnsureDriveRoots(); // A57 ④ — 드라이브 구성이 바뀌었으면(USB 등) 루트 재구성
+        SyncTreeToFolder(folder);
     }
 
     /// <summary>
@@ -411,6 +429,9 @@ public sealed partial class FileListOverlay : UserControl
                   .All(p => current.Contains(p, StringComparer.OrdinalIgnoreCase)))
             return;
 
+        // A324: 루트를 새로 만들면 선택·펼침이 통째로 사라진다 — 트리는 더 이상 어떤 폴더도
+        // 가리키지 않으므로 기억을 비운다(다음 SyncTreeToFolder가 다시 펼친다).
+        _treeFolder = null;
         FolderTree.RootNodes.Clear();
         foreach (var drive in drives)
         {
@@ -507,13 +528,19 @@ public sealed partial class FileListOverlay : UserControl
         var node = FolderTree.RootNodes.FirstOrDefault(n =>
             n.Content is FolderNode f &&
             full.StartsWith(f.Path, StringComparison.OrdinalIgnoreCase));
-        if (node is null) return; // 다른 볼륨(UNC 등) — 트리는 드라이브만 안다
+        if (node is null)
+        {
+            // 다른 볼륨(UNC 등) — 트리는 드라이브만 안다. A324: 이 폴더에 대해 트리가 할 수 있는
+            // 일은 없다는 사실도 "가리키는 상태"로 기억한다(매 항해 헛걸음 방지).
+            _treeFolder = folder;
+            return;
+        }
 
         while (node.Content is FolderNode current &&
                !string.Equals(TrimSep(current.Path), TrimSep(full), StringComparison.OrdinalIgnoreCase))
         {
             await LoadChildrenAsync(node);
-            if (seq != _expandSeq) return; // 그새 다른 폴더로 Show()됨
+            if (seq != _expandSeq) return; // 그새 다른 폴더로 Show()됨(기억은 갱신하지 않는다 — 미완주)
             node.IsExpanded = true;
 
             var next = node.Children.FirstOrDefault(c =>
@@ -521,12 +548,57 @@ public sealed partial class FileListOverlay : UserControl
                 (string.Equals(TrimSep(f.Path), TrimSep(full), StringComparison.OrdinalIgnoreCase) ||
                  full.StartsWith(TrimSep(f.Path) + Path.DirectorySeparatorChar,
                      StringComparison.OrdinalIgnoreCase)));
-            if (next is null) break; // 숨김 폴더 경유 등 — 도달한 지점까지만 선택
+            // A324: 표시 정책(A160)에 걸려 없는 길목이면 그 한 칸만 예외로 끼운다 — 아래 주석 참고.
+            next ??= AddPathNode(node, full);
+            if (next is null) break; // 그래도 없으면(권한·소실 등) 도달한 지점까지만 선택
             node = next;
         }
 
         FolderTree.SelectedNode = node;
         ScrollTreeTo(node);
+        // A324: 완주(또는 더 갈 수 없는 지점까지 도달)했다 — 이 폴더에 대한 동기는 끝났다.
+        _treeFolder = folder;
+    }
+
+    /// <summary>
+    /// A324: 목표 폴더로 가는 <b>길목</b>의 폴더를 트리에 한 칸만 끼워 넣는다 — 하위 로드
+    /// (LoadChildrenAsync)가 리스트와 같은 표시 정책(A160 ExplorerListing.ShouldShow)으로 거르는
+    /// 탓에, 경로 중간에 숨김·시스템 폴더가 하나라도 있으면(대표적으로 %AppData%) 트리가 거기서
+    /// 멈춰 하단 리스트와 어긋났다(사용자 보고의 C:\Users\...\AppData\... 경로).
+    /// 표시 정책 자체는 그대로 둔다 — 예외는 "지금 보고 있는 폴더로 가는 길"뿐이라, 형제 숨김
+    /// 폴더는 여전히 보이지 않는다(트리와 리스트가 서로 다른 <b>집합</b>을 보이는 A160의 최악
+    /// 회귀는 나지 않는다: 리스트에도 그 폴더의 내용이 떠 있다). OS 탐색기도 현재 위치는 트리에
+    /// 드러낸다.
+    /// 경로 문자열은 <paramref name="full"/>에서 잘라 쓴다(Path.Combine은 "C:" 같은 드라이브
+    /// 상대 경로를 만들 수 있다). 이름 순서(OrdinalIgnoreCase)를 지켜 끼운다 — 나머지 형제가
+    /// 그 순서로 들어 있다. 부모의 HasUnrealizedChildren은 호출 시점에 이미 내려가 있어
+    /// (LoadChildrenAsync 직후) 나중에 같은 자식이 한 번 더 생기는 일은 없다.
+    /// </summary>
+    private static TreeViewNode? AddPathNode(TreeViewNode parent, string full)
+    {
+        if (parent.Content is not FolderNode current) return null;
+        var baseDir = TrimSep(current.Path);
+        if (full.Length <= baseDir.Length + 1) return null;
+        var rest = full[(baseDir.Length + 1)..];
+        var cut = rest.IndexOf(Path.DirectorySeparatorChar);
+        var name = cut < 0 ? rest : rest[..cut];
+        if (name.Length == 0) return null;
+        var path = full[..(baseDir.Length + 1 + name.Length)];
+        if (!Directory.Exists(path)) return null; // 소실·권한 — 없는 노드를 만들지 않는다
+
+        var index = 0;
+        while (index < parent.Children.Count &&
+               parent.Children[index].Content is FolderNode sibling &&
+               string.Compare(sibling.Display, name, StringComparison.OrdinalIgnoreCase) < 0)
+            index++;
+
+        var node = new TreeViewNode
+        {
+            Content = new FolderNode(path, name),
+            HasUnrealizedChildren = true, // 그 아래는 종전대로 펼칠 때 로드(표시 정책도 종전대로)
+        };
+        parent.Children.Insert(index, node);
+        return node;
     }
 
     /// <summary>
@@ -536,9 +608,11 @@ public sealed partial class FileListOverlay : UserControl
     /// 닫혀 있으면 하지 않는다: 보이지 않는 트리를 펼칠 이유가 없고, 다시 열릴 때 Show()가
     /// 어차피 그 폴더로 ExpandToFolderAsync를 부른다(EnsureDriveRoots도 Show() 몫 — 여기서는
     /// IsOpen이므로 루트가 이미 만들어져 있다).
-    /// 같은 폴더면 조기 반환한다 — ViewChanged는 폴더 변경 통지가 아니라 "표시 목록 재작성" 통지라
+    /// 이미 그 폴더를 가리키고 있으면 조기 반환한다(A324 TreeReflects — 종전 "선택 노드가 같은
+    /// 폴더면"의 확장) — ViewChanged는 폴더 변경 통지가 아니라 "표시 목록 재작성" 통지라
     /// 감시 재스캔(A94 5차)·정렬(A5)·필터(A7) 변경으로도 같은 폴더가 계속 돌아온다. 거르지 않으면
     /// ScrollTreeTo가 반복돼 트리가 튄다.
+    /// A324: 표시 종착점(Show)도 이제 조건 없이 여기로 들어온다 — 동기 여부의 판정은 이 한 곳뿐이다.
     /// 재진입(펼치는 도중 다른 폴더로 항해)은 기존 _expandSeq가 막는다.
     /// 트리 선택 재대입이 항해를 되부르지 않는지: 트리의 항해 트리거는 ItemInvoked
     /// (OnTreeItemInvoked) 하나이고 SelectionChanged 구독이 없다 — 루프가 성립하지 않는다.
@@ -546,11 +620,22 @@ public sealed partial class FileListOverlay : UserControl
     private void SyncTreeToFolder(string folder)
     {
         if (!IsOpen) return;
-        if (FolderTree.SelectedNode?.Content is FolderNode selected &&
-            string.Equals(TrimSep(selected.Path), TrimSep(folder), StringComparison.OrdinalIgnoreCase))
-            return;
+        if (TreeReflects(folder)) return;
         _ = ExpandToFolderAsync(folder);
     }
+
+    /// <summary>
+    /// A324: 트리가 이미 이 폴더를 가리키고 있는가 — 동기 여부의 <b>단일 판정</b>이다
+    /// (호출부는 SyncTreeToFolder 하나. Show의 "같은 폴더인가" 가드를 대신한다).
+    /// ⓐ 자동 펼침이 완주해 기억해 둔 폴더와 같거나(_treeFolder — 숨김·UNC 등으로 끝까지 가지
+    /// 못한 경우도 "여기까지가 최선"으로 기억된다) ⓑ 선택 노드가 바로 그 폴더면 참이다.
+    /// 참이면 아무 일도 하지 않는다 — 다시 펼치거나 스크롤하면 그게 A323이 없앤 트리 튐이다.
+    /// </summary>
+    private bool TreeReflects(string folder) =>
+        (_treeFolder is { } known &&
+         string.Equals(TrimSep(known), TrimSep(folder), StringComparison.OrdinalIgnoreCase)) ||
+        (FolderTree.SelectedNode?.Content is FolderNode selected &&
+         string.Equals(TrimSep(selected.Path), TrimSep(folder), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// 숨김·시스템 표시(A160)가 바뀌면 트리를 루트부터 다시 만든다 — 내부 리스트의
@@ -565,6 +650,7 @@ public sealed partial class FileListOverlay : UserControl
     /// </summary>
     private void RebuildTree()
     {
+        _treeFolder = null; // A324: 트리를 버린다 — 가리키던 폴더 기억도 함께(드라이브 열거 실패 대비 명시)
         FolderTree.RootNodes.Clear();
         EnsureDriveRoots();
         if (_list?.CurrentFolder is { Length: > 0 } folder) _ = ExpandToFolderAsync(folder);
@@ -599,6 +685,11 @@ public sealed partial class FileListOverlay : UserControl
     {
         var content = args.InvokedItem is TreeViewNode node ? node.Content : args.InvokedItem;
         if (content is FolderNode folder && _list is not null)
+        {
+            // A324: 사용자가 트리에서 고른 자리가 곧 "트리가 가리키는 폴더"다 — 기억을 여기서
+            // 맞춰 두지 않으면 옛 값이 남아, 나중에 그 옛 폴더로 Show될 때 동기가 통째로 걸러진다.
+            _treeFolder = folder.Path;
             _list.NavigateTo(folder.Path, _extensions);
+        }
     }
 }
