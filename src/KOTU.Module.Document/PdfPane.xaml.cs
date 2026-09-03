@@ -113,11 +113,16 @@ public sealed partial class PdfPane : UserControl
         PageList.ItemsSource = items;
         PageChanged?.Invoke(1, items.Count);
         HookScroll();
-        // A49: 파일이 바뀌면 Contain으로 회귀(A30 규칙, 기억 안 함) — 이전 문서에서 쓰던
+        // A49: 파일이 바뀌면 기본 Fit으로 회귀(A30 규칙, 기억 안 함) — 이전 문서에서 쓰던
         // 줌 배율이 남지 않게 즉시 적용한다. 새 문서는 1페이지 머리에 앵커(이전 문서의
         // 스크롤 오프셋이 남아 엉뚱한 페이지로 가는 것 방지). 뷰포트가 0이면 SizeChanged가 이어받는다.
+        // A320: 그 기본값이 Contain에서 ActualSize(1:1)로 바뀌었다(2026-09-03 사용자 지시).
+        // 여기가 PDF의 실제 초기 배율을 거는 유일한 지점이라 DocumentView._lastFitOption 기본값과
+        // 반드시 같아야 한다(둘이 어긋나면 버튼 표시와 화면 배율이 갈라진다 — A214가 없앤 증상).
+        // ActualSize는 Contain과 달리 "페이지 머리 스냅" 모드가 아니므로 앵커는 snapToPageTop으로
+        // 명시한다(안 그러면 위 앵커 보장이 깨진다).
         PageList.UpdateLayout();
-        ApplyFitAt(PdfFitMode.Contain, 0);
+        ApplyFitAt(PdfFitMode.ActualSize, 0, snapToPageTop: true);
         return true;
     }
 
@@ -352,8 +357,12 @@ public sealed partial class PdfPane : UserControl
         ApplyFitAt(mode, CurrentPageIndex());
     }
 
-    /// <summary>idx 페이지를 기준 페이지로 Fit을 적용한다(새 문서는 0으로 고정 호출).</summary>
-    private void ApplyFitAt(PdfFitMode mode, int idx)
+    /// <summary>idx 페이지를 기준 페이지로 Fit을 적용한다(새 문서는 0으로 고정 호출).
+    /// A320: snapToPageTop = 모드와 무관하게 idx 페이지 머리로 세로 앵커를 강제한다. 새 문서
+    /// 로드 전용 스위치다 — 기본값이 ActualSize가 되면서 "페이지 전체가 보여야 하는 모드"
+    /// (FitHeight·Contain)에만 걸려 있던 앵커가 새 문서 로드에서 빠지기 때문이다. 사용자가
+    /// 보던 중에 고르는 경로(ApplyFit)는 false 그대로라 보던 지점 유지 동작이 안 바뀐다.</summary>
+    private void ApplyFitAt(PdfFitMode mode, int idx, bool snapToPageTop = false)
     {
         _appliedFit = mode; // 뷰포트가 아직 0이어도 기억해 두면 SizeChanged 재적용이 이어받는다
         HookScroll();
@@ -382,7 +391,7 @@ public sealed partial class PdfPane : UserControl
         zoom = Math.Clamp(zoom, (double)_scroll.MinZoomFactor, (double)_scroll.MaxZoomFactor);
 
         // 세로: 페이지 전체가 보여야 하는 모드는 현재 페이지 머리로 스냅, 나머지는 보던 지점 유지.
-        var top = mode is PdfFitMode.FitHeight or PdfFitMode.Contain
+        var top = snapToPageTop || mode is PdfFitMode.FitHeight or PdfFitMode.Contain
             ? _pageOffsets[idx] * zoom
             : _scroll.VerticalOffset / Math.Max(0.1, _scroll.ZoomFactor) * zoom;
         // A188: 배율을 걸기 전에 콘텐츠 최소 폭부터 새 배율로 맞추고 레이아웃을 확정한다 —

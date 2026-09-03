@@ -1871,9 +1871,12 @@ public sealed partial class DocumentView : UserControl,
         FileNameText.Text = Path.GetFileName(path);
 
         // A49→A145→A214: Fit 조절기는 항상 보이고 PDF에서 4옵션 전부 활성이다(텍스트 갈래는
-        // Fit height만 빼고 활성 — ShowTextFitState). 파일이 바뀌면 버튼 표시도 Contain으로
+        // Fit height만 빼고 활성 — ShowTextFitState). 파일이 바뀌면 버튼 표시도 기본값으로
         // 회귀(A30 규칙, 기억 안 함) — 실제 배율 적용은 PdfPane.LoadAsync가 한다.
-        _lastFitOption = PdfFitMode.Contain;
+        // A320이 그 기본값을 Contain에서 ActualSize(1:1)로 뒤집었다 — 종전 A49~A214의
+        // "Contain으로 회귀"는 폐기가 아니라 값만 갈린 것이고, 텍스트 갈래(_lastTextFitOption)와
+        // 기본값을 맞춰 빈 화면 표시(1:1)와 실제로 열리는 배율의 어긋남을 없앤 것이다.
+        _lastFitOption = PdfFitMode.ActualSize;
         ShowPdfFitState();
 
         var ok = await _pdfPane.LoadAsync(path); // 실패 다이얼로그는 패널이 띄운다
@@ -1964,9 +1967,13 @@ public sealed partial class DocumentView : UserControl,
     /// 갈래는 _lastTextFitOption으로 분리했다. 갈래별 상태라 PDF·텍스트를 오가도 서로의 표시를
     /// 오염시키지 않는다). A83 이후 100%도 플라이아웃 옵션이라 ActualSize까지 들어온다
     /// (1:1 별도 버튼은 A111에서 없어졌다).
-    /// 기억하지 않는다 — 파일이 바뀌면 Contain으로 회귀(A30 규칙).
+    /// 기억하지 않는다 — 파일이 바뀌면 기본값으로 회귀(A30 규칙).
+    /// A320: 그 기본값이 Contain에서 <b>ActualSize(1:1)</b>로 바뀌었다(2026-09-03 사용자 지시
+    /// "pdf 도 1:1 으로 할게"). 종전 A49~A214의 "Contain으로 회귀"는 값만 갈린 것이고 규칙
+    /// 자체는 그대로다. 빈 화면에서 대표로 보여 주는 텍스트 갈래(_lastTextFitOption)와 기본값이
+    /// 같아져 버튼 표시와 실제 배율이 갈라지지 않는다. 실제 배율을 거는 곳은 PdfPane.LoadAsync다.
     /// </summary>
-    private PdfFitMode _lastFitOption = PdfFitMode.Contain;
+    private PdfFitMode _lastFitOption = PdfFitMode.ActualSize;
 
     /// <summary>
     /// A214: 텍스트 갈래(파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)의 마지막 핏 옵션. FitHeight는
