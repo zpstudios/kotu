@@ -48,6 +48,23 @@ public static class AudioQuickInfo
     ];
 
     /// <summary>
+    /// A327에서 문자열 리터럴이던 스트림 절 라벨 4종을 A332에서 상수로 뽑았다 — 열림 축의
+    /// 플레이어 폴백(AudioPlayerView.FillFromPlayer)이 <b>빈칸인 그 행만</b> 찾아 채우기 때문이다
+    /// (영상 축 VideoQuickInfo의 라벨 상수와 같은 장치). <b>문구는 A327 그대로</b>이고 행 집합·
+    /// 순서도 불변이다 — 상수화는 표기를 바꾸지 않는다.
+    /// </summary>
+    public const string DurationLabel = "Duration";
+
+    /// <inheritdoc cref="DurationLabel"/>
+    public const string BitRateLabel = "Bit rate";
+
+    /// <inheritdoc cref="DurationLabel"/>
+    public const string SampleRateLabel = "Sample rate";
+
+    /// <inheritdoc cref="DurationLabel"/>
+    public const string ChannelsLabel = "Channels";
+
+    /// <summary>
     /// 정보 패널 행 전체: File·Size·Modified + (구분 행) + 태그·스트림 키 전부.
     /// 파일 크기·날짜 실패는 그 행만 생략하고, 속성 조회가 어떤 식으로 실패해도 키 라벨은
     /// 전부 나열한다(값만 빈칸). 값 포맷은 ImageQuickInfo의 기본 3행과 같다 — 같은 패널이다.
@@ -174,17 +191,17 @@ public static class AudioQuickInfo
         Row("Encoded", Get(props, "System.Media.DateEncoded") is DateTimeOffset encoded
             ? $"{encoded.LocalDateTime:yyyy-MM-dd HH:mm}" : null);
         // Duration = 100ns 틱(A6·A270과 같은 단위) → 오디오 모듈 표기(TimeText)로 통일.
-        Row("Duration", Number(Get(props, "System.Media.Duration")) is { } ticks && ticks > 0
+        Row(DurationLabel, Number(Get(props, "System.Media.Duration")) is { } ticks && ticks > 0
             ? TimeText.Format((long)ticks / TimeSpan.TicksPerMillisecond) : null);
         // 1kbps 미만·1kHz 미만은 값이 아니라 잡음으로 본다(A270 FetchAudioInfo와 같은 하한).
-        Row("Bit rate", Number(Get(props, "System.Audio.EncodingBitrate")) is { } bitrate
+        Row(BitRateLabel, Number(Get(props, "System.Audio.EncodingBitrate")) is { } bitrate
             && bitrate >= 1000 ? $"{bitrate / 1000} kbps" : null);
         Row("Variable bit rate", YesNo(Get(props, "System.Audio.IsVariableBitRate")));
-        Row("Sample rate", Number(Get(props, "System.Audio.SampleRate")) is { } rate
+        Row(SampleRateLabel, Number(Get(props, "System.Audio.SampleRate")) is { } rate
             && rate >= 1000 ? $"{rate / 1000.0:0.#} kHz" : null);
         Row("Sample size", Number(Get(props, "System.Audio.SampleSize")) is { } bits && bits > 0
             ? $"{bits} bit" : null);
-        Row("Channels", Number(Get(props, "System.Audio.ChannelCount")) is { } channels
+        Row(ChannelsLabel, Number(Get(props, "System.Audio.ChannelCount")) is { } channels
             && channels > 0 ? $"{channels}" : null);
         return rows;
     }

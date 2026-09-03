@@ -31,10 +31,19 @@ namespace KOTU.Module.Audio;
 /// libvlc 자체 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
 public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
-    IContentStateSource, IContentInfoProvider, ITrayStatusProvider
+    IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IContentInfoChangedSource
 {
     /// <summary>파일 재생을 시작하면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>
+    /// A332: libvlc가 파일을 파싱해 길이·트랙 정보를 알게 됐다 — 셸이 정보 패널을 다시 묻는다.
+    /// 파일당 1회만 쏜다(_infoNotified) — 계약의 "값이 실제로 갈렸을 때 1회" 규칙.
+    /// </summary>
+    public event Action? ContentInfoChanged;
+
+    /// <summary>A332: 지금 파일에서 정보 갱신을 이미 알렸는가 — PlayCurrent가 파일마다 리셋한다.</summary>
+    private bool _infoNotified;
 
     // ---------- 트레이 아이콘 내용 (A54, v0.118.0) ----------
 
@@ -123,23 +132,57 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         // 항해가 빨라 그새 다른 곡으로 넘어갔으면 버린다 — 오버레이도 seq로 거르지만(A200)
         // 여기서 한 번 더 끊어 낡은 결과가 새 파일 화면에 닿을 길을 남기지 않는다.
         if (_filePath != path) return null;
-        return FillDurationFromPlayer(rows);
+        return FillFromPlayer(rows);
     }
 
     /// <summary>
-    /// A327: 셸 속성 핸들러가 길이를 못 주는 컨테이너(설치 코덱에 따라 opus·flac 등)라도 재생
-    /// 중이면 libvlc가 이미 아는 길이(_durationMs)로 Duration 행만 채운다 — **행 집합은 그대로**라
-    /// 선택 축과 항목·순서가 어긋나지 않는다(값만 열림 축에서 더 채워진다).
-    /// UI 스레드 전용(_durationMs는 UI 상태) — await 복귀 뒤에만 부른다.
+    /// A327 → A332 확장(영상 축 VideoPlayerView.FillFromPlayer와 같은 규격): 셸 속성 핸들러가
+    /// 값을 못 주는 컨테이너(설치 코덱에 따라 opus·flac 등, 그리고 파일을 막 연 직후)라도 재생
+    /// 중이면 libvlc가 이미 아는 값으로 <b>빈칸인 행만</b> 채운다 — 길이·비트레이트·샘플레이트·
+    /// 채널 4종. 종전(A327)은 Duration 한 행뿐이라 영상과 비대칭이었다.
+    /// <b>행 집합·순서·라벨은 A327 그대로</b>라 선택 축과 어긋나지 않는다(값만 열림 축에서 더
+    /// 채워진다 — 부록 B 98: 행을 늘리거나 라벨을 발명하지 않는다).
+    /// Sample size(비트 심도)는 libvlc 오디오 트랙에 없는 값이라 빈칸을 유지한다.
+    /// UI 스레드 전용(_durationMs·_player는 UI 상태) — await 복귀 뒤에만 부른다.
     /// </summary>
-    private IReadOnlyList<ContentInfoItem> FillDurationFromPlayer(IReadOnlyList<ContentInfoItem> rows)
+    private IReadOnlyList<ContentInfoItem> FillFromPlayer(IReadOnlyList<ContentInfoItem> rows)
     {
-        if (_durationMs <= 0) return rows;
+        string? bitRate = null, sampleRate = null, channels = null;
+        try
+        {
+            // 재생 중이면 libvlc가 파싱한 트랙 정보를 그대로 읽는다 (별도 Parse 불필요).
+            // Media 게터는 새 래퍼를 만들어 참조를 늘리므로 쓰고 바로 해제한다(영상 축과 동일).
+            using var media = _player?.Media;
+            foreach (var track in media?.Tracks ?? [])
+            {
+                if (track.TrackType != TrackType.Audio) continue;
+                var a = track.Data.Audio;
+                // 하한(1kbps·1kHz)은 AudioQuickInfo의 속성 축과 같은 값이어야 표기가 일관된다.
+                if (track.Bitrate >= 1000) bitRate = $"{track.Bitrate / 1000} kbps";
+                if (a.Rate >= 1000) sampleRate = $"{a.Rate / 1000.0:0.#} kHz";
+                if (a.Channels > 0) channels = $"{a.Channels}";
+                break; // 첫 오디오 트랙이 표시 대상(다중 트랙은 표기 축 밖 — 영상과 같은 규칙)
+            }
+        }
+        catch
+        {
+            // 트랙 정보 실패는 채우지 않는다 — 속성 조회 결과 그대로 나간다.
+        }
+
+        var duration = _durationMs > 0 ? TimeText.Format(_durationMs) : null;
         var filled = new List<ContentInfoItem>(rows.Count);
         foreach (var row in rows)
-            filled.Add(row.Label == "Duration" && row.Value.Length == 0
-                ? new ContentInfoItem(row.Label, TimeText.Format(_durationMs))
-                : row);
+        {
+            string? value = row.Value.Length > 0 ? null : row.Label switch
+            {
+                AudioQuickInfo.DurationLabel => duration,
+                AudioQuickInfo.BitRateLabel => bitRate,
+                AudioQuickInfo.SampleRateLabel => sampleRate,
+                AudioQuickInfo.ChannelsLabel => channels,
+                _ => null,
+            };
+            filled.Add(value is null ? row : new ContentInfoItem(row.Label, value));
+        }
         return filled;
     }
 
@@ -578,6 +621,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (_player is not { } p || _libVlc is not { } lib || _filePath is null) return;
 
         _durationMs = 0;
+        _infoNotified = false; // A332: 새 파일 = 정보 갱신 통지 1회를 다시 쓸 수 있다
         _lastReportedMs = 0;
         _loopPlays = 0; // A11: 재생 단위가 새로 시작되면 리핏 카운터 리셋 — AdvanceAfterEnd 전이 1만 증가시킨다
         if (!autoAdvance) _listLoops = 0; // A255: 수동 개입 = 목록 순환 카운터 리셋(위 요약 주석)
@@ -780,6 +824,15 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         _durationMs = e.Length;
         Dispatch(() => DurationText.Text = TimeText.Format(e.Length));
+        // A332: 길이가 정해지는 시점 = libvlc가 컨테이너를 파싱해 트랙 정보까지 아는 시점이다.
+        // 셸의 정보 패널은 그보다 앞서(PlayCurrent가 ContentOpened를 쏜 프레임에) 이미 물어봐
+        // 빈칸을 받았을 수 있다 — 여기서 한 번 알려 다시 묻게 한다. 파일당 1회로 결박해
+        // (리핏 재장전은 같은 파일이라 안 쏜다) 잉여 재조회·재진입 고리를 만들지 않는다.
+        if (e.Length > 0 && !_infoNotified)
+        {
+            _infoNotified = true;
+            ContentInfoChanged?.Invoke();
+        }
     }
 
     private void OnPlayerPlaying(object? sender, EventArgs e) => Dispatch(() =>

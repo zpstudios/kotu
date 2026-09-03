@@ -25,10 +25,14 @@ namespace KOTU.Module.AllReadable;
 ///    이 화면에서도 무제 개시·새 인스턴스 요청이 실동작한다 — 두 이벤트를 그대로 중계한다
 ///    (중계가 없으면 자식이 무제로 바뀌어도 셸 제목·오버레이가 옛 파일에 머문다).
 ///  · <see cref="IFileOpenTarget"/> — 셸이 "이 파일 네가 열래?"를 먼저 물어보는 지점(A24 유지).
-///  · <see cref="IContentFilterSource"/> — A331: 좌 리스트 필터를 <b>지금 자식</b>의 담당 확장자로
-///    좁힌다. 이 모듈의 SupportedExtensions는 전 모듈 합집합이라, 그대로 두면 음악 파일을 열어
-///    센터·하단 바가 오디오 자식으로 갈린 뒤에도 리스트에 사진·문서가 남는다(사용자 보고).
-///    자식이 없는 빈 상태에서는 null을 돌려줘 종전(합집합)으로 되돌아간다.
+///  · <see cref="IContentInfoChangedSource"/> — A332: 재생 자식이 "정보가 갱신됐다"고 알리면
+///    그대로 중계한다(셸이 정보 패널 열림 축을 다시 묻는다).
+///
+/// <b>되돌린 시도(A331, v0.320.0)</b>: 좌 리스트를 지금 자식의 형식으로 좁히는 계약을 한 번 넣었다가
+/// 되돌렸다. 제기 근거였던 "좌 리스트 = 플레이리스트" 전제가 틀렸기 때문이다 — 재생 목록은
+/// <c>FolderPlaylist</c>로 자식 뷰 안에 따로 있고 좌 리스트와 무관하다(폴더를 탐색해도 재생 목록은
+/// 유지된다). 게다가 좁히면 콘텐츠를 닫지 않고서는 다른 형식으로 건너뛸 수 없어, "한 화면에서 전부
+/// 읽는다"는 A59의 원설계 의도를 해친다. 좌 리스트는 이 화면에서 <b>항상 전 모듈 합집합</b>이다.
 ///
 /// <b>워커 수명(A42)</b>: 자식 뷰의 워커·재생·구독은 자식이 <c>Unloaded</c>에서 스스로 정리한다.
 /// 그래서 자식 교체는 "이전 자식을 비주얼 트리에서 떼는 것"이 곧 정리다 —
@@ -38,13 +42,12 @@ namespace KOTU.Module.AllReadable;
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
-    IContentFilterSource
+    IContentInfoChangedSource
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
 
     private UIElement? _childView;   // 지금 센터에 얹힌 자식 뷰 (null = 빈 상태)
-    private IModule? _childModule;   // A331: 그 자식 뷰를 만든 모듈 — 좌 리스트 필터의 출처
     private string? _filePath;       // 지금 보고 있는 파일
     private bool _driveStripShown;   // 셸이 지정한 드라이브 줄 표시 여부 (A22)
     private bool _childDirty;        // 자식이 알린 마지막 미저장 상태 (A37 — 자식 교체 시 되돌리기용)
@@ -55,6 +58,11 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     /// <summary>A279: 문서 자식의 편집 대상 파일이 갈렸다는 통지(Save as...)를 그대로 셸에 중계한다 —
     /// 셸은 이걸로 창 제목을 새 파일 이름으로 다시 만든다(IContentPathChangedSource).</summary>
     public event Action<string>? ContentPathChanged;
+
+    /// <summary>A332: 재생 자식이 "상세 정보가 갱신됐다"고 알린 것을 그대로 셸에 중계한다
+    /// (IContentInfoChangedSource — 셸은 정보 패널 열림 축을 다시 묻는다). 자식 교체 자체는
+    /// 쏘지 않는다: 교체에는 언제나 콘텐츠 전환(ContentOpened 중계)이 따라와 셸이 이미 다시 묻는다.</summary>
+    public event Action? ContentInfoChanged;
 
     /// <summary>자식(문서 편집)의 미저장 상태 변화를 셸에 중계한다 — 창 제목 ● 표시(A37).</summary>
     public event Action<bool>? UnsavedChanged;
@@ -80,18 +88,6 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     {
         if (_childView is IUntitledContentSource untitled) untitled.OpenUntitled();
     }
-
-    /// <summary>
-    /// A331(좌 리스트 필터): 지금 자식 모듈의 담당 확장자 — 자식이 없으면 null이라
-    /// 셸이 종전대로 이 모듈의 합집합(A59)을 쓴다. 자식이 있을 때만 좁아지므로
-    /// "빈 All Readable = 전부 / 파일을 연 뒤 = 그 형식만"이 된다.
-    /// 자식 교체는 언제나 셸의 콘텐츠 전환이 뒤따르므로 별도 통지 이벤트를 두지 않는다
-    /// (계약 주석의 재진입 방지 규칙).
-    /// </summary>
-    public IReadOnlyList<string>? ContentExtensions =>
-        _childModule is { } module && module.SupportedExtensions.Count > 0
-            ? module.SupportedExtensions
-            : null;
 
     /// <summary>재생 표면(영상 자식)이 전면인가(A186) — 문서·사진 자식·빈 상태면 false.</summary>
     public bool HasPlaybackSurface => _childView is IPlaybackStateSource { HasPlaybackSurface: true };
@@ -188,7 +184,6 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
         if (module.CreateView(context) is not UIElement view) return; // 계약 위반 방어 — 빈 상태 유지
         _childView = view;
-        _childModule = module; // A331 — 좌 리스트 필터를 이 모듈의 담당 확장자로 좁힌다
         _filePath = context.FilePath;
 
         ChildHost.Content = view;
@@ -207,6 +202,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         }
         if (view is IContentPathChangedSource pathChanged) // A279
             pathChanged.ContentPathChanged += OnChildContentPathChanged;
+        if (view is IContentInfoChangedSource infoChanged) // A332
+            infoChanged.ContentInfoChanged += OnChildContentInfoChanged;
         UpdateBars();
         TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
         PlaybackStateChanged?.Invoke(); // A186: 자식 교체도 재생 상태 재평가 대상이다(트레이와 같은 이유)
@@ -232,10 +229,11 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         }
         if (_childView is IContentPathChangedSource pathChanged) // A279
             pathChanged.ContentPathChanged -= OnChildContentPathChanged;
+        if (_childView is IContentInfoChangedSource infoChanged) // A332
+            infoChanged.ContentInfoChanged -= OnChildContentInfoChanged;
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
-        _childModule = null; // A331 — 자식이 없으면 필터는 다시 합집합(셸이 모듈 기본값으로 폴백)
 
         if (_childDirty)
         {
@@ -278,6 +276,13 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     /// 표시를 직접 만지지 않으므로 디스패치도 셸에 맡긴다(인쇄·재생 중계와 같은 형).
     /// </summary>
     private void OnChildContentPathChanged(string path) => ContentPathChanged?.Invoke(path);
+
+    /// <summary>
+    /// A332: 재생 자식이 libvlc 파싱 완료로 "상세 정보가 갱신됐다"고 알렸다 — 그대로 셸로 올린다
+    /// (중계만. 정보 자체는 셸이 GetContentInfoAsync 중계로 다시 물어 자식에게서 받는다).
+    /// 표시를 직접 만지지 않으므로 디스패치도 셸에 맡긴다(경로 변경·인쇄·재생 중계와 같은 형).
+    /// </summary>
+    private void OnChildContentInfoChanged() => ContentInfoChanged?.Invoke();
 
     // A256(2026-08-27): A223의 열기 요청 중계(IOpenFileRequestSource · OnChildOpenFileRequested ·
     // OpenFileRequested)를 제거했다 — 문서 자식의 하단 바 Open 버튼이 사라져 중계할 신호 자체가

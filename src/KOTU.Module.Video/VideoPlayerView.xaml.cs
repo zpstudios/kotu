@@ -28,8 +28,18 @@ namespace KOTU.Module.Video;
 /// 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
 public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
-    IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IPlaybackStateSource
+    IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IPlaybackStateSource,
+    IContentInfoChangedSource
 {
+    /// <summary>
+    /// A332: libvlc가 파일을 파싱해 길이·트랙 정보를 알게 됐다 — 셸이 정보 패널을 다시 묻는다.
+    /// 파일당 1회만 쏜다(_infoNotified) — 계약의 "값이 실제로 갈렸을 때 1회" 규칙(오디오와 동형).
+    /// </summary>
+    public event Action? ContentInfoChanged;
+
+    /// <summary>A332: 지금 파일에서 정보 갱신을 이미 알렸는가 — PlayCurrent가 파일마다 리셋한다.</summary>
+    private bool _infoNotified;
+
     /// <summary>파일 재생을 시작하면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
 
@@ -104,7 +114,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// A328: 셸 속성 핸들러가 값을 못 주는 컨테이너(mkv·webm 등 설치 코덱 팩에 좌우된다)라도
     /// 재생 중이면 libvlc가 이미 아는 값으로 **빈칸인 행만** 채운다 — 길이·프레임 크기·프레임률·
     /// 코덱 4종. **행 집합은 그대로**라 선택 축과 항목·순서가 어긋나지 않는다(값만 열림 축에서
-    /// 더 채워진다 — A327 FillDurationFromPlayer의 확장형).
+    /// 더 채워진다 — A327 오디오 Duration 폴백의 확장형. A332에서 오디오 쪽도 같은 규격의
+    /// FillFromPlayer가 됐다).
     /// UI 스레드 전용(_durationMs·_player는 UI 상태) — await 복귀 뒤에만 부른다.
     /// </summary>
     private IReadOnlyList<ContentInfoItem> FillFromPlayer(IReadOnlyList<ContentInfoItem> rows)
@@ -515,6 +526,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (_player is not { } p || _libVlc is not { } lib || _filePath is null) return;
 
         _durationMs = 0;
+        _infoNotified = false; // A332: 새 파일 = 정보 갱신 통지 1회를 다시 쓸 수 있다
         _lastReportedMs = 0;
         _loopPlays = 0; // A11: 재생 단위가 새로 시작되면 리핏 카운터 리셋 — AdvanceAfterEnd 전이 1만 증가시킨다
         if (!autoAdvance) _listLoops = 0; // A255: 수동 개입 = 목록 순환 카운터 리셋(위 요약 주석)
@@ -765,6 +777,15 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         _durationMs = e.Length;
         Dispatch(() => DurationText.Text = TimeText.Format(e.Length));
         TrayStatusChanged?.Invoke(); // A54: 길이가 정해져야 평균 비트레이트가 나온다
+        // A332: 길이가 정해지는 시점 = libvlc가 컨테이너를 파싱해 트랙 정보까지 아는 시점이다.
+        // 셸의 정보 패널은 그보다 앞서(PlayCurrent가 ContentOpened를 쏜 프레임에) 이미 물어봐
+        // FillFromPlayer가 아무것도 못 채운 결과를 받았을 수 있다 — 여기서 한 번 알려 다시 묻게
+        // 한다. 파일당 1회로 결박해(리핏 재장전은 같은 파일이라 안 쏜다) 재진입 고리가 없다.
+        if (e.Length > 0 && !_infoNotified)
+        {
+            _infoNotified = true;
+            ContentInfoChanged?.Invoke();
+        }
     }
 
     private void OnPlayerPlaying(object? sender, EventArgs e) => Dispatch(() =>

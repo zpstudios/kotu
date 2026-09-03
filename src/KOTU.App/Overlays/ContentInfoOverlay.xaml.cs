@@ -33,6 +33,8 @@ public sealed partial class ContentInfoOverlay : UserControl
                                   // 소스 축 판별 필드는 폐지됐다. 두 캐시가 물리적으로 갈려 "같은
                                   // 파일을 선택했다가 연" 경우에도 소스가 섞일 길이 없다)
     private IReadOnlyList<ContentInfoItem>? _cacheItems; // A150: 문자열 → 라벨·값 행 목록 (provider 축 전용)
+    private bool _cacheProvisional;  // A332: 캐시된 열림 축 결과가 "빈 결과"라 재조회 1회가 남아 있다
+    private string? _emptyRetryPath; // A332: 그 경로에서 재조회 1회를 이미 소진했다(무한 재조회 차단)
     private ModuleWorker? _worker; // A200: 선택 조회(SelectionQuickInfo) 전용 — UI 스레드 금지(A42)
     private CancellationTokenSource? _selectionCts; // A200: 직전 선택 조회 취소 — 빠른 연속 선택
                                                     // (그리드 화살표 이동)이 직렬 워커 큐에 낡은
@@ -282,11 +284,27 @@ public sealed partial class ContentInfoOverlay : UserControl
     /// </summary>
     public void InvalidateCache()
     {
-        _cachePath = null;
-        _cacheItems = null;
+        InvalidateContentInfoCache(); // 열림 축 캐시(+ A332 재조회 예산)를 비운다
         _activePath = null;
         _seq++;
         _selectionCts?.Cancel(); // A200: 보류 중 선택 조회도 폐기 — 실행 전이면 워커 큐에서 건너뛴다
+    }
+
+    /// <summary>
+    /// A332: <b>열림 축 캐시만</b> 비운다 — 뷰가 "정보가 갈렸다"고 알렸을 때(IContentInfoChangedSource)
+    /// 셸이 부르는 자리다. <see cref="InvalidateCache"/>와 달리 시퀀스(_seq)를 올리지도,
+    /// 선택 축 조회를 취소하지도 않는다: 이 통지는 콘텐츠 전환이 아니라 "같은 파일의 값이
+    /// 늦게 도착했다"이고, 선택 축(A200·A241)은 별개 축이라 진행 중 조회를 끊을 이유가 없다
+    /// (선택 축 무회귀 — 두 축은 캐시 필드부터 물리적으로 갈려 있다).
+    /// 진행 중이던 열림 축 조회가 늦게 끝나도 무해하다: 뒤이은 재조회가 _seq를 올려
+    /// 낡은 결과를 LoadAsync 말미의 경합 검사에서 걸러 낸다.
+    /// </summary>
+    public void InvalidateContentInfoCache()
+    {
+        _cachePath = null;
+        _cacheItems = null;
+        _cacheProvisional = false;
+        _emptyRetryPath = null; // 새 계기 = 재조회 예산도 새로 준다
     }
 
     // ---------- 선택 정보 다건 캐시 + 폴더 프리페치 (A241) ----------
@@ -410,6 +428,9 @@ public sealed partial class ContentInfoOverlay : UserControl
     /// (_cachePath/_cacheItems)으로 담는다. 캐시 적중 시에도 _seq를 올린다 — 진행 중이던 직전
     /// 로드가 늦게 도착해 방금 그린 적중 결과를 덮는 역전 방지(적중이 흔해지는 A241에서
     /// 실사고 경로가 된다 — 종전 단건 캐시의 잠복 구멍 수리).
+    /// A332: 열림 축 캐시에 <b>빈 결과가 굳지 않는다</b> — 모듈 절이 통째로 빈칸인 결과는 잠정으로만
+    /// 담아 다음 표시 계기에 1회 다시 묻는다(<see cref="IsEmptyContentInfo"/>). 선택 축(다건 캐시)은
+    /// 이 완화의 대상이 아니다 — 전용 워커·수정시각 키로 이미 정상이고, 불필요한 재조회를 만들지 않는다.
     /// </summary>
     private async Task LoadAsync(string path, IContentInfoProvider? provider,
         bool selection = false, bool placeholder = false, long modifiedTicks = 0)
@@ -423,13 +444,19 @@ public sealed partial class ContentInfoOverlay : UserControl
             RenderItems(cached.Items);
             return;
         }
-        if (!selection && _cachePath == path && _cacheItems is not null)
+        if (!selection && _cachePath == path && _cacheItems is not null && !_cacheProvisional)
         {
             _seq++;
             _activePath = path;
             RenderItems(_cacheItems);
             return;
         }
+        // A332: 잠정 캐시(빈 결과)면 적중을 쓰지 않고 아래 정규 조회로 내려간다 — 재조회는
+        // **표시 계기가 있을 때 1회**뿐이다(폴링·타이머 없음). 예산은 여기서 즉시 소진하고
+        // (_emptyRetryPath가 그 사실을 경로 단위로 기억한다) 다시 비어 있어도 그때는 확정으로
+        // 굳으므로, 한 계기당 조회는 최대 2회다. 선택 축 로드는 이 예산을 건드리지 않는다
+        // (열림 축 전용 상태 — 목록에서 다른 파일을 훑는 동안 열림 축 재조회 기회가 사라지면 안 된다).
+        if (!selection) _cacheProvisional = false;
 
         var seq = ++_seq;
         _activePath = path;
@@ -467,8 +494,36 @@ public sealed partial class ContentInfoOverlay : UserControl
         {
             _cachePath = path;
             _cacheItems = items;
+            // A332: 빈 결과(모듈 절이 통째로 빈칸)는 **잠정**으로만 담는다 — 다음 표시 계기에
+            // 1회 더 묻고, 그 경로에서 예산을 이미 썼으면(_emptyRetryPath) 그대로 확정한다.
+            var empty = IsEmptyContentInfo(items);
+            _cacheProvisional = empty && _emptyRetryPath != path;
+            _emptyRetryPath = empty ? path : null;
         }
         RenderItems(items);
+    }
+
+    /// <summary>
+    /// A332 <b>"빈 결과" 판정</b> — 첫 구분 행 뒤(= 모듈 절)에 값이 있는 행이 하나도 없는 결과.
+    /// 파일 기본 3행(File·Size·Modified)은 조회가 통째로 실패해도 값이 차므로 판정에서 빼야 하고,
+    /// 그 경계가 정확히 첫 구분 행이다(네 모듈의 단일 빌더가 전부 "기본 3행 + 구분 행 + 모듈 절"
+    /// 형태다 — A327·A328·A329). 구분 행이 없는 결과(셸 폴백 <see cref="BuildBasicFileInfo"/> 등)는
+    /// 애초에 모듈 절이 없어 판정 대상이 아니다 → false(종전대로 한 번에 확정 캐시).
+    /// 행 집합·라벨·순서는 이 판정으로 바뀌지 않는다 — 읽기만 한다(부록 B 98 불변).
+    /// </summary>
+    private static bool IsEmptyContentInfo(IReadOnlyList<ContentInfoItem> items)
+    {
+        var afterSeparator = false;
+        foreach (var item in items)
+        {
+            if (item.IsSeparator)
+            {
+                afterSeparator = true;
+                continue;
+            }
+            if (afterSeparator && item.Value.Length > 0) return false; // 실질 값 1개 = 빈 결과 아님
+        }
+        return afterSeparator;
     }
 
     /// <summary>
