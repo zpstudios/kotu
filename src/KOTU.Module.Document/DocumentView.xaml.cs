@@ -1907,10 +1907,13 @@ public sealed partial class DocumentView : UserControl,
         // A49→A145→A214: Fit 조절기는 항상 보이고 PDF에서 4옵션 전부 활성이다(텍스트 갈래는
         // Fit height만 빼고 활성 — ShowTextFitState). 파일이 바뀌면 버튼 표시도 기본값으로
         // 회귀(A30 규칙, 기억 안 함) — 실제 배율 적용은 PdfPane.LoadAsync가 한다.
-        // A320이 그 기본값을 Contain에서 ActualSize(1:1)로 뒤집었다 — 종전 A49~A214의
-        // "Contain으로 회귀"는 폐기가 아니라 값만 갈린 것이고, 텍스트 갈래(_lastTextFitOption)와
-        // 기본값을 맞춰 빈 화면 표시(1:1)와 실제로 열리는 배율의 어긋남을 없앤 것이다.
-        _lastFitOption = PdfFitMode.ActualSize;
+        // A320이 그 기본값을 Contain에서 ActualSize(1:1)로 뒤집었고, A338이 다시 FitWidth로
+        // 옮겼다(2026-09-03 사용자 확정 — "문서는 fit, 영상·사진은 contain이 기본"). A320의 근거는
+        // 사용자 발언 "pdf 도 1:1 으로 할게"였는데, 그 말은 1:1을 **옵션으로 두자**는 뜻이었고
+        // 기본값까지 뒤집으라는 뜻이 아니었다(실기기 확인: 1:1로 열리면 페이지 폭이 화면보다
+        // 넓어 가로 스크롤이 생긴다). A30의 "파일이 바뀌면 기본값 회귀" 규칙 자체는 세 번 모두
+        // 그대로이고 값만 갈렸다. 1:1은 플라이아웃 옵션으로 남는다.
+        _lastFitOption = PdfFitMode.FitWidth;
         ShowPdfFitState();
 
         var ok = await _pdfPane.LoadAsync(path); // 실패 다이얼로그는 패널이 띄운다
@@ -2002,12 +2005,17 @@ public sealed partial class DocumentView : UserControl,
     /// 오염시키지 않는다). A83 이후 100%도 플라이아웃 옵션이라 ActualSize까지 들어온다
     /// (1:1 별도 버튼은 A111에서 없어졌다).
     /// 기억하지 않는다 — 파일이 바뀌면 기본값으로 회귀(A30 규칙).
-    /// A320: 그 기본값이 Contain에서 <b>ActualSize(1:1)</b>로 바뀌었다(2026-09-03 사용자 지시
-    /// "pdf 도 1:1 으로 할게"). 종전 A49~A214의 "Contain으로 회귀"는 값만 갈린 것이고 규칙
-    /// 자체는 그대로다. 빈 화면에서 대표로 보여 주는 텍스트 갈래(_lastTextFitOption)와 기본값이
-    /// 같아져 버튼 표시와 실제 배율이 갈라지지 않는다. 실제 배율을 거는 곳은 PdfPane.LoadAsync다.
+    /// 기본값 이력: A49~A214 <c>Contain</c> → A320 <c>ActualSize</c>(1:1) → <b>A338 FitWidth</b>
+    /// (2026-09-03 사용자 확정 — "문서는 fit, 영상·사진은 contain이 기본"). 규칙 자체("파일이
+    /// 바뀌면 기본값 회귀")는 세 번 모두 그대로이고 값만 갈렸다. A320은 사용자 발언 "pdf 도
+    /// 1:1 으로 할게"를 기본값 지시로 읽었는데, 그 말은 1:1을 <b>옵션으로 두자</b>는 뜻이었다 —
+    /// 실기기에서 1:1로 열리면 페이지 폭이 화면보다 넓어 가로 스크롤이 생긴다. 1:1은 플라이아웃
+    /// 옵션으로 남는다. 실제 배율을 거는 곳은 <c>PdfPane.LoadAsync</c>이고 그 값과 <b>반드시
+    /// 같아야</b> 한다(어긋나면 버튼 표시와 화면 배율이 갈라진다 — A214가 없앤 증상).
+    /// 텍스트 갈래(_lastTextFitOption)는 종전대로 <c>ActualSize</c>다 — 텍스트는 줄바꿈이 이미
+    /// 폭을 채우므로 폭 맞춤이 뜻을 갖지 않는다(A214 갈래 분리의 근거 그대로).
     /// </summary>
-    private PdfFitMode _lastFitOption = PdfFitMode.ActualSize;
+    private PdfFitMode _lastFitOption = PdfFitMode.FitWidth;
 
     /// <summary>
     /// A214: 텍스트 갈래(파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)의 마지막 핏 옵션. FitHeight는

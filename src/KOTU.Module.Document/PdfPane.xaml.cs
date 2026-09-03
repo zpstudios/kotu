@@ -116,13 +116,15 @@ public sealed partial class PdfPane : UserControl
         // A49: 파일이 바뀌면 기본 Fit으로 회귀(A30 규칙, 기억 안 함) — 이전 문서에서 쓰던
         // 줌 배율이 남지 않게 즉시 적용한다. 새 문서는 1페이지 머리에 앵커(이전 문서의
         // 스크롤 오프셋이 남아 엉뚱한 페이지로 가는 것 방지). 뷰포트가 0이면 SizeChanged가 이어받는다.
-        // A320: 그 기본값이 Contain에서 ActualSize(1:1)로 바뀌었다(2026-09-03 사용자 지시).
-        // 여기가 PDF의 실제 초기 배율을 거는 유일한 지점이라 DocumentView._lastFitOption 기본값과
-        // 반드시 같아야 한다(둘이 어긋나면 버튼 표시와 화면 배율이 갈라진다 — A214가 없앤 증상).
-        // ActualSize는 Contain과 달리 "페이지 머리 스냅" 모드가 아니므로 앵커는 snapToPageTop으로
-        // 명시한다(안 그러면 위 앵커 보장이 깨진다).
+        // A320이 그 기본값을 Contain에서 ActualSize(1:1)로 바꿨고, A338이 FitWidth로 옮겼다
+        // (2026-09-03 사용자 확정 — "문서는 fit, 영상·사진은 contain이 기본"). 여기가 PDF의 실제
+        // 초기 배율을 거는 유일한 지점이라 DocumentView._lastFitOption 기본값과 반드시 같아야
+        // 한다(둘이 어긋나면 버튼 표시와 화면 배율이 갈라진다 — A214가 없앤 증상).
+        // FitWidth는 ActualSize와 마찬가지로 "페이지 전체가 보여야 하는 모드"(FitHeight·Contain)가
+        // 아니어서 세로 앵커가 자동으로 걸리지 않는다 — A320이 만든 snapToPageTop을 그대로 쓴다
+        // (빼면 이전 문서의 스크롤 오프셋이 남아 새 문서가 엉뚱한 페이지에서 열린다).
         PageList.UpdateLayout();
-        ApplyFitAt(PdfFitMode.ActualSize, 0, snapToPageTop: true);
+        ApplyFitAt(PdfFitMode.FitWidth, 0, snapToPageTop: true);
         return true;
     }
 
