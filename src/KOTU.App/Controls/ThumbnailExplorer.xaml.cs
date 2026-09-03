@@ -627,8 +627,13 @@ public sealed partial class ThumbnailExplorer : UserControl
         StopTileAppendLoop(); // 방어: 기동 직전 잔존 루프 해제(A193 관용구)
 
         var next = start;
+        // A342: 이 루프의 직전 틱 시작 시각(틱). 0 = 아직 첫 틱 전이라 간격을 잴 수 없다.
+        var lastTickStart = 0L;
         void OnTick(object? sender, object? e)
         {
+            // A342: 정지 487ms가 prev0>fillN 구간에서 나는데 미리보기 개수와 무관해, 어느 틱이
+            // 주인인지 틱 단위로 좁힌다. 진단이 꺼져 있으면 여기서 비용이 0이다(0 = 미계측 표지).
+            var tickStart = NavDiagnostics.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
             try
             {
                 if (seq != _showSeq)
@@ -644,6 +649,17 @@ public sealed partial class ThumbnailExplorer : UserControl
                 {
                     StopTileAppendLoop(); // 완료 — 더 깨울 이유가 없다
                     FinishShowEntries(entries, seq);
+                }
+                // A342: 조각 append(마지막 틱이면 FinishShowEntries까지 포함)가 끝난 뒤에만
+                // 기록한다 — 예외 경로는 남기지 않는다.
+                if (tickStart != 0)
+                {
+                    NavDiagnostics.NoteTick(
+                        'C',
+                        next - 1,
+                        System.Diagnostics.Stopwatch.GetTimestamp() - tickStart,
+                        lastTickStart == 0 ? 0 : tickStart - lastTickStart);
+                    lastTickStart = tickStart;
                 }
             }
             catch (Exception)

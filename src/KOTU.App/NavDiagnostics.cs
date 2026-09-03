@@ -67,6 +67,18 @@ public static class NavDiagnostics
     private static int _stallAfter = -1;       // 그 간격이 난 시점의 직전 마크 인덱스(-1 = 시작 전)
     private static long _lastPublish;          // 마지막 조립 시각(틱) — RepublishMinMs 스로틀 기준
 
+    // A342 축 C — 분할 조립 루프의 틱 계측(L = 좌 리스트, C = 중앙 타일).
+    // 각 루프마다 body(틱 핸들러 본문 소요)와 gap(직전 틱 시작 → 이번 틱 시작)의 최대값과
+    // 그 값이 난 틱의 마지막 항목 인덱스를 따로 들고 있는다. At가 음수면 "기록 없음"이다.
+    private static long _tickLBody;
+    private static int _tickLBodyAt = -1;
+    private static long _tickLGap;
+    private static int _tickLGapAt = -1;
+    private static long _tickCBody;
+    private static int _tickCBodyAt = -1;
+    private static long _tickCGap;
+    private static int _tickCGapAt = -1;
+
     /// <summary>스레드별 마지막 하트비트 시각(틱) — 위 클래스 주석의 "창마다 따로" 근거.</summary>
     [ThreadStatic] private static long _lastBeat;
 
@@ -115,9 +127,23 @@ public static class NavDiagnostics
             _pendingSource = null;
             _stallStamp = 0;
             _stallAfter = -1;
+            ResetTicksLocked(); // A342 — 틱 계측도 함께 비운다(낡은 값이 남지 않게)
             _segmentsLine = string.Empty;
             _stallLine = string.Empty;
         }
+    }
+
+    /// <summary>A342: 틱 계측 누적 리셋 — Begin(새 항해)과 SetEnabled(false) 두 곳이 부른다.</summary>
+    private static void ResetTicksLocked()
+    {
+        _tickLBody = 0;
+        _tickLBodyAt = -1;
+        _tickLGap = 0;
+        _tickLGapAt = -1;
+        _tickCBody = 0;
+        _tickCBodyAt = -1;
+        _tickCGap = 0;
+        _tickCGapAt = -1;
     }
 
     /// <summary>
@@ -167,6 +193,7 @@ public static class NavDiagnostics
             _navThread = Environment.CurrentManagedThreadId;
             _stallStamp = 0;
             _stallAfter = -1;
+            ResetTicksLocked(); // A342 — 항해마다 틱 최대값을 새로 잰다
             _lastPublish = now;
         }
         // 하트비트 기준점도 여기서 다시 잡는다 — 직전 틱이 언제였든 이번 항해의 첫 구간은
@@ -202,6 +229,60 @@ public static class NavDiagnostics
             if (_session != session) return;
         }
         Mark(name);
+    }
+
+    /// <summary>
+    /// A342 축 C — 분할 조립 루프(좌 리스트·중앙 타일)의 틱 1회 계측.
+    /// 배경: 정지 라인이 prev0&gt;fillN 구간을 가리키면서도 미리보기 개수와 무관하게 487ms로
+    /// 불변이었다(v0.326.0 → v0.327.0). 그 구간의 어느 틱이 정지의 주인인지 틱 단위로 좁힌다.
+    /// <para>
+    /// body = 틱 핸들러 본문 소요, gap = 같은 루프의 직전 틱 시작부터 이번 틱 시작까지.
+    /// gap을 함께 재는 이유: body만 재면 핸들러가 돌아온 뒤 XAML이 도는 measure/arrange/render
+    /// 비용이 통째로 빠진다(80개 ListViewItem을 붙인 레이아웃 패스가 바로 그것이고, 정지의
+    /// 주인이 거기일 수 있다). gap이 크고 body가 작으면 레이아웃·외부 원인, 둘 다 크면 조립 자체다.
+    /// </para>
+    /// <para>
+    /// 한계(수용): 두 루프가 같은 렌더 프레임에서 연달아 불릴 수 있어 L의 gap에 C의 body가
+    /// 섞인다. 해석할 때 감안한다 — 걷어내려면 프레임 단위 상관 계측이 따로 필요하다.
+    /// </para>
+    /// </summary>
+    /// <param name="loop">'L' = 좌 리스트(ExplorerPane), 'C' = 중앙 타일(ThumbnailExplorer).</param>
+    /// <param name="lastIndex">그 틱이 붙인 마지막 항목 인덱스.</param>
+    /// <param name="bodyTicks">틱 핸들러 본문 소요(Stopwatch 틱).</param>
+    /// <param name="gapTicks">직전 틱 시작부터 이번 틱 시작까지(첫 틱은 0 — 무시한다).</param>
+    public static void NoteTick(char loop, int lastIndex, long bodyTicks, long gapTicks)
+    {
+        if (!_enabled) return;
+        lock (Gate)
+        {
+            if (!_active) return;
+            if (loop == 'L')
+            {
+                if (_tickLBodyAt < 0 || bodyTicks > _tickLBody)
+                {
+                    _tickLBody = bodyTicks;
+                    _tickLBodyAt = lastIndex;
+                }
+                if (gapTicks > 0 && (_tickLGapAt < 0 || gapTicks > _tickLGap))
+                {
+                    _tickLGap = gapTicks;
+                    _tickLGapAt = lastIndex;
+                }
+            }
+            else if (loop == 'C')
+            {
+                if (_tickCBodyAt < 0 || bodyTicks > _tickCBody)
+                {
+                    _tickCBody = bodyTicks;
+                    _tickCBodyAt = lastIndex;
+                }
+                if (gapTicks > 0 && (_tickCGapAt < 0 || gapTicks > _tickCGap))
+                {
+                    _tickCGap = gapTicks;
+                    _tickCGapAt = lastIndex;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -325,6 +406,32 @@ public static class NavDiagnostics
         _stallLine = _stallStamp <= 0
             ? "UI stall max not observed"
             : $"UI stall max {ToMs(_stallStamp)}ms @{SegmentNameLocked(_stallAfter)}";
+
+        // A342: 정지 라인 뒤에 틱 계측을 덧붙인다 — 정지가 "not observed"여도 붙인다
+        // (틱 쪽에만 증거가 남는 경우가 있기 때문). 조립은 여기 한 곳뿐이라는 계약 그대로다.
+        var ticks = new StringBuilder(" · tick ");
+        AppendTickLocked(ticks, 'L', _tickLBody, _tickLBodyAt, _tickLGap, _tickLGapAt);
+        ticks.Append(" · ");
+        AppendTickLocked(ticks, 'C', _tickCBody, _tickCBodyAt, _tickCGap, _tickCGapAt);
+        _stallLine += ticks.ToString();
+    }
+
+    /// <summary>A342: 루프 하나의 틱 요약 1토막 — 기록이 없으면 "L none"으로만 적는다.</summary>
+    private static void AppendTickLocked(StringBuilder text, char loop, long body, int bodyAt, long gap, int gapAt)
+    {
+        text.Append(loop);
+        if (bodyAt < 0)
+        {
+            text.Append(" none");
+            return;
+        }
+        text.Append(" body ").Append(ToMs(body)).Append("ms@#").Append(bodyAt);
+        if (gapAt < 0)
+        {
+            text.Append(" gap none"); // 틱이 하나뿐이라 간격을 잴 수 없었다
+            return;
+        }
+        text.Append(" gap ").Append(ToMs(gap)).Append("ms@#").Append(gapAt);
     }
 
     /// <summary>정지가 난 구간의 이름 — 직전 마크와 그다음 마크를 잇는다.
