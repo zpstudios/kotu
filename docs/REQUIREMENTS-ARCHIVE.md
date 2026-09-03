@@ -3638,6 +3638,56 @@
   - **낙수** = **문서·압축 모듈의 실태 점검 → A329**(부록 B 98의 잔여 두 모듈).
   - **실기기 확인 포인트는 HANDOVER §4의 v0.317.0 블록**.
 
+- ※ A329(**문서·압축 모듈 정보 패널에 포맷상 정의된 속성 전부 나열**(없는 값은 빈칸 행), v0.318.0) 완료 — 결번.
+
+  - **부록 B 98(전 모듈 원칙)의 마지막 이행이다.** A327(오디오·v0.316.0) → A328(영상·v0.317.0)에 이어
+    **문서·압축 두 모듈**을 같은 규칙 위로 올렸다. 이로써 **이미지·오디오·영상·문서·압축 전 모듈**이
+    같은 사양을 공유한다 — **남은 모듈은 없다.**
+  - ⚠️ **실태 조사 결과(등재문이 요구한 첫 단계) — 영상보다 심했다.**
+    문서·압축 두 모듈은 **`IContentInfoProvider`를 아예 구현하지 않아 열림 축에 정보 계약 자체가 없었다.**
+    PDF를 열어도 **셸 폴백 4행**(File·Size·Modified·Folder)뿐이었고, **선택 축만** 한 조각을 얹고 있었다
+    (PDF = `Pages` / 텍스트·md·html = `Encoding` / zip = `Compression` · **7z·rar 등은 아무것도 없음**).
+    ⚠️ **A328(영상)은 "두 축이 어긋난" 정도였지만 여기는 "그 자리에 아무것도 없었다"** — 다음 세션은
+    **"기능이 부실하다"와 "계약이 부재하다"를 구분해서 볼 것**(실태 조사를 첫 단계로 못박은 값이 여기서 회수됐다).
+    **이것이 부록 A-2 낙수 9**이고, 이 항목이 그것을 소진했다.
+  - **문서 모듈의 실질 갈래는 둘이다** — **PDF / 텍스트 계열**. 코드가 이미 `IsPdfFitBranch`·`IsMarkdownPath`로
+    갈라 두는 경계와 같다. **md·html은 포맷 정의 속성이 없다는 점에서 txt와 같아 별도 갈래를 만들지 않았다.**
+  - **수리의 뼈대** = 두 뷰에 **`IContentInfoProvider` 신설** + **셸 선택 축을 같은 단일 빌더로 라우팅**해
+    **두 축의 행 집합·순서를 물리적으로 동일**하게 만들었다(부록 B 98 ②).
+  - **PDF 10키** — `System.Title`·`System.Author`·`System.Subject`·`System.Keywords`·`System.Comment`·
+    `System.ApplicationName`(Producer) — 구분 행 — `System.Document.DateCreated`/`System.Document.DateSaved` ·
+    `System.Document.PageCount`·`System.Document.Version`.
+    - **제외 근거**(다음 세션이 "왜 이건 빠졌나"를 다시 조사하지 않게):
+      ① **오피스 요약 정보**(`WordCount`·`Manager`·`Company`·`LastAuthor`·`RevisionNumber` 등) —
+      **PDF가 정의하지 않는다**(부록 B 98 ⑦ — 없는 것을 만들어 채우지 않는다)
+      ② `System.Document.Security` — **비트마스크라 사람이 읽을 값이 아니다**(부록 B 98 ③)
+      ③ **식별자**(`DocumentID`·`ClientID`) ④ `System.GPS.*`(부록 B 69).
+    - ⚠️ **`System.Document.*`는 저장소 첫 사용(선례 0)** — **값이 안 오면 빈칸 행이 정상**이다(런타임 축).
+    - ⚠️ **`Pages`는 3단 폴백**(셸 키 → 열림 축이 넘긴 `PdfPane.PrintPageCount` → 문서 직접 열기)이라
+      **종전 선택 축 동작 회귀 0**이다(암호 PDF도 열림 축은 **이미 연 문서**에서 값을 받는다).
+  - **텍스트·마크다운 — 빈 라벨을 발명하지 않았다**(등재문이 명시한 금지의 준수).
+    포맷 정의 속성이 **0**이라 **속성 키 절 자체를 만들지 않고**, **코드가 이미 계산하던 값 4행**만 낸다:
+    `Encoding`·`Line endings`·`Lines`·`Characters`.
+    ⚠️ **읽기 상한은 에디터와 같은 4MB**(`DocumentView.MaxBytes`)이고 **초과 파일은 `Lines`·`Characters`를
+    빈칸으로** 둔다 — **잘린 앞부분의 수치를 전체인 척 내지 않는다.** 이 판단이 **부록 B 98 ⑧**이 됐다.
+  - **압축 — 셸 키가 전부 합성 키라 제외**(부록 B 98 ③)하고, **모든 압축 포맷이 실제로 정의하는 계산값 4행**으로
+    확대했다: `Files`·`Folders`·`Uncompressed`·`Compression`(종전에는 선택 축의 `Compression` 한 조각뿐).
+    - **값 채우기는 두 갈래다** — **선택 축**은 **zip 중앙 디렉터리만**(A155의 "7z·rar는 무겁다" 사양을 승계) ·
+      **열림 축**은 **이미 읽어 둔 `ArchiveEntryTree` 통계**를 넘겨 **포맷 무관하게** 채운다.
+      **A328의 `FillFromPlayer`와 같은 장치**이고 **행 집합은 불변**이다(값만 갈린다).
+  - **A327·A328에서 그대로 승계한 것** — 조회는 **전부 워커** · **실패 3단 폴백**(일괄 → 키별 → 라벨만) ·
+    **항해 경합 재검사**.
+  - **제거 1건** — **고아가 된 `SelectionQuickInfo.BuildFragment`**(세 갈래가 전부 모듈 빌더로 흡수돼
+    도달하지 않는다). ⚠️ 제거 배치의 위험(CS0414 부류)은 이 한 건뿐이다.
+  - **무접촉** — **A270 타일·트레이**(부록 B 98 ⑥) · **A155·A199 탐색기 상세 줄**
+    (`TryGetEncodingName`·`TryGetZipCompressionPercent`의 **공개 시그니처·동작 유지**) ·
+    **A200 우선순위** · **A323 표시 축**.
+    ⚠️ **그러므로 부록 A-2 낙수 17(상세 줄 공백 2건)은 소진되지 않았다** — 축이 다르다.
+  - **CI 1순위로 적어 둔 것** = ① 모듈에서 `ExplorerListing.FormatSize` 참조(**복구 = MB 표기 인라인 +
+    using 삭제**) ② `stats is not { UncompressedSize: > 0 }` 널 흐름(**복구 = 명시 `if`**)
+    ③ `System.Document.*` 미제공은 **런타임 축**이며 **빈칸 행이 정상**이다.
+  - **실기기 확인 포인트는 HANDOVER §4의 v0.318.0 블록**.
+
 
 ---
 
