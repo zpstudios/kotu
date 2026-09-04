@@ -1201,6 +1201,84 @@
     ⚠️ **판별 관측 = 탐색기에서 그 파일들이 구름 → 초록 체크로 바뀌었는지**(부록 B "확인 필요").
   - **실기기 확인 포인트는 HANDOVER §4의 v0.323.0~v0.327.0 블록 ④**.
 
+### A345 완료 상세 (2026-09-04 이관 — v0.335.0~v0.338.0)
+
+- ✅ A345(**완료 v0.335.0~v0.338.0 · 2026-09-04 · 4배치 + 핫픽스 v0.336.1**) — 원문 등재문: **탐색기 좌 리스트·중앙 타일 UI 가상화 —
+  `ItemsSource` + 템플릿 + `ContainerContentChanging`로 "보이는 행만 실체화"**
+  (2026-09-04 사용자 확정 *"b로 가는게 맞겠다. 가상화."* — A342 배치 5가 "XAML 객체 수 = GC 원인"을 확정한 뒤
+  상한 500 UX 대신 근본 해법을 택했다. 사전 조사 원문 = `docs/A345-virtualization-research.md`, 코드 변경 0.)
+  - **현행** = 두 표면 모두 컨테이너 자체를 `Items.Add`(가상화 0%). 컨테이너 직접 접근 60여 곳, 외부는
+    `ExplorerFileOps.ApplyCutMark` 하나. 셸·오버레이는 공개 API만 쓴다(무접촉).
+  - **선례 실존(CI 위험 아님)** = `PdfPane`(ItemsSource + CCC 위상 렌더 + `InRecycleQueue` 해제 + `ReferenceEquals`
+    재활용 검증 + ItemContainerStyle) · `ArchiveView`(ObservableCollection + `x:Bind` DataTemplate ·
+    `SelectedItems.OfType<Row>()`). `ItemsRepeater`는 선례 0건 — 쓰지 않는다. `ItemsPanel`도 명시하지 않는다.
+  - ⚠️ **최대 함정 둘(전 배치 공통)** ① **패턴 매칭의 조용한 실패** — `is FrameworkElement { Tag: Entry }` 계열
+    20여 곳이 데이터 객체 앞에서 예외 없이 null/빈 목록 → Enter·더블클릭·Del·드래그·정보 패널 전멸. 통과 조건 =
+    `Tag:` 패턴 0건 grep. ② **컨테이너 재활용 잔존** — 체크 `IsChecked`·잘라내기 `Opacity`·`AllowDrop`·
+    `DragStarting`/`Opening`/`DoubleTapped` 구독 누적·인라인 편집 TextBox → 엉뚱한 파일 조작. 통과 조건 =
+    CCC 부착 N종 = `InRecycleQueue` 해제 N종 대조표. ③ `ItemsSource` 상태의 `Items.Add/Clear` = 즉시 예외
+    (안내 행 EP:919-924·TE:711 — 대형 폴더 첫 진입에만 터져 CI가 못 잡는다).
+  - **배치(직렬 4 · 좌 리스트 먼저 — 실사용 표면이 `ListPane` 하나라 롤백 단위가 작고, 중앙은 좌의 하류)**:
+    **1** 데이터 축 신설(표면 무변경 · `EntryVm` + `Tag = vm` + 패턴 전수 교체, FO 포함 · 회귀 0 목표) →
+    **2** 좌 리스트 가상화(ItemTemplate + ItemContainerStyle(A198 행 높이 3하한 이관) + CCC + `ApplyDetail` 세터 +
+    조립 루프·안내 행 삭제 · 이름변경은 보수안) → **3** 중앙 타일 가상화(`DeferPreview` 폐기 → CCC 위상 ·
+    4갈래 `ReferenceEquals` 검증 · 배지 뷰모델화 · `ApplyTileSize` 폴백 삭제) → **4** 이름변경 뷰모델화 결정 +
+    상한/스캔 정책 확정 + 고아·주석·계측 라벨·가이드 정리. 각 배치의 통과 조건·최대 함정은 조사 문서 §6.
+  - **구현 시 결정(오케스트레이터 제안 — 사용자 이의 없으면 확정)**:
+    ① **`MaterializeLimit` 폐지 + `ExplorerListing.List` `maxItems` 2,000 → 10,000**(안전 천장 — 10,000개 폴더가
+    끝까지 보이는 것이 이 항목의 UX 목표. 상세 fetch·썸네일은 CCC로 보이는 것만, 정보 프리페치는 기존 4,000 상한).
+    ② **이름변경 = 배치 2·3은 보수안 ⓐ**(`ScrollIntoView → UpdateLayout → ContainerFromItem`, 없으면 "그새
+    사라짐" 폴백 · 편집 중 재활용 감지 시 강제 커밋) → 실기기 문제 없으면 배치 4에서 유지 확정.
+    ③ 분할 조립 계측 마크(`fill0/fillN/cfill0/clay/cfillN/prev0`)·`NoteTick` L/C는 배치 2·3에서 **의미가 바뀐다** —
+    배치 4에서 재정의하기 전까지 HANDOVER 판별식은 `total`·`stall`·`gc/pause`만 쓴다.
+  - **규모 = 대**(배치 1 중 · 2 대 · 3 대 · 4 중). 배치마다 릴리스·실기기 회수 후 다음 배치.
+  - ✅ **사용자 확정(2026-09-04) = "배치 1 진행"** + 구현 시 결정 ①~③ 이의 없음(무응답 = 확정).
+  - ✅ **배치 1 완료(v0.335.0)** — 신규 `src/KOTU.App/ExplorerEntryVm.cs`(`INotifyPropertyChanged` · `Entry` 원본 +
+    위임 getter `Path/Name/IsFolder/IsPlaceholder` + 통지 setter `DetailText/TooltipText/IsChecked/ContentOpacity`).
+    `RefreshView`가 `_displayVms`를 `_display`와 나란히 생성, 두 조립 루프·`MakeListItem/MakeGridItem/MakeTile`이
+    뷰모델을 받아 **`Tag = vm`**. `Tag: ExplorerListing.Entry` 패턴 **0건**(FO `ApplyCutMark` 포함 · 컨테이너 값과
+    뷰모델 값을 한 함수에서 함께 갱신). 공개 API 반환 타입 무변경(`SelectedEntry` = `vm.Entry`). 중앙은
+    `ShowEntries` 안에서 자기 뷰모델을 만든다(배치 3에서 좌·중앙 공유로).
+    ※ CI 1순위 = `INotifyPropertyChanged` 선례 0건(BCL — 실패 시 인터페이스·`Set`을 걷어내면 동작 무영향).
+    **실기기 확인 = 회귀 0**: 잘라내기 흐림(Ctrl+X) · 체크박스/Space · F2 · 드래그 아웃 · Del · Enter/더블클릭 ·
+    우측 정보 패널 · 상세 줄 지연 반영.
+  - ✅ **배치 2 완료(v0.336.0)** — `ListPane`이 `ItemsSource = _displayVms` + `x:DataType` DataTemplate(x:Bind —
+    Name/Glyph OneTime · DetailText/TooltipText/IsChecked/ContentOpacity OneWay) + `ItemContainerStyle`(A198
+    MinHeight 0·Padding 12,1,12,1 이관) + `ContainerContentChanging`. 분할 조립 루프(A192)·`_fillDone`·
+    `WhenFillCompleteAsync`·안내 행·`MakeListItem`·`LoadDetailInfoAsync`(+A342 배치 3 조각화) 전부 삭제.
+    **항목 해석은 `VmOf` 단일 깔때기**(뷰모델 자체 / `SelectorItem{Content}` / `FrameworkElement{Tag}`(IconGrid 휴면)).
+    CCC: 훅(메뉴·드래그·더블탭)은 컨테이너당 1회 부착 + 핸들러 안에서 `VmOf`로 지연 해석(entry 캡처 0) ·
+    `AllowDrop`은 매 CCC 재설정 · `InRecycleQueue`에서 `ExplorerRenameBox.ForceFinish`(편집 강제 커밋 = 결정 ②) ·
+    Phase 0에서 `RequestDetail`(보이는 행만 상세 fetch — `DetailRequested` 표지 + 페인 수명 `_detailGate`).
+    이름변경 보수안 ⓐ = `RealizeListContainer`(ScrollIntoView→UpdateLayout→ContainerFromItem) · 우클릭 Rename은
+    디스패처 지연 뒤 `ReferenceEquals(VmOf(item), vm)` 대조. `ExplorerListing.List` maxItems **2,000→10,000**(결정 ①).
+    `MaterializeLimit` 500은 IconGrid 휴면 경로 전용으로 존치(배치 4 정리). IconGrid·ThumbnailExplorer 무접촉.
+    ※ CI 1순위(선례 0건) = `x:Bind Mode=OneWay` · `IsChecked="{x:Bind bool}"` · `ToolTipService.ToolTip="{x:Bind}"` ·
+    DataTemplate 안 `Click=` · `ContainerFromItem` · DataTemplate 안 `x:Name`(F2 조회 키 — 런타임 축).
+    **실기기 확인** = HANDOVER §4 v0.336.0 블록.
+    ✅ **핫픽스 v0.336.1** — 명시 `ItemContainerStyle`이 콘텐츠 정렬 기본값을 잃어 체크박스가 좌측으로 붙음(사용자
+    스크린샷) → `HorizontalContentAlignment=Stretch` Setter 추가. **실기기 판정 = 사용자 확인 "10,000번째까지 잘 보인다"**.
+  - ✅ **배치 3 완료(v0.337.0)** — `TileGrid`가 `ItemsSource = _vms`(이 표면이 자기 뷰모델을 만든다 — 좌·중앙 객체 공유는
+    셸 시그니처를 바꿔야 해 배치 4 후보) + DataTemplate(`TilePreviewHost` 빈 Grid · `TileCloudBadge`
+    `Visibility="{x:Bind CloudBadgeVisibility}"` · `TileCaption`) + `ItemContainerStyle`(H/V ContentAlignment Stretch) +
+    CCC. **미리보기 = CCC 위상 0(폴더 글리프/확장자 타일/뷰모델 캐시 동기) → `RegisterUpdateCallback` 위상 1(이미지
+    원본 BitmapImage · 캐시 썸네일 · 텍스트 · 셸 썸네일 비동기 발사)**. 재활용 방어 = 모든 await 뒤
+    `ReferenceEquals(item.Content, vm)` + `InRecycleQueue`에서 host Clear·`ForceFinish`·AllowDrop false + `PreviewInFlight`.
+    뷰모델 캐시 4종(`PreviewText`·`AudioInfo`·`PreviewKnownEmpty`·`PreviewInFlight` — 비트맵은 캐시 안 함).
+    삭제 = `DeferPreview`(EffectiveViewportChanged)·`EagerPreviewCount`·`PreviewPrefetchDip`·`MaterializeLimit`·
+    `TileChunkItems`·조립 루프·`FinishShowEntries`·`MakeOverflowNotice`·`MakeTile`·`MakeCloudBadge`·`FindTileByPath`·
+    `ApplyTileSize` 폴백(Items 순회). 캡션 조회 = 이름(`TileCaptionName`) — TE:770 인덱스 계약 폐기. `_pendingRenamePath`
+    소비 = ShowEntries 안 `BeginRenameByPath`(보수안 ⓐ). 하위 에이전트가 코드를 따른 지점 = 비이미지 placeholder는
+    종전대로 셸 썸네일 갈래(cachedOnly) 유지 · `seq` 지역 변수 미사용(CS0219) 회피.
+    ※ CI 1순위(선례 0건) = `Visibility="{x:Bind}"` · `RegisterUpdateCallback`(선례 1). **실기기 확인** = HANDOVER §4 v0.337.0 블록.
+    **잔여 = 배치 4**(이름변경 뷰모델화 결정 · `MaterializeLimit`(IconGrid 휴면) 정리 · 계측 라벨 재정의 · 주석·가이드 ·
+    좌·중앙 뷰모델 공유 여부).
+  - ✅ **배치 4 완료(v0.338.0)** — 낙수 42 수리(`LivePreviewHostOf` — 적용 시점에 현재 컨테이너 재조회 · 실패 갈래는
+    `RedrawFallbackTile`로 통째 재구성 · 이미지 갈래는 부모 충돌 방지로 새 Image) · `NavDiagnostics` tick/det 축 제거 +
+    마크 의미 재정의(클래스 요약) · `MaterializeLimit` → `IconGridMaterializeLimit`(휴면 전용) · 결정 확정 = 이름변경 보수안 ⓐ ·
+    좌·중앙 뷰모델 객체 비공유 · `maxItems` 10,000 · 주석 부채 전수(EP·TE·RB·FLO·Nav) · 고아 상수 2개 제거.
+    **판별식(A345 이후)** = `total` · `stall` · `gc/pause` · `clay`(화면 분량 컨테이너 생성 = 유일한 큰 동기 구간).
+
 ## 3. 이미지 모듈
 
 - ※ A9(하단 바 정보 확충 — 파일명 옆 용량·종류(확장자·비트뎁스)·EXIF 요약(촬영일·카메라·노출) 인라인 표시,
