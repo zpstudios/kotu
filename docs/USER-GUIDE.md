@@ -231,7 +231,8 @@ Seven modules. Switch between them from the menu at the bottom left.
 
 ### 2.4 Document — plain text
 
-- `.txt .md .markdown .log .ini .html .htm` open in an editable text box.
+- `.txt .md .markdown .log .ini` open in an editable text box. `.html .htm` open as a rendered web
+  page first (see below); the view button takes you to the source.
 - **The module brings four buttons of its own to the bottom bar**, just right of the window's menu
   and **Open file** buttons, in this order: **New text file**, **Save**, **Print** and the **view**
   toggle. Opening a document is the window's own **Open file** button — a document with unsaved
@@ -256,8 +257,9 @@ Seven modules. Switch between them from the menu at the bottom left.
   renderer does not know stays as it was written. Markdown files over about 1 MB of text open
   straight in the editor, and at that size the view button locks the editor instead of rendering
   the preview.
-- **HTML is rendered too.** A `.html` or `.htm` file still opens in the editor as source, and the
-  view button shows it as a real web page instead of the locked source view. The page is rendered
+- **HTML is rendered too.** A `.html` or `.htm` file opens as a real web page first, and the
+  view button switches to the source editor and back. Files over 4 MB are view-only: the page
+  renders in full, but the editor stays empty and the view button is greyed out. The page is rendered
   from the saved file on disk — relative images and stylesheets next to it work, and unsaved edits
   stay in the editor until you save and switch again. It is a viewer, not a browser: scripts never
   run, links that lead outside your files do nothing, and nothing opens a new window. The page

@@ -516,8 +516,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
         <h3>Document — 일반 텍스트</h3>
         <ul>
-          <li><code>.txt .md .markdown .log .ini .html .htm</code>은 편집 가능한 텍스트 상자에서
-              열립니다.</li>
+          <li><code>.txt .md .markdown .log .ini</code>는 편집 가능한 텍스트 상자에서 열립니다.
+              <code>.html .htm</code>은 렌더링된 웹 페이지로 먼저 열리고(아래 참고), view 버튼으로 소스로 갑니다.</li>
           <li><strong>이 모듈은 하단 바에 자체 버튼 네 개를 가져옵니다.</strong> 창의 메뉴·<strong>Open
               file</strong> 버튼 바로 오른쪽에 <strong>New text file</strong>, <strong>Save</strong>,
               <strong>Print</strong>, 그리고 <strong>view</strong> 토글 순으로 놓입니다. 문서를 여는 것은 창
@@ -542,8 +542,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               편집기에 들어 있는 내용으로 만들어지므로 저장하지 않은 편집도 반영되고, 렌더러가 모르는 표기는
               쓰인 그대로 남습니다. 텍스트가 약 1 MB를 넘는 Markdown 파일은 바로 편집기에서 열리며, 그
               크기에서는 view 버튼이 미리 보기를 만드는 대신 편집기를 잠급니다.</li>
-          <li><strong>HTML도 렌더링됩니다.</strong> <code>.html</code>이나 <code>.htm</code> 파일은 여전히
-              편집기에서 소스로 열리고, view 버튼이 잠긴 소스 보기 대신 실제 웹 페이지로 보여 줍니다. 페이지는
+          <li><strong>HTML도 렌더링됩니다.</strong> <code>.html</code>이나 <code>.htm</code> 파일은 실제 웹
+              페이지로 먼저 열리고, view 버튼으로 소스 편집기와 오갑니다. 4MB를 넘는 파일은 보기 전용입니다 —
+              페이지는 전부 렌더링되지만 편집기는 비어 있고 view 버튼은 잠깁니다. 페이지는
               디스크에 저장된 파일로 렌더링하므로 옆에 있는 상대 경로 이미지와 스타일시트가 동작하고,
               저장하지 않은 편집은 저장한 뒤 다시 전환할 때까지 편집기에 머뭅니다. 브라우저가 아니라
               뷰어입니다 — 스크립트는 실행되지 않고, 파일 밖으로 나가는 링크는 아무 일도 하지 않으며, 새

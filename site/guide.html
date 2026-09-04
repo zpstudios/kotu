@@ -518,7 +518,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
         <h3>Document — plain text</h3>
         <ul>
-          <li><code>.txt .md .markdown .log .ini .html .htm</code> open in an editable text box.</li>
+          <li><code>.txt .md .markdown .log .ini</code> open in an editable text box. <code>.html .htm</code>
+              open as a rendered web page first (see below); the view button takes you to the source.</li>
           <li><strong>The module brings four buttons of its own to the bottom bar</strong>, just right of the
               window's menu and <em>Open file</em> buttons, in this order: <em>New text file</em>,
               <em>Save</em>, <em>Print</em> and the <em>view</em> toggle. Opening a document is the window's
@@ -547,9 +548,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               unsaved edits show up in it; anything the renderer does not know stays as it was written.
               Markdown files over about 1 MB of text open straight in the editor, and at that size the view
               button locks the editor instead of rendering the preview.</li>
-          <li><strong>HTML is rendered too.</strong> A <code>.html</code> or <code>.htm</code> file still
-              opens in the editor as source, and the view button shows it as a real web page instead of the
-              locked source view. The page is rendered from the saved file on disk — relative images and
+          <li><strong>HTML is rendered too.</strong> A <code>.html</code> or <code>.htm</code> file opens as a
+              real web page first, and the view button switches to the source editor and back. Files over
+              4 MB are view-only: the page renders in full, but the editor stays empty and the view button
+              is greyed out. The page is rendered from the saved file on disk — relative images and
               stylesheets next to it work, and unsaved edits stay in the editor until you save and switch
               again. It is a viewer, not a browser: scripts never run, links that lead outside your files
               do nothing, and nothing opens a new window. The page follows the shared document zoom, and
