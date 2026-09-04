@@ -215,6 +215,25 @@ _smtc.PlaybackStatus = MediaPlaybackStatus.Playing / Paused / Stopped / Closed;
 ④ **오디오 뷰의 재생 상태 통지 신설**(A186 확대) — SMTC `PlaybackStatus` 갱신의 선행 조건.
    이번 배치에 포함할 것인가, 별도 항목으로 뺄 것인가.
 
+## 7. 후속 조사 — "알 수 없는 앱"(A350 · 2026-09-05)
+
+v0.342.0 실기기에서 SMTC 세션·제목·버튼은 정상이나 앱 이름이 "알 수 없는 앱". v0.343.0(창 AUMID `KOTU.Instance.n`에 대한
+`HKCU\Software\Classes\AppUserModelId\<AUMID>` DisplayName/IconUri)·v0.343.1(`SetCurrentProcessExplicitAppUserModelID("KOTU")` +
+같은 키) 모두 실패. 2차 조사 결론:
+- **앱 이름은 앱이 넘기는 값이 아니다.** `DisplayUpdater`에 앱 이름 슬롯이 없고, OS가 세션의 `SourceAppUserModelId`를 셸 앱 해석기
+  (AppResolver — 시작 메뉴 바로가기 색인)로 풀어 이름·아이콘을 붙인다. 실패하면 "Unknown app".
+- **`AppUserModelId` 레지스트리 키의 DisplayName/IconUri는 토스트 알림 전용으로만 문서화** — SMTC가 읽는다는 근거 없음.
+- **Chromium은 AUMID를 SMTC에 전혀 걸지 않는다** — `GetForWindow(싱글턴 hwnd)`뿐이고, `ClearMetadata` 주석이 "메타데이터가 비면 실행
+  파일 이름이 SMTC에 보인다"고 적는다 = 정체성은 프로세스/exe에서 온다.
+- **KOTU의 확정 원인** = MainWindow의 창별 AUMID `KOTU.Instance.{n}`(A105 태스크바 분리)은 어떤 바로가기와도 일치할 수 없다. 프로세스
+  explicit AUMID는 Velopack 바로가기 AUMID(폴백 `velopack.{AppId}`류)와 불일치 시 태스크바 고정을 깨뜨릴 수 있다(velopack#104).
+- **해법(v0.343.2)** = 세션 창을 명시 AUMID가 없는 **트레이 숨김 창**(`TrayIcon` — 창마다 하나 · 최상위 WS_POPUP)으로 교체 → 프로세스 기본
+  정체성 → 셸이 exe 경로로 시작 메뉴 바로가기를 찾는다(MPC-HC·AIMP가 이름을 얻는 경로). 창당 1세션 유지.
+- 안 되면 다음 확인 = `Get-StartApps | ? Name -like '*KOTU*'`의 AppID(Velopack 바로가기 AUMID)와
+  `GlobalSystemMediaTransportControlsSessionManager`의 `SourceAppUserModelId` 대조 · 탐색기 재시작(셸 캐시).
+출처: Chromium `components/system_media_controls/win/system_media_controls_win.cc` · MS "AppUserModelIDs"(창 AUMID가 프로세스 값을 덮는다) ·
+MS "Send a local toast notification from other types of unpackaged apps" · velopack/velopack#104 · `GlobalSystemMediaTransportControlsSession.SourceAppUserModelId`.
+
 ## 출처
 
 - WM_APPCOMMAND (상수·`GET_APPCOMMAND_LPARAM`·TRUE 반환 규칙) — https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-appcommand
