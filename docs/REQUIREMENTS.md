@@ -685,6 +685,14 @@
     — 저장소의 `PrintManagerInterop.GetForWindow`(`PrintHost.cs:137`)와 같은 패턴 · 비패키지 성립 근거 = Firefox·WinUI #2631).
     최대 함정 = 버튼 enable + `PlaybackStatus` 갱신을 빠뜨리면 이벤트 0건(CI 미검출) · 해제 순서(`Closed`→`ClearAll`→`IsEnabled=false`)
     · `ButtonPressed`는 비UI 스레드. **배치 3 착수 전 확인 4건 → 부록 B.**
+  - ✅ **배치 3 완료(v0.342.0)** — Core `IMediaTransportTarget : IPlaybackStateSource`(`CanPrevious/CanNext` · `Previous/Next/Play/Pause` ·
+    `NeighborsChanged` · **`HasMediaTransport`** — 검수에서 추가: All Readable이 문서·사진 자식일 때 세션을 붙이지 않게) · 셸
+    `src/KOTU.App/Integration/MediaTransport.cs`(창당 1개 · PrintHost 위상 · `GetForWindow`는 첫 활성 시점에 지연 · `_sessionActive`
+    전이에서만 SMTC 속성 대입 · `Refresh` = PlaybackStatus/Next/Prev · 해제 = Closed→ClearAll→Update→IsEnabled=false · `ButtonPressed`
+    비UI → TryEnqueue · `DisplayUpdater.CopyFromFileAsync`(제목·아트) 실패 시 파일명 제목) · `ShowModule` Attach/Detach ·
+    `OnContentOpened` 제목 갱신 · 창 Closed Detach · 오디오 `IPlaybackStateSource` 신설(`HasPlaybackSurface=false` — A186 자동 숨김 무영향 ·
+    libvlc 전이 4곳 발화) · All Readable 중계. 구현 시 결정 = Stop→Pause · 파일 없을 때 Play 무동작(트레이 숨김 중 테스트 클립 기동
+    방지) · 세션 꺼진 동안 경로 폐기. **A349 잔여 = 실기기 회수(HANDOVER §4 v0.342.0)** — 전부 CI가 못 잡는 런타임 축.
 
 - ※ A328(**영상 정보 패널에 포맷상 정의된 속성 전부 나열**(없는 값은 빈칸 행), v0.317.0) 완료 — 결번.
   사용자 지시 **"영상도 당연히 바꿔야지."** 로 확인 필요가 소진되며 그 자리에서 착수됐다.
@@ -2642,7 +2650,7 @@
 | ~~A346~~ | 이미지 ←/→ 순서 = 탐색기 좌 리스트 표시 순서(정렬·필터 반영) | 중 | **완료 v0.339.0 — 결번**(IBrowseOrderConsumer · FromOrdered 무정렬 · A347 흡수) |
 | ~~A347~~ | 좌 리스트 ↔ 중앙 썸네일 순서 동기화 | 소~중 | **A346에 흡수(v0.339.0) — 결번**(코드상 이미 같은 목록 · 어긋남 재현 시 재등재) |
 | ~~A348~~ | 이미지 ←/→ 오토리피트 중 좌 리스트 현재 파일 표시 건너뜀 — 항해 시점 통지(ⓐ) | 소~중 | **완료 v0.340.0 — 결번**(ICurrentPathSource · SetCurrentFile만 즉시) |
-| A349 | 영상·오디오 이전/다음 파일 — Ctrl+←/→ · PageUp/Down · 하단 바 ⏮⏭ · 미디어 키(SMTC) · 순서 = 좌 리스트(낙수 43 흡수) | 중+소+중(3배치) | **배치 1 완료 v0.341.0 · 배치 2(조사) 완료** · 배치 3 SMTC 연동 = 부록 B 4문 답 뒤 · Fable(위임 시 Opus) |
+| A349 | 영상·오디오 이전/다음 파일 — Ctrl+←/→ · PageUp/Down · 하단 바 ⏮⏭ · 미디어 키(SMTC) · 순서 = 좌 리스트(낙수 43 흡수) | 중+소+중(3배치) | **배치 1~3 완료 v0.341.0~v0.342.0**(키·⏮⏭·순서 / 조사 / SMTC) · 실기기 회수 대기 · Fable(위임 시 Opus) |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
