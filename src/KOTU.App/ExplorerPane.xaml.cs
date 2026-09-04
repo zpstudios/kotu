@@ -44,6 +44,12 @@ public sealed partial class ExplorerPane : UserControl
     private const int FillChunkItems = 80;
 
     /// <summary>
+    /// A342 배치 3: 상세 캐시 히트 적용을 끊는 조각 크기(적용 건수). 값은 FillChunkItems와 같지만
+    /// 조립 조각과 결합시키지 않으려고 별도 상수로 둔다 — 한쪽만 조정해도 다른 쪽이 흔들리지 않는다.
+    /// </summary>
+    private const int DetailHitChunk = 80;
+
+    /// <summary>
     /// A192: 표면당 컨테이너 실체화 상한 — 초과분은 컨테이너를 만들지 않고 말미에 비상호작용
     /// 안내 1행만 붙인다(MakeOverflowNotice). 상한은 <b>컨테이너 실체화에만</b> 걸린다:
     /// _entries·_display·ViewChanged로 흐르는 Entry 목록과 체크 prune(A179)은 전체 그대로다.
@@ -1429,6 +1435,7 @@ public sealed partial class ExplorerPane : UserControl
         // 누적 소요(Stopwatch 틱)를 모아 foreach 직후 한 번에 넘긴다.
         var detHits = 0;
         var detTicks = 0L;
+        var hitsSinceYield = 0; // A342 배치 3 — 조각 경계 카운터(캐시 히트 적용분만 센다)
         var stop = false; // 풀이 닫힘(취소 Task) — 남은 발사 중단. UI 스레드에서만 읽고 쓴다.
 
         // 항목 하나의 fetch + UI 반영. UI 스레드에서 시작하므로 await 후속부도 UI 스레드다.
@@ -1477,6 +1484,9 @@ public sealed partial class ExplorerPane : UserControl
             // 사용자가 열어 로컬화되면 다음 재스캔에서 정상 조회된다.
             if (entry.IsPlaceholder) continue;
 
+            // A342 배치 3 — 캐시 히트 분기는 await가 없어, 같은 폴더 재진입이면 수천 건의
+            // ApplyDetail이 마지막 조립 틱 안에서 한 덩어리로 돈다(v0.329.0 실측: 히트 2,000건
+            // 473ms, UI 정지 최대 695ms). DetailHitChunk건마다 UI 스레드를 한 번 놓아 조각낸다.
             if (_infoCache.TryGetValue(entry.Path, out var hit) && hit.Modified == entry.Modified)
             {
                 if (hit.Details.Info.Length > 0)
@@ -1493,6 +1503,16 @@ public sealed partial class ExplorerPane : UserControl
                     {
                         ApplyDetail(item, entry, hit.Details);
                     }
+                    hitsSinceYield++;
+                }
+                if (hitsSinceYield >= DetailHitChunk)
+                {
+                    hitsSinceYield = 0;
+                    // 디스패처가 내려갔으면 신호가 오지 않는다 — 발사를 멈춘다. return이 아니라 break인
+                    // 이유: return은 using gate를 먼저 닫아 이미 발사된 fetch의 finally Release가
+                    // ObjectDisposedException을 던진다. break는 WhenAll로 가서 종전 종료 경로와 같다.
+                    if (!await YieldToUiAsync()) break;
+                    if (seq != _loadSeq) break; // 놓은 사이 폴더가 바뀌었다
                 }
                 continue; // 캐시 히트는 워커 없이 즉시 반영 (종전 동작)
             }
@@ -1509,6 +1529,20 @@ public sealed partial class ExplorerPane : UserControl
         if (NavDiagnostics.Enabled) NavDiagnostics.NoteDetailHits(detHits, detTicks);
         // 발사분 완주 대기 — using gate의 Dispose가 대기 중 Release보다 앞서지 않게 한다.
         await Task.WhenAll(running);
+    }
+
+    /// <summary>
+    /// A342 배치 3: UI 스레드를 한 번 놓아 준다 — 디스패처 큐에 완료 신호를 넣고 그것을 기다리므로,
+    /// 대기 중이던 입력·렌더 작업이 먼저 소화된다(저장소 관용구 = TaskCompletionSource +
+    /// DispatcherQueue.TryEnqueue). 디스패처가 이미 내려갔으면 신호가 오지 않으므로 TryEnqueue
+    /// 실패를 false로 돌려 호출부가 루프를 끝내게 한다.
+    /// </summary>
+    private async Task<bool> YieldToUiAsync()
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!DispatcherQueue.TryEnqueue(() => tcs.TrySetResult(true))) return false;
+        await tcs.Task;
+        return true;
     }
 
     /// <summary>
