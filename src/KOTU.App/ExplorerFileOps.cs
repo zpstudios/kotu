@@ -149,14 +149,19 @@ internal static class ExplorerFileOps
     /// <summary>
     /// 항목 컨테이너 하나에 잘라내기 흐림을 반영한다 — 두 표면(리스트 행·그리드 타일) 공용.
     /// 컨테이너가 아니라 '콘텐츠'의 Opacity를 건드린다: 선택 강조는 또렷한 채 아이콘·이름만
-    /// 흐려지는 탐색기 모양이 된다. 항목 = 컨테이너 직접 추가(Tag = Entry) 구조 전제.
+    /// 흐려지는 탐색기 모양이 된다. 항목 = 컨테이너 직접 추가(A345 배치 1부터 Tag = 뷰모델) 구조 전제.
     /// </summary>
     internal static void ApplyCutMark(object item)
     {
-        // ExplorerListing은 KOTU.Core.Routing — 이 파일에 using을 새로 들이지 않으려 전체 이름으로 쓴다
-        // (Windows.Storage·DataTransfer 이름들과 섞을 이유가 없다).
-        if (item is SelectorItem { Content: UIElement content, Tag: KOTU.Core.Routing.ExplorerListing.Entry entry })
-            content.Opacity = IsCutMarked(entry.Path) ? CutOpacity : 1.0;
+        // A345 배치 1: Tag의 축이 Entry에서 ExplorerEntryVm(같은 KOTU.App 네임스페이스)으로 옮겨졌다.
+        // 이 패턴을 함께 고치지 않으면 매칭이 그냥 false가 되어 잘라내기 흐림이 예외 없이 전멸한다.
+        // 컨테이너 Opacity와 뷰모델 값을 한자리에서 함께 갱신한다(두 벌이 어긋나지 않게).
+        if (item is SelectorItem { Content: UIElement content, Tag: ExplorerEntryVm vm })
+        {
+            var opacity = IsCutMarked(vm.Path) ? CutOpacity : 1.0;
+            content.Opacity = opacity;
+            vm.ContentOpacity = opacity;
+        }
     }
 
     /// <summary>

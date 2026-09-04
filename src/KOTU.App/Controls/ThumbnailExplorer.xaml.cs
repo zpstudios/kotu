@@ -223,12 +223,12 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 이 속성은 "첫 선택 파일" 질의 API로만 남았다(A86 서술의 원형).
     /// </summary>
     public string? SelectedFilePath =>
-        TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry { IsFolder: false } entry }
-            ? entry.Path : null;
+        TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerEntryVm { IsFolder: false } vm }
+            ? vm.Path : null;
 
     /// <summary>선택된 항목(파일·폴더 불문) — 없으면 null (A90: S4 Enter "선택 열기 우선" 판정).</summary>
     public ExplorerListing.Entry? SelectedEntry =>
-        TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerListing.Entry entry } ? entry : null;
+        TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerEntryVm vm } ? vm.Entry : null; // A345 배치 1 — 반환은 종전대로 Entry
 
     /// <summary>
     /// A336: 선택 표시를 걷는다 — 셸이 <b>다른 표면</b>(좌 리스트)에서 선택이 일어났을 때 부른다.
@@ -489,13 +489,13 @@ public sealed partial class ThumbnailExplorer : UserControl
         await ExplorerFileOps.ReportAsync(notice, result.Denied, ui);
     }
 
-    /// <summary>선택 타일 경로 전부(폴더 포함) — 항목 = 컨테이너 직접 추가라 Tag에서 꺼낸다(A94).</summary>
+    /// <summary>선택 타일 경로 전부(폴더 포함) — 항목 = 컨테이너 직접 추가라 Tag(A345 배치 1부터 뷰모델)에서 꺼낸다(A94).</summary>
     private IReadOnlyList<string> SelectedPaths() =>
         TileGrid.SelectedItems
             .OfType<FrameworkElement>()
             .Select(i => i.Tag)
-            .OfType<ExplorerListing.Entry>()
-            .Select(e => e.Path)
+            .OfType<ExplorerEntryVm>()
+            .Select(vm => vm.Path)
             .ToList();
 
     /// <summary>선택 타일 중 **파일**만의 경로 (A94 6차 — 일괄 열기 대상. 폴더는 제외한다).</summary>
@@ -503,9 +503,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         TileGrid.SelectedItems
             .OfType<FrameworkElement>()
             .Select(i => i.Tag)
-            .OfType<ExplorerListing.Entry>()
-            .Where(e => !e.IsFolder)
-            .Select(e => e.Path)
+            .OfType<ExplorerEntryVm>() // A345 배치 1 — Tag = 뷰모델
+            .Where(vm => !vm.IsFolder)
+            .Select(vm => vm.Path)
             .ToList();
 
     /// <summary>
@@ -573,10 +573,13 @@ public sealed partial class ThumbnailExplorer : UserControl
         CurrentFolder = folder;
         TileGrid.Items.Clear();
 
+        // A345 배치 1: 이 표면의 데이터 축을 여기서 만든다(공개 시그니처는 Entry 목록 그대로 —
+        // 셸이 부른다). 배치 3에서 좌 리스트와 뷰모델을 공유하도록 ViewChanged 훅을 바꾼다.
+        var vms = entries.Select(e => new ExplorerEntryVm(e)).ToList();
         var cap = Math.Min(entries.Count, MaterializeLimit);
         var first = Math.Min(TileChunkItems, cap);
         for (var i = 0; i < first; i++)
-            TileGrid.Items.Add(MakeTile(entries[i]));
+            TileGrid.Items.Add(MakeTile(vms[i]));
         EmptyText.Text = "No matching files here"; // A243 — ShowLoading의 "Loading..."을 원문구로 복원
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         // 계측 cfill0: 중앙 첫 조각(최대 60타일) 생성 완료 — 바로 아래 동기 레이아웃 패스와
@@ -589,7 +592,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         // 명시 호출이라 따로 잰다.
         NavDiagnostics.Mark("clay");
 
-        if (first < cap) StartTileAppendLoop(seq, entries, first, cap);
+        if (first < cap) StartTileAppendLoop(seq, entries, vms, first, cap);
         else FinishShowEntries(entries, seq); // 소형 폴더 — 조립이 여기서 동기 완료(종전 동작 동일)
     }
 
@@ -626,7 +629,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 예외가 새면 앱 전역 크래시) — 조각 생성 예외 = 루프 중단(부분 타일 잔존은 다음
     /// ShowEntries가 덮는다).
     /// </summary>
-    private void StartTileAppendLoop(int seq, IReadOnlyList<ExplorerListing.Entry> entries, int start, int cap)
+    private void StartTileAppendLoop(
+        int seq, IReadOnlyList<ExplorerListing.Entry> entries, IReadOnlyList<ExplorerEntryVm> vms,
+        int start, int cap)
     {
         StopTileAppendLoop(); // 방어: 기동 직전 잔존 루프 해제(A193 관용구)
 
@@ -650,7 +655,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                 }
                 var count = Math.Min(TileChunkItems, cap - next);
                 for (var i = next; i < next + count; i++)
-                    TileGrid.Items.Add(MakeTile(entries[i]));
+                    TileGrid.Items.Add(MakeTile(vms[i])); // A345 배치 1 — 조각의 입력도 뷰모델
                 next += count;
                 if (next >= cap)
                 {
@@ -728,7 +733,7 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     /// <summary>
     /// A192: 실체화 상한 초과 안내 — 비상호작용 1타일. Tag 없음(타일 조회·조작 루틴은 전부
-    /// Tag의 Entry 패턴 매칭이라 자연 제외된다: FindTileByPath·SelectedPaths·EntryFromSource·
+    /// Tag의 뷰모델 패턴 매칭이라 자연 제외된다 — A345 배치 1: FindTileByPath·SelectedPaths·EntryFromSource·
     /// ApplyCutMark·OnItemClick 전수 확인), 계약 훅(메뉴·드래그·더블클릭) 미부착,
     /// IsEnabled=false로 포커스·클릭 대상에서도 뺀다. 문구는 좌 리스트(ExplorerPane)와 동일 사양.
     /// <para>
@@ -752,11 +757,11 @@ public sealed partial class ThumbnailExplorer : UserControl
         IsEnabled = false,
     };
 
-    /// <summary>경로로 타일 컨테이너 찾기 — 항목 = 컨테이너 직접 추가(Tag = Entry) 구조 전제.</summary>
+    /// <summary>경로로 타일 컨테이너 찾기 — 항목 = 컨테이너 직접 추가(A345 배치 1부터 Tag = 뷰모델) 구조 전제.</summary>
     private GridViewItem? FindTileByPath(string path) =>
         TileGrid.Items.OfType<GridViewItem>().FirstOrDefault(i =>
-            i.Tag is ExplorerListing.Entry entry &&
-            string.Equals(entry.Path, path, StringComparison.OrdinalIgnoreCase));
+            i.Tag is ExplorerEntryVm vm &&
+            string.Equals(vm.Path, path, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// F2·우클릭 Rename 진입 (A94 2차): 타일 캡션 TextBlock을 인라인 편집(ExplorerRenameBox)으로
@@ -765,10 +770,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private void BeginRenameOf(GridViewItem item)
     {
-        if (item.Tag is not ExplorerListing.Entry entry) return;
+        if (item.Tag is not ExplorerEntryVm vm) return;
         if (item.Content is not Grid { Children.Count: > 1 } tile ||
             tile.Children[1] is not TextBlock caption) return;
-        ExplorerRenameBox.Begin(tile, caption, entry.Path, MakeOpUi(), RefreshViaShell);
+        ExplorerRenameBox.Begin(tile, caption, vm.Path, MakeOpUi(), RefreshViaShell);
     }
 
     /// <summary>조작 후 갱신 — 폴더 상태의 단일 원본(좌 리스트)을 셸이 다시 항해시키는 A93 경로.</summary>
@@ -842,9 +847,11 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     // ---------- 타일 구성 ----------
 
-    /// <summary>균일 타일: 위(미리보기/글리프/확장자) + 아래 파일명 1줄 말줄임 캡션(A93).</summary>
-    private GridViewItem MakeTile(ExplorerListing.Entry entry)
+    /// <summary>균일 타일: 위(미리보기/글리프/확장자) + 아래 파일명 1줄 말줄임 캡션(A93).
+    /// A345 배치 1: 입력이 뷰모델이고 컨테이너 Tag도 뷰모델이다(미리보기 갈래는 종전 Entry 그대로).</summary>
+    private GridViewItem MakeTile(ExplorerEntryVm vm)
     {
+        var entry = vm.Entry;
         var preview = entry.IsFolder ? MakeFolderGlyph()
             : IsImageFile(entry.Name) ? MakeImagePreview(entry)
             : IsTextPreviewFile(entry) ? MakeTextPreview(entry) // A233 — 내용 프리뷰(지연 교체)
@@ -875,7 +882,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         var item = new GridViewItem
         {
             Content = tile,
-            Tag = entry,
+            Tag = vm, // A345 배치 1 — Tag = 뷰모델
             // 셀(ItemWidth/ItemHeight)을 타일이 꽉 채워야 미리보기 영역이 균일해진다
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Stretch,
@@ -1754,14 +1761,14 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (isPair) Activate(entry);
     }
 
-    /// <summary>눌림의 원본 요소에서 타일 컨테이너(Tag = Entry)를 찾는다 — 조상 상향 탐색
-    /// (깊이 상한 64 = HotkeySupport.MaxAncestorDepth와 같은 방어).</summary>
+    /// <summary>눌림의 원본 요소에서 타일 컨테이너(A345 배치 1부터 Tag = 뷰모델)를 찾는다 — 조상 상향 탐색
+    /// (깊이 상한 64 = HotkeySupport.MaxAncestorDepth와 같은 방어). 반환은 종전대로 Entry다.</summary>
     private static ExplorerListing.Entry? EntryFromSource(object source)
     {
         var node = source as DependencyObject;
         for (var depth = 0; node is not null && depth < 64; depth++)
         {
-            if (node is GridViewItem { Tag: ExplorerListing.Entry entry }) return entry;
+            if (node is GridViewItem { Tag: ExplorerEntryVm vm }) return vm.Entry;
             node = VisualTreeHelper.GetParent(node);
         }
         return null;
@@ -1775,16 +1782,16 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is not FrameworkElement { Tag: ExplorerListing.Entry entry }) return;
+        if (e.ClickedItem is not FrameworkElement { Tag: ExplorerEntryVm vm }) return;
 
         var now = DateTime.UtcNow;
-        var isDouble = _lastClick is { } last && last.Path == entry.Path &&
+        var isDouble = _lastClick is { } last && last.Path == vm.Path &&
                        (now - last.At).TotalMilliseconds < DoubleClickMs;
-        _lastClick = (entry.Path, now);
+        _lastClick = (vm.Path, now);
         if (!isDouble) return;
 
         _lastClick = null;
-        Activate(entry);
+        Activate(vm.Entry);
     }
 
     /// <summary>
@@ -1795,10 +1802,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
-        if (sender is not GridViewItem { Tag: ExplorerListing.Entry entry }) return;
+        if (sender is not GridViewItem { Tag: ExplorerEntryVm vm }) return;
         e.Handled = true;
         _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게
-        Activate(entry);
+        Activate(vm.Entry);
     }
 
     /// <summary>
