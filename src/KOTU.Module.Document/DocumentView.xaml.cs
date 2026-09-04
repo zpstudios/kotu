@@ -930,6 +930,15 @@ public sealed partial class DocumentView : UserControl,
             // 이 뷰는 "파일 없음" 상태 그대로다 — _path=null이라 Ctrl+S는 무동작(SaveAsync 첫
             // 가드), 더티=false라 닫기·모듈 전환 가드(ICloseGuard)는 그냥 통과, 에디터는
             // Collapsed라 편집 입력 자체가 불가. 대입 전 상태에서 저장·닫기·편집이 새지 않는다.
+            // A343 ⓐ: 잘린 HTML은 에디터에 대입할 텍스트 자체가 없다(뷰 전용 — ApplyLoadedText가
+            // 빈 문자열을 넣는다). 미룰 대입이 없으니 지연 프레임을 끼우지 않고 바로 반영한다
+            // (지연은 "수 초 UI 점유를 로딩 표시 뒤로 미루기"가 목적이라 여기서는 무의미하다).
+            // 장식 오프는 위에서 이미 했다 — 순서는 종전 그대로다.
+            if (loaded.Truncated && IsHtmlPath(path))
+            {
+                ApplyLoadedText(path, loaded);
+                return;
+            }
             DeferApplyAfterRender(seq, path, loaded);
             return;
         }
@@ -988,13 +997,21 @@ public sealed partial class DocumentView : UserControl,
         // A181: 거터(A142 ③) 자리 예약 — 자릿수+1을 왼쪽 패딩으로 확보한다(UpdateEditorPadding
         // 주석 참고). Text 대입보다 먼저 잡아야 랩 계산이 최종 패딩으로 한 번에 끝난다.
         // 대용량(A177)은 장식 자체가 꺼져 있어 예약하지 않는다(0 = 기본 패딩).
-        _gutterDigits = loaded.Text.Length > LargeDocumentChars
+        // A343 ⓐ: 잘린 HTML = 뷰 전용 — 에디터 버퍼를 비운 채 WebView2 판으로만 연다(아래
+        // EnterHtmlViewMode). 수 초 UI를 멎게 하던 대용량 Text 대입이 사라지는 자리다. 판정은
+        // 여기서 한 번만 하고 이하 세 지점(거터·Text 대입·렌더 축)이 같은 값을 쓴다.
+        var truncatedHtml = loaded.Truncated && IsHtmlPath(path);
+        _gutterDigits = truncatedHtml || loaded.Text.Length > LargeDocumentChars
             ? 0
             : DigitCount(CountLines(loaded.Text)) + 1;
         UpdateEditorPadding();
 
         _loadingText = true; // 프로그램적 설정 — dirty 아님
-        EditorBox.Text = loaded.Text;
+        // A343 ⓐ: 잘린 HTML은 빈 문자열 대입(무대입 아님 — 옛 파일 잔상 금지). _baselineText도
+        // 이 빈 값 기준으로 서고 SetDirty(false)가 뒤따르므로 더티는 항상 false다. 저장은
+        // 3중으로 막힌다: ① UpdateEditorReadOnly의 잘림 축(영구 IsReadOnly — 입력 자체가 불가)
+        // ② SaveAsync 첫 가드의 _truncated 조기 반환(무동작) ③ 더티 없음(HasUnsavedChanges false).
+        EditorBox.Text = truncatedHtml ? string.Empty : loaded.Text;
         _loadingText = false;
         _textSnapshot = null; // A142 ①ⓑ: TextChanged 무효화와 중복이어도 무해한 방어 — 옛 파일 잔상 금지
         // A113 ⓒ: 더티 판정 기준은 "TextBox가 실제로 보유한 텍스트"의 정규화본이다 — 로드 문자열
@@ -1028,6 +1045,19 @@ public sealed partial class DocumentView : UserControl,
             && loaded.Text.Length <= LargeDocumentChars;
         ResetRenderState(renderEligible);
         if (renderEligible && loaded.Text.Length > 0) EnterRenderMode();
+        // A343 ⓐ: HTML도 기본 = 뷰(WebView2 판) — md의 위 관용구를 그대로 복제한 자리다. 자격
+        // 판정(IsHtmlRenderEligible)은 _path·실패 이력·런타임 가용성을 보는데, _path는 이 메서드
+        // 초입에서 이미 섰고 실패 이력은 바로 위 ResetRenderState(→ ResetHtmlViewState)가 걷었다
+        // — 그래서 리셋 뒤가 유일하게 옳은 자리다. 빈 파일은 md와 같이 편집으로 시작한다.
+        else if (IsHtmlRenderEligible && loaded.Text.Length > 0) EnterHtmlViewMode(path);
+        // A343 ⓐ: 잘린 HTML인데 판을 못 탔다(WebView2 런타임 부재 — 유일한 갈래다: 실패 이력은
+        // 방금 리셋됐고 텍스트는 비어 있지 않다). 에디터 버퍼가 비어 있어 그냥 두면 빈 화면이므로
+        // 안내판 + 하단 바 1줄로 대체한다(EnterHtmlViewMode 강등 갈래와 같은 짝).
+        if (truncatedHtml && !_htmlMode)
+        {
+            ShowHtmlFallbackNotice(path);
+            ShowTruncatedHtmlUnavailable();
+        }
 
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
@@ -1191,14 +1221,19 @@ public sealed partial class DocumentView : UserControl,
     //   ------------------------------+------------------------------------------------------------
     //   열기 .txt/.log/.ini           | 편집(렌더 축 리셋 — _renderEligible=false. A224: 토글은
     //                                 | 활성 — 누르면 잠금 뷰)
-    //   열기 .html/.htm               | 편집(위와 동일 — 기본 모드 무변경). A248: 토글로 뷰에
-    //                                 | 들어가면 WebView2 렌더(_htmlMode — 저장된 파일 기준
-    //                                 | file:// 항해, 스크립트 off). 런타임 부재·항해 실패는
-    //                                 | 잠금 뷰 자동 폴백 + 하단 바 안내 1줄
+    //   열기 .html/.htm               | A343 ⓐ: 기본 = WebView2 뷰(_htmlMode — 저장된 파일 기준
+    //                                 | file:// 항해, 스크립트 off. md의 "열기 = 렌더 뷰"와 같은
+    //                                 | 관용구). 빈 파일만 편집으로 시작. 토글로 편집 왕복 가능.
+    //                                 | 런타임 부재·항해 실패는 잠금 뷰 자동 폴백 + 하단 바 안내 1줄
+    //   열기 .html/.htm (4MB 잘림)    | 뷰 전용 — WebView2 뷰로 열리고 토글 비활성이라 편집으로
+    //                                 | 나갈 길이 없다. 에디터 버퍼는 빈 문자열(대입 생략 —
+    //                                 | 대용량 지연 대입 자체를 건너뛴다), 인쇄 비활성.
+    //                                 | 렌더 실패 시엔 잠금 뷰 대신 안내 플레이스홀더
+    //                                 | (ShowTruncatedHtmlUnavailable)
     //   열기 .md/.markdown (소용량)   | 렌더(기본 — 사양. 빈 파일은 편집으로 시작, 토글은 활성)
     //   열기 .md (A177 대용량)        | 편집(_renderEligible=false — 렌더 생략, A178 성능 원칙.
     //                                 | A224: 토글은 활성이되 잠금 뷰로 간다 — 비md와 일관)
-    //   열기 4MB 잘림(형식 무관)      | 편집 불가(영구 IsReadOnly) — A224: 토글 비활성(토글이
+    //   열기 4MB 잘림(html 외)        | 편집 불가(영구 IsReadOnly) — A224: 토글 비활성(토글이
     //                                 | "편집으로 전환"을 약속하면 안 된다 — 잘림 저장 사고 방지 축)
     //   열기 .pdf                     | PDF 뷰(렌더 축 리셋 — 편집 축이 없어 토글 비활성)
     //   New text file (A189 무제)     | 무제 편집(렌더 축 리셋 — 무제 md는 범위 밖. 토글 활성)
@@ -1354,7 +1389,10 @@ public sealed partial class DocumentView : UserControl,
         UpdateDecorToggles(); // A277: 잠금 뷰 = 표시 토글 비활성(Visibility는 안 바뀌므로 명시 호출)
         // A248: HTML인데 렌더 갈래를 못 탄 잠금 뷰 = 폴백 상태 — 이유를 1줄로 알린다.
         if (_path is { } fallbackPath && IsHtmlPath(fallbackPath))
+        {
             ShowHtmlFallbackNotice(fallbackPath);
+            ShowTruncatedHtmlUnavailable(); // A343 ⓐ: 잘린 HTML이면 에디터가 비어 있다 — 안내판으로
+        }
         // A277: 포커스를 에디터에 두지 않는다 — 캐럿을 숨길 공개 API가 없어(A115 ④ 판정: WinUI
         // TextBox·RichEditBox 모두 캐럿 색·표시 API 없음) "포커스가 없으면 캐럿도 없다"가 유일한
         // 수단이다. 렌더 뷰·HTML 뷰가 이미 쓰는 관용구(뷰 루트로 이동)와 같다. 클릭 포커스는 그대로
@@ -1702,13 +1740,16 @@ public sealed partial class DocumentView : UserControl,
     private bool _htmlNoticeShown;
 
     /// <summary>
-    /// A248: HTML 렌더 자격 — html 파일 + 비잘림(잘림은 토글 자체가 비활성이라 방어 중복) +
-    /// 이 뷰·이 세션에서 실패 이력 없음. _renderEligible(md)과 같은 층의 게이트로,
-    /// EnterViewMode 안에서 "WebView2 판이냐 잠금 뷰냐"만 가른다(토글 활성은 CanToggleViewMode
-    /// 그대로 — 자격이 없어도 잠금 뷰가 있으므로 토글은 살아 있다).
+    /// A248: HTML 렌더 자격 — html 파일 + 이 뷰·이 세션에서 실패 이력 없음. _renderEligible(md)과
+    /// 같은 층의 게이트로, EnterViewMode 안에서 "WebView2 판이냐 잠금 뷰냐"를 가르고 A343 ⓐ부터는
+    /// 열기 기본 모드도 이 값이 정한다(토글 활성은 CanToggleViewMode 그대로).
+    /// <para>A343 ⓐ(2026-09-04): 종전의 <c>!_truncated</c> 조건을 걷었다 — WebView2는 에디터
+    /// 버퍼가 아니라 <b>디스크의 파일</b>을 file://로 여니 4MB 읽기 잘림과 무관하게 전문이 그려진다.
+    /// 잘린 HTML은 이제 열자마자 이 판으로 들어가고, CanToggleViewMode가 여전히 <c>!_truncated</c>라
+    /// 편집으로 나갈 길이 없다 = 뷰 전용(사양).</para>
     /// </summary>
     private bool IsHtmlRenderEligible =>
-        _path is { } path && IsHtmlPath(path) && !_truncated
+        _path is { } path && IsHtmlPath(path)
         && !_htmlViewFailed && !HtmlPane.RuntimeUnavailable;
 
     /// <summary>
@@ -1758,6 +1799,7 @@ public sealed partial class DocumentView : UserControl,
         _decor.Invalidate(); // 에디터 복귀 — 장식 재개
         UpdateDecorToggles();
         ShowHtmlFallbackNotice(path);
+        ShowTruncatedHtmlUnavailable(); // A343 ⓐ: 잘린 HTML이면 되살릴 에디터 내용이 없다 — 안내판으로
         // A277: 잠금 뷰 강등 — EnterViewMode와 같은 관용구로 포커스를 뷰 루트에 둔다(캐럿 없음).
         // 위 1회 Focus 이후 포커스가 그대로여도 무해한 재확인이다(await 사이 이동 방어).
         Focus(FocusState.Programmatic);
@@ -1836,6 +1878,21 @@ public sealed partial class DocumentView : UserControl,
     {
         FileNameText.Text = Path.GetFileName(path) + " (HTML preview unavailable - showing source)";
         _htmlNoticeShown = true;
+    }
+
+    /// <summary>
+    /// A343 ⓐ: 잘린 HTML의 렌더 실패 폴백 — 잠금 뷰(에디터 표면)가 성립하지 않는 유일한 갈래다
+    /// (에디터 버퍼가 비어 있어 강등해 봐야 빈 화면이 뜬다). 그래서 에디터 대신 기존 플레이스홀더에
+    /// 이유를 띄운다(새 UI 없음 — OpenPath의 "Loading ..." 관용구와 같은 자리). 잘린 HTML이
+    /// 아니면 무동작이라 호출부 2곳(EnterViewMode 잠금 뷰 갈래·EnterHtmlViewMode 강등 갈래)이
+    /// 조건 없이 부를 수 있다. 다음 열기가 ApplyLoadedText에서 플레이스홀더를 다시 내린다.
+    /// </summary>
+    private void ShowTruncatedHtmlUnavailable()
+    {
+        if (!IsTruncatedHtml) return;
+        EditorBox.Visibility = Visibility.Collapsed; // 빈 에디터를 보이지 않는다(강등 갈래가 되살린 것을 다시 내림)
+        PlaceholderText.Text = "View only: this HTML file exceeds 4 MB and the HTML renderer is unavailable.";
+        PlaceholderText.Visibility = Visibility.Visible;
     }
 
     /// <summary>A248: 안내 걷기 — 붙어 있을 때만 파일명을 원 표기로 되돌린다(멱등).</summary>
@@ -3163,8 +3220,16 @@ public sealed partial class DocumentView : UserControl,
     /// 텍스트가 폴백**이기 때문이다(A190 원문 폴백 계약과 동형: 렌더가 안 되면 원문이지 무동작이
     /// 아니다). 렌더 갈래가 성립하면 CreatePrintPageAsync가 그쪽을 먼저 잡아 여기까지 오지 않는다.
     /// PDF 모드·빈 화면·A177 지연 대입 대기는 둘 다 false라 PDF 갈래와 자연 배타다(절 머리 주석).
+    /// <para>A343 ⓐ(2026-09-04): 잘린 HTML은 제외한다 — 그 갈래는 에디터 버퍼가 <b>빈 문자열</b>이라
+    /// (뷰 전용, ApplyLoadedText) 인쇄 대상이 실제로 없다. 종전 식이라면 _path가 있다는 이유로
+    /// 활성돼 백지가 나갔다. 셸 Ctrl+P도 CanPrintNow를 직접 보므로 버튼·키가 함께 비활성된다.</para>
     /// </summary>
-    private bool IsTextPrintTarget => _path is not null || _untitled;
+    private bool IsTextPrintTarget =>
+        (_path is not null || _untitled) && !IsTruncatedHtml;
+
+    /// <summary>A343 ⓐ: 뷰 전용 갈래 판정 — 4MB 잘림 + html 확장자(에디터 버퍼가 비어 있는 유일한
+    /// 상태). ApplyLoadedText의 대입 생략 조건과 같은 식이다(그쪽은 loaded.Truncated 기준).</summary>
+    private bool IsTruncatedHtml => _truncated && _path is { } path && IsHtmlPath(path);
 
     /// <summary>
     /// 인쇄 세션의 텍스트 스냅샷(null = 이번 세션은 텍스트 갈래가 아니다). 세션 시작
