@@ -1639,6 +1639,23 @@
     ※ CI 1순위(선례 0건) = `x:Bind Mode=OneWay` · `IsChecked="{x:Bind bool}"` · `ToolTipService.ToolTip="{x:Bind}"` ·
     DataTemplate 안 `Click=` · `ContainerFromItem` · DataTemplate 안 `x:Name`(F2 조회 키 — 런타임 축).
     **실기기 확인** = HANDOVER §4 v0.336.0 블록.
+    ✅ **핫픽스 v0.336.1** — 명시 `ItemContainerStyle`이 콘텐츠 정렬 기본값을 잃어 체크박스가 좌측으로 붙음(사용자
+    스크린샷) → `HorizontalContentAlignment=Stretch` Setter 추가. **실기기 판정 = 사용자 확인 "10,000번째까지 잘 보인다"**.
+  - ✅ **배치 3 완료(v0.337.0)** — `TileGrid`가 `ItemsSource = _vms`(이 표면이 자기 뷰모델을 만든다 — 좌·중앙 객체 공유는
+    셸 시그니처를 바꿔야 해 배치 4 후보) + DataTemplate(`TilePreviewHost` 빈 Grid · `TileCloudBadge`
+    `Visibility="{x:Bind CloudBadgeVisibility}"` · `TileCaption`) + `ItemContainerStyle`(H/V ContentAlignment Stretch) +
+    CCC. **미리보기 = CCC 위상 0(폴더 글리프/확장자 타일/뷰모델 캐시 동기) → `RegisterUpdateCallback` 위상 1(이미지
+    원본 BitmapImage · 캐시 썸네일 · 텍스트 · 셸 썸네일 비동기 발사)**. 재활용 방어 = 모든 await 뒤
+    `ReferenceEquals(item.Content, vm)` + `InRecycleQueue`에서 host Clear·`ForceFinish`·AllowDrop false + `PreviewInFlight`.
+    뷰모델 캐시 4종(`PreviewText`·`AudioInfo`·`PreviewKnownEmpty`·`PreviewInFlight` — 비트맵은 캐시 안 함).
+    삭제 = `DeferPreview`(EffectiveViewportChanged)·`EagerPreviewCount`·`PreviewPrefetchDip`·`MaterializeLimit`·
+    `TileChunkItems`·조립 루프·`FinishShowEntries`·`MakeOverflowNotice`·`MakeTile`·`MakeCloudBadge`·`FindTileByPath`·
+    `ApplyTileSize` 폴백(Items 순회). 캡션 조회 = 이름(`TileCaptionName`) — TE:770 인덱스 계약 폐기. `_pendingRenamePath`
+    소비 = ShowEntries 안 `BeginRenameByPath`(보수안 ⓐ). 하위 에이전트가 코드를 따른 지점 = 비이미지 placeholder는
+    종전대로 셸 썸네일 갈래(cachedOnly) 유지 · `seq` 지역 변수 미사용(CS0219) 회피.
+    ※ CI 1순위(선례 0건) = `Visibility="{x:Bind}"` · `RegisterUpdateCallback`(선례 1). **실기기 확인** = HANDOVER §4 v0.337.0 블록.
+    **잔여 = 배치 4**(이름변경 뷰모델화 결정 · `MaterializeLimit`(IconGrid 휴면) 정리 · 계측 라벨 재정의 · 주석·가이드 ·
+    좌·중앙 뷰모델 공유 여부).
 
 ## 8. 하드웨어(정보) 모듈
 
@@ -2624,7 +2641,7 @@
 | A342 | 폴더 진입 UI 정지 — 주인 둘(상세 캐시 버스트 · GC = 객체 수) | 소+대 | **배치 1~5 완료(v0.328.0~v0.333.0)** · 상한 500으로 진입 5초→0.9초 · **잔여 = 상한 500 UX 결정(유지 / ⓑ 가상화로 상한 복원)** · Fable(위임 시 Opus) |
 | A343 | 대용량 텍스트/HTML 열기 — 편집기 대입이 UI 수 초 정지(A177 수용 한계) | 소~중 | **ⓐ 완료 v0.332.0**(HTML은 WebView2 우선 · 잘림은 뷰 전용) · **ⓑ 편집 상한은 사용자 결정 대기**(부록 B) · Fable(위임 시 Opus) |
 | A344 | HTML 렌더 뷰 스크립트 허용(A248 반전) | 소 | **완료 v0.334.0** |
-| A345 | 탐색기 좌 리스트·중앙 타일 UI 가상화(ItemsSource + CCC · 보이는 행만 실체화) — A342 ⓑ | 대(4배치) | **배치 1·2 완료 v0.335.0~v0.336.0**(데이터 축 · 좌 리스트 가상화) · 배치 3 중앙 타일 가상화 대기 · Fable(위임 시 Opus) · 조사 `docs/A345-virtualization-research.md` |
+| A345 | 탐색기 좌 리스트·중앙 타일 UI 가상화(ItemsSource + CCC · 보이는 행만 실체화) — A342 ⓑ | 대(4배치) | **배치 1~3 완료 v0.335.0~v0.337.0**(데이터 축 · 좌 리스트 · 중앙 타일 가상화) · 배치 4 정리 대기 · Fable(위임 시 Opus) · 조사 `docs/A345-virtualization-research.md` |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
@@ -2868,6 +2885,11 @@
     ① `Entry`를 경로+이름(+폴더 여부)로 얇게 하고 크기·날짜는 CCC 위상 렌더에서 조회 ② 열거를 청크로 흘려
     첫 화면을 먼저 띄우기 — 이 둘로 `maxItems` 천장을 사실상 없앤다. **규모 = 대**(정렬이 크기·날짜를 쓰면 ①과
     충돌 — 정렬 키가 필요한 열엔 여전히 전수 조회가 필요하다는 것이 이 항목의 첫 설계 질문).
+42. **중앙 타일 미리보기 완료가 "다른 컨테이너로 재실체화된 같은 항목"에 못 얹힌다**(2026-09-04 배치 3 검수 · 코드 정독).
+    fill 3종은 발사 시점의 `item`으로 `ReferenceEquals(item.Content, vm)`를 대조하는데, 스크롤 왕복으로 같은 vm이 **다른**
+    컨테이너에 실체화되면(`PreviewInFlight`라 재발사도 없음) 캐시만 남고 화면은 확장자 타일로 남는다 — 다시 스크롤해
+    나갔다 오면 캐시로 즉시 그려진다. 수리 = 적용 시점에 `TileGrid.ContainerFromItem(vm)`으로 현재 컨테이너를 다시
+    찾아 얹기(3함수 공통 헬퍼). 규모 = 소. 배치 4에 얹을 후보.
 
 ## 부록 B. 확정된 결정 기록 (남은 작업 관련만)
 
