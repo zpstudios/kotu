@@ -261,9 +261,11 @@ Seven modules. Switch between them from the menu at the bottom left.
   view button switches to the source editor and back. Files over 4 MB are view-only: the page
   renders in full, but the editor stays empty and the view button is greyed out. The page is rendered
   from the saved file on disk — relative images and stylesheets next to it work, and unsaved edits
-  stay in the editor until you save and switch again. It is a viewer, not a browser: scripts never
-  run, links that lead outside your files do nothing, and nothing opens a new window. The page
-  follows the shared document zoom, and printing stays the source text, exactly as in edit mode.
+  stay in the editor until you save and switch again. It is a viewer, not a browser: scripts inside
+  the page do run (so reports that build their content with JavaScript render in full), but links
+  that lead outside your files do nothing, nothing opens a new window, and script dialogs are
+  silently ignored. The page follows the shared document zoom, and printing stays the source text,
+  exactly as in edit mode.
   Rendering uses the WebView2 runtime that ships with Windows 11 (on older Windows 10 it may not
   be installed); without it the view button falls back to the locked source view and the bottom
   bar says so after the file name.

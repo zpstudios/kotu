@@ -10,7 +10,9 @@ namespace KOTU.Module.Document;
 /// 저장소 선례 0인 위험 축이라, 컨트롤 생성·삽입 전부를 코드로 한다(WMC 부류 컴파일 실패와
 /// v0.174.1 런타임 XAML 파스 실패 두 축을 모두 피하는 선택 — CI는 후자를 못 잡는다).
 ///
-/// <b>보안 기본값(로컬 열람기)</b>: 스크립트 off(IsScriptEnabled=false — 사양 확정)에 더해
+/// <b>보안 기본값(로컬 열람기)</b>: 문서 안 스크립트는 허용하고(A344 — IsScriptEnabled=true.
+/// A248의 스크립트 off를 뒤집은 결과다), 나머지 방어선은 그대로 둔다 — 스크립트 대화상자
+/// 억제(AreDefaultScriptDialogsEnabled=false)·페이지↔앱 통신 차단(IsWebMessageEnabled=false)·
 /// 새 창 열기 억제(NewWindowRequested)·file:// 이외 항해 차단(NavigationStarting — 링크로
 /// 브라우저처럼 떠돌지 않게. 로컬 상대 링크는 file://로 풀리므로 허용된다)·컨텍스트 메뉴/
 /// DevTools/상태 바/브라우저 단축키 off. 내장 줌(Ctrl+휠·핀치)도 IsZoomControlEnabled=false·
@@ -18,8 +20,8 @@ namespace KOTU.Module.Document;
 ///
 /// <b>줌(A225 관용구의 WebView2 절반)</b>: WinUI 3의 WebView2 컨트롤에는 WPF/WinForms의
 /// ZoomFactor 속성이 없다(CoreWebView2Controller 비노출) — 대신 ExecuteScriptAsync로 문서
-/// 루트에 CSS zoom을 건다. IsScriptEnabled=false는 문서 안 스크립트만 막고 ExecuteScriptAsync
-/// 주입은 막지 않는다는 것이 CoreWebView2Settings 문서의 명시 규정이라 두 사양이 충돌하지
+/// 루트에 CSS zoom을 건다. 이제 문서 스크립트도 도니(A344) CSS zoom 주입과 페이지 스크립트가
+/// 같은 문서에서 공존한다 — 주입은 html 루트 style만 건드리므로 페이지 로직과 부딪히지
 /// 않는다. 적용 시점 = 항해 완료(NavigationCompleted)와 배율 변경(SetZoomPercent) 두 곳.
 ///
 /// <b>런타임 부재(구 Win10 미설치 가능)</b>: EnsureCoreWebView2Async가 던진다 — 실패는
@@ -177,14 +179,16 @@ public sealed partial class HtmlPane : UserControl
 
     /// <summary>보안·입력 기본값과 이벤트 배선(초기화 성공 후 1회). 설정 대입은 통째로
     /// try/catch — 어느 하나가 던져도 표시 자체는 계속한다(기본값보다 열린 상태로 남는
-    /// 속성이 생길 수 있으나, 스크립트 off가 같은 블록 첫 줄이라 최우선으로 걸린다).</summary>
+    /// 속성이 생길 수 있으나, 항해 차단·새 창 억제 이벤트가 독립 방어선으로 남는다).</summary>
     private void ConfigureCore(CoreWebView2 core)
     {
         try
         {
             var settings = core.Settings;
-            settings.IsScriptEnabled = false;                  // 사양 확정 — 로컬 열람기 보안 기본
-            settings.AreDefaultScriptDialogsEnabled = false;   // 스크립트 off와 같은 축(방어 중복)
+            // A344(2026-09-04 사용자 확정): A248의 스크립트 off를 뒤집는다 — JS가 내용을
+            // 그리는 보고서 HTML이 백지로 보였다.
+            settings.IsScriptEnabled = true;
+            settings.AreDefaultScriptDialogsEnabled = false;   // 스크립트 on이어도 대화상자는 띄우지 않는다
             settings.IsWebMessageEnabled = false;              // 페이지↔앱 통신 없음
             settings.AreDefaultContextMenusEnabled = false;    // 우클릭 메뉴의 인쇄·저장·소스 보기 차단
             settings.AreDevToolsEnabled = false;
@@ -237,7 +241,7 @@ public sealed partial class HtmlPane : UserControl
             }
             catch (Exception)
             {
-                // Cancel조차 못 세우면 항해는 진행된다 — 스크립트 off라 피해 면은 좁다.
+                // Cancel조차 못 세우면 항해는 진행된다 — 새 창 억제·앱 통신 차단은 남는다.
             }
         }
     }
