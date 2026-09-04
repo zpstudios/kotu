@@ -6,6 +6,17 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-09-04 (37차) — A345 배치 2 좌 리스트 가상화(v0.336.0 · Opus 위임)
+
+"a345 다음 작업 진행하자" 지시로 배치 2 착수. 오케스트레이터(Fable)가 코드 정독으로 사양을 확정해 Opus에
+위임(이번엔 529 없이 1회 성공 · 68 tool uses). 핵심 결정 = ① 항목 해석 단일 깔때기 `VmOf`(ListPane은
+SelectedItem/ClickedItem이 뷰모델 자체 · IconGrid 휴면은 Tag) ② 훅 1회 부착 + 지연 해석(entry 캡처 금지)로 재활용
+잔존을 구조적으로 차단 ③ 상세 fetch를 목록 스냅샷 순회 → CCC Phase 0 `RequestDetail`(보이는 행만)로 —
+A342 배치 3의 캐시 히트 조각화가 통째로 불필요해져 삭제 ④ 편집 중 재활용 = `ForceFinish` 강제 커밋(종료자를
+TextBox.Tag에 실음). 하위 에이전트가 지시와 달리 코드를 따른 지점 7건 보고(F2 Handled를 컨테이너 확보 뒤로 ·
+DragOver/Drop을 파일 행에도 부착하되 IsFolder 가드 등) — 전부 수용. diff = 6파일 +493/−547(EP 2,727→2,552줄).
+CI 1순위 5종(x:Bind OneWay · bool→bool? · 첨부 속성 x:Bind · 템플릿 Click · ContainerFromItem) — **CI 초록 확인(build #419) — 5종 전부 소진.**
+
 ### 2026-09-04 (후속) — A339 재측정 회수 → A342 등재(코드 변경 0)
 
 사용자가 v0.327.0 `_perftest` 진입 스크린샷 1장을 보냈다. `prev0>fillN` 3,703→3,121, **정지 488→487ms

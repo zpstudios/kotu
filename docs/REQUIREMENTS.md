@@ -1625,6 +1625,20 @@
     ※ CI 1순위 = `INotifyPropertyChanged` 선례 0건(BCL — 실패 시 인터페이스·`Set`을 걷어내면 동작 무영향).
     **실기기 확인 = 회귀 0**: 잘라내기 흐림(Ctrl+X) · 체크박스/Space · F2 · 드래그 아웃 · Del · Enter/더블클릭 ·
     우측 정보 패널 · 상세 줄 지연 반영.
+  - ✅ **배치 2 완료(v0.336.0)** — `ListPane`이 `ItemsSource = _displayVms` + `x:DataType` DataTemplate(x:Bind —
+    Name/Glyph OneTime · DetailText/TooltipText/IsChecked/ContentOpacity OneWay) + `ItemContainerStyle`(A198
+    MinHeight 0·Padding 12,1,12,1 이관) + `ContainerContentChanging`. 분할 조립 루프(A192)·`_fillDone`·
+    `WhenFillCompleteAsync`·안내 행·`MakeListItem`·`LoadDetailInfoAsync`(+A342 배치 3 조각화) 전부 삭제.
+    **항목 해석은 `VmOf` 단일 깔때기**(뷰모델 자체 / `SelectorItem{Content}` / `FrameworkElement{Tag}`(IconGrid 휴면)).
+    CCC: 훅(메뉴·드래그·더블탭)은 컨테이너당 1회 부착 + 핸들러 안에서 `VmOf`로 지연 해석(entry 캡처 0) ·
+    `AllowDrop`은 매 CCC 재설정 · `InRecycleQueue`에서 `ExplorerRenameBox.ForceFinish`(편집 강제 커밋 = 결정 ②) ·
+    Phase 0에서 `RequestDetail`(보이는 행만 상세 fetch — `DetailRequested` 표지 + 페인 수명 `_detailGate`).
+    이름변경 보수안 ⓐ = `RealizeListContainer`(ScrollIntoView→UpdateLayout→ContainerFromItem) · 우클릭 Rename은
+    디스패처 지연 뒤 `ReferenceEquals(VmOf(item), vm)` 대조. `ExplorerListing.List` maxItems **2,000→10,000**(결정 ①).
+    `MaterializeLimit` 500은 IconGrid 휴면 경로 전용으로 존치(배치 4 정리). IconGrid·ThumbnailExplorer 무접촉.
+    ※ CI 1순위(선례 0건) = `x:Bind Mode=OneWay` · `IsChecked="{x:Bind bool}"` · `ToolTipService.ToolTip="{x:Bind}"` ·
+    DataTemplate 안 `Click=` · `ContainerFromItem` · DataTemplate 안 `x:Name`(F2 조회 키 — 런타임 축).
+    **실기기 확인** = HANDOVER §4 v0.336.0 블록.
 
 ## 8. 하드웨어(정보) 모듈
 
@@ -2610,7 +2624,7 @@
 | A342 | 폴더 진입 UI 정지 — 주인 둘(상세 캐시 버스트 · GC = 객체 수) | 소+대 | **배치 1~5 완료(v0.328.0~v0.333.0)** · 상한 500으로 진입 5초→0.9초 · **잔여 = 상한 500 UX 결정(유지 / ⓑ 가상화로 상한 복원)** · Fable(위임 시 Opus) |
 | A343 | 대용량 텍스트/HTML 열기 — 편집기 대입이 UI 수 초 정지(A177 수용 한계) | 소~중 | **ⓐ 완료 v0.332.0**(HTML은 WebView2 우선 · 잘림은 뷰 전용) · **ⓑ 편집 상한은 사용자 결정 대기**(부록 B) · Fable(위임 시 Opus) |
 | A344 | HTML 렌더 뷰 스크립트 허용(A248 반전) | 소 | **완료 v0.334.0** |
-| A345 | 탐색기 좌 리스트·중앙 타일 UI 가상화(ItemsSource + CCC · 보이는 행만 실체화) — A342 ⓑ | 대(4배치) | **배치 1 완료 v0.335.0**(데이터 축) · 배치 2 좌 리스트 가상화 대기 · Fable(위임 시 Opus) · 조사 `docs/A345-virtualization-research.md` |
+| A345 | 탐색기 좌 리스트·중앙 타일 UI 가상화(ItemsSource + CCC · 보이는 행만 실체화) — A342 ⓑ | 대(4배치) | **배치 1·2 완료 v0.335.0~v0.336.0**(데이터 축 · 좌 리스트 가상화) · 배치 3 중앙 타일 가상화 대기 · Fable(위임 시 Opus) · 조사 `docs/A345-virtualization-research.md` |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
