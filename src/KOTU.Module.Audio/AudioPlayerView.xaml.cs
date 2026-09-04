@@ -32,7 +32,7 @@ namespace KOTU.Module.Audio;
 /// </summary>
 public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IContentInfoChangedSource,
-    IBrowseOrderConsumer, ICurrentPathSource
+    IBrowseOrderConsumer, ICurrentPathSource, IPlaybackStateSource, IMediaTransportTarget
 {
     /// <summary>파일 재생을 시작하면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -70,8 +70,27 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// 지금 재생 중인가 — 영상 IsPlaying(A186·A306)과 같은 정의(libvlc IsPlaying 위임).
     /// _player가 없거나(생성 전) 일시정지·정지·미디어 없음은 전부 "재생 중 아님"이다.
     /// A302: 세러모니 게이트·트레이 이퀄라이저 판정이 이 한 곳을 쓴다(판정 일원화).
+    /// A349 배치 3: <see cref="IPlaybackStateSource"/> 확대(A186 확대 — 사용자 확정 ④)로
+    /// public이 됐다. 값의 정의는 그대로다.
     /// </summary>
-    private bool IsPlaying => _player is { IsPlaying: true };
+    public bool IsPlaying => _player is { IsPlaying: true };
+
+    /// <summary>
+    /// 재생/일시정지/종료 전이를 셸에 알린다(A186 확대 — A349 배치 3, 사용자 확정 ④).
+    /// 발화 지점은 영상의 네 곳과 같은 전이다: 재생 시작(Playing)·일시정지(Paused)·
+    /// EOF 정지(AdvanceAfterEnd 전이 5)·재생 실패(EncounteredError). 오디오에서는 그 자리가
+    /// 곧 <see cref="SetTrayTimer"/> 켬/끔이 놓인 자리라 두 축이 같은 지점에서 갈린다.
+    /// UI 스레드 보장 없음(계약 규칙) — 실제로는 전부 Dispatch 안이라 UI 스레드다.
+    /// </summary>
+    public event Action? PlaybackStateChanged;
+
+    /// <summary>
+    /// A349 배치 3: <b>오디오는 재생 표면이 아니다</b>(A186 하단 바 자동 숨김 대상 밖).
+    /// 셸의 자동 숨김은 <c>HasPlaybackSurface: true</c>일 때만 무장하는데(MainWindow의
+    /// VideoBarContext), 오디오는 <b>하단 바 자체가 조작면</b>이라 재생 중 숨으면 회귀다.
+    /// 이 값은 셸이 SMTC 메타데이터 종류를 고르는 데도 쓰인다 — false = Music.
+    /// </summary>
+    public bool HasPlaybackSurface => false;
 
     /// <summary>이퀄라이저 막대 개수(16px 아래 줄에 들어가는 한계).</summary>
     private const int EqualizerBars = 4;
@@ -840,18 +859,69 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         OpenPath(target, autoAdvance: true);  // 목록 진행 = 스냅샷 유지 + 루프 카운터 보존(위 ⓒ)
     }
 
+    // ---------- 셸 계약: 미디어 키(SMTC) 대상 (A349 배치 3 — IMediaTransportTarget) ----------
+
+    /// <summary>
+    /// A349 배치 3: 이전/다음으로 갈 곳이 있는지가 달라졌다 — 셸이 SMTC의 이전/다음 버튼
+    /// 활성을 다시 계산한다. 하단 바 ⏮/⏭ 활성과 <b>같은 시점·같은 판정</b>을 쓰도록
+    /// <see cref="UpdateNeighborButtons"/> 끝에서만 쏜다(영상과 동형).
+    /// </summary>
+    public event Action? NeighborsChanged;
+
+    /// <summary>
+    /// A349 배치 3: 오디오 뷰는 언제나 미디어 키 대상이다. <see cref="HasPlaybackSurface"/>가
+    /// 거짓인 것과 <b>모순이 아니다</b> — 그쪽은 A186 하단 바 자동 숨김의 축(영상 표면 여부)이고
+    /// 이쪽은 미디어 키를 받을 자격이다. 오디오야말로 미디어 키의 주 대상이다.
+    /// </summary>
+    public bool HasMediaTransport => true;
+
+    /// <summary>목록 루프 + 파일 2개 이상 = 양 끝에서 되감을 수 있다(1개짜리는 되감아도 제자리).</summary>
+    private bool CanWrapPlaylist => _playlist is { Count: > 1 } && _loopMode == LoopMode.List;
+
+    /// <summary>A349 배치 3: 이전 파일로 갈 수 있는가 — ⏮ 활성과 SMTC 이전 버튼 활성의 공용 판정.</summary>
+    public bool CanPrevious => _playlist is { HasPrevious: true } || CanWrapPlaylist;
+
+    /// <summary>A349 배치 3: 다음 파일로 갈 수 있는가 — ⏭ 활성과 SMTC 다음 버튼 활성의 공용 판정.</summary>
+    public bool CanNext => _playlist is { HasNext: true } || CanWrapPlaylist;
+
+    /// <summary>A349 배치 3: SMTC 이전 트랙 — 하단 바 ⏮·Ctrl+←와 같은 경로.</summary>
+    public void Previous() => MoveToNeighbor(forward: false);
+
+    /// <summary>A349 배치 3: SMTC 다음 트랙 — 하단 바 ⏭·Ctrl+→와 같은 경로.</summary>
+    public void Next() => MoveToNeighbor(forward: true);
+
+    /// <summary>
+    /// A349 배치 3: SMTC 재생 — 재생 중이면 무동작(토글이 아니다). 그 밖에는
+    /// <see cref="TogglePlayPause"/>의 재생 분기를 그대로 탄다(Ended·NothingSpecial 재장전 포함).
+    /// 파일이 없으면 무동작 — ▶ 버튼의 "샘플 곡 재생"은 화면을 보고 누르는 조작이지
+    /// 창이 숨어 있을 수도 있는 미디어 키가 할 일이 아니다(영상과 같은 구현 시 결정).
+    /// </summary>
+    public void Play()
+    {
+        if (_filePath is null || IsPlaying) return;
+        TogglePlayPause();
+    }
+
+    /// <summary>A349 배치 3: SMTC 일시정지(정지도 여기로 접힌다) — 재생 중이 아니면 무동작.</summary>
+    public void Pause()
+    {
+        if (!IsPlaying) return;
+        TogglePlayPause();
+    }
+
     /// <summary>
     /// A349: ⏮/⏭ 버튼의 활성 상태 — 갈 곳이 있을 때만 살아 있다(사용자 확정 ⓐ. 저장소의
     /// "하단 바 버튼은 항상 살아 있다" 관례의 명시적 예외라 XAML 주석에도 적어 뒀다).
     /// 목록 루프가 켜져 있고 파일이 2개 이상이면 어느 끝에서도 되감을 수 있으므로 둘 다 활성이다.
     /// 재생 목록이 없으면(샘플 곡·스캔 실패·아직 스캔 전) 둘 다 비활성.
+    /// A349 배치 3: 판정을 <see cref="CanPrevious"/>/<see cref="CanNext"/>로 뽑아 SMTC와 공유하고,
+    /// 끝에서 <see cref="NeighborsChanged"/>를 쏜다(영상과 동형).
     /// </summary>
     private void UpdateNeighborButtons()
     {
-        var list = _playlist;
-        var canWrap = list is not null && _loopMode == LoopMode.List && list.Count > 1;
-        PrevButton.IsEnabled = list is not null && (list.HasPrevious || canWrap);
-        NextButton.IsEnabled = list is not null && (list.HasNext || canWrap);
+        PrevButton.IsEnabled = CanPrevious;
+        NextButton.IsEnabled = CanNext;
+        NeighborsChanged?.Invoke();
     }
 
     /// <summary>XAML Click 배선 — ⏮(이전 파일).</summary>
@@ -1036,6 +1106,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
         SetTrayTimer(true); // A54: 재생 중에만 1초마다 트레이(시간·이퀄라이저)를 갱신한다
         TrayStatusChanged?.Invoke();
+        PlaybackStateChanged?.Invoke(); // A349 배치 3(A186 확대): 재생 시작 — SMTC PlaybackStatus 갱신
         UpdateVuMeter(); // A304: 재생 시작 = 캡처 켬(VU 스타일일 때만 실동작 — 전이표)
 
         // A301: 교체 계측 소비 — RecreatePlayer ⑥이 실어 둔 개시 시각으로 "재생성 시작→
@@ -1059,6 +1130,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
             PlayButton.Content = "▶";
             SetTrayTimer(false); // A54: 멈추면 타이머도 멈춘다 — 막대는 낮게 고정
             TrayStatusChanged?.Invoke();
+            PlaybackStateChanged?.Invoke(); // A349 배치 3(A186 확대): 일시정지
             UpdateVuMeter(); // A304: 일시정지 = 캡처 즉시 정지(배터리·CPU — 오버레이는 0 레벨로 남는다)
         });
 
@@ -1096,9 +1168,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// 루프 모드가 켜져 있으면 옵션과 무관하게 종전 전이 그대로다(아래 게이트 주석 참고).
     /// A330 ⓒ: 전이 4(목록 루프 + 다음 파일 없음 = 같은 파일 재시작)를 재생 목록 블록 밖으로
     /// 꺼냈다 — 목록이 아직·끝내 만들어지지 않은 회차에도 성립해야 한다(그 자리 주석이 정본).
-    /// 영상 원본과 다른 점: 오디오에는 IPlaybackStateSource·PlaybackStateChanged가 없어
-    /// (설계 §5.2 — A186 확대는 이번 범위 밖) 그 발화 줄이 통째로 빠지고, 대신 오디오만의
-    /// 트레이 1초 타이머 정지(SetTrayTimer(false))·TrayStatusChanged가 정지 전이에 남는다.
+    /// 영상 원본과 다른 점(A349 배치 3에서 개정): 종전에는 오디오에 IPlaybackStateSource·
+    /// PlaybackStateChanged가 없어 그 발화 줄이 통째로 빠져 있었으나, A186 확대(사용자 확정 ④)로
+    /// 이제 정지 전이에서도 영상과 같이 PlaybackStateChanged를 쏜다. 오디오만의 트레이 1초 타이머
+    /// 정지(SetTrayTimer(false))·TrayStatusChanged는 그대로 함께 남는다.
     /// </summary>
     private void AdvanceAfterEnd(string? endedFile)
     {
@@ -1202,11 +1275,18 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _suppressSeekEvent = false;
         SetTrayTimer(false); // A54: 멈추면 타이머도 멈춘다 — 막대는 낮게 고정
         TrayStatusChanged?.Invoke();
+        PlaybackStateChanged?.Invoke(); // A349 배치 3(A186 확대): 재생 종료(Ended) = 정지 전이
         UpdateVuMeter(); // A304: EOF 정지(전이 5) = 캡처 정지(전이 1~4는 Playing 전이가 잇는다)
     }
 
-    private void OnPlayerError(object? sender, EventArgs e) =>
+    private void OnPlayerError(object? sender, EventArgs e)
+    {
         ShowMessage($"Playback failed: {Path.GetFileName(_filePath ?? string.Empty)}");
+        // A349 배치 3(A186 확대): 재생 실패 = 정지와 동일 취급(영상 OnPlayerError와 동형).
+        // libvlc 이벤트 스레드라 Dispatch 경유 — 계약상 UI 스레드 보장은 없지만 저장소의
+        // 다른 발화 지점과 스레드를 맞춘다.
+        Dispatch(() => PlaybackStateChanged?.Invoke());
+    }
 
     private void Dispatch(Action action)
     {

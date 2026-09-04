@@ -1013,6 +1013,16 @@ public sealed partial class MainWindow : Window
         _ = _printHost.RequestPrintAsync(provider); // 실패 전부 내부 흡수(영어 안내 다이얼로그) — 예외 무전파
     }
 
+    // ---------- 미디어 키 (A349 배치 3 — 사양 = docs/A349-media-keys-research.md) ----------
+    // CI가 SMTC API(저장소 선례 0 — Integration/MediaTransport.cs에 전부 격리)에서 깨질 때의
+    // 최소 복구: MediaTransport.cs 삭제 + 이 절 삭제 + ShowModule의 Attach/Detach 블록 +
+    // OnContentOpened의 한 줄 삭제(전부 "A349 배치 3" 표식). Core 계약(IMediaTransportTarget)과
+    // 두 재생 뷰의 구현은 BCL 전용이라 남아도 안전하다(A211 인쇄 축과 같은 구조).
+
+    /// <summary>창당 1개 SMTC 호스트(사용자 확정 ③ = 창당 1세션) — 재생 뷰가 처음 올라올 때
+    /// 만든다(시작 경로에서 SMTC 무접촉). 해제는 자신이 창 Closed에서 수행(PrintHost와 같은 형).</summary>
+    private Integration.MediaTransport? _mediaTransport;
+
     /// <summary>
     /// 단축키·센서 트레이(A18)로 모듈 전환. 이미 그 모듈이면 아무것도 하지 않는다(보던 파일 보호) —
     /// A109(v0.136.0)의 사이드바 기본도 이 no-op 가드 뒤에 있어, 같은 모듈 재선택은 화면을 건드리지
@@ -1632,6 +1642,15 @@ public sealed partial class MainWindow : Window
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnPlaybackStateChanged();
             });
+        // A349 배치 3: 미디어 키(SMTC) 세션을 이 뷰에 붙인다. 위 계약들과 달리 이벤트 구독이
+        // 아니라 셸→뷰 조작 축이라(IBrowseOrderConsumer 시드와 같은 형) 디스패치·교체 가드가
+        // 아니라 부착/해제로 다룬다 — 교체 가드는 MediaTransport가 자기 _target 참조로 대신한다
+        // (Detach가 null로 만든다). 재생 뷰가 아닌 모듈로 갈아타면 세션을 접는다(미부착이면 무동작).
+        if (view is IMediaTransportTarget mediaTarget)
+            (_mediaTransport ??= new Integration.MediaTransport(this, DispatcherQueue))
+                .Attach(mediaTarget, context.FilePath);
+        else
+            _mediaTransport?.Detach();
         // A256(2026-08-27): A223의 열기 위임 구독(IOpenFileRequestSource)을 제거했다 — 문서 모듈
         // 하단 바 Open 버튼이 사라져 이 계약의 소비자가 0이 됐고, 계약 파일도 함께 폐기했다.
         // 파일 열기는 셸 S4 'Open file'(A90) 한 곳이며, 그 경로가 쓰는 OpenFile이 미저장
@@ -1882,6 +1901,10 @@ public sealed partial class MainWindow : Window
         ArmBarAutoHide();
         _untitledContent = false;
         _currentFilePath = path;
+        // A349 배치 3: 미디어 플라이아웃 제목·아트도 지금 파일로 옮긴다. 로드 완료 통지인 이
+        // 경로를 쓰고 A348 CurrentPathChanged(로드 앞)는 쓰지 않는다 — 앞선 통지로 갱신하면
+        // 제목이 실제 재생보다 먼저 튄다. 미부착(재생 뷰 아님)이면 무동작.
+        _mediaTransport?.OnContentOpened(path);
         _selectedBrowse = null; // A200: 뷰 내부 열기(◀/▶ 등)도 열기 — 선택 축 리셋(SetContentState와 동일 규칙)
         InfoOverlay.InvalidateCache();
         RememberLastFolder(); // v0.55.0

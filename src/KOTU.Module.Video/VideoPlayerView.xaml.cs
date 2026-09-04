@@ -29,7 +29,7 @@ namespace KOTU.Module.Video;
 /// </summary>
 public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IPlaybackStateSource,
-    IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource
+    IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget
 {
     /// <summary>
     /// A349(A348 이식): 뷰 내부 항해(⏮/⏭·키)가 보여 줄 파일을 옮긴 즉시 셸에 알린다 —
@@ -746,6 +746,59 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         OpenPath(target, autoAdvance: true);  // 목록 진행 = 스냅샷 유지 + 루프 카운터 보존(위 ⓒ)
     }
 
+    // ---------- 셸 계약: 미디어 키(SMTC) 대상 (A349 배치 3 — IMediaTransportTarget) ----------
+
+    /// <summary>
+    /// A349 배치 3: 이전/다음으로 갈 곳이 있는지가 달라졌다 — 셸이 SMTC의 이전/다음 버튼
+    /// 활성을 다시 계산한다. 하단 바 ⏮/⏭ 활성과 <b>같은 시점·같은 판정</b>을 쓰도록
+    /// <see cref="UpdateNeighborButtons"/> 끝에서만 쏜다.
+    /// </summary>
+    public event Action? NeighborsChanged;
+
+    /// <summary>
+    /// A349 배치 3: 영상 뷰는 언제나 미디어 키 대상이다(화면에 올라와 있다면 곧 재생 표면이다).
+    /// <see cref="HasPlaybackSurface"/>와 값이 같아 보이지만 뜻이 다르다 —
+    /// 그쪽은 A186 하단 바 자동 숨김의 축(영상 표면 여부·오디오는 거짓)이고,
+    /// 이쪽은 미디어 키를 받을 자격(오디오도 참)이다.
+    /// </summary>
+    public bool HasMediaTransport => true;
+
+    /// <summary>목록 루프 + 파일 2개 이상 = 양 끝에서 되감을 수 있다(1개짜리는 되감아도 제자리).</summary>
+    private bool CanWrapPlaylist => _playlist is { Count: > 1 } && _loopMode == LoopMode.List;
+
+    /// <summary>A349 배치 3: 이전 파일로 갈 수 있는가 — ⏮ 활성과 SMTC 이전 버튼 활성의 공용 판정.</summary>
+    public bool CanPrevious => _playlist is { HasPrevious: true } || CanWrapPlaylist;
+
+    /// <summary>A349 배치 3: 다음 파일로 갈 수 있는가 — ⏭ 활성과 SMTC 다음 버튼 활성의 공용 판정.</summary>
+    public bool CanNext => _playlist is { HasNext: true } || CanWrapPlaylist;
+
+    /// <summary>A349 배치 3: SMTC 이전 트랙 — 하단 바 ⏮·Ctrl+←와 같은 경로.</summary>
+    public void Previous() => MoveToNeighbor(forward: false);
+
+    /// <summary>A349 배치 3: SMTC 다음 트랙 — 하단 바 ⏭·Ctrl+→와 같은 경로.</summary>
+    public void Next() => MoveToNeighbor(forward: true);
+
+    /// <summary>
+    /// A349 배치 3: SMTC 재생 — 재생 중이면 무동작(토글이 아니다). 그 밖에는
+    /// <see cref="TogglePlayPause"/>의 재생 분기를 그대로 탄다(Ended 재시작 분기 포함).
+    /// 파일이 없으면 무동작 — ▶ 버튼의 "테스트 클립 재생"은 화면을 보고 누르는 조작이지
+    /// 창이 숨어 있을 수도 있는 미디어 키가 할 일이 아니다(구현 시 결정).
+    /// </summary>
+    public void Play()
+    {
+        if (_filePath is null || IsPlaying) return;
+        TogglePlayPause();
+    }
+
+    /// <summary>
+    /// A349 배치 3: SMTC 일시정지(정지 버튼도 여기로 접힌다) — 재생 중이 아니면 무동작.
+    /// </summary>
+    public void Pause()
+    {
+        if (!IsPlaying) return;
+        TogglePlayPause();
+    }
+
     /// <summary>
     /// A349: ⏮/⏭ 버튼의 활성 상태 — 갈 곳이 있을 때만 살아 있다(사용자 확정 ⓐ. 저장소의
     /// "하단 바 버튼은 항상 살아 있다" 관례의 명시적 예외라 XAML 주석에도 적어 뒀다).
@@ -753,13 +806,14 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     /// 재생 목록이 없으면(테스트 클립·스캔 실패·아직 스캔 전) 둘 다 비활성.
     /// 호출 지점 = 목록이 바뀌는 곳(EnsurePlaylist·SetBrowseOrder·Remove 뒤)과 이동·루프 모드
     /// 변경 지점. 키는 버튼 상태와 무관하게 <see cref="MoveToNeighbor"/>의 자체 판정으로 막힌다.
+    /// A349 배치 3: 판정을 <see cref="CanPrevious"/>/<see cref="CanNext"/>로 뽑아 SMTC와 공유하고,
+    /// 끝에서 <see cref="NeighborsChanged"/>를 쏴 셸이 같은 값으로 SMTC 버튼을 다시 켠다.
     /// </summary>
     private void UpdateNeighborButtons()
     {
-        var list = _playlist;
-        var canWrap = list is not null && _loopMode == LoopMode.List && list.Count > 1;
-        PrevButton.IsEnabled = list is not null && (list.HasPrevious || canWrap);
-        NextButton.IsEnabled = list is not null && (list.HasNext || canWrap);
+        PrevButton.IsEnabled = CanPrevious;
+        NextButton.IsEnabled = CanNext;
+        NeighborsChanged?.Invoke();
     }
 
     /// <summary>XAML Click 배선 — ⏮(이전 파일).</summary>

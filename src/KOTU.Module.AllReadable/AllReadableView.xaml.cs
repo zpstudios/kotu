@@ -51,7 +51,7 @@ namespace KOTU.Module.AllReadable;
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
-    IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource
+    IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -110,6 +110,48 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
 
     /// <summary>영상 자식이 지금 재생 중인가(A186) — 자식이 계약 미구현이면 false.</summary>
     public bool IsPlaying => _childView is IPlaybackStateSource { IsPlaying: true };
+
+    // ---------- 셸 계약: 미디어 키(SMTC) 중계 (A349 배치 3) ----------
+    // 자식(영상·오디오)이 IMediaTransportTarget을 구현하면 그대로 위임하고, 그 밖의 자식
+    // (문서·사진·압축)·빈 상태면 "갈 곳 없음 + 조작 무동작"이 된다. 판단은 전부 자식이 하고
+    // 이 뷰는 흘리기만 한다(트레이 A54·재생 A186·인쇄 A211 중계와 같은 형).
+
+    /// <summary>자식의 이웃 유무 변화를 그대로 셸로 올린다(A349 배치 3 — 중계만).</summary>
+    public event Action? NeighborsChanged;
+
+    /// <summary>지금 조작 가능한 자식(재생 뷰)인가 — 아니면 아래 전부가 무동작·false다.</summary>
+    private IMediaTransportTarget? TransportChild => _childView as IMediaTransportTarget;
+
+    /// <summary>
+    /// A349 배치 3: 이 호스트는 자식이 재생 뷰일 때만 미디어 키 대상이다 — 이 축이 없으면
+    /// PDF·텍스트·사진 자식을 열어도 셸이 SMTC 세션을 붙여, 미디어 플라이아웃에 KOTU가 뜨고
+    /// 조작은 먹통이며 다른 플레이어의 미디어 키를 빼앗는다. 값이 갈리는 시점(자식 교체)에는
+    /// <see cref="NeighborsChanged"/>가 나가 셸이 세션을 다시 켜고 끈다.
+    /// <see cref="HasPlaybackSurface"/>(A186 — 영상 자식일 때만 참)와 <b>뜻이 다르다</b>:
+    /// 오디오 자식이면 이쪽만 참이다.
+    /// </summary>
+    public bool HasMediaTransport => TransportChild is not null;
+
+    /// <summary>이전 파일로 갈 수 있는가 — 자식이 재생 뷰가 아니면 false.</summary>
+    public bool CanPrevious => TransportChild is { CanPrevious: true };
+
+    /// <summary>다음 파일로 갈 수 있는가 — 자식이 재생 뷰가 아니면 false.</summary>
+    public bool CanNext => TransportChild is { CanNext: true };
+
+    /// <summary>이전 파일로 이동(자식 위임) — 재생 자식이 아니면 무동작.</summary>
+    public void Previous() => TransportChild?.Previous();
+
+    /// <summary>다음 파일로 이동(자식 위임) — 재생 자식이 아니면 무동작.</summary>
+    public void Next() => TransportChild?.Next();
+
+    /// <summary>재생(자식 위임) — 재생 자식이 아니면 무동작.</summary>
+    public void Play() => TransportChild?.Play();
+
+    /// <summary>일시정지(자식 위임) — 재생 자식이 아니면 무동작.</summary>
+    public void Pause() => TransportChild?.Pause();
+
+    /// <summary>자식의 이웃 유무 변화를 그대로 셸로 올린다(A349 배치 3 — 중계만).</summary>
+    private void OnChildNeighborsChanged() => NeighborsChanged?.Invoke();
 
     // ---------- 셸 계약: 인쇄 중계 (A211 배치 2, v0.221.0) ----------
     // 자식의 하단 바를 통째로 얹는 구조라(ChildBarHost) 자식 모듈의 인쇄 버튼도 All Readable
@@ -198,7 +240,14 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     {
         DetachChild();
 
-        if (module.CreateView(context) is not UIElement view) return; // 계약 위반 방어 — 빈 상태 유지
+        if (module.CreateView(context) is not UIElement view)
+        {
+            // 계약 위반 방어 — 빈 상태 유지. A349 배치 3: 자식이 사라진 채로 끝나므로
+            // HasMediaTransport가 거짓이 됐다는 것을 셸에 알려야 SMTC 세션이 접힌다
+            // (정상 경로는 아래 배선 끝에서 같은 이벤트를 쏜다).
+            NeighborsChanged?.Invoke();
+            return;
+        }
         _childView = view;
         _filePath = context.FilePath;
 
@@ -222,6 +271,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             infoChanged.ContentInfoChanged += OnChildContentInfoChanged;
         if (view is ICurrentPathSource currentPath) // A348
             currentPath.CurrentPathChanged += OnChildCurrentPathChanged;
+        if (view is IMediaTransportTarget transport) // A349 배치 3
+            transport.NeighborsChanged += OnChildNeighborsChanged;
         // A346: 새 자식에게 지금까지 받아 둔 표시 순서를 내려 준다. 자식 생성자가 이미 파일 열기를
         // 시작했더라도(사진 자식은 폴더 스캔을 워커에서 기다린다) 자식 쪽이 스캔 완료 시점에 폴더를
         // 다시 대조해 주입 목록을 채택하므로 첫 열기부터 순서가 맞는다.
@@ -230,6 +281,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
         UpdateBars();
         TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
         PlaybackStateChanged?.Invoke(); // A186: 자식 교체도 재생 상태 재평가 대상이다(트레이와 같은 이유)
+        NeighborsChanged?.Invoke(); // A349 배치 3: 자식이 바뀌면 이전/다음 가능 여부도 통째로 갈린다
     }
 
     /// <summary>
@@ -256,6 +308,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             infoChanged.ContentInfoChanged -= OnChildContentInfoChanged;
         if (_childView is ICurrentPathSource currentPath) // A348
             currentPath.CurrentPathChanged -= OnChildCurrentPathChanged;
+        if (_childView is IMediaTransportTarget transport) // A349 배치 3
+            transport.NeighborsChanged -= OnChildNeighborsChanged;
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
