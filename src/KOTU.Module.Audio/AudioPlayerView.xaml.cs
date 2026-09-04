@@ -31,10 +31,26 @@ namespace KOTU.Module.Audio;
 /// libvlc 자체 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
 public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
-    IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IContentInfoChangedSource
+    IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IContentInfoChangedSource,
+    IBrowseOrderConsumer, ICurrentPathSource
 {
     /// <summary>파일 재생을 시작하면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>
+    /// A349(A348 이식 · 영상과 동형): 뷰 내부 항해(⏮/⏭·키)가 보여 줄 파일을 옮긴 즉시 셸에 알린다 —
+    /// 로드 완료를 기다리는 <see cref="ContentOpened"/>보다 앞선 통지라 좌 리스트 하이라이트가
+    /// 오토리피트를 1:1로 따라간다. 셸이 연 파일(OpenPath 진입)에서는 쏘지 않는다(셸이 이미 안다).
+    /// </summary>
+    public event Action<string>? CurrentPathChanged;
+
+    // ---------- 탐색 순서 주입 (A349 — A346 IBrowseOrderConsumer 이식) ----------
+
+    /// <summary>셸이 마지막으로 준 좌 리스트의 폴더. 없으면 주입 목록을 쓰지 않는다.</summary>
+    private string? _browseFolder;
+
+    /// <summary>그 폴더의 표시 순서 그대로의 파일 경로 목록(확장자 필터·숨김 표시 반영).</summary>
+    private IReadOnlyList<string> _browseFiles = [];
 
     /// <summary>
     /// A332: libvlc가 파일을 파싱해 길이·트랙 정보를 알게 됐다 — 셸이 정보 패널을 다시 묻는다.
@@ -201,7 +217,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// A269분 +6의 실체 = 이 바에서는 정렬 스페이서 26이 비주얼라이저 버튼 32로 바뀐 것이고
     /// (칸 수 불변), 영상 바에서는 우군 끝에 0폭 스페이서 칸이 늘어 간격 6이 붙은 것이다 —
     /// 서로 다른 경로로 같은 +6이라 두 모듈의 합·임계가 계속 같은 값이다.
-    /// 임계 651(A269 이전 645·A250 이전 640)과 산식 계보는 비디오 UpdateCompactTransport 주석이 정본이다.
+    /// A349(2026-09-04): 재생 버튼 양옆에 ⏮ ⏭ 칸 2개(각 32 + 간격 6 = 76)가 두 모듈에 대칭으로
+    /// 들어가 고정 폭 합 437 → <b>513</b>, 임계 651 → <b>727</b>이다(파생: 축약 시작 창 폭 약 777 →
+    /// 약 853). 숨김 대상은 종전 3개 그대로 — 사용자 확정 ⓑ "볼륨·시간이 먼저 빠지고 ⏮⏭은 남는다".
+    /// 임계 727(A349 이전 651·A269 이전 645·A250 이전 640)과 산식 계보는 비디오 UpdateCompactTransport 주석이 정본이다.
     /// 숨김 대상(볼륨·시간 텍스트 2개)까지 비디오와 같아야 축약 후에도 클러스터 x가 일치한다.
     /// 숨겨도 기능은 남는다: 볼륨은 ↑/↓·휠·음소거 버튼, 재생 위치는 시크 슬라이더 썸 위치가 대신한다.
     /// </summary>
@@ -209,7 +228,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         // A249 예외: 폭 임계 축약은 "숨김 금지" 정책의 확정 예외다(공간 제약 — 2026-08-27 사용자
         // 답변). 영상과 같은 임계·같은 대상이어야 정렬이 유지된다.
-        var visibility = width < 651 ? Visibility.Collapsed : Visibility.Visible;
+        var visibility = width < 727 ? Visibility.Collapsed : Visibility.Visible;
         VolumeSlider.Visibility = visibility;
         PositionText.Visibility = visibility;
         DurationText.Visibility = visibility;
@@ -612,9 +631,14 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
     /// <summary>
     /// 현재 _filePath를 처음부터(또는 이어듣기 지점부터) 재생한다. 플레이어 준비 후에만 호출.
-    /// autoAdvance = EOF 자동 진행(AdvanceAfterEnd 전이 2·3)에서 온 호출 — A255 목록 순환
-    /// 카운터(_listLoops)를 잇는다. 그 외(셸 열기·드롭·▶ 재시작·샘플 곡)는 전부 수동 개입 =
-    /// 카운터 재출발(확정: 자동 진행만 순환 예산을 소모한다).
+    /// autoAdvance = <b>목록 진행</b>으로 온 호출 — A255 목록 순환 카운터(_listLoops)를 잇는다.
+    /// 그 외(셸 열기·드롭·▶ 재시작·샘플 곡)는 전부 새 재생 단위 = 카운터 재출발.
+    /// <b>A349에서 의미가 한 칸 넓어졌다</b>: 종전에는 "EOF 자동 진행(AdvanceAfterEnd 전이 2·3)"
+    /// 뿐이었으나 이제 <b>수동 이웃 이동</b>(⏮/⏭·Ctrl+←/→·PageUp/Down — MoveToNeighbor)도 이
+    /// 경로로 들어온다. 매개변수 이름은 두되 뜻은 "자동 진행 또는 수동 이웃 이동 = 목록 진행"이다.
+    /// 수동 이동을 여기로 보내는 이유는 <b>_listLoops를 리셋하지 않기 위해서</b>다(사용자 확정 ⓒ —
+    /// 수동 되감기는 반복 예산을 소모하지도, 재출발시키지도 않는다). 예산을 <b>소모</b>하는 지점은
+    /// 종전 그대로 AdvanceAfterEnd의 `_listLoops++` 두 곳뿐이다.
     /// </summary>
     private void PlayCurrent(bool autoAdvance = false)
     {
@@ -673,6 +697,12 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// 영상의 테스트 클립 판정과 동형).
     /// 스캔이 끝나기 전에 EOF가 오면 그 회차는 "목록 없음"으로 판정된다(아주 짧은 트랙 +
     /// 느린 네트워크 폴더의 희귀 경합 — 수용, 다음 EOF부터 정상).
+    /// <para>
+    /// A349: 셸이 주입한 좌 리스트 순서(<see cref="SetBrowseOrder"/>)가 이 파일의 폴더 것이면
+    /// 그것이 정본이다 — 폴더를 다시 열거하지 않으므로 워커도 대기도 없다(동기 완료).
+    /// 폴더가 다르면(명령줄·드래그&amp;드롭·연결 프로그램) 종전 자체 열거 폴백 그대로다.
+    /// 영상 EnsurePlaylist의 동형 이식이다.
+    /// </para>
     /// </summary>
     private async void EnsurePlaylist()
     {
@@ -680,6 +710,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (IsSampleTrack(file))
         {
             _playlist = null;
+            UpdateNeighborButtons();
             return;
         }
         if (_playlist is { } current &&
@@ -689,6 +720,16 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         }
 
         _playlist = null;
+        UpdateNeighborButtons(); // 목록이 정해지기 전에는 갈 곳을 알 수 없다 = 둘 다 비활성
+
+        // A349 주입 경로: 화면에서 보는 순서가 곧 ⏮/⏭·오토 넥스트 순서다(A346 이미지 선례).
+        if (SameFolder(_browseFolder, Path.GetDirectoryName(file)))
+        {
+            _playlist = FolderPlaylist.FromOrdered(_browseFiles, file, AudioModule.Extensions);
+            UpdateNeighborButtons();
+            return;
+        }
+
         FolderPlaylist list;
         try
         {
@@ -700,7 +741,137 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         }
 
         if (_tornDown || file != _filePath) return; // 그새 다른 파일로 전환됨
-        _playlist = list;
+
+        // A349 두 시점 검사(A346 관용구): 워커를 기다리는 동안 셸의 SetBrowseOrder가 도착했을 수
+        // 있다. 그 시점에는 _playlist가 아직 null이라 SetBrowseOrder 쪽 "갈아 끼우기"가 무동작이었다 —
+        // 여기서 폴더를 다시 대조해 주입 목록을 채택한다. 빠뜨리면 탐색기에서 연 첫 파일만
+        // 옛(자체 열거) 순서가 되고, 그 뒤 정렬을 건드려야 고쳐지는 증상이 된다.
+        _playlist = SameFolder(_browseFolder, Path.GetDirectoryName(file))
+            ? FolderPlaylist.FromOrdered(_browseFiles, file, AudioModule.Extensions)
+            : list;
+        UpdateNeighborButtons();
+    }
+
+    /// <summary>
+    /// A349(A346 이식): 셸이 탐색기 좌 리스트의 표시 순서를 준다(뷰 생성 직후 1회 + 정렬·필터·
+    /// 재스캔·폴더 이동마다). 지금 재생 중인 파일이 그 폴더의 것이면 재생 목록을 새 순서로 갈아
+    /// 끼운다 — 재생은 건드리지 않고(같은 파일이다) 인덱스만 새 목록에서 경로로 다시 찾는다.
+    /// 열린 파일이 없거나 폴더가 다르면 값만 저장해 두고 <see cref="EnsurePlaylist"/>가 꺼내 쓴다.
+    /// 샘플 곡은 목록 대상이 아니라 제외한다(_playlist는 null로 남는다 — 같은 규칙).
+    /// </summary>
+    public void SetBrowseOrder(string folder, IReadOnlyList<string> files)
+    {
+        _browseFolder = folder;
+        _browseFiles = files;
+
+        if (_filePath is not { } current || IsSampleTrack(current)) return;
+        if (!SameFolder(folder, Path.GetDirectoryName(current))) return;
+
+        _playlist = FolderPlaylist.FromOrdered(files, current, AudioModule.Extensions);
+        UpdateNeighborButtons();
+        // A348: 여기서는 CurrentPathChanged를 쏘지 않는다 — 목록만 갈아 끼웠을 뿐
+        // 재생 중인 파일은 그대로다(current로 인덱스를 다시 찾았다).
+    }
+
+    /// <summary>
+    /// 두 폴더 경로가 같은가 — 끝 구분자 유무만 다른 경우를 흡수한다(셸이 주는 폴더 경로와
+    /// <c>Path.GetDirectoryName</c> 결과의 표기가 갈릴 수 있다). 셸에 같은 성격의 헬퍼가 있으나
+    /// 모듈은 셸(KOTU.App)을 참조할 수 없어 여기에 따로 둔다(이미지·영상 뷰와 같은 사본).
+    /// </summary>
+    private static bool SameFolder(string? a, string? b) =>
+        !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b) &&
+        string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b),
+            StringComparison.OrdinalIgnoreCase);
+
+    // ---------- 이전/다음 파일 이동 (A349 — 영상 MoveToNeighbor의 동형 이식) ----------
+
+    /// <summary>
+    /// A349: 재생 목록의 이웃 파일로 이동한다 — 하단 바 ⏮/⏭ · Ctrl+←/→ · PageUp/PageDown 공용.
+    /// <para>
+    /// 끝 처리는 루프 모드를 따른다: 루프 없음·한 파일 루프면 목록 끝에서 무동작(버튼은 이미
+    /// 비활성이라 키로만 닿는 경로다), 목록 루프면 되감기(⏭ = 처음으로 · ⏮ = 마지막으로).
+    /// <b>되감기는 <c>_listLoops</c>를 소모하지 않는다</b>(2026-09-04 사용자 확정 ⓒ) — 그 예산은
+    /// EOF 자동 진행 전용이고 수동 개입은 세지 않는다. 그래서 이 메서드는 두 루프 카운터를
+    /// 어느 쪽으로도 건드리지 않는다(<see cref="PlayCurrent"/>의 autoAdvance=true 경로로 들어가
+    /// 리셋을 건너뛴다).
+    /// </para>
+    /// <para>
+    /// 한 파일 루프에서 수동 이동은 이웃으로 간다 — 모드는 그대로 유지되고 새 파일에서 반복한다.
+    /// 소실된 파일은 목록에서 빼고 <b>한 번만</b> 시도한다(오토 넥스트의 while 재시도와 다르다 —
+    /// 수동 조작은 "한 번 눌렀으니 한 칸"이 예측 가능하고, 연타는 사용자가 한다).
+    /// </para>
+    /// </summary>
+    private void MoveToNeighbor(bool forward)
+    {
+        if (_playlist is not { } list) return;
+
+        // 목록 루프 + 2개 이상일 때만 양 끝에서 되감을 수 있다(1개짜리 목록은 되감아도 제자리).
+        var canWrap = _loopMode == LoopMode.List && list.Count > 1;
+        string? target;
+        if (forward)
+            target = list.HasNext ? list.PeekNext : canWrap ? list.PeekFirst : null;
+        else
+            target = list.HasPrevious ? list.PeekPrevious : canWrap ? list.PeekLast : null;
+        if (target is null) return; // 끝(루프 없음) — 무동작
+
+        if (!File.Exists(target))
+        {
+            list.Remove(target);
+            UpdateNeighborButtons();
+            return;
+        }
+
+        // 인덱스 이동은 OpenPath보다 먼저다 — 그래야 이어지는 EnsurePlaylist가 "목록 진행으로 온
+        // 파일"(list.Current == file)로 보고 스냅샷을 그대로 유지한다. 뒤로 미루면 목록이 매
+        // 이동마다 다시 만들어진다.
+        if (forward)
+        {
+            if (list.HasNext) list.MoveNext();
+            else list.MoveFirst();
+        }
+        else
+        {
+            if (list.HasPrevious) list.MovePrevious();
+            else list.MoveLast();
+        }
+
+        UpdateNeighborButtons();
+        CurrentPathChanged?.Invoke(target);   // A348: 로드 앞 통지 — 좌 리스트 하이라이트 즉시 추종
+        OpenPath(target, autoAdvance: true);  // 목록 진행 = 스냅샷 유지 + 루프 카운터 보존(위 ⓒ)
+    }
+
+    /// <summary>
+    /// A349: ⏮/⏭ 버튼의 활성 상태 — 갈 곳이 있을 때만 살아 있다(사용자 확정 ⓐ. 저장소의
+    /// "하단 바 버튼은 항상 살아 있다" 관례의 명시적 예외라 XAML 주석에도 적어 뒀다).
+    /// 목록 루프가 켜져 있고 파일이 2개 이상이면 어느 끝에서도 되감을 수 있으므로 둘 다 활성이다.
+    /// 재생 목록이 없으면(샘플 곡·스캔 실패·아직 스캔 전) 둘 다 비활성.
+    /// </summary>
+    private void UpdateNeighborButtons()
+    {
+        var list = _playlist;
+        var canWrap = list is not null && _loopMode == LoopMode.List && list.Count > 1;
+        PrevButton.IsEnabled = list is not null && (list.HasPrevious || canWrap);
+        NextButton.IsEnabled = list is not null && (list.HasNext || canWrap);
+    }
+
+    /// <summary>XAML Click 배선 — ⏮(이전 파일).</summary>
+    private void OnPrevClicked(object sender, RoutedEventArgs e) => MoveToNeighbor(forward: false);
+
+    /// <summary>XAML Click 배선 — ⏭(다음 파일).</summary>
+    private void OnNextClicked(object sender, RoutedEventArgs e) => MoveToNeighbor(forward: true);
+
+    /// <summary>A349: Ctrl+← · PageUp = 이전 파일.</summary>
+    private void OnPreviousFileInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        MoveToNeighbor(forward: false);
+    }
+
+    /// <summary>A349: Ctrl+→ · PageDown = 다음 파일.</summary>
+    private void OnNextFileInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        MoveToNeighbor(forward: true);
     }
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
@@ -990,6 +1161,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
                     list.MoveNext();
                 }
                 OpenPath(next, autoAdvance: true);
+                UpdateNeighborButtons(); // A349: 인덱스가 옮겨졌으니 ⏮/⏭ 활성도 새 자리 기준으로
                 return;
             }
         }
@@ -1825,6 +1997,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _settings.Set(LoopModeKey, ModeKeyValue(mode));
         _settings.Save(); // 즉시 저장 — EQ 선례(전역 1벌)
         UpdateLoopButton();
+        UpdateNeighborButtons(); // A349: 목록 루프 켬/끔이 목록 양 끝에서 ⏮/⏭ 활성을 뒤집는다
     }
 
     /// <summary>
@@ -2013,6 +2186,12 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         // 플라이아웃은 우클릭 전용이 됐다). 툴팁이 상태형이라 Bind가 아닌 Register —
         // 표기는 UpdateLoopButton()이 같은 키 상수(LoopKey)로 조립한다(영상과 같은 배선).
         HotkeySupport.Register(this, LoopButton, LoopKey, CycleLoopMode);
+        // A349 ⏮/⏭: 툴팁만 직접 대입한다 — 키가 조합 2벌(Ctrl+←/→ 와 PageUp/Down)이라
+        // 키 1개용인 HotkeySupport.Bind로는 표기를 만들 수 없고, 가속기는 이미 XAML의
+        // UserControl.KeyboardAccelerators에 선언돼 있어 Register로 또 걸면 이중 등록이 된다.
+        // 표기 형태(설명 + 괄호 안 키)는 HotkeySupport.Tip 규칙을 그대로 따른다(영상과 같은 문구).
+        ToolTipService.SetToolTip(PrevButton, "Previous file (Ctrl+Left, Page Up)");
+        ToolTipService.SetToolTip(NextButton, "Next file (Ctrl+Right, Page Down)");
         UpdateLoopButton(); // A11: 루프 아이콘·툴팁 초기값
     }
 }

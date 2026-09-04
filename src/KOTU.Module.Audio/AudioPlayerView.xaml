@@ -13,13 +13,20 @@
          옮겼다 — 툴팁 "(키)" 표기를 키와 한 값에서 만들고, 텍스트 입력·파일 리스트
          포커스에서는 통과시켜야 하기 때문. 비디오 플레이어와 동일 배치(A10 분리 — 자막·핏 계열만 없음).
          O(열기)는 A99에서 열기 버튼과 함께 소멸 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
-         PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Space" 등) 툴팁을 화면 중앙에 띄운다. -->
+         PlacementMode=Hidden: 안 그러면 WinUI가 키 이름("Space" 등) 툴팁을 화면 중앙에 띄운다.
+         A349(2026-09-04): 이전/다음 "파일" 이동 키 4개 추가 — Ctrl+←/→ 와 PageUp/PageDown
+         (영상 모듈과 같은 배정 · 동형 이식). 수식 없는 ←/→ 는 종전대로 5초 시킹이다 —
+         액셀러레이터는 수식 조합까지 정확히 일치해야 발동하므로 두 쌍이 서로를 삼키지 않는다. -->
     <UserControl.KeyboardAccelerators>
         <KeyboardAccelerator Key="Space" Invoked="OnTogglePlayInvoked" />
         <KeyboardAccelerator Key="Left" Invoked="OnSeekBackInvoked" />
         <KeyboardAccelerator Key="Right" Invoked="OnSeekForwardInvoked" />
         <KeyboardAccelerator Key="Up" Invoked="OnVolumeUpInvoked" />
         <KeyboardAccelerator Key="Down" Invoked="OnVolumeDownInvoked" />
+        <KeyboardAccelerator Key="Left" Modifiers="Control" Invoked="OnPreviousFileInvoked" />
+        <KeyboardAccelerator Key="Right" Modifiers="Control" Invoked="OnNextFileInvoked" />
+        <KeyboardAccelerator Key="PageUp" Invoked="OnPreviousFileInvoked" />
+        <KeyboardAccelerator Key="PageDown" Invoked="OnNextFileInvoked" />
     </UserControl.KeyboardAccelerators>
 
     <Grid x:Name="RootGrid">
@@ -192,7 +199,8 @@
                  루프 칸은 A11(v0.212.0)에서 c9에 신설 → A217에서 재생 버튼 왼쪽(c0)으로 이동
                  (영상 A216과 동형 — 두 모듈에서 루프는 항상 재생 왼쪽).
                  A217(v0.229.0) 공통 클러스터 정렬: 영상↔오디오 전환 시 공통 UI(재생·위치·시크·
-                 길이·음소거·볼륨·배속 = c1~c7)가 하단 바에서 같은 x에 오도록, 클러스터 양옆
+                 길이·음소거·볼륨·배속 = A349 재계수 후 c2~c9 · 그 안쪽에 ⏮ c1·⏭ c3이 대칭으로
+                 끼어 있다)가 하단 바에서 같은 x에 오도록, 클러스터 양옆
                  고정 폭을 영상 바와 등식으로 맞춘다(시크는 star 유지 — 체감 레이아웃 변화 최소).
                    좌군(두 모듈 동일): 루프 32 + 간격 6 = 38.
                    우군 등식(A269 재계수 후 — 양쪽 114):
@@ -212,8 +220,15 @@
                  산식 정본은 영상 쪽 주석).
                  종전 "비디오보다 32 작아 축약 불요" 판정은 A217에서 소멸 —
                  영상의 축약 로직(UpdateCompactTransport, 볼륨/시간 숨김)을 동형 이식했다.
-                 숨김 대상까지 같아야 좁은 창(축약 후)에서도 클러스터가 어긋나지 않는다. -->
+                 숨김 대상까지 같아야 좁은 창(축약 후)에서도 클러스터가 어긋나지 않는다.
+                 A349(2026-09-04) 재계수: 재생 버튼 양옆에 ⏮ ⏭ 칸 2개(각 32 + 간격 6 = 38 → 합 76)를
+                 영상 바와 똑같이 끼워 넣었다 — 공통 클러스터 안쪽의 대칭 증설이라 A217 등식
+                 (좌군 38 · 우군 114)은 불변이다. 파생: 고정 폭 합 437 → 513(1칸 버튼이 6개 → 8개),
+                 축약 임계 651 → 727. 열 인덱스는 c1 이후 전부 +2(구 c1 재생 → 신 c2 …
+                 구 c10 비주얼라이저 → 신 c12). 영상 바만 고치면 두 모듈 정렬이 76 어긋난다. -->
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -244,17 +259,33 @@
                     Click="OnLoopClicked">
                 <FontIcon Glyph="&#xE8EE;" FontSize="18" />
             </Button>
-            <Button x:Name="PlayButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
+            <!-- A349(2026-09-04) 이전/다음 파일 — 재생 버튼 양옆(⏮ ▶ ⏭). 영상 모듈과 완전 대칭:
+                 1칸(32×32) + FontIcon 18(E892 Previous / E893 Next) · 툴팁은 키 2조합 병기라
+                 SetupHotkeys가 직접 대입한다(가속기는 이미 UserControl.KeyboardAccelerators에 있어
+                 HotkeySupport.Bind로 걸면 이중 등록이 된다).
+                 ⚠ "하단 바 버튼은 항상 살아 있다"(A238·A318) 관례의 명시적 예외다(사용자 확정 ⓐ):
+                 목록 끝이면 ⏭만, 처음이면 ⏮만 IsEnabled=False다(목록 루프 켬이면 둘 다 살아 있다).
+                 초기값 False = 재생 목록이 아직 없는 상태(빈 상태·샘플 곡)의 정답 —
+                 확정은 UpdateNeighborButtons(). -->
+            <Button x:Name="PrevButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
+                    IsEnabled="False" Click="OnPrevClicked">
+                <FontIcon Glyph="&#xE892;" FontSize="18" />
+            </Button>
+            <Button x:Name="PlayButton" Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
                     Content="▶"
                     ToolTipService.ToolTip="Play/Pause (Space)" Click="OnPlayClicked" />
-            <TextBlock x:Name="PositionText" Grid.Column="2" Text="0:00"
+            <Button x:Name="NextButton" Grid.Column="3" Style="{StaticResource BottomBarButtonStyle}"
+                    IsEnabled="False" Click="OnNextClicked">
+                <FontIcon Glyph="&#xE893;" FontSize="18" />
+            </Button>
+            <TextBlock x:Name="PositionText" Grid.Column="4" Text="0:00"
                        VerticalAlignment="Center" />
-            <Slider x:Name="SeekSlider" Grid.Column="3" Minimum="0" Maximum="1000"
+            <Slider x:Name="SeekSlider" Grid.Column="5" Minimum="0" Maximum="1000"
                     IsThumbToolTipEnabled="False" VerticalAlignment="Center"
                     ValueChanged="OnSeekSliderChanged" />
-            <TextBlock x:Name="DurationText" Grid.Column="4" Text="0:00"
+            <TextBlock x:Name="DurationText" Grid.Column="6" Text="0:00"
                        VerticalAlignment="Center" />
-            <Button x:Name="MuteButton" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="MuteButton" Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
                     Content="🔊" Click="OnMuteClicked" />
             <!-- A250(v0.246.0): 볼륨 슬라이더 폭 96 → 101(영상과 동일 값·동일 근거) — 0~100은
                  값이 101개라 "1px = 1단위"로 잡은 폭이다(사용자 확정). WinUI Slider의 썸 크기·트랙
@@ -262,16 +293,16 @@
                  당시 파생 재계수: 고정 폭 합 426 → 431, 축약 임계 640 → 645
                  (현재 값은 A269 재계수로 437·651 — 위 헤더 주석. UpdateCompactTransport의
                  산식 정본은 영상 쪽 주석). -->
-            <Slider x:Name="VolumeSlider" Grid.Column="6" Width="101" Minimum="0" Maximum="100"
+            <Slider x:Name="VolumeSlider" Grid.Column="8" Width="101" Minimum="0" Maximum="100"
                     VerticalAlignment="Center" ToolTipService.ToolTip="Volume (↑/↓)"
                     ValueChanged="OnVolumeSliderChanged" />
             <!-- 배속 콤보는 압축 표시(비디오와 동일 규격 — A27에서 2칸, A97에서 84×36, A106에서 84×32) -->
-            <ComboBox x:Name="SpeedBox" Grid.Column="7" Style="{StaticResource BottomBarWideComboBoxStyle}"
+            <ComboBox x:Name="SpeedBox" Grid.Column="9" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
             <!-- A164: 오디오 장치 — 서브메뉴 2개(출력 / Windows 기본 입력)는 코드가 만들고
                  목록은 열 때마다 새로 채운다(장치 꽂힘·뽑힘 추종 — 생성자 주석 참고).
                  A269(v0.267.0): c9 → c8(EQ와 스왑) — 우측군은 (좌→우) 장치 → EQ → 비주얼라이저. -->
-            <Button x:Name="DevicesButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="DevicesButton" Grid.Column="10" Style="{StaticResource BottomBarButtonStyle}"
                     ToolTipService.ToolTip="Audio devices">
                 <FontIcon Glyph="&#xE7F5;" FontSize="18" />
                 <Button.Flyout>
@@ -290,7 +321,7 @@
                  A300: 아이콘을 글리프 E9E9에서 코드 조립 도형(세로 슬라이더 3개 — 생성자의
                  MediaIcons.BuildEqualizerIcon)으로 교체 — 모양만 보고 이퀄라이징이 읽히게.
                  버튼 상자·플라이아웃·핸들러는 무접촉(Content만 코드가 채운다). -->
-            <Button x:Name="EqButton" Grid.Column="9" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="EqButton" Grid.Column="11" Style="{StaticResource BottomBarButtonStyle}"
                     ToolTipService.ToolTip="Equalizer">
                 <Button.Flyout>
                     <MenuFlyout x:Name="EqFlyout" Placement="Top" />
@@ -304,7 +335,7 @@
                  플레이어가 없어도 저장돼 첫 생성 인스턴스 옵션에 반영된다.
                  A300: 아이콘을 글리프 E8D6에서 코드 조립 도형(스펙트럼 막대 5개 — 생성자의
                  MediaIcons.BuildVisualizerIcon)으로 교체 — 음파의 그래프화가 읽히게. -->
-            <Button x:Name="VisualizerButton" Grid.Column="10" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="VisualizerButton" Grid.Column="12" Style="{StaticResource BottomBarButtonStyle}"
                     ToolTipService.ToolTip="Visualizer">
                 <Button.Flyout>
                     <MenuFlyout x:Name="VisualizerFlyout" Placement="Top" />
