@@ -148,6 +148,10 @@
                          나머지 압축분(상세 FontSize 10 · 체크박스 MinHeight 0)은 위 템플릿에 있다. -->
                     <ListView.ItemContainerStyle>
                         <Style TargetType="ListViewItem">
+                            <!-- v0.336.1: 콘텐츠(행 Grid)를 컨테이너 폭에 펴야 star 열이 늘어나 체크박스가
+                                 우측 끝에 붙는다. 명시 스타일을 걸자 기본값이 좌측 정렬로 떨어져(실기기 보고)
+                                 종전 모양(체크박스 우측)과 달라졌다. 셸 MainWindow.xaml의 같은 Setter 선례. -->
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                             <Setter Property="MinHeight" Value="0" />
                             <Setter Property="Padding" Value="12,1,12,1" />
                         </Style>
