@@ -57,16 +57,12 @@
 
 ## 1. 셸 · 시작 메뉴
 
-- [미반영 A350 · Opus] **미디어 플라이아웃의 "알 수 없는 앱" → "KOTU" + 아이콘**(2026-09-04 사용자 스크린샷 — v0.342.0 SMTC 세션이
-  `sample.mp3`·⏮⏯⏭을 제대로 띄우지만 앱 이름이 "알 수 없는 앱").
-  - **원인** = 비패키지 앱의 SMTC 표시 이름·아이콘은 창의 AppUserModelID(`TaskbarIdentity` — `KOTU.Instance.{슬롯}`)를 키로
-    `HKCU\Software\Classes\AppUserModelId\<AUMID>`의 `DisplayName`·`IconUri`에서 찾는데 그 등록이 없다(Firefox가 같은 이유로 같은
-    키를 쓴다 — 조사 문서 §3-⑥ 예고).
-  - **수리** = `TaskbarIdentity.Apply`가 창 AUMID를 박은 직후 같은 AUMID로 HKCU 키를 멱등 등록(`DisplayName`=`Branding.AppName`,
-    `IconUri`=exe 옆 `Assets\app.ico` 절대 경로 — 트레이 아이콘이 읽는 그 파일). 슬롯 번호는 작고 안정적이라 키 수는 열어 본 최대 창
-    수만큼이다. 청소 = `ExplorerIntegration`의 해제 경로에서 `KOTU.Instance.*` 접두 키 전부 삭제(과거 브랜드 `ZP.Instance.*`·`WinUtil.Instance.*`도
-    스캔 — 리브랜딩 규칙). 관리자 권한 불필요(HKCU). 규모 소.
-  - 실기기 확인 = 플라이아웃에 "KOTU" + 아이콘 · 창 2개 각각 · 앱 삭제/해제 뒤 키 잔존 없음.
+- ※ A350(**미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘**, v0.343.0) 완료 — 결번. 구현 = `TaskbarIdentity.Apply`가 창 AUMID
+  (`KOTU.Instance.{슬롯}`)를 박은 직후 `HKCU\Software\Classes\AppUserModelId\<AUMID>`에 `DisplayName`·`IconUri`(exe 옆 `Assets\app.ico`)
+  멱등 등록(같은 값이면 무쓰기 · ico 없으면 IconUri 생략) · 구 브랜드(`ZP.Instance.*`·`WinUtil.Instance.*`) 접두 키 프로세스당 1회 청소 ·
+  Velopack `OnBeforeUninstallFastCallback`에서 전부 삭제(1.2.0 문서 근거 — 저장소 훅 선례는 `OnFirstRun`뿐이라 CI 1순위였으나 초록).
+  하위 에이전트가 코드를 따른 지점 = 프로퍼티 스토어 실패 시 조기 반환을 가드로 바꿔 "성패 무관 등록" 성립. 실기기 = 플라이아웃에
+  KOTU + 아이콘 · 창 2개 각각 · 제거 후 키 잔존 0.
 
 - ※ A274(**Enter 키 터널링 승격 + A203 외부 경로 보완**, v0.271.0) 완료 — 결번.
   구현 확정 = Enter·Alt+Enter를 OnRootPreviewKeyDown으로 이관(버블 분기 제거 — 버튼 포커스 중 Enter = 전체화면·클릭은
@@ -2662,7 +2658,7 @@
 | ~~A347~~ | 좌 리스트 ↔ 중앙 썸네일 순서 동기화 | 소~중 | **A346에 흡수(v0.339.0) — 결번**(코드상 이미 같은 목록 · 어긋남 재현 시 재등재) |
 | ~~A348~~ | 이미지 ←/→ 오토리피트 중 좌 리스트 현재 파일 표시 건너뜀 — 항해 시점 통지(ⓐ) | 소~중 | **완료 v0.340.0 — 결번**(ICurrentPathSource · SetCurrentFile만 즉시) |
 | A349 | 영상·오디오 이전/다음 파일 — Ctrl+←/→ · PageUp/Down · 하단 바 ⏮⏭ · 미디어 키(SMTC) · 순서 = 좌 리스트(낙수 43 흡수) | 중+소+중(3배치) | **배치 1~3 완료 v0.341.0~v0.342.0**(키·⏮⏭·순서 / 조사 / SMTC) · 실기기 회수 대기 · Fable(위임 시 Opus) |
-| A350 | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘(HKCU AppUserModelId DisplayName·IconUri 등록) | 소 | 미반영 · Opus · 2026-09-04 등재 · 즉시 착수 |
+| ~~A350~~ | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘(AUMID HKCU 등록) | 소 | **완료 v0.343.0 — 결번** |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
