@@ -47,12 +47,43 @@ namespace KOTU.App.Integration;
 ///
 /// 실패 흡수: GetForWindow·속성 대입이 던지면 전부 삼키고 _smtc를 null로 되돌린다
 /// (PrintHost의 부분 롤백 관용구) — SMTC가 없는 환경에서도 앱은 그대로 돌아야 한다.
+///
+/// <para>
+/// <b>세션 창은 MainWindow가 아니라 트레이 숨김 창이다</b>(A350 v0.343.2 — 플라이아웃에
+/// "알 수 없는 앱"으로 뜨던 문제의 해법). 플라이아웃의 앱 이름·아이콘은 <b>앱이 주는 값이
+/// 아니다</b>: 셸이 세션 소유 창의 AppUserModelID를 읽어 그 AUMID를 가진 시작 메뉴 바로가기를
+/// 되짚고, 거기서 이름과 아이콘을 가져온다. 근거는 Chromium의
+/// system_media_controls_win.cc — SMTC에 AUMID를 거는 코드가 전혀 없고
+/// GetForWindow(전용 싱글턴 창) 하나뿐인데도 플라이아웃에 이름이 제대로 뜬다.
+/// (HKCU AppUserModelId 레지스트리 키는 토스트 알림용이라 여기에 관여하지 않는다 —
+/// v0.343.0/.1이 그 키와 프로세스 AUMID를 시도했다가 v0.343.2에서 되돌렸다.
+/// 이력은 <see cref="TaskbarIdentity"/> 주석.)
+/// </para>
+/// <para>
+/// MainWindow의 hwnd로는 이 되짚기가 <b>원리상</b> 실패한다: A105 ①이 창마다
+/// "KOTU.Instance.{n}" AUMID를 박아 두는데, 그런 AUMID를 가진 바로가기는 존재하지 않는다.
+/// 반면 <see cref="TrayIcon"/>이 창마다 만드는 숨김 최상위 창은 AUMID를 명시하지 않아
+/// 프로세스 기본 정체성(exe 경로)을 쓰므로 셸이 Velopack 바로가기를 찾아낸다 —
+/// 비패키지 플레이어들이 이름을 얻는 것과 같은 경로다. 그래서 세션 창만 그쪽으로 옮긴다:
+/// A105의 창별 태스크바 그룹 분리는 MainWindow 프로퍼티라 <b>그대로 유지</b>되고, 두 정체성은
+/// 서로 다른 창에 붙어 충돌하지 않는다.
+/// </para>
+/// <para>
+/// 수명·해제 순서: 트레이 숨김 창은 MainWindow와 수명이 같다(MainWindow 생성자가 만들고,
+/// 창 Closed에 걸린 TrayIcon.Dispose가 DestroyWindow). 그 Closed 구독이 이 클래스의
+/// <see cref="OnWindowClosed"/> 구독보다 <b>먼저</b> 등록되므로(트레이는 생성자, 이쪽은 첫 재생
+/// 뷰에서 지연 생성), 창 닫힘 때 순서는 트레이 창 파괴 → 여기의 세션 접기다. 세션 창이 이미
+/// 사라진 뒤의 접기라 속성 대입이 던질 수 있으나 전부 흡수되고, 창 소멸 자체가 OS 쪽 세션을
+/// 정리하므로 함정 ②(플라이아웃 잔상)로 이어지지 않는다.
+/// </para>
 /// </summary>
 internal sealed class MediaTransport
 {
     private readonly Window _window;
     private readonly DispatcherQueue _dispatcher;
-    private readonly IntPtr _hwnd; // 창 수명 동안 불변 — GetForWindow 전용(PrintHost와 같은 관용구)
+    // GetForWindow 전용 세션 창 핸들(창 수명 동안 불변 — PrintHost와 같은 관용구).
+    // MainWindow가 아니라 트레이 숨김 창이다(A350 — 위 주석의 "세션 창은 MainWindow가 아니다").
+    private readonly IntPtr _hwnd;
 
     private SystemMediaTransportControls? _smtc;
     private bool _registered; // 창당 1회 배선 가드 — GetForWindow·ButtonPressed 재구독 금지
@@ -74,11 +105,20 @@ internal sealed class MediaTransport
     /// </summary>
     private bool _sessionActive;
 
-    internal MediaTransport(Window window, DispatcherQueue dispatcher)
+    /// <summary>
+    /// <paramref name="sessionHwnd"/> = SMTC 세션을 걸 창(A350 v0.343.2 = 트레이 숨김 창의 핸들 —
+    /// 위 클래스 주석의 "세션 창은 MainWindow가 아니다"). IntPtr.Zero(트레이 창 생성 실패)면
+    /// MainWindow 핸들로 후퇴한다 — 그 경우 플라이아웃 이름은 못 얻지만(창별 AUMID라 바로가기
+    /// 되짚기 실패) 미디어 키 자체는 그대로 동작한다.
+    /// <paramref name="window"/>는 세션과 무관하게 <b>수명</b>에만 쓴다(창 Closed → 자기 해제).
+    /// </summary>
+    internal MediaTransport(Window window, IntPtr sessionHwnd, DispatcherQueue dispatcher)
     {
         _window = window;
         _dispatcher = dispatcher;
-        _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        _hwnd = sessionHwnd != IntPtr.Zero
+            ? sessionHwnd
+            : WinRT.Interop.WindowNative.GetWindowHandle(window);
         // 수명 자기완결: 창이 닫히면 스스로 세션을 접는다(PrintHost와 같은 형).
         window.Closed += OnWindowClosed;
     }

@@ -35,19 +35,9 @@ public static class Program
             // (해당 인자면 여기서 프로세스가 종료되므로 반드시 가장 먼저 호출)
             // OnFirstRun: 설치 후 첫 실행 감지 → 웰컴 다이얼로그(App에서 표시)
             // (Velopack 1.x API — WithFirstRun은 구 0.x 이름이라 CS1061로 CI가 죽었음, v0.19.2)
-            // OnBeforeUninstallFastCallback: 제거 직전에만 불리고 끝나면 프로세스가 종료된다
-            //   (Windows 전용 · 30초 제한). A350 표시 키는 HKCU라 제거 관리자가 손대지 않으므로
-            //   여기서 직접 지워야 삭제 후 유령 키가 남지 않는다.
             Velopack.VelopackApp.Build()
                 .OnFirstRun(_ => IsFirstRun = true)
-                .OnBeforeUninstallFastCallback(_ => Integration.TaskbarIdentity.RemoveAllDisplayKeys())
                 .Run();
-
-            // A350 후속(v0.343.1): 프로세스 AUMID를 "KOTU"로 못 박고 그 이름의 표시 키를 등록한다.
-            // 반드시 창이 하나도 만들어지기 전(= 여기) — 프로세스 AUMID는 첫 창 생성 전에 박아야
-            // 셸이 인식한다. 창별 AUMID(TaskbarIdentity.Apply)는 창 프로퍼티로 이 값을 덮으므로
-            // 태스크바 인스턴스 분리(A105)는 그대로다.
-            Integration.TaskbarIdentity.ApplyProcessIdentity();
 
             WinRT.ComWrappersSupport.InitializeComWrappers();
 

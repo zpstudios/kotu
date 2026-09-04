@@ -41,6 +41,21 @@ internal sealed class TrayIcon : IDisposable
     /// AppUserModelID의 시퀀스로 재사용한다 — 트레이 식별과 태스크바 식별이 한 시퀀스로 움직인다.
     /// </summary>
     internal int Slot { get; }
+
+    /// <summary>
+    /// 이 트레이 아이콘의 숨김 최상위 창 핸들(A350 v0.343.2). 창이 못 만들어졌으면 IntPtr.Zero.
+    /// <para>
+    /// 왜 밖으로 내는가: 이 창은 <see cref="Integration.TaskbarIdentity"/>가 손대지 않는 유일한
+    /// 최상위 창이라 <b>프로세스 기본 정체성</b>을 그대로 쓴다. 그래서 셸이 이 창의 소유자를
+    /// 물으면 exe 경로로 시작 메뉴 바로가기를 되짚어 앱 이름·아이콘을 얻는다(비패키지 플레이어가
+    /// 미디어 플라이아웃에 제 이름을 띄우는 바로 그 경로). MainWindow는 창별 AUMID
+    /// "KOTU.Instance.{n}"을 달고 있어 어떤 바로가기와도 일치하지 않는다 — 그래서
+    /// <see cref="Integration.MediaTransport"/>가 SMTC 세션을 이 창에 건다.
+    /// </para>
+    /// 수명은 이 인스턴스와 같다(<see cref="Dispose"/>의 DestroyWindow) = MainWindow 수명.
+    /// </summary>
+    internal IntPtr Hwnd => _hwnd;
+
     private readonly WndProcDelegate _wndProc; // 델리게이트 GC 방지 — 반드시 필드로 유지
     private readonly uint _taskbarCreatedMsg;
     private readonly IntPtr _hwnd;

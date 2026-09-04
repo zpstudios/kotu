@@ -1020,7 +1020,14 @@ public sealed partial class MainWindow : Window
     // 두 재생 뷰의 구현은 BCL 전용이라 남아도 안전하다(A211 인쇄 축과 같은 구조).
 
     /// <summary>창당 1개 SMTC 호스트(사용자 확정 ③ = 창당 1세션) — 재생 뷰가 처음 올라올 때
-    /// 만든다(시작 경로에서 SMTC 무접촉). 해제는 자신이 창 Closed에서 수행(PrintHost와 같은 형).</summary>
+    /// 만든다(시작 경로에서 SMTC 무접촉). 해제는 자신이 창 Closed에서 수행(PrintHost와 같은 형).
+    /// <para>
+    /// A350(v0.343.2): 세션을 거는 창은 이 창이 아니라 <c>_tray.Hwnd</c>(트레이 숨김 창)다 —
+    /// 이 창은 A105 ①의 창별 AUMID "KOTU.Instance.{n}"을 달고 있어 셸이 시작 메뉴 바로가기를
+    /// 되짚지 못하고, 미디어 플라이아웃에 "알 수 없는 앱"으로 뜬다. 트레이 창은 AUMID를
+    /// 명시하지 않아 프로세스 기본(exe 경로)으로 되짚기가 성립한다(원리는 MediaTransport 주석).
+    /// <c>_tray</c>는 생성자에서 먼저 만들어지므로 여기(지연 생성 시점)에서는 항상 유효하다.
+    /// </para></summary>
     private Integration.MediaTransport? _mediaTransport;
 
     /// <summary>
@@ -1647,7 +1654,7 @@ public sealed partial class MainWindow : Window
         // 아니라 부착/해제로 다룬다 — 교체 가드는 MediaTransport가 자기 _target 참조로 대신한다
         // (Detach가 null로 만든다). 재생 뷰가 아닌 모듈로 갈아타면 세션을 접는다(미부착이면 무동작).
         if (view is IMediaTransportTarget mediaTarget)
-            (_mediaTransport ??= new Integration.MediaTransport(this, DispatcherQueue))
+            (_mediaTransport ??= new Integration.MediaTransport(this, _tray.Hwnd, DispatcherQueue))
                 .Attach(mediaTarget, context.FilePath);
         else
             _mediaTransport?.Detach();
