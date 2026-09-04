@@ -435,9 +435,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Resume</strong>: if you watched more than 30 seconds and stopped before the last 3%,
               the position is remembered and playback continues there next time.</li>
           <li><strong>The whole folder plays as a list.</strong> When a video ends, the next file in the same
-              folder starts automatically (name order, hidden files skipped), and playback stops after the
-              last one by default. Press <kbd>L</kbd> or the loop button —
-              the first button in the bottom bar, immediately left of ▶ —
+              folder starts automatically (in the order the left list shows, so sorting and filters there apply),
+              and playback stops after the last one by default. To jump yourself, use the ⏮ ⏭ buttons either
+              side of ▶, or <kbd>Ctrl</kbd>+<kbd>←</kbd> / <kbd>Ctrl</kbd>+<kbd>→</kbd> (<kbd>PageUp</kbd> /
+              <kbd>PageDown</kbd> do the same); at the ends the button that has nowhere to go is greyed out
+              unless <strong>Loop list</strong> is on. Press <kbd>L</kbd> or the loop button —
+              the leftmost button in the bottom bar —
               to cycle through the three loop modes: <strong>off</strong> (the loop icon with a slash through
               it, at the same brightness as the other two — the button is always live),
               <strong>Loop list</strong> (after the last
@@ -497,9 +500,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>Resume</strong> works exactly as in Video (over 30 seconds played, stopped before the
               last 3%).</li>
           <li><strong>The whole folder plays as a list.</strong> When a track ends, the next file in the same
-              folder starts automatically (name order, hidden files skipped), and playback stops after the
-              last one by default. Press <kbd>L</kbd> or the loop button —
-              first in the bottom bar, immediately left of ▶, as in Video —
+              folder starts automatically (in the order the left list shows), and playback stops after the
+              last one by default. ⏮ ⏭ either side of ▶ and <kbd>Ctrl</kbd>+<kbd>←</kbd> /
+              <kbd>Ctrl</kbd>+<kbd>→</kbd> (or <kbd>PageUp</kbd> / <kbd>PageDown</kbd>) jump between tracks,
+              exactly as in Video. Press <kbd>L</kbd> or the loop button —
+              leftmost in the bottom bar, as in Video —
               to cycle through the three loop modes: <strong>off</strong> (the loop icon with a slash through
               it, at the same brightness as the other two), <strong>Loop list</strong> (after the last
               track the list starts over), and <strong>Repeat this file</strong> (the same track restarts). Right-click
@@ -852,6 +857,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Image</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>print the picture</td></tr>
           <tr><td>Video</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
           <tr><td>Video</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
+          <tr><td>Video</td><td><kbd>Ctrl</kbd>+<kbd>←</kbd> <kbd>Ctrl</kbd>+<kbd>→</kbd> · <kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>previous / next file (the order shown in the left list)</td></tr>
           <tr><td>Video</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>
           <tr><td>Video</td><td><kbd>M</kbd></td><td>mute</td></tr>
           <tr><td>Video</td><td><kbd>S</kbd></td><td>playback speed</td></tr>
@@ -860,6 +866,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Video</td><td><kbd>A</kbd> <kbd>F</kbd></td><td>Original / re-apply the last Fit option</td></tr>
           <tr><td>Audio</td><td><kbd>Space</kbd></td><td>play / pause</td></tr>
           <tr><td>Audio</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>back / forward 5 seconds</td></tr>
+          <tr><td>Audio</td><td><kbd>Ctrl</kbd>+<kbd>←</kbd> <kbd>Ctrl</kbd>+<kbd>→</kbd> · <kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>previous / next track (the order shown in the left list)</td></tr>
           <tr><td>Audio</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>volume</td></tr>
           <tr><td>Audio</td><td><kbd>M</kbd></td><td>mute</td></tr>
           <tr><td>Audio</td><td><kbd>S</kbd></td><td>playback speed</td></tr>

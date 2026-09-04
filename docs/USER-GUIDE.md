@@ -159,9 +159,11 @@ Seven modules. Switch between them from the menu at the bottom left.
 - **Resume**: if you watched more than 30 seconds and stopped before the last 3%, the position is
   remembered and playback continues there next time.
 - **The whole folder plays as a list.** When a video ends, the next file in the same folder starts
-  automatically (name order, hidden files skipped), and playback stops after the last one by
-  default. Press `L` or the loop button — the first button in the bottom bar, immediately left
-  of ▶ — to cycle through the three loop modes: **off** (the loop icon with a slash through it, at
+  automatically (in the order the left list shows, so sorting and filters there apply), and playback
+  stops after the last one by default. To jump yourself, use the ⏮ ⏭ buttons either side of ▶, or
+  `Ctrl+←` / `Ctrl+→` (`PageUp` / `PageDown` do the same); at the ends the button that has nowhere to go
+  is greyed out unless **Loop list** is on. Press `L` or the loop button — the leftmost button in the
+  bottom bar — to cycle through the three loop modes: **off** (the loop icon with a slash through it, at
   the same brightness as the other two — the button is always live), **Loop list** (after the last
   file the list starts over), and **Repeat this file** (the same file restarts). Right-click the
   button to choose how often either mode repeats — once more, three more times, or forever;
@@ -213,9 +215,9 @@ Seven modules. Switch between them from the menu at the bottom left.
   volume slider and the two time labels are hidden.
 - **Resume** works exactly as in Video (over 30 seconds played, stopped before the last 3%).
 - **The whole folder plays as a list.** When a track ends, the next file in the same folder starts
-  automatically (name order, hidden files skipped), and playback stops after the last one by
-  default. Press `L` or the loop button — first in the bottom bar, immediately left of ▶, as in
-  Video — to cycle through the three loop modes: **off** (the loop icon with a slash through it, at
+  automatically (in the order the left list shows), and playback stops after the last one by
+  default. ⏮ ⏭ either side of ▶ and `Ctrl+←` / `Ctrl+→` (or `PageUp` / `PageDown`) jump between tracks,
+  exactly as in Video. Press `L` or the loop button — leftmost in the bottom bar, as in Video — to cycle through the three loop modes: **off** (the loop icon with a slash through it, at
   the same brightness as the other two), **Loop list** (after the last
   track the list starts over), and **Repeat this file** (the same track restarts). Right-click the
   button to choose how often either mode repeats — once more, three more times, or forever;
@@ -558,6 +560,7 @@ box or while you are typing to jump through the file list.
 | Image | `Ctrl+P` | print the picture |
 | Video | `Space` | play / pause |
 | Video | `←` `→` | back / forward 5 seconds |
+| Video | `Ctrl+←` `Ctrl+→` · `PageUp` `PageDown` | previous / next file (the order shown in the left list) |
 | Video | `↑` `↓` | volume |
 | Video | `M` | mute |
 | Video | `S` | playback speed |
@@ -567,6 +570,7 @@ box or while you are typing to jump through the file list.
 | Video | `F` | re-apply the last Fit option |
 | Audio | `Space` | play / pause |
 | Audio | `←` `→` | back / forward 5 seconds |
+| Audio | `Ctrl+←` `Ctrl+→` · `PageUp` `PageDown` | previous / next track (the order shown in the left list) |
 | Audio | `↑` `↓` | volume |
 | Audio | `M` | mute |
 | Audio | `S` | playback speed |

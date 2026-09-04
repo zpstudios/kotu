@@ -435,8 +435,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>이어보기</strong>: 30초 넘게 보았고 마지막 3% 이전에 멈췄다면 위치를 기억해 다음에 그
               자리에서 이어 재생합니다.</li>
           <li><strong>폴더 전체가 하나의 목록으로 재생됩니다.</strong> 동영상이 끝나면 같은 폴더의 다음
-              파일이 자동으로 시작하고(이름 순서, 숨김 파일 제외), 기본값으로는 마지막 파일 뒤에 멈춥니다.
-              <kbd>L</kbd>이나 루프 버튼 — 하단 바의 첫 번째 버튼으로 ▶ 바로 왼쪽에 있습니다 — 을 눌러 세
+              파일이 자동으로 시작하고(좌측 리스트에 보이는 순서 그대로 — 정렬·필터가 반영됩니다), 기본값으로는
+              마지막 파일 뒤에 멈춥니다. 직접 넘기려면 ▶ 양옆의 ⏮ ⏭ 버튼이나 <kbd>Ctrl</kbd>+<kbd>←</kbd> /
+              <kbd>Ctrl</kbd>+<kbd>→</kbd>(<kbd>PageUp</kbd> / <kbd>PageDown</kbd>도 같습니다)를 쓰세요. 양 끝에서는
+              갈 곳이 없는 쪽 버튼이 흐려지며, <strong>Loop list</strong>가 켜져 있으면 되감깁니다.
+              <kbd>L</kbd>이나 루프 버튼 — 하단 바의 맨 왼쪽 버튼 — 을 눌러 세
               가지 루프 모드를 순환합니다: <strong>off</strong>(빗금이 그어진 루프 아이콘. 나머지 둘과 같은
               밝기입니다 — 버튼은 항상 살아 있습니다), <strong>Loop list</strong>(마지막 파일 뒤에 목록을
               처음부터 다시 시작), <strong>Repeat this file</strong>(같은 파일을 다시 재생). 버튼을
@@ -496,8 +499,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <li><strong>이어보기</strong>는 Video와 똑같이 동작합니다(30초 넘게 재생, 마지막 3% 이전에
               중단).</li>
           <li><strong>폴더 전체가 하나의 목록으로 재생됩니다.</strong> 트랙이 끝나면 같은 폴더의 다음 파일이
-              자동으로 시작하고(이름 순서, 숨김 파일 제외), 기본값으로는 마지막 파일 뒤에 멈춥니다. Video와
-              마찬가지로 하단 바의 첫 번째 버튼이자 ▶ 바로 왼쪽에 있는 <kbd>L</kbd> 또는 루프 버튼을 눌러 세
+              자동으로 시작하고(좌측 리스트에 보이는 순서 그대로), 기본값으로는 마지막 파일 뒤에 멈춥니다. ▶ 양옆의
+              ⏮ ⏭과 <kbd>Ctrl</kbd>+<kbd>←</kbd> / <kbd>Ctrl</kbd>+<kbd>→</kbd>(또는 <kbd>PageUp</kbd> /
+              <kbd>PageDown</kbd>)로 트랙을 넘기는 것은 Video와 같습니다. Video와 마찬가지로 하단 바의 맨
+              왼쪽에 있는 <kbd>L</kbd> 또는 루프 버튼을 눌러 세
               가지 루프 모드를 순환합니다: <strong>off</strong>(빗금이 그어진 루프 아이콘. 나머지 둘과 같은
               밝기입니다), <strong>Loop list</strong>(마지막 트랙 뒤에 목록을 처음부터 다시 시작),
               <strong>Repeat this file</strong>(같은 트랙을 다시 재생). 버튼을 우클릭하면 두 모드의 반복
@@ -829,6 +834,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Image</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>사진 인쇄</td></tr>
           <tr><td>Video</td><td><kbd>Space</kbd></td><td>재생 / 일시정지</td></tr>
           <tr><td>Video</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>5초 뒤로 / 앞으로</td></tr>
+          <tr><td>Video</td><td><kbd>Ctrl</kbd>+<kbd>←</kbd> <kbd>Ctrl</kbd>+<kbd>→</kbd> · <kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>이전 / 다음 파일(좌측 리스트에 보이는 순서)</td></tr>
           <tr><td>Video</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>볼륨</td></tr>
           <tr><td>Video</td><td><kbd>M</kbd></td><td>음소거</td></tr>
           <tr><td>Video</td><td><kbd>S</kbd></td><td>재생 배속</td></tr>
@@ -838,6 +844,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Video</td><td><kbd>F</kbd></td><td>마지막 Fit 옵션 다시 적용</td></tr>
           <tr><td>Audio</td><td><kbd>Space</kbd></td><td>재생 / 일시정지</td></tr>
           <tr><td>Audio</td><td><kbd>←</kbd> <kbd>→</kbd></td><td>5초 뒤로 / 앞으로</td></tr>
+          <tr><td>Audio</td><td><kbd>Ctrl</kbd>+<kbd>←</kbd> <kbd>Ctrl</kbd>+<kbd>→</kbd> · <kbd>PageUp</kbd> <kbd>PageDown</kbd></td><td>이전 / 다음 트랙(좌측 리스트에 보이는 순서)</td></tr>
           <tr><td>Audio</td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>볼륨</td></tr>
           <tr><td>Audio</td><td><kbd>M</kbd></td><td>음소거</td></tr>
           <tr><td>Audio</td><td><kbd>S</kbd></td><td>재생 배속</td></tr>
