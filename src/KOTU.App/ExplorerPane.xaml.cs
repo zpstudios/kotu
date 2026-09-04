@@ -42,13 +42,21 @@ public sealed partial class ExplorerPane : UserControl
     private const int DoubleClickMs = 500;
 
     /// <summary>
-    /// A192: 컨테이너 실체화 상한 — <b>A345 배치 2부터 IconGrid(휴면 그리드) 전용</b>이다.
-    /// 좌 리스트(ListPane)는 ItemsSource + DataTemplate 가상화라 보이는 행만 실체화되고,
-    /// 따라서 상한 자체가 필요 없다(안내 행 MakeOverflowNotice도 함께 폐기 — ItemsSource
-    /// 상태에서 Items.Add는 즉시 예외다). 그리드는 종전 컨테이너 조립이라 상한을 남긴다.
+    /// A192: 컨테이너 실체화 상한 — <b>IconGrid 휴면 경로 전용</b>이다(A345 배치 4에서 이름을
+    /// 그렇게 못 박았다: 종전 이름 <c>MaterializeLimit</c>은 두 표면 공통으로 읽혔다).
+    /// 살아 있는 사용처인 <b>리스트 전용 모드에서는 이 값이 한 번도 쓰이지 않는다</b> —
+    /// IconGrid가 접혀 있어 컨테이너를 한 개도 만들지 않기 때문이다. 좌 리스트(ListPane)는
+    /// ItemsSource + DataTemplate 가상화라 보이는 행만 실체화되고 상한이라는 개념 자체가 없다
+    /// (안내 행 MakeOverflowNotice도 배치 2에서 폐기 — ItemsSource 상태에서 Items.Add는 즉시 예외).
+    /// <para>
+    /// 값 500 유지 — 지금 도는 코드가 아니라 손댈 근거가 없다. <b>복구 지점</b>: 전체 페인
+    /// 사용처(좌 그리드 + 리스트)가 되살아나면 이 상한을 올리는 것이 아니라 <b>그리드도 좌
+    /// 리스트와 같은 방식으로 가상화</b>하는 것이 답이다(ItemsSource + DataTemplate +
+    /// ContainerContentChanging — 그러면 이 상수는 함께 사라진다).
+    /// </para>
     /// _entries·_display·ViewChanged로 흐르는 Entry 목록과 체크 prune(A179)은 전체 그대로다.
     /// </summary>
-    private const int MaterializeLimit = 500;
+    private const int IconGridMaterializeLimit = 500;
 
     /// <summary>파일 더블클릭 시 전체 경로와 함께 발생. 셸이 라우팅한다(재사용 규칙 적용, A24).</summary>
     public event Action<string>? FileActivated;
@@ -70,7 +78,7 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>
     /// A240: 리스트 선택 변경 — 셸이 우측 정보 패널의 "선택 우선" 표시(A200)에 쓴다. 인자 없음:
     /// 셸이 <see cref="SelectedEntry"/>를 질의한다(ThumbnailExplorer의 A200 관용구와 동일 —
-    /// 선택 상태의 원본은 표면 컨트롤 하나). 목록 재작성(Fill의 Items.Clear)·다중 선택 조작에서도
+    /// 선택 상태의 원본은 표면 컨트롤 하나). 목록 재작성(Fill의 ItemsSource 재대입)·다중 선택 조작에서도
     /// 표면이 알아서 발화한다. A179가 철거한 "선택 → 체크 동기"(A157 거울)와 무관하다 —
     /// 이것은 순수 관찰(선택 축)이고 체크 집합은 건드리지 않는다.
     /// </summary>
@@ -761,7 +769,7 @@ public sealed partial class ExplorerPane : UserControl
     /// 좌 리스트(ListPane)는 <b>뷰모델 목록을 ItemsSource로 대입</b>하고, 화면에 보이는 행만
     /// 컨테이너가 만들어진다(DataTemplate + ContainerContentChanging 가상화 — 실체화 상한 없음).
     /// 좌 그리드(IconGrid)는 휴면 표면이라 종전대로 컨테이너를 직접 만들어 붙인다
-    /// (상한 MaterializeLimit 유지 · 리스트 전용 모드에서는 접혀 있어 한 개도 만들지 않는다).
+    /// (상한 IconGridMaterializeLimit 유지 · 리스트 전용 모드에서는 접혀 있어 한 개도 만들지 않는다).
     /// <para>
     /// 사라진 것: 분할 조립 루프(A192 — CompositionTarget.Rendering 틱당 한 조각)·완료 신호
     /// (_fillDone)·상한 초과 안내 행(MakeOverflowNotice). ItemsSource 대입은 동기 1회라
@@ -787,7 +795,7 @@ public sealed partial class ExplorerPane : UserControl
 
         if (IconGrid.Visibility == Visibility.Visible) // 휴면 경로 — 종전 컨테이너 조립 그대로
         {
-            var cap = Math.Min(entries.Count, MaterializeLimit);
+            var cap = Math.Min(entries.Count, IconGridMaterializeLimit);
             for (var i = 0; i < cap; i++) IconGrid.Items.Add(MakeGridItem(_displayVms[i]));
         }
 
@@ -1130,13 +1138,10 @@ public sealed partial class ExplorerPane : UserControl
     /// (A345 배치 2 — 값이 어긋나면 F2·Rename이 예외 없이 무반응이 된다).</summary>
     private const string ItemNameBlockName = "ExplorerItemName";
 
-    /// <summary>2줄째 상세 TextBlock의 이름 (A156) — 값은 이제 x:Bind가 채운다(A345 배치 2).
-    /// 상수는 XAML의 x:Name과 짝을 이루는 정본 표기로 남긴다.</summary>
-    private const string ItemDetailBlockName = "ExplorerItemDetail";
-
-    /// <summary>체크박스의 이름 (A157 → A179) — 체크 시각도 x:Bind가 맡는다(A345 배치 2).
-    /// 상수는 XAML의 x:Name과 짝을 이루는 정본 표기로 남긴다.</summary>
-    private const string ItemCheckBoxName = "ExplorerItemCheck";
+    // A345 배치 4: 상세 줄(ExplorerItemDetail)·체크박스(ExplorerItemCheck)의 이름 상수는
+    // 삭제했다 — 값을 x:Bind가 채우게 된 배치 2 이후 참조가 0건이라, "정본 표기"로 남겨 둘
+    // 이유보다 미사용 심볼로 남는 비용이 크다(이름 규칙은 XAML 쪽 주석에 적어 뒀다).
+    // 코드가 이름으로 조회하는 자식은 이름 TextBlock 하나뿐이다(위 ItemNameBlockName).
 
     /// <summary>
     /// 항목 콘텐츠 패널에서 이름으로 TextBlock을 찾는다 (A156).
@@ -1560,8 +1565,9 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>
     /// A323: 열린 콘텐츠 파일을 리스트에 **선택 표시**로 보여준다(사용자 요구 — 클릭했을 때와
     /// 같은 테두리. 새 시각 요소를 만들지 않고 기존 선택 표시 기구를 그대로 쓴다).
-    /// 목록 밖(다른 폴더·A7 필터 밖·실체화 상한 초과)이면 지금 선택을 그대로 둔다 —
-    /// 지우면 사용자가 방금 고른 항목의 표시가 사라진다(FindItemByPath 미매칭 = 무동작 관례).
+    /// 목록 밖(다른 폴더·A7 필터 밖 — 휴면 그리드에서는 실체화 상한 초과도)이면 지금 선택을
+    /// 그대로 둔다 — 지우면 사용자가 방금 고른 항목의 표시가 사라진다(미매칭 = 무동작 관례).
+    /// 리스트는 A345 배치 2부터 목록 전체를 도는 FindVmByPath라 "화면 밖이라 못 찾는" 경우가 없다.
     /// 선택 축과의 분리: 이 대입은 SelectionChanged를 발화시키지 않으므로(_syncingCurrent)
     /// 셸의 선택 축(A200 _selectedBrowse — 우측 정보 패널의 "선택 우선")은 서지 않는다.
     /// 우측 정보는 종전대로 열린 콘텐츠(provider) 기준을 유지한다.
@@ -2052,7 +2058,12 @@ public sealed partial class ExplorerPane : UserControl
             string.Equals(vm.Path, path, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// 뷰모델 하나의 리스트 컨테이너를 실체화해 돌려준다 (A345 배치 2 — 이름변경 보수안 ⓐ).
+    /// 뷰모델 하나의 리스트 컨테이너를 실체화해 돌려준다 (A345 — 이름변경 보수안 ⓐ).
+    /// <b>배치 4에서 확정(v0.338.0)</b>: 대안이던 뷰모델화 ⓑ(IsRenaming·EditingName을 템플릿 안
+    /// TextBox에 걸기)는 채택하지 않는다 — 배치 2·3에서 ⓐ가 두 표면 모두에서 성립했고, ⓑ는
+    /// ExplorerRenameBox(두 표면 공용 편집 수명)를 통째로 다시 쓰면서 커밋·취소·검증 실패 경로를
+    /// 전부 옮겨야 해 위험 대비 이득이 없다. 이름도 그대로 둔다(RealizeListContainer /
+    /// RealizeTileContainer + ForceFinish).
     /// 인라인 편집은 컨테이너 안의 이름 TextBlock 자리에 상자를 끼우는 구조라, 가상화 뒤에는
     /// "보이게 스크롤 → 레이아웃 강제 → 컨테이너 조회"의 세 단계를 거쳐야 상자를 끼울 대상이
     /// 생긴다. 그래도 못 얻으면(목록 밖 등) null — 호출부는 무동작으로 끝낸다.
@@ -2137,8 +2148,9 @@ public sealed partial class ExplorerPane : UserControl
     /// ToggleMenuFlyoutItem과 같은 성질) 그 값을 집합에 반영만 한다 — 선택은 건드리지 않는다.
     /// <para>
     /// **Checked/Unchecked를 구독하지 않는 이유(A179 재평가)**: 종전 근거였던 "선택 → 체크 → 선택"
-    /// 되먹임 루프는 거울 철거로 사라졌지만, 그 둘은 프로그램적 IsChecked 대입(MakeListItem의
-    /// 재스캔 복원·Space 토글의 시각 동기)에도 발화해 집합 갱신이 복원 경로에서 또 돈다 —
+    /// 되먹임 루프는 거울 철거로 사라졌지만, 그 둘은 프로그램적 IsChecked 대입(A345 배치 2
+    /// 이전에는 MakeListItem의 재스캔 복원, 지금은 x:Bind가 뷰모델 IsChecked를 다시 읽는 것 ·
+    /// Space 토글의 시각 동기)에도 발화해 집합 갱신이 복원 경로에서 또 돈다 —
     /// 사용자 입력에서만 발화하는 Click 하나가 여전히 맞다(배선 불변).
     /// </para>
     /// <para>

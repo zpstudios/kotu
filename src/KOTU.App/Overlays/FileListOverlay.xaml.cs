@@ -59,7 +59,7 @@ public sealed partial class FileListOverlay : UserControl
     /// <summary>
     /// A240: 내부 리스트의 선택 변경 중계 — 셸이 우측 정보 패널의 "선택 우선"(A200) 갱신에 쓴다.
     /// **떠 있을 때만 발화한다**(SelectedFilePath의 "보이지 않는 선택은 열지 않는다" 규칙과 동일
-    /// 축) — 닫힌 도크의 목록 재작성(NavigateList → Fill의 Items.Clear)이 만드는 선택 소멸이
+    /// 축) — 닫힌 도크의 목록 재작성(NavigateList → Fill의 목록 재대입)이 만드는 선택 소멸이
     /// null 발화가 되어 썸네일 축의 선택(마지막 발화 우선)을 지우는 사고를 막는다.
     /// </summary>
     public event Action? SelectionChanged;

@@ -553,9 +553,12 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 그래서 첫 화면에 셀 크기가 즉시 먹으려면 이 세 줄의 순서가 유일한 길이다.
     /// </para>
     /// 이미지 미리보기는 BitmapImage가 스스로 비동기 디코드하므로 별도 로드 루프가 없다.
-    /// ※ 좌 리스트와 뷰모델 <b>객체</b>를 공유하지는 않는다(조사 문서의 "ViewChanged 훅 변경") —
-    /// 그러려면 공개 시그니처(ShowEntries의 Entry 목록)를 바꿔 셸까지 손대야 해서 배치 4 후보로
-    /// 남겼다. 지금은 이 표면이 자기 뷰모델을 따로 만든다(표시 상태도 표면별로 독립).
+    /// ※ 좌 리스트와 뷰모델 <b>객체</b>를 공유하지 않는다 — <b>배치 4에서 확정(v0.338.0)</b>이다
+    /// (조사 문서의 "ViewChanged 훅 변경"은 채택하지 않는다). 근거: 표시 상태가 표면별로 독립인
+    /// 것이 맞다 — 체크(A179)는 좌 리스트에만 있고 미리보기 캐시(PreviewText·AudioInfo·
+    /// PreviewKnownEmpty)는 중앙에만 있다. 공유하려면 공개 시그니처(ShowEntries의 Entry 목록)를
+    /// 바꿔 셸까지 손대야 하는데 얻는 것이 없다. 그래서 이 표면은 앞으로도 자기 뷰모델을 따로
+    /// 만든다(셸 시그니처 무변경 확정).
     /// </summary>
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
@@ -691,6 +694,50 @@ public sealed partial class ThumbnailExplorer : UserControl
         tile.Children.OfType<Grid>().FirstOrDefault(g => g.Name == TilePreviewHostName);
 
     /// <summary>
+    /// 이 뷰모델이 <b>지금</b> 얹혀 있는 미리보기 자리 — 없으면 null (A345 배치 4, 낙수 42).
+    /// 비동기 미리보기 완료가 화면을 만질 때 쓰는 유일한 조회다.
+    /// <para>
+    /// 수리한 사고: 종전에는 발사 시점의 컨테이너(item)를 붙잡아 두고
+    /// <c>ReferenceEquals(item.Content, vm)</c>로 대조했다. 같은 항목이 스크롤 왕복으로
+    /// <b>다른</b> 컨테이너에 재실체화되면 그 대조가 거짓이라 결과를 통째로 버리는데, 그때는
+    /// 이미 <see cref="ExplorerEntryVm.PreviewInFlight"/>가 내려간 뒤라 재발사도 없다 —
+    /// 캐시(PreviewText·AudioInfo)에는 남고 화면만 확장자 타일에 영영 멈춘다.
+    /// </para>
+    /// 그래서 컨테이너를 붙잡지 않고 <b>적용 시점에 다시 찾는다</b>: 그 항목이 화면 밖이면
+    /// null(그때는 다음 실체화가 캐시로 즉시 그린다), 화면 안이면 지금 그 항목을 담고 있는
+    /// 컨테이너의 미리보기 자리다. <c>Content</c> 재대조는 남겨 둔다 — 재활용 도중의 과도기
+    /// 상태에서 <c>ContainerFromItem</c>이 아직 옛 컨테이너를 돌려줄 수 있다.
+    /// </summary>
+    private Grid? LivePreviewHostOf(ExplorerEntryVm vm) =>
+        TileGrid.ContainerFromItem(vm) is GridViewItem { ContentTemplateRoot: Grid root } container
+        && ReferenceEquals(container.Content, vm)
+            ? PreviewHostOf(root)
+            : null;
+
+    /// <summary>미리보기 이미지 요소 1개 (A345 배치 4) — 세 갈래(이미지 원본·캐시 썸네일·셸
+    /// 썸네일)가 같은 배치(Uniform · 여백 4)를 쓰므로 한자리로 모았다.</summary>
+    private static Image MakePreviewImage(ImageSource source) => new()
+    {
+        Source = source,
+        Stretch = Stretch.Uniform,
+        Margin = new Thickness(4),
+    };
+
+    /// <summary>
+    /// 미리보기를 못 얻은 타일을 <b>위상 0의 실패 갈래 그대로</b> 다시 그린다 (A345 배치 4).
+    /// 종전에는 "대기 배지만 걷어 확장자 타일을 남기는" 부분 수정이었는데, 낙수 42 수리 뒤에는
+    /// 적용 대상이 발사 때 그 host가 아닐 수 있다(재실체화된 새 자리) — 그 자리에는 걷어낼 배지도
+    /// 없고, 남겨 둘 확장자 타일이 이미 있을 수도 없을 수도 있다. 그래서 부분 수정을 그만두고
+    /// <see cref="OnTileContainerContentChanging"/>의 실패 갈래와 같은 모양으로 통째로 구성한다.
+    /// </summary>
+    private void RedrawFallbackTile(Grid host, ExplorerListing.Entry entry, string? info)
+    {
+        host.Children.Clear();
+        host.Children.Add(MakeExtensionTile(entry));
+        if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info)); // A270
+    }
+
+    /// <summary>
     /// 위상 1 (A345 배치 3): 파일을 읽어야 하는 미리보기 갈래를 발사한다 — 종전 MakeTile이 조립
     /// 시점에 고르던 4갈래를 <b>보이는 타일에서만</b> 고르는 것으로 옮겼다(A339 DeferPreview의
     /// 뷰포트 판정이 하던 일을 이제 XAML 가상화 패널이 대신한다). 갈래 순서는 종전 MakeTile
@@ -711,20 +758,21 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             // A175: 클라우드 전용 이미지는 원본 디코드가 하이드레이션(전체 다운로드)이다 —
             // 원본은 절대 열지 않고 캐시·클라우드 제공 썸네일만 시도한다.
-            if (entry.IsPlaceholder) _ = FillCachedThumbnailAsync(item, vm, host, seq);
-            else StartImagePreview(item, vm, host);
+            if (entry.IsPlaceholder) _ = FillCachedThumbnailAsync(vm, seq);
+            else StartImagePreview(vm, host);
             return;
         }
         if (IsTextPreviewFile(entry)) // A233 — 내용 프리뷰
         {
-            _ = FillTextPreviewAsync(item, vm, host, seq);
+            _ = FillTextPreviewAsync(vm, seq);
             return;
         }
         // A242 — 그 외 전 파일: 셸 썸네일. 대기 배지는 실제로 요청하는 이 시점에만 붙인다
         // (요청하지도 않은 타일에 "기다리는 중" 표시가 있으면 거짓말이다 — A339의 근거 승계).
-        var badge = MakePendingBadge();
-        host.Children.Add(badge);
-        _ = FillShellThumbnailAsync(item, vm, host, badge, seq);
+        // A345 배치 4: 배지 참조는 넘기지 않는다 — 완료 시점의 자리가 이 host라는 보장이 없어,
+        // 걷어내기가 아니라 그 자리를 통째로 다시 그리는 방식으로 바꿨다(RedrawFallbackTile).
+        host.Children.Add(MakePendingBadge());
+        _ = FillShellThumbnailAsync(vm, seq);
     }
 
     /// <summary>
@@ -743,7 +791,12 @@ public sealed partial class ThumbnailExplorer : UserControl
         item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
     }
 
-    // ---------- 선택 · 이름변경 (A345 배치 3 — 보수안 ⓐ) ----------
+    // ---------- 선택 · 이름변경 (A345 — 보수안 ⓐ, 배치 4에서 확정) ----------
+    // 보수안 ⓐ = "뷰모델을 고르고 그 컨테이너를 실체화해 편집 상자를 끼운다"(RealizeTileContainer
+    // + 재활용 시 ForceFinish). 대안이던 뷰모델화 ⓑ(IsRenaming·EditingName을 템플릿 안 TextBox에
+    // 걸기)는 <b>채택하지 않는다 — 확정(v0.338.0)</b>: 배치 2·3에서 ⓐ가 두 표면 모두에서 성립했고,
+    // ⓑ는 ExplorerRenameBox(두 표면 공용 편집 수명)를 통째로 다시 쓰면서 커밋·취소·검증 실패
+    // 경로를 전부 옮겨야 해 위험 대비 이득이 없다.
 
     /// <summary>
     /// 경로로 표시 목록의 뷰모델 찾기 (A345 배치 3) — 가상화 뒤의 정본 조회이고, 종전
@@ -754,7 +807,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         _vms.FirstOrDefault(vm => string.Equals(vm.Path, path, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// 뷰모델 하나의 타일 컨테이너를 실체화해 돌려준다 (A345 배치 3 — 이름변경 보수안 ⓐ).
+    /// 뷰모델 하나의 타일 컨테이너를 실체화해 돌려준다 (A345 — 이름변경 보수안 ⓐ, 배치 4 확정).
     /// 인라인 편집은 컨테이너 안의 캡션 TextBlock 자리에 상자를 끼우는 구조라, 가상화 뒤에는
     /// "보이게 스크롤 → 레이아웃 강제 → 컨테이너 조회"의 세 단계를 거쳐야 상자를 끼울 대상이
     /// 생긴다. 그래도 못 얻으면(목록 밖 등) null — 호출부는 무동작으로 끝낸다.
@@ -932,33 +985,37 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 없다 — 종전 DeferPreview 안 본문 그대로다). 성공하면 확장자 타일을 걷는다: 그냥 겹쳐 두면
     /// <b>투명 PNG의 투명한 부분으로 아래 타일이 비쳐 보인다</b>. 실패(ImageFailed)에는 걷지 않아
     /// 확장자 타일이 그대로 남는다 = 종전 폴백과 같은 결과.
-    /// 두 핸들러 모두 <c>ReferenceEquals</c>로 재활용을 대조한다 — 디코드 완료가 늦게 오는 사이
-    /// 컨테이너가 다른 파일 타일이 됐으면 그 타일의 확장자 타일을 걷어 버리면 안 된다.
-    /// 비트맵은 뷰모델에 캐시하지 않는다(원본 Uri 디코드 결과는 XAML 이미지 캐시가 들고 있다).
+    /// 두 핸들러 모두 <see cref="LivePreviewHostOf"/>로 <b>적용 시점의 자리를 다시 찾는다</b>
+    /// (A345 배치 4, 낙수 42) — 디코드 완료가 늦게 오는 사이 컨테이너가 다른 파일 타일이 됐으면
+    /// 그 타일을 건드리면 안 되고, 같은 항목이 다른 컨테이너에 재실체화됐으면 그 새 자리에 얹어야
+    /// 한다. 비트맵은 뷰모델에 캐시하지 않는다(원본 Uri 디코드 결과는 XAML 이미지 캐시가 들고
+    /// 있다). 이 갈래만 <see cref="ExplorerEntryVm.PreviewInFlight"/>로 감싸지 않는다 —
+    /// 재실체화 때마다 다시 걸려도 디코드가 XAML 캐시에 걸려 값싸기 때문이다(의도된 예외).
     /// </para>
     /// </summary>
-    private void StartImagePreview(GridViewItem item, ExplorerEntryVm vm, Grid host)
+    private void StartImagePreview(ExplorerEntryVm vm, Grid host)
     {
         try
         {
-            var fallback = host.Children.Count > 0 ? host.Children[0] : null; // 위상 0이 깐 확장자 타일
             var bitmap = new BitmapImage { DecodePixelWidth = PreviewDecodeWidth };
             bitmap.UriSource = new Uri(vm.Path);
-            var image = new Image
-            {
-                Source = bitmap,
-                Stretch = Stretch.Uniform,
-                Margin = new Thickness(4),
-            };
+            var image = MakePreviewImage(bitmap);
             image.ImageOpened += (_, _) =>
             {
-                if (!ReferenceEquals(item.Content, vm) || fallback is null) return;
-                host.Children.Remove(fallback);
+                if (LivePreviewHostOf(vm) is not { } live) return;
+                // 성공의 최종형은 "이미지 한 장"이라 폴백을 골라 지우는 대신 통째로 비우고 얹는다
+                // (그냥 겹쳐 두면 투명 PNG의 투명한 부분으로 아래 확장자 타일이 비쳐 보인다).
+                // 발사 때 그 자리면 이 image를 다시 얹고(Clear가 잠시 떼어 낸다), 재실체화된
+                // 새 자리면 같은 비트맵으로 새 요소를 만든다 — 옛 자리의 자식을 그대로 옮기면
+                // 부모가 둘이 되어 런타임에서 죽는다(CI는 못 잡는 부류다).
+                var visual = live.Children.Contains(image) ? image : MakePreviewImage(bitmap);
+                live.Children.Clear();
+                live.Children.Add(visual);
             };
             image.ImageFailed += (_, _) =>
             {
-                if (!ReferenceEquals(item.Content, vm)) return;
-                host.Children.Remove(image);
+                // 실패는 "확장자 타일 그대로" — 자기 자신만 걷는다(없으면 무동작).
+                if (LivePreviewHostOf(vm) is { } live) live.Children.Remove(image);
             };
             host.Children.Add(image);
         }
@@ -974,14 +1031,15 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <para>
     /// A345 배치 3의 방어 3겹: ① <see cref="ExplorerEntryVm.PreviewInFlight"/> — 같은 항목이 짧은
     /// 사이에 두 번 실체화돼도 요청은 한 번, ② <c>seq</c> 대조 — 폴더가 바뀌었으면 버린다,
-    /// ③ <c>ReferenceEquals(item.Content, vm)</c> — 같은 폴더 안에서 컨테이너가 다른 파일로
-    /// 재활용됐으면 <b>화면은 건드리지 않는다</b>. ③에 걸려도 "썸네일 없음"이라는 사실은 뷰모델에
-    /// 남기므로(PreviewKnownEmpty) 다음 실체화가 헛되이 다시 묻지 않는다. 성공 비트맵은 남기지
-    /// 않는다 — 재실체화 시 다시 가져온다(셸 썸네일 캐시가 있어 싸다는 A242 근거 그대로).
+    /// ③ <see cref="LivePreviewHostOf"/> — <b>적용 시점에 이 항목의 자리를 다시 찾는다</b>
+    /// (A345 배치 4, 낙수 42: 종전에는 발사 때 잡아 둔 host·item을 대조해, 스크롤 왕복으로 다른
+    /// 컨테이너에 재실체화된 항목이 캐시만 채우고 화면은 확장자 타일에 멈췄다). 화면 밖이면
+    /// null이라 그리지 않지만 "썸네일 없음"이라는 사실은 뷰모델에 남으므로(PreviewKnownEmpty)
+    /// 다음 실체화가 헛되이 다시 묻지 않는다. 성공 비트맵은 남기지 않는다 — 재실체화 시 다시
+    /// 가져온다(셸 썸네일 캐시가 있어 싸다는 A242 근거 그대로).
     /// </para>
     /// </summary>
-    private async Task FillCachedThumbnailAsync(
-        GridViewItem item, ExplorerEntryVm vm, Grid host, int seq)
+    private async Task FillCachedThumbnailAsync(ExplorerEntryVm vm, int seq)
     {
         if (vm.PreviewInFlight) return;
         vm.PreviewInFlight = true;
@@ -1015,24 +1073,20 @@ public sealed partial class ThumbnailExplorer : UserControl
                 vm.PreviewKnownEmpty = true; // 없음 확정 — 다음 실체화가 다시 묻지 않는다
                 return;
             }
-            if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return; // ②③
+            if (seq != _showSeq) return; // ② 폴더 전환
             try
             {
                 var bitmap = new BitmapImage();
                 using (var source = new MemoryStream(bytes))
                     await bitmap.SetSourceAsync(source.AsRandomAccessStream());
-                if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return;
+                // ③ 적용 시점에 자리를 다시 찾는다 — 화면 밖이면 그리지 않는다.
+                if (seq != _showSeq || LivePreviewHostOf(vm) is not { } host) return;
                 // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
                 // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
                 // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
                 NavDiagnostics.Mark("prev0");
                 host.Children.Clear();
-                host.Children.Add(new Image
-                {
-                    Source = bitmap,
-                    Stretch = Stretch.Uniform,
-                    Margin = new Thickness(4),
-                });
+                host.Children.Add(MakePreviewImage(bitmap));
             }
             catch
             {
@@ -1108,14 +1162,15 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 안내 없음(사양). Unloaded는 _showSeq를 올려 보류 전부를 무산시킨다(생성자 주석).
     /// <para>
     /// A345 배치 3: host를 클로저로 캡처하던 종전 근거("컨테이너 재사용 없음 — ShowEntries가
-    /// 타일을 매번 새로 만든다")가 <b>무효가 됐다</b>. 이제 host는 재활용되는 컨테이너의 것이라,
-    /// 완료 시점에 <c>ReferenceEquals(item.Content, vm)</c>로 "이 컨테이너가 아직 이 파일의
-    /// 것인가"를 확인해야 한다. 읽어 온 문자열은 그 확인보다 <b>먼저</b> 뷰모델에 저장한다 —
-    /// 화면에 못 얹더라도 그 항목이 다시 실체화될 때 파일을 또 읽지 않게 된다.
+    /// 타일을 매번 새로 만든다")가 <b>무효가 됐다</b>. 배치 4(낙수 42)에서는 캡처 자체를 그만뒀다:
+    /// 완료 시점에 <see cref="LivePreviewHostOf"/>로 "이 항목이 지금 어느 자리에 있나"를 다시
+    /// 찾는다(발사 때 그 자리를 대조하면, 스크롤 왕복으로 다른 컨테이너에 재실체화된 항목이
+    /// 화면에 영영 안 뜬다 — 재발사도 PreviewInFlight 뒤라 없다). 읽어 온 문자열은 그 조회보다
+    /// <b>먼저</b> 뷰모델에 저장한다 — 화면에 못 얹더라도 그 항목이 다시 실체화될 때 파일을 또
+    /// 읽지 않고, 위상 0이 캐시에서 곧바로 그린다.
     /// </para>
     /// </summary>
-    private async Task FillTextPreviewAsync(
-        GridViewItem item, ExplorerEntryVm vm, Grid host, int seq)
+    private async Task FillTextPreviewAsync(ExplorerEntryVm vm, int seq)
     {
         if (vm.PreviewInFlight) return; // 같은 항목의 중복 발사 방지
         vm.PreviewInFlight = true;
@@ -1140,7 +1195,8 @@ public sealed partial class ThumbnailExplorer : UserControl
                     return;
                 }
                 vm.PreviewText = text; // ② 화면 판정보다 먼저 — 재실체화 시 재읽기 없음
-                if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return; // ③ 재활용 대조
+                // ③ 적용 시점에 자리를 다시 찾는다(A345 배치 4) — 화면 밖이면 그리지 않는다.
+                if (seq != _showSeq || LivePreviewHostOf(vm) is not { } host) return;
                 // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
                 // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
                 // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
@@ -1290,16 +1346,17 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 배지는 어느 갈래에서든 정보 표기보다 먼저 걷힌다(교체 갈래는 Clear가 겸한다).
     /// <para>
     /// A345 배치 3: host·badge를 클로저로 캡처하던 종전 근거("타일 전용 — 재사용 없음")가
-    /// <b>무효가 됐다</b>. 완료 시점 판정이 두 겹이다: <c>seq</c>(폴더 전환) +
-    /// <c>ReferenceEquals(item.Content, vm)</c>(같은 폴더 안 재활용). 워커 결과는 그 판정보다
+    /// <b>무효가 됐다</b>. 배치 4(낙수 42)에서는 캡처를 통째로 그만뒀다: 완료 시점 판정이
+    /// <c>seq</c>(폴더 전환) + <see cref="LivePreviewHostOf"/>(적용 시점의 자리 재조회) 두 겹이다.
+    /// 배지를 "걷어내는" 대신 그 자리를 <see cref="RedrawFallbackTile"/>로 다시 그리는 이유도
+    /// 같다 — 재실체화된 새 자리에는 걷어낼 배지가 애초에 없다. 워커 결과는 그 판정보다
     /// <b>먼저</b> 뷰모델에 남긴다 — 오디오 정보는 AudioInfo에, "썸네일 없음"은
     /// PreviewKnownEmpty에. 그래야 화면에 못 얹은 결과도 다음 실체화에서 재사용된다.
     /// 성공한 비트맵만은 남기지 않는다(메모리 — 재추출은 셸 썸네일 캐시 덕에 싸다, A242 근거).
     /// 즉 재활용 뒤 그 항목이 다시 보이면 셸 썸네일은 다시 fetch된다(사양).
     /// </para>
     /// </summary>
-    private async Task FillShellThumbnailAsync(
-        GridViewItem item, ExplorerEntryVm vm, Grid host, FontIcon badge, int seq)
+    private async Task FillShellThumbnailAsync(ExplorerEntryVm vm, int seq)
     {
         if (vm.PreviewInFlight) return; // 같은 항목의 중복 발사 방지
         vm.PreviewInFlight = true;
@@ -1327,12 +1384,12 @@ public sealed partial class ThumbnailExplorer : UserControl
                 // ② 화면 판정보다 먼저 캐시에 남긴다 — 재활용됐어도 다음 실체화가 재사용한다.
                 if (info is not null) vm.AudioInfo = info;
                 if (bytes is null) vm.PreviewKnownEmpty = true;
-                if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return; // ③ 재활용 대조
+                if (seq != _showSeq) return; // ③ 폴더 전환
                 if (bytes is null)
                 {
-                    // 실패·썸네일 없음·아이콘형(A270 ③) — 확장자 타일 유지(사양). 정보가 있으면 얹는다.
-                    host.Children.Remove(badge);
-                    if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info));
+                    // 실패·썸네일 없음·아이콘형(A270 ③) — 확장자 타일 유지(사양). 정보가 있으면
+                    // 그 아래 얹는다. 대기 배지는 다시 그리기(Clear)가 함께 걷는다.
+                    if (LivePreviewHostOf(vm) is { } empty) RedrawFallbackTile(empty, entry, info);
                     return;
                 }
                 try
@@ -1341,27 +1398,22 @@ public sealed partial class ThumbnailExplorer : UserControl
                     var bitmap = new BitmapImage();
                     using (var stream = new MemoryStream(bytes))
                         await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
-                    if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return;
+                    // 적용 시점에 자리를 다시 찾는다(A345 배치 4) — 화면 밖이면 그리지 않는다.
+                    if (seq != _showSeq || LivePreviewHostOf(vm) is not { } host) return;
                     // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
                     // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
                     // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
                     NavDiagnostics.Mark("prev0");
                     host.Children.Clear();
-                    host.Children.Add(new Image
-                    {
-                        Source = bitmap,
-                        Stretch = Stretch.Uniform,
-                        Margin = new Thickness(4),
-                    });
+                    host.Children.Add(MakePreviewImage(bitmap));
                     // A270 ②: 앨범아트 위 정보 띠 — 배지는 위 Clear가 이미 걷었다(겹침 없음).
                     if (info is not null) host.Children.Add(MakeAudioInfoBand(info));
                 }
                 catch
                 {
                     vm.PreviewKnownEmpty = true; // 손상 데이터 — 다시 받아도 같은 결과다
-                    if (!ReferenceEquals(item.Content, vm)) return;
-                    host.Children.Remove(badge); // 디코드 실패 — 확장자 타일 유지
-                    if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info));
+                    // 디코드 실패 — 확장자 타일로 되돌린다(자리 재조회는 성공 갈래와 같은 규칙).
+                    if (LivePreviewHostOf(vm) is { } failed) RedrawFallbackTile(failed, entry, info);
                 }
             }
             finally

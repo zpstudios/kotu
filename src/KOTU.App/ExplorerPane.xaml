@@ -102,8 +102,10 @@
                          루트는 반드시 **평평한 Grid 하나**다(중첩 패널 금지) — 인라인 이름변경
                          (ExplorerRenameBox.Begin)이 이 Grid에 편집 상자를 Insert하고
                          Grid.SetRow/SetColumn으로 이름 자리에 앉히기 때문이다.
-                         x:Name 세 개는 코드의 조회 키 상수(ItemNameBlockName·ItemDetailBlockName·
-                         ItemCheckBoxName)와 반드시 같은 값이어야 한다(조회가 이름 기반). -->
+                         x:Name 세 개 중 이름 TextBlock(ExplorerItemName)만 코드가 이름으로 조회한다
+                         (상수 ItemNameBlockName — 값이 어긋나면 F2·Rename이 예외 없이 무반응).
+                         나머지 둘(ExplorerItemDetail·ExplorerItemCheck)은 값을 x:Bind가 채우므로
+                         코드 조회가 없다 — 이름은 구조를 읽기 쉬우라고 남긴 표기다(A345 배치 4). -->
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="local:ExplorerEntryVm">
                             <Grid ColumnSpacing="8"

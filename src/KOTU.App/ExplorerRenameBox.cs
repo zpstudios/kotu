@@ -32,6 +32,12 @@ namespace KOTU.App;
 /// 그래서 컨테이너가 재활용 큐로 들어갈 때 호스트 패널을 넘겨 강제 커밋시킨다(ForceFinish).
 /// 종료자(Finish)는 지역 함수라 밖에서 부를 수 없어, 상자의 Tag에 실어 두고 그것을 부른다
 /// (상자 하나에 종료자 하나 — 이 Tag의 용도는 그 하나뿐이다).
+///
+/// A345 배치 4: 위 방식(보수안 ⓐ — 호출부가 컨테이너를 실체화해 자리를 넘기고, 재활용 때
+/// ForceFinish로 강제 커밋)을 <b>확정한다(v0.338.0)</b>. 대안이던 뷰모델화 ⓑ(IsRenaming·
+/// EditingName을 템플릿 안 TextBox에 x:Bind로 걸기)는 채택하지 않는다: 이 클래스가 쥐고 있는
+/// 편집 수명(커밋·취소·검증 실패·IsEditing/EditEnded로 재스캔을 보류시키는 계약)을 통째로 다시
+/// 써야 하는데, 두 표면에서 ⓐ가 이미 성립하고 있어 위험 대비 이득이 없다.
 /// </summary>
 internal static class ExplorerRenameBox
 {
