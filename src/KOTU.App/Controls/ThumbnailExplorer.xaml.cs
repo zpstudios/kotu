@@ -89,10 +89,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>
     /// A339: 타일 미리보기 생성을 <b>보이는 것(과 곧 보일 것)만</b>으로 미룬다.
     /// <para>
-    /// 왜: 실체화 상한(<see cref="MaterializeLimit"/>) 2,000개 타일이 전부 파일을 읽어 미리보기를
+    /// 왜: 실체화 상한(<see cref="MaterializeLimit"/>)만큼의 타일이 전부 파일을 읽어 미리보기를
     /// 만들고 있었지만 화면에 보이는 것은 열여섯 개 남짓이다. A334 계측판이 그 비용을 실측했다 —
     /// txt 10,000개 폴더에서 <c>prev0&gt;fillN 3,703ms</c>(목록 항목 생성과 미리보기 얹기가 같은
-    /// 구간에서 겹쳐 돈다)와 <c>UI stall max 488ms @prev0&gt;fillN</c>. 나머지 1,984개는 스크롤하지
+    /// 구간에서 겹쳐 돈다)와 <c>UI stall max 488ms @prev0&gt;fillN</c>. 나머지 대부분은 스크롤하지
     /// 않으면 아무도 보지 않는다.
     /// </para>
     /// <para>
@@ -127,8 +127,12 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// A192: 타일 실체화 상한(ExplorerPane.MaterializeLimit와 같은 값) — 초과분은 타일을 만들지
     /// 않고 말미에 비상호작용 안내 1타일만 붙인다(MakeOverflowNotice). 상한은 컨테이너 실체화에만
     /// 걸린다 — ShowEntries로 받는 Entry 목록 자체는 전체 그대로다(원본은 좌 리스트, A93).
+    /// <para>
+    /// A342 배치 5 실험: 2,000에서 500으로 내린다 — XAML 객체 수를 1/4로 줄였을 때 gen2 횟수와
+    /// GC 정지가 그에 비례해 줄어드는지 판별하려는 것이다(좌 리스트 상한과 항상 같은 값).
+    /// </para>
     /// </summary>
-    private const int MaterializeLimit = 2000;
+    private const int MaterializeLimit = 500;
 
     /// <summary>폴더 더블클릭 — 셸이 좌 리스트를 그 폴더로 항해시킨다(상태 공유의 되돌이 경로).</summary>
     public event Action<string>? FolderActivated;
@@ -669,9 +673,6 @@ public sealed partial class ThumbnailExplorer : UserControl
             catch (Exception)
             {
                 StopTileAppendLoop();
-                // A342 배치 4: 이 갈래는 FinishShowEntries에 닿지 못한다 — 여기서 풀지 않으면
-                // 중앙 타일 몫이 영영 남는다. 낡은 루프의 예외는 새 항해 것을 깎지 않게 seq를 본다.
-                if (seq == _showSeq) NavGcScope.Leave(NavGcScope.Participant.Grid);
             }
         }
         _tileAppendHandler = OnTick;
@@ -702,16 +703,12 @@ public sealed partial class ThumbnailExplorer : UserControl
     private void FinishShowEntries(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
     {
         if (seq != _showSeq) return; // 방어 — 낡은 완료가 편집 진입을 훔치지 않게
-        // A342 배치 4: 중앙 타일 몫의 GC 실험 구간 해제 — 이 표면의 정상 완료 단일 지점이다
-        // (소형 폴더는 ShowEntries가 여기를 동기로 부른다: entries가 비어도 first < cap이 거짓이라
-        // 반드시 도달한다). 낡은 완료는 바로 위 seq 대조에서 돌아갔다.
-        NavGcScope.Leave(NavGcScope.Participant.Grid);
         // 계측 cfillN / cpaint: 중앙 타일 조립 완료와 그 뒤 첫 렌더 프레임(좌 리스트의 fillN·
         // paint와 대응). 좌·중앙 중 늦게 끝난 쪽이 사용자가 보는 "확 바뀌는" 순간이다.
         NavDiagnostics.Mark("cfillN");
         NavDiagnostics.ArmPaint("cpaint");
         if (entries.Count > MaterializeLimit)
-            TileGrid.Items.Add(MakeOverflowNotice(entries.Count - MaterializeLimit));
+            TileGrid.Items.Add(MakeOverflowNotice());
         ApplyTileSize();
 
         // A94 2차: 새 폴더(Ctrl+Shift+N) 직후의 재스캔이면 그 타일을 선택하고 곧바로 이름변경
@@ -734,12 +731,16 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// Tag의 Entry 패턴 매칭이라 자연 제외된다: FindTileByPath·SelectedPaths·EntryFromSource·
     /// ApplyCutMark·OnItemClick 전수 확인), 계약 훅(메뉴·드래그·더블클릭) 미부착,
     /// IsEnabled=false로 포커스·클릭 대상에서도 뺀다. 문구는 좌 리스트(ExplorerPane)와 동일 사양.
+    /// <para>
+    /// A342 배치 5: 숨은 개수를 문구에서 뺐다 — 스캔의 maxItems 상한 때문에 entries.Count가 이미
+    /// 잘린 값이라 차이가 실제 숨은 개수가 아니다. 좌 리스트와 문구를 글자 그대로 맞춘다.
+    /// </para>
     /// </summary>
-    private static GridViewItem MakeOverflowNotice(int hidden) => new()
+    private static GridViewItem MakeOverflowNotice() => new()
     {
         Content = new TextBlock
         {
-            Text = $"{hidden} more items are not shown. Refine the filter to see them.",
+            Text = $"Showing the first {MaterializeLimit} items. Refine the filter to see the rest.",
             FontSize = 11,
             Opacity = 0.6,
             TextWrapping = TextWrapping.Wrap,

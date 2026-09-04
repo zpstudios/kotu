@@ -53,8 +53,12 @@ public sealed partial class ExplorerPane : UserControl
     /// A192: 표면당 컨테이너 실체화 상한 — 초과분은 컨테이너를 만들지 않고 말미에 비상호작용
     /// 안내 1행만 붙인다(MakeOverflowNotice). 상한은 <b>컨테이너 실체화에만</b> 걸린다:
     /// _entries·_display·ViewChanged로 흐르는 Entry 목록과 체크 prune(A179)은 전체 그대로다.
+    /// <para>
+    /// A342 배치 5 실험: 2,000에서 500으로 내린다 — XAML 객체 수를 1/4로 줄였을 때 gen2 횟수와
+    /// GC 정지가 그에 비례해 줄어드는지 판별하려는 것이다(중앙 타일 상한과 항상 같은 값).
+    /// </para>
     /// </summary>
-    private const int MaterializeLimit = 2000;
+    private const int MaterializeLimit = 500;
 
     /// <summary>파일 더블클릭 시 전체 경로와 함께 발생. 셸이 라우팅한다(재사용 규칙 적용, A24).</summary>
     public event Action<string>? FileActivated;
@@ -651,7 +655,6 @@ public sealed partial class ExplorerPane : UserControl
         // 항해 계측(diag.navTiming, 기본 꺼짐)의 합류점 — 세 진입 경로(트리 선택·리스트 활성화·
         // 중앙 썸네일 더블클릭)가 전부 이 메서드로 모인다. 출처만 각 진입점이 미리 적어 둔다
         // (NavDiagnostics.NoteSource). 꺼져 있으면 Begin이 앞단 게이트에서 즉시 반환한다.
-        NavGcScope.Enter(); // A342 배치 4 실험 — 항해 구간에만 GC 지연 모드를 낮춘다(완료·실패 시 Leave)
         NavDiagnostics.Begin();
         _ = NavigateToAsync(folder, extensions); // 발사 후 망각 — 본문이 예외를 스스로 처리(종전 async void와 동일 소비)
     }
@@ -727,15 +730,11 @@ public sealed partial class ExplorerPane : UserControl
         }
         catch (OperationCanceledException)
         {
-            // A342 배치 4: 이 항해가 아직 최신일 때만 GC 실험 구간을 푼다 — 낡은 항해(seq 불일치)는
-            // 새 항해가 이미 Enter로 세워 둔 pending을 깎으면 안 되므로 그대로 둔다.
-            if (seq == _loadSeq) NavGcScope.Leave(NavGcScope.Participant.List);
             return; // 페인이 내려가며 워커가 닫힘 — 그릴 곳도 없다
         }
         catch (Exception ex)
         {
             if (seq != _loadSeq) return;
-            NavGcScope.Leave(NavGcScope.Participant.List); // A342 배치 4 — 실패로 끝난 항해도 반드시 푼다
             StopFillAppendLoop(); // A192 — 직전 폴더의 조립 루프가 빈 판에 낡은 조각을 붙이지 않게(seq 대조와 이중)
             _fillDone?.TrySetResult(true);
             _fillDone = null;
@@ -885,9 +884,6 @@ public sealed partial class ExplorerPane : UserControl
                 StopFillAppendLoop();
                 _fillDone?.TrySetResult(true); // seq 일치 확인 뒤의 예외라 이 신호는 이번 조립 것이다
                 _fillDone = null;
-                // A342 배치 4: 이 갈래는 FinishFill에 닿지 못한다 — 여기서 풀지 않으면 좌 리스트
-                // 몫이 영영 남는다(= 프로세스가 SustainedLowLatency로 굳는다).
-                if (seq == _loadSeq) NavGcScope.Leave(NavGcScope.Participant.List);
             }
         }
         _fillAppendHandler = OnTick;
@@ -910,7 +906,7 @@ public sealed partial class ExplorerPane : UserControl
     /// ③ 상세·썸네일 로더 기동. 로더를 "루프 완료 후"로 옮긴 근거: LoadDetailInfoAsync·
     /// LoadThumbnailsAsync는 기동 시점에 Items를 스냅샷해 순회하므로, 조각이 덜 붙은 시점에
     /// 기동하면 뒤 조각의 항목이 이번 회차에서 영영 빠진다(부재 "내성"으로 해결 불가 —
-    /// 다시 찾지 않는 구조). 대형 폴더의 상세·썸네일이 조립 완료까지(2000항목 기준 수백 ms)
+    /// 다시 찾지 않는 구조). 대형 폴더의 상세·썸네일이 조립 완료까지(상한(MaterializeLimit) 기준 수백 ms)
     /// 늦는 것은 수용(사양 명기). 소형 폴더는 RefreshView가 동기로 불러 종전 시점과 같다.
     /// 낡은 완료(폐기된 루프의 마지막 틱)는 seq 대조로 걸러진다.
     /// </summary>
@@ -922,10 +918,9 @@ public sealed partial class ExplorerPane : UserControl
         NavDiagnostics.Mark("fillN");
         if (entries.Count > MaterializeLimit)
         {
-            var hidden = entries.Count - MaterializeLimit;
             if (IconGrid.Visibility == Visibility.Visible)
-                IconGrid.Items.Add(MakeOverflowNotice(hidden, grid: true));
-            ListPane.Items.Add(MakeOverflowNotice(hidden, grid: false));
+                IconGrid.Items.Add(MakeOverflowNotice(grid: true));
+            ListPane.Items.Add(MakeOverflowNotice(grid: false));
         }
         _fillDone?.TrySetResult(true);
         _fillDone = null;
@@ -942,9 +937,6 @@ public sealed partial class ExplorerPane : UserControl
         // 목록 조립·상세 로더 기동이 끝난 뒤에만 부가 스캔이 붙는다). 감시 재스캔의 재통지는
         // 소비 쪽 캐시(경로+수정시각)가 흡수한다 — 여기서 거르지 않는다(ViewChanged와 같은 방침).
         FillCompleted?.Invoke(entries);
-        // A342 배치 4: 좌 리스트 몫의 GC 실험 구간 해제 — 여기가 이 표면의 정상 완료 단일 지점이다
-        // (낡은 완료는 위 seq 대조에서 이미 돌아갔으므로 새 항해의 pending을 깎지 않는다).
-        NavGcScope.Leave(NavGcScope.Participant.List);
     }
 
     /// <summary>
@@ -952,12 +944,17 @@ public sealed partial class ExplorerPane : UserControl
     /// Tag의 Entry 패턴 매칭이라 자연 제외된다: FindItemByPath·CheckedPathsInView·SelectedPathsOf·
     /// ApplyCutMark·LoadDetailInfoAsync 전수 확인), 계약 훅(메뉴·드래그·체크·더블클릭) 미부착,
     /// IsEnabled=false로 포커스·클릭 대상에서도 뺀다. 문구는 사양 확정(UI 문자열 영어).
+    /// <para>
+    /// A342 배치 5: 숨은 개수를 문구에서 뺐다 — 스캔(ExplorerListing.List)의 maxItems가 2,000이라
+    /// entries.Count 자체가 이미 잘린 값이고, 그 차이는 실제 숨은 개수가 아니어서 거짓이 된다.
+    /// 대신 "앞의 몇 개를 보여 주는가"만 말한다(중앙 타일과 같은 문구).
+    /// </para>
     /// </summary>
-    private static SelectorItem MakeOverflowNotice(int hidden, bool grid)
+    private static SelectorItem MakeOverflowNotice(bool grid)
     {
         var text = new TextBlock
         {
-            Text = $"{hidden} more items are not shown. Refine the filter to see them.",
+            Text = $"Showing the first {MaterializeLimit} items. Refine the filter to see the rest.",
             FontSize = 11,
             Opacity = 0.6,
             TextWrapping = TextWrapping.Wrap,
@@ -972,7 +969,7 @@ public sealed partial class ExplorerPane : UserControl
     /// A192: 진행 중 분할 조립의 완료 대기(없으면 즉시) — 새 폴더/파일 생성 직후의 편집 진입이
     /// FindItemByPath 전에 부른다(그 항목의 컨테이너가 뒤 조각에 있을 수 있다). 대기 중 새
     /// 재스캔이 끼어들면 낡은 신호가 즉시 풀리고, 뒤이은 FindItemByPath 미매칭이 기존
-    /// "그새 사라짐" 폴백으로 무해하게 끝난다. 상한 밖(2000 초과분) 항목도 같은 폴백이다.
+    /// "그새 사라짐" 폴백으로 무해하게 끝난다. 상한(MaterializeLimit) 밖 항목도 같은 폴백이다.
     /// </summary>
     private Task WhenFillCompleteAsync() => _fillDone?.Task ?? Task.CompletedTask;
 
