@@ -6,6 +6,11 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-09-05 (46차) — A350 후속 v0.343.1(프로세스 AUMID · Opus 위임)
+
+사용자 스크린샷: v0.343.0에서도 "알 수 없는 앱". 가설 = SMTC가 창이 아니라 프로세스 AUMID로 이름을 찾는다(Firefox 방식) →
+`SetCurrentProcessExplicitAppUserModelID("KOTU")` + `AppUserModelId\KOTU` 키. 실기기 대기.
+
 ### 2026-09-04 (45차) — A350 플라이아웃 앱 이름(v0.343.0 · Opus 위임)
 
 사용자가 "플라이아웃"이 뭔지 물어 설명 → 스크린샷으로 확인(SMTC 동작 확정 · "알 수 없는 앱") → 원인(비패키지 앱의 AUMID 표시 키
