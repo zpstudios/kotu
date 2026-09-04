@@ -651,6 +651,7 @@ public sealed partial class ExplorerPane : UserControl
         // 항해 계측(diag.navTiming, 기본 꺼짐)의 합류점 — 세 진입 경로(트리 선택·리스트 활성화·
         // 중앙 썸네일 더블클릭)가 전부 이 메서드로 모인다. 출처만 각 진입점이 미리 적어 둔다
         // (NavDiagnostics.NoteSource). 꺼져 있으면 Begin이 앞단 게이트에서 즉시 반환한다.
+        NavGcScope.Enter(); // A342 배치 4 실험 — 항해 구간에만 GC 지연 모드를 낮춘다(완료·실패 시 Leave)
         NavDiagnostics.Begin();
         _ = NavigateToAsync(folder, extensions); // 발사 후 망각 — 본문이 예외를 스스로 처리(종전 async void와 동일 소비)
     }
@@ -726,11 +727,15 @@ public sealed partial class ExplorerPane : UserControl
         }
         catch (OperationCanceledException)
         {
+            // A342 배치 4: 이 항해가 아직 최신일 때만 GC 실험 구간을 푼다 — 낡은 항해(seq 불일치)는
+            // 새 항해가 이미 Enter로 세워 둔 pending을 깎으면 안 되므로 그대로 둔다.
+            if (seq == _loadSeq) NavGcScope.Leave(NavGcScope.Participant.List);
             return; // 페인이 내려가며 워커가 닫힘 — 그릴 곳도 없다
         }
         catch (Exception ex)
         {
             if (seq != _loadSeq) return;
+            NavGcScope.Leave(NavGcScope.Participant.List); // A342 배치 4 — 실패로 끝난 항해도 반드시 푼다
             StopFillAppendLoop(); // A192 — 직전 폴더의 조립 루프가 빈 판에 낡은 조각을 붙이지 않게(seq 대조와 이중)
             _fillDone?.TrySetResult(true);
             _fillDone = null;
@@ -880,6 +885,9 @@ public sealed partial class ExplorerPane : UserControl
                 StopFillAppendLoop();
                 _fillDone?.TrySetResult(true); // seq 일치 확인 뒤의 예외라 이 신호는 이번 조립 것이다
                 _fillDone = null;
+                // A342 배치 4: 이 갈래는 FinishFill에 닿지 못한다 — 여기서 풀지 않으면 좌 리스트
+                // 몫이 영영 남는다(= 프로세스가 SustainedLowLatency로 굳는다).
+                if (seq == _loadSeq) NavGcScope.Leave(NavGcScope.Participant.List);
             }
         }
         _fillAppendHandler = OnTick;
@@ -934,6 +942,9 @@ public sealed partial class ExplorerPane : UserControl
         // 목록 조립·상세 로더 기동이 끝난 뒤에만 부가 스캔이 붙는다). 감시 재스캔의 재통지는
         // 소비 쪽 캐시(경로+수정시각)가 흡수한다 — 여기서 거르지 않는다(ViewChanged와 같은 방침).
         FillCompleted?.Invoke(entries);
+        // A342 배치 4: 좌 리스트 몫의 GC 실험 구간 해제 — 여기가 이 표면의 정상 완료 단일 지점이다
+        // (낡은 완료는 위 seq 대조에서 이미 돌아갔으므로 새 항해의 pending을 깎지 않는다).
+        NavGcScope.Leave(NavGcScope.Participant.List);
     }
 
     /// <summary>

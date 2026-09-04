@@ -669,6 +669,9 @@ public sealed partial class ThumbnailExplorer : UserControl
             catch (Exception)
             {
                 StopTileAppendLoop();
+                // A342 배치 4: 이 갈래는 FinishShowEntries에 닿지 못한다 — 여기서 풀지 않으면
+                // 중앙 타일 몫이 영영 남는다. 낡은 루프의 예외는 새 항해 것을 깎지 않게 seq를 본다.
+                if (seq == _showSeq) NavGcScope.Leave(NavGcScope.Participant.Grid);
             }
         }
         _tileAppendHandler = OnTick;
@@ -699,6 +702,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     private void FinishShowEntries(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
     {
         if (seq != _showSeq) return; // 방어 — 낡은 완료가 편집 진입을 훔치지 않게
+        // A342 배치 4: 중앙 타일 몫의 GC 실험 구간 해제 — 이 표면의 정상 완료 단일 지점이다
+        // (소형 폴더는 ShowEntries가 여기를 동기로 부른다: entries가 비어도 first < cap이 거짓이라
+        // 반드시 도달한다). 낡은 완료는 바로 위 seq 대조에서 돌아갔다.
+        NavGcScope.Leave(NavGcScope.Participant.Grid);
         // 계측 cfillN / cpaint: 중앙 타일 조립 완료와 그 뒤 첫 렌더 프레임(좌 리스트의 fillN·
         // paint와 대응). 좌·중앙 중 늦게 끝난 쪽이 사용자가 보는 "확 바뀌는" 순간이다.
         NavDiagnostics.Mark("cfillN");
