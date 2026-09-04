@@ -26,6 +26,12 @@ namespace KOTU.App;
 /// A94 5차: 폴더 감시(ExplorerPane)의 자동 재스캔도 같은 금지를 지켜야 해서 활성 편집을 여기서
 /// 정적으로 추적한다(IsEditing) — 감시는 편집 중 만료된 재스캔을 보류하고, 종료 알림(EditEnded)을
 /// 받아 소화한다. 종료 알림은 커밋·취소·검증 실패 어느 길이든 상자가 걷힌 뒤 1회 나간다.
+///
+/// A345 배치 2(좌 리스트 UI 가상화): 편집 중 스크롤하면 그 행의 컨테이너가 <b>다른 파일 행으로
+/// 재활용</b>된다 — 편집 상자가 그대로 남으면 엉뚱한 파일의 이름을 고치는 데이터 사고가 된다.
+/// 그래서 컨테이너가 재활용 큐로 들어갈 때 호스트 패널을 넘겨 강제 커밋시킨다(ForceFinish).
+/// 종료자(Finish)는 지역 함수라 밖에서 부를 수 없어, 상자의 Tag에 실어 두고 그것을 부른다
+/// (상자 하나에 종료자 하나 — 이 Tag의 용도는 그 하나뿐이다).
 /// </summary>
 internal static class ExplorerRenameBox
 {
@@ -46,6 +52,23 @@ internal static class ExplorerRenameBox
     /// 해지는 Unloaded(CutMarksChanged와 같은 수명 규칙).
     /// </summary>
     internal static event Action? EditEnded;
+
+    /// <summary>
+    /// A345 배치 2: 이 패널(항목 콘텐츠 루트)에 열려 있는 편집 상자를 <b>커밋</b>으로 끝낸다 —
+    /// 호출부는 리스트 컨테이너가 재활용 큐로 들어가는 순간(ContainerContentChanging의
+    /// InRecycleQueue)뿐이다. 커밋을 고른 이유: 사용자가 입력한 이름을 스크롤 한 번으로 버리는
+    /// 것보다, 포커스를 잃었을 때와 같은 규칙(LostFocus = 커밋 — 탐색기 관례)이 일관된다.
+    /// 열린 상자가 없으면 무동작이다(대부분의 재활용이 이 경우다 — Count 0 조기 반환).
+    /// </summary>
+    internal static void ForceFinish(Panel host)
+    {
+        if (ActiveBoxes.Count == 0) return;
+        foreach (var box in ActiveBoxes.ToList()) // 종료가 집합을 줄이므로 복사본을 순회한다
+        {
+            if (!host.Children.Contains(box)) continue;
+            if (box.Tag is Action<bool> finish) finish(true);
+        }
+    }
 
     /// <summary>추적 해제 + 종료 알림 — Finish(정상 종료)와 상자 Unloaded(창 닫힘 안전망) 양쪽에서 온다.</summary>
     private static void ClearActive(TextBox box)
@@ -112,6 +135,10 @@ internal static class ExplorerRenameBox
             // 보류 플래그를 먼저 걷어 가고(ExplorerPane.TearDownWatch) _loadSeq도 있어 채우기는 1회다.
             ClearActive(box);
         }
+
+        // A345 배치 2: 종료자를 상자에 실어 둔다 — 가상화 컨테이너 재활용 시 밖에서(ForceFinish)
+        // 이 상자만 골라 커밋시키는 유일한 통로다(Finish는 지역 함수라 다른 접근 경로가 없다).
+        box.Tag = (Action<bool>)Finish;
 
         box.KeyDown += (_, e) =>
         {

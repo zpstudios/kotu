@@ -24,6 +24,11 @@ namespace KOTU.App;
 /// ThumbnailExplorer가 대체했고, 이 페인의 표시 목록(ViewChanged)이 그 뷰의 데이터 원본이다.
 /// 썸네일 그리드 경로(MakeGridItem·LoadThumbnailsAsync)는 전체 페인 사용처가 다시 생길 때를
 /// 위해 남겨 뒀다(리스트 전용 모드에서는 그리드가 숨겨져 실행되지 않는다).
+/// <b>A345 배치 2 — 두 표면의 구조가 갈라졌다</b>: 좌 리스트(ListPane)는 ItemsSource +
+/// DataTemplate(x:Bind) + ContainerContentChanging <b>가상화</b>라 보이는 행만 실체화되고,
+/// 항목의 표시 상태는 뷰모델(ExplorerEntryVm)이 들고 있다. 좌 그리드(IconGrid)는 휴면 표면이라
+/// 종전 컨테이너 직접 조립(Tag = 뷰모델)이 그대로다. 항목 객체의 해석은 그래서 표면마다
+/// 다르며, 그 차이는 <c>VmOf</c> 한 곳이 흡수한다 — 새 코드도 반드시 그것을 지나게 할 것.
 /// 폴더 스캔은 페인 전용 워커(A42)에서 직렬로, 항목별로 독립인 썸네일·상세 조각 fetch는
 /// 페인 전용 풀(A194 — ModuleWorkerPool, 워커 3)에서 상한 있는 병렬로 돌고,
 /// UI 스레드는 결과 반영만 한다(카운터·캐시·컨테이너 접근은 전부 UI 스레드 단독).
@@ -37,26 +42,11 @@ public sealed partial class ExplorerPane : UserControl
     private const int DoubleClickMs = 500;
 
     /// <summary>
-    /// A192 체감 조정 지점: 분할 조립 조각 크기(항목 수) — 첫 즉시 조각과 프레임당 append 조각이
-    /// 같은 값을 쓴다(확정 수치 80 — DocumentView.RenderChunkBlocks의 상수 배치 관용구.
-    /// 되돌리기·조정은 이 상수 하나만 고치면 된다).
-    /// </summary>
-    private const int FillChunkItems = 80;
-
-    /// <summary>
-    /// A342 배치 3: 상세 캐시 히트 적용을 끊는 조각 크기(적용 건수). 값은 FillChunkItems와 같지만
-    /// 조립 조각과 결합시키지 않으려고 별도 상수로 둔다 — 한쪽만 조정해도 다른 쪽이 흔들리지 않는다.
-    /// </summary>
-    private const int DetailHitChunk = 80;
-
-    /// <summary>
-    /// A192: 표면당 컨테이너 실체화 상한 — 초과분은 컨테이너를 만들지 않고 말미에 비상호작용
-    /// 안내 1행만 붙인다(MakeOverflowNotice). 상한은 <b>컨테이너 실체화에만</b> 걸린다:
+    /// A192: 컨테이너 실체화 상한 — <b>A345 배치 2부터 IconGrid(휴면 그리드) 전용</b>이다.
+    /// 좌 리스트(ListPane)는 ItemsSource + DataTemplate 가상화라 보이는 행만 실체화되고,
+    /// 따라서 상한 자체가 필요 없다(안내 행 MakeOverflowNotice도 함께 폐기 — ItemsSource
+    /// 상태에서 Items.Add는 즉시 예외다). 그리드는 종전 컨테이너 조립이라 상한을 남긴다.
     /// _entries·_display·ViewChanged로 흐르는 Entry 목록과 체크 prune(A179)은 전체 그대로다.
-    /// <para>
-    /// A342 배치 5 실험: 2,000에서 500으로 내린다 — XAML 객체 수를 1/4로 줄였을 때 gen2 횟수와
-    /// GC 정지가 그에 비례해 줄어드는지 판별하려는 것이다(중앙 타일 상한과 항상 같은 값).
-    /// </para>
     /// </summary>
     private const int MaterializeLimit = 500;
 
@@ -87,10 +77,10 @@ public sealed partial class ExplorerPane : UserControl
     public event Action? SelectionChanged;
 
     /// <summary>
-    /// A241: 표시 목록 조립 완료(A192 FinishFill) 통지 — ViewChanged(조립 시작 시점)와 달리
-    /// 컨테이너 실체화·상세 로더 기동이 끝난 뒤에 온다. 셸이 우측 정보 패널의 폴더 단위 EXIF
+    /// A241: 표시 목록 조립 완료(FinishFill) 통지 — ViewChanged(조립 시작 시점)와 달리
+    /// 목록 반영·로더 기동이 끝난 뒤에 온다(A345 배치 2부터 리스트 컨테이너 실체화는 화면 분량뿐). 셸이 우측 정보 패널의 폴더 단위 EXIF
     /// 프리페치를 여기 걸어 뼈대 우선 원칙(A192)을 지킨다. 인자 = 표시 목록 전체(정렬·필터
-    /// 반영 — 실체화 상한 밖 항목 포함, ViewChanged와 같은 집합).
+    /// 반영 — 화면 밖 항목 포함, ViewChanged와 같은 집합).
     /// </summary>
     public event Action<IReadOnlyList<ExplorerListing.Entry>>? FillCompleted;
 
@@ -158,22 +148,13 @@ public sealed partial class ExplorerPane : UserControl
     private int _loadSeq;                     // 빠른 연속 탐색 시 늦은 결과 폐기
 
     /// <summary>
-    /// A192: 분할 조립 루프의 프레임 틱 핸들러(null = 루프 없음). CompositionTarget.Rendering은
-    /// static 이벤트라 뷰 수명 안에서 반드시 해제한다 — 남기면 닫힌 페인이 통째로 누수된다
-    /// (DocumentView._renderAppendHandler와 같은 사정). 해제의 단일 지점 = StopFillAppendLoop.
-    /// 호출부 전수 = Unloaded·Fill 기동 직전 방어·NavigateToAsync 스캔 실패 경로·틱 내부
-    /// (완료/seq 중단/예외).
+    /// A345 배치 2: 상세 조각 fetch의 동시 발사 상한 — 페인 수명 1벌이다(종전 LoadDetailInfoAsync가
+    /// 회차마다 만들던 지역 게이트를 대체). 발사 주체가 "목록 전체를 도는 루프"에서
+    /// "보이는 행마다 도착하는 CCC"로 바뀌어 회차 개념이 사라졌기 때문이다.
+    /// <b>Dispose하지 않는다</b> — 대기 중인 획득이 남은 채 닫으면 finally의 Release가
+    /// ObjectDisposedException을 던진다(페인이 내려가면 seq 대조와 풀 취소가 이미 흐름을 끊는다).
     /// </summary>
-    private EventHandler<object>? _fillAppendHandler;
-
-    /// <summary>
-    /// A192: 진행 중 분할 조립의 완료 신호 — 새 폴더/파일 생성 직후의 편집 진입
-    /// (CreateFolderThenRenameAsync류)이 "컨테이너가 다 만들어진 뒤"를 기다리는 통로.
-    /// 루프가 돌 때만 존재하고(소형 폴더 = 동기 완료 = null), 완료·예외·새 Fill로 대체될 때
-    /// 반드시 TrySetResult로 풀어 준다(안 풀면 대기 흐름이 영원히 걸린다).
-    /// 생성 형태는 ModuleWorker.Run의 RunContinuationsAsynchronously 관용구.
-    /// </summary>
-    private TaskCompletionSource<bool>? _fillDone;
+    private readonly SemaphoreSlim _detailGate = new(FetchConcurrency);
     private (string Path, DateTime At)? _lastClick;
     private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
     private (string Path, DateTime At)? _lastPress;      // A131: 원시 눌림 쌍 — 항목 재구축을 건너 살아남는 최후 폴백
@@ -301,9 +282,8 @@ public sealed partial class ExplorerPane : UserControl
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             ExplorerRenameBox.EditEnded -= OnRenameEditEnded;
             _surfaceLive = false;
-            StopFillAppendLoop(); // A192 — CompositionTarget.Rendering은 static: 남기면 닫힌 페인 통째 누수
-            _fillDone?.TrySetResult(true); // A192 — 조립 완료를 기다리던 흐름 해방(소화할 곳이 없다)
-            _fillDone = null;
+            // A345 배치 2: 분할 조립 루프(CompositionTarget.Rendering)와 완료 신호가 사라져
+            // 여기서 풀어 줄 것이 없다 — 리스트는 ItemsSource 대입 한 줄로 동기 완결이다.
             TearDownWatch(); // 감시 이벤트 전부 해제 + Dispose + 디바운스 정지 — 창 통째 누수 방지
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
@@ -313,14 +293,18 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 잘라내기(Ctrl+X) 표시 반영 (A94 4차): 이미 그려 둔 항목의 콘텐츠 투명도를 경로 매칭으로
-    /// 다시 맞춘다 — 재스캔이 아니라 제자리 갱신이라 선택·스크롤이 보존된다. 새로 그려지는
-    /// 항목은 MakeGridItem·MakeListItem이 같은 규칙(ExplorerFileOps.ApplyCutMark)으로 처음부터 반영한다.
+    /// 잘라내기(Ctrl+X) 표시 반영 (A94 4차): 표시 중인 항목의 콘텐츠 투명도를 경로 매칭으로
+    /// 다시 맞춘다 — 재스캔이 아니라 제자리 갱신이라 선택·스크롤이 보존된다.
+    /// <para>
+    /// A345 배치 2: 리스트는 <b>뷰모델 목록</b>을 순회한다 — 화면 밖 항목도 값이 맞아 있어야
+    /// 나중에 실체화될 때 옳게 그려진다(x:Bind OneWay가 ContentOpacity를 읽는다).
+    /// IconGrid(휴면)는 종전대로 컨테이너 순회다 — 그쪽은 컨테이너가 값을 들고 있다.
+    /// </para>
     /// </summary>
     private void ApplyCutMarks()
     {
         foreach (var item in IconGrid.Items) ExplorerFileOps.ApplyCutMark(item);
-        foreach (var item in ListPane.Items) ExplorerFileOps.ApplyCutMark(item);
+        foreach (var vm in _displayVms) ExplorerFileOps.ApplyCutMark(vm);
     }
 
     // ---------- 정렬 (A5 → A155 컬럼 헤더) ----------
@@ -500,11 +484,11 @@ public sealed partial class ExplorerPane : UserControl
         // A345 배치 1: 데이터 축을 여기서 한 번만 만든다 — 항목 컨테이너는 전부 이 뷰모델을 Tag로 든다.
         _displayVms = arranged.Select(e => new ExplorerEntryVm(e)).ToList();
         _displayFolder = _folder; // A323 — 이 목록이 속한 폴더(셸 시드의 정합 판정용)
-        Fill(arranged, seq); // A192 — 첫 조각 즉시 + 나머지는 프레임 분할(완료 시 FinishFill)
+        Fill(arranged); // A345 배치 2 — 리스트는 ItemsSource 대입 한 줄(동기 완결)
         ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
-        // A192: 소형 폴더(첫 조각 이하)는 조립이 위 Fill에서 동기로 끝났다 — 종전 순서 그대로
-        // (Fill → ViewChanged → 로더) 마무리를 여기서 한다. 루프가 돌면 마지막 틱이 부른다.
-        if (_fillAppendHandler is null) FinishFill(arranged, seq);
+        // A345 배치 2: 조립이 항상 동기로 끝나므로 마무리도 항상 여기서 한다(종전 분할 조립
+        // 루프의 "마지막 틱이 부른다" 분기는 사라졌다). 순서는 종전 그대로 Fill → ViewChanged → 로더.
+        FinishFill(arranged, seq);
     }
 
     // ---------- 파일 종류 필터 (A7) ----------
@@ -616,12 +600,14 @@ public sealed partial class ExplorerPane : UserControl
             : "Filter file types");
     }
 
-    /// <summary>가벼운 상세 텍스트(길이·모듈별 정보 — A6·A155)를 먼저 채우고,
-    /// 무거운 썸네일을 이어서 채운다. A194: 각 단계 안에서는 fetch가 풀(워커 3)로 겹치지만
-    /// 단계 간 순서(상세 전체 → 썸네일)는 종전대로 유지한다(await 직렬).</summary>
+    /// <summary>
+    /// 조립 완료 뒤의 지연 로더 — A345 배치 2부터 <b>IconGrid 썸네일뿐</b>이다.
+    /// 리스트 상세 조각(A6·A155)은 목록 전체를 도는 루프가 아니라 보이는 행마다 도는
+    /// ContainerContentChanging(RequestDetail)이 요청한다 — 상한 없는 목록에서 fetch가
+    /// 개수에 비례해 폭주하지 않게 하는 것이 가상화의 핵심 조건이다.
+    /// </summary>
     private async Task LoadDetailsAsync(int seq)
     {
-        await LoadDetailInfoAsync(seq);
         await LoadThumbnailsAsync(seq);
     }
 
@@ -692,16 +678,13 @@ public sealed partial class ExplorerPane : UserControl
         // 문구·목록을 덮고, 실패 경로도 "Cannot read..."가 덮는다). 같은 폴더 재스캔(감시 400ms
         // 디바운스·조작 후 갱신)은 이 갈래에 안 들어와 종전대로 무Clear(깜빡임 방지)다.
         // Clear ~ Fill 사이의 소비자는 전부 빈 목록에 안전하다: 선택 소멸 발화는 A240의 null 선택
-        // 규칙(닫힌 도크는 FileListOverlay가 차단), ApplyCutMarks·CheckedPathsInView·FindItemByPath는
-        // 빈 순회, 낡은 로더·조립 루프는 위 seq 증가와 아래 Stop이 접고, 편집 진입 대기
-        // (WhenFillCompleteAsync)는 신호 해방 후 미매칭 폴백("그새 사라짐")으로 무해하게 끝난다.
+        // 규칙(닫힌 도크는 FileListOverlay가 차단), ApplyCutMarks·CheckedPathsInView·FindVmByPath는
+        // 빈 순회(A345 배치 2부터 순회 대상이 _displayVms다), 낡은 로더는 위 seq 증가가 접는다.
+        // 편집 진입 대기(A192 WhenFillCompleteAsync)는 조립이 동기가 되며 함께 사라졌다.
         if (folderChanged)
         {
-            StopFillAppendLoop(); // 직전 폴더의 조립 루프가 빈 판에 낡은 조각을 붙이지 않게(seq 대조와 이중)
-            _fillDone?.TrySetResult(true); // 직전 조립을 기다리던 흐름 해방 — 낡은 목록이니 미매칭 폴백으로 끝난다
-            _fillDone = null;
             IconGrid.Items.Clear();
-            ListPane.Items.Clear();
+            ListPane.ItemsSource = null; // A345 배치 2 — ItemsSource 상태에서 Items.Clear는 즉시 예외다
             EmptyText.Text = "Loading...";
             EmptyText.Visibility = Visibility.Visible;
             // 계측 load: "Loading..." 대입 직후 = 사용자가 보게 될 화면 상태가 정해진 시점.
@@ -740,11 +723,8 @@ public sealed partial class ExplorerPane : UserControl
         catch (Exception ex)
         {
             if (seq != _loadSeq) return;
-            StopFillAppendLoop(); // A192 — 직전 폴더의 조립 루프가 빈 판에 낡은 조각을 붙이지 않게(seq 대조와 이중)
-            _fillDone?.TrySetResult(true);
-            _fillDone = null;
             IconGrid.Items.Clear();
-            ListPane.Items.Clear();
+            ListPane.ItemsSource = null; // A345 배치 2 — 위 folderChanged 경로와 같은 규칙
             EmptyText.Text = "Cannot read this folder: " + ex.Message;
             EmptyText.Visibility = Visibility.Visible;
             ViewChanged?.Invoke(folder, []); // A93 — 썸네일 뷰도 옛 폴더 목록을 남기지 않는다
@@ -777,166 +757,62 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 표시 목록을 항목 컨테이너로 다시 만들어 채운다(ItemsSource·DataTemplate 없음 — 구조 규칙).
-    /// A192: 종전 전량 동기 생성을 분할 조립으로 대체 — 첫 조각(FillChunkItems)만 즉시 만들고
-    /// 나머지는 CompositionTarget.Rendering 틱당 한 조각씩 append한다(StartFillAppendLoop —
-    /// DocumentView.StartRenderAppendLoop의 A193 구조 복제). 실체화 상한(MaterializeLimit)을
-    /// 넘는 초과분은 만들지 않고 완료 시점(FinishFill)에 안내 1행만 붙는다. 재스캔·정렬·필터
-    /// 재진입은 명시 해제(아래 Stop) + 틱 진입 seq 대조의 이중 방어 — 낡은 조각이 새 목록에
-    /// 붙는 사고가 없다. 상세·썸네일 로더 기동도 FinishFill로 옮겼다(조각이 덜 붙은 스냅샷을
-    /// 로더가 잡으면 나중 항목이 이번 회차에서 영영 빠지기 때문 — 근거는 FinishFill 주석).
-    /// A179 유의: 체크(작업 집합)는 경로 키 집합(_checkedPaths)이 진실이라 이 재생성(폴더 감시
-    /// 400ms 재스캔 포함)이 돌아도 MakeListItem이 집합에서 복원한다 — 종전 A157의 "재스캔 후
-    /// 체크 소실" 낙수는 이것으로 해소. **선택**(하이라이트)은 여전히 재생성과 함께 사라진다 —
-    /// 선택 복원은 별도 설계가 필요해 범위 밖(등재 후보 유지).
+    /// 표시 목록을 채운다 — A345 배치 2부터 두 표면의 방식이 다르다.
+    /// 좌 리스트(ListPane)는 <b>뷰모델 목록을 ItemsSource로 대입</b>하고, 화면에 보이는 행만
+    /// 컨테이너가 만들어진다(DataTemplate + ContainerContentChanging 가상화 — 실체화 상한 없음).
+    /// 좌 그리드(IconGrid)는 휴면 표면이라 종전대로 컨테이너를 직접 만들어 붙인다
+    /// (상한 MaterializeLimit 유지 · 리스트 전용 모드에서는 접혀 있어 한 개도 만들지 않는다).
+    /// <para>
+    /// 사라진 것: 분할 조립 루프(A192 — CompositionTarget.Rendering 틱당 한 조각)·완료 신호
+    /// (_fillDone)·상한 초과 안내 행(MakeOverflowNotice). ItemsSource 대입은 동기 1회라
+    /// 기다릴 것이 없고, 안내 행은 ItemsSource 상태에서 Items.Add가 즉시 예외라 성립하지 않는다.
+    /// </para>
+    /// A179 유의: 체크(작업 집합)는 경로 키 집합(_checkedPaths)이 진실이라 이 재작성(폴더 감시
+    /// 400ms 재스캔 포함)이 돌아도 생존한다 — 시각 복원은 뷰모델을 만드는 RefreshView가 하고,
+    /// x:Bind가 그것을 읽는다. **선택**(하이라이트)은 여전히 재작성과 함께 사라진다
+    /// (선택 복원은 별도 설계가 필요해 범위 밖 — 등재 후보 유지).
     /// </summary>
-    private void Fill(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
+    private void Fill(IReadOnlyList<ExplorerListing.Entry> entries)
     {
-        StopFillAppendLoop(); // 방어: 직전 조립 루프가 남아 있으면 먼저 해제(A193 관용구)
-        _fillDone?.TrySetResult(true); // 직전 조립을 기다리던 흐름 해방 — 낡은 목록이니 미매칭 폴백으로 끝난다
-        _fillDone = null;
-
         IconGrid.Items.Clear();
-        ListPane.Items.Clear();
-        // 계측 clr: 대량 Items.Clear의 비용을 첫 조각 생성과 분리해 본다(둘 다 UI 스레드 동기다).
+        ListPane.ItemsSource = null; // 옛 목록 해제(같은 참조 재대입이 무시되는 일도 함께 막는다)
+        // 계측 clr: 옛 목록 해제 비용을 새 목록 대입과 분리해 본다(둘 다 UI 스레드 동기다).
         NavDiagnostics.Mark("clr");
 
-        // A345 배치 1: 조립의 입력은 뷰모델 목록이다. 루프가 도는 동안 재스캔이 필드를 갈아
-        // 끼워도 이번 조립은 이 스냅샷만 본다(seq 대조와 이중 방어).
-        var vms = _displayVms;
-        var cap = Math.Min(entries.Count, MaterializeLimit);
-        var first = Math.Min(FillChunkItems, cap);
-        AppendFillRange(vms, 0, first);
-        // 계측 fill0: 첫 조각(즉시 생성분) 반영 완료 — 나머지는 프레임 틱 분할이라 여기부터
-        // fillN까지가 "조각 반영에 걸린 프레임 수"다.
+        // RefreshView가 방금 만든 뷰모델 목록 — entries와 같은 순서·같은 개수다.
+        ListPane.ItemsSource = _displayVms;
+        // 계측 fill0: 리스트 대입 완료. 실제 컨테이너 생성은 레이아웃이 "보이는 행만" 하므로
+        // 여기부터 fillN까지는 종전처럼 개수에 비례하지 않는다(가상화의 판별식).
         NavDiagnostics.Mark("fill0");
+
+        if (IconGrid.Visibility == Visibility.Visible) // 휴면 경로 — 종전 컨테이너 조립 그대로
+        {
+            var cap = Math.Min(entries.Count, MaterializeLimit);
+            for (var i = 0; i < cap; i++) IconGrid.Items.Add(MakeGridItem(_displayVms[i]));
+        }
 
         EmptyText.Text = "No matching files here";
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-
-        if (first < cap)
-        {
-            _fillDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            StartFillAppendLoop(seq, entries, vms, first, cap);
-        }
-        // 소형 폴더(첫 조각 이하)는 여기서 조립이 끝났다 — 마무리(FinishFill)는 호출자
-        // (RefreshView)가 종전 순서(Fill → ViewChanged → 로더)를 지키려고 자기 자리에서 부른다.
-    }
-
-    /// <summary>조각 하나를 두 표면에 붙인다 (A192) — 종전 Fill 본문의 항목 생성 그대로.
-    /// A345 배치 1: 입력이 Entry에서 뷰모델로 바뀌었다(컨테이너 Tag = 뷰모델).</summary>
-    private void AppendFillRange(IReadOnlyList<ExplorerEntryVm> vms, int start, int count)
-    {
-        var makeGrid = IconGrid.Visibility == Visibility.Visible; // 리스트 전용 모드(현행 유일 사용처)면 그리드 생략
-        for (var i = start; i < start + count; i++)
-        {
-            var vm = vms[i];
-            if (makeGrid) IconGrid.Items.Add(MakeGridItem(vm));
-            ListPane.Items.Add(MakeListItem(vm));
-        }
     }
 
     /// <summary>
-    /// A192: 첫 조각 이후의 나머지 항목을 CompositionTarget.Rendering 틱마다 한 조각
-    /// (FillChunkItems)씩 append한다 — UI 스레드 점유 상한 = 조각 1개 생성
-    /// (DocumentView.StartRenderAppendLoop과 같은 프레임 틱 관용구·같은 해제 의무).
-    /// 중단 판정 = 매 틱 append 직전의 seq 대조(한 틱 = 한 조각이라 틱 진입 시 1회로 충분):
-    /// 재스캔(감시 디바운스 포함)·정렬·필터·폴더 전환이 _loadSeq를 올리는 현행 구조 그대로다.
-    /// 틱 핸들러는 본문 전체가 try/catch다(static 이벤트라 예외가 새면 앱 전역 크래시) —
-    /// 조각 생성 예외 = 루프 중단(부분 목록 잔존은 다음 재스캔이 덮는다) + 완료 신호 해방.
-    /// </summary>
-    private void StartFillAppendLoop(
-        int seq, IReadOnlyList<ExplorerListing.Entry> entries, IReadOnlyList<ExplorerEntryVm> vms,
-        int start, int cap)
-    {
-        StopFillAppendLoop(); // 방어: 기동 직전 잔존 루프 해제(A193 관용구)
-
-        var next = start;
-        // A342: 이 루프의 직전 틱 시작 시각(틱). 0 = 아직 첫 틱 전이라 간격을 잴 수 없다.
-        var lastTickStart = 0L;
-        void OnTick(object? sender, object? e)
-        {
-            // A342: 정지 487ms가 prev0>fillN 구간에서 나는데 미리보기 개수와 무관해, 어느 틱이
-            // 주인인지 틱 단위로 좁힌다. 진단이 꺼져 있으면 여기서 비용이 0이다(0 = 미계측 표지).
-            var tickStart = NavDiagnostics.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
-            // A342 배치 2: 이 틱 동안 늘어난 GC 정지를 함께 잰다 — 240ms짜리 틱의 주인이
-            // 조립인지 GC인지 가르는 값이다(ms 단위 — Stopwatch 틱과 섞지 않는다).
-            var pauseStart = tickStart == 0 ? 0L : NavDiagnostics.PauseMs();
-            try
-            {
-                if (seq != _loadSeq)
-                {
-                    StopFillAppendLoop(); // 그새 재스캔·정렬·폴더 전환 — 낡은 조각을 붙이지 않는다
-                    return;               // _fillDone은 건드리지 않는다 — 이미 새 Fill 것으로 대체됐다
-                }
-                var count = Math.Min(FillChunkItems, cap - next);
-                AppendFillRange(vms, next, count); // A345 배치 1 — 조각의 입력도 뷰모델
-                next += count;
-                if (next >= cap)
-                {
-                    StopFillAppendLoop(); // 완료 — 더 깨울 이유가 없다
-                    FinishFill(entries, seq);
-                }
-                // A342: 조각 append(마지막 틱이면 FinishFill까지 포함)가 끝난 뒤에만 기록한다 —
-                // 예외 경로는 남기지 않는다(반쪽 틱의 소요는 해석을 흐린다).
-                if (tickStart != 0)
-                {
-                    NavDiagnostics.NoteTick(
-                        'L',
-                        next - 1,
-                        System.Diagnostics.Stopwatch.GetTimestamp() - tickStart,
-                        lastTickStart == 0 ? 0 : tickStart - lastTickStart,
-                        NavDiagnostics.PauseMs() - pauseStart);
-                    lastTickStart = tickStart;
-                }
-            }
-            catch (Exception)
-            {
-                StopFillAppendLoop();
-                _fillDone?.TrySetResult(true); // seq 일치 확인 뒤의 예외라 이 신호는 이번 조립 것이다
-                _fillDone = null;
-            }
-        }
-        _fillAppendHandler = OnTick;
-        CompositionTarget.Rendering += OnTick;
-    }
-
-    /// <summary>A192: 분할 조립 루프 해제의 단일 지점 — 구독 해제 + 표지 소거(루프 없으면 무동작).
-    /// 기동은 StartFillAppendLoop 한 곳뿐이라 구독 중 핸들러 = 이 필드 하나가 불변식이다.</summary>
-    private void StopFillAppendLoop()
-    {
-        if (_fillAppendHandler is { } handler)
-        {
-            CompositionTarget.Rendering -= handler;
-            _fillAppendHandler = null;
-        }
-    }
-
-    /// <summary>
-    /// A192: 조립 완료의 단일 마무리 — ① 상한 초과분 안내 1행 부착, ② 완료 신호 해방,
-    /// ③ 상세·썸네일 로더 기동. 로더를 "루프 완료 후"로 옮긴 근거: LoadDetailInfoAsync·
-    /// LoadThumbnailsAsync는 기동 시점에 Items를 스냅샷해 순회하므로, 조각이 덜 붙은 시점에
-    /// 기동하면 뒤 조각의 항목이 이번 회차에서 영영 빠진다(부재 "내성"으로 해결 불가 —
-    /// 다시 찾지 않는 구조). 대형 폴더의 상세·썸네일이 조립 완료까지(상한(MaterializeLimit) 기준 수백 ms)
-    /// 늦는 것은 수용(사양 명기). 소형 폴더는 RefreshView가 동기로 불러 종전 시점과 같다.
-    /// 낡은 완료(폐기된 루프의 마지막 틱)는 seq 대조로 걸러진다.
+    /// 조립 완료의 단일 마무리: ① 열린 콘텐츠 표시(A323) 재적용, ② 썸네일 로더 기동,
+    /// ③ 조립 완료 통지(A241 — 셸의 EXIF 프리페치 훅).
+    /// <para>
+    /// A345 배치 2에서 빠진 것 = 상한 초과 안내 행 부착과 완료 신호 해방. 로더를 "조립 뒤"에
+    /// 두는 근거도 이제 <b>IconGrid 썸네일 한정</b>이다: LoadThumbnailsAsync가 기동 시점에
+    /// IconGrid.Items를 스냅샷해 순회하므로 타일이 다 붙은 뒤여야 한다. 리스트 상세 조각은
+    /// 스냅샷 순회를 그만두고 보이는 행마다(RequestDetail) 도는 구조라 이 순서와 무관하다.
+    /// </para>
+    /// 낡은 완료(폐기된 회차)는 seq 대조로 걸러진다.
     /// </summary>
     private void FinishFill(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
     {
         if (seq != _loadSeq) return; // 방어 — 낡은 완료가 로더를 기동하지 않게
-        // 계측 fillN: 마지막 조각까지 붙은 시점(로더 기동 직전). 뒤이어 무장하는 paint는
+        // 계측 fillN: 목록 반영이 끝난 시점(로더 기동 직전). 뒤이어 무장하는 paint는
         // 이 목록이 실제 화면 프레임에 올라간 시점을 잰다.
         NavDiagnostics.Mark("fillN");
-        if (entries.Count > MaterializeLimit)
-        {
-            if (IconGrid.Visibility == Visibility.Visible)
-                IconGrid.Items.Add(MakeOverflowNotice(grid: true));
-            ListPane.Items.Add(MakeOverflowNotice(grid: false));
-        }
-        _fillDone?.TrySetResult(true);
-        _fillDone = null;
-        // A323: 목록 재작성은 선택을 지운다 — 열린 콘텐츠 표시를 조립 완료 시점에 다시 건다.
-        // 여기여야 하는 이유: 분할 조립(A192)에서 해당 항목이 뒤 조각에 있을 수 있다.
+        // A323: 목록 재작성은 선택을 지운다 — 열린 콘텐츠 표시를 여기서 다시 건다.
         // 셸의 선택 축은 바로 앞 ViewChanged가 이미 null로 리셋했으므로(MainWindow 생성자 배선)
         // 이 재적용이 사용자 선택을 덮는 일이 없다 — 두 축의 순서 계약(A200)이 그대로 성립한다.
         ApplyCurrentFileSelection();
@@ -944,45 +820,76 @@ public sealed partial class ExplorerPane : UserControl
         // 이벤트 구독 한 줄이라 순서가 비용에 영향을 주지 않는다).
         NavDiagnostics.ArmPaint("paint");
         _ = LoadDetailsAsync(seq);
-        // A241: 조립 완료 훅 — 셸이 우측 정보 패널의 EXIF 프리페치를 여기서 기동한다(뼈대 우선:
-        // 목록 조립·상세 로더 기동이 끝난 뒤에만 부가 스캔이 붙는다). 감시 재스캔의 재통지는
-        // 소비 쪽 캐시(경로+수정시각)가 흡수한다 — 여기서 거르지 않는다(ViewChanged와 같은 방침).
+        // A241: 조립 완료 훅 — 셸이 우측 정보 패널의 EXIF 프리페치를 여기서 기동한다(뼈대 우선).
+        // 감시 재스캔의 재통지는 소비 쪽 캐시(경로+수정시각)가 흡수한다 — 여기서 거르지 않는다.
         FillCompleted?.Invoke(entries);
     }
 
+    // ---------- 항목 해석의 단일 지점 (A345 배치 2) ----------
+
     /// <summary>
-    /// A192: 실체화 상한 초과 안내 — 비상호작용 1행/1타일. Tag 없음(항목 조회·조작 루틴은 전부
-    /// Tag의 뷰모델 패턴 매칭이라 자연 제외된다 — A345 배치 1: FindItemByPath·CheckedPathsInView·SelectedPathsOf·
-    /// ApplyCutMark·LoadDetailInfoAsync 전수 확인), 계약 훅(메뉴·드래그·체크·더블클릭) 미부착,
-    /// IsEnabled=false로 포커스·클릭 대상에서도 뺀다. 문구는 사양 확정(UI 문자열 영어).
-    /// <para>
-    /// A342 배치 5: 숨은 개수를 문구에서 뺐다 — 스캔(ExplorerListing.List)의 maxItems가 2,000이라
-    /// entries.Count 자체가 이미 잘린 값이고, 그 차이는 실제 숨은 개수가 아니어서 거짓이 된다.
-    /// 대신 "앞의 몇 개를 보여 주는가"만 말한다(중앙 타일과 같은 문구).
-    /// </para>
+    /// 어떤 "항목 객체"에서든 뷰모델을 꺼낸다 — <b>이 배치의 최대 함정을 막는 단일 깔때기</b>다.
+    /// 두 표면의 항목 표현이 서로 다르기 때문이다:
+    /// ListPane은 ItemsSource라 SelectedItem·ClickedItem·SelectedItems가 <b>뷰모델 자체</b>이고
+    /// 컨테이너(ListViewItem)의 Content도 뷰모델이다. IconGrid(휴면)는 종전대로 컨테이너를 직접
+    /// 담으므로 <b>Tag</b>가 뷰모델이다. 한 곳이라도 옛 Tag 패턴으로 남으면 Enter·F2·Del·
+    /// Ctrl+C/X·드래그·체크·정보 패널이 <b>예외 없이</b> 죽는다(컴파일도 통과한다) — 그래서
+    /// 항목 해석은 전부 이 한 곳을 지난다.
     /// </summary>
-    private static SelectorItem MakeOverflowNotice(bool grid)
+    private static ExplorerEntryVm? VmOf(object? o) => o switch
     {
-        var text = new TextBlock
+        ExplorerEntryVm vm => vm,
+        SelectorItem { Content: ExplorerEntryVm vm } => vm,
+        FrameworkElement { Tag: ExplorerEntryVm vm } => vm,
+        _ => null,
+    };
+
+    /// <summary>
+    /// 리스트 컨테이너 준비 (A345 배치 2 — ListPane 전용). 가상화의 계약이 여기 다 모여 있다:
+    /// <list type="bullet">
+    /// <item>재활용 큐로 들어가는 컨테이너는 <b>편집 상자를 강제 커밋</b>하고 드랍을 끈다 —
+    /// 편집 중 스크롤로 상자가 다른 파일 행으로 옮겨 가는 것이 이 배치의 데이터 사고다.</item>
+    /// <item>훅(컨텍스트 메뉴·드래그·더블탭)은 컨테이너당 <b>1회만</b> 붙이고, 핸들러 안에서는
+    /// 항목을 캡처하지 않고 <see cref="VmOf"/>로 <b>그때그때 다시 푼다</b> — 캡처하면 재활용된
+    /// 컨테이너가 옛 파일을 조작한다.</item>
+    /// <item>AllowDrop은 <b>매번</b> 다시 정한다 — 폴더였던 컨테이너가 파일 행으로 재활용되면
+    /// 잔존한 AllowDrop이 파일을 드랍 대상으로 만든다.</item>
+    /// </list>
+    /// 표시값(이름·상세·툴팁·체크·잘라내기 흐림)은 x:Bind가 새 항목 값으로 다시 평가하므로
+    /// 여기서 손대지 않는다(그것이 뷰모델 축을 만든 이유다 — 배치 1).
+    /// </summary>
+    private void OnListContainerContentChanging(
+        ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.ItemContainer is not ListViewItem item) return;
+        if (args.InRecycleQueue)
         {
-            Text = $"Showing the first {MaterializeLimit} items. Refine the filter to see the rest.",
-            FontSize = 11,
-            Opacity = 0.6,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(4),
-        };
-        return grid
-            ? new GridViewItem { Content = text, IsEnabled = false }
-            : (SelectorItem)new ListViewItem { Content = text, IsEnabled = false };
+            // 인라인 이름변경 상자가 이 컨테이너에 남아 있으면 커밋으로 끝낸다(보수안 ⓐ의 짝).
+            if (item.ContentTemplateRoot is Panel host) ExplorerRenameBox.ForceFinish(host);
+            item.AllowDrop = false; // 잔존 방지 — 다음 항목이 파일이어도 드랍을 받지 않게
+            return;
+        }
+        if (args.Item is not ExplorerEntryVm vm) return;
+        EnsureListItemHooks(item);    // 컨테이너당 1회
+        item.AllowDrop = vm.IsFolder; // 매 재사용마다 재설정(폴더만 드랍 대상 — A94)
+        if (args.Phase == 0) RequestDetail(vm, _loadSeq); // 보이는 행만 상세 조각 요청
     }
 
     /// <summary>
-    /// A192: 진행 중 분할 조립의 완료 대기(없으면 즉시) — 새 폴더/파일 생성 직후의 편집 진입이
-    /// FindItemByPath 전에 부른다(그 항목의 컨테이너가 뒤 조각에 있을 수 있다). 대기 중 새
-    /// 재스캔이 끼어들면 낡은 신호가 즉시 풀리고, 뒤이은 FindItemByPath 미매칭이 기존
-    /// "그새 사라짐" 폴백으로 무해하게 끝난다. 상한(MaterializeLimit) 밖 항목도 같은 폴백이다.
+    /// 리스트 컨테이너에 계약 훅을 1회만 건다 (A345 배치 2). "이미 붙였는가"의 표지는
+    /// <see cref="UIElement.ContextFlyout"/> 유무다 — 아래에서 반드시 하나를 걸기 때문에
+    /// 별도 플래그(첨부 속성·사전)를 만들지 않아도 되는 가장 값싼 판정이다.
+    /// 훅은 전부 <b>지연 해석</b>이다(핸들러 안에서 VmOf로 다시 푼다) — 컨테이너는 재활용돼도
+    /// 훅은 남기 때문에, 여기서 vm이나 entry를 캡처하면 옛 파일을 조작하게 된다.
     /// </summary>
-    private Task WhenFillCompleteAsync() => _fillDone?.Task ?? Task.CompletedTask;
+    private void EnsureListItemHooks(ListViewItem item)
+    {
+        if (item.ContextFlyout is not null) return; // 이미 부착됨
+        AttachContextMenu(item, ListPane); // A24 + A94 2차(Rename·Delete) — A335 Opening 재구성
+        AttachDragDrop(item, ListPane);    // A94 — 드래그 아웃 + 폴더 항목 드랍
+        item.IsDoubleTapEnabled = true;    // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
+        item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
+    }
 
     /// <summary>
     /// 항목 우클릭 메뉴 (A94 2차 신설 → 6차 확장). 순서는 탐색기 관례 근사:
@@ -1003,10 +910,20 @@ public sealed partial class ExplorerPane : UserControl
     /// 첫 우클릭에서 메뉴를 놓치지 않는 근거: ContextFlyout은 <b>Opening을 먼저 발화시키고</b>
     /// 그 결과를 띄우므로, 그 시점에 채우면 같은 우클릭에서 그대로 보인다(위 3종 선례와 동일).
     /// </remarks>
-    private void AttachContextMenu(SelectorItem item, ExplorerListing.Entry entry, ListViewBase owner)
+    /// <remarks>
+    /// A345 배치 2: 대상 항목을 인자로 받지 않는다 — <b>열리는 순간</b>에 VmOf로 다시 푼다.
+    /// 가상화 뒤에는 이 컨테이너가 다른 파일로 재활용되므로, 부착 시점의 entry를 캡처하면
+    /// 옛 파일이 Cut·Delete 대상이 된다(재활용 잔존 사고 중 가장 위험한 갈래).
+    /// 그새 항목이 풀리지 않으면(재활용 중 등) 빈 메뉴로 연다 — 조작 대상이 없는 것이 옳다.
+    /// </remarks>
+    private void AttachContextMenu(SelectorItem item, ListViewBase owner)
     {
         var flyout = new MenuFlyout();
-        flyout.Opening += (_, _) => BuildItemContextMenu(flyout, item, entry, owner);
+        flyout.Opening += (_, _) =>
+        {
+            if (VmOf(item) is { } vm) BuildItemContextMenu(flyout, item, vm, owner);
+            else flyout.Items.Clear();
+        };
         item.ContextFlyout = flyout;
     }
 
@@ -1015,9 +932,14 @@ public sealed partial class ExplorerPane : UserControl
     /// 대상 규칙은 종전 그대로. 옮긴 것은 <b>시점</b>뿐이다). 매번 비우고 다시 만들므로 두 번째
     /// 우클릭에 항목이 겹쳐 쌓이지 않는다.
     /// </summary>
+    /// <remarks>
+    /// A345 배치 2: 대상은 <b>열린 순간에 푼 뷰모델</b>이다(vm). Rename만은 디스패처로 한 박자
+    /// 미루므로 그 사이 컨테이너가 재활용될 수 있어, 실행 직전에 같은 뷰모델인지 다시 대조한다.
+    /// </remarks>
     private void BuildItemContextMenu(
-        MenuFlyout flyout, SelectorItem item, ExplorerListing.Entry entry, ListViewBase owner)
+        MenuFlyout flyout, SelectorItem item, ExplorerEntryVm vm, ListViewBase owner)
     {
+        var entry = vm.Entry;
         flyout.Items.Clear();
         if (!entry.IsFolder) AddOpenInNewInstance(flyout, entry);
         AddClipboardItems(flyout, entry, owner); // A94 6차 — Cut·Copy·(폴더면 Paste) + 구분선
@@ -1026,7 +948,11 @@ public sealed partial class ExplorerPane : UserControl
             Text = "Rename",
             Icon = new FontIcon { Glyph = "\uE8AC" }, // Rename
         };
-        rename.Click += (_, _) => DispatcherQueue.TryEnqueue(() => BeginRenameOf(item));
+        rename.Click += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            // 지연 사이에 컨테이너가 재활용됐으면 다른 파일의 이름을 고치게 된다 — 무동작이 옳다.
+            if (ReferenceEquals(VmOf(item), vm)) BeginRenameOf(item);
+        });
         flyout.Items.Add(rename);
         var delete = new MenuFlyoutItem
         {
@@ -1183,8 +1109,10 @@ public sealed partial class ExplorerPane : UserControl
 
         var item = new GridViewItem { Content = panel, Tag = vm }; // A345 배치 1 — Tag = 뷰모델
         ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
-        AttachContextMenu(item, entry, IconGrid); // A24 + A94 2차(Rename·Delete)
-        AttachDragDrop(item, entry, IconGrid); // A94 — 드래그 아웃 + 폴더 항목 드랍
+        // A345 배치 2: 두 훅은 대상을 인자로 받지 않고 VmOf로 그때그때 푼다 — 여기(그리드)에서는
+        // 컨테이너 Tag가, 리스트에서는 컨테이너 Content가 뷰모델이라 같은 함수가 양쪽을 덮는다.
+        AttachContextMenu(item, IconGrid); // A24 + A94 2차(Rename·Delete)
+        AttachDragDrop(item, IconGrid); // A94 — 드래그 아웃 + 폴더 항목 드랍
         item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
         item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
         return item;
@@ -1197,30 +1125,39 @@ public sealed partial class ExplorerPane : UserControl
     // 그래서 조회 키를 코드에서 지정한 Name으로 옮긴다 — 조회 지점이 아래 두 헬퍼로 모여 있어
     // 항목 구조를 또 바꿔도 고칠 곳이 한 군데다.
 
-    /// <summary>이름 TextBlock의 조회 키 (A156). MakeListItem·MakeGridItem이 같은 이름을 붙인다.</summary>
+    /// <summary>이름 TextBlock의 조회 키 (A156) — 이름변경 진입(BeginRenameOf)이 이것으로 찾는다.
+    /// 리스트는 XAML DataTemplate의 x:Name, 그리드(휴면)는 MakeGridItem이 같은 이름을 붙인다
+    /// (A345 배치 2 — 값이 어긋나면 F2·Rename이 예외 없이 무반응이 된다).</summary>
     private const string ItemNameBlockName = "ExplorerItemName";
 
-    /// <summary>2줄째 상세 TextBlock의 조회 키 (A156) — 크기·속성·날짜를 한 줄로 합쳐 담는다.</summary>
+    /// <summary>2줄째 상세 TextBlock의 이름 (A156) — 값은 이제 x:Bind가 채운다(A345 배치 2).
+    /// 상수는 XAML의 x:Name과 짝을 이루는 정본 표기로 남긴다.</summary>
     private const string ItemDetailBlockName = "ExplorerItemDetail";
 
-    /// <summary>체크박스의 조회 키 (A157 → A179) — Space 체크 토글의 시각 동기가 이 이름으로 찾는다.</summary>
+    /// <summary>체크박스의 이름 (A157 → A179) — 체크 시각도 x:Bind가 맡는다(A345 배치 2).
+    /// 상수는 XAML의 x:Name과 짝을 이루는 정본 표기로 남긴다.</summary>
     private const string ItemCheckBoxName = "ExplorerItemCheck";
 
     /// <summary>
     /// 항목 콘텐츠 패널에서 이름으로 TextBlock을 찾는다 (A156).
     /// 항목 루트는 평평한 패널 하나(중첩 없음)라 한 레벨 탐색으로 충분하다 — 시각 트리 상향
     /// 탐색(ItemFromSource)과 달리 여기는 우리가 만든 구조만 본다.
+    /// <para>
+    /// A345 배치 2: 콘텐츠 패널을 얻는 길이 표면마다 다르다 — 리스트는 DataTemplate이 만든
+    /// <see cref="ContentControl.ContentTemplateRoot"/>이고, 그리드(휴면)는 코드가 직접 넣은
+    /// Content다. 앞쪽 갈래를 빠뜨리면 이름변경(F2·Rename)이 <b>예외 없이</b> 무반응이 된다.
+    /// </para>
     /// </summary>
     private static TextBlock? FindItemBlock(object item, string name) =>
-        item is ContentControl { Content: Panel panel }
-            ? panel.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == name)
-            : null;
+        ContentPanelOf(item)?.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == name);
 
-    /// <summary>항목 콘텐츠 패널의 작업 집합 체크박스 (A157 → A179) — FindItemBlock과 같은 이름 기반 규칙.</summary>
-    private static CheckBox? FindItemCheckBox(object item) =>
-        item is ContentControl { Content: Panel panel }
-            ? panel.Children.OfType<CheckBox>().FirstOrDefault(c => c.Name == ItemCheckBoxName)
-            : null;
+    /// <summary>항목의 콘텐츠 패널 (A345 배치 2) — 리스트 = 템플릿 루트, 그리드 = 직접 넣은 Content.</summary>
+    private static Panel? ContentPanelOf(object item) => item switch
+    {
+        ContentControl { ContentTemplateRoot: Panel templated } => templated,
+        ContentControl { Content: Panel direct } => direct,
+        _ => null,
+    };
 
     /// <summary>
     /// 지연 로드로 채우는 상세 조각 한 벌 (A6 길이 → A155 확장 → A199 모듈별 1조각으로 정리).
@@ -1279,133 +1216,18 @@ public sealed partial class ExplorerPane : UserControl
     }
 
     /// <summary>
-    /// 상세 줄과 툴팁을 한 벌로 (다시) 채운다 (A156) — 생성 시점(MakeListItem)과 지연 로드
-    /// 도착 시점(LoadDetailInfoAsync)이 같은 조립을 쓰게 하는 단일 깔때기.
+    /// 상세 줄과 툴팁을 한 벌로 (다시) 채운다 (A156) — 초판(크기·날짜)과 지연 로드 도착분이
+    /// 같은 조립을 쓰게 하는 단일 깔때기. 호출부는 전부 RequestDetail 안에 있다(A345 배치 2).
     /// </summary>
     /// <remarks>
-    /// A345 배치 1: 같은 값을 뷰모델(DetailText·TooltipText)에도 대입한다 — 두 벌이 어긋나지
-    /// 않도록 <b>한 함수 안에서 둘 다</b> 갱신하는 것이 이 배치의 계약이다. 배치 2에서
-    /// x:Bind가 뷰모델 쪽을 읽게 되면 아래 컨테이너 직접 대입이 사라진다.
+    /// A345 배치 2: 대입 대상은 <b>뷰모델뿐</b>이다 — 컨테이너 직접 대입은 사라졌다.
+    /// 화면 반영은 DataTemplate의 x:Bind(DetailText·TooltipText, Mode=OneWay)가 맡으므로
+    /// 화면 밖 항목에 적용해도 값이 보존되고, 나중에 실체화될 때 옳게 그려진다.
     /// </remarks>
-    private static void ApplyDetail(ListViewItem item, ExplorerEntryVm vm, DetailInfo details)
+    private static void ApplyDetail(ExplorerEntryVm vm, DetailInfo details)
     {
-        var detailText = BuildDetailText(vm.Entry, details);
-        var tooltipText = BuildTooltipText(vm.Entry, details);
-        vm.DetailText = detailText;
-        vm.TooltipText = tooltipText;
-        if (FindItemBlock(item, ItemDetailBlockName) is { } detail)
-            detail.Text = detailText;
-        if (item.Content is UIElement row)
-            ToolTipService.SetToolTip(row, tooltipText);
-    }
-
-    /// <summary>
-    /// 리스트 행 (A156 — 2줄): 1줄 = 아이콘 + 이름, 2줄 = 크기·[속성]·Created·Modified 한 줄,
-    /// 우측 끝 = 작업 집합 체크박스(A157 → A179). 속성 조각은 지연 로드(A6 → A155)라 처음에는
-    /// 빠진 채 조립되고, 도착하면 상세 줄을 통째로 다시 만든다.
-    /// 루트는 **평평한 Grid 하나**다(중첩 패널 금지) — 이름변경(ExplorerRenameBox.Begin)이
-    /// host 패널에 편집 상자를 끼우고 Grid.SetRow/SetColumn으로 이름 자리에 앉히기 때문.
-    /// A198 행 높이 압축: 위 트리(FileListOverlay의 FolderTree — 스타일 무지정 = WinUI 기본
-    /// TreeViewItemMinHeight 32px)와 동급을 목표로, 숨은 하한 세 개를 전부 명시로 누른다:
-    /// ① ListViewItem.MinHeight = 0 (기본 ListViewItemMinHeight 40이 진짜 하한이었다 — A156이
-    ///    예고한 "커지면 MinHeight 한 줄" 복구 지점의 반대 방향 적용),
-    /// ② ListViewItem.Padding = 12,1,12,1 (세로 1px — 기본 세로 패딩 승계 차단, 가로는 기본 근사),
-    /// ③ 체크박스 MinHeight = 0 (기본 32가 RowSpan=2로 두 줄 전체를 32px 이상으로 버텼다).
-    /// 글꼴은 이름 12 유지·상세 10(11에서 축소)·아이콘 13 유지 → 콘텐츠 약 29px + 패딩 2px ≈ 31px.
-    /// 실기기 육안이 최종 판정 — 되돌리기 지점은 아래 item 초기화의 MinHeight·Padding 두 줄과
-    /// 상세 FontSize 한 줄이다(전부 이 메서드 안).
-    /// (LineHeight/LineStackingStrategy는 쓰지 않는다 — 저장소 선례 0건이고 기본 전략상 무효).
-    /// </summary>
-    private ListViewItem MakeListItem(ExplorerEntryVm vm) // A345 배치 1 — 입력이 뷰모델
-    {
-        var entry = vm.Entry;
-        var row = new Grid { ColumnSpacing = 8, RowSpacing = 0 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                      // 0 아이콘
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // 1 이름·상세
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                      // 2 체크박스
-        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                           // 0 이름
-        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                           // 1 상세
-
-        var icon = new FontIcon
-        {
-            Glyph = entry.IsFolder ? "\uE8B7" : "\uE7C3",
-            FontSize = 13,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetRowSpan(icon, 2); // 두 줄 높이 가운데 정렬
-
-        var name = new TextBlock
-        {
-            Name = ItemNameBlockName,
-            Text = entry.Name,
-            FontSize = 12,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        Grid.SetColumn(name, 1);
-
-        var detail = new TextBlock
-        {
-            Name = ItemDetailBlockName,
-            FontSize = 10, // A198: 11 → 10 — 행 높이 압축의 일부(되돌리기 지점)
-            Opacity = 0.6,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        Grid.SetColumn(detail, 1);
-        Grid.SetRow(detail, 1);
-
-        // A179(종전 A157 반전): 체크 = 선택과 분리된 **작업 집합**의 시각화 — 진실은 경로 키 집합
-        // _checkedPaths다. 행 클릭 선택(하이라이트)은 체크에 손대지 않고, 체크는 이 체크박스
-        // 클릭(또는 Space)으로만 토글된다. SelectionMode는 Extended 그대로다 — Multiple로 바꾸면
-        // A94의 Ctrl/Shift 관례와 PathsForDrag 계약이 그 위에 서 있어 깨진다.
-        // 콘텐츠 '안'에 두는 이유 = 잘라내기 흐림(ExplorerFileOps.ApplyCutMark)이 SelectorItem.Content
-        // 루트의 Opacity를 만지므로, 밖에 두면 잘라낸 항목에서 체크만 또렷하게 남는다. 잘라내기 중
-        // 체크도 함께 0.5로 흐려지는 것은 수용한다(항목 전체가 흐려지는 탐색기 모양).
-        // 기본 치수(MinWidth·MinHeight·Padding·Margin)를 0으로 눌러야 2줄 행 높이를 체크박스가
-        // 먹지 않는다(A198: 기본 MinHeight 32가 A156 경고대로 숨은 하한이었다 — 명시 0 추가).
-        var check = new CheckBox
-        {
-            Name = ItemCheckBoxName,
-            Content = null,
-            // A179: 경로 키 집합에서 복원 — Fill 전량 재생성(재스캔)을 건너 체크가 생존한다.
-            // A345 배치 1: 바로 아래에서 뷰모델에도 같은 값을 넣는다(두 벌 동기).
-            IsChecked = _checkedPaths.Contains(entry.Path),
-            MinWidth = 0,
-            MinHeight = 0, // A198 — 행 압축의 필수 조건(이게 남으면 다른 압축이 전부 무효)
-            Padding = new Thickness(0),
-            Margin = new Thickness(0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(check, 2);
-        Grid.SetRowSpan(check, 2);
-        // A179 시각 규칙 안내(하이라이트 = 선택 / 체크 = 작업 집합)를 툴팁으로 — UI 문자열 영어.
-        ToolTipService.SetToolTip(check,
-            "Check to target file operations (copy, cut, delete, drag, open). No checks = selection.");
-        vm.IsChecked = check.IsChecked == true; // A345 배치 1 — 컨테이너 초기값과 같은 값
-        check.Click += OnItemCheckClick; // Checked/Unchecked는 구독 금지 — 근거는 OnItemCheckClick 주석
-
-        row.Children.Add(icon);
-        row.Children.Add(name);
-        row.Children.Add(detail);
-        row.Children.Add(check);
-
-        var item = new ListViewItem
-        {
-            Content = row,
-            Tag = vm, // A345 배치 1 — Tag = 뷰모델
-            // A198 행 높이 압축(트리 행 32px 동급 목표) — 되돌리기 지점: 아래 두 줄을 지우면
-            // WinUI 기본(ListViewItemMinHeight 40·테마 패딩)으로 복귀한다.
-            MinHeight = 0,
-            Padding = new Thickness(12, 1, 12, 1),
-        };
-        ApplyDetail(item, vm, DetailInfo.Empty); // 상세 줄 + 툴팁 초판(속성 조각은 아직 도착 전)
-        ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
-        AttachContextMenu(item, entry, ListPane); // A24 + A94 2차(Rename·Delete)
-        AttachDragDrop(item, entry, ListPane); // A94 — 드래그 아웃 + 폴더 항목 드랍
-        item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
-        item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
-        return item;
+        vm.DetailText = BuildDetailText(vm.Entry, details);
+        vm.TooltipText = BuildTooltipText(vm.Entry, details);
     }
 
     /// <summary>상세 조각 캐시(A6 → A155 확장): 경로→(수정시각, 조각 한 벌). 수정시각이 다르면 무효.</summary>
@@ -1445,36 +1267,44 @@ public sealed partial class ExplorerPane : UserControl
         : InfoKind.None;
 
     /// <summary>
-    /// 파일별 상세 조각(재생시간·해상도·페이지 수·압축률·인코딩 — A6 → A155 → A199)을 리스트 행
-    /// 2줄째 상세 줄에 합쳐 넣는다. 취득은 전부 워커에서(폴더 진입 체감 불변 — 동기 열거에 안 싣는 A156 결정),
-    /// UI는 텍스트 반영만. 재진입은 _loadSeq 가드(썸네일 루프와 같은 관용구).
-    /// 정렬·필터 재그리기는 캐시가 흡수한다(수정시각 일치 시 재조회 없음).
-    /// <para>
-    /// A194: 항목별 fetch는 서로 독립이라 풀(FetchPool — 워커 3)로 겹치게 돌린다. 발사는
-    /// UI 스레드의 SemaphoreSlim 게이트로 동시 3건까지만 — 폴더 전환(seq 변화)·풀 닫힘이 오면
-    /// 더 발사하지 않으므로 낡은 폴더의 fetch가 큐에 쌓이지 않는다. 결과 도착 순서는 무관(사양) —
-    /// 항목별 반영이라 순서가 필요 없다. <b>_infoCache와 ApplyDetail은 종전대로 UI 스레드에서만
-    /// 만진다</b>(발사 루프와 fetch 후속부는 전부 UI 문맥에서 돌고, 워커 람다는 순수 fetch뿐).
-    /// </para>
+    /// 행 하나의 상세 조각(재생시간·해상도·페이지 수·압축률·인코딩 — A6 → A155 → A199) 요청.
+    /// A345 배치 2: 호출부는 <b>보이는 행마다 도는 ContainerContentChanging</b> 하나뿐이다 —
+    /// 종전 LoadDetailInfoAsync는 목록 전체를 스냅샷해 돌았고, 실체화 상한이 사라진 지금
+    /// 그 구조를 두면 10,000개 폴더에서 fetch가 개수에 비례해 폭주한다(가상화의 필수 짝).
+    /// <list type="number">
+    /// <item>초판(크기·날짜)을 먼저 채운다 — 상세 줄이 빈 채로 실체화되면 행 높이가 나중에
+    /// 늘어 스크롤이 튄다(종전 MakeListItem의 초판 적용과 같은 역할).</item>
+    /// <item>폴더·클라우드 전용(A175)·대상 아닌 확장자는 여기서 끝. 이미 요청한 행도 끝
+    /// (재활용 때마다 같은 행이 다시 들어오므로 DetailRequested 표지가 중복을 막는다).</item>
+    /// <item>캐시 히트(경로 + 수정시각 일치)는 워커 없이 즉시 반영 — 같은 폴더 재진입이 값싸다.
+    /// 종전의 조각내기(A342 배치 3의 DetailHitChunk·YieldToUiAsync)는 필요가 없어졌다:
+    /// 수천 건이 한 덩어리로 도는 일 자체가 사라졌다(보이는 행만 온다).</item>
+    /// <item>그 밖은 풀(A194 — 워커 3)로 fetch. 동시 발사 상한은 페인 수명 1벌의 게이트다.</item>
+    /// </list>
+    /// <b>async void인 이유</b>: 이벤트(CCC)에서 직접 부르는 발사 후 망각이라 기다릴 주체가
+    /// 없다 — 대신 본문 전체를 try/catch로 감싸 예외가 UI 스레드로 새지 않게 한다.
+    /// _infoCache와 뷰모델 대입은 종전대로 UI 스레드 단독이다(워커 람다는 순수 fetch뿐).
     /// </summary>
-    private async Task LoadDetailInfoAsync(int seq)
+    private async void RequestDetail(ExplorerEntryVm vm, int seq)
     {
-        var items = ListPane.Items.ToList(); // 스냅샷 — await 중 컬렉션 변경 대비
-        using var gate = new SemaphoreSlim(FetchConcurrency); // 동시 발사 상한 (A194)
-        var running = new List<Task>();
-        // A342 배치 2 — 캐시 히트 경로는 await 없이 ApplyDetail을 연속 호출한다(같은 폴더
-        // 재진입이면 수천 회가 한 덩어리). 그 덩어리가 UI 정지의 주인인지 재려고 건수와
-        // 누적 소요(Stopwatch 틱)를 모아 foreach 직후 한 번에 넘긴다.
-        var detHits = 0;
-        var detTicks = 0L;
-        var hitsSinceYield = 0; // A342 배치 3 — 조각 경계 카운터(캐시 히트 적용분만 센다)
-        var stop = false; // 풀이 닫힘(취소 Task) — 남은 발사 중단. UI 스레드에서만 읽고 쓴다.
-
-        // 항목 하나의 fetch + UI 반영. UI 스레드에서 시작하므로 await 후속부도 UI 스레드다.
-        async Task FetchIntoAsync(ListViewItem item, ExplorerEntryVm vm, InfoKind kind)
+        try
         {
+            if (vm.DetailText.Length == 0) ApplyDetail(vm, DetailInfo.Empty); // 초판 — 행 높이 확보
+            if (vm.DetailRequested || vm.IsFolder || vm.IsPlaceholder) return; // A175 — 하이드레이션 유발 금지
+            var kind = InfoKindOf(vm.Name);
+            if (kind == InfoKind.None) return;
+            vm.DetailRequested = true;
+
+            if (_infoCache.TryGetValue(vm.Path, out var hit) && hit.Modified == vm.Entry.Modified)
+            {
+                if (hit.Details.Info.Length > 0) ApplyDetail(vm, hit.Details);
+                return; // 캐시 히트는 워커 없이 즉시 반영(종전 동작)
+            }
+
+            await _detailGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
             try
             {
+                if (seq != _loadSeq) return; // 폴더 전환 — 낡은 요청 폐기
                 DetailInfo details;
                 try
                 {
@@ -1482,8 +1312,7 @@ public sealed partial class ExplorerPane : UserControl
                 }
                 catch (OperationCanceledException)
                 {
-                    stop = true; // 페인이 내려가며 풀이 닫힘 — 발사 루프도 멈춘다
-                    return;
+                    return; // 페인이 내려가며 풀이 닫힘
                 }
                 catch
                 {
@@ -1492,89 +1321,17 @@ public sealed partial class ExplorerPane : UserControl
                 if (seq != _loadSeq) return; // 폴더 전환 — 낡은 결과 폐기
                 if (_infoCache.Count > 4000) _infoCache.Clear(); // 장시간 세션 폭주 방지
                 _infoCache[vm.Path] = (vm.Entry.Modified, details); // 캐시 키는 종전대로 경로
-                if (details.Info.Length == 0) return;
-                // A156: 대입이 아니라 그 항목의 상세 줄과 툴팁을 통째로 다시 조립한다
-                // (조각 순서는 BuildDetailText가 쥔다).
-                ApplyDetail(item, vm, details);
+                if (details.Info.Length > 0) ApplyDetail(vm, details);
             }
             finally
             {
-                gate.Release(); // 예외·취소 경로 포함 — 누락되면 3건 뒤 조용히 멈춘다
+                _detailGate.Release(); // 예외·취소 경로 포함 — 누락되면 3건 뒤 조용히 멈춘다
             }
         }
-
-        foreach (var obj in items)
+        catch
         {
-            if (stop || seq != _loadSeq) break;
-            if (obj is not ListViewItem { Tag: ExplorerEntryVm { IsFolder: false } vm } item) continue;
-            var kind = InfoKindOf(vm.Name);
-            if (kind == InfoKind.None) continue;
-            // A175: 클라우드 전용(placeholder) 파일은 상세 조각 취득 자체가 하이드레이션이다 —
-            // 재생시간·이미지 해상도(속성 핸들러가 파일을 연다 — A180의 이미지 축 포함)·PDF 페이지 수
-            // (전체 로드)·zip 압축률(아카이브 열기)·텍스트 인코딩(A199 — 앞부분이라도 파일을 읽는다)
-            // 전부 생략하고 상세 줄은 초판(크기·날짜)대로 둔다. 캐시에도 넣지 않는다 —
-            // 사용자가 열어 로컬화되면 다음 재스캔에서 정상 조회된다.
-            if (vm.IsPlaceholder) continue;
-
-            // A342 배치 3 — 캐시 히트 분기는 await가 없어, 같은 폴더 재진입이면 수천 건의
-            // ApplyDetail이 마지막 조립 틱 안에서 한 덩어리로 돈다(v0.329.0 실측: 히트 2,000건
-            // 473ms, UI 정지 최대 695ms). DetailHitChunk건마다 UI 스레드를 한 번 놓아 조각낸다.
-            if (_infoCache.TryGetValue(vm.Path, out var hit) && hit.Modified == vm.Entry.Modified)
-            {
-                if (hit.Details.Info.Length > 0)
-                {
-                    if (NavDiagnostics.Enabled)
-                    {
-                        // A342 배치 2 — 계측은 진단이 켜져 있을 때만(꺼짐이면 종전 호출 그대로다).
-                        var detStart = System.Diagnostics.Stopwatch.GetTimestamp();
-                        ApplyDetail(item, vm, hit.Details);
-                        detTicks += System.Diagnostics.Stopwatch.GetTimestamp() - detStart;
-                        detHits++;
-                    }
-                    else
-                    {
-                        ApplyDetail(item, vm, hit.Details);
-                    }
-                    hitsSinceYield++;
-                }
-                if (hitsSinceYield >= DetailHitChunk)
-                {
-                    hitsSinceYield = 0;
-                    // 디스패처가 내려갔으면 신호가 오지 않는다 — 발사를 멈춘다. return이 아니라 break인
-                    // 이유: return은 using gate를 먼저 닫아 이미 발사된 fetch의 finally Release가
-                    // ObjectDisposedException을 던진다. break는 WhenAll로 가서 종전 종료 경로와 같다.
-                    if (!await YieldToUiAsync()) break;
-                    if (seq != _loadSeq) break; // 놓은 사이 폴더가 바뀌었다
-                }
-                continue; // 캐시 히트는 워커 없이 즉시 반영 (종전 동작)
-            }
-
-            await gate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
-            if (stop || seq != _loadSeq)
-            {
-                gate.Release(); // 획득만 하고 발사하지 않는 경로 — 누수 방지
-                break;
-            }
-            running.Add(FetchIntoAsync(item, vm, kind));
+            // 발사 후 망각이라 삼킬 곳이 여기뿐이다 — 한 행의 상세 실패가 목록을 깨면 안 된다.
         }
-        // A342 배치 2 — 이번 조립의 캐시 히트 버스트를 계측판에 넘긴다(꺼짐이면 무동작).
-        if (NavDiagnostics.Enabled) NavDiagnostics.NoteDetailHits(detHits, detTicks);
-        // 발사분 완주 대기 — using gate의 Dispose가 대기 중 Release보다 앞서지 않게 한다.
-        await Task.WhenAll(running);
-    }
-
-    /// <summary>
-    /// A342 배치 3: UI 스레드를 한 번 놓아 준다 — 디스패처 큐에 완료 신호를 넣고 그것을 기다리므로,
-    /// 대기 중이던 입력·렌더 작업이 먼저 소화된다(저장소 관용구 = TaskCompletionSource +
-    /// DispatcherQueue.TryEnqueue). 디스패처가 이미 내려갔으면 신호가 오지 않으므로 TryEnqueue
-    /// 실패를 false로 돌려 호출부가 루프를 끝내게 한다.
-    /// </summary>
-    private async Task<bool> YieldToUiAsync()
-    {
-        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!DispatcherQueue.TryEnqueue(() => tcs.TrySetResult(true))) return false;
-        await tcs.Task;
-        return true;
     }
 
     /// <summary>
@@ -1669,7 +1426,7 @@ public sealed partial class ExplorerPane : UserControl
     /// 추출(셸 API 호출·스트림 읽기)은 워커에서 하고 UI 스레드는 비트맵 표시만 한다(A42).
     /// 항목마다 느릴 수 있으므로 상한을 두고, 폴더 이동 시 중단한다.
     /// A194: 추출은 상세 조각과 같은 풀(FetchPool)·같은 발사 구조(SemaphoreSlim 게이트,
-    /// LoadDetailInfoAsync 주석 참고)로 동시 3건까지 겹친다. loaded 카운터는 발사 전 검사와
+    /// RequestDetail 주석 참고)로 동시 3건까지 겹친다. loaded 카운터는 발사 전 검사와
     /// 반영 직전 검사 양쪽에서 보므로 상한(300)을 넘겨 반영되지 않고, 증감·검사 전부
     /// UI 스레드에서만 일어난다(경쟁 없음 — 워커 람다는 순수 fetch뿐).
     /// </summary>
@@ -1773,19 +1530,18 @@ public sealed partial class ExplorerPane : UserControl
         PathOfSelection(IconGrid.SelectedItem) ?? PathOfSelection(ListPane.SelectedItem);
 
     private static string? PathOfSelection(object? item) =>
-        item is FrameworkElement { Tag: ExplorerEntryVm { IsFolder: false } vm } ? vm.Path : null;
+        VmOf(item) is { IsFolder: false } vm ? vm.Path : null; // A345 배치 2 — 표면별 표현 차이는 VmOf가 흡수
 
     /// <summary>
     /// 선택된 항목(파일·폴더 불문) — 없으면 null (A240: 셸 선택 축 질의. ThumbnailExplorer.
     /// SelectedEntry와 같은 계약 — 폴더/무선택의 해석(= 선택 축 null)은 셸 몫이다).
-    /// 상한 초과 안내 행(MakeOverflowNotice)은 Tag가 없어 패턴 매칭에서 자연 제외된다.
-    /// A345 배치 1: Tag는 뷰모델(ExplorerEntryVm)이 되었지만 이 API의 반환은 종전대로 Entry다.
+    /// A345 배치 2: ListPane의 SelectedItem은 이제 <b>뷰모델 객체 자체</b>이고 IconGrid(휴면)는
+    /// 종전대로 컨테이너다 — 둘의 차이는 VmOf가 흡수한다. 이 API의 반환은 종전대로 Entry다.
     /// </summary>
     internal ExplorerListing.Entry? SelectedEntry =>
         EntryOfSelection(IconGrid.SelectedItem) ?? EntryOfSelection(ListPane.SelectedItem);
 
-    private static ExplorerListing.Entry? EntryOfSelection(object? item) =>
-        item is FrameworkElement { Tag: ExplorerEntryVm vm } ? vm.Entry : null; // A345 배치 1 — 반환은 종전대로 Entry
+    private static ExplorerListing.Entry? EntryOfSelection(object? item) => VmOf(item)?.Entry;
 
     // ---------- 열린 콘텐츠 표시 (A323) ----------
 
@@ -1869,14 +1625,20 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>
     /// A323: 한 표면에서 경로에 해당하는 항목을 선택하고 보이게 스크롤한다 —
     /// 대입·스크롤 관용구는 CreateFolderThenRenameAsync와 같은 한 벌(SelectedItem + ScrollIntoView).
-    /// 리스트 전용 모드(좌 오버레이)에서는 IconGrid에 항목이 없어 자연 무동작이다.
+    /// A345 배치 2: 리스트는 <b>뷰모델</b>을 선택 대상으로 대입한다(컨테이너를 찾지 않는다 —
+    /// 화면 밖 항목이면 컨테이너가 아예 없다. ScrollIntoView가 실체화까지 맡는다).
+    /// 그리드(휴면)는 종전 컨테이너 경로 그대로다. 리스트 전용 모드에서는 IconGrid에 항목이
+    /// 없어 그쪽이 자연 무동작이다.
     /// </summary>
-    private static void SelectCurrentIn(ListViewBase owner, string path)
+    private void SelectCurrentIn(ListViewBase owner, string path)
     {
-        if (FindItemByPath(owner, path) is not { } item) return;
-        if (ReferenceEquals(owner.SelectedItem, item)) return; // 이미 그 항목 — 스크롤도 되풀이하지 않는다
-        owner.SelectedItem = item;
-        owner.ScrollIntoView(item);
+        object? target = ReferenceEquals(owner, ListPane)
+            ? FindVmByPath(path)
+            : FindItemByPath(owner, path);
+        if (target is null) return;
+        if (ReferenceEquals(owner.SelectedItem, target)) return; // 이미 그 항목 — 스크롤도 되풀이하지 않는다
+        owner.SelectedItem = target;
+        owner.ScrollIntoView(target);
     }
 
     // ---------- 다중 선택 일괄 열기 (A94 6차, v0.153.0) ----------
@@ -1920,9 +1682,8 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>선택 항목 중 **파일**만의 경로 (A94 6차 — 일괄 열기 대상. 폴더는 제외한다).</summary>
     private static IReadOnlyList<string> SelectedFilePathsOf(ListViewBase owner) =>
         owner.SelectedItems
-            .OfType<FrameworkElement>()
-            .Select(i => i.Tag)
-            .OfType<ExplorerEntryVm>() // A345 배치 1 — Tag = 뷰모델
+            .Select(VmOf) // A345 배치 2 — 리스트는 뷰모델, 그리드는 컨테이너 Tag
+            .OfType<ExplorerEntryVm>()
             .Where(vm => !vm.IsFolder)
             .Select(vm => vm.Path)
             .ToList();
@@ -1937,7 +1698,14 @@ public sealed partial class ExplorerPane : UserControl
     /// 빈 영역·파일 항목 드랍은 호스트(FileListOverlay 패널)가 현재 폴더 대상으로 받는다.
     /// 항목 핸들러가 Handled를 걸므로 패널 핸들러와 이중 처리되지 않는다.
     /// </summary>
-    private void AttachDragDrop(SelectorItem item, ExplorerListing.Entry entry, ListViewBase owner)
+    /// <remarks>
+    /// A345 배치 2: 여기서도 항목을 캡처하지 않는다 — 세 핸들러 전부 발화 시점에 VmOf로 다시
+    /// 푼다(재활용된 컨테이너가 옛 파일을 끌거나 옛 폴더로 드랍받는 사고의 방지선).
+    /// 드랍 갈래는 <b>부착 시점에 폴더/파일을 가르지 않고</b> 항상 걸어 두고, 핸들러 안에서
+    /// "지금 이 컨테이너가 폴더인가"로 가른다. 실제 수용 여부는 AllowDrop이 정하며 그 값은
+    /// 리스트에서는 매 ContainerContentChanging이, 그리드(휴면)에서는 아래 한 줄이 정한다.
+    /// </remarks>
+    private void AttachDragDrop(SelectorItem item, ListViewBase owner)
     {
         item.CanDrag = true;
         item.DragStarting += async (_, args) =>
@@ -1945,8 +1713,9 @@ public sealed partial class ExplorerPane : UserControl
             var deferral = args.GetDeferral();
             try
             {
-                if (!await ExplorerFileOps.FillDragDataAsync(args.Data, PathsForDrag(owner, entry)))
-                    args.Cancel = true; // 실을 항목이 없다(그새 삭제 등) — 빈 드래그는 시작하지 않는다
+                if (VmOf(item) is not { } vm ||
+                    !await ExplorerFileOps.FillDragDataAsync(args.Data, PathsForDrag(owner, vm.Entry)))
+                    args.Cancel = true; // 실을 항목이 없다(그새 삭제·재활용 등) — 빈 드래그는 시작하지 않는다
             }
             finally
             {
@@ -1954,10 +1723,15 @@ public sealed partial class ExplorerPane : UserControl
             }
         };
 
-        if (!entry.IsFolder) return;
-        item.AllowDrop = true;
-        item.DragOver += (_, e) => ExplorerFileOps.HandleTargetDragOver(e, entry.Path);
-        item.Drop += (_, e) => HandleDrop(e, entry.Path);
+        item.AllowDrop = VmOf(item) is { IsFolder: true }; // 그리드용 초기값(리스트는 CCC가 매번 다시 정한다)
+        item.DragOver += (_, e) =>
+        {
+            if (VmOf(item) is { IsFolder: true } vm) ExplorerFileOps.HandleTargetDragOver(e, vm.Path);
+        };
+        item.Drop += (_, e) =>
+        {
+            if (VmOf(item) is { IsFolder: true } vm) HandleDrop(e, vm.Path);
+        };
     }
 
     /// <summary>
@@ -1971,12 +1745,11 @@ public sealed partial class ExplorerPane : UserControl
         return working.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) ? working : [entry.Path];
     }
 
-    /// <summary>표면의 선택 항목 경로 전부(폴더 포함) — 항목 = 컨테이너 직접 추가라 Tag(A345 배치 1부터 뷰모델)에서 꺼낸다.</summary>
+    /// <summary>표면의 선택 항목 경로 전부(폴더 포함) — 항목 해석은 VmOf 하나를 지난다(A345 배치 2).</summary>
     private static IReadOnlyList<string> SelectedPathsOf(ListViewBase owner) =>
         owner.SelectedItems
-            .OfType<FrameworkElement>()
-            .Select(i => i.Tag)
-            .OfType<ExplorerEntryVm>() // A345 배치 1 — Tag = 뷰모델
+            .Select(VmOf)
+            .OfType<ExplorerEntryVm>()
             .Select(vm => vm.Path)
             .ToList();
 
@@ -2046,7 +1819,7 @@ public sealed partial class ExplorerPane : UserControl
                 // "탐색기 리스트 포커스 = 선택 항목 열기 우선"으로 양보하는 표면 쪽 구현.
                 // ThumbnailExplorer.OnGridKeyDown의 Enter와 같은 구성): 폴더 = 진입, 파일 = 열기.
                 // 선택이 없으면 삼키지 않는다 — 셸도 이 표면엔 양보(ShouldPassThrough)라 무동작(A151·A274 유지).
-                if (owner.SelectedItem is not SelectorItem { Tag: ExplorerEntryVm vm }) return;
+                if (VmOf(owner.SelectedItem) is not { } vm) return; // A345 배치 2 — VmOf 단일 해석
                 var entry = vm.Entry;
                 e.Handled = true;
                 _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
@@ -2068,9 +1841,15 @@ public sealed partial class ExplorerPane : UserControl
             // A158: 셸 패널 키가 F11/F12로 옮겨가 F2 충돌 소멸 — 이름변경은 F2 유지(사용자 확정),
             // "선택이 있을 때만 Handled"라는 기존 소비 규칙도 무변경.
             case Windows.System.VirtualKey.F2: // 이름변경 — 다중 선택이어도 첫 항목(SelectedItem)만
-                if (owner.SelectedItem is not SelectorItem selected) return;
+                // A345 배치 2: 리스트의 SelectedItem은 뷰모델이라 편집 상자를 끼울 컨테이너를
+                // 먼저 실체화해야 한다(보수안 ⓐ). 그리드(휴면)는 SelectedItem이 곧 컨테이너다.
+                if (VmOf(owner.SelectedItem) is not { } target) return;
+                var container = ReferenceEquals(owner, ListPane)
+                    ? RealizeListContainer(target)
+                    : owner.SelectedItem as SelectorItem;
+                if (container is null) return; // 그새 사라짐 — 무동작(종전 미매칭 폴백과 같은 자리)
                 e.Handled = true;
-                BeginRenameOf(selected);
+                BeginRenameOf(container);
                 return;
             case Windows.System.VirtualKey.Delete: // Del = 휴지통 / Shift+Del = 영구 삭제(A94 4차)
                 if (ExplorerFileOps.IsCtrlDown()) return; // Ctrl+Del은 우리 조합이 아니다 — 종전대로 비켜 준다
@@ -2168,8 +1947,8 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private void BeginRenameOf(SelectorItem item)
     {
-        if (item.Tag is not ExplorerEntryVm vm) return;
-        if (item.Content is not Panel panel) return; // 편집 상자를 끼울 host
+        if (VmOf(item) is not { } vm) return; // A345 배치 2 — VmOf 단일 해석
+        if (ContentPanelOf(item) is not { } panel) return; // 편집 상자를 끼울 host(리스트 = 템플릿 루트)
         if (FindItemBlock(item, ItemNameBlockName) is not { } nameBlock) return;
         ExplorerRenameBox.Begin(panel, nameBlock, vm.Path, MakeOpUi(), RefreshAfterFileOp);
     }
@@ -2212,12 +1991,9 @@ public sealed partial class ExplorerPane : UserControl
         if (notice is not null) await ExplorerFileOps.ReportAsync(notice, denied ? 1 : 0, MakeOpUi());
         if (created is null) return;
         await NavigateToAsync(_folder, _extensions);
-        await WhenFillCompleteAsync(); // A192 — 분할 조립 완료 뒤에 찾는다(새 항목이 뒤 조각일 수 있다)
-        if (FindItemByPath(owner, created) is not { } item) return; // 그새 사라짐 등 — 생성만으로 끝
-        owner.SelectedItem = item;
-        owner.ScrollIntoView(item);
-        owner.UpdateLayout(); // 컨테이너 실체화 — 편집 상자 삽입·포커스가 성립하게
-        BeginRenameOf(item);
+        // A345 배치 2: 조립이 동기라 기다릴 것이 없다(WhenFillCompleteAsync 폐기). 리스트는
+        // 뷰모델을 선택하고 그 행의 컨테이너를 실체화해 편집에 들어간다(보수안 ⓐ).
+        BeginRenameByPath(owner, created);
     }
 
     /// <summary>
@@ -2234,15 +2010,62 @@ public sealed partial class ExplorerPane : UserControl
         if (notice is not null) await ExplorerFileOps.ReportAsync(notice, denied ? 1 : 0, MakeOpUi());
         if (created is null) return;
         await NavigateToAsync(_folder, _extensions);
-        await WhenFillCompleteAsync(); // A192 — 분할 조립 완료 뒤에 찾는다(새 항목이 뒤 조각일 수 있다)
-        if (FindItemByPath(owner, created) is not { } item) return; // 필터 밖·그새 사라짐 — 생성만으로 끝
-        owner.SelectedItem = item;
-        owner.ScrollIntoView(item);
-        owner.UpdateLayout(); // 컨테이너 실체화 — 편집 상자 삽입·포커스가 성립하게
-        BeginRenameOf(item);
+        // A345 배치 2: New folder와 같은 경로. 필터 밖·그새 사라짐이면 조용히 생성만으로 끝난다.
+        BeginRenameByPath(owner, created);
     }
 
-    /// <summary>경로로 항목 컨테이너 찾기 — 항목 = 컨테이너 직접 추가(A345 배치 1부터 Tag = 뷰모델) 구조 전제.</summary>
+    /// <summary>
+    /// 방금 만든 항목(새 폴더·새 파일)을 골라 이름변경 편집에 들여보낸다 (A345 배치 2 —
+    /// CreateFolderThenRenameAsync·CreateFileThenRenameAsync 공용).
+    /// 리스트는 뷰모델을 선택한 뒤 그 행의 컨테이너를 실체화하고(RealizeListContainer),
+    /// 그리드(휴면)는 종전대로 컨테이너를 찾아 선택·스크롤한다.
+    /// 반환은 "편집에 들어갔는가" — 못 찾으면(필터 밖·그새 사라짐) 조용히 false다.
+    /// </summary>
+    private bool BeginRenameByPath(ListViewBase owner, string path)
+    {
+        SelectorItem? container;
+        if (ReferenceEquals(owner, ListPane))
+        {
+            if (FindVmByPath(path) is not { } vm) return false;
+            owner.SelectedItem = vm;
+            container = RealizeListContainer(vm);
+        }
+        else
+        {
+            if (FindItemByPath(owner, path) is not { } item) return false;
+            owner.SelectedItem = item;
+            owner.ScrollIntoView(item);
+            owner.UpdateLayout(); // 컨테이너 실체화 — 편집 상자 삽입·포커스가 성립하게
+            container = item;
+        }
+        if (container is null) return false;
+        BeginRenameOf(container);
+        return true;
+    }
+
+    /// <summary>
+    /// 경로로 표시 목록의 뷰모델 찾기 (A345 배치 2) — 가상화 뒤의 정본 조회다.
+    /// 컨테이너 검색과 달리 <b>화면 밖 항목도 찾는다</b>(그것이 종전 상한·조각 대기 문제의 해소).
+    /// </summary>
+    private ExplorerEntryVm? FindVmByPath(string path) =>
+        _displayVms.FirstOrDefault(vm =>
+            string.Equals(vm.Path, path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 뷰모델 하나의 리스트 컨테이너를 실체화해 돌려준다 (A345 배치 2 — 이름변경 보수안 ⓐ).
+    /// 인라인 편집은 컨테이너 안의 이름 TextBlock 자리에 상자를 끼우는 구조라, 가상화 뒤에는
+    /// "보이게 스크롤 → 레이아웃 강제 → 컨테이너 조회"의 세 단계를 거쳐야 상자를 끼울 대상이
+    /// 생긴다. 그래도 못 얻으면(목록 밖 등) null — 호출부는 무동작으로 끝낸다.
+    /// </summary>
+    private ListViewItem? RealizeListContainer(ExplorerEntryVm vm)
+    {
+        ListPane.ScrollIntoView(vm);
+        ListPane.UpdateLayout();
+        return ListPane.ContainerFromItem(vm) as ListViewItem;
+    }
+
+    /// <summary>경로로 항목 컨테이너 찾기 (IconGrid 전용 — 컨테이너 직접 추가 구조, Tag = 뷰모델).
+    /// 리스트는 컨테이너가 화면 분량뿐이라 이 방식이 성립하지 않는다(FindVmByPath를 쓴다).</summary>
     private static SelectorItem? FindItemByPath(ListViewBase owner, string path) =>
         owner.Items.OfType<SelectorItem>().FirstOrDefault(i =>
             i.Tag is ExplorerEntryVm vm &&
@@ -2272,7 +2095,7 @@ public sealed partial class ExplorerPane : UserControl
             _lastPress = null; // Ctrl 토글 선택 — 진행 중이던 쌍 판정을 끊는다
             return;
         }
-        if (ItemFromSource(e.OriginalSource) is not { Tag: ExplorerEntryVm vm })
+        if (VmOf(ItemFromSource(e.OriginalSource)) is not { } vm)
         {
             _lastPress = null; // 빈 영역·스크롤바 — 항목 밖 눌림은 쌍을 끊는다
             return;
@@ -2302,7 +2125,7 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>
     /// 체크 집합 (A179) — 파일 조작 작업 집합의 **단일 원본**. 체크박스 클릭(OnItemCheckClick)과
     /// Space(OnSurfaceKeyDown)로만 늘고 준다 — 행 클릭 선택은 여기 손대지 않는다.
-    /// 경로 키인 이유 = Fill 전량 재생성(폴더 감시 400ms 재스캔 포함)을 건너 생존해야 해서
+    /// 경로 키인 이유 = 목록 전량 재작성(폴더 감시 400ms 재스캔 포함)을 건너 생존해야 해서
     /// (ExplorerFileOps.ApplyCutMark의 경로 집합 관용구). 폴더가 바뀌면 비우고, 재스캔 결과에
     /// 없는 경로는 걷어낸다 — 둘 다 NavigateToAsync가 한다.
     /// </summary>
@@ -2327,27 +2150,27 @@ public sealed partial class ExplorerPane : UserControl
     private void OnItemCheckClick(object sender, RoutedEventArgs e)
     {
         if (sender is not CheckBox box) return;
-        if (ItemFromSource(box) is not { Tag: ExplorerEntryVm vm }) return;
+        if (VmOf(ItemFromSource(box)) is not { } vm) return; // A345 배치 2 — VmOf 단일 해석
         var nowChecked = box.IsChecked == true;
         if (nowChecked) _checkedPaths.Add(vm.Path);
         else _checkedPaths.Remove(vm.Path);
-        vm.IsChecked = nowChecked; // A345 배치 1 — 컨테이너와 뷰모델을 한 함수 안에서 함께 갱신
+        vm.IsChecked = nowChecked; // 시각 반영은 x:Bind(OneWay)가 맡는다 — 컨테이너 직접 대입 없음
     }
 
     /// <summary>
     /// 포커스 항목의 체크 토글 (A179 — Space 경로. 종전 A157은 IsSelected 토글이었다).
-    /// 집합을 먼저 뒤집고 체크박스 시각을 맞춘다 — 그리드 타일(MakeGridItem)에는 체크박스가
-    /// 없어 시각 동기가 조용히 생략되지만, 그 경로는 휴면이다(리스트 전용 모드 — 클래스 주석.
+    /// 집합을 뒤집고 뷰모델에 반영하면 끝이다 — A345 배치 2부터 체크박스 시각은 x:Bind(OneWay)가
+    /// 따라온다(종전의 컨테이너 체크박스 직접 대입은 사라졌다). 그리드 타일(MakeGridItem)에는
+    /// 체크박스가 없어 시각이 보이지 않지만 그 경로는 휴면이다(리스트 전용 모드 — 클래스 주석.
     /// 전체 페인 사용처가 되살아나면 타일에도 체크박스를 다는 것이 복구 지점이다).
     /// </summary>
     private void ToggleCheckOf(SelectorItem item)
     {
-        if (item.Tag is not ExplorerEntryVm vm) return;
+        if (VmOf(item) is not { } vm) return; // A345 배치 2 — VmOf 단일 해석
         var nowChecked = !_checkedPaths.Contains(vm.Path);
         if (nowChecked) _checkedPaths.Add(vm.Path);
         else _checkedPaths.Remove(vm.Path);
-        vm.IsChecked = nowChecked; // A345 배치 1 — 컨테이너와 뷰모델을 한 함수 안에서 함께 갱신
-        if (FindItemCheckBox(item) is { } box) box.IsChecked = nowChecked;
+        vm.IsChecked = nowChecked;
     }
 
     /// <summary>
@@ -2357,12 +2180,15 @@ public sealed partial class ExplorerPane : UserControl
     /// 일괄 열기(OpenFiles)의 상한 절단도 화면 순서를 따른다.
     /// 리스트(ListPane)만 보는 근거 = 체크박스가 리스트 행에만 있고, 리스트는 그리드와 같은
     /// 폴더·같은 목록을 항상 담는다(Fill이 두 표면을 한 번에 채운다).
+    /// <para>
+    /// A345 배치 2: 순회 대상이 컨테이너에서 <b>표시 목록(_displayVms)</b>으로 바뀌었다 —
+    /// 가상화 뒤에는 컨테이너가 화면 분량뿐이라 컨테이너를 세면 "스크롤 위치에 따라 작업 집합이
+    /// 달라지는" 사고가 된다. _displayVms는 정렬·필터가 적용된 표시 목록이라 WYSIWYG 계약
+    /// (필터로 가려진 체크는 제외)과 순서(일괄 열기의 상한 절단)가 종전과 완전히 같다.
+    /// </para>
     /// </summary>
     private IReadOnlyList<string> CheckedPathsInView(bool filesOnly = false) =>
-        ListPane.Items
-            .OfType<SelectorItem>()
-            .Select(i => i.Tag)
-            .OfType<ExplorerEntryVm>() // A345 배치 1 — Tag = 뷰모델
+        _displayVms
             .Where(vm => (!filesOnly || !vm.IsFolder) && _checkedPaths.Contains(vm.Path))
             .Select(vm => vm.Path)
             .ToList();
@@ -2414,7 +2240,7 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is not FrameworkElement { Tag: ExplorerEntryVm vm }) return;
+        if (VmOf(e.ClickedItem) is not { } vm) return; // A345 배치 2 — 리스트의 ClickedItem은 뷰모델이다
 
         var now = DateTime.UtcNow;
         var isDouble = _lastClick is { } last && last.Path == vm.Path &&
@@ -2436,11 +2262,11 @@ public sealed partial class ExplorerPane : UserControl
     {
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
         if (IsInCheckBox(e.OriginalSource)) return; // A157 → A179: 체크박스 2연타 = 체크 토글 두 번(열기 아님)
-        if (sender is not SelectorItem { Tag: ExplorerEntryVm vm } item) return;
+        if (sender is not SelectorItem item || VmOf(item) is not { } vm) return; // A345 배치 2
         e.Handled = true;
         _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게
         // 소속 표면 = 컨테이너 타입으로 결정된다(MakeGridItem = GridViewItem/IconGrid,
-        // MakeListItem = ListViewItem/ListPane) — 일괄 열기(A94 6차)가 그 표면의 선택을 본다.
+        // 리스트 템플릿 = ListViewItem/ListPane) — 일괄 열기(A94 6차)가 그 표면의 선택을 본다.
         Activate(vm.Entry, item is GridViewItem ? IconGrid : ListPane);
     }
 

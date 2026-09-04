@@ -18,12 +18,20 @@ namespace KOTU.App;
 /// ApplyCutMark) 전부 <b>한 함수 안에서 둘 다</b> 갱신해 어긋날 여지를 없앴다.
 /// </para>
 /// <para>
-/// 배치 2(좌 리스트 가상화)에서 DataTemplate의 x:Bind가 아래 속성들을 읽고, 그때 컨테이너
-/// 직접 대입이 사라진다. 변경 통지 장치를 지금 갖춰 두는 이유 = 가상화 뒤에는 화면 밖 항목의
-/// 값도 보존돼야 하기 때문(재활용된 컨테이너가 옛 값을 들고 오는 사고의 방지선).
+/// 배치 2(좌 리스트 가상화)가 그것을 실행했다: 좌 리스트(ListPane)는 이제 이 뷰모델 목록을
+/// ItemsSource로 받고 DataTemplate의 x:Bind가 아래 속성들을 읽는다 — 리스트 쪽 컨테이너 직접
+/// 대입은 사라졌다(그리드 IconGrid는 휴면 표면이라 종전 컨테이너 조립·Tag = 뷰모델 그대로다).
+/// 변경 통지가 필요한 이유 = 가상화 뒤에는 화면 밖 항목의 값도 보존돼야 하기 때문
+/// (재활용된 컨테이너가 옛 값을 들고 오는 사고의 방지선 — 재활용 시 x:Bind OneWay가 새 항목
+/// 값으로 다시 평가되는 것이 그 방지선의 실체다).
+/// </para>
+/// <para>
+/// 접근성이 public인 이유(배치 2): DataTemplate의 x:Bind는 컴파일 시 이 타입을 참조하는 코드를
+/// 생성한다 — 선례 ArchiveView의 ArchiveRow도 같은 이유로 public sealed다. 생성자와
+/// <see cref="Entry"/>는 internal 그대로라 외부 어셈블리가 만들거나 원본을 꺼낼 수는 없다.
 /// </para>
 /// </summary>
-internal sealed class ExplorerEntryVm : INotifyPropertyChanged
+public sealed class ExplorerEntryVm : INotifyPropertyChanged
 {
     internal ExplorerEntryVm(ExplorerListing.Entry entry) => Entry = entry;
 
@@ -41,6 +49,19 @@ internal sealed class ExplorerEntryVm : INotifyPropertyChanged
 
     /// <summary>A175 — 클라우드 전용(하이드레이션 유발) 파일인지. 상세·썸네일 취득이 이 값으로 갈린다.</summary>
     public bool IsPlaceholder => Entry.IsPlaceholder;
+
+    /// <summary>
+    /// 행 아이콘 글리프 (배치 2) — 폴더/문서. 종전 MakeListItem·MakeGridItem이 코드에서 고르던
+    /// 규칙 그대로이고, 항목마다 불변이라 통지가 필요 없다(x:Bind 기본 OneTime으로 읽는다).
+    /// </summary>
+    public string Glyph => IsFolder ? "\uE8B7" : "\uE7C3";
+
+    /// <summary>
+    /// 배치 2: 상세 조각 fetch를 이미 한 번 요청했는지 — 컨테이너가 재활용될 때마다
+    /// ContainerContentChanging이 같은 항목을 다시 태우므로, 중복 fetch를 이 표지로 막는다.
+    /// 표시값이 아니라 내부 표지라 통지하지 않는다(UI 스레드 단독 접근).
+    /// </summary>
+    internal bool DetailRequested { get; set; }
 
     // ---------- 표시 상태(통지 있음) ----------
 

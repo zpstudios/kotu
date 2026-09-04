@@ -39,13 +39,15 @@ public static class ExplorerListing
 
     /// <summary>
     /// 폴더 내용을 나열한다: 폴더 먼저, 그다음 확장자 일치 파일, 각각 이름순.
-    /// maxItems로 초대형 폴더의 UI 폭주를 막는다.
+    /// maxItems는 A345(UI 가상화) 뒤의 <b>안전 천장</b>이다 — 종전에는 컨테이너를 전량 만들었기에
+    /// UI 폭주를 막는 실질 상한이었지만, 이제 화면에 보이는 행만 실체화되므로 표시 비용은 개수에
+    /// 비례하지 않는다. 남겨 두는 이유는 스캔 자체(열거·속성 읽기)와 메모리의 상한이다.
     /// includeHidden(A160) = 숨김·시스템 항목도 포함할지. 기본 false = 종전 동작 그대로.
     /// 호출부(ExplorerPane)가 설정값을 스캔 시작 시점에 스냅샷해 넘긴다 — 여기서 설정을 읽지 않는다
     /// (KOTU.Core는 UI·설정 주입에 비의존).
     /// </summary>
     public static IReadOnlyList<Entry> List(
-        string folder, IReadOnlyList<string> extensions, int maxItems = 2000, bool includeHidden = false)
+        string folder, IReadOnlyList<string> extensions, int maxItems = 10000, bool includeHidden = false)
     {
         var info = new DirectoryInfo(folder);
         var result = new List<Entry>();

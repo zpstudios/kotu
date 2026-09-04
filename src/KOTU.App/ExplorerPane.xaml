@@ -1,10 +1,14 @@
 <UserControl
     x:Class="KOTU.App.ExplorerPane"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:KOTU.App">
 
     <!-- 내장 탐색기(v0.25.0): 좌 70% 썸네일 그리드(바탕화면 느낌) + 우 30% 리스트.
-         좌 리스트 오버레이는 ConfigureListOnly()로 리스트만 남긴다. 항목은 코드에서 채운다.
+         좌 리스트 오버레이는 ConfigureListOnly()로 리스트만 남긴다.
+         A345 배치 2: 우 리스트(ListPane)는 ItemsSource + DataTemplate + ContainerContentChanging
+         가상화라 보이는 행만 실체화된다. 좌 그리드(IconGrid)는 휴면 표면이라 종전대로 코드가
+         컨테이너를 직접 만들어 채운다(MakeGridItem).
          A91(v0.115.0): 좌 오버레이는 DetachPathBar()로 경로 바(PathBar)만 떼어 자기 패널
          최상단에 붙인다. ※ A93(v0.120.0)부터 살아 있는 사용처는 그 좌 오버레이(리스트 전용)뿐 —
          S1 중앙은 ThumbnailExplorer가 대체했다. 전체 페인 XAML은 재사용 대비로 그대로 둔다. -->
@@ -91,8 +95,64 @@
                           SelectionMode="Extended"
                           IsItemClickEnabled="True"
                           ItemClick="OnItemClick"
+                          ContainerContentChanging="OnListContainerContentChanging"
                           BorderThickness="1,0,0,0"
-                          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                          BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <!-- A156 리스트 행(2줄)을 그대로 옮긴 템플릿 (A345 배치 2).
+                         루트는 반드시 **평평한 Grid 하나**다(중첩 패널 금지) — 인라인 이름변경
+                         (ExplorerRenameBox.Begin)이 이 Grid에 편집 상자를 Insert하고
+                         Grid.SetRow/SetColumn으로 이름 자리에 앉히기 때문이다.
+                         x:Name 세 개는 코드의 조회 키 상수(ItemNameBlockName·ItemDetailBlockName·
+                         ItemCheckBoxName)와 반드시 같은 값이어야 한다(조회가 이름 기반). -->
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="local:ExplorerEntryVm">
+                            <Grid ColumnSpacing="8"
+                                  Opacity="{x:Bind ContentOpacity, Mode=OneWay}"
+                                  ToolTipService.ToolTip="{x:Bind TooltipText, Mode=OneWay}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <FontIcon Glyph="{x:Bind Glyph}" FontSize="13"
+                                          VerticalAlignment="Center" Grid.RowSpan="2" />
+                                <TextBlock x:Name="ExplorerItemName" Grid.Column="1"
+                                           Text="{x:Bind Name}" FontSize="12"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="ExplorerItemDetail" Grid.Column="1" Grid.Row="1"
+                                           Text="{x:Bind DetailText, Mode=OneWay}"
+                                           FontSize="10" Opacity="0.6"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <!-- A179: 체크 = 선택과 분리된 작업 집합의 시각화(진실은 _checkedPaths).
+                                     기본 치수를 0으로 눌러야 2줄 행 높이를 체크박스가 먹지 않는다(A198). -->
+                                <CheckBox x:Name="ExplorerItemCheck" Grid.Column="2" Grid.RowSpan="2"
+                                          IsChecked="{x:Bind IsChecked, Mode=OneWay}"
+                                          Click="OnItemCheckClick"
+                                          MinWidth="0" MinHeight="0" Padding="0" Margin="0"
+                                          VerticalAlignment="Center"
+                                          ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                    <!-- A198 행 높이 압축(트리 행 32px 동급 목표)의 이관 지점 (A345 배치 2):
+                         종전 MakeListItem이 컨테이너에 직접 걸던 두 값을 여기로 옮겼다.
+                         ① MinHeight 0 = WinUI 기본 ListViewItemMinHeight 40이 진짜 하한이었다,
+                         ② Padding 12,1,12,1 = 세로 1px(기본 세로 패딩 승계 차단, 가로는 기본 근사).
+                         이 Setter 둘을 지우면 행 높이가 40px로 회귀한다(되돌리기 지점).
+                         나머지 압축분(상세 FontSize 10 · 체크박스 MinHeight 0)은 위 템플릿에 있다. -->
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="MinHeight" Value="0" />
+                            <Setter Property="Padding" Value="12,1,12,1" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                </ListView>
             </Grid>
 
             <TextBlock x:Name="EmptyText" Grid.ColumnSpan="2"

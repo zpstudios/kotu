@@ -147,9 +147,10 @@ internal static class ExplorerFileOps
     internal static bool IsCutMarked(string path) => CutMarked.Count > 0 && CutMarked.Contains(TrimSep(path));
 
     /// <summary>
-    /// 항목 컨테이너 하나에 잘라내기 흐림을 반영한다 — 두 표면(리스트 행·그리드 타일) 공용.
+    /// 항목 컨테이너 하나에 잘라내기 흐림을 반영한다 — <b>컨테이너 직접 추가 표면 전용</b>이다
+    /// (A345 배치 2부터 남은 곳 = ExplorerPane의 IconGrid(휴면) · ThumbnailExplorer 타일).
     /// 컨테이너가 아니라 '콘텐츠'의 Opacity를 건드린다: 선택 강조는 또렷한 채 아이콘·이름만
-    /// 흐려지는 탐색기 모양이 된다. 항목 = 컨테이너 직접 추가(A345 배치 1부터 Tag = 뷰모델) 구조 전제.
+    /// 흐려지는 탐색기 모양이 된다. 가상화된 좌 리스트는 아래 뷰모델 오버로드를 쓴다.
     /// </summary>
     internal static void ApplyCutMark(object item)
     {
@@ -163,6 +164,15 @@ internal static class ExplorerFileOps
             vm.ContentOpacity = opacity;
         }
     }
+
+    /// <summary>
+    /// 잘라내기 흐림을 <b>뷰모델</b>에 반영한다 (A345 배치 2 — 가상화된 좌 리스트 전용).
+    /// 화면 반영은 DataTemplate의 x:Bind(ContentOpacity, Mode=OneWay)가 맡으므로, 화면 밖
+    /// 항목에 적용해도 값이 보존돼 나중에 실체화될 때 옳게 그려진다(컨테이너를 세지 않는다 —
+    /// 가상화 뒤에는 컨테이너가 화면 분량뿐이라 스크롤 위치에 따라 결과가 달라진다).
+    /// </summary>
+    internal static void ApplyCutMark(ExplorerEntryVm vm) =>
+        vm.ContentOpacity = IsCutMarked(vm.Path) ? CutOpacity : 1.0;
 
     /// <summary>
     /// 잘라내기 표시 지정(Ctrl+X 성공 직후). 이전 표시는 대체된다 — 새 잘라내기·새 복사가
