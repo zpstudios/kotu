@@ -34,6 +34,15 @@ namespace KOTU.App.Integration;
 /// 지금은 KOTU 이전 브랜드가 이 키를 만든 적이 없어 실제 삭제 대상 0건) ② 제거(uninstall) 시
 /// Velopack 훅에서 <see cref="RemoveAllDisplayKeys"/>로 현재·구 브랜드 접두 키 전부 삭제.
 /// 전 구간 HKCU라 관리자 권한이 필요 없고, 모든 실패는 조용히 무시한다(A100 스타일).
+///
+/// A350 후속(v0.343.1): 창 AUMID 표시 키만 등록해서는 SMTC(미디어 플라이아웃) 이름이 잡히지
+/// 않았다(v0.343.0 실기기 확인 — 여전히 "알 수 없는 앱"). 남은 설명은 셸이 SMTC 세션 주인을
+/// 창이 아니라 **프로세스 AUMID**로 식별한다는 것이다. KOTU는 프로세스 수준 AUMID를 명시한 적이
+/// 없어 셸이 exe 경로에서 유추하고, 그 유추 값에는 등록된 표시 이름이 없다. 그래서
+/// <see cref="ApplyProcessIdentity"/>로 프로세스 AUMID를 "KOTU"로 못 박고 같은 이름의 표시 키를
+/// 등록한다(Firefox 등 비패키지 플레이어가 쓰는 것과 같은 방식).
+/// 창별 AUMID(<see cref="Apply"/>)는 그대로 둔다 — 창 프로퍼티 스토어 값이 프로세스 값을 덮으므로
+/// 태스크바 인스턴스 분리(A105)는 영향을 받지 않는다.
 /// </summary>
 internal static class TaskbarIdentity
 {
@@ -73,6 +82,31 @@ internal static class TaskbarIdentity
         {
             // 어떤 실패(OS 변형·마샬링 오류)도 앱 동작에 영향을 주면 안 된다 — 공유 AUMID로 후퇴.
         }
+    }
+
+    /// <summary>
+    /// 프로세스 수준 AUMID를 브랜드 이름("KOTU")으로 못 박고, 같은 이름의 표시 키를 등록한다.
+    /// Program.Main에서 창이 하나도 만들어지기 전에 1회 부를 것 — 프로세스 AUMID는 첫 창이
+    /// 생기기 전에 박아야 셸이 인식한다(창이 생긴 뒤 바꾸면 이미 굳은 식별자가 남는다).
+    /// 값을 브랜드 이름 그대로 쓰는 이유: Velopack packId·시작 메뉴 바로가기와 같은 이름이라
+    /// 고정(pin)·시작 메뉴 그룹과도 정합이다. 실패는 전부 조용히 무시한다.
+    /// </summary>
+    internal static void ApplyProcessIdentity()
+    {
+        try
+        {
+            // 반환값은 HRESULT지만 실패해도 할 수 있는 일이 없다 — 셸이 exe 경로로 유추하는
+            // 종전 동작으로 후퇴할 뿐이다.
+            _ = SetCurrentProcessExplicitAppUserModelID(Branding.AppName);
+        }
+        catch
+        {
+            // OS 변형·마샬링 오류 — 앱 동작에는 영향이 없다.
+        }
+
+        // P/Invoke 성패와 무관하게 표시 키는 등록해 둔다(멱등). 이번 실행에서 셸이 유추 AUMID를
+        // 썼더라도 키가 남아 있는 것은 무해하고, 다음 실행에서 그대로 쓰인다.
+        RegisterDisplay(Branding.AppName);
     }
 
     /// <summary>
@@ -164,10 +198,36 @@ internal static class TaskbarIdentity
     /// 현재·구 브랜드의 모든 창 AUMID 표시 키를 지운다. 제거(uninstall) 직전에
     /// Velopack 훅(OnBeforeUninstallFastCallback)이 부른다 — Program.Main 참조.
     /// </summary>
-    internal static void RemoveAllDisplayKeys() =>
+    internal static void RemoveAllDisplayKeys()
+    {
         DeleteDisplayKeys(
             new[] { Branding.AppName + InstanceInfix }
                 .Concat(ExplorerIntegration.LegacyBrandNames.Select(b => b + InstanceInfix)));
+
+        // v0.343.1: 프로세스 AUMID 키는 브랜드 이름 **그대로**라 위 접두사 스캔에 걸리지 않는다
+        // (접두사는 ".Instance."까지 포함한다) — 이름이 정확히 일치하는 키를 따로 지운다.
+        // 구 브랜드 이름(ZP·WinUtil)은 이 키를 만든 적이 없지만, 구 등록은 발견되는 대로 지운다는
+        // 리브랜딩 규칙에 맞춰 함께 넣는다(없으면 조용히 지나간다).
+        DeleteDisplayKeysExact(
+            new[] { Branding.AppName }.Concat(ExplorerIntegration.LegacyBrandNames));
+    }
+
+    /// <summary>AppUserModelId 뿌리에서 이름이 정확히 일치하는 서브키를 지운다(접두 스캔과 별도).</summary>
+    private static void DeleteDisplayKeysExact(IEnumerable<string> names)
+    {
+        foreach (var name in names)
+        {
+            try
+            {
+                Registry.CurrentUser.DeleteSubKeyTree(
+                    DisplayKeyRoot + "\\" + name, throwOnMissingSubKey: false);
+            }
+            catch
+            {
+                // 이름마다 개별 try/catch — 하나가 권한·동시 삭제로 던져도 나머지는 계속 지운다.
+            }
+        }
+    }
 
     /// <summary>AppUserModelId 뿌리에서 주어진 접두사로 시작하는 서브키를 전부 지운다.</summary>
     private static void DeleteDisplayKeys(IEnumerable<string> prefixes)
@@ -249,4 +309,12 @@ internal static class TaskbarIdentity
 
     [DllImport("ole32")]
     private static extern int PropVariantClear(ref PropVariant pvar);
+
+    /// <remarks>
+    /// shell32의 SetCurrentProcessExplicitAppUserModelID(PCWSTR) — 반환은 HRESULT.
+    /// 문자열 인자 하나뿐이라 마샬링 위험이 낮고, CharSet.Unicode 지정은 같은 저장소의
+    /// Shell_NotifyIconW 선언(TrayIcon.cs)과 같은 형태다.
+    /// </remarks>
+    [DllImport("shell32", CharSet = CharSet.Unicode)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
 }

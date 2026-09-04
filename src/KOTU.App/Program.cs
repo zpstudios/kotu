@@ -43,6 +43,12 @@ public static class Program
                 .OnBeforeUninstallFastCallback(_ => Integration.TaskbarIdentity.RemoveAllDisplayKeys())
                 .Run();
 
+            // A350 후속(v0.343.1): 프로세스 AUMID를 "KOTU"로 못 박고 그 이름의 표시 키를 등록한다.
+            // 반드시 창이 하나도 만들어지기 전(= 여기) — 프로세스 AUMID는 첫 창 생성 전에 박아야
+            // 셸이 인식한다. 창별 AUMID(TaskbarIdentity.Apply)는 창 프로퍼티로 이 값을 덮으므로
+            // 태스크바 인스턴스 분리(A105)는 그대로다.
+            Integration.TaskbarIdentity.ApplyProcessIdentity();
+
             WinRT.ComWrappersSupport.InitializeComWrappers();
 
             var mainInstance = AppInstance.FindOrRegisterForKey(InstanceKey);
