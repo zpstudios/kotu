@@ -30,6 +30,17 @@ namespace KOTU.App;
 /// 생성한다 — 선례 ArchiveView의 ArchiveRow도 같은 이유로 public sealed다. 생성자와
 /// <see cref="Entry"/>는 internal 그대로라 외부 어셈블리가 만들거나 원본을 꺼낼 수는 없다.
 /// </para>
+/// <para>
+/// 배치 3(중앙 타일 가상화)이 두 번째 소비자다 — 중앙 썸네일(ThumbnailExplorer)의 TileGrid도
+/// 이제 이 뷰모델 목록을 ItemsSource로 받는다(캡션·툴팁·잘라내기 흐림·클라우드 배지 =
+/// DataTemplate의 x:Bind). 중앙 표면이 더 얹은 것 = <b>미리보기 캐시 필드 4종</b>이다:
+/// 타일 미리보기(텍스트 앞부분 읽기·셸 썸네일 추출·오디오 셸 속성)는 건당 파일 IO라,
+/// 스크롤로 컨테이너가 재활용된 뒤 그 항목이 다시 실체화될 때마다 같은 IO를 반복하면
+/// 왕복 스크롤이 곧 디스크 폭주가 된다. 그래서 <b>결과를 뷰모델에 남기고</b>(PreviewText·
+/// AudioInfo), 얻을 것이 없다고 확정된 항목은 다시 요청하지 않는다(PreviewKnownEmpty).
+/// 비트맵만은 캐시하지 않는다 — 768px 디코드 × 스크롤한 항목 수는 메모리 폭주이고,
+/// 셸 썸네일 캐시가 이미 있어 재추출이 싸다는 것이 A242의 근거 그대로다.
+/// </para>
 /// </summary>
 public sealed class ExplorerEntryVm : INotifyPropertyChanged
 {
@@ -57,11 +68,46 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
     public string Glyph => IsFolder ? "\uE8B7" : "\uE7C3";
 
     /// <summary>
+    /// A337 클라우드 배지의 표시 여부 (A345 배치 3) — 중앙 타일 DataTemplate이 x:Bind로 읽는다.
+    /// 값이 항목마다 불변이라 통지가 없다(x:Bind 기본 OneTime). 종전에는 타일 조립 코드가
+    /// 같은 조건으로 FontIcon을 만들지 말지 갈랐다(MakeCloudBadge 호출 여부) — 가상화 뒤에는
+    /// 배지가 템플릿에 항상 있고 이 속성이 보일지를 정한다.
+    /// </summary>
+    public Microsoft.UI.Xaml.Visibility CloudBadgeVisibility =>
+        !IsFolder && IsPlaceholder
+            ? Microsoft.UI.Xaml.Visibility.Visible
+            : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    /// <summary>
     /// 배치 2: 상세 조각 fetch를 이미 한 번 요청했는지 — 컨테이너가 재활용될 때마다
     /// ContainerContentChanging이 같은 항목을 다시 태우므로, 중복 fetch를 이 표지로 막는다.
     /// 표시값이 아니라 내부 표지라 통지하지 않는다(UI 스레드 단독 접근).
     /// </summary>
     internal bool DetailRequested { get; set; }
+
+    // ---------- 중앙 타일 미리보기 캐시 (A345 배치 3) ----------
+    // 넷 다 표시값이 아니라 내부 표지·캐시라 통지하지 않는다(UI 스레드 단독 접근 — 미리보기
+    // 발사도 완료 반영도 전부 UI 스레드다). 화면 갱신은 캐시를 읽는 쪽(ContainerContentChanging
+    // 위상 0)이 직접 한다.
+
+    /// <summary>A233 텍스트 프리뷰의 결과 문자열 — 재실체화 시 파일을 다시 읽지 않고 즉시 그린다.</summary>
+    internal string? PreviewText { get; set; }
+
+    /// <summary>A270 오디오 정보 2줄 — 셸 속성 왕복 1회의 결과. 재실체화 시 재조회하지 않는다.</summary>
+    internal string? AudioInfo { get; set; }
+
+    /// <summary>
+    /// 미리보기로 얻을 것이 없다고 확정됐는지 (셸 썸네일 없음·파일 종류 아이콘·읽기 실패).
+    /// 확정된 항목은 재실체화돼도 다시 요청하지 않는다 — 없는 것을 스크롤할 때마다 다시
+    /// 물어보면 왕복 스크롤이 그대로 IO 폭주가 된다.
+    /// </summary>
+    internal bool PreviewKnownEmpty { get; set; }
+
+    /// <summary>
+    /// 지금 이 항목의 미리보기를 비동기로 요청해 둔 상태인지 — 같은 뷰모델이 위상 1을 두 번
+    /// 태우는 경우(스크롤 왕복으로 짧은 사이에 다시 실체화)에 같은 IO가 겹치지 않게 막는다.
+    /// </summary>
+    internal bool PreviewInFlight { get; set; }
 
     // ---------- 표시 상태(통지 있음) ----------
 

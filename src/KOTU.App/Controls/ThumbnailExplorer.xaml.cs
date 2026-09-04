@@ -25,13 +25,30 @@ namespace KOTU.App.Controls;
 /// 열 수 = 8 − 2×(열린 도크 수) → 둘 다 열림 4 · 하나 6 · 없음 8(A213 — 구 A93의 4/8 2단 개정.
 /// A63 대체 계보: 크기 고정·열 수 가변이던 종전 규칙을 열 수 고정·크기 가변으로 뒤집은 위에
 /// 3단화). 타일 한 변 = floor(실폭/열수).
+/// <para>
+/// A345 배치 3(UI 가상화): 이 표면은 더 이상 타일 컨테이너를 직접 만들지 않는다 —
+/// <c>ShowEntries</c>가 뷰모델 목록(<see cref="ExplorerEntryVm"/>)을 <c>ItemsSource</c>로
+/// 대입하면 XAML이 <b>화면에 보이는 타일만</b> 실체화한다(DataTemplate + x:Bind +
+/// ContainerContentChanging — 정본 선례는 PdfPane, 좌 리스트 판본은 배치 2). 그와 함께
+/// 사라진 것: 분할 조립 루프(A192)·실체화 상한과 안내 타일·뷰포트 지연 미리보기(A339
+/// DeferPreview). 미리보기 4갈래는 위상 0(폴백 타일을 동기로) → 위상 1(비동기 요청)로 옮겼다.
+/// </para>
+/// <para>
+/// <b>이 표면의 전제가 뒤집힌 지점</b>: 종전 주석이 곳곳에서 근거로 삼던 "타일은 재사용되지
+/// 않는다 · ShowEntries가 전량 새로 만든다"는 이제 거짓이다. 컨테이너는 스크롤하는 동안
+/// 다른 파일의 타일로 <b>재활용</b>된다. 그래서 낡음 방어가 두 겹이다:
+/// ① 폴더 전환은 종전대로 <c>_showSeq</c> 대조, ② <b>같은 폴더 안 재활용</b>은
+/// <c>ReferenceEquals(item.Content, vm)</c> 대조 — seq는 후자를 못 막는다(폴더가 안 바뀌었으니).
+/// 비동기 완료가 화면을 만지기 전에는 반드시 둘 다 통과해야 하고, 통과하지 못한 결과도
+/// <b>뷰모델 캐시에는 남긴다</b>(그 항목이 다시 실체화될 때 IO 없이 즉시 그려진다).
+/// </para>
 /// </summary>
 public sealed partial class ThumbnailExplorer : UserControl
 {
     /// <summary>
     /// 미리보기 요청 폭 상한(물리 px) — 원본 크기 디코드로 메모리가 폭주하지 않게.
     /// 이 파일의 미리보기 3경로가 공유하는 유일한 수치다: ① 이미지 실디코드
-    /// (MakeImagePreview의 BitmapImage.DecodePixelWidth) ② placeholder 캐시 전용 셸 썸네일
+    /// (StartImagePreview의 BitmapImage.DecodePixelWidth) ② placeholder 캐시 전용 셸 썸네일
     /// (FillCachedThumbnailAsync) ③ 워커 지연 교체 셸 썸네일(FetchTilePreview) — 셋이 같은 값을
     /// 써야 같은 파일이 경로에 따라 다른 선명도로 뜨는 일이 없다.
     /// <b>A275(v0.272.0): 256 → 768.</b> 타일 한 변 = floor(중앙 실폭 ÷ 열수)라 큰 창·고DPI에서
@@ -65,74 +82,20 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>더블클릭 판정 창 — ExplorerPane.DoubleClickMs와 같은 값(같은 감각).</summary>
     private const int DoubleClickMs = 500;
 
-    /// <summary>
-    /// A192 체감 조정 지점: 분할 조립 조각 크기(타일 수) — 첫 즉시 조각과 프레임당 append 조각이
-    /// 같은 값을 쓴다(확정 수치 60 — DocumentView.RenderChunkBlocks의 상수 배치 관용구.
-    /// 되돌리기·조정은 이 상수 하나만 고치면 된다).
-    /// </summary>
-    private const int TileChunkItems = 60;
+    /// <summary>DataTemplate 안 미리보기 자리(빈 Grid)의 x:Name — 조회는 이름 기반이다(A345 배치 3).
+    /// XAML의 x:Name과 값이 어긋나면 미리보기가 <b>예외 없이</b> 한 장도 안 뜬다.</summary>
+    private const string TilePreviewHostName = "TilePreviewHost";
 
-    /// <summary>
-    /// A339: 미리보기를 <b>즉시</b> 만드는 앞쪽 타일 수 — 첫 조각(<see cref="TileChunkItems"/>)과
-    /// 같은 값이다. 첫 화면은 뷰포트 이벤트를 기다리지 않고 곧바로 채워야 체감이 종전과 같고,
-    /// 뷰포트 이벤트가 어떤 이유로 오지 않아도 첫 화면은 항상 채워진다(방어).
-    /// </summary>
-    private const int EagerPreviewCount = TileChunkItems;
+    /// <summary>DataTemplate 안 캡션 TextBlock의 x:Name (A345 배치 3) — 이름변경 진입
+    /// (BeginRenameOf)이 이것으로 찾는다. 종전 tile.Children[1] 인덱스 계약의 대체다.</summary>
+    private const string TileCaptionName = "TileCaption";
 
-    /// <summary>
-    /// A339: 뷰포트 밖 타일을 미리 채우기 시작하는 거리(DIP) — 스크롤을 시작하는 순간 이미
-    /// 만들어져 있게 하는 선반입 여유다. 0으로 두면 화면에 들어온 뒤에야 읽기가 시작돼
-    /// 스크롤 중 빈 타일이 눈에 띈다.
-    /// </summary>
-    private const double PreviewPrefetchDip = 600;
-
-    /// <summary>
-    /// A339: 타일 미리보기 생성을 <b>보이는 것(과 곧 보일 것)만</b>으로 미룬다.
-    /// <para>
-    /// 왜: 실체화 상한(<see cref="MaterializeLimit"/>)만큼의 타일이 전부 파일을 읽어 미리보기를
-    /// 만들고 있었지만 화면에 보이는 것은 열여섯 개 남짓이다. A334 계측판이 그 비용을 실측했다 —
-    /// txt 10,000개 폴더에서 <c>prev0&gt;fillN 3,703ms</c>(목록 항목 생성과 미리보기 얹기가 같은
-    /// 구간에서 겹쳐 돈다)와 <c>UI stall max 488ms @prev0&gt;fillN</c>. 나머지 대부분은 스크롤하지
-    /// 않으면 아무도 보지 않는다.
-    /// </para>
-    /// <para>
-    /// 앞쪽 <see cref="EagerPreviewCount"/>개는 종전대로 즉시 채운다 — 판정은 지금 몇 번째 타일을
-    /// 만드는 중인가이고, 그 값이 곧 <c>TileGrid.Items.Count</c>다(타일은 순서대로 append되고
-    /// 이 함수는 Add <b>앞에서</b> 불린다). 별도 인덱스를 네 갈래에 흘려 넣지 않아도 되는 이유다.
-    /// </para>
-    /// 나머지는 <c>EffectiveViewportChanged</c>로 미룬다: 뷰포트까지 남은 거리가
-    /// <see cref="PreviewPrefetchDip"/> 이내로 들어오면 채우고 <b>구독을 즉시 해제</b>한다
-    /// (한 타일당 한 번만 채운다 — 스크롤을 오갈 때 같은 타일을 다시 읽지 않는다).
-    /// 낡음 방어는 종전 그대로다: 채우는 쪽 클로저가 <c>_showSeq</c>를 들고 있어 폴더가 바뀌면
-    /// 그 완료가 버려지고, 타일 자체도 <c>ShowEntries</c>가 전량 새로 만든다.
-    /// </summary>
-    private void DeferPreview(Grid host, Action fill)
-    {
-        if (TileGrid.Items.Count < EagerPreviewCount)
-        {
-            fill();
-            return;
-        }
-        void OnViewport(FrameworkElement sender, EffectiveViewportChangedEventArgs args)
-        {
-            if (args.BringIntoViewDistanceX > PreviewPrefetchDip ||
-                args.BringIntoViewDistanceY > PreviewPrefetchDip) return;
-            host.EffectiveViewportChanged -= OnViewport;
-            fill();
-        }
-        host.EffectiveViewportChanged += OnViewport;
-    }
-
-    /// <summary>
-    /// A192: 타일 실체화 상한(ExplorerPane.MaterializeLimit와 같은 값) — 초과분은 타일을 만들지
-    /// 않고 말미에 비상호작용 안내 1타일만 붙인다(MakeOverflowNotice). 상한은 컨테이너 실체화에만
-    /// 걸린다 — ShowEntries로 받는 Entry 목록 자체는 전체 그대로다(원본은 좌 리스트, A93).
-    /// <para>
-    /// A342 배치 5 실험: 2,000에서 500으로 내린다 — XAML 객체 수를 1/4로 줄였을 때 gen2 횟수와
-    /// GC 정지가 그에 비례해 줄어드는지 판별하려는 것이다(좌 리스트 상한과 항상 같은 값).
-    /// </para>
-    /// </summary>
-    private const int MaterializeLimit = 500;
+    // A345 배치 3에서 사라진 수치·장치: 분할 조립 조각(TileChunkItems 60)·즉시 미리보기 앞
+    // 구간(EagerPreviewCount)·뷰포트 선반입 거리(PreviewPrefetchDip 600)·뷰포트 지연 미리보기
+    // (A339 DeferPreview = EffectiveViewportChanged 1회 구독)·실체화 상한(MaterializeLimit 500).
+    // 넷의 목적이 전부 "다 만들면 비싸니 앞쪽만 만들자"였는데, 가상화는 애초에 보이는 것만
+    // 만들므로 그 목적 자체가 소멸했다(A339의 뷰포트 판정도 이제 XAML 패널이 대신한다).
+    // 상한이 사라져 10,000개 폴더도 마지막 항목까지 보인다.
 
     /// <summary>폴더 더블클릭 — 셸이 좌 리스트를 그 폴더로 항해시킨다(상태 공유의 되돌이 경로).</summary>
     public event Action<string>? FolderActivated;
@@ -158,17 +121,19 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     private int _columns = 8; // 기본 = 도크 둘 다 닫힘(전폭) 기준 — 셸이 곧 SetColumns(4/6/8)로 덮는다
 
-    /// <summary>A192: 조립 재진입 가드 — ShowEntries가 올 때마다 증가(ExplorerPane._loadSeq 관용구).
-    /// 진행 중 루프의 틱은 append 직전에 이 값과 대조해 낡은 조각을 버린다.</summary>
+    /// <summary>A192: 재진입 가드 — ShowEntries·ShowLoading·Unloaded가 올 때마다 증가
+    /// (ExplorerPane._loadSeq 관용구). A345 배치 3부터 이 값의 역할은 <b>폴더 전환</b> 한 가지다:
+    /// 진행 중이던 미리보기 요청이 옛 폴더의 것이면 그 완료를 버린다. 같은 폴더 안에서 컨테이너가
+    /// 다른 파일로 재활용되는 경우는 seq가 안 바뀌므로 <c>ReferenceEquals</c> 대조가 따로 막는다.</summary>
     private int _showSeq;
 
     /// <summary>
-    /// A192: 분할 조립 루프의 프레임 틱 핸들러(null = 루프 없음). CompositionTarget.Rendering은
-    /// static 이벤트라 뷰 수명 안에서 반드시 해제한다 — 남기면 닫힌 뷰가 통째로 누수된다
-    /// (DocumentView._renderAppendHandler와 같은 사정). 해제의 단일 지점 = StopTileAppendLoop.
-    /// 호출부 전수 = Unloaded·ShowEntries 기동 직전 방어·틱 내부(완료/seq 중단/예외).
+    /// 지금 그리고 있는 표시 목록의 뷰모델 (A345 배치 3) — <c>TileGrid.ItemsSource</c>에 대입한
+    /// 바로 그 목록이다. 경로 조회(FindVmByPath)·잘라내기 흐림 재적용이 컨테이너가 아니라 이
+    /// 목록을 돈다: 가상화 뒤에는 컨테이너가 화면 분량뿐이라 순회 결과가 스크롤 위치에 따라
+    /// 달라지지만, 이 목록은 화면 밖 항목까지 전부 들고 있다.
     /// </summary>
-    private EventHandler<object>? _tileAppendHandler;
+    private IReadOnlyList<ExplorerEntryVm> _vms = [];
 
     /// <summary>
     /// A233: 텍스트 프리뷰 읽기 전용 풀 — ExplorerPane._fetchPool과 같은 규칙(A194: 항목별
@@ -204,9 +169,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>
     /// Ctrl+Shift+N(새 폴더) 직후의 편집 진입 예약 (A94 2차). 이 뷰의 재스캔은 좌 리스트 경유
     /// 비동기(FolderActivated → 셸 → ViewChanged → ShowEntries)라 완료 시점을 직접 기다릴 수 없다 —
-    /// 다음으로 <b>완주한</b> 조립(FinishShowEntries — A192에서 분할 조립 완료 시점으로 이동)이
-    /// 이 경로의 타일을 찾아 이름변경 편집으로 진입하고 지운다(1회성 — 그 타일이 뒤 조각에
-    /// 있을 수 있어 조립 도중에는 소비하지 않는다).
+    /// 다음 <see cref="ShowEntries"/>가 이 경로의 항목을 찾아 이름변경 편집으로 진입하고
+    /// 지운다(1회성). A345 배치 3에서 소비 시점이 단순해졌다 — 조립이라는 개념이 사라져
+    /// "완주한 조립을 기다린다"는 조건이 없어졌고(목록은 대입 즉시 전부 있다), 편집할 행의
+    /// 컨테이너만 그때 실체화한다(BeginRenameByPath).
     /// </summary>
     private string? _pendingRenamePath;
 
@@ -223,12 +189,27 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 이 속성은 "첫 선택 파일" 질의 API로만 남았다(A86 서술의 원형).
     /// </summary>
     public string? SelectedFilePath =>
-        TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerEntryVm { IsFolder: false } vm }
-            ? vm.Path : null;
+        VmOf(TileGrid.SelectedItem) is { IsFolder: false } vm ? vm.Path : null; // A345 배치 3 — VmOf 단일 해석
 
     /// <summary>선택된 항목(파일·폴더 불문) — 없으면 null (A90: S4 Enter "선택 열기 우선" 판정).</summary>
     public ExplorerListing.Entry? SelectedEntry =>
-        TileGrid.SelectedItem is FrameworkElement { Tag: ExplorerEntryVm vm } ? vm.Entry : null; // A345 배치 1 — 반환은 종전대로 Entry
+        VmOf(TileGrid.SelectedItem)?.Entry; // A345 배치 3 — 반환은 종전대로 Entry
+
+    // ---------- 항목 해석의 단일 지점 (A345 배치 3) ----------
+
+    /// <summary>
+    /// 어떤 "항목 객체"에서든 뷰모델을 꺼낸다 — <b>이 배치의 최대 함정을 막는 단일 깔때기</b>다
+    /// (좌 리스트의 같은 이름 함수와 같은 역할·같은 근거). ItemsSource로 바뀌면서
+    /// <c>SelectedItem</c>·<c>ClickedItem</c>·<c>SelectedItems</c>가 <b>뷰모델 자체</b>가 되고
+    /// 컨테이너(GridViewItem)의 Content도 뷰모델이다 — 종전 <c>Tag</c> 패턴이 한 곳이라도 남으면
+    /// Enter·F2·Del·Ctrl+C/X·드래그·정보 패널이 <b>예외 없이</b> 죽는다(컴파일도 통과한다).
+    /// </summary>
+    private static ExplorerEntryVm? VmOf(object? o) => o switch
+    {
+        ExplorerEntryVm vm => vm,
+        GridViewItem { Content: ExplorerEntryVm vm } => vm,
+        _ => null,
+    };
 
     /// <summary>
     /// A336: 선택 표시를 걷는다 — 셸이 <b>다른 표면</b>(좌 리스트)에서 선택이 일어났을 때 부른다.
@@ -302,7 +283,6 @@ public sealed partial class ThumbnailExplorer : UserControl
         Unloaded += (_, _) =>
         {
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
-            StopTileAppendLoop(); // A192 — CompositionTarget.Rendering은 static: 남기면 닫힌 뷰 통째 누수
             // A233: 보류 텍스트 읽기 전부 무산 — seq를 올리면 게이트 대기 중이던 예약이 깨어나도
             // 발사 없이 접힌다(대조 실패). 풀을 먼저 닫으면 진행 중 읽기는 워커가 마저 끝내고
             // 스레드 종료(ModuleWorker 계약), 그 결과도 seq 대조가 버린다. 풀을 null로 두면
@@ -327,13 +307,17 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 잘라내기(Ctrl+X) 표시 반영 (A94 4차): 이미 그려 둔 타일의 콘텐츠 투명도를 경로 매칭으로
-    /// 다시 맞춘다 — 재스캔이 아니라 제자리 갱신이라 선택·스크롤이 보존된다. 새로 그려지는 타일은
-    /// MakeTile이 같은 규칙(ExplorerFileOps.ApplyCutMark)으로 처음부터 반영한다.
+    /// 잘라내기(Ctrl+X) 표시 반영 (A94 4차): 표시 목록의 흐림 값을 경로 매칭으로 다시 맞춘다 —
+    /// 재스캔이 아니라 제자리 갱신이라 선택·스크롤이 보존된다.
+    /// <para>
+    /// A345 배치 3: 순회 대상이 컨테이너(TileGrid.Items)에서 <b>뷰모델 목록</b>으로 바뀌었다 —
+    /// 가상화 뒤에는 컨테이너가 화면 분량뿐이라 컨테이너를 돌면 화면 밖 항목의 흐림이 스크롤
+    /// 위치에 따라 빠진다. 화면 반영은 DataTemplate의 x:Bind(ContentOpacity, OneWay)가 맡는다.
+    /// </para>
     /// </summary>
     private void ApplyCutMarks()
     {
-        foreach (var item in TileGrid.Items) ExplorerFileOps.ApplyCutMark(item);
+        foreach (var vm in _vms) ExplorerFileOps.ApplyCutMark(vm);
     }
 
     // A176: 구 UseTranslucentBackground(S4 중앙 반투명 — A33 아크릴/A129 스왑체인 폴백)는
@@ -377,9 +361,13 @@ public sealed partial class ThumbnailExplorer : UserControl
         // 유지하고(사용자 확정), "선택이 있을 때만 Handled"라는 기존 소비 규칙도 그대로 둔다.
         if (e.Key == VirtualKey.F2)
         {
-            if (TileGrid.SelectedItem is not GridViewItem selected) return;
+            // A345 배치 3: 선택은 뷰모델이라 컨테이너를 먼저 실체화해야 편집 상자를 끼울 대상이
+            // 생긴다(보수안 ⓐ). Handled는 그 컨테이너를 실제로 얻은 뒤에만 건다 — 못 얻었는데
+            // 소비해 버리면 F2가 아무 데도 도달하지 않고 조용히 사라진다.
+            if (VmOf(TileGrid.SelectedItem) is not { } target) return;
+            if (RealizeTileContainer(target) is not { } container) return;
             e.Handled = true;
-            BeginRenameOf(selected);
+            BeginRenameOf(container);
             return;
         }
         if (e.Key == VirtualKey.Delete)
@@ -489,11 +477,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         await ExplorerFileOps.ReportAsync(notice, result.Denied, ui);
     }
 
-    /// <summary>선택 타일 경로 전부(폴더 포함) — 항목 = 컨테이너 직접 추가라 Tag(A345 배치 1부터 뷰모델)에서 꺼낸다(A94).</summary>
+    /// <summary>선택 타일 경로 전부(폴더 포함) — A345 배치 3부터 SelectedItems가 <b>뷰모델</b>이다(A94).</summary>
     private IReadOnlyList<string> SelectedPaths() =>
         TileGrid.SelectedItems
-            .OfType<FrameworkElement>()
-            .Select(i => i.Tag)
             .OfType<ExplorerEntryVm>()
             .Select(vm => vm.Path)
             .ToList();
@@ -501,9 +487,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>선택 타일 중 **파일**만의 경로 (A94 6차 — 일괄 열기 대상. 폴더는 제외한다).</summary>
     private IReadOnlyList<string> SelectedFilePaths() =>
         TileGrid.SelectedItems
-            .OfType<FrameworkElement>()
-            .Select(i => i.Tag)
-            .OfType<ExplorerEntryVm>() // A345 배치 1 — Tag = 뷰모델
+            .OfType<ExplorerEntryVm>() // A345 배치 3 — 선택 항목 자체가 뷰모델
             .Where(vm => !vm.IsFolder)
             .Select(vm => vm.Path)
             .ToList();
@@ -555,45 +539,60 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>
     /// 표시 목록 교체 — 좌 리스트(ExplorerPane)가 정렬·필터를 적용해 넘긴 결과를 그대로 그린다.
     /// folder = 그 목록의 폴더 경로(A94 — 드랍·붙여넣기 대상으로 기억한다).
+    /// <para>
+    /// A345 배치 3: 조립이 사라졌다 — 뷰모델 목록을 만들어 <c>ItemsSource</c>에 대입하는 것이
+    /// 전부이고, 컨테이너는 XAML이 보이는 만큼만 만든다. 그와 함께 사라진 것: 분할 조립 루프
+    /// (A192)·실체화 상한과 안내 타일·완료 마무리 단계(FinishShowEntries). 대입은 동기 1회라
+    /// 기다릴 것이 없고, 안내 타일은 ItemsSource 상태에서 Items.Add가 즉시 예외라 성립하지 않는다.
+    /// </para>
+    /// <para>
+    /// 순서가 규칙이다: <c>ItemsSource</c> 대입 → <c>UpdateLayout</c> → <c>ApplyTileSize</c>.
+    /// 타일 크기는 아이템 패널(ItemsWrapGrid)의 셀 크기로 거는데 그 패널은 <b>첫 레이아웃 뒤에만</b>
+    /// 존재한다(ItemsPanelRoot) — 종전에는 패널이 없을 때를 위한 폴백(타일마다 직접 크기 대입)이
+    /// 있었지만 가상화 뒤에는 Items가 컨테이너가 아니라 데이터라 그 폴백이 성립하지 않는다.
+    /// 그래서 첫 화면에 셀 크기가 즉시 먹으려면 이 세 줄의 순서가 유일한 길이다.
+    /// </para>
     /// 이미지 미리보기는 BitmapImage가 스스로 비동기 디코드하므로 별도 로드 루프가 없다.
-    /// A192: 종전 전량 동기 생성을 분할 조립으로 대체 — 첫 조각(TileChunkItems)만 즉시 만들고
-    /// 나머지는 CompositionTarget.Rendering 틱당 한 조각씩 append한다(StartTileAppendLoop —
-    /// DocumentView.StartRenderAppendLoop의 A193 구조 복제). 실체화 상한(MaterializeLimit)을
-    /// 넘는 초과분은 만들지 않고 완료 시점(FinishShowEntries)에 안내 1타일만 붙는다.
-    /// 재진입(감시 재스캔·정렬·폴더 전환 — 전부 이 메서드로 다시 온다)은 명시 해제 +
-    /// 틱 진입 seq 대조의 이중 방어. UpdateLayout은 전량 조립 뒤 1회에서 <b>첫 조각 직후 1회</b>로
-    /// 축소 — 목적(ApplyTileSize가 캐스트하는 ItemsPanelRoot의 실체화)은 항목 수와 무관하게
-    /// 첫 레이아웃 한 번이면 성립하고, 이후 조각은 패널 속성(ItemWidth/ItemHeight)이 셀 크기를
-    /// 자동 적용한다(폴백 경로 보정은 FinishShowEntries 주석).
+    /// ※ 좌 리스트와 뷰모델 <b>객체</b>를 공유하지는 않는다(조사 문서의 "ViewChanged 훅 변경") —
+    /// 그러려면 공개 시그니처(ShowEntries의 Entry 목록)를 바꿔 셸까지 손대야 해서 배치 4 후보로
+    /// 남겼다. 지금은 이 표면이 자기 뷰모델을 따로 만든다(표시 상태도 표면별로 독립).
     /// </summary>
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
-        var seq = ++_showSeq;
-        StopTileAppendLoop(); // 방어: 직전 조립 루프가 남아 있으면 먼저 해제(A193 관용구)
+        _showSeq++; // 진행 중이던 미리보기 요청 전부 낡음 처리(폴더 전환·재스캔 공통)
         CurrentFolder = folder;
-        TileGrid.Items.Clear();
+        TileGrid.ItemsSource = null; // 옛 목록 해제(같은 참조 재대입이 무시되는 일도 함께 막는다)
 
-        // A345 배치 1: 이 표면의 데이터 축을 여기서 만든다(공개 시그니처는 Entry 목록 그대로 —
-        // 셸이 부른다). 배치 3에서 좌 리스트와 뷰모델을 공유하도록 ViewChanged 훅을 바꾼다.
         var vms = entries.Select(e => new ExplorerEntryVm(e)).ToList();
-        var cap = Math.Min(entries.Count, MaterializeLimit);
-        var first = Math.Min(TileChunkItems, cap);
-        for (var i = 0; i < first; i++)
-            TileGrid.Items.Add(MakeTile(vms[i]));
+        // A94 4차: 잘라내기 중인 경로면 처음부터 흐리게 — 종전 MakeTile의 생성 시점 반영을
+        // 뷰모델 쪽으로 옮긴 것이다(화면 반영은 x:Bind ContentOpacity).
+        foreach (var vm in vms) ExplorerFileOps.ApplyCutMark(vm);
+        _vms = vms;
         EmptyText.Text = "No matching files here"; // A243 — ShowLoading의 "Loading..."을 원문구로 복원
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        // 계측 cfill0: 중앙 첫 조각(최대 60타일) 생성 완료 — 바로 아래 동기 레이아웃 패스와
-        // 비용을 분리하려고 UpdateLayout 앞에 둔다.
+        TileGrid.ItemsSource = _vms;
+        // 계측 cfill0: 목록 대입 완료(배치 3 이후의 뜻 — 종전 "첫 조각 60타일 생성 완료"가 아니다).
+        // 실제 컨테이너 생성은 레이아웃이 보이는 만큼만 하므로 여기부터는 개수에 비례하지 않는다.
         NavDiagnostics.Mark("cfill0");
 
-        TileGrid.UpdateLayout(); // 첫 조각(상한 60타일)의 패널 실체화 — 아래 타일 크기 반영이 헛돌지 않게
+        TileGrid.UpdateLayout(); // 아이템 패널 실체화 — 아래 타일 크기 반영이 헛돌지 않게
         ApplyTileSize();
         // 계측 clay: UpdateLayout(동기 레이아웃 패스)의 비용 — UI 스레드를 통째로 잡는 유일한
-        // 명시 호출이라 따로 잰다.
+        // 명시 호출이라 따로 잰다(배치 3 이후 이 패스가 만드는 것은 화면 분량의 타일뿐이다).
         NavDiagnostics.Mark("clay");
+        // 계측 cfillN / cpaint: 배치 3 이후 clay 직후가 곧 "목록 반영 끝"이다 — 조립이 동기 1회로
+        // 접혀 clay와 cfillN 사이가 사실상 0이 됐다(종전에는 마지막 조각까지의 프레임 구간이었다).
+        NavDiagnostics.Mark("cfillN");
+        NavDiagnostics.ArmPaint("cpaint");
 
-        if (first < cap) StartTileAppendLoop(seq, entries, vms, first, cap);
-        else FinishShowEntries(entries, seq); // 소형 폴더 — 조립이 여기서 동기 완료(종전 동작 동일)
+        // A94 2차: 새 폴더·새 파일(Ctrl+Shift+N / 메뉴) 직후의 재스캔이면 그 항목으로 곧바로
+        // 이름변경 편집 진입. 조립 개념이 사라져 "완주한 조립을 기다린다"는 조건도 함께 사라졌다 —
+        // 목록은 이미 전부 여기 있고, 편집할 행의 컨테이너는 BeginRenameByPath가 실체화한다.
+        if (_pendingRenamePath is { } pending)
+        {
+            _pendingRenamePath = null; // 1회성 — 다음 갱신(다른 폴더 이동 등)에 재발화하지 않게
+            BeginRenameByPath(pending);
+        }
     }
 
     /// <summary>
@@ -602,16 +601,17 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 실변경 판정은 좌 리스트(ExplorerPane.NavigateToAsync)가 단일 지점으로 하고, 같은 폴더 감시
     /// 재스캔(400ms 디바운스)·정렬·필터 재작성은 이 경로로 오지 않아 종전대로 무Clear(깜빡임 방지).
     /// _showSeq 증가 = 보류 중 텍스트 프리뷰(A233)·셸 썸네일(A242) 예약 전부 무산(Unloaded와 같은
-    /// 장치 — 낡은 완료는 고아 host 갱신일 뿐이라 무해). 스캔 결과는 반드시 ShowEntries로 돌아와
+    /// 장치 — A345 배치 3부터 낡은 완료는 seq 대조에 걸려 화면을 만지지 못한다: 컨테이너가
+    /// 재활용되므로 "고아 host라 무해"는 더 이상 근거가 아니다). 스캔 결과는 반드시 ShowEntries로 돌아와
     /// 문구·목록을 덮는다(실패 경로도 빈 목록 ViewChanged를 쏜다 — 로딩 문구가 잔존하지 않는 근거).
-    /// _pendingRenamePath는 건드리지 않는다 — 다음으로 완주한 조립(FinishShowEntries)이 소비한다.
+    /// _pendingRenamePath는 건드리지 않는다 — 다음 ShowEntries가 소비한다(A345 배치 3).
     /// </summary>
     public void ShowLoading(string folder)
     {
         _showSeq++;
-        StopTileAppendLoop(); // 직전 조립 루프가 빈 판에 낡은 조각을 붙이지 않게(seq 대조와 이중)
         CurrentFolder = folder; // 좌 리스트(_folder)와 같은 시점 갱신 — 로딩 중 드랍·붙여넣기 대상 일치
-        TileGrid.Items.Clear();
+        TileGrid.ItemsSource = null; // A345 배치 3 — 목록 해제가 곧 타일 비우기다
+        _vms = [];
         EmptyText.Text = "Loading...";
         EmptyText.Visibility = Visibility.Visible;
         // 계측 cload: 중앙 썸네일 쪽 로딩 화면 전환 완료(좌 리스트의 load 바로 뒤 — 두 표면의
@@ -619,160 +619,180 @@ public sealed partial class ThumbnailExplorer : UserControl
         NavDiagnostics.Mark("cload");
     }
 
+    // ---------- 컨테이너 준비 · 미리보기 위상 (A345 배치 3) ----------
+
     /// <summary>
-    /// A192: 첫 조각 이후의 나머지 타일을 CompositionTarget.Rendering 틱마다 한 조각
-    /// (TileChunkItems)씩 append한다 — UI 스레드 점유 상한 = 조각 1개 생성
-    /// (DocumentView.StartRenderAppendLoop과 같은 프레임 틱 관용구·같은 해제 의무).
-    /// 중단 판정 = 매 틱 append 직전의 seq 대조(한 틱 = 한 조각이라 틱 진입 시 1회로 충분):
-    /// ShowEntries 재진입(감시 디바운스 재스캔 포함)이 _showSeq를 올린다 — 구 루프가 새 목록에
-    /// 낡은 타일을 붙이는 사고를 막는다. 틱 핸들러는 본문 전체가 try/catch다(static 이벤트라
-    /// 예외가 새면 앱 전역 크래시) — 조각 생성 예외 = 루프 중단(부분 타일 잔존은 다음
-    /// ShowEntries가 덮는다).
+    /// 타일 컨테이너 준비 — 가상화의 계약이 여기 다 모여 있다(좌 리스트
+    /// OnListContainerContentChanging의 중앙 판본이고 규칙도 같다):
+    /// <list type="bullet">
+    /// <item>재활용 큐로 들어가는 컨테이너는 <b>편집 상자를 강제 커밋</b>하고, 미리보기 자리를
+    /// 비우고, 드랍을 끈다. 미리보기를 비우는 것이 곧 비트맵 해제다(PdfPane의
+    /// <c>image.Source = null</c>과 같은 역할) — 안 비우면 재활용된 타일에 <b>다른 파일의 그림</b>이
+    /// 그대로 남는다.</item>
+    /// <item>훅(컨텍스트 메뉴·드래그·더블탭)은 컨테이너당 <b>1회만</b> 붙이고, 핸들러 안에서는
+    /// 항목을 캡처하지 않고 <see cref="VmOf"/>로 그때그때 다시 푼다.</item>
+    /// <item>AllowDrop은 <b>매번</b> 다시 정한다 — 폴더였던 컨테이너가 파일 타일로 재활용되면
+    /// 잔존한 AllowDrop이 파일을 드랍 대상으로 만든다.</item>
+    /// </list>
+    /// 표시값(캡션·툴팁·잘라내기 흐림·클라우드 배지)은 x:Bind가 새 항목 값으로 다시 평가하므로
+    /// 여기서 손대지 않는다. 손대는 것은 미리보기 하나뿐이고 그것이 위상 0/1의 일이다:
+    /// 위상 0 = <b>동기로 확실히 그릴 수 있는 것</b>(폴더 글리프·확장자 타일·뷰모델에 남아 있는
+    /// 캐시), 위상 1 = 파일을 읽어야 하는 것(RegisterUpdateCallback — PdfPane 선례).
     /// </summary>
-    private void StartTileAppendLoop(
-        int seq, IReadOnlyList<ExplorerListing.Entry> entries, IReadOnlyList<ExplorerEntryVm> vms,
-        int start, int cap)
+    private void OnTileContainerContentChanging(
+        ListViewBase sender, ContainerContentChangingEventArgs args)
     {
-        StopTileAppendLoop(); // 방어: 기동 직전 잔존 루프 해제(A193 관용구)
-
-        var next = start;
-        // A342: 이 루프의 직전 틱 시작 시각(틱). 0 = 아직 첫 틱 전이라 간격을 잴 수 없다.
-        var lastTickStart = 0L;
-        void OnTick(object? sender, object? e)
+        if (args.ItemContainer is not GridViewItem item) return;
+        if (args.InRecycleQueue)
         {
-            // A342: 정지 487ms가 prev0>fillN 구간에서 나는데 미리보기 개수와 무관해, 어느 틱이
-            // 주인인지 틱 단위로 좁힌다. 진단이 꺼져 있으면 여기서 비용이 0이다(0 = 미계측 표지).
-            var tickStart = NavDiagnostics.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
-            // A342 배치 2: 이 틱 동안 늘어난 GC 정지를 함께 잰다 — 240ms짜리 틱의 주인이
-            // 조립인지 GC인지 가르는 값이다(ms 단위 — Stopwatch 틱과 섞지 않는다).
-            var pauseStart = tickStart == 0 ? 0L : NavDiagnostics.PauseMs();
-            try
+            if (item.ContentTemplateRoot is Grid recycled)
             {
-                if (seq != _showSeq)
-                {
-                    StopTileAppendLoop(); // 그새 다른 목록이 왔다 — 낡은 타일을 붙이지 않는다
-                    return;
-                }
-                var count = Math.Min(TileChunkItems, cap - next);
-                for (var i = next; i < next + count; i++)
-                    TileGrid.Items.Add(MakeTile(vms[i])); // A345 배치 1 — 조각의 입력도 뷰모델
-                next += count;
-                if (next >= cap)
-                {
-                    StopTileAppendLoop(); // 완료 — 더 깨울 이유가 없다
-                    FinishShowEntries(entries, seq);
-                }
-                // A342: 조각 append(마지막 틱이면 FinishShowEntries까지 포함)가 끝난 뒤에만
-                // 기록한다 — 예외 경로는 남기지 않는다.
-                if (tickStart != 0)
-                {
-                    NavDiagnostics.NoteTick(
-                        'C',
-                        next - 1,
-                        System.Diagnostics.Stopwatch.GetTimestamp() - tickStart,
-                        lastTickStart == 0 ? 0 : tickStart - lastTickStart,
-                        NavDiagnostics.PauseMs() - pauseStart);
-                    lastTickStart = tickStart;
-                }
+                ExplorerRenameBox.ForceFinish(recycled); // 편집 중 스크롤 = 데이터 사고의 방지선
+                PreviewHostOf(recycled)?.Children.Clear(); // 비트맵·텍스트 블록 해제
             }
-            catch (Exception)
-            {
-                StopTileAppendLoop();
-            }
+            item.AllowDrop = false; // 잔존 방지 — 다음 항목이 파일이어도 드랍을 받지 않게
+            return;
         }
-        _tileAppendHandler = OnTick;
-        CompositionTarget.Rendering += OnTick;
-    }
-
-    /// <summary>A192: 분할 조립 루프 해제의 단일 지점 — 구독 해제 + 표지 소거(루프 없으면 무동작).
-    /// 기동은 StartTileAppendLoop 한 곳뿐이라 구독 중 핸들러 = 이 필드 하나가 불변식이다.</summary>
-    private void StopTileAppendLoop()
-    {
-        if (_tileAppendHandler is { } handler)
+        if (args.Item is not ExplorerEntryVm vm) return;
+        EnsureTileHooks(item);        // 컨테이너당 1회
+        item.AllowDrop = vm.IsFolder; // 매 재사용마다 재설정(폴더만 드랍 대상 — A94)
+        if (args.Phase != 0) return;
+        // 템플릿 루트 조회는 훅 부착 뒤에 둔다 — 어떤 이유로든 루트를 못 얻어도(템플릿 미적용 등)
+        // 메뉴·드래그·더블클릭은 붙어 있어야 한다(미리보기만 비는 것이 최악의 실패다).
+        if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
+        host.Children.Clear(); // 재활용 잔존 방어(재활용 큐를 거치지 않고 바로 오는 경로 대비)
+        if (vm.IsFolder)
         {
-            CompositionTarget.Rendering -= handler;
-            _tileAppendHandler = null;
+            host.Children.Add(MakeFolderGlyph());
+            return;
         }
+        // 어느 갈래든 확장자 타일이 먼저 깔린다 — 미리보기는 그 위를 덮거나(성공) 그대로 둔다(실패).
+        host.Children.Add(MakeExtensionTile(vm.Entry));
+        if (vm.PreviewText is { } cached) // A233 결과 재사용 — 파일을 다시 읽지 않는다
+        {
+            host.Children.Clear();
+            host.Children.Add(MakeTextPreviewBlock(cached));
+            return;
+        }
+        if (vm.PreviewKnownEmpty) // 얻을 것이 없다고 확정된 항목 — 다시 요청하지 않는다
+        {
+            if (vm.AudioInfo is { } info) host.Children.Add(MakeAudioInfoText(vm.Entry, info)); // A270
+            return;
+        }
+        args.RegisterUpdateCallback(OnTilePreviewPhase); // 위상 1 — 파일을 읽는 갈래로
     }
 
     /// <summary>
-    /// A192: 조립 완료의 단일 마무리 — ① 상한 초과분 안내 1타일 부착, ② 폴백 크기 재적용,
-    /// ③ 보류 중 이름변경 편집 진입. ③을 완료 뒤로 옮긴 이유: 새 폴더 타일이 뒤 조각에 있으면
-    /// FindTileByPath가 조립 중에는 못 찾는다 — 편집 진입 예약(_pendingRenamePath)의 소비를
-    /// "처음으로 완주한 조립"으로 미룬다(조립이 도중 무산되면 예약이 남아 다음 완주가 소비 —
-    /// 종전 '다음 ShowEntries가 소비'와 같은 1회성). ②는 ApplyTileSize의 폴백 경로(패널이
-    /// ItemsWrapGrid가 아닐 때 타일 직접 지정) 전용 보정 — 그 경로는 첫 조각만 크기를 받았으므로
-    /// 완료 시 한 번 더 전체 적용한다(정상 경로에서는 패널 속성 재대입 한 줄이라 무해).
-    /// 낡은 완료(폐기된 루프의 마지막 틱)는 seq 대조로 걸러진다.
+    /// 템플릿 루트 Grid에서 미리보기 자리(빈 Grid)를 <b>이름으로</b> 찾는다 (A345 배치 3) —
+    /// 루트가 평평한 Grid 하나라 한 레벨 탐색으로 충분하다(좌 리스트 FindItemBlock과 같은 관용구).
+    /// XAML의 x:Name과 <see cref="TilePreviewHostName"/>이 어긋나면 미리보기가 예외 없이 전멸한다.
     /// </summary>
-    private void FinishShowEntries(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
-    {
-        if (seq != _showSeq) return; // 방어 — 낡은 완료가 편집 진입을 훔치지 않게
-        // 계측 cfillN / cpaint: 중앙 타일 조립 완료와 그 뒤 첫 렌더 프레임(좌 리스트의 fillN·
-        // paint와 대응). 좌·중앙 중 늦게 끝난 쪽이 사용자가 보는 "확 바뀌는" 순간이다.
-        NavDiagnostics.Mark("cfillN");
-        NavDiagnostics.ArmPaint("cpaint");
-        if (entries.Count > MaterializeLimit)
-            TileGrid.Items.Add(MakeOverflowNotice());
-        ApplyTileSize();
+    private static Grid? PreviewHostOf(Grid tile) =>
+        tile.Children.OfType<Grid>().FirstOrDefault(g => g.Name == TilePreviewHostName);
 
-        // A94 2차: 새 폴더(Ctrl+Shift+N) 직후의 재스캔이면 그 타일을 선택하고 곧바로 이름변경
-        // 편집 진입(탐색기 관례). 반드시 '재스캔 결과가 그려진 뒤' — 편집 중 재스캔은 편집 UI를 지운다.
-        if (_pendingRenamePath is { } pending)
+    /// <summary>
+    /// 위상 1 (A345 배치 3): 파일을 읽어야 하는 미리보기 갈래를 발사한다 — 종전 MakeTile이 조립
+    /// 시점에 고르던 4갈래를 <b>보이는 타일에서만</b> 고르는 것으로 옮겼다(A339 DeferPreview의
+    /// 뷰포트 판정이 하던 일을 이제 XAML 가상화 패널이 대신한다). 갈래 순서는 종전 MakeTile
+    /// 그대로다: 폴더(위상 0에서 끝) → 이미지(클라우드 전용이면 캐시 썸네일만) → 텍스트(A233) →
+    /// 그 외 전 파일 = 셸 썸네일(A242, 단일 판정 지점).
+    /// 진입 즉시 재활용 대조(<c>ReferenceEquals</c>)를 하는 이유: 위상 콜백은 <b>다음 프레임</b>에
+    /// 오므로 그 사이 컨테이너가 다른 항목으로 재활용됐을 수 있다.
+    /// </summary>
+    private void OnTilePreviewPhase(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.ItemContainer is not GridViewItem item ||
+            args.Item is not ExplorerEntryVm vm ||
+            !ReferenceEquals(item.Content, vm)) return;
+        if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
+        var entry = vm.Entry;
+        var seq = _showSeq; // 발사 시점의 회차 — 폴더가 바뀌면 이 값으로 완료를 버린다
+        if (IsImageFile(entry.Name))
         {
-            _pendingRenamePath = null; // 1회성 — 다음 갱신(다른 폴더 이동 등)에 재발화하지 않게
-            if (FindTileByPath(pending) is { } tile)
-            {
-                TileGrid.SelectedItem = tile;
-                TileGrid.ScrollIntoView(tile);
-                TileGrid.UpdateLayout(); // 컨테이너 실체화 — 편집 상자 삽입·포커스가 성립하게
-                BeginRenameOf(tile);
-            }
+            // A175: 클라우드 전용 이미지는 원본 디코드가 하이드레이션(전체 다운로드)이다 —
+            // 원본은 절대 열지 않고 캐시·클라우드 제공 썸네일만 시도한다.
+            if (entry.IsPlaceholder) _ = FillCachedThumbnailAsync(item, vm, host, seq);
+            else StartImagePreview(item, vm, host);
+            return;
         }
+        if (IsTextPreviewFile(entry)) // A233 — 내용 프리뷰
+        {
+            _ = FillTextPreviewAsync(item, vm, host, seq);
+            return;
+        }
+        // A242 — 그 외 전 파일: 셸 썸네일. 대기 배지는 실제로 요청하는 이 시점에만 붙인다
+        // (요청하지도 않은 타일에 "기다리는 중" 표시가 있으면 거짓말이다 — A339의 근거 승계).
+        var badge = MakePendingBadge();
+        host.Children.Add(badge);
+        _ = FillShellThumbnailAsync(item, vm, host, badge, seq);
     }
 
     /// <summary>
-    /// A192: 실체화 상한 초과 안내 — 비상호작용 1타일. Tag 없음(타일 조회·조작 루틴은 전부
-    /// Tag의 뷰모델 패턴 매칭이라 자연 제외된다 — A345 배치 1: FindTileByPath·SelectedPaths·EntryFromSource·
-    /// ApplyCutMark·OnItemClick 전수 확인), 계약 훅(메뉴·드래그·더블클릭) 미부착,
-    /// IsEnabled=false로 포커스·클릭 대상에서도 뺀다. 문구는 좌 리스트(ExplorerPane)와 동일 사양.
-    /// <para>
-    /// A342 배치 5: 숨은 개수를 문구에서 뺐다 — 스캔의 maxItems 상한 때문에 entries.Count가 이미
-    /// 잘린 값이라 차이가 실제 숨은 개수가 아니다. 좌 리스트와 문구를 글자 그대로 맞춘다.
-    /// </para>
+    /// 타일 컨테이너에 계약 훅을 1회만 건다 (A345 배치 3 — 좌 리스트 EnsureListItemHooks와 같은
+    /// 구조·같은 근거). "이미 붙였는가"의 표지는 <see cref="UIElement.ContextFlyout"/> 유무다 —
+    /// 아래에서 반드시 하나를 걸기 때문에 별도 플래그(첨부 속성·사전)가 필요 없는 가장 값싼
+    /// 판정이다. 훅은 전부 <b>지연 해석</b>이다(핸들러 안에서 VmOf로 다시 푼다) — 컨테이너는
+    /// 재활용돼도 훅은 남으므로, 여기서 vm이나 entry를 캡처하면 옛 파일을 조작하게 된다.
     /// </summary>
-    private static GridViewItem MakeOverflowNotice() => new()
+    private void EnsureTileHooks(GridViewItem item)
     {
-        Content = new TextBlock
-        {
-            Text = $"Showing the first {MaterializeLimit} items. Refine the filter to see the rest.",
-            FontSize = 11,
-            Opacity = 0.6,
-            TextWrapping = TextWrapping.Wrap,
-            TextAlignment = TextAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(4),
-        },
-        IsEnabled = false,
-    };
+        if (item.ContextFlyout is not null) return; // 이미 부착됨
+        AttachContextMenu(item); // A24 + A94 2차(Rename·Delete) — A335 Opening 재구성
+        AttachDragDrop(item);    // A94 — 드래그 아웃 + 폴더 타일 드랍
+        item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
+        item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
+    }
 
-    /// <summary>경로로 타일 컨테이너 찾기 — 항목 = 컨테이너 직접 추가(A345 배치 1부터 Tag = 뷰모델) 구조 전제.</summary>
-    private GridViewItem? FindTileByPath(string path) =>
-        TileGrid.Items.OfType<GridViewItem>().FirstOrDefault(i =>
-            i.Tag is ExplorerEntryVm vm &&
-            string.Equals(vm.Path, path, StringComparison.OrdinalIgnoreCase));
+    // ---------- 선택 · 이름변경 (A345 배치 3 — 보수안 ⓐ) ----------
+
+    /// <summary>
+    /// 경로로 표시 목록의 뷰모델 찾기 (A345 배치 3) — 가상화 뒤의 정본 조회이고, 종전
+    /// FindTileByPath(컨테이너 순회)의 대체다. 컨테이너 검색과 달리 <b>화면 밖 항목도 찾는다</b>
+    /// (그것이 종전 실체화 상한·조각 대기 문제의 해소다).
+    /// </summary>
+    private ExplorerEntryVm? FindVmByPath(string path) =>
+        _vms.FirstOrDefault(vm => string.Equals(vm.Path, path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 뷰모델 하나의 타일 컨테이너를 실체화해 돌려준다 (A345 배치 3 — 이름변경 보수안 ⓐ).
+    /// 인라인 편집은 컨테이너 안의 캡션 TextBlock 자리에 상자를 끼우는 구조라, 가상화 뒤에는
+    /// "보이게 스크롤 → 레이아웃 강제 → 컨테이너 조회"의 세 단계를 거쳐야 상자를 끼울 대상이
+    /// 생긴다. 그래도 못 얻으면(목록 밖 등) null — 호출부는 무동작으로 끝낸다.
+    /// </summary>
+    private GridViewItem? RealizeTileContainer(ExplorerEntryVm vm)
+    {
+        TileGrid.ScrollIntoView(vm);
+        TileGrid.UpdateLayout();
+        return TileGrid.ContainerFromItem(vm) as GridViewItem;
+    }
+
+    /// <summary>
+    /// 방금 만든 항목(새 폴더·새 파일)을 골라 이름변경 편집에 들여보낸다 (A345 배치 3 — 종전
+    /// FinishShowEntries가 들고 있던 보류 소비 갈래를 옮긴 것이다. 호출부 = ShowEntries 한 곳).
+    /// 현재 목록이 확장자 필터로 그 항목을 안 보여 주거나 그새 사라졌으면 조용히 무동작
+    /// (종전 "그새 사라짐" 폴백과 같은 무해 경로).
+    /// </summary>
+    private void BeginRenameByPath(string path)
+    {
+        if (FindVmByPath(path) is not { } vm) return;
+        TileGrid.SelectedItem = vm;
+        if (RealizeTileContainer(vm) is { } container) BeginRenameOf(container);
+    }
 
     /// <summary>
     /// F2·우클릭 Rename 진입 (A94 2차): 타일 캡션 TextBlock을 인라인 편집(ExplorerRenameBox)으로
-    /// 바꾼다. 캡션 위치 = MakeTile의 tile.Children[1](아래 행 캡션 — 인덱스 수동 동기).
+    /// 바꾼다. 캡션 조회 = <b>이름 기반</b>(A345 배치 3 — 종전 tile.Children[1] 인덱스 계약은
+    /// 템플릿에 클라우드 배지가 끼어 자리가 밀릴 수 있어 폐기했다. 어긋나도 예외 없이 조용한
+    /// return이라 증상이 "F2 무반응"으로만 보인다 — 좌 리스트가 A156에서 같은 이유로 이미
+    /// 이름 조회로 옮겼다). 편집 상자를 끼울 host = 템플릿 루트 Grid(평평한 한 겹).
     /// 커밋 성공 갱신 = RefreshViaShell(편집이 끝난 뒤에만 — 편집 중 재스캔 금지).
     /// </summary>
     private void BeginRenameOf(GridViewItem item)
     {
-        if (item.Tag is not ExplorerEntryVm vm) return;
-        if (item.Content is not Grid { Children.Count: > 1 } tile ||
-            tile.Children[1] is not TextBlock caption) return;
+        if (VmOf(item) is not { } vm) return; // A345 배치 3 — VmOf 단일 해석
+        if (item.ContentTemplateRoot is not Grid tile) return;
+        if (tile.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == TileCaptionName)
+            is not { } caption) return;
         ExplorerRenameBox.Begin(tile, caption, vm.Path, MakeOpUi(), RefreshViaShell);
     }
 
@@ -819,8 +839,15 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>
     /// 타일 한 변 = floor(그리드 실폭 / 열 수) (A93 확정 수식). GridView의 기본 아이템 패널
     /// (ItemsWrapGrid)의 셀 크기(ItemWidth/ItemHeight)로 지정한다 — 셀이 균일하면 줄바꿈이
-    /// 정확히 열 수대로 떨어진다. 패널이 아직 없거나 다른 타입이면(테마·템플릿 변형 대비)
-    /// 타일 루트에 직접 크기를 주는 폴백으로 같은 결과를 낸다.
+    /// 정확히 열 수대로 떨어진다.
+    /// <para>
+    /// A345 배치 3: 패널이 없을 때의 폴백(타일 컨테이너를 순회하며 직접 크기 대입)을 삭제했다 —
+    /// ItemsSource 상태에서 <c>Items</c>는 컨테이너가 아니라 <b>데이터</b>라 그 순회가 아무것도
+    /// 못 고친다. 대신 패널이 아직 없으면 그냥 돌아간다: <c>ItemsPanelRoot</c>는 첫 레이아웃
+    /// 뒤에만 존재하고, 그 뒤로는 ShowEntries의 <c>UpdateLayout</c> 직후 호출·SizeChanged·
+    /// SetColumns가 다시 부른다(첫 화면 셀 크기는 ShowEntries의 대입→UpdateLayout→여기 순서가
+    /// 보장한다 — 그 순서가 유일한 길이 됐다).
+    /// </para>
     /// </summary>
     private void ApplyTileSize()
     {
@@ -829,71 +856,18 @@ public sealed partial class ThumbnailExplorer : UserControl
         var size = Math.Floor(width / _columns);
         if (size < 24) return; // 극단적으로 좁은 창 보호 — 이전 크기 유지가 낫다
 
-        if (TileGrid.ItemsPanelRoot is ItemsWrapGrid wrap)
-        {
-            wrap.ItemWidth = size;
-            wrap.ItemHeight = size;
-            return;
-        }
-        foreach (var obj in TileGrid.Items)
-            if (obj is GridViewItem { Content: FrameworkElement tile })
-            {
-                tile.Width = size;
-                tile.Height = size;
-            }
+        if (TileGrid.ItemsPanelRoot is not ItemsWrapGrid wrap) return; // 아직 첫 레이아웃 전
+        wrap.ItemWidth = size;
+        wrap.ItemHeight = size;
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e) => ApplyTileSize();
 
     // ---------- 타일 구성 ----------
-
-    /// <summary>균일 타일: 위(미리보기/글리프/확장자) + 아래 파일명 1줄 말줄임 캡션(A93).
-    /// A345 배치 1: 입력이 뷰모델이고 컨테이너 Tag도 뷰모델이다(미리보기 갈래는 종전 Entry 그대로).</summary>
-    private GridViewItem MakeTile(ExplorerEntryVm vm)
-    {
-        var entry = vm.Entry;
-        var preview = entry.IsFolder ? MakeFolderGlyph()
-            : IsImageFile(entry.Name) ? MakeImagePreview(entry)
-            : IsTextPreviewFile(entry) ? MakeTextPreview(entry) // A233 — 내용 프리뷰(지연 교체)
-            : MakeShellThumbTile(entry); // A242 — 그 외 전 파일: 셸 썸네일 지연 교체(단일 판정 지점)
-
-        var tile = new Grid();
-        tile.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        tile.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        tile.Children.Add(preview);
-        // A337: 클라우드 전용(placeholder) 파일 표시 — 이 줄이 없으면 "썸네일이 안 나온다"가
-        // 사용자에게 고장으로 읽힌다(실기기 문의: 같은 폴더의 PNG 두 개가 갈렸다). 원인은 A175
-        // 사양이다 — 원본을 열면 하이드레이션(전체 다운로드)이 일어나므로 캐시된 썸네일만
-        // 시도하고 실패하면 확장자 타일을 유지한다. 그 사실을 타일이 스스로 밝힌다.
-        if (!entry.IsFolder && entry.IsPlaceholder) tile.Children.Add(MakeCloudBadge());
-
-        var caption = new TextBlock
-        {
-            Text = entry.Name,
-            FontSize = 11,
-            TextTrimming = TextTrimming.CharacterEllipsis, // 1줄 말줄임(A93) — 2줄 아님
-            TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(4, 0, 4, 4),
-        };
-        Grid.SetRow(caption, 1);
-        tile.Children.Add(caption);
-        ToolTipService.SetToolTip(tile, entry.Name);
-
-        var item = new GridViewItem
-        {
-            Content = tile,
-            Tag = vm, // A345 배치 1 — Tag = 뷰모델
-            // 셀(ItemWidth/ItemHeight)을 타일이 꽉 채워야 미리보기 영역이 균일해진다
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            VerticalContentAlignment = VerticalAlignment.Stretch,
-        };
-        ExplorerFileOps.ApplyCutMark(item); // A94 4차 — 잘라내기 중인 경로면 처음부터 반투명
-        AttachContextMenu(item, entry); // A24 — 좌 리스트와 같은 우클릭 메뉴
-        AttachDragDrop(item, entry); // A94 — 드래그 아웃 + 폴더 타일 드랍
-        item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
-        item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
-        return item;
-    }
+    // A345 배치 3: 타일 자체(루트 Grid·캡션·클라우드 배지·컨테이너 정렬)는 이제 XAML
+    // DataTemplate + ItemContainerStyle이 만든다 — 종전 MakeTile·MakeCloudBadge는 그와 함께
+    // 삭제됐다. 코드에 남은 것은 미리보기 조각(폴더 글리프·확장자 타일·텍스트 블록·배지 2종·
+    // 오디오 정보)뿐이고, 그 조각들을 언제 어디에 넣을지는 ContainerContentChanging이 정한다.
 
     /// <summary>
     /// 타일에 드래그 아웃(전 항목)과 드랍 대상(폴더 타일만)을 건다 (A94 —
@@ -901,7 +875,14 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 잡은 타일이 선택에 포함돼 있으면 선택 전부를, 아니면 그 타일 하나만 싣는다(윈도우 관례).
     /// 폴더 타일 핸들러가 Handled를 걸므로 루트(LayoutRoot) 핸들러와 이중 처리되지 않는다.
     /// </summary>
-    private void AttachDragDrop(GridViewItem item, ExplorerListing.Entry entry)
+    /// <remarks>
+    /// A345 배치 3: 항목을 캡처하지 않는다 — 세 핸들러 전부 발화 시점에 VmOf로 다시 푼다
+    /// (재활용된 컨테이너가 옛 파일을 끌거나 옛 폴더로 드랍받는 사고의 방지선). 드랍 갈래는
+    /// <b>부착 시점에 폴더/파일을 가르지 않고</b> 항상 걸어 두고 핸들러 안에서 "지금 이 컨테이너가
+    /// 폴더인가"로 가른다 — 실제 수용 여부는 AllowDrop이 정하고 그 값은 매
+    /// ContainerContentChanging이 다시 정한다.
+    /// </remarks>
+    private void AttachDragDrop(GridViewItem item)
     {
         item.CanDrag = true;
         item.DragStarting += async (_, args) =>
@@ -909,12 +890,9 @@ public sealed partial class ThumbnailExplorer : UserControl
             var deferral = args.GetDeferral();
             try
             {
-                var selected = SelectedPaths();
-                IReadOnlyList<string> paths = selected.Contains(entry.Path, StringComparer.OrdinalIgnoreCase)
-                    ? selected
-                    : [entry.Path];
-                if (!await ExplorerFileOps.FillDragDataAsync(args.Data, paths))
-                    args.Cancel = true; // 실을 항목이 없다(그새 삭제 등)
+                if (VmOf(item) is not { } vm ||
+                    !await ExplorerFileOps.FillDragDataAsync(args.Data, PathsFor(vm.Entry)))
+                    args.Cancel = true; // 실을 항목이 없다(그새 삭제·재활용 등)
             }
             finally
             {
@@ -922,10 +900,15 @@ public sealed partial class ThumbnailExplorer : UserControl
             }
         };
 
-        if (!entry.IsFolder) return;
-        item.AllowDrop = true;
-        item.DragOver += (_, e) => ExplorerFileOps.HandleTargetDragOver(e, entry.Path);
-        item.Drop += (_, e) => HandleDrop(e, entry.Path);
+        item.AllowDrop = VmOf(item) is { IsFolder: true }; // 초기값(이후는 CCC가 매번 다시 정한다)
+        item.DragOver += (_, e) =>
+        {
+            if (VmOf(item) is { IsFolder: true } vm) ExplorerFileOps.HandleTargetDragOver(e, vm.Path);
+        };
+        item.Drop += (_, e) =>
+        {
+            if (VmOf(item) is { IsFolder: true } vm) HandleDrop(e, vm.Path);
+        };
     }
 
     /// <summary>폴더 타일: Segoe Fluent 폴더 글리프 — ExplorerPane 그리드/리스트와 같은 E8B7.</summary>
@@ -942,107 +925,123 @@ public sealed partial class ThumbnailExplorer : UserControl
         ExplorerListing.MatchesExtension(name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions);
 
     /// <summary>
-    /// 이미지 실제 축소 미리보기: BitmapImage + DecodePixelWidth(A93 지정) — 디코드는 XAML
+    /// 이미지 실제 축소 미리보기 (A93): BitmapImage + DecodePixelWidth — 디코드는 XAML
     /// 파이프라인이 비동기로 한다. WIC 밖 포맷(psd)·손상 파일은 ImageFailed로 확장자 타일 폴백.
+    /// <para>
+    /// A345 배치 3: 위상 1에서 <b>동기로</b> 건다(파일을 우리가 읽지 않으므로 워커·게이트가 필요
+    /// 없다 — 종전 DeferPreview 안 본문 그대로다). 성공하면 확장자 타일을 걷는다: 그냥 겹쳐 두면
+    /// <b>투명 PNG의 투명한 부분으로 아래 타일이 비쳐 보인다</b>. 실패(ImageFailed)에는 걷지 않아
+    /// 확장자 타일이 그대로 남는다 = 종전 폴백과 같은 결과.
+    /// 두 핸들러 모두 <c>ReferenceEquals</c>로 재활용을 대조한다 — 디코드 완료가 늦게 오는 사이
+    /// 컨테이너가 다른 파일 타일이 됐으면 그 타일의 확장자 타일을 걷어 버리면 안 된다.
+    /// 비트맵은 뷰모델에 캐시하지 않는다(원본 Uri 디코드 결과는 XAML 이미지 캐시가 들고 있다).
+    /// </para>
     /// </summary>
-    private UIElement MakeImagePreview(ExplorerListing.Entry entry)
-    {
-        // A175: 클라우드 전용(placeholder) 파일은 원본 디코드가 하이드레이션(전체 다운로드)을
-        // 일으킨다 — 원본은 절대 열지 않고, 캐시·클라우드 제공 썸네일만 비동기로 시도한다.
-        if (entry.IsPlaceholder) return MakePlaceholderPreview(entry);
-
-        // A339: 확장자 타일을 먼저 깔고 원본 디코드는 보이는 타일만 시작한다(다른 세 갈래와 같은
-        // 구조가 됐다 — 종전에는 이 갈래만 조립 시점에 BitmapImage를 걸어 2,000장 디코드를
-        // 한꺼번에 예약했다). 실패·예외 폴백이 이제 "확장자 타일로 되돌리기"가 아니라
-        // "확장자 타일을 그대로 두기"라 host.Children.Clear()가 필요 없다.
-        var host = new Grid();
-        var fallback = MakeExtensionTile(entry);
-        host.Children.Add(fallback);
-        DeferPreview(host, () =>
-        {
-            try
-            {
-                var bitmap = new BitmapImage { DecodePixelWidth = PreviewDecodeWidth };
-                bitmap.UriSource = new Uri(entry.Path);
-                var image = new Image
-                {
-                    Source = bitmap,
-                    Stretch = Stretch.Uniform,
-                    Margin = new Thickness(4),
-                };
-                // 성공하면 확장자 타일을 걷는다 — 그냥 겹쳐 두면 **투명 PNG의 투명한 부분으로
-                // 아래 타일이 비쳐 보인다**(종전에는 host에 이미지만 있었으므로 없던 문제다).
-                // 실패(ImageFailed)에는 걷지 않아 확장자 타일이 그대로 남는다 = 종전 폴백과 같은 결과.
-                image.ImageOpened += (_, _) => host.Children.Remove(fallback);
-                image.ImageFailed += (_, _) => host.Children.Remove(image);
-                host.Children.Add(image);
-            }
-            catch
-            {
-                // 경로가 Uri가 못 되는 극단 케이스 — 확장자 타일 그대로.
-            }
-        });
-        return host;
-    }
-
-    /// <summary>
-    /// 클라우드 전용(placeholder) 이미지 타일 (A175): 즉시 확장자 타일을 그려 두고, 캐시된
-    /// 썸네일(ReturnOnlyIfCached — 원본을 열지 않는다)이 있으면 비동기로 바꿔 끼운다.
-    /// 없으면 확장자 타일 그대로 — 어떤 경우에도 하이드레이션은 일어나지 않는다.
-    /// </summary>
-    private UIElement MakePlaceholderPreview(ExplorerListing.Entry entry)
-    {
-        var host = new Grid();
-        host.Children.Add(MakeExtensionTile(entry));
-        DeferPreview(host, () => _ = FillCachedThumbnailAsync(host, entry.Path)); // A339
-        return host;
-    }
-
-    /// <summary>
-    /// 캐시·클라우드 제공 썸네일을 UI 스레드 비동기로 받아 host에 채운다 (A175).
-    /// ReturnOnlyIfCached라 원본 파일은 열리지 않는다(캐시에 없으면 실패 → 확장자 타일 유지).
-    /// 폴더 이동으로 host가 트리에서 떨어져도(ShowEntries가 타일을 전부 새로 만든다)
-    /// 고아 Grid 갱신일 뿐이라 무해하다 — 재진입 가드가 필요 없는 이유.
-    /// </summary>
-    private static async Task FillCachedThumbnailAsync(Grid host, string path)
+    private void StartImagePreview(GridViewItem item, ExplorerEntryVm vm, Grid host)
     {
         try
         {
-            var file = await StorageFile.GetFileFromPathAsync(path);
-            using var thumb = await file.GetThumbnailAsync(
-                ThumbnailMode.SingleItem, PreviewDecodeWidth, ThumbnailOptions.ReturnOnlyIfCached);
-            if (thumb is null || thumb.Size == 0) return;
-            // A270 ③: 파일 종류 아이콘은 무정보다 — 확장자 타일을 덮지 않는다(FetchTilePreview와
-            // 같은 판정·같은 복구법: 이 줄만 지우면 종전 동작). 두 번째 GetThumbnailAsync 호출부.
-            if (thumb.Type == ThumbnailType.Icon) return;
-
-            // 스트림 → 바이트 → BitmapImage: ExplorerPane.FetchThumbnail과 같은 변환 관용구
-            // (검증된 형태만 복제 — thumb를 SetSourceAsync에 직접 넘기는 선례가 저장소에 없다).
-            using var stream = thumb.AsStreamForRead();
-            using var buffer = new MemoryStream((int)thumb.Size);
-            await stream.CopyToAsync(buffer);
-            buffer.Position = 0;
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(buffer.AsRandomAccessStream());
-
-            // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
-            // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
-            // 썸네일) 어디서 먼저 와도 첫 것만 남는다. 이 마크가 필요한 이유: A334 실측의
-            // 정지(343ms → 파일 1만 개에서 1,289ms)가 마지막 마크 <b>이후</b>로 잡혀
-            // "모든 반영이 끝난 뒤"까지만 알 수 있었다 — 그 구간이 내용 얹기인지 그보다
-            // 뒤인지 가르는 자가 없었다. 이제 정지 라벨이 prev0 앞뒤로 갈린다.
-            NavDiagnostics.Mark("prev0");
-            host.Children.Clear();
-            host.Children.Add(new Image
+            var fallback = host.Children.Count > 0 ? host.Children[0] : null; // 위상 0이 깐 확장자 타일
+            var bitmap = new BitmapImage { DecodePixelWidth = PreviewDecodeWidth };
+            bitmap.UriSource = new Uri(vm.Path);
+            var image = new Image
             {
                 Source = bitmap,
                 Stretch = Stretch.Uniform,
                 Margin = new Thickness(4),
-            });
+            };
+            image.ImageOpened += (_, _) =>
+            {
+                if (!ReferenceEquals(item.Content, vm) || fallback is null) return;
+                host.Children.Remove(fallback);
+            };
+            image.ImageFailed += (_, _) =>
+            {
+                if (!ReferenceEquals(item.Content, vm)) return;
+                host.Children.Remove(image);
+            };
+            host.Children.Add(image);
         }
         catch
         {
-            // 캐시 썸네일 없음·읽기 실패 — 확장자 타일 유지. 원본은 어떤 폴백에서도 열지 않는다.
+            // 경로가 Uri가 못 되는 극단 케이스 — 확장자 타일 그대로.
+        }
+    }
+
+    /// <summary>
+    /// 캐시·클라우드 제공 썸네일을 UI 스레드 비동기로 받아 host에 채운다 (A175 — 클라우드 전용
+    /// 이미지 갈래). ReturnOnlyIfCached라 원본 파일은 열리지 않는다(캐시에 없으면 확장자 타일 유지).
+    /// <para>
+    /// A345 배치 3의 방어 3겹: ① <see cref="ExplorerEntryVm.PreviewInFlight"/> — 같은 항목이 짧은
+    /// 사이에 두 번 실체화돼도 요청은 한 번, ② <c>seq</c> 대조 — 폴더가 바뀌었으면 버린다,
+    /// ③ <c>ReferenceEquals(item.Content, vm)</c> — 같은 폴더 안에서 컨테이너가 다른 파일로
+    /// 재활용됐으면 <b>화면은 건드리지 않는다</b>. ③에 걸려도 "썸네일 없음"이라는 사실은 뷰모델에
+    /// 남기므로(PreviewKnownEmpty) 다음 실체화가 헛되이 다시 묻지 않는다. 성공 비트맵은 남기지
+    /// 않는다 — 재실체화 시 다시 가져온다(셸 썸네일 캐시가 있어 싸다는 A242 근거 그대로).
+    /// </para>
+    /// </summary>
+    private async Task FillCachedThumbnailAsync(
+        GridViewItem item, ExplorerEntryVm vm, Grid host, int seq)
+    {
+        if (vm.PreviewInFlight) return;
+        vm.PreviewInFlight = true;
+        try
+        {
+            if (seq != _showSeq) return; // ① 발사 전 낡음(폴더 전환)
+            byte[]? bytes = null;
+            try
+            {
+                var file = await StorageFile.GetFileFromPathAsync(vm.Path);
+                using var thumb = await file.GetThumbnailAsync(
+                    ThumbnailMode.SingleItem, PreviewDecodeWidth, ThumbnailOptions.ReturnOnlyIfCached);
+                // A270 ③: 파일 종류 아이콘은 무정보다 — 확장자 타일을 덮지 않는다(FetchTilePreview와
+                // 같은 판정·같은 복구법: Type 판정 한 줄만 지우면 종전 동작). 두 번째 호출부.
+                if (thumb is not null && thumb.Size != 0 && thumb.Type != ThumbnailType.Icon)
+                {
+                    // 스트림 → 바이트 → BitmapImage: ExplorerPane.FetchThumbnail과 같은 변환 관용구
+                    // (검증된 형태만 복제 — thumb를 SetSourceAsync에 직접 넘기는 선례가 없다).
+                    using var stream = thumb.AsStreamForRead();
+                    using var buffer = new MemoryStream((int)thumb.Size);
+                    await stream.CopyToAsync(buffer);
+                    bytes = buffer.ToArray();
+                }
+            }
+            catch
+            {
+                bytes = null; // 캐시 썸네일 없음·읽기 실패 — 원본은 어떤 폴백에서도 열지 않는다
+            }
+            if (bytes is null)
+            {
+                vm.PreviewKnownEmpty = true; // 없음 확정 — 다음 실체화가 다시 묻지 않는다
+                return;
+            }
+            if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return; // ②③
+            try
+            {
+                var bitmap = new BitmapImage();
+                using (var source = new MemoryStream(bytes))
+                    await bitmap.SetSourceAsync(source.AsRandomAccessStream());
+                if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return;
+                // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
+                // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
+                // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
+                NavDiagnostics.Mark("prev0");
+                host.Children.Clear();
+                host.Children.Add(new Image
+                {
+                    Source = bitmap,
+                    Stretch = Stretch.Uniform,
+                    Margin = new Thickness(4),
+                });
+            }
+            catch
+            {
+                vm.PreviewKnownEmpty = true; // 손상 데이터 디코드 실패 — 확장자 타일 유지
+            }
+        }
+        finally
+        {
+            vm.PreviewInFlight = false;
         }
     }
 
@@ -1101,61 +1100,62 @@ public sealed partial class ThumbnailExplorer : UserControl
         && ExplorerListing.MatchesExtension(entry.Name, KOTU.Module.Audio.AudioModule.Extensions);
 
     /// <summary>
-    /// 텍스트 파일 타일 (A233): 즉시 확장자 타일을 그려 두고, 워커 읽기가 끝나면 그 타일의
-    /// 내용만 교체한다(A175 MakePlaceholderPreview의 지연 교체 구조 — 조립 루프(ShowEntries·
-    /// A192 append 틱)는 예약만 하고 블로킹되지 않는다. 이미지 타일의 지연 디코드와 같은 감각).
-    /// </summary>
-    private UIElement MakeTextPreview(ExplorerListing.Entry entry)
-    {
-        var host = new Grid();
-        host.Children.Add(MakeExtensionTile(entry));
-        // A339: _showSeq는 예약 시점이 아니라 실제 발사 시점의 값을 잡아야 한다 — 미룬 사이에
-        // 폴더가 바뀌었으면 이 타일은 이미 버려진 목록의 것이고, 그 회차의 seq로 발사하면
-        // 낡음 판정(FillTextPreviewAsync의 seq 대조)이 제 몫을 한다.
-        DeferPreview(host, () => _ = FillTextPreviewAsync(host, entry.Path, _showSeq));
-        return host;
-    }
-
-    /// <summary>
     /// 게이트(동시 TextPreviewConcurrency건) 획득 후 워커에서 파일 앞부분을 읽어 타일 내용을
     /// 교체한다 (A233). UI 스레드에서 시작하므로 await 후속부도 UI 스레드다(ExplorerPane.
-    /// LoadDetailInfoAsync의 A194 발사 구조 — 별도 디스패치 없이 seq 재대조가 성립하는 근거).
-    /// 낡음 이중 방어(A192 관용구): ① 게이트 통과 시점 — 재스캔 빈발(A131)로 보류가 쌓여도
-    /// 낡은 예약은 읽기 자체를 시작하지 않는다(자연 배압 — 상한 초과분은 게이트 대기 큐에서
-    /// 잠들었다가 여기서 접힌다), ② 읽기 완료 시점 — 결과를 버린다. host는 이 타일 전용 클로저
-    /// 캡처라(컨테이너 재사용·풀 없음 — ShowEntries가 타일을 매번 새로 만든다) 교체가 다른
-    /// 타일로 갈 수 없다. Unloaded는 _showSeq를 올려 보류 전부를 무산시킨다(생성자 주석).
-    /// 실패(잠김·삭제 경합·풀 닫힘 취소)는 조용히 확장자 타일 유지 — 안내 없음(사양).
+    /// LoadDetailInfoAsync의 A194 발사 구조 — 별도 디스패치 없이 재대조가 성립하는 근거).
+    /// 게이트 통과 시점의 seq 대조가 자연 배압이다: 재스캔 빈발(A131)로 보류가 쌓여도 낡은 예약은
+    /// 읽기 자체를 시작하지 않는다. 실패(잠김·삭제 경합·풀 닫힘 취소)는 조용히 확장자 타일 유지 —
+    /// 안내 없음(사양). Unloaded는 _showSeq를 올려 보류 전부를 무산시킨다(생성자 주석).
+    /// <para>
+    /// A345 배치 3: host를 클로저로 캡처하던 종전 근거("컨테이너 재사용 없음 — ShowEntries가
+    /// 타일을 매번 새로 만든다")가 <b>무효가 됐다</b>. 이제 host는 재활용되는 컨테이너의 것이라,
+    /// 완료 시점에 <c>ReferenceEquals(item.Content, vm)</c>로 "이 컨테이너가 아직 이 파일의
+    /// 것인가"를 확인해야 한다. 읽어 온 문자열은 그 확인보다 <b>먼저</b> 뷰모델에 저장한다 —
+    /// 화면에 못 얹더라도 그 항목이 다시 실체화될 때 파일을 또 읽지 않게 된다.
+    /// </para>
     /// </summary>
-    private async Task FillTextPreviewAsync(Grid host, string path, int seq)
+    private async Task FillTextPreviewAsync(
+        GridViewItem item, ExplorerEntryVm vm, Grid host, int seq)
     {
-        await _textReadGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
+        if (vm.PreviewInFlight) return; // 같은 항목의 중복 발사 방지
+        vm.PreviewInFlight = true;
         try
         {
-            if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다
-            string? text;
+            await _textReadGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
             try
             {
-                text = await TextPool.Run(_ => ReadTextPreview(path));
+                if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다
+                string? text;
+                try
+                {
+                    text = await TextPool.Run(_ => ReadTextPreview(vm.Path));
+                }
+                catch
+                {
+                    return; // 읽기 실패·풀 닫힘(취소 Task) — 확장자 타일 유지(재시도 여지도 남긴다)
+                }
+                if (text is null)
+                {
+                    vm.PreviewKnownEmpty = true; // 빈 파일·전부 공백 — 다시 읽을 이유가 없다
+                    return;
+                }
+                vm.PreviewText = text; // ② 화면 판정보다 먼저 — 재실체화 시 재읽기 없음
+                if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return; // ③ 재활용 대조
+                // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
+                // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
+                // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
+                NavDiagnostics.Mark("prev0");
+                host.Children.Clear();
+                host.Children.Add(MakeTextPreviewBlock(text));
             }
-            catch
+            finally
             {
-                return; // 읽기 실패·풀 닫힘(취소 Task) — 확장자 타일 유지
+                _textReadGate.Release(); // 예외·낡음 경로 포함 — 누락되면 상한 건 뒤 조용히 멈춘다(A194)
             }
-            if (seq != _showSeq || text is null) return; // ② 완료 시점 재대조(이중 방어)
-            // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
-            // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
-            // 썸네일) 어디서 먼저 와도 첫 것만 남는다. 이 마크가 필요한 이유: A334 실측의
-            // 정지(343ms → 파일 1만 개에서 1,289ms)가 마지막 마크 <b>이후</b>로 잡혀
-            // "모든 반영이 끝난 뒤"까지만 알 수 있었다 — 그 구간이 내용 얹기인지 그보다
-            // 뒤인지 가르는 자가 없었다. 이제 정지 라벨이 prev0 앞뒤로 갈린다.
-            NavDiagnostics.Mark("prev0");
-            host.Children.Clear();
-            host.Children.Add(MakeTextPreviewBlock(text));
         }
         finally
         {
-            _textReadGate.Release(); // 예외·낡음 경로 포함 — 누락되면 상한 건 뒤 조용히 멈춘다(A194)
+            vm.PreviewInFlight = false;
         }
     }
 
@@ -1255,31 +1255,6 @@ public sealed partial class ThumbnailExplorer : UserControl
     // ---------- 비이미지 셸 썸네일 (A242) ----------
 
     /// <summary>
-    /// 비이미지 파일 타일 (A242): 즉시 확장자 타일 + 우하단 대기 배지를 그려 두고, 워커 추출이
-    /// 끝나면 셸 썸네일로 교체한다(A233 MakeTextPreview의 지연 교체 구조 그대로 — 조립 루프는
-    /// 예약만 하고 블로킹되지 않는다). 대상 = 폴더·이미지·텍스트(A233) 제외 전 파일 — 갈래
-    /// 선택은 MakeTile 한 곳이라 다른 갈래와 이중 로드가 없다. 실패·썸네일 없음 = 배지만 걷고
-    /// 확장자 타일 유지(안내 없음·사양). 자체 캐시는 두지 않는다 — 셸 썸네일 캐시가 이미 있어
-    /// 재추출이 싸다(ExplorerPane.RefreshView 주석과 같은 근거). 성공한 타일은 다음 재스캔
-    /// (타일 전량 재생성)까지 다시 바뀌지 않는다 — 감시 재스캔 시 재요청은 기존 파이프라인 규칙.
-    /// </summary>
-    private UIElement MakeShellThumbTile(ExplorerListing.Entry entry)
-    {
-        var host = new Grid();
-        host.Children.Add(MakeExtensionTile(entry));
-        // A339: 대기 배지도 미루는 안쪽에서 만든다 — 미리보기를 아직 요청하지도 않은 타일에
-        // "기다리는 중" 표시가 붙어 있으면 거짓말이 되고, 배지 객체도 안 만든 만큼 아낀다.
-        // A270: 오디오면 같은 워커 왕복에서 셸 속성(길이·비트레이트·샘플레이트·채널)도 함께 읽는다.
-        DeferPreview(host, () =>
-        {
-            var badge = MakePendingBadge();
-            host.Children.Add(badge);
-            _ = FillShellThumbnailAsync(host, badge, entry, IsAudioInfoFile(entry), _showSeq);
-        });
-        return host;
-    }
-
-    /// <summary>
     /// A243: 지연 교체 대기 배지 — 정적 글리프(E895 Sync). ProgressRing은 기각(CI가 컴파일
     /// 전용이라 애니메이션을 검증할 수 없다 — A94류 보수 관용구). 확장자 타일을 가리지 않게
     /// 우하단 소형·저투명으로 겹치고, 히트 테스트에서도 뺀다(타일 히트 판정은 조상 탐색
@@ -1296,117 +1271,107 @@ public sealed partial class ThumbnailExplorer : UserControl
         IsHitTestVisible = false,
     };
 
-    /// <summary>
-    /// A337: 클라우드 전용(온라인 전용) 파일 배지 — 대기 배지(<see cref="MakePendingBadge"/>)와
-    /// 같은 한 벌(FontIcon·소형·반투명)이고 <b>자리만 반대쪽 위</b>다: 대기
-    /// 배지는 우하단이라 겹치지 않고, 둘이 동시에 보이는 순간(클라우드 파일의 캐시 썸네일을
-    /// 기다리는 동안)에도 서로를 가리지 않는다.
-    /// <para>
-    /// <b>썸네일이 성공해도 남는다</b>: 이 배지가 말하는 것은 "미리보기가 없다"가 아니라
-    /// "이 파일은 로컬에 없다"이고, 그 사실은 캐시 썸네일을 찾았는지와 무관하다. 열면 다운로드가
-    /// 일어난다는 예고이기도 하다.
-    /// </para>
-    /// 글리프 <c>E753</c> = Segoe Fluent Icons의 Cloud — 윈도우 탐색기가 같은 상태에 쓰는
-    /// 그림이라 사용자가 이미 아는 기호다(별도 학습이 필요 없다).
-    /// <para>
-    /// 대기 배지와 <b>다른 점 하나</b>: 히트 테스트에서 빼지 않는다 — 툴팁이 이 배지의 존재
-    /// 이유(왜 미리보기가 없는지)를 설명하는 유일한 자리이고, 히트 테스트를 끄면 툴팁이
-    /// 뜨지 않는다. 포인터 이벤트는 조상으로 버블링되므로 타일 선택·더블클릭은 그대로다
-    /// (타일 히트 판정도 조상 탐색 EntryFromSource라 영향이 없다).
-    /// </para>
-    /// <b>클라우드 전용 파일에만</b> 만든다 — 로컬 파일은 객체가 0개 늘어난다(타일 조립이
-    /// 개수에 비례하는 병목이라: A334 실측 clay&gt;fillN).
-    /// </summary>
-    private static FontIcon MakeCloudBadge()
-    {
-        var badge = new FontIcon
-        {
-            Glyph = "\uE753",
-            FontSize = 10,
-            Opacity = 0.55,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 12, 12, 0),
-        };
-        ToolTipService.SetToolTip(badge, "Online-only file — preview needs a download");
-        return badge;
-    }
+    // A337 클라우드 배지는 A345 배치 3에서 XAML DataTemplate으로 옮겼다(TileCloudBadge) —
+    // 대기 배지와 같은 한 벌이고 자리만 반대쪽 위다. 표시 여부 = ExplorerEntryVm.
+    // CloudBadgeVisibility(썸네일 성공 여부와 무관하게 남는다 — 이 배지가 말하는 것은
+    // "미리보기가 없다"가 아니라 "이 파일은 로컬에 없다"이기 때문이다. 히트 테스트에서
+    // 빼지 않는 것도 그대로다 — 툴팁이 그 사실을 설명하는 유일한 자리다).
 
     /// <summary>
     /// 게이트(동시 ThumbFetchConcurrency건) 획득 후 워커에서 셸 썸네일을 추출해 타일 내용을
-    /// 교체한다 (A242 — FillTextPreviewAsync의 A194 발사 구조 그대로: UI 스레드에서 시작하므로
-    /// await 후속부도 UI 스레드, 낡음 이중 방어 = ① 게이트 통과 시점 ② 완료 시점 seq 대조,
-    /// host·badge는 이 타일 전용 클로저 캡처라 교체가 다른 타일로 갈 수 없고, Unloaded·
-    /// ShowLoading(A243)은 _showSeq를 올려 보류 전부를 무산시킨다). 클라우드 전용(placeholder)
-    /// 파일은 entry.IsPlaceholder가 그대로 워커의 cachedOnly가 되어 캐시·클라우드 제공 썸네일만
-    /// 요청한다(A175 하이드레이션 금지 불변 — 속성 조회도 IsAudioInfoFile이 미리 접는다).
-    /// 추출 실패·썸네일 없음·비트맵 디코드 실패는 배지만 걷고 확장자 타일 유지(안내 없음).
-    /// A270: 한 워커 왕복이 썸네일과 오디오 정보를 함께 물어 오므로 seq 대조도 한 벌이다 —
+    /// 교체한다 (A242 — FillTextPreviewAsync와 같은 A194 발사 구조: UI 스레드에서 시작하므로
+    /// await 후속부도 UI 스레드다). 클라우드 전용(placeholder) 파일은 entry.IsPlaceholder가
+    /// 그대로 워커의 cachedOnly가 되어 캐시·클라우드 제공 썸네일만 요청한다(A175 하이드레이션
+    /// 금지 불변 — 속성 조회도 IsAudioInfoFile이 미리 접는다). 추출 실패·썸네일 없음·비트맵
+    /// 디코드 실패는 배지만 걷고 확장자 타일 유지(안내 없음·사양).
+    /// A270: 한 워커 왕복이 썸네일과 오디오 정보를 함께 물어 오므로 대조도 한 벌이다 —
     /// 교체 없음(아이콘형·실패) 갈래에서는 확장자 타일 하단에 정보를 얹고(MakeAudioInfoText),
     /// 앨범아트로 교체된 갈래에서는 아트 하단 반투명 띠로 같은 정보를 얹는다(MakeAudioInfoBand).
-    /// 배지는 어느 갈래에서든 정보 표기보다 먼저 걷히므로(교체 갈래는 Clear가 겸한다) 겹치지 않는다.
+    /// 배지는 어느 갈래에서든 정보 표기보다 먼저 걷힌다(교체 갈래는 Clear가 겸한다).
+    /// <para>
+    /// A345 배치 3: host·badge를 클로저로 캡처하던 종전 근거("타일 전용 — 재사용 없음")가
+    /// <b>무효가 됐다</b>. 완료 시점 판정이 두 겹이다: <c>seq</c>(폴더 전환) +
+    /// <c>ReferenceEquals(item.Content, vm)</c>(같은 폴더 안 재활용). 워커 결과는 그 판정보다
+    /// <b>먼저</b> 뷰모델에 남긴다 — 오디오 정보는 AudioInfo에, "썸네일 없음"은
+    /// PreviewKnownEmpty에. 그래야 화면에 못 얹은 결과도 다음 실체화에서 재사용된다.
+    /// 성공한 비트맵만은 남기지 않는다(메모리 — 재추출은 셸 썸네일 캐시 덕에 싸다, A242 근거).
+    /// 즉 재활용 뒤 그 항목이 다시 보이면 셸 썸네일은 다시 fetch된다(사양).
+    /// </para>
     /// </summary>
     private async Task FillShellThumbnailAsync(
-        Grid host, FontIcon badge, ExplorerListing.Entry entry, bool wantAudioInfo, int seq)
+        GridViewItem item, ExplorerEntryVm vm, Grid host, FontIcon badge, int seq)
     {
-        await _thumbFetchGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
+        if (vm.PreviewInFlight) return; // 같은 항목의 중복 발사 방지
+        vm.PreviewInFlight = true;
         try
         {
-            if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다(고아 host라 배지도 무의미)
-            (byte[]? Bytes, string? Info) result;
+            await _thumbFetchGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
             try
             {
-                result = await ThumbPool.Run(
-                    _ => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo));
-            }
-            catch
-            {
-                result = (null, null); // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로(배지 걷기)로
-            }
-            if (seq != _showSeq) return; // ② 완료 시점 재대조(이중 방어)
-            // 튜플을 지역 변수로 풀어 둔다 — 아래 null 판정·재사용이 종전(단일 bytes) 형태 그대로.
-            var bytes = result.Bytes;
-            var info = result.Info;
-            if (bytes is null)
-            {
-                // 실패·썸네일 없음·아이콘형(A270 ③) — 확장자 타일 유지(사양). 정보가 있으면 얹는다.
-                host.Children.Remove(badge);
-                if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info));
-                return;
-            }
-            try
-            {
-                // 바이트 → BitmapImage: ExplorerPane.LoadThumbnailsAsync의 반영 관용구 그대로
-                var bitmap = new BitmapImage();
-                using (var stream = new MemoryStream(bytes))
-                    await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
-                if (seq != _showSeq) return;
-                // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
-                // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
-                // 썸네일) 어디서 먼저 와도 첫 것만 남는다. 이 마크가 필요한 이유: A334 실측의
-                // 정지(343ms → 파일 1만 개에서 1,289ms)가 마지막 마크 <b>이후</b>로 잡혀
-                // "모든 반영이 끝난 뒤"까지만 알 수 있었다 — 그 구간이 내용 얹기인지 그보다
-                // 뒤인지 가르는 자가 없었다. 이제 정지 라벨이 prev0 앞뒤로 갈린다.
-                NavDiagnostics.Mark("prev0");
-                host.Children.Clear();
-                host.Children.Add(new Image
+                if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다
+                var entry = vm.Entry;
+                var wantAudioInfo = IsAudioInfoFile(entry);
+                (byte[]? Bytes, string? Info) result;
+                try
                 {
-                    Source = bitmap,
-                    Stretch = Stretch.Uniform,
-                    Margin = new Thickness(4),
-                });
-                // A270 ②: 앨범아트 위 정보 띠 — 배지는 위 Clear가 이미 걷었다(겹침 없음).
-                if (info is not null) host.Children.Add(MakeAudioInfoBand(info));
+                    result = await ThumbPool.Run(
+                        _ => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo));
+                }
+                catch
+                {
+                    result = (null, null); // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로로
+                }
+                // 튜플을 지역 변수로 풀어 둔다 — 아래 null 판정·재사용이 종전(단일 bytes) 형태 그대로.
+                var bytes = result.Bytes;
+                var info = result.Info;
+                // ② 화면 판정보다 먼저 캐시에 남긴다 — 재활용됐어도 다음 실체화가 재사용한다.
+                if (info is not null) vm.AudioInfo = info;
+                if (bytes is null) vm.PreviewKnownEmpty = true;
+                if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return; // ③ 재활용 대조
+                if (bytes is null)
+                {
+                    // 실패·썸네일 없음·아이콘형(A270 ③) — 확장자 타일 유지(사양). 정보가 있으면 얹는다.
+                    host.Children.Remove(badge);
+                    if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info));
+                    return;
+                }
+                try
+                {
+                    // 바이트 → BitmapImage: ExplorerPane.LoadThumbnailsAsync의 반영 관용구 그대로
+                    var bitmap = new BitmapImage();
+                    using (var stream = new MemoryStream(bytes))
+                        await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+                    if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return;
+                    // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
+                    // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
+                    // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
+                    NavDiagnostics.Mark("prev0");
+                    host.Children.Clear();
+                    host.Children.Add(new Image
+                    {
+                        Source = bitmap,
+                        Stretch = Stretch.Uniform,
+                        Margin = new Thickness(4),
+                    });
+                    // A270 ②: 앨범아트 위 정보 띠 — 배지는 위 Clear가 이미 걷었다(겹침 없음).
+                    if (info is not null) host.Children.Add(MakeAudioInfoBand(info));
+                }
+                catch
+                {
+                    vm.PreviewKnownEmpty = true; // 손상 데이터 — 다시 받아도 같은 결과다
+                    if (!ReferenceEquals(item.Content, vm)) return;
+                    host.Children.Remove(badge); // 디코드 실패 — 확장자 타일 유지
+                    if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info));
+                }
             }
-            catch
+            finally
             {
-                host.Children.Remove(badge); // 손상 데이터 디코드 실패 — 확장자 타일 유지
-                if (info is not null) host.Children.Add(MakeAudioInfoText(entry, info));
+                _thumbFetchGate.Release(); // 예외·낡음 경로 포함 — 누락되면 상한 건 뒤 조용히 멈춘다(A194)
             }
         }
         finally
         {
-            _thumbFetchGate.Release(); // 예외·낡음 경로 포함 — 누락되면 상한 건 뒤 조용히 멈춘다(A194)
+            vm.PreviewInFlight = false;
         }
     }
 
@@ -1579,10 +1544,20 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 요지: 종전에는 타일마다 메뉴를 통째로 조립해 항목 1개당 XAML 객체가 열 개 남짓 늘었고,
     /// A334 계측판이 그 비용을 <c>clay&gt;fillN 8,539ms</c>(파일 10,000개)로 찍었다.
     /// </remarks>
-    private void AttachContextMenu(GridViewItem item, ExplorerListing.Entry entry)
+    /// <remarks>
+    /// A345 배치 3: 대상 항목을 인자로 받지 않는다 — <b>열리는 순간</b>에 VmOf로 다시 푼다.
+    /// 가상화 뒤에는 이 컨테이너가 다른 파일로 재활용되므로, 부착 시점의 entry를 캡처하면
+    /// 옛 파일이 Cut·Delete 대상이 된다(재활용 잔존 사고 중 가장 위험한 갈래).
+    /// 그새 항목이 풀리지 않으면 빈 메뉴로 연다 — 조작 대상이 없는 것이 옳다.
+    /// </remarks>
+    private void AttachContextMenu(GridViewItem item)
     {
         var flyout = new MenuFlyout();
-        flyout.Opening += (_, _) => BuildTileContextMenu(flyout, item, entry);
+        flyout.Opening += (_, _) =>
+        {
+            if (VmOf(item) is { } vm) BuildTileContextMenu(flyout, item, vm);
+            else flyout.Items.Clear();
+        };
         item.ContextFlyout = flyout;
     }
 
@@ -1590,8 +1565,13 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// A335: 타일 메뉴의 실제 내용 — 열릴 때마다 새로 채운다(구성·순서·활성 조건·대상 규칙은
     /// 종전 그대로, 옮긴 것은 <b>시점</b>뿐). 매번 비우므로 두 번째 우클릭에 겹쳐 쌓이지 않는다.
     /// </summary>
-    private void BuildTileContextMenu(MenuFlyout flyout, GridViewItem item, ExplorerListing.Entry entry)
+    /// <remarks>
+    /// A345 배치 3: 대상은 <b>열린 순간에 푼 뷰모델</b>이다(vm). Rename만은 디스패처로 한 박자
+    /// 미루므로 그 사이 컨테이너가 재활용될 수 있어, 실행 직전에 같은 뷰모델인지 다시 대조한다.
+    /// </remarks>
+    private void BuildTileContextMenu(MenuFlyout flyout, GridViewItem item, ExplorerEntryVm vm)
     {
+        var entry = vm.Entry;
         flyout.Items.Clear();
         if (!entry.IsFolder)
         {
@@ -1610,7 +1590,11 @@ public sealed partial class ThumbnailExplorer : UserControl
             Text = "Rename",
             Icon = new FontIcon { Glyph = "\uE8AC" }, // Rename
         };
-        rename.Click += (_, _) => DispatcherQueue.TryEnqueue(() => BeginRenameOf(item));
+        rename.Click += (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            // 지연 사이에 컨테이너가 재활용됐으면 다른 파일의 이름을 고치게 된다 — 무동작이 옳다.
+            if (ReferenceEquals(VmOf(item), vm)) BeginRenameOf(item);
+        });
         flyout.Items.Add(rename);
         var delete = new MenuFlyoutItem
         {
@@ -1761,14 +1745,15 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (isPair) Activate(entry);
     }
 
-    /// <summary>눌림의 원본 요소에서 타일 컨테이너(A345 배치 1부터 Tag = 뷰모델)를 찾는다 — 조상 상향 탐색
-    /// (깊이 상한 64 = HotkeySupport.MaxAncestorDepth와 같은 방어). 반환은 종전대로 Entry다.</summary>
+    /// <summary>눌림의 원본 요소에서 타일 컨테이너를 찾아 항목을 푼다 — 조상 상향 탐색
+    /// (깊이 상한 64 = HotkeySupport.MaxAncestorDepth와 같은 방어). 컨테이너에서 뷰모델을 꺼내는
+    /// 것은 VmOf 하나를 지난다(A345 배치 3 — Content가 뷰모델이다). 반환은 종전대로 Entry다.</summary>
     private static ExplorerListing.Entry? EntryFromSource(object source)
     {
         var node = source as DependencyObject;
         for (var depth = 0; node is not null && depth < 64; depth++)
         {
-            if (node is GridViewItem { Tag: ExplorerEntryVm vm }) return vm.Entry;
+            if (node is GridViewItem container) return VmOf(container)?.Entry;
             node = VisualTreeHelper.GetParent(node);
         }
         return null;
@@ -1782,7 +1767,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is not FrameworkElement { Tag: ExplorerEntryVm vm }) return;
+        if (VmOf(e.ClickedItem) is not { } vm) return; // A345 배치 3 — ClickedItem은 이제 뷰모델이다
 
         var now = DateTime.UtcNow;
         var isDouble = _lastClick is { } last && last.Path == vm.Path &&
@@ -1802,7 +1787,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
-        if (sender is not GridViewItem { Tag: ExplorerEntryVm vm }) return;
+        if (sender is not GridViewItem item || VmOf(item) is not { } vm) return; // A345 배치 3
         e.Handled = true;
         _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게
         Activate(vm.Entry);
