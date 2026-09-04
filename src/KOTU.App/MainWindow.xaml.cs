@@ -1588,6 +1588,14 @@ public sealed partial class MainWindow : Window
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnContentPathChanged(path);
             });
+        // A348: 뷰 내부 항해로 "보여 주려는 파일"이 바뀌었다(로드 완료 전) → 좌 리스트 표시만 즉시
+        // 옮긴다. 같은 디스패치·교체 가드(위와 동일 관용구 — 이 통지도 UI 스레드 보장이 없다).
+        if (view is ICurrentPathSource currentPathSource)
+            currentPathSource.CurrentPathChanged += path => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!ReferenceEquals(ModuleHost.Content, view)) return;
+                OnCurrentPathChanged(path);
+            });
         // A346: 탐색 순서 소비자(이미지 뷰어)에게 좌 리스트의 현재 표시 순서를 즉시 시드한다.
         // 뷰는 위 CreateView(생성자)에서 이미 파일 열기를 시작했지만, 폴더 스캔을 워커에서 기다리는
         // 동안 이 시드가 도착하고 뷰가 스캔 완료 시점에 폴더를 다시 대조해 주입 목록을 채택한다 —
@@ -1915,6 +1923,29 @@ public sealed partial class MainWindow : Window
     /// 그래도 이 경로는 남긴다 — "콘텐츠를 다시 열지 않고 경로만 갈린다"는 계약의 담당 축이다.
     /// </summary>
     private void OnContentPathChanged(string path) => SetTitle(FileTitle(path));
+
+    /// <summary>
+    /// A348: 모듈 뷰가 항해로 "지금 보여 주려는 파일"을 옮겼다는 알림(<see cref="ICurrentPathSource"/> —
+    /// 이미지 뷰어의 ◀/▶·삭제 후 이웃 이동). <b>가벼운 것 하나만</b> 한다: 좌 리스트의 현재 파일
+    /// 선택 표시(A323)를 그 파일로 옮긴다(<c>ExplorerPane.SelectCurrentIn</c>이 ScrollIntoView까지
+    /// 해서 스크롤도 따라온다).
+    /// <para>
+    /// 이유: ←/→ 오토리피트에서는 중간 파일의 로드가 폐기돼 <see cref="OnContentOpened"/>가 건너뛰므로,
+    /// 표시를 그쪽에만 걸어 두면 하이라이트가 수 개~십수 개씩 뛴다(A348 사용자 보고). 이 통지는
+    /// 매 스텝 오므로 표시가 리피트를 1:1로 따라간다.
+    /// </para>
+    /// <para>
+    /// <b>여기서 하지 않는 것</b>(사용자 확정 — 전부 로드 완료의 <see cref="OnContentOpened"/> 담당):
+    /// 창 제목·정보 패널 캐시 무효·오버레이 재적용·드라이브 줄·셸 아이콘, 그리고 셸의 기준 경로
+    /// (<c>_currentFilePath</c>) 대입. 기준 경로를 여기서 옮기지 않는 이유는 그것이 "지금 화면에 있는
+    /// 콘텐츠"의 정본이고 그 정본에 매달린 것(폴더 기준·정보 패널·트레이)이 로드 완료 축이기 때문이다.
+    /// 그래서 로드가 <b>실패</b>한 파일에서 멈추면 좌 리스트 하이라이트는 그 파일, 제목·정보는 직전
+    /// 성공 파일이 된다 — 화면에도 실패 문구가 뜨는 상태라 수용한다(A348 등재 확정).
+    /// </para>
+    /// <see cref="OnContentOpened"/>가 부르는 <c>ShowListOverlay</c>의 같은 대입은 그대로 둔다 —
+    /// 같은 값이면 <c>SelectCurrentIn</c>의 <c>ReferenceEquals</c> 가드로 무동작이다.
+    /// </summary>
+    private void OnCurrentPathChanged(string path) => ListOverlay.SetCurrentFile(path);
 
     /// <summary>
     /// A332: 열려 있는 콘텐츠의 상세 정보가 갱신됐다는 알림(IContentInfoChangedSource — 재생 뷰가

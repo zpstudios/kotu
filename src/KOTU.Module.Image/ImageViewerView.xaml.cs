@@ -27,9 +27,13 @@ namespace KOTU.Module.Image;
 /// A346: ←/→ 순서는 <b>탐색기 좌 리스트가 표시 중인 순서</b>를 따른다
 /// (<see cref="IBrowseOrderConsumer"/> 주입 — 정렬 키·확장자 필터가 그대로 반영된다).
 /// 주입이 없거나 다른 폴더의 파일을 열면(명령줄·드래그&amp;드롭) 종전대로 자체 열거로 폴백한다.
+/// A348: 항해로 "보여 주려는 파일"이 바뀌는 즉시 <see cref="ICurrentPathSource"/>를 쏜다 —
+/// 로드 완료(ContentOpened)를 기다리지 않으므로 오토리피트로 중간 로드가 폐기돼도 셸의 좌 리스트
+/// 표시는 매 스텝 따라온다.
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
-    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IPrintPageProvider, IBrowseOrderConsumer
+    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IPrintPageProvider, IBrowseOrderConsumer,
+    ICurrentPathSource
 {
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패, 회전(A191) 시점.</summary>
     public event Action? TrayStatusChanged;
@@ -85,6 +89,14 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     /// <summary>이미지를 열거나 ←/→로 바꿀 때 셸에 알린다(v0.25.0 — 탐색기·오버레이 동기화).</summary>
     public event Action<string>? ContentOpened;
+
+    /// <summary>
+    /// A348: 항해로 "지금 보여 주려는 파일"이 바뀐 즉시 알린다(<see cref="ICurrentPathSource"/>) —
+    /// <see cref="ContentOpened"/>와 달리 <b>로드 완료를 기다리지 않는다</b>. 발화 지점은
+    /// <see cref="MoveAsync"/>(◀/▶)와 <see cref="DeleteCurrentAsync"/>(삭제 후 이웃 이동) 둘뿐이다.
+    /// 셸은 이걸로 좌 리스트의 현재 파일 표시만 옮긴다(무거운 동기는 종전대로 ContentOpened가).
+    /// </summary>
+    public event Action<string>? CurrentPathChanged;
 
     private ImageFolderNavigator? _navigator;
     // A346: 셸이 주입한 "탐색기 좌 리스트의 표시 순서"와 그 목록이 속한 폴더. 열려 있는 파일이
@@ -205,6 +217,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         _navigator = ImageFolderNavigator.FromOrdered(files, current);
         // A194 선읽기 캐시는 "옛 목록의 이웃" 기준이다 — 순서가 바뀌면 이웃이 달라지므로 비운다.
         _preloadCache.Clear();
+        // A348: 여기서는 CurrentPathChanged를 쏘지 않는다 — 항해자만 갈아 끼웠을 뿐
+        // 보여 주는 파일은 그대로다(current로 인덱스를 다시 찾았다).
     }
 
     /// <summary>
@@ -261,6 +275,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         _navigator = navigator;
         _preloadCache.Clear(); // A194 — 파일·폴더 전환 = 옛 목록 기준의 선읽기 캐시 무효화
         PlaceholderText.Visibility = Visibility.Collapsed;
+        // A348: 이 경로는 CurrentPathChanged를 쏘지 않는다 — 셸이 연 파일이라 셸의 기준 경로는
+        // 이미 그 파일이다(뷰 내부 항해만이 셸 몰래 파일을 옮긴다). 로드가 끝나면 ContentOpened가
+        // 종전대로 전부 동기화한다.
         _ = LoadCurrentAsync();
     }
 
@@ -1092,7 +1109,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         if (_navigator is null) return;
         var moved = forward ? _navigator.MoveNext() : _navigator.MovePrevious();
-        if (moved) await LoadCurrentAsync(); // 끝에서는 순환하지 않고 멈춤
+        if (!moved) return; // 끝에서는 순환하지 않고 멈춤
+        // A348: 로드 시작 **전에** 셸에 새 현재 파일을 알린다 — 오토리피트로 이 로드가 다음 스텝에
+        // 폐기되더라도(LoadCurrentAsync의 현재 파일 재검증) 좌 리스트 표시는 한 칸도 건너뛰지 않는다.
+        if (_navigator.Current is { } moving) CurrentPathChanged?.Invoke(moving);
+        await LoadCurrentAsync();
     }
 
     private async Task DeleteCurrentAsync()
@@ -1111,6 +1132,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             _navigator.Remove(path);
             _preloadCache.Remove(path); // A194 — 삭제된 파일의 선읽기 잔재 제거(이어지는 표시는
                                         // 이웃 캐시 히트가 그대로 통한다 — LoadCurrentAsync 조회)
+            // A348: 삭제로 옮겨 간 이웃도 "보여 주려는 파일" 변경이다 — 로드 전에 알린다.
+            // 마지막 한 장을 지웠으면 Current가 null이라(볼 파일 없음) 쏘지 않는다.
+            if (_navigator.Current is { } neighbor) CurrentPathChanged?.Invoke(neighbor);
             await LoadCurrentAsync(); // 다음(마지막이었다면 이전) 이미지 표시
         }
         catch (Exception ex)

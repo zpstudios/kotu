@@ -32,6 +32,10 @@ namespace KOTU.Module.AllReadable;
 ///    ◀/▶가 좌 리스트 순서를 못 따른다 — 여기서는 뷰 계층이 한 겹 더 있어 셸의 직접 주입이
 ///    자식까지 닿지 않기 때문이다. 좌 리스트는 이 화면에서 전 모듈 합집합이라 목록에 다른 형식이
 ///    섞여 오지만, 걸러 내는 것은 받는 자식 쪽 몫이다(계약 문서 참조).
+///  · <see cref="ICurrentPathSource"/> — A348: 자식(사진)이 항해 시점에 쏘는 "보여 주려는 파일이
+///    바뀌었다"를 그대로 중계한다. 이 중계가 없으면 이 화면에서 연 사진의 ←/→ 오토리피트 때
+///    좌 리스트 하이라이트가 로드 완료분만 따라가 건너뛴다(셸은 ModuleHost.Content = 이 뷰에게만
+///    계약을 묻기 때문 — A279 중계와 같은 이유).
 ///
 /// <b>되돌린 시도(A331, v0.320.0)</b>: 좌 리스트를 지금 자식의 형식으로 좁히는 계약을 한 번 넣었다가
 /// 되돌렸다. 제기 근거였던 "좌 리스트 = 플레이리스트" 전제가 틀렸기 때문이다 — 재생 목록은
@@ -47,7 +51,7 @@ namespace KOTU.Module.AllReadable;
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
-    IContentInfoChangedSource, IBrowseOrderConsumer
+    IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -66,6 +70,10 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     /// <summary>A279: 문서 자식의 편집 대상 파일이 갈렸다는 통지(Save as...)를 그대로 셸에 중계한다 —
     /// 셸은 이걸로 창 제목을 새 파일 이름으로 다시 만든다(IContentPathChangedSource).</summary>
     public event Action<string>? ContentPathChanged;
+
+    /// <summary>A348: 자식이 항해로 "보여 주려는 파일"을 옮겼다는 통지를 그대로 셸에 중계한다
+    /// (ICurrentPathSource — 셸은 좌 리스트의 현재 파일 표시만 즉시 옮긴다).</summary>
+    public event Action<string>? CurrentPathChanged;
 
     /// <summary>A332: 재생 자식이 "상세 정보가 갱신됐다"고 알린 것을 그대로 셸에 중계한다
     /// (IContentInfoChangedSource — 셸은 정보 패널 열림 축을 다시 묻는다). 자식 교체 자체는
@@ -212,6 +220,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             pathChanged.ContentPathChanged += OnChildContentPathChanged;
         if (view is IContentInfoChangedSource infoChanged) // A332
             infoChanged.ContentInfoChanged += OnChildContentInfoChanged;
+        if (view is ICurrentPathSource currentPath) // A348
+            currentPath.CurrentPathChanged += OnChildCurrentPathChanged;
         // A346: 새 자식에게 지금까지 받아 둔 표시 순서를 내려 준다. 자식 생성자가 이미 파일 열기를
         // 시작했더라도(사진 자식은 폴더 스캔을 워커에서 기다린다) 자식 쪽이 스캔 완료 시점에 폴더를
         // 다시 대조해 주입 목록을 채택하므로 첫 열기부터 순서가 맞는다.
@@ -244,6 +254,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             pathChanged.ContentPathChanged -= OnChildContentPathChanged;
         if (_childView is IContentInfoChangedSource infoChanged) // A332
             infoChanged.ContentInfoChanged -= OnChildContentInfoChanged;
+        if (_childView is ICurrentPathSource currentPath) // A348
+            currentPath.CurrentPathChanged -= OnChildCurrentPathChanged;
         ChildBarHost.Content = null;
         ChildHost.Content = null;
         _childView = null;
@@ -307,6 +319,15 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     /// 표시를 직접 만지지 않으므로 디스패치도 셸에 맡긴다(경로 변경·인쇄·재생 중계와 같은 형).
     /// </summary>
     private void OnChildContentInfoChanged() => ContentInfoChanged?.Invoke();
+
+    /// <summary>
+    /// A348: 사진 자식이 ◀/▶ 항해(또는 삭제 후 이웃 이동)로 보여 주려는 파일을 옮겼다 — 그대로
+    /// 셸로 올린다(중계만). 자체 상태(_filePath·하단 바)는 <b>건드리지 않는다</b>: 그 축의 정본은
+    /// 로드 완료의 ContentOpened 중계이고, 오토리피트 중 폐기되는 중간 파일을 여기서 대입하면
+    /// 트레이 폴백·빈 상태 바가 화면에 없는 파일을 가리키게 된다.
+    /// 표시를 직접 만지지 않으므로 디스패치도 셸에 맡긴다(경로 변경·인쇄·재생 중계와 같은 형).
+    /// </summary>
+    private void OnChildCurrentPathChanged(string path) => CurrentPathChanged?.Invoke(path);
 
     // A256(2026-08-27): A223의 열기 요청 중계(IOpenFileRequestSource · OnChildOpenFileRequested ·
     // OpenFileRequested)를 제거했다 — 문서 자식의 하단 바 Open 버튼이 사라져 중계할 신호 자체가
