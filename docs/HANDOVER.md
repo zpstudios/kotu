@@ -1353,7 +1353,11 @@ Y `pad.Top` 누락 · 줄 탐색 정지)에 오염돼 있었고, 좌표계가 �
    4 MB and the HTML renderer is unavailable." 이 뜨는가(백지가 아니어야 한다).
 ⑤ **무회귀** — txt/md/log 열기·md 렌더 기본·PDF는 무변경이어야 한다.
 
-### v0.331.0 (A342 배치 4 · 실험) — 항해 구간에만 GC SustainedLowLatency
+### v0.331.0 (A342 배치 4 · 실험) — 항해 구간에만 GC SustainedLowLatency — ✅ 2026-09-04 회수(2장, v0.332.0)
+
+> **회수** = 냉 `gc 20/18/16 pause 1546ms · stall 348` / 온 `gc 22/17/15 pause 2432ms · stall 839 ·
+> det hit 2000 467ms · L 최대 틱 #159(gc 219)`. **실험 효과 없음**(gen2≈gen0 유지 · pause는 편차 안) —
+> 배치 3은 성립(버스트 틱 소멸). 다음 = 부록 B 택일(철회 + ⓐ/ⓑ). 아래 ①②는 소진.
 
 > ⚠️ **CI 초록 확인이 선행**(CI 1순위 = `GCSettings.LatencyMode` 대입 · 선례 0건).
 > **이 릴리스는 실험이다** — 사용자 확정("실험 1회 후 결과에 따라 a·b 결정"). 결과가 곧 다음 결정이다.
