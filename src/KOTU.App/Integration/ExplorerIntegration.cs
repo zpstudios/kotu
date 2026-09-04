@@ -28,6 +28,12 @@ public static class ExplorerIntegration
     /// </summary>
     private static readonly string[] LegacyBrands = ["ZP", "WinUtil"];
 
+    /// <summary>
+    /// A350: 구 브랜드 이름의 읽기 전용 노출. <see cref="TaskbarIdentity"/>가 창 AUMID 표시 키
+    /// (HKCU AppUserModelId) 청소에 같은 목록을 쓴다 — 리브랜딩 때 고칠 곳을 위 배열 하나로 유지하기 위함.
+    /// </summary>
+    internal static IReadOnlyList<string> LegacyBrandNames => LegacyBrands;
+
     private const string ExtractHereVerbName = Brand + ".ExtractHere";
     private const string CompressVerbName = Brand + ".Compress";
 

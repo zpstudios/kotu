@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 
 namespace KOTU.App.Integration;
 
@@ -22,6 +23,17 @@ namespace KOTU.App.Integration;
 /// 수용된 트레이드오프(사양 — 코드 대응 없음): 창별 AUMID는 작업표시줄 고정(pin)·점프리스트가
 /// 인스턴스 단위로 갈라진다. 고정한 버튼은 다음 실행에서 같은 슬롯 번호의 창하고만 다시
 /// 만나고, Velopack 바로가기의 AUMID와도 달라 시작 메뉴 그룹 연결이 느슨해질 수 있다.
+///
+/// A350(2026-09-04): 창마다 AUMID를 따로 박으면 그 AUMID가 곧 앱의 정체가 되므로,
+/// 비패키지 앱은 AUMID별 표시 정보를 직접 등록해야 한다. 등록이 없으면 미디어 플라이아웃(SMTC)이
+/// 세션 주인을 "알 수 없는 앱"으로 표시한다(v0.342.0 실사례). 등록 위치는 표준 경로
+/// HKCU\Software\Classes\AppUserModelId\{AUMID}의 DisplayName(REG_SZ) + IconUri(절대 경로) —
+/// Firefox 등 다른 비패키지 플레이어가 쓰는 것과 같은 방식이다.
+/// 키 수 = 한 사용자가 열어 본 최대 슬롯 번호만큼(슬롯은 창 생성 단조 시퀀스라 작고 안정적).
+/// 청소 지점은 둘이다: ① 프로세스당 1회 구 브랜드 접두 키 스캔 삭제(리브랜딩 규칙 —
+/// 지금은 KOTU 이전 브랜드가 이 키를 만든 적이 없어 실제 삭제 대상 0건) ② 제거(uninstall) 시
+/// Velopack 훅에서 <see cref="RemoveAllDisplayKeys"/>로 현재·구 브랜드 접두 키 전부 삭제.
+/// 전 구간 HKCU라 관리자 권한이 필요 없고, 모든 실패는 조용히 무시한다(A100 스타일).
 /// </summary>
 internal static class TaskbarIdentity
 {
@@ -46,38 +58,144 @@ internal static class TaskbarIdentity
     {
         try
         {
+            var aumid = $"{Branding.AppName}.Instance.{sequence}";
             var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
             var iid = s_iidPropertyStore; // ref 인자용 복사 — readonly 원본 보호
-            if (SHGetPropertyStoreForWindow(hwnd, ref iid, out var store) < 0 || store is null)
-                return;
-            try
-            {
-                // 수동 PROPVARIANT(VT_LPWSTR): 문자열을 CoTaskMem에 두고, 쓰기가 끝나면
-                // 성패와 무관하게 PropVariantClear로 해제한다(내부의 CoTaskMemFree까지 담당).
-                var value = new PropVariant
-                {
-                    vt = VtLpwstr,
-                    p = Marshal.StringToCoTaskMemUni($"{Branding.AppName}.Instance.{sequence}"),
-                };
-                try
-                {
-                    var key = s_pkeyAppUserModelId; // ref 인자용 복사
-                    if (store.SetValue(ref key, ref value) >= 0) _ = store.Commit();
-                }
-                finally
-                {
-                    _ = PropVariantClear(ref value);
-                }
-            }
-            finally
-            {
-                // RCW 즉시 해제 — 창마다 1회뿐인 일회성 객체라 GC 지연 해제에 기대지 않는다.
-                _ = Marshal.FinalReleaseComObject(store);
-            }
+            if (SHGetPropertyStoreForWindow(hwnd, ref iid, out var store) >= 0 && store is not null)
+                WriteAumidToStore(store, aumid);
+
+            // A350: 프로퍼티 스토어 성공 여부와 무관하게 같은 AUMID로 표시 정보를 등록한다.
+            // (스토어가 실패했다면 창은 exe 기본 AUMID로 후퇴해 이 키가 쓰이지 않지만, 남아도 무해하고
+            //  다음 실행에서 성공하면 그대로 쓰인다 — 그래서 성패로 분기하지 않는다.)
+            RegisterDisplay(aumid);
         }
         catch
         {
             // 어떤 실패(OS 변형·마샬링 오류)도 앱 동작에 영향을 주면 안 된다 — 공유 AUMID로 후퇴.
+        }
+    }
+
+    /// <summary>
+    /// 창의 프로퍼티 스토어에 PKEY_AppUserModelID를 쓰고 커밋한다.
+    /// (A350에서 Apply 본문에서 분리 — 스토어 획득 실패로 조기 반환해도 표시 키 등록은 계속되게 하기 위함.)
+    /// </summary>
+    private static void WriteAumidToStore(IPropertyStore store, string aumid)
+    {
+        try
+        {
+            // 수동 PROPVARIANT(VT_LPWSTR): 문자열을 CoTaskMem에 두고, 쓰기가 끝나면
+            // 성패와 무관하게 PropVariantClear로 해제한다(내부의 CoTaskMemFree까지 담당).
+            var value = new PropVariant
+            {
+                vt = VtLpwstr,
+                p = Marshal.StringToCoTaskMemUni(aumid),
+            };
+            try
+            {
+                var key = s_pkeyAppUserModelId; // ref 인자용 복사
+                if (store.SetValue(ref key, ref value) >= 0) _ = store.Commit();
+            }
+            finally
+            {
+                _ = PropVariantClear(ref value);
+            }
+        }
+        finally
+        {
+            // RCW 즉시 해제 — 창마다 1회뿐인 일회성 객체라 GC 지연 해제에 기대지 않는다.
+            _ = Marshal.FinalReleaseComObject(store);
+        }
+    }
+
+    // ---------- A350: AUMID 표시 이름 · 아이콘 ----------
+
+    /// <summary>비패키지 앱의 AUMID별 표시 정보 등록 뿌리(HKCU). 관리자 권한 불필요.</summary>
+    private const string DisplayKeyRoot = @"Software\Classes\AppUserModelId";
+
+    /// <summary>AUMID 중간 마디 — 브랜드 이름 뒤에 붙는 고정 접두사(청소 스캔의 판별 기준).</summary>
+    private const string InstanceInfix = ".Instance.";
+
+    /// <summary>구 브랜드 키 청소를 프로세스당 1회로 제한하는 플래그(창마다 재스캔할 이유가 없다).</summary>
+    private static bool s_legacyDisplayKeysCleaned;
+
+    /// <summary>
+    /// 창 AUMID에 표시 이름·아이콘을 등록한다(멱등 — 값이 이미 같으면 쓰지 않는다).
+    /// 아이콘은 트레이·타이틀바가 읽는 그 파일(exe 옆 Assets\app.ico)을 절대 경로로 가리킨다.
+    /// </summary>
+    private static void RegisterDisplay(string aumid)
+    {
+        try
+        {
+            using (var key = Registry.CurrentUser.CreateSubKey(DisplayKeyRoot + "\\" + aumid))
+            {
+                if (key is null) return;
+
+                if (key.GetValue("DisplayName") as string != Branding.AppName)
+                    key.SetValue("DisplayName", Branding.AppName, RegistryValueKind.String);
+
+                // 아이콘 파일이 없으면 IconUri는 아예 쓰지 않는다 — 깨진 경로를 남기느니
+                // 셸 기본 아이콘 폴백이 낫다.
+                var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+                if (File.Exists(icon) && key.GetValue("IconUri") as string != icon)
+                    key.SetValue("IconUri", icon, RegistryValueKind.String);
+            }
+
+            CleanLegacyDisplayKeysOnce();
+        }
+        catch
+        {
+            // 등록 실패 = 플라이아웃이 앱 이름을 못 찾을 뿐 — 앱 동작에는 영향이 없다.
+        }
+    }
+
+    /// <summary>
+    /// 구 브랜드 접두 표시 키를 프로세스당 1회 스캔해 지운다(예: ZP.Instance.0).
+    /// 현재는 KOTU 이전 브랜드(ZP·WinUtil)가 이 키를 만든 적이 없어 실제 삭제 대상은 0건이지만,
+    /// 리브랜딩 규칙(구 등록은 발견되는 대로 지운다)상 스캔 코드를 선제로 둔다.
+    /// </summary>
+    private static void CleanLegacyDisplayKeysOnce()
+    {
+        if (s_legacyDisplayKeysCleaned) return;
+        s_legacyDisplayKeysCleaned = true; // 실패해도 재시도하지 않는다(창마다 순회할 가치가 없다).
+        DeleteDisplayKeys(ExplorerIntegration.LegacyBrandNames.Select(b => b + InstanceInfix));
+    }
+
+    /// <summary>
+    /// 현재·구 브랜드의 모든 창 AUMID 표시 키를 지운다. 제거(uninstall) 직전에
+    /// Velopack 훅(OnBeforeUninstallFastCallback)이 부른다 — Program.Main 참조.
+    /// </summary>
+    internal static void RemoveAllDisplayKeys() =>
+        DeleteDisplayKeys(
+            new[] { Branding.AppName + InstanceInfix }
+                .Concat(ExplorerIntegration.LegacyBrandNames.Select(b => b + InstanceInfix)));
+
+    /// <summary>AppUserModelId 뿌리에서 주어진 접두사로 시작하는 서브키를 전부 지운다.</summary>
+    private static void DeleteDisplayKeys(IEnumerable<string> prefixes)
+    {
+        try
+        {
+            var list = prefixes.ToArray();
+            if (list.Length == 0) return;
+
+            using var root = Registry.CurrentUser.OpenSubKey(DisplayKeyRoot, writable: true);
+            if (root is null) return; // 뿌리 자체가 없으면 지울 것도 없다
+
+            foreach (var name in root.GetSubKeyNames())
+            {
+                if (!list.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase))) continue;
+                try
+                {
+                    root.DeleteSubKeyTree(name, throwOnMissingSubKey: false);
+                }
+                catch
+                {
+                    // 항목마다 개별 try/catch — 하나가 권한·동시 삭제로 던져도 나머지는 계속 지운다.
+                }
+            }
+        }
+        catch
+        {
+            // 뿌리 접근 자체 실패(권한·정책)도 조용히 무시한다.
         }
     }
 
