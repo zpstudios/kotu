@@ -27,6 +27,11 @@ namespace KOTU.Module.AllReadable;
 ///  · <see cref="IFileOpenTarget"/> — 셸이 "이 파일 네가 열래?"를 먼저 물어보는 지점(A24 유지).
 ///  · <see cref="IContentInfoChangedSource"/> — A332: 재생 자식이 "정보가 갱신됐다"고 알리면
 ///    그대로 중계한다(셸이 정보 패널 열림 축을 다시 묻는다).
+///  · <see cref="IBrowseOrderConsumer"/> — A346: 셸이 주는 좌 리스트 표시 순서를 받아 두었다가
+///    자식에게 그대로 내려 준다(자식 교체 때 다시 한 번). 이 중계가 없으면 이 화면에서 연 사진의
+///    ◀/▶가 좌 리스트 순서를 못 따른다 — 여기서는 뷰 계층이 한 겹 더 있어 셸의 직접 주입이
+///    자식까지 닿지 않기 때문이다. 좌 리스트는 이 화면에서 전 모듈 합집합이라 목록에 다른 형식이
+///    섞여 오지만, 걸러 내는 것은 받는 자식 쪽 몫이다(계약 문서 참조).
 ///
 /// <b>되돌린 시도(A331, v0.320.0)</b>: 좌 리스트를 지금 자식의 형식으로 좁히는 계약을 한 번 넣었다가
 /// 되돌렸다. 제기 근거였던 "좌 리스트 = 플레이리스트" 전제가 틀렸기 때문이다 — 재생 목록은
@@ -42,7 +47,7 @@ namespace KOTU.Module.AllReadable;
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
-    IContentInfoChangedSource
+    IContentInfoChangedSource, IBrowseOrderConsumer
 {
     /// <summary>자식 후보(파일 모듈만) — 모듈이 등록 시점에 추려 넘겨준다.</summary>
     private readonly IReadOnlyList<IModule> _children;
@@ -51,6 +56,9 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     private string? _filePath;       // 지금 보고 있는 파일
     private bool _driveStripShown;   // 셸이 지정한 드라이브 줄 표시 여부 (A22)
     private bool _childDirty;        // 자식이 알린 마지막 미저장 상태 (A37 — 자식 교체 시 되돌리기용)
+    // A346: 셸이 마지막으로 준 좌 리스트 표시 순서(자식 교체 때 새 자식에게 다시 내려 준다).
+    private string? _browseFolder;
+    private IReadOnlyList<string> _browseFiles = [];
 
     /// <summary>자식이 파일을 열면(첫 로드·자식 내부 ◀/▶ 탐색 포함) 셸에 그대로 중계한다.</summary>
     public event Action<string>? ContentOpened;
@@ -204,6 +212,11 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             pathChanged.ContentPathChanged += OnChildContentPathChanged;
         if (view is IContentInfoChangedSource infoChanged) // A332
             infoChanged.ContentInfoChanged += OnChildContentInfoChanged;
+        // A346: 새 자식에게 지금까지 받아 둔 표시 순서를 내려 준다. 자식 생성자가 이미 파일 열기를
+        // 시작했더라도(사진 자식은 폴더 스캔을 워커에서 기다린다) 자식 쪽이 스캔 완료 시점에 폴더를
+        // 다시 대조해 주입 목록을 채택하므로 첫 열기부터 순서가 맞는다.
+        if (view is IBrowseOrderConsumer browseChild && _browseFolder is { } browseFolder)
+            browseChild.SetBrowseOrder(browseFolder, _browseFiles);
         UpdateBars();
         TrayStatusChanged?.Invoke(); // A54: 자식이 바뀌면 트레이가 옛 값에 머물지 않게 즉시 알린다
         PlaybackStateChanged?.Invoke(); // A186: 자식 교체도 재생 상태 재평가 대상이다(트레이와 같은 이유)
@@ -241,6 +254,17 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             _childDirty = false;
             UnsavedChanged?.Invoke(false);
         }
+    }
+
+    /// <summary>
+    /// A346: 셸이 준 좌 리스트 표시 순서를 보관하고 지금 자식에게 그대로 내려 준다(중계만 —
+    /// 자기 형식으로 거르는 판단은 자식이 한다). 자식이 없거나 소비자가 아니면 보관만 한다.
+    /// </summary>
+    public void SetBrowseOrder(string folder, IReadOnlyList<string> files)
+    {
+        _browseFolder = folder;
+        _browseFiles = files;
+        if (_childView is IBrowseOrderConsumer child) child.SetBrowseOrder(folder, files);
     }
 
     /// <summary>자식의 트레이 값 변화를 그대로 셸로 올린다(A54 — 중계만, 판단은 자식이).</summary>

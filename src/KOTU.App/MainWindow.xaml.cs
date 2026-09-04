@@ -268,6 +268,13 @@ public sealed partial class MainWindow : Window
             }
             if (_openFileBrowsing) _s4Explorer?.ShowEntries(folder, entries);
             else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(folder, entries);
+            // A346: 열려 있는 콘텐츠 뷰가 표시 순서를 소비하면(이미지 뷰어) 그 순서를 주입한다 —
+            // 뷰 내부 ◀/▶가 좌 리스트에 보이는 순서(정렬 키·확장자 필터 반영)를 그대로 따르게.
+            // 뷰가 없거나(S1 — ModuleHost.Content가 콘텐츠 뷰가 아님) 소비자가 아니면 무동작.
+            // S4('오픈 파일' 탐색) 중에도 뒤에 열린 뷰가 있으면 주입한다: 사용자가 지금 보고 있는
+            // 목록이 곧 그 뷰의 ◀/▶ 순서여야 한다(데이터 경로는 좌 리스트 하나뿐 — 위 A93 주석).
+            if (ModuleHost.Content is IBrowseOrderConsumer browseConsumer)
+                browseConsumer.SetBrowseOrder(folder, BrowseFilesOf(entries));
         };
         // A243: 폴더 실변경 항해 시작 — 스캔 완료(ViewChanged)를 기다리지 않고 지금 화면을 차지한
         // 썸네일 표면부터 즉시 로딩 화면으로 전환한다(수신 분기는 위 ViewChanged와 동일 — 표면이
@@ -1513,6 +1520,15 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// A346: 좌 리스트 표시 목록에서 <b>파일 항목만</b> 경로 순서 그대로 뽑는다 —
+    /// 모듈에 넘길 수 있는 형태(문자열 목록)로 좁히는 자리다(<see cref="IBrowseOrderConsumer"/>는
+    /// KOTU.Core에 있고 모듈은 셸을 참조하지 못하므로 ExplorerListing.Entry를 그대로 넘길 수 없다).
+    /// 폴더 항목은 뷰 내부 ◀/▶ 항해 대상이 아니라서 뺀다.
+    /// </summary>
+    private static IReadOnlyList<string> BrowseFilesOf(IReadOnlyList<ExplorerListing.Entry> entries) =>
+        entries.Where(e => !e.IsFolder).Select(e => e.Path).ToList();
+
+    /// <summary>
     /// 모듈 뷰 교체의 단일 종착점. defaultSidebars(A109, v0.136.0) = **모듈 실행·전환 경로**로 들어온
     /// 호출인지 — true면 뷰 교체를 마친 뒤 사이드바(불투명 도크) 기본 상태를 다시 적용한다
     /// (A314(2026-09-02)부터 그 기본 = 좌·우 모두 열림 — A273의 좌 열림·우 닫힘 재개정)
@@ -1572,6 +1588,15 @@ public sealed partial class MainWindow : Window
                 if (!ReferenceEquals(ModuleHost.Content, view)) return;
                 OnContentPathChanged(path);
             });
+        // A346: 탐색 순서 소비자(이미지 뷰어)에게 좌 리스트의 현재 표시 순서를 즉시 시드한다.
+        // 뷰는 위 CreateView(생성자)에서 이미 파일 열기를 시작했지만, 폴더 스캔을 워커에서 기다리는
+        // 동안 이 시드가 도착하고 뷰가 스캔 완료 시점에 폴더를 다시 대조해 주입 목록을 채택한다 —
+        // 그래서 탐색기에서 연 첫 파일부터 순서가 맞는다(뷰 쪽 '두 시점 검사' 주석 참조).
+        // 밖(명령줄·드래그&드롭)에서 연 파일이면 폴더가 달라 뷰가 자체 열거로 폴백한다.
+        // 스캔이 도는 중이면 DisplayFolder는 CurrentFolder와 다르다 — 시드는 A323과 같은 규칙으로
+        // '표시 중인 목록의 폴더' 기준으로 한다(그 뒤 스캔 완료 ViewChanged가 다시 주입한다).
+        if (view is IBrowseOrderConsumer browseConsumer && ListOverlay.DisplayFolder is { } shownFolder)
+            browseConsumer.SetBrowseOrder(shownFolder, BrowseFilesOf(ListOverlay.CurrentEntries));
         // A332: 열려 있는 콘텐츠의 상세 정보가 뒤늦게 확정됐다(재생 뷰의 libvlc 파싱 완료) →
         // 정보 패널 열림 축을 다시 묻는다. 같은 디스패치·교체 가드(위와 동일 관용구 — 이 통지는
         // libvlc 이벤트 스레드에서 온다).

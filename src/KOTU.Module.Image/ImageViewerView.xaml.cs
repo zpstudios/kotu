@@ -24,9 +24,12 @@ namespace KOTU.Module.Image;
 /// A194: 표시 완료 후 양옆 이웃 각 1장을 같은 워커로 선읽기해 항해 체감 지연을 줄인다.
 /// A211 배치 2(v0.221.0): 인쇄 공급자(<see cref="IPrintPageProvider"/>) — 보고 있는 사진 1장을
 /// 인쇄 가능 영역 안 contain으로 담은 1페이지를 셸 PrintHost에 넘긴다(Ctrl+P·하단 바 버튼).
+/// A346: ←/→ 순서는 <b>탐색기 좌 리스트가 표시 중인 순서</b>를 따른다
+/// (<see cref="IBrowseOrderConsumer"/> 주입 — 정렬 키·확장자 필터가 그대로 반영된다).
+/// 주입이 없거나 다른 폴더의 파일을 열면(명령줄·드래그&amp;드롭) 종전대로 자체 열거로 폴백한다.
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
-    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IPrintPageProvider
+    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IPrintPageProvider, IBrowseOrderConsumer
 {
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패, 회전(A191) 시점.</summary>
     public event Action? TrayStatusChanged;
@@ -84,6 +87,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     public event Action<string>? ContentOpened;
 
     private ImageFolderNavigator? _navigator;
+    // A346: 셸이 주입한 "탐색기 좌 리스트의 표시 순서"와 그 목록이 속한 폴더. 열려 있는 파일이
+    // 이 폴더의 것이면 항해 목록의 정본이 된다(주입 전·다른 폴더면 자체 열거로 폴백).
+    private string? _browseFolder;
+    private IReadOnlyList<string> _browseFiles = [];
     private int _openSeq;        // OpenPath 경쟁 방지: 느린 폴더 스캔이 최신 열기를 덮지 않게
     private int _userRotation;   // R 키 누적 회전 (0/90/180/270)
     private int _exifRotation;   // EXIF orientation에서 읽은 회전
@@ -179,29 +186,78 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
     }
 
+    // ---------- 탐색 순서 주입 (A346) ----------
+
+    /// <summary>
+    /// A346: 셸이 탐색기 좌 리스트의 표시 순서를 준다(뷰 생성 직후 1회 + 정렬·필터·재스캔·폴더 이동마다).
+    /// 지금 열려 있는 파일이 그 폴더의 것이면 항해자를 새 순서로 갈아 끼운다 — 화면은 다시 그리지
+    /// 않고(같은 파일이다) 인덱스만 새 목록에서 경로로 다시 찾는다. 열린 파일이 없거나 폴더가 다르면
+    /// 값만 저장해 두고, 그 폴더의 파일을 열 때 <see cref="OpenPath"/>가 꺼내 쓴다.
+    /// </summary>
+    public void SetBrowseOrder(string folder, IReadOnlyList<string> files)
+    {
+        _browseFolder = folder;
+        _browseFiles = files;
+
+        var current = _navigator?.Current;
+        if (current is null || !SameFolder(folder, Path.GetDirectoryName(current))) return;
+
+        _navigator = ImageFolderNavigator.FromOrdered(files, current);
+        // A194 선읽기 캐시는 "옛 목록의 이웃" 기준이다 — 순서가 바뀌면 이웃이 달라지므로 비운다.
+        _preloadCache.Clear();
+    }
+
+    /// <summary>
+    /// 두 폴더 경로가 같은가 — 끝 구분자 유무만 다른 경우를 흡수한다(셸이 주는 폴더 경로와
+    /// <c>Path.GetDirectoryName</c> 결과의 표기가 갈릴 수 있다). 셸에 같은 성격의 헬퍼가 있으나
+    /// 모듈은 셸(KOTU.App)을 참조할 수 없어 여기에 따로 둔다.
+    /// </summary>
+    private static bool SameFolder(string? a, string? b) =>
+        !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b) &&
+        string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b),
+            StringComparison.OrdinalIgnoreCase);
+
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
 
     private async void OpenPath(string path)
     {
-        // 폴더 스캔 + 자연 정렬은 대형 폴더·네트워크 드라이브에서 느릴 수 있다 — 워커에서.
         var seq = ++_openSeq;
         ImageFolderNavigator navigator;
-        try
+        // A346: 셸이 주입한 좌 리스트 순서가 이 파일의 폴더 것이면 그것이 정본이다 —
+        // 폴더를 다시 열거하지 않으므로 대기도 없다.
+        var injected = SameFolder(_browseFolder, Path.GetDirectoryName(path));
+        if (injected)
         {
-            navigator = await Worker.Run(_ => ImageFolderNavigator.Create(path));
+            navigator = ImageFolderNavigator.FromOrdered(_browseFiles, path);
         }
-        catch (OperationCanceledException)
+        else
         {
-            return; // 뷰가 내려가며 워커가 닫힘
-        }
-        catch (Exception ex)
-        {
-            PlaceholderText.Text = "Cannot read the folder: " + ex.Message;
-            PlaceholderText.Visibility = Visibility.Visible;
-            return;
+            // 폴더 스캔 + 자연 정렬은 대형 폴더·네트워크 드라이브에서 느릴 수 있다 — 워커에서.
+            try
+            {
+                navigator = await Worker.Run(_ => ImageFolderNavigator.Create(path));
+            }
+            catch (OperationCanceledException)
+            {
+                return; // 뷰가 내려가며 워커가 닫힘
+            }
+            catch (Exception ex)
+            {
+                PlaceholderText.Text = "Cannot read the folder: " + ex.Message;
+                PlaceholderText.Visibility = Visibility.Visible;
+                return;
+            }
         }
 
         if (seq != _openSeq) return; // 그새 다른 파일이 열렸다 — 이 결과는 버린다.
+
+        // A346 두 시점 검사: 워커를 기다리는 동안 셸의 SetBrowseOrder가 도착했을 수 있다.
+        // 그 시점에는 _navigator가 아직 없거나 옛 폴더의 것이라 SetBrowseOrder 쪽 "갈아 끼우기"가
+        // 무동작이었다 — 여기서 폴더를 다시 대조해 주입 목록을 채택한다. 빠뜨리면 탐색기에서 연
+        // 첫 파일만 옛(자체 열거) 순서가 되고 그 뒤 정렬을 건드려야 고쳐지는 증상이 된다.
+        if (!injected && SameFolder(_browseFolder, Path.GetDirectoryName(path)))
+            navigator = ImageFolderNavigator.FromOrdered(_browseFiles, path);
+
         _navigator = navigator;
         _preloadCache.Clear(); // A194 — 파일·폴더 전환 = 옛 목록 기준의 선읽기 캐시 무효화
         PlaceholderText.Visibility = Visibility.Collapsed;
@@ -1048,6 +1104,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         {
             var file = await StorageFile.GetFileFromPathAsync(path);
             await file.DeleteAsync(StorageDeleteOption.Default); // 휴지통으로
+            // A346: 주입 목록을 쓰고 있어도 여기서는 종전대로 즉시 제거한다 — 탐색기 감시 재스캔이
+            // 곧 SetBrowseOrder로 새 목록을 주지만 그 사이의 ◀/▶가 지워진 파일을 가리키면 안 된다.
+            // 재주입 시점에는 아래 LoadCurrentAsync가 이미 이웃으로 옮겨 간 뒤라 새 현재 파일이
+            // 목록에 있고, 인덱스는 FromOrdered가 경로로 다시 찾는다.
             _navigator.Remove(path);
             _preloadCache.Remove(path); // A194 — 삭제된 파일의 선읽기 잔재 제거(이어지는 표시는
                                         // 이웃 캐시 히트가 그대로 통한다 — LoadCurrentAsync 조회)
