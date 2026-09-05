@@ -266,10 +266,13 @@ public sealed partial class ExplorerPane : UserControl
         // A240: 선택 변경을 셸로 중계 — ThumbnailExplorer :206과 같은 얇은 래핑(선택 판정·해석은
         // 셸 몫 — SelectedEntry 질의). 두 표면 어느 쪽 발화든 한 이벤트로 모은다(현행 유일
         // 사용처는 리스트 전용 모드라 IconGrid는 접혀 항목이 안 만들어진다 — 실발화는 ListPane뿐).
-        // A323: 열린 콘텐츠 표시용 프로그램 선택(SetCurrentFile)은 중계하지 않는다 — 그 선택은
-        // **열림 축**의 표시일 뿐이라 셸의 **선택 축**(A200 _selectedBrowse)을 세우면 안 된다.
-        IconGrid.SelectionChanged += (_, _) => { if (!_syncingCurrent) SelectionChanged?.Invoke(); };
-        ListPane.SelectionChanged += (_, _) => { if (!_syncingCurrent) SelectionChanged?.Invoke(); };
+        // A323 → A351: 열린 콘텐츠 표시(SetCurrentFile)는 이제 **선택을 건드리지 않는다** —
+        // 전용 시각 요소(IsCurrent → 액센트 바·이름 굵기)로 갈라서서 SelectionChanged 자체가
+        // 발화하지 않는다. 그래서 종전의 억제 표지(_syncingCurrent)가 통째로 사라졌다.
+        // 남은 프로그램 대입은 RevertSelectionToCurrentFile의 "선택 비우기"뿐이고, 그 되먹임은
+        // 셸 표지(MainWindow._syncingBrowseSelection)가 끊는다.
+        IconGrid.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
+        ListPane.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
         // A94 4차: 잘라내기 표시(전역 1벌)가 바뀌면 이미 그려 둔 항목의 흐림만 다시 맞춘다.
         // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
         // (Unloaded로 워커를 정리하는 아래 관용구와 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
@@ -820,10 +823,10 @@ public sealed partial class ExplorerPane : UserControl
         // 계측 fillN: 목록 반영이 끝난 시점(로더 기동 직전). 뒤이어 무장하는 paint는
         // 이 목록이 실제 화면 프레임에 올라간 시점을 잰다.
         NavDiagnostics.Mark("fillN");
-        // A323: 목록 재작성은 선택을 지운다 — 열린 콘텐츠 표시를 여기서 다시 건다.
-        // 셸의 선택 축은 바로 앞 ViewChanged가 이미 null로 리셋했으므로(MainWindow 생성자 배선)
-        // 이 재적용이 사용자 선택을 덮는 일이 없다 — 두 축의 순서 계약(A200)이 그대로 성립한다.
-        ApplyCurrentFileSelection();
+        // A323 → A351: 목록 재작성은 뷰모델을 통째로 새로 만든다(_displayVms) — 열린 콘텐츠
+        // 표시는 뷰모델에 얹힌 값이라 여기서 다시 걸어야 한다. 이제 선택을 건드리지 않으므로
+        // 이 재적용이 사용자 선택을 덮을 여지 자체가 없다(두 축 완전 분리 — A200·A351).
+        ApplyCurrentFileMark();
         // 계측 paint: 조립 완료 후 첫 렌더 프레임 — 로더 기동보다 앞에 무장해 둔다(무장 자체는
         // 이벤트 구독 한 줄이라 순서가 비용에 영향을 주지 않는다).
         NavDiagnostics.ArmPaint("paint");
@@ -1548,103 +1551,91 @@ public sealed partial class ExplorerPane : UserControl
 
     private static ExplorerListing.Entry? EntryOfSelection(object? item) => VmOf(item)?.Entry;
 
-    // ---------- 열린 콘텐츠 표시 (A323) ----------
+    // ---------- 열린 콘텐츠 표시 (A323 → A351) ----------
 
     /// <summary>
-    /// A323: 셸이 알려 준 "지금 열려 있는 콘텐츠 파일" — 목록 재작성(Fill이 선택을 지운다) 후
-    /// 다시 걸어야 하므로 필드로 기억한다. null = 표시할 열린 콘텐츠 없음.
+    /// A323: 셸이 알려 준 "지금 열려 있는 콘텐츠 파일" — 목록 재작성(RefreshView가 뷰모델을
+    /// 새로 만든다) 뒤에 다시 걸어야 하므로 필드로 기억한다. null = 표시할 열린 콘텐츠 없음.
     /// </summary>
     private string? _currentFile;
 
     /// <summary>
-    /// A323: 위 표시용 선택 대입이 도는 동안 <see cref="SelectionChanged"/> 중계를 억제하는 표지.
-    /// 배선 지점 = 생성자의 두 SelectionChanged 람다(그 주석에 근거).
+    /// A351: 직전에 표시를 걸어 준 뷰모델 — 같은 항목에 표시가 다시 걸릴 때
+    /// <c>ScrollIntoView</c>를 되풀이하지 않으려고 기억한다(종전 SelectCurrentIn의
+    /// ReferenceEquals 가드가 하던 몫 그대로다. 목록이 재작성되면 뷰모델이 새 객체라
+    /// 참조 비교가 자연히 "다른 항목"이 되어 새 목록에서는 다시 스크롤한다).
     /// </summary>
-    private bool _syncingCurrent;
+    private ExplorerEntryVm? _markedVm;
 
     /// <summary>
-    /// A323: 열린 콘텐츠 파일을 리스트에 **선택 표시**로 보여준다(사용자 요구 — 클릭했을 때와
-    /// 같은 테두리. 새 시각 요소를 만들지 않고 기존 선택 표시 기구를 그대로 쓴다).
-    /// 목록 밖(다른 폴더·A7 필터 밖 — 휴면 그리드에서는 실체화 상한 초과도)이면 지금 선택을
-    /// 그대로 둔다 — 지우면 사용자가 방금 고른 항목의 표시가 사라진다(미매칭 = 무동작 관례).
-    /// 리스트는 A345 배치 2부터 목록 전체를 도는 FindVmByPath라 "화면 밖이라 못 찾는" 경우가 없다.
-    /// 선택 축과의 분리: 이 대입은 SelectionChanged를 발화시키지 않으므로(_syncingCurrent)
-    /// 셸의 선택 축(A200 _selectedBrowse — 우측 정보 패널의 "선택 우선")은 서지 않는다.
-    /// 우측 정보는 종전대로 열린 콘텐츠(provider) 기준을 유지한다.
+    /// A323 → <b>A351 반전</b>: 열린 콘텐츠 파일을 좌 리스트에 보여준다.
+    /// <para>
+    /// 종전(A323)에는 <b>선택 표시를 그대로 재사용</b>했다 — "새 시각 요소를 만들지 않는다"가
+    /// 그때의 사양이었다. 그러면 "사용자가 방금 고른 행"과 "열려 있는 파일"이 같은 어두운 배경
+    /// 하나로 겹쳐 구분이 되지 않는다(사용자 보고). A351이 그것을 뒤집었다: 표시는 이제
+    /// <b>전용 시각 요소</b>이고(뷰모델 <c>IsCurrent</c> → 좌측 액센트 바 + 이름 굵기 —
+    /// ExplorerPane.xaml의 리스트 DataTemplate), <b>선택은 건드리지 않는다</b>.
+    /// </para>
+    /// 그 결과 선택 축(A200 _selectedBrowse)은 이 경로에서 아예 서지 않는다 — 억제 표지가
+    /// 필요 없어진 근거다. 목록 밖(다른 폴더·A7 필터 밖)이면 켜지는 항목이 없다.
     /// </summary>
     internal void SetCurrentFile(string? path)
     {
         _currentFile = path;
-        ApplyCurrentFileSelection();
+        ApplyCurrentFileMark();
     }
 
     /// <summary>
-    /// A336: 선택 표시를 <b>열린 콘텐츠 표시(A323) 상태로 되돌린다</b> — 셸이 다른 표면(중앙
-    /// 썸네일·S4 그리드)에서 선택이 일어났을 때 부른다. 선택 축은 하나뿐이라(A200) 표시도 한
-    /// 표면에만 남아야 한다(사용자 확정).
+    /// A336 → A351: 좌 리스트의 <b>선택만 비운다</b> — 셸이 다른 표면(중앙 썸네일·S4 그리드)에서
+    /// 선택이 일어났을 때 부른다. 선택 축은 하나뿐이라(A200) 선택 표시도 한 표면에만 남아야 한다.
     /// <para>
-    /// 중앙 표면의 <c>ClearSelection</c>과 달리 <b>그냥 비울 수 없다</b>: 이 목록의 선택 표시는
-    /// A323에서 "지금 열려 있는 파일"을 가리키는 표시로도 쓰인다(새 시각 요소를 만들지 않고 선택
-    /// 기구를 재사용한 것이 그 사양). 그래서 일단 비우고, 열린 콘텐츠가 있으면 그 항목을 다시
-    /// 건다 — 결과는 "사용자 선택은 사라지고 열린 파일 표시는 남는다"다.
+    /// A336 시절에는 그냥 비울 수 없었다: 이 목록의 선택 표시가 A323의 "열린 파일" 표시를
+    /// 겸했기 때문이다("비우고 → 열린 파일을 다시 건다"가 그때의 구현). A351이 그 겸직을
+    /// 끝냈으므로 <b>되살릴 것이 없다</b> — 열린 파일 표시(액센트 바·굵은 이름)는 선택과 무관하게
+    /// 그대로 남는다. 메서드 이름은 셸·오버레이 시그니처를 건드리지 않으려고 유지한다.
     /// </para>
-    /// 되먹임 차단은 두 겹이다: 여기서 <see cref="_syncingCurrent"/>로 중계를 막고(A323의 표지를
-    /// 그대로 재사용 — 목적이 같다: 표시용 대입은 선택 축을 건드리지 않는다), 셸도 자기 표지로
-    /// 같은 구간을 막는다(MainWindow._syncingBrowseSelection).
+    /// 되먹임 차단: 이 비우기가 SelectionChanged를 발화해 셸까지 되올라가도
+    /// 셸 표지(MainWindow._syncingBrowseSelection)가 그 구간을 끊는다.
     /// </summary>
     internal void RevertSelectionToCurrentFile()
     {
-        _syncingCurrent = true;
-        try
-        {
-            IconGrid.SelectedItems.Clear();
-            ListPane.SelectedItems.Clear();
-        }
-        finally
-        {
-            _syncingCurrent = false; // 예외가 나도 표지가 남으면 이후 사용자 선택이 통째로 침묵한다
-        }
-        ApplyCurrentFileSelection(); // 열린 콘텐츠가 있으면 그 표시만 되살린다(없으면 무동작 = 빈 선택)
+        IconGrid.SelectedItems.Clear();
+        ListPane.SelectedItems.Clear();
     }
 
     /// <summary>
-    /// A323: 기억해 둔 열린 콘텐츠 경로를 지금 목록에 반영한다. 호출부 = <see cref="SetCurrentFile"/>
-    /// (셸 통지 시점) + <see cref="FinishFill"/>(목록 재작성 후 — 폴더가 바뀐 경우에도 새 목록에서
-    /// 표시가 맞게). 이미 그 항목이 선택돼 있으면 무동작이라 연속 항해(키 반복)에서도
-    /// 스크롤이 되풀이되지 않는다.
+    /// A351: 기억해 둔 열린 콘텐츠 경로를 지금 표시 목록에 반영한다 — 한 항목만
+    /// <c>IsCurrent = true</c>이고 나머지는 전부 false다(경로 비교는 OrdinalIgnoreCase).
+    /// 호출부 = <see cref="SetCurrentFile"/>(셸 통지 시점) + <see cref="FinishFill"/>
+    /// (목록 재작성 후 — 뷰모델이 매번 새로 만들어지므로 재적용이 필수다).
+    /// <para>
+    /// 표시가 붙은 항목은 보이도록 스크롤한다(종전 선택 재사용이 주던 동작을 그대로 승계).
+    /// 단 <b>직전과 같은 뷰모델이면 스크롤하지 않는다</b> — 같은 값 재통지(ShowListOverlay가
+    /// 부르는 같은 경로 대입 등)가 스크롤을 되풀이하지 않게. ←/→ 오토리피트는 항목이 매번
+    /// 달라지므로 종전대로 매 스텝 따라 스크롤한다.
+    /// </para>
+    /// 휴면 그리드(IconGrid)에는 표시를 두지 않는다 — 컨테이너를 코드가 직접 조립하는 표면이라
+    /// 템플릿이 없고, 살아 있는 사용처(좌 리스트 전용 오버레이)에서는 항목이 만들어지지도 않는다.
+    /// 중앙 타일에도 두지 않는다(A351 ⓒ 사용자 확정 — 열린 파일 뒤라 어차피 보이지 않는다).
     /// </summary>
-    private void ApplyCurrentFileSelection()
+    private void ApplyCurrentFileMark()
     {
-        if (_currentFile is not { Length: > 0 } path) return;
-        _syncingCurrent = true;
-        try
+        var path = _currentFile is { Length: > 0 } p ? p : null;
+        ExplorerEntryVm? hit = null;
+        foreach (var vm in _displayVms)
         {
-            SelectCurrentIn(IconGrid, path);
-            SelectCurrentIn(ListPane, path);
+            var isCurrent = path is not null &&
+                string.Equals(vm.Path, path, StringComparison.OrdinalIgnoreCase);
+            vm.IsCurrent = isCurrent;
+            if (isCurrent) hit = vm;
         }
-        finally
+        if (hit is null)
         {
-            _syncingCurrent = false; // 예외가 나도 표지가 남으면 이후 사용자 선택이 통째로 침묵한다
+            _markedVm = null;
+            return;
         }
-    }
-
-    /// <summary>
-    /// A323: 한 표면에서 경로에 해당하는 항목을 선택하고 보이게 스크롤한다 —
-    /// 대입·스크롤 관용구는 CreateFolderThenRenameAsync와 같은 한 벌(SelectedItem + ScrollIntoView).
-    /// A345 배치 2: 리스트는 <b>뷰모델</b>을 선택 대상으로 대입한다(컨테이너를 찾지 않는다 —
-    /// 화면 밖 항목이면 컨테이너가 아예 없다. ScrollIntoView가 실체화까지 맡는다).
-    /// 그리드(휴면)는 종전 컨테이너 경로 그대로다. 리스트 전용 모드에서는 IconGrid에 항목이
-    /// 없어 그쪽이 자연 무동작이다.
-    /// </summary>
-    private void SelectCurrentIn(ListViewBase owner, string path)
-    {
-        object? target = ReferenceEquals(owner, ListPane)
-            ? FindVmByPath(path)
-            : FindItemByPath(owner, path);
-        if (target is null) return;
-        if (ReferenceEquals(owner.SelectedItem, target)) return; // 이미 그 항목 — 스크롤도 되풀이하지 않는다
-        owner.SelectedItem = target;
-        owner.ScrollIntoView(target);
+        if (!ReferenceEquals(_markedVm, hit)) ListPane.ScrollIntoView(hit);
+        _markedVm = hit;
     }
 
     // ---------- 다중 선택 일괄 열기 (A94 6차, v0.153.0) ----------
@@ -2253,6 +2244,19 @@ public sealed partial class ExplorerPane : UserControl
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
         if (VmOf(e.ClickedItem) is not { } vm) return; // A345 배치 2 — 리스트의 ClickedItem은 뷰모델이다
+
+        // A351 ⓑ(사용자 확정 — 윈도우 탐색기는 마우스 클릭에도 하얀 테두리를 그린다):
+        // WinUI는 포커스가 **FocusState.Keyboard로** 들어올 때만 시스템 포커스 시각(하얀 선
+        // 테두리)을 그린다 — 포인터 클릭이 주는 기본 포커스나 Programmatic(저장소의 다른
+        // Focus 호출들)에는 그리지 않는다. 그래서 클릭한 행에 그 상태로 포커스를 다시 준다.
+        // 더블클릭 판정(_lastClick)·A131 원시 눌림과는 무관하다(그 판정은 아래에서 이어진다).
+        // 체크박스 클릭은 ItemClick 자체가 오지 않으므로(체크박스가 소비) 영향이 없다.
+        // 리스트 한정 = 휴면 그리드는 이 표시의 대상이 아니다.
+        if (ReferenceEquals(sender, ListPane) &&
+            ListPane.ContainerFromItem(vm) is ListViewItem row)
+        {
+            row.Focus(FocusState.Keyboard);
+        }
 
         var now = DateTime.UtcNow;
         var isDouble = _lastClick is { } last && last.Path == vm.Path &&

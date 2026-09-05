@@ -111,16 +111,17 @@ public sealed partial class FileListOverlay : UserControl
     public string? DisplayFolder => _list?.DisplayFolder is { Length: > 0 } folder ? folder : null;
 
     /// <summary>
-    /// A323: 셸이 "지금 열려 있는 콘텐츠 파일"을 알려 준다 — 내부 리스트가 그 항목을 선택
-    /// 표시로 보여주고, 필요하면 보이도록 스크롤한다(ExplorerPane.SetCurrentFile).
-    /// 선택 축(A200)은 세우지 않는다 — 그쪽 계약은 그 메서드 주석에 있다.
+    /// A323 → A351: 셸이 "지금 열려 있는 콘텐츠 파일"을 알려 준다 — 내부 리스트가 그 항목에
+    /// 전용 표시(좌측 액센트 바 + 굵은 이름)를 걸고, 필요하면 보이도록 스크롤한다
+    /// (ExplorerPane.SetCurrentFile). 선택은 건드리지 않는다 — 그쪽 계약은 그 메서드 주석에 있다.
     /// 리스트가 아직 없으면 무동작이다(호출부 ShowListOverlay가 Show 뒤에 부르므로 항상 있다).
     /// </summary>
     public void SetCurrentFile(string? path) => _list?.SetCurrentFile(path);
 
     /// <summary>
-    /// A336: 좌 리스트의 선택 표시를 열린 콘텐츠 표시(A323) 상태로 되돌린다 — 셸이 중앙 표면에서
-    /// 선택이 일어났을 때 부른다(중계만 — 근거는 ExplorerPane.RevertSelectionToCurrentFile).
+    /// A336 → A351: 좌 리스트의 선택을 비운다 — 셸이 중앙 표면에서 선택이 일어났을 때 부른다.
+    /// 열린 콘텐츠 표시는 A351부터 선택과 다른 축이라 되살릴 것이 없다(이름만 시그니처 보존용).
+    /// 중계만 — 근거는 ExplorerPane.RevertSelectionToCurrentFile.
     /// </summary>
     public void RevertSelectionToCurrentFile() => _list?.RevertSelectionToCurrentFile();
 

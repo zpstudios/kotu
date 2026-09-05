@@ -147,6 +147,50 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
         set => Set(ref _contentOpacity, value);
     }
 
+    private bool _isCurrent;
+
+    /// <summary>
+    /// A351: 지금 셸이 열어 놓은 콘텐츠 파일인지 — <b>선택과는 다른 축</b>이다.
+    /// A323은 이 표시를 선택(SelectedItem)으로 대신했는데, 그러면 "사용자가 고른 행"과
+    /// "열려 있는 파일"이 같은 어두운 배경 하나로 겹쳐 구분이 되지 않았다(사용자 보고).
+    /// 이제 전용 시각 요소 둘이 이 값에 달려 있다 — 좌측 액센트 바
+    /// (<see cref="CurrentMarkVisibility"/>)와 이름 굵기(<see cref="NameWeight"/>).
+    /// <para>
+    /// 세터를 <c>Set</c> 헬퍼로 쓰지 않는 이유: 그 헬퍼는 자기 이름 하나만 통지하는데
+    /// 여기는 파생 둘까지 세 이름을 함께 통지해야 한다(안 하면 재활용된 컨테이너의 x:Bind가
+    /// 옛 굵기·옛 바를 들고 온다).
+    /// </para>
+    /// </summary>
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set
+        {
+            if (_isCurrent == value) return;
+            _isCurrent = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCurrent)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentMarkVisibility)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(NameWeight)));
+        }
+    }
+
+    /// <summary>
+    /// A351: 좌측 액센트 바를 보일지 — 리스트 DataTemplate이 x:Bind OneWay로 읽는다
+    /// (선례 = 중앙 타일의 <see cref="CloudBadgeVisibility"/>. 그쪽은 불변이라 OneTime이다).
+    /// </summary>
+    public Microsoft.UI.Xaml.Visibility CurrentMarkVisibility =>
+        _isCurrent
+            ? Microsoft.UI.Xaml.Visibility.Visible
+            : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    /// <summary>
+    /// A351: 열린 파일의 이름만 굵게 — SemiBold 선례는 ThumbnailExplorer.MakeExtensionTile.
+    /// </summary>
+    public Microsoft.UI.Text.FontWeight NameWeight =>
+        _isCurrent
+            ? Microsoft.UI.Text.FontWeights.SemiBold
+            : Microsoft.UI.Text.FontWeights.Normal;
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>값이 실제로 바뀔 때만 통지 — 같은 값 재대입이 재렌더를 부르지 않게 한다.</summary>

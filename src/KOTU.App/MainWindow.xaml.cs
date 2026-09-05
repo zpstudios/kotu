@@ -1956,24 +1956,26 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// A348: 모듈 뷰가 항해로 "지금 보여 주려는 파일"을 옮겼다는 알림(<see cref="ICurrentPathSource"/> —
-    /// 이미지 뷰어의 ◀/▶·삭제 후 이웃 이동). <b>가벼운 것 하나만</b> 한다: 좌 리스트의 현재 파일
-    /// 선택 표시(A323)를 그 파일로 옮긴다(<c>ExplorerPane.SelectCurrentIn</c>이 ScrollIntoView까지
-    /// 해서 스크롤도 따라온다).
+    /// 이미지 뷰어의 ◀/▶·삭제 후 이웃 이동). <b>가벼운 것 하나만</b> 한다: 좌 리스트의 열린 콘텐츠
+    /// 표시(A323 → A351)를 그 파일로 옮긴다(<c>ExplorerPane.ApplyCurrentFileMark</c>가
+    /// ScrollIntoView까지 해서 스크롤도 따라온다).
     /// <para>
     /// 이유: ←/→ 오토리피트에서는 중간 파일의 로드가 폐기돼 <see cref="OnContentOpened"/>가 건너뛰므로,
-    /// 표시를 그쪽에만 걸어 두면 하이라이트가 수 개~십수 개씩 뛴다(A348 사용자 보고). 이 통지는
+    /// 표시를 그쪽에만 걸어 두면 표시가 수 개~십수 개씩 뛴다(A348 사용자 보고). 이 통지는
     /// 매 스텝 오므로 표시가 리피트를 1:1로 따라간다.
+    /// <b>A351</b>: 이 표시는 이제 선택이 아니라 전용 시각 요소(좌측 액센트 바 + 굵은 이름)다 —
+    /// 항해가 사용자 선택을 끌고 다니지 않는다(종전에는 선택이 함께 따라갔다).
     /// </para>
     /// <para>
     /// <b>여기서 하지 않는 것</b>(사용자 확정 — 전부 로드 완료의 <see cref="OnContentOpened"/> 담당):
     /// 창 제목·정보 패널 캐시 무효·오버레이 재적용·드라이브 줄·셸 아이콘, 그리고 셸의 기준 경로
     /// (<c>_currentFilePath</c>) 대입. 기준 경로를 여기서 옮기지 않는 이유는 그것이 "지금 화면에 있는
     /// 콘텐츠"의 정본이고 그 정본에 매달린 것(폴더 기준·정보 패널·트레이)이 로드 완료 축이기 때문이다.
-    /// 그래서 로드가 <b>실패</b>한 파일에서 멈추면 좌 리스트 하이라이트는 그 파일, 제목·정보는 직전
+    /// 그래서 로드가 <b>실패</b>한 파일에서 멈추면 좌 리스트 표시는 그 파일, 제목·정보는 직전
     /// 성공 파일이 된다 — 화면에도 실패 문구가 뜨는 상태라 수용한다(A348 등재 확정).
     /// </para>
     /// <see cref="OnContentOpened"/>가 부르는 <c>ShowListOverlay</c>의 같은 대입은 그대로 둔다 —
-    /// 같은 값이면 <c>SelectCurrentIn</c>의 <c>ReferenceEquals</c> 가드로 무동작이다.
+    /// 같은 항목이면 <c>ApplyCurrentFileMark</c>의 ReferenceEquals 가드로 스크롤이 되풀이되지 않는다.
     /// </summary>
     private void OnCurrentPathChanged(string path) => ListOverlay.SetCurrentFile(path);
 
@@ -4087,13 +4089,15 @@ public sealed partial class MainWindow : Window
     /// 어느 쪽이 진짜 축인지가 코드에서 사라진다 — 축은 셸이 들고 표면이 따라간다.
     /// </para>
     /// <para>
-    /// 두 표면의 처리가 다른 이유: 중앙 썸네일·S4 그리드는 탐색 전용이라 비우면 끝이지만, 좌
-    /// 리스트의 선택 표시는 A323에서 "지금 열린 파일" 표시로도 쓰인다 — 그래서 비우는 대신
-    /// <b>그 상태로 되돌린다</b>(열린 파일이 있으면 그 항목만 다시 걸린다).
+    /// A336 시절 두 표면의 처리가 달랐던 이유: 좌 리스트의 선택 표시가 A323에서 "지금 열린 파일"
+    /// 표시를 겸해, 비우는 대신 <b>그 상태로 되돌려야</b> 했다. <b>A351이 그 겸직을 끝냈다</b> —
+    /// 열린 파일 표시는 이제 선택과 다른 축(액센트 바 + 굵은 이름)이라 좌 리스트도 그냥 비우면
+    /// 된다(메서드 이름만 시그니처 보존용으로 남아 있다).
     /// </para>
     /// 되먹임: 이 안의 대입은 각 표면의 SelectionChanged를 발화시켜 이 함수까지 되올라온다 —
     /// <see cref="_syncingBrowseSelection"/>이 그 구간의 재진입을 끊는다(끊지 않으면 반대쪽의
-    /// "선택 없음"이 방금 세운 축을 null로 덮어쓴다). 표면 쪽 표지(_syncingCurrent)와 이중 방어다.
+    /// "선택 없음"이 방금 세운 축을 null로 덮어쓴다). A351 전에는 표면 쪽 표지(_syncingCurrent)와
+    /// 이중 방어였으나, 표면 쪽 표지가 사라져 이제 이 표지 하나가 유일한 차단막이다.
     /// </summary>
     private void SyncBrowseSelectionSurfaces(bool fromList)
     {
@@ -4308,12 +4312,12 @@ public sealed partial class MainWindow : Window
             return;
         }
         ListOverlay.Show(folder, extensions);
-        // A323: 좌 리스트에 **열린 콘텐츠 파일**을 선택 표시로 보여준다(사용자 요구 — 모드1에서
+        // A323 → A351: 좌 리스트에 **열린 콘텐츠 파일**을 전용 표시로 보여준다(모드1에서
         // 지금 보는 파일이 무엇인지 리스트에 표시). Show 뒤에 부르는 이유: 폴더가 바뀐 경우
         // Show가 건 재항해의 조립 완료(FinishFill)가 새 목록에서 같은 값을 다시 걸어 준다.
         // 항해로 파일만 바뀐 경우(같은 폴더 — 위 Show가 재작성을 건너뛴다)는 이 호출이 곧
-        // "선택만 옮기기"다(A323 사양 ③). 선택 축(_selectedBrowse)은 서지 않는다 —
-        // ExplorerPane.SetCurrentFile이 SelectionChanged 중계를 억제한다(두 축 분리 유지).
+        // "표시만 옮기기"다(A323 사양 ③). 선택 축(_selectedBrowse)은 서지 않는다 —
+        // A351부터는 이 표시가 선택과 다른 축(액센트 바)이라 SelectionChanged가 아예 안 난다.
         // 전 모듈 공통: 좌 리스트는 S1~S4·모든 파일 모듈이 공유하는 단일 인스턴스라
         // 이 한 지점이 곧 전 모듈 적용이다.
         ListOverlay.SetCurrentFile(_currentFilePath);
