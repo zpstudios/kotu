@@ -57,7 +57,7 @@
 
 ## 1. 셸 · 시작 메뉴
 
-- ※ A350(**미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘**, v0.343.0) 완료 — 결번. 구현 = `TaskbarIdentity.Apply`가 창 AUMID
+- ※ A350(**미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘**, v0.343.0 → v0.343.2에서 완결) 완료 — 결번. 구현 = `TaskbarIdentity.Apply`가 창 AUMID
   (`KOTU.Instance.{슬롯}`)를 박은 직후 `HKCU\Software\Classes\AppUserModelId\<AUMID>`에 `DisplayName`·`IconUri`(exe 옆 `Assets\app.ico`)
   멱등 등록(같은 값이면 무쓰기 · ico 없으면 IconUri 생략) · 구 브랜드(`ZP.Instance.*`·`WinUtil.Instance.*`) 접두 키 프로세스당 1회 청소 ·
   Velopack `OnBeforeUninstallFastCallback`에서 전부 삭제(1.2.0 문서 근거 — 저장소 훅 선례는 `OnFirstRun`뿐이라 CI 1순위였으나 초록).
@@ -74,7 +74,7 @@
   숨김 창(`TrayIcon.Hwnd` — 명시 AUMID 없음 → 프로세스 기본 정체성 → 셸이 exe 경로로 Velopack 바로가기 역추적 = MPC-HC·AIMP 경로)**으로
   교체 + v0.343.0/.1 추가분 전부 되돌림(`Program.cs`·`ExplorerIntegration` = v0.342.0과 빈 diff · `TaskbarIdentity`는 이력 주석만).
   근거 = `docs/A349-media-keys-research.md` §7(추가). **사용자 기기 잔재** = v0.343.0/.1이 만든 `HKCU\Software\Classes\AppUserModelId\KOTU`·
-  `KOTU.Instance.*` 키 — 앱이 더는 손대지 않으므로 수동 삭제 안내. **실기기 대기.**
+  `KOTU.Instance.*` 키 — 앱이 더는 손대지 않으므로 수동 삭제 안내. ✅ **실기기 확인 2026-09-05 — 플라이아웃에 KOTU 아이콘 + "KOTU" 표시**(스크린샷). 결번.
 
 - ※ A274(**Enter 키 터널링 승격 + A203 외부 경로 보완**, v0.271.0) 완료 — 결번.
   구현 확정 = Enter·Alt+Enter를 OnRootPreviewKeyDown으로 이관(버블 분기 제거 — 버튼 포커스 중 Enter = 전체화면·클릭은
@@ -2670,7 +2670,7 @@
 | ~~A347~~ | 좌 리스트 ↔ 중앙 썸네일 순서 동기화 | 소~중 | **A346에 흡수(v0.339.0) — 결번**(코드상 이미 같은 목록 · 어긋남 재현 시 재등재) |
 | ~~A348~~ | 이미지 ←/→ 오토리피트 중 좌 리스트 현재 파일 표시 건너뜀 — 항해 시점 통지(ⓐ) | 소~중 | **완료 v0.340.0 — 결번**(ICurrentPathSource · SetCurrentFile만 즉시) |
 | A349 | 영상·오디오 이전/다음 파일 — Ctrl+←/→ · PageUp/Down · 하단 바 ⏮⏭ · 미디어 키(SMTC) · 순서 = 좌 리스트(낙수 43 흡수) | 중+소+중(3배치) | **배치 1~3 완료 v0.341.0~v0.342.0**(키·⏮⏭·순서 / 조사 / SMTC) · 실기기 회수 대기 · Fable(위임 시 Opus) |
-| A350 | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘(AUMID HKCU 등록) | 소 | v0.343.0·.1(레지스트리·프로세스 AUMID) 실패·되돌림 → **v0.343.2 세션 창 = 트레이 숨김 창 — 실기기 대기** |
+| ~~A350~~ | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘 | 소 | **완료 v0.343.2 — 결번**(세션 창 = 트레이 숨김 창 · v0.343.0/.1 되돌림 · 실기기 확인) |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
