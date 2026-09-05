@@ -186,7 +186,9 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
     /// <summary>
     /// A351: 열린 파일의 이름만 굵게 — SemiBold 선례는 ThumbnailExplorer.MakeExtensionTile.
     /// </summary>
-    public Microsoft.UI.Text.FontWeight NameWeight =>
+    // 타입은 WinRT 구조체 Windows.UI.Text.FontWeight다(값 상수만 Microsoft.UI.Text.FontWeights —
+    // v0.344.0 CI 실패 CS0234의 정정. TextBlock.FontWeight의 선언 타입과 같다).
+    public Windows.UI.Text.FontWeight NameWeight =>
         _isCurrent
             ? Microsoft.UI.Text.FontWeights.SemiBold
             : Microsoft.UI.Text.FontWeights.Normal;

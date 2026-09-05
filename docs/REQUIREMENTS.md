@@ -651,6 +651,12 @@
     눌림에서 그 컨테이너에 `Focus(FocusState.Keyboard)`(포커스 시각은 FocusState.Keyboard일 때만 그려진다 — 선례 grep 필요 · 저장소의
     `Focus(FocusState.Programmatic)`는 시각을 안 그린다) ⓒ 중앙 타일에는 두지 않음.
   - 규모 = 소~중(좌 리스트 + 셸 A336 경로).
+  - ✅ **완료(v0.344.0)** — `ExplorerEntryVm.IsCurrent`(+`CurrentMarkVisibility`·`NameWeight` 파생 통지) · 템플릿 좌측 액센트 바 열(Width 3 ·
+    `AccentFillColorDefaultBrush` · Visibility x:Bind) + 이름 `FontWeight` x:Bind(선례 0 — CI 초록) · 좌 패딩 12→1로 들여쓰기 상쇄(1+3+ColumnSpacing 8 = 12 —
+    하위 에이전트가 지시의 8px 오산을 잡음) · `ApplyCurrentFileMark`(뷰모델 순회 · `SelectedItem` 무접촉 · 직전 마크 기억으로 스크롤 반복 억제) ·
+    `SelectCurrentIn`·`ApplyCurrentFileSelection`·`_syncingCurrent` 삭제 · `RevertSelectionToCurrentFile` = 선택 해제만 · `OnItemClick`에서
+    `ContainerFromItem(vm).Focus(FocusState.Keyboard)`. **동작 변화(사양)** = ←/→ 항해 때 좌 리스트 **선택**은 더 이상 따라가지 않고 마크만
+    따라간다. ⚠️ 실기기 1순위 = WinUI 3 `ListViewItem`의 Win11 선택 인디케이터(좌측 액센트 알약)가 A351 바와 겹쳐 보이면 차별화 필요.
 
 - ※ A347(**좌 리스트 ↔ 중앙 썸네일 순서 동기화**) — **A346에 흡수(v0.339.0)**. 코드상 두 표면은 `RefreshView` 하나가 같은 목록을
   흘려 이미 같은 순서이고, 어긋나 보이던 세 번째 축(이미지 뷰어 ←/→)이 A346으로 같은 목록을 쓰게 됐다. v0.339.0 뒤에도 좌·중앙이
@@ -2692,7 +2698,7 @@
 | ~~A348~~ | 이미지 ←/→ 오토리피트 중 좌 리스트 현재 파일 표시 건너뜀 — 항해 시점 통지(ⓐ) | 소~중 | **완료 v0.340.0 — 결번**(ICurrentPathSource · SetCurrentFile만 즉시) |
 | A349 | 영상·오디오 이전/다음 파일 — Ctrl+←/→ · PageUp/Down · 하단 바 ⏮⏭ · 미디어 키(SMTC) · 순서 = 좌 리스트(낙수 43 흡수) | 중+소+중(3배치) | **배치 1~3 완료 v0.341.0~v0.342.0**(키·⏮⏭·순서 / 조사 / SMTC) · 실기기 회수 대기 · Fable(위임 시 Opus) |
 | ~~A350~~ | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘 | 소 | **완료 v0.343.2 — 결번**(세션 창 = 트레이 숨김 창 · v0.343.0/.1 되돌림 · 실기기 확인) |
-| A351 | 좌 리스트 열린 콘텐츠 표시를 선택 표시와 분리(액센트 바 + 굵은 이름 · 클릭에도 포커스 테두리 · A323/A336 연쇄) | 소~중 | 미반영 · Fable(위임 시 Opus) · 3문 확정 · 착수 대기 |
+| A351 | 좌 리스트 열린 콘텐츠 표시를 선택 표시와 분리(액센트 바 + 굵은 이름 · 클릭에도 포커스 테두리) | 소~중 | **완료 v0.344.0** · 실기기 대기(선택 인디케이터 겹침 여부) |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
