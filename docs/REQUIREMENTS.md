@@ -2244,6 +2244,16 @@
     `reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\KOTU.exe" /v CustomDumpFlags /t REG_DWORD /d 0x1161 /f`
     (0x1161 = DataSegs | UnloadedModules | IndirectlyReferencedMemory | ProcessThreadData | ThreadInfo — stowed 예외 구조체까지 담기는 축소 덤프 ·
     수십 MB) → 재현 → `%LOCALAPPDATA%\CrashDumps\KOTU.exe.*.dmp` zip 전달. 끝나면 같은 키 삭제(`reg delete … /f`).
+  - ✅ **덤프 9개 회수(2026-09-06 · `KOTU.exe.<pid>.dmp` — 이날 전 크래시)** — 샌드박스 `minidump`로 파싱: 전부 **UI 스레드에서 XAML 내부 디스패치 작업
+    (CoreMessagingXP → Microsoft.UI.Xaml.dll+0x217bad → +0xd061 → +0xb786 → RoFailFast) · stowed `SE02` hr=0x8000FFFF form=binary(46프레임) nested=`XAML`**
+    · 관리(coreclr) 프레임 없음. 46프레임 스택 배열과 XAML 중첩 정보는 **힙**에 있어 MiniDumpNormal/0x1161에도 안 담김(참조 메모리는 스택에서만
+    따라간다). → **`CustomDumpFlags=0x21321`**(PrivateReadWriteMemory 0x200 포함 · 접근 불가 페이지 무시)로 재수집 요청.
+    웹 조사(하위 에이전트): WinUI 3의 **레이아웃 사이클 failfast도 stowed에 최소 정보만 남긴다**(E_UNEXPECTED 배제 근거 아님 · 재부상) · WinUI 3는 STA라
+    레이아웃 중 메시지 펌프 재진입 가능(PowerToys #47145 — 비동기 완료 콜백이 목록·컨테이너를 건드리는 경로) · ItemsSource 통째 교체 + 재활용 버그
+    다수(#9189·#9655·#5755 · WASDK 2.0에 "목록 갱신 뒤 ListView 크래시 수정") · CacheLength 4배 = 64~70개 전량 실체화 구간과 일치.
+    **v0.348.1** = Trace log 켜짐 시 `DebugSettings.LayoutCycleTracingLevel=High`(레이아웃 사이클이면 stowed 메시지에 추적 동봉 — 새 덤프에서 읽는다).
+    수리 후보(증거 뒤) = ⓐ `ItemsSource` 통째 교체 → 증분 갱신(Remove/Insert) ⓑ `CacheLength` 축소 ⓒ 툴팁 x:Bind 제거(항목마다 팝업) ⓓ 비동기 완료
+    콜백의 컨테이너 접근을 레이아웃 밖으로 ⓔ WASDK 2.0 상향.
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
