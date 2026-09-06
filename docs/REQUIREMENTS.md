@@ -1708,6 +1708,14 @@
   `InRecycleQueue` = `ForceFinish` + host Clear ③ 상세 fetch·미리보기는 CCC 위상(보이는 것만) + 뷰모델 캐시 ④ 이름변경 = 보수안 ⓐ
   (`Realize*Container`) 확정 ⑤ 스캔 상한 `maxItems` 10,000(낙수 41이 그 다음) ⑥ 계측 판별식 = `total`·`stall`·`gc/pause`·`clay`.
 
+- [미반영 A353 · Opus] **다른 프로세스가 쓰고 있는 텍스트 파일(로그 등)을 문서 모듈이 못 연다 — "being used by another process"**
+  (2026-09-06 사용자 보고: 한 KOTU가 `trace.log`를 쓰는 중에 탐색기에서 더블클릭 → 다른 창의 KOTU 문서 모듈이 "Failed to open: … being
+  used by another process"). 원인 = `DocumentView` :2296 `File.OpenRead(path)` = `FileShare.Read` — 쓰기 잠금을 가진 프로세스가 있으면
+  공유 위반. `DiagTrace`는 `FileShare.ReadWrite`로 열어 두었으니 **읽는 쪽**이 `new FileStream(path, FileMode.Open, FileAccess.Read,
+  FileShare.ReadWrite)`로 열면 된다(로그 파일·쓰기 중인 문서를 보는 일반 사례 — `DocumentQuickInfo` :271·:310도 동일 수리). 편집·저장 경로
+  (:2750 `ReadAllBytes` 검증)는 별개(저장 시점엔 우리가 쓰는 쪽). 규모 소. ※ "새 인스턴스가 열렸다"는 정상(A24 — 이미 떠 있는 창에 콘텐츠가
+  있으면 새 창).
+
 ## 8. 하드웨어(정보) 모듈
 
 - ※ A259(**하단 바 긴 그래프 전폭화 + 기간 표기 내장**, v0.259.0) 완료 — 결번.
@@ -2748,6 +2756,7 @@
 | ~~A350~~ | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘 | 소 | **완료 v0.343.2 — 결번**(세션 창 = 트레이 숨김 창 · v0.343.0/.1 되돌림 · 실기기 확인) |
 | A351 | 좌 리스트 열린 콘텐츠 표시를 선택 표시와 분리(액센트 바 + 굵은 이름 · 클릭에도 포커스 테두리) | 소~중 | **완료 v0.344.0 → CI 빨강(CS0234) → v0.344.1** · 실기기 대기(선택 인디케이터 겹침 여부) |
 | A352 | All Readable 대형 폴더 강제 종료(0xC000027B stowed · Microsoft.UI.Xaml.dll) — 배치 1 트레이스 로그 → 배치 2 원인 수리 | 소 + 원인별 | **배치 1 완료 v0.345.0** · 사용자 trace.log 대기 |
+| A353 | 쓰기 중인 파일(로그)을 문서 모듈이 못 연다 — 읽기를 FileShare.ReadWrite로 | 소 | 미반영 · Opus · 2026-09-06 등재 |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
