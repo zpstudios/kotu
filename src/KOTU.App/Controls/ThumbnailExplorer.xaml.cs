@@ -32,7 +32,17 @@ namespace KOTU.App.Controls;
 /// 대입하면 XAML이 <b>화면에 보이는 타일만</b> 실체화한다(DataTemplate + x:Bind +
 /// ContainerContentChanging — 정본 선례는 PdfPane, 좌 리스트 판본은 배치 2). 그와 함께
 /// 사라진 것: 분할 조립 루프(A192)·실체화 상한과 안내 타일·뷰포트 지연 미리보기(A339
-/// DeferPreview). 미리보기 4갈래는 위상 0(폴백 타일을 동기로) → 위상 1(비동기 요청)로 옮겼다.
+/// DeferPreview). 미리보기 갈래는 위상 0(폴백 타일을 동기로) → 위상 1(비동기 요청)로 옮겼다.
+/// </para>
+/// <para>
+/// <b>미리보기 3갈래 (A352 배치 2 개정)</b>: ① 폴더 = 글리프(위상 0에서 끝)
+/// ② 클라우드 전용(placeholder) 이미지 = 캐시 전용 셸 썸네일(A175 하이드레이션 금지)
+/// ③ <b>그 외 전 파일 = 셸 썸네일</b>(A242 — 로컬 이미지 원본 포함. 텍스트 프리뷰 A233만
+/// 그 앞에 끼어든다). 종전에는 로컬 이미지 원본이 네 번째 갈래로 <c>BitmapImage.UriSource</c>
+/// 직접 디코드를 썼는데, A352 트레이스에서 <b>그 경로가 XAML 네이티브 안에서 프로세스를
+/// 죽였다</b>(관리 예외 없음 · 이벤트 1000 0xC000027B stowed · 문제의 PNG는 파일 자체가
+/// 정상이었고 폴더 밖으로 옮기면 크래시가 사라졌다). 그래서 직접 디코드를 폐기하고
+/// 이미지도 워커 fetch → 바이트 → <c>SetSourceAsync</c>라는 검증된 관용구로 통일했다.
 /// </para>
 /// <para>
 /// <b>이 표면의 전제가 뒤집힌 지점</b>: 종전 주석이 곳곳에서 근거로 삼던 "타일은 재사용되지
@@ -48,10 +58,12 @@ public sealed partial class ThumbnailExplorer : UserControl
 {
     /// <summary>
     /// 미리보기 요청 폭 상한(물리 px) — 원본 크기 디코드로 메모리가 폭주하지 않게.
-    /// 이 파일의 미리보기 3경로가 공유하는 유일한 수치다: ① 이미지 실디코드
-    /// (StartImagePreview의 BitmapImage.DecodePixelWidth) ② placeholder 캐시 전용 셸 썸네일
-    /// (FillCachedThumbnailAsync) ③ 워커 지연 교체 셸 썸네일(FetchTilePreview) — 셋이 같은 값을
+    /// 이 파일의 미리보기 2경로가 공유하는 유일한 수치다: ① placeholder 캐시 전용 셸 썸네일
+    /// (FillCachedThumbnailAsync) ② 워커 지연 교체 셸 썸네일(FetchTilePreview) — 둘이 같은 값을
     /// 써야 같은 파일이 경로에 따라 다른 선명도로 뜨는 일이 없다.
+    /// (A352 배치 2 이전에는 세 번째로 이미지 실디코드 StartImagePreview의
+    /// BitmapImage.DecodePixelWidth가 있었다 — 그 갈래를 폐기하면서 로컬 이미지도 ②를 쓴다.
+    /// 요청 폭이 같으므로 화질은 종전과 동일하다.)
     /// <b>A275(v0.272.0): 256 → 768.</b> 타일 한 변 = floor(중앙 실폭 ÷ 열수)라 큰 창·고DPI에서
     /// 256은 업스케일이었다(예: 2560px 폭·4열이면 타일 640 → 256을 2.5배 늘려 그린다).
     /// 768은 셸 썸네일 캐시가 실제로 굽는 버킷 상단(1024 아래 최대 상용 버킷)이라 요청이
@@ -728,8 +740,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         return host;
     }
 
-    /// <summary>미리보기 이미지 요소 1개 (A345 배치 4) — 세 갈래(이미지 원본·캐시 썸네일·셸
-    /// 썸네일)가 같은 배치(Uniform · 여백 4)를 쓰므로 한자리로 모았다.</summary>
+    /// <summary>미리보기 이미지 요소 1개 (A345 배치 4) — 두 갈래(placeholder 캐시 썸네일·셸
+    /// 썸네일)가 같은 배치(Uniform · 여백 4)를 쓰므로 한자리로 모았다
+    /// (A352 배치 2 이전에는 이미지 원본 직접 디코드 갈래까지 셋이었다).</summary>
     private static Image MakePreviewImage(ImageSource source) => new()
     {
         Source = source,
@@ -753,10 +766,12 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     /// <summary>
     /// 위상 1 (A345 배치 3): 파일을 읽어야 하는 미리보기 갈래를 발사한다 — 종전 MakeTile이 조립
-    /// 시점에 고르던 4갈래를 <b>보이는 타일에서만</b> 고르는 것으로 옮겼다(A339 DeferPreview의
-    /// 뷰포트 판정이 하던 일을 이제 XAML 가상화 패널이 대신한다). 갈래 순서는 종전 MakeTile
-    /// 그대로다: 폴더(위상 0에서 끝) → 이미지(클라우드 전용이면 캐시 썸네일만) → 텍스트(A233) →
+    /// 시점에 고르던 갈래를 <b>보이는 타일에서만</b> 고르는 것으로 옮겼다(A339 DeferPreview의
+    /// 뷰포트 판정이 하던 일을 이제 XAML 가상화 패널이 대신한다). 갈래 순서:
+    /// 폴더(위상 0에서 끝) → 클라우드 전용 이미지(캐시 썸네일만 — A175) → 텍스트(A233) →
     /// 그 외 전 파일 = 셸 썸네일(A242, 단일 판정 지점).
+    /// <b>A352 배치 2</b>: 로컬 이미지 원본 전용 갈래(StartImagePreview)를 없애고 셸 썸네일로
+    /// 합쳤다 — 이미지도 다른 파일과 같은 길을 간다.
     /// 진입 즉시 재활용 대조(<c>ReferenceEquals</c>)를 하는 이유: 위상 콜백은 <b>다음 프레임</b>에
     /// 오므로 그 사이 컨테이너가 다른 항목으로 재활용됐을 수 있다.
     /// </summary>
@@ -768,23 +783,17 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
         var entry = vm.Entry;
         var seq = _showSeq; // 발사 시점의 회차 — 폴더가 바뀌면 이 값으로 완료를 버린다
-        if (IsImageFile(entry.Name))
+        // A175: 클라우드 전용 이미지는 원본 디코드가 하이드레이션(전체 다운로드)이다 —
+        // 원본은 절대 열지 않고 캐시·클라우드 제공 썸네일만 시도한다(이 갈래만 이미지 고유다).
+        if (IsImageFile(entry.Name) && entry.IsPlaceholder)
         {
-            // A175: 클라우드 전용 이미지는 원본 디코드가 하이드레이션(전체 다운로드)이다 —
-            // 원본은 절대 열지 않고 캐시·클라우드 제공 썸네일만 시도한다.
-            if (entry.IsPlaceholder)
-            {
-                // A352 배치 1: 위상 1의 갈래 선택 — 마지막 줄의 갈래가 곧 용의자다(뜨거운 경로).
-                if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill cached " + entry.Path);
-                _ = FillCachedThumbnailAsync(vm, seq);
-            }
-            else
-            {
-                if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill image " + entry.Path);
-                StartImagePreview(vm, host);
-            }
+            // A352 배치 1: 위상 1의 갈래 선택 — 마지막 줄의 갈래가 곧 용의자다(뜨거운 경로).
+            if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill cached " + entry.Path);
+            _ = FillCachedThumbnailAsync(vm, seq);
             return;
         }
+        // A352 배치 2: 로컬 이미지 원본은 더 이상 특별 취급하지 않는다 — 아래 셸 썸네일 갈래로
+        // 함께 내려간다(종전 StartImagePreview = BitmapImage.UriSource 직접 디코드는 폐기).
         if (IsTextPreviewFile(entry)) // A233 — 내용 프리뷰
         {
             if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill text " + entry.Path); // A352 배치 1
@@ -795,6 +804,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         // (요청하지도 않은 타일에 "기다리는 중" 표시가 있으면 거짓말이다 — A339의 근거 승계).
         // A345 배치 4: 배지 참조는 넘기지 않는다 — 완료 시점의 자리가 이 host라는 보장이 없어,
         // 걷어내기가 아니라 그 자리를 통째로 다시 그리는 방식으로 바꿨다(RedrawFallbackTile).
+        // A352 배치 2: 로컬 이미지 원본도 여기로 온다. 셸이 이미지에 파일 종류 아이콘
+        // (ThumbnailType.Icon)을 돌려주는 건 손상·미지원 형식뿐이므로, FetchTilePreview의
+        // A270 ③ 규칙(아이콘형 = Bytes null → 확장자 타일 유지)은 이미지에도 그대로 옳다.
         host.Children.Add(MakePendingBadge());
         // A352 배치 1: 셸 썸네일 갈래 — 인프로세스 셸 핸들러가 도는 유일한 경로다(A352 1순위 가설
         // 후보였던 자리). 마지막 줄이 여기서 멈추면 그 파일의 핸들러를 의심한다.
@@ -1004,55 +1016,16 @@ public sealed partial class ThumbnailExplorer : UserControl
     private static bool IsImageFile(string name) =>
         ExplorerListing.MatchesExtension(name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions);
 
-    /// <summary>
-    /// 이미지 실제 축소 미리보기 (A93): BitmapImage + DecodePixelWidth — 디코드는 XAML
-    /// 파이프라인이 비동기로 한다. WIC 밖 포맷(psd)·손상 파일은 ImageFailed로 확장자 타일 폴백.
-    /// <para>
-    /// A345 배치 3: 위상 1에서 <b>동기로</b> 건다(파일을 우리가 읽지 않으므로 워커·게이트가 필요
-    /// 없다 — 종전 DeferPreview 안 본문 그대로다). 성공하면 확장자 타일을 걷는다: 그냥 겹쳐 두면
-    /// <b>투명 PNG의 투명한 부분으로 아래 타일이 비쳐 보인다</b>. 실패(ImageFailed)에는 걷지 않아
-    /// 확장자 타일이 그대로 남는다 = 종전 폴백과 같은 결과.
-    /// 두 핸들러 모두 <see cref="LivePreviewHostOf"/>로 <b>적용 시점의 자리를 다시 찾는다</b>
-    /// (A345 배치 4, 낙수 42) — 디코드 완료가 늦게 오는 사이 컨테이너가 다른 파일 타일이 됐으면
-    /// 그 타일을 건드리면 안 되고, 같은 항목이 다른 컨테이너에 재실체화됐으면 그 새 자리에 얹어야
-    /// 한다. 비트맵은 뷰모델에 캐시하지 않는다(원본 Uri 디코드 결과는 XAML 이미지 캐시가 들고
-    /// 있다). 이 갈래만 <see cref="ExplorerEntryVm.PreviewInFlight"/>로 감싸지 않는다 —
-    /// 재실체화 때마다 다시 걸려도 디코드가 XAML 캐시에 걸려 값싸기 때문이다(의도된 예외).
-    /// </para>
-    /// </summary>
-    private void StartImagePreview(ExplorerEntryVm vm, Grid host)
-    {
-        try
-        {
-            var bitmap = new BitmapImage { DecodePixelWidth = PreviewDecodeWidth };
-            bitmap.UriSource = new Uri(vm.Path);
-            var image = MakePreviewImage(bitmap);
-            image.ImageOpened += (_, _) =>
-            {
-                DiagTrace.Write("tiles", "ImageOpened " + vm.Path); // A352 배치 1
-                if (LivePreviewHostOf(vm) is not { } live) return;
-                // 성공의 최종형은 "이미지 한 장"이라 폴백을 골라 지우는 대신 통째로 비우고 얹는다
-                // (그냥 겹쳐 두면 투명 PNG의 투명한 부분으로 아래 확장자 타일이 비쳐 보인다).
-                // 발사 때 그 자리면 이 image를 다시 얹고(Clear가 잠시 떼어 낸다), 재실체화된
-                // 새 자리면 같은 비트맵으로 새 요소를 만든다 — 옛 자리의 자식을 그대로 옮기면
-                // 부모가 둘이 되어 런타임에서 죽는다(CI는 못 잡는 부류다).
-                var visual = live.Children.Contains(image) ? image : MakePreviewImage(bitmap);
-                live.Children.Clear();
-                live.Children.Add(visual);
-            };
-            image.ImageFailed += (_, _) =>
-            {
-                DiagTrace.Write("tiles", "ImageFailed " + vm.Path); // A352 배치 1
-                // 실패는 "확장자 타일 그대로" — 자기 자신만 걷는다(없으면 무동작).
-                if (LivePreviewHostOf(vm) is { } live) live.Children.Remove(image);
-            };
-            host.Children.Add(image);
-        }
-        catch
-        {
-            // 경로가 Uri가 못 되는 극단 케이스 — 확장자 타일 그대로.
-        }
-    }
+    // A352 배치 2: 로컬 이미지 원본 전용 갈래(StartImagePreview — BitmapImage.UriSource +
+    // DecodePixelWidth 직접 디코드, A93)를 삭제했다. 근거 = A352 트레이스
+    // (docs/assets/A352-trace-2026-09-06.log): 그 경로가 세션 전체에서 딱 3번 돌았고
+    // 그 직후 프로세스가 사라졌다 — 관리 예외(exc 줄)도 ImageOpened/ImageFailed도 없이
+    // 이벤트 1000(Microsoft.UI.Xaml.dll · 0xC000027B stowed)만 남았다. 즉 XAML 네이티브
+    // 이미지 파이프라인 안에서 죽었다. 문제의 PNG 3장은 파일 자체가 정상이었고(8비트 RGBA ·
+    // CRC 정상 · 인터레이스 없음), 그 3장을 폴더 밖으로 옮기면 크래시가 사라졌다.
+    // 대체 = 셸 썸네일 갈래(FillShellThumbnailAsync — 워커 FetchTilePreview로 바이트를 받아
+    // BitmapImage.SetSourceAsync). 이미지 뷰어 본체·좌 그리드가 이미 쓰는 검증된 관용구이고,
+    // 요청 폭도 같은 PreviewDecodeWidth(768)라 화질 차이가 없다.
 
     /// <summary>
     /// 캐시·클라우드 제공 썸네일을 UI 스레드 비동기로 받아 host에 채운다 (A175 — 클라우드 전용
