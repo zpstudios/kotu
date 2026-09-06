@@ -1724,6 +1724,17 @@
   `InRecycleQueue` = `ForceFinish` + host Clear ③ 상세 fetch·미리보기는 CCC 위상(보이는 것만) + 뷰모델 캐시 ④ 이름변경 = 보수안 ⓐ
   (`Realize*Container`) 확정 ⑤ 스캔 상한 `maxItems` 10,000(낙수 41이 그 다음) ⑥ 계측 판별식 = `total`·`stall`·`gc/pause`·`clay`.
 
+- [미반영 A355 · Opus] **UI 스레드 `StorageFile`/`StorageFolder` 호출 잔여 4곳을 워커로**(낙수 44 승격 · 2026-09-07 "다음 건들 진행"). A352가 덤프로
+  확정한 재진입 경로(UI 스레드 셸 API 동기 구간 → COM 메시지 펌프 → XAML 작업 재진입 → E_UNEXPECTED failfast)와 같은 형태가 제스처당 1회로
+  남아 있다: ① `ExplorerFileOps.CollectStorageItemsAsync`(:1085 — 드래그 `DragStarting` 데퍼럴 안에서 항목마다 `GetFolderFromPathAsync`/`GetFileFromPathAsync`)
+  ② `MediaTransport.UpdateDisplayAsync`(:319 — SMTC 제목·아트 `GetFileFromPathAsync` + `CopyFromFileAsync`) ③ `PdfPane.LoadDocumentAsync`(:147 —
+  `GetFileFromPathAsync` + `PdfDocument.LoadFromFileAsync`) ④ `ImageViewerView.DeleteCurrentAsync`(:1137 — `GetFileFromPathAsync` + `DeleteAsync`).
+  수리 = `StorageFile` 취득(과 가능한 후속 호출)을 각 뷰의 워커(`Worker.Run` — 영상 `EnsurePlaylist`·이미지 `ReadImageFile` 관용구)로 옮기고 UI
+  스레드에는 결과 반영만. ①은 드래그 데퍼럴 안이라 워커 왕복 뒤 `args.Data`에 싣는 순서 유지. ②는 `RandomAccessStreamReference`가 UI 객체가
+  아니라 워커에서 만들어 넘겨도 되는지 확인(안 되면 `CopyFromFileAsync`만 UI에 남기고 파일 취득만 워커). ③ `PdfDocument`는 agile — 워커 로드 가능
+  (`LoadFromFileAsync` 동기 대기 = ExplorerPane `FetchDetailInfo` Pdf 갈래 선례). ④ 삭제는 워커에서 `DeleteAsync` 동기 대기. 전부 `ShellFetch.WaitOrThrow`
+  타임아웃 적용. 규모 소~중.
+
 - ※ A353(**쓰기 중인 파일(로그 등)을 문서 모듈이 못 연다 → `FileShare.ReadWrite`**, v0.347.0) 완료 — 결번. Core `KOTU.Core/IO/SharedRead.Open`
   (`FileMode.Open · FileAccess.Read · FileShare.ReadWrite`) 신설 → 문서 본문 `ReadTextSmart` · `DocumentQuickInfo` 2곳 · 탐색기 텍스트 프리뷰 ·
   이미지 뷰어 `ReadImageFile`(`ReadAllBytes` → `ReadExactly`) · 자막 `SubtitleCharset` 기본 읽기까지 통일. 유지 = 저장 검증(우리가 쓴 파일)·
@@ -2875,6 +2886,7 @@
 | ~~A352~~ | All Readable 대형 폴더 강제 종료(0xC000027B · E_UNEXPECTED) | 소+원인별 | **완료 v0.345.0~v0.349.0 — 결번**(원인 = UI 스레드 StorageFile 동기 호출 → COM 펌프 → XAML 재진입 · 덤프로 확정 · 실기기 무크래시) |
 | ~~A353~~ | 쓰기 중인 파일(로그)을 문서 모듈이 못 연다 — 읽기를 FileShare.ReadWrite로 | 소 | **완료 v0.347.0 — 결번**(Core SharedRead · 5 읽기 경로 통일) |
 | A354 | 전원 차단 복원 후 영상 ❚❚ 버튼 무반응(libvlc 이벤트 축 사망 추정) — 자가 복구 + 일시정지 복원 + libvlc 전이 트레이스 | 소~중 | 미반영 · Fable(위임 시 Opus) · 부록 B 2문 · 2026-09-06 등재 |
+| A355 | UI 스레드 StorageFile 호출 잔여 4곳을 워커로(드래그·SMTC 표시·PDF 열기·이미지 삭제 — A352 재진입 경로 봉인) | 소~중 | 미반영 · Opus · 2026-09-07 등재(낙수 44 승격) |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
@@ -3130,7 +3142,7 @@
     좌 리스트가 다른 정렬·필터일 때 "다음 곡"이 리스트의 다음 항목이 아니다. 수리 = 두 뷰가 `IBrowseOrderConsumer`를 구현하고
     `FolderPlaylist`에 `FromOrdered`를 더하는 것(A346 이식) + 자동 이어짐 시 `ICurrentPathSource` 통지(A348 이식 — 좌 리스트
     하이라이트 즉시 추종). 규모 소~중. 사용자가 필요하다고 볼 때 등재.
-44. **UI 스레드 `StorageFile` 호출 잔여 4곳을 워커로**(2026-09-07 A352 배치 4 전수 표): 드래그 `ExplorerFileOps.CollectStorageItemsAsync`(데퍼럴 안) ·
+44. → **A355로 승격(2026-09-07)**. **UI 스레드 `StorageFile` 호출 잔여 4곳을 워커로**(2026-09-07 A352 배치 4 전수 표): 드래그 `ExplorerFileOps.CollectStorageItemsAsync`(데퍼럴 안) ·
     `MediaTransport.UpdateDisplayAsync`(SMTC 제목·아트) · `PdfPane.LoadDocumentAsync` · `ImageViewerView.DeleteCurrentAsync`. 제스처당 1회라 재현
     확률은 낮지만 같은 재진입 경로다(XAML 작업이 큐에 있을 때 COM 펌프). 규모 소~중(각각 워커 `Run` 이관 + UI 반영 분리).
 
