@@ -1085,7 +1085,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         cardBody.Children.Add(new TextBlock
         {
             Text = "Writes every navigation, preview and exception to "
-                + DiagTrace.LogPath + ". For crash troubleshooting only.",
+                + DiagTrace.LogPath + ". Also enables XAML layout-cycle tracing."
+                + " For crash troubleshooting only.",
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,

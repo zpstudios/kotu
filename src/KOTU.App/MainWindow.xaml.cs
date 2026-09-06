@@ -3174,7 +3174,24 @@ public sealed partial class MainWindow : Window
             dq.TryEnqueue(ApplyTraceDiagnostics);
             return;
         }
-        DiagTrace.SetEnabled(_settings.Get(TraceDiagnostics.SettingKey, false));
+        var on = _settings.Get(TraceDiagnostics.SettingKey, false);
+        DiagTrace.SetEnabled(on);
+        try
+        {
+            // A352: 레이아웃 사이클이면 stowed exception 메시지에 추적이 실린다(WinAppSDK 1.5+ DebugSettings).
+            // 켜진 동안만 — 비용이 있다. 중단점은 항상 끈다(릴리스 빌드에 디버거가 붙을 일이 없다).
+            var dbg = Microsoft.UI.Xaml.Application.Current.DebugSettings;
+            dbg.LayoutCycleTracingLevel = on
+                ? Microsoft.UI.Xaml.LayoutCycleTracingLevel.High
+                : Microsoft.UI.Xaml.LayoutCycleTracingLevel.None;
+            dbg.LayoutCycleDebugBreakLevel = Microsoft.UI.Xaml.LayoutCycleDebugBreakLevel.None;
+        }
+        catch
+        {
+            // 진단이 앱을 깨면 안 된다. 이 두 속성은 IDebugSettings3 QI라 런타임에 따라
+            // InvalidCastException으로 튈 수 있다(microsoft-ui-xaml #9827) — 트레이스 파일 자체는
+            // 위에서 이미 켜졌으니 추적만 못 붙을 뿐이다.
+        }
     }
 
     /// <summary>계측 값 재조립 통지 — 항해가 돈 UI 스레드에서 오므로 자기 창의 큐로 넘긴다.</summary>
