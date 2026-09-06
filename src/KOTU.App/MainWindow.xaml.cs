@@ -300,7 +300,9 @@ public sealed partial class MainWindow : Window
         ListOverlay.FillCompleted += entries => InfoOverlay.PrefetchSelectionInfo(entries);
         // A93 드랍 규칙: 우측 인포 영역 드랍 = 그 파일 열기 — 콘텐츠가 없으면 OpenFile의
         // 라우터(A59)가 담당 모듈로 전환한 뒤 여는 기존 경로를 그대로 쓴다.
-        InfoOverlay.FileDropped += OpenFile;
+        // A354: OpenFile에 선택 매개변수(startPaused)가 붙으면서 메서드 그룹 대입 대신 람다로 —
+        // 델리게이트 대상은 종전과 같은 "경로 하나로 열기"다(선택 매개변수는 기본값 그대로).
+        InfoOverlay.FileDropped += path => OpenFile(path);
         // A119: 모듈 고유 패널(ISidePanelProvider — 정보 모듈) 호스트의 좌/우 방향 1회 조립.
         // 배경·힌트·상태 규칙은 파일 오버레이와 동일하게 호스트가 재현한다(SidePanelHost 참조).
         LeftPanelHost.Initialize(panelOnRight: false);
@@ -1421,8 +1423,15 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OpenFileRouted(string path) => OpenFile(path);
 
-    /// <summary>파일 라우팅의 종착점: 확장자로 모듈을 찾아 뷰를 띄운다.</summary>
-    public async void OpenFile(string path)
+    /// <summary>
+    /// 파일 라우팅의 종착점: 확장자로 모듈을 찾아 뷰를 띄운다.
+    /// A354: <paramref name="startPaused"/> = 재생 모듈이면 자동 재생하지 말고 이어보기 위치에서
+    /// 일시정지로 세우라는 요청(<see cref="OpenContext.StartPaused"/>). 지금 이 값을 true로 주는
+    /// 곳은 재시작 세션 복원(<c>WindowManager.RestoreWindow</c>) 하나뿐이고, 나머지 호출부는
+    /// 기본값 false라 자동 재생이 그대로다. 재사용 뷰 경로(<see cref="IFileOpenTarget"/>)에는
+    /// 전달하지 않는다 — 복원은 항상 빈 새 창이라 그 갈래로 들어오지 않는다.
+    /// </summary>
+    public async void OpenFile(string path, bool startPaused = false)
     {
         // A59: 지금 뷰가 "내가 안에서 연다"고 하는 모듈(All Readable)이면 모듈을 바꾸지 않는다 —
         // 창은 그대로 두고 센터·하단 바만 그 파일 형식의 자식 모듈로 갈린다.
@@ -1477,7 +1486,7 @@ public sealed partial class MainWindow : Window
             SetContentState(null, null);
             return;
         }
-        ShowModule(module, OpenContext.ForFile(path), FileTitle(path));
+        ShowModule(module, OpenContext.ForFile(path, startPaused), FileTitle(path));
     }
 
     /// <summary>탐색기 우클릭 동사(여기에 풀기/압축) 진입점. 동사는 압축 모듈이 처리한다.</summary>

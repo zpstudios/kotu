@@ -293,6 +293,24 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     private bool _muted; // A28: 음소거 상태 로컬 소유 — libvlc Mute 게터의 스테일 값 회피
     private bool _tornDown;
     private bool _pendingStartOverlay; // A12: 다음 Playing에서 시작 오버레이 표시(일시정지 해제와 구분)
+
+    /// <summary>
+    /// A354: 재시작 세션 복원으로 열린 파일인가(<see cref="OpenContext.StartPaused"/>).
+    /// 첫 <c>Playing</c>에서 1회 소모하며 그 자리에서 일시정지시킨다 — libvlc는 재생을 시작해야
+    /// 시킹·트랙 정보가 서므로 "아예 재생하지 않기"가 아니라 "시작 직후 멈추기"로 구현한다.
+    /// 그래서 첫 프레임(과 아주 짧은 소리)이 스칠 수 있다 — 수용(오케스트레이터 확정 ⓐ).
+    /// </summary>
+    private bool _startPaused;
+
+    // A354 자가 복구: ▶/❚❚를 눌렀는데 대응 이벤트(Playing/Paused)가 안 오면 플레이어를 다시 건다.
+    // 타이머는 뷰당 1개를 재사용하고(피드백 칩·시작 오버레이 관용구), 대응 이벤트가 오면 즉시 멈춘다.
+    private DispatcherTimer? _healTimer;
+    private bool _healWantPlaying; // 마지막 조작이 요구한 상태 — 틱에서 실제 IsPlaying과 대조한다
+    private long _healResumeMs;    // 조작 시점의 재생 위치 — 재기동 후 이 자리로 되돌린다
+
+    /// <summary>A354: 자가 복구 판정까지 기다리는 시간. 사람이 "안 먹네"라고 느끼기 직전 값이다.</summary>
+    private const int SelfHealDelayMs = 700;
+
     private DispatcherTimer? _startOverlayTimer;
     private DispatcherTimer? _feedbackTimer; // A13: 전체화면 조작 피드백 칩
     private ModuleWorker? _worker; // libvlc 생성·해제/자막 탐지·변환 전용(A42) — 뷰별 분리
@@ -369,6 +387,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         _settings = settings;
         _resumeStore = new PlaybackResumeStore(settings);
         _filePath = context.FilePath is { } p && File.Exists(p) ? p : null;
+        _startPaused = context.StartPaused; // A354: 재시작 세션 복원 = 첫 Playing에서 멈춰 세운다
 
         foreach (var s in Speeds)
             SpeedBox.Items.Add($"{s:0.##}×");
@@ -881,6 +900,8 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         }
 
         _filePath = path;
+        _startPaused = false; // A354: 복원 파일이 열리지 못한 채 다른 파일로 넘어가면 여기서 소멸시킨다
+                              // (복원 진입은 생성자뿐이라 이 경로가 그 깃발을 세우는 일은 없다)
 
         // A230 → A249: 빈 상태 → 재생 파일 확보 = Fit 조절기 활성. _filePath가 null이 아니게 되는
         // 지점은 생성자와 여기 둘뿐이고(닫기 경로 없음 — EOF/Ended도 파일은 그대로다) 두 곳 다
@@ -941,6 +962,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         _startOverlayTimer?.Stop(); // A12: 해체 후 틱 방지
         _feedbackTimer?.Stop();     // A13
+        _healTimer?.Stop();         // A354: 해체된 뷰가 플레이어를 되살리면 안 된다
 
         // A306: 정적 이벤트 구독 해제(안 하면 해체된 뷰가 산다)와 억제 해제. _tornDown이 이미
         // 서 있어 UpdateDisplayAwake는 무조건 "해제"로 판정한다 — 걸어 둔 적이 없으면 무동작이다.
@@ -1017,9 +1039,19 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         }
     }
 
-    private void OnPlayerPlaying(object? sender, EventArgs e) => Dispatch(() =>
+    private void OnPlayerPlaying(object? sender, EventArgs e)
+    {
+        // A354: libvlc 전이 트레이스 — 디스패치보다 앞에 찍는다(이벤트 축이 살아 있는지 자체가
+        // 관측 대상이라, UI 스레드까지 갔는지와 분리해서 봐야 한다). 뜨거운 경로가 아니다.
+        if (DiagTrace.Enabled) DiagTrace.Write("player", $"Playing {_filePath}");
+        Dispatch(OnPlayingDispatched);
+    }
+
+    private void OnPlayingDispatched()
     {
         PlayButton.Content = "❚❚";
+        // A354: 기대하던 재생 전이가 왔다 = 이벤트 축이 살아 있다 — 자가 복구 대기를 접는다.
+        if (_healWantPlaying) _healTimer?.Stop();
         PlaybackStateChanged?.Invoke(); // A186: 재생 시작 — 셸이 자동 숨김 카운트를 시작한다
         UpdateDisplayAwake();           // A306: 재생 중 = 화면 꺼짐 억제(설정이 켜져 있을 때)
 
@@ -1037,6 +1069,16 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
             p.Time = _pendingResumeMs;
             _pendingResumeMs = -1;
         }
+
+        // A354: 복원으로 연 파일은 여기서 멈춰 세운다 — 반드시 위치 대입 **뒤**다(먼저 멈추면
+        // 시킹이 일시정지 상태로 밀려 이어보기 위치가 어긋난다). 1회 소모라 이후 일시정지 해제·
+        // 다음 파일은 정상 재생이다. 버튼 표기는 곧 오는 Paused 이벤트가 ▶로 바꾼다(기존 경로).
+        if (_startPaused && _player is { CanPause: true } paused)
+        {
+            _startPaused = false;
+            paused.Pause();
+        }
+
         if (_pendingAutoSubtitle)
         {
             _pendingAutoSubtitle = false;
@@ -1052,18 +1094,24 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
         // 보기 모드도 미디어·플레이어 교체 후 다시 적용한다 (v0.41.0 — 해상도가 달라질 수 있다)
         ApplyFitMode();
-    });
+    }
 
-    private void OnPlayerPaused(object? sender, EventArgs e) =>
+    private void OnPlayerPaused(object? sender, EventArgs e)
+    {
+        if (DiagTrace.Enabled) DiagTrace.Write("player", $"Paused {_filePath}"); // A354
         Dispatch(() =>
         {
             PlayButton.Content = "▶";
+            // A354: 기대하던 일시정지 전이가 왔다 — 자가 복구 대기를 접는다.
+            if (!_healWantPlaying) _healTimer?.Stop();
             PlaybackStateChanged?.Invoke(); // A186: 일시정지 = 바 상시 표시
             UpdateDisplayAwake();           // A306: 일시정지 = 억제 해제
         });
+    }
 
     private void OnPlayerEndReached(object? sender, EventArgs e)
     {
+        if (DiagTrace.Enabled) DiagTrace.Write("player", $"EndReached {_filePath}"); // A354
         // 끝까지 봤으면 이어보기 기록을 지운다(97% 정책). (이 콜백 안에서 Stop()을 부르면 교착 — 금지)
         // A11: 이 삭제는 루프 전이와 무관하게 유지한다 — 다 본 파일의 기록 청소는 별개 사실이고,
         // 바로 이 삭제가 목록 진행·리핏 후 이 파일을 다시 열 때 0초 시작을 보장한다(설계 §3.3).
@@ -1233,6 +1281,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     private void OnPlayerError(object? sender, EventArgs e)
     {
+        if (DiagTrace.Enabled) DiagTrace.Write("player", $"EncounteredError {_filePath}"); // A354
         ShowMessage($"Playback failed: {Path.GetFileName(_filePath ?? string.Empty)}");
         Dispatch(() =>
         {
@@ -1568,13 +1617,65 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (p.CanPause && p.IsPlaying)
         {
             p.Pause();
+            ArmSelfHeal(p, wantPlaying: false); // A354
             ShowFeedback("❚❚"); // A13: 멎었음을 표시
         }
         else
         {
             p.Play();
+            ArmSelfHeal(p, wantPlaying: true); // A354
             ShowFeedback("▶"); // A13: 재생 재개
         }
+    }
+
+    /// <summary>
+    /// A354: ▶/❚❚ 조작 뒤 대응 이벤트를 기다리는 감시를 건다. <see cref="SelfHealDelayMs"/> 안에
+    /// Playing/Paused가 오면(핸들러가 Stop) 무동작이고, 안 오면 <see cref="SelfHealTick"/>이
+    /// 플레이어를 다시 건다. 실제 재현 조건(전원 차단 후 부팅 직후 자동 재생)은 미확인이라
+    /// 원인별 대응 대신 "먹통이면 되살린다"는 일반 자가 복구로 둔다(오케스트레이터 확정 ⓑ).
+    /// </summary>
+    private void ArmSelfHeal(MediaPlayer p, bool wantPlaying)
+    {
+        _healWantPlaying = wantPlaying;
+        try { _healResumeMs = p.Time; }
+        catch { _healResumeMs = 0; } // 죽은 플레이어의 게터까지 던지면 0초부터 되살린다
+
+        var timer = _healTimer;
+        if (timer is null)
+        {
+            timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(SelfHealDelayMs) };
+            timer.Tick += (_, _) => SelfHealTick();
+            _healTimer = timer;
+        }
+        timer.Stop(); // 연타 시 대기 시간 리셋(A13 피드백 칩과 같은 관용구)
+        timer.Start();
+    }
+
+    /// <summary>
+    /// A354: 대기 시간이 지나도 상태가 요청과 다르면 = 이벤트 축이 죽었다고 보고 미디어를 다시 건다.
+    /// 위치 복원은 <see cref="PlayCurrent"/> **뒤에** _pendingResumeMs를 덮어써 이어보기와 같은
+    /// 자리(첫 Playing)에서 1회 적용하게 한다 — PlayCurrent가 이 필드를 이어보기 값으로
+    /// 덮어쓰므로 순서를 뒤집으면 안 된다.
+    /// autoAdvance는 false다: 이 복구를 부른 것은 사용자의 ▶/❚❚ 조작이고, 저장소 규칙상
+    /// 수동 개입은 목록 순환 카운터를 재출발시킨다(PlayCurrent 요약 주석).
+    /// 복구는 "재생"으로 착지한다 — 일시정지 요청이었더라도 축을 되살리는 쪽이 먼저다
+    /// (되살아난 뒤에는 ❚❚가 정상 동작한다).
+    /// </summary>
+    private void SelfHealTick()
+    {
+        _healTimer?.Stop();
+        if (_tornDown || _player is not { } p || _filePath is null) return;
+
+        bool playing;
+        try { playing = p.IsPlaying; }
+        catch { playing = !_healWantPlaying; } // 게터까지 던지면 먹통으로 간주하고 되살린다
+        if (playing == _healWantPlaying) return; // 이벤트가 늦었을 뿐 — 상태는 맞다
+
+        if (DiagTrace.Enabled)
+            DiagTrace.Write("player", $"self-heal {_filePath} want={_healWantPlaying} at={_healResumeMs}");
+
+        PlayCurrent();
+        if (_healResumeMs > 0) _pendingResumeMs = _healResumeMs;
     }
 
     private void SeekBy(long deltaMs)

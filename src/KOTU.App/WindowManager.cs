@@ -254,7 +254,11 @@ public sealed class WindowManager
         }
         if (file is not null)
         {
-            window.OpenFile(file);
+            // A354: 복원으로 여는 파일은 자동 재생하지 않는다 — 재생 모듈이면 이어보기 위치에서
+            // 일시정지로 선다(부팅 직후 장치 준비 전 자동 재생으로 libvlc 이벤트 축이 죽어
+            // ▶/❚❚가 먹통이 되던 현상 회피 + 창이 여럿 되살아날 때 소리 폭발 방지).
+            // 재생 모듈이 아닌 뷰는 이 값을 읽지 않아 무해하다.
+            window.OpenFile(file, startPaused: true);
         }
         else
         {
