@@ -2160,7 +2160,16 @@
   - ✅ **배치 2 완료(v0.346.0)** — `StartImagePreview` 삭제 · 로컬 이미지 원본도 셸 썸네일 갈래(`FillShellThumbnailAsync` — 워커 `FetchTilePreview`
     → 바이트 → `SetSourceAsync` · 요청 폭 768 동일)로 → 미리보기 **3갈래**(폴더 글리프 / placeholder 캐시 썸네일 / 그 외 전부 셸 썸네일).
     수용 = 셸이 구운 썸네일이라 화질 미세 차이·첫 표시가 워커 게이트(3건)만큼 느릴 수 있음. **실기기 판정 = `그림` 폴더 재진입 무크래시.**
-    잔여 = 배치 3(원인 규명은 하지 않는다 — 경로 폐기로 종결 · 실기기 확인 후 결번) + A353.
+    ✅ **실기기(2026-09-06) = 무크래시.** 단 **새 증상**: PNG 4장 원위치 후 첫 진입에서 그 4장만 타일이 안 뜨고(확장자 타일), 다른 폴더에
+    갔다 오면 뜬다(사용자: *"이미 썸네일 내용 불러오고 보여줄 준비까지는 다 되었는데 표시만 못하고 있었다는 거잖아?"* — 정확한 추정).
+  - **배치 3 = 첫 진입 미표시(코드 정독 후보 둘)** ⓐ `FillShellThumbnailAsync` 성공 경로 :1411 — 완료 시점 `LivePreviewHostOf(vm)`가 null이면
+    비트맵을 버리고 return(`PreviewInFlight=false` · 재요청은 재실체화 때만) → 타일이 화면에 그대로 있으면 영영 확장자 타일 = "불러왔는데 표시
+    못 함". 첫 진입은 `UpdateLayout`·`ApplyTileSize`·셀 재배치가 겹쳐 `ContainerFromItem`이 잠시 null일 수 있다. 트레이스 표지 = `no live host`.
+    ⓑ 첫 요청에서 셸이 `ThumbnailType.Icon`을 돌려줌(OneDrive 폴더의 로컬 파일 — 아직 추출 안 된 항목에 아이콘 선반환) → A270 ③ 규칙으로
+    `PreviewKnownEmpty=true` → 이 뷰에서는 재요청 없음 → 재진입(새 뷰모델) 때는 셸 캐시가 생겨 표시. 트레이스 표지 = `shell done` 없이
+    `bytes null`류/`PreviewKnownEmpty`. **트레이스로 갈린다 — 사용자 로그 요청.** 수리 = ⓐ면 완료 시 host가 없을 때 비트맵을 뷰모델에 1회 보관
+    (`PendingBitmap`)하고 다음 위상 0이 즉시 얹기 + 디스패처 지연 재조회 1회 · ⓑ면 Icon형 첫 결과는 KnownEmpty로 굳히지 않고 1회 재시도
+    (`PreviewIconRetried` 표지). 둘 다 소.
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
