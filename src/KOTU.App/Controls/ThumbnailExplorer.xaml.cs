@@ -10,6 +10,7 @@ using Windows.Storage;
 using Windows.Storage.FileProperties;
 using Windows.System;
 using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
+using KOTU.Core.IO; // A353: 쓰기 잠금을 가진 파일도 읽는 공유 열기(SharedRead)
 using KOTU.Core.Routing;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -1234,7 +1235,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private static string? ReadTextPreview(string path)
     {
-        using var stream = File.OpenRead(path);
+        using var stream = SharedRead.Open(path); // A353: 쓰는 중인 파일도 프리뷰한다
         if (stream.Length == 0) return null; // 빈 파일 — 보여 줄 내용이 없다
         var truncated = stream.Length > TextPreviewMaxBytes;
         var bytes = new byte[Math.Min(stream.Length, TextPreviewMaxBytes)];

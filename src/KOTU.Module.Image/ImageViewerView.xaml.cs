@@ -9,6 +9,7 @@ using Windows.Storage;
 using Windows.System;
 using KOTU.Core.Contracts;
 using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
+using KOTU.Core.IO; // A353: 쓰기 잠금을 가진 파일도 읽는 공유 열기(SharedRead)
 using KOTU.Core.Routing;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -694,7 +695,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private static (byte[] Data, uint Width, uint Height, int ExifRotation,
         string Size, string Kind, string Exif) ReadImageFile(string path)
     {
-        var data = File.ReadAllBytes(path);
+        // A353: File.ReadAllBytes는 FileShare.Read라 다른 프로세스가 쓰기로 잡고 있으면
+        // 열기 자체가 실패한다 — 공유 읽기로 열고 길이만큼 한 번에 채운다(DocumentView와 같은 관용구).
+        byte[] data;
+        using (var file = SharedRead.Open(path))
+        {
+            data = new byte[file.Length];
+            file.ReadExactly(data);
+        }
+
         uint width = 0, height = 0;
         var exifRotation = 0;
         var size = FormatSize(data.LongLength);

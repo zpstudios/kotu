@@ -1,4 +1,5 @@
 using System.Text;
+using KOTU.Core.IO; // A353: 쓰기 잠금을 가진 파일도 읽는 공유 열기(SharedRead)
 
 namespace KOTU.Module.Video;
 
@@ -55,19 +56,31 @@ public static class SubtitleCharset
     /// 이미 UTF-8이면 원본 경로 그대로, 아니면 UTF-8 사본을 만들어 그 경로를 반환.
     /// </summary>
     /// <param name="path">원본 자막 경로.</param>
-    /// <param name="readBytes">파일 읽기 (테스트 주입용, 기본: File.ReadAllBytes).</param>
+    /// <param name="readBytes">파일 읽기 (테스트 주입용, 기본: 공유 읽기 ReadAllShared).</param>
     /// <param name="writeUtf8Copy">(원본 경로, 디코드된 텍스트) → 사본 경로 (테스트 주입용, 기본: 임시 폴더).</param>
     public static string EnsureUtf8File(
         string path,
         Func<string, byte[]>? readBytes = null,
         Func<string, string, string>? writeUtf8Copy = null)
     {
-        readBytes ??= File.ReadAllBytes;
+        readBytes ??= ReadAllShared;
         writeUtf8Copy ??= WriteTempUtf8Copy;
 
         var bytes = readBytes(path);
         if (!NeedsConversion(bytes)) return path;
         return writeUtf8Copy(path, DecodeAuto(bytes));
+    }
+
+    /// <summary>
+    /// 자막 파일 전체를 공유 읽기로 읽는다(A353) — File.ReadAllBytes는 FileShare.Read라
+    /// 다른 프로세스가 쓰기로 잡고 있는 자막을 열지 못한다(다운로드 중인 자막 등).
+    /// </summary>
+    private static byte[] ReadAllShared(string path)
+    {
+        using var stream = SharedRead.Open(path);
+        var bytes = new byte[stream.Length];
+        stream.ReadExactly(bytes);
+        return bytes;
     }
 
     private static bool HasUtf8Bom(byte[] bytes) =>

@@ -8,6 +8,7 @@ using Windows.Storage.Pickers;
 using Windows.System;
 using KOTU.Core.Contracts;
 using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
+using KOTU.Core.IO; // A353: 쓰기 잠금을 가진 파일도 읽는 공유 열기(SharedRead)
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -2293,7 +2294,10 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private static LoadedText ReadTextSmart(string path)
     {
-        using var stream = File.OpenRead(path);
+        // A353: File.OpenRead는 FileShare.Read라 쓰기 잠금을 가진 프로세스가 있으면 열기가 실패한다
+        // (로그처럼 쓰는 중인 파일). 단, 이렇게 연 내용은 그 순간의 스냅샷이라
+        // 편집해 저장하면 상대의 쓰기와 부딪힐 수 있다(저장 실패 안내는 기존 경로 그대로).
+        using var stream = SharedRead.Open(path);
         var truncated = stream.Length > MaxBytes;
         var bytes = new byte[Math.Min(stream.Length, MaxBytes)];
         stream.ReadExactly(bytes);

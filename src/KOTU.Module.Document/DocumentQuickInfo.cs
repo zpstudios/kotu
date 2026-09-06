@@ -2,6 +2,7 @@ using System.Text;
 using Windows.Data.Pdf;
 using Windows.Storage;
 using KOTU.Core.Contracts;
+using KOTU.Core.IO; // A353: 쓰기 잠금을 가진 파일도 읽는 공유 열기(SharedRead)
 using KOTU.Core.Routing;
 
 namespace KOTU.Module.Document;
@@ -268,7 +269,7 @@ public static class DocumentQuickInfo
     {
         try
         {
-            using var stream = File.OpenRead(path);
+            using var stream = SharedRead.Open(path); // A353: 쓰는 중인 파일도 열린다
             // 빈 파일은 판정할 바이트가 없다 — 인코딩·줄바꿈은 빈칸이지만 "0자 1줄"은 사실이다
             // (에디터가 여는 모습과 같다 — CountLines("") = 1).
             if (stream.Length == 0) return new TextStats(null, null, 1, 0);
@@ -307,7 +308,7 @@ public static class DocumentQuickInfo
     {
         try
         {
-            using var stream = File.OpenRead(path);
+            using var stream = SharedRead.Open(path); // A353: 쓰는 중인 파일도 열린다
             if (stream.Length == 0) return null; // 빈 파일 — 판정할 바이트가 없다
             var truncated = stream.Length > DetectBytes;
             var bytes = new byte[(int)Math.Min(stream.Length, DetectBytes)];
