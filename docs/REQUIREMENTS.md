@@ -2254,6 +2254,21 @@
     **v0.348.1** = Trace log 켜짐 시 `DebugSettings.LayoutCycleTracingLevel=High`(레이아웃 사이클이면 stowed 메시지에 추적 동봉 — 새 덤프에서 읽는다).
     수리 후보(증거 뒤) = ⓐ `ItemsSource` 통째 교체 → 증분 갱신(Remove/Insert) ⓑ `CacheLength` 축소 ⓒ 툴팁 x:Bind 제거(항목마다 팝업) ⓓ 비동기 완료
     콜백의 컨테이너 접근을 레이아웃 밖으로 ⓔ WASDK 2.0 상향.
+  - ✅ **힙 포함 덤프 회수(2026-09-07 · `KOTU.exe.18128.dmp` 300MB · `CustomDumpFlags 0x21321` + `DumpType 0`) — 원인 확정.** stowed 46프레임
+    (UI 스레드 0xa9d8) 바닥→위: **JIT 관리 코드 → `windows.storage.dll`(StorageFile API) → combase 교차 아파트 COM 호출 → rpcrt4 → combase 대기 →
+    user32 메시지 펌프 → CoreMessagingXP 디스패치 → Microsoft.UI.Xaml.dll 내부 작업 → RoFailFast**. = **UI 스레드에서 `StorageFile.*`를 동기로 부르면
+    COM이 대기 중 메시지 루프를 펌프하고, 그 안에서 XAML의 큐된 작업이 재진입 실행되어 XAML이 자기 상태 불일치로 프로세스를 죽인다**(WinUI 3 = STA ·
+    조사 문서의 PowerToys #47145 경로 그대로). 저장소에서 UI 스레드가 `StorageFile`을 부르던 곳 = **`ThumbnailExplorer.FillCachedThumbnailAsync`
+    :1058~1059 하나**(`GetFileFromPathAsync`·`GetThumbnailAsync(ReturnOnlyIfCached)` — `await` 앞 호출이 동기 COM 왕복) · 호출부 = XAML `RegisterUpdateCallback`
+    위상 1 콜백. 트레이스의 마지막 줄이 늘 `fill cached`였던 이유이고, `그림` 폴더는 placeholder 이미지가 대부분이라 이 경로가 수십 번 돌아 확률이
+    높았다. 배치 2·3(직접 디코드 폐기·CCC 동기 대입 제거·타임아웃)은 원인이 아니었고(무해 존치), F11 실험은 확률 재현의 우연이었다.
+  - ✅ **배치 4 완료(v0.349.0)** — `FillCachedThumbnailAsync`·`IsImageFile` 삭제 → placeholder 이미지도 워커 `FetchTilePreview(cachedOnly)`(A175
+    하이드레이션 금지·A270 ③ 유지 · 대기 배지 붙음) → 미리보기 **2갈래**(폴더 글리프 / 그 외 전부 워커 셸 썸네일) · `OnTilePreviewPhase`·좌 리스트
+    CCC 위상 0의 발사를 `DispatcherQueue.TryEnqueue`로 XAML 콜백 밖으로(seq·`ReferenceEquals` 재대조 · 배지는 적용 시점 `LivePreviewHostOf`) ·
+    `ShellFetch.WaitOrThrowAsync` 사용처 0(존치·경고). **불가침 규칙(클래스 주석·HANDOVER §3.4)** = ① UI 스레드에서 `StorageFile`/셸 API를 부르지
+    않는다(워커 `Run`) ② XAML 콜백(CCC·위상 콜백·SizeChanged·Loaded) 안에서 WinRT/COM 호출·비동기 발사를 하지 않는다. 보고된 잔여 UI 스레드
+    StorageFile 호출(제스처당 1회 — 드래그 `CollectStorageItemsAsync`·SMTC `UpdateDisplayAsync`·PDF 열기·이미지 삭제) = 낙수 44.
+    **실기기 판정 = `그림`에서 폴더 생성/복사 5회 무크래시(Trace log 꺼진 채).**
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
@@ -2857,7 +2872,7 @@
 | A349 | 영상·오디오 이전/다음 파일 — Ctrl+←/→ · PageUp/Down · 하단 바 ⏮⏭ · 미디어 키(SMTC) · 순서 = 좌 리스트(낙수 43 흡수) | 중+소+중(3배치) | **배치 1~3 완료 v0.341.0~v0.342.0**(키·⏮⏭·순서 / 조사 / SMTC) · 실기기 회수 대기 · Fable(위임 시 Opus) |
 | ~~A350~~ | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘 | 소 | **완료 v0.343.2 — 결번**(세션 창 = 트레이 숨김 창 · v0.343.0/.1 되돌림 · 실기기 확인) |
 | A351 | 좌 리스트 열린 콘텐츠 표시를 선택 표시와 분리(액센트 바 + 굵은 이름 · 클릭에도 포커스 테두리) | 소~중 | **완료 v0.344.0 → CI 빨강(CS0234) → v0.344.1** · 실기기 대기(선택 인디케이터 겹침 여부) |
-| A352 | All Readable 대형 폴더 강제 종료(0xC000027B stowed · Microsoft.UI.Xaml.dll) — 배치 1 트레이스 로그 → 배치 2 원인 수리 | 소 + 원인별 | **배치 1~3 완료 v0.345.0~v0.348.0**(트레이스 → 직접 디코드 폐기(무관) → **원인 확정: CCC 안 동기 뷰모델 대입 = 레이아웃 사이클** + fetch 타임아웃) · 실기기 판정 대기 |
+| A352 | All Readable 대형 폴더 강제 종료(0xC000027B stowed · Microsoft.UI.Xaml.dll) — 배치 1 트레이스 로그 → 배치 2 원인 수리 | 소 + 원인별 | **배치 1~4 완료 v0.345.0~v0.349.0** · **원인 확정(덤프) = UI 스레드 StorageFile 동기 호출 → COM 펌프 → XAML 재진입 failfast** · 실기기 판정 대기(5회 무크래시) |
 | ~~A353~~ | 쓰기 중인 파일(로그)을 문서 모듈이 못 연다 — 읽기를 FileShare.ReadWrite로 | 소 | **완료 v0.347.0 — 결번**(Core SharedRead · 5 읽기 경로 통일) |
 | A354 | 전원 차단 복원 후 영상 ❚❚ 버튼 무반응(libvlc 이벤트 축 사망 추정) — 자가 복구 + 일시정지 복원 + libvlc 전이 트레이스 | 소~중 | 미반영 · Fable(위임 시 Opus) · 부록 B 2문 · 2026-09-06 등재 |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
@@ -3115,6 +3130,10 @@
     좌 리스트가 다른 정렬·필터일 때 "다음 곡"이 리스트의 다음 항목이 아니다. 수리 = 두 뷰가 `IBrowseOrderConsumer`를 구현하고
     `FolderPlaylist`에 `FromOrdered`를 더하는 것(A346 이식) + 자동 이어짐 시 `ICurrentPathSource` 통지(A348 이식 — 좌 리스트
     하이라이트 즉시 추종). 규모 소~중. 사용자가 필요하다고 볼 때 등재.
+44. **UI 스레드 `StorageFile` 호출 잔여 4곳을 워커로**(2026-09-07 A352 배치 4 전수 표): 드래그 `ExplorerFileOps.CollectStorageItemsAsync`(데퍼럴 안) ·
+    `MediaTransport.UpdateDisplayAsync`(SMTC 제목·아트) · `PdfPane.LoadDocumentAsync` · `ImageViewerView.DeleteCurrentAsync`. 제스처당 1회라 재현
+    확률은 낮지만 같은 재진입 경로다(XAML 작업이 큐에 있을 때 COM 펌프). 규모 소~중(각각 워커 `Run` 이관 + UI 반영 분리).
+
 
 
 ## 부록 B. 확정된 결정 기록 (남은 작업 관련만)

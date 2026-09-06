@@ -6,6 +6,15 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-09-06~07 (53차) — A352 배치 4 원인 확정(v0.349.0 · Opus 위임) — 덤프가 답했다
+
+v0.348.0에서 재발(fff) → WER 1001 서명(E_UNEXPECTED · StackHash) → ReportArchive zip(덤프 없음) → LocalDumps 절차(0x1161 → 힙 미포함 실패 →
+0x21321 + DumpType 0 안내) → 사용자 덤프 9개 + 300MB 덤프 회수 → 샌드박스 `minidump` 파싱: stowed 46프레임 = **UI 스레드 StorageFile →
+COM 펌프 → XAML 재진입**. 원인 지점 = `FillCachedThumbnailAsync`(placeholder 캐시 썸네일 — 위상 1 콜백 안 동기 COM). 그 사이 사용자 관찰
+"Trace log 켜면 안 죽음"(v0.348.1 LayoutCycleTracing이 타이밍을 바꿈 — 확률 재현의 편향)도 재진입 경합과 정합.
+**교훈(문서화)**: 이 항목에서 헛수리 3번(배치 2·3·v0.348.1) — 트레이스의 "마지막 줄"·갈래 실험 1회·WER 서명만으로 원인을 단정했다. UI 정지형
+사망은 **힙 포함 덤프의 stowed 스택**이 유일한 증거였다. 다음부터 0xC000027B는 첫 단계에서 `DumpType 0 + CustomDumpFlags 0x21321`을 안내한다.
+
 ### 2026-09-06 (52차) — A352 배치 3(v0.348.0 · Opus 위임 2회) — 원인 확정
 
 2차 크래시 로그(재스캔 1초 뒤 UI 정지 사망 · 관리 예외 없음) → 레이아웃 사이클 가설 · 갈래 실험 제안 → 3차 로그에서 별개 사실(갓 복사된
