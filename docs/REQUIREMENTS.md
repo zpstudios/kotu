@@ -2197,6 +2197,16 @@
     같은 타임아웃 + 좌 그리드 `LoadThumbnailsAsync`·`FetchDetailInfo`(Image 해상도 등 속성 핸들러)도 워커 동기 대기라 같은 보호.
     **크래시와의 관계(추정)** = 두 크래시 모두 OneDrive가 그 폴더에서 활동하던 순간(첫 진입 · aaa 생성/복사)이었다. 워커 행은 UI를 죽이지
     않으므로 크래시 자체는 별개 원인이 남는다(레이아웃 사이클 가설 유지) — F11 실험 + 이벤트 1001 서명 대기.
+  - ✅ **갈래 실험 회수(2026-09-06)** — 좌 패널 **닫은 채**(F11) `그림`에 `bbb` 생성 → 무크래시 · 좌 패널 **연 채** `ccc` 생성 → 크래시.
+    **원인 확정 = 좌 리스트 `ExplorerPane` CCC 위상 0 → `RequestDetail` → `ApplyDetail`이 CCC 안에서 동기로 통지 속성(`DetailText`·`TooltipText`)을
+    대입 → x:Bind OneWay가 측정 중 컨테이너를 재측정 → 재스캔(전 항목 캐시 히트 65건)/첫 진입(초판 64건)에서 한 레이아웃 패스에 수십 건 →
+    레이아웃 사이클 failfast**(항목 2·25개 폴더는 임계 미달). A345 배치 2가 만든 결함.
+  - ✅ **배치 3 완료(v0.348.0)** — ① 초판 `ApplyDetail(vm, Empty)`를 `RefreshView`(ItemsSource 대입 전 — 통지 수신자 0)로 이관 · 캐시 히트 적용은
+    `DispatcherQueue.TryEnqueue`(레이아웃 밖 · seq 대조) · fetch 완료 적용은 await 뒤(종전) · **불가침 규칙 = CCC 스택 안에서 뷰모델 통지 속성 대입
+    금지**(EP·EntryVm 주석). 중앙 타일 CCC는 통지 속성 대입 0건이라 무접촉. ② `ShellFetch`(5초 · `Task.WaitAsync` 선례 0 → CI 후보 · 복구
+    `WhenAny`) — `FetchTilePreview`·`FetchAudioInfo`·`FillCachedThumbnailAsync`·`FetchDetailInfo`(PDF/재생시간/해상도)·`FetchThumbnail` 전수 ·
+    첫 타임아웃 `PreviewTimedOut` 1회 재시도, 두 번째 KnownEmpty · 트레이스 `shell timeout`/`detail timeout`. 범위 밖(후속 후보) = 모듈 QuickInfo·
+    `ExplorerFileOps:1095`의 같은 동기 대기. **실기기 판정 = 좌 패널 연 채 `그림`에서 폴더 생성/복사 → 무크래시.**
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
@@ -2800,7 +2810,7 @@
 | A349 | 영상·오디오 이전/다음 파일 — Ctrl+←/→ · PageUp/Down · 하단 바 ⏮⏭ · 미디어 키(SMTC) · 순서 = 좌 리스트(낙수 43 흡수) | 중+소+중(3배치) | **배치 1~3 완료 v0.341.0~v0.342.0**(키·⏮⏭·순서 / 조사 / SMTC) · 실기기 회수 대기 · Fable(위임 시 Opus) |
 | ~~A350~~ | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘 | 소 | **완료 v0.343.2 — 결번**(세션 창 = 트레이 숨김 창 · v0.343.0/.1 되돌림 · 실기기 확인) |
 | A351 | 좌 리스트 열린 콘텐츠 표시를 선택 표시와 분리(액센트 바 + 굵은 이름 · 클릭에도 포커스 테두리) | 소~중 | **완료 v0.344.0 → CI 빨강(CS0234) → v0.344.1** · 실기기 대기(선택 인디케이터 겹침 여부) |
-| A352 | All Readable 대형 폴더 강제 종료(0xC000027B stowed · Microsoft.UI.Xaml.dll) — 배치 1 트레이스 로그 → 배치 2 원인 수리 | 소 + 원인별 | **배치 1(트레이스)·배치 2(직접 디코드 폐기) 완료 v0.345.0~v0.346.0** · 실기기 판정 대기 |
+| A352 | All Readable 대형 폴더 강제 종료(0xC000027B stowed · Microsoft.UI.Xaml.dll) — 배치 1 트레이스 로그 → 배치 2 원인 수리 | 소 + 원인별 | **배치 1~3 완료 v0.345.0~v0.348.0**(트레이스 → 직접 디코드 폐기(무관) → **원인 확정: CCC 안 동기 뷰모델 대입 = 레이아웃 사이클** + fetch 타임아웃) · 실기기 판정 대기 |
 | ~~A353~~ | 쓰기 중인 파일(로그)을 문서 모듈이 못 연다 — 읽기를 FileShare.ReadWrite로 | 소 | **완료 v0.347.0 — 결번**(Core SharedRead · 5 읽기 경로 통일) |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
