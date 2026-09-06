@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -26,6 +26,8 @@ namespace KOTU.Module.Document;
 ///
 /// <b>편집 범위(A113 ② 명문화)</b>: 편집·저장은 <b>플레인 텍스트 계열만</b>이다 — PDF는 뷰 전용
 /// (<c>_path</c>가 null이라 저장 경로 자체가 없다), 4MB 잘림 텍스트는 IsReadOnly(잘린 채 저장 방지),
+/// <b>A343 ⓑ: 1M자(LargeDocumentChars) 초과 텍스트도 앞부분만 담고 보기 전용</b>(<c>_capped</c> —
+/// 같은 "잘린 채 저장 방지" 축이다),
 /// 비텍스트 포맷(HWP 등)은 뷰어가 생겨도 편집 대상이 아니다.
 /// A189: 무제 문서(New text file)는 <c>_path</c>가 null이어도 편집 대상이다 — 구분 표지는
 /// <c>_untitled</c>(필드 주석 참고), 첫 저장이 Save as 피커로 경로를 확정한다.
@@ -146,8 +148,22 @@ public sealed partial class DocumentView : UserControl,
     ///    전수 스캔(EnsureLineStarts)이 대용량 스크롤 지연의 잔여 원인이었다.
     /// 값 근거: A177 사양의 제안 임계 1MB 그대로(ASCII/UTF-8에서 1M 문자 ≈ 1MB). 잘림 상한
     /// (MaxBytes 4MB)의 1/4 지점이라 잘림 직전의 최악 구간 전체가 보호권에 들어온다.
+    /// A343 ⓑ(v0.333.0): ⓒ <b>편집기 대입 상한</b>으로도 쓴다 — 이 임계를 넘는 문서는 워커
+    /// (ReadTextSmart)에서 앞부분만 남기고 잘라 <c>_capped</c>로 표시하고, 뷰는 보기 전용이 된다.
+    /// ⓐ의 지연 대입은 "수 초 정지를 로딩 표시 뒤로 미루기"였을 뿐 정지 자체는 남아 있었고
+    /// (A177 수용 한계), 1M~4M자 비잘림 텍스트가 그 잔여 구간이었다. 상한을 하나 더 만들지 않고
+    /// 이 값을 재사용한다 — 장식 오프·인쇄 억제와 같은 지점에서 갈리는 편이 축이 늘지 않는다.
     /// </summary>
     private const int LargeDocumentChars = 1024 * 1024;
+
+    /// <summary>
+    /// A343 ⓑ: "대용량 문서인가"의 단일 판정 — 상한에 걸려 잘렸거나(Capped) 상한을 넘는다.
+    /// 잘라 담은 뒤에는 <c>Text.Length</c>가 상한 이하로 내려앉아 길이 비교만으로는 대용량을
+    /// 못 알아본다(장식 오프·거터·md 렌더 자격이 조용히 되살아나는 회귀 자리다) — 그래서 두
+    /// 조건의 논리합이 정본이다. 길이 비교 쪽은 잘림 안내가 덧붙은 4MB 문서만 실제로 참이 된다.
+    /// </summary>
+    private static bool IsLargeDocument(LoadedText loaded) =>
+        loaded.Capped || loaded.Text.Length > LargeDocumentChars;
 
     private int _openSeq; // 느린 읽기가 최신 열기를 덮지 않게
     private ModuleWorker? _worker; // 파일 읽기·쓰기 전용(A42) — 뷰별 분리
@@ -172,6 +188,18 @@ public sealed partial class DocumentView : UserControl,
     private TextEncodingKind _encoding;    // 열 때 감지한 인코딩 — 저장 시 보존
     private string _newLine = "\r\n";      // 원본 줄바꿈 스타일 — 저장 시 보존
     private bool _truncated;               // 4MB 잘림 → 읽기 전용
+
+    /// <summary>
+    /// A343 ⓑ: 편집기 대입 상한(<see cref="LargeDocumentChars"/>) 초과라 <b>앞 1MB분만</b> 담겼다
+    /// → 보기 전용. <c>_truncated</c>(4MB 바이트 잘림)와 별개 축이고 둘 다 설 수 있다.
+    /// 세우는 곳 = ApplyLoadedText(loaded.Capped), 내리는 곳 = StartUntitled·OpenPdf(다른 표지들과 함께).
+    /// <b>저장 3중 차단</b>은 <c>_truncated</c>와 같은 형태다: ⓐ UpdateEditorReadOnly의 영구
+    /// IsReadOnly ⓑ SaveAsync 첫 가드의 조기 반환 ⓒ 더티 추적 자체를 걸러 항상 false.
+    /// 인쇄도 함께 막힌다(GetPrintPageCount의 안내 1장 갈래 — 4MB 잘림과 같은 처리).
+    /// 사용자에게 알리는 곳 = 상단 안내판 하나다(<see cref="IsCappedNoticeVisible"/>) — 4MB
+    /// 잘림을 겸해도 마찬가지고, 그때는 본문 끝 잘림 줄이 붙지 않는다(ReadTextSmart).
+    /// </summary>
+    private bool _capped;
     private bool _dirty;                   // 미저장 변경 여부
     private bool _loadingText;             // 프로그램적 Text 설정 중 TextChanged 무시용
 
@@ -353,6 +381,15 @@ public sealed partial class DocumentView : UserControl,
     /// 거터 예약(UpdateEditorPadding)이 이 위에 얹힌다(위·오른쪽·아래는 건드리지 않는다).</summary>
     private const double BaseEditorPaddingLeft = 24;
 
+    /// <summary>A343 ⓑ 기본 위쪽 패딩. <b>XAML Padding="24,16,24,68"의 위쪽 값과 반드시 같은 값</b> —
+    /// 보기 전용 안내판(CappedNoticeBar)이 뜨면 그 높이만큼 더한 값으로 덮어쓴다(왼쪽 거터 예약과
+    /// 같은 관용구). 안내판은 에디터 위에 겹치는 오버레이라 이 예약이 없으면 첫 줄을 가린다.</summary>
+    private const double BaseEditorPaddingTop = 16;
+
+    /// <summary>A343 ⓑ 안내판 높이 — <b>XAML CappedNoticeBar의 Height와 반드시 같은 값</b>
+    /// (위 패딩 예약이 실측이 아니라 이 상수를 쓴다: 실측은 첫 레이아웃 전에 0이라 예약이 흔들린다).</summary>
+    private const double CappedNoticeHeight = 28;
+
     private const int DefaultZoomPercent = 100;
     private const int MinZoomPercent = 20;   // A229 사양 범위 20~500(A181의 50~300 확대), 단계 10
     private const int MaxZoomPercent = 500;
@@ -412,7 +449,10 @@ public sealed partial class DocumentView : UserControl,
             ? EditorDecor.GutterReserveWidth(_gutterDigits, _zoomPercent / 100.0)
             : 0.0;
         var pad = EditorBox.Padding;
-        EditorBox.Padding = new Thickness(BaseEditorPaddingLeft + reserve, pad.Top, pad.Right, pad.Bottom);
+        // A343 ⓑ: 위쪽은 기본값 + 안내판 자리(떠 있을 때만). 종전에는 pad.Top을 그대로 넘겼는데,
+        // 그러면 안내판이 뜬 뒤의 줌 변경이 예약을 지워 첫 줄이 안내판 뒤로 들어간다.
+        var top = BaseEditorPaddingTop + (IsCappedNoticeVisible ? CappedNoticeHeight : 0);
+        EditorBox.Padding = new Thickness(BaseEditorPaddingLeft + reserve, top, pad.Right, pad.Bottom);
     }
 
     /// <summary>
@@ -924,12 +964,16 @@ public sealed partial class DocumentView : UserControl,
 
         if (seq != _openSeq) return; // 그새 다른 파일이 열렸다
 
-        if (loaded.Text.Length > LargeDocumentChars)
+        // A343 ⓑ: 판정은 IsLargeDocument — 상한에 걸려 잘린 문서는 길이가 상한 이하로 내려앉아
+        // 종전의 길이 비교만으로는 이 갈래를 놓친다(장식 오프가 통째로 새는 자리).
+        if (IsLargeDocument(loaded))
         {
             // A177 ⓑ: 장식 오프는 대입보다 먼저 — 대입이 쏘는 TextChanged→Invalidate부터 전부
             // 무동작이 되고, 스크롤 훅(ViewChanged)은 아예 걸리지도 않는다.
             _decor.DisableForLargeDocument();
-            // A177 ⓐ: 대입(수 초 UI 점유)은 로딩 표시 프레임이 제출된 뒤로 미룬다. 미루는 동안
+            // A177 ⓐ: 대입은 로딩 표시 프레임이 제출된 뒤로 미룬다(A343 ⓑ 이후 대입량이 상한
+            // 1M자로 닫혀 수 초가 아니라 수백 ms급이지만, 로딩 문구를 먼저 보이는 편이 낫다 —
+            // 지연 자체는 유지가 오케스트레이터 결정이다). 미루는 동안
             // 이 뷰는 "파일 없음" 상태 그대로다 — _path=null이라 Ctrl+S는 무동작(SaveAsync 첫
             // 가드), 더티=false라 닫기·모듈 전환 가드(ICloseGuard)는 그냥 통과, 에디터는
             // Collapsed라 편집 입력 자체가 불가. 대입 전 상태에서 저장·닫기·편집이 새지 않는다.
@@ -991,6 +1035,7 @@ public sealed partial class DocumentView : UserControl,
         _encoding = loaded.Encoding;
         _newLine = loaded.NewLine;
         _truncated = loaded.Truncated;
+        _capped = loaded.Capped;                 // A343 ⓑ: 상한 초과 = 앞부분만 담겼다 → 보기 전용
         _originalBytes = loaded.OriginalBytes;   // A113 ⓑ: 원본 바이트(잘림이면 null)
         _lossyAtLoad = loaded.Loss != RoundTripLoss.None;
         _lossyReason = loaded.Loss;
@@ -1004,7 +1049,7 @@ public sealed partial class DocumentView : UserControl,
         // EnterHtmlViewMode). 수 초 UI를 멎게 하던 대용량 Text 대입이 사라지는 자리다. 판정은
         // 여기서 한 번만 하고 이하 세 지점(거터·Text 대입·렌더 축)이 같은 값을 쓴다.
         var truncatedHtml = loaded.Truncated && IsHtmlPath(path);
-        _gutterDigits = truncatedHtml || loaded.Text.Length > LargeDocumentChars
+        _gutterDigits = truncatedHtml || IsLargeDocument(loaded)
             ? 0
             : DigitCount(CountLines(loaded.Text)) + 1;
         UpdateEditorPadding();
@@ -1044,8 +1089,9 @@ public sealed partial class DocumentView : UserControl,
         // A190: 마크다운이면 기본 = 렌더 뷰(사양). 자격 = md 확장자 + 비잘림 + A177 임계 이하
         // (대용량 md는 렌더 생략·에디터만 — A178 성능 원칙. 4MB 잘림은 항상 임계 초과지만 명시
         // 이중 게이트). 빈 파일은 그릴 게 없어 편집으로 시작한다(토글은 활성 — 타이핑 후 미리보기).
-        var renderEligible = IsMarkdownPath(path) && !loaded.Truncated
-            && loaded.Text.Length <= LargeDocumentChars;
+        // A343 ⓑ: 판정을 IsLargeDocument로 바꾼다 — 상한에 걸려 잘린 md는 길이가 상한 이하로
+        // 내려앉아 종전 식이면 렌더 자격이 되살아난다(1.5M자 md가 앞부분만 렌더되는 회귀).
+        var renderEligible = IsMarkdownPath(path) && !loaded.Truncated && !IsLargeDocument(loaded);
         ResetRenderState(renderEligible);
         if (renderEligible && loaded.Text.Length > 0) EnterRenderMode();
         // A343 ⓐ: HTML도 기본 = 뷰(WebView2 판) — md의 위 관용구를 그대로 복제한 자리다. 자격
@@ -1137,6 +1183,7 @@ public sealed partial class DocumentView : UserControl,
         _encoding = TextEncodingKind.Utf8;
         _newLine = "\r\n";
         _truncated = false;
+        _capped = false; // A343 ⓑ: 무제는 빈 버퍼 — 상한 표지도 함께 걷는다
         _originalBytes = null;
         _lossyAtLoad = false;
         _lossyReason = RoundTripLoss.None;
@@ -1237,7 +1284,17 @@ public sealed partial class DocumentView : UserControl,
     //   열기 .md (A177 대용량)        | 편집(_renderEligible=false — 렌더 생략, A178 성능 원칙.
     //                                 | A224: 토글은 활성이되 잠금 뷰로 간다 — 비md와 일관)
     //   열기 4MB 잘림(html 외)        | 편집 불가(영구 IsReadOnly) — A224: 토글 비활성(토글이
-    //                                 | "편집으로 전환"을 약속하면 안 된다 — 잘림 저장 사고 방지 축)
+    //                                 | "편집으로 전환"을 약속하면 안 된다 — 잘림 저장 사고 방지 축).
+    //                                 | A343 ⓑ: 본문도 앞 1MB분만 담긴다(_capped 동반) — 안내는
+    //                                 | 상단 안내판 1줄("4MB 초과 · 앞 1,048,576자"). 본문 끝의
+    //                                 | 종전 잘림 줄은 붙지 않는다(표시량과 어긋나 안내가 겹친다).
+    //                                 | 4MB인데 1M자 이하로 디코드되면(바이트 큰 다국어) 반대로
+    //                                 | 종전 끝 줄만 붙고 안내판은 안 뜬다(_capped=false)
+    //   열기 1M자 초과(비잘림)        | A343 ⓑ: 보기 전용 — 앞 1MB분만 담고(_capped) 영구
+    //                                 | IsReadOnly·저장 차단·더티 불가·인쇄는 안내 1장. 상단
+    //                                 | 안내판(CappedNoticeBar) 1줄. 토글 비활성(잘림과 같은 이유).
+    //                                 | md는 렌더 자격 없음(종전 대용량 md와 같다), html은
+    //                                 | 열기 기본이 WebView2 판이라 디스크 전문이 그대로 보인다
     //   열기 .pdf                     | PDF 뷰(렌더 축 리셋 — 편집 축이 없어 토글 비활성)
     //   New text file (A189 무제)     | 무제 편집(렌더 축 리셋 — 무제 md는 범위 밖. 토글 활성)
     //   토글 클릭 (뷰 중)             | 편집(md 렌더면 에디터 표시·포커스 — 보류 중 파싱은
@@ -1298,8 +1355,11 @@ public sealed partial class DocumentView : UserControl,
     /// IsReadOnly라 토글이 "편집으로 전환"을 약속하면 안 되므로 비활성(잘림 저장 사고 방지 축
     /// 무손상). 대용량 md(A177 임계 초과)는 활성이다 — 렌더 자격만 없어 뷰 = 잠금 뷰(비md와
     /// 일관). 무제도 활성(잠글 이유는 없지만 일관성 — 사양).
+    /// <para>A343 ⓑ: 상한 초과(_capped)도 같은 이유로 비활성이다 — 버퍼가 앞부분뿐이라 토글이
+    /// "편집으로 전환"을 약속할 수 없다(잘림과 같은 판단). 상한 초과 HTML은 열기 기본이 WebView2
+    /// 판(디스크 전문)이라 그 판에 머무르고, md는 렌더 자격이 없어 편집 표면 그대로다.</para>
     /// </summary>
-    private bool CanToggleViewMode => (_path is not null || _untitled) && !_truncated;
+    private bool CanToggleViewMode => (_path is not null || _untitled) && !_truncated && !_capped;
 
     /// <summary>true = 렌더 뷰 표시 중(에디터 Collapsed). 세우고 걷는 곳 = EnterRenderMode/
     /// ExitRenderMode/ResetRenderState 셋뿐이다.</summary>
@@ -1443,7 +1503,9 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private void UpdateEditorReadOnly()
     {
-        EditorBox.IsReadOnly = _truncated || _viewMode;
+        // A343 ⓑ: 상한 초과(_capped)도 잘림과 같은 영구 잠금 축이다 — 앞부분만 담긴 버퍼가
+        // 저장으로 원본을 덮어쓰는 사고를 막는 첫 겹(3중 차단의 ⓐ).
+        EditorBox.IsReadOnly = _truncated || _capped || _viewMode;
         EditorBox.IsTabStop = !_viewMode; // A277 ⓑ — 잘림(읽기 전용)은 편집 모드라 탭 진입 유지
         _decor.SetViewSuppressed(_viewMode); // A277 ⓐ
     }
@@ -1492,6 +1554,7 @@ public sealed partial class DocumentView : UserControl,
         var onEditableSurface = EditorBox.Visibility == Visibility.Visible && !_viewMode;
         GuideToggleButton.IsEnabled = onEditableSurface;
         MarksToggleButton.IsEnabled = onEditableSurface;
+        UpdateCappedNotice(); // A343 ⓑ: 이 메서드의 호출 전수 = 에디터 표시 전환 전수(그쪽 주석)
     }
 
     /// <summary>A215: 가이드 토글 클릭 — 즉시 적용 + 즉시 저장(A181 줌 관용구).</summary>
@@ -1714,6 +1777,11 @@ public sealed partial class DocumentView : UserControl,
         RenderPane.Visibility = Visibility.Collapsed;
         RenderStack.Children.Clear();
         UpdateViewToggle();
+        // A343 ⓑ: 여기서 _renderMode·_htmlMode가 내려간다 — 안내판 판정이 그 두 표지를 보므로
+        // 함께 재산출한다. ApplyLoadedText는 UpdateDecorToggles(에디터 표시 전환)를 이 리셋보다
+        // **먼저** 부르기 때문에(직전 파일이 렌더·HTML 판이었으면 그때는 아직 표지가 서 있다)
+        // 이 한 줄이 없으면 새 파일의 안내판이 조용히 안 뜬다.
+        UpdateCappedNotice();
     }
 
     // ---------- HTML 렌더 뷰 (A248 — 뷰 모드의 HTML 구현, WebView2) ----------
@@ -1906,6 +1974,74 @@ public sealed partial class DocumentView : UserControl,
         if (_path is { } path) FileNameText.Text = Path.GetFileName(path);
     }
 
+    // ---------- 보기 전용 안내판 (A343 ⓑ — 편집기 대입 상한) ----------
+
+    /// <summary>
+    /// A343 ⓑ: 상한 표시 문자 수의 표기(1,048,576) — 안내 문구 두 갈래가 같은 값을 쓴다.
+    /// 상수에서 뽑는다: 1MB = 1,048,576자라 문장에 1,000,000을 박으면 실제 표시량과 어긋난다.
+    /// <para>자릿수 구분은 현재 문화권이 아니라 불변 문화권으로 찍는다 — UI 문자열은 영어 고정이다.
+    /// 네임스페이스를 통째로 적는 건 이 파일의 CompositionTarget 관용구와 같다(1회 사용에 using을
+    /// 늘리지 않는다).</para>
+    /// </summary>
+    private static readonly string CappedCharsText =
+        LargeDocumentChars.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A343 ⓑ: 상단 안내판 문구(UI 문자열은 영어만). ⓐ의 잘린 HTML 안내판 관용구
+    /// ("View only: ...")를 그대로 잇는다.
+    /// <para><b>두 갈래인 이유</b>: 4MB 잘림(<c>_truncated</c>) 문서도 이제 앞 1,048,576자만
+    /// 편집기에 들어간다 — 그때 "1 MB보다 크다"만 말하면 <b>왜 뒤가 없는지</b>(파일이 4MB를
+    /// 넘어 읽기 자체가 잘렸다)가 사라진다. 그래서 잘림이면 두 사실을 한 줄에 담는다:
+    /// 파일이 4MB 초과라는 것과, 그중 앞 1,048,576자만 담겼다는 것. 숫자 둘 다 상수에서 뽑는다
+    /// (MaxBytes·LargeDocumentChars — 상수를 고치면 문구가 따라온다).</para>
+    /// <para>정적 필드가 아니라 인스턴스 속성인 까닭 = 문구가 <c>_truncated</c>에 따라 갈리므로
+    /// 생성자 1회 대입이 성립하지 않는다(대입 지점 = UpdateCappedNotice, 표시 전환과 한 세트).</para>
+    /// </summary>
+    private string CappedNoticeMessage => _truncated
+        ? "View only: this file is larger than " + (MaxBytes / 1024 / 1024)
+          + " MB. Showing the first " + CappedCharsText + " characters."
+        : "View only: this file is larger than 1 MB of text. Showing the first "
+          + CappedCharsText + " characters.";
+
+    /// <summary>
+    /// A343 ⓑ: 안내판을 띄울 상태인가 — 상한 초과(<c>_capped</c>)이고, 지금 보이는 표면이
+    /// 에디터일 때(md 렌더 판·HTML 판 위에는 뜨지 않는다 — 그 판들은 잘린 버퍼가 아니라 각자의
+    /// 원본을 그린다). PDF·빈 화면·무제는 <c>_capped</c> 자체가 false다.
+    /// <para><b>보정(문구 불일치)</b>: 종전에는 <c>!_truncated</c>로 4MB 잘림 문서를 빼고 본문 끝의
+    /// 잘림 안내 줄에 맡겼는데, 그 줄은 "앞 4MB를 보여준다"고 말하는 반면 실제 편집기에는 앞
+    /// 1,048,576자만 들어가 <b>사용자가 보는 정보가 틀렸다</b>. 이제 잘림이든 아니든 <c>_capped</c>면
+    /// 이 판이 뜨고 문구만 갈린다(CappedNoticeMessage). 짝이 되는 반대편 조치 = ReadTextSmart가
+    /// <c>capped</c>일 때 본문 끝 안내 줄을 아예 덧붙이지 않는 것(안내 중복 금지).</para>
+    /// <para>유일한 예외 = 잘린 HTML(<see cref="IsTruncatedHtml"/>) — 에디터 버퍼가 빈 문자열인
+    /// 갈래라 안내할 본문이 없고, WebView2 판이 못 서면 ShowTruncatedHtmlUnavailable의 종전
+    /// 안내판이 그 자리를 담당한다(<c>_htmlMode</c>가 false여도 이 판이 끼어들면 안 된다).</para>
+    /// </summary>
+    private bool IsCappedNoticeVisible =>
+        _capped && !IsTruncatedHtml && !_renderMode && !_htmlMode;
+
+    /// <summary>
+    /// A343 ⓑ: 안내판 표시 동기화. 호출은 <see cref="UpdateDecorToggles"/> 한 곳에 얹었다 —
+    /// 그쪽 호출 전수가 정확히 "에디터 표시 전환 뒤"라(전환 지점마다 Visibility 대입 직후 호출)
+    /// 이 안내판이 필요로 하는 훅과 같은 집합이기 때문이다. 따로 부르게 하면 전환 한 곳을
+    /// 빠뜨려도 조용히 어긋난다(UpdateEditorReadOnly가 A277 시각 억제를 같이 실은 것과 같은 판단).
+    /// 패딩 예약도 함께 맞춘다 — 표시와 자리가 한 세트다.
+    /// <para>문구도 여기서 넣는다(종전에는 생성자 1회) — 4MB 잘림이냐에 따라 갈리는데
+    /// <c>_truncated</c>는 파일마다 바뀌는 값이라 생성자 시점에 확정되지 않는다. 보이지 않을
+    /// 때는 대입하지 않는다(숨은 판의 문구를 고칠 이유가 없다). 툴팁은 좁은 창의 말줄임 대비.</para>
+    /// </summary>
+    private void UpdateCappedNotice()
+    {
+        var visible = IsCappedNoticeVisible;
+        if (visible)
+        {
+            var message = CappedNoticeMessage;
+            CappedNoticeText.Text = message;
+            ToolTipService.SetToolTip(CappedNoticeBar, message);
+        }
+        CappedNoticeBar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        UpdateEditorPadding();
+    }
+
     // ---------- PDF (A16) ----------
 
     private PdfPane? _pdfPane; // 지연 생성 — 텍스트만 쓰는 세션에는 만들지 않는다
@@ -1943,6 +2079,7 @@ public sealed partial class DocumentView : UserControl,
         _path = null;
         _untitled = false; // A189: PDF 뷰 — 무제 표지도 함께 걷는다(경로 없음 = 뷰 전용의 종전 의미)
         _truncated = false;
+        _capped = false; // A343 ⓑ: PDF는 텍스트 버퍼가 없다 — 상한 표지도 함께 걷는다
         _originalBytes = null;
         _lossyAtLoad = false;
         _lossyReason = RoundTripLoss.None;
@@ -2283,8 +2420,16 @@ public sealed partial class DocumentView : UserControl,
         DecodingLoss,  // 디코딩이 대체 문자를 만들어 원본 바이트를 되쓸 수 없다
     }
 
+    /// <summary>
+    /// 읽기 결과 한 벌. <c>Capped</c>(A343 ⓑ) = 편집기 대입 상한(<see cref="LargeDocumentChars"/>)에
+    /// 걸려 <b>앞부분만</b> 담겼다는 표지로, <c>Truncated</c>(4MB 바이트 잘림)와 별개 축이다 —
+    /// 둘 다 설 수 있고(4MB 파일은 대개 상한도 넘는다) 안내 문구가 다르다 — 둘 다면 상단
+    /// 안내판이 "4MB 초과 + 앞 1,048,576자" 갈래로 뜬다(<see cref="CappedNoticeMessage"/>).
+    /// <c>Truncated</c>인데 <c>Capped</c>가 아닌 조합도 성립한다(4MB가 1M자 이하로 디코드되는
+    /// 바이트 큰 다국어 텍스트) — 그때만 본문 끝에 종전 잘림 안내 줄이 붙는다.
+    /// </summary>
     private sealed record LoadedText(
-        string Text, TextEncodingKind Encoding, string NewLine, bool Truncated,
+        string Text, TextEncodingKind Encoding, string NewLine, bool Truncated, bool Capped,
         byte[]? OriginalBytes, RoundTripLoss Loss, DateTime WriteTimeUtc, long Length);
 
     /// <summary>
@@ -2367,9 +2512,28 @@ public sealed partial class DocumentView : UserControl,
         var writeTimeUtc = stamp.LastWriteTimeUtc;
         var length = stamp.Length;
 
-        if (truncated)
+        // A343 ⓑ: 편집기 대입 상한 — 상한을 넘는 문서는 여기(워커)에서 앞부분만 남긴다. UI 스레드
+        // 비용이 0인 자리이고, 상한을 넘는 문자열이 애초에 UI로 건너가지 않는 것이 이 항목의 요지다
+        // (A177 ⓐ의 지연 대입은 "수 초 정지를 로딩 표시 뒤로 미루기"였지 없애기가 아니었다).
+        // 서로게이트 쌍 한가운데서 자르면 짝 잃은 상위 서로게이트가 남아 마지막 글자가 깨진다 —
+        // 그 자리면 한 글자 앞에서 끊는다(잘린 문서라 1자 손실은 무의미하다).
+        var capped = text.Length > LargeDocumentChars;
+        if (capped)
+        {
+            var cut = LargeDocumentChars;
+            if (char.IsHighSurrogate(text[cut - 1])) cut--;
+            text = text[..cut];
+        }
+
+        // 본문 끝 잘림 안내 줄은 이제 "4MB를 넘었는데 상한에는 안 걸린 문서"에만 붙는다
+        // (바이트가 큰 다국어 텍스트 — 4MB가 1M자 이하로 디코드되는 경우). 상한에 걸린 문서는
+        // 상단 안내판(CappedNoticeBar)이 두 사실을 함께 말하므로 여기서 덧붙이면 안내가
+        // 겹치고, 무엇보다 이 줄의 "앞 4MB를 보여준다"가 실제 표시량(앞 1,048,576자)과 어긋난다.
+        // 덤으로 절단이 이 줄까지 잘라 먹던 어색함도 사라진다(종전에는 자르기가 먼저였다).
+        if (truncated && !capped)
             text += $"\n\n--- Showing the first {MaxBytes / 1024 / 1024} MB of this file (read-only) ---";
-        return new LoadedText(text, kind, newline, truncated, originalBytes, loss, writeTimeUtc, length);
+        return new LoadedText(
+            text, kind, newline, truncated, capped, originalBytes, loss, writeTimeUtc, length);
     }
 
     /// <summary>저장용 인코드. CP949로 표현 못 하는 문자는 예외로 알린다(무단 '?' 치환 방지).</summary>
@@ -2431,7 +2595,9 @@ public sealed partial class DocumentView : UserControl,
         {
             timer.Stop(); // 반복 타이머 — 1회 판정용이라 즉시 멈춘다
             // A189: 무제(_untitled)는 경로가 없어도 판정 대상이다 — 편집 계열 가드 공통 형태.
-            if (_loadingText || (_path is null && !_untitled) || _truncated) return; // 판정 대상이 아니다
+            // A343 ⓑ: _capped도 잘림과 같은 비대상(앞부분만 담긴 버퍼는 더티가 될 수 없다 —
+            // 3중 차단의 ⓒ. IsReadOnly라 실제로는 편집이 오지 않지만 축을 코드로 닫아 둔다).
+            if (_loadingText || (_path is null && !_untitled) || _truncated || _capped) return; // 판정 대상이 아니다
             SetDirty(!EditorMatchesBaseline());
         };
         return timer;
@@ -2449,7 +2615,8 @@ public sealed partial class DocumentView : UserControl,
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
     {
         _textSnapshot = null; // A142 ①ⓑ: 어떤 편집이든 스냅샷부터 무효화 — 조기 반환보다 먼저
-        if (_loadingText || (_path is null && !_untitled) || _truncated) return; // A189: 무제도 더티 추적
+        // A343 ⓑ: _capped도 잘림과 같은 비대상 — 더티가 서지 않으니 저장 버튼·닫기 가드가 조용하다.
+        if (_loadingText || (_path is null && !_untitled) || _truncated || _capped) return; // A189: 무제도 더티 추적
         var text = EditorText; // 새 스냅샷 1회(A142 ①ⓑ) — 추적·길이 비교가 같은 인스턴스를 쓴다
         TrackEdit(_changePrevText, text); // A266: 직전 텍스트와의 트림으로 이번 편집을 구간에 병합
         _changePrevText = text;
@@ -2637,7 +2804,8 @@ public sealed partial class DocumentView : UserControl,
         if (_saving) return false;
         // 잘림·PDF·빈 화면 — 저장 대상이 없다(ⓐ~ⓓ 비적용). A189: 무제는 저장 대상이다 —
         // 경로 확정(Save as 피커)은 SaveCoreAsync 몫.
-        if ((_path is null && !_untitled) || _truncated) return true;
+        // A343 ⓑ: _capped(앞부분만 담긴 버퍼)도 여기서 잘림과 같이 무동작으로 끝난다 — 3중 차단의 ⓑ.
+        if ((_path is null && !_untitled) || _truncated || _capped) return true;
         SettlePendingDirtyCheck(); // 250ms 창 안의 치환 편집이 "저장할 것 없음"으로 새지 않게
         if (!_dirty) return true;
 
@@ -2774,7 +2942,9 @@ public sealed partial class DocumentView : UserControl,
             // A190: 경로가 바뀌었다 — 렌더 자격만 재판정(모드는 편집 유지 — 상태 전이표).
             // 현행 피커는 무제=.txt 고정·검증 실패 Save as=같은 확장자라 값이 바뀌는 경로는
             // 없지만, 자격의 단일 출처를 지키는 방어다(_truncated는 저장 가능이므로 항상 false).
-            _renderEligible = IsMarkdownPath(path) && !_truncated
+            // A343 ⓑ: _capped도 함께 본다 — 상한 초과 문서는 저장 자체가 막혀 여기 오지 않지만,
+            // 자격의 단일 출처를 지키는 방어라 축을 빠뜨리지 않는다(_truncated와 같은 이유).
+            _renderEligible = IsMarkdownPath(path) && !_truncated && !_capped
                 && EditorText.Length <= LargeDocumentChars;
             UpdateViewToggle();
             // 창 제목 갱신은 셸 몫 — A279부터 경로가 갈리는 저장(Save as...·무제 첫 저장)을
@@ -3123,7 +3293,11 @@ public sealed partial class DocumentView : UserControl,
         }
         if (_printText is { } text)
         {
-            if (text.Length > LargeDocumentChars) return 1; // 인쇄 억제 — 안내 1장(전문 패스 없음)
+            // A343 ⓑ: _capped(앞부분만 담긴 버퍼)도 같은 억제 갈래다 — 상한을 넘던 문서가 이제
+            // 상한 이하 길이로 담기므로 길이 비교만 남기면 **잘린 내용이 온전한 문서인 척**
+            // 인쇄돼 나간다(이 배치 최대의 회귀 자리). 인쇄 대상은 편집기 버퍼(CapturePrintSnapshot의
+            // EditorText)라 원본 파일을 대신 찍는 경로가 없어, 종전 4MB 잘림과 같은 안내 1장으로 막는다.
+            if (_capped || text.Length > LargeDocumentChars) return 1; // 인쇄 억제 — 안내 1장(전문 패스 없음)
             return EnsurePrintLayout(spec, text)?.PageCount ?? 0; // 0 = 이상 규격 — 셸이 안내 1장
         }
         return PrintablePdfPane?.PrintPageCount ?? 0;
@@ -3509,7 +3683,9 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private object? CreateTextPrintPage(int pageNumber, PrintPageSpec spec, string snapshot)
     {
-        if (snapshot.Length > LargeDocumentChars)
+        // A343 ⓑ: 억제 판정은 GetPrintPageCount와 같은 식이어야 한다(_capped 포함) — 어긋나면
+        // 페이지 수 1과 페이지 내용이 서로 다른 갈래를 찍는다.
+        if (_capped || snapshot.Length > LargeDocumentChars)
             return pageNumber == 1 ? BuildPrintNoticePage(spec) : null;
         if (EnsurePrintLayout(spec, snapshot) is not { } layout) return null;
         if (pageNumber < 1 || pageNumber > layout.PageCount) return null;
