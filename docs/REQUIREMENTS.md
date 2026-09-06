@@ -2134,6 +2134,16 @@
     재활용·상세 fetch · 중앙 ShowEntries/위상 0·1/fill 3종/ImageOpened·Failed/LivePreviewHostOf null · All Readable 자식 교체 · 4모듈 OpenPath ·
     SMTC. 뜨거운 경로는 `Enabled` 검사 뒤에만 보간. **사용자 절차** = 설정 → Trace log 켬 → All Readable 그 폴더 재현 → 죽은 뒤 Open log folder →
     `trace.log` 전달(마지막 `exc` 줄 + 그 직전 `phase0`/`fill`/`fetch` 줄이 범인).
+  - ✅ **trace.log 회수(2026-09-06 · `docs/assets/A352-trace-2026-09-06.log` 192줄)** — 폴더 `…\그림`(64개 · exts=48 · All Readable). 항해·스캔·
+    ShowEntries 정상, 타일 위상 0 108건, 좌 리스트 phase0·detail 정상. **마지막 줄들** = `fill image` × 3(`vlcsnap-2026-01-18…png` ·
+    `…01-19…png` · `…01-27…png` — `StartImagePreview` = `BitmapImage.UriSource` + `DecodePixelWidth` 768 직접 디코드) + `fill cached`
+    (`민초로부터 온 퇴장 통보.png` — placeholder · `GetThumbnailAsync ReturnOnlyIfCached`) 직후 프로세스 소멸(**`ImageOpened`/`ImageFailed`/
+    `cached done` 어느 것도 안 찍힘 · `exc` 줄 없음** — 관리 예외가 아니라 XAML 네이티브(디코드/렌더)에서 죽었다). 30초 뒤 재시작 로그는
+    하드웨어 모듈(무관한 LHM 예외 2건 — 정상 first-chance).
+    **좁혀진 후보** = ① `BitmapImage.UriSource` 직접 디코드(PNG 3장 동시) ② placeholder 캐시 썸네일(1장). 둘 다 이미지 모듈 중앙 타일과 같은
+    코드라 **All Readable 고유가 아닐 가능성** — 확인 실험 ⓐ 이미지 모듈에서 같은 `그림` 폴더 진입(같은 경로가 돌면 같은 결과여야) ⓑ 그 PNG
+    4장을 잠시 다른 곳으로 옮기고 재진입(사라지면 파일 단위 원인 → 파일 전달 요청). 수리 후보 = 이미지 원본 타일도 셸 썸네일 경로
+    (`FetchTilePreview`)로 통일(직접 디코드 폐기 — 워커 fetch·바이트→SetSourceAsync는 검증된 관용구) — 실험 결과와 무관하게 견고성 향상.
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)

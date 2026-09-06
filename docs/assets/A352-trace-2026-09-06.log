@@ -1,0 +1,192 @@
+[11:29:14.061] [T1] trace | KOTU v0.345.0 · 2026-09-06 11:29:14 · pid 7648
+[11:29:16.787] [T1] shell | ShowModule allreadable path=(none)
+[11:29:16.798] [T1] smtc | Attach (none)
+[11:29:16.811] [T1] nav | NavigateToAsync C:\Users\tsusa\OneDrive - Automanix\그림 exts=48
+[11:29:16.821] [T1] tiles | ShowLoading C:\Users\tsusa\OneDrive - Automanix\그림
+[11:29:16.827] [T1] nav | scan done C:\Users\tsusa\OneDrive - Automanix\그림 count=64
+[11:29:16.828] [T1] nav | RefreshView C:\Users\tsusa\OneDrive - Automanix\그림 count=64
+[11:29:16.832] [T1] tiles | ShowEntries C:\Users\tsusa\OneDrive - Automanix\그림 count=64
+[11:29:16.848] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\240323 강가 별장
+[11:29:16.863] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\240323 강가 별장
+[11:29:16.876] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Feedback
+[11:29:16.877] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Saved Pictures
+[11:29:16.878] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Scan
+[11:29:16.880] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Screenshots
+[11:29:16.881] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Zwift
+[11:29:16.882] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\바탕화면
+[11:29:16.883] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\스캔
+[11:29:16.885] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\스크린샷
+[11:29:16.886] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\카메라 앨범
+[11:29:16.887] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.jpeg
+[11:29:16.897] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.jpg
+[11:29:16.899] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.png
+[11:29:16.900] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\AMX.jpg
+[11:29:16.902] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\ARS-로고디자인_원본파일.png
+[11:29:16.903] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\DALL·E 2024-07-22 16.05.33 - Simplified version of a logo for 'Automotive Research Solution' with the main elements being 'ARS' in a bold font and a sleek, modern car silhouette. .webp
+[11:29:16.904] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\KakaoTalk_20200117_092011491.png
+[11:29:16.905] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\KakaoTalk_20240703_110337676.jpg
+[11:29:16.907] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\pexels-pixabay-37347.jpg
+[11:29:16.908] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\pexels-polina-zimmerman-3778619.jpg
+[11:29:16.913] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Feedback
+[11:29:16.916] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Saved Pictures
+[11:29:16.919] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Scan
+[11:29:16.921] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Screenshots
+[11:29:16.924] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\Zwift
+[11:29:16.927] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\바탕화면
+[11:29:16.930] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\스캔
+[11:29:16.933] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\스크린샷
+[11:29:16.935] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\카메라 앨범
+[11:29:16.938] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.jpeg
+[11:29:16.941] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.jpg
+[11:29:16.944] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.png
+[11:29:16.946] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\AMX.jpg
+[11:29:16.949] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\ARS-로고디자인_원본파일.png
+[11:29:16.952] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\DALL·E 2024-07-22 16.05.33 - Simplified version of a logo for 'Automotive Research Solution' with the main elements being 'ARS' in a bold font and a sleek, modern car silhouette. .webp
+[11:29:16.954] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\KakaoTalk_20200117_092011491.png
+[11:29:16.957] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\KakaoTalk_20240703_110337676.jpg
+[11:29:16.960] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\pexels-pixabay-37347.jpg
+[11:29:16.963] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\pexels-polina-zimmerman-3778619.jpg
+[11:29:16.965] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220709_232639106_2.jpg
+[11:29:16.968] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220714_125035942_2.jpg
+[11:29:16.971] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220714_125148380_2.jpg
+[11:29:16.973] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220719_121308973_2.jpg
+[11:29:16.976] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220726_125747369_2.jpg
+[11:29:16.979] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220804_125449327_2.jpg
+[11:29:16.981] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220812_121956977_2.jpg
+[11:29:16.984] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220813_214558393_2.jpg
+[11:29:16.987] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220817_112931072_2.jpg
+[11:29:16.990] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220824_112948946_2.jpg
+[11:29:16.992] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220827_001839431_2.jpg
+[11:29:17.118] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.jpeg
+[11:29:17.121] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.jpg
+[11:29:17.122] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.png
+[11:29:17.123] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\AMX.jpg
+[11:29:17.124] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\ARS-로고디자인_원본파일.png
+[11:29:17.124] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\DALL·E 2024-07-22 16.05.33 - Simplified version of a logo for 'Automotive Research Solution' with the main elements being 'ARS' in a bold font and a sleek, modern car silhouette. .webp
+[11:29:17.125] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\KakaoTalk_20200117_092011491.png
+[11:29:17.126] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\KakaoTalk_20240703_110337676.jpg
+[11:29:17.127] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\pexels-pixabay-37347.jpg
+[11:29:17.127] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\pexels-polina-zimmerman-3778619.jpg
+[11:29:17.130] [T11] exc | OperationCanceledException: The operation was canceled. @ at System.Threading.CancellationToken.ThrowOperationCanceledException()
+[11:29:17.130] [T11] exc | OperationCanceledException: The operation was canceled. @ at System.Threading.SemaphoreSlim.Wait(Int32 millisecondsTimeout, CancellationToken cancellationToken)
+[11:29:17.189] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220827_230734531_2.jpg
+[11:29:17.193] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220831_130316984_2.jpg
+[11:29:17.245] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\KakaoTalk_20200117_092011491.png
+[11:29:17.246] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\AMX.jpg
+[11:29:17.246] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\ARS-로고디자인_원본파일.png
+[11:29:17.246] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.jpg
+[11:29:17.247] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.png
+[11:29:17.247] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\pexels-polina-zimmerman-3778619.jpg
+[11:29:17.247] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\pexels-pixabay-37347.jpg
+[11:29:17.247] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\220731 강화도.mp4_005246116.jpeg
+[11:29:17.248] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\KakaoTalk_20240703_110337676.jpg
+[11:29:17.248] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\DALL·E 2024-07-22 16.05.33 - Simplified version of a logo for 'Automotive Research Solution' with the main elements being 'ARS' in a bold font and a sleek, modern car silhouette. .webp
+[11:29:17.252] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220902_215631957_3.jpg
+[11:29:17.256] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220903_010322367_2.jpg
+[11:29:17.259] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220920_125143842.MOTION-02.ORIGINAL_2.jpg
+[11:29:17.289] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220709_232639106_2.jpg
+[11:29:17.290] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220714_125035942_2.jpg
+[11:29:17.292] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220714_125148380_2.jpg
+[11:29:17.293] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220719_121308973_2.jpg
+[11:29:17.299] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220709_232639106_2.jpg
+[11:29:17.300] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220714_125035942_2.jpg
+[11:29:17.301] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220714_125148380_2.jpg
+[11:29:17.302] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220719_121308973_2.jpg
+[11:29:17.305] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20221101_105955590_2.jpg
+[11:29:17.308] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230212_024010110.jpg
+[11:29:17.338] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220714_125148380_2.jpg
+[11:29:17.339] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220719_121308973_2.jpg
+[11:29:17.339] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220714_125035942_2.jpg
+[11:29:17.339] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220709_232639106_2.jpg
+[11:29:17.345] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230212_025601437_2.jpg
+[11:29:17.348] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230422_230822530~2.jpg
+[11:29:17.351] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-18-12h58m03s381.png
+[11:29:17.352] [T1] detail | fetch Image C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-18-12h58m03s381.png
+[11:29:17.382] [T1] detail | done C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-18-12h58m03s381.png
+[11:29:17.387] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-19-02h04m39s483.png
+[11:29:17.387] [T1] detail | fetch Image C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-19-02h04m39s483.png
+[11:29:17.391] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-27-01h49m01s690.png
+[11:29:17.391] [T1] detail | fetch Image C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-27-01h49m01s690.png
+[11:29:17.398] [T1] detail | done C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-19-02h04m39s483.png
+[11:29:17.414] [T1] detail | done C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-27-01h49m01s690.png
+[11:29:17.422] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220726_125747369_2.jpg
+[11:29:17.424] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220804_125449327_2.jpg
+[11:29:17.425] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220812_121956977_2.jpg
+[11:29:17.427] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220813_214558393_2.jpg
+[11:29:17.438] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220726_125747369_2.jpg
+[11:29:17.439] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220804_125449327_2.jpg
+[11:29:17.440] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220812_121956977_2.jpg
+[11:29:17.441] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220813_214558393_2.jpg
+[11:29:17.445] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\민초로부터 온 퇴장 통보.png
+[11:29:17.448] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\아우디 현가장치 관련 리콜.png
+[11:29:17.451] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\오토매닉스 대표이미지.png
+[11:29:17.501] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220726_125747369_2.jpg
+[11:29:17.501] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220804_125449327_2.jpg
+[11:29:17.502] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220812_121956977_2.jpg
+[11:29:17.502] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220813_214558393_2.jpg
+[11:29:17.533] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\오토매닉스 로고.png
+[11:29:17.536] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\오토매닉스 로고이미지.png
+[11:29:17.625] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220817_112931072_2.jpg
+[11:29:17.626] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220824_112948946_2.jpg
+[11:29:17.628] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220827_001839431_2.jpg
+[11:29:17.629] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220827_230734531_2.jpg
+[11:29:17.639] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220817_112931072_2.jpg
+[11:29:17.639] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220824_112948946_2.jpg
+[11:29:17.640] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220827_001839431_2.jpg
+[11:29:17.641] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220827_230734531_2.jpg
+[11:29:17.667] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\오토매닉스_약도.png
+[11:29:17.670] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\오토매닉스_인감_배경제거.png
+[11:29:17.674] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\코인챗 로고 long 188_79.png
+[11:29:17.681] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220817_112931072_2.jpg
+[11:29:17.682] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220824_112948946_2.jpg
+[11:29:17.683] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220827_001839431_2.jpg
+[11:29:17.693] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220827_230734531_2.jpg
+[11:29:17.704] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\코인챗 로고 square 148_148.png
+[11:29:17.707] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\코인챗_211012_아이폰XS_2대_중고구매.png
+[11:29:17.750] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\코인챗_사무실.jpg
+[11:29:17.753] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\코인챗_회의실.jpg
+[11:29:17.757] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\포가차.jpg
+[11:29:17.791] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220831_130316984_2.jpg
+[11:29:17.792] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220902_215631957_3.jpg
+[11:29:17.794] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220903_010322367_2.jpg
+[11:29:17.795] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220920_125143842.MOTION-02.ORIGINAL_2.jpg
+[11:29:17.802] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220831_130316984_2.jpg
+[11:29:17.803] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220902_215631957_3.jpg
+[11:29:17.805] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220903_010322367_2.jpg
+[11:29:17.805] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220920_125143842.MOTION-02.ORIGINAL_2.jpg
+[11:29:17.809] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\화면 캡처 2020-11-26 162745.png
+[11:29:17.812] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\화면 캡처 2022-06-21 003453.png
+[11:29:17.846] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220831_130316984_2.jpg
+[11:29:17.847] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220903_010322367_2.jpg
+[11:29:17.847] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220902_215631957_3.jpg
+[11:29:17.847] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20220920_125143842.MOTION-02.ORIGINAL_2.jpg
+[11:29:17.859] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\화면 캡처 2022-08-01 115837.jpg
+[11:29:17.862] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\화면 캡처 2022-08-01 115837.png
+[11:29:17.865] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\화면 캡처 2022-08-07 171622.png
+[11:29:17.889] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\화면 캡처 2022-09-29 233922.png
+[11:29:17.892] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\화면 캡처 2022-10-18 181358.png
+[11:29:17.900] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20221101_105955590_2.jpg
+[11:29:17.901] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230212_024010110.jpg
+[11:29:17.902] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230212_025601437_2.jpg
+[11:29:17.904] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230422_230822530~2.jpg
+[11:29:17.911] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20221101_105955590_2.jpg
+[11:29:17.911] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230212_024010110.jpg
+[11:29:17.912] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230212_025601437_2.jpg
+[11:29:17.913] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230422_230822530~2.jpg
+[11:29:17.916] [T1] list | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\화면 캡처 2022-10-21 005745.png
+[11:29:17.939] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20221101_105955590_2.jpg
+[11:29:17.941] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230422_230822530~2.jpg
+[11:29:17.943] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230212_024010110.jpg
+[11:29:17.943] [T1] tiles | cached done C:\Users\tsusa\OneDrive - Automanix\그림\PXL_20230212_025601437_2.jpg
+[11:29:17.948] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-18-12h58m03s381.png
+[11:29:17.949] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-19-02h04m39s483.png
+[11:29:17.951] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-27-01h49m01s690.png
+[11:29:17.952] [T1] tiles | phase0 C:\Users\tsusa\OneDrive - Automanix\그림\민초로부터 온 퇴장 통보.png
+[11:29:17.952] [T1] tiles | fill image C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-18-12h58m03s381.png
+[11:29:17.954] [T1] tiles | fill image C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-19-02h04m39s483.png
+[11:29:17.954] [T1] tiles | fill image C:\Users\tsusa\OneDrive - Automanix\그림\vlcsnap-2026-01-27-01h49m01s690.png
+[11:29:17.955] [T1] tiles | fill cached C:\Users\tsusa\OneDrive - Automanix\그림\민초로부터 온 퇴장 통보.png
+[11:29:47.477] [T1] trace | KOTU v0.345.0 · 2026-09-06 11:29:47 · pid 14116
+[11:29:47.604] [T1] shell | ShowModule hardware path=(none)
+[11:29:48.810] [T4] exc | ManagementException: 잘못된 클래스입니다.  @ at System.Management.ManagementException.ThrowWithExtendedInfo(ManagementStatus errorCode)
+[11:29:48.873] [T4] exc | DllNotFoundException: Unable to load DLL 'atiadlxx.dll' or one of its dependencies: 지정된 모듈을 찾을 수 없습니다. (0x8007007E) @ at LibreHardwareMonitor.Interop.AtiAdlxx.ADL2_Main_Control_Create(ADL_Main_Memory_AllocDelegate callback, Int32 connectedAdapters, IntPtr& context)
