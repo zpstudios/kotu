@@ -1050,11 +1050,14 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             if (seq != _showSeq) return; // ① 발사 전 낡음(폴더 전환)
             byte[]? bytes = null;
+            var timedOut = false; // A352 배치 3: 시한 초과인가 — 없음 확정과 가르는 표지
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(vm.Path);
-                using var thumb = await file.GetThumbnailAsync(
-                    ThumbnailMode.SingleItem, PreviewDecodeWidth, ThumbnailOptions.ReturnOnlyIfCached);
+                // A352 배치 3: 비블로킹 await라도 영영 안 끝나면 PreviewInFlight가 풀리지 않아
+                // 이 항목의 미리보기가 세션 내내 다시 시도되지 않는다 — 여기도 같은 시한을 건다.
+                var file = await ShellFetch.WaitOrThrowAsync(StorageFile.GetFileFromPathAsync(vm.Path));
+                using var thumb = await ShellFetch.WaitOrThrowAsync(file.GetThumbnailAsync(
+                    ThumbnailMode.SingleItem, PreviewDecodeWidth, ThumbnailOptions.ReturnOnlyIfCached));
                 // A270 ③: 파일 종류 아이콘은 무정보다 — 확장자 타일을 덮지 않는다(FetchTilePreview와
                 // 같은 판정·같은 복구법: Type 판정 한 줄만 지우면 종전 동작). 두 번째 호출부.
                 if (thumb is not null && thumb.Size != 0 && thumb.Type != ThumbnailType.Icon)
@@ -1070,11 +1073,14 @@ public sealed partial class ThumbnailExplorer : UserControl
             catch (Exception ex)
             {
                 bytes = null; // 캐시 썸네일 없음·읽기 실패 — 원본은 어떤 폴백에서도 열지 않는다
-                DiagTrace.Write("tiles", $"cached failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
+                timedOut = ShellFetch.IsTimeout(ex);
+                DiagTrace.Write("tiles", timedOut
+                    ? "shell timeout " + vm.Path // A352 배치 3 — 동기화 중 무기한 대기를 끊은 자리
+                    : $"cached failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
             }
             if (bytes is null)
             {
-                vm.PreviewKnownEmpty = true; // 없음 확정 — 다음 실체화가 다시 묻지 않는다
+                MarkPreviewMiss(vm, timedOut); // 없음 확정 또는 1회 재시도 유예(A352 배치 3)
                 return;
             }
             if (seq != _showSeq) return; // ② 폴더 전환
@@ -1377,6 +1383,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                 var entry = vm.Entry;
                 var wantAudioInfo = IsAudioInfoFile(entry);
                 (byte[]? Bytes, string? Info) result;
+                var timedOut = false; // A352 배치 3: 시한 초과인가 — 없음 확정과 가르는 표지
                 try
                 {
                     result = await ThumbPool.Run(
@@ -1385,14 +1392,19 @@ public sealed partial class ThumbnailExplorer : UserControl
                 catch (Exception ex)
                 {
                     result = (null, null); // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로로
-                    DiagTrace.Write("tiles", $"shell failed {entry.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
+                    // 워커가 던진 예외는 풀이 그대로 옮겨 주므로(ModuleWorker.Run) 여기서 TimeoutException을
+                    // 원형 그대로 만난다 — 시한 초과만 "없음 확정"에서 빼고 나머지는 종전대로다.
+                    timedOut = ShellFetch.IsTimeout(ex);
+                    DiagTrace.Write("tiles", timedOut
+                        ? "shell timeout " + entry.Path // A352 배치 3
+                        : $"shell failed {entry.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
                 }
                 // 튜플을 지역 변수로 풀어 둔다 — 아래 null 판정·재사용이 종전(단일 bytes) 형태 그대로.
                 var bytes = result.Bytes;
                 var info = result.Info;
                 // ② 화면 판정보다 먼저 캐시에 남긴다 — 재활용됐어도 다음 실체화가 재사용한다.
                 if (info is not null) vm.AudioInfo = info;
-                if (bytes is null) vm.PreviewKnownEmpty = true;
+                if (bytes is null) MarkPreviewMiss(vm, timedOut); // A352 배치 3 — 시한 초과는 1회 유예
                 if (seq != _showSeq) return; // ③ 폴더 전환
                 if (bytes is null)
                 {
@@ -1439,12 +1451,36 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
+    /// 미리보기를 못 얻은 항목의 뒷정리 (A352 배치 3) — 두 갈래(캐시 썸네일·셸 썸네일)가 공유한다.
+    /// <para>
+    /// 평범한 실패(썸네일 없음·아이콘형·읽기 실패)는 종전대로 <see cref="ExplorerEntryVm.PreviewKnownEmpty"/>로
+    /// 굳혀 재실체화 때 다시 묻지 않는다. <b>시한 초과만 다르다</b>: 그때는 파일이 아니라 동기화가
+    /// 원인이라 잠시 뒤에는 성공할 수 있으므로 한 번은 유예한다(재실체화 시 1회 재시도).
+    /// 무한 재시도를 막는 것이 <see cref="ExplorerEntryVm.PreviewTimedOut"/>이다 —
+    /// 두 번째 시한 초과부터는 없음 확정으로 넘긴다.
+    /// </para>
+    /// </summary>
+    private static void MarkPreviewMiss(ExplorerEntryVm vm, bool timedOut)
+    {
+        if (!timedOut || vm.PreviewTimedOut)
+        {
+            vm.PreviewKnownEmpty = true;
+            return;
+        }
+        vm.PreviewTimedOut = true; // 첫 시한 초과 — 다음 실체화가 한 번 더 물어본다
+    }
+
+    /// <summary>
     /// 워커 스레드: 타일 지연 교체 1회분 — 셸 썸네일 바이트(A242)와 오디오 정보 텍스트(A270)를
     /// 한 번의 왕복으로 함께 읽는다(StorageFile 취득도 1회. 파일당 워커 왕복이 2회가 되면
     /// 게이트 상한이 사실상 반토막 나고 seq 대조도 두 벌이 된다 — 통합이 그 둘을 다 막는다).
     /// 썸네일 = ExplorerPane.FetchThumbnail 이식·요청 크기만 PreviewDecodeWidth(이미지 실디코드
     /// 폭과 통일 — A275에서 256 → 768). StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는
-    /// 여기서 동기 대기한다(전용 스레드라 UI 교착 없음). cachedOnly(A175): 옵션 없는 호출은
+    /// 여기서 동기 대기한다(전용 스레드라 UI 교착 없음) — <b>단 무기한이 아니다</b>: A352 배치 3부터
+    /// 셸 호출은 <see cref="ShellFetch.WaitOrThrow{T}"/>로 시한(5초)을 건다. 실측 근거 = 갓 복사된
+    /// OneDrive 폴더의 파일에서 이 두 호출이 영구 대기해 워커 3칸이 전부 걸렸다(그 뒤 폴더 전체의
+    /// 셸 썸네일이 멈췄다). 시한 초과는 TimeoutException으로 호출부에 올라간다.
+    /// cachedOnly(A175): 옵션 없는 호출은
     /// 캐시가 비면 시스템이 원본을 열어 생성하므로 placeholder에서는 하이드레이션(전체
     /// 다운로드)이 된다 — ReturnOnlyIfCached로 캐시에 없으면 null.
     /// <b>A270 ③</b>: 셸이 돌려준 것이 파일 종류 아이콘(Type = Icon)이면 Bytes = null로 접는다 —
@@ -1455,7 +1491,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     private static (byte[]? Bytes, string? Info) FetchTilePreview(
         string path, bool cachedOnly, bool wantAudioInfo)
     {
-        var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
+        var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path));
 
         string? info = null;
         if (wantAudioInfo)
@@ -1470,11 +1506,10 @@ public sealed partial class ThumbnailExplorer : UserControl
             }
         }
 
-        using var thumb = (cachedOnly
-                ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth,
-                    ThumbnailOptions.ReturnOnlyIfCached)
-                : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth))
-            .AsTask().GetAwaiter().GetResult();
+        using var thumb = ShellFetch.WaitOrThrow(cachedOnly
+            ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth,
+                ThumbnailOptions.ReturnOnlyIfCached)
+            : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth));
         if (thumb is null || thumb.Size == 0) return (null, info);
         if (thumb.Type == ThumbnailType.Icon) return (null, info); // A270 ③ — 교체 생략(복구 = 이 줄 삭제)
 
@@ -1495,10 +1530,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private static string? FetchAudioInfo(StorageFile file)
     {
-        var props = file.Properties.RetrievePropertiesAsync(
-                ["System.Media.Duration", "System.Audio.EncodingBitrate",
-                 "System.Audio.SampleRate", "System.Audio.ChannelCount"])
-            .AsTask().GetAwaiter().GetResult();
+        var props = ShellFetch.WaitOrThrow(file.Properties.RetrievePropertiesAsync(
+            ["System.Media.Duration", "System.Audio.EncodingBitrate",
+             "System.Audio.SampleRate", "System.Audio.ChannelCount"]));
 
         var ticks = props.TryGetValue("System.Media.Duration", out var d) ? (long)PropNumber(d) : 0L;
         var duration = ticks > 0

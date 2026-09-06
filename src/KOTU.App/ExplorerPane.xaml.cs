@@ -496,6 +496,14 @@ public sealed partial class ExplorerPane : UserControl
         _display = arranged; // A204 — 다음 정렬 변경의 입력(현재 표시 순서)
         // A345 배치 1: 데이터 축을 여기서 한 번만 만든다 — 항목 컨테이너는 전부 이 뷰모델을 Tag로 든다.
         _displayVms = arranged.Select(e => new ExplorerEntryVm(e)).ToList();
+        // A352: 상세 줄 초판(크기·날짜)을 여기서 전부 채운다 — 종전에는 RequestDetail이
+        // ContainerContentChanging(CCC) 안에서 행마다 대입했는데, 그 대입이 측정 중인 컨테이너의
+        // TextBlock을 바꿔 재측정을 부르고 한 레이아웃 패스에 수십 건이 겹치면 레이아웃 사이클로
+        // 프로세스가 소멸했다(0xC000027B — 관리 예외 없음). 여기는 ItemsSource 대입(Fill) 전이라
+        // 뷰모델이 아직 아무 컨테이너에도 바인딩돼 있지 않다 — 통지가 아무도 깨우지 않는다.
+        // 비용은 항목당 문자열 조립 2회뿐이라(10,000개 = 2만 회) 수 ms 수준이고, 그 대신
+        // "행 높이를 먼저 확보한다"는 초판의 목적은 실체화 이전에 값이 있으므로 더 잘 달성된다.
+        foreach (var vm in _displayVms) ApplyDetail(vm, DetailInfo.Empty);
         _displayFolder = _folder; // A323 — 이 목록이 속한 폴더(셸 시드의 정합 판정용)
         Fill(arranged); // A345 배치 2 — 리스트는 ItemsSource 대입 한 줄(동기 완결)
         ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
@@ -874,6 +882,16 @@ public sealed partial class ExplorerPane : UserControl
     /// </list>
     /// 표시값(이름·상세·툴팁·체크·잘라내기 흐림)은 x:Bind가 새 항목 값으로 다시 평가하므로
     /// 여기서 손대지 않는다(그것이 뷰모델 축을 만든 이유다 — 배치 1).
+    /// <para>
+    /// <b>불가침 규칙(A352)</b>: 이 호출 스택 안에서는 <b>뷰모델의 통지 속성을 절대 대입하지
+    /// 않는다</b>. CCC는 컨테이너를 측정하는 도중에 불리므로, 대입 → 통지 → x:Bind OneWay →
+    /// 그 컨테이너의 TextBlock 변경 → 재측정이 한 레이아웃 패스 안에서 수십 번 겹치면 WinUI가
+    /// 레이아웃 사이클로 판정해 <b>관리 예외 없이 프로세스를 죽인다</b>(0xC000027B — 실사고:
+    /// 좌 패널을 연 채 항목 60여 개 폴더에서 탐색기로 폴더 생성/복사 → 감시 재스캔). 대입 자리는
+    /// 셋뿐이다 — 초판은 <see cref="RefreshView"/>(ItemsSource 대입 전), 캐시 히트는
+    /// DispatcherQueue 한 틱 뒤, fetch 완료는 await 뒤(이미 레이아웃 밖). 여기서 하는 대입은
+    /// 컨테이너 자신의 속성(AllowDrop 등 — 통지 축이 아니다)까지다.
+    /// </para>
     /// </summary>
     private void OnListContainerContentChanging(
         ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -1299,15 +1317,24 @@ public sealed partial class ExplorerPane : UserControl
     /// 종전 LoadDetailInfoAsync는 목록 전체를 스냅샷해 돌았고, 실체화 상한이 사라진 지금
     /// 그 구조를 두면 10,000개 폴더에서 fetch가 개수에 비례해 폭주한다(가상화의 필수 짝).
     /// <list type="number">
-    /// <item>초판(크기·날짜)을 먼저 채운다 — 상세 줄이 빈 채로 실체화되면 행 높이가 나중에
-    /// 늘어 스크롤이 튄다(종전 MakeListItem의 초판 적용과 같은 역할).</item>
+    /// <item>초판(크기·날짜)은 여기서 채우지 않는다 — <see cref="RefreshView"/>가 목록을
+    /// 만들자마자(ItemsSource 대입 전) 전 항목에 미리 넣는다. A352 이전에는 이 함수가 넣었고,
+    /// 그것이 CCC 스택 안의 통지 대입이라 레이아웃 사이클(프로세스 소멸)의 한 축이었다.</item>
     /// <item>폴더·클라우드 전용(A175)·대상 아닌 확장자는 여기서 끝. 이미 요청한 행도 끝
     /// (재활용 때마다 같은 행이 다시 들어오므로 DetailRequested 표지가 중복을 막는다).</item>
-    /// <item>캐시 히트(경로 + 수정시각 일치)는 워커 없이 즉시 반영 — 같은 폴더 재진입이 값싸다.
+    /// <item>캐시 히트(경로 + 수정시각 일치)는 워커 없이 반영 — 같은 폴더 재진입이 값싸다.
+    /// 단 A352부터 <b>디스패처 한 틱 뒤</b>다: 이 함수는 CCC 스택에서 불리고, 재스캔은 전 항목이
+    /// 히트라 즉시 대입하면 한 레이아웃 패스에 수십 건의 재측정이 겹친다.
     /// 종전의 조각내기(A342 배치 3의 DetailHitChunk·YieldToUiAsync)는 필요가 없어졌다:
     /// 수천 건이 한 덩어리로 도는 일 자체가 사라졌다(보이는 행만 온다).</item>
     /// <item>그 밖은 풀(A194 — 워커 3)로 fetch. 동시 발사 상한은 페인 수명 1벌의 게이트다.</item>
     /// </list>
+    /// <para>
+    /// <b>A352 규칙 — CCC 안에서 뷰모델 통지 속성 대입 금지</b>: 실사고로 레이아웃 사이클이 나
+    /// 프로세스가 소멸했다(0xC000027B, 관리 예외 없음). 대입 자리는 셋으로 고정한다 —
+    /// <b>초판은 <see cref="RefreshView"/></b>(바인딩 전), <b>캐시 히트는 디스패처</b>(한 틱 뒤),
+    /// <b>fetch 완료는 await 뒤</b>(이미 레이아웃 밖 — 이 함수의 첫 진입만 CCC 스택이다).
+    /// </para>
     /// <b>async void인 이유</b>: 이벤트(CCC)에서 직접 부르는 발사 후 망각이라 기다릴 주체가
     /// 없다 — 대신 본문 전체를 try/catch로 감싸 예외가 UI 스레드로 새지 않게 한다.
     /// _infoCache와 뷰모델 대입은 종전대로 UI 스레드 단독이다(워커 람다는 순수 fetch뿐).
@@ -1316,7 +1343,8 @@ public sealed partial class ExplorerPane : UserControl
     {
         try
         {
-            if (vm.DetailText.Length == 0) ApplyDetail(vm, DetailInfo.Empty); // 초판 — 행 높이 확보
+            // A352: 초판(크기·날짜) 대입은 RefreshView로 옮겼다 — 여기(CCC 호출 스택)에서
+            // 뷰모델 통지 속성을 건드리면 레이아웃 사이클이 된다(아래 요약 참고).
             if (vm.DetailRequested || vm.IsFolder || vm.IsPlaceholder) return; // A175 — 하이드레이션 유발 금지
             var kind = InfoKindOf(vm.Name);
             if (kind == InfoKind.None) return;
@@ -1327,8 +1355,21 @@ public sealed partial class ExplorerPane : UserControl
 
             if (_infoCache.TryGetValue(vm.Path, out var hit) && hit.Modified == vm.Entry.Modified)
             {
-                if (hit.Details.Info.Length > 0) ApplyDetail(vm, hit.Details);
-                return; // 캐시 히트는 워커 없이 즉시 반영(종전 동작)
+                // A352: 캐시 히트도 CCC 호출 스택 안이라 **즉시** 대입하면 안 된다 —
+                // 같은 폴더 재진입·재스캔은 전 항목이 히트라 한 레이아웃 패스에 수십 건이
+                // 겹치고, 그것이 이 사고의 실제 재현 경로였다(폴더 생성/복사 → 감시 재스캔).
+                // 디스패처 큐는 레이아웃 밖(현재 패스가 끝난 뒤 UI 스레드)이라 안전하다.
+                // 우선순위는 기본(Normal), 낡음 방어는 발사 시점 seq 대조 — 폴더가 바뀐 뒤
+                // 도착한 대입은 버린다(fetch 완료 경로와 같은 관용구).
+                if (hit.Details.Info.Length > 0)
+                {
+                    var details = hit.Details;
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (seq == _loadSeq) ApplyDetail(vm, details);
+                    });
+                }
+                return; // 캐시 히트는 워커 없이 반영(종전 동작 — 이제 한 틱 뒤)
             }
 
             await _detailGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
@@ -1344,8 +1385,11 @@ public sealed partial class ExplorerPane : UserControl
                 {
                     return; // 페인이 내려가며 풀이 닫힘
                 }
-                catch
+                catch (Exception ex)
                 {
+                    // A352 배치 3: 시한 초과도 여기로 온다 — _infoCache에 넣지 않으므로(아래 캐시 대입
+                    // 자체를 건너뛴다) 다음 진입에서 다시 물어본다. 그 밖의 실패는 종전과 같다.
+                    if (ShellFetch.IsTimeout(ex)) DiagTrace.Write("detail", "timeout " + vm.Path);
                     return; // 속성·헤더를 못 읽는 파일은 빈 칸 유지
                 }
                 if (DiagTrace.Enabled) DiagTrace.Write("detail", "done " + vm.Path); // A352 배치 1
@@ -1403,9 +1447,10 @@ public sealed partial class ExplorerPane : UserControl
             {
                 // 문서를 실제로 여는 비용(암호 PDF는 예외 → 빈 칸)이지만 워커 + 캐시라 수용 —
                 // PdfPane.LoadDocumentAsync와 같은 API를 동기 대기(FetchThumbnail 관용구)로 쓴다.
-                var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
-                var doc = Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file)
-                    .AsTask().GetAwaiter().GetResult();
+                // A352 배치 3: 셸 호출은 전부 시한(ShellFetch)을 건다 — OneDrive 동기화 중 파일에서
+                // 영구 대기가 실측됐고, 워커 3칸이 그렇게 걸리면 상세 줄 전체가 조용히 멈춘다.
+                var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path));
+                var doc = ShellFetch.WaitOrThrow(Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file));
                 if (doc.PageCount == 0) return DetailInfo.Empty;
                 var pages = doc.PageCount == 1 ? "1 page" : $"{doc.PageCount} pages";
                 return new DetailInfo(pages, "Pages: " + doc.PageCount);
@@ -1436,9 +1481,9 @@ public sealed partial class ExplorerPane : UserControl
     /// A199에서 해상도 조각이 탈락하며 길이 단일 조회로 복귀.)</summary>
     private static long FetchDurationTicks(string path)
     {
-        var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
-        var props = file.Properties.RetrievePropertiesAsync(["System.Media.Duration"])
-            .AsTask().GetAwaiter().GetResult();
+        var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path)); // A352 배치 3 — 시한
+        var props = ShellFetch.WaitOrThrow(
+            file.Properties.RetrievePropertiesAsync(["System.Media.Duration"]));
         return props.TryGetValue("System.Media.Duration", out var d) && d is ulong u ? (long)u : 0L;
     }
 
@@ -1446,10 +1491,9 @@ public sealed partial class ExplorerPane : UserControl
     /// 키만 이미지용 System.Image.*다. ImageViewerView의 System.Image.BitDepth 조회와 같은 계열). 없으면 0.</summary>
     private static (int Width, int Height) FetchImageSize(string path)
     {
-        var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
-        var props = file.Properties.RetrievePropertiesAsync(
-                ["System.Image.HorizontalSize", "System.Image.VerticalSize"])
-            .AsTask().GetAwaiter().GetResult();
+        var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path)); // A352 배치 3 — 시한
+        var props = ShellFetch.WaitOrThrow(file.Properties.RetrievePropertiesAsync(
+            ["System.Image.HorizontalSize", "System.Image.VerticalSize"]));
         var width = props.TryGetValue("System.Image.HorizontalSize", out var w) && w is uint uw ? (int)uw : 0;
         var height = props.TryGetValue("System.Image.VerticalSize", out var h) && h is uint uh ? (int)uh : 0;
         return (width, height);
@@ -1530,7 +1574,8 @@ public sealed partial class ExplorerPane : UserControl
     /// <summary>
     /// 워커 스레드: 셸 썸네일을 PNG/JPG 바이트로 추출한다. 없으면 null.
     /// StorageFile API는 agile이라 워커에서 불러도 되고, WinRT 비동기는 여기서 동기 대기한다
-    /// (전용 스레드라 UI 교착 없음).
+    /// (전용 스레드라 UI 교착 없음) — <b>단 무기한이 아니다</b>: A352 배치 3부터 시한(ShellFetch,
+    /// 5초)을 건다. 시한을 넘기면 TimeoutException이고 호출부는 종전 실패와 같게 글리프를 유지한다.
     /// cachedOnly(A175) = 클라우드 전용(placeholder) 파일 — 캐시·클라우드 제공 썸네일만 요청
     /// (ReturnOnlyIfCached). 옵션 없는 호출은 캐시가 비면 시스템이 원본을 열어 생성하므로
     /// placeholder에서는 하이드레이션(전체 다운로드)이 된다. 캐시에 없으면 null → 글리프 유지.
@@ -1538,11 +1583,10 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private static byte[]? FetchThumbnail(string path, bool cachedOnly)
     {
-        var file = StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult();
-        using var thumb = (cachedOnly
-                ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96, ThumbnailOptions.ReturnOnlyIfCached)
-                : file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96))
-            .AsTask().GetAwaiter().GetResult();
+        var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path));
+        using var thumb = ShellFetch.WaitOrThrow(cachedOnly
+            ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96, ThumbnailOptions.ReturnOnlyIfCached)
+            : file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96));
         if (thumb is null || thumb.Size == 0) return null;
 
         using var stream = thumb.AsStreamForRead();

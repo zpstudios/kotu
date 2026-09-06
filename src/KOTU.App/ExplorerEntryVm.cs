@@ -41,6 +41,14 @@ namespace KOTU.App;
 /// 비트맵만은 캐시하지 않는다 — 768px 디코드 × 스크롤한 항목 수는 메모리 폭주이고,
 /// 셸 썸네일 캐시가 이미 있어 재추출이 싸다는 것이 A242의 근거 그대로다.
 /// </para>
+/// <para>
+/// <b>A352 불가침 규칙</b>: 아래 <b>통지 있는</b> 속성(DetailText·TooltipText·IsChecked·
+/// ContentOpacity·IsCurrent)은 <b>ContainerContentChanging 호출 스택 안에서 대입하지 않는다</b> —
+/// 통지가 x:Bind OneWay를 타고 측정 중인 컨테이너를 바꿔 재측정을 부르고, 한 레이아웃 패스에
+/// 수십 건이 겹치면 레이아웃 사이클로 프로세스가 소멸한다(0xC000027B, 관리 예외 없음 — 실사고).
+/// 대입은 셋 중 하나여야 한다: 목록을 만든 직후(ItemsSource 대입 전) · DispatcherQueue 한 틱 뒤 ·
+/// await 뒤(비동기 완료). 통지가 없는 내부 표지·캐시(DetailRequested·PreviewText 등)는 규칙 밖이다.
+/// </para>
 /// </summary>
 public sealed class ExplorerEntryVm : INotifyPropertyChanged
 {
@@ -102,6 +110,13 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
     /// 물어보면 왕복 스크롤이 그대로 IO 폭주가 된다.
     /// </summary>
     internal bool PreviewKnownEmpty { get; set; }
+
+    /// <summary>
+    /// 미리보기 요청이 셸 시한(ShellFetch.Timeout)을 한 번 넘겼는지 (A352 배치 3).
+    /// 시한 초과는 파일이 아니라 동기화가 원인일 수 있어 한 번은 유예하고(재실체화 시 재시도),
+    /// 두 번째부터는 PreviewKnownEmpty로 굳힌다 — 무한 재시도 방지.
+    /// </summary>
+    internal bool PreviewTimedOut { get; set; }
 
     /// <summary>
     /// 지금 이 항목의 미리보기를 비동기로 요청해 둔 상태인지 — 같은 뷰모델이 위상 1을 두 번
