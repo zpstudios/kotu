@@ -251,7 +251,7 @@ Seven modules. Switch between them from the menu at the bottom left.
   the two display toggles grey out until you switch back, which leaves the text on its own to read.
   You can still select and copy, and save any edits you made earlier. For
   Markdown and HTML the view mode is a rendered view, described below. The button is greyed out
-  only when nothing is open, for PDFs (always view-only) and for files opened read-only (over 4 MB).
+  only when nothing is open, for PDFs (always view-only) and for files opened read-only (over about 1 MB of text).
 - **Markdown is rendered.** A `.md` or `.markdown` file opens as a formatted preview — headings,
   bold and italic, inline code and code blocks, lists, quotes, horizontal rules and links — and the
   view button switches between that preview and the editor. The preview is built
@@ -260,7 +260,7 @@ Seven modules. Switch between them from the menu at the bottom left.
   straight in the editor, and at that size the view button locks the editor instead of rendering
   the preview.
 - **HTML is rendered too.** A `.html` or `.htm` file opens as a real web page first, and the
-  view button switches to the source editor and back. Files over 4 MB are view-only: the page
+  view button switches to the source editor and back. HTML files over 4 MB are view-only: the page
   renders in full, but the editor stays empty and the view button is greyed out. The page is rendered
   from the saved file on disk — relative images and stylesheets next to it work, and unsaved edits
   stay in the editor until you save and switch again. It is a viewer, not a browser: scripts inside
@@ -277,7 +277,9 @@ Seven modules. Switch between them from the menu at the bottom left.
   **N changed** (e.g. `12 changed`) appears in the bottom bar while there is — N sums, over
   each edited spot, the larger of the characters removed and inserted there.
 - Closing or switching away with unsaved changes asks first: **Save** / **Don't save** / **Cancel**.
-- Files larger than 4 MB open read-only, showing the first 4 MB.
+- Text files larger than about 1 MB of text open read-only: KOTU shows the first 1,048,576 characters so the
+  window stays responsive, and editing, saving, and full printing are off for that view (a notice at the top
+  says so). Files larger than 4 MB are cut at 4 MB before that.
 - `Tab` inserts a tab character in the editor.
 - The text fills the full width of the window. To make it larger or smaller, zoom with
   `Ctrl`+wheel — 20% to 500% of the normal size, 10% per notch — or with `Ctrl`+`+` / `Ctrl`+`-`
