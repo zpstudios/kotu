@@ -2207,6 +2207,16 @@
     `WhenAny`) — `FetchTilePreview`·`FetchAudioInfo`·`FillCachedThumbnailAsync`·`FetchDetailInfo`(PDF/재생시간/해상도)·`FetchThumbnail` 전수 ·
     첫 타임아웃 `PreviewTimedOut` 1회 재시도, 두 번째 KnownEmpty · 트레이스 `shell timeout`/`detail timeout`. 범위 밖(후속 후보) = 모듈 QuickInfo·
     `ExplorerFileOps:1095`의 같은 동기 대기. **실기기 판정 = 좌 패널 연 채 `그림`에서 폴더 생성/복사 → 무크래시.**
+  - ⚠️ **v0.348.0에서도 크래시(2026-09-06 21:26 · `docs/assets/A352-trace-2026-09-06-d.log` 7,740행~)** — 좌 패널 연 채 `fff` 생성 → 수 초 내 사망.
+    판독: 첫 진입(69개)은 무사 · 감시 재스캔(70개) → 좌·중앙 각 69/70 컨테이너 재활용 → **두 표면 모두 전 항목(69·70)이 위상 0을 탄다**(WinUI 기본
+    CacheLength 4배 뷰포트라 70개는 전부 실체화 — 첫 진입에서도 같다) → 1.8초 뒤 목록 끝 근처에서 `fill cached 코인챗_회의실.jpg`를 끝으로 UI
+    정지·사망. **2차 크래시와 같은 위치(재실체화 버스트의 끝)**. 배치 3 ⓐ(CCC 동기 대입 제거)는 원인이 아니었다 — 갈래 실험(F11)은 재현이 확률적
+    이라면 무효일 수 있다. 관리 예외 0 · 트레이스로는 더 좁혀지지 않는다(UI 정지형 사망은 마지막 줄이 범인이 아니다).
+    **다음 = WER 문제 서명(이벤트 1001 P1~P10) — 레이아웃 사이클/기타 XAML failfast의 종류가 거기서 갈린다** + 대조 실험 2건(사용자): ⓐ Trace log
+    **끈 채** 같은 재현(트레이스의 동기 flush가 레이아웃 안에서 도는 영향 배제) ⓑ 좌 패널 닫은 채 재현 **2회 이상**(확률성 판정).
+    코드 정독 후보(재스캔에서만 성립하는 것) = ⓒ `RefreshView`가 `ItemsSource`를 갈아 끼우는 사이 **옛 뷰모델의 비동기 fill이 완료되어
+    `LivePreviewHostOf(옛 vm)` → `ContainerFromItem(목록에 없는 항목)`** — 낡은 항목으로 컨테이너 조회 · ⓓ 재스캔 뒤 `_infoCache` 히트 70건의
+    디스패처 콜백이 실체화된 70행의 재측정을 연쇄 · ⓔ 좌 리스트 `ApplyCurrentFileMark`/`ScrollIntoView`가 재실체화 중에 호출.
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
