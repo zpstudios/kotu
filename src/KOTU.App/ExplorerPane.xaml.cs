@@ -919,7 +919,19 @@ public sealed partial class ExplorerPane : UserControl
             // A352 배치 1: 위상 0 = 행 실체화. 대형 폴더에서 초당 수십 줄이 나오는 가장 뜨거운
             // 기록 지점이라 게이트를 먼저 읽는다(꺼짐이면 bool 하나로 끝난다).
             if (DiagTrace.Enabled) DiagTrace.Write("list", "phase0 " + vm.Path);
-            RequestDetail(vm, _loadSeq); // 보이는 행만 상세 조각 요청
+            // A352 배치 4: CCC 스택 안에서 발사하지 않는다 — 중앙 표면의 위상 콜백과 같은 규칙이다
+            // (ThumbnailExplorer 클래스 상단 "불가침 규칙": XAML 콜백 안에서는 WinRT/COM 호출도
+            // 비동기 발사도 하지 않는다. 발사 함수의 첫 await 앞 동기 구간이 곧 XAML 작업 안이라,
+            // 그 구간에 셸 호출이 끼면 COM 대기가 메시지를 펌프해 XAML을 재진입시킨다).
+            // RequestDetail의 첫 await 앞에는 셸 호출이 없지만(_infoCache 조회·게이트 WaitAsync뿐)
+            // 대칭을 지켜 둔다 — 여기에 셸 호출이 하나 끼는 순간 되살아나는 종류의 사고다.
+            var seq = _loadSeq;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                // 한 틱 사이의 폴더 전환·컨테이너 재활용은 접는다(중앙 표면과 같은 두 겹 대조).
+                if (seq != _loadSeq || !ReferenceEquals(item.Content, vm)) return;
+                RequestDetail(vm, seq); // 보이는 행만 상세 조각 요청
+            });
         }
     }
 
@@ -1313,7 +1325,8 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>
     /// 행 하나의 상세 조각(재생시간·해상도·페이지 수·압축률·인코딩 — A6 → A155 → A199) 요청.
-    /// A345 배치 2: 호출부는 <b>보이는 행마다 도는 ContainerContentChanging</b> 하나뿐이다 —
+    /// A345 배치 2: 호출부는 <b>보이는 행마다 도는 ContainerContentChanging</b> 하나뿐이다
+    /// (A352 배치 4부터 그 안에서 직접 부르지 않고 디스패처 한 틱 뒤로 미룬다) —
     /// 종전 LoadDetailInfoAsync는 목록 전체를 스냅샷해 돌았고, 실체화 상한이 사라진 지금
     /// 그 구조를 두면 10,000개 폴더에서 fetch가 개수에 비례해 폭주한다(가상화의 필수 짝).
     /// <list type="number">
@@ -1333,7 +1346,8 @@ public sealed partial class ExplorerPane : UserControl
     /// <b>A352 규칙 — CCC 안에서 뷰모델 통지 속성 대입 금지</b>: 실사고로 레이아웃 사이클이 나
     /// 프로세스가 소멸했다(0xC000027B, 관리 예외 없음). 대입 자리는 셋으로 고정한다 —
     /// <b>초판은 <see cref="RefreshView"/></b>(바인딩 전), <b>캐시 히트는 디스패처</b>(한 틱 뒤),
-    /// <b>fetch 완료는 await 뒤</b>(이미 레이아웃 밖 — 이 함수의 첫 진입만 CCC 스택이다).
+    /// <b>fetch 완료는 await 뒤</b>(이미 레이아웃 밖). A352 배치 4부터는 <b>첫 진입도 CCC
+    /// 스택이 아니다</b> — 호출부(OnListContainerContentChanging)가 디스패처 한 틱 뒤로 미룬다.
     /// </para>
     /// <b>async void인 이유</b>: 이벤트(CCC)에서 직접 부르는 발사 후 망각이라 기다릴 주체가
     /// 없다 — 대신 본문 전체를 try/catch로 감싸 예외가 UI 스레드로 새지 않게 한다.

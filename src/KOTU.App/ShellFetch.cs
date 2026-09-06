@@ -44,7 +44,17 @@ internal static class ShellFetch
         }
     }
 
-    /// <summary>UI 스레드 await용 — <see cref="WaitOrThrow{T}"/>와 같은 시한·같은 예외다.</summary>
+    /// <summary>
+    /// UI 스레드 await용 — <see cref="WaitOrThrow{T}"/>와 같은 시한·같은 예외다.
+    /// <para>
+    /// <b>A352 배치 4부터 사용처가 없다</b>(유일한 호출부였던 ThumbnailExplorer.
+    /// FillCachedThumbnailAsync를 삭제했다). 남겨 두되 <b>새로 쓰지 말 것</b>:
+    /// UI 스레드에서 <c>StorageFile</c> 취득·썸네일·속성 조회를 부르면 <c>await</c> 앞의 호출
+    /// 자체가 동기로 COM을 왕복하고, 그 대기가 메시지를 펌프해 XAML의 큐된 작업을 재진입시켜
+    /// 프로세스가 죽는다(힙 포함 크래시 덤프로 확정 — ThumbnailExplorer 클래스 상단
+    /// "불가침 규칙" 문단). 셸 호출은 워커 스레드에서 <see cref="WaitOrThrow{T}"/>로 한다.
+    /// </para>
+    /// </summary>
     internal static async Task<T> WaitOrThrowAsync<T>(IAsyncOperation<T> operation)
     {
         try

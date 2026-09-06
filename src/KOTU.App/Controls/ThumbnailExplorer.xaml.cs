@@ -36,14 +36,27 @@ namespace KOTU.App.Controls;
 /// DeferPreview). 미리보기 갈래는 위상 0(폴백 타일을 동기로) → 위상 1(비동기 요청)로 옮겼다.
 /// </para>
 /// <para>
-/// <b>미리보기 3갈래 (A352 배치 2 개정)</b>: ① 폴더 = 글리프(위상 0에서 끝)
-/// ② 클라우드 전용(placeholder) 이미지 = 캐시 전용 셸 썸네일(A175 하이드레이션 금지)
-/// ③ <b>그 외 전 파일 = 셸 썸네일</b>(A242 — 로컬 이미지 원본 포함. 텍스트 프리뷰 A233만
-/// 그 앞에 끼어든다). 종전에는 로컬 이미지 원본이 네 번째 갈래로 <c>BitmapImage.UriSource</c>
-/// 직접 디코드를 썼는데, A352 트레이스에서 <b>그 경로가 XAML 네이티브 안에서 프로세스를
-/// 죽였다</b>(관리 예외 없음 · 이벤트 1000 0xC000027B stowed · 문제의 PNG는 파일 자체가
-/// 정상이었고 폴더 밖으로 옮기면 크래시가 사라졌다). 그래서 직접 디코드를 폐기하고
-/// 이미지도 워커 fetch → 바이트 → <c>SetSourceAsync</c>라는 검증된 관용구로 통일했다.
+/// <b>미리보기 2갈래 (A352 배치 4 개정)</b>: ① 폴더 = 글리프(위상 0에서 끝)
+/// ② <b>그 외 전 파일 = 워커 셸 썸네일</b>(A242 — 로컬 이미지 원본도 클라우드 전용
+/// (placeholder) 파일도 같은 길이다. placeholder는 워커의 cachedOnly로 캐시·클라우드 제공
+/// 썸네일만 요청해 A175 하이드레이션 금지를 지킨다. 텍스트 프리뷰 A233만 그 앞에 끼어든다).
+/// 배치 2에서 로컬 이미지 원본 직접 디코드(<c>BitmapImage.UriSource</c>)를, 배치 4에서
+/// placeholder 전용 UI 스레드 갈래(FillCachedThumbnailAsync)를 차례로 없앤 결과다.
+/// </para>
+/// <para>
+/// <b>불가침 규칙(A352 배치 4 — 확정 원인)</b>: <b>UI 스레드에서 WinRT 셸 API
+/// (<c>StorageFile</c> 취득 · <c>GetThumbnailAsync</c> · 속성 조회)를 부르지 않는다.</b>
+/// 힙 포함 크래시 덤프의 stowed 스택 46프레임이 원인을 확정했다: 관리 코드 →
+/// windows.storage.dll → combase(교차 아파트 COM 호출) → rpcrt4 → combase 대기 →
+/// user32 메시지 펌프(<c>CoWaitForMultipleHandles</c>가 <b>메시지를 펌프한다</b>) →
+/// CoreMessaging 디스패치 → Microsoft.UI.Xaml.dll 내부 작업 → RoFailFast(E_UNEXPECTED).
+/// 즉 UI 스레드의 셸 호출은 그 대기 동안 XAML의 큐된 작업(레이아웃·컨테이너 준비·바인딩)을
+/// <b>재진입</b>시키고, XAML은 자기 상태 불일치를 만나 관리 예외 없이 프로세스를 죽인다
+/// (WinUI 3는 STA라 이 재진입이 가능하다 — UWP의 ASTA와 다른 점이다). <c>await</c> 앞의
+/// 호출 자체가 UI 스레드에서 동기로 COM을 왕복하므로 async라는 사실은 방어가 되지 않는다.
+/// 짝 규칙: <b>XAML 콜백(ContainerContentChanging · 위상 콜백 · SizeChanged · Loaded) 안에서는
+/// 비동기 발사도 시작하지 않는다</b> — 발사 함수의 첫 <c>await</c> 앞 동기 구간이 곧 XAML
+/// 작업 안이기 때문이다. 발사는 <c>DispatcherQueue.TryEnqueue</c>로 한 틱 미룬다.
 /// </para>
 /// <para>
 /// <b>이 표면의 전제가 뒤집힌 지점</b>: 종전 주석이 곳곳에서 근거로 삼던 "타일은 재사용되지
@@ -59,9 +72,9 @@ public sealed partial class ThumbnailExplorer : UserControl
 {
     /// <summary>
     /// 미리보기 요청 폭 상한(물리 px) — 원본 크기 디코드로 메모리가 폭주하지 않게.
-    /// 이 파일의 미리보기 2경로가 공유하는 유일한 수치다: ① placeholder 캐시 전용 셸 썸네일
-    /// (FillCachedThumbnailAsync) ② 워커 지연 교체 셸 썸네일(FetchTilePreview) — 둘이 같은 값을
-    /// 써야 같은 파일이 경로에 따라 다른 선명도로 뜨는 일이 없다.
+    /// 미리보기 요청이 한 경로(워커 FetchTilePreview)로 통일된 A352 배치 4부터는 그 한 곳이
+    /// 쓰는 값이다 — placeholder도 같은 폭으로(옵션만 ReturnOnlyIfCached) 요청하므로 같은 파일이
+    /// 경로에 따라 다른 선명도로 뜨는 일이 없다.
     /// (A352 배치 2 이전에는 세 번째로 이미지 실디코드 StartImagePreview의
     /// BitmapImage.DecodePixelWidth가 있었다 — 그 갈래를 폐기하면서 로컬 이미지도 ②를 쓴다.
     /// 요청 폭이 같으므로 화질은 종전과 동일하다.)
@@ -741,9 +754,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         return host;
     }
 
-    /// <summary>미리보기 이미지 요소 1개 (A345 배치 4) — 두 갈래(placeholder 캐시 썸네일·셸
-    /// 썸네일)가 같은 배치(Uniform · 여백 4)를 쓰므로 한자리로 모았다
-    /// (A352 배치 2 이전에는 이미지 원본 직접 디코드 갈래까지 셋이었다).</summary>
+    /// <summary>미리보기 이미지 요소 1개 (A345 배치 4) — 배치(Uniform · 여백 4)를 한자리에 모아
+    /// 둔다. 갈래가 셋(이미지 원본 직접 디코드·placeholder 캐시 썸네일·셸 썸네일)이던 시절의
+    /// 공통 조각이었고, A352 배치 2·4에서 앞의 둘이 사라져 지금은 셸 썸네일 갈래 전용이다.</summary>
     private static Image MakePreviewImage(ImageSource source) => new()
     {
         Source = source,
@@ -769,50 +782,58 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 위상 1 (A345 배치 3): 파일을 읽어야 하는 미리보기 갈래를 발사한다 — 종전 MakeTile이 조립
     /// 시점에 고르던 갈래를 <b>보이는 타일에서만</b> 고르는 것으로 옮겼다(A339 DeferPreview의
     /// 뷰포트 판정이 하던 일을 이제 XAML 가상화 패널이 대신한다). 갈래 순서:
-    /// 폴더(위상 0에서 끝) → 클라우드 전용 이미지(캐시 썸네일만 — A175) → 텍스트(A233) →
-    /// 그 외 전 파일 = 셸 썸네일(A242, 단일 판정 지점).
+    /// 폴더(위상 0에서 끝) → 텍스트(A233) → 그 외 전 파일 = 셸 썸네일(A242, 단일 판정 지점).
     /// <b>A352 배치 2</b>: 로컬 이미지 원본 전용 갈래(StartImagePreview)를 없애고 셸 썸네일로
-    /// 합쳤다 — 이미지도 다른 파일과 같은 길을 간다.
+    /// 합쳤다. <b>A352 배치 4</b>: 클라우드 전용 이미지 전용 갈래(FillCachedThumbnailAsync)도
+    /// 없앴다 — 이미지든 placeholder든 다른 파일과 같은 길을 간다.
     /// 진입 즉시 재활용 대조(<c>ReferenceEquals</c>)를 하는 이유: 위상 콜백은 <b>다음 프레임</b>에
     /// 오므로 그 사이 컨테이너가 다른 항목으로 재활용됐을 수 있다.
+    /// <para>
+    /// <b>A352 배치 4 — 이 콜백 안에서는 아무것도 발사하지 않는다.</b> 위상 콜백은 XAML의 작업
+    /// 큐 안에서 돌고, 발사 함수의 첫 <c>await</c> 앞 동기 구간(게이트 WaitAsync · 트레이스 ·
+    /// 배지 추가)이 그 안에서 실행된다. 그 구간이 셸 호출로 이어지면 COM 대기가 메시지를 펌프해
+    /// XAML을 재진입시키고 프로세스가 죽는다(클래스 상단 "불가침 규칙" 문단 — 크래시 덤프로
+    /// 확정). 그래서 갈래 선택부터 배지·발사까지 통째로 <c>DispatcherQueue.TryEnqueue</c>로 한 틱
+    /// 미룬다 — 그 틱에서는 이미 레이아웃 밖이라 재진입할 XAML 작업이 없다. 미룬 뒤에는 낡음을
+    /// 다시 본다(seq = 폴더 전환 · <c>ReferenceEquals</c> = 같은 폴더 안 컨테이너 재활용).
+    /// </para>
     /// </summary>
     private void OnTilePreviewPhase(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.ItemContainer is not GridViewItem item ||
             args.Item is not ExplorerEntryVm vm ||
             !ReferenceEquals(item.Content, vm)) return;
-        if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
+        // 미리보기 자리가 있는 타일인지만 확인한다 — 실제로 그릴 자리는 한 틱 뒤에 다시 찾는다
+        // (A345 배치 4의 LivePreviewHostOf 규칙: 자리는 붙잡지 않고 적용 시점에 조회한다).
+        if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is null) return;
         var entry = vm.Entry;
         var seq = _showSeq; // 발사 시점의 회차 — 폴더가 바뀌면 이 값으로 완료를 버린다
-        // A175: 클라우드 전용 이미지는 원본 디코드가 하이드레이션(전체 다운로드)이다 —
-        // 원본은 절대 열지 않고 캐시·클라우드 제공 썸네일만 시도한다(이 갈래만 이미지 고유다).
-        if (IsImageFile(entry.Name) && entry.IsPlaceholder)
+        DispatcherQueue.TryEnqueue(() =>
         {
-            // A352 배치 1: 위상 1의 갈래 선택 — 마지막 줄의 갈래가 곧 용의자다(뜨거운 경로).
-            if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill cached " + entry.Path);
-            _ = FillCachedThumbnailAsync(vm, seq);
-            return;
-        }
-        // A352 배치 2: 로컬 이미지 원본은 더 이상 특별 취급하지 않는다 — 아래 셸 썸네일 갈래로
-        // 함께 내려간다(종전 StartImagePreview = BitmapImage.UriSource 직접 디코드는 폐기).
-        if (IsTextPreviewFile(entry)) // A233 — 내용 프리뷰
-        {
-            if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill text " + entry.Path); // A352 배치 1
-            _ = FillTextPreviewAsync(vm, seq);
-            return;
-        }
-        // A242 — 그 외 전 파일: 셸 썸네일. 대기 배지는 실제로 요청하는 이 시점에만 붙인다
-        // (요청하지도 않은 타일에 "기다리는 중" 표시가 있으면 거짓말이다 — A339의 근거 승계).
-        // A345 배치 4: 배지 참조는 넘기지 않는다 — 완료 시점의 자리가 이 host라는 보장이 없어,
-        // 걷어내기가 아니라 그 자리를 통째로 다시 그리는 방식으로 바꿨다(RedrawFallbackTile).
-        // A352 배치 2: 로컬 이미지 원본도 여기로 온다. 셸이 이미지에 파일 종류 아이콘
-        // (ThumbnailType.Icon)을 돌려주는 건 손상·미지원 형식뿐이므로, FetchTilePreview의
-        // A270 ③ 규칙(아이콘형 = Bytes null → 확장자 타일 유지)은 이미지에도 그대로 옳다.
-        host.Children.Add(MakePendingBadge());
-        // A352 배치 1: 셸 썸네일 갈래 — 인프로세스 셸 핸들러가 도는 유일한 경로다(A352 1순위 가설
-        // 후보였던 자리). 마지막 줄이 여기서 멈추면 그 파일의 핸들러를 의심한다.
-        if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill shell " + entry.Path);
-        _ = FillShellThumbnailAsync(vm, seq);
+            // 한 틱 사이에 폴더가 바뀌었거나 이 컨테이너가 다른 항목으로 재활용됐으면 접는다.
+            if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return;
+            if (IsTextPreviewFile(entry)) // A233 — 내용 프리뷰
+            {
+                if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill text " + entry.Path); // A352 배치 1
+                _ = FillTextPreviewAsync(vm, seq);
+                return;
+            }
+            // A242 — 그 외 전 파일: 셸 썸네일. 대기 배지는 실제로 요청하는 이 시점에만 붙인다
+            // (요청하지도 않은 타일에 "기다리는 중" 표시가 있으면 거짓말이다 — A339의 근거 승계).
+            // 붙일 자리는 지금 이 항목이 얹혀 있는 자리다(위상 콜백에서 잡아 둔 host가 아니다).
+            // A352 배치 4: placeholder 갈래도 여기로 합쳐졌다 — 종전에는 배지 없이 돌았지만 두
+            // 갈래가 다르게 보일 이유가 없어 배지 붙는 쪽으로 통일했다(잠깐 보였다 사라진다).
+            // A352 배치 2·4: 로컬 이미지 원본도 클라우드 전용 파일도 여기로 온다. 셸이 이미지에
+            // 파일 종류 아이콘(ThumbnailType.Icon)을 돌려주는 건 손상·미지원 형식뿐이므로,
+            // FetchTilePreview의 A270 ③ 규칙(아이콘형 = Bytes null → 확장자 타일 유지)은
+            // 이미지에도 그대로 옳고, placeholder는 entry.IsPlaceholder가 워커의 cachedOnly가
+            // 되어 A175(하이드레이션 금지)를 그대로 지킨다.
+            if (LivePreviewHostOf(vm) is { } live) live.Children.Add(MakePendingBadge());
+            // A352 배치 1: 셸 썸네일 갈래 — 인프로세스 셸 핸들러가 도는 유일한 경로다.
+            // 마지막 줄이 여기서 멈추면 그 파일의 핸들러를 의심한다.
+            if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill shell " + entry.Path);
+            _ = FillShellThumbnailAsync(vm, seq);
+        });
     }
 
     /// <summary>
@@ -1013,9 +1034,10 @@ public sealed partial class ThumbnailExplorer : UserControl
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    /// <summary>이미지 모듈 담당 확장자인지 — 담당 목록(ImageFolderNavigator)을 그대로 재사용(A93).</summary>
-    private static bool IsImageFile(string name) =>
-        ExplorerListing.MatchesExtension(name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions);
+    // A352 배치 4: 이미지 확장자 판정(IsImageFile — ImageFolderNavigator.SupportedExtensions
+    // 재사용, A93)을 삭제했다. 마지막 사용처가 "클라우드 전용 이미지만 캐시 전용 썸네일" 갈래
+    // 였는데 그 갈래 자체가 사라져(아래 문단) 이미지인지 여부는 이 표면의 미리보기 선택에 더는
+    // 영향을 주지 않는다 — 폴더가 아니면 전부 같은 길로 간다.
 
     // A352 배치 2: 로컬 이미지 원본 전용 갈래(StartImagePreview — BitmapImage.UriSource +
     // DecodePixelWidth 직접 디코드, A93)를 삭제했다. 근거 = A352 트레이스
@@ -1028,88 +1050,14 @@ public sealed partial class ThumbnailExplorer : UserControl
     // BitmapImage.SetSourceAsync). 이미지 뷰어 본체·좌 그리드가 이미 쓰는 검증된 관용구이고,
     // 요청 폭도 같은 PreviewDecodeWidth(768)라 화질 차이가 없다.
 
-    /// <summary>
-    /// 캐시·클라우드 제공 썸네일을 UI 스레드 비동기로 받아 host에 채운다 (A175 — 클라우드 전용
-    /// 이미지 갈래). ReturnOnlyIfCached라 원본 파일은 열리지 않는다(캐시에 없으면 확장자 타일 유지).
-    /// <para>
-    /// A345 배치 3의 방어 3겹: ① <see cref="ExplorerEntryVm.PreviewInFlight"/> — 같은 항목이 짧은
-    /// 사이에 두 번 실체화돼도 요청은 한 번, ② <c>seq</c> 대조 — 폴더가 바뀌었으면 버린다,
-    /// ③ <see cref="LivePreviewHostOf"/> — <b>적용 시점에 이 항목의 자리를 다시 찾는다</b>
-    /// (A345 배치 4, 낙수 42: 종전에는 발사 때 잡아 둔 host·item을 대조해, 스크롤 왕복으로 다른
-    /// 컨테이너에 재실체화된 항목이 캐시만 채우고 화면은 확장자 타일에 멈췄다). 화면 밖이면
-    /// null이라 그리지 않지만 "썸네일 없음"이라는 사실은 뷰모델에 남으므로(PreviewKnownEmpty)
-    /// 다음 실체화가 헛되이 다시 묻지 않는다. 성공 비트맵은 남기지 않는다 — 재실체화 시 다시
-    /// 가져온다(셸 썸네일 캐시가 있어 싸다는 A242 근거 그대로).
-    /// </para>
-    /// </summary>
-    private async Task FillCachedThumbnailAsync(ExplorerEntryVm vm, int seq)
-    {
-        if (vm.PreviewInFlight) return;
-        vm.PreviewInFlight = true;
-        try
-        {
-            if (seq != _showSeq) return; // ① 발사 전 낡음(폴더 전환)
-            byte[]? bytes = null;
-            var timedOut = false; // A352 배치 3: 시한 초과인가 — 없음 확정과 가르는 표지
-            try
-            {
-                // A352 배치 3: 비블로킹 await라도 영영 안 끝나면 PreviewInFlight가 풀리지 않아
-                // 이 항목의 미리보기가 세션 내내 다시 시도되지 않는다 — 여기도 같은 시한을 건다.
-                var file = await ShellFetch.WaitOrThrowAsync(StorageFile.GetFileFromPathAsync(vm.Path));
-                using var thumb = await ShellFetch.WaitOrThrowAsync(file.GetThumbnailAsync(
-                    ThumbnailMode.SingleItem, PreviewDecodeWidth, ThumbnailOptions.ReturnOnlyIfCached));
-                // A270 ③: 파일 종류 아이콘은 무정보다 — 확장자 타일을 덮지 않는다(FetchTilePreview와
-                // 같은 판정·같은 복구법: Type 판정 한 줄만 지우면 종전 동작). 두 번째 호출부.
-                if (thumb is not null && thumb.Size != 0 && thumb.Type != ThumbnailType.Icon)
-                {
-                    // 스트림 → 바이트 → BitmapImage: ExplorerPane.FetchThumbnail과 같은 변환 관용구
-                    // (검증된 형태만 복제 — thumb를 SetSourceAsync에 직접 넘기는 선례가 없다).
-                    using var stream = thumb.AsStreamForRead();
-                    using var buffer = new MemoryStream((int)thumb.Size);
-                    await stream.CopyToAsync(buffer);
-                    bytes = buffer.ToArray();
-                }
-            }
-            catch (Exception ex)
-            {
-                bytes = null; // 캐시 썸네일 없음·읽기 실패 — 원본은 어떤 폴백에서도 열지 않는다
-                timedOut = ShellFetch.IsTimeout(ex);
-                DiagTrace.Write("tiles", timedOut
-                    ? "shell timeout " + vm.Path // A352 배치 3 — 동기화 중 무기한 대기를 끊은 자리
-                    : $"cached failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
-            }
-            if (bytes is null)
-            {
-                MarkPreviewMiss(vm, timedOut); // 없음 확정 또는 1회 재시도 유예(A352 배치 3)
-                return;
-            }
-            if (seq != _showSeq) return; // ② 폴더 전환
-            try
-            {
-                var bitmap = new BitmapImage();
-                using (var source = new MemoryStream(bytes))
-                    await bitmap.SetSourceAsync(source.AsRandomAccessStream());
-                // ③ 적용 시점에 자리를 다시 찾는다 — 화면 밖이면 그리지 않는다.
-                if (seq != _showSeq || LivePreviewHostOf(vm) is not { } host) return;
-                // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
-                // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
-                // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
-                NavDiagnostics.Mark("prev0");
-                if (DiagTrace.Enabled) DiagTrace.Write("tiles", "cached done " + vm.Path); // A352 배치 1
-                host.Children.Clear();
-                host.Children.Add(MakePreviewImage(bitmap));
-            }
-            catch (Exception ex)
-            {
-                vm.PreviewKnownEmpty = true; // 손상 데이터 디코드 실패 — 확장자 타일 유지
-                DiagTrace.Write("tiles", $"cached decode failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
-            }
-        }
-        finally
-        {
-            vm.PreviewInFlight = false;
-        }
-    }
+    // A352 배치 4: 클라우드 전용(placeholder) 이미지 전용 갈래 FillCachedThumbnailAsync를
+    // 삭제했다 — 이 표면에서 UI 스레드가 StorageFile을 만지던 유일한 자리였고, 힙 포함 크래시
+    // 덤프의 stowed 스택이 지목한 곳이 정확히 여기다(클래스 상단 "불가침 규칙" 문단).
+    // 대체는 신설이 아니라 통합이다: placeholder도 FillShellThumbnailAsync로 보내면 워커의
+    // FetchTilePreview가 entry.IsPlaceholder를 cachedOnly로 받아 ReturnOnlyIfCached로 요청하므로
+    // A175(하이드레이션 금지)와 A270 ③(아이콘형은 확장자 타일을 덮지 않는다)이 그대로 성립하고,
+    // 요청 폭(PreviewDecodeWidth)도 같은 값이다. 달라지는 것은 대기 배지 하나뿐이다 —
+    // 종전 placeholder 갈래는 배지 없이 돌았는데 공통 갈래라 이제 붙는다(통일 쪽을 택했다).
 
     /// <summary>
     /// 이미지 외 파일 타일: 담당 모듈 액센트 색 배경 + 확장자 대문자 (A93).
@@ -1211,7 +1159,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                 // ③ 적용 시점에 자리를 다시 찾는다(A345 배치 4) — 화면 밖이면 그리지 않는다.
                 if (seq != _showSeq || LivePreviewHostOf(vm) is not { } host) return;
                 // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
-                // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
+                // 기록하므로(NavDiagnostics.Mark) 두 갈래(텍스트 미리보기·셸
                 // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
                 NavDiagnostics.Mark("prev0");
                 if (DiagTrace.Enabled) DiagTrace.Write("tiles", "text done " + vm.Path); // A352 배치 1
@@ -1354,6 +1302,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 그대로 워커의 cachedOnly가 되어 캐시·클라우드 제공 썸네일만 요청한다(A175 하이드레이션
     /// 금지 불변 — 속성 조회도 IsAudioInfoFile이 미리 접는다). 추출 실패·썸네일 없음·비트맵
     /// 디코드 실패는 배지만 걷고 확장자 타일 유지(안내 없음·사양).
+    /// <b>A352 배치 4</b>: 클라우드 전용 이미지도 이 함수로 온다 — UI 스레드에서 StorageFile을
+    /// 부르던 전용 갈래(FillCachedThumbnailAsync)를 삭제하고 이 한 곳으로 합쳤다.
     /// A270: 한 워커 왕복이 썸네일과 오디오 정보를 함께 물어 오므로 대조도 한 벌이다 —
     /// 교체 없음(아이콘형·실패) 갈래에서는 확장자 타일 하단에 정보를 얹고(MakeAudioInfoText),
     /// 앨범아트로 교체된 갈래에서는 아트 하단 반투명 띠로 같은 정보를 얹는다(MakeAudioInfoBand).
@@ -1422,7 +1372,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                     // 적용 시점에 자리를 다시 찾는다(A345 배치 4) — 화면 밖이면 그리지 않는다.
                     if (seq != _showSeq || LivePreviewHostOf(vm) is not { } host) return;
                     // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
-                    // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
+                    // 기록하므로(NavDiagnostics.Mark) 두 갈래(텍스트 미리보기·셸
                     // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
                     NavDiagnostics.Mark("prev0");
                     if (DiagTrace.Enabled) DiagTrace.Write("tiles", "shell done " + entry.Path); // A352 배치 1
@@ -1451,7 +1401,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 미리보기를 못 얻은 항목의 뒷정리 (A352 배치 3) — 두 갈래(캐시 썸네일·셸 썸네일)가 공유한다.
+    /// 미리보기를 못 얻은 항목의 뒷정리 (A352 배치 3) — 종전에는 두 갈래(캐시 썸네일·셸 썸네일)가
+    /// 공유했고, 배치 4에서 캐시 썸네일 갈래가 사라져 지금 호출부는 셸 썸네일 갈래 한 곳이다.
     /// <para>
     /// 평범한 실패(썸네일 없음·아이콘형·읽기 실패)는 종전대로 <see cref="ExplorerEntryVm.PreviewKnownEmpty"/>로
     /// 굳혀 재실체화 때 다시 묻지 않는다. <b>시한 초과만 다르다</b>: 그때는 파일이 아니라 동기화가
@@ -1483,6 +1434,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// cachedOnly(A175): 옵션 없는 호출은
     /// 캐시가 비면 시스템이 원본을 열어 생성하므로 placeholder에서는 하이드레이션(전체
     /// 다운로드)이 된다 — ReturnOnlyIfCached로 캐시에 없으면 null.
+    /// <b>A352 배치 4</b>: 클라우드 전용 이미지도 이 경로로 온다(종전 UI 스레드 갈래
+    /// FillCachedThumbnailAsync의 대체). 그 갈래의 유일한 고유 규칙이 cachedOnly였고 여기 이미
+    /// 있으므로, 합치면서 새로 넣은 것은 없다.
     /// <b>A270 ③</b>: 셸이 돌려준 것이 파일 종류 아이콘(Type = Icon)이면 Bytes = null로 접는다 —
     /// 무정보 제네릭 아이콘이 정보가 있는 확장자 타일을 덮는 반개선을 막는 전 파일 공통 규칙
     /// (되돌리려면 Type 판정 한 줄만 지우면 A242 종전 동작으로 복귀한다).
