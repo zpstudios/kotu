@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using KOTU.App.Integration;
 using KOTU.Core.Contracts;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그 경로(DiagTrace.LogPath)
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
@@ -669,6 +670,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         BuildEditorDecorDiagnosticsSection(); // A285: 그 바로 옆 — 에디터 장식 EOF 계측 토글
         BuildAudioSwapDiagnosticsSection(); // A301: 그 바로 옆 — 오디오 비주얼라이저 교체 계측 토글
         BuildNavTimingDiagnosticsSection(); // 그 바로 옆 — 폴더 항해 계측판 토글
+        BuildTraceDiagnosticsSection(); // A352 배치 1: 그 바로 옆 — 트레이스 로그 토글
         BuildSettingsFileSection(); // A36: "Open settings.json"(A292부터 Troubleshooting 절 끝)
 
         AddHeader("Updates");
@@ -1028,6 +1030,96 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
+        Root.Children.Add(cardBody);
+    }
+
+    /// <summary>
+    /// A352 배치 1: 트레이스 로그 토글 — 위 항해 계측판 카드(BuildNavTimingDiagnosticsSection)
+    /// 바로 옆·같은 방식이다. 배선도 그대로 최소형(Set → Save → NotifyChanged 세 줄 — 열린 모든
+    /// 창의 MainWindow가 TraceDiagnostics.Changed를 구독해 DiagTrace 게이트를 다시 적용한다).
+    /// busy·<see cref="_suppressToggle"/> 축 불사용·되돌아오는 동기화 구독 없음(변경 진입로가 이
+    /// 토글 하나뿐)·카드 문법 A197/A220까지 전부 위 카드와 같은 근거·같은 형태다.
+    /// <para>
+    /// 이 카드에만 있는 것 = <b>"Open log folder" 버튼</b>. 이 진단의 산출물은 화면이 아니라
+    /// 파일이고(크래시로 프로세스가 사라지므로 화면에는 아무것도 남지 않는다) 사용자가 그 파일을
+    /// 찾아 전달해야 끝나기 때문이다. 폴더 열기는 ArchiveView.OpenInExplorer 관용구 복제
+    /// (explorer.exe + /select 인자 + UseShellExecute) — 실패해도 조용히 무동작이다(경로는 아래
+    /// 설명 줄에 그대로 적혀 있어 손으로 찾아갈 수 있다).
+    /// </para>
+    /// </summary>
+    private void BuildTraceDiagnosticsSection()
+    {
+        var toggle = new ToggleSwitch
+        {
+            // A197과 같은 문법 — 스위치가 제목 왼쪽, 내장 On/Off 문구 제거, MinWidth 0(기본 154 해제).
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsOn = _settings.Get(TraceDiagnostics.SettingKey, false), // 파일 저장 — 재시작 후에도 유지
+        };
+        toggle.Toggled += (_, _) =>
+        {
+            _settings.Set(TraceDiagnostics.SettingKey, toggle.IsOn);
+            _settings.Save();
+            TraceDiagnostics.NotifyChanged(); // 열린 모든 창이 게이트를 즉시 다시 적용한다
+        };
+
+        var headerRow = new Grid { ColumnSpacing = 8 };
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var title = new TextBlock
+        {
+            Text = "Trace log",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(toggle, 0);
+        Grid.SetColumn(title, 1);
+        headerRow.Children.Add(toggle);
+        headerRow.Children.Add(title);
+
+        var cardBody = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 0, 8) };
+        cardBody.Children.Add(headerRow);
+        cardBody.Children.Add(new TextBlock
+        {
+            Text = "Writes every navigation, preview and exception to "
+                + DiagTrace.LogPath + ". For crash troubleshooting only.",
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true, // 경로를 그대로 복사해 갈 수 있게(A36 설정 파일 줄과 같은 이유)
+        });
+
+        var openButton = new Button
+        {
+            Content = "Open log folder",
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        openButton.Click += (_, _) =>
+        {
+            try
+            {
+                // System.IO는 정식 이름으로 쓴다 — 이 파일에는 사용례가 File.Exists 하나뿐이고,
+                // XAML 쪽에 같은 이름의 도형 타입(Shapes.Path)이 있어 오해 여지를 남기지 않는다.
+                var log = DiagTrace.LogPath;
+                var folder = System.IO.Path.GetDirectoryName(log);
+                if (folder is null) return;
+                // 로그를 한 번도 켜지 않았으면 폴더 자체가 없다 — 열기 전에 만든다(빈 폴더가 열린다).
+                System.IO.Directory.CreateDirectory(folder);
+                // 탐색기 인자 형태는 ArchiveView.OpenInExplorer 선례 그대로다 —
+                // 파일이 있으면 그 파일을 선택한 채로, 없으면 폴더만 연다.
+                var args = System.IO.File.Exists(log) ? $"/select,\"{log}\"" : $"\"{folder}\"";
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo("explorer.exe", args) { UseShellExecute = true });
+            }
+            catch
+            {
+                // 폴더를 못 열어도 진단 자체는 성립한다(경로는 위 설명 줄에 적혀 있다).
+            }
+        };
+        cardBody.Children.Add(openButton);
         Root.Children.Add(cardBody);
     }
 

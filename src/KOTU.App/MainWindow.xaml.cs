@@ -11,6 +11,7 @@ using KOTU.Input;
 using KOTU.Ui; // A305 배치 2: 셸 모드 버튼 아이콘 코드 조립(MediaIcons — Shared 소스 링크)
 using KOTU.Core.Cli;
 using KOTU.Core.Contracts;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace) — 셸의 기록 지점들이 쓴다
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
 
@@ -361,6 +362,14 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => NavDiagnostics.Updated -= OnNavDiagnosticsUpdated;
         Closed += (_, _) => _navBeatTimer?.Stop();
         ApplyNavDiagnostics();
+
+        // A352 배치 1: 트레이스 로그(diag.trace, 기본 꺼짐) — 배선은 바로 위 관용구 복제.
+        // 다만 대상이 프로세스 전역 파일 하나라 창마다 따로 켜지는 축이 없다(ApplyTraceDiagnostics
+        // 주석 참고) — 여기서는 구독·해제와 초기 1회 적용, 그리고 창 수명 기록만 한다.
+        TraceDiagnostics.Changed += ApplyTraceDiagnostics;
+        Closed += (_, _) => TraceDiagnostics.Changed -= ApplyTraceDiagnostics;
+        ApplyTraceDiagnostics();
+        Closed += (_, _) => DiagTrace.Write("shell", "window closed");
 
         // A206(v0.215.0): 업데이트 자동 확인은 '설정 화면 열림' 참조 카운트가 0이 아닌 동안에만
         // 돈다. 카운트를 놓는 정상 경로는 SettingsView의 Unloaded지만, 설정을 띄운 채 창을 닫으면
@@ -1556,6 +1565,8 @@ public sealed partial class MainWindow : Window
     private async void ShowModule(IModule module, OpenContext context, string title,
         bool defaultSidebars = false)
     {
+        // A352 배치 1: 트레이스 — 모듈 전환의 진입점(어떤 모듈로 어떤 파일을 여는가).
+        DiagTrace.Write("shell", $"ShowModule {module.Id} path={context.FilePath ?? "(none)"}");
         // 현재 뷰에 미저장 변경이 있으면 먼저 정리(저장/버리기/취소) — 취소면 아무것도 안 바꾼다 (A37).
         // 제목 변경도 가드 뒤로 미뤄서, 취소 시 제목이 어긋나지 않는다.
         if (!await ConfirmDiscardAsync()) return;
@@ -1896,6 +1907,7 @@ public sealed partial class MainWindow : Window
     /// <summary>모듈 뷰가 파일을 열었다는 알림(IContentStateSource) — 탐색기를 내리고 기준 경로 갱신.</summary>
     private void OnContentOpened(string path)
     {
+        DiagTrace.Write("shell", "OnContentOpened " + path); // A352 배치 1
         // A90: 뷰 내부 열기도 "새 콘텐츠가 화면을 차지"이므로 S4 자동 종료(SetContentState와 동일 규칙).
         ExitOpenFileBrowsing(restore: false, refresh: false);
         ResetBarAutoHide(); // A186: 콘텐츠 교체 = 타이머 정지·바 복원(재생 표면은 PlaybackStateChanged가 다시 연다)
@@ -1977,7 +1989,11 @@ public sealed partial class MainWindow : Window
     /// <see cref="OnContentOpened"/>가 부르는 <c>ShowListOverlay</c>의 같은 대입은 그대로 둔다 —
     /// 같은 항목이면 <c>ApplyCurrentFileMark</c>의 ReferenceEquals 가드로 스크롤이 되풀이되지 않는다.
     /// </summary>
-    private void OnCurrentPathChanged(string path) => ListOverlay.SetCurrentFile(path);
+    private void OnCurrentPathChanged(string path)
+    {
+        DiagTrace.Write("shell", "OnCurrentPathChanged " + path); // A352 배치 1
+        ListOverlay.SetCurrentFile(path);
+    }
 
     /// <summary>
     /// A332: 열려 있는 콘텐츠의 상세 정보가 갱신됐다는 알림(IContentInfoChangedSource — 재생 뷰가
@@ -3139,6 +3155,26 @@ public sealed partial class MainWindow : Window
         // Tick 본문은 타임스탬프 하나와 비교뿐이라 조립·표시 갱신을 하지 않는다(계측 왜곡 방지).
         timer.Tick += (_, _) => NavDiagnostics.Beat();
         return timer;
+    }
+
+    // ---------- 트레이스 로그 (diag.trace) ----------
+
+    /// <summary>
+    /// A352 배치 1: 설정 토글 반영(생성자 배선: 초기 1회 + TraceDiagnostics.Changed).
+    /// 위 두 진단과 달리 창에 붙은 화면 요소가 없다 — 대상은 프로세스 전역 파일 하나다.
+    /// 그래서 창이 여럿이면 이 메서드도 여러 번 불리는데, <c>DiagTrace.SetEnabled</c>가
+    /// <b>같은 값이면 무동작</b>이라 파일이 다시 열리거나 훅이 두 번 걸리지 않는다(멱등).
+    /// 마샬링은 그대로 둔다 — 다른 창의 설정 화면(다른 UI 스레드)에서 발화할 수 있고,
+    /// 설정 읽기(_settings)를 자기 창 스레드에서 하는 편이 위 두 진단과 같은 형태다.
+    /// </summary>
+    private void ApplyTraceDiagnostics()
+    {
+        if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
+        {
+            dq.TryEnqueue(ApplyTraceDiagnostics);
+            return;
+        }
+        DiagTrace.SetEnabled(_settings.Get(TraceDiagnostics.SettingKey, false));
     }
 
     /// <summary>계측 값 재조립 통지 — 항해가 돈 UI 스레드에서 오므로 자기 창의 큐로 넘긴다.</summary>

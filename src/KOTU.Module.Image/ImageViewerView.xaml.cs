@@ -8,6 +8,7 @@ using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
 using KOTU.Core.Routing;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -235,6 +236,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     private async void OpenPath(string path)
     {
+        DiagTrace.Write("image", "OpenPath " + path); // A352 배치 1
         var seq = ++_openSeq;
         ImageFolderNavigator navigator;
         // A346: 셸이 주입한 좌 리스트 순서가 이 파일의 폴더 것이면 그것이 정본이다 —

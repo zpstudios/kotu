@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
@@ -491,6 +492,7 @@ public sealed partial class ExplorerPane : UserControl
     {
         var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
         var arranged = ExplorerListing.Arrange(input, _sortKey, _sortDesc, _hiddenExts);
+        DiagTrace.Write("nav", $"RefreshView {_folder} count={arranged.Count}"); // A352 배치 1
         _display = arranged; // A204 — 다음 정렬 변경의 입력(현재 표시 순서)
         // A345 배치 1: 데이터 축을 여기서 한 번만 만든다 — 항목 컨테이너는 전부 이 뷰모델을 Tag로 든다.
         _displayVms = arranged.Select(e => new ExplorerEntryVm(e)).ToList();
@@ -667,6 +669,8 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private async Task NavigateToAsync(string folder, IReadOnlyList<string> extensions)
     {
+        // A352 배치 1: 항해 시작 — 폴더와 담당 확장자 수(All Readable은 전 모듈 합집합이라 크다).
+        DiagTrace.Write("nav", $"NavigateToAsync {folder} exts={extensions.Count}");
         _extensions = extensions;
         EnsureFilterFlyout(); // A7 — 확장자 목록이 바뀌었으면 필터 재구성
         // A179: 폴더가 바뀌면 체크 집합을 비운다 — 다른 폴더의 체크가 보이지 않는 채 작업 집합에
@@ -743,12 +747,14 @@ public sealed partial class ExplorerPane : UserControl
             // (렌더 프레임 마크까지 가지 못하는 유일한 정상 경로다).
             NavDiagnostics.Mark("fail");
             NavDiagnostics.ArmPaint("paint");
+            DiagTrace.Write("nav", $"scan failed {folder} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
             return;
         }
 
         // 계측 scan: 폴더 열거 결과 도착(= 워커 왕복 완료). yield>scan이 크면 정지의 원인은
         // 워커 쪽 열거 시간이고, load>yield가 크면 UI 스레드가 애초에 풀리지 않은 것이다.
         NavDiagnostics.Mark("scan");
+        DiagTrace.Write("nav", $"scan done {folder} count={entries.Count}"); // A352 배치 1
 
         if (seq != _loadSeq) return; // 그새 다른 폴더로 이동함
 
@@ -875,15 +881,28 @@ public sealed partial class ExplorerPane : UserControl
         if (args.ItemContainer is not ListViewItem item) return;
         if (args.InRecycleQueue)
         {
+            // A352 배치 1: 재활용 큐 진입 — 문자열 조립을 피하려고 게이트를 먼저 읽는다(뜨거운 경로).
+            if (DiagTrace.Enabled)
+                DiagTrace.Write("list", "recycle " + ((args.Item as ExplorerEntryVm)?.Path ?? "(none)"));
             // 인라인 이름변경 상자가 이 컨테이너에 남아 있으면 커밋으로 끝낸다(보수안 ⓐ의 짝).
-            if (item.ContentTemplateRoot is Panel host) ExplorerRenameBox.ForceFinish(host);
+            if (item.ContentTemplateRoot is Panel host)
+            {
+                if (DiagTrace.Enabled) DiagTrace.Write("list", "ForceFinish(recycle)");
+                ExplorerRenameBox.ForceFinish(host);
+            }
             item.AllowDrop = false; // 잔존 방지 — 다음 항목이 파일이어도 드랍을 받지 않게
             return;
         }
         if (args.Item is not ExplorerEntryVm vm) return;
         EnsureListItemHooks(item);    // 컨테이너당 1회
         item.AllowDrop = vm.IsFolder; // 매 재사용마다 재설정(폴더만 드랍 대상 — A94)
-        if (args.Phase == 0) RequestDetail(vm, _loadSeq); // 보이는 행만 상세 조각 요청
+        if (args.Phase == 0)
+        {
+            // A352 배치 1: 위상 0 = 행 실체화. 대형 폴더에서 초당 수십 줄이 나오는 가장 뜨거운
+            // 기록 지점이라 게이트를 먼저 읽는다(꺼짐이면 bool 하나로 끝난다).
+            if (DiagTrace.Enabled) DiagTrace.Write("list", "phase0 " + vm.Path);
+            RequestDetail(vm, _loadSeq); // 보이는 행만 상세 조각 요청
+        }
     }
 
     /// <summary>
@@ -1302,6 +1321,9 @@ public sealed partial class ExplorerPane : UserControl
             var kind = InfoKindOf(vm.Name);
             if (kind == InfoKind.None) return;
             vm.DetailRequested = true;
+            // A352 배치 1: 상세 fetch 발사 — 종류까지 적는다(어느 갈래의 WinRT 호출에서 죽는지가
+            // 이 진단의 핵심이라, 마지막 줄의 kind가 곧 용의자다). 뜨거운 경로라 게이트 선검사.
+            if (DiagTrace.Enabled) DiagTrace.Write("detail", $"fetch {kind} {vm.Path}");
 
             if (_infoCache.TryGetValue(vm.Path, out var hit) && hit.Modified == vm.Entry.Modified)
             {
@@ -1326,6 +1348,7 @@ public sealed partial class ExplorerPane : UserControl
                 {
                     return; // 속성·헤더를 못 읽는 파일은 빈 칸 유지
                 }
+                if (DiagTrace.Enabled) DiagTrace.Write("detail", "done " + vm.Path); // A352 배치 1
                 if (seq != _loadSeq) return; // 폴더 전환 — 낡은 결과 폐기
                 if (_infoCache.Count > 4000) _infoCache.Clear(); // 장시간 세션 폭주 방지
                 _infoCache[vm.Path] = (vm.Entry.Modified, details); // 캐시 키는 종전대로 경로
@@ -1336,9 +1359,12 @@ public sealed partial class ExplorerPane : UserControl
                 _detailGate.Release(); // 예외·취소 경로 포함 — 누락되면 3건 뒤 조용히 멈춘다
             }
         }
-        catch
+        catch (Exception ex)
         {
             // 발사 후 망각이라 삼킬 곳이 여기뿐이다 — 한 행의 상세 실패가 목록을 깨면 안 된다.
+            // A352 배치 1: 삼키더라도 트레이스에는 남긴다(예외 자체는 first-chance 훅도 잡지만,
+            // 이 줄이 있어야 "어느 파일의 상세에서 났는가"가 붙는다).
+            DiagTrace.Write("detail", $"failed {vm.Path} {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -1945,6 +1971,7 @@ public sealed partial class ExplorerPane : UserControl
     private void BeginRenameOf(SelectorItem item)
     {
         if (VmOf(item) is not { } vm) return; // A345 배치 2 — VmOf 단일 해석
+        DiagTrace.Write("list", "BeginRenameOf " + vm.Path); // A352 배치 1
         if (ContentPanelOf(item) is not { } panel) return; // 편집 상자를 끼울 host(리스트 = 템플릿 루트)
         if (FindItemBlock(item, ItemNameBlockName) is not { } nameBlock) return;
         ExplorerRenameBox.Begin(panel, nameBlock, vm.Path, MakeOpUi(), RefreshAfterFileOp);

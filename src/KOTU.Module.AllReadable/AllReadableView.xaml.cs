@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using KOTU.Core.Contracts;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace — Core에 있어 모듈에서도 부른다)
 using KOTU.Core.Routing;
 
 namespace KOTU.Module.AllReadable;
@@ -238,10 +239,14 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     /// <summary>자식 뷰를 만들어 센터와 하단 바에 얹는다. 이전 자식은 먼저 완전히 정리한다.</summary>
     private void ShowChild(IModule module, OpenContext context)
     {
+        // A352 배치 1: 자식 교체 — 이 화면은 확장자마다 다른 모듈 뷰를 갈아 끼우므로,
+        // 크래시 직전 줄의 모듈 id가 곧 "어떤 형식에서 죽었나"다.
+        DiagTrace.Write("allread", $"ShowChild {module.Id} path={context.FilePath ?? "(none)"}");
         DetachChild();
 
         if (module.CreateView(context) is not UIElement view)
         {
+            DiagTrace.Write("allread", $"ShowChild failed (no view) {module.Id}"); // A352 배치 1
             // 계약 위반 방어 — 빈 상태 유지. A349 배치 3: 자식이 사라진 채로 끝나므로
             // HasMediaTransport가 거짓이 됐다는 것을 셸에 알려야 SMTC 세션이 접힌다
             // (정상 경로는 아래 배선 끝에서 같은 이벤트를 쏜다).

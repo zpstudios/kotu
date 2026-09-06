@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -894,6 +895,7 @@ public sealed partial class DocumentView : UserControl,
 
     private async void OpenPath(string path)
     {
+        DiagTrace.Write("document", "OpenPath " + path); // A352 배치 1
         var seq = ++_openSeq;
         // A177 ⓐ: 워커 읽기·(대용량이면) 대입 지연 동안 첫 프레임에 보일 로딩 표시. 새 UI 없이
         // 기존 플레이스홀더를 문구만 바꿔 재사용한다(문구 관용구 = ContentInfoOverlay의

@@ -9,6 +9,7 @@ using Windows.Devices.Enumeration;
 using Windows.Media.Devices;
 using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
 using KOTU.Core.Integration;
 using KOTU.Core.Navigation;
 using KOTU.Core.Settings;
@@ -949,6 +950,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     /// <summary>autoAdvance는 PlayCurrent로 중계만 한다(A255 — EOF 자동 진행 표시).</summary>
     private async void OpenPath(string path, bool autoAdvance = false)
     {
+        DiagTrace.Write("audio", "OpenPath " + path); // A352 배치 1
         if (!File.Exists(path)) return;
 
         // 듣던 파일이 있으면 위치를 저장하고 전환한다 (샘플 곡은 이어듣기 제외).

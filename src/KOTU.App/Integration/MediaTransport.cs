@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Windows.Media;
 using Windows.Storage;
 using KOTU.Core.Contracts;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
 
 namespace KOTU.App.Integration;
 
@@ -137,6 +138,7 @@ internal sealed class MediaTransport
     /// </summary>
     internal void Attach(IMediaTransportTarget target, string? filePath)
     {
+        DiagTrace.Write("smtc", $"Attach {filePath ?? "(none)"}"); // A352 배치 1
         if (_disposed) return;
         if (_target is not null) Detach();
         // SMTC 배선(GetForWindow)은 여기서 하지 않는다 — 세션을 실제로 켤 때(Refresh의 활성 경로)
@@ -155,6 +157,7 @@ internal sealed class MediaTransport
     /// </summary>
     internal void Detach()
     {
+        DiagTrace.Write("smtc", "Detach"); // A352 배치 1
         if (_target is not { } target) return;
         DeactivateSession();
         target.PlaybackStateChanged -= OnTargetStateChanged;
@@ -217,6 +220,8 @@ internal sealed class MediaTransport
         if (_disposed || _target is not { } target) return;
         if (!target.HasMediaTransport)
         {
+            // A352 배치 1: 세션 활성 전이 — 켜짐/꺼짐이 바뀌는 순간만 남긴다(Refresh 자체는 잦다).
+            if (_sessionActive) DiagTrace.Write("smtc", "session off");
             DeactivateSession();
             // 꺼져 있는 동안의 경로는 미디어가 아니다(문서·사진 자식) — 남겨 두면 나중에 세션을
             // 켤 때 그 파일 이름이 플라이아웃 제목으로 잠깐 뜬다. 새 제목은 재생 자식이 로드를
@@ -226,7 +231,11 @@ internal sealed class MediaTransport
         }
         // 여기부터가 "미디어 키를 받을 자격이 있는 대상" — 이 시점에 처음 SMTC를 배선한다.
         if (!TryEnsureRegistered() || _smtc is not { } smtc) return;
-        if (!_sessionActive && !TryActivateSession(smtc)) return;
+        if (!_sessionActive)
+        {
+            if (!TryActivateSession(smtc)) return;
+            DiagTrace.Write("smtc", "session on"); // A352 배치 1
+        }
         try
         {
             smtc.PlaybackStatus = target.IsPlaying ? MediaPlaybackStatus.Playing : MediaPlaybackStatus.Paused;
@@ -351,6 +360,8 @@ internal sealed class MediaTransport
         try
         {
             var button = args.Button;
+            // A352 배치 1: 비UI 스레드 콜백 — 이 줄과 다음 UI 줄 사이가 곧 마샬링 구간이다.
+            DiagTrace.Write("smtc", "ButtonPressed " + button);
             _dispatcher.TryEnqueue(() =>
             {
                 if (_disposed || _target is not { } target) return;

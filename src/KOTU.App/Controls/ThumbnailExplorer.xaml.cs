@@ -9,6 +9,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
 using Windows.System;
+using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
 using KOTU.Core.Routing;
 using KOTU.Core.Threading;
 using KOTU.Input;
@@ -563,6 +564,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
         _showSeq++; // 진행 중이던 미리보기 요청 전부 낡음 처리(폴더 전환·재스캔 공통)
+        DiagTrace.Write("tiles", $"ShowEntries {folder} count={entries.Count}"); // A352 배치 1
         CurrentFolder = folder;
         TileGrid.ItemsSource = null; // 옛 목록 해제(같은 참조 재대입이 무시되는 일도 함께 막는다)
 
@@ -612,6 +614,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     public void ShowLoading(string folder)
     {
         _showSeq++;
+        DiagTrace.Write("tiles", "ShowLoading " + folder); // A352 배치 1
         CurrentFolder = folder; // 좌 리스트(_folder)와 같은 시점 갱신 — 로딩 중 드랍·붙여넣기 대상 일치
         TileGrid.ItemsSource = null; // A345 배치 3 — 목록 해제가 곧 타일 비우기다
         _vms = [];
@@ -648,6 +651,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (args.ItemContainer is not GridViewItem item) return;
         if (args.InRecycleQueue)
         {
+            // A352 배치 1: 재활용 큐 진입 — 뜨거운 경로라 게이트를 먼저 읽는다.
+            if (DiagTrace.Enabled)
+                DiagTrace.Write("tiles", "recycle " + ((args.Item as ExplorerEntryVm)?.Path ?? "(none)"));
             if (item.ContentTemplateRoot is Grid recycled)
             {
                 ExplorerRenameBox.ForceFinish(recycled); // 편집 중 스크롤 = 데이터 사고의 방지선
@@ -663,6 +669,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         // 템플릿 루트 조회는 훅 부착 뒤에 둔다 — 어떤 이유로든 루트를 못 얻어도(템플릿 미적용 등)
         // 메뉴·드래그·더블클릭은 붙어 있어야 한다(미리보기만 비는 것이 최악의 실패다).
         if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
+        // A352 배치 1: 위상 0 = 타일 실체화. 대형 폴더에서 가장 뜨거운 지점이라 게이트 선검사.
+        if (DiagTrace.Enabled) DiagTrace.Write("tiles", "phase0 " + vm.Path);
         host.Children.Clear(); // 재활용 잔존 방어(재활용 큐를 거치지 않고 바로 오는 경로 대비)
         if (vm.IsFolder)
         {
@@ -708,11 +716,17 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 컨테이너의 미리보기 자리다. <c>Content</c> 재대조는 남겨 둔다 — 재활용 도중의 과도기
     /// 상태에서 <c>ContainerFromItem</c>이 아직 옛 컨테이너를 돌려줄 수 있다.
     /// </summary>
-    private Grid? LivePreviewHostOf(ExplorerEntryVm vm) =>
-        TileGrid.ContainerFromItem(vm) is GridViewItem { ContentTemplateRoot: Grid root } container
-        && ReferenceEquals(container.Content, vm)
-            ? PreviewHostOf(root)
-            : null;
+    private Grid? LivePreviewHostOf(ExplorerEntryVm vm)
+    {
+        var host = TileGrid.ContainerFromItem(vm) is GridViewItem { ContentTemplateRoot: Grid root } container
+            && ReferenceEquals(container.Content, vm)
+                ? PreviewHostOf(root)
+                : null;
+        // A352 배치 1: null = "그 항목이 지금 화면에 없다" — 비동기 완료가 화면을 못 만진 경우다.
+        // 정상 동작이지만 크래시 직전 줄을 읽을 때 "완료가 버려졌다"와 "완료가 그렸다"를 갈라 준다.
+        if (host is null && DiagTrace.Enabled) DiagTrace.Write("tiles", "no live host " + vm.Path);
+        return host;
+    }
 
     /// <summary>미리보기 이미지 요소 1개 (A345 배치 4) — 세 갈래(이미지 원본·캐시 썸네일·셸
     /// 썸네일)가 같은 배치(Uniform · 여백 4)를 쓰므로 한자리로 모았다.</summary>
@@ -758,12 +772,22 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             // A175: 클라우드 전용 이미지는 원본 디코드가 하이드레이션(전체 다운로드)이다 —
             // 원본은 절대 열지 않고 캐시·클라우드 제공 썸네일만 시도한다.
-            if (entry.IsPlaceholder) _ = FillCachedThumbnailAsync(vm, seq);
-            else StartImagePreview(vm, host);
+            if (entry.IsPlaceholder)
+            {
+                // A352 배치 1: 위상 1의 갈래 선택 — 마지막 줄의 갈래가 곧 용의자다(뜨거운 경로).
+                if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill cached " + entry.Path);
+                _ = FillCachedThumbnailAsync(vm, seq);
+            }
+            else
+            {
+                if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill image " + entry.Path);
+                StartImagePreview(vm, host);
+            }
             return;
         }
         if (IsTextPreviewFile(entry)) // A233 — 내용 프리뷰
         {
+            if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill text " + entry.Path); // A352 배치 1
             _ = FillTextPreviewAsync(vm, seq);
             return;
         }
@@ -772,6 +796,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         // A345 배치 4: 배지 참조는 넘기지 않는다 — 완료 시점의 자리가 이 host라는 보장이 없어,
         // 걷어내기가 아니라 그 자리를 통째로 다시 그리는 방식으로 바꿨다(RedrawFallbackTile).
         host.Children.Add(MakePendingBadge());
+        // A352 배치 1: 셸 썸네일 갈래 — 인프로세스 셸 핸들러가 도는 유일한 경로다(A352 1순위 가설
+        // 후보였던 자리). 마지막 줄이 여기서 멈추면 그 파일의 핸들러를 의심한다.
+        if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill shell " + entry.Path);
         _ = FillShellThumbnailAsync(vm, seq);
     }
 
@@ -1002,6 +1029,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             var image = MakePreviewImage(bitmap);
             image.ImageOpened += (_, _) =>
             {
+                DiagTrace.Write("tiles", "ImageOpened " + vm.Path); // A352 배치 1
                 if (LivePreviewHostOf(vm) is not { } live) return;
                 // 성공의 최종형은 "이미지 한 장"이라 폴백을 골라 지우는 대신 통째로 비우고 얹는다
                 // (그냥 겹쳐 두면 투명 PNG의 투명한 부분으로 아래 확장자 타일이 비쳐 보인다).
@@ -1014,6 +1042,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             };
             image.ImageFailed += (_, _) =>
             {
+                DiagTrace.Write("tiles", "ImageFailed " + vm.Path); // A352 배치 1
                 // 실패는 "확장자 타일 그대로" — 자기 자신만 걷는다(없으면 무동작).
                 if (LivePreviewHostOf(vm) is { } live) live.Children.Remove(image);
             };
@@ -1064,9 +1093,10 @@ public sealed partial class ThumbnailExplorer : UserControl
                     bytes = buffer.ToArray();
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 bytes = null; // 캐시 썸네일 없음·읽기 실패 — 원본은 어떤 폴백에서도 열지 않는다
+                DiagTrace.Write("tiles", $"cached failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
             }
             if (bytes is null)
             {
@@ -1085,12 +1115,14 @@ public sealed partial class ThumbnailExplorer : UserControl
                 // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
                 // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
                 NavDiagnostics.Mark("prev0");
+                if (DiagTrace.Enabled) DiagTrace.Write("tiles", "cached done " + vm.Path); // A352 배치 1
                 host.Children.Clear();
                 host.Children.Add(MakePreviewImage(bitmap));
             }
-            catch
+            catch (Exception ex)
             {
                 vm.PreviewKnownEmpty = true; // 손상 데이터 디코드 실패 — 확장자 타일 유지
+                DiagTrace.Write("tiles", $"cached decode failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
             }
         }
         finally
@@ -1185,8 +1217,9 @@ public sealed partial class ThumbnailExplorer : UserControl
                 {
                     text = await TextPool.Run(_ => ReadTextPreview(vm.Path));
                 }
-                catch
+                catch (Exception ex)
                 {
+                    DiagTrace.Write("tiles", $"text failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
                     return; // 읽기 실패·풀 닫힘(취소 Task) — 확장자 타일 유지(재시도 여지도 남긴다)
                 }
                 if (text is null)
@@ -1201,6 +1234,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                 // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
                 // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
                 NavDiagnostics.Mark("prev0");
+                if (DiagTrace.Enabled) DiagTrace.Write("tiles", "text done " + vm.Path); // A352 배치 1
                 host.Children.Clear();
                 host.Children.Add(MakeTextPreviewBlock(text));
             }
@@ -1374,9 +1408,10 @@ public sealed partial class ThumbnailExplorer : UserControl
                     result = await ThumbPool.Run(
                         _ => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo));
                 }
-                catch
+                catch (Exception ex)
                 {
                     result = (null, null); // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로로
+                    DiagTrace.Write("tiles", $"shell failed {entry.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
                 }
                 // 튜플을 지역 변수로 풀어 둔다 — 아래 null 판정·재사용이 종전(단일 bytes) 형태 그대로.
                 var bytes = result.Bytes;
@@ -1404,14 +1439,16 @@ public sealed partial class ThumbnailExplorer : UserControl
                     // 기록하므로(NavDiagnostics.Mark) 세 갈래(캐시 썸네일·텍스트 미리보기·셸
                     // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
                     NavDiagnostics.Mark("prev0");
+                    if (DiagTrace.Enabled) DiagTrace.Write("tiles", "shell done " + entry.Path); // A352 배치 1
                     host.Children.Clear();
                     host.Children.Add(MakePreviewImage(bitmap));
                     // A270 ②: 앨범아트 위 정보 띠 — 배지는 위 Clear가 이미 걷었다(겹침 없음).
                     if (info is not null) host.Children.Add(MakeAudioInfoBand(info));
                 }
-                catch
+                catch (Exception ex)
                 {
                     vm.PreviewKnownEmpty = true; // 손상 데이터 — 다시 받아도 같은 결과다
+                    DiagTrace.Write("tiles", $"shell decode failed {entry.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
                     // 디코드 실패 — 확장자 타일로 되돌린다(자리 재조회는 성공 갈래와 같은 규칙).
                     if (LivePreviewHostOf(vm) is { } failed) RedrawFallbackTile(failed, entry, info);
                 }
