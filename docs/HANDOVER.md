@@ -1348,7 +1348,7 @@ Y `pad.Top` 누락 · 줄 탐색 정지)에 오염돼 있었고, 좌표계가 �
 
 ### v0.349.0 (A352 배치 4) — 강제 종료 원인 확정 수리(덤프 근거)
 
-> ⚠️ **CI 초록 확인이 선행**(제거 배치 — `FillCachedThumbnailAsync`·`IsImageFile` 삭제 · 새 API 0).
+> ✅ **CI 초록(v0.349.0 build #475·release #474) 확인 완료.**
 > 근거 = 힙 포함 덤프의 stowed 46프레임: UI 스레드 `StorageFile` 동기 호출 → COM 메시지 펌프 → XAML 재진입 → E_UNEXPECTED failfast. 앞 배치(2·3)와
 > v0.348.1 추적은 헛수리/무관이었다(무해 존치). **불가침 규칙 2개 신설**(§3.4).
 
