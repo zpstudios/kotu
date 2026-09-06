@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Foundation; // A355: IAsyncOperation·IAsyncAction — 워커 동기 대기(ShellWait)
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.System;
@@ -140,6 +141,41 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다.</summary>
     private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU image worker");
+
+    /// <summary>
+    /// A355: 워커에서 WinRT 셸 비동기 호출을 동기 대기하되 시한을 건다.
+    /// KOTU.App의 <c>ShellFetch.WaitOrThrow</c>와 같은 규약이지만 그쪽은 App 어셈블리 전용이고
+    /// KOTU.Core는 net8.0(윈도우 TFM이 아님)이라 <c>Windows.Foundation</c>을 못 본다 —
+    /// 그래서 모듈에는 인라인한다. 시한이 지나도 원래 작업은 계속 돈다(취소는 최선 노력).
+    /// </summary>
+    private static readonly TimeSpan ShellTimeout = TimeSpan.FromSeconds(5);
+
+    private static T ShellWait<T>(IAsyncOperation<T> operation)
+    {
+        try
+        {
+            return operation.AsTask().WaitAsync(ShellTimeout).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
+        {
+            try { operation.Cancel(); } catch { /* 되찾을 것은 스레드뿐 */ }
+            throw;
+        }
+    }
+
+    /// <summary>결과 없는 셸 호출용(<c>DeleteAsync</c> 등) — 위와 같은 시한·같은 예외.</summary>
+    private static void ShellWait(IAsyncAction action)
+    {
+        try
+        {
+            action.AsTask().WaitAsync(ShellTimeout).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
+        {
+            try { action.Cancel(); } catch { /* 되찾을 것은 스레드뿐 */ }
+            throw;
+        }
+    }
 
     /// <summary>
     /// 이웃 선읽기 캐시 (A194): 경로 → ReadImageFile 결과의 Task. <b>현재 파일의 양옆 각 1장,
@@ -1134,8 +1170,16 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
         try
         {
-            var file = await StorageFile.GetFileFromPathAsync(path);
-            await file.DeleteAsync(StorageDeleteOption.Default); // 휴지통으로
+            // A355: 파일 취득·삭제를 워커에서 한다 — UI 스레드에서 WinRT 셸 호출을 await하면
+            // await 앞의 호출 구간이 동기로 COM을 왕복하고, 그 대기가 메시지를 펌프해 XAML의
+            // 큐된 작업을 재진입시켜 프로세스가 죽는다(A352가 힙 덤프로 확정). StorageFile은
+            // agile이라 워커 안에서 만들어 그 자리에서 쓰는 이 형태가 가장 안전하다.
+            // 시한 초과·실패는 종전과 같은 catch(아래 실패 문구)로 접힌다.
+            await Worker.Run(_ =>
+            {
+                var file = ShellWait(StorageFile.GetFileFromPathAsync(path));
+                ShellWait(file.DeleteAsync(StorageDeleteOption.Default)); // 휴지통으로
+            });
             // A346: 주입 목록을 쓰고 있어도 여기서는 종전대로 즉시 제거한다 — 탐색기 감시 재스캔이
             // 곧 SetBrowseOrder로 새 목록을 주지만 그 사이의 ◀/▶가 지워진 파일을 가리키면 안 된다.
             // 재주입 시점에는 아래 LoadCurrentAsync가 이미 이웃으로 옮겨 간 뒤라 새 현재 파일이

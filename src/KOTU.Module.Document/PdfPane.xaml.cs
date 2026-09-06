@@ -4,9 +4,11 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Data.Pdf;
+using Windows.Foundation; // A355: IAsyncOperation — 워커 동기 대기(ShellWait)
 using Windows.Storage;
 using Windows.Storage.Streams;
 using Windows.System;
+using KOTU.Core.Threading; // A355: 판 전용 워커(ModuleWorker)
 
 namespace KOTU.Module.Document;
 
@@ -44,6 +46,33 @@ public sealed partial class PdfPane : UserControl
     private ScrollViewer? _scroll;           // ListView 내장 ScrollViewer (지연 탐색)
     private ScrollContentPresenter? _presenter; // Ctrl+휠 줌 가로채기 지점 (A98, 지연 탐색)
 
+    /// <summary>A355: 셸 파일 취득·문서 로드 전용 워커(A42) — 판당 1개. 지연 생성.</summary>
+    private ModuleWorker? _worker;
+
+    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다(DocumentView.Worker 관용구).</summary>
+    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU pdf worker");
+
+    /// <summary>
+    /// A355: 워커에서 WinRT 셸/PDF 비동기 호출을 동기 대기하되 시한을 건다.
+    /// KOTU.App의 <c>ShellFetch.WaitOrThrow</c>와 같은 규약이지만 그쪽은 App 어셈블리 전용이고
+    /// KOTU.Core는 net8.0(윈도우 TFM이 아님)이라 <c>Windows.Foundation</c>을 못 본다 —
+    /// 그래서 모듈에는 인라인한다. 시한이 지나도 원래 작업은 계속 돈다(취소는 최선 노력).
+    /// </summary>
+    private static readonly TimeSpan ShellTimeout = TimeSpan.FromSeconds(5);
+
+    private static T ShellWait<T>(IAsyncOperation<T> operation)
+    {
+        try
+        {
+            return operation.AsTask().WaitAsync(ShellTimeout).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
+        {
+            try { operation.Cancel(); } catch { /* 되찾을 것은 스레드뿐 */ }
+            throw;
+        }
+    }
+
     private sealed class PageItem
     {
         public int Index;      // 0-base 페이지 번호
@@ -63,6 +92,13 @@ public sealed partial class PdfPane : UserControl
             // A188: 수동 줌 상태(Fit 추종 해제)에서도 창 크기가 바뀌면 콘텐츠 최소 폭을
             // 새 뷰포트로 따라잡아야 페이지가 계속 수평 중앙에 온다(배율은 그대로 둔다).
             else if (_scroll is not null) EnsureContentMinWidth(_scroll.ZoomFactor);
+        };
+        // A355: 판이 내려가면 워커도 접는다 — 진행 중 로드는 워커가 마저 끝내고 스레드가 종료한다
+        // (DocumentView.Unloaded와 같은 규칙). 다시 로드되면 Worker 프로퍼티가 새로 만든다.
+        Unloaded += (_, _) =>
+        {
+            _worker?.Dispose();
+            _worker = null;
         };
     }
 
@@ -141,19 +177,30 @@ public sealed partial class PdfPane : UserControl
         PageChanged?.Invoke(0, 0);
     }
 
-    /// <summary>첫 시도 실패는 암호 PDF로 보고 물어본 뒤 재시도. 취소는 OperationCanceled.</summary>
+    /// <summary>
+    /// 첫 시도 실패는 암호 PDF로 보고 물어본 뒤 재시도. 취소는 OperationCanceled.
+    /// <para>
+    /// A355: 파일 취득과 문서 로드는 <b>워커</b>에서 한다 — UI 스레드에서 WinRT 셸 호출을
+    /// await하면 await 앞의 호출 구간이 동기로 COM을 왕복하고, 그 대기가 메시지를 펌프해
+    /// XAML의 큐된 작업을 재진입시켜 프로세스가 죽는다(A352가 힙 덤프로 확정). StorageFile과
+    /// PdfDocument는 agile이라 워커에서 만들어 UI로 넘겨도 된다(탐색기 상세 fetch의 Pdf 갈래가
+    /// 이미 워커에서 LoadFromFileAsync를 동기 대기하는 선례). 암호 프롬프트만 UI라
+    /// 순서는 워커 시도 → 실패 → UI 프롬프트 → 워커 재시도가 된다.
+    /// </para>
+    /// </summary>
     private async Task<PdfDocument> LoadDocumentAsync(string path)
     {
-        var file = await StorageFile.GetFileFromPathAsync(path);
+        var file = await Worker.Run(_ => ShellWait(StorageFile.GetFileFromPathAsync(path)));
         try
         {
-            return await PdfDocument.LoadFromFileAsync(file);
+            return await Worker.Run(_ => ShellWait(PdfDocument.LoadFromFileAsync(file)));
         }
         catch
         {
             var password = await PromptPasswordAsync()
                 ?? throw new OperationCanceledException();
-            return await PdfDocument.LoadFromFileAsync(file, password); // 또 실패 → 호출부 에러 표시
+            // 또 실패 → 호출부 에러 표시
+            return await Worker.Run(_ => ShellWait(PdfDocument.LoadFromFileAsync(file, password)));
         }
     }
 

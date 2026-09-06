@@ -1081,24 +1081,40 @@ internal static class ExplorerFileOps
 
     // ---------- 내부: WinRT 항목 수집 ----------
 
-    /// <summary>경로 → IStorageItem(파일/폴더). 사라진 항목은 건너뛴다. StorageFile API는 agile.</summary>
-    private static async Task<List<IStorageItem>> CollectStorageItemsAsync(IReadOnlyList<string> paths)
-    {
-        var items = new List<IStorageItem>(paths.Count);
-        foreach (var path in paths)
+    /// <summary>
+    /// 경로 → IStorageItem(파일/폴더). 사라진 항목은 건너뛴다.
+    /// <para>
+    /// A355: <b>수집 전체를 워커(스레드풀)에서</b> 한다. 종전에는 UI 스레드에서 항목마다
+    /// <c>GetFileFromPathAsync</c>를 await했는데, WinRT 셸 호출은 await 앞의 호출 구간 자체가
+    /// 동기로 COM을 왕복하고 그 대기가 메시지를 펌프해 XAML의 큐된 작업을 재진입시킨다 —
+    /// A352가 힙 덤프로 확정한 E_UNEXPECTED failfast 경로다(ShellFetch 주석 참고).
+    /// 특히 이 메서드의 최대 호출부는 드래그 <c>DragStarting</c> 데퍼럴 안이라, 선택 항목 수만큼
+    /// 그 왕복이 반복된다. 워커로 옮기면 UI 스레드에는 결과 반영(SetStorageItems·Clipboard)만 남는다.
+    /// </para>
+    /// <para>
+    /// <c>IStorageItem</c>을 스레드 사이로 넘기는 것은 안전하다 — StorageFile·StorageFolder는
+    /// agile 객체라 아파트 경계에서 마샬링이 필요 없다(ExplorerPane·ThumbnailExplorer가 이미
+    /// 워커에서 취득한 StorageFile을 그대로 쓰는 선례). 항목별 시한은 <see cref="ShellFetch"/>가
+    /// 건다 — OneDrive 동기화 중 파일 하나가 영영 반환하지 않아도 나머지로 계속 간다.
+    /// </para>
+    /// </summary>
+    private static Task<List<IStorageItem>> CollectStorageItemsAsync(IReadOnlyList<string> paths) =>
+        Task.Run(() =>
         {
-            try
+            var items = new List<IStorageItem>(paths.Count);
+            foreach (var path in paths)
             {
-                if (Directory.Exists(path))
-                    items.Add(await StorageFolder.GetFolderFromPathAsync(path));
-                else
-                    items.Add(await StorageFile.GetFileFromPathAsync(path));
+                try
+                {
+                    items.Add(Directory.Exists(path)
+                        ? ShellFetch.WaitOrThrow(StorageFolder.GetFolderFromPathAsync(path))
+                        : (IStorageItem)ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path)));
+                }
+                catch
+                {
+                    // 그새 사라졌거나 접근 불가, 또는 시한 초과 — 남은 항목으로 계속
+                }
             }
-            catch
-            {
-                // 그새 사라졌거나 접근 불가 — 남은 항목으로 계속
-            }
-        }
-        return items;
-    }
+            return items;
+        });
 }

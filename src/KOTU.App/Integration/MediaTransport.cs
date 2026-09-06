@@ -306,6 +306,14 @@ internal sealed class MediaTransport
     /// (CopyFromFileAsync), 실패하거나 제목이 비면 파일 이름으로 채운다. Type은 어떤 경로로든
     /// 반드시 선다(문서 규칙 — 화면 보호기 억제 등에 쓰인다).
     /// 낡음 방어: 이 await 사이에 다음 파일로 넘어갔을 수 있어 완료 시점에 경로를 다시 대조한다.
+    /// <para>
+    /// A355: 파일 취득(<c>GetFileFromPathAsync</c>)만 워커로 옮겼다 — UI 스레드에서 부르면
+    /// await 앞의 호출 구간이 동기로 COM을 왕복하며 메시지를 펌프해 XAML 작업을 재진입시킨다
+    /// (A352가 덤프로 확정한 failfast 경로 — ShellFetch 주석). <c>CopyFromFileAsync</c>는
+    /// <b>UI 스레드에 남긴다</b>: DisplayUpdater는 UI 스레드에서 만든 SMTC의 소유물이라
+    /// 다른 스레드에서 만지면 안 된다. StorageFile은 agile이라 워커에서 받아 넘겨도 된다.
+    /// 취득 실패·시한 초과는 종전과 같은 폴백(파일 이름 제목)으로 접는다.
+    /// </para>
     /// </summary>
     private async Task UpdateDisplayAsync(string path)
     {
@@ -316,12 +324,12 @@ internal sealed class MediaTransport
         var copied = false;
         try
         {
-            var file = await StorageFile.GetFileFromPathAsync(path);
+            var file = await Task.Run(() => ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path)));
             copied = await updater.CopyFromFileAsync(type, file);
         }
         catch
         {
-            copied = false; // 접근 불가·형식 미지원 — 아래 파일 이름 폴백
+            copied = false; // 접근 불가·형식 미지원·시한 초과 — 아래 파일 이름 폴백
         }
         if (!ReferenceEquals(_target, target) || _currentPath != path) return; // 그새 갈렸다
 
