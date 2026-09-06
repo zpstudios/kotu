@@ -2127,6 +2127,13 @@
   - **배치 1 사양 확정** = 트레이스 로그에 **`AppDomain.FirstChanceException`**(타입·메시지·최상위 프레임 1줄 — stowed 예외의 마지막
     first-chance가 곧 범인) + `TaskScheduler.UnobservedTaskException` + 항해/미리보기/상세 fetch 발사·완료(경로) 기록. `diag.trace` 토글
     (기본 꺼짐 · 설정 진단 카드 옆) · `%TEMP%\KOTU\trace.log` 줄 단위 flush · 1MB 회전.
+  - ✅ **배치 1 완료(v0.345.0)** — Core `KOTU.Core/Diagnostics/DiagTrace.cs`(모듈도 기록 가능 · `Enabled` 게이트 · lock + 매 줄 Flush ·
+    `FileShare.ReadWrite` · 1MB → `trace.1.log` 회전 · FirstChance/Unobserved/Unhandled 훅 · `[ThreadStatic]` 재진입 가드 · 헤더 = 버전·시각·pid) ·
+    App `TraceDiagnostics`(키 `diag.trace` · Changed) · 설정 카드 "Trace log"(항해 계측 카드 뒤 · 경로 표시 · **Open log folder** = explorer /select) ·
+    `MainWindow.ApplyTraceDiagnostics` · 기록 지점 = 셸 ShowModule/OnContentOpened/CurrentPathChanged/Closed · 좌 리스트 항해·스캔·CCC 위상 0·
+    재활용·상세 fetch · 중앙 ShowEntries/위상 0·1/fill 3종/ImageOpened·Failed/LivePreviewHostOf null · All Readable 자식 교체 · 4모듈 OpenPath ·
+    SMTC. 뜨거운 경로는 `Enabled` 검사 뒤에만 보간. **사용자 절차** = 설정 → Trace log 켬 → All Readable 그 폴더 재현 → 죽은 뒤 Open log folder →
+    `trace.log` 전달(마지막 `exc` 줄 + 그 직전 `phase0`/`fill`/`fetch` 줄이 범인).
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
@@ -2730,7 +2737,7 @@
 | A349 | 영상·오디오 이전/다음 파일 — Ctrl+←/→ · PageUp/Down · 하단 바 ⏮⏭ · 미디어 키(SMTC) · 순서 = 좌 리스트(낙수 43 흡수) | 중+소+중(3배치) | **배치 1~3 완료 v0.341.0~v0.342.0**(키·⏮⏭·순서 / 조사 / SMTC) · 실기기 회수 대기 · Fable(위임 시 Opus) |
 | ~~A350~~ | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘 | 소 | **완료 v0.343.2 — 결번**(세션 창 = 트레이 숨김 창 · v0.343.0/.1 되돌림 · 실기기 확인) |
 | A351 | 좌 리스트 열린 콘텐츠 표시를 선택 표시와 분리(액센트 바 + 굵은 이름 · 클릭에도 포커스 테두리) | 소~중 | **완료 v0.344.0 → CI 빨강(CS0234) → v0.344.1** · 실기기 대기(선택 인디케이터 겹침 여부) |
-| A352 | All Readable 대형 폴더 강제 종료 진단 — 트레이스 로그(diag.trace) + 1순위 가설 인프로세스 셸 썸네일 핸들러 | 소 + 원인별 | 미반영 · Fable(위임 시 Opus) · 2026-09-05 등재 · 사용자 로그 확인 대기 |
+| A352 | All Readable 대형 폴더 강제 종료(0xC000027B stowed · Microsoft.UI.Xaml.dll) — 배치 1 트레이스 로그 → 배치 2 원인 수리 | 소 + 원인별 | **배치 1 완료 v0.345.0** · 사용자 trace.log 대기 |
 | ~~A257~~ | 설정 절 재재구성 — 접기 폐지(A235 ② 반전)+메뉴→마스터→모듈 순서 | 소 | **완료 v0.257.0 — 결번**(접기 폐지 + 절 순서 = 메뉴→마스터→모듈 5그룹) |
 | ~~A258~~ | 오토 넥스트 플레이 옵션(유효 조건 = 루프 없음 — 확정) | 중 | **완료 v0.258.0 — 결번**(설정 Playback 섹션 신설·키 player.autoNext 기본 true) |
 | ~~A259~~ | HW 긴 그래프 전폭화 + "5m" 표기 내장(A146·A128 반전·임계 600) | 중 | **완료 v0.259.0 — 결번**(star 균등 전폭 + x축 InBar 부활·312/600 재계수) |
