@@ -2233,6 +2233,17 @@
     코드 정독 후보(재스캔에서만 성립하는 것) = ⓒ `RefreshView`가 `ItemsSource`를 갈아 끼우는 사이 **옛 뷰모델의 비동기 fill이 완료되어
     `LivePreviewHostOf(옛 vm)` → `ContainerFromItem(목록에 없는 항목)`** — 낡은 항목으로 컨테이너 조회 · ⓓ 재스캔 뒤 `_infoCache` 히트 70건의
     디스패처 콜백이 실체화된 70행의 재측정을 연쇄 · ⓔ 좌 리스트 `ApplyCurrentFileMark`/`ScrollIntoView`가 재실체화 중에 호출.
+  - ✅ **WER 서명 회수(2026-09-06 · `docs/assets/A352-Report-2026-09-06.wer`)** — 이벤트 1001: P4 `StackHash12_35f`(오류 모듈을 특정 못 함) ·
+    **P7 = `8000ffff` = E_UNEXPECTED** · P8 오프셋 0. 레이아웃 사이클(0x800F1000 계열)이 **아니다**. E_UNEXPECTED는 WinUI에서 컨테이너 준비·
+    레이아웃이 진행 중인 사이의 재진입(ItemsSource/컬렉션 교체 · 컨테이너 상태 어긋남 · ScrollIntoView 선호출)에서 나는 코드. ReportArchive에는
+    `Report.wer`만 있고 `.dmp`는 Temp에서 삭제됐다 → **LocalDumps 등록으로 덤프를 받는다**(아래 사용자 절차). 덤프 파싱 준비 = 샌드박스 `minidump`
+    패키지(예외 레코드 + 죽은 스레드 스택의 모듈+오프셋).
+    **사용자 절차(관리자 명령 프롬프트)**:
+    `reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\KOTU.exe" /v DumpFolder /t REG_EXPAND_SZ /d "%LOCALAPPDATA%\CrashDumps" /f`
+    `reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\KOTU.exe" /v DumpType /t REG_DWORD /d 0 /f`
+    `reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\KOTU.exe" /v CustomDumpFlags /t REG_DWORD /d 0x1161 /f`
+    (0x1161 = DataSegs | UnloadedModules | IndirectlyReferencedMemory | ProcessThreadData | ThreadInfo — stowed 예외 구조체까지 담기는 축소 덤프 ·
+    수십 MB) → 재현 → `%LOCALAPPDATA%\CrashDumps\KOTU.exe.*.dmp` zip 전달. 끝나면 같은 키 삭제(`reg delete … /f`).
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
