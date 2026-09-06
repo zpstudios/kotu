@@ -2117,7 +2117,16 @@
     module이 KOTU.exe/coreclr가 아닌 서드파티 DLL이면 ⓐ가 즉답.
   - **사용자 몫(진단 전에 지금 확인 가능)** = ⓐ `%TEMP%\KOTU\startup-error.log` 존재·내용 ⓑ 이벤트 뷰어 → Windows 로그 → 응용 프로그램 →
     KOTU.exe 이벤트 1000의 "오류 모듈 이름"·"예외 코드" ⓒ 그 폴더의 확장자 구성(특히 일반적이지 않은 형식).
-  - 규모 = ① 소 · ② 원인별.
+  - ✅ **사용자 회수(2026-09-05)** = 이벤트 1000 **오류 모듈 `Microsoft.UI.Xaml.dll` · 예외 코드 `0xC000027B`**(STATUS_STOWED_EXCEPTION —
+    WinRT/XAML 비동기 콜백·바인딩·레이아웃에서 던져진 관리/WinRT 예외가 XAML 런타임에서 처리되지 못하고 프로세스를 죽인 것.
+    `Application.UnhandledException`이 못 받는 갈래 — 그래서 startup-error.log·메시지 박스가 없다). **셸 썸네일 핸들러 가설은 약화**
+    (그랬다면 오류 모듈이 서드파티 DLL이었을 것). 새 1순위 = A345 배치 2·3 이후의 **x:Bind/CCC/비동기 미리보기 경로**에서 나는 예외
+    (후보: 비UI 스레드에서의 뷰모델 PropertyChanged → x:Bind 갱신 · 부모 충돌 · 컨테이너 재활용 중 `ContentTemplateRoot` null · 긴 파일명 →
+    `StorageFile.GetFileFromPathAsync`/`GetThumbnailAsync`의 WinRT 예외가 `await` 밖(이벤트 핸들러)에서 새는 경우). All Readable = 모든
+    확장자·모든 갈래가 한 폴더에서 돈다.
+  - **배치 1 사양 확정** = 트레이스 로그에 **`AppDomain.FirstChanceException`**(타입·메시지·최상위 프레임 1줄 — stowed 예외의 마지막
+    first-chance가 곧 범인) + `TaskScheduler.UnobservedTaskException` + 항해/미리보기/상세 fetch 발사·완료(경로) 기록. `diag.trace` 토글
+    (기본 꺼짐 · 설정 진단 카드 옆) · `%TEMP%\KOTU\trace.log` 줄 단위 flush · 1MB 회전.
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
