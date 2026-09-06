@@ -2187,6 +2187,16 @@
     64×2 — 무시할 비용), 캐시 히트·fetch 완료 적용은 `DispatcherQueue.TryEnqueue`(레이아웃 밖)로 미룬다 ⓑ = 위상 0의 자식 교체를 `RegisterUpdateCallback`
     위상 1로 미루고 위상 0은 아무것도 만지지 않는다(PdfPane은 위상 0에서 크기만 대입) ⓒ = `ApplyTileSize` 재진입 가드(같은 값이면 대입 생략).
     셋 다 소~중이고 **셋 다 해도 무해**하다 — 실험 결과가 없으면 셋 다 적용.
+  - ✅ **3차 로그(`docs/assets/A352-trace-2026-09-06-c.log` · pid 43332)** — 재시작 후 새 폴더 `그림\aaa`(복사한 PNG 4장) 진입: `phase0`·`detail done`
+    정상 → 16:26:15.552 **`fill shell` ×4 이후 `shell done`·`no live host`·`exc` 어느 것도 영영 없음**(7초 뒤 풀 취소 예외만 = 모듈 이탈). 즉
+    **`FetchTilePreview`(워커: `StorageFile.GetFileFromPathAsync` + `GetThumbnailAsync(SingleItem, 768)`를 `.GetAwaiter().GetResult()`로 동기 대기)가
+    갓 복사된 OneDrive 파일에서 영원히 안 돌아온다** → 워커 3개(`ThumbFetchConcurrency`)가 전부 걸려 그 뒤 모든 셸 썸네일이 멈춘다(= "미리보기가
+    안 뜬다"). 첫 진입 미표시(배치 3 후보 ⓐⓑ)의 실체가 이것일 가능성 큼 — 재진입 때는 OneDrive 동기화/셸 캐시가 끝나 즉시 돌아온다.
+    **확정 수리(배치 3)** = 셸 썸네일 워커 대기에 **타임아웃**(`AsTask().WaitAsync(TimeSpan)` — .NET 6+ · 선례 0 · 5초 제안) → 초과 시 실패로 접고
+    (`PreviewKnownEmpty`는 굳히지 않는다 — 재실체화 때 1회 재시도) + UI 스레드의 `FillCachedThumbnailAsync`(`await GetThumbnailAsync(ReturnOnlyIfCached)`)도
+    같은 타임아웃 + 좌 그리드 `LoadThumbnailsAsync`·`FetchDetailInfo`(Image 해상도 등 속성 핸들러)도 워커 동기 대기라 같은 보호.
+    **크래시와의 관계(추정)** = 두 크래시 모두 OneDrive가 그 폴더에서 활동하던 순간(첫 진입 · aaa 생성/복사)이었다. 워커 행은 UI를 죽이지
+    않으므로 크래시 자체는 별개 원인이 남는다(레이아웃 사이클 가설 유지) — F11 실험 + 이벤트 1001 서명 대기.
 
 
 - ※ A59(**All Readable 통합 모듈 신규** — 모든 지원 형식을 한 창에서 열어보는 모듈, v0.113.0) 완료 — 결번. (상세 → docs/REQUIREMENTS-ARCHIVE.md)
