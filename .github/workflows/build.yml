@@ -6,12 +6,20 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: 구조 정합성 검사
+        shell: pwsh
+        run: ./eng/Test-Architecture.ps1
 
       - name: .NET 8 SDK 설치
         uses: actions/setup-dotnet@v4
@@ -25,4 +33,73 @@ jobs:
         run: dotnet build KOTU.sln -c Release -p:Platform=x64 --no-restore
 
       - name: 단위 테스트
-        run: dotnet test KOTU.sln -c Release -p:Platform=x64 --no-build --verbosity normal
+        run: dotnet test KOTU.sln -c Release -p:Platform=x64 --no-build --verbosity normal --logger trx --results-directory TestResults
+
+      - name: 테스트 결과 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults/*.trx
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: 작업 브랜치 실행본 생성
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
+        run: dotnet publish src/KOTU.App -c Release -p:Platform=x64 -r win-x64 --self-contained -o artifacts/KOTU -p:InformationalVersion=${{ github.sha }}
+
+      - name: 실행본 엔진 및 리소스 정합성 검사
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
+        shell: pwsh
+        env:
+          BUILD_BRANCH: ${{ github.ref_name }}
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          $package = Join-Path $PWD 'artifacts/KOTU'
+          $sevenZip = 'C:/Program Files/7-Zip/7z.dll'
+          if (!(Test-Path $sevenZip)) { throw '7z.dll missing from Windows runner' }
+          Copy-Item $sevenZip $package
+          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $package
+          $required = @('KOTU.exe', 'resources.pri', '7z.dll',
+                        'KOTU.DocumentModel.dll', 'Assets/app.ico', 'Assets/test-clip.mp4', 'Assets/sample.mp3')
+          foreach ($file in $required) {
+            if (!(Test-Path (Join-Path $package $file))) { throw "Package missing: $file" }
+          }
+          $vlc = Get-ChildItem $package -Recurse -Filter libvlc.dll | Select-Object -First 1
+          if (!$vlc -or !(Test-Path (Join-Path $vlc.DirectoryName 'libvlccore.dll')) -or
+              !(Test-Path (Join-Path $vlc.DirectoryName 'plugins'))) { throw 'VLC engine or plugins missing' }
+          @"
+          KOTU branch build
+          Branch: $env:BUILD_BRANCH
+          Commit: $env:BUILD_COMMIT
+
+          Extract the entire ZIP, close all running KOTU instances, then launch KOTU.exe.
+          This is an unpackaged test build, not an installer or an official update.
+          It uses the existing KOTU user settings and file associations; back up settings before testing.
+          See docs/ARCHITECTURE-MIGRATION.md in the repository for the manual checks.
+          "@ | Set-Content (Join-Path $package 'BRANCH-BUILD.txt') -Encoding utf8
+
+      - name: 실행본 시작 검사
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $package = Join-Path $PWD 'artifacts/KOTU'
+          $app = Start-Process -FilePath (Join-Path $package 'KOTU.exe') -WorkingDirectory $package -WindowStyle Hidden -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            $app.Refresh()
+            if ($app.HasExited) { throw "KOTU exited during startup: $($app.ExitCode)" }
+            $startupLog = Join-Path $env:TEMP 'KOTU/startup-error.log'
+            if (Test-Path $startupLog) { throw (Get-Content $startupLog -Raw) }
+          } finally {
+            if (!$app.HasExited) { Stop-Process -Id $app.Id -Force }
+          }
+
+      - name: 작업 브랜치 실행본 다운로드
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KOTU-win-x64-${{ github.sha }}
+          path: artifacts/KOTU/
+          if-no-files-found: error
+          retention-days: 14
