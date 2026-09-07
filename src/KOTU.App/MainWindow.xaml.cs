@@ -1,3 +1,4 @@
+using KOTU.Core.Content;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -379,6 +380,11 @@ public sealed partial class MainWindow : Window
         // 않는 확인이 계속 돌게 되므로 창이 내려갈 때 한 번 더 놓아 준다.
         // 뷰 쪽 해제가 멱등(_updateWatchHeld)이라 Unloaded와 겹쳐도 두 번 빠지지 않는다.
         Closed += (_, _) => (ModuleHost.Content as SettingsView)?.ReleaseUpdateWatch();
+        Closed += (_, _) =>
+        {
+            _contentClosed = true;
+            DetachContentBindings();
+        };
 
         // A226: F11/F12 패널 키는 **터널링**(PreviewKeyDown — 창 루트가 포커스 요소보다 먼저
         // 받는다)으로 승격. A212 감사에서 앱 코드의 선소비는 0건이었는데도 사용자 재보고
@@ -1393,7 +1399,7 @@ public sealed partial class MainWindow : Window
         _titleDirtyMark = false;
         SetTitle(Branding.AppName); // A103: 설정 화면도 파일이 없으니 "KOTU"뿐 (구: "KOTU Settings")
         var settings = new SettingsView(_router);
-        ModuleHost.Content = settings;
+        ReplaceContent(settings);
         // 설정도 하단 바 제공(광고 + ⛶, v0.50.0) — 모듈들과 같은 통합 방식
         ModuleBarHost.Content = settings.TakeBottomBar() as UIElement;
         ClearModulePanels(); // A119: 이전 모듈 패널(정보 모듈 그래프 등)이 설정 위에 남지 않게
@@ -1440,6 +1446,7 @@ public sealed partial class MainWindow : Window
         if (ModuleHost.Content is IFileOpenTarget target)
         {
             if (!await ConfirmDiscardAsync()) return; // 자식 문서의 미저장 변경 (A37)
+            if (!ReferenceEquals(ModuleHost.Content, target)) return;
             if (target.TryOpenFile(path))
             {
                 _titleDirtyMark = false;
@@ -1476,7 +1483,7 @@ public sealed partial class MainWindow : Window
                 },
             };
             unsupported.Loaded += (_, _) => unsupported.Focus(FocusState.Programmatic);
-            ModuleHost.Content = unsupported;
+            ReplaceContent(unsupported);
             ModuleBarHost.Content = null;
             ClearModulePanels(); // A119: 미지원 안내 화면에도 이전 모듈 패널이 남으면 안 된다
             AttachDriveStrip(null); // 미지원 파일 안내 화면 — 모듈 바와 함께 드라이브 줄도 내린다 (A22)
@@ -1583,7 +1590,7 @@ public sealed partial class MainWindow : Window
         SetTitle(title);
 
         var view = (UIElement)module.CreateView(context);
-        ModuleHost.Content = view;
+        ReplaceContent(view);
         // 모듈이 제공하는 하단 바 줄(동영상 트랜스포트 등)을 셸 하단 바에 통합 (v0.21.0)
         ModuleBarHost.Content = (view as IBottomBarProvider)?.TakeBottomBar() as UIElement;
         // A119: 모듈 고유 패널 호스트를 비운다 — ModuleBarHost 교체와 같은 자리. 새 뷰가 패널
@@ -1594,135 +1601,12 @@ public sealed partial class MainWindow : Window
         IsUntouched = false;
         UpdateModeIndicator(module);
 
-        // 뷰 내부 열기(열기 버튼·◀/▶ 탐색·테스트 클립)도 셸과 동기화 (v0.25.0)
-        if (view is IContentStateSource source)
-            source.ContentOpened += path => DispatcherQueue.TryEnqueue(() => OnContentOpened(path));
-        // A189: 무제 문서 진입(경로 없는 콘텐츠 — 문서 모듈 'New text file')도 셸과 동기화.
-        // 뷰가 이미 교체됐으면 무시한다(아래 이벤트들과 같은 가드).
-        if (view is IUntitledContentSource untitledSource)
-        {
-            untitledSource.UntitledOpened += () => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                OnUntitledOpened();
-            });
-            // A247 → A267: 콘텐츠 위 'New text file' — 이 창(발화한 뷰)은 그대로 두고 새 창에서
-            // 무제를 연다. A267에서 이 경로는 다이얼로그의 한 선택지가 아니라 콘텐츠 위 New의
-            // 유일한 동작이 됐다(빈 상태만 뷰가 자기 자리에서 개시). 배선은 무변경 —
-            // 같은 디스패치·교체 가드(위와 동일 관용구).
-            untitledSource.UntitledWindowRequested += () => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                _manager.OpenUntitledDocumentInNewWindow();
-            });
-        }
-        // A279: 열려 있는 콘텐츠의 파일이 갈렸다(문서 Save as...·무제 첫 저장) → 창 제목 재조립.
-        // 같은 디스패치·교체 가드(위와 동일 관용구). 이 저장은 ContentOpened도 함께 쏘므로
-        // 기준 경로·오버레이는 그쪽이 옮기고 여기서는 제목만 잇는다.
-        if (view is IContentPathChangedSource pathChangedSource)
-            pathChangedSource.ContentPathChanged += path => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                OnContentPathChanged(path);
-            });
-        // A348: 뷰 내부 항해로 "보여 주려는 파일"이 바뀌었다(로드 완료 전) → 좌 리스트 표시만 즉시
-        // 옮긴다. 같은 디스패치·교체 가드(위와 동일 관용구 — 이 통지도 UI 스레드 보장이 없다).
-        if (view is ICurrentPathSource currentPathSource)
-            currentPathSource.CurrentPathChanged += path => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                OnCurrentPathChanged(path);
-            });
-        // A346: 탐색 순서 소비자(이미지 뷰어)에게 좌 리스트의 현재 표시 순서를 즉시 시드한다.
-        // 뷰는 위 CreateView(생성자)에서 이미 파일 열기를 시작했지만, 폴더 스캔을 워커에서 기다리는
-        // 동안 이 시드가 도착하고 뷰가 스캔 완료 시점에 폴더를 다시 대조해 주입 목록을 채택한다 —
-        // 그래서 탐색기에서 연 첫 파일부터 순서가 맞는다(뷰 쪽 '두 시점 검사' 주석 참조).
-        // 밖(명령줄·드래그&드롭)에서 연 파일이면 폴더가 달라 뷰가 자체 열거로 폴백한다.
-        // 스캔이 도는 중이면 DisplayFolder는 CurrentFolder와 다르다 — 시드는 A323과 같은 규칙으로
-        // '표시 중인 목록의 폴더' 기준으로 한다(그 뒤 스캔 완료 ViewChanged가 다시 주입한다).
+        // 계약 구독 수명은 ReplaceContent에서 부착한다. 탐색 순서와 미디어 조작은 셸 소유다.
         if (view is IBrowseOrderConsumer browseConsumer && ListOverlay.DisplayFolder is { } shownFolder)
             browseConsumer.SetBrowseOrder(shownFolder, BrowseFilesOf(ListOverlay.CurrentEntries));
-        // A332: 열려 있는 콘텐츠의 상세 정보가 뒤늦게 확정됐다(재생 뷰의 libvlc 파싱 완료) →
-        // 정보 패널 열림 축을 다시 묻는다. 같은 디스패치·교체 가드(위와 동일 관용구 — 이 통지는
-        // libvlc 이벤트 스레드에서 온다).
-        if (view is IContentInfoChangedSource infoChangedSource)
-            infoChangedSource.ContentInfoChanged += () => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                OnContentInfoChanged();
-            });
-        // A159: 모듈 뷰의 "콘텐츠를 닫아 달라" 요청(압축 하단 바 Back의 루트 클릭이 유일한 발화
-        // 지점) → Esc 말단 층(A202)과 같은 실행부·같은 사이드바 기본(defaultSidebars: true)으로
-        // 닫는다. 닫을 콘텐츠가 없으면(S1) TryCloseContent가 false를 돌려주고 아무 일도 없다.
-        // 같은 디스패치·교체 가드(위와 동일 관용구).
-        if (view is IContentCloseRequestSource closeRequestSource)
-            closeRequestSource.ContentCloseRequested += () => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                TryCloseContent(defaultSidebars: true);
-            });
-        // A186: 재생 상태 변화(재생/일시정지/정지) → 하단 바 자동 숨김 재평가.
-        // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(A37과 같은 가드).
-        if (view is IPlaybackStateSource playback)
-            playback.PlaybackStateChanged += () => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                OnPlaybackStateChanged();
-            });
-        // A349 배치 3: 미디어 키(SMTC) 세션을 이 뷰에 붙인다. 위 계약들과 달리 이벤트 구독이
-        // 아니라 셸→뷰 조작 축이라(IBrowseOrderConsumer 시드와 같은 형) 디스패치·교체 가드가
-        // 아니라 부착/해제로 다룬다 — 교체 가드는 MediaTransport가 자기 _target 참조로 대신한다
-        // (Detach가 null로 만든다). 재생 뷰가 아닌 모듈로 갈아타면 세션을 접는다(미부착이면 무동작).
         if (view is IMediaTransportTarget mediaTarget)
             (_mediaTransport ??= new Integration.MediaTransport(this, _tray.Hwnd, DispatcherQueue))
                 .Attach(mediaTarget, context.FilePath);
-        else
-            _mediaTransport?.Detach();
-        // A256(2026-08-27): A223의 열기 위임 구독(IOpenFileRequestSource)을 제거했다 — 문서 모듈
-        // 하단 바 Open 버튼이 사라져 이 계약의 소비자가 0이 됐고, 계약 파일도 함께 폐기했다.
-        // 파일 열기는 셸 S4 'Open file'(A90) 한 곳이며, 그 경로가 쓰는 OpenFile이 미저장
-        // 가드(A37 ConfirmDiscardAsync)·제목 갱신을 그대로 갖고 있다(가드 손실 없음).
-        // A211 배치 1: 모듈 하단 바 인쇄 버튼(배치 2~5에서 추가)의 신호 → 셸 인쇄 단일 경로.
-        // 계약에 UI 스레드 보장이 없어 디스패치하고, 뷰가 이미 교체됐으면 무시한다(위와 같은 가드).
-        if (view is IPrintPageProvider printProvider)
-            printProvider.PrintRequested += () => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                RequestPrint();
-            });
-        // 핀의 최소 크기 1회 축소(A238): 발화는 뷰(핀 ON 순간 1회), 실행은 셸.
-        // 지금 보이는 뷰의 요청만 받는다 — 구 A61 접힘의 "펼치기는 뷰가 내려간 뒤에도 수용"은
-        // 되돌릴 상태 자체가 사라져 함께 소멸했다(핀 축소는 보통의 창 크기일 뿐이다).
-        // UI 스레드면 즉시, 아니면 디스패치(종전과 같은 분기 — 순서 의존은 이제 없지만
-        // 토글 클릭과 같은 틱에 반영되는 쪽이 자연스럽다).
-        if (view is IWindowShrinkSource shrinkSource)
-            shrinkSource.ShrinkToMinRequested += () =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                if (DispatcherQueue is { } dq && !dq.HasThreadAccess)
-                    dq.TryEnqueue(ShrinkToMinimum);
-                else
-                    ShrinkToMinimum();
-            };
-        // 미저장 표시(A37): 창 제목·트레이 툴팁에 ● — 뷰가 이미 교체됐으면 무시
-        if (view is ICloseGuard guard)
-            guard.UnsavedChanged += dirty => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                _titleDirtyMark = dirty;
-                ApplyTitle();
-            });
-        // 트레이 아이콘 내용(A54): 모듈은 값만 내주고 아이콘 합성은 셸이 한다.
-        // UI 스레드 보장이 없는 계약이라 디스패치하고, 뷰가 이미 교체됐으면 무시한다(A37과 같은 가드).
-        if (view is ITrayStatusProvider trayStatus)
-            trayStatus.TrayStatusChanged += () => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!ReferenceEquals(ModuleHost.Content, view)) return;
-                // A137: 저장 성공(A113 재기준화 — DocumentView.CommitSave의 1회 통지)의 용량 변화가
-                // 이 경로로 창 32px 아이콘에 닿는다. 오디오의 1초 주기 발화 같은 잦은 호출은
-                // _windowIconKey 선비교가 창 쪽 재합성을 걸러 낸다(트레이는 종전 ComposeKey 방어).
-                RefreshShellIcons();
-            });
         SetContentState(module, context.FilePath);
         // A109(v0.136.0): 모듈 전환의 기본 화면 = 사이드바.
         // A314(2026-09-02 — A273 재개정): 기본은 **좌·우 모두 열림**이다(값의 단일 출처 =
@@ -1738,6 +1622,49 @@ public sealed partial class MainWindow : Window
         if (defaultSidebars) ApplyDefaultSidebars();
     }
 
+    private ContentContractSession? _contentSession;
+    private bool _contentClosed;
+
+    private void DetachContentBindings()
+    {
+        var session = _contentSession;
+        _contentSession = null;
+        session?.Dispose();
+        _mediaTransport?.Detach();
+    }
+
+    private void ReplaceContent(UIElement view)
+    {
+        DetachContentBindings();
+        // 하단 바와 별도 패널은 센터와 다른 트리에 있다. 센터의 Unloaded 전에 먼저 떼어 준다.
+        ModuleBarHost.Content = null;
+        ClearModulePanels();
+        AttachDriveStrip(null);
+        ModuleHost.Content = view;
+        var session = new ContentContractSession(view, action =>
+        {
+            // 중첩 All Readable 통지는 UI에 도착한 뒤 다시 큐에 넣지 않는다.
+            if (DispatcherQueue.HasThreadAccess) action();
+            else DispatcherQueue.TryEnqueue(() => action());
+        }, () => !_contentClosed && ReferenceEquals(ModuleHost.Content, view));
+        _contentSession = session;
+        session.ContentOpened += OnContentOpened;
+        session.UntitledOpened += OnUntitledOpened;
+        session.UntitledWindowRequested += () => _manager.OpenUntitledDocumentInNewWindow();
+        session.ContentPathChanged += OnContentPathChanged;
+        session.CurrentPathChanged += OnCurrentPathChanged;
+        session.ContentInfoChanged += OnContentInfoChanged;
+        session.ContentCloseRequested += () => TryCloseContent(defaultSidebars: true);
+        session.PlaybackStateChanged += OnPlaybackStateChanged;
+        session.PrintRequested += RequestPrint;
+        session.ShrinkToMinRequested += ShrinkToMinimum;
+        session.UnsavedChanged += dirty =>
+        {
+            _titleDirtyMark = dirty;
+            ApplyTitle();
+        };
+        session.TrayStatusChanged += RefreshShellIcons;
+    }
     // ---------- 미저장 가드 (A37) ----------
 
     private bool _confirmInProgress; // ContentDialog는 동시에 1개만 — 중복 진입 방지
@@ -1746,19 +1673,22 @@ public sealed partial class MainWindow : Window
     /// <summary>현재 뷰(ICloseGuard)에 미저장 변경이 있으면 사용자에게 확인. true = 계속 진행.</summary>
     private async Task<bool> ConfirmDiscardAsync()
     {
-        if (ModuleHost.Content is not ICloseGuard { HasUnsavedChanges: true } guard) return true;
-        if (_confirmInProgress) return false;
+        if (_contentClosed || _confirmInProgress) return false;
+        var session = _contentSession;
+        var content = ModuleHost.Content;
+        if (content is not ICloseGuard { HasUnsavedChanges: true }) return true;
         _confirmInProgress = true;
         try
         {
-            return await guard.ConfirmCloseAsync();
+            return session is not null && await session.ConfirmCloseAsync() &&
+                !_contentClosed && ReferenceEquals(_contentSession, session) &&
+                ReferenceEquals(ModuleHost.Content, content);
         }
         finally
         {
             _confirmInProgress = false;
         }
     }
-
     /// <summary>트레이 닫기·X 버튼 공용: 미저장 확인 후 닫는다.</summary>
     private async Task ConfirmThenCloseAsync()
     {
