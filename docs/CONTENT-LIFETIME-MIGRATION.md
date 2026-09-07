@@ -13,7 +13,7 @@
 | 1 | 문서 저장 세션·파일 저장 서비스 | 브랜치 검증 완료 · [문서 세션](ARCHITECTURE-MIGRATION.md) |
 | 2 | 파일 전송 계획·실행·원본 정리 | 브랜치 검증 완료 · [파일 전송](FILE-TRANSFER-MIGRATION.md) |
 | 3 | 정식 배포 검증 필수화 | build 및 release 수동 시험 성공 · [배포 검증](RELEASE-VERIFICATION.md) |
-| 4 | 콘텐츠 계약 수명·All Readable 회귀 검사 | 로컬 빌드·304건 회귀 검사 통과, CI 대기 · 이 문서 |
+| 4 | 콘텐츠 계약 수명·All Readable 회귀 검사 | 로컬 빌드·304건 회귀 및 GitHub 설치 EXE 검증 통과 · 이 문서 |
 | 5 | Windows 취소·타임아웃·미디어 공통 정책 | 후속 예정 |
 
 ## 소유권과 교체 순서
@@ -56,8 +56,11 @@ MainWindow의 모듈·설정·미지원 파일 교체는 같은 구독 해제와
 변경 diff의 공백·한글 이스케이프 검사도 통과했다. 독립 검토에서 발견한 워커 스레드의
 UI 동일성 접근과 늦은 정보·인쇄 결과 문제를 수정하고 회귀 테스트에 포함했다.
 검증 로그는 로컬의 무시 대상 `artifacts/phase4-build.log`, `artifacts/phase4-tests.log`,
-`TestResults/phase4-full`에 남긴다. GitHub 설치 EXE 검증은 커밋·푸시 후 별도로
-확인한다. Core 테스트는 실제 WinUI 레이아웃이나 네이티브 재생을 실행하는 검사가 아니다.
+`TestResults/phase4-full`에 남긴다.
+[GitHub build 34130716113](https://github.com/zpstudios/kotu/actions/runs/34130716113)은
+소스 커밋 `8d8adb4`에서 전체 성공했다. 설치 EXE 패키징·실제 설치·설치 파일 정합성·
+설치본 시작 검사 및 아티팩트 업로드가 통과했다. 기본 브랜치 병합과 정식 Release 발행은
+하지 않았다. Core 테스트는 실제 WinUI 레이아웃이나 네이티브 재생을 실행하는 검사가 아니다.
 
 수동 확인: All Readable에서 문서 편집 후 영상·사진·압축으로 전환, 저장 확인 취소와 버리기,
 압축 Back으로 콘텐츠 닫기, 재생 중 설정·미지원 파일로 전환, 인쇄·정보 조회 중 파일 전환,
