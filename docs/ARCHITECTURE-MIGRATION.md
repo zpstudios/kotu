@@ -8,7 +8,11 @@
   첫 실행에서 설치는 성공했으나 Velopack 기본 제외 파일 `createdump.exe`를 요구하여 검사가 실패했다.
   v0.353.2에서 [Velopack 1.2.0 공식 제외 규칙](https://github.com/velopack/velopack/blob/1.2.0/src/vpk/Velopack.Packaging/PackageBuilder.cs)과
   기본 PDB 제외 규칙만 비교에서 제외한다. 나머지 파일의 누락·해시 불일치는 계속 실패시킨다.
-  아래 v0.353.0 결과와 구분하며, 설치 EXE의 최종 성공 여부는 해당 커밋의 Actions 실행을 확인한다.
+  [v0.353.2 build 34117227808](https://github.com/zpstudios/kotu/actions/runs/34117227808) 전체 성공:
+  빌드·테스트·패키징·실제 설치·배포 파일 SHA-256 비교·설치본 시작·업로드 통과.
+  소스 커밋 `fe29e4d7eab49adbbe94e529ee64a1dcd4957af4`,
+  [설치 EXE 아티팩트](https://github.com/zpstudios/kotu/actions/runs/34117227808/artifacts/10016965066).
+  아래 v0.353.0 결과는 최초 구조 변경 실행본의 이력이다.
 
 - 로컬 구조 검사 통과: 17개 프로젝트의 참조·순환·모델 독립성·솔루션 빌드 매핑.
 - 작업용 .NET SDK 8.0.424에서 `KOTU.DocumentModel.Tests` 컴파일 및 Windows 테스트 9건 통과(실패/건너뜀 0).
