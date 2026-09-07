@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Description>파일 전송 계획·실행·원본 정리. UI 비의존, Windows 파일시스템 어댑터.</Description>
+  </PropertyGroup>
+</Project>

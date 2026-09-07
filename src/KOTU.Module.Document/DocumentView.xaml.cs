@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -11,6 +11,7 @@ using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
 using KOTU.Core.IO; // A353: 쓰기 잠금을 가진 파일도 읽는 공유 열기(SharedRead)
 using KOTU.Core.Settings;
 using KOTU.Core.Threading;
+using KOTU.DocumentModel;
 using KOTU.Input;
 using KOTU.Ui;
 
@@ -207,10 +208,8 @@ public sealed partial class DocumentView : UserControl,
     private byte[]? _originalBytes;        // ⓑ: 로드한 원본 바이트(잘림이면 null) — 저장 성공 시 쓴 바이트로 재기준화
     private bool _lossyAtLoad;             // ⓑ: 무수정 저장이 원본 바이트를 재현하지 못한다(로드 시 1회 판정)
     private RoundTripLoss _lossyReason;    // ⓑ: 사유 — 저장 전 예고 대화상자의 본문이 갈린다
-    private DateTime _diskWriteTimeUtc;    // ⓓ: 열 때·저장 때 기록한 디스크 스탬프(수정 시각)
-    private long _diskLength;              // ⓓ: 디스크 스탬프(크기)
-    private string _baselineText = string.Empty; // ⓒ: 더티 판정 기준(\n 정규화) — 저장 성공 시 재기준화
-    private bool _saving;                  // 저장 흐름(대화상자 포함) 중복 진입 방지 — ContentDialog는 동시 1개
+    private readonly DocumentSession _documentSession = new();
+    private readonly DocumentFileStore _documentFiles = new();
 
     /// <summary>
     /// A142 ①ⓑ: <c>TextBox.Text</c> 게터는 호출마다 전문을 마샬링 복사한다(4MB급에서 지배적 비용) —
@@ -1039,8 +1038,6 @@ public sealed partial class DocumentView : UserControl,
         _originalBytes = loaded.OriginalBytes;   // A113 ⓑ: 원본 바이트(잘림이면 null)
         _lossyAtLoad = loaded.Loss != RoundTripLoss.None;
         _lossyReason = loaded.Loss;
-        _diskWriteTimeUtc = loaded.WriteTimeUtc; // A113 ⓓ: 외부 변경 판정의 기준 스탬프
-        _diskLength = loaded.Length;
 
         // A181: 거터(A142 ③) 자리 예약 — 자릿수+1을 왼쪽 패딩으로 확보한다(UpdateEditorPadding
         // 주석 참고). Text 대입보다 먼저 잡아야 랩 계산이 최종 패딩으로 한 번에 끝난다.
@@ -1055,7 +1052,7 @@ public sealed partial class DocumentView : UserControl,
         UpdateEditorPadding();
 
         _loadingText = true; // 프로그램적 설정 — dirty 아님
-        // A343 ⓐ: 잘린 HTML은 빈 문자열 대입(무대입 아님 — 옛 파일 잔상 금지). _baselineText도
+        // A343 ⓐ: 잘린 HTML은 빈 문자열 대입(무대입 아님 — 옛 파일 잔상 금지). _documentSession.BaselineText도
         // 이 빈 값 기준으로 서고 SetDirty(false)가 뒤따르므로 더티는 항상 false다. 저장은
         // 3중으로 막힌다: ① UpdateEditorReadOnly의 잘림 축(영구 IsReadOnly — 입력 자체가 불가)
         // ② SaveAsync 첫 가드의 _truncated 조기 반환(무동작) ③ 더티 없음(HasUnsavedChanges false).
@@ -1066,7 +1063,7 @@ public sealed partial class DocumentView : UserControl,
         // 대신 셋 직후 값을 쓰는 이유는, TextBox가 줄바꿈('\r') 외에 무언가를 더 손봐도 열자마자
         // 더티가 되는 오탐이 없게 하기 위함(undo 원복 판정의 기준점과도 일치한다).
         // 이 접근이 스냅샷을 새로 띄워 첫 장식 렌더(A115)까지 같은 복사본을 쓴다(A142 ①ⓑ).
-        _baselineText = NormalizeNewlines(EditorText);
+        _documentSession.Reset(NormalizeNewlines(EditorText), new DocumentStamp(loaded.WriteTimeUtc, loaded.Length));
         _dirtyTimer?.Stop(); // 이전 파일의 보류 중 판정이 새 파일 상태를 건드리지 않게
         UpdateEditorReadOnly(); // A224 단일 산출 지점 — 잘림(_truncated)이면 영구 잠금(잘린 채 저장 방지)
         SetDirty(false);
@@ -1141,7 +1138,7 @@ public sealed partial class DocumentView : UserControl,
     {
         // 저장 흐름 진행 중(대화상자·쓰기 대기)이면 무시한다 — StartUntitled가 쓰기 중인 버퍼를
         // 갈아치우지 않게(SaveAsync·ConfirmCloseAsync의 같은 가드 관용구).
-        if (_saving) return;
+        if (_documentSession.IsSaving) return;
         if (_shownPath is null && !_untitled)
         {
             StartUntitled(); // 빈 상태 — 이 자리에서 무제 개시
@@ -1187,8 +1184,6 @@ public sealed partial class DocumentView : UserControl,
         _originalBytes = null;
         _lossyAtLoad = false;
         _lossyReason = RoundTripLoss.None;
-        _diskWriteTimeUtc = default; // ⓓ 스탬프는 첫 저장(CommitSave)이 잡는다
-        _diskLength = 0;
 
         _gutterDigits = DigitCount(1) + 1; // 빈 문서 = 1줄 — ApplyLoadedText와 같은 산식
         UpdateEditorPadding();
@@ -1197,7 +1192,7 @@ public sealed partial class DocumentView : UserControl,
         EditorBox.Text = string.Empty;
         _loadingText = false;
         _textSnapshot = null;
-        _baselineText = string.Empty; // A113 ⓒ: 무제의 더티 기준 = 빈 문자열
+        _documentSession.Reset(string.Empty); // 무제의 기준과 디스크 스탬프를 함께 초기화한다.
         _dirtyTimer?.Stop();
         UpdateEditorReadOnly(); // A224 단일 산출 지점 — 무제는 잘림·뷰 모드 둘 다 아님 = 편집 가능
         SetDirty(false);
@@ -2083,7 +2078,7 @@ public sealed partial class DocumentView : UserControl,
         _originalBytes = null;
         _lossyAtLoad = false;
         _lossyReason = RoundTripLoss.None;
-        _baselineText = string.Empty;
+        _documentSession.Reset(string.Empty);
         _dirtyTimer?.Stop();
         SetDirty(false);
         ResetRenderState(false); // A190: 렌더 축 리셋 — PDF 뷰에는 토글이 없다(비활성)
@@ -2620,7 +2615,7 @@ public sealed partial class DocumentView : UserControl,
         var text = EditorText; // 새 스냅샷 1회(A142 ①ⓑ) — 추적·길이 비교가 같은 인스턴스를 쓴다
         TrackEdit(_changePrevText, text); // A266: 직전 텍스트와의 트림으로 이번 편집을 구간에 병합
         _changePrevText = text;
-        if (text.Length != _baselineText.Length)
+        if (text.Length != _documentSession.BaselineText.Length)
         {
             _dirtyTimer?.Stop(); // 보류 중 판정 불필요 — 결과가 이미 확정이다
             SetDirty(true);
@@ -2631,7 +2626,7 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>ⓒ 판정 본체: 에디터 내용을 \n 정규화해 기준 텍스트와 비교한다.</summary>
-    private bool EditorMatchesBaseline() => NormalizeNewlines(EditorText) == _baselineText;
+    private bool EditorMatchesBaseline() => _documentSession.MatchesBaseline(NormalizeNewlines(EditorText));
 
     /// <summary>ⓒ 즉시 재판정(디바운스 없이) — 저장 성공 재기준화 직후에 쓴다.</summary>
     private void RecomputeDirty()
@@ -2666,8 +2661,8 @@ public sealed partial class DocumentView : UserControl,
 
     /// <summary>
     /// A266: 직전 TextChanged 시점의 에디터 원문 — 접두·접미 트림의 old 쪽. 기존 보관 문자열은
-    /// "지금"(_textSnapshot — 편집마다 무효화)과 "기준"(_baselineText — \n 정규화)뿐이라 "직전"은
-    /// 재사용할 수 없어 별도로 든다(A177 임계급 문자열 1벌 추가 — _baselineText·_printText가
+    /// "지금"(_textSnapshot — 편집마다 무효화)과 "기준"(_documentSession.BaselineText — \n 정규화)뿐이라 "직전"은
+    /// 재사용할 수 없어 별도로 든다(A177 임계급 문자열 1벌 추가 — _documentSession.BaselineText·_printText가
     /// 상시 전문을 쥐는 기존 메모리 자세와 동급으로 수용).
     /// </summary>
     private string _changePrevText = string.Empty;
@@ -2801,7 +2796,7 @@ public sealed partial class DocumentView : UserControl,
         // 저장 흐름이 이미 진행 중이다(대화상자 포함) — 완료를 주장하지 않는다
         // (ContentDialog는 동시 1개. A267: New 클릭은 더 이상 다이얼로그를 띄우지 않아
         // 여기 합류시켰던 _newFileConfirmInProgress 가드는 함께 사라졌다).
-        if (_saving) return false;
+        if (_documentSession.IsSaving) return false;
         // 잘림·PDF·빈 화면 — 저장 대상이 없다(ⓐ~ⓓ 비적용). A189: 무제는 저장 대상이다 —
         // 경로 확정(Save as 피커)은 SaveCoreAsync 몫.
         // A343 ⓑ: _capped(앞부분만 담긴 버퍼)도 여기서 잘림과 같이 무동작으로 끝난다 — 3중 차단의 ⓑ.
@@ -2809,23 +2804,30 @@ public sealed partial class DocumentView : UserControl,
         SettlePendingDirtyCheck(); // 250ms 창 안의 치환 편집이 "저장할 것 없음"으로 새지 않게
         if (!_dirty) return true;
 
-        _saving = true;
+        var operation = _documentSession.TryBeginSave();
+        if (operation is null) return false;
         try
         {
-            return await SaveCoreAsync();
+            return await SaveCoreAsync(operation);
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (Exception ex)
+        {
+            await ShowMessageAsync("Save failed", ex.Message);
+            return false;
         }
         finally
         {
-            _saving = false;
+            _documentSession.EndSave(operation);
         }
     }
 
-    private async Task<bool> SaveCoreAsync()
+    private async Task<bool> SaveCoreAsync(DocumentSession.SaveOperation operation)
     {
         // A189: 무제 문서는 저장 대상 경로가 아직 없다 — 먼저 Save as 피커로 경로를 확정한다
         // (A113 ⓐ의 "Save as..." 피커 재사용). 취소 = 저장 전체 취소(더티 유지 — ConfirmCloseAsync
         // 경유면 닫기도 함께 취소). ⓓ 외부 변경·ⓑ 라운드트립 예고는 원본 디스크 파일이 없어
-        // 자연히 건너뛴다(_path=null → DiskChangedSinceLoad=false, _originalBytes=null).
+        // 자연히 건너뛴다(_path=null → 외부 변경 검사 생략, _originalBytes=null).
         // 피커가 기존 파일을 골랐으면 덮어쓰기 확인은 피커 자신이 했다(기존 Save as 흐름과 동일).
         string originalPath;
         var savedAs = false;
@@ -2844,13 +2846,16 @@ public sealed partial class DocumentView : UserControl,
             return true; // SaveAsync가 걸렀다 — 방어
         }
 
+        if (!_documentSession.IsCurrentSave(operation)) return false;
         // WinUI TextBox는 줄바꿈을 '\r'로 정규화한다 — 기준(\n)으로 맞춘 뒤 원본 스타일로 되돌린다.
         var normalized = NormalizeNewlines(EditorText); // A142 ①ⓑ: 마지막 편집 후 스냅샷 재사용
 
         var text = _newLine == "\n" ? normalized : normalized.Replace("\n", _newLine);
 
         // ⓓ 외부 변경 감지: 열 때(또는 직전 저장 때) 기록한 스탬프와 다르면 덮어쓸지 먼저 묻는다.
-        if (DiskChangedSinceLoad() && !await ConfirmOverwriteExternalChangeAsync()) return false;
+        var expectedStamp = _documentSession.DiskStamp;
+        if (!savedAs && await Worker.Run(_ => _documentFiles.HasChanged(originalPath, expectedStamp))
+            && !await ConfirmOverwriteExternalChangeAsync()) return false;
 
         // ⓑ 라운드트립 손실 예고: 로드 시 1회 판정해 둔 결과 — 원본 바이트를 쥔 경우에만 성립한다.
         if (_lossyAtLoad && _originalBytes is not null && !await ConfirmNormalizeAsync()) return false;
@@ -2871,11 +2876,12 @@ public sealed partial class DocumentView : UserControl,
         var path = originalPath;
         while (true)
         {
-            SaveStamp stamp;
+            if (!_documentSession.IsCurrentSave(operation)) return false;
+            DocumentWriteResult result;
             try
             {
                 var target = path; // 워커 클로저가 이번 회차의 경로를 읽도록 고정
-                stamp = await Worker.Run(_ => WriteAndVerify(target, bytes));
+                result = await Worker.Run(_ => _documentFiles.WriteAndVerify(target, bytes));
             }
             catch (OperationCanceledException)
             {
@@ -2887,10 +2893,9 @@ public sealed partial class DocumentView : UserControl,
                 return false;
             }
 
-            if (stamp.Verified)
+            if (result.Verified)
             {
-                CommitSave(path, savedAs, bytes, normalized, stamp);
-                return true;
+                return CommitSave(operation, path, savedAs, bytes, normalized, result.Stamp);
             }
 
             // ⓐ 실패: 디스크가 의심 상태고 버퍼가 정본이다 — 더티를 유지한 채 선택지를 준다.
@@ -2909,29 +2914,16 @@ public sealed partial class DocumentView : UserControl,
         }
     }
 
-    /// <summary>ⓐ 쓰기+재검증 결과. Verified=false면 디스크가 의심 상태다(버퍼가 정본 — 더티 유지).</summary>
-    private sealed record SaveStamp(bool Verified, DateTime WriteTimeUtc, long Length);
-
-    /// <summary>
-    /// 워커에서 쓰고(WriteAllBytes — 반환 시점에 핸들이 닫혀 있다) 곧바로 다시 읽어 쓴 바이트와
-    /// 대조한다(A113 ⓐ). ⓓ 스탬프 재기록용 수정 시각·크기도 같은 왕복에서 조회해 돌려준다.
-    /// </summary>
-    private static SaveStamp WriteAndVerify(string path, byte[] bytes)
-    {
-        File.WriteAllBytes(path, bytes);
-        var verified = File.ReadAllBytes(path).SequenceEqual(bytes);
-        var info = new FileInfo(path);
-        return new SaveStamp(verified, info.LastWriteTimeUtc, info.Length);
-    }
-
     /// <summary>
     /// 저장 성공(ⓐ 통과) 후 재기준화: 원본 바이트·기준 텍스트·손실 플래그·ⓓ 스탬프를 방금 쓴
     /// 상태로 다시 잡는다 — 이걸 빠뜨리면 다음 저장마다 ⓓ가 "외부 변경"을 오탐한다.
     /// Save as...로 경로가 바뀌었으면 편집 대상·상태바·셸 통지(기존 배선)도 새 경로로 잇는다.
     /// </summary>
-    private void CommitSave(string path, bool savedAs, byte[] bytes, string normalizedText, SaveStamp stamp)
+    private bool CommitSave(DocumentSession.SaveOperation operation, string path, bool savedAs,
+        byte[] bytes, string normalizedText, DocumentStamp stamp)
     {
-        if (!savedAs && path != _path) return; // 그새 다른 파일이 열렸다 — 새 파일 상태를 덮지 않는다
+        if (!savedAs && path != _path) return false;
+        if (!_documentSession.TryCommitSave(operation, normalizedText, stamp)) return false;
 
         if (path != _path)
         {
@@ -2958,9 +2950,6 @@ public sealed partial class DocumentView : UserControl,
         _originalBytes = bytes;         // ⓑ: 이제 디스크의 원본 = 방금 쓴 바이트
         _lossyAtLoad = false;
         _lossyReason = RoundTripLoss.None;
-        _baselineText = normalizedText; // ⓒ: 기준 텍스트 = 저장한 그 내용
-        _diskWriteTimeUtc = stamp.WriteTimeUtc; // ⓓ: 스탬프 재기록
-        _diskLength = stamp.Length;
 
         // ⓒ: 쓰는 동안 새 입력이 있었으면 기준과 다르다 — 무조건 끄지 않고 내용 비교로 재판정한다
         // (종전에는 저장 완료가 무조건 더티 해제였다 — 그 사이 입력이 표시 없이 새는 창이 있었다).
@@ -2969,7 +2958,7 @@ public sealed partial class DocumentView : UserControl,
         // 에디터 원문과 1:1이다(TextBox 줄바꿈 '\r' ↔ 기준 '\n' — ⓒ 길이 비교와 같은 전제).
         ResetChangeTracking();
         RecomputeDirty();
-        if (_dirty) TrackEdit(_baselineText, NormalizeNewlines(_changePrevText));
+        if (_dirty) TrackEdit(_documentSession.BaselineText, NormalizeNewlines(_changePrevText));
 
         // A137: 저장 성공 1회 통지 — 저장으로 파일 크기가 바뀌면 셸이 작업표시줄 32px 아이콘의
         // 용량 표기를 다시 그린다(타이핑 중 실시간 갱신은 하지 않는다 — 부록 B 69 확정. 여기는
@@ -2977,26 +2966,7 @@ public sealed partial class DocumentView : UserControl,
         // 변경)도 이 한 번으로 충분하고, 트레이 값(A138 페이지)은 저장으로 안 변하므로 셸의
         // ComposeKey 선비교가 트레이 재합성을 걸러 준다 — 종전의 savedAs 한정 발화를 대체한다.
         TrayStatusChanged?.Invoke();
-    }
-
-    /// <summary>
-    /// A113 ⓓ: 디스크의 파일이 연 뒤(또는 직전 저장 뒤)에 바뀌었는지 — 수정 시각·크기 스탬프 비교.
-    /// 파일이 사라졌거나 조회가 실패해도 "외부에서 무슨 일이 있었다"이므로 변경으로 친다.
-    /// </summary>
-    private bool DiskChangedSinceLoad()
-    {
-        if (_path is null) return false;
-        try
-        {
-            var info = new FileInfo(_path);
-            return !info.Exists
-                || info.LastWriteTimeUtc != _diskWriteTimeUtc
-                || info.Length != _diskLength;
-        }
-        catch
-        {
-            return true;
-        }
+        return !_dirty; // 저장 이후 입력이 남았으면 저장 후 닫기/교체를 허용하지 않는다.
     }
 
     /// <summary>ⓓ: 외부 변경을 안고 덮어쓸지 확인. 파괴적이라 기본 버튼은 Cancel(강행 금지 원칙).</summary>
@@ -3135,7 +3105,7 @@ public sealed partial class DocumentView : UserControl,
         get
         {
             SettlePendingDirtyCheck();
-            return _dirty;
+            return _dirty || _documentSession.IsSaving;
         }
     }
 
@@ -3143,11 +3113,11 @@ public sealed partial class DocumentView : UserControl,
     public async Task<bool> ConfirmCloseAsync()
     {
         if (!HasUnsavedChanges) return true; // 보류 중 ⓒ 판정 확정 포함
-        // ContentDialog는 동시 1개 — 저장 흐름(_saving)이 떠 있으면 닫기 보류
+        // ContentDialog는 동시 1개 — 저장 흐름(_documentSession.IsSaving)이 떠 있으면 닫기 보류
         // (둘째 ShowAsync는 예외를 던진다). A267: New 분기 다이얼로그가 폐기되어
         // 이 가드에 합류시켰던 _newFileConfirmInProgress도 함께 제거됐다.
-        if (_saving) return false;
-        if (XamlRoot is null) return true; // 다이얼로그를 띄울 수 없으면 막지 않는다
+        if (_documentSession.IsSaving) return false;
+        if (XamlRoot is null) return false; // 미저장 내용을 확인할 수 없으면 현재 문서를 유지한다.
 
         var dialog = new ContentDialog
         {
@@ -3162,7 +3132,8 @@ public sealed partial class DocumentView : UserControl,
         };
         return await dialog.ShowAsync() switch
         {
-            ContentDialogResult.Primary => await SaveAsync(), // 저장 실패·취소면 닫기도 취소
+            ContentDialogResult.Primary => await SaveAsync()
+                && _documentSession.CanClose(NormalizeNewlines(EditorText)),
             ContentDialogResult.Secondary => true,            // 버리기
             _ => false,                                       // 취소
         };
@@ -3416,7 +3387,7 @@ public sealed partial class DocumentView : UserControl,
     /// (<see cref="PrintJobName"/> 읽기)에 1회 굳는다 — string 불변이라 참조 보관 = 스냅샷이고,
     /// 세션 중 편집·파일 전환이 와도 페이지 내용·수가 흔들리지 않는다(늦게 온 미리보기 요청
     /// 포함). 세션 종료 신호는 계약에 없어 다음 세션 시작이 덮어쓸 때까지 유지된다(보유 상한
-    /// = A177 임계급 문자열 1개 — _baselineText가 상시 전문을 쥐는 기존 메모리 자세와 동급).
+    /// = A177 임계급 문자열 1개 — _documentSession.BaselineText가 상시 전문을 쥐는 기존 메모리 자세와 동급).
     /// </summary>
     private string? _printText;
 

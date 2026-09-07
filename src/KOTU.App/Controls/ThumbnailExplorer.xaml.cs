@@ -153,6 +153,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 진행 중이던 미리보기 요청이 옛 폴더의 것이면 그 완료를 버린다. 같은 폴더 안에서 컨테이너가
     /// 다른 파일로 재활용되는 경우는 seq가 안 바뀌므로 <c>ReferenceEquals</c> 대조가 따로 막는다.</summary>
     private int _showSeq;
+    private readonly CancellableBatch _previewBatch = new();
 
     /// <summary>
     /// 지금 그리고 있는 표시 목록의 뷰모델 (A345 배치 3) — <c>TileGrid.ItemsSource</c>에 대입한
@@ -304,6 +305,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         // (ExplorerPane과 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
         Loaded += (_, _) =>
         {
+            if (_previewBatch.Token.IsCancellationRequested) _previewBatch.Restart();
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             ExplorerFileOps.CutMarksChanged += ApplyCutMarks;
         };
@@ -317,6 +319,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             // seq 선증가가 중요: 닫힌 풀의 Run은 취소 Task라 어차피 무해지만, 낡은 예약이
             // 지연 재생성으로 새 풀을 되살리는 길을 이 한 줄이 막는다.
             _showSeq++;
+            _previewBatch.Dispose();
             _textPool?.Dispose();
             _textPool = null;
             _thumbPool?.Dispose(); // A242 — 텍스트 풀과 같은 정리 규칙(보류 무산은 위 seq 선증가가 겸한다)
@@ -589,7 +592,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
-        _showSeq++; // 진행 중이던 미리보기 요청 전부 낡음 처리(폴더 전환·재스캔 공통)
+        _showSeq++;
+        _previewBatch.Restart(); // 진행 중이던 미리보기 요청 전부 낡음 처리(폴더 전환·재스캔 공통)
         DiagTrace.Write("tiles", $"ShowEntries {folder} count={entries.Count}"); // A352 배치 1
         CurrentFolder = folder;
         TileGrid.ItemsSource = null; // 옛 목록 해제(같은 참조 재대입이 무시되는 일도 함께 막는다)
@@ -640,6 +644,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     public void ShowLoading(string folder)
     {
         _showSeq++;
+        _previewBatch.Restart();
         DiagTrace.Write("tiles", "ShowLoading " + folder); // A352 배치 1
         CurrentFolder = folder; // 좌 리스트(_folder)와 같은 시점 갱신 — 로딩 중 드랍·붙여넣기 대상 일치
         TileGrid.ItemsSource = null; // A345 배치 3 — 목록 해제가 곧 타일 비우기다
@@ -1132,19 +1137,22 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private async Task FillTextPreviewAsync(ExplorerEntryVm vm, int seq)
     {
+        var cancellation = _previewBatch.Token;
+        if (seq != _showSeq || cancellation.IsCancellationRequested) return;
         if (vm.PreviewInFlight) return; // 같은 항목의 중복 발사 방지
         vm.PreviewInFlight = true;
         try
         {
-            await _textReadGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
-            try
+            using var lease = await CancellableBatch.EnterAsync(_textReadGate, cancellation); // UI 문맥 await — 후속부는 UI 스레드로 복귀
             {
                 if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다
                 string? text;
                 try
                 {
-                    text = await TextPool.Run(_ => ReadTextPreview(vm.Path));
+                    text = await TextPool.Run(ctx => { ctx.ThrowIfCancelled(); return ReadTextPreview(vm.Path); }, cancellation);
+                    cancellation.ThrowIfCancellationRequested();
                 }
+                catch (OperationCanceledException) { return; }
                 catch (Exception ex)
                 {
                     DiagTrace.Write("tiles", $"text failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
@@ -1166,11 +1174,9 @@ public sealed partial class ThumbnailExplorer : UserControl
                 host.Children.Clear();
                 host.Children.Add(MakeTextPreviewBlock(text));
             }
-            finally
-            {
-                _textReadGate.Release(); // 예외·낡음 경로 포함 — 누락되면 상한 건 뒤 조용히 멈춘다(A194)
-            }
+
         }
+        catch (OperationCanceledException) { }
         finally
         {
             vm.PreviewInFlight = false;
@@ -1322,12 +1328,13 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private async Task FillShellThumbnailAsync(ExplorerEntryVm vm, int seq)
     {
+        var cancellation = _previewBatch.Token;
+        if (seq != _showSeq || cancellation.IsCancellationRequested) return;
         if (vm.PreviewInFlight) return; // 같은 항목의 중복 발사 방지
         vm.PreviewInFlight = true;
         try
         {
-            await _thumbFetchGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
-            try
+            using var lease = await CancellableBatch.EnterAsync(_thumbFetchGate, cancellation); // UI 문맥 await — 후속부는 UI 스레드로 복귀
             {
                 if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다
                 var entry = vm.Entry;
@@ -1337,8 +1344,10 @@ public sealed partial class ThumbnailExplorer : UserControl
                 try
                 {
                     result = await ThumbPool.Run(
-                        _ => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo));
+                        ctx => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo, ctx.Cancellation), cancellation);
+                    cancellation.ThrowIfCancellationRequested();
                 }
+                catch (OperationCanceledException) { return; }
                 catch (Exception ex)
                 {
                     result = (null, null); // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로로
@@ -1349,6 +1358,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                         ? "shell timeout " + entry.Path // A352 배치 3
                         : $"shell failed {entry.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
                 }
+                if (seq != _showSeq || cancellation.IsCancellationRequested) return;
                 // 튜플을 지역 변수로 풀어 둔다 — 아래 null 판정·재사용이 종전(단일 bytes) 형태 그대로.
                 var bytes = result.Bytes;
                 var info = result.Info;
@@ -1381,19 +1391,19 @@ public sealed partial class ThumbnailExplorer : UserControl
                     // A270 ②: 앨범아트 위 정보 띠 — 배지는 위 Clear가 이미 걷었다(겹침 없음).
                     if (info is not null) host.Children.Add(MakeAudioInfoBand(info));
                 }
+                catch (OperationCanceledException) { return; }
                 catch (Exception ex)
                 {
+                    if (seq != _showSeq || cancellation.IsCancellationRequested) return;
                     vm.PreviewKnownEmpty = true; // 손상 데이터 — 다시 받아도 같은 결과다
                     DiagTrace.Write("tiles", $"shell decode failed {entry.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
                     // 디코드 실패 — 확장자 타일로 되돌린다(자리 재조회는 성공 갈래와 같은 규칙).
                     if (LivePreviewHostOf(vm) is { } failed) RedrawFallbackTile(failed, entry, info);
                 }
             }
-            finally
-            {
-                _thumbFetchGate.Release(); // 예외·낡음 경로 포함 — 누락되면 상한 건 뒤 조용히 멈춘다(A194)
-            }
+
         }
+        catch (OperationCanceledException) { }
         finally
         {
             vm.PreviewInFlight = false;
@@ -1443,33 +1453,38 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 예외(잠김·삭제 경합)는 호출부 catch가 삼킨다.
     /// </summary>
     private static (byte[]? Bytes, string? Info) FetchTilePreview(
-        string path, bool cachedOnly, bool wantAudioInfo)
+        string path, bool cachedOnly, bool wantAudioInfo, CancellationToken cancellation)
     {
-        var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path));
+        cancellation.ThrowIfCancellationRequested();
+        var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path), cancellation);
 
         string? info = null;
         if (wantAudioInfo)
         {
             try
             {
-                info = FetchAudioInfo(file);
+                info = FetchAudioInfo(file, cancellation);
             }
+            catch (OperationCanceledException) { throw; }
             catch
             {
                 info = null; // 속성 핸들러 없음·조회 실패 — 정보 없이 썸네일만 간다(조각 전부 생략)
             }
         }
 
+        cancellation.ThrowIfCancellationRequested();
         using var thumb = ShellFetch.WaitOrThrow(cachedOnly
             ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth,
                 ThumbnailOptions.ReturnOnlyIfCached)
-            : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth));
+            : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth), cancellation, late => late?.Dispose());
         if (thumb is null || thumb.Size == 0) return (null, info);
         if (thumb.Type == ThumbnailType.Icon) return (null, info); // A270 ③ — 교체 생략(복구 = 이 줄 삭제)
 
+        cancellation.ThrowIfCancellationRequested();
         using var stream = thumb.AsStreamForRead();
         using var buffer = new MemoryStream((int)thumb.Size);
         stream.CopyTo(buffer);
+        cancellation.ThrowIfCancellationRequested();
         return (buffer.ToArray(), info);
     }
 
@@ -1482,11 +1497,12 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 값이 없는 조각은 빼고(속성 핸들러가 없는 컨테이너·손상 파일) 남는 조각이 없으면 null =
     /// 표기 자체를 걸지 않는다(ExplorerPane 상세 줄의 조각 생략 규칙과 같은 폴백).
     /// </summary>
-    private static string? FetchAudioInfo(StorageFile file)
+    private static string? FetchAudioInfo(StorageFile file, CancellationToken cancellation)
     {
+        cancellation.ThrowIfCancellationRequested();
         var props = ShellFetch.WaitOrThrow(file.Properties.RetrievePropertiesAsync(
             ["System.Media.Duration", "System.Audio.EncodingBitrate",
-             "System.Audio.SampleRate", "System.Audio.ChannelCount"]));
+             "System.Audio.SampleRate", "System.Audio.ChannelCount"]), cancellation);
 
         var ticks = props.TryGetValue("System.Media.Duration", out var d) ? (long)PropNumber(d) : 0L;
         var duration = ticks > 0

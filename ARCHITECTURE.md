@@ -1,5 +1,11 @@
 # KOTU — 올인원 Windows 유틸리티 아키텍처 설계
 
+> v0.354.0 작업 브랜치의 파일 전송 구조 분리는
+> [FILE-TRANSFER-MIGRATION.md](docs/FILE-TRANSFER-MIGRATION.md)를 참조한다.
+
+> v0.353.0 작업 브랜치의 문서 세션 분리와 단계적 구조 변경은
+> [ARCHITECTURE-MIGRATION.md](docs/ARCHITECTURE-MIGRATION.md)를 참조한다.
+
 최초 설계 초안: v0.1.0 · 2026-08-03. 이후 8~11장(스레드 모델·중첩 호스팅·브랜드 에셋·UI 원칙)이
 증축되었고, 1~7장은 **당시 설계 판단의 기록**으로 남긴다 — 구현의 정본은 언제나 코드다.
 현행 상태·남은 작업은 `docs/REQUIREMENTS.md`, 이어받기 요약은 `docs/HANDOVER.md`를 본다.

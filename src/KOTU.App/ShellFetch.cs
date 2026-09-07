@@ -15,7 +15,7 @@ namespace KOTU.App;
 /// <b>취소는 기대하지 않는다</b>: 시한이 지나도 원래의 WinRT 작업은 계속 돈다.
 /// <see cref="IAsyncInfo.Cancel"/>를 한 번 불러 보긴 하지만(셸이 협조하면 자원을 일찍 놓는다)
 /// 효과는 보장되지 않는다. 우리가 되찾는 것은 <b>호출한 스레드</b>이고, 뒤늦게 도착할 결과는
-/// 주인이 없으므로 그대로 버려진다.
+/// 정리 콜백이 있으면 그 콜백으로 해제한다.
 /// </para>
 /// </summary>
 internal static class ShellFetch
@@ -31,43 +31,10 @@ internal static class ShellFetch
     /// 호출부는 이 예외를 "실패"로 접되 <b>"없음 확정"으로는 굳히지 않는다</b>
     /// (동기화가 끝난 뒤 다시 물으면 성공할 수 있다 — ThumbnailExplorer의 PreviewTimedOut 규칙).
     /// </summary>
-    internal static T WaitOrThrow<T>(IAsyncOperation<T> operation)
-    {
-        try
-        {
-            return operation.AsTask().WaitAsync(Timeout).GetAwaiter().GetResult();
-        }
-        catch (TimeoutException)
-        {
-            TryCancel(operation);
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// UI 스레드 await용 — <see cref="WaitOrThrow{T}"/>와 같은 시한·같은 예외다.
-    /// <para>
-    /// <b>A352 배치 4부터 사용처가 없다</b>(유일한 호출부였던 ThumbnailExplorer.
-    /// FillCachedThumbnailAsync를 삭제했다). 남겨 두되 <b>새로 쓰지 말 것</b>:
-    /// UI 스레드에서 <c>StorageFile</c> 취득·썸네일·속성 조회를 부르면 <c>await</c> 앞의 호출
-    /// 자체가 동기로 COM을 왕복하고, 그 대기가 메시지를 펌프해 XAML의 큐된 작업을 재진입시켜
-    /// 프로세스가 죽는다(힙 포함 크래시 덤프로 확정 — ThumbnailExplorer 클래스 상단
-    /// "불가침 규칙" 문단). 셸 호출은 워커 스레드에서 <see cref="WaitOrThrow{T}"/>로 한다.
-    /// </para>
-    /// </summary>
-    internal static async Task<T> WaitOrThrowAsync<T>(IAsyncOperation<T> operation)
-    {
-        try
-        {
-            return await operation.AsTask().WaitAsync(Timeout);
-        }
-        catch (TimeoutException)
-        {
-            TryCancel(operation);
-            throw;
-        }
-    }
-
+    internal static T WaitOrThrow<T>(IAsyncOperation<T> operation,
+        CancellationToken cancellation = default, Action<T>? discard = null)
+        => KOTU.Core.Threading.BoundedOperation.WaitAsync(operation.AsTask(), Timeout,
+            cancellation, () => TryCancel(operation), discard).GetAwaiter().GetResult();
     /// <summary>예외가 이 시설의 시한 초과인지 — 호출부가 "없음 확정"과 "지금은 못 얻었다"를 가르는 판정.</summary>
     internal static bool IsTimeout(Exception ex) => ex is TimeoutException;
 
