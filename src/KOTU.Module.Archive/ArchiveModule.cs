@@ -7,8 +7,13 @@ namespace KOTU.Module.Archive;
 public sealed class ArchiveModule : IModule
 {
     private readonly ISettingsService _settings;
+    private readonly ArchiveJobCoordinator _jobs;
 
-    public ArchiveModule(ISettingsService settings) => _settings = settings;
+    public ArchiveModule(ISettingsService settings, ArchiveJobCoordinator jobs)
+    {
+        _settings = settings;
+        _jobs = jobs;
+    }
 
     /// <summary>이 모듈이 담당하는 확장자(소문자, 점 포함).</summary>
     public static readonly IReadOnlyList<string> Extensions =
@@ -24,5 +29,5 @@ public sealed class ArchiveModule : IModule
 
     public IReadOnlyList<string> SupportedExtensions => Extensions;
 
-    public object CreateView(OpenContext context) => new ArchiveView(context, _settings);
+    public object CreateView(OpenContext context) => new ArchiveView(context, _settings, _jobs);
 }

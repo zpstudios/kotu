@@ -244,6 +244,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = Branding.AppName;
         _manager = manager;
+        InitializeJobs();
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
 
@@ -965,6 +966,11 @@ public sealed partial class MainWindow : Window
         var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
         accelerator.Invoked += (_, e) =>
         {
+            if (IsFocusWithin(JobsLayer))
+            {
+                e.Handled = false;
+                return;
+            }
             // A32 예외: 단독 키는 입력 컨트롤 타이핑을 뺏으면 안 된다.
             // A84: Shift 조합도 동일 — 에디터에서 Shift+글자는 대문자 입력이 우선(Shift+N 통과).
             // A107: Menu 조합은 이 예외에 안 걸린다(문자를 안 만든다) — 텍스트 입력 중에도 발화.
@@ -1697,6 +1703,7 @@ public sealed partial class MainWindow : Window
         if (_hiddenInTray && ModuleHost.Content is ICloseGuard { HasUnsavedChanges: true })
             BringToFront();
         if (!await ConfirmDiscardAsync()) return;
+        if (_manager.TryBlockLastWindowClose(this)) return;
         _closeConfirmed = true;
         Close();
     }
@@ -1705,10 +1712,19 @@ public sealed partial class MainWindow : Window
     private void OnAppWindowClosing(Microsoft.UI.Windowing.AppWindow sender,
         Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
-        if (_closeConfirmed) return;
-        if (ModuleHost.Content is not ICloseGuard { HasUnsavedChanges: true }) return;
-        args.Cancel = true;
-        _ = ConfirmThenCloseAsync();
+        if (_manager.TryBlockLastWindowClose(this)) { _closeConfirmed = false; args.Cancel = true; return; }
+        if (!_closeConfirmed && ModuleHost.Content is ICloseGuard { HasUnsavedChanges: true })
+        {
+            args.Cancel = true;
+            _ = ConfirmThenCloseAsync();
+            return;
+        }
+        // 미저장 확인이 끝난 마지막 창만 시작 금지권을 잡는다. 실제 종료까지 보유한다.
+        if (_jobCloseLease is null)
+        {
+            if (!_manager.TryPrepareLastWindowClose(this, out var lease)) { _closeConfirmed = false; args.Cancel = true; return; }
+            _jobCloseLease = lease;
+        }
     }
 
     // ---------- 내장 탐색기 + 좌/우 오버레이 (v0.25.0 → A58 상태 머신) ----------
@@ -2215,6 +2231,7 @@ public sealed partial class MainWindow : Window
         // 먼저다(ExplorerRenameBox — e.Handled 존중). IME 조합 취소는 IME가 키를 먹어 여기 안 온다.
         if (e.Key == VirtualKey.Escape)
         {
+            if (JobsPanel.Visibility == Visibility.Visible) { HideJobs(); e.Handled = true; return; }
             OnShellEscape(e);
             MarkAltUseIfConsumed(e); // A107: Alt 홀드 중 셸이 Esc를 소비(S4 복귀)한 경우도 Alt up 소비 대상
             return;
@@ -2275,6 +2292,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (IsFocusWithin(JobsLayer)) return;
         // A274: Enter(+Alt+Enter)도 이 터널링 층이다 — F11/F12와 키가 겹치지 않아 분기 순서는
         // 동작 무관하지만, 아래 SideForKey 조기 반환 형태를 보존하려 Enter를 먼저 가른다.
         // Alt 판정은 버블 시절(OnRootKeyDown의 구 분기)과 같은 IsAltDown 스냅샷 — 게이트 유무가

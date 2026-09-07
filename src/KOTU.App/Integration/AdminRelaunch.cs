@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 
 namespace KOTU.App.Integration;
@@ -33,32 +34,42 @@ internal static class AdminRelaunch
     /// </summary>
     internal static void Relaunch(Action? beforeExit = null)
     {
+        var windows = App.Services.GetRequiredService<WindowManager>();
         var exe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(exe)) return;
+        if (!windows.TryBeginRestart()) return;
 
-        // A124: 창이 전부 살아 있는 지금(재시작 확정 전) 창 세트를 기록한다. 미저장 가드(A37)는
-        // 현행 그대로 타지 않는다 — 이 경로는 원래 묻지 않고 내려간다(Application.Exit).
-        KOTU.Core.Integration.RestartSession.TryWrite();
-
-        Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().UnregisterKey();
+        var exiting = false;
+        var keyReleased = false;
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            // 시작 금지권을 가진 상태에서만 창 세트 기록과 단일 인스턴스 키 반납을 한다.
+            KOTU.Core.Integration.RestartSession.TryWrite();
+            Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().UnregisterKey();
+            keyReleased = true;
+            try
             {
-                FileName = exe,
-                UseShellExecute = true,
-                Verb = "runas",
-            });
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = exe,
+                    UseShellExecute = true,
+                    Verb = "runas",
+                });
+            }
+            catch
+            {
+                KOTU.Core.Integration.RestartSession.TryDiscard();
+                if (keyReleased) Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey(InstanceKey);
+                return;
+            }
+            beforeExit?.Invoke();
+            Application.Current.Exit();
+            exiting = true;
         }
-        catch
+        finally
         {
-            // UAC 취소 — 재시작 무산: 방금 쓴 세션 파일을 되지우고(A124),
-            // 유일한 인스턴스이므로 키를 되찾는다 (Program.InstanceKey와 동일해야 함)
-            KOTU.Core.Integration.RestartSession.TryDiscard();
-            Microsoft.Windows.AppLifecycle.AppInstance.FindOrRegisterForKey(InstanceKey);
-            return;
+            // UAC 취소와 재시작 실패는 새 작업을 다시 받을 수 있어야 한다.
+            if (!exiting) windows.CancelRestartPreparation();
         }
-        beforeExit?.Invoke(); // 하드웨어 뷰: 드라이버 핸들을 먼저 정리하고 내려간다
-        Application.Current.Exit();
     }
 }

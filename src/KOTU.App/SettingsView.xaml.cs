@@ -1531,7 +1531,11 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             if (await confirm.ShowAsync() == ContentDialogResult.Primary)
             {
                 status.Text = "Applying and restarting...";
-                UpdateService.ApplyAndRestart(info);
+                if (!UpdateService.ApplyAndRestart(info))
+                {
+                    status.Text = "Restart postponed while jobs are running. Finish or cancel them, then try again.";
+                    updateButton.IsEnabled = true;
+                }
             }
             else
             {
