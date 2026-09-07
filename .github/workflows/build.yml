@@ -19,7 +19,9 @@ jobs:
 
       - name: 구조 정합성 검사
         shell: pwsh
-        run: ./eng/Test-Architecture.ps1
+        run: |
+          ./eng/Test-Architecture.ps1
+          ./eng/Test-ReleaseWorkflow.ps1
 
       - name: .NET 8 SDK 설치
         uses: actions/setup-dotnet@v4
@@ -55,20 +57,8 @@ jobs:
           BUILD_BRANCH: ${{ github.ref_name }}
           BUILD_COMMIT: ${{ github.sha }}
         run: |
+          ./eng/Prepare-Package.ps1 -PackagePath artifacts/KOTU
           $package = Join-Path $PWD 'artifacts/KOTU'
-          $sevenZip = 'C:/Program Files/7-Zip/7z.dll'
-          if (!(Test-Path $sevenZip)) { throw '7z.dll missing from Windows runner' }
-          Copy-Item $sevenZip $package
-          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $package
-          $required = @('KOTU.exe', 'resources.pri', '7z.dll',
-                        'KOTU.DocumentModel.dll', 'KOTU.FileOperations.dll',
-                        'Assets/app.ico', 'Assets/test-clip.mp4', 'Assets/sample.mp3')
-          foreach ($file in $required) {
-            if (!(Test-Path (Join-Path $package $file))) { throw "Package missing: $file" }
-          }
-          $vlc = Get-ChildItem $package -Recurse -Filter libvlc.dll | Select-Object -First 1
-          if (!$vlc -or !(Test-Path (Join-Path $vlc.DirectoryName 'libvlccore.dll')) -or
-              !(Test-Path (Join-Path $vlc.DirectoryName 'plugins'))) { throw 'VLC engine or plugins missing' }
           @"
           KOTU branch build
           Branch: $env:BUILD_BRANCH
@@ -86,17 +76,7 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
         shell: pwsh
         run: |
-          $package = Join-Path $PWD 'artifacts/KOTU'
-          $app = Start-Process -FilePath (Join-Path $package 'KOTU.exe') -WorkingDirectory $package -WindowStyle Hidden -PassThru
-          try {
-            Start-Sleep -Seconds 10
-            $app.Refresh()
-            if ($app.HasExited) { throw "KOTU exited during startup: $($app.ExitCode)" }
-            $startupLog = Join-Path $env:TEMP 'KOTU/startup-error.log'
-            if (Test-Path $startupLog) { throw (Get-Content $startupLog -Raw) }
-          } finally {
-            if (!$app.HasExited) { Stop-Process -Id $app.Id -Force }
-          }
+          ./eng/Test-AppStartup.ps1 -PackagePath artifacts/KOTU
 
       - name: 작업 브랜치 실행본 다운로드
         if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
@@ -128,37 +108,7 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
         shell: pwsh
         run: |
-          $setup = (Resolve-Path artifacts/installer/KOTU-win-Setup.exe).Path
-          $installer = Start-Process -FilePath $setup -ArgumentList '--silent' -WindowStyle Hidden -PassThru
-          if (!$installer.WaitForExit(120000)) {
-            Stop-Process -Id $installer.Id -Force
-            throw 'Installer timed out'
-          }
-          if ($installer.ExitCode -ne 0) { throw "Installer failed: $($installer.ExitCode)" }
-          $installed = Join-Path $env:LOCALAPPDATA 'KOTU/current'
-          $package = (Resolve-Path artifacts/KOTU).Path
-          foreach ($file in (Get-ChildItem $package -Recurse -File)) {
-            # Velopack 1.2.0 PackageBuilder.REGEX_EXCLUDES + PackCommand.Exclude 기본값.
-            # 진단 파일만 제외하며 실행 파일·DLL·리소스의 누락/변경은 계속 실패시킨다.
-            if ($file.FullName -imatch '.*[\\/]createdump.*|.*\.vshost\..*|.*\.nupkg$' -or
-                $file.FullName -cmatch '.*\.pdb') { continue }
-            $relative = [IO.Path]::GetRelativePath($package, $file.FullName)
-            $target = Join-Path $installed $relative
-            if (!(Test-Path $target)) { throw "Installed file missing: $relative" }
-            if ((Get-FileHash $file.FullName).Hash -ne (Get-FileHash $target).Hash) {
-              throw "Installed file differs: $relative"
-            }
-          }
-          $app = Start-Process -FilePath (Join-Path $installed 'KOTU.exe') -WorkingDirectory $installed -WindowStyle Hidden -PassThru
-          try {
-            Start-Sleep -Seconds 10
-            $app.Refresh()
-            if ($app.HasExited) { throw "Installed KOTU exited: $($app.ExitCode)" }
-            $startupLog = Join-Path $env:TEMP 'KOTU/startup-error.log'
-            if (Test-Path $startupLog) { throw (Get-Content $startupLog -Raw) }
-          } finally {
-            if (!$app.HasExited) { Stop-Process -Id $app.Id -Force }
-          }
+          ./eng/Test-Installer.ps1 -SetupPath artifacts/installer/KOTU-win-Setup.exe -PackagePath artifacts/KOTU
 
       - name: 작업 브랜치 설치 EXE 다운로드
         if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'

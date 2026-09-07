@@ -8,6 +8,7 @@
 #   "커밋마다 push"(협업 규칙 1.3) 운용에서는 버전 커밋 직후의 docs 커밋 push가 이 갈래를
 #   상시로 만든다. 그래서 아래 concurrency로 릴리스 런을 직렬화한다 — 뒤 런은 앞 런이 끝난 뒤에
 #   체크아웃하므로 태그 검사가 경합 없이 성립하고, 같은 버전이면 skip 초록으로 떨어진다.
+# A358: 검증·설치 검사 성공 뒤에만 master에서 발행한다. 다른 ref의 수동 실행은 아티팩트만 남긴다.
 name: release
 
 on:
@@ -44,7 +45,7 @@ jobs:
           $exists = (git tag -l $tag)
           "version=$ver" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
-          "skip=$(if ($exists) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
+          "skip=$(if ($exists -and $env:GITHUB_REF -eq 'refs/heads/master') { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
           Write-Host "version=$ver, tag=$tag, 이미 릴리스됨=$([bool]$exists)"
 
       - name: .NET 8 SDK 설치
@@ -53,50 +54,51 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: 구조 및 배포 게이트 검사
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          ./eng/Test-Architecture.ps1
+          ./eng/Test-ReleaseWorkflow.ps1
+
+      - name: NuGet 복원
+        if: steps.ver.outputs.skip != 'true'
+        run: dotnet restore KOTU.sln -p:Platform=x64
+
+      - name: 전체 솔루션 빌드
+        if: steps.ver.outputs.skip != 'true'
+        run: dotnet build KOTU.sln -c Release -p:Platform=x64 --no-restore
+
+      - name: 전체 솔루션 테스트
+        if: steps.ver.outputs.skip != 'true'
+        run: dotnet test KOTU.sln -c Release -p:Platform=x64 --no-build --verbosity normal --logger trx --results-directory TestResults
+
+      - name: 테스트 결과 보관
+        if: always() && steps.ver.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults/*.trx
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Publish (self-contained, x64)
         if: steps.ver.outputs.skip != 'true'
-        run: dotnet publish src/KOTU.App -c Release -p:Platform=x64 -r win-x64 --self-contained
+        run: dotnet publish src/KOTU.App -c Release -p:Platform=x64 -r win-x64 --self-contained -o artifacts/KOTU -p:InformationalVersion=${{ github.sha }}
 
-      - name: 7z.dll 동봉 (LGPL — 원본 그대로, 고지 파일 포함, 동적 로드만)
+      - name: 실행본 정합성 및 시작 검사
         if: steps.ver.outputs.skip != 'true'
         shell: pwsh
         run: |
-          # windows 러너에는 7-Zip이 기본 설치되어 있다. 없으면 choco로 설치.
-          if (!(Test-Path "C:\Program Files\7-Zip\7z.dll")) { choco install 7zip -y --no-progress }
-          $publishDir = Get-ChildItem -Path src/KOTU.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1
-          Copy-Item "C:\Program Files\7-Zip\7z.dll" $publishDir.FullName
-          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $publishDir.FullName
-
-      - name: resources.pri 검증 (없으면 실행 불가 zip이므로 릴리스 중단)
-        if: steps.ver.outputs.skip != 'true'
-        shell: pwsh
-        run: |
-          $publishDir = (Get-ChildItem -Path src/KOTU.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1).FullName
-          # 혹시 publish 복사가 또 빠지면 빌드 출력(OutDir)에서 가져온다.
-          if (!(Test-Path "$publishDir\resources.pri")) {
-            $outPri = Get-ChildItem src/KOTU.App/bin -Recurse -Filter resources.pri |
-                      Where-Object { $_.FullName -notlike "*publish*" } | Select-Object -First 1
-            if ($outPri) { Copy-Item $outPri.FullName $publishDir }
-          }
-          # 기본 이름($(TargetName).pri = KOTU.pri)으로 생성된 경우: 로더가 찾는 고정 이름으로 복사
-          # ※ A64에서 AssemblyName을 KOTU로 바꿨으므로 KOTU.App.pri가 아니라 KOTU.pri다.
-          if (!(Test-Path "$publishDir\resources.pri") -and (Test-Path "$publishDir\KOTU.pri")) {
-            Copy-Item "$publishDir\KOTU.pri" "$publishDir\resources.pri"
-          }
-          if (!(Test-Path "$publishDir\resources.pri")) {
-            Write-Host "### resources.pri가 어디에도 없음 — bin 전체의 pri 목록:"
-            Get-ChildItem src/KOTU.App/bin -Recurse -Filter *.pri | ForEach-Object { Write-Host $_.FullName }
-            Write-Error "resources.pri 미생성 — EnableMsixTooling/PRI 설정을 확인할 것. 실행 불가 zip이므로 릴리스를 중단한다."
-            exit 1
-          }
-          Write-Host "resources.pri OK: $publishDir\resources.pri"
+          ./eng/Prepare-Package.ps1 -PackagePath artifacts/KOTU
+          ./eng/Test-AppStartup.ps1 -PackagePath artifacts/KOTU
 
       # A173: vpk pack은 출력 폴더에 직전 릴리스의 풀 패키지가 있어야 델타(*-delta.nupkg)를 만든다.
       # 그래서 pack 전에 GitHub Releases에서 최신 풀 패키지를 내려받아 둔다(프라이빗 저장소이므로 토큰 필수).
       # 이 단계가 실패하면 릴리스는 계속하되 "델타 없이 풀 패키지만" 나간다 — 조용한 후퇴이므로
       # 첫 도입·직전 릴리스 부재가 아닌데도 델타가 안 나오면 이 단계 로그부터 볼 것.
       - name: 직전 릴리스 취득 (델타 생성용, A173)
-        if: steps.ver.outputs.skip != 'true'
+        if: steps.ver.outputs.skip != 'true' && github.ref == 'refs/heads/master'
         # 최후 방어선: 아래 스크립트가 예기치 못한 예외로 죽어도 릴리스 자체는 진행한다(델타만 포기).
         continue-on-error: true
         shell: pwsh
@@ -108,16 +110,17 @@ jobs:
             Write-Warning "vpk 설치 실패 — 델타 없이 계속한다(패키징 단계에서 설치를 재시도)."
             exit 0
           }
-          # 채널(win)·outputDir 모두 pack 단계와 동일해야 pack이 베이스를 찾는다.
-          vpk download github --repoUrl https://github.com/zpstudios/kotu --token $env:GH_TOKEN --outputDir vpk_out
+          # 채널(win)을 유지하고 성공한 풀 패키지만 pack 출력 폴더로 복사한다.
+          vpk download github --repoUrl https://github.com/zpstudios/kotu --token $env:GH_TOKEN --outputDir vpk_base
           if ($LASTEXITCODE -ne 0) {
             # 릴리스가 하나도 없거나(첫 릴리스) 자산에 releases.win.json이 없으면 여기로 온다.
-            # 불완전하게 받힌 파일이 pack의 델타 베이스로 잡히면 pack 자체가 깨질 수 있으므로 비운다.
+            # 불완전한 다운로드를 pack의 델타 베이스로 사용하지 않는다.
             Write-Warning "직전 릴리스 취득 실패 — 이번 릴리스는 델타 없이 풀 패키지만 발행된다."
-            Remove-Item vpk_out -Recurse -Force -ErrorAction SilentlyContinue
+            # 실패한 다운로드는 별도 폴더에 남긴다. pack 입력에는 복사하지 않는다.
             exit 0
           }
-          Get-ChildItem vpk_out | ForEach-Object { Write-Host ("취득됨: " + $_.Name) }
+          New-Item -ItemType Directory -Path vpk_out -Force | Out-Null
+          Get-ChildItem vpk_base -File -Filter '*-full.nupkg' | Copy-Item -Destination vpk_out
 
       - name: Velopack 패키징 (Setup.exe + 자동 업데이트 피드)
         if: steps.ver.outputs.skip != 'true'
@@ -127,7 +130,7 @@ jobs:
           if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
             dotnet tool install --global vpk --version 1.2.0
           }
-          $publishDir = (Get-ChildItem -Path src/KOTU.App/bin -Recurse -Directory -Filter publish | Select-Object -First 1).FullName
+          $publishDir = (Resolve-Path -LiteralPath artifacts/KOTU).Path
           # mainExe는 KOTU.exe — A64(v0.88.0)에서 AssemblyName을 KOTU로 바꿨다(구: WinUtil.App.exe).
           # packId = KOTU (A46/v0.86.0 리브랜딩). packId가 바뀌면 구 packId(ZP·WinUtil) 설치본은
           # 자동 업데이트가 끊기므로 새 KOTU-win-Setup.exe를 1회 수동 설치해야 한다 (릴리스 본문에 안내).
@@ -143,11 +146,28 @@ jobs:
           $ver = "${{ steps.ver.outputs.version }}"
           Get-ChildItem vpk_out -Filter *.nupkg |
             Where-Object { $_.Name -notlike "*$ver*" } |
-            ForEach-Object { Write-Host ("업로드 제외(직전 버전): " + $_.Name); Remove-Item $_.FullName -Force }
+            ForEach-Object { Write-Host ("업로드 제외(직전 버전): " + $_.Name); Remove-Item -LiteralPath $_.FullName -Force }
           Get-ChildItem vpk_out | ForEach-Object { Write-Host ("생성됨: " + $_.Name) }
 
-      - name: 태그 생성 + GitHub Release 업로드
+      - name: 설치 및 설치본 정합성 검사
+        timeout-minutes: 5
         if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          ./eng/Test-ReleasePackage.ps1 -PackagePath vpk_out -Version '${{ steps.ver.outputs.version }}'
+          ./eng/Test-Installer.ps1 -SetupPath vpk_out/KOTU-win-Setup.exe -PackagePath artifacts/KOTU
+
+      - name: 수동 시험 배포물 보관
+        if: success() && steps.ver.outputs.skip != 'true' && github.ref != 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KOTU-release-dry-run-${{ github.sha }}
+          path: vpk_out/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 태그 생성 + GitHub Release 업로드
+        if: success() && steps.ver.outputs.skip != 'true' && github.ref == 'refs/heads/master'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
