@@ -1,13 +1,22 @@
 # KOTU 요구사항 — 남은 작업 정리
 
+> **현재 작업 지시 · 2026-09-08**: 별도 지시가 있을 때까지 `master`에서 직접 작업한다.
+> 사용자가 임시 작업 브랜치 절차를 끝내고 기존 방식으로 돌아가도록 명시했다(`CLAUDE.md` §1).
+> **A361 병합 완료 · v0.358.0**: 사용자 승인으로 master에 병합·푸시했다.
+> 병합 커밋 `3a64dc25472302c31202f99651e0967acd4b36aa`. [정식 v0.358.0](https://github.com/zpstudios/kotu/releases/tag/v0.358.0)을 2026-09-08 01:38:46 KST에 발행했다(초안·사전 공개 아님).
+> 태그는 위 병합 커밋과 일치한다. [master build 34143723371](https://github.com/zpstudios/kotu/actions/runs/34143723371)과
+> [release 34143723469](https://github.com/zpstudios/kotu/actions/runs/34143723469) 모두 성공했다.
+> [설치 EXE](https://github.com/zpstudios/kotu/releases/download/v0.358.0/KOTU-win-Setup.exe), Portable·full·delta(621,221 bytes)와 업데이트 피드가 게시됐다.
+> 이번 지시는 병합 승인과 작업 위치 선호이며, 추가 실기기 시험 결과가 보고된 것은 아니다.
+
 > **A361 전역 압축 백그라운드 작업(v0.358.0) · 브랜치 구현 완료**: 사용자 승인에 따라
 > 압축 작업을 창·뷰와 분리하고 모든 창이 공유하는 상태·취소·암호 입력 패널을 추가한다.
 > 작업 중 창/모듈 전환을 허용하며 앱 종료·업데이트·관리자 재시작에서 작업 유실을 방어한다.
 > 작업 브랜치 `codex/archive-background-jobs`. 전체 빌드·341건 회귀 및 독립 검토 완료,
 > [GitHub build 34141876924](https://github.com/zpstudios/kotu/actions/runs/34141876924) 설치 EXE 검증까지 성공.
-> A361은 master 병합·정식 발행 전이다. 실제 UI 수동 확인 범위와 상세는 `docs/ARCHIVE-JOBS.md`.
+> 현재 병합·배포 상태는 위 기록을 따른다. 실제 UI 수동 확인 범위와 상세는 `docs/ARCHIVE-JOBS.md`.
 
-> **현재 상태 · 2026-09-08**: 사용자가 “별 문제 없이 잘 되는 것 같네”라고 정상 사용 피드백을
+> **이전 v0.357.0 배포 이력 · 2026-09-08**: 사용자가 “별 문제 없이 잘 되는 것 같네”라고 정상 사용 피드백을
 > 전하고 기본 브랜치 병합을 승인했다. 이는 개별 UI·클라우드·재생 시험 항목을 모두 수행했다는
 > 보고가 아니다. 1~5단계를 v0.357.0으로 master에 병합·푸시했다.
 > 병합 커밋: `669b865a1a26ebe64cc02fdb18450e2d2a4d2b4f`.

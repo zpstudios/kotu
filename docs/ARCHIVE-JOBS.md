@@ -1,10 +1,17 @@
 # 전역 압축 백그라운드 작업 — A361 (v0.358.0)
 
+> **현재 상태 · 2026-09-08**: 사용자 승인으로 A361(v0.358.0)을 master에 병합·푸시했다.
+> 병합 커밋 `3a64dc25472302c31202f99651e0967acd4b36aa`. [정식 v0.358.0](https://github.com/zpstudios/kotu/releases/tag/v0.358.0)을 2026-09-08 01:38:46 KST에 발행했다(초안·사전 공개 아님).
+> 태그는 위 병합 커밋과 일치한다. [master build 34143723371](https://github.com/zpstudios/kotu/actions/runs/34143723371)과
+> [release 34143723469](https://github.com/zpstudios/kotu/actions/runs/34143723469) 모두 성공했다.
+> [설치 EXE](https://github.com/zpstudios/kotu/releases/download/v0.358.0/KOTU-win-Setup.exe), Portable·full·delta(621,221 bytes)와 업데이트 피드가 게시됐다.
+> 아래 브랜치 검증 이력과 실제 UI 수동 확인의 한계는 유지한다. 이번 병합 승인에 추가 시험 보고는 없다.
+
 2026-09-08 · `codex/archive-background-jobs`
 
 사용자가 전역 압축 작업 진행을 승인했다. 압축 실행의 수명을 창·압축 뷰와 분리하고,
 모든 창에서 같은 작업을 확인·취소·암호 응답할 수 있도록 한다. 브랜치 구현과 로컬 빌드·
-회귀 및 GitHub 설치 검증을 완료했다. A361은 master 병합·정식 발행 전이며,
+회귀 및 GitHub 설치 검증을 완료했다. 당시 범위는 병합 전 브랜치 검증까지였으며,
 아래 범위는 코드 정독과 테스트를 기준으로 기록한다.
 
 ## 동작과 책임
