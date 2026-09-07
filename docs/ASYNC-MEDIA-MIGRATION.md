@@ -38,7 +38,16 @@
 Audio 22건, Video 36건이며 나머지 기존 125건도 통과했다. 마지막 사전 취소/0초 시한 경합도
 검사했다. 최종 TRX는 무시 대상 TestResults/phase5-final에 있다. 구조 검사 19개 프로젝트와
 변경 diff 공백·한글 이스케이프 검사도 통과했다. 독립 검토의 발견 사항을 수정했다.
-GitHub 설치 EXE·게시 없는 정식 배포 시험은 push 후 결과를 기록한다.
+최종 소스 `13380ab505d10a2d2b2918b3fdd84915f569aac3`에서
+[GitHub build 34131850705](https://github.com/zpstudios/kotu/actions/runs/34131850705)와
+[게시 없는 release 시험 34131883483](https://github.com/zpstudios/kotu/actions/runs/34131883483)이
+모두 성공했다. 구조·전체 빌드·테스트·publish·엔진/리소스·시작 검사, 설치 EXE 패키징,
+실제 설치·설치 파일 해시·설치본 시작·아티팩트 업로드가 통과했다. release 시험은
+Setup/Portable/풀 패키지와 업데이트 피드의 버전·크기·해시도 검사했다.
+[최종 설치 EXE 아티팩트](https://github.com/zpstudios/kotu/actions/runs/34131850705/artifacts/10022634359)는
+`KOTU-installer-win-x64-13380ab505d10a2d2b2918b3fdd84915f569aac3`(161,266,444 bytes)다.
+태그·정식 Release 업로드 및 직전 릴리스 취득 단계는 건너뛰었다. 기본 브랜치 병합이나
+공식 발행 없이 다섯 단계의 브랜치 검증을 완료했으며, 이전 버전 기반 델타 생성은 검증하지 않았다.
 
 ## 남는 한계와 실기기 확인
 
@@ -60,4 +69,4 @@ Audio/Video의 재생기, 장치 전환 잠금, 스왑체인, 네이티브 해�
 | 2 | 구현·설치 검사 완료 | `FILE-TRANSFER-MIGRATION.md` |
 | 3 | 일반 빌드·정식 배포의 게시 없는 시험 완료 | `RELEASE-VERIFICATION.md` |
 | 4 | 구현·설치 검사 완료 | `CONTENT-LIFETIME-MIGRATION.md` |
-| 5 | 구현·로컬 검증 완료, GitHub 검증 대기 | 이 문서 |
+| 5 | 구현·로컬 검증·설치 검사·게시 없는 release 시험 완료 | 이 문서 |

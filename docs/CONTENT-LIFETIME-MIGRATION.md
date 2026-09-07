@@ -14,7 +14,7 @@
 | 2 | 파일 전송 계획·실행·원본 정리 | 브랜치 검증 완료 · [파일 전송](FILE-TRANSFER-MIGRATION.md) |
 | 3 | 정식 배포 검증 필수화 | build 및 release 수동 시험 성공 · [배포 검증](RELEASE-VERIFICATION.md) |
 | 4 | 콘텐츠 계약 수명·All Readable 회귀 검사 | 로컬 빌드·304건 회귀 및 GitHub 설치 EXE 검증 통과 · 이 문서 |
-| 5 | Windows 취소·타임아웃·미디어 공통 정책 | 후속 예정 |
+| 5 | Windows 취소·타임아웃·미디어 공통 정책 | 구현·로컬 323건 및 GitHub 설치·배포 시험 통과 · [최종 단계](ASYNC-MEDIA-MIGRATION.md) |
 
 ## 소유권과 교체 순서
 
