@@ -1,10 +1,13 @@
 # 구조 개선 작업 브랜치
 
-2026-09-07 · v0.353.1 · A356 · `codex/architecture-document-session`
+2026-09-07 · v0.353.2 · A356 · `codex/architecture-document-session`
 
 ## 검증 및 전달 상태 (2026-09-07)
 
 - v0.353.1: 설치 EXE 생성·실제 설치·파일 해시 비교·설치본 시작 검사를 브랜치 CI에 추가했다.
+  첫 실행에서 설치는 성공했으나 Velopack 기본 제외 파일 `createdump.exe`를 요구하여 검사가 실패했다.
+  v0.353.2에서 [Velopack 1.2.0 공식 제외 규칙](https://github.com/velopack/velopack/blob/1.2.0/src/vpk/Velopack.Packaging/PackageBuilder.cs)과
+  기본 PDB 제외 규칙만 비교에서 제외한다. 나머지 파일의 누락·해시 불일치는 계속 실패시킨다.
   아래 v0.353.0 결과와 구분하며, 설치 EXE의 최종 성공 여부는 해당 커밋의 Actions 실행을 확인한다.
 
 - 로컬 구조 검사 통과: 17개 프로젝트의 참조·순환·모델 독립성·솔루션 빌드 매핑.
@@ -64,7 +67,7 @@ GitHub → Actions → build → 해당 브랜치/커밋의 성공한 실행 →
 사용자의 설치 EXE 요청에 따라 A356 후속 v0.353.1부터 기존 정식 배포와 같은 Velopack 1.2.0으로
 `KOTU-win-Setup.exe`도 생성한다. `KOTU-installer-win-x64-<커밋 SHA>` 아티팩트를 다운로드해
 ZIP에서 Setup.exe를 꺼내 실행한다. 설치 파일만 필요하며 나머지 엔진은 EXE 안에 포함된다.
-GitHub의 새 Windows 러너에서 무인 설치 후 publish 파일 전체의 SHA-256 일치와 설치본 시작을
+GitHub의 새 Windows 러너에서 무인 설치 후 publish 파일(위 기본 제외 대상 외)의 SHA-256 일치와 설치본 시작을
 검사한 경우에만 업로드한다. 로컬 사용자 컴퓨터에 자동 설치하지 않는다.
 
 주의: packId는 기존 `KOTU`를 유지하므로 기존 설치본을 교체한다. 사용자 설정도 공유한다.

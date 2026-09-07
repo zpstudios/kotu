@@ -137,6 +137,10 @@ jobs:
           $installed = Join-Path $env:LOCALAPPDATA 'KOTU/current'
           $package = (Resolve-Path artifacts/KOTU).Path
           foreach ($file in (Get-ChildItem $package -Recurse -File)) {
+            # Velopack 1.2.0 PackageBuilder.REGEX_EXCLUDES + PackCommand.Exclude 기본값.
+            # 진단 파일만 제외하며 실행 파일·DLL·리소스의 누락/변경은 계속 실패시킨다.
+            if ($file.FullName -imatch '.*[\\/]createdump.*|.*\.vshost\..*|.*\.nupkg$' -or
+                $file.FullName -cmatch '.*\.pdb') { continue }
             $relative = [IO.Path]::GetRelativePath($package, $file.FullName)
             $target = Join-Path $installed $relative
             if (!(Test-Path $target)) { throw "Installed file missing: $relative" }
