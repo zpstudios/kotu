@@ -4,7 +4,8 @@
 
 사용자가 전역 압축 작업 진행을 승인했다. 압축 실행의 수명을 창·압축 뷰와 분리하고,
 모든 창에서 같은 작업을 확인·취소·암호 응답할 수 있도록 한다. 브랜치 구현과 로컬 빌드·
-회귀 검증을 완료했으며 GitHub 설치 검증 대기다. 아래 범위는 코드 정독과 테스트를 기준으로 기록한다.
+회귀 및 GitHub 설치 검증을 완료했다. A361은 master 병합·정식 발행 전이며,
+아래 범위는 코드 정독과 테스트를 기준으로 기록한다.
 
 ## 동작과 책임
 
@@ -53,7 +54,16 @@ Archive 42건을 포함하며 Core 단독 150건도 통과했다. 새 테스트�
 진행률·이력 제한·유휴 시작 방지, 입력 복제·관찰자 해제·ZIP/7z 실행을 확인한다.
 최종 로그는 무시 대상 `artifacts/archive-jobs-final-build.log`,
 `artifacts/archive-jobs-final-tests.log`, TRX는 `TestResults/archive-jobs-final`에 보관한다.
-GitHub 작업 브랜치 설치·시작 검사는 아직 대기 중이다.
+[GitHub build 34141876924](https://github.com/zpstudios/kotu/actions/runs/34141876924)가
+소스 `1254bc885f26fba0c53eb6cb294e63f0b64ee004`에서 전체 성공했다. 구조·전체 빌드·테스트·
+publish·엔진/리소스·시작 검사, 설치 EXE 생성·실제 설치·설치 파일 해시·설치본 시작과
+아티팩트 업로드를 통과했다.
+[설치 EXE 아티팩트](https://github.com/zpstudios/kotu/actions/runs/34141876924/artifacts/10026371664)는
+`KOTU-installer-win-x64-1254bc885f26fba0c53eb6cb294e63f0b64ee004`(161,283,426 bytes),
+[실행본 ZIP](https://github.com/zpstudios/kotu/actions/runs/34141876924/artifacts/10026343406)은
+`KOTU-win-x64-1254bc885f26fba0c53eb6cb294e63f0b64ee004`다. 아티팩트는 14일 보관한다.
+설치판은 기존 KOTU를 교체하며 설정과 공식 업데이트 피드를 공유한다. 브랜치 시험이므로
+새 공식 Release나 태그를 만들지 않았다. 실제 암호 입력·다중 창 작업 UI를 자동 조작한 결과는 아니다.
 독립 코드 검토에서 작업 입력의 불변성, 암호 노출, 뷰 해제 후 콜백, 모든 종료 진입점을
 확인했다. 발견한 키보드 입력 누락과 임시 항목의 셸 실행 예외 경로를 보완했다.
 Jobs 버튼과 패널 전체에서 전역 단축키·압축 문자 키를 양보하고, PasswordBox Enter는
