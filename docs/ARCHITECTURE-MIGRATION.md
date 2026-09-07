@@ -10,9 +10,15 @@
 - 전체 솔루션 Release/x64 빌드 성공: 경고 0·오류 0. 문서 모듈과 앱 본체까지 별도 build로 확인했다.
 - 7개 테스트 프로젝트 총 249건 통과(실패/건너뜀 0). 새 모델 9건을 포함한다.
 - 최초 검증용 SDK·패키지는 정리했으며, 재개 시 다시 받은 파일은 무시 대상 `artifacts`에 보관한다.
-  실행 결과는 로컬의 무시 대상 `TestResults`에 남겼다. 앱 UI 조작과 GitHub 실행본 시작 검사는 아직 미실행이다.
-- GitHub 푸시는 기존 PAT에 workflow 변경 권한이 없어 거절됐다. 브랜치 CI와 실행본 생성은 아직 실행되지 않았다.
-  인증 권한 갱신 후 같은 브랜치를 push하고, build 성공·아티팩트 존재를 확인해야 전달이 완료된다.
+  실행 결과는 로컬의 무시 대상 `TestResults`에 남겼다. 앱 UI 조작은 아직 미실행이며 시작 검사는 아래 GitHub 실행에서 통과했다.
+- 최초 GitHub 푸시는 원격 URL에 포함된 PAT의 workflow 권한 부족으로 거절됐다. 해당 인증값을 URL에서
+  제거한 뒤 Git Credential Manager 브라우저 로그인으로 `zpstudios`를 연결했다. 이 저장소의 로컬
+  `credential.https://github.com.username`만 지정했으며 다른 저장소 인증은 변경하지 않았다.
+- 브랜치 푸시 및 [GitHub build 실행 34114648200](https://github.com/zpstudios/kotu/actions/runs/34114648200) 성공.
+  구조 검사·전체 빌드·테스트·publish·엔진/리소스 검사·시작 검사·아티팩트 업로드가 모두 통과했다.
+- 검증된 소스 커밋: `0d87e4b356963fac82bc3f8c635da60eba4a8bf7`.
+  [실행본 ZIP](https://github.com/zpstudios/kotu/actions/runs/34114648200/artifacts/10015893643)
+  (157,449,155 bytes, 2026-09-21 UTC 만료). 이후 결과 기록용 문서 커밋은 코드 변경 없이 CI를 생략한다.
 
 사용자 지시: 기본 브랜치 밖에서 구조 변경을 시작하고 커밋·푸시하며, GitHub에서 실행본을
 내려받아 시험할 수 있도록 한다. 정합성 검사를 포함한다. 현재 기본 브랜치는 `master`다.
