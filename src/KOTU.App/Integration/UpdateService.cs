@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Velopack;
 using Velopack.Sources;
 
@@ -41,6 +42,12 @@ public static class UpdateService
     }
 
     /// <summary>다운로드된 업데이트를 적용하고 앱을 재시작한다.</summary>
-    public static void ApplyAndRestart(UpdateInfo info) =>
-        CreateManager().ApplyUpdatesAndRestart(info);
+    public static bool ApplyAndRestart(UpdateInfo info)
+    {
+        var windows = App.Services.GetRequiredService<WindowManager>();
+        if (!windows.TryBeginRestart()) return false;
+        try { CreateManager().ApplyUpdatesAndRestart(info); }
+        catch { windows.CancelRestartPreparation(); throw; }
+        return true;
+    }
 }

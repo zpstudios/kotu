@@ -32,13 +32,16 @@ public partial class App : Application
     {
         var services = new ServiceCollection();
         services.AddSingleton<ISettingsService, JsonSettingsService>();
+        services.AddSingleton<KOTU.Core.Jobs.BackgroundJobService>();
+        services.AddSingleton(sp => new KOTU.Module.Archive.ArchiveJobCoordinator(
+            sp.GetRequiredService<KOTU.Core.Jobs.BackgroundJobService>()));
         services.AddSingleton(sp =>
         {
             var router = new FileTypeRouter();
             // Phase 1+에서 모듈 등록. 등록 순서 = 우선순위.
             router.Register(new KOTU.Module.Image.ImageModule());
             router.Register(new KOTU.Module.Archive.ArchiveModule(
-                sp.GetRequiredService<ISettingsService>()));
+                sp.GetRequiredService<ISettingsService>(), sp.GetRequiredService<KOTU.Module.Archive.ArchiveJobCoordinator>()));
             router.Register(new KOTU.Module.Video.VideoModule(
                 sp.GetRequiredService<ISettingsService>()));
             router.Register(new KOTU.Module.Audio.AudioModule(
@@ -60,7 +63,7 @@ public partial class App : Application
         });
         // A222: 창 재사용 규칙 설정(A24 window.alwaysNewWindow) 폐지로 ISettingsService 주입 제거.
         services.AddSingleton(sp => new WindowManager(
-            sp.GetRequiredService<FileTypeRouter>()));
+            sp.GetRequiredService<FileTypeRouter>(), sp.GetRequiredService<KOTU.Core.Jobs.BackgroundJobService>()));
         return services.BuildServiceProvider();
     }
 

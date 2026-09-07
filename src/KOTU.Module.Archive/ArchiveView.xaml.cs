@@ -9,6 +9,7 @@ using Windows.Storage.Pickers;
 using Windows.System;
 using KOTU.Core.Contracts;
 using KOTU.Core.Threading;
+using KOTU.Core.Jobs;
 using KOTU.Input;
 
 namespace KOTU.Module.Archive;
@@ -91,20 +92,21 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// </summary>
     public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
     {
-        if (_archivePath is not { } path) return null;
+        if (!_attached || _archivePath is not { } path) return null;
+        var generation = _viewGeneration;
         var stats = _root is { } root ? StatsOf(root) : null; // UI 스레드에서 스냅샷(트리는 UI 상태)
 
         IReadOnlyList<ContentInfoItem> rows;
         try
         {
-            rows = await Worker.Run(_ => ArchiveQuickInfo.BuildRows(path, stats));
+            rows = await Worker.Run(_ => ArchiveQuickInfo.BuildRows(path, stats), _viewLifetime.Token).WaitAsync(_viewLifetime.Token);
         }
         catch
         {
             return null; // 오버레이 정보는 부가 기능 — 실패하면 셸 기본 정보로 대신한다
         }
         // 그새 다른 압축 파일로 넘어갔으면 버린다(오버레이 seq에 더한 2중 방어 — A328과 같은 규칙).
-        return _archivePath == path ? rows : null;
+        return IsCurrent(generation) && _archivePath == path ? rows : null;
     }
 
     /// <summary>
@@ -186,7 +188,13 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private string? _password;          // 마지막으로 성공/입력된 암호 (아카이브 단위로 유지)
     private ArchiveEntryNode? _root;
     private ArchiveEntryNode? _currentFolder;
-    private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _cts; // 화면에 속하는 목록 조회만 취소한다.
+    private readonly ArchiveJobCoordinator _jobs;
+    private CancellationTokenSource _viewLifetime = new();
+    private int _viewGeneration;
+    private volatile bool _attached;
+    private Guid? _activeJobId;
+    private ContentDialog? _viewDialog;
     private bool _busy;
     private bool _initialized;
     private ModuleWorker? _worker;      // 압축 목록/해제/생성 전용(A42) — 뷰별 분리
@@ -196,11 +204,12 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     public ObservableCollection<ArchiveRow> Rows { get; } = [];
 
-    public ArchiveView(OpenContext context, KOTU.Core.Settings.ISettingsService settings)
+    public ArchiveView(OpenContext context, KOTU.Core.Settings.ISettingsService settings, ArchiveJobCoordinator jobs)
     {
         InitializeComponent();
         SetupHotkeys(); // A34: 툴바·하단 바 버튼 핫키 + 툴팁 표기
         _settings = settings;
+        _jobs = jobs;
         _initialFile = context.FilePath;
         _initialArgs = context.Arguments;
         // A22: 상태 문구가 생기거나 사라지면 드라이브 줄 표시를 다시 판정한다.
@@ -208,18 +217,41 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         // A201(키 감사 수리): 로드 시 자기 포커스 — 7개 모듈 뷰 중 이 뷰만 IsTabStop·자기 포커스가
         // 없어, 뷰 교체 직후(이전 뷰 철거로 포커스가 표류하면) 셸 전역 키(Enter·Esc·F11/F12)가
         // 죽을 수 있었다. 다른 뷰들과 같은 관용구(ImageViewerView 등 — IsTabStop은 XAML에서 설정).
-        Loaded += (_, _) => Focus(FocusState.Programmatic);
+        Loaded += (_, _) =>
+        {
+            _attached = true;
+            _viewGeneration++;
+            if (_viewLifetime.IsCancellationRequested)
+            {
+                _viewLifetime.Dispose();
+                _viewLifetime = new CancellationTokenSource();
+            }
+            _jobs.Jobs.Changed -= OnJobsChanged;
+            _jobs.Jobs.Changed += OnJobsChanged;
+            UpdateObservedJob();
+            Focus(FocusState.Programmatic);
+        };
         Loaded += OnLoaded;
         Unloaded += (_, _) =>
         {
-            _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
+            _attached = false;
+            _viewGeneration++;
+            _jobs.Jobs.Changed -= OnJobsChanged;
+            _viewLifetime.Cancel(); // 관찰만 끝낸다. 앱 수명의 압축 작업은 취소하지 않는다.
+            _cts?.Cancel();
+            _viewDialog?.Hide();
+            _viewDialog = null;
+            _password = null;
+            if (_root is null && _activeJobId is null) _initialized = false;
+            _busy = false;
+            _worker?.Dispose(); // 화면 전용 조회가 끝나면 워커가 종료한다.
             _worker = null;
         };
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_initialized) return;
+        if (!_attached || _initialized) return;
         _initialized = true;
 
         if (_initialFile is not { } path || !File.Exists(path))
@@ -237,7 +269,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             return;
         }
 
+        var generation = _viewGeneration;
         await LoadArchiveAsync(path);
+        if (!IsCurrent(generation)) return;
 
         if (_initialArgs.Contains(KOTU.Core.Cli.LaunchRequest.ExtractHereToken) && _root is not null)
             await ExtractHereAsync();
@@ -247,7 +281,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     private async Task LoadArchiveAsync(string path)
     {
-        if (_busy) return;
+        if (_busy || !_attached) return;
+        var generation = _viewGeneration;
+        var backend = _backend;
         _archivePath = path;
         _password = null;
 
@@ -259,10 +295,10 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
                 IReadOnlyList<ArchiveEntry> entries = [];
                 var ok = await RunOperationAsync("Reading archive...", (progress, _) =>
                 {
-                    entries = _backend.List(path, password);
+                    entries = backend.List(path, password);
                     progress.Report(1);
                 });
-                if (!ok) return;
+                if (!ok || !IsCurrent(generation)) return;
 
                 _root = ArchiveEntryTree.Build(entries);
                 _navStack.Clear();
@@ -275,13 +311,15 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             }
             catch (ArchivePasswordException)
             {
+                if (!IsCurrent(generation)) return;
                 var entered = await PromptPasswordAsync();
+                if (!IsCurrent(generation)) return;
                 if (entered is null) return; // 취소
                 _password = entered;
             }
             catch (Exception ex)
             {
-                StatusText.Text = "Failed to open: " + ex.Message;
+                if (IsCurrent(generation)) StatusText.Text = "Failed to open: " + ex.Message;
                 return;
             }
         }
@@ -358,20 +396,29 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// <summary>파일 항목 더블클릭: 임시 폴더에 그 항목만 풀고 OS 기본 앱으로 연다.</summary>
     private async Task OpenEntryExternallyAsync(ArchiveEntryNode node)
     {
-        if (_busy || _archivePath is null) return;
+        if (_busy || !_attached || _archivePath is null) return;
 
+        var generation = _viewGeneration;
         var tempDir = Path.Combine(Path.GetTempPath(), "KOTU", "Archive", Guid.NewGuid().ToString("N"));
-        if (!await ExtractWithRetryAsync(tempDir, [node.FullPath], "Opening...")) return;
-
         var extracted = Path.Combine(tempDir, node.FullPath.Replace('/', Path.DirectorySeparatorChar));
-        if (File.Exists(extracted))
+        if (!await ExtractWithRetryAsync(tempDir, [node.FullPath], "Opening...", extracted, openEntry: true) ||
+            !IsCurrent(generation)) return;
+        try
         {
-            Process.Start(new ProcessStartInfo(extracted) { UseShellExecute = true });
-            StatusText.Text = "Opened with the default app: " + node.Name;
+            var opened = await Task.Run(() =>
+            {
+                if (!IsCurrent(generation) || !File.Exists(extracted)) return false;
+                // 셸 연결 프로그램 호출도 워커에서 한다. 대기 중 내려간 화면은 실행하지 않는다.
+                if (!IsCurrent(generation)) return false;
+                Process.Start(new ProcessStartInfo(extracted) { UseShellExecute = true });
+                return true;
+            });
+            if (!IsCurrent(generation)) return;
+            StatusText.Text = opened ? "Opened with the default app: " + node.Name : "Extracted file not found: " + node.Name;
         }
-        else
+        catch
         {
-            StatusText.Text = "Extracted file not found: " + node.Name;
+            if (IsCurrent(generation)) StatusText.Text = "Could not launch the default app. The extracted file remains available in Jobs.";
         }
     }
 
@@ -382,12 +429,14 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// <summary>"폴더를 골라 풀기" 실행. 버튼과 T 키(A34)가 공유한다.</summary>
     private async Task ExtractToAsync()
     {
-        if (_busy || _archivePath is null) return;
+        if (_busy || !_attached || _archivePath is null) return;
 
         var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.Downloads };
         picker.FileTypeFilter.Add("*");
         WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
+        var generation = _viewGeneration;
         var folder = await picker.PickSingleFolderAsync();
+        if (!IsCurrent(generation)) return;
         if (folder is null) return;
 
         // 마지막 풀기(저장) 위치를 설정에 기억 (v0.55.0 사용자 요청)
@@ -397,7 +446,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         if (await ExtractWithRetryAsync(folder.Path, SelectedEntryPaths(), "Extracting..."))
         {
             StatusText.Text = "Extracted: " + folder.Path;
-            OpenInExplorer(folder.Path);
+            // 결과 위치는 앱 작업 패널에서 연다.
         }
     }
 
@@ -406,7 +455,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// <summary>"여기에 풀기" 실행. 버튼과 탐색기 우클릭 동사가 공유한다.</summary>
     private async Task ExtractHereAsync()
     {
-        if (_busy || _archivePath is null || _root is null) return;
+        if (_busy || !_attached || _archivePath is null || _root is null) return;
 
         // 대상 폴더 결정: 단일 루트면 이중 폴더 방지, 이름이 겹치면 "(2)" 등 빈 이름 사용.
         var plan = ExtractHerePlanner.Plan(
@@ -414,28 +463,14 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             _root.Children.Select(c => c.Name).ToList(),
             p => Directory.Exists(p) || File.Exists(p));
 
-        if (await ExtractWithRetryAsync(plan.TargetDirectory, entryPaths: null, "Extracting..."))
+        if (await ExtractWithRetryAsync(plan.TargetDirectory, entryPaths: null, "Extracting...", plan.ResultPath))
         {
             StatusText.Text = "Extracted: " + plan.ResultPath;
-            OpenInExplorer(plan.ResultPath);
+            // 결과 위치는 앱 작업 패널에서 연다.
         }
     }
 
     /// <summary>풀기 결과를 탐색기로 보여준다. 실패해도 조용히 무시.</summary>
-    private static void OpenInExplorer(string path)
-    {
-        try
-        {
-            // 결과가 파일이면 부모 폴더에서 해당 파일을 선택해 보여준다.
-            var args = Directory.Exists(path) ? $"\"{path}\"" : $"/select,\"{path}\"";
-            Process.Start(new ProcessStartInfo("explorer.exe", args) { UseShellExecute = true });
-        }
-        catch
-        {
-            // 탐색기 열기는 부가 기능 — 실패가 흐름을 막으면 안 된다.
-        }
-    }
-
     /// <summary>선택된 항목 경로 목록. 선택이 없으면 null(=전체).</summary>
     private IReadOnlyCollection<string>? SelectedEntryPaths()
     {
@@ -445,32 +480,15 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         return selected.Count > 0 ? selected : null;
     }
 
-    /// <summary>해제 실행. 암호 오류면 입력을 받아 재시도한다. 성공 시 true.</summary>
-    private async Task<bool> ExtractWithRetryAsync(
-        string targetDirectory, IReadOnlyCollection<string>? entryPaths, string label)
+    /// <summary>앱 작업으로 해제하고 이 화면에서만 완료를 관찰한다. 암호 입력은 공용 작업 패널이 맡는다.</summary>
+    private Task<bool> ExtractWithRetryAsync(string targetDirectory,
+        IReadOnlyCollection<string>? entryPaths, string label, string? resultPath = null, bool openEntry = false)
     {
-        while (true)
-        {
-            try
-            {
-                var password = _password;
-                return await RunOperationAsync(label, (progress, ct) =>
-                    _backend.Extract(_archivePath!, targetDirectory, entryPaths, password, progress, ct));
-            }
-            catch (ArchivePasswordException)
-            {
-                var entered = await PromptPasswordAsync();
-                if (entered is null) return false;
-                _password = entered;
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = "Extract failed: " + ex.Message;
-                return false;
-            }
-        }
+        if (!_attached || _archivePath is not { } archivePath) return Task.FromResult(false);
+        var password = _password;
+        return RunBackgroundJobAsync(() => _jobs.StartExtract(archivePath, targetDirectory,
+            entryPaths, password, resultPath, openEntry), label);
     }
-
     // ---------- 새 압축 ----------
 
     private async void OnCreateZipClick(object sender, RoutedEventArgs e) =>
@@ -486,7 +504,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
         picker.FileTypeFilter.Add("*");
         WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
+        var generation = _viewGeneration;
         var files = await picker.PickMultipleFilesAsync();
+        if (!IsCurrent(generation)) return;
         if (files is null || files.Count == 0) return;
 
         await StartCreateFlowAsync(files.Select(f => f.Path).ToList(), use7z);
@@ -498,28 +518,27 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// </summary>
     private async Task StartCreateFlowAsync(IReadOnlyList<string> sourcePaths, bool? use7z)
     {
-        if (_busy || sourcePaths.Count == 0) return;
+        if (_busy || !_attached || sourcePaths.Count == 0) return;
 
+        var generation = _viewGeneration;
         var options = await PromptCreateOptionsAsync(use7z, sourcePaths);
+        if (!IsCurrent(generation)) return;
         if (options is null) return;
         var (sevenZ, password, targetPath) = options.Value;
 
         try
         {
-            var ok = await RunOperationAsync("Compressing...", (progress, ct) =>
-            {
-                if (sevenZ) _backend.Create7z(sourcePaths, targetPath, password, progress, ct);
-                else _backend.CreateZip(sourcePaths, targetPath, password, progress, ct);
-            });
+            var ok = await RunBackgroundJobAsync(
+                () => _jobs.StartCreate(sourcePaths, targetPath, sevenZ, password), "Compressing...");
             if (ok)
             {
                 StatusText.Text = "Archive created: " + targetPath;
-                OpenInExplorer(targetPath); // 결과 파일을 탐색기에서 선택해 보여준다
+                // 결과 위치 열기는 어느 모듈에서든 작업 패널의 명시적 조작으로 제공한다.
             }
         }
         catch (Exception ex)
         {
-            StatusText.Text = "Compress failed: " + ex.Message;
+            if (IsCurrent(generation)) StatusText.Text = "Compress failed: " + ex.Message;
         }
     }
 
@@ -538,7 +557,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     {
         if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
         e.Handled = true; // 창 수준 라우팅과의 이중 처리 방지 (await 전에 동기로 지정해야 유효)
+        var generation = _viewGeneration;
         var items = await e.DataView.GetStorageItemsAsync();
+        if (!IsCurrent(generation)) return;
         var paths = items.Select(i => i.Path).Where(p => !string.IsNullOrEmpty(p)).ToList();
         if (paths.Count == 0) return;
 
@@ -550,6 +571,8 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// <summary>암호 입력 대화상자. 취소하면 null.</summary>
     private async Task<string?> PromptPasswordAsync()
     {
+        if (!_attached || _viewDialog is not null) return null;
+        var generation = _viewGeneration;
         var box = new PasswordBox();
         var dialog = new ContentDialog
         {
@@ -560,8 +583,17 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
-        var result = await dialog.ShowAsync();
-        return result == ContentDialogResult.Primary && box.Password.Length > 0 ? box.Password : null;
+        _viewDialog = dialog;
+        try
+        {
+            var result = await dialog.ShowAsync();
+            return IsCurrent(generation) && result == ContentDialogResult.Primary && box.Password.Length > 0 ? box.Password : null;
+        }
+        finally
+        {
+            box.Password = string.Empty;
+            if (ReferenceEquals(_viewDialog, dialog)) _viewDialog = null;
+        }
     }
 
     /// <summary>
@@ -571,6 +603,8 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private async Task<(bool Use7z, string? Password, string TargetPath)?> PromptCreateOptionsAsync(
         bool? use7z, IReadOnlyList<string> sourcePaths)
     {
+        if (!_attached || _viewDialog is not null) return null;
+        var generation = _viewGeneration;
         var saveDir = Path.GetDirectoryName(sourcePaths[0]);
         if (string.IsNullOrEmpty(saveDir)) saveDir = ".";
         var baseName = Path.GetFileNameWithoutExtension(sourcePaths[0]);
@@ -621,7 +655,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.Downloads };
             picker.FileTypeFilter.Add("*");
             WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
-            if (await picker.PickSingleFolderAsync() is { } folder)
+            if (await picker.PickSingleFolderAsync() is { } folder && IsCurrent(generation))
             {
                 saveDir = folder.Path;
                 UpdateLocationText();
@@ -644,53 +678,122 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
-
-        var password = passwordBox.Password.Length > 0 ? passwordBox.Password : null;
-        return (formatBox.SelectedIndex == 1, password, CurrentTarget());
+        _viewDialog = dialog;
+        try
+        {
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || !IsCurrent(generation)) return null;
+            var password = passwordBox.Password.Length > 0 ? passwordBox.Password : null;
+            return (formatBox.SelectedIndex == 1, password, CurrentTarget());
+        }
+        finally
+        {
+            passwordBox.Password = string.Empty;
+            if (ReferenceEquals(_viewDialog, dialog)) _viewDialog = null;
+        }
     }
-
     // ---------- 공통: 백그라운드 실행 / 진행률 / 취소 ----------
 
-    private void OnCancelClick(object sender, RoutedEventArgs e) => _cts?.Cancel();
+    private bool IsCurrent(int generation) => _attached && generation == Volatile.Read(ref _viewGeneration);
 
-    /// <summary>
-    /// 작업을 뷰 전용 워커에서 실행하고 진행률/취소를 연결한다(A42 계약: Run+WorkContext).
-    /// 취소되면 false. ArchivePasswordException 등은 호출자에게 그대로 전파된다.
-    /// </summary>
+    private void OnCancelClick(object sender, RoutedEventArgs e)
+    {
+        if (_activeJobId is { } id) _jobs.Jobs.Cancel(id);
+        else _cts?.Cancel();
+    }
+
+    private void OnJobsChanged()
+    {
+        var generation = Volatile.Read(ref _viewGeneration);
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (IsCurrent(generation)) UpdateObservedJob();
+        });
+    }
+
+    private void UpdateObservedJob()
+    {
+        if (!_attached || _activeJobId is not { } id) return;
+        var job = _jobs.Jobs.GetSnapshots().FirstOrDefault(item => item.Id == id);
+        if (job is null)
+        {
+            _activeJobId = null;
+            SetBusy(false, null);
+            return;
+        }
+        if (_busy != job.IsActive) SetBusy(job.IsActive, null);
+        _operationProgress = job.Progress;
+        OperationProgress.Value = job.Progress * 100;
+        CancelButton.IsEnabled = job.IsActive && job.State != BackgroundJobState.Canceling;
+        StatusText.Text = job.State switch
+        {
+            BackgroundJobState.WaitingForPassword => "Password required. Open Jobs to continue or cancel.",
+            BackgroundJobState.Canceling => "Canceling after the current file. Created files remain.",
+            BackgroundJobState.Succeeded => "Completed: " + job.ResultPath,
+            BackgroundJobState.Canceled => "Canceled. Already-created files remain.",
+            BackgroundJobState.Failed => job.Error ?? "Operation failed. See Jobs for the result.",
+            _ => job.Title + " — progress and cancel are also available in Jobs."
+        };
+        TrayStatusChanged?.Invoke();
+    }
+
+    private async Task<bool> RunBackgroundJobAsync(Func<BackgroundJobHandle> start, string label)
+    {
+        if (!_attached || _busy) return false;
+        var generation = _viewGeneration;
+        var observation = _viewLifetime.Token;
+        BackgroundJobHandle handle;
+        try { handle = start(); }
+        catch (InvalidOperationException ex)
+        {
+            StatusText.Text = ex.Message;
+            return false;
+        }
+        _activeJobId = handle.Id;
+        SetBusy(true, label);
+        UpdateObservedJob();
+        try
+        {
+            // 화면을 떠나면 이 대기만 끝낸다. 서비스는 작업과 결과를 계속 보관한다.
+            var result = await handle.Completion.WaitAsync(observation);
+            if (!IsCurrent(generation) || _activeJobId != handle.Id) return false;
+            UpdateObservedJob();
+            return result.State == BackgroundJobState.Succeeded;
+        }
+        catch (OperationCanceledException) { return false; }
+    }
+
+    /// <summary>목록 조회만 화면 수명의 워커에서 실행한다. 화면 해제 뒤 UI·암호 대화상자는 갱신하지 않는다.</summary>
     private async Task<bool> RunOperationAsync(string label, Action<IProgress<double>, CancellationToken> work)
     {
-        var cts = new CancellationTokenSource();
+        if (!_attached) return false;
+        var generation = _viewGeneration;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_viewLifetime.Token);
         _cts = cts;
         var dispatcher = DispatcherQueue;
-        var progress = new DelegateProgress(v =>
-            dispatcher.TryEnqueue(() =>
-            {
-                _operationProgress = Math.Clamp(v, 0, 1);
-                OperationProgress.Value = _operationProgress * 100;
-                // A54: 트레이는 정수 퍼센트만 보므로 셸의 키 비교가 재합성을 알아서 걸러 준다.
-                TrayStatusChanged?.Invoke();
-            }));
-
+        var progress = new DelegateProgress(v => dispatcher.TryEnqueue(() =>
+        {
+            if (!IsCurrent(generation) || !ReferenceEquals(_cts, cts) || !double.IsFinite(v)) return;
+            _operationProgress = Math.Clamp(v, 0, 1);
+            OperationProgress.Value = _operationProgress * 100;
+            TrayStatusChanged?.Invoke();
+        }));
         SetBusy(true, label);
         try
         {
-            await Worker.Run(ctx => work(ctx.Progress, ctx.Cancellation), cts.Token, progress);
-            return true;
+            await Worker.Run(ctx => work(ctx.Progress, ctx.Cancellation), cts.Token, progress).WaitAsync(cts.Token);
+            return IsCurrent(generation);
         }
         catch (OperationCanceledException)
         {
-            StatusText.Text = "Canceled";
+            if (IsCurrent(generation)) StatusText.Text = "Canceled";
             return false;
         }
         finally
         {
-            SetBusy(false, null);
-            _cts = null;
-            cts.Dispose();
+            if (ReferenceEquals(_cts, cts)) _cts = null;
+            if (IsCurrent(generation)) SetBusy(false, null);
         }
     }
-
     private void SetBusy(bool busy, string? label)
     {
         _busy = busy;
@@ -699,6 +802,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         // (2026-08-27 사용자 답변) — 진행 중(busy)에만 존재하는 버튼이라 평시에는 비활성이 아니라
         // 숨김이 맞다(진행 막대와 한 몸으로 뜨고 진다).
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        CancelButton.IsEnabled = busy;
         if (busy)
         {
             _operationProgress = 0;

@@ -394,6 +394,29 @@
                            TextWrapping="Wrap" />
             </StackPanel>
         </Border>
+        <!-- 전역 작업은 모듈 바 자동 숨김과 파일 탐색 레이어에서 독립이다. -->
+        <StackPanel x:Name="JobsLayer" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="8" Spacing="6" MaxWidth="380">
+            <Button x:Name="JobsButton" Content="Jobs" HorizontalAlignment="Right"
+                    Visibility="Collapsed" Click="OnJobsButtonClick" />
+            <Border x:Name="JobsPanel" Visibility="Collapsed" Padding="12"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="8" Width="360">
+                <StackPanel Spacing="8">
+                    <Grid>
+                        <TextBlock Text="Background jobs" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button Content="Close" HorizontalAlignment="Right" Click="OnJobsCloseClick" />
+                    </Grid>
+                    <TextBlock x:Name="JobsNotice" TextWrapping="Wrap" Visibility="Collapsed" />
+                    <TextBlock Text="Canceling may wait for the current file. Partial files may remain."
+                               TextWrapping="Wrap" FontSize="12" />
+                    <ScrollViewer x:Name="JobsScroll" MaxHeight="400" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="JobsRows" Spacing="12" />
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+        </StackPanel>
     </Grid>
     </Grid>
 </Window>

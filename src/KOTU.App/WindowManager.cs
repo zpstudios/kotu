@@ -1,3 +1,4 @@
+using KOTU.Core.Jobs;
 using Microsoft.UI.Xaml;
 using KOTU.Core.Cli;
 using KOTU.Core.Routing;
@@ -36,9 +37,12 @@ public sealed class WindowManager
     /// </summary>
     private readonly List<MainWindow> _ordered = [];
 
-    public WindowManager(FileTypeRouter router)
+    public BackgroundJobService Jobs { get; }
+
+    public WindowManager(FileTypeRouter router, BackgroundJobService jobs)
     {
         _router = router;
+        Jobs = jobs;
     }
 
     /// <summary>가장 최근 활성화된 창. 업데이트 다이얼로그 등 공용 UI의 호스트로 쓴다.</summary>
@@ -161,10 +165,51 @@ public sealed class WindowManager
     /// <summary>모든 창 닫기 = 앱 종료 (트레이 메뉴 'Exit KOTU').</summary>
     public void CloseAll()
     {
+        if (TryBlockExitForJobs()) return;
         foreach (var window in _windows.ToArray())
             window.Close();
     }
 
+    /// <summary>작업을 강제 중단하지 않는다. 암호 대기와 취소 중도 아직 실행 중이다.</summary>
+    public bool TryBlockExitForJobs()
+    {
+        if (!Jobs.HasActiveJobs) return false;
+        ActiveWindow?.ShowJobs("Jobs are still running. Finish or cancel them before closing or restarting KOTU.");
+        return true;
+    }
+
+    private IDisposable? _restartJobLease;
+
+    public bool TryBeginRestart()
+    {
+        if (_restartJobLease is not null) return false;
+        _restartJobLease = Jobs.TryAcquireIdleLease();
+        if (_restartJobLease is not null) return true;
+        ActiveWindow?.ShowJobs("Finish or cancel jobs before restarting KOTU.");
+        return false;
+    }
+
+    public void CancelRestartPreparation()
+    {
+        _restartJobLease?.Dispose();
+        _restartJobLease = null;
+    }
+
+    public bool TryPrepareLastWindowClose(MainWindow window, out IDisposable? lease)
+    {
+        lease = null;
+        if (_windows.Count > 1) return true;
+        lease = Jobs.TryAcquireIdleLease();
+        if (lease is not null) return true;
+        window.ShowJobs("Finish or cancel jobs before closing KOTU.");
+        return false;
+    }
+    public bool TryBlockLastWindowClose(MainWindow window)
+    {
+        if (_windows.Count > 1 || !Jobs.HasActiveJobs) return false;
+        window.ShowJobs("Jobs are still running. Finish or cancel them before closing KOTU.");
+        return true;
+    }
     // ---------- 관리자 재시작 창 세트 복원 (A124) ----------
 
     /// <summary>

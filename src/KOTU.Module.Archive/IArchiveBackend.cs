@@ -3,7 +3,7 @@ namespace KOTU.Module.Archive;
 /// <summary>압축 파일 내부 항목 하나. 경로는 '/' 구분자로 정규화된 상대 경로.</summary>
 public sealed record ArchiveEntry(string Path, bool IsDirectory, long Size, DateTime Modified);
 
-/// <summary>암호가 필요하거나 틀렸음을 나타낸다. 뷰에서 이 예외를 잡아 암호 입력 후 재시도한다.</summary>
+/// <summary>암호가 필요하거나 틀렸음을 나타낸다. 목록 뷰 또는 앱 작업이 암호를 받아 재시도한다.</summary>
 public sealed class ArchivePasswordException : Exception
 {
     public ArchivePasswordException(Exception? inner = null)
@@ -13,7 +13,7 @@ public sealed class ArchivePasswordException : Exception
 }
 
 /// <summary>
-/// 압축 백엔드 추상화. 구현은 UI 비의존이며 모든 메서드는 동기(호출자가 뷰 전용 ModuleWorker에서 실행한다 — A42).
+/// 압축 백엔드 추상화. 모든 메서드는 동기이며 목록은 뷰 워커, 해제·생성은 앱 작업 워커에서 실행한다.
 /// </summary>
 public interface IArchiveBackend
 {
