@@ -1,3 +1,5 @@
+using KOTU.FileOperations;
+using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -19,8 +21,8 @@ namespace KOTU.App;
 /// DataPackage.Properties에 실어 보낸 경로 목록으로 판정하고, 외부(OS 탐색기 등) 소스는
 /// 경로를 모르므로 기본 = 복사다(수정자로만 이동 강제 가능. docs/A94-matrix.md에 명기).
 ///
-/// 실제 조작은 System.IO로 워커 스레드에서 한다(UI 블로킹 금지). WinRT StorageFolder에는
-/// MoveAsync가 없어 폴더 이동을 못 하므로, 파일·폴더 모두 System.IO 한 경로로 통일했다.
+/// 파일 전송은 UI 비의존 KOTU.FileOperations에서 워커 스레드로 실행한다(UI 블로킹 금지).
+/// 원본 계획·충돌 정책·파일시스템 처리와 원본 정리는 서비스가 담당한다.
 /// 이름 충돌은 3차부터 탐색기 동등의 선택형 — 워커가 만나는 충돌마다 ExplorerConflictDialog로
 /// Replace(파일 덮어쓰기/폴더 병합)·Skip·Keep both("이름 (2)" 규칙 재사용)를 묻고, 취소(Esc)는
 /// 남은 작업 중단이다(수행분 유지 — 탐색기 동등). 1차의 무조건 "(2)" 자동 생성은 같은 폴더로의
@@ -54,7 +56,7 @@ internal static class ExplorerFileOps
     /// 1 이상이면 <see cref="ReportAsync"/>가 완료 요약 대신 관리자 재시작을 제안한다.
     /// </summary>
     internal sealed record OpResult(int Done, int Skipped, int Failed, string? FirstError,
-        bool Cancelled = false, int Total = 0, int Denied = 0)
+        bool Cancelled = false, int Total = 0, int Denied = 0, bool SourcesRemain = false)
     {
         internal static OpResult Empty { get; } = new(0, 0, 0, null);
 
@@ -335,7 +337,7 @@ internal static class ExplorerFileOps
         }
         var paths = items.Select(i => i.Path).Where(p => !string.IsNullOrEmpty(p)).ToList();
         if (paths.Count == 0) return OpResult.Empty;
-        return await Task.Run(() => TransferAsync(paths, targetFolder, move, ui));
+        return await TransferAsync(paths, targetFolder, move, ui);
     }
 
     // ---------- OS 탐색기 클립보드 상호운용: "Preferred DropEffect" (A94 6차, v0.153.0) ----------
@@ -495,6 +497,7 @@ internal static class ExplorerFileOps
     internal static async Task<(bool DidWork, OpResult Result, string? Notice)> PasteFromClipboardAsync(
         string targetFolder, OpUi ui)
     {
+        var clipboardSequence = GetClipboardSequenceNumber();
         DataPackageView view;
         try
         {
@@ -507,17 +510,40 @@ internal static class ExplorerFileOps
         if (!view.Contains(StandardDataFormats.StorageItems)) return (false, OpResult.Empty, null);
 
         // A94 6차 — 셸 형식 우선, 없으면 종전 판정. 이동으로 판정된 원본의 삭제 주체는 우리다
-        // (아래 TransferAsync가 System.IO로 옮긴다 — 탐색기 쪽에 알릴 것은 없다).
+        // (아래 TransferAsync가 전송 서비스로 옮긴다 — 탐색기 쪽에 알릴 것은 없다).
         var move = await PreferredDropEffectIsMoveAsync(view)
             ?? view.RequestedOperation.HasFlag(DataPackageOperation.Move);
         var result = await TransferDroppedAsync(view, targetFolder, move, ui);
-        if (move && !result.Cancelled && result.Failed == 0 && result.Done > 0)
+        if (move && !result.Cancelled && result.Failed == 0 && result.Done > 0 &&
+            !result.SourcesRemain && TryClearClipboard(clipboardSequence))
         {
-            try { Clipboard.Clear(); } catch { /* 소유권 등 — 비우기 실패는 무해 */ }
             ClearCutMarks(); // A94 4차 — 잘라내기 1회성 소진(원본은 이미 사라졌다)
         }
         return (true, result, result.Notice(move));
     }
+
+    // 잠깐 클립보드를 잠근 상태에서 순번을 비교하고 비운다. 이동 도중 새로 복사한 내용은 보존한다.
+    private static bool TryClearClipboard(uint expectedSequence)
+    {
+        if (expectedSequence == 0 || !OpenClipboard(IntPtr.Zero)) return false;
+        try { return GetClipboardSequenceNumber() == expectedSequence && EmptyClipboard(); }
+        finally { CloseClipboard(); }
+    }
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern uint GetClipboardSequenceNumber();
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenClipboard(IntPtr owner);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EmptyClipboard();
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseClipboard();
 
     // ---------- 삭제: Del = 휴지통 (A94 2차) / Shift+Del = 영구 삭제 (A94 4차) ----------
 
@@ -702,370 +728,39 @@ internal static class ExplorerFileOps
         }
     }
 
-    // ---------- 내부: 실제 조작 (워커 스레드, System.IO) ----------
+    // ---------- 내부: 파일 전송 서비스와 UI 연결 ----------
 
-    /// <summary>
-    /// 워커 스레드: 항목별 이동/복사 (A94 3차 — 충돌 선택형). 항목 단위로 실패를 격리한다
-    /// (하나 실패해도 나머지 계속). 이름 충돌은 TransferOp.AskAsync로 UI에 묻고(정책 흐름:
-    /// all 선택이 있으면 그대로, 없으면 대화상자), 취소면 그 지점에서 남은 작업을 중단한다
-    /// (수행분 유지). Task.Run으로 진입하고 대화상자 대기는 await뿐이라 파일 I/O가 UI 스레드로
-    /// 올라오지 않는다(TCS는 RunContinuationsAsynchronously — 연속도 풀에서 돈다).
-    /// </summary>
+    /// <summary>서비스가 파일 I/O의 워커 실행을 보장한다. 화면은 충돌 선택과 진행 표시만 담당한다.</summary>
     private static async Task<OpResult> TransferAsync(
         IReadOnlyList<string> paths, string targetFolder, bool move, OpUi ui)
     {
-        string target;
-        try
+        var lastProgressAt = DateTime.MinValue;
+        void ReportProgress(int current)
         {
-            target = Path.GetFullPath(targetFolder);
-        }
-        catch (Exception ex)
-        {
-            return new OpResult(0, 0, paths.Count, ex.Message);
-        }
-
-        var op = new TransferOp(ui, move, paths.Count);
-        int done = 0, skipped = 0, failed = 0, denied = 0; // denied = failed 중 권한 부족(A94 4차)
-        string? firstError = null;
-        for (var i = 0; i < paths.Count && !op.Cancelled; i++)
-        {
-            op.ReportProgress(i + 1); // "Copying 3 of 12..." — 최상위 항목 기준(3개 미만 생략)
-            try
-            {
-                var src = TrimSep(Path.GetFullPath(paths[i]));
-                var isFolder = Directory.Exists(src);
-                if (!isFolder && !File.Exists(src))
-                {
-                    skipped++; // 드래그·복사 후 사라진 항목 — 조용히 건너뜀
-                    continue;
-                }
-                var name = Path.GetFileName(src);
-                if (name.Length == 0)
-                    throw new IOException("cannot move a drive root");
-                if (isFolder && IsSelfOrDescendant(target, src))
-                    throw new IOException("cannot put a folder inside itself");
-                if (move && Path.GetDirectoryName(src) is { } parent && PathsEqual(parent, target))
-                {
-                    skipped++; // 같은 폴더로 이동 = 무동작(가드 — DragOver가 놓친 경로 대비)
-                    continue;
-                }
-
-                var dest = Path.Combine(target, name);
-                if (PathsEqual(src, dest))
-                {
-                    // 같은 폴더로의 강제 복사(Ctrl) = 자기 자신과의 충돌 — 탐색기처럼 묻지 않고
-                    // "(2)" 사본(1차 규칙 유지. 병합-자기재귀도 이 가드가 원천 차단한다)
-                    TransferItem(src, UniqueDestination(target, name), isFolder, move);
-                    done++;
-                    continue;
-                }
-                if (!File.Exists(dest) && !Directory.Exists(dest))
-                {
-                    TransferItem(src, dest, isFolder, move); // 충돌 없음 — 종전과 동일한 직행
-                    done++;
-                    continue;
-                }
-
-                // 체크박스 노출 = 남은 충돌 2건 이상일 때. 폴더 충돌은 병합 내부의 파일 충돌
-                // 가능성이 미지수라 항상 노출한다(구현 시 결정 — 보고서 명기).
-                var offerAll = !op.HasSticky &&
-                    (isFolder || KnownConflictsAhead(paths, i, target) >= 2);
-                var choice = await op.AskAsync(name, isFolder, target, offerAll);
-                if (choice is null) break; // 취소 — 남은 작업 중단(이미 수행분 유지)
-                switch (choice)
-                {
-                    case ConflictChoice.Skip:
-                        skipped++; // 이동이면 원본 잔류 — 탐색기 동등
-                        break;
-                    case ConflictChoice.KeepBoth:
-                        TransferItem(src, UniqueDestination(target, name), isFolder, move);
-                        done++;
-                        break;
-                    case ConflictChoice.Replace when isFolder && Directory.Exists(dest):
-                    {
-                        // 폴더 충돌의 Replace = 병합(대상을 지우지 않는다 — 탐색기 동등)
-                        var (ok, mergeError, mergeDenied) = await MergeDirectoryAsync(op, src, dest);
-                        if (op.Cancelled) break; // 병합 중 취소 — 이 항목은 미완(카운트 제외)
-                        if (ok) done++;
-                        else
-                        {
-                            failed++;
-                            // 병합 내부의 권한 부족도 최상위 1건으로 센다(카운트는 최상위 기준 — 3차 규칙)
-                            if (mergeDenied) denied++;
-                            firstError ??= mergeError ?? $"could not merge \"{name}\"";
-                        }
-                        break;
-                    }
-                    case ConflictChoice.Replace:
-                        // 파일 덮어쓰기. 종류 불일치(파일 자리에 폴더 등)는 아래 실행부가 던져
-                        // 항목 실패로 격리된다(탐색기도 오류로 다룬다)
-                        TransferItem(src, dest, isFolder, move, overwrite: true);
-                        done++;
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                failed++;
-                if (IsAccessDenied(ex)) denied++; // 권한 부족 = 관리자 재시작 제안 대상(A94 4차)
-                firstError ??= ex.Message;
-            }
-        }
-        return new OpResult(done, skipped, failed, firstError, op.Cancelled, paths.Count, denied);
-    }
-
-    /// <summary>
-    /// 이동/복사 1회분의 충돌 정책·취소·진행 표시 상태 (A94 3차). 인스턴스는 조작 1회 수명 —
-    /// "Do this for all remaining conflicts"도 이번 조작 한정이다(저장 안 함). 워커 흐름 전용
-    /// (순차 await 체인이라 잠금 불요).
-    /// </summary>
-    private sealed class TransferOp
-    {
-        private const int ProgressMinItems = 3;     // 1~2개 조작은 진행 문구 생략(순간 완료 — 구현 시 결정)
-        private const int ProgressThrottleMs = 100; // UI 마셜 스로틀 — 마지막 값(current == total)은 예외
-
-        private readonly OpUi _ui;
-        private readonly bool _move;
-        private readonly int _total;
-        private ConflictChoice? _sticky;
-        private DateTime _lastProgressAt = DateTime.MinValue;
-
-        internal TransferOp(OpUi ui, bool move, int total)
-        {
-            _ui = ui;
-            _move = move;
-            _total = total;
-        }
-
-        /// <summary>취소됨(Esc·창 닫힘·표시 실패) — 이후 남은 작업은 수행하지 않는다(수행분 유지).</summary>
-        internal bool Cancelled { get; private set; }
-
-        /// <summary>이동 조작인지 — 병합 재귀(MergeDirectoryAsync)가 참조한다.</summary>
-        internal bool Move => _move;
-
-        /// <summary>all 선택이 이미 있는지 — 있으면 대화상자가 안 뜨므로 체크박스 판정 비용을 아낀다.</summary>
-        internal bool HasSticky => _sticky is not null;
-
-        /// <summary>
-        /// 충돌 1건의 정책 결정: all 선택이 있으면 그대로, 없으면 UI 스레드로 마셜해 대화상자
-        /// (ExplorerConflictDialog — 창 단위 직렬화 포함). null = 취소(이후 전 충돌도 취소로 고정).
-        /// </summary>
-        internal async Task<ConflictChoice?> AskAsync(
-            string name, bool isFolder, string destFolder, bool offerAll)
-        {
-            if (Cancelled) return null;
-            if (_sticky is { } sticky) return sticky;
-            var (choice, all) = await ExplorerConflictDialog.AskAsync(
-                _ui.Dispatcher, _ui.Root, name, isFolder, destFolder, offerAll);
-            if (choice is null)
-            {
-                Cancelled = true;
-                return null;
-            }
-            if (all) _sticky = choice;
-            return choice;
-        }
-
-        /// <summary>최상위 항목 진행 문구 "Copying 3 of 12..." — 항목 시작마다, 100ms 스로틀(마지막은 강제).</summary>
-        internal void ReportProgress(int current)
-        {
-            if (_total < ProgressMinItems) return;
+            if (paths.Count < 3) return;
             var now = DateTime.UtcNow;
-            if (current != _total && (now - _lastProgressAt).TotalMilliseconds < ProgressThrottleMs) return;
-            _lastProgressAt = now;
-            _ui.Post($"{(_move ? "Moving" : "Copying")} {current} of {_total}...");
+            if (current != paths.Count && (now - lastProgressAt).TotalMilliseconds < 100) return;
+            lastProgressAt = now;
+            ui.Post($"{(move ? "Moving" : "Copying")} {current} of {paths.Count}...");
         }
-    }
 
-    /// <summary>
-    /// 현재 충돌(1) + 남은 최상위 항목 중 대상에 같은 이름이 이미 있는 것의 수 —
-    /// "Do this for all remaining conflicts" 체크박스 노출 판정용. 2 이상이면 충분해 조기 종료.
-    /// </summary>
-    private static int KnownConflictsAhead(IReadOnlyList<string> paths, int fromIndex, string target)
-    {
-        var count = 1;
-        for (var j = fromIndex + 1; j < paths.Count && count < 2; j++)
-        {
-            try
+        var result = await new FileTransferService().TransferAsync(paths, targetFolder, move,
+            async conflict =>
             {
-                var name = Path.GetFileName(TrimSep(Path.GetFullPath(paths[j])));
-                if (name.Length == 0) continue;
-                var dest = Path.Combine(target, name);
-                if (File.Exists(dest) || Directory.Exists(dest)) count++;
-            }
-            catch
-            {
-                // 판정 불가 항목은 세지 않는다 — 체크박스가 안 뜨는 쪽으로만 어긋난다
-            }
-        }
-        return count;
-    }
-
-    /// <summary>
-    /// 단일 항목 실행부(충돌 판정 없음 — 호출부가 dest를 확정한 뒤). overwrite = Replace의
-    /// 파일 덮어쓰기(폴더 병합은 MergeDirectoryAsync 몫 — 폴더 + overwrite 조합은 대상이
-    /// 파일일 때뿐이고, 그 경우 CopyDirectory가 던져 항목 실패로 격리된다).
-    /// </summary>
-    private static void TransferItem(string src, string dest, bool isFolder, bool move, bool overwrite = false)
-    {
-        if (isFolder)
-        {
-            if (!move) CopyDirectory(src, dest);
-            else if (SameVolume(src, dest)) Directory.Move(src, dest);
-            else
-            {
-                CopyDirectory(src, dest); // Directory.Move는 볼륨을 못 넘는다
-                Directory.Delete(src, recursive: true);
-            }
-            return;
-        }
-        TransferFile(src, dest, move, overwrite);
-    }
-
-    /// <summary>파일 1개 이동/복사. overwrite면 File.Copy/File.Move의 덮어쓰기 오버로드를 쓴다.</summary>
-    private static void TransferFile(string src, string dest, bool move, bool overwrite = false)
-    {
-        if (!move)
-        {
-            File.Copy(src, dest, overwrite);
-            return;
-        }
-        if (SameVolume(src, dest))
-        {
-            if (overwrite) File.Move(src, dest, overwrite: true);
-            else File.Move(src, dest);
-            return;
-        }
-        File.Copy(src, dest, overwrite); // 명시 복사+삭제 — 실패 시 원본 보존이 명확하다
-        File.Delete(src);
-    }
-
-    /// <summary>
-    /// 폴더 충돌의 Replace = 병합 (A94 3차, 탐색기 동등): 대상 폴더를 지우지 않고 내용을 재귀
-    /// 복사/이동한다. 내부 "파일" 충돌은 같은 정책 흐름(all 선택 존중, 없으면 그 파일에 대해
-    /// 대화상자 — 체크박스는 항상 노출: 남은 내부 충돌 수는 미지수), 내부 "폴더" 충돌은 묻지
-    /// 않고 자동 병합(하위로 계속). 이동 병합은 내용을 옮긴 뒤 "빈" 원본 폴더만 지운다 —
-    /// Skip·실패로 항목이 남으면 원본 폴더 유지(탐색기 동등). 취소는 그 지점에서 멈춘다
-    /// (수행분 유지·원본 정리도 하지 않는다). 반환 = (내부 전체 성공 여부, 첫 오류,
-    /// 실패 중 권한 부족이 있었는지 — A94 4차: 호출부가 그 최상위 항목을 접근 거부 1건으로 센다).
-    /// 순환 가드는 1차 가드 재사용 — 최상위에서 대상이 원본 하위면 애초에 오지 않고,
-    /// 병합은 이미 있던 대상 폴더로만 내려가 새 순환을 만들 수 없다.
-    /// </summary>
-    private static async Task<(bool Ok, string? FirstError, bool Denied)> MergeDirectoryAsync(
-        TransferOp op, string src, string dest)
-    {
-        var ok = true;
-        var denied = false;
-        string? firstError = null;
-        void Fail(Exception ex) => FailWith(ex.Message, IsAccessDenied(ex));
-        void FailWith(string message, bool wasDenied)
-        {
-            ok = false;
-            denied |= wasDenied;
-            firstError ??= message;
-        }
-
-        List<string> files, dirs;
-        try
-        {
-            // 스냅샷 — 이동 병합은 순회 중 원본에서 항목을 빼내므로 라이브 열거가 깨진다.
-            // ※ A160(v0.169.0) 확인 사항: 표시는 숨김/시스템을 거르지만(ExplorerListing.ShouldShow)
-            // 조작은 거르지 않는다 — 이 열거도 아래 CopyDirectory도 속성 필터가 없어, 감춰진 항목까지
-            // 함께 복사·이동·삭제된다(탐색기 동등 동작이라 A160 범위에서 고치지 않았다. 되짚지 말 것).
-            files = Directory.EnumerateFiles(src).ToList();
-            dirs = Directory.EnumerateDirectories(src).ToList();
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message, IsAccessDenied(ex));
-        }
-
-        foreach (var file in files)
-        {
-            if (op.Cancelled) return (ok, firstError, denied);
-            try
-            {
-                var name = Path.GetFileName(file);
-                var destFile = Path.Combine(dest, name);
-                if (File.Exists(destFile) || Directory.Exists(destFile))
+                var (choice, all) = await ExplorerConflictDialog.AskAsync(ui.Dispatcher, ui.Root,
+                    conflict.Name, conflict.IsFolder, conflict.DestinationFolder, conflict.OfferAll);
+                if (choice is null) return null;
+                var policy = choice.Value switch
                 {
-                    var choice = await op.AskAsync(name, isFolder: false, dest, offerAll: true);
-                    if (choice is null) return (ok, firstError, denied); // 취소 — 원본 정리 없이 중단
-                    if (choice == ConflictChoice.Skip) continue; // 이동이면 원본 파일·폴더 잔류
-                    if (choice == ConflictChoice.KeepBoth)
-                    {
-                        TransferFile(file, UniqueDestination(dest, name), op.Move);
-                        continue;
-                    }
-                    TransferFile(file, destFile, op.Move, overwrite: true); // Replace
-                    continue;
-                }
-                TransferFile(file, destFile, op.Move);
-            }
-            catch (Exception ex)
-            {
-                Fail(ex);
-            }
-        }
-        foreach (var dir in dirs)
-        {
-            if (op.Cancelled) return (ok, firstError, denied);
-            try
-            {
-                var name = Path.GetFileName(dir);
-                var destDir = Path.Combine(dest, name);
-                if (Directory.Exists(destDir))
-                {
-                    var (subOk, subError, subDenied) = await MergeDirectoryAsync(op, dir, destDir);
-                    if (!subOk) FailWith(subError ?? $"could not merge \"{name}\"", subDenied);
-                }
-                else if (File.Exists(destDir))
-                {
-                    // 폴더 자리의 동명 파일 — 탐색기도 오류(권한 문제가 아니다)
-                    FailWith($"a file named \"{name}\" is in the way", false);
-                }
-                else if (!op.Move)
-                {
-                    CopyDirectory(dir, destDir);
-                }
-                else if (SameVolume(dir, destDir))
-                {
-                    Directory.Move(dir, destDir);
-                }
-                else
-                {
-                    CopyDirectory(dir, destDir);
-                    Directory.Delete(dir, recursive: true);
-                }
-            }
-            catch (Exception ex)
-            {
-                Fail(ex);
-            }
-        }
-
-        if (op.Move && !op.Cancelled)
-        {
-            try
-            {
-                // 빈 원본만 삭제(비재귀) — Skip·실패 잔여물이 있으면 남긴다(탐색기 동등)
-                if (!Directory.EnumerateFileSystemEntries(src).Any()) Directory.Delete(src);
-            }
-            catch (Exception ex)
-            {
-                Fail(ex);
-            }
-        }
-        return (ok, firstError, denied);
-    }
-
-    private static void CopyDirectory(string source, string destination)
-    {
-        Directory.CreateDirectory(destination);
-        foreach (var file in Directory.EnumerateFiles(source))
-            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
-        foreach (var dir in Directory.EnumerateDirectories(source))
-            CopyDirectory(dir, Path.Combine(destination, Path.GetFileName(dir)));
+                    ConflictChoice.Replace => TransferChoice.Replace,
+                    ConflictChoice.Skip => TransferChoice.Skip,
+                    ConflictChoice.KeepBoth => TransferChoice.KeepBoth,
+                    _ => throw new InvalidOperationException("Unknown conflict choice"),
+                };
+                return new TransferDecision(policy, all);
+            }, ReportProgress);
+        return new OpResult(result.Done, result.Skipped, result.Failed, result.FirstError,
+            result.Cancelled, result.Total, result.Denied, result.SourcesRemain);
     }
 
     /// <summary>이름 충돌 회피: "이름.ext" → "이름 (2).ext" → "이름 (3).ext" … (파일·폴더 공통).</summary>

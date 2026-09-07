@@ -61,7 +61,8 @@ jobs:
           Copy-Item $sevenZip $package
           Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $package
           $required = @('KOTU.exe', 'resources.pri', '7z.dll',
-                        'KOTU.DocumentModel.dll', 'Assets/app.ico', 'Assets/test-clip.mp4', 'Assets/sample.mp3')
+                        'KOTU.DocumentModel.dll', 'KOTU.FileOperations.dll',
+                        'Assets/app.ico', 'Assets/test-clip.mp4', 'Assets/sample.mp3')
           foreach ($file in $required) {
             if (!(Test-Path (Join-Path $package $file))) { throw "Package missing: $file" }
           }

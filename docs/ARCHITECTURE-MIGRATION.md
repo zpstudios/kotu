@@ -1,5 +1,8 @@
 # 구조 개선 작업 브랜치
 
+> 2단계 A357(v0.354.0)는 [FILE-TRANSFER-MIGRATION.md](FILE-TRANSFER-MIGRATION.md)에 기록한다.
+> 아래는 완료된 1단계 A356의 범위와 검증 이력이다.
+
 2026-09-07 · v0.353.2 · A356 · `codex/architecture-document-session`
 
 ## 검증 및 전달 상태 (2026-09-07)

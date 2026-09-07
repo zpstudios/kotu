@@ -1,5 +1,8 @@
 # KOTU 인수인계 문서
 
+> **최신 작업 A357(v0.354.0) · 구조 개선 2단계**: 파일 전송 계획/실행/원본 정리를
+> `KOTU.FileOperations`로 분리한다. 작업 범위·회귀 검사·남은 한계는 `docs/FILE-TRANSFER-MIGRATION.md` 참고.
+
 > **작업 브랜치 안내(2026-09-07)**: `codex/architecture-document-session`의 A356(v0.353.0)은
 > 문서 저장 세션·파일 서비스 분리와 브랜치 실행본 CI를 진행 중이다. 기본 브랜치 `master`에는
 > 병합하지 않는다. 최신 작업 범위·검증 방법·후속 단계는 `docs/ARCHITECTURE-MIGRATION.md`를 읽는다.

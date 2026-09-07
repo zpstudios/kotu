@@ -85,6 +85,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
+    <ProjectReference Include="..\KOTU.FileOperations\KOTU.FileOperations.csproj" />
     <ProjectReference Include="..\KOTU.Module.Image\KOTU.Module.Image.csproj" />
     <ProjectReference Include="..\KOTU.Module.Archive\KOTU.Module.Archive.csproj" />
     <ProjectReference Include="..\KOTU.Module.Video\KOTU.Module.Video.csproj" />

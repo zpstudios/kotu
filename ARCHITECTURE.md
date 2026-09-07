@@ -1,5 +1,8 @@
 # KOTU — 올인원 Windows 유틸리티 아키텍처 설계
 
+> v0.354.0 작업 브랜치의 파일 전송 구조 분리는
+> [FILE-TRANSFER-MIGRATION.md](docs/FILE-TRANSFER-MIGRATION.md)를 참조한다.
+
 > v0.353.0 작업 브랜치의 문서 세션 분리와 단계적 구조 변경은
 > [ARCHITECTURE-MIGRATION.md](docs/ARCHITECTURE-MIGRATION.md)를 참조한다.
 

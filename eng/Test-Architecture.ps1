@@ -13,10 +13,10 @@ foreach ($project in $projects) {
         $target
     })
     $graph[$project.FullName] = $references
-    if ($project.BaseName -eq 'KOTU.DocumentModel') {
-        if ($xml.SelectSingleNode('//TargetFramework').InnerText -ne 'net8.0') { throw 'DocumentModel must remain platform independent' }
+    if ($project.BaseName -in @('KOTU.DocumentModel', 'KOTU.FileOperations')) {
+        if ($xml.SelectSingleNode('//TargetFramework').InnerText -ne 'net8.0') { throw "$relative must remain UI independent" }
         if ($references.Count -ne 0 -or $xml.SelectNodes('//PackageReference').Count -ne 0) {
-            throw 'DocumentModel must not depend on UI, engine, or framework packages'
+            throw "$relative must not depend on UI, engine, or framework packages"
         }
     }
 }
