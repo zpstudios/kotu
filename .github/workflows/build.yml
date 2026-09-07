@@ -74,7 +74,9 @@ jobs:
           Commit: $env:BUILD_COMMIT
 
           Extract the entire ZIP, close all running KOTU instances, then launch KOTU.exe.
-          This is an unpackaged test build, not an installer or an official update.
+          This is a branch test build, not an official release.
+          The separate KOTU-installer artifact contains Setup.exe, which replaces the existing KOTU installation.
+          Installed builds still use the official release update feed, not this branch.
           It uses the existing KOTU user settings and file associations; back up settings before testing.
           See docs/ARCHITECTURE-MIGRATION.md in the repository for the manual checks.
           "@ | Set-Content (Join-Path $package 'BRANCH-BUILD.txt') -Encoding utf8
@@ -101,5 +103,63 @@ jobs:
         with:
           name: KOTU-win-x64-${{ github.sha }}
           path: artifacts/KOTU/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 작업 브랜치 설치 EXE 생성
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
+        shell: pwsh
+        run: |
+          dotnet tool install --global vpk --version 1.2.0
+          if ($LASTEXITCODE -ne 0) { throw 'Velopack installation failed' }
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version |
+                     Where-Object { $_ } | Select-Object -First 1
+          if (!$version) { throw 'Package version missing' }
+          vpk pack --packId KOTU --packVersion $version `
+                   --packDir artifacts/KOTU --mainExe KOTU.exe `
+                   --packTitle KOTU --packAuthors "ZP Studios" --outputDir artifacts/installer `
+                   --splashImage packaging/splash.png --icon src/KOTU.App/Assets/app.ico
+          if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
+          if (!(Test-Path artifacts/installer/KOTU-win-Setup.exe)) { throw 'Setup.exe missing' }
+
+      - name: 설치 및 설치본 정합성 검사
+        timeout-minutes: 5
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path artifacts/installer/KOTU-win-Setup.exe).Path
+          $installer = Start-Process -FilePath $setup -ArgumentList '--silent' -WindowStyle Hidden -PassThru
+          if (!$installer.WaitForExit(120000)) {
+            Stop-Process -Id $installer.Id -Force
+            throw 'Installer timed out'
+          }
+          if ($installer.ExitCode -ne 0) { throw "Installer failed: $($installer.ExitCode)" }
+          $installed = Join-Path $env:LOCALAPPDATA 'KOTU/current'
+          $package = (Resolve-Path artifacts/KOTU).Path
+          foreach ($file in (Get-ChildItem $package -Recurse -File)) {
+            $relative = [IO.Path]::GetRelativePath($package, $file.FullName)
+            $target = Join-Path $installed $relative
+            if (!(Test-Path $target)) { throw "Installed file missing: $relative" }
+            if ((Get-FileHash $file.FullName).Hash -ne (Get-FileHash $target).Hash) {
+              throw "Installed file differs: $relative"
+            }
+          }
+          $app = Start-Process -FilePath (Join-Path $installed 'KOTU.exe') -WorkingDirectory $installed -WindowStyle Hidden -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            $app.Refresh()
+            if ($app.HasExited) { throw "Installed KOTU exited: $($app.ExitCode)" }
+            $startupLog = Join-Path $env:TEMP 'KOTU/startup-error.log'
+            if (Test-Path $startupLog) { throw (Get-Content $startupLog -Raw) }
+          } finally {
+            if (!$app.HasExited) { Stop-Process -Id $app.Id -Force }
+          }
+
+      - name: 작업 브랜치 설치 EXE 다운로드
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: KOTU-installer-win-x64-${{ github.sha }}
+          path: artifacts/installer/KOTU-win-Setup.exe
           if-no-files-found: error
           retention-days: 14
