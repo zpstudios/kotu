@@ -1,12 +1,17 @@
 # KOTU 인수인계 문서
 
-> **로컬 완료 A364 · v0.360.0 · CI 대기**: 직전 하단 바 감사 결과에 대한 사용자 수정 승인을 등록했다.
+> **배포 완료 A364 · v0.360.0**: 직전 하단 바 감사 결과에 대한 사용자 수정 승인을 등록했다.
 > 문서 빈 화면 표시·Zoom 실폭/접힌 간격·All Readable 가짜 Zoom 제거·공통 미디어 아이콘과
 > 감사된 아이콘 영역/간격만 수정한다. `docs/TOOLBAR-CONSISTENCY.md`가 범위·검증 정본이다.
 > 운용 규칙 재확정: REQUIREMENTS 등록 + 사용자 명시적 선택이 모두 있어야 개발한다.
 > 이름·설명으로 선택해도 유효하며, 다른 백로그(A363 포함)는 자동 진행하지 않는다.
 > master 직접 작업. 전체 Release/x64 빌드 경고/오류 0, 8개 프로젝트 388건 통과(실패/건너뜀 0).
-> 19개 프로젝트 구조·변경 XAML 5개·diff·한글 검사와 독립 검토 통과. GitHub CI는 대기 중이다.
+> 19개 프로젝트 구조·변경 XAML 5개·diff·한글 검사와 독립 검토 통과.
+> [build 34209280968](https://github.com/zpstudios/kotu/actions/runs/34209280968)·
+> [release 34209280982](https://github.com/zpstudios/kotu/actions/runs/34209280982) 성공, 설치·정합성·시작 검사 통과.
+> [정식 v0.360.0](https://github.com/zpstudios/kotu/releases/tag/v0.360.0)을 2026-09-08 18:25:35 KST 게시했다.
+> 소스/태그 `5f2874548d47d9df20c3e808f98ea0ed2e8b36f3` 일치. Setup·Portable·full·delta(693,940 bytes)·피드 확인.
+> 기존 설치본의 제자리 업데이트 시험은 미실행이다.
 > 도형 미리보기는 생산 좌표를 그린 자료이며 WinUI 캡처가 아니다. 실제 픽셀/테마 검증은 미수행이다.
 > 아래 A362는 직전 배포 이력이다.
 

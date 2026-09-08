@@ -37,7 +37,7 @@ A363 광고 서버·분석과 다른 미선택 백로그는 구현하지 않는�
 
 ## 검증
 
-로컬 구현·검증 완료, GitHub CI·배포 검증 대기 중이다. 독립 소스 검토에서 남은 지적은 없다.
+로컬 구현·검증과 GitHub CI·정식 배포를 완료했다. 독립 소스 검토에서 남은 지적은 없다.
 
 - 전체 Release/x64 빌드: 경고 0·오류 0 (`artifacts/a364-build.log`).
 - Windows 전체 회귀: 8개 프로젝트 388/388 통과, 실패·건너뜀 0.
@@ -52,3 +52,20 @@ WinUI 화면 캡처가 아니다. 도형 테스트는 경계·높이·중심·�
 실제 WinUI 픽셀 배치·테마·배율·포커스/키보드 조작을 실행하지 않았다면 완료로 주장하지 않는다.
 수동 확인은 빈 문서와 파일 열림, All Readable 빈 화면과 자식 바, Audio/Video 재생·음소거,
 밝은/어두운 테마의 비활성 아이콘, 서로 다른 창 폭과 배율에서 공통 위치·간격을 대조한다.
+
+## 정식 배포 증거
+
+소스와 v0.360.0 태그는 `5f2874548d47d9df20c3e808f98ea0ed2e8b36f3`으로 일치한다.
+[build 34209280968](https://github.com/zpstudios/kotu/actions/runs/34209280968)과
+[release 34209280982](https://github.com/zpstudios/kotu/actions/runs/34209280982)가 모두 성공했다.
+전체 빌드·테스트, 실행본 준비·시작, 패키징, 실제 설치·설치 파일 정합성·시작과 업로드를 통과했다.
+master 일반 빌드의 작업 브랜치 설치 단계는 의도대로 건너뛰며, 정식 설치 검사는 release에서 수행했다.
+
+[정식 v0.360.0](https://github.com/zpstudios/kotu/releases/tag/v0.360.0)은
+2026-09-08 18:25:35 KST에 게시됐다(초안·사전 공개 아님).
+[Setup EXE](https://github.com/zpstudios/kotu/releases/download/v0.360.0/KOTU-win-Setup.exe)
+164,378,596 bytes, Portable 159,829,183 bytes, full 159,886,308 bytes,
+delta 693,940 bytes와 `assets.win.json`·`RELEASES`·`releases.win.json`을 확인했다.
+공개 업데이트 피드에는 현재 0.360.0 full/delta와 직전 0.359.0 full이 들어 있다.
+델타 생성은 확인했으며 기존 설치본의 제자리 업데이트 시험은 수행하지 않았다.
+실제 WinUI 픽셀·테마·배율·포커스 검증 한계는 위 기록대로 남는다.
