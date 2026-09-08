@@ -101,7 +101,8 @@
              ArchiveView.xaml.cs SetBusy 주석). -->
         <Border x:Name="StatusBar" Grid.Row="3" Padding="0,2,0,2">
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
-            <Grid ColumnSpacing="6">
+            <!-- A364: 표시된 요소만 Margin 6을 차지한다. 진행/취소가 접히면 끝 빈칸도 사라진다. -->
+            <Grid ColumnSpacing="0">
                 <Grid.ColumnDefinitions>
                     <!-- c0 A296: Back(구 상단 브레드크럼 옆 — 좌측군 1번째) -->
                     <ColumnDefinition Width="Auto" />
@@ -133,7 +134,7 @@
                      결과). U 키는 '위로' 의미만 유지해 루트에서는 무동작이다(OnBackClick 주석). -->
                 <Button x:Name="BackButton" Grid.Column="0" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnBackClick">
-                    <FontIcon Glyph="&#xE72B;" FontSize="14" />
+                    <FontIcon Glyph="&#xE72B;" FontSize="18" />
                 </Button>
                 <!-- A271 c0 → A296 c1: 새 압축. 상단 툴바에 있던 CreateButton을 그대로 옮긴 것이라
                      Content 텍스트만 1칸 규격 아이콘으로 바뀌었다 — 글리프 F012(ZipFolder)는
@@ -143,8 +144,8 @@
                      C 키(SetupHotkeys)의 동작 = 이 플라이아웃 열기 그대로.
                      활성 = 작업 중이 아님(UpdateToolbarState) — 아카이브가 없어도 활성이다
                      (빈 상태에서 새 압축을 시작하는 것이 이 버튼의 주 용도). -->
-                <Button x:Name="CreateButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}">
-                    <FontIcon Glyph="&#xF012;" FontSize="14" />
+                <Button x:Name="CreateButton" Grid.Column="1" Margin="6,0,0,0" Style="{StaticResource BottomBarButtonStyle}">
+                    <FontIcon Glyph="&#xF012;" FontSize="18" />
                     <Button.Flyout>
                         <MenuFlyout Placement="Top">
                             <MenuFlyoutItem Text="As ZIP..." Click="OnCreateZipClick" />
@@ -159,27 +160,27 @@
                      글리프: E8DA(OpenLocal — 폴더를 골라 그리로 풀기) ·
                      E896(Download — 지금 이 자리에 내려놓기. 셸 트레이 메뉴 'Min to tray'와 같은
                      글리프지만 표면이 달라 충돌하지 않는다). -->
-                <Button x:Name="ExtractToButton" Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
+                <Button x:Name="ExtractToButton" Grid.Column="2" Margin="6,0,0,0" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnExtractToClick" IsEnabled="False">
-                    <FontIcon Glyph="&#xE8DA;" FontSize="14" />
+                    <FontIcon Glyph="&#xE8DA;" FontSize="18" />
                 </Button>
-                <Button x:Name="ExtractHereButton" Grid.Column="3" Style="{StaticResource BottomBarButtonStyle}"
+                <Button x:Name="ExtractHereButton" Grid.Column="3" Margin="6,0,0,0" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnExtractHereClick" IsEnabled="False">
-                    <FontIcon Glyph="&#xE896;" FontSize="14" />
+                    <FontIcon Glyph="&#xE896;" FontSize="18" />
                 </Button>
-                <TextBlock x:Name="StatusText" Grid.Column="4" VerticalAlignment="Center"
+                <TextBlock x:Name="StatusText" Grid.Column="4" Margin="6,0,0,0" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
                 <!-- A22(v0.108.0): 파일이 열려 있지 않을 때만 뜨는 공용 드라이브 줄(셸이 주입).
                      v0.47.0의 "현재 아카이브가 있는 드라이브" 텍스트를 대체한다 —
                      상태 텍스트와 같은 칸을 쓰고, 상태 문구가 있으면 그쪽이 우선이다. -->
-                <ContentPresenter x:Name="DriveStripHost" Grid.Column="4"
+                <ContentPresenter x:Name="DriveStripHost" Grid.Column="4" Margin="6,0,0,0"
                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                   VerticalAlignment="Center" Visibility="Collapsed" />
-                <ProgressBar x:Name="OperationProgress" Grid.Column="5" Width="160"
+                <ProgressBar x:Name="OperationProgress" Grid.Column="5" Margin="6,0,0,0" Width="160"
                              Minimum="0" Maximum="100" VerticalAlignment="Center"
                              Visibility="Collapsed" />
                 <!-- "Cancel"은 1칸(32)에 안 들어가는 텍스트라 2칸 규격 -->
-                <Button x:Name="CancelButton" Grid.Column="6" Style="{StaticResource BottomBarWideButtonStyle}"
+                <Button x:Name="CancelButton" Grid.Column="6" Margin="6,0,0,0" Style="{StaticResource BottomBarWideButtonStyle}"
                         Content="Cancel"
                         Click="OnCancelClick" Visibility="Collapsed" />
                 <!-- A271의 우측 끝 Fit 조절기(영구 비활성 2버튼)는 A296에서 제거됨 —

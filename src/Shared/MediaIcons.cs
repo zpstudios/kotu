@@ -32,6 +32,12 @@ namespace KOTU.Ui;
 /// </summary>
 internal static class MediaIcons
 {
+    internal static Grid BuildPlayIcon() => ToolbarIcons.Build(ToolbarIconKind.Play);
+    internal static Grid BuildPauseIcon() => ToolbarIcons.Build(ToolbarIconKind.Pause);
+    internal static Grid BuildPreviousIcon() => ToolbarIcons.Build(ToolbarIconKind.Previous);
+    internal static Grid BuildNextIcon() => ToolbarIcons.Build(ToolbarIconKind.Next);
+    internal static Grid BuildSoundIcon(bool muted = false) => ToolbarIcons.Build(muted ? ToolbarIconKind.Muted : ToolbarIconKind.Sound);
+
     /// <summary>
     /// A300: 이퀄라이저 = <b>세로 슬라이더 3개</b>(트랙 막대 3 + 노브 높이 상이) — 믹서/EQ의
     /// 보편 도상. 16×16 칸(32×32 버튼의 내용 칸 26px 안 — FontSize 18 글리프 상당) 좌표:

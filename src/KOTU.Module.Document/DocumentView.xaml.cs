@@ -467,9 +467,25 @@ public sealed partial class DocumentView : UserControl,
     /// 호출 지점 = ApplyZoom(값 변화)과 표면 전환 3곳(파일 열기·무제 시작·PDF 진입) —
     /// PDF 이탈(HidePdf)은 곧바로 이 셋 중 하나가 뒤따르거나(텍스트 전환) 빈 화면 그대로다.
     /// </summary>
+    // 자동 열에는 간격을 두지 않는다. 표시된 컨트롤의 왼쪽 여백만 공간을 차지한다.
+    private void UpdateToolbarPresentation()
+    {
+        var text = _path is not null || _untitled;
+        var document = text || _pdfPane is { Visibility: Visibility.Visible };
+        var textVisibility = text ? Visibility.Visible : Visibility.Collapsed;
+        ZoomButton.Visibility = textVisibility;
+        SaveButton.Visibility = textVisibility;
+        ViewToggleButton.Visibility = textVisibility;
+        DecorTogglePanel.Visibility = text && EditorBox.Visibility == Visibility.Visible
+            ? Visibility.Visible : Visibility.Collapsed;
+        PrintButton.Visibility = document ? Visibility.Visible : Visibility.Collapsed;
+        FitControls.Visibility = PrintButton.Visibility;
+    }
+
     private void UpdateZoomText()
     {
         ZoomButton.IsEnabled = _path is not null || _untitled;
+        UpdateToolbarPresentation();
         var text = $"{_zoomPercent}%";
         if (ZoomText.Text == text) return;
         ZoomText.Text = text;
@@ -1550,6 +1566,7 @@ public sealed partial class DocumentView : UserControl,
         var onEditableSurface = EditorBox.Visibility == Visibility.Visible && !_viewMode;
         GuideToggleButton.IsEnabled = onEditableSurface;
         MarksToggleButton.IsEnabled = onEditableSurface;
+        UpdateToolbarPresentation();
         UpdateTextPosition();
         UpdateCappedNotice(); // A343 ⓑ: 이 메서드의 호출 전수 = 에디터 표시 전환 전수(그쪽 주석)
     }
@@ -2235,6 +2252,7 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private void ShowPdfFitState()
     {
+        UpdateToolbarPresentation();
         FitButton.IsEnabled = true;
         FitOptionsButton.IsEnabled = true;
         FitHeightItem.IsEnabled = true; // A214: 텍스트 갈래에서 꺼졌을 수 있다 — PDF는 항상 활성
@@ -2257,6 +2275,7 @@ public sealed partial class DocumentView : UserControl,
     /// </summary>
     private void ShowTextFitState()
     {
+        UpdateToolbarPresentation();
         // 판정은 줌 표기(UpdateZoomText)와 같은 축 — 잘림(잠금 뷰)도 _path가 있어 활성이다.
         var active = _path is not null || _untitled;
         // A230 → A249(v0.246.0): 빈 화면에서 조절기를 접던 SetFitControlVisible(active) 호출은

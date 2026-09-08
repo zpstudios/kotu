@@ -379,6 +379,10 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     public VideoPlayerView(OpenContext context, ISettingsService settings)
     {
         InitializeComponent();
+        PlayButton.Content = MediaIcons.BuildPlayIcon();
+        PrevButton.Content = MediaIcons.BuildPreviousIcon();
+        NextButton.Content = MediaIcons.BuildNextIcon();
+        MuteButton.Content = MediaIcons.BuildSoundIcon();
         // A310: 플라이아웃 "Original" 항목의 아이콘도 본체 1:1 상자와 같은 파일(Shared/FitIcons)이
         // 그린다 — 종전에는 XAML 인라인 도형이라 본체와 미세하게 다른 그림이었다(사용자 보고).
         // MenuFlyoutItem.Icon은 IconElement만 받아 본체의 Border를 못 꽂으므로, 같은 치수표로
@@ -541,7 +545,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
             player.Volume = (int)VolumeSlider.Value;
             _muted = false; // 새 인스턴스는 음소거 해제 상태 (A28: 로컬 상태도 동기)
-            MuteButton.Content = "🔊";
+            MuteButton.Content = MediaIcons.BuildSoundIcon();
             HookPlayerEvents(player);
         }
         catch (Exception ex)
@@ -1049,7 +1053,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
 
     private void OnPlayingDispatched()
     {
-        PlayButton.Content = "❚❚";
+        PlayButton.Content = MediaIcons.BuildPauseIcon();
         // A354: 기대하던 재생 전이가 왔다 = 이벤트 축이 살아 있다 — 자가 복구 대기를 접는다.
         if (_healWantPlaying) _healTimer?.Stop();
         PlaybackStateChanged?.Invoke(); // A186: 재생 시작 — 셸이 자동 숨김 카운트를 시작한다
@@ -1101,7 +1105,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (DiagTrace.Enabled) DiagTrace.Write("player", $"Paused {_filePath}"); // A354
         Dispatch(() =>
         {
-            PlayButton.Content = "▶";
+            PlayButton.Content = MediaIcons.BuildPlayIcon();
             // A354: 기대하던 일시정지 전이가 왔다 — 자가 복구 대기를 접는다.
             if (!_healWantPlaying) _healTimer?.Stop();
             PlaybackStateChanged?.Invoke(); // A186: 일시정지 = 바 상시 표시
@@ -1245,7 +1249,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         // (목록 루프 되감기 예산 소진, 한 파일 소진 후 다음 파일 없음)도 이 경로로 온다.
         // A258: "루프 없음 + Auto-play next file 끔"도 이 경로다 — 목록 중간 파일이어도 여기서
         // 멈추므로 ▶ 표기·시크바 끝 갱신을 반드시 거쳐야 한다(이 블록을 건너뛰는 정지 금지).
-        PlayButton.Content = "▶";
+        PlayButton.Content = MediaIcons.BuildPlayIcon();
         PositionText.Text = TimeText.Format(_durationMs);
         _suppressSeekEvent = true;
         SeekSlider.Value = SeekSlider.Maximum;
@@ -1701,7 +1705,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         if (_player is not { } p) return;
         _muted = !_muted;
         p.Mute = _muted;
-        MuteButton.Content = _muted ? "🔇" : "🔊";
+        MuteButton.Content = MediaIcons.BuildSoundIcon(_muted);
         ShowFeedback(_muted ? "Muted" : $"Volume {(int)VolumeSlider.Value}%"); // A13
     }
 

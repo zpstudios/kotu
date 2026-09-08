@@ -435,6 +435,10 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     public AudioPlayerView(OpenContext context, ISettingsService settings)
     {
         InitializeComponent();
+        PlayButton.Content = MediaIcons.BuildPlayIcon();
+        PrevButton.Content = MediaIcons.BuildPreviousIcon();
+        NextButton.Content = MediaIcons.BuildNextIcon();
+        MuteButton.Content = MediaIcons.BuildSoundIcon();
         _settings = settings;
         _resumeStore = new PlaybackResumeStore(settings);
         _filePath = context.FilePath is { } p && File.Exists(p) ? p : null;
@@ -642,7 +646,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
             player.Volume = (int)VolumeSlider.Value;
             _muted = false; // 새 인스턴스는 음소거 해제 상태 (A28: 로컬 상태도 동기)
-            MuteButton.Content = "🔊";
+            MuteButton.Content = MediaIcons.BuildSoundIcon();
             HookPlayerEvents(player);
 
             // A163: 프리셋 목록 확정 + 저장값 적용(볼륨과 같은 UI 스레드 적용 경로).
@@ -1107,7 +1111,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
 
     private void OnPlayingDispatched()
     {
-        PlayButton.Content = "❚❚";
+        PlayButton.Content = MediaIcons.BuildPauseIcon();
         // A354: 기대하던 재생 전이가 왔다 = 이벤트 축이 살아 있다 — 자가 복구 대기를 접는다.
         if (_healWantPlaying) _healTimer?.Stop();
 
@@ -1169,7 +1173,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (DiagTrace.Enabled) DiagTrace.Write("player", $"Paused {_filePath}"); // A354
         Dispatch(() =>
         {
-            PlayButton.Content = "▶";
+            PlayButton.Content = MediaIcons.BuildPlayIcon();
             // A354: 기대하던 일시정지 전이가 왔다 — 자가 복구 대기를 접는다.
             if (!_healWantPlaying) _healTimer?.Stop();
             SetTrayTimer(false); // A54: 멈추면 타이머도 멈춘다 — 막대는 낮게 고정
@@ -1314,7 +1318,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         // 다음 파일 없음)도 이 경로로 온다.
         // A258: "루프 없음 + Auto-play next file 끔"도 이 경로다 — 목록 중간 파일이어도 여기서
         // 멈추므로 아래 네 줄(▶ 표기·시크바 끝) + 오디오 전용 트레이 두 줄을 반드시 거쳐야 한다.
-        PlayButton.Content = "▶";
+        PlayButton.Content = MediaIcons.BuildPlayIcon();
         PositionText.Text = TimeText.Format(_durationMs);
         _suppressSeekEvent = true;
         SeekSlider.Value = SeekSlider.Maximum;
@@ -1457,7 +1461,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (_player is not { } p) return;
         _muted = !_muted;
         p.Mute = _muted;
-        MuteButton.Content = _muted ? "🔇" : "🔊";
+        MuteButton.Content = MediaIcons.BuildSoundIcon(_muted);
     }
 
     // A151: 전체화면 토글(ToggleFullScreen·⛶ 버튼·F11/Esc 액셀러레이터)은 전부 제거 —

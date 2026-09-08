@@ -160,7 +160,7 @@
                 <FontIcon Glyph="&#xE8EE;" FontSize="18" />
             </Button>
             <!-- A349(2026-09-04) 이전/다음 파일 — 재생 버튼 양옆(⏮ ▶ ⏭). 규격은 루프 버튼과 같은
-                 1칸(32×32) + FontIcon 18(E892 Previous / E893 Next). 툴팁은 키 2조합을 병기해야 해서
+                 1칸(32×32) + 공통 18×18 벡터(Previous / Next). 툴팁은 키 2조합을 병기해야 해서
                  SetupHotkeys가 직접 대입한다(HotkeySupport.Bind는 키 1개용이고, 가속기는 이미
                  UserControl.KeyboardAccelerators에 있어 이중 등록이 된다 — 그 자리 주석 참조).
                  ⚠ 이 두 버튼은 "하단 바 버튼은 항상 살아 있다"(A238·A318) 관례의 명시적 예외다
@@ -170,14 +170,13 @@
                  UpdateNeighborButtons()가 목록·루프 모드가 정해질 때마다 확정한다. -->
             <Button x:Name="PrevButton" Grid.Column="1" Style="{StaticResource BottomBarButtonStyle}"
                     IsEnabled="False" Click="OnPrevClicked">
-                <FontIcon Glyph="&#xE892;" FontSize="18" />
+                <!-- 공통 벡터 아이콘은 생성자에서 새 인스턴스로 공급한다. -->
             </Button>
             <Button x:Name="PlayButton" Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
-                    Content="▶"
                     ToolTipService.ToolTip="Play/Pause (Space)" Click="OnPlayClicked" />
             <Button x:Name="NextButton" Grid.Column="3" Style="{StaticResource BottomBarButtonStyle}"
                     IsEnabled="False" Click="OnNextClicked">
-                <FontIcon Glyph="&#xE893;" FontSize="18" />
+                <!-- 공통 벡터 아이콘은 생성자에서 새 인스턴스로 공급한다. -->
             </Button>
             <TextBlock x:Name="PositionText" Grid.Column="4" Text="0:00"
                        VerticalAlignment="Center" />
@@ -187,7 +186,7 @@
             <TextBlock x:Name="DurationText" Grid.Column="6" Text="0:00"
                        VerticalAlignment="Center" />
             <Button x:Name="MuteButton" Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
-                    Content="🔊" Click="OnMuteClicked" />
+                    Click="OnMuteClicked" />
             <!-- A250(v0.246.0): 볼륨 슬라이더 폭 96 → 101 — 0~100은 값이 101개라 "1px = 1단위"로
                  잡은 폭이다(사용자 확정). 다만 WinUI Slider는 썸 크기·트랙 좌우 패딩이 있어
                  실제 픽셀↔단위 대응은 1:1이 아니다 — 101은 명목치다.

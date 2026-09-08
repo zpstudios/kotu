@@ -10,5 +10,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\KOTU.Core\KOTU.Core.csproj" />
+    <Compile Include="..\..\src\Shared\ToolbarIconGeometry.cs" Link="ToolbarIconGeometry.cs" />
   </ItemGroup>
 </Project>

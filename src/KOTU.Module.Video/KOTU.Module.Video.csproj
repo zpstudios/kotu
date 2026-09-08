@@ -34,4 +34,8 @@
     -->
     <Content Include="Assets\test-clip.mp4" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\ToolbarIconGeometry.cs" Link="ToolbarIconGeometry.cs" />
+    <Compile Include="..\Shared\ToolbarIcons.cs" Link="ToolbarIcons.cs" />
+  </ItemGroup>
 </Project>
