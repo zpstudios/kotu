@@ -57,13 +57,13 @@
                 <Setter Property="VerticalContentAlignment" Value="Center" />
             </Style>
             <!-- 2칸 Button — Height 32는 위 1칸 스타일에서 상속받는다(폭만 덮어쓴다) -->
-            <!-- 공통 Fit 화살표: 본체 오른쪽에 이어지는 32px 한 칸. -->
+            <!-- A365 공통 Fit 화살표: 본체와 6px 떨어진 독립 32px 버튼. -->
             <Style x:Key="BottomBarFitOptionsStyle" TargetType="DropDownButton">
                 <Setter Property="Width" Value="32" />
                 <Setter Property="Height" Value="32" />
                 <Setter Property="Padding" Value="4" />
-                <Setter Property="BorderThickness" Value="0,1,1,1" />
-                <Setter Property="CornerRadius" Value="0,4,4,0" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="4" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="HorizontalContentAlignment" Value="Center" />
             </Style>

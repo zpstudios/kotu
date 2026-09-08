@@ -164,7 +164,7 @@
                  아래 이력의 상시 비활성 표시는 현재 UpdateToolbarPresentation의 콘텐츠별 표시가 대체한다. -->
             <Grid ColumnSpacing="0">
                 <Grid.ColumnDefinitions>
-                    <!-- A362: New / Save / View, 가변 정보, 변경/가이드/페이지, Zoom84 / Print32 / Fit64. -->
+                    <!-- A362: New / Save / View, 가변 정보, 변경/가이드/페이지, Zoom84 / Print32 / Fit70. -->
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -331,12 +331,7 @@
                      내용·툴팁은 코드(ShowPdfFitState/ShowTextFitState/UpdateFitButton)가 갱신하므로
                      아래 FontIcon은 초기값일 뿐이다(생성자에서 곧바로 빈 화면 표시 "1:1" 상자가 된다 — A260).
                      A111(v0.133.0): 1:1 별도 버튼 제거(100%가 플라이아웃 옵션이 됐다) · 구 Auto-fit = 새 Contain. -->
-                <!-- A144: Fit 조절기 = 정사각형 버튼 2개(32+32 = 64×32, 간격 0) — 구 SplitButton
-                     (84×32)은 본체/화살표 분할 폭을 WinUI 기본 템플릿이 정해 비율 통제가 안 됐다.
-                     CornerRadius 좌/우 분리 + 화살표의 왼쪽 테두리 0으로 한 몸처럼 보인다(가운데
-                     경계선 = 본체의 오른쪽 테두리 1px 하나). DropDownButton은 키 있는 기본 스타일이
-                     없어 BasedOn 불가(v0.113.1 실기기 이력)라 구 SplitButton처럼 인라인 값으로 적는다.
-                     화살표는 내용 없이 내장 셰브론만 표시한다(A키·F키는 본체 FitButton에 그대로). -->
+                <!-- A365: Fit은 독립 버튼32 + 간격6 + 화살표32 = 70폭이다. 두 버튼 모두 전체 테두리와 둥근 모서리를 쓴다. -->
                 <!-- A145→A214: 조절기는 콘텐츠가 있는 동안 보이고, PDF는 4옵션 전부·텍스트 갈래
                      (파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)는 Fit height만 뺀 3옵션이 활성이다
                      (높이 무한 — 2026-08-24 사용자 지시로 부록 B 67의 "텍스트 비활성"을 반전).
@@ -347,9 +342,9 @@
                      아니라 IsEnabled가 진다 — HotkeySupport의 통과 게이트가 IsEnabled와
                      Visibility를 함께 보기 때문이다(Shared/HotkeySupport.cs:61).
                      활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍만 한다. -->
-                <StackPanel x:Name="FitControls" Margin="6,0,0,0" Grid.Column="9" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel x:Name="FitControls" Margin="6,0,0,0" Grid.Column="9" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
-                            CornerRadius="4,0,0,4" IsEnabled="False"
+                            IsEnabled="False"
                             Click="OnFitClicked">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     </Button>

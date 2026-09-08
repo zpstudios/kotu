@@ -471,15 +471,14 @@ public sealed partial class DocumentView : UserControl,
     private void UpdateToolbarPresentation()
     {
         var text = _path is not null || _untitled;
-        var document = text || _pdfPane is { Visibility: Visibility.Visible };
         var textVisibility = text ? Visibility.Visible : Visibility.Collapsed;
         ZoomButton.Visibility = textVisibility;
         SaveButton.Visibility = textVisibility;
         ViewToggleButton.Visibility = textVisibility;
         DecorTogglePanel.Visibility = text && EditorBox.Visibility == Visibility.Visible
             ? Visibility.Visible : Visibility.Collapsed;
-        PrintButton.Visibility = document ? Visibility.Visible : Visibility.Collapsed;
-        FitControls.Visibility = PrintButton.Visibility;
+        PrintButton.Visibility = Visibility.Visible; // A365: 빈 상태도 표시하고 기존 활성 판정은 그대로 둔다.
+        FitControls.Visibility = Visibility.Visible;
     }
 
     private void UpdateZoomText()
