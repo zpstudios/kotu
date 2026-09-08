@@ -1,11 +1,16 @@
 # KOTU 인수인계 문서
 
-> **로컬 검증 완료 A365 · v0.361.0 (2026-09-08)**: 사용자 "하자" 승인 후 REQUIREMENTS에 먼저 등록했다.
+> **배포 완료 A365 · v0.361.0 (2026-09-08)**: 사용자 "하자" 승인 후 REQUIREMENTS에 먼저 등록했다.
 > master에서 Audio/Video 배속 뒤 세 버튼을 각각 +6/+44/+82 위치로 맞췄다. 공통 Fit은
 > 32+6+32=70폭의 독립 버튼 두 개다. Document 빈 Print/Fit 및 All Readable 빈 Print/Fit은
 > 비활성으로 복원했고, 텍스트 조작 표시 조건과 가짜 Zoom 제거는 유지했다. 압축 배치는 무변경이다.
-> XAML 6개 파싱·개별 좌표 검산·19프로젝트 구조·diff 검사 통과. 전체 Release/x64 빌드 경고·오류 0, 8개 프로젝트 388/388 통과. 배포는 대기다.
+> XAML 6개 파싱·개별 좌표 검산·19프로젝트 구조·diff 검사 통과. 전체 Release/x64 빌드 경고·오류 0, 8개 프로젝트 388/388 통과. GitHub CI·정식 배포도 완료했다.
 > 실제 WinUI 픽셀/배율/포커스/테마는 미검증. 상세 좌표와 검증은 docs/TOOLBAR-CONSISTENCY.md 정본.
+> [build 34216454819](https://github.com/zpstudios/kotu/actions/runs/34216454819)·
+> [release 34216454801](https://github.com/zpstudios/kotu/actions/runs/34216454801) 성공, 설치본 정합성·시작 통과.
+> [정식 v0.361.0](https://github.com/zpstudios/kotu/releases/tag/v0.361.0)을 2026-09-08 19:44:05 KST 게시했다.
+> 소스/태그 `cf45a1b9511c091e231ec164ccc849199cca668a` 일치. Setup·Portable·full·delta(477,636 bytes)·피드 확인.
+> 실제 UI 픽셀/배율/포커스/테마 및 기존 설치본의 제자리 업데이트 시험은 미실행이다.
 > 다음은 A364 배포 이력이다.
 > **배포 완료 A364 · v0.360.0**: 직전 하단 바 감사 결과에 대한 사용자 수정 승인을 등록했다.
 > 문서 빈 화면 표시·Zoom 실폭/접힌 간격·All Readable 가짜 Zoom 제거·공통 미디어 아이콘과

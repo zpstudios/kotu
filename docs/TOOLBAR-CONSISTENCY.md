@@ -43,9 +43,24 @@ XAML 자막/Fit 배치만 각각10/11로 옮겼다. Image Fit 열은64에서70, 
 
 - 변경 포함 XAML 6개 XML 파싱 통과. 실제 Video 열/Spacing을 읽어 +6/+44/+82와 끝114를 확인했다.
 - 구조 검사 19개 프로젝트 통과. 변경 파일 diff 공백 검사 통과.
-- 전체 Release/x64 빌드 경고 0·오류 0, 8개 프로젝트 388/388 통과(실패·건너뜀 0). 배포는 대기다. 로그: artifacts/a365-build.log, artifacts/a365-tests.log; TRX: TestResults/a365-final.
+- 전체 Release/x64 빌드 경고 0·오류 0, 8개 프로젝트 388/388 통과(실패·건너뜀 0). GitHub CI·정식 배포도 완료했다. 로그: artifacts/a365-build.log, artifacts/a365-tests.log; TRX: TestResults/a365-final.
 - 실제 WinUI 화면에서 픽셀·배율·포커스·비활성 테마를 확인하지 않았다. 좌표표는 소스 레이아웃
   검산이며 실제 UI 캡처가 아니다. A364의 도형 미리보기도 같은 검증 한계를 유지한다.
+
+## A365 정식 배포 증거
+
+[build 34216454819](https://github.com/zpstudios/kotu/actions/runs/34216454819)와
+[release 34216454801](https://github.com/zpstudios/kotu/actions/runs/34216454801)가 성공했다.
+소스/태그는 `cf45a1b9511c091e231ec164ccc849199cca668a`로 일치한다.
+전체 빌드·테스트, 실행본 정합성·시작, 패키징, 설치본 정합성·시작, 공식 업로드를 통과했다.
+[정식 v0.361.0](https://github.com/zpstudios/kotu/releases/tag/v0.361.0)은
+2026-09-08 19:44:05 KST에 게시됐다(초안·사전 공개 아님).
+[Setup EXE](https://github.com/zpstudios/kotu/releases/download/v0.361.0/KOTU-win-Setup.exe)
+164,379,007 bytes, Portable 159,829,594 bytes, full 159,886,719 bytes,
+delta 477,636 bytes 및 `assets.win.json`·`RELEASES`·`releases.win.json`을 확인했다.
+공개 피드는 현재 0.361.0 full/delta와 직전 0.360.0 full을 포함한다.
+델타 생성은 확인했지만 기존 설치본의 제자리 업데이트는 시험하지 않았다.
+실제 WinUI 화면의 픽셀·배율·포커스·비활성 테마는 여전히 미검증이다.
 
 ---
 # A364 배포 이력 — v0.360.0

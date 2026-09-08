@@ -1,12 +1,17 @@
 # KOTU 요구사항 — 남은 작업 정리
 
-> **로컬 검증 완료 A365 · v0.361.0 (2026-09-08)**: 사용자가 A364 후속 제안에 "하자"로 승인했다.
+> **배포 완료 A365 · v0.361.0 (2026-09-08)**: 사용자가 A364 후속 제안에 "하자"로 승인했다.
 > master에서 오디오/비디오 배속 뒤 개별 버튼 좌표를 일치시키고, 비디오의 0폭 간격 칸을
 > 제거하여 자막·Fit 본체·화살표를 각각 32폭/6간격으로 배치한다. Image·Document·All Readable의
 > Fit 본체/화살표에도 6간격을 적용하고 관련 열 폭·축약 산식을 맞춘다.
 > Document 빈 상태의 Print/Fit은 항상 표시·비활성으로 복원하되 텍스트 Zoom·장식은 관련
 > 텍스트 콘텐츠에서만 표시한다. All Readable 빈 OwnBar도 Print/Fit 비활성만 복원하며
 > 가짜 Zoom은 복원하지 않는다. 압축 배치와 다른 백로그는 변경하지 않는다.
+> [build 34216454819](https://github.com/zpstudios/kotu/actions/runs/34216454819)·
+> [release 34216454801](https://github.com/zpstudios/kotu/actions/runs/34216454801) 성공, 설치본 정합성·시작 통과.
+> [정식 v0.361.0](https://github.com/zpstudios/kotu/releases/tag/v0.361.0)을 2026-09-08 19:44:05 KST 게시했다.
+> 소스/태그 `cf45a1b9511c091e231ec164ccc849199cca668a` 일치. Setup·Portable·full·delta(477,636 bytes)·피드 확인.
+> 실제 UI 픽셀/배율/포커스/테마 및 기존 설치본의 제자리 업데이트 시험은 미실행이다.
 > 기존 기능·단축키·자식 하단 바를 보존한다. 검증 결과는 `docs/TOOLBAR-CONSISTENCY.md`에 기록한다.
 
 > **배포 완료 A364 · v0.360.0**: 사용자가 직전 하단 바 감사 항목을
