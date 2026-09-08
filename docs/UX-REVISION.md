@@ -45,7 +45,16 @@ Fit 본체와 화살표는 32+32이며 사이 간격은 0이다. 모듈 바의 �
 
 로컬 구현·독립 코드 검토 완료. Release/x64 전체 빌드 경고 0·오류 0,
 8개 테스트 프로젝트 378건 통과(실패·건너뜀 0), 구조 정합성 검사 19개 프로젝트 통과.
-결과 파일은 `TestResults/a362-final`에 있다. GitHub 빌드·릴리스는 아직 대기다.
+결과 파일은 `TestResults/a362-final`에 있다.
+[GitHub build 34204177279](https://github.com/zpstudios/kotu/actions/runs/34204177279)와
+[release 34204177388](https://github.com/zpstudios/kotu/actions/runs/34204177388) 모두 성공했다.
+소스와 태그는 `0bab23e71ab929d8e1e78c85bbc8c298ec644395`이며,
+[정식 v0.359.0](https://github.com/zpstudios/kotu/releases/tag/v0.359.0)은
+2026-09-08 17:28:55 KST에 발행됐다(초안·사전 공개 아님).
+[설치 EXE](https://github.com/zpstudios/kotu/releases/download/v0.359.0/KOTU-win-Setup.exe),
+Portable·full·delta(616,849 bytes) 및 업데이트 피드 게시를 확인했다.
+릴리스 작업의 설치·파일 해시·설치본 시작 검증이 통과했고, 피드에는 v0.359.0 full/delta와
+이전 v0.358.0 full이 포함된다. 기존 설치본의 실제 제자리 업데이트는 미실행이다.
 
 | 범위 | 근거와 남은 확인 |
 | --- | --- |

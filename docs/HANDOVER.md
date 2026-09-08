@@ -1,8 +1,14 @@
 # KOTU 인수인계 문서
 
-> **로컬 구현 완료 A362 · v0.359.0**: master 직접 작업. 셸 모드·공통 하단 바·All Readable·썸네일
+> **배포 완료 A362 · v0.359.0**: master 직접 작업. 셸 모드·공통 하단 바·All Readable·썸네일
 > 부모 이동·문서 UI 및 성능·압축 작업의 새 창 전환과 제목 진행 표시를 정리했다.
-> 전체 빌드 경고/오류 0, 8개 프로젝트 378건 통과, 구조 정합성·독립 검토 완료. GitHub 검증 대기.
+> 전체 빌드 경고/오류 0, 8개 프로젝트 378건 통과, 구조 정합성·독립 검토 완료.
+> [build 34204177279](https://github.com/zpstudios/kotu/actions/runs/34204177279)와
+> [release 34204177388](https://github.com/zpstudios/kotu/actions/runs/34204177388) 성공.
+> 소스/태그 `0bab23e71ab929d8e1e78c85bbc8c298ec644395`.
+> [정식 v0.359.0](https://github.com/zpstudios/kotu/releases/tag/v0.359.0)을 2026-09-08 17:28:55 KST 발행했다(초안·사전 공개 아님).
+> [설치 EXE](https://github.com/zpstudios/kotu/releases/download/v0.359.0/KOTU-win-Setup.exe), Portable·full·delta(616,849 bytes)·업데이트 피드 게시 확인.
+> 설치·해시·시작 검증 통과. 실제 UI·제자리 업데이트·스크롤 성능 측정은 미실행이다.
 > 현재 범위와 검증 정본은 `docs/UX-REVISION.md`. A363 광고 서버·분석은 백로그 등록만 한다.
 
 > **현재 작업 지시 · 2026-09-08**: 별도 지시가 있을 때까지 `master`에서 직접 작업한다.
