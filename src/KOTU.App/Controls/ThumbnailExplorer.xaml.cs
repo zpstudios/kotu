@@ -210,6 +210,19 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     public string? CurrentFolder { get; private set; }
 
+    private string? ParentFolderPath()
+    {
+        try { return CurrentFolder is { Length: > 0 } folder ? Directory.GetParent(folder)?.FullName : null; }
+        catch (ArgumentException) { return null; }
+    }
+
+    private void UpdateParentFolderButton() => ParentFolderButton.IsEnabled = ParentFolderPath() is not null;
+
+    private void OnParentFolderClick(object sender, RoutedEventArgs e)
+    {
+        if (ParentFolderPath() is { } parent) FolderActivated?.Invoke(parent);
+    }
+
     /// <summary>
     /// 선택된 파일 타일의 경로 — 폴더·무선택이면 null (A86: 셸 Enter "선택 파일 있으면 열기").
     /// A94(Extended)부터 다중 선택이 가능하지만 이 속성은 첫 선택(SelectedItem) 기준을 유지한다.
@@ -278,6 +291,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         // (ExplorerPane의 IconGrid·ListPane과 같은 규칙). A90의 S4 키맵("A34 문자 핫키 = 무동작")도
         // 이 태그 하나로 충족된다 — S4 그리드에 포커스가 있는 동안 HotkeySupport가 전부 통과시킨다.
         TileGrid.Tag = HotkeySupport.PassThroughTag;
+        ParentFolderButton.Tag = HotkeySupport.PassThroughTag;
         // A90: Enter = 선택 항목 열기 (keymap S1 "선택 파일 있으면 열기"·S4 "선택 열기 우선"의
         // 그리드 쪽 구현). GridView의 기본 Enter 처리(ItemClick — 이 클래스에선 더블클릭 판정에만
         // 쓰여 단발 Enter로는 안 열린다)가 이벤트를 Handled로 만들 수 있어 handledEventsToo로 받는다
@@ -596,6 +610,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         _previewBatch.Restart(); // 진행 중이던 미리보기 요청 전부 낡음 처리(폴더 전환·재스캔 공통)
         DiagTrace.Write("tiles", $"ShowEntries {folder} count={entries.Count}"); // A352 배치 1
         CurrentFolder = folder;
+        UpdateParentFolderButton();
         TileGrid.ItemsSource = null; // 옛 목록 해제(같은 참조 재대입이 무시되는 일도 함께 막는다)
 
         var vms = entries.Select(e => new ExplorerEntryVm(e)).ToList();
@@ -646,7 +661,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         _showSeq++;
         _previewBatch.Restart();
         DiagTrace.Write("tiles", "ShowLoading " + folder); // A352 배치 1
-        CurrentFolder = folder; // 좌 리스트(_folder)와 같은 시점 갱신 — 로딩 중 드랍·붙여넣기 대상 일치
+        CurrentFolder = folder;
+        UpdateParentFolderButton(); // 좌 리스트(_folder)와 같은 시점 갱신 — 로딩 중 드랍·붙여넣기 대상 일치
         TileGrid.ItemsSource = null; // A345 배치 3 — 목록 해제가 곧 타일 비우기다
         _vms = [];
         EmptyText.Text = "Loading...";

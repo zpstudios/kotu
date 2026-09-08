@@ -1,3 +1,4 @@
+using KOTU.DocumentModel;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -196,11 +197,11 @@ internal sealed class EditorDecor
 
     // A142 ③: 논리 줄 시작 인덱스(0 포함, 오름차순) — 텍스트 버전당 1회 스캔 캐시.
     // 스냅샷(_textProvider)이 편집당 1회 새 인스턴스를 주므로 참조 비교로 재빌드를 판정한다.
-    private int[] _lineStarts = [];
-    private string? _lineStartsSource;
+    private readonly TextLineIndex _lineIndex;
+    private readonly Dictionary<int, Rect> _rectCache = [];
 
-    // A215(2026-08-24): 표시 토글 2축 — 라인 가이드 / ¶·EOF 마커. 거터(A142 행 번호)는 축 밖
-    // (항상 표시 — 사용자 지시 범위가 "감싸는 줄"과 "펑츄에이션" 둘뿐이다). 끈 축의 요소는
+    // 표시 토글 2축 — 라인 가이드·줄 번호 / ¶·EOF 마커. 줄 번호는 가이드 설정을 공유한다.
+    // 잠금 뷰에서는 기존처럼 줄 번호를 허용하지만 가이드 토글을 끄면 함께 숨긴다. 끈 축의 요소는
     // 렌더 패스가 아예 안 만들고, EndPass의 잔여 풀 정리(Collapsed)가 이전 패스 요소를 걷는다.
     private bool _showGuides = true;
     private bool _showMarks = true;
@@ -263,12 +264,13 @@ internal sealed class EditorDecor
     private string _diagStepSrc = "n/a";
 
     public EditorDecor(FrameworkElement themeSource, TextBox editor, Canvas canvas,
-        Func<string> textProvider)
+        Func<string> textProvider, TextLineIndex lineIndex)
     {
         _themeSource = themeSource;
         _editor = editor;
         _canvas = canvas;
         _textProvider = textProvider;
+        _lineIndex = lineIndex;
         _brush = MakeBrush();
 
         // 플래그만 — 무게 금지(A113). 전문 스냅샷 무효화는 소유자(DocumentView)가 한다(A142 ①ⓑ).
@@ -415,6 +417,12 @@ internal sealed class EditorDecor
 
     private void RenderCore()
     {
+        _rectCache.Clear(); // 패스마다 폐기 — 스크롤·편집·배율의 옛 좌표를 재사용하지 않는다.
+        if (!_showGuides && !MarksOn && !_diagOn)
+        {
+            ClearVisual();
+            return;
+        }
         if (_editor.Visibility != Visibility.Visible)
         {
             ClearVisual(); // PDF 모드·빈 화면 — 장식 없음(사양)
@@ -472,7 +480,7 @@ internal sealed class EditorDecor
         // 치수 × _scale = 본문과 같은 배율(A181 — 상수 블록 주석 참고).
         EnsureLineStarts(text);
         var digits = 1;
-        for (var n = _lineStarts.Length; n >= 10; n /= 10) digits++;
+        for (var n = _lineIndex.Count; n >= 10; n /= 10) digits++;
         var gutterWidth = digits * GutterDigitWidth * _scale;
         var margin = Math.Max(0, (_themeSource.ActualWidth - vw) / 2); // 컬럼 왼쪽의 가용 여백(보통 0)
         // A208(v0.217.0): 종전 판정은 "선호 간격(GutterTextGap) 기준 x가 클립 좌변(-margin)보다
@@ -483,7 +491,7 @@ internal sealed class EditorDecor
         // 본문 왼끝(pad.Left)을 최소 간격 이내로 침범하는 진짜 자리 부족만 숨긴다(종전 폴백 유지 —
         // 본문을 덮는 그림은 여전히 없다). 예약이 정상 실린 상태의 좌표는 종전과 완전히 같다.
         var gutterX = Math.Max(-margin, pad.Left - GutterTextGap * _scale - gutterWidth);
-        var gutterVisible = gutterX + gutterWidth <= pad.Left - GutterMinTextGap * _scale;
+        var gutterVisible = _showGuides && gutterX + gutterWidth <= pad.Left - GutterMinTextGap * _scale;
 
         var idx = FirstVisibleIndex(len);
         var line = idx >= 0 ? LineIndexOf(idx) : 0; // 첫 표시 줄이 속한 논리 줄(0-base)
@@ -507,7 +515,7 @@ internal sealed class EditorDecor
             // 넘긴다 — 빈 마지막 줄 윗변의 좌표원 표기(진단 endLine=)에 쓰인다.
             var lineStep = ResolveLineStep(stepHere, rect.Height, out var stepSrc);
             // A142 ③: 번호는 논리 줄의 첫 시각적 줄에만 — 자동 줄바꿈 연속 줄은 비워 둔다.
-            if (gutterVisible && idx == _lineStarts[line])
+            if (gutterVisible && idx == _lineIndex.GetStart(line))
                 DrawLineNumber(line + 1, gutterX, gutterWidth, rect.Y, vh);
             AddTopGuide(rect.Y, vw, vh, pad);
             // A289 ⓐ: 종전 rect.Y + rect.Height는 캐럿 상자 높이(24)만큼 내려간 자리라 병합선이
@@ -968,26 +976,9 @@ internal sealed class EditorDecor
     /// 이진 탐색·배열 조회만 한다. WinUI TextBox는 개행을 '\r'로 정규화하지만(A113) CRLF도
     /// 방어적으로 한 개행으로 센다(IsNewline과 같은 겸용 방침).
     /// </summary>
-    private void EnsureLineStarts(string text)
-    {
-        if (ReferenceEquals(_lineStartsSource, text)) return;
-        var starts = new List<int> { 0 };
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (!IsNewline(text[i])) continue;
-            if (text[i] == '\r' && i + 1 < text.Length && text[i + 1] == '\n') i++; // CRLF는 한 개행
-            starts.Add(i + 1);
-        }
-        _lineStarts = [.. starts];
-        _lineStartsSource = text;
-    }
+    private void EnsureLineStarts(string text) => _lineIndex.Update(text);
 
-    /// <summary>index가 속한 논리 줄(0-base) — PdfPane.CurrentPageIndex와 같은 이진 탐색 관용구.</summary>
-    private int LineIndexOf(int index)
-    {
-        var pos = Array.BinarySearch(_lineStarts, index);
-        return pos >= 0 ? pos : ~pos - 1;
-    }
+    private int LineIndexOf(int index) => _lineIndex.GetLineIndex(index);
 
     // ---------- 그리기(요소 풀 재사용) ----------
 
@@ -1280,7 +1271,7 @@ internal sealed class EditorDecor
             // 이 줄의 ·EOF·줄 번호·가이드는 전부 같은 한 값을 쓰므로, trailing·endCaret이면 실측
             // 자리, font면 프로브 근사 자리다(커서와의 일치 여부는 스크린샷에서 대조).
             $"endLine={_diagEndLineSrc}\n" +
-            $"lineStarts={_lineStarts.Length}  scale={_scale:F2}";
+            $"lineStarts={_lineIndex.Count}  scale={_scale:F2}";
         _diagPanel.Visibility = Visibility.Visible;
         // 오른쪽 위 구석 정렬 — 폭은 트리 밖 Measure/DesiredSize 실측(DocumentView 인쇄 프로브 관용구).
         // 클립(UpdateClip)의 우변 = vw - pad.Right, 상변 = pad.Top 안쪽에 4px 여유로 앉힌다.
@@ -1391,7 +1382,11 @@ internal sealed class EditorDecor
     /// </summary>
     private Rect RectOf(int index)
     {
-        var rect = _editor.GetRectFromCharacterIndex(index, false);
+        if (!_rectCache.TryGetValue(index, out var rect))
+        {
+            rect = _editor.GetRectFromCharacterIndex(index, false);
+            _rectCache.Add(index, rect);
+        }
         var pad = _editor.Padding;
         return new Rect(rect.X + pad.Left, rect.Y + _yShift + pad.Top, rect.Width, rect.Height);
     }
@@ -1416,7 +1411,7 @@ internal sealed class EditorDecor
 
     /// <summary>A288: RectOf와 같은 보정의 Y 전용 경로(줄 탐색 NextLineStart 전용) — 캔버스 절대 Y.</summary>
     private double TopOf(int index) =>
-        _editor.GetRectFromCharacterIndex(index, false).Y + _yShift + _editor.Padding.Top;
+        RectOf(index).Y;
 
     /// <summary>WinUI TextBox는 줄바꿈을 '\r'로 정규화한다(A113 확인) — '\n'은 방어적 겸용.</summary>
     private static bool IsNewline(char c) => c is '\r' or '\n';

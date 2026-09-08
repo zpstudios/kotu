@@ -12,7 +12,7 @@ namespace KOTU.Module.AllReadable;
 /// 계약과 열린 경로는 ChildContentHost, XAML과 Unloaded를 통한 워커 해제는 이 뷰가 담당한다.
 /// </summary>
 public sealed partial class AllReadableView : UserControl, IContentStateSource, IContentInfoProvider,
-    IBottomBarProvider, IDriveStripHost, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
+    IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
     IContentCloseRequestSource
@@ -136,6 +136,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     }
 
     public void SetBrowseOrder(string folder, IReadOnlyList<string> files) => _content.SetBrowseOrder(folder, files);
+    public Guid? ActiveJobId => (_content.Child as IBackgroundJobOwner)?.ActiveJobId;
     public bool HasUnsavedChanges => _content.HasUnsavedChanges;
     public Task<bool> ConfirmCloseAsync() => _content.ConfirmCloseAsync();
     public void OpenUntitled() => _content.OpenUntitled();
@@ -160,7 +161,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     {
         RootGrid.Children.Remove(StatusBar);
         StatusBar.Background = null;
-        StatusBar.Padding = new Thickness(0, 2, 0, 2);
+        StatusBar.Padding = new Thickness(0);
         return StatusBar;
     }
 

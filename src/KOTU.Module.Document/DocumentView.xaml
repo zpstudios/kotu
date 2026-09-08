@@ -1,4 +1,4 @@
-﻿<UserControl
+<UserControl
     x:Class="KOTU.Module.Document.DocumentView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -70,6 +70,7 @@
             Visibility="Collapsed"
             ScrollViewer.VerticalScrollBarVisibility="Auto"
             TextChanged="OnEditorTextChanged"
+            SelectionChanged="OnEditorSelectionChanged"
             KeyDown="OnEditorKeyDown" />
 
         <!-- A115: 장식 레이어(라인 가이드·¶·EOF) — EditorBox 위(z)에 겹치되 IsHitTestVisible=False로
@@ -161,27 +162,17 @@
             <!-- ColumnSpacing 6 = A97(v0.116.0) 전 모듈 공통 간격(구 10). -->
             <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
-                    <!-- c0 A189: New text file 버튼 칸(A256에서 Open 칸이 사라져 좌측군 1번째) -->
+                    <!-- A362: New / Save / View, 가변 정보, 변경/가이드/페이지, Zoom84 / Print32 / Fit64. -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c1 저장 -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c2 A211→A245: 인쇄 버튼 칸(좌측군 3번째) -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c3 A190: 편집/렌더 토글 버튼 칸(1칸 32px — A27 규격. A245에서 좌측군 끝) -->
-                    <ColumnDefinition Width="Auto" />
-                    <!-- c4 파일명(파일 있음) / 드라이브 줄(파일 없음, A22) 공용 칸 —
-                         A245: 유일한 star 칸(구 c5·c7 두 star의 환원) -->
                     <ColumnDefinition Width="*" />
-                    <!-- c5 수정됨(●) -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c6 A215→A245→A264: 표시 토글 그룹(가이드·¶) — 배율 앞으로 당겼다 -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c7 PDF 페이지(A264에서도 같은 칸 — 토글과 배율 사이) -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- c8 A264: 줌 배율 버튼(A263) — Fit 바로 앞 -->
-                    <ColumnDefinition Width="Auto" />
-                    <!-- c9 Fit 조절기 2버튼 -->
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="32" />
+                    <ColumnDefinition Width="64" />
                 </Grid.ColumnDefinitions>
                 <!-- A27(v0.107.0): 하단 바 버튼은 1칸(32×32)·2칸(84×32) 두 규격만
                      (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
@@ -219,7 +210,7 @@
                      편집/뷰 토글 앞(좌측군 3번째)으로 재이동 — 사용자 확정 순서
                      "새 파일 · 저장 · 인쇄 · 편집/뷰". 폭 파생 수치 없음(임계 축약 로직이
                      없는 바 — star 칸이 흡수). -->
-                <Button x:Name="PrintButton" Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
+                <Button x:Name="PrintButton" Grid.Column="8" Style="{StaticResource BottomBarButtonStyle}"
                         IsEnabled="False"
                         Click="OnPrintButtonClick"
                         ToolTipService.ToolTip="Print (Ctrl+P)">
@@ -233,13 +224,13 @@
                      글리프는 누르면 갈 모드: 편집 중 E890(View) / 뷰 중 E70F(Edit).
                      핫키 없음(A34 등록 없음 — New 버튼과 같은 부류, 초기 툴팁은 고정값).
                      A245: 좌측군 끝(인쇄 뒤)으로 이동 — 칸만 바뀌고 판정·글리프는 무변경. -->
-                <Button x:Name="ViewToggleButton" Grid.Column="3" Style="{StaticResource BottomBarButtonStyle}"
+                <Button x:Name="ViewToggleButton" Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
                         IsEnabled="False"
                         Click="OnViewToggleClick"
                         ToolTipService.ToolTip="View">
                     <FontIcon x:Name="ViewToggleIcon" Glyph="&#xE890;" FontSize="14" />
                 </Button>
-                <TextBlock x:Name="FileNameText" Grid.Column="4" VerticalAlignment="Center"
+                <TextBlock x:Name="FileNameText" Grid.Column="3" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Text="No file open" />
                 <!-- A22(v0.108.0): 파일이 열려 있지 않을 때만 뜨는 공용 드라이브 줄(셸이 주입).
                      v0.47.0의 "현재 문서가 있는 드라이브" 텍스트를 대체한다 —
@@ -247,14 +238,14 @@
                      A245: star가 하나로 환원돼 스팬이 필요 없어졌다 — 구 c5~c7 스팬은 그 사이에
                      끼어 있던 표시 토글 칸과 우측 스페이서 star를 되찾기 위한 보정이었고, 지금은
                      이 칸 자체가 남는 폭을 전부 먹는 유일한 star다(우측군은 전부 Auto). -->
-                <ContentPresenter x:Name="DriveStripHost" Grid.Column="4"
+                <ContentPresenter x:Name="DriveStripHost" Grid.Column="3"
                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                   VerticalAlignment="Center" Visibility="Collapsed" />
                 <!-- 수정됨 표시(A37 → A266) — 미저장 시에만 "N changed"(N = 변경 구간별
                      max(제거 폭, 삽입 폭)의 합 — 문자열은 코드(UpdateChangedText)가 편집마다
                      채우므로 여기 Text는 없다). 창 제목의 ●는 셸이 UnsavedChanged로 다는
                      별개 축(A136)이라 이번 개편과 무관하게 그대로다. -->
-                <TextBlock x:Name="ModifiedText" Grid.Column="5" VerticalAlignment="Center"
+                <TextBlock x:Name="ModifiedText" Grid.Column="4" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed" />
                 <!-- A215(2026-08-24) → A245(2026-08-27) → A264/A265(2026-08-28): 편집 모드 표시
                      토글 2종 — ① 라인 가이드(줄 상/하단 선 — A115 ①) ② 펑츄에이션 마커(¶·EOF —
@@ -279,12 +270,12 @@
                      글리프: E7A5(가로줄 무리 — 가이드 근사) 대신 실존 확인이 쉬운 표준 글리프를
                      쓴다 — 가이드 = E8A9(AlignLeft류 가로줄), 마커 = 문자 '¶' 텍스트(글리프 탐색
                      불요 — 마커 자신이 최고의 아이콘이다). -->
-                <StackPanel x:Name="DecorTogglePanel" Grid.Column="6" Orientation="Horizontal"
+                <StackPanel x:Name="DecorTogglePanel" Grid.Column="5" Orientation="Horizontal"
                             Spacing="6" VerticalAlignment="Center">
                     <ToggleButton x:Name="GuideToggleButton" Style="{StaticResource BottomBarToggleButtonStyle}"
                                   IsEnabled="False"
                                   Click="OnGuideToggleClick"
-                                  ToolTipService.ToolTip="Line guides">
+                                  ToolTipService.ToolTip="Line guides and numbers">
                         <FontIcon Glyph="&#xE8A9;" FontSize="14" />
                     </ToggleButton>
                     <ToggleButton x:Name="MarksToggleButton" Style="{StaticResource BottomBarToggleButtonStyle}"
@@ -295,10 +286,10 @@
                                    VerticalAlignment="Center" />
                     </ToggleButton>
                 </StackPanel>
-                <!-- PDF 현재 페이지/전체 (A16) — PDF가 열려 있을 때만.
+                <!-- 텍스트 커서 줄/전체 줄 또는 PDF 현재 페이지/전체 페이지.
                      A264: 칸 번호는 그대로(c7)지만 이웃이 바뀌었다 — 앞이 표시 토글, 뒤가 배율
                      버튼이다(사용자 미언급 자리라 "¶ 뒤·배율 앞" 제안을 채택). -->
-                <TextBlock x:Name="PageInfoText" Grid.Column="7" VerticalAlignment="Center"
+                <TextBlock x:Name="PageInfoText" Grid.Column="6" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed" />
                 <!-- A181 → A263(v0.262.0): 현재 줌 배율(document.zoom을 퍼센트로).
                      종전 표시 전용 TextBlock(ZoomText)을 프리셋 드롭다운으로 바꿨다 — 값 표기는
@@ -315,7 +306,7 @@
                      폭만 Auto다(내용이 "20%"~"500%"로 가변). A34 문자 핫키 없음(FitOptionsButton과
                      같은 부류 — 툴팁은 고정값). 아래 IsEnabled="False"가 첫 프레임 값이다
                      (초기 상태 = 빈 화면). -->
-                <DropDownButton x:Name="ZoomButton" Grid.Column="8"
+                <DropDownButton x:Name="ZoomButton" Grid.Column="7"
                                 Height="32" Padding="8,2" BorderThickness="1" CornerRadius="4"
                                 VerticalAlignment="Center" VerticalContentAlignment="Center"
                                 IsEnabled="False"
@@ -360,10 +351,7 @@
                             Click="OnFitClicked">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     </Button>
-                    <DropDownButton x:Name="FitOptionsButton"
-                                    Width="32" Height="32" Padding="4"
-                                    BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
-                                    VerticalAlignment="Center" IsEnabled="False">
+                    <DropDownButton x:Name="FitOptionsButton" Style="{StaticResource BottomBarFitOptionsStyle}" IsEnabled="False">
                         <DropDownButton.Flyout>
                             <MenuFlyout Placement="Top">
                                 <!-- 계보 = "1:1" 글자 도형(A143) → 네 모서리 꺾쇠 + 중앙 사각(A184) →

@@ -1,4 +1,4 @@
-using KOTU.Core.Contracts;
+﻿using KOTU.Core.Contracts;
 
 namespace KOTU.Core.Content;
 
@@ -57,7 +57,12 @@ public sealed class ChildContentHost : IContentStateSource, IContentInfoProvider
             _dirty = dirty;
             UnsavedChanged?.Invoke(dirty);
         };
-        session.ContentPathChanged += value => ContentPathChanged?.Invoke(value);
+        session.ContentPathChanged += value =>
+        {
+            OpenedPath = value;
+            StateChanged?.Invoke();
+            if (ReferenceEquals(_session, session)) ContentPathChanged?.Invoke(value);
+        };
         session.CurrentPathChanged += value => CurrentPathChanged?.Invoke(value);
         session.UntitledWindowRequested += () => UntitledWindowRequested?.Invoke();
         session.ContentInfoChanged += () => ContentInfoChanged?.Invoke();

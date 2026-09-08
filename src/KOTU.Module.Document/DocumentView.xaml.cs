@@ -218,6 +218,7 @@ public sealed partial class DocumentView : UserControl,
     /// 무변경이다 — 비교를 없애는 게 아니라 복사 횟수만 줄인다.
     /// </summary>
     private string? _textSnapshot;
+    private readonly TextLineIndex _textLines = new();
 
     /// <summary>스냅샷 경유 전문 접근 — 에디터 텍스트를 읽는 모든 경로가 이걸 쓴다(A142 ①ⓑ).</summary>
     private string EditorText => _textSnapshot ??= EditorBox.Text;
@@ -255,7 +256,7 @@ public sealed partial class DocumentView : UserControl,
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
         SetupZoomAccelerators(); // A246: Ctrl+± 문서 줌 — XAML에 못 쓰는 (VirtualKey)187/189 포함 코드 등록
         // A115: 에디터 장식(가이드·¶·EOF·A142 행 번호). 전문 텍스트는 공유 스냅샷으로 공급한다(A142 ①ⓑ).
-        _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText);
+        _decor = new EditorDecor(this, EditorBox, DecorLayer, () => EditorText, _textLines);
 
         // A215: 저장된 표시 토글 2축(라인 가이드·¶ 마커 — 기본 둘 다 켜짐)을 장식기와 버튼에 반영.
         // 토글 활성 자체(편집 중인 에디터 표면에서만 — A277에서 잠금 뷰가 빠졌다)는
@@ -1163,7 +1164,7 @@ public sealed partial class DocumentView : UserControl,
     /// 트레이·작업표시줄 32px는 경로 없음 폴백 그대로다(_shownPath=null → 유휴 "DOC" /
     /// 셸 OpenFileIconInfo의 File.Exists 가드 → 유휴 이니셜) — 값 무변경이라 TrayStatusChanged도
     /// 쏘지 않는다(셸 갱신은 UntitledOpened 쪽 RefreshShellIcons가 겸한다). 첫 저장이 경로를
-    /// 확정하면 CommitSave의 기존 배선(ContentOpened·TrayStatusChanged)이 전부 되살린다.
+    /// 확정하면 CommitSave의 경로 배선(ContentPathChanged·TrayStatusChanged)이 전부 되살린다.
     /// A267: 버튼 경로의 호출자는 빈 상태뿐이다(콘텐츠 위 New는 새 창으로 간다 —
     /// OnNewFileClick 분기 주석 참고). 셸 경로(OpenUntitled)도 새 창의 빈 뷰에서만 부른다.
     /// 이 메서드 자체는 콘텐츠 위에서도 안전하지만 그 경우 내용 파기가 되므로,
@@ -1549,6 +1550,7 @@ public sealed partial class DocumentView : UserControl,
         var onEditableSurface = EditorBox.Visibility == Visibility.Visible && !_viewMode;
         GuideToggleButton.IsEnabled = onEditableSurface;
         MarksToggleButton.IsEnabled = onEditableSurface;
+        UpdateTextPosition();
         UpdateCappedNotice(); // A343 ⓑ: 이 메서드의 호출 전수 = 에디터 표시 전환 전수(그쪽 주석)
     }
 
@@ -2062,7 +2064,7 @@ public sealed partial class DocumentView : UserControl,
                 }
                 // A148: 드래그 팬은 매 프레임 ViewChanged → PageChanged를 부른다. 페이지 번호가
                 // 그대로면 대입하지 않는다(같은 값이어도 TextBlock 대입은 측정·배치를 유발한다).
-                var text = total > 0 ? $"{current} / {total}" : string.Empty;
+                var text = total > 0 ? $"{current}p / {total}p" : string.Empty;
                 if (PageInfoText.Text == text) return;
                 PageInfoText.Text = text;
             };
@@ -2598,6 +2600,25 @@ public sealed partial class DocumentView : UserControl,
         return timer;
     }
 
+    // 줄 색인은 장식과 공유하며 동일 본문에서는 이진 탐색만 한다. 줄바꿈으로 생긴 논리 줄 기준이다.
+    private void UpdateTextPosition()
+    {
+        if (_loadingText || PageInfoText is null) return;
+        // PDF의 페이지 표시는 PageChanged만 소유한다. 숨은 편집기의 늦은 선택 통지는 무시한다.
+        if (_pdfPane is { Visibility: Visibility.Visible }) return;
+        if (_path is null && !_untitled)
+        {
+            PageInfoText.Visibility = Visibility.Collapsed;
+            return;
+        }
+        _textLines.Update(EditorText);
+        var text = $"{_textLines.GetLineIndex(EditorBox.SelectionStart) + 1} / {_textLines.Count}";
+        if (PageInfoText.Text != text) PageInfoText.Text = text;
+        PageInfoText.Visibility = Visibility.Visible;
+    }
+
+    private void OnEditorSelectionChanged(object sender, RoutedEventArgs e) => UpdateTextPosition();
+
     /// <summary>
     /// A113 ⓒ: 더티 = "기준 텍스트(로드·저장 시점)와 실제로 다른가". 길이가 다르면 그 자체가
     /// 증거라 즉시 확정한다 — 대용량(잘림 한계 4MB 직전) 파일에서 키 입력마다 전체 비교를 하지
@@ -2610,6 +2631,7 @@ public sealed partial class DocumentView : UserControl,
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
     {
         _textSnapshot = null; // A142 ①ⓑ: 어떤 편집이든 스냅샷부터 무효화 — 조기 반환보다 먼저
+        UpdateTextPosition();
         // A343 ⓑ: _capped도 잘림과 같은 비대상 — 더티가 서지 않으니 저장 버튼·닫기 가드가 조용하다.
         if (_loadingText || (_path is null && !_untitled) || _truncated || _capped) return; // A189: 무제도 더티 추적
         var text = EditorText; // 새 스냅샷 1회(A142 ①ⓑ) — 추적·길이 비교가 같은 인스턴스를 쓴다
@@ -2942,9 +2964,9 @@ public sealed partial class DocumentView : UserControl,
             // 창 제목 갱신은 셸 몫 — A279부터 경로가 갈리는 저장(Save as...·무제 첫 저장)을
             // ContentPathChanged로 따로 알려 셸이 제목을 새 파일 이름으로 다시 만든다
             // (종전에는 무제 전이(A189)만 갱신돼 기존 파일 Save as는 옛 이름이 남았다).
-            ContentOpened?.Invoke(path); // 셸 동기화 — 기준 경로·드라이브 줄·오버레이(기존 배선)
-            // 순서 주의: 제목은 위 ContentOpened가 셸 상태(기준 경로)를 옮긴 뒤에 잇는다.
-            ContentPathChanged?.Invoke(path); // A279 — 창 제목만 담당(저장 자체와 무관한 후속 통지)
+            // 저장 경로 확정은 새 문서 열기가 아니다 — 셸 표시 모드는 유지한다.
+            // 경로 변경 계약이 기준 경로·제목·오버레이를 함께 갱신한다.
+            ContentPathChanged?.Invoke(path); // 저장 자체와 무관한 후속 통지
         }
 
         _originalBytes = bytes;         // ⓑ: 이제 디스크의 원본 = 방금 쓴 바이트

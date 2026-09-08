@@ -130,10 +130,10 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <!-- c12 = A269 정렬 스페이서(A349 재계수 전 c10). 요소를 두지 않으므로 칸 자체는
-                     0폭이고, 이 바가 얻는 것은 c11과의 ColumnSpacing 6뿐이다 — 오디오 우군이
-                     비주얼라이저 버튼(A268)으로 6 커진 만큼을 여기서 갚는다. 이 칸에 무엇이든 넣으면
-                     A217 정렬이 그 폭만큼 깨진다(넣어야 하면 양쪽 우군 등식을 함께 재계수할 것). -->
+                <!-- A362: c10은 0폭 간격 칸, c11 자막32, c12 Fit64다.
+                     Speed 뒤의 간격 6+6, 자막32, 간격6, Fit64 = 114px로
+                     Audio의 간격6+Devices32+간격6+Eq32+간격6+Visualizer32와 같다.
+                     Fit 뒤에는 빈 간격이 없어 다른 모듈의 오른쪽 끝과 일치한다. -->
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
@@ -202,7 +202,7 @@
             <ComboBox x:Name="SpeedBox" Grid.Column="9" Style="{StaticResource BottomBarWideComboBoxStyle}"
                       SelectionChanged="OnSpeedChanged" />
             <!-- 자막: 콤보 → 아이콘 버튼 + 라디오 플라이아웃 (v0.53.0 사용자 요청 — 공간 절약) -->
-            <Button x:Name="SubtitleButton" Grid.Column="10" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="SubtitleButton" Grid.Column="11" Style="{StaticResource BottomBarButtonStyle}"
                     IsEnabled="False">
                 <FontIcon Glyph="&#xE190;" FontSize="18" />
                 <Button.Flyout>
@@ -233,15 +233,12 @@
                  IsEnabled가 진다 — HotkeySupport의 통과 게이트가 IsEnabled와 Visibility를 함께
                  보기 때문이다(Shared/HotkeySupport.cs:61). 빈 상태 ▶ = 테스트 클립(A207) 등
                  다른 버튼은 빈 상태에도 그대로 쓰이므로 종전대로 손대지 않는다. -->
-            <StackPanel Grid.Column="11" Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel Grid.Column="12" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
                         CornerRadius="4,0,0,4" IsEnabled="False" Click="OnFitClicked">
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                 </Button>
-                <DropDownButton x:Name="FitOptionsButton"
-                                Width="32" Height="32" Padding="4"
-                                BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
-                                VerticalAlignment="Center"
+                <DropDownButton x:Name="FitOptionsButton" Style="{StaticResource BottomBarFitOptionsStyle}"
                                 IsEnabled="False"
                                 ToolTipService.ToolTip="Fit options">
                     <DropDownButton.Flyout>

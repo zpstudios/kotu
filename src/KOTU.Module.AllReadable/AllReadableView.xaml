@@ -47,10 +47,28 @@
                      A97(v0.116.0): 요소 간격은 전 모듈 6으로 통일 — 개별 Margin 대신 ColumnSpacing.
                      열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
                      전체화면 ⛶ 칸은 A151에서 제거 — 셸 하단 바 우측 모드 버튼 2개가 대체한다. -->
-                <Grid x:Name="OwnBar" ColumnSpacing="6">
+                <Grid x:Name="OwnBar" ColumnSpacing="6" Padding="0,2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="84" />
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="64" />
                     </Grid.ColumnDefinitions>
+                    <!-- 빈 통합 뷰에서는 조작을 약속하지 않고 공통 위치만 유지한다. -->
+                    <Button Grid.Column="1" Style="{StaticResource BottomBarWideButtonStyle}"
+                            Content="Zoom" IsEnabled="False" ToolTipService.ToolTip="Open a file to zoom" />
+                    <Button Grid.Column="2" Style="{StaticResource BottomBarButtonStyle}"
+                            IsEnabled="False" ToolTipService.ToolTip="Open a printable file">
+                        <FontIcon Glyph="&#xE749;" FontSize="18" />
+                    </Button>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource BottomBarButtonStyle}" CornerRadius="4,0,0,4"
+                                IsEnabled="False" ToolTipService.ToolTip="Open a file to fit">
+                            <FontIcon Glyph="&#xE9A6;" FontSize="18" />
+                        </Button>
+                        <DropDownButton Style="{StaticResource BottomBarFitOptionsStyle}" IsEnabled="False"
+                                        ToolTipService.ToolTip="Fit options" />
+                    </StackPanel>
                     <TextBlock
                         x:Name="FileNameText"
                         Grid.Column="0"

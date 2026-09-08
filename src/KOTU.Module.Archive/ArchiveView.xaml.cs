@@ -39,7 +39,7 @@ public sealed class ArchiveRow
 /// </summary>
 public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.IContentStateSource,
     IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider,
-    IContentCloseRequestSource, IContentInfoProvider
+    IContentCloseRequestSource, IContentInfoProvider, KOTU.Core.Contracts.IBackgroundJobOwner
 {
     /// <summary>아카이브를 열면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -194,6 +194,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private int _viewGeneration;
     private volatile bool _attached;
     private Guid? _activeJobId;
+    public Guid? ActiveJobId => _activeJobId;
     private ContentDialog? _viewDialog;
     private bool _busy;
     private bool _initialized;

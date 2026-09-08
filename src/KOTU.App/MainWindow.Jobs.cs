@@ -28,6 +28,15 @@ public sealed partial class MainWindow
         RefreshJobs();
     }
 
+    private BackgroundJobSnapshot? CurrentContentJob()
+        => ContentJobPresentation.FindActive(ModuleHost.Content, _manager.Jobs.GetSnapshots());
+
+    private bool RedirectFromWorkingArchive(Action<MainWindow> open)
+    {
+        if (CurrentContentJob() is null) return false;
+        _manager.OpenDestinationWindow(open);
+        return true;
+    }
     private void OnJobsChanged()
     {
         // 워커 통지를 합쳐 최신 스냅샷만 반영한다. 닫힌 창의 큐도 더 이상 UI를 만지지 않는다.
@@ -42,6 +51,7 @@ public sealed partial class MainWindow
     private void RefreshJobs()
     {
         var jobs = _manager.Jobs.GetSnapshots();
+        if (_tray is not null) ApplyTitle();
         var active = jobs.Count(j => j.IsActive);
         var waiting = jobs.Count(j => j.State == BackgroundJobState.WaitingForPassword);
         JobsButton.Content = waiting > 0 ? $"Jobs ({active}) - password needed"

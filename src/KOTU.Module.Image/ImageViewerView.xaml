@@ -69,19 +69,12 @@
                  걷어내고 부모 Grid의 ColumnSpacing 한 곳에서 정한다(다시 흩어지지 않게). -->
             <Grid ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
-                    <!-- A252(v0.246.0) 칸 구성: c0 인쇄 · c1 파일명·메타(파일 있음) = 드라이브 줄
-                         (파일 없음, A22) 공용 star · c2 배율 · c3 회전 · c4 Fit 조절기.
-                         인쇄는 A211 배치 2(v0.221.0)에서 맨 끝(구 c4)에 붙였다가 A252에서 좌측
-                         정렬군 선두로 옮겼다 — 프린트 버튼을 전 모듈 좌측군으로 통일한 것
-                         (문서 바는 A223부터 이미 좌측군). 칸 하나가 앞뒤로 옮겨졌을 뿐 고정 폭
-                         합은 그대로라 폭 파생 수치가 없다 — 늘고 주는 폭은 star 칸(c1)이 흡수한다.
-                         열기 버튼 칸은 A99에서 제거 — 파일 열기는 셸 S4 'Open file'(A90)로 일원화.
-                         1:1 버튼 칸은 A111에서 제거 — 100%가 Fit 플라이아웃 4옵션에 들어갔다. -->
-                    <ColumnDefinition Width="Auto" />
+                    <!-- A362: 왼쪽 회전, 가변 파일 정보, 오른쪽 Zoom84 / Print32 / Fit64. -->
+                    <ColumnDefinition Width="32" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="32" />
+                    <ColumnDefinition Width="64" />
                 </Grid.ColumnDefinitions>
                 <!-- A27(v0.107.0): 하단 바 버튼은 1칸(32×32)·2칸(84×32) 두 규격만
                      (A97/v0.116.0에서 40→36, A106/v0.132.0에서 36→32) —
@@ -103,8 +96,7 @@
                      흡수하는 설계다(아래 FileInfoPanel 주석). 버튼 32 + ColumnSpacing 6은
                      자리가 어디든 * 칸(파일명·메타)에서 나온다. -->
                 <Button
-                    x:Name="PrintButton"
-                    Grid.Column="0"
+                    x:Name="PrintButton" Grid.Column="3"
                     Style="{StaticResource BottomBarButtonStyle}"
                     IsEnabled="False"
                     ToolTipService.ToolTip="Print (Ctrl+P)"
@@ -148,7 +140,7 @@
                      칸 번호는 A252에서 1 → 2(앞에 인쇄 칸이 들어와 한 칸씩 밀렸다).
                      Fit 버튼 본체는 "모드"(1:1/Contain/Fit width/Fit height), 여기는 "실제 배율"이라 역할이 다르다. -->
                 <TextBlock
-                    x:Name="ZoomText"
+                    x:Name="ZoomText" Width="84" TextAlignment="Center"
                     Grid.Column="2"
                     VerticalAlignment="Center" />
                 <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate = 1칸, Fit = 1칸 버튼 2개
@@ -162,8 +154,7 @@
                      R 키는 HotkeySupport가 버튼의 IsEnabled를 보고 자동으로 통과시킨다(:61 게이트) —
                      비활성 버튼에 키가 새지 않는다. 칸 번호는 A252에서 2 → 3. -->
                 <Button
-                    x:Name="RotateButton"
-                    Grid.Column="3"
+                    x:Name="RotateButton" Grid.Column="0"
                     Style="{StaticResource BottomBarButtonStyle}"
                     IsEnabled="False"
                     Click="OnRotateButtonClick">
@@ -196,11 +187,7 @@
                         Click="OnFitClick">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                     </Button>
-                    <DropDownButton
-                        x:Name="FitOptionsButton"
-                        Width="32" Height="32" Padding="4"
-                        BorderThickness="0,1,1,1" CornerRadius="0,4,4,0"
-                        VerticalAlignment="Center"
+                    <DropDownButton x:Name="FitOptionsButton" Style="{StaticResource BottomBarFitOptionsStyle}"
                         IsEnabled="False"
                         ToolTipService.ToolTip="Fit options">
                         <DropDownButton.Flyout>
@@ -244,7 +231,7 @@
                         </DropDownButton.Flyout>
                     </DropDownButton>
                 </StackPanel>
-                <!-- A252: 인쇄 버튼 선언은 바 맨 앞(c0)으로 옮겼다 — 위 PrintButton 주석 참조. -->
+                <!-- A362: 인쇄는 공통 오른쪽 c3, 회전은 고유 왼쪽 c0이다. -->
             </Grid>
         </Border>
     </Grid>

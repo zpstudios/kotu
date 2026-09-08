@@ -111,6 +111,13 @@ public sealed class WindowManager
     /// 명시적 "새 창으로 열기"(A24: Shift+더블클릭·우클릭 메뉴). 재사용 규칙과 무관하게
     /// 항상 새 창을 만든다 — 빈 셸 재사용도 안 한다(요청한 창을 그대로 두는 게 의도).
     /// </summary>
+    /// <summary>현재 작업 창은 남겨 두고 요청한 목적지를 같은 프로세스의 새 창에서 연다.</summary>
+    internal void OpenDestinationWindow(Action<MainWindow> open)
+    {
+        var window = Create();
+        open(window);
+        window.Activate();
+    }
     public void OpenFileInNewWindow(string path)
     {
         var window = Create();

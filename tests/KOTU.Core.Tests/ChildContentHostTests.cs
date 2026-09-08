@@ -10,7 +10,7 @@ public class ChildContentHostTests
     private static ChildContentHost NewHost() => new(action => action());
 
     [Fact]
-    public void RequestedAndSavedPathsDoNotReplaceOpenedPath()
+    public void RequestedPathWaitsForLoadAndSavedPathUpdatesWithoutOpen()
     {
         var child = new FakeContent();
         var host = NewHost();
@@ -20,8 +20,12 @@ public class ChildContentHostTests
         host.ContentPathChanged += saved.Add;
         host.Attach(child, "initial");
         child.RaiseCurrentPathChanged("requested");
-        child.RaiseContentPathChanged("saved");
         Assert.Equal("initial", host.OpenedPath);
+        var opened = new List<string>();
+        host.ContentOpened += opened.Add;
+        child.RaiseContentPathChanged("saved");
+        Assert.Equal("saved", host.OpenedPath);
+        Assert.Empty(opened);
         Assert.Equal(["requested"], requested);
         Assert.Equal(["saved"], saved);
         child.RaiseContentOpened("loaded");
@@ -116,14 +120,17 @@ public class ChildContentHostTests
         Assert.Equal(["loaded"], opened);
     }
 
-    [Fact]
-    public void StateCallbackReplacementSuppressesRestOfOldNotification()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StateCallbackReplacementSuppressesRestOfOldNotification(bool save)
     {
         var host = NewHost();
         var old = new FakeContent();
         host.Attach(old, "old");
         var delivered = new List<string>();
         host.ContentOpened += delivered.Add;
+        host.ContentPathChanged += delivered.Add;
         var replace = true;
         host.StateChanged += () =>
         {
@@ -132,7 +139,8 @@ public class ChildContentHostTests
             host.Detach(() => { });
             host.Attach(new FakeContent(), "replacement");
         };
-        old.RaiseContentOpened("late");
+        if (save) old.RaiseContentPathChanged("late");
+        else old.RaiseContentOpened("late");
         Assert.Empty(delivered);
         Assert.Equal("replacement", host.OpenedPath);
     }
