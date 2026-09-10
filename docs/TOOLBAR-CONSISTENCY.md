@@ -31,10 +31,25 @@ ConfigureOriginalMenuItem으로 설정한다. Loaded 때 해당 IconRoot만24×2
 생산 좌표 테스트를 종류별 뷰포트·외곽22×18·숫자10·버튼 내용 영역 검사로 보강했다.
 최신 메뉴 높이 보정을 포함한 전체 Release/x64 빌드 경고0/오류0, 전체389건 통과(실패/건너뜀0).
 Core185/DocumentModel22/FileOperations36/Image21/Audio22/Video36/Archive42/Hardware25다.
-로그는 artifacts/a366-build.log·a366-tests.log, 결과는 TestResults/a366-final이다. 배포는 대기다.
+로그는 artifacts/a366-build.log·a366-tests.log, 결과는 TestResults/a366-final이다. GitHub CI·정식 배포도 완료했다.
 artifacts/a366-icon-contours.json의 생산 좌표로 artifacts/a366-icon-preview.png 전후 미리보기를 만들고
 밝은/어두운 배경의1배·4배 도식을 확인했다. 이 파일은 로컬 검증 산출물이다. 실제 WinUI 픽셀/배율/테마·
 메뉴 측정은 직접 검증하지 않았다. 생성하는 전후 미리보기는 생산 좌표의 도식이며 GUI 캡처가 아니다.
+
+## A366 정식 배포 증거
+
+[build 34440789148](https://github.com/zpstudios/kotu/actions/runs/34440789148)와
+[release 34440789160](https://github.com/zpstudios/kotu/actions/runs/34440789160)가 성공했다.
+소스와 v0.362.0 태그는 `c03d4888c3974a68c408b7f398df2ca8ef5b3c2f`로 일치한다.
+전체 빌드·테스트, 실행본 정합성·시작, 패키징, 설치본 정합성·시작 및 공식 업로드를 통과했다.
+[정식 v0.362.0](https://github.com/zpstudios/kotu/releases/tag/v0.362.0)은
+2026-09-10 14:31:59 KST에 게시됐다(초안·사전 공개 아님).
+[Setup EXE](https://github.com/zpstudios/kotu/releases/download/v0.362.0/KOTU-win-Setup.exe)
+164,380,614 bytes, Portable 159,831,201 bytes, full 159,888,326 bytes,
+delta 924,698 bytes와 `assets.win.json`·`RELEASES`·`releases.win.json`을 확인했다.
+공개 피드는 현재 0.362.0 full/delta와 직전 0.361.0 full을 포함한다.
+델타 생성은 확인했지만 기존 설치본의 제자리 업데이트 시험은 수행하지 않았다.
+실제 WinUI 화면·배율·테마·메뉴 측정의 미검증 한계는 그대로 남는다.
 
 ---
 # A365 하단 바 개별 위치와 빈 상태 복원 — v0.361.0
