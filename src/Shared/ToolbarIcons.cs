@@ -17,11 +17,11 @@ internal static class ToolbarIcons
         };
         var root = new Grid
         {
-            Width = ToolbarIconGeometry.Size, Height = ToolbarIconGeometry.Size,
+            Width = ToolbarIconGeometry.ViewportSize(kind), Height = ToolbarIconGeometry.ViewportSize(kind),
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         // Canvas는 좌표 원점을 옮기지 않는다. Path의 내용 자동 맞춤으로 여백이 사라지는 것을 막는다.
-        var canvas = new Canvas { Width = ToolbarIconGeometry.Size, Height = ToolbarIconGeometry.Size };
+        var canvas = new Canvas { Width = ToolbarIconGeometry.ViewportSize(kind), Height = ToolbarIconGeometry.ViewportSize(kind) };
         canvas.Children.Add(shape);
         root.Children.Add(sentinel);
         root.Children.Add(canvas);
@@ -33,17 +33,17 @@ internal static class ToolbarIcons
 
     internal static PathIcon BuildMenu(ToolbarIconKind kind) => new()
     {
-        Width = ToolbarIconGeometry.Size, Height = ToolbarIconGeometry.Size,
+        Width = ToolbarIconGeometry.ViewportSize(kind), Height = ToolbarIconGeometry.ViewportSize(kind),
         Data = Geometry(kind),
     };
 
     private static PathGeometry Geometry(ToolbarIconKind kind)
     {
         var geometry = new PathGeometry { FillRule = FillRule.EvenOdd };
-        // 채우지 않는 대각선은 잉크 없이 18×18 경계를 확정한다. PathIcon이 실제 잉크 범위만
+        // 채우지 않는 대각선은 잉크 없이 종류별 뷰포트 경계를 확정한다. PathIcon이 실제 잉크 범위만
         // 확대해 메뉴의 1:1 상자를 늘리지 않도록 버튼과 같은 원점·배율을 보존한다.
         var viewport = new PathFigure { StartPoint = new Point(0, 0), IsFilled = false, IsClosed = false };
-        viewport.Segments.Add(new LineSegment { Point = new Point(ToolbarIconGeometry.Size, ToolbarIconGeometry.Size) });
+        viewport.Segments.Add(new LineSegment { Point = new Point(ToolbarIconGeometry.ViewportSize(kind), ToolbarIconGeometry.ViewportSize(kind)) });
         geometry.Figures.Add(viewport);
         foreach (var contour in ToolbarIconGeometry.Create(kind))
         {

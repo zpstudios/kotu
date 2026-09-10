@@ -5,6 +5,22 @@ namespace KOTU.Core.Tests;
 
 public class ToolbarIconGeometryTests
 {
+    [Fact]
+    public void OnlyOriginalExpandsAndStillFitsButtonContent()
+    {
+        foreach (var kind in Enum.GetValues<ToolbarIconKind>())
+            Assert.Equal(kind == ToolbarIconKind.OriginalRatio ? 24 : 18, ToolbarIconGeometry.ViewportSize(kind));
+        var contours = ToolbarIconGeometry.Create(ToolbarIconKind.OriginalRatio);
+        Assert.Equal(22, contours[0].Max(p => p.X) - contours[0].Min(p => p.X));
+        Assert.Equal(18, contours[0].Max(p => p.Y) - contours[0].Min(p => p.Y));
+        foreach (var digit in contours.Skip(2).Take(2))
+        {
+            Assert.Equal(10, digit.Max(p => p.Y) - digit.Min(p => p.Y));
+            Assert.All(digit, p => { Assert.InRange(p.X, 3, 21); Assert.InRange(p.Y, 5, 19); });
+        }
+        Assert.True(ToolbarIconGeometry.ViewportSize(ToolbarIconKind.OriginalRatio) <= 32 - 2 * (1 + 2));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -19,8 +35,8 @@ public class ToolbarIconGeometryTests
         {
             Assert.All(contour, p =>
             {
-                Assert.InRange(p.X, 0, ToolbarIconGeometry.Size);
-                Assert.InRange(p.Y, 0, ToolbarIconGeometry.Size);
+                Assert.InRange(p.X, 0, ToolbarIconGeometry.ViewportSize((ToolbarIconKind)kind));
+                Assert.InRange(p.Y, 0, ToolbarIconGeometry.ViewportSize((ToolbarIconKind)kind));
             });
             var area = contour.Select((p, i) => p.X * contour[(i + 1) % contour.Length].Y
                 - p.Y * contour[(i + 1) % contour.Length].X).Sum() / 2;
@@ -58,12 +74,12 @@ public class ToolbarIconGeometryTests
     public void RatioOutlineIsCenteredAndPreviewUsesProductionContours()
     {
         var outline = ToolbarIconGeometry.Create(ToolbarIconKind.OriginalRatio)[0];
-        Assert.Equal(18, outline.Min(p => p.X) + outline.Max(p => p.X));
-        Assert.Equal(18, outline.Min(p => p.Y) + outline.Max(p => p.Y));
+        Assert.Equal(24, outline.Min(p => p.X) + outline.Max(p => p.X));
+        Assert.Equal(24, outline.Min(p => p.Y) + outline.Max(p => p.Y));
         // 요청된 디자인 검토 산출물만 내보낸다. WinUI 화면 캡처가 아니라 같은 원본 좌표다.
         if (Environment.GetEnvironmentVariable("KOTU_ICON_PREVIEW_PATH") is { Length: > 0 } path)
         {
-            var icons = Enum.GetValues<ToolbarIconKind>().Select(kind => new { Name = kind.ToString(), Contours = ToolbarIconGeometry.Create(kind) });
+            var icons = Enum.GetValues<ToolbarIconKind>().Select(kind => new { Name = kind.ToString(), Size = ToolbarIconGeometry.ViewportSize(kind), Contours = ToolbarIconGeometry.Create(kind) });
             File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(icons));
         }
     }

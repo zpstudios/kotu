@@ -196,7 +196,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         // 그린다 — 종전에는 XAML 인라인 도형이라 본체와 미세하게 다른 그림이었다(사용자 보고).
         // MenuFlyoutItem.Icon은 IconElement만 받아 본체의 Border를 못 꽂으므로, 같은 치수표로
         // 그린 PathIcon 판본을 받는다. 호출마다 새 인스턴스라 v0.174.1의 공유 크래시와 무관하다.
-        FitOriginalItem.Icon = FitIcons.BuildOriginalRatioIcon();
+        FitIcons.ConfigureOriginalMenuItem(FitOriginalItem);
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
         // 키 입력을 받기 위해 로드 시 포커스 확보 (IsTabStop은 XAML에서 설정)
