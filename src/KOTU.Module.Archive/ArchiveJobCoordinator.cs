@@ -6,6 +6,8 @@ namespace KOTU.Module.Archive;
 /// <summary>뷰를 캡처하지 않는 압축 작업 어댑터. 작업 입력을 복제하고 네이티브 실행 워커를 소유한다.</summary>
 public sealed class ArchiveJobCoordinator
 {
+    private static readonly object DestinationGate = new();
+    private static readonly HashSet<string> Destinations = new(StringComparer.OrdinalIgnoreCase);
     private readonly IArchiveBackend _backend;
     public BackgroundJobService Jobs { get; }
 
@@ -15,6 +17,70 @@ public sealed class ArchiveJobCoordinator
     {
         Jobs = jobs;
         _backend = backend;
+    }
+
+    /// <summary>선택한 압축마다 즉시 작업을 등록한다. 목록 조회·암호 대기도 작업 수명에 속한다.</summary>
+    public IReadOnlyList<BackgroundJobHandle> StartExtractMany(IReadOnlyList<string> archivePaths, bool forceFolder, string? password = null)
+    {
+        var operations = new List<(BackgroundJobRequest, Func<BackgroundJobContext, Task>)>();
+        foreach (var path in archivePaths.ToArray())
+        {
+            var backend = _backend;
+            operations.Add((new BackgroundJobRequest(BackgroundJobKind.ExtractArchive,
+                "Extract: " + Path.GetFileName(path), path, null),
+                context => ExtractPlannedAsync(backend, path, forceFolder, password, context)));
+        }
+        return Jobs.StartMany(operations);
+    }
+
+    private static async Task ExtractPlannedAsync(IArchiveBackend backend, string archivePath,
+        bool forceFolder, string? password, BackgroundJobContext context)
+    {
+        using var worker = new ModuleWorker("KOTU archive planning job");
+        ExtractHerePlan? plan = null;
+        try
+        {
+            while (true)
+            {
+                context.Cancellation.ThrowIfCancellationRequested();
+                var attempt = password;
+                password = null;
+                try
+                {
+                    await worker.Run(_ =>
+                    {
+                        if (plan is null)
+                        {
+                            var entries = backend.List(archivePath, attempt);
+                            context.Cancellation.ThrowIfCancellationRequested();
+                            var names = ArchiveEntryTree.Build(entries).Children.Select(entry => entry.Name).ToArray();
+                            lock (DestinationGate)
+                            {
+                                plan = ExtractHerePlanner.Plan(Path.GetFullPath(archivePath), names,
+                                    path => File.Exists(path) || Directory.Exists(path) || Destinations.Contains(path), forceFolder);
+                                Destinations.Add(plan.ResultPath);
+                            }
+                            context.SetResultPath(plan.ResultPath);
+                        }
+                        backend.Extract(archivePath, plan.TargetDirectory, null, attempt,
+                            context.Progress, context.Cancellation);
+                    }, context.Cancellation).ConfigureAwait(false);
+                    context.Cancellation.ThrowIfCancellationRequested();
+                    return;
+                }
+                catch (ArchivePasswordException)
+                {
+                    context.Cancellation.ThrowIfCancellationRequested();
+                }
+                finally { attempt = null; }
+                password = await context.RequestPasswordAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            password = null;
+            if (plan is not null) lock (DestinationGate) Destinations.Remove(plan.ResultPath);
+        }
     }
 
     public BackgroundJobHandle StartExtract(string archivePath, string targetDirectory,
@@ -75,6 +141,11 @@ public sealed class ArchiveJobCoordinator
         string? password, BackgroundJobContext context)
     {
         using var worker = new ModuleWorker("KOTU archive creation job");
+        var target = Path.GetFullPath(input.TargetPath);
+        lock (DestinationGate)
+        {
+            if (!Destinations.Add(target)) throw new IOException("Another archive job is writing this destination.");
+        }
         try
         {
             await worker.Run(_ =>
@@ -89,10 +160,10 @@ public sealed class ArchiveJobCoordinator
         finally
         {
             password = null;
+            lock (DestinationGate) Destinations.Remove(target);
         }
     }
 
     private sealed record ExtractInput(string ArchivePath, string TargetDirectory, IReadOnlyCollection<string>? EntryPaths);
     private sealed record CreateInput(IReadOnlyList<string> SourcePaths, string TargetPath, bool Use7z);
 }
-

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/KOTU.Core/Cli/LaunchRequest.cs" Link="LaunchRequest.cs" />
+    <Compile Include="../../src/KOTU.App/Integration/ShellSelectionRequest.cs" Link="ShellSelectionRequest.cs" />
+    <Compile Include="../../src/KOTU.App/Integration/ShellVerbServer.cs" Link="ShellVerbServer.cs" />
+  </ItemGroup>
+</Project>

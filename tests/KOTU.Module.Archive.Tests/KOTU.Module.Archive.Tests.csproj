@@ -6,6 +6,10 @@
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <PlatformTarget>x64</PlatformTarget>
     <IsPackable>false</IsPackable>
+    <!-- 패키징과 같은 x64 엔진을 시험 출력에 제공한다. 로컬은 정식 배포본에서 추출한 DLL도 지정할 수 있다. -->
+    <SevenZipNativePath Condition="'$(SevenZipNativePath)' == '' and Exists('..\..\src\KOTU.Module.Archive\runtimes\win-x64\7z.dll')">$(MSBuildProjectDirectory)\..\..\src\KOTU.Module.Archive\runtimes\win-x64\7z.dll</SevenZipNativePath>
+    <SevenZipNativePath Condition="'$(SevenZipNativePath)' == '' and Exists('C:\Program Files\7-Zip\7z.dll')">C:\Program Files\7-Zip\7z.dll</SevenZipNativePath>
+    <SevenZipNativePath Condition="'$(SevenZipNativePath)' == ''">$(MSBuildProjectDirectory)\..\..\artifacts\native\7zip\7z.dll</SevenZipNativePath>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
@@ -14,5 +18,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\KOTU.Module.Archive\KOTU.Module.Archive.csproj" />
+    <None Include="$(SevenZipNativePath)" Link="7z.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(SevenZipNativePath)')" />
   </ItemGroup>
+  <Target Name="RequireArchiveTestNativeEngine" BeforeTargets="Build">
+    <Error Condition="!Exists('$(SevenZipNativePath)')" Text="Archive native tests require the release x64 7z.dll. Set SevenZipNativePath, install the CI 7-Zip engine, or extract the released DLL to artifacts/native/7zip/7z.dll." />
+  </Target>
 </Project>

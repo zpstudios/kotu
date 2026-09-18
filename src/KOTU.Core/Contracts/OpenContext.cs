@@ -6,6 +6,14 @@ public sealed record OpenContext
     /// <summary>열 파일 경로. 네비게이션으로 진입한 경우 null.</summary>
     public string? FilePath { get; init; }
 
+    private IReadOnlyList<string> _inputPaths = Array.Empty<string>();
+    /// <summary>압축 동사에 전달되는 전체 선택. 입력 배열 변경으로 요청이 바뀌지 않는다.</summary>
+    public IReadOnlyList<string> InputPaths
+    {
+        get => _inputPaths;
+        init => _inputPaths = Array.AsReadOnly(value.ToArray());
+    }
+
     /// <summary>추가 인자(커맨드라인 등).</summary>
     public IReadOnlyList<string> Arguments { get; init; } = [];
 

@@ -11,14 +11,33 @@ public enum LaunchVerb
 
     /// <summary>파일/폴더를 새 압축으로 만든다 (탐색기 우클릭 메뉴).</summary>
     Compress,
+
+    /// <summary>자동 판단과 무관하게 새 폴더를 만들어 푼다.</summary>
+    ExtractToFolder,
 }
 
 /// <summary>
 /// 커맨드라인 → 실행 요청 해석. UI·OS 비의존 — 단위 테스트 대상.
 /// 첫 실행(OnLaunched)과 단일 인스턴스 재전달(redirect activation) 양쪽에서 쓴다.
 /// </summary>
-public sealed record LaunchRequest(LaunchVerb Verb, string? FilePath)
+public sealed record LaunchRequest
 {
+    public LaunchVerb Verb { get; }
+    public IReadOnlyList<string> Paths { get; }
+    public string? FilePath => Paths.FirstOrDefault();
+
+    public LaunchRequest(LaunchVerb verb, string? filePath)
+        : this(verb, filePath is null ? [] : new[] { filePath }, true) { }
+
+    private LaunchRequest(LaunchVerb verb, IEnumerable<string> paths, bool copy)
+    {
+        Verb = verb;
+        Paths = Array.AsReadOnly(paths.ToArray());
+    }
+
+    public static LaunchRequest FromPaths(LaunchVerb verb, IEnumerable<string> paths) => new(verb, paths, true);
+    public void Deconstruct(out LaunchVerb verb, out string? filePath) { verb = Verb; filePath = FilePath; }
+    public const string ExtractToFolderToken = "--extract-to-folder";
     public const string ExtractHereToken = "--extract-here";
     public const string CompressToken = "--compress";
 
@@ -26,31 +45,33 @@ public sealed record LaunchRequest(LaunchVerb Verb, string? FilePath)
     public string? VerbToken => Verb switch
     {
         LaunchVerb.ExtractHere => ExtractHereToken,
+        LaunchVerb.ExtractToFolder => ExtractToFolderToken,
         LaunchVerb.Compress => CompressToken,
         _ => null,
     };
 
-    /// <summary>토큰 목록 해석: 알려진 동사 토큰과 첫 번째 비옵션 토큰(파일 경로)을 찾는다.</summary>
+    /// <summary>토큰 목록 해석: 알려진 동사 토큰과 모든 비옵션 토큰(선택 경로)을 찾는다.</summary>
     public static LaunchRequest Parse(IReadOnlyList<string> args)
     {
         string? verbToken = null;
-        string? file = null;
+        var files = new List<string>();
 
         foreach (var arg in args)
         {
-            if (arg is ExtractHereToken or CompressToken)
+            if (arg is ExtractHereToken or ExtractToFolderToken or CompressToken)
                 verbToken ??= arg;
             else if (!arg.StartsWith("--", StringComparison.Ordinal) && arg.Length > 0)
-                file ??= arg;
+                files.Add(arg);
         }
 
         var verb = verbToken switch
         {
             ExtractHereToken => LaunchVerb.ExtractHere,
+            ExtractToFolderToken => LaunchVerb.ExtractToFolder,
             CompressToken => LaunchVerb.Compress,
             _ => LaunchVerb.Open,
         };
-        return new LaunchRequest(verb, file);
+        return FromPaths(verb, files);
     }
 
     /// <summary>

@@ -67,7 +67,7 @@ public partial class App : Application
         return services.BuildServiceProvider();
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         // 재전달 활성화가 창이 다 닫히는 순간과 겹쳐도 큐잉할 수 있게 UI 디스패처를 잡아둔다
         _uiDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
@@ -103,7 +103,13 @@ public partial class App : Application
 
         // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
         // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당
-        var request = LaunchRequest.Parse(Environment.GetCommandLineArgs().Skip(1).ToList());
+        LaunchRequest request;
+        try { request = await Integration.ShellSelectionRequest.ParseAsync(Environment.GetCommandLineArgs().Skip(1).ToList()); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            ShowSelectionError();
+            return;
+        }
         // A124: 관리자 재시작 직전에 기록된 창 세트가 있으면(2분 유효) 기본 1창 대신 세트를
         // 재현한다. 쓰는 쪽이 하드웨어 모듈 Restart as admin 한 곳뿐이라, 일반 시작(파일 인자·
         // 바로가기)이 여기서 복원하게 되는 일은 실질적으로 승격 재기동뿐이다. 파일 인자가
@@ -209,12 +215,19 @@ public partial class App : Application
         });
     }
 
+    private void ShowSelectionError()
+    {
+        // 전달 파일 내용이나 원본 경로는 오류 메시지에 노출하지 않는다.
+        var window = _windowManager?.ActiveWindow ?? _windowManager?.OpenInitialWindow();
+        window?.BringToFront();
+        Integration.ShellSelectionRequest.ShowError();
+    }
     private void OnRedirectedActivation(object? sender, AppActivationArguments e)
     {
         var manager = _windowManager;
         if (manager is null) return;
 
-        _uiDispatcher?.TryEnqueue(() =>
+        _uiDispatcher?.TryEnqueue(async () =>
         {
             if (e.Kind == ExtendedActivationKind.File &&
                 e.Data is Windows.ApplicationModel.Activation.IFileActivatedEventArgs fileArgs &&
@@ -227,7 +240,11 @@ public partial class App : Application
                      !string.IsNullOrWhiteSpace(launch.Arguments))
             {
                 // 두 번째 인스턴스의 커맨드라인이 그대로 넘어온다(선행 exe 토큰 포함 가능).
-                manager.Dispatch(LaunchRequest.ParseCommandLine(launch.Arguments));
+                try { manager.Dispatch(await Integration.ShellSelectionRequest.ParseCommandLineAsync(launch.Arguments)); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+                {
+                    ShowSelectionError();
+                }
             }
             else
             {

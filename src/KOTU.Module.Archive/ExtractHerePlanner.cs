@@ -18,13 +18,13 @@ public static class ExtractHerePlanner
     public static ExtractHerePlan Plan(
         string archivePath,
         IReadOnlyList<string> rootEntryNames,
-        Func<string, bool> exists)
+        Func<string, bool> exists, bool forceFolder = false)
     {
         var parent = Path.GetDirectoryName(archivePath);
         if (string.IsNullOrEmpty(parent)) parent = ".";
 
         // 단일 루트 항목: 충돌이 없으면 래퍼 없이 그대로 푼다.
-        if (rootEntryNames.Count == 1 && !string.IsNullOrEmpty(rootEntryNames[0]))
+        if (!forceFolder && rootEntryNames.Count == 1 && !string.IsNullOrEmpty(rootEntryNames[0]))
         {
             var direct = Path.Combine(parent, rootEntryNames[0]);
             if (!exists(direct))

@@ -39,6 +39,8 @@ public static class Program
                 .OnFirstRun(_ => IsFirstRun = true)
                 .Run();
 
+            if (Integration.ShellVerbServer.TryRun(args, out var shellExitCode)) return shellExitCode;
+
             WinRT.ComWrappersSupport.InitializeComWrappers();
 
             var mainInstance = AppInstance.FindOrRegisterForKey(InstanceKey);

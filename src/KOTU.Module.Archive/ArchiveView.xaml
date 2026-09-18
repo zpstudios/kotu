@@ -166,6 +166,11 @@
                 </Button>
                 <Button x:Name="ExtractHereButton" Grid.Column="3" Margin="6,0,0,0" Style="{StaticResource BottomBarButtonStyle}"
                         Click="OnExtractHereClick" IsEnabled="False">
+                    <Button.ContextFlyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem Text="Extract into a new folder" Click="OnExtractFolderClick" />
+                        </MenuFlyout>
+                    </Button.ContextFlyout>
                     <FontIcon Glyph="&#xE896;" FontSize="18" />
                 </Button>
                 <TextBlock x:Name="StatusText" Grid.Column="4" Margin="6,0,0,0" VerticalAlignment="Center"

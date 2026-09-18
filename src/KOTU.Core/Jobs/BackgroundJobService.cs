@@ -25,20 +25,34 @@ public sealed class BackgroundJobService
     }
 
     public BackgroundJobHandle Start(BackgroundJobRequest request, Func<BackgroundJobContext, Task> execute)
+        => StartMany([(request, execute)])[0];
+
+    /// <summary>한 선택의 모든 작업을 종료 게이트와 원자적으로 등록한다. 일부만 등록된 채 거절하지 않는다.</summary>
+    public IReadOnlyList<BackgroundJobHandle> StartMany(
+        IReadOnlyList<(BackgroundJobRequest Request, Func<BackgroundJobContext, Task> Execute)> operations)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(execute);
-        Job job;
+        var inputs = operations.ToArray();
+        foreach (var input in inputs)
+        {
+            ArgumentNullException.ThrowIfNull(input.Request);
+            ArgumentNullException.ThrowIfNull(input.Execute);
+        }
+        Job[] jobs;
         lock (_gate)
         {
             if (_idleLease is not null) throw new InvalidOperationException("The app is closing or restarting. New jobs cannot be started.");
-            job = new Job(request);
-            _jobs.Add(job.Snapshot.Id, job);
+            jobs = inputs.Select(input => new Job(input.Request)).ToArray();
+            foreach (var job in jobs) _jobs.Add(job.Snapshot.Id, job);
         }
         NotifyChanged();
         // 서비스가 보관하는 실행 델리게이트는 불변 작업 입력만 캡처해야 한다.
-        _ = Task.Run(() => ExecuteAsync(job, execute));
-        return new BackgroundJobHandle(job.Snapshot.Id, job.Completion.Task);
+        for (var i = 0; i < jobs.Length; i++)
+        {
+            var job = jobs[i];
+            var execute = inputs[i].Execute;
+            _ = Task.Run(() => ExecuteAsync(job, execute));
+        }
+        return Array.AsReadOnly(jobs.Select(job => new BackgroundJobHandle(job.Snapshot.Id, job.Completion.Task)).ToArray());
     }
 
     /// <summary>유휴 상태를 원자적으로 확보한다. UI 대기 중 잠금 없이 새 작업 시작만 막는다.</summary>
@@ -128,7 +142,7 @@ public sealed class BackgroundJobService
         {
             job.Token.ThrowIfCancellationRequested();
             var context = new BackgroundJobContext(job.Token, new JobProgress(this, job),
-                () => RequestPasswordAsync(job));
+                () => RequestPasswordAsync(job), path => SetResultPath(job, path));
             await execute(context).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -170,6 +184,16 @@ public sealed class BackgroundJobService
         password?.TrySetCanceled();
         if (dispose) job.Cancellation.Dispose();
         job.Completion.TrySetResult(completed);
+        NotifyChanged();
+    }
+
+    private void SetResultPath(Job job, string path)
+    {
+        lock (_gate)
+        {
+            if (!job.Snapshot.IsActive || job.Snapshot.ResultPath == path) return;
+            job.Snapshot = job.Snapshot with { ResultPath = path };
+        }
         NotifyChanged();
     }
 

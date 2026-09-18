@@ -34,8 +34,8 @@ public sealed class ArchiveRow
 /// <summary>
 /// 압축 화면. 내부 탐색(브레드크럼/더블클릭 진입/뒤로), 풀기(폴더 선택·여기에 풀기),
 /// 새 압축(zip/7z, 드래그&amp;드롭 포함), 암호 재시도, 진행률/취소를 제공한다.
-/// 모든 파일 I/O는 뷰 전용 워커(A42)에서 직렬로 수행하고 UI 스레드는 결과 반영만 한다 —
-/// 창이 여러 개면 워커도 창마다 하나라 서로의 압축/해제를 기다리지 않는다.
+/// 목록 탐색은 뷰 워커, 압축·해제와 그 준비 단계는 앱 작업 워커에서 수행한다 —
+/// UI 스레드는 결과만 반영하며 여러 선택의 암호·취소·결과는 작업별로 유지한다.
 /// </summary>
 public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.IContentStateSource,
     IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider,
@@ -181,6 +181,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private readonly IArchiveBackend _backend = new SevenZipBackend();
     private readonly KOTU.Core.Settings.ISettingsService _settings;
     private readonly string? _initialFile;
+    private readonly IReadOnlyList<string> _initialPaths;
     private readonly IReadOnlyList<string> _initialArgs;
     private readonly Stack<ArchiveEntryNode> _navStack = new();
 
@@ -194,7 +195,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private int _viewGeneration;
     private volatile bool _attached;
     private Guid? _activeJobId;
-    public Guid? ActiveJobId => _activeJobId;
+    private readonly List<Guid> _batchJobIds = [];
+    public Guid? ActiveJobId => _jobs.Jobs.GetSnapshots()
+        .FirstOrDefault(job => job.IsActive && _batchJobIds.Contains(job.Id))?.Id ?? _activeJobId;
     private ContentDialog? _viewDialog;
     private bool _busy;
     private bool _initialized;
@@ -212,6 +215,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         _settings = settings;
         _jobs = jobs;
         _initialFile = context.FilePath;
+        _initialPaths = context.InputPaths.Count > 0 ? context.InputPaths : context.FilePath is { } input ? new[] { input } : [];
         _initialArgs = context.Arguments;
         // A22: 상태 문구가 생기거나 사라지면 드라이브 줄 표시를 다시 판정한다.
         StatusText.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => ApplyDriveStrip());
@@ -255,7 +259,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         if (!_attached || _initialized) return;
         _initialized = true;
 
-        if (_initialFile is not { } path || !File.Exists(path))
+        if (_initialFile is not { } path)
         {
             UpdateToolbarState();
             return;
@@ -266,16 +270,18 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         {
             // 대상은 압축 파일이 아니라 압축할 원본 — 목록을 읽지 말고 바로 새 압축 흐름으로.
             UpdateToolbarState();
-            await StartCreateFlowAsync([path], use7z: null);
+            await StartCreateFlowAsync(_initialPaths, use7z: null);
             return;
         }
 
-        var generation = _viewGeneration;
+        if (_initialArgs.Contains(KOTU.Core.Cli.LaunchRequest.ExtractHereToken) ||
+            _initialArgs.Contains(KOTU.Core.Cli.LaunchRequest.ExtractToFolderToken))
+        {
+            await RunExtractManyAsync(_initialPaths,
+                _initialArgs.Contains(KOTU.Core.Cli.LaunchRequest.ExtractToFolderToken));
+            return;
+        }
         await LoadArchiveAsync(path);
-        if (!IsCurrent(generation)) return;
-
-        if (_initialArgs.Contains(KOTU.Core.Cli.LaunchRequest.ExtractHereToken) && _root is not null)
-            await ExtractHereAsync();
     }
 
     // ---------- 아카이브 열기 / 목록 ----------
@@ -454,23 +460,36 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private async void OnExtractHereClick(object sender, RoutedEventArgs e) => await ExtractHereAsync();
 
     /// <summary>"여기에 풀기" 실행. 버튼과 탐색기 우클릭 동사가 공유한다.</summary>
-    private async Task ExtractHereAsync()
+    private async Task ExtractHereAsync(bool forceFolder = false)
     {
         if (_busy || !_attached || _archivePath is null || _root is null) return;
-
-        // 대상 폴더 결정: 단일 루트면 이중 폴더 방지, 이름이 겹치면 "(2)" 등 빈 이름 사용.
-        var plan = ExtractHerePlanner.Plan(
-            _archivePath,
-            _root.Children.Select(c => c.Name).ToList(),
-            p => Directory.Exists(p) || File.Exists(p));
-
-        if (await ExtractWithRetryAsync(plan.TargetDirectory, entryPaths: null, "Extracting...", plan.ResultPath))
-        {
-            StatusText.Text = "Extracted: " + plan.ResultPath;
-            // 결과 위치는 앱 작업 패널에서 연다.
-        }
+        await RunExtractManyAsync([_archivePath], forceFolder, _password);
     }
 
+    private async void OnExtractFolderClick(object sender, RoutedEventArgs e) => await ExtractHereAsync(forceFolder: true);
+
+    private async Task RunExtractManyAsync(IReadOnlyList<string> paths, bool forceFolder, string? password = null)
+    {
+        if (!_attached || _busy) return;
+        var generation = _viewGeneration;
+        try
+        {
+            // await 전에 모두 등록한다. 특정 파일의 암호·실패가 나머지 선택을 지우지 않는다.
+            var handles = _jobs.StartExtractMany(paths, forceFolder, password);
+            _batchJobIds.Clear();
+            _batchJobIds.AddRange(handles.Select(handle => handle.Id));
+            _activeJobId = handles.FirstOrDefault()?.Id;
+            SetBusy(true, "Extracting...");
+            UpdateObservedJob();
+            await Task.WhenAll(handles.Select(handle => handle.Completion)).WaitAsync(_viewLifetime.Token);
+            if (IsCurrent(generation)) UpdateObservedJob();
+        }
+        catch (OperationCanceledException) { }
+        catch (InvalidOperationException ex)
+        {
+            if (IsCurrent(generation)) StatusText.Text = ex.Message;
+        }
+    }
     /// <summary>풀기 결과를 탐색기로 보여준다. 실패해도 조용히 무시.</summary>
     /// <summary>선택된 항목 경로 목록. 선택이 없으면 null(=전체).</summary>
     private IReadOnlyCollection<string>? SelectedEntryPaths()
@@ -698,7 +717,11 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     private void OnCancelClick(object sender, RoutedEventArgs e)
     {
-        if (_activeJobId is { } id) _jobs.Jobs.Cancel(id);
+        if (_batchJobIds.Count > 0)
+        {
+            foreach (var jobId in _batchJobIds) _jobs.Jobs.Cancel(jobId);
+        }
+        else if (_activeJobId is { } id) _jobs.Jobs.Cancel(id);
         else _cts?.Cancel();
     }
 
@@ -713,7 +736,8 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     private void UpdateObservedJob()
     {
-        if (!_attached || _activeJobId is not { } id) return;
+        if (!_attached || ActiveJobId is not { } id) return;
+        _activeJobId = id;
         var job = _jobs.Jobs.GetSnapshots().FirstOrDefault(item => item.Id == id);
         if (job is null)
         {
@@ -724,7 +748,10 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         if (_busy != job.IsActive) SetBusy(job.IsActive, null);
         _operationProgress = job.Progress;
         OperationProgress.Value = job.Progress * 100;
-        CancelButton.IsEnabled = job.IsActive && job.State != BackgroundJobState.Canceling;
+        CancelButton.IsEnabled = _batchJobIds.Count > 0
+            ? _jobs.Jobs.GetSnapshots().Any(item => _batchJobIds.Contains(item.Id) &&
+                item.IsActive && item.State != BackgroundJobState.Canceling)
+            : job.IsActive && job.State != BackgroundJobState.Canceling;
         StatusText.Text = job.State switch
         {
             BackgroundJobState.WaitingForPassword => "Password required. Open Jobs to continue or cancel.",
@@ -749,6 +776,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             StatusText.Text = ex.Message;
             return false;
         }
+        _batchJobIds.Clear();
         _activeJobId = handle.Id;
         SetBusy(true, label);
         UpdateObservedJob();
@@ -865,7 +893,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private void SetupHotkeys()
     {
         HotkeySupport.Bind(this, ExtractHereButton, VirtualKey.E,
-            "Extract into a folder named after the archive, next to it", () => _ = ExtractHereAsync());
+            "Extract here automatically; right-click for a new folder", () => _ = ExtractHereAsync());
         HotkeySupport.Bind(this, ExtractToButton, VirtualKey.T,
             "Choose a folder to extract into (only selected items, if any)", () => _ = ExtractToAsync());
         HotkeySupport.Bind(this, CreateButton, VirtualKey.C,

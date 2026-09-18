@@ -37,6 +37,10 @@ jobs:
       - name: 단위 테스트
         run: dotnet test KOTU.sln -c Release -p:Platform=x64 --no-build --verbosity normal --logger trx --results-directory TestResults
 
+      - name: Explorer 선택 COM 전달 검사
+        timeout-minutes: 3
+        run: dotnet run --project eng/ShellVerbSmoke/ShellVerbSmoke.csproj -c Release
+
       - name: 테스트 결과 보관
         if: always()
         uses: actions/upload-artifact@v4

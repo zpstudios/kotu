@@ -19,16 +19,19 @@ public sealed record BackgroundJobHandle(Guid Id, Task<BackgroundJobSnapshot> Co
 public sealed class BackgroundJobContext
 {
     private readonly Func<Task<string>> _requestPassword;
+    private readonly Action<string> _setResultPath;
     public CancellationToken Cancellation { get; }
     public IProgress<double> Progress { get; }
 
-    internal BackgroundJobContext(CancellationToken cancellation, IProgress<double> progress, Func<Task<string>> requestPassword)
+    internal BackgroundJobContext(CancellationToken cancellation, IProgress<double> progress, Func<Task<string>> requestPassword, Action<string> setResultPath)
     {
         Cancellation = cancellation;
         Progress = progress;
         _requestPassword = requestPassword;
+        _setResultPath = setResultPath;
     }
 
     public Task<string> RequestPasswordAsync() => _requestPassword();
+    /// <summary>목록 조회 뒤 결정된 실제 결과 위치를 공개한다. 종료된 작업은 변경하지 않는다.</summary>
+    public void SetResultPath(string path) => _setResultPath(path);
 }
-

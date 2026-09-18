@@ -75,7 +75,7 @@ public sealed class WindowManager
     /// <summary>실행 요청(첫 실행·재전달 공통 진입점)을 알맞은 창으로 보낸다.</summary>
     public void Dispatch(LaunchRequest request)
     {
-        if (request.FilePath is not { } file || !File.Exists(file))
+        if (request.FilePath is not { } file || (request.Verb == LaunchVerb.Open && !File.Exists(file)))
         {
             // 파일 없는 실행: 창이 없으면 하나 열고, 있으면 최근 창만 앞으로.
             // A219: 최근 창이 트레이 숨김이어도 이 갈래는 복귀시킨다(현행 유지 — 파일 없는
@@ -93,7 +93,8 @@ public sealed class WindowManager
         else
         {
             // 탐색기 우클릭 동사(여기에 풀기/압축)는 압축 모듈 담당
-            var target = FindReusable("archive");
+            // 목록 읽기나 옵션 입력 중에도 뒤따른 요청이 기존 화면을 교체하지 않는다.
+            var target = Create();
             target.OpenVerb(request);
             target.BringToFront();
         }

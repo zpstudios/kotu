@@ -1402,7 +1402,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        ShowModule(module, new OpenContext { FilePath = file, Arguments = [token] },
+        ShowModule(module, new OpenContext { FilePath = file, InputPaths = request.Paths, Arguments = [token] },
             FileTitle(file));
     }
 

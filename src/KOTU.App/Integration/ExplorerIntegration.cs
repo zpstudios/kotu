@@ -29,6 +29,7 @@ public static class ExplorerIntegration
     private static readonly string[] LegacyBrands = ["ZP", "WinUtil"];
 
     private const string ExtractHereVerbName = Brand + ".ExtractHere";
+    private const string ExtractFolderVerbName = Brand + ".ExtractToFolder";
     private const string CompressVerbName = Brand + ".Compress";
 
     private static IEnumerable<string> LegacyExtractHereVerbNames =>
@@ -600,8 +601,12 @@ public static class ExplorerIntegration
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractHereVerbName}");
             verb.SetValue(null, $"Extract here with {brandLabel}");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
-            using var command = verb.CreateSubKey("command");
-            command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.ExtractHereToken} \"%1\"");
+            RegisterSelectionVerb(verb, LaunchVerb.ExtractHere);
+            using var folderVerb = Registry.CurrentUser.CreateSubKey(
+                $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractFolderVerbName}");
+            folderVerb.SetValue(null, $"Extract to folder with {brandLabel}");
+            folderVerb.SetValue("Icon", $"\"{ExePath}\",0");
+            RegisterSelectionVerb(folderVerb, LaunchVerb.ExtractToFolder);
 
             // 구 브랜드(ZP·WinUtil) 등록 흔적 청소
             foreach (var legacyVerb in LegacyExtractHereVerbNames)
@@ -621,6 +626,8 @@ public static class ExplorerIntegration
             Registry.CurrentUser.DeleteSubKeyTree(
                 $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractHereVerbName}",
                 throwOnMissingSubKey: false);
+            Registry.CurrentUser.DeleteSubKeyTree(
+                $@"Software\Classes\SystemFileAssociations\{ext}\shell\{ExtractFolderVerbName}", false);
             foreach (var legacyVerb in LegacyExtractHereVerbNames)
             {
                 Registry.CurrentUser.DeleteSubKeyTree(
@@ -628,6 +635,8 @@ public static class ExplorerIntegration
                     throwOnMissingSubKey: false);
             }
         }
+        UnregisterSelectionServer(LaunchVerb.ExtractHere);
+        UnregisterSelectionServer(LaunchVerb.ExtractToFolder);
         NotifyShell();
     }
 
@@ -650,8 +659,13 @@ public static class ExplorerIntegration
         {
             verb.SetValue(null, $"Compress with {brandLabel}");
             verb.SetValue("Icon", $"\"{ExePath}\",0");
-            using var command = verb.CreateSubKey("command");
-            command.SetValue(null, $"\"{ExePath}\" {LaunchRequest.CompressToken} \"%1\"");
+            RegisterSelectionVerb(verb, LaunchVerb.Compress);
+        }
+        using (var directoryVerb = Registry.CurrentUser.CreateSubKey(@"Software\Classes\Directory\shell\" + CompressVerbName))
+        {
+            directoryVerb.SetValue(null, $"Compress with {brandLabel}");
+            directoryVerb.SetValue("Icon", $"\"{ExePath}\",0");
+            RegisterSelectionVerb(directoryVerb, LaunchVerb.Compress);
         }
         // 구 브랜드(ZP·WinUtil) 등록 흔적 청소
         foreach (var legacyPath in LegacyCompressVerbKeyPaths)
@@ -664,6 +678,8 @@ public static class ExplorerIntegration
         Registry.CurrentUser.DeleteSubKeyTree(CompressVerbKeyPath, throwOnMissingSubKey: false);
         foreach (var legacyPath in LegacyCompressVerbKeyPaths)
             Registry.CurrentUser.DeleteSubKeyTree(legacyPath, throwOnMissingSubKey: false);
+        Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\Directory\shell\" + CompressVerbName, false);
+        UnregisterSelectionServer(LaunchVerb.Compress);
         NotifyShell();
     }
 
@@ -709,13 +725,14 @@ public static class ExplorerIntegration
 
             var archiveExts = modules.FirstOrDefault(m => m.Id == "archive")?.SupportedExtensions
                               ?? (IReadOnlyList<string>)[];
-            if (archiveExts.Count > 0 && IsExtractHereMenuRegistered(archiveExts) && !VerbCommandIsCurrent(
-                    $@"Software\Classes\SystemFileAssociations\{archiveExts[0]}\shell\{ExtractHereVerbName}\command"))
-            {
+            if (archiveExts.Count > 0 && IsExtractHereMenuRegistered(archiveExts)
+                && (!SelectionVerbIsCurrent($@"Software\Classes\SystemFileAssociations\{archiveExts[0]}\shell\{ExtractHereVerbName}", LaunchVerb.ExtractHere)
+                    || !SelectionVerbIsCurrent($@"Software\Classes\SystemFileAssociations\{archiveExts[0]}\shell\{ExtractFolderVerbName}", LaunchVerb.ExtractToFolder)))
                 RegisterExtractHereMenu(archiveExts, archiveBrandLabel);
-            }
 
-            if (IsCompressMenuRegistered() && !VerbCommandIsCurrent(CompressVerbKeyPath + @"\command"))
+            if (IsCompressMenuRegistered()
+                && (!SelectionVerbIsCurrent(CompressVerbKeyPath, LaunchVerb.Compress)
+                    || !SelectionVerbIsCurrent(@"Software\Classes\Directory\shell\" + CompressVerbName, LaunchVerb.Compress)))
                 RegisterCompressMenu(archiveBrandLabel);
         }
         catch
@@ -741,13 +758,34 @@ public static class ExplorerIntegration
         return false;
     }
 
-    /// <summary>우클릭 verb의 command 키가 현재 exe를 가리키는지.</summary>
-    private static bool VerbCommandIsCurrent(string commandKeyPath)
+    // 선택 배열을 전달하는 COM 정적 동사. 기존 사용자가 켠 옵션의 등록/복구 경로만 호출한다.
+    private static void RegisterSelectionVerb(RegistryKey verb, LaunchVerb action)
     {
-        using var cmd = Registry.CurrentUser.OpenSubKey(commandKeyPath);
-        return cmd is not null &&
-               ShellCommand.IsSameExe(ShellCommand.ExtractExePath(cmd.GetValue(null) as string), ExePath);
+        var clsid = ShellVerbServer.ClassFor(action).ToString("B");
+        using (var server = Registry.CurrentUser.CreateSubKey($@"Software\Classes\CLSID\{clsid}\LocalServer32"))
+            server.SetValue(null, SelectionServerCommand(action));
+        verb.SetValue("MultiSelectModel", "Player");
+        using var command = verb.CreateSubKey("command");
+        command.SetValue(null, string.Empty);
+        command.SetValue("DelegateExecute", clsid);
     }
+
+    private static string SelectionServerCommand(LaunchVerb action)
+        => $"\"{ExePath}\" {ShellVerbServer.ServerToken} {LaunchRequest.FromPaths(action, []).VerbToken}";
+
+    private static bool SelectionVerbIsCurrent(string path, LaunchVerb action)
+    {
+        var clsid = ShellVerbServer.ClassFor(action).ToString("B");
+        using var verb = Registry.CurrentUser.OpenSubKey(path);
+        using var command = verb?.OpenSubKey("command");
+        using var server = Registry.CurrentUser.OpenSubKey($@"Software\Classes\CLSID\{clsid}\LocalServer32");
+        return string.Equals(command?.GetValue("DelegateExecute") as string, clsid, StringComparison.OrdinalIgnoreCase)
+            && verb?.GetValue("MultiSelectModel") as string == "Player"
+            && string.Equals(server?.GetValue(null) as string, SelectionServerCommand(action), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void UnregisterSelectionServer(LaunchVerb action)
+        => Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\CLSID\{ShellVerbServer.ClassFor(action):B}", false);
 
     // ---------- 공통 ----------
 

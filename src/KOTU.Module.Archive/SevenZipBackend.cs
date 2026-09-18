@@ -171,6 +171,10 @@ public sealed class SevenZipBackend : IArchiveBackend
             {
                 AddUnique(dict, Path.GetFileName(source), source);
             }
+            else
+            {
+                throw new FileNotFoundException("A selected source no longer exists.", source);
+            }
         }
         if (dict.Count == 0) throw new FileNotFoundException("Nothing to compress.");
         return dict;
