@@ -1,6 +1,6 @@
 # KOTU 인수인계 문서
 
-> **로컬 구현·검증 완료 A367~A369 · v0.363.0 (2026-09-18)**: 사용자 승인 후 master에서 명시적인 새 폴더 해제와
+> **배포 완료 A367~A369 · v0.363.0 (2026-09-18)**: 사용자 승인 후 master에서 명시적인 새 폴더 해제와
 > 다중 선택 전달을 수정했다. 전체 선택 목록 복사, 선택 단위 Shell COM 전달, 요청별 목적 창,
 > 압축별 작업 일괄 등록·작업 내부 목록/암호 처리, 실제 결과 위치 갱신과 프로세스 내부 출력 예약을 적용했다.
 > 기존 자동 단일 루트 해제·협조적 취소·공용 Jobs 및 종료 보호는 유지한다. 원인과 한계의 정본은
@@ -8,7 +8,9 @@
 > 실제 ZIP/7z 내용 왕복·누락 원본 시험 3건, 생산 링크 COM 3동사·500경로/32K초과·nonce 방어 통과.
 > 구조19프로젝트·release gate 변형5건·actionlint 통과. 시험 DLL 누락은 복사 계약으로 해결했으며
 > 로컬 엔진은 정식 v0.362.0의 7z.dll26.03이다. 최종 증거: artifacts/a367-build.log·a367-tests.log, TestResults/a367-final.
-> GitHub CI·배포는 대기 중이다. 실제 Explorer 메뉴·설치 후 등록 이관·최초 UI 실행 및 WinUI 수동 조작은 미검증이다.
+> [build 35325664498](https://github.com/zpstudios/kotu/actions/runs/35325664498)·[release 35325664487](https://github.com/zpstudios/kotu/actions/runs/35325664487) 모두 성공했다. 양쪽 전체 테스트(실제 ZIP/7z 왕복 포함)와 Explorer 선택 COM 게이트를 통과했고, 릴리스의 패키지·설치·파일 해시·설치본 시작 검사도 성공했다.
+> [정식 v0.363.0](https://github.com/zpstudios/kotu/releases/tag/v0.363.0)을 2026-09-18 17:49:35 KST 게시했다(초안·사전 공개 아님). 소스/태그 `ce4aaf87f098a860ad5fc8ba360000c282184a7a` 일치. [Setup](https://github.com/zpstudios/kotu/releases/download/v0.363.0/KOTU-win-Setup.exe)·Portable·full·delta(619,394 bytes)·업데이트 피드를 확인했다. `releases.win.json`에 새 full/delta와 이전 v0.362.0 full이 있다. 기존 설치본의 제자리 업데이트는 미검증이다.
+> 실제 Explorer 메뉴·설치 후 등록 이관·선택 전달을 통한 최초 UI 실행 및 WinUI 수동 조작은 미검증이다.
 
 > **배포 완료 A366 · v0.362.0 (2026-09-10)**: 사용자 승인 후 A366을 진행 등록하고 Original(1:1)만
 > 24뷰포트·외곽22×18·숫자10으로 확대했다. 다른 아이콘18 및 하단 버튼32·위치·간격은 유지한다.

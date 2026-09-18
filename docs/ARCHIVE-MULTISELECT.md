@@ -1,6 +1,6 @@
 # 압축 선택 목록과 명시적 폴더 해제 — A367~A369
 
-2026-09-18 사용자가 원인 조사 후 수정을 승인했다. v0.363.0 로컬 구현과 독립 검토를 완료했다. 전체 Release/x64 빌드 경고·오류 0(15.68초), 8개 시험 프로젝트 404/404 통과다. GitHub CI·배포는 대기 중이며 실제 Windows 탐색기 메뉴 및 WinUI 조작은 아직 검증하지 않았다.
+2026-09-18 사용자가 원인 조사 후 수정을 승인했다. v0.363.0 구현·독립 검토·정식 배포를 완료했다. 전체 Release/x64 빌드 경고·오류 0(15.68초), 8개 시험 프로젝트 404/404 통과다. GitHub build·release 모두 성공했다. 실제 Windows 탐색기 메뉴 및 WinUI 조작은 아직 검증하지 않았다.
 
 ## 확인한 원인
 
@@ -40,6 +40,12 @@ Windows 탐색기는 `IExecuteCommand`·`IObjectWithSelection` COM 경계에서 
 - 생산 소스를 링크한 `eng/ShellVerbSmoke`에서 별도 프로세스 COM 3개 동사, 500개 경로·32K 초과 선택, nonce·재사용·손상 요청 방어를 통과했다. 실제 Explorer 메뉴 클릭 검증과는 구분한다.
 - Archive XAML 파싱·diff 공백 검사, 구조 19프로젝트, release gate 변형 5건, actionlint 통과.
 - 최종 로그: `artifacts/a367-build.log`, `artifacts/a367-tests.log`, `TestResults/a367-final` 최신 8개 TRX. 네이티브 원인/단축 재검증: `artifacts/a367-native-diagnostic.log`, `artifacts/a367-native-fixed.log`.
-- 실제 Explorer 선택 메뉴 클릭·설치 후 레지스트리 마이그레이션·최초 UI 실행, UI 포커스·레이아웃, 암호 입력과 취소 버튼의 수동 조작은 미검증이다. COM 하네스 결과와 실제 Explorer UI 검증을 구분해서 기록한다.
+- 실제 Explorer 선택 메뉴 클릭·설치 후 레지스트리 마이그레이션·선택 전달을 통한 최초 UI 실행, UI 포커스·레이아웃, 암호 입력과 취소 버튼의 수동 조작은 미검증이다. COM 하네스 결과와 실제 Explorer UI 검증을 구분해서 기록한다.
+
+## 정식 배포 증거
+
+[build 35325664498](https://github.com/zpstudios/kotu/actions/runs/35325664498)·[release 35325664487](https://github.com/zpstudios/kotu/actions/runs/35325664487) 모두 성공했다. 양쪽 전체 테스트(실제 ZIP/7z 왕복 포함)와 Explorer 선택 COM 게이트를 통과했고, 릴리스의 패키지·설치·파일 해시·설치본 시작 검사도 성공했다.
+
+[정식 v0.363.0](https://github.com/zpstudios/kotu/releases/tag/v0.363.0)을 2026-09-18 17:49:35 KST 게시했다(초안·사전 공개 아님). 소스/태그 `ce4aaf87f098a860ad5fc8ba360000c282184a7a` 일치. [Setup](https://github.com/zpstudios/kotu/releases/download/v0.363.0/KOTU-win-Setup.exe)·Portable·full·delta(619,394 bytes)·업데이트 피드를 확인했다. `releases.win.json`에 새 full/delta와 이전 v0.362.0 full이 있다. 기존 설치본의 제자리 업데이트는 미검증이다.
 
 공식 계약: [IExecuteCommand 선택 배열](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-iexecutecommand), [Verb selection model](https://learn.microsoft.com/en-us/windows/win32/shell/how-to-employ-the-verb-selection-model).
