@@ -8,13 +8,17 @@
 
 표현 모델은 선택 순서와 완료 스냅샷을 화면 수명 동안 보관한다. 진행 중에는 공용 스냅샷으로 갱신하고, 각 작업의 Completion 결과도 받아 이력 제한보다 많은 작업이 첫 화면 갱신 전에 끝나도 결과를 복원한다. 완료된 행은 늦은 진행 알림으로 되돌아가지 않는다. UI 반영은 화면 세대와 모델 동일성을 확인하며 Unloaded에서 기존 구독과 관찰 대기를 해제한다. 결과 열기는 UI 밖에서 경로를 확인한 뒤 실행하고 화면 이탈 후 늦은 실행·오류 표시를 방지한다.
 
-순수 생산 표현 모델의 회귀 시험 10건을 추가했다: 상태 6종과 버튼 조건, 제어형 느린 작업의 진행→완료/변경 알림, 이력 1개 제한에서 100개 즉시 완료 복원/선택 순서, 무관한 작업 및 결과 없는 성공의 열기 방어. 분리 중 작업 완료·공용 이력 삭제 후 재관찰 복원도 검사했다. 완료 결과 화면은 반복 재부착해도 초기 추출을 다시 실행하지 않는다. 독립 검토 완료, 전체 Release/x64 빌드 경고/오류0(50.74초), 8개 프로젝트414/414 통과(실패/건너뜀0, Core191·Archive61 포함)다. 신규10건과 실제 ZIP/7z 내용 왕복·누락 원본3건 모두 통과했다. 증거는 artifacts/a370-build.log·a370-tests.log 및 TestResults/a370-final이다. GitHub CI·배포는 대기 중이다. 실제 WinUI 픽셀·키보드·다중 창 수동 조작은 아직 검증하지 않았다. 작업 실행·백엔드·선택 전달·암호·취소 정책과 서비스 코드는 변경하지 않았다.
+순수 생산 표현 모델의 회귀 시험 10건을 추가했다: 상태 6종과 버튼 조건, 제어형 느린 작업의 진행→완료/변경 알림, 이력 1개 제한에서 100개 즉시 완료 복원/선택 순서, 무관한 작업 및 결과 없는 성공의 열기 방어. 분리 중 작업 완료·공용 이력 삭제 후 재관찰 복원도 검사했다. 완료 결과 화면은 반복 재부착해도 초기 추출을 다시 실행하지 않는다. 독립 검토 완료, 전체 Release/x64 빌드 경고/오류0(50.74초), 8개 프로젝트414/414 통과(실패/건너뜀0, Core191·Archive61 포함)다. 신규10건과 실제 ZIP/7z 내용 왕복·누락 원본3건 모두 통과했다. 증거는 artifacts/a370-build.log·a370-tests.log 및 TestResults/a370-final이다. 후속 GitHub CI·정식 배포까지 완료했다. 실제 WinUI 픽셀·키보드·다중 창 수동 조작은 아직 검증하지 않았다. 작업 실행·백엔드·선택 전달·암호·취소 정책과 서비스 코드는 변경하지 않았다.
 
 ### A370 CI 컴파일 보정
 
 최초 CI에서는 `ArchiveBatchPresentationTests.cs:81`의 `model.Update(completed.Reverse())`가 void 반환 호출로 해석되어 인자로 사용할 수 없어 컴파일에 실패했다. CI annotation: "Argument 1: cannot convert from 'void' to 'System.Collections.Generic.IEnumerable<KOTU.Core.Jobs.BackgroundJobSnapshot>'". source dfe244a의 build35328700357·release35328700290가 실패했고 태그·릴리스는 생성되지 않았다. model.Update(Enumerable.Reverse(completed))로 LINQ 함수를 명시했다. 같은 시험 호출 패턴은 이 한 곳뿐이며 생산 코드와 v0.364.0 버전은 변경하지 않았다. 로컬과 CI의 정확한 SDK/참조 차이가 이 선택을 유발했는지는 확정하지 않는다.
 
-수정 후 Archive 프로젝트 빌드와 시험 61/61 통과(실제 ZIP/7z 왕복·누락 원본 시험 포함). 로그는 `artifacts/a370-ci-fix-archive.log`다. 앞선 전체414/414는 최초 로컬 검증 기록이며, 이 한 줄 보정 후 전체 확인은 후속 CI에서 진행한다. 정식 배포는 아직 대기 중이다.
+수정 후 Archive 프로젝트 빌드와 시험 61/61 통과(실제 ZIP/7z 왕복·누락 원본 시험 포함). 로그는 `artifacts/a370-ci-fix-archive.log`다. 앞선 전체414/414는 최초 로컬 검증 기록이며, 이 한 줄 보정 후 전체 빌드·테스트도 후속 CI에서 성공했다.
+
+[build 35329319992](https://github.com/zpstudios/kotu/actions/runs/35329319992)·[release 35329319887](https://github.com/zpstudios/kotu/actions/runs/35329319887) 모두 성공했다. 수정 소스의 전체 빌드·전체 테스트·Explorer COM 전달 게이트 및 패키지·설치·파일 해시·설치본 시작 검사를 통과했다.
+
+[정식 v0.364.0](https://github.com/zpstudios/kotu/releases/tag/v0.364.0)을 2026-09-18 18:30:31 KST 게시했다(초안·사전 공개 아님). 소스/태그 `458368987bf1096c69e537be5f0b655ef499b3cc` 일치. [Setup](https://github.com/zpstudios/kotu/releases/download/v0.364.0/KOTU-win-Setup.exe)·Portable·full·delta(500,256 bytes)·업데이트 피드를 확인했다. 피드에는 새 full/delta와 이전 v0.363.0 full이 있다. 실제 GUI 조작·기존 설치본의 제자리 업데이트는 미검증이다.
 
 ## A367~A369 기록
 

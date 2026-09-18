@@ -1,6 +1,6 @@
 # KOTU 요구사항 — 남은 작업 정리
 
-- [로컬 완료 A370 · 사용자 승인, 배포 대기] **탐색기 일괄 압축 해제 후 중앙 화면의 진행·완료 표시** (2026-09-18 등록·사용자 명시 승인)
+- [배포 완료 A370 · 사용자 승인, v0.364.0] **탐색기 일괄 압축 해제 후 중앙 화면의 진행·완료 표시** (2026-09-18 등록·사용자 명시 승인)
   - 사용자 보고: Windows 탐색기에서 ZIP 두 개를 선택해 Extract to folder 실행 후, Jobs는 두 건 모두 Completed이나 중앙은 Open an archive 안내만 보여 해제가 진행되지 않은 것처럼 보인다.
   - 현장 읽기 검증: 보고된 결과 폴더 두 곳에 파일 1개·4개가 존재하고, 총 5개 모두 ZIP 내부 원본과 크기 및 SHA-256이 일치했다. 실제 해제 실패가 아닌 화면 표시 문제다. 사용자 파일은 변경하지 않았다.
   - 코드 원인: ArchiveView.OnLoaded의 일괄 해제 경로는 작업 등록 후 반환하고 중앙 목록을 채우는 LoadArchiveAsync/RefreshRows를 거치지 않는다. 완료 시 하단 상태와 Jobs만 갱신하므로 초기 안내가 남는다.
@@ -9,8 +9,11 @@
 
   - v0.364.0 구현: 외부 일괄 해제의 중앙 안내를 실제 선택별 작업 결과 목록으로 대체했다. 성공할 때만 결과 폴더를 열 수 있고, 암호 입력은 기존 우상단 Jobs로 안내한다.
   - 큰 작업의 기존 제목·하단 진행/취소·Jobs 표시는 유지하며 중앙에도 진행률과 상태를 표시한다. 작업별 최종 Completion 결과를 보존해 공용 이력 제한·빠른 완료에도 선택 결과를 잃지 않는다.
-  - 상태 6종, 제어형 느린 작업, 100개 즉시 완료/이력 제한, 관련 없는 작업·결과 없음의 열기 방어 회귀 시험을 추가했다. 독립 검토 완료, 전체 빌드 경고/오류0(50.74초), 414/414 통과(Core191·Archive61, 신규10건 포함). 재부착·이력 삭제 회귀 및 실제 ZIP/7z 관련 3건 통과. 실제 GUI는 미검증이며 GitHub CI·배포 대기.
-  - 최초 CI의 시험81행 `completed.Reverse()` void 반환 선택 컴파일 오류를 `Enumerable.Reverse(completed)` 한 줄로 보정했다. 생산/버전 무변경, 이후 Archive 빌드·61/61 통과(artifacts/a370-ci-fix-archive.log). SDK 차이 원인은 미확정이며 후속 CI·배포 대기다.
+  - 상태 6종, 제어형 느린 작업, 100개 즉시 완료/이력 제한, 관련 없는 작업·결과 없음의 열기 방어 회귀 시험을 추가했다. 독립 검토 완료, 전체 빌드 경고/오류0(50.74초), 414/414 통과(Core191·Archive61, 신규10건 포함). 재부착·이력 삭제 회귀 및 실제 ZIP/7z 관련 3건 통과. 실제 GUI는 미검증이며 후속 GitHub CI·정식 배포 완료.
+  - 최초 CI의 시험81행 `completed.Reverse()` void 반환 선택 컴파일 오류를 `Enumerable.Reverse(completed)` 한 줄로 보정했다. 생산/버전 무변경, 이후 Archive 빌드·61/61 통과(artifacts/a370-ci-fix-archive.log). SDK 차이 원인은 미확정이며 후속 CI·배포는 성공했다.
+  - [build 35329319992](https://github.com/zpstudios/kotu/actions/runs/35329319992)·[release 35329319887](https://github.com/zpstudios/kotu/actions/runs/35329319887) 모두 성공했다. 수정 소스의 전체 빌드·전체 테스트·Explorer COM 전달 게이트 및 패키지·설치·파일 해시·설치본 시작 검사를 통과했다.
+  - [정식 v0.364.0](https://github.com/zpstudios/kotu/releases/tag/v0.364.0)을 2026-09-18 18:30:31 KST 게시했다(초안·사전 공개 아님). 소스/태그 `458368987bf1096c69e537be5f0b655ef499b3cc` 일치. [Setup](https://github.com/zpstudios/kotu/releases/download/v0.364.0/KOTU-win-Setup.exe)·Portable·full·delta(500,256 bytes)·업데이트 피드를 확인했다. 피드에는 새 full/delta와 이전 v0.363.0 full이 있다. 실제 GUI 조작·기존 설치본의 제자리 업데이트는 미검증이다.
+
 ## 2026-09-18 압축 관련 제보 — v0.363.0 정식 배포 완료
 
 근거는 사용자가 첨부한 2026-09-17~18 대화 이미지다. 아래는 제보와 요청을 옮긴 것이며,

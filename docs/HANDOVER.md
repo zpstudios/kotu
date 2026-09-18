@@ -1,15 +1,17 @@
 # KOTU 인수인계 문서
 
-> **로컬 구현·검증 완료 A370 · v0.364.0 (2026-09-18 사용자 승인)**: 일괄 해제는 실제 성공했지만 중앙 안내문이
+> **배포 완료 A370 · v0.364.0 (2026-09-18 사용자 승인)**: 일괄 해제는 실제 성공했지만 중앙 안내문이
 > 그대로 남던 표시 문제를 수정했다. 외부 일괄 해제 화면에 선택별 진행/암호 대기/완료/실패/취소와 성공 결과의
 > Open folder를 표시한다. 기존 일반 압축 내부 목록과 작업 실행·암호·취소 정책은 유지한다.
 > 공용 이력에서 지워진 빠른 완료도 각 작업 Completion 결과로 보존한다. 상태 6종·느린 작업·100개 즉시 완료 등
 > 신규10건을 포함해 전체414/414 통과(Core191·Archive61), 독립 검토 완료.
 > 전체 Release/x64 빌드 경고/오류0(50.74초). 재부착·이력 삭제 회귀와 실제 ZIP/7z 관련3건도 통과했다.
-> 증거: artifacts/a370-build.log·a370-tests.log, TestResults/a370-final. 실제 GUI는 미검증이며 GitHub CI·배포 대기다.
+> 증거: artifacts/a370-build.log·a370-tests.log, TestResults/a370-final. 실제 GUI는 미검증이며 후속 GitHub CI·정식 배포는 완료했다.
 > 최초 CI에서 시험81행 Reverse 호출이 void로 선택되어 컴파일 실패했다. Enumerable.Reverse 명시 한 줄로 보정,
-> 이후 Archive 빌드·61/61 재검증 통과(artifacts/a370-ci-fix-archive.log). 생산/버전은 무변경, 후속 CI·배포 대기.
+> 이후 Archive 빌드·61/61 재검증 통과(artifacts/a370-ci-fix-archive.log). 생산/버전은 무변경, 후속 CI·배포 성공.
 > SDK 차이는 확인되지 않았으며 앞선414/414는 최초 로컬 기록이다.
+> [build 35329319992](https://github.com/zpstudios/kotu/actions/runs/35329319992)·[release 35329319887](https://github.com/zpstudios/kotu/actions/runs/35329319887) 모두 성공했다. 수정 소스의 전체 빌드·전체 테스트·Explorer COM 전달 게이트 및 패키지·설치·파일 해시·설치본 시작 검사를 통과했다.
+> [정식 v0.364.0](https://github.com/zpstudios/kotu/releases/tag/v0.364.0)을 2026-09-18 18:30:31 KST 게시했다(초안·사전 공개 아님). 소스/태그 `458368987bf1096c69e537be5f0b655ef499b3cc` 일치. [Setup](https://github.com/zpstudios/kotu/releases/download/v0.364.0/KOTU-win-Setup.exe)·Portable·full·delta(500,256 bytes)·업데이트 피드를 확인했다. 피드에는 새 full/delta와 이전 v0.363.0 full이 있다. 실제 GUI 조작·기존 설치본의 제자리 업데이트는 미검증이다.
 > 상세: [ARCHIVE-MULTISELECT.md](ARCHIVE-MULTISELECT.md)의 A370 절.
 
 > **배포 완료 A367~A369 · v0.363.0 (2026-09-18)**: 사용자 승인 후 master에서 명시적인 새 폴더 해제와
