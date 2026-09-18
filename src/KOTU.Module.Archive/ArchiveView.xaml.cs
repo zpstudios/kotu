@@ -196,6 +196,8 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private volatile bool _attached;
     private Guid? _activeJobId;
     private readonly List<Guid> _batchJobIds = [];
+    private ArchiveBatchPresentation? _batchPresentation;
+    private bool _showBatchResults;
     public Guid? ActiveJobId => _jobs.Jobs.GetSnapshots()
         .FirstOrDefault(job => job.IsActive && _batchJobIds.Contains(job.Id))?.Id ?? _activeJobId;
     private ContentDialog? _viewDialog;
@@ -234,6 +236,11 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             _jobs.Jobs.Changed -= OnJobsChanged;
             _jobs.Jobs.Changed += OnJobsChanged;
             UpdateObservedJob();
+            if (_batchPresentation is { } presentation)
+            {
+                foreach (var item in presentation.Items)
+                    _ = ObserveBatchCompletionAsync(item.Id, presentation, _viewGeneration, _viewLifetime.Token);
+            }
             Focus(FocusState.Programmatic);
         };
         Loaded += OnLoaded;
@@ -247,7 +254,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             _viewDialog?.Hide();
             _viewDialog = null;
             _password = null;
-            if (_root is null && _activeJobId is null) _initialized = false;
+            if (_root is null && _activeJobId is null && _batchPresentation is null) _initialized = false;
             _busy = false;
             _worker?.Dispose(); // 화면 전용 조회가 끝나면 워커가 종료한다.
             _worker = null;
@@ -277,6 +284,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         if (_initialArgs.Contains(KOTU.Core.Cli.LaunchRequest.ExtractHereToken) ||
             _initialArgs.Contains(KOTU.Core.Cli.LaunchRequest.ExtractToFolderToken))
         {
+            _showBatchResults = true;
             await RunExtractManyAsync(_initialPaths,
                 _initialArgs.Contains(KOTU.Core.Cli.LaunchRequest.ExtractToFolderToken));
             return;
@@ -478,16 +486,73 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             var handles = _jobs.StartExtractMany(paths, forceFolder, password);
             _batchJobIds.Clear();
             _batchJobIds.AddRange(handles.Select(handle => handle.Id));
+            var presentation = new ArchiveBatchPresentation(handles, paths);
+            _batchPresentation = presentation;
+            if (_showBatchResults)
+            {
+                BreadcrumbText.Text = presentation.Summary;
+                EntryHeaders.Visibility = Visibility.Collapsed;
+                EntryList.Visibility = Visibility.Collapsed;
+                PlaceholderText.Visibility = Visibility.Collapsed;
+                BatchResults.ItemsSource = presentation.Items;
+                BatchResults.Visibility = Visibility.Visible;
+            }
             _activeJobId = handles.FirstOrDefault()?.Id;
             SetBusy(true, "Extracting...");
             UpdateObservedJob();
-            await Task.WhenAll(handles.Select(handle => handle.Completion)).WaitAsync(_viewLifetime.Token);
+            await Task.WhenAll(handles.Select(handle => ObserveBatchCompletionAsync(handle.Id, presentation,
+                generation, _viewLifetime.Token)));
             if (IsCurrent(generation)) UpdateObservedJob();
         }
         catch (OperationCanceledException) { }
         catch (InvalidOperationException ex)
         {
             if (IsCurrent(generation)) StatusText.Text = ex.Message;
+        }
+    }
+    private async Task ObserveBatchCompletionAsync(Guid id, ArchiveBatchPresentation presentation,
+        int generation, CancellationToken observation)
+    {
+        try
+        {
+            // 서비스 이력 제한과 무관하게 각 task의 최종 스냅샷을 보존한다.
+            var result = await presentation.WaitForCompletionAsync(id, observation);
+            if (IsCurrent(generation) && ReferenceEquals(_batchPresentation, presentation))
+            {
+                presentation.Update([result]);
+                if (_showBatchResults) BreadcrumbText.Text = presentation.Summary;
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void OnBatchCancel(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ArchiveBatchItem item } && item.CanCancel &&
+            _batchPresentation?.Items.Contains(item) == true)
+            _jobs.Jobs.Cancel(item.Id);
+    }
+
+    private async void OnBatchOpenFolder(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ArchiveBatchItem item } || !item.CanOpen ||
+            _batchPresentation?.Items.Contains(item) != true) return;
+        var presentation = _batchPresentation;
+        var generation = _viewGeneration;
+        var path = item.ResultPath;
+        try
+        {
+            await Task.Run(() =>
+            {
+                if (!IsCurrent(generation)) return;
+                var folder = Directory.Exists(path) ? path : File.Exists(path) ? Path.GetDirectoryName(path) : null;
+                if (folder is null) throw new DirectoryNotFoundException();
+                if (IsCurrent(generation)) Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+            });
+        }
+        catch
+        {
+            if (IsCurrent(generation) && ReferenceEquals(_batchPresentation, presentation)) item.ReportOpenError();
         }
     }
     /// <summary>풀기 결과를 탐색기로 보여준다. 실패해도 조용히 무시.</summary>
@@ -736,6 +801,11 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
     private void UpdateObservedJob()
     {
+        if (_attached && _batchPresentation is { } presentation)
+        {
+            presentation.Update(_jobs.Jobs.GetSnapshots());
+            if (_showBatchResults) BreadcrumbText.Text = presentation.Summary;
+        }
         if (!_attached || ActiveJobId is not { } id) return;
         _activeJobId = id;
         var job = _jobs.Jobs.GetSnapshots().FirstOrDefault(item => item.Id == id);
@@ -767,6 +837,17 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     private async Task<bool> RunBackgroundJobAsync(Func<BackgroundJobHandle> start, string label)
     {
         if (!_attached || _busy) return false;
+        _batchPresentation = null;
+        if (_showBatchResults)
+        {
+            _showBatchResults = false;
+            BatchResults.ItemsSource = null;
+            BatchResults.Visibility = Visibility.Collapsed;
+            EntryHeaders.Visibility = Visibility.Visible;
+            EntryList.Visibility = Visibility.Visible;
+            RefreshRows();
+            UpdateBreadcrumb();
+        }
         var generation = _viewGeneration;
         var observation = _viewLifetime.Token;
         BackgroundJobHandle handle;
