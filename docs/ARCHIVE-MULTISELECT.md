@@ -10,6 +10,12 @@
 
 순수 생산 표현 모델의 회귀 시험 10건을 추가했다: 상태 6종과 버튼 조건, 제어형 느린 작업의 진행→완료/변경 알림, 이력 1개 제한에서 100개 즉시 완료 복원/선택 순서, 무관한 작업 및 결과 없는 성공의 열기 방어. 분리 중 작업 완료·공용 이력 삭제 후 재관찰 복원도 검사했다. 완료 결과 화면은 반복 재부착해도 초기 추출을 다시 실행하지 않는다. 독립 검토 완료, 전체 Release/x64 빌드 경고/오류0(50.74초), 8개 프로젝트414/414 통과(실패/건너뜀0, Core191·Archive61 포함)다. 신규10건과 실제 ZIP/7z 내용 왕복·누락 원본3건 모두 통과했다. 증거는 artifacts/a370-build.log·a370-tests.log 및 TestResults/a370-final이다. GitHub CI·배포는 대기 중이다. 실제 WinUI 픽셀·키보드·다중 창 수동 조작은 아직 검증하지 않았다. 작업 실행·백엔드·선택 전달·암호·취소 정책과 서비스 코드는 변경하지 않았다.
 
+### A370 CI 컴파일 보정
+
+최초 CI에서는 `ArchiveBatchPresentationTests.cs:81`의 `model.Update(completed.Reverse())`가 void 반환 호출로 해석되어 인자로 사용할 수 없어 컴파일에 실패했다. CI annotation: "Argument 1: cannot convert from 'void' to 'System.Collections.Generic.IEnumerable<KOTU.Core.Jobs.BackgroundJobSnapshot>'". source dfe244a의 build35328700357·release35328700290가 실패했고 태그·릴리스는 생성되지 않았다. model.Update(Enumerable.Reverse(completed))로 LINQ 함수를 명시했다. 같은 시험 호출 패턴은 이 한 곳뿐이며 생산 코드와 v0.364.0 버전은 변경하지 않았다. 로컬과 CI의 정확한 SDK/참조 차이가 이 선택을 유발했는지는 확정하지 않는다.
+
+수정 후 Archive 프로젝트 빌드와 시험 61/61 통과(실제 ZIP/7z 왕복·누락 원본 시험 포함). 로그는 `artifacts/a370-ci-fix-archive.log`다. 앞선 전체414/414는 최초 로컬 검증 기록이며, 이 한 줄 보정 후 전체 확인은 후속 CI에서 진행한다. 정식 배포는 아직 대기 중이다.
+
 ## A367~A369 기록
 
 2026-09-18 사용자가 원인 조사 후 수정을 승인했다. v0.363.0 구현·독립 검토·정식 배포를 완료했다. 전체 Release/x64 빌드 경고·오류 0(15.68초), 8개 시험 프로젝트 404/404 통과다. GitHub build·release 모두 성공했다. 실제 Windows 탐색기 메뉴 및 WinUI 조작은 아직 검증하지 않았다.

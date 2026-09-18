@@ -7,6 +7,9 @@
 > 신규10건을 포함해 전체414/414 통과(Core191·Archive61), 독립 검토 완료.
 > 전체 Release/x64 빌드 경고/오류0(50.74초). 재부착·이력 삭제 회귀와 실제 ZIP/7z 관련3건도 통과했다.
 > 증거: artifacts/a370-build.log·a370-tests.log, TestResults/a370-final. 실제 GUI는 미검증이며 GitHub CI·배포 대기다.
+> 최초 CI에서 시험81행 Reverse 호출이 void로 선택되어 컴파일 실패했다. Enumerable.Reverse 명시 한 줄로 보정,
+> 이후 Archive 빌드·61/61 재검증 통과(artifacts/a370-ci-fix-archive.log). 생산/버전은 무변경, 후속 CI·배포 대기.
+> SDK 차이는 확인되지 않았으며 앞선414/414는 최초 로컬 기록이다.
 > 상세: [ARCHIVE-MULTISELECT.md](ARCHIVE-MULTISELECT.md)의 A370 절.
 
 > **배포 완료 A367~A369 · v0.363.0 (2026-09-18)**: 사용자 승인 후 master에서 명시적인 새 폴더 해제와

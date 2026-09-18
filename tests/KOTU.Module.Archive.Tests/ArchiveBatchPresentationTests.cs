@@ -78,7 +78,7 @@ public class ArchiveBatchPresentationTests
         Assert.Single(service.GetSnapshots());
         var model = new ArchiveBatchPresentation(handles, Enumerable.Range(0, 100).Select(index => $"{index}.zip").ToArray());
         model.Update(service.GetSnapshots());
-        model.Update(completed.Reverse());
+        model.Update(Enumerable.Reverse(completed));
         Assert.Equal(100, model.Items.Count);
         Assert.All(model.Items, item => Assert.True(item.CanOpen));
         Assert.Equal(Enumerable.Range(0, 100).Select(index => $"{index}.zip"), model.Items.Select(item => item.Name));
