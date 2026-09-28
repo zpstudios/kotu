@@ -479,6 +479,23 @@ public sealed partial class DocumentView : UserControl,
             ? Visibility.Visible : Visibility.Collapsed;
         PrintButton.Visibility = Visibility.Visible; // A365: 빈 상태도 표시하고 기존 활성 판정은 그대로 둔다.
         FitControls.Visibility = Visibility.Visible;
+        UpdateViewModeLabelVisibility(StatusBarGrid.ActualWidth);
+    }
+
+    // A340: 최소 창(720 DIP)에서 셸 여백을 뺀 모듈 바는 약 594 DIP다. 상태 라벨 폭과
+    // 파일명 최소 가독 영역을 더한 620 DIP부터 라벨을 보이고, 그 아래에서는 동작 버튼을 남긴 채
+    // 라벨만 먼저 접는다. 콘텐츠별 버튼이 접힌 뒤에도 같은 한 지점에서 다시 판정한다.
+    private const double ViewModeLabelMinBarWidth = 620;
+
+    private void OnStatusBarSizeChanged(object sender, SizeChangedEventArgs e) =>
+        UpdateViewModeLabelVisibility(e.NewSize.Width);
+
+    private void UpdateViewModeLabelVisibility(double barWidth)
+    {
+        var text = _path is not null || _untitled;
+        ViewModeText.Visibility = text && barWidth >= ViewModeLabelMinBarWidth
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void UpdateZoomText()
@@ -1522,15 +1539,18 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>
-    /// A190→A224: 토글 버튼 표시 갱신의 단일 지점 — 활성(CanToggleViewMode) + 글리프·툴팁
+    /// A190→A224→A340: 토글 버튼 표시 갱신의 단일 지점 — 활성(CanToggleViewMode) + 글리프·툴팁
     /// (누르면 갈 모드: 편집 중 E890 View / 뷰 중 E70F Edit — "Markdown only" 문구는 A224에서
-    /// 제거, 전 텍스트 형식이 대상이다). UpdateFitButton과 같은 "코드가 내용을 정한다" 관용구.
+    /// 제거, 전 텍스트 형식이 대상이다) + 현재 모드 글자. 버튼과 라벨 모두 _viewMode 한 값에서
+    /// 산출해 상태/동작이 어긋나는 이중 원천을 만들지 않는다.
     /// </summary>
     private void UpdateViewToggle()
     {
         ViewToggleButton.IsEnabled = CanToggleViewMode;
         ViewToggleIcon.Glyph = _viewMode ? "\uE70F" : "\uE890"; // Edit / View
-        ToolTipService.SetToolTip(ViewToggleButton, _viewMode ? "Edit" : "View");
+        ToolTipService.SetToolTip(ViewToggleButton,
+            _viewMode ? "Switch to edit mode" : "Switch to view mode");
+        ViewModeText.Text = _viewMode ? "Viewing" : "Editing";
     }
 
     // ---------- 편집 표시 토글 2종 (A215) ----------

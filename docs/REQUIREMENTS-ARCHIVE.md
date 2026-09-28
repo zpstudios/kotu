@@ -1,5 +1,18 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
+## A340
+
+- [구현 완료 A340 · v0.367.0] **편집/보기 토글의 상태와 동작 분리**: 기존 아이콘은 계속
+  “누르면 갈 모드”를 표시하고, 바로 왼쪽의 `Editing`/`Viewing` 라벨이 현재 모드를 명시한다.
+  툴팁은 `Switch to view mode`/`Switch to edit mode`로 바꿨다. 버튼 아이콘·툴팁·상태 라벨은
+  모두 `UpdateViewToggle`의 `_viewMode` 한 값에서 산출하며, 라벨은 활성·잠금·장식 상태에 관여하지 않는다.
+- **현행 배치 반영**: A340 등재 뒤 A362가 인쇄 버튼을 우측군으로 옮겼으므로, 현행 10칸 구조를
+  기준으로 상태 라벨 c2를 신설하고 View c3, 파일명 star c4, 나머지 우측군 c5~c10으로 재계수했다.
+  모듈 바 폭 620 DIP 아래에서는 라벨만 먼저 접고 동작 버튼은 유지한다.
+- **검증**: XAML/XML 파싱, 11개 열과 c10 종단, 이벤트·문구·단일 상태 원천 정적 계약,
+  19프로젝트 구조 및 배포 게이트 변형 5건을 통과했다. 로컬 환경에는 .NET SDK가 없어 컴파일·시험은
+  GitHub CI에서 확인한다. 가이드 4벌 동기화. 실제 WinUI 배치와 620 DIP 전후 전환은 미검증.
+
 ## A341
 
 - **정식 배포 완료 v0.366.1**: 2026-09-28 12:36:32 KST 게시. [build36373872610](https://github.com/zpstudios/kotu/actions/runs/36373872610)·[release36373872611](https://github.com/zpstudios/kotu/actions/runs/36373872611) 성공. 소스/태그48471fcc03a5841f4683b597c2455a05441177ec 일치. [Setup](https://github.com/zpstudios/kotu/releases/download/v0.366.1/KOTU-win-Setup.exe)·Portable·full·delta(470,687 bytes)·피드 게시 확인. 업데이트 피드에는 새 full/delta와 v0.366.0 full이 있다. 최초 v0.366.0도 배포됐으나 최종 사용 버전은 인쇄 예산을 보강한 v0.366.1이다. 실제 GUI/인쇄/제자리 업데이트는 미검증.

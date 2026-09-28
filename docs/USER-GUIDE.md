@@ -251,8 +251,10 @@ Seven modules. Switch between them from the menu at the bottom left.
   (**Line guides** and **Paragraph marks**), the PDF page count, the zoom percentage and the
   **Fit** control. The toggles and the zoom button are always there and simply grey out where they
   do not apply.
-- **Every text document has an edit mode and a view mode.** The view button in the bottom bar
-  switches between them. In view mode the editor is locked so nothing changes while you read, and
+- **Every text document has an edit mode and a view mode.** The bottom bar names the current state as
+  **Editing** or **Viewing**; the button immediately to its right shows the action it will take and its
+  tooltip says **Switch to view mode** or **Switch to edit mode**. On a narrow window the state text
+  hides first while the button remains available. In view mode the editor is locked so nothing changes while you read, and
   the editing marks go with it: **the caret, the guide lines and the `¶` marks all disappear** and
   the two display toggles grey out until you switch back, which leaves the text on its own to read.
   You can still select and copy, and save any edits you made earlier. For
