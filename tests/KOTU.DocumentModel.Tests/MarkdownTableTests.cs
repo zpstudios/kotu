@@ -116,6 +116,39 @@ public sealed class MarkdownTableTests
     private static string Text(IReadOnlyList<MdSpan> spans) => string.Concat(spans.Select(s => s.Text));
 
     [Fact]
+    public void PrintBudgetPreservesOrdinaryBlockBoundary()
+    {
+        var blocks = Enumerable.Repeat(new MdBlock(MdBlockKind.Paragraph, 0, "", []), 3000).ToList();
+        Assert.True(MarkdownRenderBatch.FitsPrintBudget(blocks, 3000));
+        blocks.Add(blocks[0]);
+        Assert.False(MarkdownRenderBatch.FitsPrintBudget(blocks, 3000));
+    }
+
+    [Fact]
+    public void PrintBudgetCountsTableCellsAndRejectsHeavyTablesBelowRowLimit()
+    {
+        var row = PrintBudgetRow(100);
+        var blocks = Enumerable.Repeat(row, 30).ToList();
+        Assert.True(MarkdownRenderBatch.FitsPrintBudget(blocks, 3000));
+        blocks.Add(row);
+        Assert.False(MarkdownRenderBatch.FitsPrintBudget(blocks, 3000));
+    }
+
+    [Fact]
+    public void PrintBudgetCountsMixedBlocksAndSingleHugeRow()
+    {
+        var paragraph = new MdBlock(MdBlockKind.Paragraph, 0, "", []);
+        Assert.True(MarkdownRenderBatch.FitsPrintBudget([paragraph, PrintBudgetRow(2999)], 3000));
+        Assert.False(MarkdownRenderBatch.FitsPrintBudget([paragraph, PrintBudgetRow(3000)], 3000));
+        Assert.False(MarkdownRenderBatch.FitsPrintBudget([PrintBudgetRow(3001)], 3000));
+        Assert.False(MarkdownRenderBatch.FitsPrintBudget([paragraph], 0));
+    }
+
+    private static MdBlock PrintBudgetRow(int cells) => new(MdBlockKind.TableRow, 0, "", [],
+        new MdTableRow(Enumerable.Repeat<IReadOnlyList<MdSpan>>([], cells).ToArray(),
+            Enumerable.Repeat(MdColumnAlignment.Left, cells).ToArray(), false, false));
+
+    [Fact]
     public void BodyWithoutPipeIsOneCellUntilBlankOrNewBlock()
     {
         var blocks = MarkdownParser.Parse("A|B\n---|---\nonlyone\n`code|pipe`\nescaped\\|pipe\n\nparagraph\n\nA|B\n---|---\nlast\n# Heading");

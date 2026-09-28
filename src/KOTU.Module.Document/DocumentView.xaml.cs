@@ -3281,7 +3281,7 @@ public sealed partial class DocumentView : UserControl,
     /// <summary>
     /// 총 페이지 수 — 갈래별(Paginate는 UI 스레드, 계약의 "무겁게 만들지 말 것"):
     /// 마크다운 렌더(배치 5) = 블록 팩킹 시뮬레이션(EnsurePrintRenderLayout — 블록당 Measure 1회.
-    /// 블록 수 상한 MaxRenderPrintBlocks가 점유를 닫고, 넘으면 스냅샷 단계에서 이미 원문 갈래다).
+    /// 블록·표 셀 예산 MaxRenderPrintBlocks를 넘으면 스냅샷 단계에서 이미 원문 갈래다).
     /// 텍스트(배치 4) = 측정 1회 기반 산술 페이지네이션(EnsurePrintLayout — 전문 1패스 산술이라
     /// A177 임계(1MB) 이하에서 수 ms). 임계 초과는 산출 없이 즉답 1(안내 페이지 1장 — 인쇄 억제,
     /// 부록 B 78 확정. 장식 오프(A177 ⓑ)와 같은 성질의 성능 방어라 임계 상수도 재사용한다.
@@ -3454,7 +3454,7 @@ public sealed partial class DocumentView : UserControl,
     /// <b>A211 배치 5</b>: 세션 모드(렌더/편집)도 여기서 함께 굳는다 — 조건 4개가 전부 맞을 때만
     /// 렌더 갈래다: ⓐ 지금 렌더 모드일 것 ⓑ 대상이 md 파일일 것(불변식상 ⓐ면 참이지만 갈래
     /// 판정의 단일 지점이라 명시 재확인 — 무제·비md가 새는 경로를 코드로 닫는다) ⓒ 판에 오른
-    /// 모델이 있을 것(파싱 대기 중·원문 폴백 중이면 없다) ⓓ 블록 수가 팩킹 상한 이하일 것.
+    /// 모델이 있을 것(파싱 대기 중·원문 폴백 중이면 없다) ⓓ 블록·표 셀 수가 팩킹 예산 이하일 것.
     /// 하나라도 어긋나면 _printBlocks가 null로 남아 원문 갈래로 인쇄된다(다운·무동작 없음).
     /// </para>
     /// </summary>
@@ -3466,7 +3466,8 @@ public sealed partial class DocumentView : UserControl,
         _printRenderLayout = null;
         if (IsTextPrintTarget) _printText = EditorText; // A142 ①ⓑ 공유 스냅샷 관용구 — 복사 없음
         if (_renderMode && _path is { } path && IsMarkdownPath(path)
-            && _renderBlocks is { Count: > 0 } blocks && blocks.Count <= MaxRenderPrintBlocks)
+            && _renderBlocks is { Count: > 0 } blocks
+            && MarkdownRenderBatch.FitsPrintBudget(blocks, MaxRenderPrintBlocks))
         {
             _printBlocks = blocks; // 불변 record 목록이라 참조 보관 = 스냅샷(세션 중 토글과 무관)
         }
@@ -3802,16 +3803,15 @@ public sealed partial class DocumentView : UserControl,
     // 페이지 조립은 캐시된 구간을 다시 조립하기만 한다.
 
     /// <summary>
-    /// 렌더 갈래 팩킹의 블록 수 상한 — 넘으면 그 세션은 원문 갈래다(스냅샷 단계 판정).
+    /// 렌더 갈래 팩킹 예산 — 일반 블록은 1, 표는 셀마다 1이며 초과 시 원문 갈래다.
     /// <para>
     /// 왜 필요한가: 렌더 자격(A190)은 A177 임계(1MB 문자) 이하 md 전부라, 임계 직전 문서면
     /// 블록이 수만 개까지 나올 수 있다. 팩킹은 블록당 조립 + Measure 1회이고 그 전량이
     /// <b>Paginate(UI 스레드) 안에서 동기로</b> 돈다 — 계약이 "무겁게 만들지 말 것"이라고 못
     /// 박은 자리다. 상한을 넘는 문서는 렌더 대신 원문 텍스트로 인쇄한다(과제 사양의 "대용량 =
-    /// 원문 폴백"). 값 근거: A193 분할 조립이 프레임당 60블록을 안전 조각으로 잡았는데
-    /// (RenderChunkBlocks), 그쪽은 시각 트리 부착까지 포함한 비용이고 여기는 측정 전용이라 더
-    /// 싸다. 3000 = 그 조각의 50배 — 페이지네이션 1회 점유를 A193 기준 50프레임 이내로 묶고,
-    /// 실제로는 부착·배치·렌더가 빠져 그보다 짧다. 일반 문서(수백 블록)는 걸리지 않는다.
+    /// 원문 폴백"). 기존 3000블록 상한을 유지하되 A341 표는 행 수가 아닌 셀 수로 계산한다.
+    /// 이는 생성할 요소 수를 제한하는 예산이며 한 블록의 텍스트 길이나 실제 소요 시간을
+    /// 보장하는 상한은 아니다. 일반 문서(수백 블록)는 걸리지 않는다.
     /// </para>
     /// </summary>
     private const int MaxRenderPrintBlocks = 3000;
