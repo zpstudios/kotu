@@ -475,8 +475,8 @@ Image, Video, PDF and text documents share one Fit control with four options:
 | **Fit height** | fills the height |
 
 Clicking the body of the button re-applies the option you last chose (`F`). Clicking the arrow opens
-the list. `A` jumps straight to **Original**. A new picture or video starts at Contain; a new PDF
-starts at Original.
+the list. `A` jumps straight to **Original**. A new picture, video or PDF starts at Contain, so the
+whole page or frame is visible.
 
 **In a text or Markdown document** — while you edit, while you read the locked view, and in the
 rendered Markdown view alike — the first three options are live and **Fit height** is greyed out,
@@ -485,7 +485,8 @@ all three come to the same thing: the document goes back to 100%. Which one you 
 button then shows, and a document opens showing **Original**.
 
 While nothing is open — the window is showing the file browser — the Fit control stays on the bar
-but is greyed out; it comes alive when a file opens.
+with the same neutral Fit icon used by the other modules, but is greyed out; it comes alive when a
+file opens.
 
 ---
 
@@ -864,7 +865,7 @@ If KOTU's own folder moves — after an update, or after you move a portable cop
 you turned on are repaired silently the next time it starts.
 
 **The Start menu** is the button at the bottom-left corner (``Alt+` ``). It rises from the bar and
-lists, from the bottom up: Min to tray, then All Readable, Image, Video, Audio, Document,
+lists, from the bottom up: Min to tray, then All Readable, Document, Image, Video, Audio,
 Archive, H/W Info, then Settings. There is no Exit entry here — closing the last window ends the
 app, and the tray menu has **Exit KOTU**.
 

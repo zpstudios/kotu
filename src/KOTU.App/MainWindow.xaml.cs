@@ -979,16 +979,16 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 시작 메뉴 구성. 패널은 **위→아래**로 채우는데 **번호는 아래에서 위로** 올라간다
     /// (1번이 메뉴 최하단) — 그래서 아래 AddModuleItem 호출은 7 → 1 역순으로 늘어놓는다.
-    /// 번호(1=All Readable · 2=문서 · 3=이미지 · 4=오디오 · 5=영상 · 6=압축 · 7=하드웨어 —
+    /// 번호(1=All Readable · 2=문서 · 3=이미지 · 4=영상 · 5=오디오 · 6=압축 · 7=하드웨어 —
     /// **A254/v0.242.0이 A96 배열을 대체**, A10 오디오 삽입 승계)는 A147(v0.163.0)이 Alt+숫자를
     /// 폐지한 뒤로 **표기·순서용 개념**일 뿐 어떤 키와도 연결되지 않는다(그래서 번호를 다시
     /// 매겨도 키맵은 영향이 없다 — A34 표는 폐지된 키의 이력일 뿐).
     /// A254(v0.242.0) 이후 배치(위→아래):
     /// 광고 · 구분선 · Settings(0) · **구분선** · 하드웨어(7) · 구분선 · 압축(6) · 구분선 ·
-    /// 영상(5) · 오디오(4) · 이미지(3) · 문서(2) · **구분선** · All Readable(1) · 구분선 ·
+    /// 오디오(5) · 영상(4) · 이미지(3) · 문서(2) · **구분선** · All Readable(1) · 구분선 ·
     /// Minimize to tray(A218 — 최하단·번호 없음).
     /// 즉 화면에서 보이는 아래→위 순서는 Min to tray → All Readable → 문서 → 이미지 →
-    /// 오디오 → 영상이다(A254 사용자 지시). 압축·하드웨어·Settings·상단부는 불변.
+    /// 영상 → 오디오다(A372 사용자 지시). 압축·하드웨어·Settings·상단부는 불변.
     /// 굵게 표시한 구분선 2개가 A96(v0.116.0) 신규다 — ① 1번과 2번 사이 ② 하드웨어와 Settings
     /// 사이(둘이 서로 붙어 보인다는 사용자 지적). A254는 구분선 위치를 건드리지 않았다.
     /// </summary>
@@ -1020,10 +1020,10 @@ public sealed partial class MainWindow : Window
         AddModuleItem("archive"); // 6
         StartMenuPanel.Children.Add(Divider());
 
-        // 영상-오디오-이미지-문서 그룹 (A254/v0.242.0 재배열 — 아래부터 문서 → 위로 갈수록 영상).
+        // 오디오-영상-이미지-문서 그룹 (A372/v0.368.0 — A254의 Audio/Video 순서만 교환).
         // 나열은 위→아래 채움 순서라 화면에서 읽히는 아래→위 순서와 정확히 반대다.
-        AddModuleItem("video"); // 5 — A254 이전 3
-        AddModuleItem("audio"); // 4 — 음악 재생 분리 (A10, v0.75.0), 번호 불변
+        AddModuleItem("audio"); // 5 — A372에서 Video와 순서 교환
+        AddModuleItem("video"); // 4 — A254 이전 3, A372에서 Audio와 순서 교환
         AddModuleItem("image"); // 3 — A254 이전 2
         AddModuleItem("document"); // 2 — v0.44.0 실제 모듈로 교체 (텍스트·마크다운 1단계), A254 이전 5
         StartMenuPanel.Children.Add(Divider()); // A96 신규 ①: 1번 ↔ 2번 분리

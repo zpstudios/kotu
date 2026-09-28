@@ -2138,12 +2138,13 @@ public sealed partial class DocumentView : UserControl,
         // Fit height만 빼고 활성 — ShowTextFitState). 파일이 바뀌면 버튼 표시도 기본값으로
         // 회귀(A30 규칙, 기억 안 함) — 실제 배율 적용은 PdfPane.LoadAsync가 한다.
         // A320이 그 기본값을 Contain에서 ActualSize(1:1)로 뒤집었고, A338이 다시 FitWidth로
-        // 옮겼다(2026-09-03 사용자 확정 — "문서는 fit, 영상·사진은 contain이 기본"). A320의 근거는
+        // 옮겼다. A374는 사용자가 첨부한 세로로 잘린 PDF 화면을 근거로, 처음부터 페이지 전체가
+        // 한 화면에 들어오는 Contain으로 되돌린다. A320의 근거는
         // 사용자 발언 "pdf 도 1:1 으로 할게"였는데, 그 말은 1:1을 **옵션으로 두자**는 뜻이었고
         // 기본값까지 뒤집으라는 뜻이 아니었다(실기기 확인: 1:1로 열리면 페이지 폭이 화면보다
-        // 넓어 가로 스크롤이 생긴다). A30의 "파일이 바뀌면 기본값 회귀" 규칙 자체는 세 번 모두
+        // 넓어 가로 스크롤이 생긴다). A30의 "파일이 바뀌면 기본값 회귀" 규칙 자체는 네 번 모두
         // 그대로이고 값만 갈렸다. 1:1은 플라이아웃 옵션으로 남는다.
-        _lastFitOption = PdfFitMode.FitWidth;
+        _lastFitOption = PdfFitMode.Contain;
         ShowPdfFitState();
 
         var ok = await _pdfPane.LoadAsync(path); // 실패 다이얼로그는 패널이 띄운다
@@ -2235,9 +2236,10 @@ public sealed partial class DocumentView : UserControl,
     /// 오염시키지 않는다). A83 이후 100%도 플라이아웃 옵션이라 ActualSize까지 들어온다
     /// (1:1 별도 버튼은 A111에서 없어졌다).
     /// 기억하지 않는다 — 파일이 바뀌면 기본값으로 회귀(A30 규칙).
-    /// 기본값 이력: A49~A214 <c>Contain</c> → A320 <c>ActualSize</c>(1:1) → <b>A338 FitWidth</b>
-    /// (2026-09-03 사용자 확정 — "문서는 fit, 영상·사진은 contain이 기본"). 규칙 자체("파일이
-    /// 바뀌면 기본값 회귀")는 세 번 모두 그대로이고 값만 갈렸다. A320은 사용자 발언 "pdf 도
+    /// 기본값 이력: A49~A214 <c>Contain</c> → A320 <c>ActualSize</c>(1:1) → A338 <c>FitWidth</c>
+    /// → <b>A374 Contain</b>. A338은 2026-09-03 사용자 확정("문서는 fit, 영상·사진은 contain이 기본")에
+    /// 따른 값이었고, A374는 새 사용자 요청(문서 전체를 한 화면에 보기)으로 이를 개정했다. 규칙 자체("파일이
+    /// 바뀌면 기본값 회귀")는 네 번 모두 그대로이고 값만 갈렸다. A320은 사용자 발언 "pdf 도
     /// 1:1 으로 할게"를 기본값 지시로 읽었는데, 그 말은 1:1을 <b>옵션으로 두자</b>는 뜻이었다 —
     /// 실기기에서 1:1로 열리면 페이지 폭이 화면보다 넓어 가로 스크롤이 생긴다. 1:1은 플라이아웃
     /// 옵션으로 남는다. 실제 배율을 거는 곳은 <c>PdfPane.LoadAsync</c>이고 그 값과 <b>반드시
@@ -2245,7 +2247,7 @@ public sealed partial class DocumentView : UserControl,
     /// 텍스트 갈래(_lastTextFitOption)는 종전대로 <c>ActualSize</c>다 — 텍스트는 줄바꿈이 이미
     /// 폭을 채우므로 폭 맞춤이 뜻을 갖지 않는다(A214 갈래 분리의 근거 그대로).
     /// </summary>
-    private PdfFitMode _lastFitOption = PdfFitMode.FitWidth;
+    private PdfFitMode _lastFitOption = PdfFitMode.Contain;
 
     /// <summary>
     /// A214: 텍스트 갈래(파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)의 마지막 핏 옵션. FitHeight는
@@ -2285,9 +2287,8 @@ public sealed partial class DocumentView : UserControl,
     /// **활성**으로 재정의했다: 100%·Contain·Fit width 3옵션 + 본체(마지막 옵션 표시·재적용).
     /// Fit height만 비활성 — 텍스트는 높이가 무한이라 성립하지 않는다(사용자 명시).
     /// 빈 화면(파일·무제 없음)은 A230이 조절기를 <b>접게</b> 했다가 A249(v0.246.0)가 되돌렸다 —
-    /// 다시 <b>보이되 비활성</b>이고, 그때 표시되는 내용이 아래의 "1:1" 상자다(A230 기간에 화면에
-    /// 닿지 않던 세 줄이 그대로 되살아난 것 — 의도된 복원. 표기 계보 = "1/1" → A253 "OR" →
-    /// A260 상자 안 "1:1").
+    /// 다시 <b>보이되 비활성</b>이다. A373부터 이때의 표시는 실제 선택값이 아닌 공통 Fit 아이콘
+    /// (이미지·영상의 빈 상태와 같은 E9A6)이다. 문서를 열면 갈래별 마지막 옵션 표시로 바뀐다.
     /// 활성/비활성 전환은 ShowPdfFitState와 이 한 쌍만 한다(계약 무변경 — 제3 지점 금지).
     /// 활성이면 A·F 키도 HotkeySupport의 IsEnabled 게이트를 통과해 동작한다 — 단 에디터
     /// 타이핑 중에는 종전대로 글자가 우선이다(A32/A84 통과 규칙 — ShouldPassThrough).
@@ -2311,11 +2312,9 @@ public sealed partial class DocumentView : UserControl,
         }
         // A230 기간에는 접힌 상태의 내용이라 화면에 닿지 않던 세 줄 — A249(v0.246.0)의 표시 정책
         // 복원으로 다시 빈 화면 갈래의 실제 표시가 됐다(비활성 버튼 표시 + "No document open").
-        // A253: 표시를 "1/1"(13px)에서 원본 배율 표기 "OR"(9px)로 맞췄다.
-        // A260: 그 표기가 상자 안 "1:1"이 됐다 — UpdateFitButton의 ActualSize 표시와 같은
-        // 조립기를 쓴다. 빈 화면 ↔ 문서 열림 전환에서 같은 모양이 그대로 이어져야 하기 때문이다
-        // (호출마다 새 인스턴스라 UIElement 재사용 문제도 없다).
-        FitButton.Content = FitIcons.BuildOriginalRatioBox();
+        // A373: 빈 상태는 선택된 배율이 없으므로 ActualSize의 "1:1"을 암시하지 않는다.
+        // 이미지·영상 모듈의 빈 상태 XAML과 같은 공통 Fit(Contain) 글리프를 쓴다.
+        FitButton.Content = new FontIcon { Glyph = "\uE9A6", FontSize = 18 };
         ToolTipService.SetToolTip(FitButton, "No document open");
         ToolTipService.SetToolTip(FitOptionsButton, "No document open");
     }
@@ -2326,7 +2325,7 @@ public sealed partial class DocumentView : UserControl,
     /// DropDownButton(FitOptionsButton, 플라이아웃 전담·A34 키 없음)이라 이 메서드는
     /// 종전대로 본체(FitButton)만 만진다. A214: 갈래별 마지막 옵션을 골라 표시한다
     /// (PDF = _lastFitOption / 텍스트 = _lastTextFitOption — 빈 화면은 ShowTextFitState가
-    /// 비활성 "1:1" 상자를 직접 그리므로 여기 안 온다). 텍스트 갈래는 FitHeight가 될 수 없다(항목 비활성).
+    /// 비활성 공통 Fit 아이콘을 직접 그리므로 여기 안 온다). 텍스트 갈래는 FitHeight가 될 수 없다(항목 비활성).
     /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
     /// A184: 그 PathIcon 도형을 글자 "1:1" 형상에서 꺾쇠 프레임으로 바꿨다.
     /// A231(3차): 도형 자체를 폐기하고 <b>소형 텍스트 "100%"</b>로 갔다 — 2026-08-25
@@ -2337,7 +2336,7 @@ public sealed partial class DocumentView : UserControl,
     /// 본체 상태 표시는 그 약자 "OR" 두 글자로 갔다(2026-08-27 사용자 지시).
     /// A260(5차·확정): 그 "OR"을 <b>테두리 상자 안의 "1:1"</b>로 바꾼다(2026-08-27 사용자 지시 —
     /// 약자보다 배율 기호가 즉시 읽힌다. A143의 "1:1" 글자가 상자를 얻어 돌아온 형태다).
-    /// 조립은 <see cref="FitIcons.BuildOriginalRatioBox"/> 한 곳 — 위 빈 화면 갈래도 같은 것을 쓴다.
+    /// 조립은 <see cref="FitIcons.BuildOriginalRatioBox"/> 한 곳에서 맡는다.
     /// 본체는 Button이라 Content에 임의 UIElement를 넣을 수 있다(IconElement만 받는
     /// MenuFlyoutItem.Icon과 다르다).
     /// 툴팁 "Original size"·항목 이름 "Original"·A 키 표기는 A253 그대로 무변경.
@@ -4084,6 +4083,6 @@ public sealed partial class DocumentView : UserControl,
         HotkeySupport.Register(this, FitButton, ActualSizeKey,
             () => SelectFitOption(PdfFitMode.ActualSize));
         HotkeySupport.Register(this, FitButton, FitKey, ReapplyFit); // A214: 갈래 공용 재적용
-        ShowTextFitState(); // A145→A214: 초기 상태(파일 없음) = 빈 화면 갈래(비활성 "1:1" 상자)
+        ShowTextFitState(); // A145→A373: 초기 상태(파일 없음) = 빈 화면 갈래(비활성 공통 Fit 아이콘)
     }
 }
