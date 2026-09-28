@@ -2,6 +2,8 @@
 
 ## A341
 
+- **정식 배포 완료 v0.366.1**: 2026-09-28 12:36:32 KST 게시. [build36373872610](https://github.com/zpstudios/kotu/actions/runs/36373872610)·[release36373872611](https://github.com/zpstudios/kotu/actions/runs/36373872611) 성공. 소스/태그48471fcc03a5841f4683b597c2455a05441177ec 일치. [Setup](https://github.com/zpstudios/kotu/releases/download/v0.366.1/KOTU-win-Setup.exe)·Portable·full·delta(470,687 bytes)·피드 게시 확인. 업데이트 피드에는 새 full/delta와 v0.366.0 full이 있다. 최초 v0.366.0도 배포됐으나 최종 사용 버전은 인쇄 예산을 보강한 v0.366.1이다. 실제 GUI/인쇄/제자리 업데이트는 미검증.
+
 - **v0.366.1 후속 검토 보완**: 표 인쇄의 기존3000블록 조건이 행 수만 계산하여 다열 표에서 UI 요소를 과다 생성할 수 있다는 독립 검토 결과를 반영했다. 일반 블록1/표 셀1 가중 예산을 넘어가면 측정 전에 기존 원문 인쇄로 전환한다. 일반/혼합/다열/단일큰행 경계 시험3건 추가. 최종 전체 빌드0경고/0오류(26.86초), 450/450 통과(DocumentModel47). 재검토에서 기존 발견 해결 확인. 증거 artifacts/a341-print-build.log·a341-print-tests.log, TestResults/a341-print-final. 안내4개 동기화.
 
 - [구현 완료 A341 · v0.366.0] **마크다운 뷰어 모드의 표 미지원 — 표 문법 신설**
