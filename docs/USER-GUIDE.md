@@ -478,6 +478,9 @@ Clicking the body of the button re-applies the option you last chose (`F`). Clic
 the list. `A` jumps straight to **Original**. A new picture, video or PDF starts at Contain, so the
 whole page or frame is visible.
 
+If a PDF fills or is wider than the window in Fit width, Original or another enlarged mode, it starts at the page's
+left edge instead of hiding that edge behind a black leading margin. Pages that fit remain centred.
+
 **In a text or Markdown document** — while you edit, while you read the locked view, and in the
 rendered Markdown view alike — the first three options are live and **Fit height** is greyed out,
 since a document has no fixed height to fit. The text already wraps to the width of the view, so
