@@ -200,9 +200,21 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
 
         // 키 입력을 받기 위해 로드 시 포커스 확보 (IsTabStop은 XAML에서 설정)
-        Loaded += (_, _) => Focus(FocusState.Programmatic);
+        Loaded += (_, _) =>
+        {
+            Focus(FocusState.Programmatic);
+            if (!_imageLoading && !_copyReady && _navigator?.Current is not null)
+                _ = LoadCurrentAsync();
+        };
+        KeyDown += OnImageCopyKeyDown;
+        LosingFocus += (_, _) => _copyGate.Invalidate();
         Unloaded += (_, _) =>
         {
+            _copyGate.Invalidate();
+            _copyReady = false;
+            _imageLoading = false;
+            _loadSequence++;
+            _openSeq++;
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
             _preloadCache.Clear(); // A194 — 뷰 언로드 = 선읽기 캐시 무효화(대형 바이트를 붙들지 않는다)
@@ -275,6 +287,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         DiagTrace.Write("image", "OpenPath " + path); // A352 배치 1
         var seq = ++_openSeq;
+        _loadSequence++;
+        _imageLoading = true;
+        _copyReady = false;
+        _copyGate.Invalidate();
         ImageFolderNavigator navigator;
         // A346: 셸이 주입한 좌 리스트 순서가 이 파일의 폴더 것이면 그것이 정본이다 —
         // 폴더를 다시 열거하지 않으므로 대기도 없다.
@@ -439,6 +455,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         var point = e.GetCurrentPoint(Scroller);
         if (point.Properties.PointerUpdateKind
             != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
+        Focus(FocusState.Pointer); // 이미지 클릭은 탐색기에서 이미지로 복사 대상을 돌린다.
         // 밀 여지가 없으면 무동작(등재문 ⓒ) — 창맞춤·축소 상태에서 클릭이 팬으로 오인되지 않는다.
         if (Scroller.ScrollableWidth <= 0 && Scroller.ScrollableHeight <= 0) return;
         if (!_zoomPresenter.CapturePointer(e.Pointer)) return; // 캡처 실패 = 상태를 만들지 않는다
@@ -598,9 +615,14 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     private async Task LoadCurrentAsync()
     {
+        var loadSequence = ++_loadSequence;
+        _copyReady = false;
+        _copyGate.Invalidate();
+        _imageLoading = true;
         var path = _navigator?.Current;
         if (path is null)
         {
+            _imageLoading = false;
             ImageControl.Source = null;
             _printBytes = null; // A211 — 표시가 비면 인쇄 재료도 비운다(CanPrintNow false)
             PlaceholderText.Visibility = Visibility.Visible;
@@ -613,7 +635,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         {
             if (NeedsMagickDecode(path))
             {
-                await LoadViaMagickAsync(path);
+                await LoadViaMagickAsync(path, loadSequence);
                 return;
             }
 
@@ -628,7 +650,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             // A194: 캐시 히트는 대기 없이 완료될 수 있어 종전 직렬 큐의 "요청 순서 = 적용 순서"가
             // 깨질 수 있다 — Magick 경로와 같은 현재 파일 재검증으로 낡은 결과를 버린다
             // (필드 대입 전이라 직전 파일 메타가 새 화면에 섞이지 않는다).
-            if (_navigator?.Current != path) return;
+            if (_navigator?.Current != path || loadSequence != _loadSequence) return;
 
             _pixelWidth = width;
             _pixelHeight = height;
@@ -640,9 +662,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             var bitmap = new BitmapImage(); // GIF 애니메이션은 BitmapImage 기본 지원
             using (var stream = new MemoryStream(data))
                 await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
-            if (_navigator?.Current != path) return; // A194 — SetSourceAsync 대기 중의 항해도 폐기
+            if (_navigator?.Current != path || loadSequence != _loadSequence) return; // A194 — SetSourceAsync 대기 중의 항해도 폐기
 
             ImageControl.Source = bitmap;
+            _copyReady = true;
             _printBytes = data; // A211 — 인쇄 재료(표시 소스와 한 몸으로 세운다)
             PlaceholderText.Visibility = Visibility.Collapsed;
             _userRotation = 0;
@@ -657,6 +680,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
         catch (Exception ex)
         {
+            if (loadSequence != _loadSequence) return;
+            _copyReady = false;
             ImageControl.Source = null;
             _printBytes = null; // A211 — 로드 실패도 "인쇄할 그림 없음"이다(표시 소스와 같은 처리)
             FileNameText.Text = $"Failed to load: {Path.GetFileName(path)} ({ex.Message})";
@@ -674,6 +699,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             UpdatePrintButton(); // A211 — 이 경로는 UpdateStatusBar를 타지 않는다(파일명 칸에 오류 문구를 남겨야 해서)
             TrayStatusChanged?.Invoke();
         }
+        finally
+        {
+            if (loadSequence == _loadSequence) _imageLoading = false;
+        }
     }
 
     // ---------- Magick.NET 디코드 경로 (v0.34.0) ----------
@@ -686,7 +715,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// psd 등을 Magick.NET으로 PNG 바이트로 변환해 표시한다. psd는 첫 이미지가
     /// 병합(composite) 미리보기라 레이어 펼침 없이 그대로 쓴다. 디코드는 워커에서(A42).
     /// </summary>
-    private async Task LoadViaMagickAsync(string path)
+    private async Task LoadViaMagickAsync(string path, int loadSequence)
     {
         var (png, width, height, size, kind) = await Worker.Run(_ =>
         {
@@ -697,7 +726,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
                 FormatSize(new FileInfo(path).Length), FormatKind(path, bitDepth));
         });
 
-        if (_navigator?.Current != path) return; // 그새 다른 파일로 이동함
+        if (_navigator?.Current != path || loadSequence != _loadSequence) return; // 그새 다른 파일로 이동함
 
         _pixelWidth = width;
         _pixelHeight = height;
@@ -708,7 +737,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         using var stream = new MemoryStream(png);
         var bitmap = new BitmapImage();
         await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+        if (_navigator?.Current != path || loadSequence != _loadSequence) return;
 
+        _copyReady = true;
         ImageControl.Source = bitmap;
         _printBytes = png; // A211 — psd도 이 시점엔 PNG 바이트라 인쇄 파이프가 같다(BitmapImage 디코드 가능)
         PlaceholderText.Visibility = Visibility.Collapsed;
@@ -1142,6 +1173,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     private void RotateClockwise()
     {
+        _copyGate.Invalidate();
         _userRotation = (_userRotation + 90) % 360;
         ApplyRotation();
         // A191: 한 번 돌 때마다 트레이의 가로·세로 표기가 뒤바뀐다(총 회전 90°/270° ↔ 0°/180°).

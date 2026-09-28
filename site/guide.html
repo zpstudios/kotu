@@ -379,6 +379,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               only when the picture is bigger than the view and only once the pointer has really moved, so
               double-clicking for full screen still works. Mouse only — touch and pen pan the way they
               always did.</li>
+          <li><strong>Copy the image itself</strong> with <kbd>Ctrl+C</kbd> while the image canvas has
+            keyboard focus. Click the picture to return focus after using the file list. The copy keeps
+            the original pixel resolution and displayed rotation; zoom, Fit and panning do not crop or
+            resize it. Animated images copy their <strong>first frame as a still image</strong>. This
+            also works for images opened in All Readable. File lists, text fields, popups and other
+            focused controls retain their own copy behavior. Nothing is copied while loading or when
+            there is no successfully loaded image.</li>
           <li><strong>Rotate</strong> 90° clockwise with the rotate button or <kbd>R</kbd>. Rotation is not
               saved to the file and resets when you move to the next picture. Orientation stored in EXIF is
               applied automatically.</li>

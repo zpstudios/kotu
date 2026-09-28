@@ -114,6 +114,12 @@ Seven modules. Switch between them from the menu at the bottom left.
 - **Push the picture around** by dragging it with the left mouse button. It starts only when the
   picture is bigger than the view and only once the pointer has really moved, so double-clicking for
   full screen still works. Mouse only — touch and pen pan the way they always did.
+- **Copy the image itself** with `Ctrl+C` while the image canvas has keyboard focus. Click the
+  picture to return focus after using the file list. The copy keeps the original pixel resolution
+  and displayed rotation; zoom, Fit and panning do not crop or resize it. Animated images copy
+  their **first frame as a still image**. This also works for images opened in All Readable.
+  File lists, text fields, popups and other focused controls retain their own copy behavior.
+  Nothing is copied while loading or when there is no successfully loaded image.
 - **Rotate** 90° clockwise with the rotate button or `R`. Rotation is not saved to the file and
   resets when you move to the next picture. Orientation stored in EXIF is applied automatically.
 - **Fit** — see [2.9](#29-the-fit-button). The Image module keeps your choice while you browse the folder.
