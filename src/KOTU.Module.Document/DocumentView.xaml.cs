@@ -1653,7 +1653,7 @@ public sealed partial class DocumentView : UserControl,
         {
             // A193: 첫 조각만 즉시 조립 — 첫 호출 전 Clear는 호출자 몫(AppendRange 계약).
             RenderStack.Children.Clear();
-            var first = Math.Min(RenderChunkBlocks, blocks.Count);
+            var first = MarkdownRenderBatch.Count(blocks, 0, RenderChunkBlocks);
             MarkdownRenderer.AppendRange(RenderStack, blocks, 0, first);
             // A211 배치 5: 판에 오른 모델을 인쇄가 재사용한다(요소가 아니라 모델 — 필드 주석).
             // 분할 조립(A193)이 아직 남아 있어도 모델은 이미 전량이라 인쇄는 문서 전체를 찍는다.
@@ -1692,7 +1692,7 @@ public sealed partial class DocumentView : UserControl,
                     StopRenderAppendLoop(); // 그새 토글·파일 전환·재진입 — 낡은 블록을 붙이지 않는다
                     return;
                 }
-                var count = Math.Min(RenderChunkBlocks, blocks.Count - next);
+                var count = MarkdownRenderBatch.Count(blocks, next, RenderChunkBlocks);
                 MarkdownRenderer.AppendRange(RenderStack, blocks, next, count);
                 next += count;
                 if (next >= blocks.Count) StopRenderAppendLoop(); // 완료 — 더 깨울 이유가 없다

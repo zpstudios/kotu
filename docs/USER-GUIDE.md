@@ -259,12 +259,18 @@ Seven modules. Switch between them from the menu at the bottom left.
   Markdown and HTML the view mode is a rendered view, described below. The button is greyed out
   only when nothing is open, for PDFs (always view-only) and for files opened read-only (over about 1 MB of text).
 - **Markdown is rendered.** A `.md` or `.markdown` file opens as a formatted preview — headings,
-  bold and italic, inline code and code blocks, lists, quotes, horizontal rules and links — and the
+  bold and italic, inline code and code blocks, lists, quotes, horizontal rules, links and pipe tables — and the
   view button switches between that preview and the editor. The preview is built
   from what is in the editor at the moment you switch, so unsaved edits show up in it; anything the
   renderer does not know stays as it was written. Markdown files over about 1 MB of text open
   straight in the editor, and at that size the view button locks the editor instead of rendering
   the preview.
+- **Markdown tables** use a header and a matching separator row (at least three hyphens per cell).
+  Colons select left, center or right alignment for the whole column. Missing body cells are empty;
+  extra cells are ignored. Cells wrap within the document width and support the same emphasis,
+  links and single-backtick code as other text. Use `\|` for a literal pipe; pipes inside paired
+  single-backtick code stay in the cell. Printing breaks tables between rows; headers are not repeated.
+  A body line without pipes is one cell. End the table with a blank line before an ordinary paragraph.
 - **HTML is rendered too.** A `.html` or `.htm` file opens as a real web page first, and the
   view button switches to the source editor and back. HTML files over 4 MB are view-only: the page
   renders in full, but the editor stays empty and the view button is greyed out. The page is rendered

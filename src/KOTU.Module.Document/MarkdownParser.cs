@@ -2,7 +2,7 @@ using System.Text;
 
 namespace KOTU.Module.Document;
 
-/// <summary>블록 종류(A190 — 지원 부분집합 확정본). 표에 없는 문법은 전부 Paragraph(원문 그대로)다.</summary>
+/// <summary>블록 종류(A190 부분집합 + A341 파이프 표). 지원 밖 문법은 Paragraph로 남긴다.</summary>
 internal enum MdBlockKind
 {
     Paragraph, // 일반 문단(연속 텍스트 줄 묶음 — 줄 경계는 LineBreak 스팬)
@@ -11,6 +11,7 @@ internal enum MdBlockKind
     ListItem,  // "- " 불릿·"숫자. " 순서 목록 — 한 줄 = 한 블록, Level = 들여쓰기 단계
     Quote,     // "> " 인용 — 연속 인용 줄 묶음
     Rule,      // "---"(하이픈 3개 이상 단독 줄) 수평선
+    TableRow,  // 표의 한 행: 분할 렌더링과 인쇄도 행 단위로 처리한다.
 }
 
 /// <summary>
@@ -25,15 +26,20 @@ internal sealed record MdSpan(
     string? LinkUrl = null,
     bool LineBreak = false);
 
-/// <summary>파싱된 블록 하나. Literal은 CodeBlock(본문)·ListItem(불릿/번호 표기)만 쓴다(그 외 빈 문자열).</summary>
-internal sealed record MdBlock(MdBlockKind Kind, int Level, string Literal, IReadOnlyList<MdSpan> Spans);
+/// <summary>Literal은 코드 본문·목록 표기, Table은 TableRow의 셀·열 정렬·경계 정보를 담는다.</summary>
+internal sealed record MdBlock(MdBlockKind Kind, int Level, string Literal, IReadOnlyList<MdSpan> Spans,
+    MdTableRow? Table = null);
+
+internal enum MdColumnAlignment { Left, Center, Right }
+internal sealed record MdTableRow(IReadOnlyList<IReadOnlyList<MdSpan>> Cells,
+    IReadOnlyList<MdColumnAlignment> Alignments, bool IsHeader, bool IsLast);
 
 /// <summary>
 /// A190: 자체 최소 마크다운 파서 — 렌더 뷰(뷰 모드 토글)의 문단 모델을 만든다.
 /// UI 비의존 순수 함수라 워커 스레드(A42)에서 돌고, UI(MarkdownRenderer)는 결과 모델만 조립한다.
 ///
 /// <b>지원 부분집합(사양 확정)</b>: 헤딩 1~3단 · 굵게 · 기울임 · 인라인 코드 · 코드 블록 ·
-/// 리스트(불릿/숫자·들여쓰기) · 인용 · 수평선 · 링크. <b>그 외 문법은 원문 그대로 출력</b>
+/// 리스트(불릿/숫자·들여쓰기) · 인용 · 수평선 · 링크 · 파이프 표. <b>그 외 문법은 원문 그대로 출력</b>
 /// (조용한 폴백 — 깨지지 않는 게 합격선). 이미지 문법(느낌표+대괄호)은 링크로 오인하지 않고
 /// 원문 그대로 둔다.
 ///
@@ -84,6 +90,21 @@ internal static class MarkdownParser
             var raw = lines[i];
             var indent = IndentWidth(raw, out var contentStart);
             var content = raw[contentStart..];
+            if (TryTableHeader(lines, i, out var header, out var alignments))
+            {
+                blocks.Add(TableRow(header, alignments, isHeader: true));
+                i += 2;
+                while (i < lines.Count && Classify(lines[i].TrimStart(' ', '\t')) == LineKind.Text)
+                {
+                    // 표 안에서는 파이프 없는 본문도 한 셀이다. 빈 줄 또는 다음 블록에서 표를 끝낸다.
+                    SplitTableCells(lines[i], out var cells);
+                    blocks.Add(TableRow(cells, alignments, isHeader: false));
+                    i++;
+                }
+                var last = blocks[^1];
+                blocks[^1] = last with { Table = last.Table! with { IsLast = true } };
+                continue;
+            }
             switch (Classify(content))
             {
                 case LineKind.Blank:
@@ -156,6 +177,7 @@ internal static class MarkdownParser
                     {
                         var pc = lines[i].TrimStart(' ', '\t');
                         if (Classify(pc) != LineKind.Text) break;
+                        if (TryTableHeader(lines, i, out _, out _)) break;
                         if (!first) spans.Add(new MdSpan(string.Empty, LineBreak: true));
                         spans.AddRange(ParseInlines(pc.TrimEnd()));
                         first = false;
@@ -167,6 +189,89 @@ internal static class MarkdownParser
             }
         }
         return blocks;
+    }
+
+    private static MdBlock TableRow(IReadOnlyList<string> cells,
+        IReadOnlyList<MdColumnAlignment> alignments, bool isHeader)
+    {
+        var parsed = new IReadOnlyList<MdSpan>[alignments.Count];
+        for (var column = 0; column < parsed.Length; column++)
+            parsed[column] = ParseInlines(column < cells.Count ? cells[column] : string.Empty);
+        return new MdBlock(MdBlockKind.TableRow, 0, string.Empty, [],
+            new MdTableRow(parsed, alignments, isHeader, IsLast: false));
+    }
+
+    private static bool TryTableHeader(IReadOnlyList<string> lines, int index,
+        out List<string> header, out IReadOnlyList<MdColumnAlignment> alignments)
+    {
+        header = [];
+        alignments = [];
+        if (index + 1 >= lines.Count || Classify(lines[index].TrimStart(' ', '\t')) != LineKind.Text
+            || !SplitTableCells(lines[index], out header)
+            || !SplitTableCells(lines[index + 1], out var delimiter) || header.Count != delimiter.Count)
+            return false;
+        var result = new MdColumnAlignment[delimiter.Count];
+        for (var column = 0; column < delimiter.Count; column++)
+        {
+            var cell = delimiter[column];
+            var left = cell.StartsWith(':');
+            var right = cell.EndsWith(':');
+            var start = left ? 1 : 0;
+            var end = cell.Length - (right ? 1 : 0);
+            if (end - start < 3) return false;
+            for (var n = start; n < end; n++)
+                if (cell[n] != '-') return false;
+            result[column] = right ? (left ? MdColumnAlignment.Center : MdColumnAlignment.Right)
+                : MdColumnAlignment.Left;
+        }
+        alignments = result;
+        return true;
+    }
+
+    // 바깥 파이프는 선택 사항이다. 이스케이프와 짝이 맞는 단일 백틱 코드 안의 파이프는 셀 내용이다.
+    // 백틱 지원은 기존 인라인 파서와 같으며 닫히지 않은 백틱은 일반 문자로 남긴다.
+    private static bool SplitTableCells(string line, out List<string> cells)
+    {
+        cells = [];
+        var text = line.Trim();
+        var cell = new StringBuilder();
+        var separators = 0;
+        var endsWithSeparator = false;
+        for (var pos = 0; pos < text.Length; pos++)
+        {
+            var c = text[pos];
+            if (c == '\\' && pos + 1 < text.Length && (text[pos + 1] == '|' || text[pos + 1] == '\\'))
+            {
+                cell.Append(text[++pos]);
+                endsWithSeparator = false;
+                continue;
+            }
+            if (c == '`')
+            {
+                var close = text.IndexOf('`', pos + 1);
+                if (close > pos + 1)
+                {
+                    cell.Append(text, pos, close - pos + 1);
+                    pos = close;
+                    endsWithSeparator = false;
+                    continue;
+                }
+            }
+            if (c == '|')
+            {
+                if (pos != 0) cells.Add(cell.ToString().Trim());
+                cell.Clear();
+                separators++;
+                endsWithSeparator = true;
+            }
+            else
+            {
+                cell.Append(c);
+                endsWithSeparator = false;
+            }
+        }
+        if (!endsWithSeparator) cells.Add(cell.ToString().Trim());
+        return separators > 0 && cells.Count > 0;
     }
 
     /// <summary>줄 분류 — 앞 공백을 걷어낸 내용 기준. 지원 밖 형태는 전부 Text(원문 그대로)다.</summary>

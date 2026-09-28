@@ -9,7 +9,7 @@ namespace KOTU.Module.Document;
 /// A190: 파싱된 문단 모델(MarkdownParser)을 WinUI 요소로 조립한다 — UI 스레드 전용
 /// (파싱은 워커, 조립은 UI라는 A42 분업의 UI 쪽 절반).
 ///
-/// <b>구성 방식</b>: RichTextBlock 대신 <b>블록당 TextBlock(+Border) 1개를 StackPanel에 쌓는다</b> —
+/// <b>구성 방식</b>: TextBlock(+Border)을 StackPanel에 쌓고, 표는 한 행당 Grid로 조립한다 —
 /// 저장소에 선례가 있는 API(코드 생성 TextBlock·Border·FontWeights·FromArgb 브러시 —
 /// HardwareView·SettingsView·MainWindow 다수)를 최대한 재사용하고, 선례 없는 문서 API는
 /// 인라인(Run·Hyperlink·TextHighlighter)에 한정한다(각각의 위험·복구법은 구현 보고서 참고).
@@ -71,8 +71,8 @@ internal static class MarkdownRenderer
     }
 
     /// <summary>
-    /// 인쇄용 글자색 고정 — <see cref="BuildBlock"/>이 만드는 요소는 TextBlock·StackPanel·Border
-    /// 셋뿐이라(빌더 전수) 이 세 갈래로 닫힌다. 자식 순회는 인덱스로 한다(Count + 인덱서만 쓰는
+    /// 인쇄용 글자색 고정 — TextBlock·Border·Panel(StackPanel과 표의 Grid)을 재귀 순회한다.
+    /// 자식 순회는 인덱스로 한다(Count + 인덱서만 쓰는
     /// 최소 표면). Hyperlink는 자기 전경색(강조색)을 들고 있어 TextBlock 지정만으로는 안 눌린다.
     /// 브러시는 요소마다 새로 만든다(클래스 주석의 "리소스 공유 안 함" 방침).
     /// </summary>
@@ -106,11 +106,46 @@ internal static class MarkdownRenderer
         MdBlockKind.ListItem => BuildListItem(block),
         MdBlockKind.Quote => BuildQuote(block),
         MdBlockKind.Rule => BuildRule(),
+        MdBlockKind.TableRow => BuildTableRow(block.Table!),
         _ => BuildParagraph(block),
     };
 
     private static UIElement BuildParagraph(MdBlock block) =>
         WithMargin(BuildLines(block.Spans, BodyFontSize, semiBold: false), new Thickness(0, 0, 0, 10));
+
+    private static UIElement BuildTableRow(MdTableRow row)
+    {
+        // 행마다 같은 별표 폭을 사용하므로 조립 조각이나 인쇄 페이지가 달라도 열 경계가 같다.
+        var grid = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, row.IsHeader ? 2 : 0, 0, row.IsLast ? 10 : 0),
+        };
+        for (var column = 0; column < row.Alignments.Count; column++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var text = MakeTextBlock(BodyFontSize, semiBold: row.IsHeader);
+            text.TextAlignment = row.Alignments[column] switch
+            {
+                MdColumnAlignment.Center => TextAlignment.Center,
+                MdColumnAlignment.Right => TextAlignment.Right,
+                _ => TextAlignment.Left,
+            };
+            FillLine(text, row.Cells[column]);
+            var cell = new Border
+            {
+                BorderBrush = SubtleBrush(0x80),
+                // 맞닿은 행은 반 두께를 합쳐 한 선이 된다. 인쇄 페이지 첫 행에도 위쪽 선이 남는다.
+                BorderThickness = new Thickness(column == 0 ? 1 : 0, row.IsHeader ? 1 : 0.5, 1, row.IsLast ? 1 : 0.5),
+                Background = row.IsHeader ? SubtleBrush(0x22) : null,
+                Padding = new Thickness(8, 6, 8, 6),
+                Child = text,
+            };
+            Grid.SetColumn(cell, column);
+            grid.Children.Add(cell);
+        }
+        return grid;
+    }
 
     private static UIElement BuildHeading(MdBlock block)
     {
