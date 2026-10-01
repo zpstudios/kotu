@@ -6,6 +6,17 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-01 — v0.370.0 설치본 실기기 종합 QA
+
+- 실제 설치본을 직접 조작해 시작 메뉴·다중 창·PDF/TXT/Markdown·Image·Video·Audio·Archive·
+  H/W Info·Settings/Update·All Readable의 정상/빈 상태/대표 오류 입력을 표본 점검했다.
+- A372~A377 결과와 압축 해제 후 Windows 탐색기 결과 폴더 1개 자동 열기를 실기기에서 확인했다.
+  TXT 편집/저장은 디스크 재읽기로, All Readable의 PNG→MP3 전환은 자식 뷰와 실제 재생 진행으로 확인했다.
+- 손상 ZIP이 암호 파일로 오인되고 Cancel 뒤 `Reading archive...`가 남는 문제를 A378(Fable),
+  실제 `settings.json`과 About의 `settings.ini` 문구가 충돌하는 문제를 A379(Opus)로 등록했다.
+- 코드 수정·버전 상승·릴리스는 하지 않았다. 상세 범위와 미시험 조합은
+  `docs/QA-REPORT-2026-10-01.md`에 기록했다.
+
 ### 2026-10-01 — A377 PDF Fit width 내부 패널 확대 원점 수리(v0.370.0)
 
 사용자가 v0.369.0 실기기 화면으로 PDF 왼쪽 검은 여백과 우측 내용 은폐가 여전히 남았다고 재보고했다.

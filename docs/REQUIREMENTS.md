@@ -1,5 +1,30 @@
 # KOTU 요구사항 — 남은 작업 정리
 
+- [미반영 A378 · Fable] **손상·비압축 ZIP을 암호 파일로 오판하고 취소 후 `Reading archive...`가 남는 문제**
+  (2026-10-01 v0.370.0 실기기 종합 QA에서 재현)
+  - 일반 텍스트를 `.zip`으로 이름만 바꿔 Archive에서 열면 `Password required`가 표시된다.
+    Cancel 뒤에도 제목은 해당 파일로 남고 빈 화면과 `Reading archive...`가 계속되며 해제 버튼은 비활성이다.
+  - 암호화가 확실한 경우에만 암호를 요청하고, 손상·미지원 입력은 명확한 열기 실패로 종료한다.
+    암호 입력 취소를 포함한 모든 반환 경로에서 busy/상태 문구·도구 상태를 정상화한다.
+  - 조사 출발점: `SevenZipBackend.IsPasswordError`의 예외 문자열 휴리스틱과
+    `ArchiveView.LoadArchiveAsync`의 `ArchivePasswordException` 취소 반환 경로. 정상 암호 ZIP의
+    재시도 계약과 백그라운드 Jobs 암호 흐름은 보존한다.
+  - 재현·기대 결과와 이번 전체 표본은 [실기기 QA 보고서](QA-REPORT-2026-10-01.md)에 기록했다.
+
+- [미반영 A379 · Opus] **Settings Mission Statement의 `settings.ini beside the app` 문구를 실제 설정 정책과 일치시키기**
+  (2026-10-01 v0.370.0 실기기 종합 QA에서 확인)
+  - 같은 Settings 화면은 실제 파일을 `%APPDATA%\KOTU\settings.json`으로 안내하지만 Mission Statement는
+    모든 설정이 앱 옆 `settings.ini`에 있다고 말한다. `Branding.cs` 주석도 이를 미구현 지향점으로 명시한다.
+  - 저장 위치·포맷을 바꾸는 A43 포터블 요구가 아니다. Mission Statement와 이를 재사용하는 첫 실행/스플래시
+    문구만 현재 동작에 맞고 오래가지 않는 표현으로 정정한다. 사용자 노출 문구는 영어를 유지한다.
+  - 설정 파일 안내, 실제 저장 경로, 앱 About, 첫 실행 문구 및 패키징 스플래시의 표현을 함께 대조한다.
+
+- **2026-10-01 v0.370.0 실기기 종합 QA**: 설치본에서 시작 메뉴·창 라우팅·Document/PDF/TXT/Markdown·
+  Image·Video·Audio·Archive·H/W Info·Settings/Update·All Readable을 정상/빈 상태/전환/대표 오류 입력으로
+  직접 조작했다. 최근 A372~A377과 압축 결과 폴더 자동 열기는 정상 동작했고 앱 중단은 없었다.
+  신규 문제는 A378~A379로 등록했으며, 수행 범위와 제외 조합은
+  [QA-REPORT-2026-10-01.md](QA-REPORT-2026-10-01.md)가 정본이다.
+
 - [배포 완료 A377 · v0.370.0] **PDF Fit width에서 내부 패널의 가운데 확대 때문에 생기는 왼쪽 여백과 우측 잘림 수리**
   (2026-10-01 사용자 실기기 재보고·개발 선택)
   - 사용자 첨부 화면에서 일반 세로 Letter PDF를 Fit width로 표시했을 때 페이지 왼쪽에 약 155px의 검은 여백이 남고 오른쪽이 같은 폭만큼 화면 밖으로 숨었다.

@@ -1,5 +1,12 @@
 # KOTU 인수인계 문서
 
+> **v0.370.0 실기기 종합 QA 완료(2026-10-01)**: 설치본을 직접 조작해 시작 메뉴·창 라우팅·
+> Document/PDF/TXT/Markdown·Image·Video·Audio·Archive·H/W Info·Settings/Update·All Readable의
+> 정상/빈 상태/전환/대표 오류 입력을 점검했다. 최근 A372~A377과 압축 해제 후 결과 폴더 자동 열기는
+> 통과했고 앱 중단은 없었다. 신규 미반영은 A378(손상 ZIP의 암호 오판 + 취소 뒤 Reading 상태 잔류,
+> Fable)과 A379(Mission Statement의 settings.ini 문구 불일치, Opus) 두 건이다. 상세·제외 조합 정본은
+> `docs/QA-REPORT-2026-10-01.md`; 개발은 사용자 선택 전 착수하지 않는다.
+
 > **A377 정식 배포 완료(2026-10-01)**: v0.370.0에서 PDF Fit width의 왼쪽 검은 여백과
 > 우측 잘림을 다시 수리했다. A375가 `ListViewItem` 내용만 왼쪽 정렬하고 상위 `ItemsStackPanel`의
 > 가운데 확대 원점을 놓친 것이 원인이었다. 패널은 항상 왼쪽에서 확대하고, 화면 안에 들어오는 페이지의
