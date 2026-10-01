@@ -443,9 +443,9 @@ public sealed class SevenZipBackend : IArchiveBackend
                     !TryReadAt(stream, position, digitalSignature))
                     return false;
                 var signatureLength = BinaryPrimitives.ReadUInt16LittleEndian(digitalSignature[4..6]);
-                var next = position + digitalSignature.Length + signatureLength;
-                if (next != end) return false;
-                position = next;
+                var signatureEnd = position + digitalSignature.Length + signatureLength;
+                if (signatureEnd != end) return false;
+                position = signatureEnd;
                 break;
             }
             if (recordSignature != 0x02014B50 || end - position < entry.Length ||
