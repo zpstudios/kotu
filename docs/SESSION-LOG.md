@@ -14,6 +14,10 @@ A375는 `ListViewItem.HorizontalContentAlignment`와 가로 오프셋만 왼쪽�
 `ItemsStackPanel`이 축소 전 폭으로 뷰포트 가운데에 놓인 뒤 확대되는 기준점은 그대로였다.
 A377은 내부 패널의 `HorizontalAlignment`를 Left로 고정한다. Contain 등 화면 안에 들어오는 페이지는
 기존 `MinWidth = viewport / zoom`과 항목 Center 정렬이 중앙 배치를 계속 담당한다.
+구조 검사 19개·배포 게이트 5개·XML/XAML·소스 계약·diff 검사가 통과했고, GitHub Build
+`36824097838`과 Release `36824097971`도 성공했다. 설정 모듈에서 v0.370.0을 설치한 뒤 같은 PDF를
+직접 열어 기본 Contain에서 문서 전체가 중앙에 보이는 것과 Fit width에서 페이지가 화면 왼쪽부터 시작해
+검은 여백·우측 잘림 없이 양쪽 끝이 모두 보이는 것을 확인했다.
 
 ### 2026-10-01 — A376 압축 해제 완료 후 탐색기 자동 열기(v0.369.0)
 
