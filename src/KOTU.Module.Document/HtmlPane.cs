@@ -160,6 +160,9 @@ public sealed partial class HtmlPane : UserControl
         {
             try
             {
+                if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+                    Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER",
+                        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "WebView2"));
                 await _webView.EnsureCoreWebView2Async();
             }
             catch (Exception)

@@ -1,0 +1,27 @@
+KOTU Standalone
+
+Run KOTU-win-Standalone.exe directly. You do not need to extract an archive.
+The launcher uses the Windows .NET Framework 4.x runtime and automatically extracts
+the complete self-contained .NET 8 application to a private temporary folder.
+WinUI resources, native libraries, VLC plugins and license notices stay together.
+Microsoft-signed Visual C++ x64 runtime DLLs are included app-locally, without
+installing a shared runtime. Their redistribution notice is in the licenses folder.
+Recording requires Windows Media Foundation. Windows N/KN needs Microsoft's Media
+Feature Pack, and Windows Server needs the Media Foundation feature.
+Normal exit removes the session folder. Force termination, a crash of the launcher,
+power loss or persistent file locks may leave temporary files; no reboot deletion
+or persistent cleanup service is installed.
+
+Settings and playback history are held in memory for this session only.
+Automatic updates, update checks, file associations, right-click registration,
+legacy registration cleanup and automatic tray promotion are disabled.
+Administrator restart starts a new standalone session without restoring windows.
+HTML browser data and diagnostic/working files use the session temporary folder.
+No KOTU settings or restart files are read from or written to AppData.
+
+Files you explicitly save, recordings you create and changes you explicitly make
+to Windows (such as desktop wallpaper or the default microphone) are normal results
+of those actions. Wallpaper conversion uses a temporary PNG, not an AppData file.
+Windows may record ordinary process execution and tray history, and existing
+drivers/runtimes can maintain their own OS records. This package neither installs
+drivers nor promises to erase Windows logs, Prefetch, antivirus or tray history.

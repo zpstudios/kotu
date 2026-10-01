@@ -31,7 +31,10 @@ public partial class App : Application
     private static IServiceProvider ConfigureServices()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<ISettingsService, JsonSettingsService>();
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+            services.AddSingleton<ISettingsService, MemorySettingsService>();
+        else
+            services.AddSingleton<ISettingsService, JsonSettingsService>();
         services.AddSingleton<KOTU.Core.Jobs.BackgroundJobService>();
         services.AddSingleton(sp => new KOTU.Module.Archive.ArchiveJobCoordinator(
             sp.GetRequiredService<KOTU.Core.Jobs.BackgroundJobService>()));
@@ -105,7 +108,8 @@ public partial class App : Application
         // 커맨드라인 인자 해석: 파일 열기 또는 탐색기 우클릭 동사(--extract-here/--compress)
         // → 멀티 윈도우 라우팅(같은 모듈 재사용/새 창)은 WindowManager가 담당
         LaunchRequest request;
-        try { request = await Integration.ShellSelectionRequest.ParseAsync(Environment.GetCommandLineArgs().Skip(1).ToList()); }
+        try { request = await Integration.ShellSelectionRequest.ParseAsync(Program.IsStandaloneSmokeTest
+            ? [] : Environment.GetCommandLineArgs().Skip(1).ToList()); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
             ShowSelectionError();
@@ -131,6 +135,21 @@ public partial class App : Application
         // 새 버전을 찾아도 토스트는 없다(A114 알림 방식 b — 설정 화면 표시가 전부).
         Integration.UpdateCoordinator.Initialize();
 
+        if (Program.IsStandaloneSmokeTest)
+        {
+            var settings = Services.GetRequiredService<ISettingsService>();
+            settings.Set("standalone.smoke", true);
+            settings.Save();
+            if (settings is not MemorySettingsService || Integration.UpdateService.IsUpdatableBuild)
+                throw new InvalidOperationException("Standalone policy verification failed.");
+            var smokeSettings = new SettingsView(Services.GetRequiredService<FileTypeRouter>());
+            _ = smokeSettings.TakeBottomBar();
+            await Task.Run(Integration.StandaloneSmoke.VerifyNativePayload);
+            await Task.Delay(4000);
+            Integration.StandaloneSmoke.Complete();
+            Exit();
+        }
+
         // 설치 직후 첫 실행이면 미션 스테이트먼트 웰컴을 띄운다.
         if (Program.IsFirstRun) ShowFirstRunWelcome();
     }
@@ -144,6 +163,7 @@ public partial class App : Application
     /// </summary>
     private static void ShellRegistrationMaintenance()
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
         var settings = Services.GetRequiredService<ISettingsService>();
         const string key = "integration.legacyBrandCleanupDone";
         var needsLegacyCleanup = !settings.Get(key, false);

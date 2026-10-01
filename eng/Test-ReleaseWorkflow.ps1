@@ -23,6 +23,8 @@ function Assert-ReleaseWorkflow([string]$text) {
         'vpk pack --packId KOTU',
         './eng/Test-ReleasePackage.ps1 -PackagePath vpk_out',
         './eng/Test-Installer.ps1 -SetupPath vpk_out/KOTU-win-Setup.exe -PackagePath artifacts/KOTU',
+        './eng/Build-Standalone.ps1',
+        './eng/Test-Standalone.ps1 -ExecutablePath vpk_out/KOTU-win-Standalone.exe',
         'uses: softprops/action-gh-release@v2'
     )
     $previous = -1
@@ -53,12 +55,14 @@ $mutations = @(
     $source.Replace('dotnet test KOTU.sln', 'dotnet test tests/OneProject.csproj'),
     $source.Replace('run: dotnet test KOTU.sln', "continue-on-error: true`n        run: dotnet test KOTU.sln"),
     $source.Replace('./eng/Test-Installer.ps1 -SetupPath vpk_out', './eng/Skipped.ps1 -SetupPath vpk_out'),
-    $source.Replace('dotnet run --project eng/ShellVerbSmoke/ShellVerbSmoke.csproj', 'dotnet run --project eng/Skipped.csproj')
+    $source.Replace('dotnet run --project eng/ShellVerbSmoke/ShellVerbSmoke.csproj', 'dotnet run --project eng/Skipped.csproj'),
+    $source.Replace('./eng/Build-Standalone.ps1', './eng/Skipped.ps1'),
+    $source.Replace('./eng/Test-Standalone.ps1', './eng/Skipped.ps1')
 )
 foreach ($mutation in $mutations) {
     $rejected = $false
     try { Assert-ReleaseWorkflow $mutation } catch { $rejected = $true }
     if (!$rejected) { throw 'Release gate regression was not rejected' }
 }
-Write-Output 'Release gate contract passed; five bypass regressions rejected.'
+Write-Output 'Release gate contract passed; seven bypass regressions rejected.'
 

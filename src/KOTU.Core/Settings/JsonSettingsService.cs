@@ -12,6 +12,8 @@ public sealed class JsonSettingsService : ISettingsService
 
     public JsonSettingsService(string? path = null)
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+            throw new InvalidOperationException("Persistent settings are disabled in the standalone build.");
         _path = path ?? DefaultPath();
         _values = Load(_path);
     }

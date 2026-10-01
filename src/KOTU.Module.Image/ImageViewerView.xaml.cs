@@ -603,7 +603,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private static string WriteWallpaperPng(string sourcePath)
     {
         var target = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            KOTU.Core.Integration.DistributionPolicy.IsStandalone ? Path.GetTempPath() :
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "KOTU", "wallpaper.png");
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         using var magick = new ImageMagick.MagickImage(sourcePath);

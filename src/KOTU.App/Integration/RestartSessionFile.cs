@@ -65,6 +65,7 @@ internal static class RestartSessionFile
     /// </summary>
     public static void Write(List<WindowSnapshot> windows)
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
         var path = PathOf();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(new Payload
@@ -77,6 +78,7 @@ internal static class RestartSessionFile
     /// <summary>기록한 세션 파일을 지운다 — UAC 취소(재시작 무산) 시 쓰는 쪽의 뒷정리.</summary>
     public static void Delete()
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
         try
         {
             File.Delete(PathOf()); // 파일 부재는 no-op — File.Delete는 없는 파일에 던지지 않는다
@@ -94,6 +96,7 @@ internal static class RestartSessionFile
     /// </summary>
     public static IReadOnlyList<WindowSnapshot>? TryConsume()
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return null;
         try
         {
             var path = PathOf();

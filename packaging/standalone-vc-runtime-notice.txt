@@ -1,0 +1,20 @@
+Microsoft Visual C++ Runtime
+
+Copyright Microsoft Corporation. All rights reserved.
+This distribution includes Microsoft-signed x64 Visual C++ 14.x runtime DLLs
+from the Visual Studio CRT redistribution directory. They remain Microsoft
+software and are distributed under the applicable Microsoft Software License
+Terms and Distributable Code rules, not the KOTU license.
+
+Redistribution information and license directory:
+https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files
+https://visualstudio.microsoft.com/license-terms/
+https://learn.microsoft.com/visualstudio/releases/2022/redistribution
+
+These app-local files are extracted with KOTU and removed with its session;
+KOTU does not install or register a shared Visual C++ runtime. Runtime updates
+require downloading a newer KOTU Standalone executable.
+
+Windows Media Foundation is an operating-system prerequisite for recording.
+Windows N/KN requires the Microsoft Media Feature Pack. Windows Server requires
+the Media Foundation feature. KOTU does not install either feature.

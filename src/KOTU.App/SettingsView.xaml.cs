@@ -151,6 +151,18 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // A222(2026-08-24): Windows 섹션(A24 "Always open files in a new instance" 토글 하나뿐이었다)은
         // 옵션 폐지와 함께 통째로 제거 — 창 재사용 규칙은 이제 설정 없이 고정이다(WindowManager 주석).
 
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+        {
+            AddHeader("Standalone build");
+            Root.Children.Add(new TextBlock
+            {
+                Text = "Settings and playback history last only for this session. Explorer integration and updates are disabled.",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.7,
+            });
+        }
+        else
+        {
         AddHeader("Explorer integration");
         // A162(v0.171.0): 4문장 374자였던 설명을 한 줄로 줄이고 상세(관리자 권한 불필요·해제 시 완전 삭제·
         // Windows가 막는 보호 확장자와 그 대처)는 사용자 가이드 "Explorer integration" 절로 옮겼다.
@@ -655,6 +667,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // 어느 그룹에도 속하지 않는다(A292: 모듈별 progressText가 사라져 이제 진행·결과가 전부 이
         // 줄로 온다. A326의 일괄 처리 n/m 진행 문구도 여기다).
         Root.Children.Add(_status);
+        }
 
         // A292: Playback 절이 Explorer integration 바로 아래로 올라왔다(A258의 "Updates 바로 앞"을
         // 대체 — 마스터·Advanced 링크·Playback이 대부분 한 화면에 함께 보이게 한다는 사용자 사양).
@@ -675,7 +688,10 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
 
         AddHeader("Updates");
         var currentVersion = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
-        BuildUpdatesSection(currentVersion);
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+            Root.Children.Add(new TextBlock { Text = "Updates are disabled in the standalone build.", Opacity = 0.7 });
+        else
+            BuildUpdatesSection(currentVersion);
 
         AddHeader("About");
         // 저장소 주소는 클릭해서 이동 가능 (v0.52.0 사용자 요청)
@@ -1243,6 +1259,11 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     /// </summary>
     private void BuildSettingsFileSection()
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+        {
+            Root.Children.Add(new TextBlock { Text = _settings.FilePath, Opacity = 0.7 });
+            return;
+        }
         var openButton = new Button
         {
             Content = "Open settings.json",

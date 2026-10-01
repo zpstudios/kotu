@@ -21,6 +21,8 @@ internal static class ShellSelectionRequest
     internal static Task<LaunchRequest> ParseAsync(IReadOnlyList<string> args)
     {
         if (!args.Contains(Token)) return Task.FromResult(LaunchRequest.Parse(args));
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+            throw new InvalidDataException("Explorer integration is unavailable in the standalone build.");
         if (args.Count != 2 || args[0] != Token) throw new InvalidDataException("Invalid shell selection arguments.");
         return Task.Run(() => Consume(args[1]));
     }
@@ -34,6 +36,8 @@ internal static class ShellSelectionRequest
 
     internal static string Write(LaunchRequest request, string? requestDirectory = null)
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+            throw new InvalidOperationException("Explorer integration is unavailable in the standalone build.");
         Validate(request.Verb, request.Paths);
         var directory = SecureDirectory(requestDirectory);
         var nonce = Guid.NewGuid().ToString("N");
@@ -66,6 +70,8 @@ internal static class ShellSelectionRequest
 
     internal static LaunchRequest Consume(string nonce, string? requestDirectory = null)
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+            throw new InvalidOperationException("Explorer integration is unavailable in the standalone build.");
         if (!Guid.TryParseExact(nonce, "N", out _)) throw new InvalidDataException("Invalid shell selection identifier.");
         var directory = SecureDirectory(requestDirectory);
         var path = Path.Combine(directory.FullName, nonce + ".json");

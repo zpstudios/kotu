@@ -189,6 +189,7 @@ public static class ExplorerIntegration
     /// </summary>
     public static void OpenDefaultAppsSettings()
     {
+        if (DistributionPolicy.IsStandalone) return;
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -220,6 +221,7 @@ public static class ExplorerIntegration
     /// <summary>확장자별 OS '연결 프로그램' 대화상자 — 여기서 KOTU를 고르면 기본 앱이 된다.</summary>
     public static void ShowSetDefaultDialog(nint ownerHwnd, string ext)
     {
+        if (DistributionPolicy.IsStandalone) return;
         var info = new OpenAsInfo
         {
             FileName = ext, // ".mp4" 형태 — OAIF_REGISTER_EXT와 함께면 확장자 등록 모드로 동작
@@ -268,6 +270,7 @@ public static class ExplorerIntegration
     public static IReadOnlyList<string> SetAsDefault(IModule module,
         IProgress<AssociationProgress>? progress = null)
     {
+        if (DistributionPolicy.IsStandalone) return module.SupportedExtensions.ToList();
         string sid;
         try { sid = WindowsIdentity.GetCurrent().User?.Value ?? string.Empty; }
         catch { sid = string.Empty; }
@@ -300,6 +303,7 @@ public static class ExplorerIntegration
     /// <returns>지정에 성공했으면 true. false면 A25 폴백('연결 프로그램' 대화상자 등) 대상.</returns>
     public static bool SetAsDefaultForExtension(IModule module, string ext)
     {
+        if (DistributionPolicy.IsStandalone) return false;
         if (IsProtectedExtension(ext)) return false;
 
         string sid;
@@ -416,6 +420,7 @@ public static class ExplorerIntegration
     /// </summary>
     public static void CleanUpLegacyBrandRegistrations(IEnumerable<IModule> modules)
     {
+        if (DistributionPolicy.IsStandalone) return;
         try
         {
             // A59: 연결 대상이 아닌 모듈(All Readable)은 등록한 적이 없으니 청소할 것도 없다.
@@ -459,6 +464,7 @@ public static class ExplorerIntegration
     /// <param name="progress">확장자 하나를 끝낼 때마다 n/m을 보고할 곳 (A77, v0.106.0). 없으면 보고 안 함.</param>
     public static void RegisterAssociation(IModule module, IProgress<AssociationProgress>? progress = null)
     {
+        if (DistributionPolicy.IsStandalone) return;
         var total = module.SupportedExtensions.Count;
         var done = 0;
         foreach (var ext in module.SupportedExtensions)
@@ -504,6 +510,7 @@ public static class ExplorerIntegration
     /// </summary>
     public static void RegisterExtensionAssociation(IModule module, string ext)
     {
+        if (DistributionPolicy.IsStandalone) return;
         WriteExtensionClassKeys(module, ext);
 
         // 이 확장자 범위의 구 형태(모듈 단일 ProgID)·구 브랜드 청소 — RemoveAssociationKeys의
@@ -521,6 +528,7 @@ public static class ExplorerIntegration
     /// </summary>
     public static void UnregisterExtensionAssociation(IModule module, string ext)
     {
+        if (DistributionPolicy.IsStandalone) return;
         RemoveExtensionAssociationKeys(ProgId(module), ext, removeExtProgId: true);
         foreach (var legacyProgId in LegacyProgIds(module))
             RemoveExtensionAssociationKeys(legacyProgId, ext, removeExtProgId: true);
@@ -533,6 +541,7 @@ public static class ExplorerIntegration
     /// 진행률은 현재 브랜드 정리분만 센다 — 구 브랜드 청소는 보통 지울 게 없어 순식간에 끝난다.</param>
     public static void UnregisterAssociation(IModule module, IProgress<AssociationProgress>? progress = null)
     {
+        if (DistributionPolicy.IsStandalone) return;
         RemoveAssociationKeys(module, ProgId(module), removeExtProgIds: true, progress);
         foreach (var legacyProgId in LegacyProgIds(module))
             RemoveAssociationKeys(module, legacyProgId, removeExtProgIds: true);
@@ -595,6 +604,7 @@ public static class ExplorerIntegration
 
     public static void RegisterExtractHereMenu(IReadOnlyList<string> archiveExtensions, string brandLabel)
     {
+        if (DistributionPolicy.IsStandalone) return;
         foreach (var ext in archiveExtensions)
         {
             using var verb = Registry.CurrentUser.CreateSubKey(
@@ -621,6 +631,7 @@ public static class ExplorerIntegration
 
     public static void UnregisterExtractHereMenu(IReadOnlyList<string> archiveExtensions)
     {
+        if (DistributionPolicy.IsStandalone) return;
         foreach (var ext in archiveExtensions)
         {
             Registry.CurrentUser.DeleteSubKeyTree(
@@ -655,6 +666,7 @@ public static class ExplorerIntegration
 
     public static void RegisterCompressMenu(string brandLabel)
     {
+        if (DistributionPolicy.IsStandalone) return;
         using (var verb = Registry.CurrentUser.CreateSubKey(CompressVerbKeyPath))
         {
             verb.SetValue(null, $"Compress with {brandLabel}");
@@ -675,6 +687,7 @@ public static class ExplorerIntegration
 
     public static void UnregisterCompressMenu()
     {
+        if (DistributionPolicy.IsStandalone) return;
         Registry.CurrentUser.DeleteSubKeyTree(CompressVerbKeyPath, throwOnMissingSubKey: false);
         foreach (var legacyPath in LegacyCompressVerbKeyPaths)
             Registry.CurrentUser.DeleteSubKeyTree(legacyPath, throwOnMissingSubKey: false);
@@ -705,6 +718,7 @@ public static class ExplorerIntegration
     /// <param name="archiveBrandLabel">우클릭 메뉴 라벨용 압축 모듈 BrandName.</param>
     public static void ReRegisterIfExeMoved(IReadOnlyList<IModule> modules, string archiveBrandLabel)
     {
+        if (DistributionPolicy.IsStandalone) return;
         try
         {
             // A59: 연결 대상이 아닌 모듈(All Readable)은 확장자가 있어도 등록 자체를 하지 않는다.

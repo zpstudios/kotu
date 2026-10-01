@@ -23,6 +23,7 @@ internal static class TrayPromotion
     /// </summary>
     public static void Request()
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
         _ = Task.Run(async () =>
         {
             try
@@ -44,6 +45,7 @@ internal static class TrayPromotion
     /// <summary>NotifyIconSettings를 1회 스캔해 자기 exe의 꺼진 항목을 IsPromoted=1로 만든다.</summary>
     private static void Promote()
     {
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
         // 파일명 하드코딩 금지 — 리브랜딩으로 exe 이름이 바뀌어도 이 코드는 그대로 유효해야 한다.
         var exeName = Path.GetFileName(Environment.ProcessPath);
         if (string.IsNullOrEmpty(exeName)) return;

@@ -6,6 +6,18 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-01 — A43 단일 실행 파일 배포(v0.373.0)
+
+- 기존 Velopack Portable.zip과 별개로 `KOTU-win-Standalone.exe`를 추가했다. WinUI의 loose
+  `resources.pri`와 네이티브 플러그인 구조를 보존하기 위해 완전한 self-contained publish를 ZIP으로 내장한
+  launcher 방식을 택했다. 실행마다 사용자 전용 임시 폴더에 풀고 정상 종료 시 정리한다.
+- 설정은 메모리 전용이며 업데이트·Explorer 등록/삭제·트레이 승격·재시작 세션·셸 요청을 컴파일 정책으로
+  차단한다. app-local VC++ CRT는 Microsoft 서명/x64/PE 의존성을 검증해 녹화 엔진까지 깨끗한 Windows에서
+  로드되도록 했다.
+- 독립 검수에서 CRT 누락, 시간 기반 거짓 스모크 통과, 흔적 스냅샷 사각지대를 발견해 수정했다. nonce 성공
+  영수증 뒤에만 성공하며 실제 WinUI·Settings·VLC·Recorder·7z, AppData/레지스트리 불변과 TEMP 정리를
+  통과했다. 상세·실기기 잔여 조건은 `docs/A43-standalone-implementation.md`가 정본이다.
+
 ### 2026-10-01 — A14/A15 Record 모듈(v0.372.0)
 
 - 사용자 선택으로 화면 녹화와 마이크 녹음을 별도 Record 모듈 하나로 구현했다. 화면/창은

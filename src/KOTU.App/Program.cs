@@ -14,10 +14,11 @@ namespace KOTU.App;
 /// </summary>
 public static class Program
 {
-    private const string InstanceKey = Branding.AppName + "-Main"; // A46/v0.86.0 리브랜딩 (구: ZP-Main, 그 전: WinUtil-Main)
+    private static string InstanceKey => KOTU.Core.Integration.DistributionPolicy.InstanceKey; // A46/v0.86.0 리브랜딩 (구: ZP-Main, 그 전: WinUtil-Main)
 
     /// <summary>설치 후 첫 실행 여부(Velopack 훅). 미션 웰컴 다이얼로그 표시에 쓴다.</summary>
     internal static bool IsFirstRun { get; private set; }
+    internal static bool IsStandaloneSmokeTest { get; private set; }
 
     /// <summary>시작 실패 로그 경로: %TEMP%\KOTU\startup-error.log</summary>
     private static string LogPath =>
@@ -31,19 +32,28 @@ public static class Program
 
         try
         {
+            IsStandaloneSmokeTest = KOTU.Core.Integration.DistributionPolicy.IsStandalone &&
+                args.Length == 1 && args[0] == "--standalone-smoke-test" &&
+                Integration.StandaloneSmoke.HasLauncherReceipt();
+            if (KOTU.Core.Integration.DistributionPolicy.IsStandalone &&
+                args.Length == 1 && args[0] == "--standalone-smoke-test" && !IsStandaloneSmokeTest)
+                return 1;
             // Velopack 훅: 설치/업데이트/제거 시 넘어오는 특수 인자를 처리한다.
             // (해당 인자면 여기서 프로세스가 종료되므로 반드시 가장 먼저 호출)
             // OnFirstRun: 설치 후 첫 실행 감지 → 웰컴 다이얼로그(App에서 표시)
             // (Velopack 1.x API — WithFirstRun은 구 0.x 이름이라 CS1061로 CI가 죽었음, v0.19.2)
-            Velopack.VelopackApp.Build()
+            if (!KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+                Velopack.VelopackApp.Build()
                 .OnFirstRun(_ => IsFirstRun = true)
                 .Run();
 
-            if (Integration.ShellVerbServer.TryRun(args, out var shellExitCode)) return shellExitCode;
+            if (!KOTU.Core.Integration.DistributionPolicy.IsStandalone &&
+                Integration.ShellVerbServer.TryRun(args, out var shellExitCode)) return shellExitCode;
 
             WinRT.ComWrappersSupport.InitializeComWrappers();
 
-            var mainInstance = AppInstance.FindOrRegisterForKey(InstanceKey);
+            var mainInstance = AppInstance.FindOrRegisterForKey(IsStandaloneSmokeTest
+                ? InstanceKey + "-Smoke-" + Guid.NewGuid().ToString("N") : InstanceKey);
             var activationArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
 
             if (!mainInstance.IsCurrent)
@@ -98,6 +108,8 @@ public static class Program
         {
             // 로그조차 못 쓰는 상황이면 메시지 박스만 시도한다.
         }
+
+        if (IsStandaloneSmokeTest) return;
 
         try
         {

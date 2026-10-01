@@ -26,7 +26,7 @@ internal static class AdminRelaunch
     /// 단일 인스턴스 키 — Program.InstanceKey와 반드시 같은 값이어야 한다(그쪽은 private).
     /// 같은 조립식(Branding.AppName + "-Main")을 써 리브랜딩 때 함께 움직이게 한다.
     /// </summary>
-    private const string InstanceKey = Branding.AppName + "-Main";
+    private static string InstanceKey => KOTU.Core.Integration.DistributionPolicy.InstanceKey;
 
     /// <summary>
     /// 관리자 권한으로 재시작한다(위 단계 ⓐ~ⓔ). UI 스레드에서 부를 것 —
@@ -36,6 +36,8 @@ internal static class AdminRelaunch
     {
         var windows = App.Services.GetRequiredService<WindowManager>();
         var exe = Environment.ProcessPath;
+        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+            exe = Environment.GetEnvironmentVariable("KOTU_STANDALONE_LAUNCHER");
         if (string.IsNullOrEmpty(exe)) return;
         if (!windows.TryBeginRestart()) return;
 

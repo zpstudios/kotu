@@ -162,6 +162,13 @@ jobs:
           ./eng/Test-ReleasePackage.ps1 -PackagePath vpk_out -Version '${{ steps.ver.outputs.version }}'
           ./eng/Test-Installer.ps1 -SetupPath vpk_out/KOTU-win-Setup.exe -PackagePath artifacts/KOTU
 
+      - name: Standalone single executable build and verification
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          ./eng/Build-Standalone.ps1
+          ./eng/Test-Standalone.ps1 -ExecutablePath vpk_out/KOTU-win-Standalone.exe
+
       - name: 수동 시험 배포물 보관
         if: success() && steps.ver.outputs.skip != 'true' && github.ref != 'refs/heads/master'
         uses: actions/upload-artifact@v4
@@ -181,9 +188,10 @@ jobs:
           body: |
             ## 앱 이름이 **KOTU (King Of The Util)** 로 바뀌었습니다 (v0.86.0, A46)
 
-            ## 받을 파일은 둘 중 하나입니다
-            - **`KOTU-win-Setup.exe`** — 설치판. 시작 메뉴 등록, 이후 자동 업데이트.
-            - **`KOTU-win-Portable.zip`** — 무설치판. 아무 폴더에나 풀어 실행, 역시 자동 업데이트.
+            ## Choose a download
+            - **`KOTU-win-Setup.exe`** — Installed version with Start menu registration and automatic updates.
+            - **`KOTU-win-Portable.zip`** — Extract to a folder and run. Includes automatic updates and saved settings.
+            - **`KOTU-win-Standalone.exe`** — Run one file directly. Updates and Explorer registration are disabled; settings and playback history last only for the session. Files are automatically extracted to a private temporary folder and removed on normal exit. Uses the Windows .NET Framework runtime for the launcher; the application includes .NET 8.
 
             > **구 `ZP`(v0.85.0 이하) 또는 `WinUtil`(v0.32.0 이하) 설치본을 쓰고 있다면** 자동 업데이트가
             > 여기서 끊깁니다 — 새 `KOTU-win-Setup.exe`를 한 번 설치해 주세요.
