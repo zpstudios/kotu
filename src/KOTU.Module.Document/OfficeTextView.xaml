@@ -1,0 +1,42 @@
+<UserControl
+    x:Class="KOTU.Module.Document.OfficeTextView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid x:Name="RootGrid" Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="Notice" Margin="24,16,24,8" TextWrapping="Wrap" Opacity="0.75"
+                   Text="Text preview. Original layout, images, charts and formulas are not rendered. Tables are flattened; reading order may differ. Export to PDF for the original appearance." />
+        <ListView x:Name="TextList" Grid.Row="1" Padding="16,0,16,68" FontSize="16"
+                  SelectionMode="None" IsItemClickEnabled="False" HorizontalContentAlignment="Stretch">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <TextBlock x:Name="StatusText" Grid.Row="1" Margin="24" TextWrapping="Wrap" Text="Loading text preview..." />
+        <Grid x:Name="BottomBar" Grid.Row="1" VerticalAlignment="Bottom" ColumnSpacing="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="FileNameText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <ContentControl x:Name="DriveStripHost" Visibility="Collapsed" />
+            <Button x:Name="CopyButton" Grid.Column="1" Content="Copy text" Click="CopyText" IsEnabled="False" />
+            <Button Grid.Column="2" Content="A−" Click="SmallerText" ToolTipService.ToolTip="Smaller preview text"
+                    AutomationProperties.Name="Smaller preview text" />
+            <Button Grid.Column="3" Content="A+" Click="LargerText" ToolTipService.ToolTip="Larger preview text"
+                    AutomationProperties.Name="Larger preview text" />
+        </Grid>
+    </Grid>
+</UserControl>

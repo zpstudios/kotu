@@ -1,5 +1,6 @@
 using KOTU.Core.Contracts;
 using KOTU.Core.Settings;
+using KOTU.DocumentModel;
 
 namespace KOTU.Module.Document;
 
@@ -10,15 +11,15 @@ namespace KOTU.Module.Document;
 /// 마크다운(md·markdown)은 편집에 더해 렌더 뷰(자체 최소 렌더러 — MarkdownParser/Renderer)를
 /// 하단 바 토글로 오간다. A224: 비md 텍스트 형식의 뷰 모드는 잠금 뷰(에디터 그대로 +
 /// IsReadOnly — HTML 렌더는 A248에서 붙었다). A277: 잠금 뷰는 편집 전용 시각 요소(캐럿·가이드·
-/// ¶·EOF)를 걷어 편집 화면과 구분된다. HWP·오픈오피스는 뷰어가 생기면 확장.
+/// ¶·EOF)를 걷어 편집 화면과 구분된다. A45: HWP·HWPX·ODT·ODS·ODP는 본문 미리보기 전용이다.
 /// </summary>
 public sealed class DocumentModule : IModule
 {
     /// <summary>담당 확장자(.ini는 A37, .pdf는 A16에서 뷰어와 함께, .html/.htm은 A224에서
     /// 편집/뷰 모드 전 형식화와 함께 추가 — 1차는 텍스트 에디터로 연다).
-    /// HWP·오픈오피스는 뷰어가 생기면 추가한다(스텁에 연결하지 않는다).</summary>
+    /// A45 오피스 형식은 읽기 전용 본문 미리보기에 연결한다.</summary>
     public static readonly string[] Extensions =
-        [".txt", ".md", ".markdown", ".log", ".ini", ".html", ".htm", ".pdf"];
+        [".txt", ".md", ".markdown", ".log", ".ini", ".html", ".htm", ".pdf", .. OfficeTextReader.Extensions];
 
     // ---------- A181: 본문 줌 설정 (A171 폭 설정 대체) ----------
     // A171(v0.173.0)의 폭 설정 상수 3종(키 document.editorMaxWidth·기본 900·선택지)은 A181에서
@@ -55,5 +56,7 @@ public sealed class DocumentModule : IModule
 
     public IReadOnlyList<string> SupportedExtensions => Extensions;
 
-    public object CreateView(OpenContext context) => new DocumentView(context, _settings);
+    public object CreateView(OpenContext context) => context.FilePath is { } path && OfficeTextReader.Supports(path)
+        ? new OfficeTextView(path)
+        : new DocumentView(context, _settings);
 }

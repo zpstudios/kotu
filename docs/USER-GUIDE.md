@@ -102,7 +102,7 @@ Eight modules. Switch between them from the menu at the bottom left.
 | 2 | Image | `.jpg .jpeg .png .gif .bmp .webp .tif .tiff .ico .psd` |
 | 3 | Video | `.mp4 .mkv .avi .webm .mov .wmv .m4v .mpg .mpeg .ts .m2ts .flv .3gp .ogv` |
 | 4 | Audio | `.mp3 .flac .wav .ogg .opus .m4a .aac .wma` |
-| 5 | Document | `.txt .md .markdown .log .ini .html .htm .pdf` |
+| 5 | Document | `.txt .md .markdown .log .ini .html .htm .pdf .hwp .hwpx .odt .ods .odp` |
 | 6 | Archive | `.zip .7z .rar .tar .gz .tgz .bz2 .xz` |
 | 7 | H/W Info | no files — live hardware information |
 | 8 | Record | no file associations — screen/window MP4 recording or microphone-only WAV recording |
@@ -368,6 +368,18 @@ editor either way.
   prepared one at a time, so a document hundreds of pages long prints without loading them all at
   once, and a password-protected PDF prints without asking for the password again while it is open.
   The button is greyed out while there is nothing to print.
+
+### Document — HWP and OpenDocument text preview
+
+- `.hwp` (HWP 5.x), `.hwpx`, `.odt`, `.ods` and `.odp` open as an **offline, read-only text preview**.
+  Paragraphs and table-cell text are shown; use **Copy text** to copy the displayed preview and `A−` / `A+`
+  to change its text size.
+- This is not the original page layout. Images, charts, formulas, styling and pagination are not rendered,
+  and reading order may differ. Export the document to PDF in its authoring app when appearance matters.
+- HWP 3.x and encrypted, DRM-protected or distribution-only documents are not supported. Very large previews
+  stop at 200,000 characters and say so on screen. KOTU never uploads or modifies these documents.
+- This product was developed by referring to Hancom's public HWP document file specification.
+  **본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.**
 
 ### 2.6 Archive
 

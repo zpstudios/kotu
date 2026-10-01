@@ -6,6 +6,17 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-01 — A45 오피스 본문 미리보기(v0.374.0)
+
+- 외부 LibreOffice·클라우드·추가 패키지 없이 HWP 5.x/HWPX/ODT/ODS/ODP의 본문과 표 셀을 읽는
+  전용 읽기 화면을 추가했다. 원본 편집·저장·인쇄는 없고 페이지 레이아웃·이미지·차트·수식은 지원하지
+  않으므로 A45는 부분 완료로 유지한다.
+- CFB FAT/miniFAT와 압축 HWP 레코드, HWPX spine, ODF ZIP/XML을 용량·항목·깊이·순환·경로 상한 안에서
+  파싱한다. 암호/DRM/배포용 HWP, HWP 3.x는 거부한다. 실제 공개 HWP/HWPX/OASIS ODT도 검증했다.
+- 독립 검수에서 HWPX 표 앞뒤 읽기 순서, 탐색기의 바이너리 평문 오인, 닫힌 뷰의 늦은 정보 반영을 수정하고
+  CFB v4·순환·범위·과대 길이 시험을 보강했다. App 빌드 0경고/0오류, 전체 498/498 통과. 한컴 공개
+  사양 지정 고지를 UI·소스·배포 고지·가이드에 병기했다. 상세는 `docs/A45-office-text-preview.md`.
+
 ### 2026-10-01 — A43 단일 실행 파일 배포(v0.373.0)
 
 - 기존 Velopack Portable.zip과 별개로 `KOTU-win-Standalone.exe`를 추가했다. WinUI의 loose

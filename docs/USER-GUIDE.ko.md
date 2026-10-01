@@ -104,7 +104,7 @@ Windows 탐색기에서 더블클릭하거나(해당 형식을 등록해 두었�
 | 2 | Image | `.jpg .jpeg .png .gif .bmp .webp .tif .tiff .ico .psd` |
 | 3 | Video | `.mp4 .mkv .avi .webm .mov .wmv .m4v .mpg .mpeg .ts .m2ts .flv .3gp .ogv` |
 | 4 | Audio | `.mp3 .flac .wav .ogg .opus .m4a .aac .wma` |
-| 5 | Document | `.txt .md .markdown .log .ini .html .htm .pdf` |
+| 5 | Document | `.txt .md .markdown .log .ini .html .htm .pdf .hwp .hwpx .odt .ods .odp` |
 | 6 | Archive | `.zip .7z .rar .tar .gz .tgz .bz2 .xz` |
 | 7 | H/W Info | 파일 없음 — 실시간 하드웨어 정보 |
 | 8 | Record | 파일 연결 없음 — 화면/창 MP4 녹화 또는 마이크 단독 WAV 녹음 |
@@ -347,6 +347,18 @@ Windows 탐색기에서 더블클릭하거나(해당 형식을 등록해 두었�
   300 DPI까지 렌더링됩니다. 페이지는 한 번에 하나씩 준비하므로 수백 쪽짜리 문서도 전부 메모리에 올리지
   않고 인쇄되고, 암호가 걸린 PDF도 열려 있는 동안에는 암호를 다시 묻지 않습니다. 인쇄할 것이 없으면
   버튼은 비활성입니다.
+
+### Document — HWP·OpenDocument 본문 미리보기
+
+- `.hwp`(HWP 5.x), `.hwpx`, `.odt`, `.ods`, `.odp`는 **오프라인 읽기 전용 본문 미리보기**로 엽니다.
+  문단과 표 셀의 글자를 표시하며 **Copy text**로 표시된 본문을 복사하고 `A−` / `A+`로 글자 크기를
+  바꿀 수 있습니다.
+- 원본 페이지 모양을 재현하는 화면은 아닙니다. 이미지·차트·수식·서식·페이지 배치는 표시하지 않고 읽기
+  순서가 달라질 수 있습니다. 모양이 중요하면 작성 프로그램에서 PDF로 내보낸 뒤 여세요.
+- HWP 3.x와 암호·DRM·배포용 문서는 지원하지 않습니다. 아주 긴 미리보기는 200,000자에서 멈추고 화면에
+  알립니다. KOTU는 이 문서를 업로드하거나 수정하지 않습니다.
+- 본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
+  *This product was developed by referring to Hancom's public HWP document file specification.*
 
 ### 2.6 Archive
 

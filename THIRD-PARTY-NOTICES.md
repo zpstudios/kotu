@@ -28,3 +28,13 @@ KOTU는 아래 외부 구성요소를 사용합니다. 각 구성요소는 자�
 
 LGPL 구성요소는 모두 별도 dll로 동적 링크하며 정적 링크하지 않습니다. rar 형식 지원은 7-Zip에 포함된 unRAR 코드의 제한(역공학하여 rar 압축기를 만드는 것 금지)을 따릅니다.
 MPL-2.0 구성요소(LibreHardwareMonitor 계열)는 해당 파일을 수정하지 않고 그대로 사용하므로 소스 공개 의무가 발생하지 않습니다.
+
+## HWP file format attribution / HWP 파일 형식 고지
+
+This product was developed by referring to Hancom's public HWP document file specification.
+
+본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
+
+The HWP text-preview parser is original KOTU code based on [Hancom's public HWP 5.0 specification](https://www.hancom.com/support/downloadCenter/hwpOwpml).
+No Hancom rendering engine or third-party HWP parser is bundled. Original page layout is not rendered.
+The distribution also includes `licenses/HWP-Format-NOTICE.txt`.

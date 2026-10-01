@@ -29,7 +29,7 @@ LibreHardwareMonitor)에 맡기고, KOTU는 **하나로 묶인 경험**에 집�
 | **이미지** (Image) | ✅ | jpg·png·gif·webp·bmp·tif·ico·psd / ←→ 폴더 탐색(자연 정렬) / 휠 줌 10~800%·드래그 팬 / 회전(EXIF 자동 적용) / GIF 애니메이션 / 휴지통 삭제 / 인쇄 / EXIF 요약 표시 |
 | **비디오** (Video) | ✅ | mp4·mkv·avi·webm·mov·wmv 등 13종 / libvlc 내장 재생 / 시킹·볼륨·배속(0.5~2×) / 자막 자동 탐지(srt·smi·ass 등, CP949 자동 변환) / 이어보기 / 폴더 연속 재생 + 반복 모드 / Ctrl+휠 줌 / 재생 중 하단 바 자동 숨김 |
 | **오디오** (Audio) | ✅ | mp3·flac·wav·ogg·opus·m4a·aac·wma / 실시간 비주얼라이저 4종(Scope·Spectrum·Spectrometer·VU) / 출력 장치 선택·이퀄라이저 / 이어보기 / 폴더 연속 재생 + 반복 모드 |
-| **문서** (Document) | ✅ | txt·md·html·log·ini 편집 + pdf 보기 / 편집 ↔ 보기 모드 전환 / 마크다운·HTML 렌더 뷰 / 인쇄(PDF는 페이지 범위 지정) / 인코딩(UTF-8·UTF-16·CP949)·줄바꿈 유지 저장, 저장 전 경고·저장 후 검증 / PDF 연속 스크롤 / Ctrl+휠 20~500% 확대 |
+| **문서** (Document) | ✅ | txt·md·html·log·ini 편집 + pdf 보기 / HWP 5.x·HWPX·ODT·ODS·ODP 읽기 전용 본문 미리보기(원본 레이아웃 아님) / 편집 ↔ 보기 모드 전환 / 마크다운·HTML 렌더 뷰 / 인쇄(PDF는 페이지 범위 지정) / 인코딩(UTF-8·UTF-16·CP949)·줄바꿈 유지 저장, 저장 전 경고·저장 후 검증 / PDF 연속 스크롤 / Ctrl+휠 20~500% 확대 |
 | **압축** (Archive) | ✅ | zip·7z·rar·tar·gz·tgz·bz2·xz 해제 / zip·7z 생성(암호 지원, 7z은 파일명까지 암호화) / 풀지 않고 내부 탐색·개별 파일 열기 / 드래그&드롭 압축 / 한글 파일명(CP949) 자동 복구 / 진행률·취소 |
 | **H/W Info** | ✅ | 센서 타일 10종(CPU·GPU 온도/전력/부하/클럭, RAM, 팬, SSD 온도) 실시간 그래프 / 사양 목록(CPU·GPU·RAM·메인보드·저장장치·네트워크·시스템) 전체 복사 / 갱신 주기 선택 / 항상 위 / 선택 센서를 트레이 아이콘에 표시 |
 | **Record** | ✅ | 화면 또는 창을 MP4(H.264/AAC, 30fps)로 녹화하며 기본 출력 시스템 오디오는 항상 포함, 선택 마이크 혼합 가능 / 마이크 단독 48kHz 16-bit mono WAV / 저장 또는 삭제, 출력 폴더 열기 |
@@ -95,3 +95,5 @@ tests/               # 단위 테스트 (xunit)
 KOTU 자체 코드는 [MIT](LICENSE)입니다. 함께 배포·사용되는 외부 구성요소는 각자의 라이선스를 따릅니다 —
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 참고 (7-Zip: LGPL, libvlc: LGPL,
 LibreHardwareMonitor: MPL-2.0 등).
+
+본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.

@@ -4,6 +4,7 @@ using Windows.Storage;
 using KOTU.Core.Contracts;
 using KOTU.Core.IO; // A353: 쓰기 잠금을 가진 파일도 읽는 공유 열기(SharedRead)
 using KOTU.Core.Routing;
+using KOTU.DocumentModel;
 
 namespace KOTU.Module.Document;
 
@@ -103,6 +104,11 @@ public static class DocumentQuickInfo
         }
 
         rows.Add(ContentInfoItem.Separator); // 파일 정보 / 문서 정보 그룹 구분 (A150 관례)
+        if (OfficeTextReader.Supports(path))
+        {
+            rows.AddRange(OfficePreviewRows(path));
+            return rows;
+        }
         rows.AddRange(IsPdfPath(path)
             ? BuildPdfRowsFrom(RetrieveProperties(path), path, pdfPageCount)
             : BuildTextRowsFrom(ReadTextStats(path)));
@@ -115,9 +121,12 @@ public static class DocumentQuickInfo
     /// 갈래 판정은 확장자만 보므로 파일을 건드리지 않는다.
     /// </summary>
     public static List<ContentInfoItem> BlankPropertyRows(string path) =>
-        IsPdfPath(path)
+        OfficeTextReader.Supports(path) ? OfficePreviewRows(path) : IsPdfPath(path)
             ? BuildPdfRowsFrom(new Dictionary<string, object?>(), fallbackPath: null, pdfPageCount: 0)
             : BuildTextRowsFrom(null);
+
+    private static List<ContentInfoItem> OfficePreviewRows(string path) =>
+        [new("Format", Path.GetExtension(path).TrimStart('.').ToUpperInvariant()), new("View", "Text preview (not original layout)")];
 
     /// <summary>PDF 갈래 판정 — 라우팅(DocumentModule.Extensions의 .pdf)과 같은 짝.</summary>
     private static bool IsPdfPath(string path) =>

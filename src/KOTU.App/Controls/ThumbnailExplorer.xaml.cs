@@ -1115,13 +1115,14 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     /// <summary>
     /// 내용 프리뷰 대상 텍스트 파일인지 (A233) — 문서 모듈 담당 목록(DocumentModule.Extensions)
-    /// 재사용에서 .pdf만 뺀다(ExplorerPane.InfoKindOf의 Text 갈래와 같은 판정 — 그쪽은 Pdf
+    /// 재사용에서 PDF와 오피스 패키지 형식을 뺀다(ExplorerPane.InfoKindOf의 Text 갈래와 같은 판정 — 그쪽은 Pdf
     /// 갈래가 먼저 잡고 여기는 명시 제외. A224류 목록 추가분 자동 추종). 클라우드 전용
     /// (placeholder) 파일은 앞부분 읽기조차 하이드레이션이라 제외한다(A175 — 확장자 타일 유지).
     /// </summary>
     private static bool IsTextPreviewFile(ExplorerListing.Entry entry) =>
         !entry.IsPlaceholder
         && !string.Equals(Path.GetExtension(entry.Name), ".pdf", StringComparison.OrdinalIgnoreCase)
+        && !KOTU.DocumentModel.OfficeTextReader.Supports(entry.Name)
         && ExplorerListing.MatchesExtension(entry.Name, KOTU.Module.Document.DocumentModule.Extensions);
 
     /// <summary>

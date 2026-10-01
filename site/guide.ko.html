@@ -369,7 +369,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>2</td><td>Image</td><td><code>.jpg .jpeg .png .gif .bmp .webp .tif .tiff .ico .psd</code></td></tr>
           <tr><td>3</td><td>Video</td><td><code>.mp4 .mkv .avi .webm .mov .wmv .m4v .mpg .mpeg .ts .m2ts .flv .3gp .ogv</code></td></tr>
           <tr><td>4</td><td>Audio</td><td><code>.mp3 .flac .wav .ogg .opus .m4a .aac .wma</code></td></tr>
-          <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .html .htm .pdf</code></td></tr>
+          <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .html .htm .pdf .hwp .hwpx .odt .ods .odp</code></td></tr>
           <tr><td>6</td><td>Archive</td><td><code>.zip .7z .rar .tar .gz .tgz .bz2 .xz</code></td></tr>
           <tr><td>7</td><td>H/W Info</td><td>파일 없음 — 실시간 하드웨어 정보</td></tr>
           <tr><td>8</td><td>Record</td><td>파일 연결 없음 — 화면/창 MP4 녹화 또는 마이크 단독 WAV 녹음</td></tr>
@@ -659,6 +659,20 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               300 DPI까지 렌더링됩니다. 페이지는 한 번에 하나씩 준비하므로 수백 쪽짜리 문서도 전부 메모리에
               올리지 않고 인쇄되고, 암호가 걸린 PDF도 열려 있는 동안에는 암호를 다시 묻지 않습니다. 인쇄할
               것이 없으면 버튼은 비활성입니다.</li>
+        </ul>
+
+        <h3>Document — HWP·OpenDocument 본문 미리보기</h3>
+        <ul>
+          <li><code>.hwp</code>(HWP 5.x), <code>.hwpx</code>, <code>.odt</code>, <code>.ods</code>,
+              <code>.odp</code>는 <strong>오프라인 읽기 전용 본문 미리보기</strong>로 엽니다. 문단과 표 셀의
+              글자를 표시하며 <strong>Copy text</strong>로 본문을 복사하고 <code>A−</code> / <code>A+</code>로
+              글자 크기를 바꿀 수 있습니다.</li>
+          <li>원본 페이지 모양을 재현하는 화면은 아닙니다. 이미지·차트·수식·서식·페이지 배치는 표시하지
+              않고 읽기 순서가 달라질 수 있습니다. 모양이 중요하면 작성 프로그램에서 PDF로 내보내세요.</li>
+          <li>HWP 3.x와 암호·DRM·배포용 문서는 지원하지 않습니다. 아주 긴 미리보기는 200,000자에서
+              멈춥니다. KOTU는 이 문서를 업로드하거나 수정하지 않습니다.</li>
+          <li>본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.<br>
+              <em>This product was developed by referring to Hancom's public HWP document file specification.</em></li>
         </ul>
 
         <h3>Archive</h3>

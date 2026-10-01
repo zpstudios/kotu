@@ -114,6 +114,8 @@
           Condition="!Exists('$(PublishDir)resources.pri') And Exists('$(PublishDir)$(TargetName).pri')" />
   </Target>
   <ItemGroup>
+    <Content Include="..\..\packaging\hwp-format-notice.txt" Link="licenses\HWP-Format-NOTICE.txt"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(PkgScreenRecorderLib)\LICENSE" Link="licenses\ScreenRecorderLib-LICENSE.txt"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

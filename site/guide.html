@@ -364,7 +364,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>2</td><td>Image</td><td><code>.jpg .jpeg .png .gif .bmp .webp .tif .tiff .ico .psd</code></td></tr>
           <tr><td>3</td><td>Video</td><td><code>.mp4 .mkv .avi .webm .mov .wmv .m4v .mpg .mpeg .ts .m2ts .flv .3gp .ogv</code></td></tr>
           <tr><td>4</td><td>Audio</td><td><code>.mp3 .flac .wav .ogg .opus .m4a .aac .wma</code></td></tr>
-          <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .html .htm .pdf</code></td></tr>
+          <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .html .htm .pdf .hwp .hwpx .odt .ods .odp</code></td></tr>
           <tr><td>6</td><td>Archive</td><td><code>.zip .7z .rar .tar .gz .tgz .bz2 .xz</code></td></tr>
           <tr><td>7</td><td>H/W Info</td><td>no files — live hardware information</td></tr>
           <tr><td>8</td><td>Record</td><td>no file associations — screen/window MP4 or microphone-only WAV recording</td></tr>
@@ -677,6 +677,20 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               hundreds of pages long prints without loading them all at once, and a password-protected PDF
               prints without asking for the password again while it is open. The button is greyed out while
               there is nothing to print.</li>
+        </ul>
+
+        <h3>Document — HWP and OpenDocument text preview</h3>
+        <ul>
+          <li><code>.hwp</code> (HWP 5.x), <code>.hwpx</code>, <code>.odt</code>, <code>.ods</code> and
+              <code>.odp</code> open as an <strong>offline, read-only text preview</strong>. Paragraphs and
+              table-cell text are shown; <strong>Copy text</strong> copies the displayed preview and
+              <code>A−</code> / <code>A+</code> change its text size.</li>
+          <li>This is not the original page layout. Images, charts, formulas, styling and pagination are not
+              rendered, and reading order may differ. Export to PDF in the authoring app when appearance matters.</li>
+          <li>HWP 3.x and encrypted, DRM-protected or distribution-only documents are not supported. Very large
+              previews stop at 200,000 characters. KOTU never uploads or modifies these documents.</li>
+          <li>This product was developed by referring to Hancom's public HWP document file specification.<br>
+              <strong>본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.</strong></li>
         </ul>
 
         <h3>Archive</h3>
