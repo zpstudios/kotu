@@ -1,5 +1,13 @@
 # KOTU 인수인계 문서
 
+> **A378~A379 구현 완료·v0.371.0 배포 전(2026-10-01)**: 손상 ZIP은 예외 문구만으로 암호 파일로
+> 분류하지 않고 ZIP 암호 플래그·7z AES 코더 등 내부 증거를 확인한다. 실패·취소는 뷰 상태와 셸의
+> 제목·파일 경로·정보/드라이브·아이콘을 함께 빈 상태로 돌리되 오류 문구는 보존한다. All Readable도
+> 실패 계약을 중계한다. 평문 ZIP과 정상 암호 ZIP/7z, 늦은 통지/자식 교체 회귀시험을 추가했다.
+> Mission Statement는 app files와 Windows user profile의 설정을 구분하도록 고치고 Settings·Welcome·
+> 설치 스플래시를 동기화했다. 로컬 SDK가 없어 컴파일·시험은 CI 전이며, 배포 뒤 A378 및 A349/A351을
+> 실제 설치본에서 직접 확인한다.
+
 > **v0.370.0 실기기 종합 QA 완료(2026-10-01)**: 설치본을 직접 조작해 시작 메뉴·창 라우팅·
 > Document/PDF/TXT/Markdown·Image·Video·Audio·Archive·H/W Info·Settings/Update·All Readable의
 > 정상/빈 상태/전환/대표 오류 입력을 점검했다. 최근 A372~A377과 압축 해제 후 결과 폴더 자동 열기는

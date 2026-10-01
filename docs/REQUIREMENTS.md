@@ -1,6 +1,6 @@
 # KOTU 요구사항 — 남은 작업 정리
 
-- [미반영 A378 · Fable] **손상·비압축 ZIP을 암호 파일로 오판하고 취소 후 `Reading archive...`가 남는 문제**
+- [구현 완료 A378 · v0.371.0 · 배포 전] **손상·비압축 ZIP을 암호 파일로 오판하고 취소 후 `Reading archive...`가 남는 문제**
   (2026-10-01 v0.370.0 실기기 종합 QA에서 재현)
   - 일반 텍스트를 `.zip`으로 이름만 바꿔 Archive에서 열면 `Password required`가 표시된다.
     Cancel 뒤에도 제목은 해당 파일로 남고 빈 화면과 `Reading archive...`가 계속되며 해제 버튼은 비활성이다.
@@ -9,15 +9,24 @@
   - 조사 출발점: `SevenZipBackend.IsPasswordError`의 예외 문자열 휴리스틱과
     `ArchiveView.LoadArchiveAsync`의 `ArchivePasswordException` 취소 반환 경로. 정상 암호 ZIP의
     재시도 계약과 백그라운드 Jobs 암호 흐름은 보존한다.
+  - v0.371.0 구현: 7-Zip 예외 문구만 보지 않고 ZIP 암호 플래그·7z AES 코더 등 파일 내부 증거를
+    함께 확인한다. 실패·취소는 뷰 상태를 정리하고 새 `IContentOpenFailedSource` 계약으로 셸에 알려,
+    오류 문구를 보존한 채 제목·파일 경로·정보/드라이브·아이콘을 빈 상태로 되돌린다. All Readable의
+    중첩 Archive도 같은 계약을 중계한다.
+  - 평문 ZIP 비밀번호 오판 방지, 정상 암호 ZIP/7z의 무암호·오암호·정암호 재시도, 늦은 실패 통지와
+    교체된 자식 억제 회귀시험을 추가했다. 로컬 .NET SDK가 없어 실행은 GitHub CI 전이며 정적 검사는 통과했다.
   - 재현·기대 결과와 이번 전체 표본은 [실기기 QA 보고서](QA-REPORT-2026-10-01.md)에 기록했다.
 
-- [미반영 A379 · Opus] **Settings Mission Statement의 `settings.ini beside the app` 문구를 실제 설정 정책과 일치시키기**
+- [구현 완료 A379 · v0.371.0 · 배포 전] **Settings Mission Statement의 `settings.ini beside the app` 문구를 실제 설정 정책과 일치시키기**
   (2026-10-01 v0.370.0 실기기 종합 QA에서 확인)
   - 같은 Settings 화면은 실제 파일을 `%APPDATA%\KOTU\settings.json`으로 안내하지만 Mission Statement는
     모든 설정이 앱 옆 `settings.ini`에 있다고 말한다. `Branding.cs` 주석도 이를 미구현 지향점으로 명시한다.
   - 저장 위치·포맷을 바꾸는 A43 포터블 요구가 아니다. Mission Statement와 이를 재사용하는 첫 실행/스플래시
     문구만 현재 동작에 맞고 오래가지 않는 표현으로 정정한다. 사용자 노출 문구는 영어를 유지한다.
   - 설정 파일 안내, 실제 저장 경로, 앱 About, 첫 실행 문구 및 패키징 스플래시의 표현을 함께 대조한다.
+  - v0.371.0 구현: 문구를 `app files stay in one folder, with settings stored in your Windows user profile`로
+    바꾸고 Settings About·첫 실행 Welcome의 공용 원문과 설치 스플래시 생성기/PNG를 동기화했다.
+    PNG는 560×470 RGB를 유지하고 해당 두 줄에만 변경이 있음을 시각 확인했다.
 
 - **2026-10-01 v0.370.0 실기기 종합 QA**: 설치본에서 시작 메뉴·창 라우팅·Document/PDF/TXT/Markdown·
   Image·Video·Audio·Archive·H/W Info·Settings/Update·All Readable을 정상/빈 상태/전환/대표 오류 입력으로

@@ -69,10 +69,27 @@ public class ContentContractSessionTests
     {
         var child = new FakeContent();
         var session = new ContentContractSession(child, action => action(), () => true);
-        Assert.Equal(13, child.SubscriptionCount);
+        Assert.Equal(14, child.SubscriptionCount);
         session.Dispose();
         session.Dispose();
         Assert.Equal(0, child.SubscriptionCount);
+    }
+
+    [Fact]
+    public void QueuedOpenFailureCannotEscapeDisposedAttachment()
+    {
+        var queue = new Queue<Action>();
+        var child = new FakeContent();
+        var delivered = 0;
+        var session = new ContentContractSession(child, queue.Enqueue, () => true);
+        session.ContentOpenFailed += () => delivered++;
+        child.RaiseContentOpenFailed();
+        session.Dispose();
+
+        using var replacement = new ContentContractSession(child, queue.Enqueue, () => true);
+        while (queue.TryDequeue(out var callback)) callback();
+
+        Assert.Equal(0, delivered);
     }
 
     [Fact]

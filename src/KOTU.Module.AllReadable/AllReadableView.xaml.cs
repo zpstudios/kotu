@@ -15,7 +15,7 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
-    IContentCloseRequestSource
+    IContentCloseRequestSource, IContentOpenFailedSource
 {
     private readonly IReadOnlyList<IModule> _children;
     private readonly ChildContentHost _content;
@@ -75,6 +75,11 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     {
         add => _content.ContentCloseRequested += value;
         remove => _content.ContentCloseRequested -= value;
+    }
+    public event Action? ContentOpenFailed
+    {
+        add => _content.ContentOpenFailed += value;
+        remove => _content.ContentOpenFailed -= value;
     }
     public event Action? NeighborsChanged
     {

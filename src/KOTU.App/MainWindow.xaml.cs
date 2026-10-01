@@ -1533,6 +1533,7 @@ public sealed partial class MainWindow : Window
         session.CurrentPathChanged += OnCurrentPathChanged;
         session.ContentInfoChanged += OnContentInfoChanged;
         session.ContentCloseRequested += () => TryCloseContent(defaultSidebars: true);
+        session.ContentOpenFailed += OnContentOpenFailed;
         session.PlaybackStateChanged += OnPlaybackStateChanged;
         session.PrintRequested += RequestPrint;
         session.ShrinkToMinRequested += ShrinkToMinimum;
@@ -1732,6 +1733,13 @@ public sealed partial class MainWindow : Window
         // A54: 유휴(3자) → 열림(2줄) 전환도 이 경로로 걸린다.
         // A137: 뷰 내부 열기(◀/▶ 등)도 창 32px의 확장자/용량을 바꾸므로 셸 아이콘 전체 갱신.
         RefreshShellIcons();
+    }
+
+    /// <summary>실제 열기에 실패한 뷰는 유지하고 셸이 미리 반영한 파일 컨텍스트만 빈 상태로 되돌린다.</summary>
+    private void OnContentOpenFailed()
+    {
+        SetTitle(Branding.AppName);
+        SetContentState(_currentModule, null);
     }
 
     /// <summary>저장된 경로와 표시 정보만 갱신하고 창·패널 구성은 보존한다.</summary>

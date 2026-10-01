@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using SevenZip;
 
 namespace KOTU.Module.Archive;
@@ -45,7 +46,7 @@ public sealed class SevenZipBackend : IArchiveBackend
             }
             return entries;
         }
-        catch (SevenZipException ex) when (IsPasswordError(ex))
+        catch (SevenZipException ex) when (IsPasswordError(ex, archivePath))
         {
             throw new ArchivePasswordException(ex);
         }
@@ -94,7 +95,7 @@ public sealed class SevenZipBackend : IArchiveBackend
             }
             cancellationToken.ThrowIfCancellationRequested();
         }
-        catch (SevenZipException ex) when (IsPasswordError(ex))
+        catch (SevenZipException ex) when (IsPasswordError(ex, archivePath))
         {
             throw new ArchivePasswordException(ex);
         }
@@ -243,11 +244,268 @@ public sealed class SevenZipBackend : IArchiveBackend
     private static bool IsZip(string path) =>
         string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>7z.dll 예외 메시지 기반 암호 오류 판별(보수적 휴리스틱).</summary>
-    private static bool IsPasswordError(SevenZipException ex)
+    /// <summary>
+    /// 7z.dll 예외 메시지 기반 암호 오류 판별. SevenZipSharp의 일반 열기 실패 문구에도
+    /// 암호 가능성이 함께 적히므로, 실제 압축 시그니처가 확인된 파일만 암호 재시도로 보낸다.
+    /// </summary>
+    private static bool IsPasswordError(SevenZipException ex, string archivePath)
     {
         var text = ex.ToString();
-        return text.Contains("password", StringComparison.OrdinalIgnoreCase) ||
-               text.Contains("encrypted", StringComparison.OrdinalIgnoreCase);
+        var mentionsPassword = text.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+                               text.Contains("encrypted", StringComparison.OrdinalIgnoreCase);
+        return mentionsPassword && HasPasswordEvidence(archivePath);
+    }
+
+    /// <summary>
+    /// ZIP의 암호 플래그와 7z의 AES 코더처럼 파일 안에서 확인되는 암호 증거를 찾는다.
+    /// RAR은 시그니처 뒤 암호 메타데이터가 버전별로 달라 기존 암호 흐름을 보존하도록 시그니처를 쓴다.
+    /// 확장자만 맞는 손상 파일은 SevenZipSharp의 모호한 암호 문구를 그대로 열기 실패로 처리한다.
+    /// </summary>
+    internal static bool HasPasswordEvidence(string archivePath)
+    {
+        Span<byte> header = stackalloc byte[32];
+        try
+        {
+            using var stream = File.OpenRead(archivePath);
+            if (ZipCentralDirectoryContainsEncryptedEntry(stream)) return true;
+
+            stream.Position = 0;
+            var read = stream.Read(header);
+            if (read >= 6 && header[..6].SequenceEqual(new byte[] { 0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C }))
+                return read >= 32 && SevenZipHeaderContainsAes(stream, header);
+
+            return read >= 7 && header[..7].SequenceEqual(new byte[] { 0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00 }) ||
+                   read >= 8 && header[..8].SequenceEqual(new byte[] { 0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00 });
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// ZIP 중앙 디렉터리의 모든 항목 플래그를 읽는다. 로컬 헤더 위치에 의존하지 않으므로
+    /// 앞에 실행 파일이 붙은 SFX와 평문·암호 항목이 섞인 ZIP도 판별한다.
+    /// </summary>
+    private static bool ZipCentralDirectoryContainsEncryptedEntry(FileStream stream)
+    {
+        const int eocdLength = 22;
+        const int maxEocdSearch = eocdLength + ushort.MaxValue;
+        if (stream.Length < eocdLength) return false;
+
+        var tailLength = (int)Math.Min(stream.Length, maxEocdSearch);
+        var tail = new byte[tailLength];
+        if (!TryReadAt(stream, stream.Length - tailLength, tail)) return false;
+
+        for (var i = tail.Length - eocdLength; i >= 0; i--)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(i, 4)) != 0x06054B50) continue;
+            var commentLength = BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(i + 20, 2));
+            if (i + eocdLength + commentLength != tail.Length) continue;
+            var eocdPosition = stream.Length - tailLength + i;
+            if (TryReadZipEocdCandidate(stream, tail.AsSpan(i, eocdLength), eocdPosition, out var encrypted))
+                return encrypted;
+        }
+        return false;
+    }
+
+    /// <summary>EOCD 후보 하나의 디스크·ZIP64·중앙 디렉터리 구조를 끝까지 검증한다.</summary>
+    private static bool TryReadZipEocdCandidate(
+        FileStream stream, ReadOnlySpan<byte> eocd, long eocdPosition, out bool encrypted)
+    {
+        encrypted = false;
+        var disk = BinaryPrimitives.ReadUInt16LittleEndian(eocd[4..6]);
+        var centralDisk = BinaryPrimitives.ReadUInt16LittleEndian(eocd[6..8]);
+        var entriesOnDisk = BinaryPrimitives.ReadUInt16LittleEndian(eocd[8..10]);
+        var totalEntries = BinaryPrimitives.ReadUInt16LittleEndian(eocd[10..12]);
+        if (disk != 0 || centralDisk != 0 || entriesOnDisk != totalEntries) return false;
+
+        ulong centralSize = BinaryPrimitives.ReadUInt32LittleEndian(eocd[12..16]);
+        ulong centralOffset = BinaryPrimitives.ReadUInt32LittleEndian(eocd[16..20]);
+        ulong expectedEntries = totalEntries;
+        long centralEnd = eocdPosition;
+        if (entriesOnDisk == ushort.MaxValue || totalEntries == ushort.MaxValue ||
+            centralSize == uint.MaxValue || centralOffset == uint.MaxValue)
+        {
+            if (!TryReadZip64Directory(
+                    stream, eocdPosition, out centralEnd, out centralSize, out centralOffset, out expectedEntries))
+                return false;
+        }
+
+        if (centralSize > (ulong)centralEnd || centralOffset > (ulong)centralEnd) return false;
+        var centralStart = centralEnd - (long)centralSize;
+        // 중앙 디렉터리 오프셋보다 실제 위치가 앞설 수 없다. 차이는 SFX 접두부 길이다.
+        if ((ulong)centralStart < centralOffset) return false;
+        return TryReadCentralDirectory(stream, centralStart, centralSize, expectedEntries, out encrypted);
+    }
+
+    /// <summary>ZIP64 locator와 EOCD를 제한된 후방 탐색으로 찾아 중앙 디렉터리 범위를 돌려준다.</summary>
+    private static bool TryReadZip64Directory(
+        FileStream stream, long eocdPosition, out long centralEnd, out ulong centralSize,
+        out ulong centralOffset, out ulong expectedEntries)
+    {
+        centralEnd = 0;
+        centralSize = 0;
+        centralOffset = 0;
+        expectedEntries = 0;
+        const int locatorLength = 20;
+        if (eocdPosition < locatorLength) return false;
+
+        Span<byte> locator = stackalloc byte[locatorLength];
+        var locatorPosition = eocdPosition - locatorLength;
+        if (!TryReadAt(stream, locatorPosition, locator) ||
+            BinaryPrimitives.ReadUInt32LittleEndian(locator[..4]) != 0x07064B50 ||
+            BinaryPrimitives.ReadUInt32LittleEndian(locator[4..8]) != 0 ||
+            BinaryPrimitives.ReadUInt32LittleEndian(locator[16..20]) != 1)
+            return false;
+
+        var recordedPosition = BinaryPrimitives.ReadUInt64LittleEndian(locator[8..16]);
+        if (recordedPosition <= (ulong)long.MaxValue &&
+            TryReadZip64EocdAt(
+                stream, (long)recordedPosition, locatorPosition,
+                out centralSize, out centralOffset, out expectedEntries))
+        {
+            centralEnd = (long)recordedPosition;
+            return true;
+        }
+
+        // SFX 접두부가 있으면 locator의 기록 오프셋에는 그 길이가 빠져 있다.
+        const int maxZip64Search = 1024 * 1024;
+        var searchStart = Math.Max(0, locatorPosition - maxZip64Search);
+        var searchLength = checked((int)(locatorPosition - searchStart));
+        var search = new byte[searchLength];
+        if (!TryReadAt(stream, searchStart, search)) return false;
+        for (var i = search.Length - 12; i >= 0; i--)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(search.AsSpan(i, 4)) != 0x06064B50) continue;
+            var position = searchStart + i;
+            if (!TryReadZip64EocdAt(
+                    stream, position, locatorPosition, out centralSize, out centralOffset, out expectedEntries))
+                continue;
+            centralEnd = position;
+            return true;
+        }
+        return false;
+    }
+
+    private static bool TryReadZip64EocdAt(
+        FileStream stream, long position, long expectedEnd, out ulong centralSize,
+        out ulong centralOffset, out ulong expectedEntries)
+    {
+        centralSize = 0;
+        centralOffset = 0;
+        expectedEntries = 0;
+        Span<byte> record = stackalloc byte[56];
+        if (position < 0 || position > expectedEnd - record.Length ||
+            !TryReadAt(stream, position, record) ||
+            BinaryPrimitives.ReadUInt32LittleEndian(record[..4]) != 0x06064B50)
+            return false;
+
+        var bodySize = BinaryPrimitives.ReadUInt64LittleEndian(record[4..12]);
+        if (bodySize < 44 || bodySize > (ulong)(expectedEnd - position - 12) ||
+            (ulong)position + 12 + bodySize != (ulong)expectedEnd)
+            return false;
+        if (BinaryPrimitives.ReadUInt32LittleEndian(record[16..20]) != 0 ||
+            BinaryPrimitives.ReadUInt32LittleEndian(record[20..24]) != 0)
+            return false;
+        var entriesOnDisk = BinaryPrimitives.ReadUInt64LittleEndian(record[24..32]);
+        expectedEntries = BinaryPrimitives.ReadUInt64LittleEndian(record[32..40]);
+        if (entriesOnDisk != expectedEntries)
+            return false;
+
+        centralSize = BinaryPrimitives.ReadUInt64LittleEndian(record[40..48]);
+        centralOffset = BinaryPrimitives.ReadUInt64LittleEndian(record[48..56]);
+        return true;
+    }
+
+    private static bool TryReadCentralDirectory(
+        FileStream stream, long start, ulong size, ulong expectedEntries, out bool encrypted)
+    {
+        encrypted = false;
+        if (size > (ulong)(stream.Length - start)) return false;
+        var end = start + (long)size;
+        var position = start;
+        ulong entries = 0;
+        Span<byte> signature = stackalloc byte[4];
+        Span<byte> entry = stackalloc byte[46];
+        while (position < end)
+        {
+            if (end - position < signature.Length || !TryReadAt(stream, position, signature)) return false;
+            var recordSignature = BinaryPrimitives.ReadUInt32LittleEndian(signature);
+            if (recordSignature == 0x05054B50)
+            {
+                Span<byte> digitalSignature = stackalloc byte[6];
+                if (end - position < digitalSignature.Length ||
+                    !TryReadAt(stream, position, digitalSignature))
+                    return false;
+                var signatureLength = BinaryPrimitives.ReadUInt16LittleEndian(digitalSignature[4..6]);
+                var next = position + digitalSignature.Length + signatureLength;
+                if (next != end) return false;
+                position = next;
+                break;
+            }
+            if (recordSignature != 0x02014B50 || end - position < entry.Length ||
+                !TryReadAt(stream, position, entry))
+                return false;
+            if ((BinaryPrimitives.ReadUInt16LittleEndian(entry[8..10]) & 0x0001) != 0) encrypted = true;
+
+            var variableLength = (long)BinaryPrimitives.ReadUInt16LittleEndian(entry[28..30]) +
+                                 BinaryPrimitives.ReadUInt16LittleEndian(entry[30..32]) +
+                                 BinaryPrimitives.ReadUInt16LittleEndian(entry[32..34]);
+            var next = position + entry.Length + variableLength;
+            if (next <= position || next > end) return false;
+            position = next;
+            entries++;
+        }
+        return position == end && entries == expectedEntries;
+    }
+
+    private static bool TryReadAt(FileStream stream, long position, Span<byte> destination)
+    {
+        if (position < 0 || position > stream.Length || destination.Length > stream.Length - position) return false;
+        stream.Position = position;
+        var read = 0;
+        while (read < destination.Length)
+        {
+            var count = stream.Read(destination[read..]);
+            if (count == 0) return false;
+            read += count;
+        }
+        return true;
+    }
+
+    /// <summary>7z 시작 헤더가 가리키는 다음 헤더에서 AES-256 코더 ID를 찾는다.</summary>
+    private static bool SevenZipHeaderContainsAes(FileStream stream, ReadOnlySpan<byte> header)
+    {
+        var nextHeaderOffset = BitConverter.ToUInt64(header[12..20]);
+        var nextHeaderSize = BitConverter.ToUInt64(header[20..28]);
+        if (nextHeaderSize == 0 || nextHeaderOffset > (ulong)long.MaxValue - 32) return false;
+
+        var absoluteOffset = (long)nextHeaderOffset + 32;
+        if (absoluteOffset < 32 || absoluteOffset >= stream.Length) return false;
+        var available = (ulong)(stream.Length - absoluteOffset);
+        var bytesToRead = (int)Math.Min(Math.Min(nextHeaderSize, available), 1024UL * 1024);
+        if (bytesToRead < 4) return false;
+
+        var nextHeader = new byte[bytesToRead];
+        stream.Position = absoluteOffset;
+        var read = 0;
+        while (read < nextHeader.Length)
+        {
+            var count = stream.Read(nextHeader, read, nextHeader.Length - read);
+            if (count == 0) break;
+            read += count;
+        }
+        for (var i = 0; i <= read - 4; i++)
+        {
+            if (nextHeader[i] == 0x06 && nextHeader[i + 1] == 0xF1 &&
+                nextHeader[i + 2] == 0x07 && nextHeader[i + 3] == 0x01)
+                return true;
+        }
+        return false;
     }
 }

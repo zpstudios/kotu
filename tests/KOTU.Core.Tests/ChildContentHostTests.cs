@@ -73,18 +73,23 @@ public class ChildContentHostTests
         var actions = new List<string>();
         host.PrintRequested += () => actions.Add("print");
         host.ContentCloseRequested += () => actions.Add("close");
+        host.ContentOpenFailed += () => actions.Add("failed");
         host.UntitledWindowRequested += () => actions.Add("window");
         host.Attach(old, "old");
         host.Detach(() => { });
         host.Attach(current, "new");
         old.RaisePrintRequested();
         old.RaiseContentCloseRequested();
+        old.RaiseContentOpenFailed();
         old.RaiseUntitledWindowRequested();
         Assert.Empty(actions);
+        Assert.Equal("new", host.OpenedPath);
         current.RaisePrintRequested();
         current.RaiseContentCloseRequested();
+        current.RaiseContentOpenFailed();
         current.RaiseUntitledWindowRequested();
-        Assert.Equal(["print", "close", "window"], actions);
+        Assert.Equal(["print", "close", "failed", "window"], actions);
+        Assert.Null(host.OpenedPath);
     }
 
     [Fact]

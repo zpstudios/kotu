@@ -6,6 +6,18 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-01 — A378~A379 손상 ZIP 상태 복구와 설정 설명 정합화(v0.371.0)
+
+- 사용자 선택으로 A378·A379를 함께 구현했다. A378은 SevenZipSharp의 모호한 예외 문자열을 그대로
+  암호 오류로 바꾸지 않고 ZIP 암호 플래그·7z AES 코더 등 파일 내부 증거를 함께 확인한다.
+- 열기 실패/취소 뒤 Archive 내부만 비우면 셸은 선반영한 파일 경로를 계속 열린 것으로 보는 누락을
+  검수에서 발견했다. `IContentOpenFailedSource`를 신설해 현재 뷰와 오류 문구는 유지하고 제목·경로·
+  정보/드라이브·아이콘만 빈 상태로 복구했다. ContentContractSession·All Readable 중첩 수명도 연결했다.
+- 평문 ZIP 오판 방지, 정상 암호 ZIP/7z 재시도, 늦은 실패와 교체 자식 억제 회귀시험을 추가했다.
+- A379는 Mission Statement를 `app files stay in one folder, with settings stored in your Windows user profile`로
+  고치고 Settings/Welcome 공용 원문, 스플래시 생성기와 560×470 RGB PNG를 동기화했다.
+- v0.371.0. 로컬 .NET SDK가 없어 정적 검사만 수행하고 전체 빌드·시험·패키징은 GitHub CI에서 확인한다.
+
 ### 2026-10-01 — v0.370.0 설치본 실기기 종합 QA
 
 - 실제 설치본을 직접 조작해 시작 메뉴·다중 창·PDF/TXT/Markdown·Image·Video·Audio·Archive·

@@ -6,7 +6,7 @@ namespace KOTU.Core.Content;
 public sealed class ChildContentHost : IContentStateSource, IContentInfoProvider, ICloseGuard,
     ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource,
     IContentPathChangedSource, IContentInfoChangedSource, IBrowseOrderConsumer,
-    ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource
+    ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource, IContentOpenFailedSource
 {
     private readonly Action<Action> _dispatch;
     private ContentContractSession? _session;
@@ -28,6 +28,7 @@ public sealed class ChildContentHost : IContentStateSource, IContentInfoProvider
     public event Action? PlaybackStateChanged;
     public event Action? PrintRequested;
     public event Action? ContentCloseRequested;
+    public event Action? ContentOpenFailed;
     public event Action? NeighborsChanged;
 
     public ChildContentHost(Action<Action> dispatch) => _dispatch = dispatch;
@@ -70,6 +71,12 @@ public sealed class ChildContentHost : IContentStateSource, IContentInfoProvider
         session.PlaybackStateChanged += () => PlaybackStateChanged?.Invoke();
         session.PrintRequested += () => PrintRequested?.Invoke();
         session.ContentCloseRequested += () => ContentCloseRequested?.Invoke();
+        session.ContentOpenFailed += () =>
+        {
+            OpenedPath = null;
+            StateChanged?.Invoke();
+            if (ReferenceEquals(_session, session)) ContentOpenFailed?.Invoke();
+        };
         session.NeighborsChanged += () => NeighborsChanged?.Invoke();
         if (child is IBrowseOrderConsumer browse && _browseFolder is { } folder)
             browse.SetBrowseOrder(folder, _browseFiles);

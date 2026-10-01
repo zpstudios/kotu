@@ -30,6 +30,7 @@ public sealed class ContentContractSession : IDisposable
         if (content is IPlaybackStateSource sourcePlaybackStateChanged) sourcePlaybackStateChanged.PlaybackStateChanged += OnPlaybackStateChanged;
         if (content is IPrintPageProvider sourcePrintRequested) sourcePrintRequested.PrintRequested += OnPrintRequested;
         if (content is IContentCloseRequestSource sourceContentCloseRequested) sourceContentCloseRequested.ContentCloseRequested += OnContentCloseRequested;
+        if (content is IContentOpenFailedSource sourceContentOpenFailed) sourceContentOpenFailed.ContentOpenFailed += OnContentOpenFailed;
         if (content is IWindowShrinkSource sourceShrinkToMinRequested) sourceShrinkToMinRequested.ShrinkToMinRequested += OnShrinkToMinRequested;
         if (content is IMediaTransportTarget sourceNeighborsChanged) sourceNeighborsChanged.NeighborsChanged += OnNeighborsChanged;
     }
@@ -66,6 +67,9 @@ public sealed class ContentContractSession : IDisposable
 
     public event Action? ContentCloseRequested;
     private void OnContentCloseRequested() => Dispatch(() => ContentCloseRequested?.Invoke());
+
+    public event Action? ContentOpenFailed;
+    private void OnContentOpenFailed() => Dispatch(() => ContentOpenFailed?.Invoke());
 
     public event Action? ShrinkToMinRequested;
     private void OnShrinkToMinRequested() => Dispatch(() => ShrinkToMinRequested?.Invoke());
@@ -106,6 +110,7 @@ public sealed class ContentContractSession : IDisposable
         if (Content is IPlaybackStateSource sourcePlaybackStateChanged) sourcePlaybackStateChanged.PlaybackStateChanged -= OnPlaybackStateChanged;
         if (Content is IPrintPageProvider sourcePrintRequested) sourcePrintRequested.PrintRequested -= OnPrintRequested;
         if (Content is IContentCloseRequestSource sourceContentCloseRequested) sourceContentCloseRequested.ContentCloseRequested -= OnContentCloseRequested;
+        if (Content is IContentOpenFailedSource sourceContentOpenFailed) sourceContentOpenFailed.ContentOpenFailed -= OnContentOpenFailed;
         if (Content is IWindowShrinkSource sourceShrinkToMinRequested) sourceShrinkToMinRequested.ShrinkToMinRequested -= OnShrinkToMinRequested;
         if (Content is IMediaTransportTarget sourceNeighborsChanged) sourceNeighborsChanged.NeighborsChanged -= OnNeighborsChanged;
     }

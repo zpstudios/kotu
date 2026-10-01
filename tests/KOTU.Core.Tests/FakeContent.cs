@@ -2,7 +2,7 @@ using KOTU.Core.Contracts;
 
 namespace KOTU.Core.Tests;
 
-internal sealed class FakeContent : IContentStateSource, IContentPathChangedSource, ICurrentPathSource, ICloseGuard, IUntitledContentSource, IContentInfoChangedSource, ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IContentCloseRequestSource, IWindowShrinkSource, IMediaTransportTarget,
+internal sealed class FakeContent : IContentStateSource, IContentPathChangedSource, ICurrentPathSource, ICloseGuard, IUntitledContentSource, IContentInfoChangedSource, ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IContentCloseRequestSource, IContentOpenFailedSource, IWindowShrinkSource, IMediaTransportTarget,
     IContentInfoProvider, IBrowseOrderConsumer
 {
     public event Action<string>? ContentOpened;
@@ -27,6 +27,8 @@ internal sealed class FakeContent : IContentStateSource, IContentPathChangedSour
     public void RaisePrintRequested() => PrintRequested?.Invoke();
     public event Action? ContentCloseRequested;
     public void RaiseContentCloseRequested() => ContentCloseRequested?.Invoke();
+    public event Action? ContentOpenFailed;
+    public void RaiseContentOpenFailed() => ContentOpenFailed?.Invoke();
     public event Action? ShrinkToMinRequested;
     public void RaiseShrinkToMinRequested() => ShrinkToMinRequested?.Invoke();
     public event Action? NeighborsChanged;
@@ -42,6 +44,7 @@ internal sealed class FakeContent : IContentStateSource, IContentPathChangedSour
         (PlaybackStateChanged?.GetInvocationList().Length ?? 0) +
         (PrintRequested?.GetInvocationList().Length ?? 0) +
         (ContentCloseRequested?.GetInvocationList().Length ?? 0) +
+        (ContentOpenFailed?.GetInvocationList().Length ?? 0) +
         (ShrinkToMinRequested?.GetInvocationList().Length ?? 0) +
         (NeighborsChanged?.GetInvocationList().Length ?? 0);
     public bool HasUnsavedChanges { get; set; }

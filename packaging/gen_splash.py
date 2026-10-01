@@ -26,8 +26,8 @@ DEJAVU_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 MISSION = [
     "No bloat. Ever.",
     "Crucial features only — easy to use.",
-    "Easy to install & uninstall — all files in one folder,",
-    "   all settings in settings.ini beside the app.",
+    "Easy to install & uninstall — app files stay in one folder,",
+    "   with settings stored in your Windows user profile.",
     "No personal information collected, whatsoever —",
     "   no watch history, no file history.",
     "Free forever, for everyone — personal and",

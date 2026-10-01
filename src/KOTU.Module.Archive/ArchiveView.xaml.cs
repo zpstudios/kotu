@@ -39,7 +39,8 @@ public sealed class ArchiveRow
 /// </summary>
 public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.IContentStateSource,
     IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider,
-    IContentCloseRequestSource, IContentInfoProvider, KOTU.Core.Contracts.IBackgroundJobOwner
+    IContentCloseRequestSource, IContentOpenFailedSource, IContentInfoProvider,
+    KOTU.Core.Contracts.IBackgroundJobOwner
 {
     /// <summary>아카이브를 열면 셸에 알린다(v0.25.0 — 빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -49,6 +50,9 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
     /// 셸이 Esc 말단 층(A202)과 같은 실행부(TryCloseContent)로 아카이브를 닫고 탐색기(S1)로 되돌린다.
     /// </summary>
     public event Action? ContentCloseRequested;
+
+    /// <summary>목록 열기 실패 뒤 셸이 선반영한 파일 컨텍스트를 빈 상태로 되돌리도록 알린다.</summary>
+    public event Action? ContentOpenFailed;
 
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 열기·작업 시작/진행/종료 시점.</summary>
     public event Action? TrayStatusChanged;
@@ -299,8 +303,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         if (_busy || !_attached) return;
         var generation = _viewGeneration;
         var backend = _backend;
-        _archivePath = path;
-        _password = null;
+        ClearOpenedArchive();
 
         while (true)
         {
@@ -313,8 +316,14 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
                     entries = backend.List(path, password);
                     progress.Report(1);
                 });
-                if (!ok || !IsCurrent(generation)) return;
+                if (!IsCurrent(generation)) return;
+                if (!ok)
+                {
+                    CompleteOpenFailure(generation, "Canceled");
+                    return;
+                }
 
+                _archivePath = path;
                 _root = ArchiveEntryTree.Build(entries);
                 _navStack.Clear();
                 _currentFolder = _root;
@@ -329,15 +338,46 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
                 if (!IsCurrent(generation)) return;
                 var entered = await PromptPasswordAsync();
                 if (!IsCurrent(generation)) return;
-                if (entered is null) return; // 취소
+                if (entered is null)
+                {
+                    CompleteOpenFailure(generation, "Canceled");
+                    return;
+                }
                 _password = entered;
             }
             catch (Exception ex)
             {
-                if (IsCurrent(generation)) StatusText.Text = "Failed to open: " + ex.Message;
+                if (IsCurrent(generation))
+                {
+                    CompleteOpenFailure(generation, "Failed to open: " + ex.Message);
+                }
                 return;
             }
         }
+    }
+
+    /// <summary>현재 열기 시도의 실패 상태를 확정한 뒤 셸에 정확히 한 번 알린다.</summary>
+    private void CompleteOpenFailure(int generation, string status)
+    {
+        if (!IsCurrent(generation)) return;
+        StatusText.Text = status;
+        ClearOpenedArchive();
+        ContentOpenFailed?.Invoke();
+    }
+
+    /// <summary>열기에 실패하거나 사용자가 취소했을 때 열린 압축 상태와 도구를 빈 상태로 되돌린다.</summary>
+    private void ClearOpenedArchive()
+    {
+        _archivePath = null;
+        _password = null;
+        _root = null;
+        _currentFolder = null;
+        _navStack.Clear();
+        Rows.Clear();
+        PlaceholderText.Visibility = Visibility.Visible;
+        UpdateBreadcrumb();
+        UpdateToolbarState();
+        TrayStatusChanged?.Invoke();
     }
 
     private void RefreshRows()
