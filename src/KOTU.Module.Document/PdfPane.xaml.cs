@@ -526,6 +526,12 @@ public sealed partial class PdfPane : UserControl
         if (_scroll is null || zoom <= 0) return;
         _itemsPanel ??= PageList.ItemsPanelRoot; // ThumbnailExplorer.xaml.cs의 ItemsPanelRoot과 같은 접근
         if (_itemsPanel is null) return;
+        // A377: ItemsStackPanel 자체가 뷰포트 가운데에 놓인 채 확대되면, 컨테이너의 내용을
+        // Left로 바꿔도 패널 앞 여백까지 함께 확대되어 Fit width에서 그 여백만큼 우측이 잘린다.
+        // 패널의 확대 원점은 항상 왼쪽에 고정한다. 화면 안에 들어오는 페이지의 중앙 정렬은
+        // 아래 MinWidth와 ListViewItem의 Center가 담당하므로 Contain·Original의 기존 배치는 유지된다.
+        if (_itemsPanel.HorizontalAlignment != HorizontalAlignment.Left)
+            _itemsPanel.HorizontalAlignment = HorizontalAlignment.Left;
         var viewportW = _scroll.ViewportWidth;
         if (viewportW <= 0) return;
         var min = viewportW / zoom;

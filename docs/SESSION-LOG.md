@@ -6,6 +6,15 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-01 — A377 PDF Fit width 내부 패널 확대 원점 수리(v0.370.0)
+
+사용자가 v0.369.0 실기기 화면으로 PDF 왼쪽 검은 여백과 우측 내용 은폐가 여전히 남았다고 재보고했다.
+제보 PDF는 612×792pt의 일반 세로 Letter 3페이지였고 최신 설치본에서 Fit width 화면을 직접 재현했다.
+A375는 `ListViewItem.HorizontalContentAlignment`와 가로 오프셋만 왼쪽으로 바꿨지만, 상위
+`ItemsStackPanel`이 축소 전 폭으로 뷰포트 가운데에 놓인 뒤 확대되는 기준점은 그대로였다.
+A377은 내부 패널의 `HorizontalAlignment`를 Left로 고정한다. Contain 등 화면 안에 들어오는 페이지는
+기존 `MinWidth = viewport / zoom`과 항목 Center 정렬이 중앙 배치를 계속 담당한다.
+
 ### 2026-10-01 — A376 압축 해제 완료 후 탐색기 자동 열기(v0.369.0)
 
 사용자가 압축을 푼 뒤 결과물이 들어 있는 폴더를 연 Windows 탐색기 창 하나가 떠야 한다고 요청했다.
