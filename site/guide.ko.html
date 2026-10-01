@@ -362,7 +362,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
       <!-- ================= 2. MODULES ================= -->
       <section id="modules">
         <h2><span class="num">2</span>모듈</h2>
-        <p>모듈은 일곱 개입니다. 왼쪽 아래 메뉴에서 전환합니다.</p>
+        <p>모듈은 여덟 개입니다. 왼쪽 아래 메뉴에서 전환합니다.</p>
         <div class="tbl"><table>
           <tr><th>#</th><th>모듈</th><th>여는 형식</th></tr>
           <tr><td>1</td><td>All Readable</td><td>다른 파일 모듈이 열 수 있는 모든 것</td></tr>
@@ -372,6 +372,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .html .htm .pdf</code></td></tr>
           <tr><td>6</td><td>Archive</td><td><code>.zip .7z .rar .tar .gz .tgz .bz2 .xz</code></td></tr>
           <tr><td>7</td><td>H/W Info</td><td>파일 없음 — 실시간 하드웨어 정보</td></tr>
+          <tr><td>8</td><td>Record</td><td>파일 연결 없음 — 화면/창 MP4 녹화 또는 마이크 단독 WAV 녹음</td></tr>
         </table></div>
 
         <h3>Image</h3>
@@ -771,6 +772,23 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            <em>Original</em>이 표시된 상태로 시작합니다.</p>
         <p>아무것도 열려 있지 않을 때는 — 창이 파일 브라우저를 보여 주는 상태 — Fit 컨트롤이 다른 모듈과
            같은 중립 Fit 아이콘으로 바에 남아 있되 비활성입니다. 파일을 열면 살아납니다.</p>
+        <h3 id="record">Record</h3>
+        <p><strong>Screen recording</strong>을 고르면 화면이나 열린 창을 선택하고 Start를 눌러
+           <code>.mp4</code> 저장 위치를 정합니다. H.264 영상(초당 30프레임)과 AAC 오디오를 기록합니다.
+           선택한 창만 녹화해도 기본 시스템 출력 오디오는 항상 포함됩니다. 사용 가능한 마이크를 함께
+           섞으려면 <strong>Include microphone with system audio</strong>를 켭니다.
+           <strong>Microphone recording</strong>은 선택한 마이크만 48 kHz, 16-bit mono WAV로 저장합니다.
+           Record는 파일 연결을 등록하지 않으며, 저장된 MP4와 WAV는 Video와 Audio에서 엽니다.</p>
+        <p><strong>Stop and save</strong>로 마무리하거나 <strong>Discard</strong>로 현재 녹음을 버립니다.
+           저장한 뒤 <strong>Open folder</strong>로 파일 위치를 열 수 있습니다. KOTU는 녹음 마무리가 끝날
+           때까지 기다린 뒤 결과 파일을 공개하며, 임시 형제 파일을 사용해 실패하거나 버린 녹음이 기존
+           파일을 덮어쓰지 않게 합니다. 녹음 중 창 닫기, 모듈 전환, Settings 진입 시에는 저장 후 중지·
+           버리기·계속 녹음 중 선택합니다. 화면 캡처에는 x64 Microsoft Visual C++ 2015–2022
+           재배포 패키지와 Windows Media Foundation이 필요하고, Windows N/KN에는 Media Feature Pack이
+           필요할 수 있습니다. 창 녹화는 Windows 10 버전 1903 이상에서 가능하며 선택한 창을 열어 복원된
+           상태로 두어야 합니다. 마이크 접근은 Windows 개인정보 설정을 따릅니다. 보호된 콘텐츠,
+           장치/디스플레이 제거, 절전은 녹화를 중단시킬 수 있습니다. 앱을 강제 종료하면 미완성 임시
+           파일이 남을 수 있고, 미완성 MP4 재생은 보장되지 않습니다.</p>
       </section>
 
       <!-- ================= 3. SHORTCUTS ================= -->
@@ -1262,7 +1280,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            <strong>작업 표시줄</strong>의 것은 열린 파일이 얼마나 큰지를, <strong>알림 영역</strong>의 것은
            모듈이 지금 무엇을 하고 있는지를 알려 줍니다.</p>
         <p>셋은 하나의 색 팔레트를 씁니다. 모듈마다 색이 있고 — Image 초록, Video 빨강, Audio 청록,
-           Document 보라, Archive 호박색, H/W Info 파랑, All Readable 자홍 — 아이콘은 그 색을 씁니다.</p>
+           Record 주황, Document 보라, Archive 호박색, H/W Info 파랑, All Readable 자홍 — 아이콘은 그 색을 씁니다.</p>
 
         <h3>제목 표시줄 — 16 px</h3>
         <p><strong>창 번호, 그것뿐입니다.</strong> 제목 표시줄이 이름 앞에 적는 것과 같은 번호이므로
@@ -1282,7 +1300,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            <code>TXT</code> 위에 <code>40K</code>, <code>JPG</code> 위에 <code>2.4M</code>. 모듈이 아니라
            파일에서 읽어 오므로 이것만은 모든 모듈에서 같습니다.</p>
         <p>아무것도 열려 있지 않으면 타일이 모듈 색으로 채워지고 세 글자가 들어갑니다 — <code>IMG</code>,
-           <code>VID</code>, <code>AUD</code>, <code>DOC</code>, <code>ARC</code>, <code>ALL</code>.
+           <code>VID</code>, <code>AUD</code>, <code>REC</code>, <code>DOC</code>, <code>ARC</code>, <code>ALL</code>.
            H/W Info와 모듈이 없는 화면은 대신 KOTU 아이콘 본체에 모듈 색 고리를 두르고 그 아래에 세 글자
            띠를 답니다.</p>
         <p>작업 표시줄에서 창은 하나로 묶이지 않고 각자 서므로, 번호와 이 타일이 작업 표시줄과
@@ -1293,7 +1311,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            <strong>모듈마다 다른 것이 바로 이 아이콘이며</strong>, 지금 하고 있는 일을 따라갑니다.</p>
         <ul>
           <li><strong>아무것도 열려 있지 않을 때</strong> — 모듈 색이 아이콘을 채우고 세 글자가 흰색으로
-              들어갑니다: <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>DOC</code>,
+              들어갑니다: <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>REC</code>, <code>DOC</code>,
               <code>ARC</code>, <code>ALL</code>.</li>
           <li><strong>무언가 열려 있을 때</strong> — 모듈 색으로 테두리를 두른 어두운 배지에, 그 모듈 고유의
               값 두 개가 같은 색으로 들어갑니다.</li>
@@ -1303,6 +1321,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Image</td><td><code>IMG</code></td><td>사진의 <strong>가로</strong> 위에 <strong>세로</strong> 픽셀 — <code>4032</code> 위에 <code>3024</code>. EXIF든 <kbd>R</kbd>이든 사분의 일 바퀴 돌아간 상태를 보고 있으면 둘이 바뀝니다. 다섯 자리부터는 줄여 적습니다(<code>12k</code>)</td></tr>
           <tr><td>Video</td><td><code>VID</code></td><td><strong>해상도</strong>(<code>1080p</code>) 위에 <strong>평균 비트레이트</strong>(<code>4.2M</code>) — 그 순간이 아니라 파일 전체의 평균입니다</td></tr>
           <tr><td>Audio</td><td><code>AUD</code></td><td><strong>재생 위치</strong> 위에 <strong>작은 막대 네 개</strong>. 막대는 트랙이 재생되는 동안 1초에 한 번 움직이고, 일시정지·정지 상태에서는 낮게 멈춰 있습니다. 스펙트럼 분석이 아니라 살아 있다는 표시입니다</td></tr>
+          <tr><td>Record</td><td><code>REC</code></td><td>녹화 중에는 <code>REC</code> 아래에 경과 시간을 표시하고, 저장하거나 버리면 한 줄 대기 표시로 돌아갑니다</td></tr>
           <tr><td>Document</td><td><code>DOC</code></td><td>현재 페이지와 전체 페이지 수를 <strong>대각선으로</strong> 나눠 — 현재는 왼쪽 위, 전체는 오른쪽 아래. PDF는 실제 페이지를 세고, 텍스트와 Markdown은 페이지가 없으므로 <code>1</code>과 <code>1</code>로 나옵니다. 네 자리부터는 <code>999+</code>로 표시합니다</td></tr>
           <tr><td>Archive</td><td><code>ARC</code></td><td><strong>종류</strong>(<code>ZIP</code>, <code>7Z</code>) 위에 <strong>압축률</strong>(<code>0.42</code>). 압축·해제 작업이 진행 중이면 아랫줄이 대신 <strong>진행률</strong>(<code>45%</code>)이 됩니다</td></tr>
           <tr><td>All Readable</td><td><code>ALL</code></td><td>그 파일을 다루는 모듈이 보여 줄 것을 그대로 — 사진을 열면 Image의 두 줄이, 동영상을 열면 Video의 두 줄이 나옵니다</td></tr>

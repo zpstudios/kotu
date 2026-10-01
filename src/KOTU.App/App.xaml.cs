@@ -50,6 +50,7 @@ public partial class App : Application
                 sp.GetRequiredService<ISettingsService>())); // v0.44.0 (A171에서 설정 주입)
             router.Register(new KOTU.Module.Hardware.HardwareModule(
                 sp.GetRequiredService<ISettingsService>())); // 트레이 센서 선택 복원 (A18)
+            router.Register(new KOTU.Module.Record.RecordModule(sp.GetRequiredService<ISettingsService>()));
             // A59(v0.113.0): All Readable 통합 모듈은 **맨 마지막**에 등록한다 —
             // 담당 확장자가 다른 모듈의 합집합이라, 먼저 등록하면 라우팅(등록 순서 = 우선순위)에서
             // 전용 모듈을 가로채 탐색기 더블클릭이 전부 이 모듈로 빨려 들어간다.

@@ -16,11 +16,12 @@
 PDF면 문서 뷰어, 압축 파일이면 내부 탐색. 창의 껍데기(사이드 패널·하단 바·트레이 아이콘)는 그대로 있고
 가운데 화면과 하단 바만 바뀝니다. 재생·해제 같은 무거운 일은 검증된 엔진(7-Zip, libvlc,
 LibreHardwareMonitor)에 맡기고, KOTU는 **하나로 묶인 경험**에 집중합니다. 필요한 엔진은 전부 동봉되어
-있어 코덱 팩이나 별도 설치가 필요 없습니다.
+있어 코덱 팩이나 별도 설치가 필요 없습니다. Record는 화면/창 MP4 녹화와 마이크 WAV 녹음을 제공하며,
+녹화 파일 연결은 Video와 Audio 모듈이 담당합니다.
 
 ## 기능
 
-일곱 개 모듈을 하단 왼쪽 메뉴에서 전환합니다.
+여덟 개 모듈을 하단 왼쪽 메뉴에서 전환합니다.
 
 | 모듈 | 상태 | 주요 기능 |
 |---|---|---|
@@ -31,6 +32,7 @@ LibreHardwareMonitor)에 맡기고, KOTU는 **하나로 묶인 경험**에 집�
 | **문서** (Document) | ✅ | txt·md·html·log·ini 편집 + pdf 보기 / 편집 ↔ 보기 모드 전환 / 마크다운·HTML 렌더 뷰 / 인쇄(PDF는 페이지 범위 지정) / 인코딩(UTF-8·UTF-16·CP949)·줄바꿈 유지 저장, 저장 전 경고·저장 후 검증 / PDF 연속 스크롤 / Ctrl+휠 20~500% 확대 |
 | **압축** (Archive) | ✅ | zip·7z·rar·tar·gz·tgz·bz2·xz 해제 / zip·7z 생성(암호 지원, 7z은 파일명까지 암호화) / 풀지 않고 내부 탐색·개별 파일 열기 / 드래그&드롭 압축 / 한글 파일명(CP949) 자동 복구 / 진행률·취소 |
 | **H/W Info** | ✅ | 센서 타일 10종(CPU·GPU 온도/전력/부하/클럭, RAM, 팬, SSD 온도) 실시간 그래프 / 사양 목록(CPU·GPU·RAM·메인보드·저장장치·네트워크·시스템) 전체 복사 / 갱신 주기 선택 / 항상 위 / 선택 센서를 트레이 아이콘에 표시 |
+| **Record** | ✅ | 화면 또는 창을 MP4(H.264/AAC, 30fps)로 녹화하며 기본 출력 시스템 오디오는 항상 포함, 선택 마이크 혼합 가능 / 마이크 단독 48kHz 16-bit mono WAV / 저장 또는 삭제, 출력 폴더 열기 |
 
 > CPU 온도·전력, 팬 속도, 드라이브 온도는 관리자 권한(과 PawnIO 드라이버)이 필요합니다. 읽을 수 없을 때는
 > 화면에서 이유와 함께 **관리자로 재시작** 또는 드라이버 안내를 제공합니다.
@@ -73,7 +75,7 @@ WebView2 런타임을 사용합니다(없으면 소스 보기로 대체).
 ```
 src/KOTU.Core        # 모듈 계약(IModule)·파일 라우터·설정 — UI 비의존
 src/KOTU.App         # WinUI 3 셸: 단일 인스턴스, 다중 창, 파일 → 모듈 라우팅
-src/KOTU.Module.*    # 기능 모듈 (AllReadable, Image, Video, Audio, Document, Archive, Hardware)
+src/KOTU.Module.*    # 기능 모듈 (AllReadable, Image, Video, Audio, Document, Archive, Hardware, Record)
 tests/               # 단위 테스트 (xunit)
 ```
 

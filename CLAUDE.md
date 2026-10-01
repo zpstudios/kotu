@@ -96,8 +96,10 @@
 
 ## 3. 빌드·배포 환경
 
-- 샌드박스(Linux)에 dotnet 없음 — 정적 검사(tree-sitter·grep·XML 검증)까지만 가능,
-  실빌드는 push 후 GitHub Actions(windows-latest). **tree-sitter는 using 누락·catch 타입 순서를
+- 시스템 PATH에는 dotnet이 없지만 저장소의 `artifacts/dotnet/dotnet.exe`에 .NET 8 SDK가 있다.
+  `DOTNET_CLI_HOME=artifacts/dotnet-home`, `NUGET_PACKAGES=artifacts/nuget`로 두고 Windows 로컬
+  빌드·테스트·publish를 먼저 수행한다. 패키지 복원 네트워크가 막히면 승인된 외부 실행으로 재시도하고,
+  최종 배포 검증은 GitHub Actions(windows-latest)도 확인한다. **tree-sitter는 using 누락·catch 타입 순서를
   못 잡는다** — 유사 파일과 대조 검사할 것.
 - **WPF에서 되는 XAML 문법이 WinUI에서 된다고 가정하지 말 것**(v0.169.1 실사례: `PathGeometry.Figures`에
   path 미니언어 문자열 → `XamlCompiler error WMC0055`. `Data="M ..."`처럼 **Geometry 타입 속성**에 거는

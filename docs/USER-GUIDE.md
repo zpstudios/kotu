@@ -94,7 +94,7 @@ does not belong to the module you are looking at opens it in a new window.
 
 ## 2. Modules
 
-Seven modules. Switch between them from the menu at the bottom left.
+Eight modules. Switch between them from the menu at the bottom left.
 
 | # | Module | Opens |
 |---|---|---|
@@ -105,6 +105,7 @@ Seven modules. Switch between them from the menu at the bottom left.
 | 5 | Document | `.txt .md .markdown .log .ini .html .htm .pdf` |
 | 6 | Archive | `.zip .7z .rar .tar .gz .tgz .bz2 .xz` |
 | 7 | H/W Info | no files — live hardware information |
+| 8 | Record | no file associations — screen/window MP4 recording or microphone-only WAV recording |
 
 ### 2.1 Image
 
@@ -493,6 +494,26 @@ While nothing is open — the window is showing the file browser — the Fit con
 with the same neutral Fit icon used by the other modules, but is greyed out; it comes alive when a
 file opens.
 
+### 2.10 Record
+
+Choose **Screen recording** to select a display or open window, then Start and choose an `.mp4`
+destination. Recording uses H.264 video at 30 fps and AAC audio. The default system playback audio
+is always included, even when recording one window; enable **Include microphone with system audio**
+to mix an available microphone. Choose **Microphone recording** to save only the selected microphone
+as 48 kHz, 16-bit mono WAV. This module does not register file associations; saved MP4 and WAV files
+open in Video and Audio.
+
+Use **Stop and save** to finish, or **Discard** to remove the current recording. After saving, use
+**Open folder** to locate it. KOTU waits for recording finalization before publishing the file and
+uses a temporary sibling file so a failed or discarded recording does not replace an existing file.
+While recording, closing the window, switching modules, or opening Settings asks whether to stop and
+save, discard, or keep recording. Screen capture requires the x64 Microsoft Visual C++ 2015–2022
+Redistributable and Windows Media Foundation; Windows N/KN may need the Media Feature Pack. Window
+capture requires Windows 10 version 1903 or newer and the selected window kept open and restored.
+Microphone access follows Windows privacy settings. Protected content, device/display removal, or
+sleep can interrupt capture. A forced app termination can leave an unfinished temporary file, and
+an incomplete MP4 is not guaranteed to be playable.
+
 ---
 
 ## 3. Keyboard shortcuts
@@ -563,7 +584,7 @@ is to pick a module, which starts that module the standard way — both sidebars
 
 Inside the Open file browser, `F11` and `F12` do nothing; `Esc` gets you out.
 
-`Enter`, `Alt`+`Enter`, `Esc` and the screen mode button behave the same in all seven modules — they
+`Enter`, `Alt`+`Enter`, `Esc` and the screen mode button behave the same in all eight modules — they
 belong to the window, not to the module.
 
 ### 3.3 Letter keys, per module
@@ -1009,8 +1030,8 @@ spot and each says something different: the one in the **title bar** says which 
 one in the **taskbar** says how big the open file is, and the one in the **notification area** says
 what the module is doing right now.
 
-They share one palette. Every module has a colour — Image green, Video red, Audio teal, Document
-purple, Archive amber, H/W Info blue, All Readable magenta — and that is the colour these icons use.
+They share one palette. Every module has a colour — Image green, Video red, Audio teal, Record orange,
+Document purple, Archive amber, H/W Info blue, All Readable magenta — and that is the colour these icons use.
 
 ### 9.1 The title bar — 16 px
 
@@ -1031,7 +1052,7 @@ white number, since they have no open-or-closed state to show.
 rather than from the module.
 
 With nothing open the tile is filled with the module's colour and carries its three letters — `IMG`,
-`VID`, `AUD`, `DOC`, `ARC`, `ALL`. H/W Info and the module-less screens instead show the KOTU icon
+`VID`, `AUD`, `REC`, `DOC`, `ARC`, `ALL`. H/W Info and the module-less screens instead show the KOTU icon
 proper with a ring in the module's colour and a three-letter band under it.
 
 Each window stands on its own in the taskbar rather than stacking into one group, so the numbers and
@@ -1043,7 +1064,7 @@ Every open window puts one small icon in the notification area and keeps it ther
 window lives. **This is the one that differs per module**, and it keeps up with what you are doing.
 
 - **Nothing open** — the module's colour fills the icon, with its three letters in white: `IMG`,
-  `VID`, `AUD`, `DOC`, `ARC` or `ALL`.
+  `VID`, `AUD`, `REC`, `DOC`, `ARC` or `ALL`.
 - **Something open** — a dark badge bordered in the module's colour, carrying that module's own two
   values in the same colour.
 
@@ -1052,6 +1073,7 @@ window lives. **This is the one that differs per module**, and it keeps up with 
 | **Image** | `IMG` | the picture's **width** over its **height** in pixels — `4032` over `3024`. The two swap when what you are looking at is turned a quarter turn, whether by EXIF or by `R`. Five figures and up are shortened (`12k`) |
 | **Video** | `VID` | the **resolution** (`1080p`) over the **average bit rate** (`4.2M`) — average over the whole file, not the moment |
 | **Audio** | `AUD` | the **playing position** over **four small bars**. The bars move once a second while a track plays and sit low and still when it is paused or stopped. They are a sign of life, not a spectrum analysis |
+| **Record** | `REC` | `REC` over the elapsed recording time while capture is active; it returns to the single idle label after saving or discarding |
 | **Document** | `DOC` | the page you are on and the page count, split **diagonally** — current in the upper left, total in the lower right. PDFs count real pages; text and Markdown have none, so they read `1` and `1`. Four figures and up show as `999+` |
 | **Archive** | `ARC` | the **kind** (`ZIP`, `7Z`) over the **compression ratio** (`0.42`). While a compress or extract job is running, the lower line becomes its **progress** (`45%`) instead |
 | **All Readable** | `ALL` | whatever the module handling the file would show — open a photo and you get Image's two lines, open a video and you get Video's |

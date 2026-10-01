@@ -52,7 +52,8 @@
 ```
 
 위 그림은 초안 시점의 것이다. 현재는 **Document 모듈**(4.3c)과 **All Readable 모듈**(9장)이 더해져
-모듈 슬롯이 일곱이다.
+모듈 프로젝트는 현재 여덟 개다. 이후 추가된 Record 모듈(A14/A15)은 화면/창 녹화와 마이크 녹음을 제공하며
+파일 연결을 소유하지 않는다. 저장 MP4/WAV의 담당 모듈은 Video/Audio다.
 
 핵심 규칙:
 
@@ -83,6 +84,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 ├─ src/KOTU.Module.Document   # 텍스트 편집·마크다운/HTML 렌더 뷰·PDF 뷰어 (초안 이후 신설 — 아래 4.3c)
 ├─ src/KOTU.Module.Hardware   # Phase 5 (정보·모니터링 구현, 스트레스는 미구현)
 ├─ src/KOTU.Module.AllReadable # A59(v0.113.0) 통합 모듈 — 아래 9장(중첩 호스팅)
+├─ src/KOTU.Module.Record     # A14/A15 화면·창 MP4 및 마이크 WAV 녹화 (파일 연결 없음)
 └─ tests/                   # 모듈별 단위 테스트
 ```
 
@@ -153,7 +155,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 - 커밋 규칙: 변경마다 버전 명기하여 커밋 (예: `v0.2.0 image-viewer: 방향키 탐색 구현`).
 
 > **현황**: Phase 0~5는 모두 완주했고(스트레스 테스트만 미구현), 초안에 없던 Document·All Readable
-> 모듈이 더해져 현재 7모듈이다. 위 표는 **초기 분담 기록**으로 남긴다 — 지금의 개발 방식(오케스트레이터
+> 모듈이 더해져 Record를 포함한 현재 8모듈이다. 위 표는 **초기 분담 기록**으로 남긴다 — 지금의 개발 방식(오케스트레이터
 > + 서브에이전트 직렬)과 커밋·릴리스 규칙의 정본은 `CLAUDE.md`, 남은 작업은 `docs/REQUIREMENTS.md`.
 
 ## 6. 주요 리스크 (초안 시점 목록 + 결말)
@@ -194,6 +196,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 | `KOTU video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
 | `KOTU audio worker` | 뷰마다 1 | Normal | libvlc(시각화 인스턴스) 생성·해제 (A10) |
 | `KOTU document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지)·저장(인코딩 보존, A37) |
+| `KOTU record worker` | 뷰마다 1 | Normal | 소스 열거·세션 시작/중지·네이티브 자원 해제·설정 I/O·완료 MP4/WAV 공개를 직렬화. 캡처·인코드와 WAV 패킷 기록은 네이티브/캡처 스레드에서 수행 |
 | (All Readable 전용 워커 없음) | — | — | 자식 모듈 뷰의 워커를 그대로 쓴다 — 자식이 바뀌면 이전 워커도 함께 정리(9장) |
 | `KOTU drive strip worker` | 하단 바 드라이브 줄마다 1 (= 모듈 뷰마다 1) | **BelowNormal** | 드라이브 열거·용량(`DriveInfo`) 30초 주기 + 종류 WMI 1회 캐시 (A22, v0.108.0). 줄이 숨겨지면(파일 열림) 타이머 정지, 뷰 Unloaded 시 정리 |
 | `KOTU settings worker` | 설정 뷰마다 1 | Normal | 탐색기 연결 등록·해제, UserChoice 쓰기(A38), 기본 앱 개수 조회 (A77, v0.106.0). 모듈별로 나누지 않는다 — Capabilities 키를 모듈들이 공유해 동시 쓰기가 위험 |
@@ -214,6 +217,7 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 | 자막 탐지·CP949→UTF-8 변환 | video worker | 플라이아웃·`AddSlave` 적용 |
 | 문서 텍스트 읽기·저장(A37) | document worker | 본문 표시·수정됨 표시 갱신 |
 | PDF 로드·페이지 렌더(A16, Windows.Data.Pdf) | WinRT 비동기(OS 관리) | 페이지 비트맵 표시(가상화 지연 렌더) |
+| 화면/창 캡처·MP4 인코드(H.264/AAC, 30 fps) 및 마이크 전용 WAV(48 kHz, 16-bit mono) 녹음(A14/A15) | record worker가 세션 수명·완료를 조정, ScreenRecorderLib/NAudio 캡처 스레드가 미디어 처리 | 상태·타이머·결과 경로만 반영. 저장 전 완료 대기, 임시 파일을 성공 시에만 대상으로 공개 |
 | 드라이브 목록·용량(`DriveStatus.Collect`) + 종류 WMI 조회(`PhysicalDiskKinds`, 프로세스 1회 캐시) | drive strip worker | 공용 드라이브 줄(`DriveStrip`) 항목·막대 그리기, 넘치면 마퀴 |
 | 탐색기 연결 등록·해제 + 기본 앱 지정(A38)·개수 조회 (A77) | settings worker | 진행 링·`Registering... (n/m)` 텍스트, 완료 후 "Default app for n/m extensions"·결과 문구 반영 |
 | libvlc 재생 이벤트(시간·상태) | libvlc 스레드 | `Dispatch()` 경유 슬라이더·라벨 갱신 |

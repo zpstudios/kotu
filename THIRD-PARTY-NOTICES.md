@@ -11,7 +11,8 @@ KOTU는 아래 외부 구성요소를 사용합니다. 각 구성요소는 자�
 | [SharpCompress](https://github.com/adamhathcock/sharpcompress) | zip CP949 인코딩 경로 | MIT | NuGet |
 | [libvlc](https://www.videolan.org/vlc/libvlc.html) (VideoLAN.LibVLC.Windows) | 동영상 재생 엔진 | LGPL-2.1 | 별도 dll 동적 링크, 원본 그대로 동봉. 소스는 videolan.org에서 제공 |
 | [LibVLCSharp / LibVLCSharp.WinUI](https://code.videolan.org/videolan/LibVLCSharp) | libvlc .NET 래퍼 | LGPL-2.1 | NuGet, 동적 링크 |
-| [NAudio](https://github.com/naudio/NAudio) (NAudio.Wasapi) | 오디오 VU 미터의 WASAPI 루프백 레벨 캡처 (A304) | MIT | NuGet |
+| [NAudio](https://github.com/naudio/NAudio) (NAudio.Wasapi) | 오디오 VU 미터의 WASAPI 루프백 레벨 캡처 (A304), 마이크 PCM WAV 녹음 (A15) | MIT | NuGet |
+| [ScreenRecorderLib](https://github.com/sskodje/ScreenRecorderLib) 7.0.1 | 화면·창 캡처, WASAPI 시스템/마이크 믹스, Media Foundation H.264/AAC MP4 저장 (A14) | MIT | NuGet, x64 동적 링크. 배포본 `licenses/ScreenRecorderLib-LICENSE.txt`에 패키지의 원본 라이선스 동봉. Visual C++ x64 런타임 및 Windows Media Foundation 필요 |
 | [Magick.NET](https://github.com/dlemstra/Magick.NET) (Magick.NET-Q8-x64) | WIC가 못 읽는 이미지 포맷(psd 등) 디코드 | Apache-2.0 (동봉 네이티브 [ImageMagick](https://imagemagick.org/script/license.php)은 ImageMagick License) | NuGet |
 | Microsoft Windows App SDK / WinUI 3 | UI 프레임워크 (HTML 렌더 뷰의 WebView2 컨트롤 포함, A248) | MIT | NuGet |
 | System.Drawing.Common | 트레이·창 아이콘 GDI+ 합성(브랜드 표식) | MIT | NuGet |

@@ -357,7 +357,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
       <!-- ================= 2. MODULES ================= -->
       <section id="modules">
         <h2><span class="num">2</span>Modules</h2>
-        <p>Seven modules. Switch between them from the menu at the bottom left.</p>
+        <p>Eight modules. Switch between them from the menu at the bottom left.</p>
         <div class="tbl"><table>
           <tr><th>#</th><th>Module</th><th>Opens</th></tr>
           <tr><td>1</td><td>All Readable</td><td>anything the other file modules can open</td></tr>
@@ -367,6 +367,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>5</td><td>Document</td><td><code>.txt .md .markdown .log .ini .html .htm .pdf</code></td></tr>
           <tr><td>6</td><td>Archive</td><td><code>.zip .7z .rar .tar .gz .tgz .bz2 .xz</code></td></tr>
           <tr><td>7</td><td>H/W Info</td><td>no files — live hardware information</td></tr>
+          <tr><td>8</td><td>Record</td><td>no file associations — screen/window MP4 or microphone-only WAV recording</td></tr>
         </table></div>
 
         <h3>Image</h3>
@@ -796,6 +797,23 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>While nothing is open — the window is showing the file browser — the Fit control stays on the
            bar with the same neutral Fit icon used by the other modules, but is greyed out; it comes alive
            when a file opens.</p>
+        <h3 id="record">Record</h3>
+        <p>Choose <strong>Screen recording</strong> to select a display or open window, then Start and choose
+           an <code>.mp4</code> destination. Recording uses H.264 video at 30 fps and AAC audio. The default
+           system playback audio is always included, even when recording one window; enable
+           <strong>Include microphone with system audio</strong> to mix an available microphone. Choose
+           <strong>Microphone recording</strong> to save only the selected microphone as 48 kHz, 16-bit mono
+           WAV. Record does not register file associations; saved MP4 and WAV files open in Video and Audio.</p>
+        <p>Use <strong>Stop and save</strong> to finish, or <strong>Discard</strong> to remove the current
+           recording. After saving, use <strong>Open folder</strong> to locate it. KOTU waits for recording
+           finalization before publishing the file and uses a temporary sibling file so a failed or discarded
+           recording does not replace an existing file. While recording, closing the window, switching modules,
+           or opening Settings asks whether to stop and save, discard, or keep recording. Screen capture requires
+           the x64 Microsoft Visual C++ 2015–2022 Redistributable and Windows Media Foundation; Windows N/KN may
+           need the Media Feature Pack. Window capture requires Windows 10 version 1903 or newer and the selected
+           window kept open and restored. Microphone access follows Windows privacy settings. Protected content,
+           device/display removal, or sleep can interrupt capture. Forced app termination can leave an unfinished
+           temporary file, and an incomplete MP4 is not guaranteed to be playable.</p>
       </section>
 
       <!-- ================= 3. SHORTCUTS ================= -->
@@ -862,7 +880,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         <p>Inside the Open file browser, <kbd>F11</kbd> and <kbd>F12</kbd> do nothing; <kbd>Esc</kbd> gets
            you out.</p>
         <p><kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Enter</kbd>, <kbd>Esc</kbd> and the screen mode button
-           behave the same in all seven modules — they belong to the window, not to the module.</p>
+           behave the same in all eight modules — they belong to the window, not to the module.</p>
 
         <h3>Letter keys, per module</h3>
         <p>Only one module is on screen at a time, so the same letter can mean different things in different
@@ -1308,8 +1326,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            the spot and each says something different: the one in the <strong>title bar</strong> says which
            window this is, the one in the <strong>taskbar</strong> says how big the open file is, and the one
            in the <strong>notification area</strong> says what the module is doing right now.</p>
-        <p>They share one palette. Every module has a colour — Image green, Video red, Audio teal, Document
-           purple, Archive amber, H/W Info blue, All Readable magenta — and that is the colour these icons
+        <p>They share one palette. Every module has a colour — Image green, Video red, Audio teal, Record orange,
+           Document purple, Archive amber, H/W Info blue, All Readable magenta — and that is the colour these icons
            use.</p>
 
         <h3>The title bar — 16 px</h3>
@@ -1330,7 +1348,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            <code>TXT</code> over <code>40K</code>, <code>JPG</code> over <code>2.4M</code>. This one is the
            same in every module, because it is read from the file rather than from the module.</p>
         <p>With nothing open the tile is filled with the module's colour and carries its three letters —
-           <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>DOC</code>, <code>ARC</code>,
+           <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>REC</code>, <code>DOC</code>, <code>ARC</code>,
            <code>ALL</code>. H/W Info and the module-less screens instead show the KOTU icon proper with a
            ring in the module's colour and a three-letter band under it.</p>
         <p>Each window stands on its own in the taskbar rather than stacking into one group, so the numbers
@@ -1342,7 +1360,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
            what you are doing.</p>
         <ul>
           <li><strong>Nothing open</strong> — the module's colour fills the icon, with its three letters in
-              white: <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>DOC</code>,
+              white: <code>IMG</code>, <code>VID</code>, <code>AUD</code>, <code>REC</code>, <code>DOC</code>,
               <code>ARC</code> or <code>ALL</code>.</li>
           <li><strong>Something open</strong> — a dark badge bordered in the module's colour, carrying that
               module's own two values in the same colour.</li>
@@ -1352,6 +1370,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
           <tr><td>Image</td><td><code>IMG</code></td><td>the picture's <strong>width</strong> over its <strong>height</strong> in pixels — <code>4032</code> over <code>3024</code>. The two swap when what you are looking at is turned a quarter turn, whether by EXIF or by <kbd>R</kbd>. Five figures and up are shortened (<code>12k</code>)</td></tr>
           <tr><td>Video</td><td><code>VID</code></td><td>the <strong>resolution</strong> (<code>1080p</code>) over the <strong>average bit rate</strong> (<code>4.2M</code>) — average over the whole file, not the moment</td></tr>
           <tr><td>Audio</td><td><code>AUD</code></td><td>the <strong>playing position</strong> over <strong>four small bars</strong>. The bars move once a second while a track plays and sit low and still when it is paused or stopped. They are a sign of life, not a spectrum analysis</td></tr>
+          <tr><td>Record</td><td><code>REC</code></td><td><code>REC</code> over the elapsed recording time while capture is active; it returns to the single idle label after saving or discarding</td></tr>
           <tr><td>Document</td><td><code>DOC</code></td><td>the page you are on and the page count, split <strong>diagonally</strong> — current in the upper left, total in the lower right. PDFs count real pages; text and Markdown have none, so they read <code>1</code> and <code>1</code>. Four figures and up show as <code>999+</code></td></tr>
           <tr><td>Archive</td><td><code>ARC</code></td><td>the <strong>kind</strong> (<code>ZIP</code>, <code>7Z</code>) over the <strong>compression ratio</strong> (<code>0.42</code>). While a compress or extract job is running, the lower line becomes its <strong>progress</strong> (<code>45%</code>) instead</td></tr>
           <tr><td>All Readable</td><td><code>ALL</code></td><td>whatever the module handling the file would show — open a photo and you get Image's two lines, open a video and you get Video's</td></tr>

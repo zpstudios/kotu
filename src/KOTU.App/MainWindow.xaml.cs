@@ -1015,6 +1015,7 @@ public sealed partial class MainWindow : Window
         StartMenuPanel.Children.Add(Divider()); // A96 신규 ②: 하드웨어 인포 ↔ Settings 분리
 
         AddModuleItem("hardware"); // 7
+        AddModuleItem("record");
         StartMenuPanel.Children.Add(Divider());
 
         AddModuleItem("archive"); // 6
@@ -4203,6 +4204,7 @@ public sealed partial class MainWindow : Window
         "image" => "IMG",
         "video" => "VID",
         "audio" => "AUD",
+        "record" => "REC",
         "document" => "DOC",
         "archive" => "ARC",
         "hardware" => "INF",

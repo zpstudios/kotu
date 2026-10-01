@@ -53,6 +53,9 @@
     <!-- A233: 썸네일 텍스트 프리뷰의 CP949 폴백. 문서·압축·동영상 모듈과 같은 버전 —
          모듈 경유 전이 참조에 기대지 않고 소비 프로젝트가 직접 선언한다(저장소 관례) -->
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+    <!-- The recorder package injects its native managed reference through build targets.
+         Declare it in the executable too so publish resolves and copies the x64 assembly. -->
+    <PackageReference Include="ScreenRecorderLib" Version="7.0.1" GeneratePathProperty="true" />
   </ItemGroup>
   <ItemGroup>
     <!-- 런타임 로드용 .ico 원본: 타이틀바(AppWindow.SetIcon)·트레이 아이콘(TrayIcon)이 exe 옆에서 읽는다.
@@ -90,6 +93,7 @@
     <ProjectReference Include="..\KOTU.Module.Archive\KOTU.Module.Archive.csproj" />
     <ProjectReference Include="..\KOTU.Module.Video\KOTU.Module.Video.csproj" />
     <ProjectReference Include="..\KOTU.Module.Audio\KOTU.Module.Audio.csproj" />
+    <ProjectReference Include="..\KOTU.Module.Record\KOTU.Module.Record.csproj" />
     <ProjectReference Include="..\KOTU.Module.Hardware\KOTU.Module.Hardware.csproj" />
     <ProjectReference Include="..\KOTU.Module.Document\KOTU.Module.Document.csproj" />
     <!-- A59(v0.113.0): 통합 모듈. 자식 모듈 뷰는 셸이 넘긴 IModule 계약으로 만든다(직접 참조 없음). -->
@@ -109,6 +113,10 @@
     <Copy SourceFiles="$(PublishDir)$(TargetName).pri" DestinationFiles="$(PublishDir)resources.pri"
           Condition="!Exists('$(PublishDir)resources.pri') And Exists('$(PublishDir)$(TargetName).pri')" />
   </Target>
+  <ItemGroup>
+    <Content Include="$(PkgScreenRecorderLib)\LICENSE" Link="licenses\ScreenRecorderLib-LICENSE.txt"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ToolbarIconGeometry.cs" Link="ToolbarIconGeometry.cs" />
     <Compile Include="..\Shared\ToolbarIcons.cs" Link="ToolbarIcons.cs" />
