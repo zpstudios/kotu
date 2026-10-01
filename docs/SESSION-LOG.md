@@ -16,7 +16,12 @@
 - 평문 ZIP 오판 방지, 정상 암호 ZIP/7z 재시도, 늦은 실패와 교체 자식 억제 회귀시험을 추가했다.
 - A379는 Mission Statement를 `app files stay in one folder, with settings stored in your Windows user profile`로
   고치고 Settings/Welcome 공용 원문, 스플래시 생성기와 560×470 RGB PNG를 동기화했다.
-- v0.371.0. 로컬 .NET SDK가 없어 정적 검사만 수행하고 전체 빌드·시험·패키징은 GitHub CI에서 확인한다.
+- 첫 푸시의 C# 지역 변수명 충돌을 CI가 검출해 수정했고, build #36836552015와 release #36836551899가
+  최종 통과했다. 정식 v0.371.0 업데이트를 설치본에 적용했다.
+- 손상 ZIP은 암호 창 없이 실패하고 제목·파일 정보가 빈 상태로 복구되며 정상 ZIP 재열기가 됐다. Settings
+  About의 새 문구와 현재/최신 v0.371.0도 확인했다.
+- 남은 A349/A351도 직접 회수했다. 오디오·비디오 2파일의 버튼·Ctrl/Page 키·경계와 Windows 실제 SMTC
+  Previous/Next/PlayPause, 열린 파일 액센트 바·굵은 이름과 선택/포커스 테두리 분리를 모두 확인했다.
 
 ### 2026-10-01 — v0.370.0 설치본 실기기 종합 QA
 
