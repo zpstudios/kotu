@@ -189,6 +189,110 @@ public class ArchiveJobCoordinatorTests
     }
 
     [Fact]
+    public async Task SuccessfulExtractionOpensExplorerAfterCompletion()
+    {
+        var jobs = new BackgroundJobService();
+        var backend = new FakeBackend();
+        var resultPath = Path.Combine(Path.GetTempPath(), "KOTU archive open " + Guid.NewGuid());
+        Directory.CreateDirectory(resultPath);
+        var opened = Signal<string>();
+        using var release = new ManualResetEventSlim();
+        backend.ExtractAction = (_, _, _, _, _, _) => release.Wait();
+        var coordinator = new ArchiveJobCoordinator(jobs, backend, path => opened.TrySetResult(path));
+        try
+        {
+            var handle = coordinator.StartExtract("source.zip", resultPath);
+            Assert.False(opened.Task.IsCompleted);
+            release.Set();
+            Assert.Equal(BackgroundJobState.Succeeded, (await handle.Completion.WaitAsync(Limit)).State);
+            Assert.Equal(resultPath, await opened.Task.WaitAsync(Limit));
+        }
+        finally
+        {
+            release.Set();
+            Directory.Delete(resultPath, true);
+        }
+    }
+
+    [Fact]
+    public async Task BatchExtractionOpensOnlyFirstSuccessfulResultOnce()
+    {
+        var jobs = new BackgroundJobService();
+        var resultRoot = Path.Combine(Path.GetTempPath(), "KOTU archive batch open " + Guid.NewGuid());
+        Directory.CreateDirectory(resultRoot);
+        var opened = Signal<string>();
+        var openCount = 0;
+        var backend = new FakeBackend
+        {
+            ExtractAction = (_, target, _, _, _, _) => Directory.CreateDirectory(target)
+        };
+        var coordinator = new ArchiveJobCoordinator(jobs, backend, path =>
+        {
+            Interlocked.Increment(ref openCount);
+            opened.TrySetResult(path);
+        });
+        try
+        {
+            var handles = coordinator.StartExtractMany(
+                [Path.Combine(resultRoot, "first.zip"), Path.Combine(resultRoot, "second.zip")], true);
+            await Task.WhenAll(handles.Select(handle => handle.Completion)).WaitAsync(Limit);
+            Assert.EndsWith("first", await opened.Task.WaitAsync(Limit), StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(1, Volatile.Read(ref openCount));
+        }
+        finally { Directory.Delete(resultRoot, true); }
+    }
+
+    [Fact]
+    public async Task FailedCanceledAndTemporaryEntryExtractionDoNotOpenExplorer()
+    {
+        var opened = new List<string>();
+        var failedBackend = new FakeBackend
+        {
+            ExtractAction = (_, _, _, _, _, _) => throw new IOException("failed")
+        };
+        var failed = new ArchiveJobCoordinator(new BackgroundJobService(), failedBackend, opened.Add)
+            .StartExtract("failed.zip", "missing");
+        Assert.Equal(BackgroundJobState.Failed, (await failed.Completion.WaitAsync(Limit)).State);
+
+        var cancelJobs = new BackgroundJobService();
+        var cancelEntered = Signal<bool>();
+        using var cancelRelease = new ManualResetEventSlim();
+        var canceledBackend = new FakeBackend
+        {
+            ExtractAction = (_, _, _, _, _, token) =>
+            {
+                cancelEntered.TrySetResult(true);
+                cancelRelease.Wait();
+                token.ThrowIfCancellationRequested();
+            }
+        };
+        var canceled = new ArchiveJobCoordinator(cancelJobs, canceledBackend, opened.Add)
+            .StartExtract("canceled.zip", Path.GetTempPath());
+        await cancelEntered.Task.WaitAsync(Limit);
+        cancelJobs.Cancel(canceled.Id);
+        cancelRelease.Set();
+        Assert.Equal(BackgroundJobState.Canceled, (await canceled.Completion.WaitAsync(Limit)).State);
+
+        var entryRoot = Path.Combine(Path.GetTempPath(), "KOTU archive entry " + Guid.NewGuid());
+        Directory.CreateDirectory(entryRoot);
+        try
+        {
+            var entryBackend = new FakeBackend { ExtractAction = (_, _, _, _, _, _) => { } };
+            var entry = new ArchiveJobCoordinator(new BackgroundJobService(), entryBackend, opened.Add)
+                .StartExtract("source.zip", entryRoot, ["entry.txt"],
+                    resultPath: Path.Combine(entryRoot, "entry.txt"), openEntry: true);
+            Assert.Equal(BackgroundJobState.Succeeded, (await entry.Completion.WaitAsync(Limit)).State);
+            await Task.Delay(50);
+            Assert.Empty(opened);
+        }
+        finally
+        {
+            cancelRelease.Set();
+            Directory.Delete(entryRoot, true);
+        }
+    }
+
+    [Fact]
     public void ClosingLeaseRejectsCoordinatorStartBeforeAnyNativeCall()
     {
         var jobs = new BackgroundJobService();

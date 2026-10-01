@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using KOTU.Core.Jobs;
 using KOTU.Core.Threading;
 
@@ -9,14 +10,20 @@ public sealed class ArchiveJobCoordinator
     private static readonly object DestinationGate = new();
     private static readonly HashSet<string> Destinations = new(StringComparer.OrdinalIgnoreCase);
     private readonly IArchiveBackend _backend;
+    private readonly Action<string> _openFolder;
     public BackgroundJobService Jobs { get; }
 
-    public ArchiveJobCoordinator(BackgroundJobService jobs) : this(jobs, new SevenZipBackend()) { }
+    public ArchiveJobCoordinator(BackgroundJobService jobs)
+        : this(jobs, new SevenZipBackend(), OpenFolderInExplorer) { }
 
-    public ArchiveJobCoordinator(BackgroundJobService jobs, IArchiveBackend backend)
+    internal ArchiveJobCoordinator(BackgroundJobService jobs, IArchiveBackend backend)
+        : this(jobs, backend, _ => { }) { }
+
+    internal ArchiveJobCoordinator(BackgroundJobService jobs, IArchiveBackend backend, Action<string> openFolder)
     {
         Jobs = jobs;
         _backend = backend;
+        _openFolder = openFolder;
     }
 
     /// <summary>선택한 압축마다 즉시 작업을 등록한다. 목록 조회·암호 대기도 작업 수명에 속한다.</summary>
@@ -30,7 +37,9 @@ public sealed class ArchiveJobCoordinator
                 "Extract: " + Path.GetFileName(path), path, null),
                 context => ExtractPlannedAsync(backend, path, forceFolder, password, context)));
         }
-        return Jobs.StartMany(operations);
+        var handles = Jobs.StartMany(operations);
+        _ = OpenFirstSuccessfulResultAsync(handles, _openFolder);
+        return handles;
     }
 
     private static async Task ExtractPlannedAsync(IArchiveBackend backend, string archivePath,
@@ -94,7 +103,46 @@ public sealed class ArchiveJobCoordinator
             openEntry ? BackgroundJobKind.OpenArchiveEntry : BackgroundJobKind.ExtractArchive,
             (openEntry ? "Open entry: " : "Extract: ") + Path.GetFileName(archivePath),
             archivePath, resultPath ?? targetDirectory);
-        return Jobs.Start(request, context => ExtractAsync(backend, input, password, context));
+        var handle = Jobs.Start(request, context => ExtractAsync(backend, input, password, context));
+        if (!openEntry) _ = OpenFirstSuccessfulResultAsync([handle], _openFolder);
+        return handle;
+    }
+
+    /// <summary>
+    /// 한 번의 사용자 해제 요청에는 탐색기 창을 하나만 연다. 일괄 해제는 모든 작업이 끝난 뒤
+    /// 선택 순서상 첫 성공 결과를 사용하며, 실패·취소·임시 항목 열기는 대상이 아니다.
+    /// 뷰 수명과 분리해 사용자가 압축 화면을 떠난 뒤 완료돼도 같은 동작을 보장한다.
+    /// </summary>
+    private static async Task OpenFirstSuccessfulResultAsync(
+        IReadOnlyList<BackgroundJobHandle> handles, Action<string> openFolder)
+    {
+        try
+        {
+            var results = await Task.WhenAll(handles.Select(handle => handle.Completion)).ConfigureAwait(false);
+            var folder = results
+                .Where(result => result.State == BackgroundJobState.Succeeded)
+                .Select(result => ResultFolder(result.ResultPath))
+                .FirstOrDefault(path => path is not null);
+            if (folder is not null) openFolder(folder);
+        }
+        catch
+        {
+            // 결과 폴더 열기는 부가 동작이다. 해제 결과와 작업 상태를 뒤집지 않는다.
+        }
+    }
+
+    private static string? ResultFolder(string? resultPath)
+    {
+        if (string.IsNullOrWhiteSpace(resultPath)) return null;
+        if (Directory.Exists(resultPath)) return resultPath;
+        return File.Exists(resultPath) ? Path.GetDirectoryName(resultPath) : null;
+    }
+
+    private static void OpenFolderInExplorer(string folder)
+    {
+        var start = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
+        start.ArgumentList.Add(folder);
+        Process.Start(start);
     }
 
     public BackgroundJobHandle StartCreate(IReadOnlyList<string> sourcePaths, string targetPath,

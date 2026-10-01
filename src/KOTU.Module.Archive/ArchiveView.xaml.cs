@@ -461,7 +461,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         if (await ExtractWithRetryAsync(folder.Path, SelectedEntryPaths(), "Extracting..."))
         {
             StatusText.Text = "Extracted: " + folder.Path;
-            // 결과 위치는 앱 작업 패널에서 연다.
+            // 성공한 일반 해제는 작업 조정자가 결과 위치를 탐색기로 한 번 연다.
         }
     }
 
@@ -555,7 +555,6 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             if (IsCurrent(generation) && ReferenceEquals(_batchPresentation, presentation)) item.ReportOpenError();
         }
     }
-    /// <summary>풀기 결과를 탐색기로 보여준다. 실패해도 조용히 무시.</summary>
     /// <summary>선택된 항목 경로 목록. 선택이 없으면 null(=전체).</summary>
     private IReadOnlyCollection<string>? SelectedEntryPaths()
     {

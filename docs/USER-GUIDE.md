@@ -388,14 +388,16 @@ neither applies to an archive.
   target name is taken, ` (2)`, ` (3)` … is appended.
 - **Extract...** (`T`) asks for a destination folder and unpacks only the selected rows — or
   everything, if nothing is selected.
+- After a successful extraction, KOTU opens one Windows Explorer window at the result folder.
+  A multi-archive batch still opens only one window; **Open folder** in the result list can reopen
+  any individual result.
 - **New archive** (`C`) creates a **ZIP** or a **7z**. A password is optional; 7z also encrypts the
   file names inside, ZIP does not. It is in the bottom bar, so it is there even when no archive is
   open and the centre is showing the file thumbnails.
 - Drop files or folders onto the window to compress them — the same New archive dialog appears.
 - Archives that need a password ask for one when you list or extract them.
 - ZIP files with broken Korean file names are re-read as CP949 automatically.
-- Long operations show a progress bar and a **Cancel** button. When it finishes, the result is
-  revealed in Windows Explorer.
+- Long operations show a progress bar and a **Cancel** button.
 - All eight listed formats can be extracted. Only ZIP and 7z can be created.
 
 ### 2.7 H/W Info
