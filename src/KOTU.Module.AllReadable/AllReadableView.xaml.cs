@@ -20,6 +20,10 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     private readonly IReadOnlyList<IModule> _children;
     private readonly ChildContentHost _content;
     private bool _driveStripShown;
+    private static long _nextJournalView;
+    private readonly long _journalView = Interlocked.Increment(ref _nextJournalView);
+    private long _transitionGeneration;
+    private string? _childModuleId;
 
     public event Action<string>? ContentOpened
     {
@@ -98,11 +102,16 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             else DispatcherQueue.TryEnqueue(() => action());
         });
         _content.StateChanged += UpdateBars;
+        _content.ContentOpenFailed += () => RecordTransition(ContentTransitionStage.OpenFailed);
         Loaded += (_, _) =>
         {
             if (_content.Child is null) Focus(FocusState.Programmatic);
         };
-        Unloaded += (_, _) => DetachChild();
+        Unloaded += (_, _) =>
+        {
+            RecordTransition(ContentTransitionStage.Unloaded);
+            DetachChild();
+        };
         if (context.FilePath is { } path && File.Exists(path)) TryOpenFile(path);
         UpdateBars();
     }
@@ -117,28 +126,63 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     private void ShowChild(IModule module, OpenContext context)
     {
         DiagTrace.Write("allread", $"ShowChild {module.Id} path={context.FilePath ?? "(none)"}");
-        DetachChild();
-        if (module.CreateView(context) is not UIElement view)
+        _transitionGeneration++;
+        ContentTransitionJournal.Shared.Record(_journalView, _transitionGeneration, module.Id, ContentTransitionStage.Begin);
+        try
         {
-            DiagTrace.Write("allread", $"ShowChild failed (no view) {module.Id}");
-            return;
+            DetachChild();
+            _childModuleId = module.Id;
+            RecordTransition(ContentTransitionStage.CreateBegin);
+            if (module.CreateView(context) is not UIElement view)
+            {
+                RecordTransition(ContentTransitionStage.OpenFailed);
+                DiagTrace.Write("allread", $"ShowChild failed (no view) {module.Id}");
+                return;
+            }
+            RecordTransition(ContentTransitionStage.Created);
+            _content.Attach(view, context.FilePath);
+            RecordTransition(ContentTransitionStage.ContractsAttached);
+            ChildHost.Content = view;
+            RecordTransition(ContentTransitionStage.ViewAttached);
+            ChildBarHost.Content = (view as IBottomBarProvider)?.TakeBottomBar() as UIElement;
+            RecordTransition(ContentTransitionStage.BarAttached);
+            UpdateBars();
+            RecordTransition(ContentTransitionStage.Completed);
         }
-        _content.Attach(view, context.FilePath);
-        ChildHost.Content = view;
-        ChildBarHost.Content = (view as IBottomBarProvider)?.TakeBottomBar() as UIElement;
-        UpdateBars();
+        catch (Exception ex)
+        {
+            RecordTransition(ContentTransitionStage.Failed, ex);
+            throw;
+        }
     }
 
     private void DetachChild()
     {
-        _content.Detach(() =>
+        RecordTransition(ContentTransitionStage.DetachBegin);
+        try
         {
-            // 구독 무효화 다음 바, 센터 순으로 제거한다. 자식의 Unloaded가 실제 정리를 맡는다.
-            ChildBarHost.Content = null;
-            ChildHost.Content = null;
-        });
-        UpdateBars();
+            _content.Detach(() =>
+            {
+                RecordTransition(ContentTransitionStage.ContractsDetached);
+                // 구독 무효화 다음 바, 센터 순으로 제거한다. 자식의 Unloaded가 실제 정리를 맡는다.
+                ChildBarHost.Content = null;
+                RecordTransition(ContentTransitionStage.BarRemoved);
+                ChildHost.Content = null;
+                RecordTransition(ContentTransitionStage.ViewRemoved);
+            });
+            UpdateBars();
+            RecordTransition(ContentTransitionStage.Detached);
+            _childModuleId = null;
+        }
+        catch (Exception ex)
+        {
+            RecordTransition(ContentTransitionStage.Failed, ex);
+            throw;
+        }
     }
+
+    private void RecordTransition(ContentTransitionStage stage, Exception? error = null) =>
+        ContentTransitionJournal.Shared.Record(_journalView, _transitionGeneration, _childModuleId, stage, error);
 
     public void SetBrowseOrder(string folder, IReadOnlyList<string> files) => _content.SetBrowseOrder(folder, files);
     public Guid? ActiveJobId => (_content.Child as IBackgroundJobOwner)?.ActiveJobId;
