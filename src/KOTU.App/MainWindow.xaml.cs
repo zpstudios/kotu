@@ -1519,6 +1519,7 @@ public sealed partial class MainWindow : Window
         ClearModulePanels();
         AttachDriveStrip(null);
         ModuleHost.Content = view;
+        (view as IBottomOverlayConsumer)?.SetBottomOverlay(BottomBar);
         var session = new ContentContractSession(view, action =>
         {
             // 중첩 All Readable 통지는 UI에 도착한 뒤 다시 큐에 넣지 않는다.

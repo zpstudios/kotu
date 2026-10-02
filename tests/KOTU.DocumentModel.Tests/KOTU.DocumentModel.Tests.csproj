@@ -4,6 +4,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\src\KOTU.Module.Document\PdfFitGeometry.cs" Link="PdfFitGeometry.cs" />
     <Compile Include="..\..\src\KOTU.Module.Document\MarkdownParser.cs" Link="MarkdownParser.cs" />
     <Compile Include="..\..\src\KOTU.Module.Document\MarkdownRenderBatch.cs" Link="MarkdownRenderBatch.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

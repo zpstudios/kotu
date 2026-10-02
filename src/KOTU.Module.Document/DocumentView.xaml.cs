@@ -48,7 +48,7 @@ namespace KOTU.Module.Document;
 /// 행 조립은 셸의 선택 축과 공유하는 단일 빌더(<see cref="DocumentQuickInfo"/>)가 전담한다.
 /// </summary>
 public sealed partial class DocumentView : UserControl,
-    IContentStateSource, IBottomBarProvider, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
+    IContentStateSource, IBottomBarProvider, IBottomOverlayConsumer, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
     IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource, IContentInfoProvider
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
@@ -942,6 +942,14 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>하단 상태바를 뷰에서 떼어 셸 하단 바 한 줄에 얹는다(이미지 v0.27.0과 동일 패턴).</summary>
+    private object? _bottomOverlay;
+
+    public void SetBottomOverlay(object overlay)
+    {
+        _bottomOverlay = overlay;
+        _pdfPane?.SetBottomOverlay(overlay);
+    }
+
     public object? TakeBottomBar()
     {
         RootGrid.Children.Remove(StatusBar);
@@ -2086,6 +2094,7 @@ public sealed partial class DocumentView : UserControl,
         if (_pdfPane is null)
         {
             _pdfPane = new PdfPane();
+            if (_bottomOverlay is { } overlay) _pdfPane.SetBottomOverlay(overlay);
             _pdfPane.PageChanged += (current, total) =>
             {
                 // A138: 트레이 = 페이지 위치. 스크롤·팬마다 오는 이벤트라 같은 값이면 쏘지 않는다

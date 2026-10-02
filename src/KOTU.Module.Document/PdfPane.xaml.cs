@@ -13,13 +13,6 @@ using KOTU.Core.Threading; // A355: 판 전용 워커(ModuleWorker)
 namespace KOTU.Module.Document;
 
 /// <summary>
-/// PDF 맞춤 보기 모드(A49 — A30 규격 준용). Contain = 페이지가 뷰포트보다 크면 전부 보이게
-/// 줄이고, 작으면 100%(원본 크기) = <b>축소만</b> — A83이 3모듈 공통으로 확정한 의미론이다
-/// (구 이름 AutoFit에서 계산식·동작 변화 없음. zoom = min(1:1 배율, 가로 맞춤, 세로 맞춤)).
-/// </summary>
-public enum PdfFitMode { Contain, FitWidth, FitHeight, ActualSize }
-
-/// <summary>
 /// PDF 뷰어 패널(A16). OS 내장 Windows.Data.Pdf로 페이지를 비트맵 렌더한다 —
 /// 외부 네이티브 의존성 없음(라이선스·배포 부담 없음), unpackaged 지원.
 /// 페이지 크기는 열 때 전부 훑어 레이아웃을 확정하고, 실제 렌더는 ListView 가상화로
@@ -38,6 +31,43 @@ public sealed partial class PdfPane : UserControl
 
     /// <summary>스크롤 기준 현재 페이지/전체 (1-base). 문서를 내리면 (0, 0).</summary>
     public event Action<int, int>? PageChanged;
+
+    private FrameworkElement? _bottomOverlay;
+    private (double Width, double Height)? _fitViewport;
+    private bool _applyingFit;
+
+    public void SetBottomOverlay(object overlay)
+    {
+        _bottomOverlay = overlay as FrameworkElement;
+        _fitViewport = null;
+    }
+
+    private double VisibleViewportHeight()
+    {
+        if (_scroll is null) return 0;
+        var height = _scroll.ViewportHeight;
+        if (_bottomOverlay is not { } overlay || overlay.XamlRoot != XamlRoot || XamlRoot is null)
+            return height;
+        for (DependencyObject? node = overlay; node is not null; node = VisualTreeHelper.GetParent(node))
+            if (node is UIElement element && element.Visibility != Visibility.Visible) return height;
+        var bounds = overlay.TransformToVisual(_scroll).TransformBounds(
+            new Rect(0, 0, overlay.ActualWidth, overlay.ActualHeight));
+        return PdfFitGeometry.VisibleHeight(_scroll.ViewportWidth, height,
+            bounds.X, bounds.Y, bounds.Width, bounds.Height);
+    }
+
+    // A381: 바의 숨김·재배치·배율 변화는 PdfPane.SizeChanged 없이도 일어난다.
+    // 레이아웃 입력이 달라진 때만 재적용하며 UpdateLayout 재진입은 차단한다.
+    private void OnFitLayoutUpdated(object? sender, object e)
+    {
+        if (_applyingFit || _appliedFit is not { } mode || Visibility != Visibility.Visible) return;
+        HookScroll();
+        if (_scroll is null) return;
+        var viewport = (_scroll.ViewportWidth, VisibleViewportHeight());
+        if (_fitViewport == viewport) return;
+        _fitViewport = viewport;
+        ApplyFit(mode);
+    }
 
     private PdfDocument? _doc;
     private int _loadSeq;                    // 늦은 렌더·이전 문서 결과 무시용
@@ -84,6 +114,7 @@ public sealed partial class PdfPane : UserControl
     public PdfPane()
     {
         InitializeComponent();
+        LayoutUpdated += OnFitLayoutUpdated;
         // A49: Fit이 적용된 동안은 뷰포트 크기 변화를 추종해 배율을 다시 계산한다
         // (비디오 v0.41.0의 Fit width/height 크기 추종과 같은 규칙).
         SizeChanged += (_, _) =>
@@ -146,7 +177,7 @@ public sealed partial class PdfPane : UserControl
             };
             items.Add(item);
             offsets[i] = y;
-            y += item.Height + 16; // ItemTemplate 상하 마진 8+8
+            y += item.Height + 18; // ItemTemplate 테두리 2 + 상하 마진 8+8
         }
         _items = items;
         _pageOffsets = offsets;
@@ -425,12 +456,21 @@ public sealed partial class PdfPane : UserControl
     /// 보던 중에 고르는 경로(ApplyFit)는 false 그대로라 보던 지점 유지 동작이 안 바뀐다.</summary>
     private void ApplyFitAt(PdfFitMode mode, int idx, bool snapToPageTop = false)
     {
+        if (_applyingFit) return;
+        _applyingFit = true;
+        try { ApplyFitCore(mode, idx, snapToPageTop); }
+        finally { _applyingFit = false; }
+    }
+
+    private void ApplyFitCore(PdfFitMode mode, int idx, bool snapToPageTop)
+    {
         _appliedFit = mode; // 뷰포트가 아직 0이어도 기억해 두면 SizeChanged 재적용이 이어받는다
         HookScroll();
         if (_scroll is null || _items.Count == 0) return;
 
         var viewportW = _scroll.ViewportWidth;
-        var viewportH = _scroll.ViewportHeight;
+        var viewportH = VisibleViewportHeight();
+        _fitViewport = (viewportW, viewportH);
         if (viewportW <= 0 || viewportH <= 0) return;
 
         idx = Math.Clamp(idx, 0, _items.Count - 1);
@@ -438,18 +478,8 @@ public sealed partial class PdfPane : UserControl
         if (item.Width <= 0 || item.Height <= 0) return;
 
         // 페이지 실측: 가로 = 비트맵 폭 + 테두리 2, 세로 = 높이 + 테두리 2 + 상하 마진 16(전부 보이게)
-        var fitWidth = viewportW / (item.Width + 2);
-        var fitHeight = viewportH / (item.Height + 18);
-        var actual = item.NativeWidth > 0 ? item.NativeWidth / item.Width : 1.0;
-        var zoom = mode switch
-        {
-            PdfFitMode.FitWidth => fitWidth,
-            PdfFitMode.FitHeight => fitHeight,
-            PdfFitMode.ActualSize => actual,
-            // Contain = 축소만(A83): 1:1 배율(actual)을 상한으로 둬 작은 페이지는 확대하지 않는다
-            _ => Math.Min(actual, Math.Min(fitWidth, fitHeight)),
-        };
-        zoom = Math.Clamp(zoom, (double)_scroll.MinZoomFactor, (double)_scroll.MaxZoomFactor);
+        var zoom = PdfFitGeometry.Zoom(viewportW, viewportH, item.Width, item.Height,
+            item.NativeWidth, mode, _scroll.MinZoomFactor, _scroll.MaxZoomFactor);
 
         // 세로: 페이지 전체가 보여야 하는 모드는 현재 페이지 머리로 스냅, 나머지는 보던 지점 유지.
         var top = snapToPageTop || mode is PdfFitMode.FitHeight or PdfFitMode.Contain

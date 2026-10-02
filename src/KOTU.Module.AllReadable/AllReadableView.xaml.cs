@@ -15,11 +15,18 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
     IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
-    IContentCloseRequestSource, IContentOpenFailedSource
+    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer
 {
     private readonly IReadOnlyList<IModule> _children;
     private readonly ChildContentHost _content;
     private bool _driveStripShown;
+    private object? _bottomOverlay;
+
+    public void SetBottomOverlay(object overlay)
+    {
+        _bottomOverlay = overlay;
+        (_content.Child as IBottomOverlayConsumer)?.SetBottomOverlay(overlay);
+    }
     private static long _nextJournalView;
     private readonly long _journalView = Interlocked.Increment(ref _nextJournalView);
     private long _transitionGeneration;
@@ -143,6 +150,8 @@ public sealed partial class AllReadableView : UserControl, IContentStateSource, 
             _content.Attach(view, context.FilePath);
             RecordTransition(ContentTransitionStage.ContractsAttached);
             ChildHost.Content = view;
+            if (_bottomOverlay is { } overlay)
+                (view as IBottomOverlayConsumer)?.SetBottomOverlay(overlay);
             RecordTransition(ContentTransitionStage.ViewAttached);
             ChildBarHost.Content = (view as IBottomBarProvider)?.TakeBottomBar() as UIElement;
             RecordTransition(ContentTransitionStage.BarAttached);
