@@ -35,3 +35,12 @@ The installed app registers a fixed AppInstance key before creating App; subsequ
 - Final Release/x64 solution build: 0 warnings, 0 errors. All 503 tests passed with normal Windows permissions; the sandbox run had 27 FileOperations failures, which all passed on the same binaries outside sandbox restrictions. Evidence: `artifacts/a380-build.log`, `artifacts/a380-tests-unrestricted.log`, `TestResults/a380-final-unrestricted`.
 
 For a recurrence, preserve both transition files and the corresponding Application Error/WER record before additional navigation can rotate them. A dump or reproducible scenario is still needed for a root-cause repair. Minimal code recovery is to remove the AllReadable journal hooks and `ContentTransitionJournal` (no playback, routing, or archive behavior was modified).
+
+## Release verification
+
+The user explicitly authorized release on 2026-10-02. v0.375.0 was published at 15:25:55 KST with
+tag/source `72895f4d4bb7a4653273414c1d5a46abe5b724b7`. GitHub build `36972832177` and release
+`36972832219` succeeded. Setup, Portable, Standalone, full/delta packages and three update metadata
+files were present (8 assets); the release is neither draft nor prerelease. Installation, installed-file
+consistency, startup and Standalone gates passed. This release still adds diagnostics only and does
+not establish resolution of the original crash.
