@@ -32,19 +32,35 @@ internal sealed class ScreenRecordingSession : IRecordingSession
         }
     }
 
-    public static IReadOnlyList<CaptureSource> GetSources(nint ownWindow)
+    public static IReadOnlyList<CaptureSource> GetSources(nint ownWindow, CaptureSource? preferred)
     {
         var sources = new List<CaptureSource>();
-        foreach (var display in Recorder.GetDisplays().Take(32))
-            sources.Add(new CaptureSource($"Screen: {display.FriendlyName} ({display.DeviceName})", display.DeviceName, 0));
+        foreach (var display in Recorder.GetDisplays())
+        {
+            var source = new CaptureSource($"Screen: {display.FriendlyName} ({display.DeviceName})", display.DeviceName, 0);
+            if (sources.Count < 32) sources.Add(source);
+            else if (display.DeviceName == preferred?.DisplayName) sources[^1] = source;
+        }
+        var windows = new List<CaptureSource>();
         // HWND capture requires Windows 10 1903. Desktop duplication still works on 1809.
         if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362))
-            foreach (var window in Recorder.GetWindows().Where(w => w.Handle != ownWindow).Take(200))
-                sources.Add(new CaptureSource($"Window: {window.Title}", null, window.Handle, window.Pid));
+            foreach (var window in Recorder.GetWindows().Where(w => w.Handle != ownWindow))
+            {
+                var source = new CaptureSource($"Window: {window.Title}", null, window.Handle, window.Pid);
+                if (windows.Count < 200) windows.Add(source);
+                else if (window.Handle == preferred?.WindowHandle && window.Pid == preferred.ProcessId) windows[^1] = source;
+            }
+        if (preferred is { DisplayName: null } && !windows.Any(w => RecordingSourceCatalog.Key(w) == RecordingSourceCatalog.Key(preferred)) &&
+            RecordingSourceDiscovery.WindowStillExists(preferred))
+        {
+            if (windows.Count == 200) windows[^1] = preferred;
+            else windows.Add(preferred);
+        }
+        sources.AddRange(windows);
         return sources;
     }
 
-    public ScreenRecordingSession(CaptureSource source, string? microphoneId, string path)
+    public ScreenRecordingSession(CaptureSource source, string? microphoneId, string? outputId, string path)
     {
         // Revalidate immediately before opening the capture. Never silently fall back to
         // another window or to a silent video when the selected source/device disappears.
@@ -64,33 +80,30 @@ internal sealed class ScreenRecordingSession : IRecordingSession
         }
 
         // NAudio's managed COM activation initializes the worker apartment before native
-        // options are built. Native LoopbackAudioSource.Default calls CoCreateInstance
-        // before the recorder's capture thread initializes COM, so do not rely on it here.
-        using var audioDevices = new MMDeviceEnumerator();
-        string outputDeviceId;
-        try
-        {
-            using var outputDevice = audioDevices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            outputDeviceId = outputDevice.ID;
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException("No default audio output is available. Connect a speaker or headset before recording.", ex);
-        }
-        var systemAudio = new LoopbackAudioSource(outputDeviceId);
+        // options are built. Explicit endpoint IDs prevent default-device retargeting.
+        using var audioDevices = outputId is null && microphoneId is null ? null : new MMDeviceEnumerator();
         var options = RecorderOptions.Default;
         options.SourceOptions.RecordingSources.Add(video);
-        options.AudioOptions.IsAudioEnabled = true;
+        options.AudioOptions.AudioSources.Clear();
+        options.AudioOptions.IsAudioEnabled = outputId is not null || microphoneId is not null;
         options.AudioOptions.Bitrate = AudioBitrate.bitrate_192kbps;
-        options.AudioOptions.AudioSources.Add(systemAudio);
+        LoopbackAudioSource? systemAudio = null;
+        if (outputId is not null)
+        {
+            using var outputDevice = audioDevices!.GetDevice(outputId);
+            if (outputDevice.State != DeviceState.Active || outputDevice.DataFlow != DataFlow.Render)
+                throw new InvalidOperationException("The selected system audio output is no longer available. Choose an active output.");
+            systemAudio = new LoopbackAudioSource(outputId);
+            options.AudioOptions.AudioSources.Add(systemAudio);
+        }
         if (microphoneId is not null)
         {
-            using var inputDevice = audioDevices.GetDevice(microphoneId);
-            if (inputDevice.State != DeviceState.Active)
+            using var inputDevice = audioDevices!.GetDevice(microphoneId);
+            if (inputDevice.State != DeviceState.Active || inputDevice.DataFlow != DataFlow.Capture)
                 throw new InvalidOperationException("The selected microphone is no longer available. Refresh the device list.");
             // Leave headroom when both sources are active; no playback monitoring is added.
-            systemAudio.Volume = 0.7f;
-            options.AudioOptions.AudioSources.Add(new CaptureAudioSource(microphoneId) { Volume = 0.7f });
+            if (systemAudio is not null) systemAudio.Volume = 0.7f;
+            options.AudioOptions.AudioSources.Add(new CaptureAudioSource(microphoneId) { Volume = systemAudio is not null ? 0.7f : 1f });
         }
         options.VideoEncoderOptions.Framerate = 30;
         options.VideoEncoderOptions.IsFixedFramerate = true;

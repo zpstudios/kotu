@@ -12,5 +12,7 @@
     <ProjectReference Include="..\..\src\KOTU.Core\KOTU.Core.csproj" />
     <Compile Include="..\..\src\Shared\ToolbarIconGeometry.cs" Link="ToolbarIconGeometry.cs" />
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingOutput.cs" Link="RecordingOutput.cs" />
+    <Compile Include="..\..\src\KOTU.Module.Record\RecordingSession.cs" Link="RecordingSession.cs" />
+    <Compile Include="..\..\src\KOTU.Module.Record\RecordingSourceCatalog.cs" Link="RecordingSourceCatalog.cs" />
   </ItemGroup>
 </Project>

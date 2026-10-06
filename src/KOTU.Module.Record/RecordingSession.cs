@@ -5,7 +5,12 @@ internal sealed record CaptureSource(string Label, string? DisplayName, nint Win
     public override string ToString() => Label;
 }
 
-internal sealed record MicrophoneDevice(string Label, string Id)
+internal sealed record MicrophoneDevice(string Label, string Id, bool IsDefault = false)
+{
+    public override string ToString() => Label;
+}
+
+internal sealed record OutputDevice(string Label, string Id, bool IsDefault)
 {
     public override string ToString() => Label;
 }

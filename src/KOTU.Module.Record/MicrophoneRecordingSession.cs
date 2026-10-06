@@ -26,7 +26,7 @@ internal sealed class MicrophoneRecordingSession : IRecordingSession
     public bool IsRecording => Volatile.Read(ref _ended) == 0;
     public TimeSpan Elapsed => TimeSpan.FromSeconds(Interlocked.Read(ref _bytesWritten) / 96000d);
 
-    public static IReadOnlyList<MicrophoneDevice> GetDevices()
+    public static IReadOnlyList<MicrophoneDevice> GetDevices(string? preferredId = null)
     {
         using var enumerator = new MMDeviceEnumerator();
         string? defaultId = null;
@@ -40,8 +40,11 @@ internal sealed class MicrophoneRecordingSession : IRecordingSession
         foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active))
         {
             using (device)
-                if (result.Count < 64) result.Add(new MicrophoneDevice(
-                    device.FriendlyName + (device.ID == defaultId ? " (Default)" : ""), device.ID));
+            {
+                var value = new MicrophoneDevice(device.FriendlyName + (device.ID == defaultId ? " (Default)" : ""), device.ID, device.ID == defaultId);
+                if (result.Count < 64) result.Add(value);
+                else if (device.ID == preferredId) result[^1] = value;
+            }
         }
         return result.OrderByDescending(device => device.Id == defaultId).ToList();
     }
@@ -51,7 +54,12 @@ internal sealed class MicrophoneRecordingSession : IRecordingSession
         _postToWorker = postToWorker;
         using var enumerator = new MMDeviceEnumerator();
         _device = enumerator.GetDevice(deviceId);
-        try { _capture = new WasapiCapture(_device) { WaveFormat = new WaveFormat(48000, 16, 1) }; }
+        try
+        {
+            if (_device.State != DeviceState.Active || _device.DataFlow != DataFlow.Capture)
+                throw new InvalidOperationException("The selected microphone is no longer available. Choose an active microphone.");
+            _capture = new WasapiCapture(_device) { WaveFormat = new WaveFormat(48000, 16, 1) };
+        }
         catch { _device.Dispose(); throw; }
         try { _writer = new WaveFileWriter(path, _capture.WaveFormat); }
         catch { _capture.Dispose(); _device.Dispose(); throw; }

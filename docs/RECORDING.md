@@ -5,12 +5,15 @@ saved MP4 and WAV files continue to open in Video and Audio.
 
 ## Behavior
 
+- Modes, screens/windows, system outputs and microphones are visible selectable
+  lists, rather than dropdowns. The selected row is explicit and supports keyboard
+  navigation. Longer lists scroll in place.
 - **Screen recording**: choose one screen or open window and a save folder. Records
-  MP4 with H.264 video at 30 fps and AAC stereo audio. The default Windows playback
-  endpoint is always captured: this includes other applications' sounds, even when
-  only one window is selected. The optional microphone checkbox defaults to enabled
-  when an active microphone is available. With both sources, each is set to 70% to
-  leave mixing headroom. No microphone monitoring is enabled.
+  MP4 with H.264 video at 30 fps and optional AAC stereo audio. System audio and
+  microphone inclusion have separate checkboxes. Choose the exact playback endpoint:
+  its other applications' sounds are included even when only one window is selected.
+  Uncheck both audio choices for silent video. With both audio sources, each is set
+  to 70% to leave mixing headroom. No microphone monitoring is enabled.
 - **Microphone recording**: select an active input and save standard PCM WAV
   (48 kHz, 16-bit, mono). WASAPI shared-mode conversion avoids codec installation.
   This first implementation deliberately uses the allowed standard-file alternative
@@ -36,11 +39,23 @@ saved MP4 and WAV files continue to open in Video and Audio.
 - Closing the window, switching modules, or entering settings while recording uses
   the existing `ICloseGuard`: Stop and save / Discard / Keep recording. Unexpected
   view unload requests a stop and discards its temporary recording after completion.
-- Source/device enumeration is capped at 32 screens, 200 windows and 64 microphones.
-  Refresh re-enumerates devices. Selection is checked again when starting; there is
-  no silent fallback to a different screen, window, or microphone.
+- Source/device enumeration updates automatically about every two seconds and is
+  capped at 32 screens, 200 windows, 64 microphones and 64 outputs. The selected
+  available source stays included within each cap. Refresh requests an immediate
+  observation. Stable display IDs, window handle+PID, and audio endpoint IDs preserve
+  selections across label/default-device changes. Initial default selection happens
+  only on the first successful observation without a remembered ID. Missing IDs
+  stay unselected; another source is never silently substituted.
+- A failed category preserves its last known rows and reports an independent source
+  refresh error. It does not establish device removal. During recording, lists still
+  update but selection is locked. Successfully observed loss of an active source
+  requests Stop/save; successful output or a recoverable partial path retains the
+  reason. Minimized/hidden windows omitted by enumeration remain present while the
+  selected HWND still belongs to the same PID; starting still requires a restored
+  available window. Native capture failures may finish first.
 - Settings: `record.mode` (`screen` by default), `record.includeMicrophone` (`true`),
-  and `record.microphoneId`. These are saved on the module worker when starting.
+  `record.includeSystemAudio` (`true`), `record.microphoneId`, `record.outputId` and
+  `record.sourceKey`. These are saved on the module worker when starting.
   `record.videoFolder` and `record.audioFolder` remember custom folders on the same
   worker after a successful folder choice. Canceling the picker preserves the current
   location. Switching mode displays its own folder. Selecting a folder or initializing
@@ -79,17 +94,28 @@ confirms shared-mode PCM conversion and the RecordingStopped completion contract
 
 ## Threads and lifetime
 
-`KOTU record worker` serializes discovery, known-library resolution, folder creation
+`KOTU record worker` serializes known-library resolution, folder creation
 and write probes, destination naming, device construction, Stop, native disposal,
 settings I/O and output publication. FolderPicker UI stays on the dispatcher; only
 the chosen path is sent to the worker for validation and persistence. Mode, source,
-microphone and destination folder are snapshotted before recording starts.
+microphone, optional output and destination folder are snapshotted before recording starts.
 ScreenRecorderLib's native workers capture and
 encode; NAudio's capture thread writes bounded WAV packets. Neither loop runs on the
 UI dispatcher. The thread-pool timer only reads elapsed state and queues one bounded
 UI update. Session callbacks complete tasks with asynchronous continuations.
 
-Refresh has a sequence/lifetime guard. A native backend load is isolated behind
+`KOTU record source discovery` is a separate BelowNormal worker. A thread-pool timer
+queues one discovery at a time, including at most one waiting UI application. All
+native discovery, audio enumeration, sorting and window identity probes run there,
+so discovery cannot occupy the Stop queue. Unchanged snapshots do not mutate rows;
+changed rows are diffed into ObservableCollections. Failed observations preserve
+their category. A capped observation for an old selection cannot establish loss of
+a newly selected recording source: mismatching observation preferences cause a fresh
+poll instead. Disposal cancels work and closes the timer/discovery queue; late UI
+applications check lifetime and sequence. Native enumeration itself has no timeout;
+a stuck discovery delays source updates, but cannot delay capture Stop.
+
+A native backend load is isolated behind
 non-inlined factory calls so a screen dependency failure leaves microphone recording
 available. Completion (not a Stop request) is the boundary for releasing device/file
 handles. WAV automatically stops and saves below its 4 GiB container limit (3.5 GB
@@ -107,7 +133,7 @@ of sample data), with an explicit notice.
   and open. Protected content, secure desktop, display/device removal, and sleep may
   cause blank frames or a recording failure. There is no HDR color correction.
 - Device/default-output changes during a recording do not retarget it. Refresh and
-  start a new recording to use a changed endpoint. The displayed microphone list may
+  select a new source after saving to use a changed endpoint. The displayed microphone list may
   include virtual or line-in endpoints that Windows classifies as capture devices.
 - Recording is finalized on normal Stop/close. Forced process termination can leave
   the sibling temporary file; there is no crash-recovery scanner or guarantee that
@@ -122,6 +148,11 @@ of sample data), with an explicit notice.
   output suite passed all 12 cases and the Record Release/x64 build passed with zero
   warnings/errors. FolderPicker, redirected libraries and device capture need GUI
   checks; they were not exercised by these tests.
+- A388 Record Release/x64 build passed with zero warnings/errors. Nine pure catalog
+  tests cover stable identity, no-fallback defaults, observation races, failed
+  categories, silent video/microphone requirements and minimal row changes. Together
+  with the 12 output tests, 21/21 targeted tests passed. These tests do not exercise
+  native device discovery, unplug handling, the visible list UI or silent MP4 output.
 - Device checks: screen and window MP4 with system sound, silent-system interval,
   optional microphone mix, microphone-only WAV, missing/denied microphone, source
   closed/minimized, device unplug, save failure, rapid start/stop, Discard, close/module
