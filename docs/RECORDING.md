@@ -42,8 +42,13 @@ saved MP4 and WAV files continue to open in Video and Audio.
   Record view keeps the existing `REC` module label. Busy operations such as folder
   permission checks or publishing a file do not claim active recording.
 - The initial save folders are the Windows Videos library's `KOTU` folder for MP4
-  and the Music library's `KOTU` folder for WAV. **Change folder** remembers a separate
-  location for each mode. Folder initialization creates missing directories and checks
+  and the Music library's `KOTU` folder for WAV. Both paths and their separate
+  **Change video folder** / **Change audio folder** buttons remain visible regardless
+  of the selected mode. Either folder can also be changed during recording; the
+  active recording keeps its original destination and changes apply to the next one.
+  Source refresh, each folder and recording status have distinct cards with contrasting
+  backgrounds and borders; action buttons have their own contrasting fill and outline.
+  Folder initialization creates missing directories and checks
   write access on the module worker; an error disables Start for that mode until a
   valid folder is chosen. No alternate save location is silently used.
 - Start generates a timestamped filename with a full GUID suffix directly in the

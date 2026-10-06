@@ -38,8 +38,12 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private readonly Button _stop = new() { Content = "Stop and save", IsEnabled = false };
     private readonly Button _cancel = new() { Content = "Discard", IsEnabled = false };
     private readonly Button _folder = new() { Content = "Open folder", IsEnabled = false };
-    private readonly Button _changeFolder = new() { Content = "Change folder" };
-    private readonly TextBlock _saveFolder = new() { Text = "Preparing save folder...", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+    private readonly Button _changeVideoFolder = new() { Content = "Change video folder" };
+    private readonly Button _changeAudioFolder = new() { Content = "Change audio folder" };
+    private readonly TextBlock _videoFolderPath = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+    private readonly TextBlock _audioFolderPath = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+    private readonly TextBlock _videoFolderNotice = new() { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+    private readonly TextBlock _audioFolderNotice = new() { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
     private readonly TextBlock _barClock = new() { Text = "Ready", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly TextBlock _captureState = new() { Text = "Ready", TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _captureSources = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
@@ -137,13 +141,16 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         panel.Children.Add(_screenOptions);
         panel.Children.Add(new TextBlock { Text = "Microphone" });
         panel.Children.Add(_microphone);
-        panel.Children.Add(_refresh);
-        panel.Children.Add(_discoveryStatus);
-        panel.Children.Add(new TextBlock { Text = "Save folder" });
-        panel.Children.Add(_saveFolder);
-        panel.Children.Add(_changeFolder);
-        panel.Children.Add(_status);
-        panel.Children.Add(_path);
+        ConfigureActionButton(_refresh);
+        ConfigureActionButton(_changeVideoFolder);
+        ConfigureActionButton(_changeAudioFolder);
+        panel.Children.Add(CreateSettingsCard("Sources", "\uE72C", _discoveryStatus, _refresh));
+        panel.Children.Add(CreateSettingsCard("Video save folder · MP4", "\uE714", _videoFolderPath, _videoFolderNotice, _changeVideoFolder));
+        panel.Children.Add(CreateSettingsCard("Audio save folder · WAV", "\uE720", _audioFolderPath, _audioFolderNotice, _changeAudioFolder));
+        panel.Children.Add(CreateSettingsCard("Recording status", "\uE946", _status, _path));
+        _path.Visibility = Visibility.Collapsed;
+        _path.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) =>
+            _path.Visibility = string.IsNullOrEmpty(_path.Text) ? Visibility.Collapsed : Visibility.Visible);
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         ConfigureBarButton(_start, "\uE7C8", "Start recording", "Start recording");
         ConfigureBarButton(_stop, ((char)Symbol.Stop).ToString(), "Stop and save", "Stop and save");
@@ -192,7 +199,8 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _stop.Click += async (_, _) => await StopAsync(false);
         _cancel.Click += async (_, _) => await DiscardAsync();
         _folder.Click += async (_, _) => await OpenFolderAsync();
-        _changeFolder.Click += async (_, _) => await ChangeFolderAsync();
+        _changeVideoFolder.Click += async (_, _) => await ChangeFolderAsync(screen: true);
+        _changeAudioFolder.Click += async (_, _) => await ChangeFolderAsync(screen: false);
         Loaded += async (_, _) => { StartDiscovery(); await InitializeFoldersAsync(); };
         Unloaded += OnUnloaded;
         UpdateDiscoverySelection();
@@ -208,6 +216,49 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     public event Action? TrayStatusChanged;
     public object? TakeBottomBar() => _bar;
     public TrayStatus GetTrayStatus() => _presentation.Tray;
+
+    private static Border CreateSettingsCard(string title, string glyph, params UIElement[] controls)
+    {
+        var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        heading.Children.Add(new FontIcon { Glyph = glyph, FontSize = 18 });
+        heading.Children.Add(new TextBlock { Text = title, FontSize = 16, TextWrapping = TextWrapping.Wrap });
+        var content = new StackPanel { Spacing = 12 };
+        content.Children.Add(heading);
+        foreach (var control in controls) content.Children.Add(control);
+        var card = new Border
+        {
+            Child = content, Padding = new Thickness(16), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+        };
+        void ApplyColors()
+        {
+            var dark = card.ActualTheme == ElementTheme.Dark;
+            card.Background = new SolidColorBrush(dark ? ColorHelper.FromArgb(255, 32, 32, 32) : ColorHelper.FromArgb(255, 243, 243, 243));
+            card.BorderBrush = new SolidColorBrush(dark ? ColorHelper.FromArgb(255, 98, 98, 98) : ColorHelper.FromArgb(255, 138, 138, 138));
+        }
+        card.Loaded += (_, _) => ApplyColors();
+        card.ActualThemeChanged += (_, _) => ApplyColors();
+        ApplyColors();
+        return card;
+    }
+
+    private static void ConfigureActionButton(Button button)
+    {
+        button.Padding = new Thickness(14, 8, 14, 8);
+        button.MinHeight = 36;
+        button.BorderThickness = new Thickness(1);
+        button.CornerRadius = new CornerRadius(6);
+        button.HorizontalAlignment = HorizontalAlignment.Left;
+        AutomationProperties.SetName(button, button.Content.ToString()!);
+        void ApplyColors()
+        {
+            var dark = button.ActualTheme == ElementTheme.Dark;
+            button.Background = new SolidColorBrush(dark ? ColorHelper.FromArgb(255, 52, 52, 52) : ColorHelper.FromArgb(255, 224, 224, 224));
+            button.BorderBrush = new SolidColorBrush(dark ? ColorHelper.FromArgb(255, 133, 133, 133) : ColorHelper.FromArgb(255, 119, 119, 119));
+        }
+        button.Loaded += (_, _) => ApplyColors();
+        button.ActualThemeChanged += (_, _) => ApplyColors();
+        ApplyColors();
+    }
 
     private static GridView CreateSourceGrid(string glyph, string name, string category, string labelBinding = "{Binding Label}")
     {
@@ -410,8 +461,14 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _mix.IsEnabled = selectable;
         _includeOutput.IsEnabled = selectable;
         _refresh.IsEnabled = !_disposed;
-        _changeFolder.IsEnabled = selectable;
-        _saveFolder.Text = _folderInitializing ? "Preparing save folder..." : CurrentFolder ?? CurrentFolderError ?? "Choose a save folder.";
+        var canChangeFolder = !_disposed && !_folderInitializing && !_choosingFolder && !_closeDialog;
+        _changeVideoFolder.IsEnabled = _changeAudioFolder.IsEnabled = canChangeFolder;
+        _videoFolderPath.Text = _folderInitializing ? "Preparing video save folder..." : _videoFolder ?? "Choose a video save folder.";
+        _audioFolderPath.Text = _folderInitializing ? "Preparing audio save folder..." : _audioFolder ?? "Choose an audio save folder.";
+        _videoFolderNotice.Text = _videoFolderError ?? "";
+        _audioFolderNotice.Text = _audioFolderError ?? "";
+        _videoFolderNotice.Visibility = _videoFolderError is null ? Visibility.Collapsed : Visibility.Visible;
+        _audioFolderNotice.Visibility = _audioFolderError is null ? Visibility.Collapsed : Visibility.Visible;
         _start.IsEnabled = selectable && !_catalogInitializing && !_closeDialog && CurrentFolder is not null && CurrentFolderError is null &&
             (screen ? SelectedCaptureSource is not null && (_includeOutput.IsChecked != true || _output.SelectedItem is OutputDevice) &&
                 (_mix.IsChecked != true || _microphone.SelectedItem is MicrophoneDevice) : _microphone.SelectedItem is MicrophoneDevice);
@@ -577,10 +634,9 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         }
     }
 
-    private async Task ChangeFolderAsync()
+    private async Task ChangeFolderAsync(bool screen)
     {
-        if (_disposed || _busy || _folderInitializing || _choosingFolder) return;
-        var screen = ScreenMode;
+        if (_disposed || _folderInitializing || _choosingFolder || _closeDialog) return;
         _choosingFolder = true;
         UpdateControls();
         try
@@ -605,10 +661,10 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             if (_disposed) return;
             if (screen) { _videoFolder = folder; _videoFolderError = null; }
             else { _audioFolder = folder; _audioFolderError = null; }
-            _status.Text = "Save folder updated.";
+            _status.Text = (screen ? "Video" : "Audio") + " save folder updated." + (_busy ? " Applies to the next recording." : "");
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { if (!_disposed) _status.Text = "Could not change the save folder. " + DescribeError(ex); }
+        catch (Exception ex) { if (!_disposed) _status.Text = "Could not change the " + (screen ? "video" : "audio") + " save folder. " + DescribeError(ex); }
         finally { _choosingFolder = false; if (!_disposed) UpdateControls(); }
     }
 
