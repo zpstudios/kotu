@@ -80,7 +80,7 @@
                                   Visibility="{x:Bind CloudBadgeVisibility}"
                                   ToolTipService.ToolTip="Online-only file — preview needs a download" />
                         <TextBlock x:Name="TileCaption" Grid.Row="1"
-                                   Text="{x:Bind Name}" FontSize="11"
+                                   Text="{x:Bind Name}" FontSize="14"
                                    TextTrimming="CharacterEllipsis"
                                    TextAlignment="Center"
                                    Margin="4,0,4,4" />

@@ -972,7 +972,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 타일 한 변 = floor(그리드 실폭 / 열 수) (A93 확정 수식). GridView의 기본 아이템 패널
+    /// 타일 폭 = floor(그리드 실폭 / 열 수) (A93 확정 수식). GridView의 기본 아이템 패널
     /// (ItemsWrapGrid)의 셀 크기(ItemWidth/ItemHeight)로 지정한다 — 셀이 균일하면 줄바꿈이
     /// 정확히 열 수대로 떨어진다.
     /// <para>
@@ -993,7 +993,9 @@ public sealed partial class ThumbnailExplorer : UserControl
 
         if (TileGrid.ItemsPanelRoot is not ItemsWrapGrid wrap) return; // 아직 첫 레이아웃 전
         wrap.ItemWidth = size;
-        wrap.ItemHeight = size;
+        // A387: 11에서 14 DIP로 커진 캡션의 기본 줄 높이 증가분을 셀 높이에 더한다.
+        // 캡션 Auto 행이 미리보기의 공간을 가져가지 않도록 세로에만 4 DIP를 확보한다.
+        wrap.ItemHeight = size + 4;
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e) => ApplyTileSize();
