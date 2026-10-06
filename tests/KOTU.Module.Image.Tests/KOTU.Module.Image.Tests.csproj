@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\KOTU.Module.Image\KOTU.Module.Image.csproj" />
+    <Compile Include="..\..\src\KOTU.App\Controls\ThumbnailRaster.cs" Link="ThumbnailRaster.cs" />
   </ItemGroup>
 </Project>

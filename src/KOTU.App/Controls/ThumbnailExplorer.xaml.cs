@@ -1,4 +1,5 @@
 using System.Text;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -87,8 +88,12 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 흔들리면 셸 썸네일 캐시가 버킷마다 새로 구워져 첫 표시가 느려지고, 캐시 적중률이 떨어진다.
     /// ※ 앱 .ico 자산(16~256 7종)과는 무관하다 — 이 상수는 파일 미리보기 전용이다.
     /// ※ 창 아이콘 2프레임(16/32)의 DPI 추종은 이 항목 범위 밖(A275 ② 별건 후보).
+    /// A385: 셸 요청 버킷은 유지하되 반환 이미지의 디코드·Fant 축소는 워커에서 수행한다.
+    /// UI 반영 크기 = 실제 미리보기 영역에서 여백을 뺀 물리 픽셀 크기이며 상한은 768이다.
     /// </summary>
     private const int PreviewDecodeWidth = 768;
+    private XamlRoot? _previewXamlRoot;
+    private double _previewRasterScale;
 
     /// <summary>A233: 텍스트 프리뷰가 파일 앞에서 읽는 상한(바이트) — 타일에 이 이상 안 보이므로
     /// 전체 읽기는 낭비다(대형 파일 보호 — File.ReadAllText 금지, FileStream 부분 읽기).</summary>
@@ -319,12 +324,21 @@ public sealed partial class ThumbnailExplorer : UserControl
         // (ExplorerPane과 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
         Loaded += (_, _) =>
         {
+            _previewXamlRoot = XamlRoot;
+            if (_previewXamlRoot is not null)
+            {
+                _previewRasterScale = _previewXamlRoot.RasterizationScale;
+                _previewXamlRoot.Changed -= OnPreviewRasterScaleChanged;
+                _previewXamlRoot.Changed += OnPreviewRasterScaleChanged;
+            }
             if (_previewBatch.Token.IsCancellationRequested) _previewBatch.Restart();
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             ExplorerFileOps.CutMarksChanged += ApplyCutMarks;
         };
         Unloaded += (_, _) =>
         {
+            if (_previewXamlRoot is not null) _previewXamlRoot.Changed -= OnPreviewRasterScaleChanged;
+            _previewXamlRoot = null;
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             // A233: 보류 텍스트 읽기 전부 무산 — seq를 올리면 게이트 대기 중이던 예약이 깨어나도
             // 발사 없이 접힌다(대조 실패). 풀을 먼저 닫으면 진행 중 읽기는 워커가 마저 끝내고
@@ -719,6 +733,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         // A352 배치 1: 위상 0 = 타일 실체화. 대형 폴더에서 가장 뜨거운 지점이라 게이트 선검사.
         if (DiagTrace.Enabled) DiagTrace.Write("tiles", "phase0 " + vm.Path);
         host.Children.Clear(); // 재활용 잔존 방어(재활용 큐를 거치지 않고 바로 오는 경로 대비)
+        host.Tag = null;
+        host.SizeChanged -= OnPreviewHostSizeChanged;
+        host.SizeChanged += OnPreviewHostSizeChanged;
         if (vm.IsFolder)
         {
             host.Children.Add(MakeFolderGlyph());
@@ -784,6 +801,37 @@ public sealed partial class ThumbnailExplorer : UserControl
         Stretch = Stretch.Uniform,
         Margin = new Thickness(4),
     };
+
+    private ThumbnailRaster.Target PreviewTarget(Grid host) =>
+        ThumbnailRaster.Viewport(host.ActualWidth, host.ActualHeight, XamlRoot?.RasterizationScale ?? 1);
+
+    private void QueuePreviewResize(Grid host)
+    {
+        // SizeChanged is a layout callback: defer all image creation and worker submission one tick.
+        var seq = _showSeq;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (seq != _showSeq || _previewBatch.Token.IsCancellationRequested) return;
+            DependencyObject? node = host;
+            while (node is not null && node is not GridViewItem) node = VisualTreeHelper.GetParent(node);
+            if (node is not GridViewItem item || VmOf(item) is not { } vm || vm.IsFolder ||
+                vm.PreviewKnownEmpty || IsTextPreviewFile(vm.Entry) || !ReferenceEquals(LivePreviewHostOf(vm), host)) return;
+            var target = PreviewTarget(host);
+            if (target.Width <= 0 || target.Height <= 0 || Equals(host.Tag, target)) return;
+            _ = FillShellThumbnailAsync(vm, seq);
+        });
+    }
+
+    private void OnPreviewHostSizeChanged(object sender, SizeChangedEventArgs args) => QueuePreviewResize((Grid)sender);
+
+    private void OnPreviewRasterScaleChanged(XamlRoot sender, XamlRootChangedEventArgs args)
+    {
+        if (_previewRasterScale == sender.RasterizationScale) return;
+        _previewRasterScale = sender.RasterizationScale;
+        if (TileGrid.ItemsPanelRoot is not Panel panel) return;
+        foreach (var item in panel.Children.OfType<GridViewItem>())
+            if (item.ContentTemplateRoot is Grid root && PreviewHostOf(root) is { } host) QueuePreviewResize(host);
+    }
 
     /// <summary>
     /// 미리보기를 못 얻은 타일을 <b>위상 0의 실패 갈래 그대로</b> 다시 그린다 (A345 배치 4).
@@ -1349,6 +1397,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     {
         var cancellation = _previewBatch.Token;
         if (seq != _showSeq || cancellation.IsCancellationRequested) return;
+        if (LivePreviewHostOf(vm) is not { } initialHost) return;
+        var target = PreviewTarget(initialHost);
+        if (target.Width <= 0 || target.Height <= 0) return;
+        var retrySize = false;
         if (vm.PreviewInFlight) return; // 같은 항목의 중복 발사 방지
         vm.PreviewInFlight = true;
         try
@@ -1358,12 +1410,12 @@ public sealed partial class ThumbnailExplorer : UserControl
                 if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다
                 var entry = vm.Entry;
                 var wantAudioInfo = IsAudioInfoFile(entry);
-                (byte[]? Bytes, string? Info) result;
+                (ThumbnailRaster.Pixels? Pixels, string? Info) result;
                 var timedOut = false; // A352 배치 3: 시한 초과인가 — 없음 확정과 가르는 표지
                 try
                 {
                     result = await ThumbPool.Run(
-                        ctx => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo, ctx.Cancellation), cancellation);
+                        ctx => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo, target, ctx.Cancellation), cancellation);
                     cancellation.ThrowIfCancellationRequested();
                 }
                 catch (OperationCanceledException) { return; }
@@ -1378,14 +1430,14 @@ public sealed partial class ThumbnailExplorer : UserControl
                         : $"shell failed {entry.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
                 }
                 if (seq != _showSeq || cancellation.IsCancellationRequested) return;
-                // 튜플을 지역 변수로 풀어 둔다 — 아래 null 판정·재사용이 종전(단일 bytes) 형태 그대로.
-                var bytes = result.Bytes;
+                // 완성 픽셀과 오디오 정보를 분리한다. 디코드·축소는 이미 워커에서 끝났다.
+                var pixels = result.Pixels;
                 var info = result.Info;
                 // ② 화면 판정보다 먼저 캐시에 남긴다 — 재활용됐어도 다음 실체화가 재사용한다.
                 if (info is not null) vm.AudioInfo = info;
-                if (bytes is null) MarkPreviewMiss(vm, timedOut); // A352 배치 3 — 시한 초과는 1회 유예
+                if (pixels is null) MarkPreviewMiss(vm, timedOut); // A352 배치 3 — 시한 초과는 1회 유예
                 if (seq != _showSeq) return; // ③ 폴더 전환
-                if (bytes is null)
+                if (pixels is null)
                 {
                     // 실패·썸네일 없음·아이콘형(A270 ③) — 확장자 타일 유지(사양). 정보가 있으면
                     // 그 아래 얹는다. 대기 배지는 다시 그리기(Clear)가 함께 걷는다.
@@ -1394,18 +1446,20 @@ public sealed partial class ThumbnailExplorer : UserControl
                 }
                 try
                 {
-                    // 바이트 → BitmapImage: ExplorerPane.LoadThumbnailsAsync의 반영 관용구 그대로
-                    var bitmap = new BitmapImage();
-                    using (var stream = new MemoryStream(bytes))
-                        await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
                     // 적용 시점에 자리를 다시 찾는다(A345 배치 4) — 화면 밖이면 그리지 않는다.
-                    if (seq != _showSeq || LivePreviewHostOf(vm) is not { } host) return;
+                    if (seq != _showSeq || cancellation.IsCancellationRequested || LivePreviewHostOf(vm) is not { } host) return;
+                    if (PreviewTarget(host) != target) { retrySize = true; return; }
+                    // The worker has decoded and filtered: UI only copies bounded premultiplied BGRA.
+                    var bitmap = new WriteableBitmap(pixels.Width, pixels.Height);
+                    using (var output = bitmap.PixelBuffer.AsStream()) output.Write(pixels.Bgra);
+                    bitmap.Invalidate();
                     // A335 계측: 타일 내용이 화면에 처음 얹히는 순간. Mark는 같은 이름을 한 번만
                     // 기록하므로(NavDiagnostics.Mark) 두 갈래(텍스트 미리보기·셸
                     // 썸네일) 어디서 먼저 와도 첫 것만 남는다.
                     NavDiagnostics.Mark("prev0");
                     if (DiagTrace.Enabled) DiagTrace.Write("tiles", "shell done " + entry.Path); // A352 배치 1
                     host.Children.Clear();
+                    host.Tag = target;
                     host.Children.Add(MakePreviewImage(bitmap));
                     // A270 ②: 앨범아트 위 정보 띠 — 배지는 위 Clear가 이미 걷었다(겹침 없음).
                     if (info is not null) host.Children.Add(MakeAudioInfoBand(info));
@@ -1426,6 +1480,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         finally
         {
             vm.PreviewInFlight = false;
+            if (retrySize && seq == _showSeq && !cancellation.IsCancellationRequested && LivePreviewHostOf(vm) is { } resized)
+                QueuePreviewResize(resized);
         }
     }
 
@@ -1466,13 +1522,13 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <b>A352 배치 4</b>: 클라우드 전용 이미지도 이 경로로 온다(종전 UI 스레드 갈래
     /// FillCachedThumbnailAsync의 대체). 그 갈래의 유일한 고유 규칙이 cachedOnly였고 여기 이미
     /// 있으므로, 합치면서 새로 넣은 것은 없다.
-    /// <b>A270 ③</b>: 셸이 돌려준 것이 파일 종류 아이콘(Type = Icon)이면 Bytes = null로 접는다 —
+    /// <b>A270 ③</b>: 셸이 돌려준 것이 파일 종류 아이콘(Type = Icon)이면 Pixels = null로 접는다 —
     /// 무정보 제네릭 아이콘이 정보가 있는 확장자 타일을 덮는 반개선을 막는 전 파일 공통 규칙
     /// (되돌리려면 Type 판정 한 줄만 지우면 A242 종전 동작으로 복귀한다).
     /// 예외(잠김·삭제 경합)는 호출부 catch가 삼킨다.
     /// </summary>
-    private static (byte[]? Bytes, string? Info) FetchTilePreview(
-        string path, bool cachedOnly, bool wantAudioInfo, CancellationToken cancellation)
+    private static (ThumbnailRaster.Pixels? Pixels, string? Info) FetchTilePreview(
+        string path, bool cachedOnly, bool wantAudioInfo, ThumbnailRaster.Target target, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path), cancellation);
@@ -1498,13 +1554,14 @@ public sealed partial class ThumbnailExplorer : UserControl
             : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth), cancellation, late => late?.Dispose());
         if (thumb is null || thumb.Size == 0) return (null, info);
         if (thumb.Type == ThumbnailType.Icon) return (null, info); // A270 ③ — 교체 생략(복구 = 이 줄 삭제)
+        if (thumb.Size > ThumbnailRaster.MaxEncodedBytes) return (null, info);
 
         cancellation.ThrowIfCancellationRequested();
         using var stream = thumb.AsStreamForRead();
         using var buffer = new MemoryStream((int)thumb.Size);
         stream.CopyTo(buffer);
         cancellation.ThrowIfCancellationRequested();
-        return (buffer.ToArray(), info);
+        return (ThumbnailRaster.Decode(buffer.ToArray(), target, cancellation), info);
     }
 
     // ---------- 오디오 타일 정보 (A270) ----------
