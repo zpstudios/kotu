@@ -6,6 +6,8 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Ellipse = Microsoft.UI.Xaml.Shapes.Ellipse;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.System;
@@ -36,6 +38,10 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private readonly Button _changeFolder = new() { Content = "Change folder" };
     private readonly TextBlock _saveFolder = new() { Text = "Preparing save folder...", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly TextBlock _barClock = new() { Text = "Ready", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly TextBlock _captureState = new() { Text = "Ready", TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _captureSources = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+    private readonly Ellipse _captureDot = CreateRecordingDot();
+    private readonly Ellipse _barDot = CreateRecordingDot();
     private readonly TextBlock _status = new() { Text = "Choose a mode and recording source.", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly TextBlock _path = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly TextBlock _description = new() { TextWrapping = TextWrapping.Wrap };
@@ -76,6 +82,12 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private int _refreshSequence;
     private int _tickQueued;
     private int _discoveryPending;
+    private RecordingPhase _phase = RecordingPhase.Ready;
+    private RecordingPresentation _presentation = RecordingPresentation.Create(RecordingPhase.Ready, true, false, false, false, TimeSpan.Zero, "");
+    private bool _activeScreen;
+    private bool _captureObserved;
+    private TimeSpan _captureElapsed;
+    private string _activeSourceLabels = "";
 
     public RecordView(ISettingsService settings)
     {
@@ -100,6 +112,18 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _screenOptions.Children.Add(_mix);
         var panel = new StackPanel { Spacing = 14, MaxWidth = 640, Margin = new Thickness(28, 28, 28, 72), HorizontalAlignment = HorizontalAlignment.Stretch };
         panel.Children.Add(new TextBlock { Text = "Record", FontSize = 28 });
+        var banner = new Grid { ColumnSpacing = 6, RowSpacing = 4 };
+        banner.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        banner.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        banner.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        banner.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetColumn(_captureState, 1);
+        Grid.SetRow(_captureSources, 1);
+        Grid.SetColumnSpan(_captureSources, 2);
+        banner.Children.Add(_captureDot);
+        banner.Children.Add(_captureState);
+        banner.Children.Add(_captureSources);
+        panel.Children.Add(banner);
         panel.Children.Add(_mode);
         panel.Children.Add(_description);
         panel.Children.Add(_screenOptions);
@@ -118,7 +142,13 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         ConfigureBarButton(_cancel, "\uE74D", "Discard recording", "Discard recording");
         ConfigureBarButton(_folder, "\uE8B7", "Open result folder (last saved or partial recording)", "Open result folder");
         // A389: 셸이 받는 하단 줄에만 버튼을 배치한다. 상태 칸은 좁은 폭에서 먼저 줄어든다.
-        var barControls = new FrameworkElement[] { _start, _stop, _cancel, _folder, _barClock };
+        var barStatus = new Grid { ColumnSpacing = 6, HorizontalAlignment = HorizontalAlignment.Stretch };
+        barStatus.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        barStatus.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(_barClock, 1);
+        barStatus.Children.Add(_barDot);
+        barStatus.Children.Add(_barClock);
+        var barControls = new FrameworkElement[] { _start, _stop, _cancel, _folder, barStatus };
         for (var i = 0; i < barControls.Length; i++)
         {
             _bar.ColumnDefinitions.Add(new ColumnDefinition { Width = i < 4 ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
@@ -171,9 +201,28 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     public event Action<bool>? UnsavedChanged;
     public event Action? TrayStatusChanged;
     public object? TakeBottomBar() => _bar;
-    public TrayStatus GetTrayStatus() => _busy
-        ? TrayStatus.Open("REC", _barClock.Text, 0xFFFF5050)
-        : TrayStatus.Idle("REC");
+    public TrayStatus GetTrayStatus() => _presentation.Tray;
+
+    private static Ellipse CreateRecordingDot() => new()
+    {
+        Width = 8, Height = 8, Fill = new SolidColorBrush(Colors.Red),
+        VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, IsHitTestVisible = false,
+    };
+
+    private void UpdateRecordingPresentation(bool recording = false, bool completed = false)
+    {
+        if (_disposed) return;
+        _presentation = RecordingPresentation.Create(_phase, _activeScreen, recording, completed, _captureObserved, _captureElapsed, _activeSourceLabels);
+        _captureState.Text = _presentation.Text;
+        _captureSources.Text = _activeSourceLabels;
+        _captureSources.Visibility = string.IsNullOrEmpty(_activeSourceLabels) ? Visibility.Collapsed : Visibility.Visible;
+        _barClock.Text = _presentation.Detail;
+        _captureDot.Visibility = _barDot.Visibility = _presentation.IsRecording ? Visibility.Visible : Visibility.Collapsed;
+        ToolTipService.SetToolTip(_barClock, _presentation.Detail);
+        AutomationProperties.SetName(_captureState, _presentation.Text);
+        AutomationProperties.SetName(_barClock, _presentation.Detail);
+        TrayStatusChanged?.Invoke();
+    }
 
     private static void ConfigureBarButton(Button button, string glyph, string tooltip, string name)
     {
@@ -425,6 +474,17 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         var mixPreference = _mix.IsChecked == true;
         var systemPreference = _includeOutput.IsChecked == true;
         _sourceLostReason = null;
+        _activeScreen = screen;
+        _activeSourceLabels = string.Join(" · ", new[]
+        {
+            screen ? source!.Label : null,
+            includeSystemAudio ? "System audio: " + outputDevice!.Label : null,
+            !screen || includeMicrophone ? "Microphone: " + microphone!.Label : null,
+        }.Where(label => label is not null));
+        _captureObserved = false;
+        _captureElapsed = TimeSpan.Zero;
+        _phase = RecordingPhase.Starting;
+        UpdateRecordingPresentation();
         Volatile.Write(ref _activeSelection, new(screen ? source : null,
             !screen || includeMicrophone ? microphone!.Id : null, includeSystemAudio ? outputDevice!.Id : null));
         _starting = true;
@@ -473,7 +533,8 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             }, _lifetime.Token);
             _session = session;
             _starting = false;
-            _barClock.Text = "Starting";
+            _phase = RecordingPhase.Active;
+            UpdateRecordingPresentation();
             _finishTask = FinishAsync(session, output, destination);
             temporaryPath = null; // FinishAsync owns the file from here.
             if (_disposed)
@@ -487,18 +548,15 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                 await StopAsync(false);
                 return;
             }
-            _status.Text = screen
-                ? includeSystemAudio && includeMicrophone ? "Recording screen, system audio and microphone. Stop to save the MP4."
-                    : includeSystemAudio ? "Recording screen and selected system audio. Stop to save the MP4."
-                    : includeMicrophone ? "Recording screen and selected microphone. Stop to save the MP4." : "Recording silent video. Stop to save the MP4."
-                : "Recording microphone. Stop to save the WAV.";
+            _status.Text = screen ? "Stop to save the MP4 recording." : "Stop to save the WAV recording.";
             _timer = new System.Threading.Timer(_ => QueueTick(session), null, 0, 250);
             UpdateControls();
         }
-        catch (OperationCanceledException) { if (!_disposed) _status.Text = "Recording canceled."; }
+        catch (OperationCanceledException) { _phase = RecordingPhase.Finished; if (!_disposed) _status.Text = "Recording canceled."; }
         catch (Exception ex)
         {
             keepTemporary = true;
+            _phase = RecordingPhase.Error;
             if (!destinationPrepared && !_disposed)
             {
                 var error = "Could not prepare the save folder. " + DescribeError(ex);
@@ -535,7 +593,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             if (_session is null)
             {
                 Volatile.Write(ref _activeSelection, null);
-                if (!_disposed) SetBusy(false);
+                if (!_disposed) { UpdateRecordingPresentation(); SetBusy(false); }
                 else _worker.Dispose();
             }
         }
@@ -546,13 +604,16 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         // At most one UI update is pending, even if rendering is temporarily delayed.
         if (Interlocked.Exchange(ref _tickQueued, 1) != 0) return;
         var elapsed = session.Elapsed;
-        var label = $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+        var recording = session.IsRecording;
+        var completed = session.Completion.IsCompleted;
         if (!DispatcherQueue.TryEnqueue(() =>
         {
             Interlocked.Exchange(ref _tickQueued, 0);
-            if (_disposed || _session != session) return;
-            _barClock.Text = _stopRequested ? "Saving..." : session.IsRecording ? label : "Starting...";
-            TrayStatusChanged?.Invoke();
+            if (_disposed || _session != session || _phase != RecordingPhase.Active) return;
+            _captureElapsed = elapsed;
+            _captureObserved |= recording;
+            // 완료가 UI 대기 중 발생했다면 이전 녹화 스냅샷을 활성 표식으로 쓰지 않는다.
+            UpdateRecordingPresentation(recording, completed || session.Completion.IsCompleted);
         })) Interlocked.Exchange(ref _tickQueued, 0);
     }
 
@@ -566,30 +627,36 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         try
         {
             var result = await session.Completion;
+            _phase = RecordingPhase.Saving;
+            UpdateRecordingPresentation();
             // A device failure or WAV size limit may stop capture while a close/discard
             // dialog is open. Wait for that choice before publishing the recording.
             if (_closeDecision is { } decision) await decision.Task;
             _stopRequested = true;
             _timer?.Dispose();
             _timer = null;
-            if (!_disposed) { _status.Text = "Finalizing recording..."; _barClock.Text = "Saving..."; UpdateControls(); }
+            if (!_disposed) { _status.Text = "Finalizing recording..."; UpdateControls(); }
             // Capture callbacks have stopped. Release native handles before moving/deleting.
-            var discard = await _worker.Run(_ =>
+            var finalized = await _worker.Run(_ =>
             {
+                var elapsed = session.Elapsed;
                 session.Dispose();
                 // Read the current disposition after releasing the native handles:
                 // an unload may have requested discard while this work was queued.
-                if (_discard || _disposed) { RecordingOutput.Discard(temporaryPath); return true; }
-                if (result.Error is not null) return false; // Keep a partial file for recovery.
+                if (_discard || _disposed) { RecordingOutput.Discard(temporaryPath); return (Discard: true, Elapsed: elapsed); }
+                if (result.Error is not null) return (Discard: false, Elapsed: elapsed); // Keep a partial file for recovery.
                 RecordingOutput.Publish(temporaryPath, destination, overwrite: false);
-                return false;
+                return (Discard: false, Elapsed: elapsed);
             });
+            var discard = finalized.Discard;
+            _captureElapsed = finalized.Elapsed;
             discarded = discard;
             if (!_disposed)
             {
                 if (discard)
                 {
                     _status.Text = "Recording discarded.";
+                    _phase = RecordingPhase.Finished;
                     _path.Text = "";
                 }
                 else if (result.Error is not null)
@@ -597,10 +664,12 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                     _status.Text = (_sourceLostReason is { } lost ? lost + " " : "") + "Recording failed. " + result.Error + " A partial file may be available at the path below.";
                     _path.Text = temporaryPath;
                     _savedPath = temporaryPath;
+                    _phase = RecordingPhase.Error;
                 }
                 else
                 {
                     saved = true;
+                    _phase = RecordingPhase.Finished;
                     _savedPath = destination;
                     _path.Text = destination;
                     _status.Text = (_sourceLostReason is { } lost ? lost + " " : "") + (result.Notice ?? "Recording saved.");
@@ -609,6 +678,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         }
         catch (Exception ex)
         {
+            _phase = RecordingPhase.Error;
             if (!_disposed)
             {
                 _savedPath = temporaryPath;
@@ -623,7 +693,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             _session = null;
             Volatile.Write(ref _activeSelection, null);
             _stopRequested = false;
-            if (!_disposed) { _barClock.Text = "Ready"; SetBusy(false); }
+            if (!_disposed) { UpdateRecordingPresentation(); SetBusy(false); }
             else _worker.Dispose();
         }
         return saved || discarded;
@@ -637,12 +707,20 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         if (!_stopRequested)
         {
             _stopRequested = true;
+            _phase = RecordingPhase.Stopping;
+            UpdateRecordingPresentation();
             if (!_disposed) { _status.Text = discard ? "Discarding recording..." : "Stopping and saving..."; UpdateControls(); }
             try { await _worker.Run(_ => { if (!session.Completion.IsCompleted) session.Stop(); }); }
             catch (Exception ex)
             {
-                _stopRequested = false;
-                if (!_disposed) { _status.Text = "Could not stop recording. " + DescribeError(ex); UpdateControls(); }
+                // 동시에 완료된 세션의 저장/종료 상태를 늦은 정지 오류가 되돌리면 안 된다.
+                if (_session == session && _phase == RecordingPhase.Stopping && !session.Completion.IsCompleted)
+                {
+                    _stopRequested = false;
+                    _phase = RecordingPhase.Active;
+                    UpdateRecordingPresentation();
+                    if (!_disposed) { _status.Text = "Could not stop recording. " + DescribeError(ex); UpdateControls(); }
+                }
                 return false;
             }
         }

@@ -24,6 +24,18 @@ saved MP4 and WAV files continue to open in Video and Audio.
   save-folder selection and result/error paths. The bottom bar stretches with the
   shell; its status text trims before the four button columns. A worker timer updates
   the UI and recording tray status at most four times per second.
+- A compact main banner and the bottom bar show the same capture state, elapsed
+  time and the source labels captured when Start was pressed. A red dot accompanies
+  **Recording screen** or **Recording microphone** only after the backend confirms
+  active capture. Preparing/Starting, Stopping, Saving, Finished and Error have no
+  red capture indicator. Stop removes the indicator immediately; native completion
+  and finalization take precedence over queued progress. Source list refreshes do
+  not rename the active source labels. Full bottom-bar text is available in its
+  tooltip and accessible name.
+- The tray uses the same cached state: red `VRC`/`ARC` while screen/audio capture is
+  confirmed, and neutral `PRE`/`STP`/`SAV`/`END`/`ERR` during other phases. An idle
+  Record view keeps the existing `REC` module label. Busy operations such as folder
+  permission checks or publishing a file do not claim active recording.
 - The initial save folders are the Windows Videos library's `KOTU` folder for MP4
   and the Music library's `KOTU` folder for WAV. **Change folder** remembers a separate
   location for each mode. Folder initialization creates missing directories and checks
@@ -106,6 +118,9 @@ ScreenRecorderLib's native workers capture and
 encode; NAudio's capture thread writes bounded WAV packets. Neither loop runs on the
 UI dispatcher. The thread-pool timer only reads elapsed state and queues one bounded
 UI update. Session callbacks complete tasks with asynchronous continuations.
+The timer snapshots only atomic elapsed/capture/completion state; the dispatcher
+applies a pure presentation result to the banner, bottom bar and cached tray state.
+No blinking timer or capture-state polling runs on the UI thread.
 
 `KOTU record source discovery` is a separate BelowNormal worker. A thread-pool timer
 queues one discovery at a time, including at most one waiting UI application. All
@@ -151,6 +166,11 @@ of sample data), with an explicit notice.
   output suite passed all 12 cases and the Record Release/x64 build passed with zero
   warnings/errors. FolderPicker, redirected libraries and device capture need GUI
   checks; they were not exercised by these tests.
+- A390's 11 presentation tests cover confirmed screen/audio capture, startup with
+  no native capture, stop/finalization priority over late recording snapshots,
+  completion/native finishing, retry reset and idle state. Record Release/x64 also
+  built with zero warnings/errors. Visual markers and actual device transitions
+  remain pending GUI checks.
 - A388 Record Release/x64 build passed with zero warnings/errors. Nine pure catalog
   tests cover stable identity, no-fallback defaults, observation races, failed
   categories, silent video/microphone requirements and minimal row changes. Together

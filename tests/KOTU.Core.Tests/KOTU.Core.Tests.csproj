@@ -14,5 +14,6 @@
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingOutput.cs" Link="RecordingOutput.cs" />
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingSession.cs" Link="RecordingSession.cs" />
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingSourceCatalog.cs" Link="RecordingSourceCatalog.cs" />
+    <Compile Include="..\..\src\KOTU.Module.Record\RecordingPresentation.cs" Link="RecordingPresentation.cs" />
   </ItemGroup>
 </Project>
