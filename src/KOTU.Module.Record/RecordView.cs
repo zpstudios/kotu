@@ -102,6 +102,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _mode.ItemTemplate = null;
         _mode.Items.Add(new GridViewItem { Content = CreateModeTile("\uE714", "Screen recording") });
         _mode.Items.Add(new GridViewItem { Content = CreateModeTile("\uE720", "Microphone recording") });
+        foreach (GridViewItem item in _mode.Items) HookTileSelection(item);
         _mode.SelectedIndex = settings.Get("record.mode", "screen") == "microphone" ? 1 : 0;
         _mix.IsChecked = settings.Get("record.includeMicrophone", true);
         _includeOutput.IsChecked = settings.Get("record.includeSystemAudio", true);
@@ -218,7 +219,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             ItemTemplate = (DataTemplate)XamlReader.Load($$"""
                 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
                     <Border Width="132" Height="132" Padding="10" CornerRadius="8"
-                            BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                            BorderThickness="2" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
                         <Grid RowSpacing="6">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="36"/>
@@ -227,6 +228,11 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                             <TextBlock Grid.Row="1" Text="{{category}}" FontSize="10" Opacity="0.65" HorizontalAlignment="Center"/>
                             <TextBlock Grid.Row="2" Text="{{labelBinding}}" FontSize="12" TextWrapping="Wrap"
                                        TextTrimming="CharacterEllipsis" MaxLines="2" TextAlignment="Center"/>
+                            <Border Name="SelectionBadge" Grid.RowSpan="3" Width="22" Height="22" CornerRadius="11"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed"
+                                    Background="{ThemeResource SystemControlHighlightAccentBrush}" IsHitTestVisible="False">
+                                <FontIcon Glyph="&#xE73E;" FontSize="12" Foreground="White"/>
+                            </Border>
                         </Grid>
                     </Border>
                 </DataTemplate>
@@ -249,9 +255,22 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         ScrollViewer.SetHorizontalScrollMode(grid, ScrollMode.Disabled);
         ScrollViewer.SetVerticalScrollBarVisibility(grid, ScrollBarVisibility.Auto);
         AutomationProperties.SetName(grid, name);
+        var hookedContainers = new HashSet<GridViewItem>();
         grid.ContainerContentChanging += (_, args) =>
         {
             if (args.InRecycleQueue) return;
+            if (args.ItemContainer is GridViewItem container)
+            {
+                if (hookedContainers.Add(container) && container.Content is not Border)
+                {
+                    // Bind the decoration to the container's actual selection, including keyboard
+                    // selection, restored preferences and deselection in the other capture group.
+                    HookTileSelection(container);
+                }
+                ApplyTileSelection(container);
+                if (args.Phase == 0)
+                    args.RegisterUpdateCallback((_, updated) => ApplyTileSelection((GridViewItem)updated.ItemContainer));
+            }
             var label = args.Item switch
             {
                 CaptureSource source => source.Label,
@@ -266,15 +285,44 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         return grid;
     }
 
+    private static void HookTileSelection(GridViewItem container)
+    {
+        container.RegisterPropertyChangedCallback(ListViewItem.IsSelectedProperty, (_, _) => ApplyTileSelection(container));
+        container.Loaded += (_, _) => ApplyTileSelection(container);
+        container.ActualThemeChanged += (_, _) => ApplyTileSelection(container);
+    }
+
+    private static void ApplyTileSelection(GridViewItem container)
+    {
+        if ((container.Content as Border ?? container.ContentTemplateRoot as Border) is not { Child: Grid content } tile) return;
+        var accent = (SolidColorBrush)Application.Current.Resources["SystemControlHighlightAccentBrush"];
+        tile.BorderBrush = container.IsSelected ? accent : (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"];
+        tile.Background = container.IsSelected
+            ? new SolidColorBrush(accent.Color) { Opacity = 0.22 }
+            : new SolidColorBrush(Colors.Transparent);
+        foreach (var badge in content.Children.OfType<Border>().Where(b => b.Name == "SelectionBadge"))
+            badge.Visibility = container.IsSelected ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private static FrameworkElement CreateModeTile(string glyph, string label)
     {
         var panel = new StackPanel { Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
         panel.Children.Add(new FontIcon { Glyph = glyph, FontSize = 30 });
         panel.Children.Add(new TextBlock { Text = label, FontSize = 12, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center });
+        var content = new Grid();
+        content.Children.Add(panel);
+        content.Children.Add(new Border
+        {
+            Name = "SelectionBadge", Width = 22, Height = 22, CornerRadius = new CornerRadius(11),
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+            Background = (Brush)Application.Current.Resources["SystemControlHighlightAccentBrush"],
+            Visibility = Visibility.Collapsed, IsHitTestVisible = false,
+            Child = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = new SolidColorBrush(Colors.White) },
+        });
         var tile = new Border
         {
-            Width = 132, Height = 132, Padding = new Thickness(10), Child = panel,
-            CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+            Width = 132, Height = 132, Padding = new Thickness(10), Child = content,
+            CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(2),
             BorderBrush = (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"],
         };
         AutomationProperties.SetName(tile, label);

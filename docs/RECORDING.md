@@ -10,6 +10,9 @@ saved MP4 and WAV files continue to open in Video and Audio.
   have separate headings and different icons, with a single selection across both
   groups. Native selection marks and keyboard navigation remain available. Longer
   grids scroll in place; full device and window names are available in tooltips.
+- Selected tiles have a 2 DIP accent border, tinted background and a top-right
+  check badge. These decorations follow the actual container selection for mouse,
+  keyboard, restored preferences and recycled items in all five source grids.
 - **Screen recording**: choose one screen or open window and a save folder. Records
   MP4 with H.264 video at 30 fps and optional AAC stereo audio. System audio and
   microphone inclusion have separate checkboxes. Choose the exact playback endpoint:
