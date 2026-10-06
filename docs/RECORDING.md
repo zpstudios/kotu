@@ -5,7 +5,7 @@ saved MP4 and WAV files continue to open in Video and Audio.
 
 ## Behavior
 
-- **Screen recording**: choose one screen or open window, then a destination. Records
+- **Screen recording**: choose one screen or open window and a save folder. Records
   MP4 with H.264 video at 30 fps and AAC stereo audio. The default Windows playback
   endpoint is always captured: this includes other applications' sounds, even when
   only one window is selected. The optional microphone checkbox defaults to enabled
@@ -18,9 +18,20 @@ saved MP4 and WAV files continue to open in Video and Audio.
 - The bottom bar supplies Start, Stop and save, Discard, and elapsed time. The main
   panel shows the destination/result and can open its folder. A worker timer updates
   the UI and recording tray status at most four times per second.
+- The initial save folders are the Windows Videos library's `KOTU` folder for MP4
+  and the Music library's `KOTU` folder for WAV. **Change folder** remembers a separate
+  location for each mode. Folder initialization creates missing directories and checks
+  write access on the module worker; an error disables Start for that mode until a
+  valid folder is chosen. No alternate save location is silently used.
+- Start generates a timestamped filename with a full GUID suffix directly in the
+  displayed folder. There is no per-recording Save dialog or empty destination file.
+  **Open folder** opens the folder containing the last saved or recoverable partial
+  recording, and remains disabled until a result path is available.
 - Stop awaits the encoder's completion before publishing the result. Recording uses
-  a unique sibling temporary file; the destination is replaced only after successful
-  finalization. Discard deletes only that session's temporary file. Failures retain
+  a unique sibling temporary file; the destination is created only after successful
+  finalization, using a move that refuses overwrites. A concurrent filename collision
+  preserves both the existing file and the temporary recording. Discard deletes only
+  that session's temporary file. Failures retain
   any partial recording and show its path; partial MP4 recovery is not guaranteed.
 - Closing the window, switching modules, or entering settings while recording uses
   the existing `ICloseGuard`: Stop and save / Discard / Keep recording. Unexpected
@@ -30,6 +41,11 @@ saved MP4 and WAV files continue to open in Video and Audio.
   no silent fallback to a different screen, window, or microphone.
 - Settings: `record.mode` (`screen` by default), `record.includeMicrophone` (`true`),
   and `record.microphoneId`. These are saved on the module worker when starting.
+  `record.videoFolder` and `record.audioFolder` remember custom folders on the same
+  worker after a successful folder choice. Canceling the picker preserves the current
+  location. Switching mode displays its own folder. Selecting a folder or initializing
+  folders locks selectors and Start; late picker/initialization results after unload
+  are ignored.
 
 ## Windows and dependency evidence
 
@@ -63,8 +79,12 @@ confirms shared-mode PCM conversion and the RecordingStopped completion contract
 
 ## Threads and lifetime
 
-`KOTU record worker` serializes discovery, device construction, Stop, native disposal,
-settings I/O and output publication. ScreenRecorderLib's native workers capture and
+`KOTU record worker` serializes discovery, known-library resolution, folder creation
+and write probes, destination naming, device construction, Stop, native disposal,
+settings I/O and output publication. FolderPicker UI stays on the dispatcher; only
+the chosen path is sent to the worker for validation and persistence. Mode, source,
+microphone and destination folder are snapshotted before recording starts.
+ScreenRecorderLib's native workers capture and
 encode; NAudio's capture thread writes bounded WAV packets. Neither loop runs on the
 UI dispatcher. The thread-pool timer only reads elapsed state and queues one bounded
 UI update. Session callbacks complete tasks with asynchronous continuations.
@@ -97,6 +117,11 @@ of sample data), with an explicit notice.
   package's original license. Roslyn syntax and pinned-package API checks, project XML
   and architecture checks, and the complete 465-test suite also passed.
   Equivalent output-preservation tests are linked into `KOTU.Core.Tests`.
+- A391 added default-folder creation, custom-folder/no-fallback, invalid-folder,
+  unique-name/no-empty-destination and non-overwrite collision tests. The targeted
+  output suite passed all 12 cases and the Record Release/x64 build passed with zero
+  warnings/errors. FolderPicker, redirected libraries and device capture need GUI
+  checks; they were not exercised by these tests.
 - Device checks: screen and window MP4 with system sound, silent-system interval,
   optional microphone mix, microphone-only WAV, missing/denied microphone, source
   closed/minimized, device unplug, save failure, rapid start/stop, Discard, close/module
