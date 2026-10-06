@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Markup;
 using Ellipse = Microsoft.UI.Xaml.Shapes.Ellipse;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -20,11 +21,13 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private readonly ModuleWorker _worker = new("KOTU record worker");
     private readonly ModuleWorker _discoveryWorker = new("KOTU record source discovery", ThreadPriority.BelowNormal);
     private readonly CancellationTokenSource _lifetime = new();
-    private readonly ListView _mode = new() { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 100 };
-    private readonly ListView _source = new() { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 260, DisplayMemberPath = "Label" };
-    private readonly ListView _microphone = new() { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 180, DisplayMemberPath = "Label" };
-    private readonly ListView _output = new() { SelectionMode = ListViewSelectionMode.Single, MaxHeight = 180, DisplayMemberPath = "Label" };
+    private readonly GridView _mode = CreateSourceGrid("\uE714", "Recording mode", "", "{Binding}");
+    private readonly GridView _source = CreateSourceGrid("\uE7F4", "Screens", "SCREEN");
+    private readonly GridView _windows = CreateSourceGrid("\uE737", "Windows", "WINDOW");
+    private readonly GridView _microphone = CreateSourceGrid("\uE720", "Microphones", "MICROPHONE");
+    private readonly GridView _output = CreateSourceGrid("\uE767", "System audio outputs", "SYSTEM AUDIO");
     private readonly ObservableCollection<CaptureSource> _sources = [];
+    private readonly ObservableCollection<CaptureSource> _windowSources = [];
     private readonly ObservableCollection<MicrophoneDevice> _microphones = [];
     private readonly ObservableCollection<OutputDevice> _outputs = [];
     private readonly CheckBox _includeOutput = new() { Content = "Include system audio from the selected output" };
@@ -96,16 +99,20 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _selectedSourceKey = settings.Get("record.sourceKey", "");
         _selectedMicrophoneId = settings.Get("record.microphoneId", "");
         _selectedOutputId = settings.Get("record.outputId", "");
-        _mode.Items.Add("Screen recording");
-        _mode.Items.Add("Microphone recording");
+        _mode.ItemTemplate = null;
+        _mode.Items.Add(new GridViewItem { Content = CreateModeTile("\uE714", "Screen recording") });
+        _mode.Items.Add(new GridViewItem { Content = CreateModeTile("\uE720", "Microphone recording") });
         _mode.SelectedIndex = settings.Get("record.mode", "screen") == "microphone" ? 1 : 0;
         _mix.IsChecked = settings.Get("record.includeMicrophone", true);
         _includeOutput.IsChecked = settings.Get("record.includeSystemAudio", true);
         _source.ItemsSource = _sources;
+        _windows.ItemsSource = _windowSources;
         _microphone.ItemsSource = _microphones;
         _output.ItemsSource = _outputs;
-        _screenOptions.Children.Add(new TextBlock { Text = "Screen or window" });
+        _screenOptions.Children.Add(new TextBlock { Text = "Screens · Entire display", FontSize = 16 });
         _screenOptions.Children.Add(_source);
+        _screenOptions.Children.Add(new TextBlock { Text = "Windows · Individual app", FontSize = 16, Margin = new Thickness(0, 8, 0, 0) });
+        _screenOptions.Children.Add(_windows);
         _screenOptions.Children.Add(_includeOutput);
         _screenOptions.Children.Add(new TextBlock { Text = "System audio output" });
         _screenOptions.Children.Add(_output);
@@ -163,11 +170,8 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                     ? _screenError ?? "Choose a screen or window, then start recording."
                     : _microphone.SelectedItem is MicrophoneDevice ? "Ready to record the selected microphone." : "Choose an available microphone.");
         };
-        _source.SelectionChanged += (_, _) =>
-        {
-            if (!_applyingSources && _source.SelectedItem is CaptureSource source) _selectedSourceKey = RecordingSourceCatalog.Key(source);
-            UpdateDiscoverySelection(); UpdateControls();
-        };
+        _source.SelectionChanged += (_, _) => CaptureSelectionChanged(_source, _windows);
+        _windows.SelectionChanged += (_, _) => CaptureSelectionChanged(_windows, _source);
         _microphone.SelectionChanged += (_, _) =>
         {
             if (!_applyingSources && _microphone.SelectedItem is MicrophoneDevice microphone) _selectedMicrophoneId = microphone.Id;
@@ -195,6 +199,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     }
 
     private bool ScreenMode => _mode.SelectedIndex == 0;
+    private CaptureSource? SelectedCaptureSource => _source.SelectedItem as CaptureSource ?? _windows.SelectedItem as CaptureSource;
     private string? CurrentFolder => ScreenMode ? _videoFolder : _audioFolder;
     private string? CurrentFolderError => ScreenMode ? _videoFolderError : _audioFolderError;
     public bool HasUnsavedChanges => _busy;
@@ -202,6 +207,94 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     public event Action? TrayStatusChanged;
     public object? TakeBottomBar() => _bar;
     public TrayStatus GetTrayStatus() => _presentation.Tray;
+
+    private static GridView CreateSourceGrid(string glyph, string name, string category, string labelBinding = "{Binding Label}")
+    {
+        // Native GridView containers retain selection, focus, checkmarks and arrow-key navigation.
+        var grid = new GridView
+        {
+            SelectionMode = ListViewSelectionMode.Single, MaxHeight = 300,
+            IsMultiSelectCheckBoxEnabled = false,
+            ItemTemplate = (DataTemplate)XamlReader.Load($$"""
+                <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                    <Border Width="132" Height="132" Padding="10" CornerRadius="8"
+                            BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                        <Grid RowSpacing="6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="36"/>
+                            </Grid.RowDefinitions>
+                            <FontIcon Glyph="{{glyph}}" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="1" Text="{{category}}" FontSize="10" Opacity="0.65" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Text="{{labelBinding}}" FontSize="12" TextWrapping="Wrap"
+                                       TextTrimming="CharacterEllipsis" MaxLines="2" TextAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+                """),
+            ItemsPanel = (ItemsPanelTemplate)XamlReader.Load("""
+                <ItemsPanelTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                    <ItemsWrapGrid Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+                """),
+            ItemContainerStyle = (Style)XamlReader.Load("""
+                <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="GridViewItem">
+                    <Setter Property="Margin" Value="0,0,8,8"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                </Style>
+                """),
+        };
+        ScrollViewer.SetHorizontalScrollBarVisibility(grid, ScrollBarVisibility.Disabled);
+        ScrollViewer.SetHorizontalScrollMode(grid, ScrollMode.Disabled);
+        ScrollViewer.SetVerticalScrollBarVisibility(grid, ScrollBarVisibility.Auto);
+        AutomationProperties.SetName(grid, name);
+        grid.ContainerContentChanging += (_, args) =>
+        {
+            if (args.InRecycleQueue) return;
+            var label = args.Item switch
+            {
+                CaptureSource source => source.Label,
+                MicrophoneDevice microphone => microphone.Label,
+                OutputDevice output => output.Label,
+                _ => null,
+            };
+            if (label is null) return;
+            ToolTipService.SetToolTip(args.ItemContainer, label);
+            AutomationProperties.SetName(args.ItemContainer, label);
+        };
+        return grid;
+    }
+
+    private static FrameworkElement CreateModeTile(string glyph, string label)
+    {
+        var panel = new StackPanel { Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
+        panel.Children.Add(new FontIcon { Glyph = glyph, FontSize = 30 });
+        panel.Children.Add(new TextBlock { Text = label, FontSize = 12, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center });
+        var tile = new Border
+        {
+            Width = 132, Height = 132, Padding = new Thickness(10), Child = panel,
+            CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+            BorderBrush = (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"],
+        };
+        AutomationProperties.SetName(tile, label);
+        ToolTipService.SetToolTip(tile, label);
+        return tile;
+    }
+
+    private void CaptureSelectionChanged(GridView selected, GridView other)
+    {
+        if (_applyingSources) return;
+        if (selected.SelectedItem is CaptureSource source)
+        {
+            _applyingSources = true;
+            try { other.SelectedItem = null; }
+            finally { _applyingSources = false; }
+            _selectedSourceKey = RecordingSourceCatalog.Key(source);
+        }
+        UpdateDiscoverySelection();
+        UpdateControls();
+    }
 
     private static Ellipse CreateRecordingDot() => new()
     {
@@ -263,6 +356,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         var selectable = !_busy && !_folderInitializing && !_choosingFolder;
         _mode.IsEnabled = selectable;
         _source.IsEnabled = selectable;
+        _windows.IsEnabled = selectable;
         _microphone.IsEnabled = selectable && (!screen || _mix.IsChecked == true);
         _output.IsEnabled = selectable && _includeOutput.IsChecked == true;
         _mix.IsEnabled = selectable;
@@ -271,7 +365,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _changeFolder.IsEnabled = selectable;
         _saveFolder.Text = _folderInitializing ? "Preparing save folder..." : CurrentFolder ?? CurrentFolderError ?? "Choose a save folder.";
         _start.IsEnabled = selectable && !_catalogInitializing && !_closeDialog && CurrentFolder is not null && CurrentFolderError is null &&
-            (screen ? _source.SelectedItem is CaptureSource && (_includeOutput.IsChecked != true || _output.SelectedItem is OutputDevice) &&
+            (screen ? SelectedCaptureSource is not null && (_includeOutput.IsChecked != true || _output.SelectedItem is OutputDevice) &&
                 (_mix.IsChecked != true || _microphone.SelectedItem is MicrophoneDevice) : _microphone.SelectedItem is MicrophoneDevice);
         _stop.IsEnabled = _session is not null && !_stopRequested;
         _cancel.IsEnabled = _session is not null && !_stopRequested;
@@ -282,7 +376,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     {
         if (_applyingSources) return;
         // Immutable preferences are the only view state read by the discovery thread.
-        Volatile.Write(ref _discoverySelection, new(_source.SelectedItem as CaptureSource,
+        Volatile.Write(ref _discoverySelection, new(SelectedCaptureSource,
             (_microphone.SelectedItem as MicrophoneDevice)?.Id ?? _selectedMicrophoneId,
             (_output.SelectedItem as OutputDevice)?.Id ?? _selectedOutputId));
     }
@@ -346,7 +440,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         finally { if (!posted) Interlocked.Exchange(ref _discoveryPending, 0); }
     }
 
-    private void ApplySources<T>(ListView list, ObservableCollection<T> current, IReadOnlyList<T>? snapshot,
+    private void ApplySources<T>(ListViewBase list, ObservableCollection<T> current, IReadOnlyList<T>? snapshot,
         ref bool initialized, ref string? selectedKey, Func<T, string> key, Func<T, bool> isDefault) where T : class
     {
         if (snapshot is null) return;
@@ -363,7 +457,17 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _applyingSources = true;
         try
         {
-            ApplySources(_source, _sources, snapshot.Sources, ref _sourcesInitialized, ref _selectedSourceKey, RecordingSourceCatalog.Key, _ => false);
+            if (snapshot.Sources is { } sources)
+            {
+                // Choose once across both categories, so only one capture target can be selected.
+                var selected = RecordingSourceCatalog.Select(sources, _selectedSourceKey, RecordingSourceCatalog.Key, _ => false, !_sourcesInitialized);
+                _sourcesInitialized = true;
+                if (selected is not null) _selectedSourceKey = RecordingSourceCatalog.Key(selected);
+                RecordingSourceCatalog.Apply(_sources, sources.Where(s => s.DisplayName is not null).ToArray(), RecordingSourceCatalog.Key);
+                RecordingSourceCatalog.Apply(_windowSources, sources.Where(s => s.DisplayName is null).ToArray(), RecordingSourceCatalog.Key);
+                _source.SelectedItem = selected is null ? null : _sources.FirstOrDefault(s => RecordingSourceCatalog.Key(s) == RecordingSourceCatalog.Key(selected));
+                _windows.SelectedItem = selected is null ? null : _windowSources.FirstOrDefault(s => RecordingSourceCatalog.Key(s) == RecordingSourceCatalog.Key(selected));
+            }
             ApplySources(_microphone, _microphones, snapshot.Microphones, ref _microphonesInitialized, ref _selectedMicrophoneId, d => d.Id, d => d.IsDefault);
             ApplySources(_output, _outputs, snapshot.Outputs, ref _outputsInitialized, ref _selectedOutputId, d => d.Id, d => d.IsDefault);
         }
@@ -375,7 +479,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             snapshot.OutputError is { } output ? "System outputs: " + output : null }.Where(s => s is not null);
         var message = string.Join("\n", errors);
         if (message.Length == 0) message = "Sources update automatically. Select the sources to record.";
-        if (!_busy && (ScreenMode && _source.SelectedItem is null ||
+        if (!_busy && (ScreenMode && SelectedCaptureSource is null ||
             (ScreenMode && _includeOutput.IsChecked == true && _output.SelectedItem is null) ||
             ((!ScreenMode || _mix.IsChecked == true) && _microphone.SelectedItem is null)))
             message += " Choose an available source; missing selections are not replaced automatically.";
@@ -464,7 +568,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     {
         if (_disposed || _busy || _catalogInitializing || _closeDialog || _choosingFolder || _folderInitializing || CurrentFolderError is not null || CurrentFolder is not { } saveFolder) return;
         var screen = ScreenMode;
-        var source = _source.SelectedItem as CaptureSource;
+        var source = SelectedCaptureSource;
         var microphone = _microphone.SelectedItem as MicrophoneDevice;
         var outputDevice = _output.SelectedItem as OutputDevice;
         if (screen && source is null || !screen && microphone is null) return;
