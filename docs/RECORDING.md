@@ -18,8 +18,11 @@ saved MP4 and WAV files continue to open in Video and Audio.
   (48 kHz, 16-bit, mono). WASAPI shared-mode conversion avoids codec installation.
   This first implementation deliberately uses the allowed standard-file alternative
   to M4A: there is no AAC export pass or falsely labeled audio-only MP4.
-- The bottom bar supplies Start, Stop and save, Discard, and elapsed time. The main
-  panel shows the destination/result and can open its folder. A worker timer updates
+- The bottom bar supplies compact 32 DIP Start, Stop and save, Discard, and Open
+  result folder buttons, followed by elapsed time/status. Every icon button has an
+  explicit tooltip and accessible name. The main panel focuses on source choices,
+  save-folder selection and result/error paths. The bottom bar stretches with the
+  shell; its status text trims before the four button columns. A worker timer updates
   the UI and recording tray status at most four times per second.
 - The initial save folders are the Windows Videos library's `KOTU` folder for MP4
   and the Music library's `KOTU` folder for WAV. **Change folder** remembers a separate

@@ -4,6 +4,7 @@ using KOTU.Core.Settings;
 using KOTU.Core.Threading;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -34,13 +35,12 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private readonly Button _folder = new() { Content = "Open folder", IsEnabled = false };
     private readonly Button _changeFolder = new() { Content = "Change folder" };
     private readonly TextBlock _saveFolder = new() { Text = "Preparing save folder...", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-    private readonly TextBlock _clock = new() { Text = "00:00:00", FontSize = 36 };
-    private readonly TextBlock _barClock = new() { Text = "Ready", VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _barClock = new() { Text = "Ready", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly TextBlock _status = new() { Text = "Choose a mode and recording source.", TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly TextBlock _path = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly TextBlock _description = new() { TextWrapping = TextWrapping.Wrap };
     private readonly StackPanel _screenOptions = new() { Spacing = 8 };
-    private readonly StackPanel _bar = new() { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Grid _bar = new() { ColumnSpacing = 6, MinWidth = 152, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center };
     private IRecordingSession? _session;
     private Task<bool>? _finishTask;
     private TaskCompletionSource<bool>? _closeDecision;
@@ -110,15 +110,21 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         panel.Children.Add(new TextBlock { Text = "Save folder" });
         panel.Children.Add(_saveFolder);
         panel.Children.Add(_changeFolder);
-        panel.Children.Add(_clock);
         panel.Children.Add(_status);
         panel.Children.Add(_path);
-        panel.Children.Add(_folder);
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        _bar.Children.Add(_start);
-        _bar.Children.Add(_stop);
-        _bar.Children.Add(_cancel);
-        _bar.Children.Add(_barClock);
+        ConfigureBarButton(_start, "\uE7C8", "Start recording", "Start recording");
+        ConfigureBarButton(_stop, ((char)Symbol.Stop).ToString(), "Stop and save", "Stop and save");
+        ConfigureBarButton(_cancel, "\uE74D", "Discard recording", "Discard recording");
+        ConfigureBarButton(_folder, "\uE8B7", "Open result folder (last saved or partial recording)", "Open result folder");
+        // A389: 셸이 받는 하단 줄에만 버튼을 배치한다. 상태 칸은 좁은 폭에서 먼저 줄어든다.
+        var barControls = new FrameworkElement[] { _start, _stop, _cancel, _folder, _barClock };
+        for (var i = 0; i < barControls.Length; i++)
+        {
+            _bar.ColumnDefinitions.Add(new ColumnDefinition { Width = i < 4 ? GridLength.Auto : new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(barControls[i], i);
+            _bar.Children.Add(barControls[i]);
+        }
         _mode.SelectionChanged += (_, _) =>
         {
             UpdateControls();
@@ -168,6 +174,27 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     public TrayStatus GetTrayStatus() => _busy
         ? TrayStatus.Open("REC", _barClock.Text, 0xFFFF5050)
         : TrayStatus.Idle("REC");
+
+    private static void ConfigureBarButton(Button button, string glyph, string tooltip, string name)
+    {
+        try
+        {
+            if (Application.Current?.Resources["BottomBarButtonStyle"] is Style style) button.Style = style;
+        }
+        catch { /* 공통 스타일이 없는 호스트에서도 기본 버튼 템플릿으로 표시한다. */ }
+        // 기본 스타일의 최소 크기가 명시 크기를 이기지 않도록 두 값 모두 지정한다.
+        button.Width = button.Height = 32;
+        button.MinWidth = button.MinHeight = 0;
+        button.Padding = new Thickness(2);
+        button.BorderThickness = new Thickness(1);
+        button.CornerRadius = new CornerRadius(4);
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
+        button.VerticalAlignment = VerticalAlignment.Center;
+        button.Content = new FontIcon { Glyph = glyph, FontSize = 18 };
+        ToolTipService.SetToolTip(button, tooltip);
+        AutomationProperties.SetName(button, name);
+    }
 
     private void SetBusy(bool value)
     {
@@ -446,7 +473,6 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             }, _lifetime.Token);
             _session = session;
             _starting = false;
-            _clock.Text = "00:00:00";
             _barClock.Text = "Starting";
             _finishTask = FinishAsync(session, output, destination);
             temporaryPath = null; // FinishAsync owns the file from here.
@@ -525,7 +551,6 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         {
             Interlocked.Exchange(ref _tickQueued, 0);
             if (_disposed || _session != session) return;
-            _clock.Text = label;
             _barClock.Text = _stopRequested ? "Saving..." : session.IsRecording ? label : "Starting...";
             TrayStatusChanged?.Invoke();
         })) Interlocked.Exchange(ref _tickQueued, 0);
