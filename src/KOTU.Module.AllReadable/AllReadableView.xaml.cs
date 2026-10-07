@@ -11,7 +11,7 @@ namespace KOTU.Module.AllReadable;
 /// 파일 형식별 자식의 센터와 하단 바만 교체한다. 셸의 모듈 정체성과 전 형식 탐색 목록은 유지한다.
 /// 계약과 열린 경로는 ChildContentHost, XAML과 Unloaded를 통한 워커 해제는 이 뷰가 담당한다.
 /// </summary>
-public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSource, IContentStateSource, IContentInfoProvider,
+public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSource, IFileSizeConsumer, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
@@ -214,6 +214,7 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     public bool HasUnsavedChanges => _content.HasUnsavedChanges;
     public Task<bool> ConfirmCloseAsync() => _content.ConfirmCloseAsync();
     public void CaptureSettings() => (_content.Child as ISettingsSnapshotSource)?.CaptureSettings();
+    public void SetFileSize(string path, long? bytes) => _content.SetFileSize(path, bytes);
     public void OpenUntitled() => _content.OpenUntitled();
     public bool HasPlaybackSurface => _content.HasPlaybackSurface;
     public bool IsPlaying => _content.IsPlaying;

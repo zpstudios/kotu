@@ -3,7 +3,7 @@
 namespace KOTU.Core.Content;
 
 /// <summary>중첩 콘텐츠의 계약과 열린 경로를 소유한다. XAML과 실제 워커 해제는 뷰의 책임이다.</summary>
-public sealed class ChildContentHost : IContentStateSource, IContentInfoProvider, ICloseGuard,
+public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, IContentInfoProvider, ICloseGuard,
     ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource,
     IContentPathChangedSource, IContentInfoChangedSource, IBrowseOrderConsumer,
     ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource, IContentOpenFailedSource
@@ -157,9 +157,16 @@ public sealed class ChildContentHost : IContentStateSource, IContentInfoProvider
     {
         if (Child is ITrayStatusProvider provider) return provider.GetTrayStatus();
         if (OpenedPath is not { } path) return TrayStatus.Idle("ALL");
-        long bytes = -1;
-        try { bytes = new FileInfo(path).Length; }
-        catch { /* 파일 크기를 못 읽으면 기존 빈 크기 표시를 유지한다. */ }
+        var bytes = string.Equals(path, _sizePath, StringComparison.OrdinalIgnoreCase) ? _fileSize ?? -1 : -1;
         return TrayStatus.Open(TrayFormat.Extension(path), TrayFormat.Size(bytes));
+    }
+
+    private string? _sizePath;
+    private long? _fileSize;
+    public void SetFileSize(string path, long? bytes)
+    {
+        _sizePath = path;
+        _fileSize = bytes;
+        (Child as IFileSizeConsumer)?.SetFileSize(path, bytes);
     }
 }

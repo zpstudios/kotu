@@ -39,7 +39,7 @@ public sealed class ArchiveRow
 /// UI 스레드는 결과만 반영하며 여러 선택의 암호·취소·결과는 작업별로 유지한다.
 /// </summary>
 public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.IContentStateSource,
-    IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider,
+    IBottomBarProvider, KOTU.Core.Contracts.IDriveStripHost, ITrayStatusProvider, IFileSizeConsumer,
     IContentCloseRequestSource, IContentOpenFailedSource, IContentInfoProvider,
     KOTU.Core.Contracts.IBackgroundJobOwner
 {
@@ -72,17 +72,13 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         if (_busy) return TrayStatus.Open(kind, TrayFormat.Percent(_operationProgress));
         if (_archivePath is not { } path || _root is null) return TrayStatus.Idle("ARC");
 
-        long packed = -1;
-        try
-        {
-            packed = new FileInfo(path).Length;
-        }
-        catch
-        {
-            // 크기를 못 읽으면 압축률 줄만 "—"가 된다.
-        }
+        var packed = string.Equals(path, _sizePath, StringComparison.OrdinalIgnoreCase) ? _fileSize ?? -1 : -1;
         return TrayStatus.Open(kind, TrayFormat.Ratio(packed, _root.Size));
     }
+
+    private string? _sizePath;
+    private long? _fileSize;
+    public void SetFileSize(string path, long? bytes) { _sizePath = path; _fileSize = bytes; }
 
     /// <summary>
     /// 정보 오버레이용 압축 정보 (A329) — 단일 빌더(ArchiveQuickInfo)를 쓴다: 파일 기본 3행 +

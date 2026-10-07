@@ -28,7 +28,7 @@ namespace KOTU.Module.Video;
 /// 생성/해제가 같은 큐라 순서가 구조적으로 보장된다. libvlc 이벤트는 libvlc 자체 스레드에서
 /// 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
-public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSource, IBottomBarProvider,
+public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSource, IFileSizeConsumer, IBottomBarProvider,
     IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IPlaybackStateSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget
 {
@@ -77,7 +77,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
     /// <summary>
     /// 트레이 아이콘 내용(A54): 열림 = 해상도("1080p") · 비트레이트("4.2M"), 유휴 = "VID".
     /// 비트레이트는 libvlc 통계 대신 <b>파일 크기 ÷ 재생 길이</b>의 평균값이다 —
-    /// 16px 표기에는 순간값보다 안정적이고, 이미 쓰는 값(_durationMs·FileInfo)만으로 구해진다(구현 시 결정).
+    /// 16px 표기에는 순간값보다 안정적이고, 이미 쓰는 값(_durationMs·파일 크기 캐시)만으로 구해진다(구현 시 결정).
     /// 아직 파싱 전이라 값이 없으면 그 줄만 "—"가 된다.
     /// </summary>
     public TrayStatus GetTrayStatus()
@@ -85,17 +85,13 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         if (_filePath is not { } path) return TrayStatus.Idle("VID");
 
         var (_, height) = VideoPixelSize();
-        long bytes = -1;
-        try
-        {
-            bytes = new FileInfo(path).Length;
-        }
-        catch
-        {
-            // 크기를 못 읽으면 비트레이트 줄만 "—"가 된다.
-        }
+        var bytes = string.Equals(path, _sizePath, StringComparison.OrdinalIgnoreCase) ? _fileSize ?? -1 : -1;
         return TrayStatus.Open(TrayFormat.Resolution((int)height), TrayFormat.BitrateOf(bytes, _durationMs));
     }
+
+    private string? _sizePath;
+    private long? _fileSize;
+    public void SetFileSize(string path, long? bytes) { _sizePath = path; _fileSize = bytes; }
 
     /// <summary>
     /// 정보 오버레이용 미디어 정보 (A328) — 단일 빌더(VideoQuickInfo)로 옮겼다: 파일 기본 3행 +

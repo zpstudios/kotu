@@ -49,7 +49,7 @@ namespace KOTU.Module.Document;
 /// </summary>
 public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     IContentStateSource, IBottomBarProvider, IBottomOverlayConsumer, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
-    IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource, IContentInfoProvider
+    IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource, IContentInfoProvider, IContentInfoChangedSource
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -69,6 +69,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 텍스트·PDF 열기와 닫기,
     /// 페이지 이동(A138), 저장 성공(A137 — 셸의 작업표시줄 용량 갱신 훅) 시점.</summary>
     public event Action? TrayStatusChanged;
+    public event Action? ContentInfoChanged;
 
     /// <summary>
     /// 지금 보고 있는 파일(트레이 표기용, A54). 편집 대상인 <c>_path</c>와 별개다 —
@@ -3054,6 +3055,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // A113 재기준화 지점이라 "저장 성공 시 1회"가 정확히 성립하는 자리다). Save as...(경로
         // 변경)도 이 한 번으로 충분하고, 트레이 값(A138 페이지)은 저장으로 안 변하므로 셸의
         // ComposeKey 선비교가 트레이 재합성을 걸러 준다 — 종전의 savedAs 한정 발화를 대체한다.
+        ContentInfoChanged?.Invoke(); // 같은 경로 저장도 파일 정보·아이콘 크기 캐시를 무효화한다.
         TrayStatusChanged?.Invoke();
         return !_dirty; // 저장 이후 입력이 남았으면 저장 후 닫기/교체를 허용하지 않는다.
     }

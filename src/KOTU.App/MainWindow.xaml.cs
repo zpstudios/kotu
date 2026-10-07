@@ -180,6 +180,17 @@ public sealed partial class MainWindow : Window
         InitializeJobs();
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
+        _iconMetadata = new((path, cancellation) => IconWorker.Run(_ => FileMetadata.Read(path), cancellation));
+        _iconRefreshTimer.Tick += (_, _) => { _iconRefreshTimer.Stop(); InvalidateIconMetadata(); RefreshShellIcons(); };
+        Closed += (_, _) =>
+        {
+            _iconRefreshTimer.Stop();
+            _iconProbe.Dispose();
+            _iconMetadata.Dispose();
+            ++_iconWatchGeneration;
+            _iconWorker?.Post(() => { _iconWatcher?.Dispose(); _iconWatcher = null; });
+            _iconWorker?.Dispose();
+        };
         ListOverlay.NavigationStarted += _ => { _folderProbe.Cancel(); _historyProbe.Cancel(); };
         Closed += (_, _) => { _folderProbe.Dispose(); _historyProbe.Dispose(); _pathWorker?.Dispose(); };
 
@@ -1705,6 +1716,7 @@ public sealed partial class MainWindow : Window
         HideS1Flash(); // A90-b 강조가 콘텐츠 전환 뒤까지 남지 않게
         _currentModule = module;
         _currentFilePath = filePath;
+        InvalidateIconMetadata();
         _untitledContent = false; // A189: 모듈 전환·실경로 열기·설정 진입은 무제 상태를 걷는다
         _selectedBrowse = null;   // A200: 열기·모듈 전환 = 선택 축 리셋 — 더블클릭 열기의 선택
                                   // 겹발화가 열린 콘텐츠 정보를 가리는 역전 방지(아래 Apply가 그린다)
@@ -1800,6 +1812,7 @@ public sealed partial class MainWindow : Window
         }
         _untitledContent = false;
         _currentFilePath = path;
+        InvalidateIconMetadata();
         // A349 배치 3: 미디어 플라이아웃 제목·아트도 지금 파일로 옮긴다. 로드 완료 통지인 이
         // 경로를 쓰고 A348 CurrentPathChanged(로드 앞)는 쓰지 않는다 — 앞선 통지로 갱신하면
         // 제목이 실제 재생보다 먼저 튄다. 미부착(재생 뷰 아님)이면 무동작.
@@ -1839,6 +1852,7 @@ public sealed partial class MainWindow : Window
     {
         _shellLayout.SavedPath(path);
         _currentFilePath = path;
+        InvalidateIconMetadata();
         _untitledContent = false;
         InfoOverlay.InvalidateCache();
         RememberLastFolder();
@@ -1891,6 +1905,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnContentInfoChanged()
     {
+        InvalidateIconMetadata();
+        RefreshShellIcons();
         InfoOverlay.InvalidateContentInfoCache();
         if (_selectedBrowse is not null) return; // 선택 축 표시 중 — 덮지 않는다
         RefreshInfoOverlayForSelection();        // 열림 축 재판정(패널이 닫혀 있으면 무동작)
@@ -4232,6 +4248,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void RefreshShellIcons()
     {
+        if (_contentClosed) return;
+        EnsureIconMetadata();
         if (_moduleIconPath is { } path && File.Exists(path))
         {
             var idleFill = Branding.IdleFill(CurrentModuleId);
@@ -4254,7 +4272,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// 작업표시줄 32px 아이콘의 열림 2줄 값(A137 ② — 예: "TXT" / "40K"). 값은 트레이 계약이 아니라
-    /// <b>셸이 현재 경로에서 직접 계산</b>한다 — 계약의 TrayStatus는 모듈마다 의미가 다르지만
+    /// <b>셸이 현재 경로의 워커 조회 캐시로 계산</b>한다 — 계약의 TrayStatus는 모듈마다 의미가 다르지만
     /// (문서=페이지(A138)·영상=해상도/비트레이트·오디오=시간/막대 — 부록 B 52) 확장자+용량은
     /// 전 모듈 공통이라 경로 계산이 계약 확장보다 싸다(구현 시 결정 — REQUIREMENTS A137 ②).
     /// 표기는 트레이와 같은 규격(TrayFormat.Extension·Size — 단일 소스).
@@ -4264,17 +4282,84 @@ public sealed partial class MainWindow : Window
     private (string? Line1, string? Line2) OpenFileIconInfo(Windows.UI.Color? idleFill)
     {
         if (idleFill is null) return (null, null);
-        if (_currentFilePath is not { } file || !File.Exists(file)) return (null, null);
-        long bytes = -1;
-        try
+        if (_currentFilePath is not { } file) return (null, null);
+        var metadata = _iconMetadata.Peek(file);
+        if (metadata?.Exists == false) return (null, null);
+        return (TrayFormat.Extension(file), TrayFormat.Size(metadata?.Length ?? -1));
+    }
+
+    private ModuleWorker? _iconWorker;
+    private ModuleWorker IconWorker => _iconWorker ??= new("KOTU icon metadata worker");
+    private readonly FileMetadataCache _iconMetadata;
+    private readonly LatestRequest _iconProbe = new();
+    private readonly DispatcherTimer _iconRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(200) };
+    private string? _iconQueryPath;
+    private string? _iconWatchedPath;
+    private long _iconWatchGeneration;
+    private FileSystemWatcher? _iconWatcher; // 생성·해제 모두 IconWorker의 FIFO에서 수행한다.
+
+    private void InvalidateIconMetadata()
+    {
+        if (_currentFilePath is { } path) _iconMetadata.Invalidate(path);
+        _iconProbe.Cancel();
+        _iconQueryPath = null;
+    }
+
+    private async void EnsureIconMetadata()
+    {
+        var path = _currentFilePath;
+        if (!string.Equals(path, _iconWatchedPath, StringComparison.OrdinalIgnoreCase))
         {
-            bytes = new FileInfo(file).Length;
+            _iconRefreshTimer.Stop();
+            _iconProbe.Cancel();
+            _iconQueryPath = null;
+            _iconWatchedPath = path;
+            if (path is not null) _iconMetadata.Invalidate(path);
+            var generation = ++_iconWatchGeneration;
+            // 감시 생성도 네트워크 경로를 만질 수 있어 UI에서 수행하지 않는다.
+            IconWorker.Post(() =>
+            {
+                _iconWatcher?.Dispose();
+                _iconWatcher = null;
+                if (path is null) return;
+                try
+                {
+                    var watcher = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path))
+                    {
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite
+                    };
+                    _iconWatcher = watcher;
+                    void Changed() => DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (_contentClosed || generation != _iconWatchGeneration) return;
+                        _iconRefreshTimer.Stop();
+                        _iconRefreshTimer.Start();
+                    });
+                    watcher.Changed += (_, _) => Changed();
+                    watcher.Created += (_, _) => Changed();
+                    watcher.Deleted += (_, _) => Changed();
+                    watcher.Renamed += (_, _) => Changed();
+                    watcher.Error += (_, _) => Changed();
+                    watcher.EnableRaisingEvents = true;
+                }
+                catch { _iconWatcher?.Dispose(); _iconWatcher = null; }
+            });
         }
-        catch
+        if (path is null) return;
+        if (_iconMetadata.Peek(path) is { } cached)
         {
-            // 크기를 못 읽으면 그 줄만 "—"가 된다(TrayFormat.Size(-1) — DocumentView의 종전 처리와 동일).
+            (ModuleHost.Content as IFileSizeConsumer)?.SetFileSize(path, cached.Length);
+            return;
         }
-        return (TrayFormat.Extension(file), TrayFormat.Size(bytes));
+        (ModuleHost.Content as IFileSizeConsumer)?.SetFileSize(path, null);
+        if (string.Equals(path, _iconQueryPath, StringComparison.OrdinalIgnoreCase)) return;
+        _iconQueryPath = path;
+        var request = _iconProbe.Begin();
+        var metadata = await _iconMetadata.GetAsync(path, request);
+        if (_contentClosed || request.IsCancellationRequested ||
+            !string.Equals(path, _currentFilePath, StringComparison.OrdinalIgnoreCase)) return;
+        _iconQueryPath = null;
+        if (metadata is not null) RefreshShellIcons();
     }
 
     // ---------- 트레이 아이콘 내용 (A54, v0.118.0) ----------
