@@ -27,6 +27,7 @@ namespace KOTU.App;
 public sealed class WindowManager
 {
     private readonly FileTypeRouter _router;
+    private readonly SemaphoreSlim _dispatchGate = new(1, 1);
 
     /// <summary>열린 창 목록. 끝쪽이 가장 최근에 활성화된 창(MRU).</summary>
     private readonly List<MainWindow> _windows = [];
@@ -74,9 +75,15 @@ public sealed class WindowManager
     }
 
     /// <summary>실행 요청(첫 실행·재전달 공통 진입점)을 알맞은 창으로 보낸다.</summary>
-    public void Dispatch(LaunchRequest request)
+    public async Task DispatchAsync(LaunchRequest request)
     {
-        if (request.FilePath is not { } file || (request.Verb == LaunchVerb.Open && !File.Exists(file)))
+        await _dispatchGate.WaitAsync();
+        try
+        {
+        // 활성화 한 건의 단발 조회. UI 상태는 캡처한 요청으로만 판단한다.
+        var exists = request.Verb != LaunchVerb.Open ||
+            await Task.Run(() => File.Exists(request.FilePath));
+        if (request.FilePath is not { } file || !exists)
         {
             // 파일 없는 실행: 창이 없으면 하나 열고, 있으면 최근 창만 앞으로.
             // A219: 최근 창이 트레이 숨김이어도 이 갈래는 복귀시킨다(현행 유지 — 파일 없는
@@ -99,6 +106,8 @@ public sealed class WindowManager
             target.OpenVerb(request);
             target.BringToFront();
         }
+        }
+        finally { _dispatchGate.Release(); }
     }
 
     /// <summary>파일을 담당 모듈 창으로 라우팅해 연다. 창 선택은 재사용 규칙(A24·A219 특칙)을 따른다.</summary>
@@ -262,12 +271,20 @@ public sealed class WindowManager
     /// 경로는 미저장 가드(ConfirmDiscardAsync)가 완료 태스크를 돌려 await가 동기 연속이다 —
     /// 루프 한 바퀴 안에서 창 하나의 생성·라우팅이 끝난 뒤 다음 창으로 넘어간다.
     /// </summary>
-    public bool TryRestoreSession()
+    public async Task<bool> TryRestoreSessionAsync()
+    {
+        await _dispatchGate.WaitAsync();
+        try { return await RestoreSessionCoreAsync(); }
+        finally { _dispatchGate.Release(); }
+    }
+
+    private async Task<bool> RestoreSessionCoreAsync()
     {
         IReadOnlyList<Integration.RestartSessionFile.WindowSnapshot>? snapshots;
         try
         {
-            snapshots = Integration.RestartSessionFile.TryConsume();
+            // 시작 시 한 번만 읽고 삭제하는 세션 파일 I/O.
+            snapshots = await Task.Run(Integration.RestartSessionFile.TryConsume);
         }
         catch
         {
@@ -280,7 +297,9 @@ public sealed class WindowManager
         {
             try
             {
-                if (RestoreWindow(snapshot)) restored++;
+                var path = snapshot.FilePath;
+                var exists = path is { Length: > 0 } && await Task.Run(() => File.Exists(path));
+                if (RestoreWindow(snapshot, exists)) restored++;
             }
             catch
             {
@@ -299,9 +318,9 @@ public sealed class WindowManager
     /// 기하는 창 표시 전에 적용(ApplySessionBounds — A55 화면 밖 보정 재사용).
     /// 여러 창의 Activate 경합으로 마지막 창만 포커스가 남는 것은 수용(A124 확정).
     /// </summary>
-    private bool RestoreWindow(Integration.RestartSessionFile.WindowSnapshot snapshot)
+    private bool RestoreWindow(Integration.RestartSessionFile.WindowSnapshot snapshot, bool exists)
     {
-        var file = snapshot.FilePath is { Length: > 0 } path && File.Exists(path) ? path : null;
+        var file = exists ? snapshot.FilePath : null;
         var moduleId = snapshot.ModuleId is { Length: > 0 } id
             && _router.Modules.Any(m => m.Id == id) ? id : null;
         if (file is null && moduleId is null) return false;

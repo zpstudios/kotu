@@ -237,9 +237,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         // 만들어 거는 것은 저장소 관례다(ExplorerPane.MakeSurfaceMenu·ThumbnailExplorer 동일).
         Scroller.ContextFlyout = MakeSurfaceMenu();
 
-        if (context.FilePath is { } path && File.Exists(path))
+        if (context.FilePath is { } path)
         {
-            OpenPath(path);
+            OpenInitialPathAsync(path);
         }
         else
         {
@@ -282,6 +282,19 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             StringComparison.OrdinalIgnoreCase);
 
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
+
+    private async void OpenInitialPathAsync(string path)
+    {
+        var seq = ++_openSeq;
+        try
+        {
+            var exists = await Worker.Run(_ => File.Exists(path));
+            if (seq != _openSeq) return;
+            if (exists) OpenPath(path);
+            else { PlaceholderText.Visibility = Visibility.Visible; UpdateStatusBar(); }
+        }
+        catch (OperationCanceledException) { }
+    }
 
     private async void OpenPath(string path)
     {

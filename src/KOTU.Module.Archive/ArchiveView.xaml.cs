@@ -733,7 +733,8 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         var saveDir = Path.GetDirectoryName(sourcePaths[0]);
         if (string.IsNullOrEmpty(saveDir)) saveDir = ".";
         var baseName = Path.GetFileNameWithoutExtension(sourcePaths[0]);
-        var existsCheck = (Func<string, bool>)(p => File.Exists(p) || Directory.Exists(p));
+        using var targetProbe = new KOTU.Core.Threading.LatestRequest();
+        var targetActive = true;
 
         var sourceList = new ItemsControl
         {
@@ -765,12 +766,32 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.8,
         };
-        string CurrentTarget()
+        Task<string> CurrentTargetAsync(CancellationToken cancellation)
         {
             var ext = formatBox.SelectedIndex == 1 ? ".7z" : ".zip";
-            return ExtractHerePlanner.UniquePath(Path.Combine(saveDir!, baseName + ext), existsCheck);
+            var candidate = Path.Combine(saveDir!, baseName + ext);
+            return Worker.Run(ctx => ExtractHerePlanner.UniquePath(candidate, p =>
+            {
+                ctx.Cancellation.ThrowIfCancellationRequested();
+                return File.Exists(p) || Directory.Exists(p);
+            }), cancellation);
         }
-        void UpdateLocationText() => locationText.Text = "Save to: " + CurrentTarget();
+        async void UpdateLocationText()
+        {
+            var request = targetProbe.Begin();
+            try
+            {
+                var target = await CurrentTargetAsync(request);
+                if (targetActive && IsCurrent(generation) && !request.IsCancellationRequested)
+                    locationText.Text = "Save to: " + target;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception)
+            {
+                if (targetActive && IsCurrent(generation) && !request.IsCancellationRequested)
+                    locationText.Text = "Could not check the save location.";
+            }
+        }
         UpdateLocationText();
         formatBox.SelectionChanged += (_, _) => UpdateLocationText();
 
@@ -808,10 +829,13 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
         {
             if (await dialog.ShowAsync() != ContentDialogResult.Primary || !IsCurrent(generation)) return null;
             var password = passwordBox.Password.Length > 0 ? passwordBox.Password : null;
-            return (formatBox.SelectedIndex == 1, password, CurrentTarget());
+            var selected7z = formatBox.SelectedIndex == 1;
+            var target = await CurrentTargetAsync(targetProbe.Begin());
+            return IsCurrent(generation) ? (selected7z, password, target) : null;
         }
         finally
         {
+            targetActive = false;
             passwordBox.Password = string.Empty;
             if (ReferenceEquals(_viewDialog, dialog)) _viewDialog = null;
         }

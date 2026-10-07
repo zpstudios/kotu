@@ -146,6 +146,7 @@ public sealed partial class FileListOverlay : UserControl
     public FileListOverlay()
     {
         InitializeComponent();
+        Unloaded += (_, _) => _expandSeq++;
         // A34: 폴더 트리에 포커스가 있는 동안에도 모듈 버튼 핫키는 통과시킨다
         // (트리 타이핑 탐색 우선 — 하단 리스트는 ExplorerPane이 같은 표시를 건다).
         FolderTree.Tag = HotkeySupport.PassThroughTag;
@@ -606,7 +607,8 @@ public sealed partial class FileListOverlay : UserControl
                  full.StartsWith(TrimSep(f.Path) + Path.DirectorySeparatorChar,
                      StringComparison.OrdinalIgnoreCase)));
             // A324: 표시 정책(A160)에 걸려 없는 길목이면 그 한 칸만 예외로 끼운다 — 아래 주석 참고.
-            next ??= AddPathNode(node, full);
+            next ??= await AddPathNodeAsync(node, full, seq);
+            if (seq != _expandSeq) return;
             if (next is null) break; // 그래도 없으면(권한·소실 등) 도달한 지점까지만 선택
             node = next;
         }
@@ -631,7 +633,7 @@ public sealed partial class FileListOverlay : UserControl
     /// 그 순서로 들어 있다. 부모의 HasUnrealizedChildren은 호출 시점에 이미 내려가 있어
     /// (LoadChildrenAsync 직후) 나중에 같은 자식이 한 번 더 생기는 일은 없다.
     /// </summary>
-    private static TreeViewNode? AddPathNode(TreeViewNode parent, string full)
+    private async Task<TreeViewNode?> AddPathNodeAsync(TreeViewNode parent, string full, int seq)
     {
         if (parent.Content is not FolderNode current) return null;
         var baseDir = TrimSep(current.Path);
@@ -641,7 +643,8 @@ public sealed partial class FileListOverlay : UserControl
         var name = cut < 0 ? rest : rest[..cut];
         if (name.Length == 0) return null;
         var path = full[..(baseDir.Length + 1 + name.Length)];
-        if (!Directory.Exists(path)) return null; // 소실·권한 — 없는 노드를 만들지 않는다
+        // 한 단계 보조 노드의 단발 조회. 트리 객체 생성은 await 뒤 UI에서만 한다.
+        if (!await Task.Run(() => Directory.Exists(path)) || seq != _expandSeq) return null;
 
         var index = 0;
         while (index < parent.Children.Count &&

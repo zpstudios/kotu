@@ -976,7 +976,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (item.ContentTemplateRoot is not Grid tile) return;
         if (tile.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == TileCaptionName)
             is not { } caption) return;
-        ExplorerRenameBox.Begin(tile, caption, vm.Path, MakeOpUi(), RefreshViaShell);
+        ExplorerRenameBox.Begin(tile, caption, vm.Path, vm.IsFolder, MakeOpUi(), RefreshViaShell);
     }
 
     /// <summary>조작 후 갱신 — 폴더 상태의 단일 원본(좌 리스트)을 셸이 다시 항해시키는 A93 경로.</summary>

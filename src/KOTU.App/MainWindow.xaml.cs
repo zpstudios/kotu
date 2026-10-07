@@ -15,6 +15,7 @@ using KOTU.Core.Contracts;
 using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace) — 셸의 기록 지점들이 쓴다
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
+using KOTU.Core.Threading;
 
 namespace KOTU.App;
 
@@ -31,6 +32,11 @@ public sealed partial class MainWindow : Window
     private readonly WindowManager _manager;
     private readonly TrayIcon _tray;
     private readonly ISettingsService _settings;
+    private ModuleWorker? _pathWorker;
+    private ModuleWorker PathWorker => _pathWorker ??= new("KOTU shell path worker");
+    private readonly LatestRequest _folderProbe = new();
+    private readonly LatestRequest _historyProbe = new();
+    private bool _historyProbeRunning;
     private double _uiScaleFactor = 1.0; // 시스템 DPI 대비 상대 배율 (1.0 = 오버라이드 없음)
     private bool _xamlRootHooked;
 
@@ -174,6 +180,8 @@ public sealed partial class MainWindow : Window
         InitializeJobs();
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
+        ListOverlay.NavigationStarted += _ => { _folderProbe.Cancel(); _historyProbe.Cancel(); };
+        Closed += (_, _) => { _folderProbe.Dispose(); _historyProbe.Dispose(); _pathWorker?.Dispose(); };
 
         // 좌측 파일 리스트 오버레이(A57 ②) 배선 — 열기 이벤트는 기존(v0.25.0) 홀드 리스트와 동일 경로
         ListOverlay.Settings = _settings;                                  // 정렬 키 저장(A5)
@@ -2018,12 +2026,17 @@ public sealed partial class MainWindow : Window
     /// RememberBrowsedFolder가 하므로 한 창에서는 두 값이 사실상 일치한다).
     /// 중앙 탐색기(A93)와 A81 빈 도크의 리스트 오버레이가 같은 규칙을 공유한다.
     /// </summary>
-    private string ExplorerStartFolder()
+    private Task<string> ExplorerStartFolderAsync(CancellationToken cancellation)
     {
-        if (ListOverlay.CurrentFolder is { } current && Directory.Exists(current)) return current;
+        var current = ListOverlay.CurrentFolder;
         var saved = _settings.Get(LastFolderKey, string.Empty);
-        if (saved.Length > 0 && Directory.Exists(saved)) return saved;
-        return Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        return PathWorker.Run(ctx =>
+        {
+            if (current is not null && Directory.Exists(current)) return current;
+            ctx.Cancellation.ThrowIfCancellationRequested();
+            if (saved.Length > 0 && Directory.Exists(saved)) return saved;
+            return Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        }, cancellation);
     }
 
     /// <summary>
@@ -2034,8 +2047,11 @@ public sealed partial class MainWindow : Window
     /// 목록의 원본은 좌 도크의 리스트(ExplorerPane) 하나다: 도크가 닫혀 있어도 NavigateList로
     /// 그 리스트를 항해시키면 ViewChanged가 돌아와 썸네일 뷰까지 같은 목록으로 채워진다.
     /// </summary>
-    private void UpdateEmptyExplorer()
+    private async void UpdateEmptyExplorer()
     {
+        var request = _folderProbe.Begin();
+        _historyProbe.Cancel();
+        var content = ModuleHost.Content;
         if (IsEmptyFileModule && _currentModule is { } module)
         {
             if (_thumbnailExplorer is null)
@@ -2060,8 +2076,14 @@ public sealed partial class MainWindow : Window
             // A174: 빈 모듈 전환은 좌 리스트의 현재 위치를 리셋하지 않는다 — ExplorerStartFolder가
             // 세션 현재 폴더를 그대로 돌려주고, 필터만 새 모듈 것으로 바뀐다(A57 ③ 모듈 필터 유지).
             // 현재 폴더에 이 모듈의 확장자가 0건이면 빈 목록이 된다 — 사양상 허용(등재문 ⓑ).
-            ListOverlay.NavigateList(ExplorerStartFolder(), module.SupportedExtensions);
             ExplorerHost.Visibility = Visibility.Visible;
+            try
+            {
+                var folder = await ExplorerStartFolderAsync(request);
+                if (_contentClosed || request.IsCancellationRequested || !ReferenceEquals(content, ModuleHost.Content) || !IsEmptyFileModule) return;
+                ListOverlay.NavigateList(folder, module.SupportedExtensions);
+            }
+            catch (OperationCanceledException) { }
         }
         else
         {
@@ -3300,14 +3322,7 @@ public sealed partial class MainWindow : Window
     private bool TryPopFolderHistory()
     {
         if (_folderBackHistory.Count == 0) return false;
-        var index = _folderBackHistory.Count - 1;
-        var folder = _folderBackHistory[index];
-        _folderBackHistory.RemoveAt(index);
-        if (!Directory.Exists(folder)) return true; // 소실 항목 1건 폐기 — 항해 없음(과주행 금지)
-        if (ListOverlay.CurrentFolder is { Length: > 0 } current)
-            PushHistory(_folderForwardHistory, current);
-        _historyNavTarget = folder; // 복귀 항해의 재push 방지 — 도착 ViewChanged 1회가 소비
-        ListOverlay.NavigateList(folder); // 확장자 생략 = 모듈 필터 유지(썸네일 폴더 더블클릭과 동형)
+        _ = NavigateHistoryAsync(back: true);
         return true;
     }
 
@@ -3322,15 +3337,32 @@ public sealed partial class MainWindow : Window
     {
         if (!IsEmptyFileModule && !IsOpenFileBrowsing) return false;
         if (_folderForwardHistory.Count == 0) return false;
-        var index = _folderForwardHistory.Count - 1;
-        var folder = _folderForwardHistory[index];
-        _folderForwardHistory.RemoveAt(index);
-        if (!Directory.Exists(folder)) return true; // 소실 항목 1건 폐기 — 항해 없음(과주행 금지)
-        if (ListOverlay.CurrentFolder is { Length: > 0 } current)
-            PushHistory(_folderBackHistory, current);
-        _historyNavTarget = folder;
-        ListOverlay.NavigateList(folder);
+        _ = NavigateHistoryAsync(back: false);
         return true;
+    }
+
+    private async Task NavigateHistoryAsync(bool back)
+    {
+        if (_historyProbeRunning) return;
+        var source = back ? _folderBackHistory : _folderForwardHistory;
+        var destination = back ? _folderForwardHistory : _folderBackHistory;
+        if (source.Count == 0) return;
+        var folder = source[^1];
+        source.RemoveAt(source.Count - 1);
+        var request = _historyProbe.Begin();
+        var content = ModuleHost.Content;
+        _historyProbeRunning = true;
+        try
+        {
+            var exists = await PathWorker.Run(_ => Directory.Exists(folder), request);
+            if (!exists || _contentClosed || request.IsCancellationRequested ||
+                !ReferenceEquals(content, ModuleHost.Content) || (!IsEmptyFileModule && !IsOpenFileBrowsing)) return;
+            if (ListOverlay.CurrentFolder is { Length: > 0 } current) PushHistory(destination, current);
+            _historyNavTarget = folder;
+            ListOverlay.NavigateList(folder);
+        }
+        catch (OperationCanceledException) { }
+        finally { _historyProbeRunning = false; }
     }
 
     /// <summary>포커스 요소가 주어진 루트의 비주얼 트리 안에 있는지 (A90 — S4 그리드 포커스 판정).</summary>
@@ -3869,8 +3901,13 @@ public sealed partial class MainWindow : Window
     /// A174에서도 유지다(부록 B 71 ② — 유지 대상은 빈 모듈 전환만).
     /// 폴더가 사라졌으면(이동식 드라이브 탈착 등) 띄우지 않는다 — 문구·도크는 IsOpen 기준으로 따라온다.
     /// </summary>
-    private void ShowListOverlay()
+    private async void ShowListOverlay()
     {
+        var request = _folderProbe.Begin();
+        var content = ModuleHost.Content;
+        var file = _currentFilePath;
+        try
+        {
         // A196: 모듈이 없어도 폴백 화면(미지원 안내)이면 전체 파일 필터로 띄운다 —
         // 모듈 개념이 없어 담당 확장자가 없다(등재문 확정). 빈 셸(폴백도 아님)만 종전대로 숨김.
         // A205: 설정 화면은 폴백이 아니다 — 애초에 listShow가 false라 여기까지 오지 않지만,
@@ -3882,12 +3919,21 @@ public sealed partial class MainWindow : Window
             ListOverlay.Hide();
             return;
         }
-        var folder = _currentFilePath is not null
-            ? Path.GetDirectoryName(_currentFilePath)
-            : ExplorerStartFolder();
-        if (folder is not { Length: > 0 } || !Directory.Exists(folder))
+        var folder = file is not null
+            ? Path.GetDirectoryName(file)
+            : await ExplorerStartFolderAsync(request);
+        var exists = folder is { Length: > 0 } && await PathWorker.Run(_ => Directory.Exists(folder), request);
+        if (!exists && IsOpenFileBrowsing) folder = await ExplorerStartFolderAsync(request);
+        if (_contentClosed || request.IsCancellationRequested || !ReferenceEquals(content, ModuleHost.Content) ||
+            file != _currentFilePath) return;
+        if (folder is not { Length: > 0 } || (!exists && !IsOpenFileBrowsing))
         {
             ListOverlay.Hide();
+            return;
+        }
+        if (EffectiveSidebarStates().List == OverlayState.Closed)
+        {
+            if (IsEmptyFileModule || IsOpenFileBrowsing) ListOverlay.NavigateList(folder, extensions);
             return;
         }
         ListOverlay.Show(folder, extensions);
@@ -3900,6 +3946,8 @@ public sealed partial class MainWindow : Window
         // 전 모듈 공통: 좌 리스트는 S1~S4·모든 파일 모듈이 공유하는 단일 인스턴스라
         // 이 한 지점이 곧 전 모듈 적용이다.
         ListOverlay.SetCurrentFile(_currentFilePath);
+        }
+        catch (OperationCanceledException) { }
     }
 
     // ---------- '오픈 파일' 버튼 · S4 탐색 모드 (A90) ----------
@@ -3957,8 +4005,7 @@ public sealed partial class MainWindow : Window
         EnsureS4Explorer();
         S4Host.Visibility = Visibility.Visible;
         ApplyOverlayStates(); // ShowListOverlay가 현재 파일의 폴더로 Show → (폴더가 바뀌면) ViewChanged → S4 그리드 채움
-        if (!ListOverlay.IsOpen) // 파일 폴더 소실(드라이브 탈착 등) — 시작 폴더(A174)로라도 목록을 만든다
-            ListOverlay.NavigateList(ExplorerStartFolder(), _currentModule.SupportedExtensions);
+        // A386: 폴더 소실 시 시작 위치 폴백도 ShowListOverlay의 비동기 질의에서 수행한다.
         // A323: 좌 리스트가 이미 그 폴더면 Show가 재항해를 건너뛰어 ViewChanged가 오지 않는다 —
         // 방금 만든 S4 그리드가 빈 채로 남지 않게 지금 목록을 직접 얹는다(재스캔 없음).
         // 스캔이 도는 중(위 Show나 폴더 소실 폴백이 실제 항해를 걸었다)이면 하지 않는다:

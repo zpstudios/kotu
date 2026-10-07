@@ -338,6 +338,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         };
         Unloaded += (_, _) =>
         {
+            _openSeq++;
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
             _dirtyTimer?.Stop(); // A113 ⓒ: 뷰가 내려간 뒤 디바운스 판정이 발화하지 않게
@@ -363,8 +364,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             CloseHtmlPane();
         };
 
-        if (context.FilePath is { } path && File.Exists(path))
-            OpenAny(path);
+        if (context.FilePath is { } path)
+            OpenInitialPathAsync(path);
         else
             PlaceholderText.Visibility = Visibility.Visible;
     }
@@ -940,6 +941,19 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     }
 
     /// <summary>확장자로 텍스트/PDF 경로를 나눈다(A16).</summary>
+    private async void OpenInitialPathAsync(string path)
+    {
+        var seq = ++_openSeq;
+        try
+        {
+            var exists = await Worker.Run(_ => File.Exists(path));
+            if (seq != _openSeq) return;
+            if (exists) OpenAny(path);
+            else PlaceholderText.Visibility = Visibility.Visible;
+        }
+        catch (OperationCanceledException) { }
+    }
+
     private void OpenAny(string path)
     {
         if (Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase))

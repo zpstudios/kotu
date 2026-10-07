@@ -2033,7 +2033,7 @@ public sealed partial class ExplorerPane : UserControl
         DiagTrace.Write("list", "BeginRenameOf " + vm.Path); // A352 배치 1
         if (ContentPanelOf(item) is not { } panel) return; // 편집 상자를 끼울 host(리스트 = 템플릿 루트)
         if (FindItemBlock(item, ItemNameBlockName) is not { } nameBlock) return;
-        ExplorerRenameBox.Begin(panel, nameBlock, vm.Path, MakeOpUi(), RefreshAfterFileOp);
+        ExplorerRenameBox.Begin(panel, nameBlock, vm.Path, vm.IsFolder, MakeOpUi(), RefreshAfterFileOp);
     }
 
     /// <summary>
@@ -2559,6 +2559,7 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private void TearDownWatch()
     {
+        _watchProbe.Cancel();
         _watchSeq++; // A333 — 보류 중인 채택 무효화(만들어 오던 감시자는 AdoptWatch가 버린다)
         if (_watcher is { } watcher)
         {
@@ -2623,7 +2624,9 @@ public sealed partial class ExplorerPane : UserControl
     /// 경로 재사용). 루트까지 없으면 현재 폴더 재스캔이 기존 실패 경로("Cannot read this folder" +
     /// 빈 목록 통지)로 떨어지고, 감시자도 재대상 실패로 꺼진다 = 감시 중지 + 빈 목록(사양).
     /// </summary>
-    private void OnWatchDebounceExpired()
+    private bool _watchProbeRunning;
+    private readonly LatestRequest _watchProbe = new();
+    private async void OnWatchDebounceExpired()
     {
         if (!_surfaceLive || _folder.Length == 0) return; // Unloaded 직후 잔여 Tick 방어(타이머 Stop과 이중)
         if (ExplorerRenameBox.IsEditing)
@@ -2632,13 +2635,29 @@ public sealed partial class ExplorerPane : UserControl
             return;
         }
         _watchPending = false;
-
-        // UI 스레드 Directory.Exists는 ExplorerRenameBox.Begin과 같은 수준의 가벼운 조회 —
-        // 끊긴 네트워크 경로면 느릴 수 있지만, 그 경우는 감시 생성부터 실패해 여기 올 일이 드물다.
-        var target = _folder;
-        while (target.Length > 0 && !Directory.Exists(target))
-            target = Directory.GetParent(target)?.FullName ?? string.Empty;
-        NavigateTo(target.Length > 0 ? target : _folder, _extensions);
+        if (_watchProbeRunning) { _watchPending = true; return; }
+        _watchProbeRunning = true;
+        var folder = _folder;
+        var watch = _watchSeq;
+        var load = _loadSeq;
+        var cancellation = _watchProbe.Begin();
+        try
+        {
+            var target = await Worker.Run(ctx => PathProbe.ExistingAncestor(folder, ctx.Cancellation), cancellation);
+            if (!_surfaceLive || watch != _watchSeq || load != _loadSeq || folder != _folder) return;
+            if (ExplorerRenameBox.IsEditing) { _watchPending = true; return; }
+            NavigateTo(target, _extensions);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            if (_surfaceLive && watch == _watchSeq && load == _loadSeq) NavigateTo(folder, _extensions);
+        }
+        finally
+        {
+            _watchProbeRunning = false;
+            if (_surfaceLive && _watchPending && !ExplorerRenameBox.IsEditing) RestartWatchDebounce();
+        }
     }
 
     /// <summary>

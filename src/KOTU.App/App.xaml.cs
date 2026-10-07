@@ -119,8 +119,8 @@ public partial class App : Application
         // 재현한다. 쓰는 쪽이 하드웨어 모듈 Restart as admin 한 곳뿐이라, 일반 시작(파일 인자·
         // 바로가기)이 여기서 복원하게 되는 일은 실질적으로 승격 재기동뿐이다. 파일 인자가
         // 함께 온 극단 케이스도 복원 뒤 기존 라우팅으로 마저 연다(창 재사용 규칙 A24 그대로).
-        if (!_windowManager.TryRestoreSession() || request.FilePath is not null)
-            _windowManager.Dispatch(request);
+        if (!await _windowManager.TryRestoreSessionAsync() || request.FilePath is not null)
+            await _windowManager.DispatchAsync(request);
 
         // 선택 센서 트레이(A18 SensorTray)는 A101(v0.137.0)에서 폐지 — 창별 트레이 아이콘이
         // 그 창의 선택값을 표시한다(HardwareView의 ITrayStatusProvider). 상시 표시 축은 소멸.
@@ -261,7 +261,7 @@ public partial class App : Application
                      !string.IsNullOrWhiteSpace(launch.Arguments))
             {
                 // 두 번째 인스턴스의 커맨드라인이 그대로 넘어온다(선행 exe 토큰 포함 가능).
-                try { manager.Dispatch(await Integration.ShellSelectionRequest.ParseCommandLineAsync(launch.Arguments)); }
+                try { await manager.DispatchAsync(await Integration.ShellSelectionRequest.ParseCommandLineAsync(launch.Arguments)); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
                 {
                     ShowSelectionError();

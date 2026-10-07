@@ -90,7 +90,7 @@ internal static class ExplorerRenameBox
     /// onRenamed = 커밋 성공 후 재스캔.
     /// 이미 편집 중(TextBlock이 Collapsed)이면 중복 진입하지 않는다.
     /// </summary>
-    internal static void Begin(Panel host, TextBlock nameBlock, string path,
+    internal static void Begin(Panel host, TextBlock nameBlock, string path, bool isFolder,
         ExplorerFileOps.OpUi ui, Action onRenamed)
     {
         if (nameBlock.Visibility == Visibility.Collapsed) return; // 이미 편집 중 — 중복 진입 방지
@@ -167,7 +167,7 @@ internal static class ExplorerRenameBox
             box.Focus(FocusState.Programmatic);
             var stem = Path.GetFileNameWithoutExtension(originalName);
             // 파일 = 확장자 제외 선택(탐색기 관례) / 폴더·확장자 없는 이름 = 전체 선택
-            box.Select(0, Directory.Exists(path) || stem.Length == 0 ? originalName.Length : stem.Length);
+            box.Select(0, isFolder || stem.Length == 0 ? originalName.Length : stem.Length);
         };
     }
 }

@@ -354,7 +354,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         FitIcons.ConfigureOriginalMenuItem(FitOriginalItem);
         _settings = settings;
         _resumeStore = new PlaybackResumeStore(settings);
-        _filePath = context.FilePath is { } p && File.Exists(p) ? p : null;
+        _filePath = context.FilePath;
         _startPaused = context.StartPaused; // A354: 재시작 세션 복원 = 첫 Playing에서 멈춰 세운다
 
         foreach (var s in Speeds)
@@ -449,6 +449,10 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
     /// VideoView의 D3D 스왑체인이 준비되면 호출된다. 여기서만 스왑체인 옵션을 얻을 수 있다.
     /// 파일 없이 열렸어도 플레이어는 만들어 둔다 — 이후 열기 버튼/드롭으로 파일이 올 수 있다.
     /// </summary>
+    private readonly LatestRequest _pathProbe = new();
+    private bool _neighborProbeRunning;
+    private int _openSequence;
+
     private async void OnVlcInitialized(object? sender, InitializedEventArgs e)
     {
         if (_tornDown) return;
@@ -460,8 +464,20 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
             PlaceholderText.Visibility = Visibility.Visible;
         }
 
+        var initial = _filePath;
+        var initialGeneration = _pathProbe.Generation;
+        if (initial is not null)
+        {
+            try
+            {
+                var exists = await Worker.Run(_ => File.Exists(initial));
+                if (_tornDown || initialGeneration != _pathProbe.Generation || initial != _filePath) return;
+                if (!exists) { _filePath = null; PlaceholderText.Text = "Open a video file, or drop one onto the window\n▶ = built-in display and speaker test clip"; UpdateFitEnabled(); }
+            }
+            catch (OperationCanceledException) { return; }
+        }
         await EnsurePlayerAsync();
-        if (!_tornDown && _filePath is not null && _player is not null) PlayCurrent();
+        if (initialGeneration == _pathProbe.Generation && !_tornDown && _filePath is not null && _player is not null) PlayCurrent();
     }
 
     /// <summary>
@@ -695,9 +711,9 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
     /// 수동 조작은 "한 번 눌렀으니 한 칸"이 예측 가능하고, 연타는 사용자가 한다).
     /// </para>
     /// </summary>
-    private void MoveToNeighbor(bool forward)
+    private async void MoveToNeighbor(bool forward)
     {
-        if (_playlist is not { } list) return;
+        if (_tornDown || _neighborProbeRunning || _playlist is not { } list) return;
 
         // 목록 루프 + 2개 이상일 때만 양 끝에서 되감을 수 있다(1개짜리 목록은 되감아도 제자리).
         var canWrap = _loopMode == LoopMode.List && list.Count > 1;
@@ -708,7 +724,17 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
             target = list.HasPrevious ? list.PeekPrevious : canWrap ? list.PeekLast : null;
         if (target is null) return; // 끝(루프 없음) — 무동작
 
-        if (!File.Exists(target))
+        var before = _filePath;
+        var current = list.Current;
+        var request = _pathProbe.Begin();
+        _neighborProbeRunning = true;
+        bool exists;
+        try { exists = await Worker.Run(_ => File.Exists(target), request); }
+        catch (OperationCanceledException) { return; }
+        finally { _neighborProbeRunning = false; }
+        if (_tornDown || request.IsCancellationRequested || before != _filePath ||
+            !ReferenceEquals(_playlist, list) || current != list.Current) return;
+        if (!exists)
         {
             list.Remove(target);
             UpdateNeighborButtons();
@@ -731,7 +757,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
 
         UpdateNeighborButtons();
         CurrentPathChanged?.Invoke(target);   // A348: 로드 앞 통지 — 좌 리스트 하이라이트 즉시 추종
-        OpenPath(target, autoAdvance: true);  // 목록 진행 = 스냅샷 유지 + 루프 카운터 보존(위 ⓒ)
+        OpenPath(target, autoAdvance: true, existenceChecked: true);  // 목록 진행 = 스냅샷 유지 + 루프 카운터 보존(위 ⓒ)
     }
 
     // ---------- 셸 계약: 미디어 키(SMTC) 대상 (A349 배치 3 — IMediaTransportTarget) ----------
@@ -855,10 +881,27 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
     // ---------- 파일 열기 (버튼/드래그&드롭/초기 컨텍스트) ----------
 
     /// <summary>autoAdvance는 PlayCurrent로 중계만 한다(A255 — EOF 자동 진행 표시).</summary>
-    private async void OpenPath(string path, bool autoAdvance = false)
+    private async void OpenPath(string path, bool autoAdvance = false, bool existenceChecked = false, string? missingMessage = null)
     {
         DiagTrace.Write("video", "OpenPath " + path); // A352 배치 1
-        if (!File.Exists(path)) return;
+        if (_tornDown) return;
+        var request = _pathProbe.Begin();
+        if (!existenceChecked)
+        {
+            try
+            {
+                var exists = await Worker.Run(_ => File.Exists(path), request);
+                if (_tornDown || request.IsCancellationRequested) return;
+                if (!exists)
+                {
+                    if (missingMessage is not null) ShowMessage(missingMessage);
+                    return;
+                }
+            }
+            catch (OperationCanceledException) { return; }
+        }
+        if (_tornDown || request.IsCancellationRequested) return;
+        var openSequence = ++_openSequence;
 
         // 보던 파일이 있으면 위치를 저장하고 전환한다.
         if (_player is { } p && _filePath is not null && !IsTestClip(_filePath) && _durationMs > 0)
@@ -887,7 +930,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         }
 
         await EnsurePlayerAsync(); // 이미 있으면 즉시 반환 — 인스턴스 교체 없음(A10 이후 동영상 전용)
-        if (_tornDown || _filePath != path) return; // 그새 또 다른 파일로 전환됨
+        if (_tornDown || openSequence != _openSequence || _filePath != path) return; // 그새 또 다른 파일로 전환됨
 
         if (_player is not null) PlayCurrent(autoAdvance);
         // 플레이어가 아직 없으면(스왑체인 준비 전) OnVlcInitialized에서 PlayCurrent()가 이어받는다.
@@ -907,6 +950,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _tornDown = true;
+        _pathProbe.Dispose();
         var player = _player;
         var libVlc = _libVlc;
         _player = null;
@@ -1128,12 +1172,14 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
     /// [오디오 동형 이식 완료 — v0.255.0 / A258 게이트도 동형 이식 — v0.258.0]
     /// 오디오에는 PlaybackStateChanged가 없다 — 그 줄만 빼고 복제.
     /// </summary>
-    private void AdvanceAfterEnd(string? endedFile)
+    private async void AdvanceAfterEnd(string? endedFile)
     {
+        if (_neighborProbeRunning) return;
         // 재진입 가드(설계 §2.3): _tornDown은 Dispatch가 이중 검사했다. 여기서는
         // ② 그새 다른 파일로 전환되지 않았는지 ③ 사용자가 ▶로 이미 재시작하지 않았는지(Ended 유지)만.
         if (_player is not { } p || _filePath is null || _filePath != endedFile) return;
         if (p.State != VLCState.Ended) return;
+        var request = _pathProbe.Begin();
 
         // 전이 1: 한 파일 루프 — 횟수 내면 같은 파일 재시작(0 = 무한. "1" = 한 번 더 = 총 2회).
         // 소진하면 아래 목록 진행으로 낙하한다(구 규칙 승계) — 다음 파일에서는 PlayCurrent가
@@ -1174,7 +1220,12 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
                     : null;
                 if (next is null) break;
 
-                if (!File.Exists(next))
+                bool exists;
+                try { exists = await Worker.Run(_ => File.Exists(next), request); }
+                catch (OperationCanceledException) { return; }
+                if (_tornDown || request.IsCancellationRequested || _filePath != endedFile ||
+                    !ReferenceEquals(_playlist, list) || !ReferenceEquals(_player, p) || p.State != VLCState.Ended) return;
+                if (!exists)
                 {
                     list.Remove(next);
                     continue;
@@ -1189,7 +1240,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
                 {
                     list.MoveNext();
                 }
-                OpenPath(next, autoAdvance: true);
+                OpenPath(next, autoAdvance: true, existenceChecked: true);
                 UpdateNeighborButtons(); // A349: 인덱스가 옮겨졌으니 ⏮/⏭ 활성도 새 자리 기준으로
                 return;
             }
@@ -1464,6 +1515,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
     /// </summary>
     private void SetLoopState(LoopMode mode, int limit)
     {
+        _pathProbe.Cancel();
         _loopMode = mode;
         if (mode == LoopMode.List)
         {
@@ -1566,6 +1618,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
 
     private void TogglePlayPause()
     {
+        _pathProbe.Cancel();
         // 아무것도 열지 않은 상태의 ▶ = 내장 테스트 클립 재생 (화면 색감 + 스피커 점검).
         // A207: 반드시 _player 가드보다 앞이다 — 빈 모듈 상태(S1 중앙 탐색기)에서는 스왑체인
         // 초기화(OnVlcInitialized → _player 생성)가 아직 안 끝났을 수 있어, 종전 가드 순서로는
@@ -1574,8 +1627,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         // 스왑체인 없이 Play를 직접 부르는 경로는 생기지 않는다.
         if (_filePath is null)
         {
-            if (File.Exists(TestClipPath)) OpenPath(TestClipPath);
-            else ShowMessage(@"Test clip not found (Assets\test-clip.mp4)");
+            OpenPath(TestClipPath, missingMessage: @"Test clip not found (Assets\test-clip.mp4)");
             return;
         }
 

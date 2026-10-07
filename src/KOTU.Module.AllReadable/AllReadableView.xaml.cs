@@ -116,18 +116,34 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
         };
         Unloaded += (_, _) =>
         {
+            _initialPathProbe.Dispose();
             RecordTransition(ContentTransitionStage.Unloaded);
             DetachChild();
         };
-        if (context.FilePath is { } path && File.Exists(path)) TryOpenFile(path);
+        if (context.FilePath is { } path) OpenInitialPathAsync(path);
         UpdateBars();
     }
 
     public bool TryOpenFile(string path)
     {
+        _initialPathProbe.Cancel();
         if (AllReadableRouting.ResolveChild(_children, path) is not { } module) return false;
         ShowChild(module, OpenContext.ForFile(path));
         return true;
+    }
+
+    private readonly KOTU.Core.Threading.LatestRequest _initialPathProbe = new();
+
+    private async void OpenInitialPathAsync(string path)
+    {
+        var request = _initialPathProbe.Begin();
+        try
+        {
+            // 통합 모듈의 단발 진입 확인. 실제 읽기와 재생은 자식 워커를 그대로 사용한다.
+            var exists = await Task.Run(() => File.Exists(path), request);
+            if (!request.IsCancellationRequested && exists) TryOpenFile(path);
+        }
+        catch (OperationCanceledException) { }
     }
 
     private void ShowChild(IModule module, OpenContext context)

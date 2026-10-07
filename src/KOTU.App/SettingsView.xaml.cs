@@ -1114,12 +1114,15 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             Content = "Open log folder",
             HorizontalAlignment = HorizontalAlignment.Left,
         };
-        openButton.Click += (_, _) =>
+        openButton.Click += async (_, _) =>
         {
             try
             {
                 // System.IO는 정식 이름으로 쓴다 — 이 파일에는 사용례가 File.Exists 하나뿐이고,
                 // XAML 쪽에 같은 이름의 도형 타입(Shapes.Path)이 있어 오해 여지를 남기지 않는다.
+                await Worker.Run(_ =>
+                {
+                if (!_uiAlive) return;
                 var log = DiagTrace.LogPath;
                 var folder = System.IO.Path.GetDirectoryName(log);
                 if (folder is null) return;
@@ -1130,6 +1133,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 var args = System.IO.File.Exists(log) ? $"/select,\"{log}\"" : $"\"{folder}\"";
                 System.Diagnostics.Process.Start(
                     new System.Diagnostics.ProcessStartInfo("explorer.exe", args) { UseShellExecute = true });
+                });
             }
             catch
             {
