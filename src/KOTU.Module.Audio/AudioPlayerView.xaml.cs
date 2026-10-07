@@ -31,7 +31,7 @@ namespace KOTU.Module.Audio;
 /// 스레드 모델(A42): libvlc 생성·해제는 뷰 전용 워커에서 직렬로. libvlc 이벤트는
 /// libvlc 자체 스레드에서 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
-public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
+public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSource, IBottomBarProvider,
     IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IContentInfoChangedSource,
     IBrowseOrderConsumer, ICurrentPathSource, IPlaybackStateSource, IMediaTransportTarget
 {
@@ -996,6 +996,13 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     // 셸 S4 'Open file'(A90)로 일원화됐다.
     // 드래그&드롭은 종전대로 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
+    public void CaptureSettings()
+    {
+        if (_player is { } player && _filePath is { } path && !IsSampleTrack(path) && _durationMs > 0)
+            _resumeStore.Report(path, player.Time, _durationMs);
+        _settings.Set("audio.volume", (int)VolumeSlider.Value);
+    }
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _tornDown = true;
@@ -1034,7 +1041,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         }
 
         _settings.Set("audio.volume", (int)VolumeSlider.Value);
-        _settings.Save();
+        _settings.RequestSave();
 
         // 마지막 해제 작업까지 큐에 넣었으니 워커를 닫는다(남은 작업은 워커가 마저 실행).
         // null로 되돌리지 않는다 — 해체된 뷰에서 게터가 새 워커를 만들면 스레드가 샌다.
@@ -1510,7 +1517,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         _eqPreset = presetName;
         _settings.Set("audio.equalizer", presetName);
-        _settings.Save();
+        _settings.RequestSave();
         if (_player is { } p) ApplyEqualizer(p);
     }
 
@@ -1577,7 +1584,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
     {
         _outputDeviceId = deviceId;
         _settings.Set("audio.outputDevice", deviceId);
-        _settings.Save();
+        _settings.RequestSave();
         if (_player is not { } p) return;
         try
         {
@@ -1777,7 +1784,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         if (string.Equals(style, _visualizer, StringComparison.Ordinal)) return;
         _visualizer = style;
         _settings.Set(VisualizerKey, style);
-        _settings.Save();
+        _settings.RequestSave();
         if (!IsPlaying) ShowCeremony(VisualizerLabel(style)); // A302: 정지 상태에서만
         UpdateVuMeter(); // A304: VU 진입 = 오버레이 즉시 표시 / 이탈 = 오버레이·캡처 즉시 정리
         RecreatePlayer();
@@ -2181,7 +2188,7 @@ public sealed partial class AudioPlayerView : UserControl, IBottomBarProvider,
         _loopPlays = 0;
         _listLoops = 0;
         _settings.Set(LoopModeKey, ModeKeyValue(mode));
-        _settings.Save(); // 즉시 저장 — EQ 선례(전역 1벌)
+        _settings.RequestSave(); // 즉시 저장 — EQ 선례(전역 1벌)
         UpdateLoopButton();
         UpdateNeighborButtons(); // A349: 목록 루프 켬/끔이 목록 양 끝에서 ⏮/⏭ 활성을 뒤집는다
     }

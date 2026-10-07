@@ -25,4 +25,5 @@ public sealed class MemorySettingsService : ISettingsService
     }
 
     public void Save() { }
+    public Task SaveAsync() => Task.CompletedTask;
 }

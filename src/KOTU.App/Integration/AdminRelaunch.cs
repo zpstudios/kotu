@@ -32,7 +32,7 @@ internal static class AdminRelaunch
     /// 관리자 권한으로 재시작한다(위 단계 ⓐ~ⓔ). UI 스레드에서 부를 것 —
     /// 마지막 단계가 Application.Exit다. beforeExit = 종료 직전 정리(없으면 생략).
     /// </summary>
-    internal static void Relaunch(Action? beforeExit = null)
+    internal static async void Relaunch(Action? beforeExit = null)
     {
         var windows = App.Services.GetRequiredService<WindowManager>();
         var exe = Environment.ProcessPath;
@@ -45,6 +45,7 @@ internal static class AdminRelaunch
         var keyReleased = false;
         try
         {
+            await windows.FlushSettingsAsync();
             // 시작 금지권을 가진 상태에서만 창 세트 기록과 단일 인스턴스 키 반납을 한다.
             KOTU.Core.Integration.RestartSession.TryWrite();
             Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().UnregisterKey();
@@ -68,6 +69,7 @@ internal static class AdminRelaunch
             Application.Current.Exit();
             exiting = true;
         }
+        catch (Exception ex) { KOTU.Core.Settings.SettingsPersistence.Report(ex); }
         finally
         {
             // UAC 취소와 재시작 실패는 새 작업을 다시 받을 수 있어야 한다.

@@ -47,7 +47,7 @@ namespace KOTU.Module.Document;
 /// A329: 정보 공급자(<see cref="IContentInfoProvider"/>) — 우측 정보 패널의 열림 축.
 /// 행 조립은 셸의 선택 축과 공유하는 단일 빌더(<see cref="DocumentQuickInfo"/>)가 전담한다.
 /// </summary>
-public sealed partial class DocumentView : UserControl,
+public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     IContentStateSource, IBottomBarProvider, IBottomOverlayConsumer, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
     IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource, IContentInfoProvider
 {
@@ -616,11 +616,18 @@ public sealed partial class DocumentView : UserControl,
     }
 
     /// <summary>보류 중 디스크 Save를 지금 확정한다 — 타이머 발화와 Unloaded가 같은 경로다.</summary>
+    public void CaptureSettings()
+    {
+        FlushPendingZoomApply();
+        _zoomSaveTimer?.Stop();
+        FlushZoomSave();
+    }
+
     private void FlushZoomSave()
     {
         if (!_zoomSavePending) return;
         _zoomSavePending = false;
-        _settings.Save();
+        _settings.RequestSave();
     }
 
     /// <summary>
@@ -1604,7 +1611,7 @@ public sealed partial class DocumentView : UserControl,
         _showGuides = GuideToggleButton.IsChecked == true;
         _decor.SetDecorVisibility(_showGuides, _showMarks);
         _settings.Set(DocumentModule.ShowGuidesSettingKey, _showGuides);
-        _settings.Save();
+        _settings.RequestSave();
     }
 
     /// <summary>A215: ¶ 마커 토글 클릭 — 가이드와 동형.</summary>
@@ -1613,7 +1620,7 @@ public sealed partial class DocumentView : UserControl,
         _showMarks = MarksToggleButton.IsChecked == true;
         _decor.SetDecorVisibility(_showGuides, _showMarks);
         _settings.Set(DocumentModule.ShowMarksSettingKey, _showMarks);
-        _settings.Save();
+        _settings.RequestSave();
     }
 
     /// <summary>

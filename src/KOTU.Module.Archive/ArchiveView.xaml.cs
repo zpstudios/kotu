@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using KOTU.Core.Settings;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
@@ -496,7 +497,7 @@ public sealed partial class ArchiveView : UserControl, KOTU.Core.Contracts.ICont
 
         // 마지막 풀기(저장) 위치를 설정에 기억 (v0.55.0 사용자 요청)
         _settings.Set("archive.lastExtractDir", folder.Path);
-        _settings.Save();
+        _settings.RequestSave();
 
         if (await ExtractWithRetryAsync(folder.Path, SelectedEntryPaths(), "Extracting..."))
         {

@@ -125,7 +125,7 @@ internal sealed class HardwareInstanceState
         if (_settings is not null)
         {
             _settings.Set(TraySensorsSettingKey, string.Join(',', snapshot));
-            _settings.Save();
+            _settings.RequestSave();
         }
     }
 
@@ -140,7 +140,7 @@ internal sealed class HardwareInstanceState
         if (_settings is not null)
         {
             _settings.Set(ChannelOrderSettingKey, string.Join(',', snapshot));
-            _settings.Save();
+            _settings.RequestSave();
         }
     }
 
@@ -151,7 +151,7 @@ internal sealed class HardwareInstanceState
         if (_settings is not null)
         {
             _settings.Set(BarScaleSettingKey, BarScaleSteps[index].Id);
-            _settings.Save();
+            _settings.RequestSave();
         }
     }
 

@@ -437,6 +437,12 @@ public sealed partial class MainWindow : Window
         _tray.MinimizeToTrayRequested += HideToTray; // A218: 트레이 숨김은 명시 호출 2곳뿐(이 메뉴 + 시작 메뉴)
         _tray.ExitAllRequested += _manager.CloseAll;
         Closed += (_, _) => _tray.Dispose();
+        SettingsPersistence.Changed += OnSettingsPersistenceChanged;
+        Closed += (_, _) => SettingsPersistence.Changed -= OnSettingsPersistenceChanged;
+        RootLayout.Children.Add(_settingsError);
+        _settingsError.ActionButton = new Button { Content = "Retry" };
+        ((Button)_settingsError.ActionButton).Click += (_, _) => _settings.RequestSave();
+        OnSettingsPersistenceChanged();
 
         // A105 ①: 인스턴스 고유 AppUserModelID — 태스크바 그룹을 창(인스턴스)별로 분리한다.
         // 시퀀스는 A100 트레이 슬롯(창 생성 단조 증가·수명 불변)을 그대로 쓴다 — 표시 번호(A2)는
@@ -595,7 +601,7 @@ public sealed partial class MainWindow : Window
         }
         catch { /* 프레젠터 조작 실패가 시작을 막으면 안 된다 */ }
 
-        Closed += (_, _) => SaveWindowBounds();
+        // A386: 종료 승인 뒤 창을 닫기 전에 비동기 저장을 끝낸다.
     }
 
     /// <summary>
@@ -698,7 +704,7 @@ public sealed partial class MainWindow : Window
             }
         }
         _settings.Set("window.maximized", maximized);
-        _settings.Save();
+        _settings.RequestSave();
     }
 
     // ---------- 관리자 재시작 창 세트 스냅샷/복원 (A124) ----------
@@ -1550,6 +1556,51 @@ public sealed partial class MainWindow : Window
 
     private bool _confirmInProgress; // ContentDialog는 동시에 1개만 — 중복 진입 방지
     private bool _closeConfirmed;    // 확인을 마친 뒤의 재진입 Close 허용
+    private bool _closeInProgress;
+    private readonly InfoBar _settingsError = new()
+    {
+        Severity = InfoBarSeverity.Error, IsClosable = false,
+        Title = "Settings could not be saved",
+        Message = "Changes are kept in this session. Retry saving before you close KOTU.",
+        VerticalAlignment = VerticalAlignment.Top,
+    };
+
+    private void OnSettingsPersistenceChanged() => DispatcherQueue.TryEnqueue(() =>
+    {
+        if (!_contentClosed) _settingsError.IsOpen = SettingsPersistence.LastError is not null;
+    });
+
+    internal void CaptureSettings()
+    {
+        (ModuleHost.Content as ISettingsSnapshotSource)?.CaptureSettings();
+        SaveWindowBounds();
+    }
+
+    private async Task UnloadContentForCloseAsync()
+    {
+        // 중첩 All Readable 자식도 실제 Unloaded(설정 스냅샷/해제 예약)가 끝난 뒤 저장한다.
+        var unloaded = new List<Task>();
+        void Observe(DependencyObject element)
+        {
+            if (element is UserControl { IsLoaded: true } view)
+            {
+                var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                RoutedEventHandler? handler = null;
+                handler = (_, _) => { view.Unloaded -= handler; done.TrySetResult(); };
+                view.Unloaded += handler;
+                unloaded.Add(done.Task);
+            }
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+                Observe(VisualTreeHelper.GetChild(element, i));
+        }
+        if (ModuleHost.Content is DependencyObject content) Observe(content);
+        DetachContentBindings();
+        ModuleBarHost.Content = null;
+        ClearModulePanels();
+        AttachDriveStrip(null);
+        ModuleHost.Content = null;
+        await Task.WhenAll(unloaded);
+    }
 
     /// <summary>현재 뷰(ICloseGuard)에 미저장 변경이 있으면 사용자에게 확인. true = 계속 진행.</summary>
     private async Task<bool> ConfirmDiscardAsync()
@@ -1573,14 +1624,45 @@ public sealed partial class MainWindow : Window
     /// <summary>트레이 닫기·X 버튼 공용: 미저장 확인 후 닫는다.</summary>
     private async Task ConfirmThenCloseAsync()
     {
-        // A69: 트레이로 숨긴 창의 닫기(트레이 Close·Exit KOTU)에서 미저장 확인(A37)이 필요하면
-        // 대화상자가 보이도록 먼저 복귀시킨다 — 숨긴 채 ContentDialog를 띄우면 응답할 방법이 없다.
-        if (_hiddenInTray && ModuleHost.Content is ICloseGuard { HasUnsavedChanges: true })
-            BringToFront();
-        if (!await ConfirmDiscardAsync()) return;
-        if (_manager.TryBlockLastWindowClose(this)) return;
-        _closeConfirmed = true;
-        Close();
+        if (_closeInProgress) return;
+        _closeInProgress = true;
+        try
+        {
+            // A69: 트레이로 숨긴 창의 닫기(트레이 Close·Exit KOTU)에서 미저장 확인(A37)이 필요하면
+            // 대화상자가 보이도록 먼저 복귀시킨다 — 숨긴 채 ContentDialog를 띄우면 응답할 방법이 없다.
+            if (_hiddenInTray && ModuleHost.Content is ICloseGuard { HasUnsavedChanges: true })
+                BringToFront();
+            if (!await ConfirmDiscardAsync()) return;
+            if (_manager.TryBlockLastWindowClose(this)) return;
+            if (!_manager.TryPrepareLastWindowClose(this, out var lease)) return;
+            _jobCloseLease = lease;
+            CaptureSettings();
+            _contentClosed = true;
+            RootLayout.IsHitTestVisible = false;
+            await UnloadContentForCloseAsync();
+            while (true)
+            {
+                try { await _settings.SaveAsync(); SettingsPersistence.Report(null); break; }
+                catch (Exception ex)
+                {
+                    SettingsPersistence.Report(ex);
+                    BringToFront();
+                    RootLayout.IsHitTestVisible = true;
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Settings could not be saved",
+                        Content = "Your last settings changes have not been written to disk.",
+                        PrimaryButtonText = "Retry", CloseButtonText = "Close without saving",
+                        XamlRoot = RootLayout.XamlRoot,
+                    };
+                    if (await dialog.ShowAsync() != ContentDialogResult.Primary) break;
+                    RootLayout.IsHitTestVisible = false;
+                }
+            }
+            _closeConfirmed = true;
+            Close();
+        }
+        finally { _closeInProgress = false; }
     }
 
     /// <summary>X 버튼/Alt+F4 닫기 가로채기(A37) — 미저장 변경이 있을 때만 개입한다.</summary>
@@ -1588,7 +1670,7 @@ public sealed partial class MainWindow : Window
         Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
         if (_manager.TryBlockLastWindowClose(this)) { _closeConfirmed = false; args.Cancel = true; return; }
-        if (!_closeConfirmed && ModuleHost.Content is ICloseGuard { HasUnsavedChanges: true })
+        if (!_closeConfirmed)
         {
             args.Cancel = true;
             _ = ConfirmThenCloseAsync();
@@ -1694,7 +1776,7 @@ public sealed partial class MainWindow : Window
         _lastBrowsedFolder = folder;
         if (_settings.Get(LastFolderKey, string.Empty) == folder) return;
         _settings.Set(LastFolderKey, folder);
-        _settings.Save();
+        _settings.RequestSave();
     }
 
     /// <summary>모듈 뷰가 파일을 열었다는 알림(IContentStateSource) — 탐색기를 내리고 기준 경로 갱신.</summary>

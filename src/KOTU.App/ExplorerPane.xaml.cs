@@ -472,7 +472,7 @@ public sealed partial class ExplorerPane : UserControl
             _settings?.Set(SortSettingKey, key.ToString().ToLowerInvariant());
         }
         _settings?.Set(SortDescSettingKey, _sortDesc);
-        _settings?.Save();
+        _settings?.RequestSave();
         SyncSortHeaders();
         RefreshView(_display);
     }
@@ -582,7 +582,7 @@ public sealed partial class ExplorerPane : UserControl
             // 기대는 것과 같은 성질). 저장은 A5 정렬과 같은 관용구 — 즉시 Set + Save.
             _showHidden = showHidden.IsChecked;
             _settings?.Set(ShowHiddenSettingKey, _showHidden);
-            _settings?.Save();
+            _settings?.RequestSave();
             // 좌 패널 폴더 트리는 자기 열거를 따로 한다 — 같은 설정으로 다시 만들라고 알린다.
             ShowHiddenChanged?.Invoke();
             // ⚠️ RefreshView(_entries)가 아니라 **재열거**여야 한다: 그건 마지막 스캔 결과를

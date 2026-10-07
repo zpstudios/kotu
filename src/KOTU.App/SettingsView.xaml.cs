@@ -800,7 +800,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             var value = scaleBox.SelectedIndex <= 0 ? 0 : UiScale.Percents[scaleBox.SelectedIndex - 1];
             if (value == _settings.Get(UiScale.SettingKey, 0)) return;
             _settings.Set(UiScale.SettingKey, value);
-            _settings.Save();
+            _settings.RequestSave();
             UiScale.NotifyChanged();
         };
         // A41→A246: 단축키(Ctrl+±·Ctrl+휠) 진입로는 회수됐지만 이 동기 구독은 유지한다 —
@@ -861,7 +861,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         toggle.Toggled += (_, _) =>
         {
             _settings.Set(ShellDiagnostics.SettingKey, toggle.IsOn);
-            _settings.Save();
+            _settings.RequestSave();
             ShellDiagnostics.NotifyChanged(); // 열린 모든 창의 스트립이 즉시 켜지고 꺼진다
         };
 
@@ -913,7 +913,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         toggle.Toggled += (_, _) =>
         {
             _settings.Set(EditorDecorDiagnostics.SettingKey, toggle.IsOn);
-            _settings.Save();
+            _settings.RequestSave();
             EditorDecorDiagnostics.NotifyChanged(); // 열린 문서 뷰의 오버레이가 즉시 켜지고 꺼진다
         };
 
@@ -965,7 +965,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         toggle.Toggled += (_, _) =>
         {
             _settings.Set(AudioDiagnostics.SettingKey, toggle.IsOn);
-            _settings.Save();
+            _settings.RequestSave();
             AudioDiagnostics.NotifyChanged(); // 열린 오디오 뷰의 오버레이가 즉시 켜지고 꺼진다
         };
 
@@ -1017,7 +1017,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         toggle.Toggled += (_, _) =>
         {
             _settings.Set(NavDiagnostics.SettingKey, toggle.IsOn);
-            _settings.Save();
+            _settings.RequestSave();
             NavDiagnostics.NotifyChanged(); // 열린 모든 창의 계측판이 즉시 켜지고 꺼진다
         };
 
@@ -1077,7 +1077,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         toggle.Toggled += (_, _) =>
         {
             _settings.Set(TraceDiagnostics.SettingKey, toggle.IsOn);
-            _settings.Save();
+            _settings.RequestSave();
             TraceDiagnostics.NotifyChanged(); // 열린 모든 창이 게이트를 즉시 다시 적용한다
         };
 
@@ -1170,7 +1170,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         toggle.Toggled += (_, _) =>
         {
             _settings.Set(PlaybackSettings.AutoNextKey, toggle.IsOn);
-            _settings.Save(); // 즉시 저장 — 재생 설정 관용구(EQ·루프 모드와 같은 축)
+            _settings.RequestSave(); // 즉시 저장 — 재생 설정 관용구(EQ·루프 모드와 같은 축)
         };
 
         var headerRow = new Grid { ColumnSpacing = 8 };
@@ -1213,7 +1213,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         awakeToggle.Toggled += (_, _) =>
         {
             _settings.Set(PlaybackSettings.KeepDisplayAwakeKey, awakeToggle.IsOn);
-            _settings.Save(); // 즉시 저장 — 재생 설정 관용구(EQ·루프 모드와 같은 축)
+            _settings.RequestSave(); // 즉시 저장 — 재생 설정 관용구(EQ·루프 모드와 같은 축)
             // 재생 중에 끄면 그 자리에서 억제가 풀려야 한다 — 열린 영상 뷰들이 이 알림을 듣는다.
             PlaybackSettings.NotifyKeepDisplayAwakeChanged();
         };
@@ -1294,25 +1294,28 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         };
         Root.Children.Add(status);
 
-        openButton.Click += (_, _) =>
+        openButton.Click += async (_, _) =>
         {
             var path = _settings.FilePath;
             try
             {
                 // 설정을 한 번도 바꾸지 않은 프로필에는 파일이 아직 없다 — 현재 값을 먼저 디스크로 내린다.
-                if (!File.Exists(path)) _settings.Save();
-                if (!File.Exists(path))
+                await Worker.Run(_ => { if (!File.Exists(path)) _settings.Save(); });
+                if (!_uiAlive) return;
+                if (!await Worker.Run(_ => File.Exists(path)))
                 {
                     status.Text = "Could not create the settings file.";
                     status.Visibility = Visibility.Visible;
                     return;
                 }
 
+                if (!_uiAlive) return;
                 status.Visibility = Visibility.Collapsed;
                 App.Services.GetRequiredService<WindowManager>().OpenFileInNewWindow(path);
             }
             catch (Exception ex)
             {
+                if (!_uiAlive) return;
                 status.Text = "Could not open the settings file: " + ex.Message;
                 status.Visibility = Visibility.Visible;
             }
@@ -1552,7 +1555,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             if (await confirm.ShowAsync() == ContentDialogResult.Primary)
             {
                 status.Text = "Applying and restarting...";
-                if (!UpdateService.ApplyAndRestart(info))
+                if (!await UpdateService.ApplyAndRestartAsync(info))
                 {
                     status.Text = "Restart postponed while jobs are running. Finish or cancel them, then try again.";
                     updateButton.IsEnabled = true;

@@ -1,5 +1,6 @@
 using KOTU.Core.Jobs;
 using Microsoft.UI.Xaml;
+using Microsoft.Extensions.DependencyInjection;
 using KOTU.Core.Cli;
 using KOTU.Core.Routing;
 
@@ -187,6 +188,12 @@ public sealed class WindowManager
     }
 
     private IDisposable? _restartJobLease;
+
+    public async Task FlushSettingsAsync()
+    {
+        foreach (var window in _windows.ToArray()) window.CaptureSettings();
+        await App.Services.GetRequiredService<KOTU.Core.Settings.ISettingsService>().SaveAsync();
+    }
 
     public bool TryBeginRestart()
     {

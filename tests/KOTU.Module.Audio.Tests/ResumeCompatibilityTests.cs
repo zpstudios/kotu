@@ -10,7 +10,7 @@ public sealed class ResumeCompatibilityTests : IDisposable
     public void Dispose() { if (File.Exists(_path)) File.Delete(_path); }
 
     [Fact]
-    public void Legacy_json_reads_and_writes_without_changing_other_module()
+    public async Task Legacy_json_reads_and_writes_without_changing_other_module()
     {
         File.WriteAllText(_path, """
             {"audio.resume":[{"Path":"C:\\song.mp3","PositionMs":60000,"DurationMs":600000,"UpdatedAt":"2026-01-02T03:04:05+09:00"}],
@@ -23,6 +23,7 @@ public sealed class ResumeCompatibilityTests : IDisposable
         Assert.Equal(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.FromHours(9)), original[0].UpdatedAt);
         Assert.Equal(60000L, store.GetResumePositionMs(@"C:\song.mp3"));
         store.Report(@"C:\song.mp3", 120_000, 600_000);
+        await settings.SaveAsync();
         using var json = JsonDocument.Parse(File.ReadAllText(_path));
         var entry = json.RootElement.GetProperty(PlaybackResumeStore.SettingsKey)[0];
         Assert.Equal(new[] { "DurationMs", "Path", "PositionMs", "UpdatedAt" },
@@ -35,7 +36,7 @@ public sealed class ResumeCompatibilityTests : IDisposable
     [Fact]
     public void Exact_thresholds_are_preserved()
     {
-        var store = new PlaybackResumeStore(new JsonSettingsService(_path));
+        var store = new PlaybackResumeStore(new MemorySettingsService());
         store.Report("a", 29_999, 100_000);
         Assert.Null(store.GetResumePositionMs("a"));
         store.Report("a", 30_000, 100_000);
@@ -49,7 +50,7 @@ public sealed class ResumeCompatibilityTests : IDisposable
     [Fact]
     public void Reports_refresh_lru_but_reads_do_not_and_capacity_has_minimum_one()
     {
-        var store = new PlaybackResumeStore(new JsonSettingsService(_path), 2);
+        var store = new PlaybackResumeStore(new MemorySettingsService(), 2);
         store.Report("a", 30_000, 100_000);
         store.Report("b", 30_000, 100_000);
         store.Report("A", 40_000, 100_000);
@@ -57,7 +58,7 @@ public sealed class ResumeCompatibilityTests : IDisposable
         store.Report("c", 30_000, 100_000);
         Assert.Null(store.GetResumePositionMs("b"));
         Assert.Equal(40_000, store.GetResumePositionMs("a"));
-        var single = new PlaybackResumeStore(new JsonSettingsService(_path), 0);
+        var single = new PlaybackResumeStore(new MemorySettingsService(), 0);
         single.Report("d", 30_000, 100_000);
         Assert.Equal(1, single.Count);
         Assert.Equal(30_000, single.GetResumePositionMs("d"));

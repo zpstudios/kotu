@@ -45,12 +45,16 @@ public static class UpdateService
     }
 
     /// <summary>다운로드된 업데이트를 적용하고 앱을 재시작한다.</summary>
-    public static bool ApplyAndRestart(UpdateInfo info)
+    public static async Task<bool> ApplyAndRestartAsync(UpdateInfo info)
     {
         if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return false;
         var windows = App.Services.GetRequiredService<WindowManager>();
         if (!windows.TryBeginRestart()) return false;
-        try { CreateManager().ApplyUpdatesAndRestart(info); }
+        try
+        {
+            await windows.FlushSettingsAsync();
+            CreateManager().ApplyUpdatesAndRestart(info);
+        }
         catch { windows.CancelRestartPreparation(); throw; }
         return true;
     }

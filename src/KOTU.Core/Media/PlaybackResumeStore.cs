@@ -91,6 +91,6 @@ public sealed class PlaybackResumeStore<TEntry> where TEntry : class, IResumeEnt
     private void Persist()
     {
         _settings.Set(_settingsKey, _entries);
-        _settings.Save();
+        _settings.RequestSave();
     }
 }

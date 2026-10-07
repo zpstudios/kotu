@@ -1,4 +1,5 @@
 using System.Text.Json;
+using KOTU.Core.Threading;
 
 namespace KOTU.Core.Settings;
 
@@ -9,13 +10,19 @@ public sealed class JsonSettingsService : ISettingsService
     private readonly string _path;
     private readonly Dictionary<string, JsonElement> _values;
     private readonly object _lock = new();
+    private readonly Action<string, string> _write;
+    private TaskCompletionSource? _pendingSave;
+    private bool _saving;
 
-    public JsonSettingsService(string? path = null)
+    public JsonSettingsService(string? path = null) : this(path, WriteFile) { }
+
+    internal JsonSettingsService(string? path, Action<string, string> write)
     {
         if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
             throw new InvalidOperationException("Persistent settings are disabled in the standalone build.");
         _path = path ?? DefaultPath();
         _values = Load(_path);
+        _write = write;
     }
 
     /// <summary>
@@ -34,29 +41,75 @@ public sealed class JsonSettingsService : ISettingsService
 
     public T Get<T>(string key, T defaultValue)
     {
+        JsonElement el;
         lock (_lock)
-        {
-            if (!_values.TryGetValue(key, out var el)) return defaultValue;
-            try { return el.Deserialize<T>() ?? defaultValue; }
-            catch (JsonException) { return defaultValue; }
-        }
+            if (!_values.TryGetValue(key, out el)) return defaultValue;
+        try { return el.Deserialize<T>() ?? defaultValue; }
+        catch (JsonException) { return defaultValue; }
     }
 
     public void Set<T>(string key, T value)
     {
-        lock (_lock)
-        {
-            _values[key] = JsonSerializer.SerializeToElement(value);
-        }
+        var serialized = JsonSerializer.SerializeToElement(value);
+        lock (_lock) _values[key] = serialized;
     }
 
-    public void Save()
+    // 녹화 폴더 등 기존 워커 호출자는 실패를 직접 받아야 한다. UI 호출은 금지.
+    public void Save() => SaveAsync().GetAwaiter().GetResult();
+
+    public Task SaveAsync()
     {
         lock (_lock)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(_path, JsonSerializer.Serialize(_values, s_json));
+            _pendingSave ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
+            var task = _pendingSave.Task;
+            if (!_saving)
+            {
+                _saving = true;
+                _ = DrainAsync();
+            }
+            return task;
         }
+    }
+
+    private async Task DrainAsync()
+    {
+        // 버스트마다 워커 하나. 실행 중 스냅샷 + 최신 대기 배치 하나만 유지한다.
+        // 스냅샷은 실행 순서대로 취득하므로 오래된 값이 뒤늦게 파일을 덮지 않는다.
+        using var worker = new ModuleWorker("KOTU settings persistence", ThreadPriority.BelowNormal);
+        await worker.Run(_ =>
+        {
+            while (true)
+            {
+                TaskCompletionSource completion;
+                Dictionary<string, JsonElement> snapshot;
+                lock (_lock)
+                {
+                    if (_pendingSave is null) { _saving = false; return; }
+                    completion = _pendingSave;
+                    _pendingSave = null;
+                    snapshot = new(_values);
+                }
+                try
+                {
+                    _write(_path, JsonSerializer.Serialize(snapshot, s_json));
+                    completion.TrySetResult();
+                }
+                catch (Exception ex) { completion.TrySetException(ex); }
+            }
+        }).ConfigureAwait(false);
+    }
+
+    private static void WriteFile(string path, string json)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + ".tmp";
+        try
+        {
+            File.WriteAllText(temp, json);
+            File.Move(temp, path, overwrite: true);
+        }
+        finally { if (File.Exists(temp)) File.Delete(temp); }
     }
 
     private static Dictionary<string, JsonElement> Load(string path)

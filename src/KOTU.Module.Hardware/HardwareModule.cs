@@ -50,7 +50,7 @@ public sealed class HardwareModule : IModule
         if (ms != stored)
         {
             settings.Set(RefreshSettingKey, ms);
-            settings.Save();
+            settings.RequestSave();
         }
         Poller.Interval = TimeSpan.FromMilliseconds(ms);
     }
@@ -82,7 +82,7 @@ public sealed class HardwareModule : IModule
         if (_settings is { } settings)
         {
             settings.Set(RefreshSettingKey, ms);
-            settings.Save();
+            settings.RequestSave();
         }
     }
 

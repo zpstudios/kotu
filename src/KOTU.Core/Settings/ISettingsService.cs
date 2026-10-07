@@ -12,4 +12,6 @@ public interface ISettingsService
     T Get<T>(string key, T defaultValue);
     void Set<T>(string key, T value);
     void Save();
+    /// <summary>현재까지의 변경을 직렬 저장한다. UI에서는 await 또는 RequestSave를 사용한다.</summary>
+    Task SaveAsync();
 }

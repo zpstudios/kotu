@@ -28,7 +28,7 @@ namespace KOTU.Module.Video;
 /// 생성/해제가 같은 큐라 순서가 구조적으로 보장된다. libvlc 이벤트는 libvlc 자체 스레드에서
 /// 오므로 UI 갱신은 DispatcherQueue로 넘긴다(Dispatch).
 /// </summary>
-public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
+public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSource, IBottomBarProvider,
     IContentStateSource, IContentInfoProvider, ITrayStatusProvider, IPlaybackStateSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget
 {
@@ -897,6 +897,13 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
     // 셸 S4 'Open file'(A90)로 일원화됐다.
     // 드래그&드롭은 종전대로 창 수준(MainWindow)에서 확장자 라우팅으로 일괄 처리한다.
 
+    public void CaptureSettings()
+    {
+        if (_player is { } player && _filePath is { } path && !IsTestClip(path) && _durationMs > 0)
+            _resumeStore.Report(path, player.Time, _durationMs);
+        _settings.Set("video.volume", (int)VolumeSlider.Value);
+    }
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _tornDown = true;
@@ -938,7 +945,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         UpdateDisplayAwake();
 
         _settings.Set("video.volume", (int)VolumeSlider.Value);
-        _settings.Save();
+        _settings.RequestSave();
 
         // 마지막 해제 작업까지 큐에 넣었으니 워커를 닫는다(남은 작업은 워커가 마저 실행).
         // null로 되돌리지 않는다 — 해체된 뷰에서 게터가 새 워커를 만들면 스레드가 샌다.
@@ -1471,7 +1478,7 @@ public sealed partial class VideoPlayerView : UserControl, IBottomBarProvider,
         _loopPlays = 0;
         _listLoops = 0;
         _settings.Set(LoopModeKey, ModeKeyValue(mode));
-        _settings.Save(); // 즉시 저장 — EQ 선례(전역 1벌)
+        _settings.RequestSave(); // 즉시 저장 — EQ 선례(전역 1벌)
         UpdateLoopButton();
         UpdateNeighborButtons(); // A349: 목록 루프 켬/끔이 목록 양 끝에서 ⏮/⏭ 활성을 뒤집는다
     }

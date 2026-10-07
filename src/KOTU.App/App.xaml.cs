@@ -177,7 +177,7 @@ public partial class App : Application
             {
                 Integration.ExplorerIntegration.CleanUpLegacyBrandRegistrations(modules);
                 settings.Set(key, true);
-                settings.Save();
+                settings.RequestSave();
             }
 
             // A78: 우클릭 메뉴 라벨은 하드코딩하지 않고 압축 모듈 BrandName을 따른다(A52와 동일 원칙).

@@ -9,7 +9,7 @@ public class PlaybackResumeStoreTests : IDisposable
         Path.Combine(Path.GetTempPath(), $"winutil-test-{Guid.NewGuid():N}.json");
 
     private PlaybackResumeStore NewStore(int capacity = 300) =>
-        new(new JsonSettingsService(_settingsPath), capacity);
+        new(new MemorySettingsService(), capacity);
 
     public void Dispose()
     {
@@ -103,12 +103,14 @@ public class PlaybackResumeStoreTests : IDisposable
     }
 
     [Fact]
-    public void 설정_파일을_거쳐_재시작해도_기록이_유지된다()
+    public async Task 설정_파일을_거쳐_재시작해도_기록이_유지된다()
     {
-        NewStore().Report(@"C:\m\song.mp3", 120_000, 3_600_000);
+        var settings = new JsonSettingsService(_settingsPath);
+        new PlaybackResumeStore(settings).Report(@"C:\m\song.mp3", 120_000, 3_600_000);
 
         // 새 설정 서비스 + 새 스토어 = 앱 재시작 시뮬레이션
-        var reloaded = NewStore();
+        await settings.SaveAsync();
+        var reloaded = new PlaybackResumeStore(new JsonSettingsService(_settingsPath));
         Assert.Equal(120_000, reloaded.GetResumePositionMs(@"C:\m\song.mp3"));
     }
 
