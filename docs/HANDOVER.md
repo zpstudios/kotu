@@ -7,7 +7,9 @@
 > src C#/XAML219개 기준 전 기능 정적 경로 표와 추가 발견 R1~R10의 근거·우선순위는
 > `docs/A386-UI-WORKER-AUDIT.md`가 정본이다. 잔여 구현은 별도 사용자 선택 대상이다.
 > 실제 WinUI 종료/다중 창·SMB/USB·네이티브 재생/녹화·UAC/업데이트·프레임 시간은 미검증이다.
-> 완료 상세는 REQUIREMENTS-ARCHIVE로 이관했다. 원격 최종 릴리스 결과는 검증 후 기록한다.
+> 네 버전 모두 원격 build/release 성공·정식 자산8개·원본태그 일치 확인. v0.390.0은
+> build37566464053/release37566464055, 게시12:29:33KST. 설치·시작·COM·Standalone 검사도 성공했다.
+> 완료 상세는 REQUIREMENTS-ARCHIVE, 버전별 증거 링크는 감사 결과 §8에 기록했다.
 
 > **A394 · v0.386.0(2026-10-06)**: 선택 모드와 관계없이 오디오·비디오 저장 폴더를 각각 표시하고
 > 변경한다. 녹화 중 변경은 다음 녹화부터 적용하며 이미 캡처한 현재 녹화 목적지는 유지한다.
@@ -38,7 +40,7 @@
 > A390 실제 세션 표식/고정 소스명/트레이 일치는 v0.383.0 로컬 구현 완료.
 > 전체 Release/x64 빌드0경고·0오류, 전체 회귀550/550, 구조20개·릴리스 게이트7개·
 > 탐색기 COM smoke 통과. 실기기 확인 대기는 §4에 정리했고 이전 항목은 DEVICE-CHECKS로 보존했다.
-> A386 UI/워커 종합 검토와 A383 부모 타일은 등록만 유지한다.
+> 당시 A386 UI/워커 종합 검토와 A383 부모 타일은 등록만 유지했다(A386 현재 결과는 상단).
 > 사용자 승인 후 v0.377.0~v0.383.0을 버전별 순차 발행했다. 최신 v0.383.0 게시17:11:25KST,
 > 일곱 버전 build/release·8개 배포물·원본태그·설치/시작/Standalone 검증 성공.
 > 정본: docs/A384-A391-RELEASE-VERIFICATION.md.
@@ -1030,7 +1032,7 @@ v0.161.0 이하 20묶음은 `docs/DEVICE-CHECKS-ARCHIVE.md`로 "미확인 종결
 GUI/실제 캡처 장치 실행 검증은 수행하지 않았다. 워커 WIC 품질 및 출력/소스/상태 단위 검증은 실제 Windows에서 수행했다.
 정본: docs/A384-TREE-DENSITY.md, docs/A385-THUMBNAIL-QUALITY.md, docs/A387-TILE-CAPTIONS.md,
 docs/A388-RECORD-SOURCE-LISTS.md, docs/A389-RECORD-BOTTOM-BAR.md, docs/A390-RECORDING-STATE.md,
-docs/A391-RECORD-OUTPUT-DEFAULTS.md. A386 전수 구조 감사와 A383 부모 타일은 별도 등록 상태다.
+docs/A391-RECORD-OUTPUT-DEFAULTS.md. 당시 별도 등록이던 A386의 현재 결과는 상단, A383은 미선택이다.
 
 ## 5. 사용자에게 물어야 할 미결 사항
 

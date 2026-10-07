@@ -167,5 +167,25 @@ P1 = 사용자 경로의 동기 I/O·종료 잠금 등 우선 분리/검증할 �
   같은 경로 저장·외부 크기 변경/삭제 → 드라이브 표시 on/off → 다중 창과 종료/재시작 실패 복구.
   진단 계측을 켤 때 R1의 동기 로그 자체가 측정에 영향을 줄 수 있음을 구분한다.
 
-배포 결과와 커밋은 아래 릴리스 검증 기록에 추가한다. 위 로컬 로그/TRX는 ignored 검증 산출물이며
+배포 결과와 커밋은 아래 릴리스 검증 기록으로 확인한다. 위 로컬 로그/TRX는 ignored 검증 산출물이며
 저장소에는 이 결과 요약과 재실행 가능한 회귀 시험 소스를 남긴다.
+
+## 8. 버전별 원격 검증
+
+각 구현 커밋 직후 master에 push했고 앞 버전 release 성공을 확인한 뒤 다음 버전을 push했다.
+GitHub Actions/Release 공개 API로 원본 커밋·워크플로 결과·정식 배포 여부를 대조했다.
+
+| 버전 | 구현 커밋 | build | release | 배포 |
+|---|---|---|---|---|
+| v0.387.0 | `c271c4cec1a55092317dd705d04297bbf254a0f4` | [성공37563000290](https://github.com/zpstudios/kotu/actions/runs/37563000290) | [성공37563000187](https://github.com/zpstudios/kotu/actions/runs/37563000187) | [정식 릴리스·자산8개](https://github.com/zpstudios/kotu/releases/tag/v0.387.0) |
+| v0.388.0 | `0a99945483d692de1c949f08075a641f5e662f16` | [성공37564126334](https://github.com/zpstudios/kotu/actions/runs/37564126334) | [성공37564126379](https://github.com/zpstudios/kotu/actions/runs/37564126379) | [정식 릴리스·자산8개](https://github.com/zpstudios/kotu/releases/tag/v0.388.0) |
+| v0.389.0 | `abe6e5cf4a16ea536a7181f6a24921a48f1d61da` | [성공37565392802](https://github.com/zpstudios/kotu/actions/runs/37565392802) | [성공37565392835](https://github.com/zpstudios/kotu/actions/runs/37565392835) | [정식 릴리스·자산8개](https://github.com/zpstudios/kotu/releases/tag/v0.389.0) |
+| v0.390.0 | `233356a72dab549f7de230b739384627098cd46b` | [성공37566464053](https://github.com/zpstudios/kotu/actions/runs/37566464053) | [성공37566464055](https://github.com/zpstudios/kotu/actions/runs/37566464055) | [정식 릴리스·자산8개](https://github.com/zpstudios/kotu/releases/tag/v0.390.0) |
+
+네 태그 모두 표의 구현 커밋과 일치하며 draft=false/prerelease=false다. v0.390.0 게시 시각은
+2026-10-07 12:29:33 KST. 마지막 release의 전체 테스트·Explorer 선택 COM 전달·실행본 정합성/시작·
+설치/설치본 정합성·Standalone build/verification 단계가 각각 success임을 jobs API로 확인했다.
+검증 기록을 마무리하는 후속 문서 커밋은 제품 코드와 버전을 변경하지 않는다.
+
+릴리스 워크플로의 설치·시작·Standalone 검사는 배포물 자동 smoke 검증이다.
+7절의 실제 사용자 UI 조작·장치·네트워크·반응성 측정 완료를 대신하지 않는다.
