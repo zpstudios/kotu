@@ -1306,7 +1306,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 // 설정을 한 번도 바꾸지 않은 프로필에는 파일이 아직 없다 — 현재 값을 먼저 디스크로 내린다.
                 await Worker.Run(_ => { if (!File.Exists(path)) _settings.Save(); });
                 if (!_uiAlive) return;
-                if (!await Worker.Run(_ => File.Exists(path)))
+                var exists = await Worker.Run(_ => File.Exists(path));
+                if (!_uiAlive) return;
+                if (!exists)
                 {
                     status.Text = "Could not create the settings file.";
                     status.Visibility = Visibility.Visible;

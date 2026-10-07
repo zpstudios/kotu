@@ -35,7 +35,7 @@ public sealed partial class DriveStrip : UserControl
     private Storyboard? _marquee;
     private double _marqueeDistance;
     private bool _active;
-    private int _seq; // 늦게 도착한 조회 결과 폐기(빠른 표시 on/off 대비)
+    private readonly CoalescingRefresh<IReadOnlyList<DriveUsage>> _refresh;
 
     /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도 되살아난다(다른 뷰들과 같은 관용구).</summary>
     private ModuleWorker Worker =>
@@ -44,6 +44,7 @@ public sealed partial class DriveStrip : UserControl
     public DriveStrip()
     {
         InitializeComponent();
+        _refresh = new(cancellation => Worker.Run(_ => DriveStatus.Collect(PhysicalDiskKinds.Lookup), cancellation), Build);
         Visibility = Visibility.Collapsed; // 셸이 SetActive(true)로 켠다 — 기본은 숨김
         Unloaded += (_, _) =>
         {
@@ -62,12 +63,12 @@ public sealed partial class DriveStrip : UserControl
         if (_active == active) return;
         _active = active;
         Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+        _refresh.SetActive(active);
 
         if (active)
         {
             _timer ??= CreateTimer();
             _timer.Start();
-            Refresh();
         }
         else
         {
@@ -85,22 +86,7 @@ public sealed partial class DriveStrip : UserControl
     }
 
     /// <summary>드라이브 조회를 워커로 보내고 결과만 UI에 반영한다. 실패는 조용히 무시(부가 표시).</summary>
-    private async void Refresh()
-    {
-        var seq = ++_seq;
-        IReadOnlyList<DriveUsage> drives;
-        try
-        {
-            drives = await Worker.Run(_ => DriveStatus.Collect(PhysicalDiskKinds.Lookup));
-        }
-        catch
-        {
-            return; // 워커 종료·조회 실패 — 표시는 부가 기능이라 흐름을 막지 않는다
-        }
-
-        if (seq != _seq || !_active) return; // 그새 숨겨졌거나 더 최신 조회가 있다
-        Build(drives);
-    }
+    private void Refresh() => _refresh.Request();
 
     /// <summary>조회 결과로 항목을 다시 그린다(사본 2벌 — 마퀴 이음새용).</summary>
     private void Build(IReadOnlyList<DriveUsage> drives)

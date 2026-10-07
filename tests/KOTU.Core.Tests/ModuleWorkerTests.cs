@@ -144,6 +144,41 @@ public sealed class ModuleWorkerTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => late.WaitAsync(Wait));
     }
 
+    [Fact]
+    public async Task Cleanup_posted_before_dispose_runs_after_prior_native_work()
+    {
+        using var worker = new ModuleWorker("cleanup order");
+        using var release = new ManualResetEventSlim();
+        var order = new List<int>();
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var operation = worker.Run(_ => { Assert.True(release.Wait(Wait)); order.Add(1); });
+        worker.Post(() => { order.Add(2); finished.SetResult(); });
+        worker.Dispose();
+        release.Set();
+        await operation.WaitAsync(Wait);
+        await finished.Task.WaitAsync(Wait);
+        Assert.Equal(new[] { 1, 2 }, order);
+    }
+
+    [Fact]
+    public async Task Round_robin_pool_can_queue_behind_busy_worker_while_other_worker_is_idle()
+    {
+        using var pool = new ModuleWorkerPool("pool audit", 2);
+        using var release = new ManualResetEventSlim();
+        var busy = pool.Run(_ => { Assert.True(release.Wait(Wait)); return Thread.CurrentThread.Name; });
+        try
+        {
+            var other = await pool.Run(_ => Thread.CurrentThread.Name).WaitAsync(Wait);
+            var queued = pool.Run(_ => Thread.CurrentThread.Name);
+            var idleAgain = await pool.Run(_ => Thread.CurrentThread.Name).WaitAsync(Wait);
+            Assert.Equal(other, idleAgain);
+            Assert.False(queued.IsCompleted);
+            release.Set();
+            Assert.Equal(await busy.WaitAsync(Wait), await queued.WaitAsync(Wait));
+        }
+        finally { release.Set(); }
+    }
+
     private sealed class InlineProgress(Action<double> report) : IProgress<double>
     {
         public void Report(double value) => report(value);

@@ -181,6 +181,8 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 | `ModuleWorker` | 모듈(뷰) 전용 직렬 워커. 이름 있는 전용 스레드 1 + FIFO 큐. `Run`(완료 Task)/`Post`(뒷정리 fire-and-forget) |
 | `WorkContext` | 작업에 전달되는 실행 맥락 — 취소(`Cancellation`)·진행률(`Progress`, 없으면 no-op) 통일 |
 | `PollingWorker<T>` | 주기 폴링 루프. 구독 없으면 휴면, 첫 구독 시 즉시 1회, `Poke()`로 간격 건너뛰기 |
+| `LatestRequest` | UI 소유 최신 요청 토큰. 새 요청·해제 시 이전 조회 취소, 실행 중 결과는 호출자가 수명/경로와 함께 대조(A386) |
+| `CoalescingRefresh<T>` | UI 소유 조회 조정기. 실행 하나 + 최신 대기 하나, 비활성화/재표시 세대 방어. 실제 수집은 주입된 워커(A386) |
 
 계약 한 형태: **요청** = `worker.Run(ctx => 작업, ct, progress)` / **취소** = `CancellationToken` / **진행률** = `IProgress<double>`(UI 스레드에서 만든 `Progress<T>`는 자동 마샬링) / **완료** = 반환 `Task`(UI에서 await → UI로 복귀). 워커 큐는 직렬이라 같은 워커의 작업은 겹치지 않고 순서가 보장된다.
 
@@ -188,18 +190,22 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 
 | 스레드 | 수 | 우선순위 | 수명·비고 |
 |---|---|---|---|
-| UI 스레드 | 창마다 1 | Normal | WinUI 3 디스패처. 렌더·입력·결과 반영만 |
+| UI 스레드 | 프로세스의 WinUI 디스패처(현재 모든 창 공유) | Normal | 렌더·입력·결과 반영 |
 | `KOTU hardware poller` | 프로세스 1 (**공유**) | **BelowNormal** | 50/200/500/1000/2000/5000ms 폴링(A73 선택, 기본 500): 센서(LHM)는 매 주기, WMI 스펙은 2초 캐시, SMART는 10초마다(A17). H/W 뷰 구독 0이면 휴면 |
-| `KOTU explorer worker` | 페인마다 1 | Normal | 폴더 스캔·썸네일 추출. Unloaded 시 정리 |
-| `KOTU archive worker` | 뷰마다 1 | Normal | 목록/해제/생성/항목 미리보기 |
+| `KOTU explorer worker` | 페인마다 1 | Normal | 폴더 스캔·감시. 상세/썸네일은 별도 FetchPool, Unloaded 시 정리 |
+| `KOTU archive worker` | 뷰마다 1 | Normal | 목록/항목 미리보기. 일반 해제/생성은 앱 BackgroundJobService의 작업 실행 경로 |
 | `KOTU image worker` | 뷰마다 1 | Normal | 파일 읽기·WIC 메타데이터·Magick 디코드·EXIF 정보 |
 | `KOTU video worker` | 뷰마다 1 | Normal | libvlc 생성·해제, 자막 탐지·CP949 변환 |
 | `KOTU audio worker` | 뷰마다 1 | Normal | libvlc(시각화 인스턴스) 생성·해제 (A10) |
 | `KOTU document worker` | 뷰마다 1 | Normal | 텍스트 읽기(인코딩 감지)·저장(인코딩 보존, A37) |
-| `KOTU record worker` | 뷰마다 1 | Normal | 소스 열거·세션 시작/중지·네이티브 자원 해제·설정 I/O·완료 MP4/WAV 공개를 직렬화. 캡처·인코드와 WAV 패킷 기록은 네이티브/캡처 스레드에서 수행 |
+| `KOTU record worker` | 뷰마다 1 | Normal | 세션 시작/중지·네이티브 자원 해제·설정 I/O·완료 MP4/WAV 공개를 직렬화. 캡처·인코드와 WAV 패킷 기록은 네이티브/캡처 스레드에서 수행 |
 | (All Readable 전용 워커 없음) | — | — | 자식 모듈 뷰의 워커를 그대로 쓴다 — 자식이 바뀌면 이전 워커도 함께 정리(9장) |
 | `KOTU drive strip worker` | 하단 바 드라이브 줄마다 1 (= 모듈 뷰마다 1) | **BelowNormal** | 드라이브 열거·용량(`DriveInfo`) 30초 주기 + 종류 WMI 1회 캐시 (A22, v0.108.0). 줄이 숨겨지면(파일 열림) 타이머 정지, 뷰 Unloaded 시 정리 |
 | `KOTU settings worker` | 설정 뷰마다 1 | Normal | 탐색기 연결 등록·해제, UserChoice 쓰기(A38), 기본 앱 개수 조회 (A77, v0.106.0). 모듈별로 나누지 않는다 — Capabilities 키를 모듈들이 공유해 동시 쓰기가 위험 |
+| `KOTU settings persistence` | 설정 서비스의 저장 버스트마다 1 | BelowNormal | 메모리 잠금 밖 JSON 직렬화·임시 파일/교체. 실행·최신 대기 배치로 병합, 종료 시 await SaveAsync(A386) |
+| `KOTU shell path worker` | 창마다 필요 시 1 | Normal | 현재/마지막 폴더·히스토리 존재 조회(A386) |
+| `KOTU icon metadata worker` | 창마다 필요 시 1 | Normal | 파일 크기 캐시와 열린 파일 감시 생성/해제. 아이콘 UI에는 캐시만 전달(A386) |
+| `KOTU record source discovery` | 녹화 뷰마다 1 | BelowNormal | 소스 감시·발견 전용. 세션 워커와 분리, 중복 요청 제한 |
 | libvlc 내부 스레드 | libvlc 관리 | — | 디코드·이벤트 콜백. 이벤트는 `Dispatch()`로 UI 이관 |
 | .NET 스레드풀 | 런타임 관리 | — | await 연속, 닫힌 워커의 `Post` 폴백 |
 
@@ -208,15 +214,15 @@ KOTU.sln                 # 실행 파일은 KOTU.exe (AssemblyName, A64/v0.88.0)
 | 작업 | 스레드 | UI 스레드가 하는 일 |
 |---|---|---|
 | 하드웨어 WMI 스펙 + LHM 센서 수집(50~5000ms 선택, A73) | hardware poller | 스펙은 dedup 후 트리 반영, 센서 카드·그래프는 매 프레임 갱신 |
-| 탐색기 폴더 스캔 / 썸네일 추출 | explorer worker | 목록 채우기 / 비트맵 표시 |
-| S1 중앙 썸네일 뷰 타일(`ThumbnailExplorer`, A93 — S4 '오픈 파일' 오버레이(A90)도 같은 컨트롤의 **별도 인스턴스**로 재사용, 목록 경로 동일) | 전용 워커 없음 — 목록은 좌 도크 리스트(ExplorerPane)의 결과를 공유, 이미지 미리보기는 XAML `BitmapImage` 비동기 디코드(DecodePixelWidth 256) | 타일 구성·크기 재계산(floor(실폭/열수)) |
-| 압축 목록·해제·생성 | archive worker | 진행률 바·완료 상태 |
+| 탐색기 폴더 스캔 / 상세·썸네일 추출 | explorer worker / FetchPool | 목록 채우기 / 비트맵 표시 |
+| S1/S4 중앙 썸네일(`ThumbnailExplorer`, 별도 인스턴스) | 목록은 ExplorerPane 결과 공유, ThumbPool/TextPool에서 WinRT 조회·WIC 실제 축소·텍스트 읽기 | 가상화 타일/픽셀 표시·크기 재계산 |
+| 압축 목록·해제·생성 | archive worker(목록), BackgroundJobService(해제/생성) | 진행률 바·암호 응답·완료 상태 |
 | 이미지 파일 읽기·메타데이터(WIC)·psd(Magick) | image worker | `SetSourceAsync` 표시 |
 | 영상 libvlc 생성·해제 | video worker | 뷰 연결(`Vlc.MediaPlayer`) |
 | 음악 libvlc(파형 시각화) 생성·해제 (A10) | audio worker | 뷰 연결(`Vlc.MediaPlayer`) |
 | 자막 탐지·CP949→UTF-8 변환 | video worker | 플라이아웃·`AddSlave` 적용 |
 | 문서 텍스트 읽기·저장(A37) | document worker | 본문 표시·수정됨 표시 갱신 |
-| PDF 로드·페이지 렌더(A16, Windows.Data.Pdf) | WinRT 비동기(OS 관리) | 페이지 비트맵 표시(가상화 지연 렌더) |
+| PDF 로드·페이지 렌더(A16, Windows.Data.Pdf) | pdf worker에서 파일/문서 로드, 페이지는 WinRT 비동기(OS 관리) | 페이지 비트맵 표시(가상화 지연 렌더) |
 | 화면/창 캡처·MP4 인코드(H.264/AAC, 30 fps) 및 마이크 전용 WAV(48 kHz, 16-bit mono) 녹음(A14/A15) | record worker가 세션 수명·완료를 조정, ScreenRecorderLib/NAudio 캡처 스레드가 미디어 처리 | 상태·타이머·결과 경로만 반영. 저장 전 완료 대기, 임시 파일을 성공 시에만 대상으로 공개 |
 | 드라이브 목록·용량(`DriveStatus.Collect`) + 종류 WMI 조회(`PhysicalDiskKinds`, 프로세스 1회 캐시) | drive strip worker | 공용 드라이브 줄(`DriveStrip`) 항목·막대 그리기, 넘치면 마퀴 |
 | 탐색기 연결 등록·해제 + 기본 앱 지정(A38)·개수 조회 (A77) | settings worker | 진행 링·`Registering... (n/m)` 텍스트, 완료 후 "Default app for n/m extensions"·결과 문구 반영 |
@@ -284,6 +290,9 @@ UI 스레드(디스패처)에서 발견되면 즉시 수리 대상:
 
 1. **동기 파일·레지스트리·COM·WMI IO.** 예외 = 단일 메타데이터 조작(`File.Exists` 가드,
    이름변경·폴더 생성급 — `ExplorerFileOps.Rename` 선례)뿐이며, 예외를 쓰면 근거를 주석으로 남긴다.
+   **A386 보강**: 이 예외는 네트워크/이동식 경로의 지연 보장이 아니다. 사용자 경로 존재 조회·
+   아이콘 크기는 워커로 이관했다. 남은 단일 변경·기본 정보·선읽기 속성 조회도 잔여 수리 후보로
+   분류한다. 코드별 현행·잔여 문제 정본은 [A386 감사](docs/A386-UI-WORKER-AUDIT.md)다.
 2. **입력 크기에 상한이 없는 루프·대형 문자열 처리.** 상한 없는 입력(폴더 항목 수·파일 크기·
    아카이브 항목 수)을 도는 루프는 상한(Take/Limit — `TreeChildLimit`·`ThumbnailLimit` 선례)·
    분할·워커행 중 하나를 반드시 고른다. 임계 감각 = A177(문서 1M자).

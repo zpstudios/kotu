@@ -1597,7 +1597,8 @@ public sealed partial class MainWindow : Window
 
     private async Task UnloadContentForCloseAsync()
     {
-        // 중첩 All Readable 자식도 실제 Unloaded(설정 스냅샷/해제 예약)가 끝난 뒤 저장한다.
+        // 중첩 자식의 Unloaded 발화와 동기 설정 캡처/해제 예약 후 저장한다.
+        // async void 해제 작업의 비동기 뒷부분이나 네이티브 종료 완료를 기다린다는 뜻은 아니다.
         var unloaded = new List<Task>();
         void Observe(DependencyObject element)
         {
