@@ -1,7 +1,7 @@
 # A395 — Fit 통합 분할 버튼 인수인계
 
 작성/검증: 2026-10-08. 구현 기준: master, `582ad99` 이후 작업, 제품 v0.391.0.
-상태: **구현·로컬 빌드/자동시험·직접 UI 검증 완료. 원격 발행 결과는 아래 배포 기록 참조.**
+상태: **구현·로컬 빌드/자동시험·직접 UI 검증·정식 배포 완료.**
 
 ## 확정된 요청
 
@@ -115,4 +115,13 @@ Alt+Down으로 메뉴 열림을 관찰하지 못했고 Enter는 셸 화면 모�
 
 ## 배포 기록
 
-로컬 검증 완료 후 v0.391.0 커밋/즉시 push 예정. 원격 build/release는 아직 확인 전이다.
+- 구현 커밋 `57cf5a4a4eda3ee78fe19bda9451c9e2868c0f70`을 master에 즉시 push했다.
+- [build 37779489869](https://github.com/zpstudios/kotu/actions/runs/37779489869) 성공.
+  원격 전체 빌드·자동시험·Explorer COM 전달 검사 통과.
+- [release 37779489888](https://github.com/zpstudios/kotu/actions/runs/37779489888) 성공.
+  원격 전체 빌드/시험·publish·시작·설치본 정합성·Standalone 검사 및 업로드 통과.
+- [v0.391.0 정식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.391.0)는
+  2026-10-08 21:55:41 KST에 게시됐다. draft/prerelease가 아니며 배포물8개 모두 uploaded다:
+  Setup.exe, Portable.zip, Standalone.exe, full/delta nupkg, assets.win.json, releases.win.json, RELEASES.
+- 원격 `v0.391.0` 태그가 위 구현 커밋을 정확히 가리키는 것을 확인했다.
+  원격 자동 설치 검사는 통과했지만 게시된 설치본을 이 PC에서 다시 설치해 수동 UI 시험한 것은 아니다.
