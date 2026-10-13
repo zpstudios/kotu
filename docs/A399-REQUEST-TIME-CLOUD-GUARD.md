@@ -128,3 +128,11 @@ Release/win-x64 self-contained publish 및 필수 파일 검사에 성공했다.
 
 검사한 로컬 Core DLL SHA-256: `C21610093AFC1613D3BA6D016A05C8B85AD4807298BDEBADE5A42DA353C6D9DF`.
 검사한 로컬 App DLL SHA-256: `D7B54C385E416BB031E273E40B54CB9B4B666BA997ED79478336CC8F84FB762D`.
+
+## 원격 게시 상태
+
+제품 커밋 `dbc3427eac1ee6fcf366012a604844f48c97a590`을 로컬 master에 보존했다.
+push는 자동 승인 검토가 정확한 원격/master 게시 승인과 대상 확인 부족을 이유로 차단하여
+실행되지 않았다. 메인은 origin의 호스트·저장소 경로와 현재 브랜치를 비밀값 없이 재확인했다:
+github.com/zpstudios/kotu, master. 사용자의 해당 제품 push·자동 정식 릴리스 응답을 기다린다.
+원격 build/release·태그·Setup/Standalone 배포는 아직 시작·완료한 것으로 기록하지 않는다.
