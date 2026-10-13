@@ -282,3 +282,14 @@ App self-contained publish 성공, 구조20프로젝트·릴리스 게이트7개
 `--no-build --no-restore`를 확인된 testhost 연결 제한 밖에서 실행했다.
 근거는 `artifacts/a401-a/solution-build.log`, `full-tests.log`, `full-tests/*.trx`, `publish.log`.
 최종 diff 공백·신규 파일 포함 한글 이스케이프 검사 통과. 계측 소스는 UI 시행 뒤 변경하지 않았다.
+
+### 원격 검증
+
+계측 커밋 `2a4a0e1cfde4e65124ba22aa0dde794ec1d1d696`을 master에 push했다.
+[build38441378047](https://github.com/zpstudios/kotu/actions/runs/38441378047)은
+2026-10-14 02:50:09 KST 완료·성공. 원격 로그에서 전체 빌드0경고·0오류, 8개 시험 실행
+**599/599**, 실제 Explorer COM3동사·32K 초과 선택·일회 전달/nonce 검사 통과를 확인했다.
+[release38441377995](https://github.com/zpstudios/kotu/actions/runs/38441377995)도 성공했으며
+기존 v0.392.0 태그 때문에 패키징·설치·Standalone·게시 단계를 건너뛰었다. 새 제품 릴리스나
+이번 계측 빌드의 실제 Standalone 검증 완료로 해석하지 않는다. 정식 배포 태그는 `e311bcf` 유지.
+요약 로그는 `artifacts/a401-a/remote-verification.log`. 최종 기록만의 추가 push는 보류한다.
