@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using KOTU.DocumentModel;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
@@ -160,6 +161,14 @@ internal sealed class EditorDecor
 
     private ScrollViewer? _scroll; // 템플릿 내부 ContentElement — 표시 후 지연 취득(PdfPane 선례)
     private bool _disabled;        // 폴백: 한 번 끄면 뷰 수명 동안 유지(예외·크래시 금지)
+    private bool _unloaded;
+    private bool _experimentSuppressed;
+    private TextPerformanceData? _performance;
+    private bool _measureRects;
+    private long _rectCalls;
+    private long _rectTicks;
+    private long _rectMaxTicks;
+    internal bool IsDisabled => _disabled || _experimentSuppressed || _unloaded;
     private int _hookAttempts;     // 레이아웃이 끝났는데도 ScrollViewer가 없으면 포기하는 카운터
     private bool _pending;         // "다음 레이아웃 반영 후 렌더" 예약 — LayoutUpdated가 소비
     private SolidColorBrush _brush;
@@ -286,7 +295,7 @@ internal sealed class EditorDecor
         {
             if (!_pending) return;
             _pending = false;
-            Render();
+            Render(TextPerfEvent.DecorLayout);
         };
         // 스크롤은 레이아웃 패스 없이(컴포지션) 움직인다 — ViewChanged 구독은 EnsureScrollHook에서.
         _themeSource.ActualThemeChanged += (_, _) =>
@@ -295,7 +304,7 @@ internal sealed class EditorDecor
             foreach (var guide in _guides) guide.Fill = _brush;
             foreach (var marker in _markers) marker.Foreground = _brush;
             foreach (var number in _numbers) number.Foreground = _brush;
-            Render();
+            Render(TextPerfEvent.DecorTheme);
         };
     }
 
@@ -306,7 +315,40 @@ internal sealed class EditorDecor
     /// <summary>텍스트·크기·모드 변경 공용 진입점 — 다음 레이아웃 반영 후 다시 그린다.</summary>
     public void Invalidate()
     {
-        if (!_disabled) _pending = true;
+        if (!IsDisabled) _pending = true;
+    }
+
+    internal void SetPerformance(TextPerformanceData? performance, bool suppress)
+    {
+        _performance = performance;
+        if (_experimentSuppressed == suppress) return;
+        _experimentSuppressed = suppress;
+        if (suppress)
+        {
+            _pending = false;
+            _scrollTimer?.Stop();
+            if (_scroll is { } scroll) scroll.ViewChanged -= OnScrollViewChanged;
+            _scroll = null;
+            ClearVisual(); // 거터·진단판까지 모두 제외한다. 본문 폭의 비교를 위해 패딩은 유지한다.
+        }
+        else Invalidate();
+    }
+
+    internal void Suspend()
+    {
+        _unloaded = true;
+        _pending = false;
+        _scrollTimer?.Stop();
+        if (_scroll is { } scroll) scroll.ViewChanged -= OnScrollViewChanged;
+        _scroll = null;
+        _performance = null;
+    }
+
+    internal void Resume()
+    {
+        if (!_unloaded) return;
+        _unloaded = false;
+        Invalidate();
     }
 
     /// <summary>
@@ -341,7 +383,7 @@ internal sealed class EditorDecor
         _showGuides = guides;
         _showMarks = marks;
         Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
-        Render();     // A295: 클릭 즉시 반영 — 토글과 같은 프레임에 그리거나 걷는다
+        Render(TextPerfEvent.DecorVisibility); // A295: 클릭 즉시 반영
     }
 
     /// <summary>
@@ -358,7 +400,7 @@ internal sealed class EditorDecor
         if (_disabled || suppressed == _viewSuppressed) return;
         _viewSuppressed = suppressed;
         Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
-        Render();     // 전환 즉시 반영 — 사라짐·재등장이 모드 전환과 같은 프레임에 보인다
+        Render(TextPerfEvent.DecorMode); // 전환 즉시 반영
     }
 
     /// <summary>
@@ -373,7 +415,7 @@ internal sealed class EditorDecor
         _diagOn = on;
         if (!on && _diagPanel is { } panel) panel.Visibility = Visibility.Collapsed;
         Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
-        Render();     // 전환 즉시 반영 — 켜는 순간 오버레이가 바로 보인다
+        Render(TextPerfEvent.DecorDiagnostic); // 전환 즉시 반영
     }
 
     /// <summary>
@@ -387,9 +429,15 @@ internal sealed class EditorDecor
     public void DisableForLargeDocument() => Disable();
 
     /// <summary>즉시 렌더(스크롤·테마 경로). 어떤 예외든 장식만 끈다 — 에디터 본기능 무영향.</summary>
-    private void Render()
+    private void Render(TextPerfEvent trigger)
     {
-        if (_disabled) return;
+        if (IsDisabled) return;
+        var performance = _performance is { IsActive: true } active ? active : null;
+        performance?.Event(trigger);
+        using var measurement = performance?.Measure(TextPerfMetric.DecorPass);
+        var phase = performance?.CurrentPhase ?? default;
+        _measureRects = performance is not null;
+        if (_measureRects) _rectCalls = _rectTicks = _rectMaxTicks = 0;
         try
         {
             RenderCore();
@@ -398,13 +446,21 @@ internal sealed class EditorDecor
         {
             Disable(); // 함정 1: 실패해도 그 장식만 안 돈다 — 예외를 밖으로 내보내지 않는다
         }
+        finally
+        {
+            if (_measureRects) performance!.RecordRectBatch(_rectCalls, _rectTicks, _rectMaxTicks, phase);
+            _measureRects = false;
+        }
     }
 
     private void Disable()
     {
+        _performance?.Event(TextPerfEvent.DecorDisabled);
         _disabled = true;
         _pending = false;
         _scrollTimer?.Stop(); // 예약된 스로틀 렌더도 함께 무른다(A142 ①ⓐ)
+        if (_scroll is { } scroll) scroll.ViewChanged -= OnScrollViewChanged;
+        _scroll = null;
         try
         {
             ClearVisual();
@@ -448,7 +504,7 @@ internal sealed class EditorDecor
             if (!_originChecked && scroll.VerticalOffset > 48)
             {
                 // 스크롤됐는데 첫 문자 y가 위로 밀려나지 않았다면 콘텐츠 기준 좌표다(자가 확인 1회)
-                _contentRelative = _editor.GetRectFromCharacterIndex(0, false).Y > -YEpsilon;
+                _contentRelative = GetCharacterRect(0, false).Y > -YEpsilon;
                 _originChecked = true;
             }
             if (_contentRelative) _yShift = -scroll.VerticalOffset;
@@ -976,7 +1032,11 @@ internal sealed class EditorDecor
     /// 이진 탐색·배열 조회만 한다. WinUI TextBox는 개행을 '\r'로 정규화하지만(A113) CRLF도
     /// 방어적으로 한 개행으로 센다(IsNewline과 같은 겸용 방침).
     /// </summary>
-    private void EnsureLineStarts(string text) => _lineIndex.Update(text);
+    private void EnsureLineStarts(string text)
+    {
+        if (_performance is { IsActive: true } performance) performance.UpdateLineIndex(_lineIndex, text);
+        else _lineIndex.Update(text);
+    }
 
     private int LineIndexOf(int index) => _lineIndex.GetLineIndex(index);
 
@@ -1322,10 +1382,11 @@ internal sealed class EditorDecor
     /// </summary>
     private void OnScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
     {
+        if (IsDisabled) return;
         if (!e.IsIntermediate)
         {
             _scrollTimer?.Stop(); // 예약분은 이 최종 렌더가 대체한다
-            Render();
+            Render(TextPerfEvent.DecorScrollFinal);
             return;
         }
         if (_scrollTimer is { IsEnabled: true }) return; // 이번 간격의 렌더는 이미 예약돼 있다
@@ -1339,7 +1400,7 @@ internal sealed class EditorDecor
         timer.Tick += (_, _) =>
         {
             timer.Stop(); // 다음 중간 이벤트가 다시 시작한다
-            Render();
+            Render(TextPerfEvent.DecorScrollTimer);
         };
         return timer;
     }
@@ -1384,7 +1445,7 @@ internal sealed class EditorDecor
     {
         if (!_rectCache.TryGetValue(index, out var rect))
         {
-            rect = _editor.GetRectFromCharacterIndex(index, false);
+            rect = GetCharacterRect(index, false);
             _rectCache.Add(index, rect);
         }
         var pad = _editor.Padding;
@@ -1404,7 +1465,7 @@ internal sealed class EditorDecor
     /// </summary>
     private Rect RectOfTrailing(int index)
     {
-        var rect = _editor.GetRectFromCharacterIndex(index, true);
+        var rect = GetCharacterRect(index, true);
         var pad = _editor.Padding;
         return new Rect(rect.X + pad.Left, rect.Y + _yShift + pad.Top, rect.Width, rect.Height);
     }
@@ -1412,6 +1473,20 @@ internal sealed class EditorDecor
     /// <summary>A288: RectOf와 같은 보정의 Y 전용 경로(줄 탐색 NextLineStart 전용) — 캔버스 절대 Y.</summary>
     private double TopOf(int index) =>
         RectOf(index).Y;
+
+    private Rect GetCharacterRect(int index, bool trailingEdge)
+    {
+        if (!_measureRects) return _editor.GetRectFromCharacterIndex(index, trailingEdge);
+        var start = Stopwatch.GetTimestamp();
+        try { return _editor.GetRectFromCharacterIndex(index, trailingEdge); }
+        finally
+        {
+            var elapsed = Stopwatch.GetTimestamp() - start;
+            _rectCalls++;
+            _rectTicks += elapsed;
+            _rectMaxTicks = Math.Max(_rectMaxTicks, elapsed);
+        }
+    }
 
     /// <summary>WinUI TextBox는 줄바꿈을 '\r'로 정규화한다(A113 확인) — '\n'은 방어적 겸용.</summary>
     private static bool IsNewline(char c) => c is '\r' or '\n';

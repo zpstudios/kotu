@@ -220,9 +220,28 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private string? _textSnapshot;
     private readonly TextLineIndex _textLines = new();
+    private TextPerformanceCapture? _performance;
 
     /// <summary>스냅샷 경유 전문 접근 — 에디터 텍스트를 읽는 모든 경로가 이걸 쓴다(A142 ①ⓑ).</summary>
-    private string EditorText => _textSnapshot ??= EditorBox.Text;
+    private string EditorText
+    {
+        get
+        {
+            if (_textSnapshot is { } cached) return cached;
+            using var measurement = _performance?.Data?.Measure(TextPerfMetric.TextGet);
+            return _textSnapshot = EditorBox.Text;
+        }
+    }
+
+    private void SetEditorText(string text)
+    {
+        using var measurement = _performance?.Data?.Measure(TextPerfMetric.TextSet);
+        EditorBox.Text = text;
+    }
+
+    private TextPerfState ReadPerformanceState() => new(_textSnapshot?.Length ?? 0, _performance?.Data?.KnownLines ?? 0,
+        _zoomPercent, EditorBox.TextWrapping != TextWrapping.NoWrap, _showGuides, _showMarks,
+        _viewMode, _decor.IsDisabled, _capped, _truncated, EditorBox.ActualWidth, EditorBox.ActualHeight);
 
     /// <summary>
     /// A177 ⓐ: 지연 대입을 기다리는 CompositionTarget.Rendering 핸들러(null = 대기 없음).
@@ -334,11 +353,16 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 뷰 모드·PDF·빈 화면도 종전 그대로 뷰 루트다(A277 "포커스 없음 = 캐럿 없음" 유지).
         Loaded += (_, _) =>
         {
+            _decor.Resume();
             if (EditorBox.Visibility == Visibility.Visible && !_viewMode) FocusEditorForEditing();
             else Focus(FocusState.Programmatic);
         };
         Unloaded += (_, _) =>
         {
+            _decor.Suspend();
+            _performance?.Dispose();
+            _performance = null;
+            _decor.SetPerformance(null, suppress: false);
             _openSeq++;
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
@@ -428,6 +452,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void ApplyZoom()
     {
+        _performance?.Data?.Event(TextPerfEvent.Zoom);
         var scale = _zoomPercent / 100.0;
         EditorBox.FontSize = BaseEditorFontSize * scale;
         _decor.SetScale(scale);
@@ -1000,6 +1025,16 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     {
         DiagTrace.Write("document", "OpenPath " + path); // A352 배치 1
         var seq = ++_openSeq;
+        _performance?.Stop("document-replaced");
+        _performance = null;
+        if (TextPerformanceCapture.IsEnabled)
+            _performance = TextPerformanceCapture.Create(EditorBox, ReadPerformanceState);
+        if (_performance is { } performance)
+        {
+            EditorBox.TextWrapping = performance.Options.Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap;
+            _decor.SetPerformance(performance.Data, suppress: performance.Options.Decor == 0);
+        }
+        var capture = _performance;
         // A177 ⓐ: 워커 읽기·(대용량이면) 대입 지연 동안 첫 프레임에 보일 로딩 표시. 새 UI 없이
         // 기존 플레이스홀더를 문구만 바꿔 재사용한다(문구 관용구 = ContentInfoOverlay의
         // "Loading info..."). 종전에는 읽기 동안 빈 화면이었다 — 작은 파일은 읽기가 프레임보다
@@ -1011,14 +1046,21 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         LoadedText loaded;
         try
         {
-            loaded = await Worker.Run(_ => ReadTextSmart(path));
+            var data = capture?.Data;
+            loaded = await Worker.Run(_ =>
+            {
+                using var measurement = data?.Measure(TextPerfMetric.OpenWorker);
+                return ReadTextSmart(path, data);
+            });
         }
         catch (OperationCanceledException)
         {
+            capture?.Stop("open-cancelled");
             return; // 뷰가 내려가며 워커가 닫힘
         }
         catch (Exception ex)
         {
+            capture?.Stop("open-failed");
             PlaceholderText.Text = "Failed to open: " + ex.Message;
             PlaceholderText.Visibility = Visibility.Visible;
             return;
@@ -1032,7 +1074,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         {
             // A177 ⓑ: 장식 오프는 대입보다 먼저 — 대입이 쏘는 TextChanged→Invalidate부터 전부
             // 무동작이 되고, 스크롤 훅(ViewChanged)은 아예 걸리지도 않는다.
-            _decor.DisableForLargeDocument();
+            if (_performance?.Options.Decor != 1) _decor.DisableForLargeDocument();
             // A177 ⓐ: 대입은 로딩 표시 프레임이 제출된 뒤로 미룬다(A343 ⓑ 이후 대입량이 상한
             // 1M자로 닫혀 수 초가 아니라 수백 ms급이지만, 로딩 문구를 먼저 보이는 편이 낫다 —
             // 지연 자체는 유지가 오케스트레이터 결정이다). 미루는 동안
@@ -1109,9 +1151,10 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // EnterHtmlViewMode). 수 초 UI를 멎게 하던 대용량 Text 대입이 사라지는 자리다. 판정은
         // 여기서 한 번만 하고 이하 세 지점(거터·Text 대입·렌더 축)이 같은 값을 쓴다.
         var truncatedHtml = loaded.Truncated && IsHtmlPath(path);
-        _gutterDigits = truncatedHtml || IsLargeDocument(loaded)
-            ? 0
-            : DigitCount(CountLines(loaded.Text)) + 1;
+        using (var measurement = _performance?.Data?.Measure(TextPerfMetric.CountLines))
+            _gutterDigits = truncatedHtml || IsLargeDocument(loaded)
+                ? 0
+                : DigitCount(CountLines(loaded.Text)) + 1;
         UpdateEditorPadding();
 
         _loadingText = true; // 프로그램적 설정 — dirty 아님
@@ -1119,14 +1162,14 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 이 빈 값 기준으로 서고 SetDirty(false)가 뒤따르므로 더티는 항상 false다. 저장은
         // 3중으로 막힌다: ① UpdateEditorReadOnly의 잘림 축(영구 IsReadOnly — 입력 자체가 불가)
         // ② SaveAsync 첫 가드의 _truncated 조기 반환(무동작) ③ 더티 없음(HasUnsavedChanges false).
-        EditorBox.Text = truncatedHtml ? string.Empty : loaded.Text;
+        SetEditorText(truncatedHtml ? string.Empty : loaded.Text);
         _loadingText = false;
         _textSnapshot = null; // A142 ①ⓑ: TextChanged 무효화와 중복이어도 무해한 방어 — 옛 파일 잔상 금지
         // A113 ⓒ: 더티 판정 기준은 "TextBox가 실제로 보유한 텍스트"의 정규화본이다 — 로드 문자열
         // 대신 셋 직후 값을 쓰는 이유는, TextBox가 줄바꿈('\r') 외에 무언가를 더 손봐도 열자마자
         // 더티가 되는 오탐이 없게 하기 위함(undo 원복 판정의 기준점과도 일치한다).
         // 이 접근이 스냅샷을 새로 띄워 첫 장식 렌더(A115)까지 같은 복사본을 쓴다(A142 ①ⓑ).
-        _documentSession.Reset(NormalizeNewlines(EditorText), new DocumentStamp(loaded.WriteTimeUtc, loaded.Length));
+        _documentSession.Reset(NormalizeNewlines(EditorText, _performance?.Data), new DocumentStamp(loaded.WriteTimeUtc, loaded.Length));
         _dirtyTimer?.Stop(); // 이전 파일의 보류 중 판정이 새 파일 상태를 건드리지 않게
         UpdateEditorReadOnly(); // A224 단일 산출 지점 — 잘림(_truncated)이면 영구 잠금(잘린 채 저장 방지)
         SetDirty(false);
@@ -1170,6 +1213,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
+        _performance?.Applied();
     }
 
     // A256(2026-08-27): 하단 바 Open 버튼(A223)과 그 클릭 핸들러(FileOpenPicker) ·
@@ -1234,6 +1278,9 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void StartUntitled()
     {
+        _performance?.Stop("surface-changed");
+        _performance = null;
+        _decor.SetPerformance(null, suppress: false);
         ++_openSeq; // 진행 중 읽기(OpenPath)·지연 대입(A177)이 이 상태를 덮지 않게
         HidePdf();
         ResetRenderState(false); // A190: 렌더 축 리셋 — 무제는 .txt 계열(무제 md는 범위 밖)
@@ -1252,7 +1299,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdateEditorPadding();
 
         _loadingText = true; // 프로그램적 설정 — dirty 아님(ApplyLoadedText 관용구)
-        EditorBox.Text = string.Empty;
+        SetEditorText(string.Empty);
         _loadingText = false;
         _textSnapshot = null;
         _documentSession.Reset(string.Empty); // 무제의 기준과 디스크 스탬프를 함께 초기화한다.
@@ -2111,6 +2158,9 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     private async void OpenPdf(string path)
     {
+        _performance?.Stop("surface-changed");
+        _performance = null;
+        _decor.SetPerformance(null, suppress: false);
         var seq = ++_openSeq; // 텍스트 열기와 같은 경쟁 방지 시퀀스 공유
 
         if (_pdfPane is null)
@@ -2502,7 +2552,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// (동영상 자막 SubtitleCharset과 같은 접근 — 모듈 간 참조 금지라 별도 구현).
     /// 감지한 인코딩·줄바꿈 스타일은 저장 시 보존을 위해 함께 반환한다(A37).
     /// </summary>
-    private static LoadedText ReadTextSmart(string path)
+    private static LoadedText ReadTextSmart(string path, TextPerformanceData? performance = null)
     {
         // A353: File.OpenRead는 FileShare.Read라 쓰기 잠금을 가진 프로세스가 있으면 열기가 실패한다
         // (로그처럼 쓰는 중인 파일). 단, 이렇게 연 내용은 그 순간의 스냅샷이라
@@ -2558,7 +2608,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         if (!truncated)
         {
             originalBytes = bytes; // 참조 유지 — 이미 전부 읽었다(추가 복사 없음)
-            var restored = NormalizeNewlines(text);
+            var restored = NormalizeNewlines(text, performance, worker: true);
             if (newline != "\n") restored = restored.Replace("\n", newline);
             try
             {
@@ -2622,8 +2672,9 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// 패스로 처리한다 — 4MB급에서 중간 문자열 복사 2회 → 최대 1회('\r'가 없으면 0회).
     /// A113 ⓒ의 비교 계약 자체는 무변경이다(복사 횟수만 줄인다).
     /// </summary>
-    private static string NormalizeNewlines(string text)
+    private static string NormalizeNewlines(string text, TextPerformanceData? performance = null, bool worker = false)
     {
+        using var measurement = performance?.Measure(worker ? TextPerfMetric.NormalizeWorker : TextPerfMetric.NormalizeUi);
         if (!text.Contains('\r')) return text; // 로드 텍스트(\n 전용)·개행 없는 파일의 흔한 빠른 경로
         var chars = new char[text.Length];
         var n = 0;
@@ -2679,7 +2730,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             PageInfoText.Visibility = Visibility.Collapsed;
             return;
         }
-        _textLines.Update(EditorText);
+        if (_performance?.Data is { } performance) performance.UpdateLineIndex(_textLines, EditorText);
+        else _textLines.Update(EditorText);
         var text = $"{_textLines.GetLineIndex(EditorBox.SelectionStart) + 1} / {_textLines.Count}";
         if (PageInfoText.Text != text) PageInfoText.Text = text;
         PageInfoText.Visibility = Visibility.Visible;
@@ -2716,7 +2768,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     }
 
     /// <summary>ⓒ 판정 본체: 에디터 내용을 \n 정규화해 기준 텍스트와 비교한다.</summary>
-    private bool EditorMatchesBaseline() => _documentSession.MatchesBaseline(NormalizeNewlines(EditorText));
+    private bool EditorMatchesBaseline() => _documentSession.MatchesBaseline(NormalizeNewlines(EditorText, _performance?.Data));
 
     /// <summary>ⓒ 즉시 재판정(디바운스 없이) — 저장 성공 재기준화 직후에 쓴다.</summary>
     private void RecomputeDirty()
@@ -2938,7 +2990,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
         if (!_documentSession.IsCurrentSave(operation)) return false;
         // WinUI TextBox는 줄바꿈을 '\r'로 정규화한다 — 기준(\n)으로 맞춘 뒤 원본 스타일로 되돌린다.
-        var normalized = NormalizeNewlines(EditorText); // A142 ①ⓑ: 마지막 편집 후 스냅샷 재사용
+        var normalized = NormalizeNewlines(EditorText, _performance?.Data); // A142 ①ⓑ: 마지막 편집 후 스냅샷 재사용
 
         var text = _newLine == "\n" ? normalized : normalized.Replace("\n", _newLine);
 
@@ -3048,7 +3100,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 에디터 원문과 1:1이다(TextBox 줄바꿈 '\r' ↔ 기준 '\n' — ⓒ 길이 비교와 같은 전제).
         ResetChangeTracking();
         RecomputeDirty();
-        if (_dirty) TrackEdit(_documentSession.BaselineText, NormalizeNewlines(_changePrevText));
+        if (_dirty) TrackEdit(_documentSession.BaselineText, NormalizeNewlines(_changePrevText, _performance?.Data));
 
         // A137: 저장 성공 1회 통지 — 저장으로 파일 크기가 바뀌면 셸이 작업표시줄 32px 아이콘의
         // 용량 표기를 다시 그린다(타이핑 중 실시간 갱신은 하지 않는다 — 부록 B 69 확정. 여기는
@@ -3224,7 +3276,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         return await dialog.ShowAsync() switch
         {
             ContentDialogResult.Primary => await SaveAsync()
-                && _documentSession.CanClose(NormalizeNewlines(EditorText)),
+                && _documentSession.CanClose(NormalizeNewlines(EditorText, _performance?.Data)),
             ContentDialogResult.Secondary => true,            // 버리기
             _ => false,                                       // 취소
         };
