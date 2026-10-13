@@ -131,8 +131,24 @@ Release/win-x64 self-contained publish 및 필수 파일 검사에 성공했다.
 
 ## 원격 게시 상태
 
-제품 커밋 `dbc3427eac1ee6fcf366012a604844f48c97a590`을 로컬 master에 보존했다.
-push는 자동 승인 검토가 정확한 원격/master 게시 승인과 대상 확인 부족을 이유로 차단하여
-실행되지 않았다. 메인은 origin의 호스트·저장소 경로와 현재 브랜치를 비밀값 없이 재확인했다:
-github.com/zpstudios/kotu, master. 사용자의 해당 제품 push·자동 정식 릴리스 응답을 기다린다.
-원격 build/release·태그·Setup/Standalone 배포는 아직 시작·완료한 것으로 기록하지 않는다.
+제품 커밋은 `dbc3427eac1ee6fcf366012a604844f48c97a590`이다. 첫 push는 자동 승인 검토가
+정확한 원격/master 게시 승인과 대상 확인 부족을 이유로 차단했다. 메인은 origin의 호스트·저장소
+경로와 현재 브랜치를 비밀값 없이 재확인했다: github.com/zpstudios/kotu, master.
+사용자가 **제품 커밋 푸시·릴리스 승인**으로 응답한 뒤 진행 기록을 포함한
+`e311bcf6ceeeaf75e6ade0d42a184bf9a6463701`을 성공적으로 전송했다.
+원격 [build38423214587](https://github.com/zpstudios/kotu/actions/runs/38423214587) /
+[release38423214361](https://github.com/zpstudios/kotu/actions/runs/38423214361) 모두 성공했다.
+
+| 원격 확인 | 결과 |
+| --- | --- |
+| 정식 릴리스 | [v0.392.0](https://github.com/zpstudios/kotu/releases/tag/v0.392.0), 2026-10-14 00:42:04 KST 게시. draft=false, prerelease=false, Latest 일치 |
+| 소스 일치 | 두 workflow의 head_sha·release target_commitish·태그 commit이 모두 `e311bcf6ceeeaf75e6ade0d42a184bf9a6463701` |
+| 필수 검사 | 전체 빌드/시험, Explorer COM, 실행본 정합성/시작, 패키징, 설치본 정합성, Standalone build/verification 모두 success |
+| 배포물 | Setup.exe·Portable.zip·Standalone.exe·0.392.0 full/delta.nupkg·assets.win.json·releases.win.json·RELEASES, 총8개 모두 uploaded·크기0 초과 |
+
+기록 전용 후속 커밋 `e311bcf`는 제품 소스를 바꾸지 않았다. 제품 변경의 정본은 `dbc3427`이다.
+master용 build 작업의 작업 브랜치 배포 단계와 release의 수동 시험 배포물 단계가 생략된 것은
+각 workflow의 분기 조건에 따른다. 위 설치·시작·Standalone 성공 판정은 release 작업에서 확인했다.
+이 배포 검사가 실제 OneDrive 제공자나 사용자 제보 UI를 재현한 것은 아니다.
+조회한 원격 상태·필수 단계·자산 목록은 로컬 `artifacts/a399-b-remote-verification.json`에 보존했다.
+최종 검증 후 문서만의 추가 push는 보류한다.
