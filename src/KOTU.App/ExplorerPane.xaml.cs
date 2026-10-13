@@ -1391,10 +1391,11 @@ public sealed partial class ExplorerPane : UserControl
             try
             {
                 if (seq != _loadSeq) return; // 폴더 전환 — 낡은 요청 폐기
-                DetailInfo details;
+                DetailInfo? details;
                 try
                 {
-                    details = await FetchPool.Run(_ => FetchDetailInfo(kind, vm.Path));
+                    details = await FetchPool.Run(ctx => CloudFileAccess.ReadLocal(
+                        vm.Path, vm.IsPlaceholder, ctx.Cancellation, () => FetchDetailInfo(kind, vm.Path)));
                 }
                 catch (OperationCanceledException)
                 {
@@ -1407,6 +1408,9 @@ public sealed partial class ExplorerPane : UserControl
                     if (ShellFetch.IsTimeout(ex)) DiagTrace.Write("detail", "timeout " + vm.Path);
                     return; // 속성·헤더를 못 읽는 파일은 빈 칸 유지
                 }
+                // A399: 상태 변경/속성 조회 실패로 생략한 결과는 Empty로 캐시하지 않는다.
+                // 수정시각이 그대로인 다운로드 완료 뒤 새 목록에서도 다시 조회할 수 있어야 한다.
+                if (details is null) return;
                 if (DiagTrace.Enabled) DiagTrace.Write("detail", "done " + vm.Path); // A352 배치 1
                 if (seq != _loadSeq) return; // 폴더 전환 — 낡은 결과 폐기
                 if (_infoCache.Count > 4000) _infoCache.Clear(); // 장시간 세션 폭주 방지
@@ -1598,6 +1602,8 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private static byte[]? FetchThumbnail(string path, bool cachedOnly)
     {
+        // A399: 휴면 그리드도 요청 직전 상태를 확인한다. 이 함수는 FetchPool 워커에서만 호출된다.
+        cachedOnly = !CloudFileAccess.CanReadContent(path, cachedOnly, default);
         var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path));
         using var thumb = ShellFetch.WaitOrThrow(cachedOnly
             ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96, ThumbnailOptions.ReturnOnlyIfCached)

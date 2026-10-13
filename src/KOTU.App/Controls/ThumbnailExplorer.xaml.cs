@@ -1216,7 +1216,8 @@ public sealed partial class ThumbnailExplorer : UserControl
                 string? text;
                 try
                 {
-                    text = await TextPool.Run(ctx => { ctx.ThrowIfCancelled(); return ReadTextPreview(vm.Path); }, cancellation);
+                    text = await TextPool.Run(ctx => CloudFileAccess.ReadLocal(
+                        vm.Path, vm.Entry.IsPlaceholder, ctx.Cancellation, () => ReadTextPreview(vm.Path)), cancellation);
                     cancellation.ThrowIfCancellationRequested();
                 }
                 catch (OperationCanceledException) { return; }
@@ -1530,7 +1531,11 @@ public sealed partial class ThumbnailExplorer : UserControl
     private static (ThumbnailRaster.Pixels? Pixels, string? Info) FetchTilePreview(
         string path, bool cachedOnly, bool wantAudioInfo, ThumbnailRaster.Target target, CancellationToken cancellation)
     {
-        cancellation.ThrowIfCancellationRequested();
+        // A399: 게이트 대기 중 온라인 전용으로 바뀔 수 있다. 속성 조회도 워커에서만 수행한다.
+        // 열거 시 보호는 낮추지 않으며, 조회 실패면 썸네일은 캐시 한정·오디오 속성은 생략한다.
+        // 검사와 셸 요청은 원자적이지 않고, ReturnOnlyIfCached도 제공자 전체 동작의 보증은 아니다.
+        cachedOnly = !CloudFileAccess.CanReadContent(path, cachedOnly, cancellation);
+        wantAudioInfo &= !cachedOnly;
         var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path), cancellation);
 
         string? info = null;
