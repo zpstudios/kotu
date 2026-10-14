@@ -294,6 +294,7 @@ public sealed partial class ExplorerPane : UserControl
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             ExplorerRenameBox.EditEnded -= OnRenameEditEnded;
             _surfaceLive = false;
+            ++_loadSeq; // 해제 전 열거 결과가 재로드된 화면에 적용되지 않게 한다.
             // A345 배치 2: 분할 조립 루프(CompositionTarget.Rendering)와 완료 신호가 사라져
             // 여기서 풀어 줄 것이 없다 — 리스트는 ItemsSource 대입 한 줄로 동기 완결이다.
             TearDownWatch(); // 감시 이벤트 전부 해제 + Dispose + 디바운스 정지 — 창 통째 누수 방지
@@ -675,7 +676,7 @@ public sealed partial class ExplorerPane : UserControl
     /// NavigateTo의 대기 가능형 (A94 2차) — 새 폴더 생성 직후 "재스캔 '완료 후' 그 항목으로
     /// 이름변경 편집 진입"(CreateFolderThenRenameAsync)이 스캔 완료 시점을 알아야 해서 분리했다.
     /// </summary>
-    private async Task NavigateToAsync(string folder, IReadOnlyList<string> extensions)
+    private async Task NavigateToAsync(string folder, IReadOnlyList<string> extensions, bool fromWatch = false)
     {
         // A352 배치 1: 항해 시작 — 폴더와 담당 확장자 수(All Readable은 전 모듈 합집합이라 크다).
         DiagTrace.Write("nav", $"NavigateToAsync {folder} exts={extensions.Count}");
@@ -690,7 +691,10 @@ public sealed partial class ExplorerPane : UserControl
         PathText.Text = folder;
         ToolTipService.SetToolTip(PathText, folder); // 잘려도 전체 경로 확인 가능(A8)
         UpButton.IsEnabled = Directory.GetParent(folder) is not null;
-        EnsureWatch(folder); // A94 5차 — 폴더 전환 즉시 재대상(스캔 완료 전의 변경도 디바운스로 잡힌다)
+        // 자동 갱신은 감시를 유지해 열거 중 통지도 다음 한 번으로 병합한다.
+        // 명시 Refresh는 종전처럼 감시/보류를 새로 시작하고 모든 미리보기를 재조회한다.
+        if (!fromWatch || folderChanged) EnsureWatch(folder);
+        var watchGeneration = _watchSeq;
         // 계측 pre: 여기까지가 "스캔 전 준비" 전부다(필터 재구성·부모 계산·감시자 재대상).
         // nav>pre가 크면 정지는 스캔이 아니라 이 준비 구간에 있다는 뜻이다.
         NavDiagnostics.Mark("pre");
@@ -745,7 +749,8 @@ public sealed partial class ExplorerPane : UserControl
         }
         catch (Exception ex)
         {
-            if (seq != _loadSeq) return;
+            if (seq != _loadSeq || (fromWatch && watchGeneration != _watchSeq)) return;
+            if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return; }
             IconGrid.Items.Clear();
             ListPane.ItemsSource = null; // A345 배치 2 — 위 folderChanged 경로와 같은 규칙
             EmptyText.Text = "Cannot read this folder: " + ex.Message;
@@ -764,7 +769,8 @@ public sealed partial class ExplorerPane : UserControl
         NavDiagnostics.Mark("scan");
         DiagTrace.Write("nav", $"scan done {folder} count={entries.Count}"); // A352 배치 1
 
-        if (seq != _loadSeq) return; // 그새 다른 폴더로 이동함
+        if (seq != _loadSeq || (fromWatch && watchGeneration != _watchSeq)) return;
+        if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return; }
 
         _entries = entries;
         // A179: 체크 집합 정리 — 재스캔 결과에 없는 경로(삭제·이동·이름변경·숨김 전환으로 소실)는
@@ -2438,242 +2444,114 @@ public sealed partial class ExplorerPane : UserControl
         NavigateTo(home, _extensions);
     }
 
-    // ---------- 폴더 감시 (A94 5차, v0.152.0) — 외부 변경 자동 갱신 ----------
+    // ---------- 폴더 감시 (A399-a) ----------
 
-    /// <summary>감시 디바운스(ms) — 마지막 이벤트 기준 병합, 만료 시 전체 재스캔 1회(사양 확정 수치).</summary>
-    private const int WatchDebounceMs = 400;
-
-    private FileSystemWatcher? _watcher;     // 현재 폴더 전용 — 창(페인)별 1개(전역 공유 금지), 전환·오류 시 dispose+재생성
-    private DispatcherTimer? _watchDebounce; // UI 스레드 디바운스(DocumentView DirtyTimer와 같은 방식) — 지연 생성
-    private DispatcherQueue? _watchQueue;    // 풀 스레드 이벤트 → UI 마셜용. 감시 시작 시점(UI 스레드)에 캡처
-    private bool _watchPending;              // 이름변경 편집 중 만료된 재스캔 보류 — bool 1개(큐 아님, 소화도 1회)
-    private bool _surfaceLive;               // Loaded~Unloaded 사이인가 — 죽은 뷰 접근 방어(감시 경로 공용)
-
-    /// <summary>
-    /// A333: 감시 세대 번호 — 워커에서 만들어 온 감시자를 채택해도 되는지의 판정 하나뿐이다.
-    /// 올리는 곳은 <see cref="TearDownWatch"/> 한 곳(= "지금 감시를 버린다"의 단일 지점: 재대상·
-    /// 언로드·오류 재시작이 전부 그리로 모인다). UI 스레드에서만 읽고 쓴다 — 증가도 채택 판정도
-    /// 전부 UI 문맥이고, 워커는 이 값을 <b>복사본으로만</b> 들고 간다(_loadSeq와 같은 관용구).
-    /// </summary>
+    private FolderWatch? _watcher;
+    private bool _surfaceLive;
     private int _watchSeq;
+    private readonly LatestRequest _watchProbe = new();
+    private readonly RefreshRequestGate _watchRefresh = new();
 
-    /// <summary>
-    /// 현재 폴더 감시 시작·재대상 (A94 5차): 폴더가 바뀔 때마다 기존 감시자를 통째로 dispose하고
-    /// 새로 만든다 — Path 교체 재사용보다 실패 상태가 단순하다(예외가 나도 반쯤 살아 있는 감시자가
-    /// 남지 않고, 감시자 생성은 값싸다). NotifyFilter는 최소 구성(FileName·DirectoryName·
-    /// LastWrite·Size) — LastAccess류를 빼 Changed 폭주와 "재스캔이 이벤트를 되먹이는" 순환을 피한다.
-    /// 생성·시작 실패(네트워크 드라이브·접근 불가·제거된 드라이브·사라진 폴더)는 조용히 무감시 =
-    /// 종전과 동일하게 명시 재스캔만 남는다(사양). 호출은 UI 스레드 전용(NavigateToAsync·Loaded·
-    /// 오류 재시작).
-    /// <para>
-    /// <b>A333 — 생성·해제를 워커로 뺐다(CLAUDE.md 1.8)</b>. <c>new FileSystemWatcher(folder)</c>는
-    /// 경로 유효성(디렉터리 존재 확인)을, <c>EnableRaisingEvents = true</c>는 디렉터리 핸들 열기와
-    /// ReadDirectoryChangesW 등록을 <b>동기 커널 I/O로</b> 한다. 이 메서드는 폴더가 바뀔 때마다
-    /// <see cref="NavigateToAsync"/>가 <b>"Loading..." 표시(A243)보다 앞서</b> 부르므로, 잠들어 있던
-    /// 디스크·느린 볼륨에서는 그 I/O가 곧 <b>첫 프레임이 그려지기 전의 UI 정지</b>가 된다
-    /// (A243 로딩 문구가 있는데도 안 보인다는 사용자 보고의 유일한 구조적 설명 — 이 지점 말고는
-    /// 항해 시작~로딩 표시 사이에 UI 스레드 I/O가 없다). 그래서 만들기는 워커에서 하고,
-    /// UI 스레드는 다 만들어진 감시자를 <see cref="AdoptWatch"/>로 <b>채택만</b> 한다.
-    /// 채택 전에 폴더가 또 바뀌었으면(<see cref="_watchSeq"/> 불일치) 그 감시자는 버린다 —
-    /// 필드(_watcher·_watchPending·타이머)는 여전히 UI 스레드에서만 만진다(경쟁 없음).
-    /// 감시가 붙는 시점이 몇 ms 늦어지지만 사양은 그대로다: 그 창의 변경은 어차피 곧 도착하는
-    /// 전체 스캔 결과가 담고 있다(재대상 직후 = "곧 전체 스캔으로 시작한다"는 종전 근거 그대로).
-    /// </para>
-    /// </summary>
+    /// <summary>OS 감시의 생성/해제는 워커에서, 채택/결과 반영은 UI에서 수행한다.</summary>
     private void EnsureWatch(string folder)
     {
-        TearDownWatch(); // 재대상 = 기존 감시·보류 상태 폐기(새 폴더는 곧 전체 스캔으로 시작한다)
+        TearDownWatch();
         if (!_surfaceLive || folder.Length == 0) return;
-
-        var seq = _watchSeq;         // 방금 TearDownWatch가 올린 세대 — 이후 재대상·언로드면 어긋난다
-        var queue = DispatcherQueue; // 풀 스레드에서 컨트롤 프로퍼티 접근 금지 — 여기(UI)서 캡처(OpUi 관용구)
-        _watchQueue = queue;
-        _ = Task.Run(() => // 워커 — FileListOverlay.LoadChildrenAsync와 같은 Task.Run 관용구
+        var seq = _watchSeq;
+        var queue = DispatcherQueue;
+        _ = Task.Run(() =>
         {
-            FileSystemWatcher? watcher = null;
+            FolderWatch made;
             try
             {
-                watcher = new FileSystemWatcher(folder)
+                made = new FolderWatch(folder, action => queue.TryEnqueue(() => action()), error =>
                 {
-                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName |
-                                   NotifyFilters.LastWrite | NotifyFilters.Size,
-                    IncludeSubdirectories = false, // 감시 대상 = 현재 폴더 한 단계뿐(사양)
-                };
-                watcher.Created += OnWatcherEvent;
-                watcher.Deleted += OnWatcherEvent;
-                watcher.Renamed += OnWatcherEvent; // RenamedEventArgs는 FileSystemEventArgs 파생 — 같은 핸들러로 받는다
-                watcher.Changed += OnWatcherEvent;
-                watcher.Error += OnWatcherError;
-                watcher.EnableRaisingEvents = true; // 접근 불가·소실 경로는 대개 여기서 던진다
+                    // 이벤트마다 큐를 쓰지 않는다. 이 콜백은 400ms 정숙 뒤 한 번이며
+                    // 생성 시 세대가 고정돼 옛 감시자의 일반 통지/오류 모두 폐기한다.
+                    if (!_surfaceLive || seq != _watchSeq) return;
+                    if (error) EnsureWatch(_folder);
+                    OnWatchDebounceExpired();
+                });
             }
-            catch
-            {
-                DiscardWatcher(watcher); // 반쯤 만든 감시자 정리 — 이 폴더는 감시 없이 동작(명시 재스캔만)
-                return;
-            }
-            if (watcher is not { } made) return; // 도달 불가(위 catch가 실패를 다 걷는다) — 널 흐름 분석용 명시
-            // 채택은 UI 스레드에서. 큐가 이미 닫혔으면(창 종료) 여기서 버린다 — 누수 방지.
+            catch { return; } // 접근 불가/소실 폴더는 명시 Refresh만 남긴다.
             if (!queue.TryEnqueue(() => AdoptWatch(made, seq))) DiscardWatcher(made);
         });
     }
 
-    /// <summary>
-    /// A333 — UI 스레드: 워커가 다 만들어 온 감시자를 채택한다. 그새 폴더가 또 바뀌었거나
-    /// (세대 불일치) 뷰가 내려갔으면 채택하지 않고 버린다. 필드 대입은 여기 한 곳뿐이라
-    /// _watcher가 UI 스레드 단독 소유라는 종전 불변식이 그대로 유지된다.
-    /// </summary>
-    private void AdoptWatch(FileSystemWatcher watcher, int seq)
+    private void AdoptWatch(FolderWatch watcher, int seq)
     {
-        if (seq != _watchSeq || !_surfaceLive)
-        {
-            DiscardWatcher(watcher);
-            return;
-        }
+        if (seq != _watchSeq || !_surfaceLive) { DiscardWatcher(watcher); return; }
         _watcher = watcher;
+        // 오류 후 재생성 중 끝난 재조회가 보류분을 남겼을 수도 있다.
+        if (_watchRefresh.Pending && !_watchRefresh.Running && !ExplorerRenameBox.IsEditing)
+            watcher.RequestRefresh();
     }
 
-    /// <summary>
-    /// A333 — 감시자 1개 폐기의 단일 지점: 이벤트 전부 해제 후 <b>워커에서</b> Dispose.
-    /// Dispose를 워커로 미루는 이유는 생성과 같다 — 디렉터리 핸들을 닫고 진행 중 OS 콜백이
-    /// 빠져나가기를 기다리므로 UI 스레드에서 하면 그만큼 멈춘다. 해제 뒤에 버리므로 그 사이
-    /// 도착하는 잔여 콜백은 없고, 실패는 삼킨다(정리 실패는 이미 버린 객체의 문제).
-    /// 호출부 = TearDownWatch(살아 있던 것) · EnsureWatch의 생성 실패 · AdoptWatch의 채택 거부.
-    /// </summary>
-    private void DiscardWatcher(FileSystemWatcher? watcher)
+    private static void DiscardWatcher(FolderWatch watcher)
     {
-        if (watcher is null) return;
-        watcher.Created -= OnWatcherEvent;
-        watcher.Deleted -= OnWatcherEvent;
-        watcher.Renamed -= OnWatcherEvent;
-        watcher.Changed -= OnWatcherEvent;
-        watcher.Error -= OnWatcherError;
+        watcher.StopNotifications(); // 이미 큐에 오른 콜백도 즉시 무효화한다.
         _ = Task.Run(() =>
         {
             try { watcher.Dispose(); }
-            catch { /* 뒷정리 실패는 무시 — ModuleWorker.Post와 같은 방침 */ }
+            catch { /* OS 감시 정리 실패는 이미 버린 세대의 문제다. */ }
         });
     }
 
-    /// <summary>
-    /// 감시 해제 (A94 5차): 이벤트 전부 해제 후 Dispose — FileSystemWatcher는 OS 콜백에 뿌리를
-    /// 두므로 Dispose 없이는 닫힌 창의 뷰 델리게이트째 살아남는다(정적 이벤트 구독과 같은 부류의
-    /// 누수). 디바운스 타이머도 멈춘다 — Unloaded 뒤 Tick이 죽은 뷰를 만지지 않게(핸들러 안
-    /// 상태 검사와 이중 방어). 보류 플래그도 버린다 — 재대상이면 곧 전체 스캔이 오고, Unloaded면
-    /// 소화할 곳이 없다(편집 커밋 직후의 재스캔이 보류분을 대신 덮는 근거이기도 하다).
-    /// A333: 세대 번호를 올려 <b>만들어지는 중이던</b> 감시자의 채택까지 함께 취소한다 —
-    /// 실물 폐기·Dispose는 DiscardWatcher 한 곳이 맡는다.
-    /// </summary>
     private void TearDownWatch()
     {
         _watchProbe.Cancel();
-        _watchSeq++; // A333 — 보류 중인 채택 무효화(만들어 오던 감시자는 AdoptWatch가 버린다)
+        _watchSeq++;
         if (_watcher is { } watcher)
         {
             _watcher = null;
             DiscardWatcher(watcher);
         }
-        _watchDebounce?.Stop();
-        _watchPending = false;
+        // 실행 중 재조회는 끝날 때까지 하나로 유지한다. 새 폴더의 이벤트가
+        // 도착해도 옛 작업의 finally가 두 번째 동시 작업을 허용하지 않는다.
+        _watchRefresh.ResetPending();
     }
 
     /// <summary>
-    /// 감시 이벤트(Created/Deleted/Renamed/Changed 공용) — FileSystemWatcher 콜백은 스레드풀로
-    /// 온다. 여기서는 UI 상태를 일절 만지지 않고 TryEnqueue 마셜만 한다(WinUI에는
-    /// SynchronizingObject 대상이 없다). 우리 조작(이동/복사/삭제)의 명시 재스캔과 겹칠 수 있지만
-    /// 억제 플래그는 두지 않는다 — 디바운스가 흡수하고, 최악이 중복 재스캔 1회(무해)라 단순 우선(사양).
+    /// 경로 확인부터 목록 반영까지 실행 하나 + 보류 하나. 편집 중은 시작도 반영도 보류한다.
+    /// 같은 폴더 자동 갱신은 감시를 끊지 않으며 늦은 결과는 load/watch 세대로 폐기한다.
     /// </summary>
-    private void OnWatcherEvent(object sender, FileSystemEventArgs e) =>
-        _watchQueue?.TryEnqueue(RestartWatchDebounce);
-
-    /// <summary>
-    /// 감시 오류(InternalBufferOverflowException = 이벤트 폭주로 개별 통지 유실 포함) =
-    /// 감시 재시작 시도 + 전체 재스캔 1회(사양). 재스캔은 디바운스 경유 — 편집 중 보류 규칙이
-    /// 같은 길을 타고, 폴더 자체가 사라진 경우도 만료 시 상위 이동으로 수렴한다.
-    /// 재시작 실패(폴더 소실 등)는 생성 실패와 같은 조용한 무감시다.
-    /// </summary>
-    private void OnWatcherError(object sender, ErrorEventArgs e) =>
-        _watchQueue?.TryEnqueue(() =>
-        {
-            if (!_surfaceLive || !ReferenceEquals(sender, _watcher)) return; // 재대상 뒤 옛 감시자의 잔여 오류 무시
-            EnsureWatch(_folder);
-            RestartWatchDebounce();
-        });
-
-    /// <summary>UI 스레드: 디바운스 타이머 되감기 — 마지막 이벤트 기준 400ms 병합(연속 이벤트 1회로).</summary>
-    private void RestartWatchDebounce()
-    {
-        if (!_surfaceLive || _folder.Length == 0) return; // Unloaded 뒤 도착한 잔여 마셜 — 죽은 뷰 방어
-        var timer = _watchDebounce ??= CreateWatchDebounce();
-        timer.Stop(); // 반복 타이머 — Stop 후 Start로 확실히 되감는다(전 모듈 관용구)
-        timer.Start();
-    }
-
-    private DispatcherTimer CreateWatchDebounce()
-    {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(WatchDebounceMs) };
-        timer.Tick += (_, _) =>
-        {
-            timer.Stop(); // 반복 타이머 — 1회 판정용이라 즉시 멈춘다(DocumentView DirtyTimer 관용구)
-            OnWatchDebounceExpired();
-        };
-        return timer;
-    }
-
-    /// <summary>
-    /// 디바운스 만료 = 전체 재스캔 1회. 항목별 증분 반영을 하지 않는 이유: 정렬(A5)·필터(A7)·
-    /// 썸네일 채우기·중앙 썸네일 동기(A93 ViewChanged)가 전부 기존 재스캔 경로(NavigateTo)에 이미
-    /// 있다 — 그 경로 재사용이 규칙이다. 재스캔 재진입은 NavigateToAsync의 _loadSeq(늦은 결과
-    /// 폐기)가 이미 막으므로 별도 방어를 더하지 않는다.
-    /// 이름변경 편집 중(ExplorerRenameBox)이면 재스캔이 편집 상자를 지우므로 보류 플래그만 세우고,
-    /// 편집 종료 알림(OnRenameEditEnded)에서 1회 소화한다.
-    /// 현재 폴더가 사라졌으면 가장 가까운 존재하는 상위로 이동한다(탐색기 동등 — 기존 NavigateTo
-    /// 경로 재사용). 루트까지 없으면 현재 폴더 재스캔이 기존 실패 경로("Cannot read this folder" +
-    /// 빈 목록 통지)로 떨어지고, 감시자도 재대상 실패로 꺼진다 = 감시 중지 + 빈 목록(사양).
-    /// </summary>
-    private bool _watchProbeRunning;
-    private readonly LatestRequest _watchProbe = new();
     private async void OnWatchDebounceExpired()
     {
-        if (!_surfaceLive || _folder.Length == 0) return; // Unloaded 직후 잔여 Tick 방어(타이머 Stop과 이중)
-        if (ExplorerRenameBox.IsEditing)
-        {
-            _watchPending = true; // 몇 번 만료돼도 소화는 1회 — bool 하나가 전부(큐 금지, 사양)
-            return;
-        }
-        _watchPending = false;
-        if (_watchProbeRunning) { _watchPending = true; return; }
-        _watchProbeRunning = true;
+        if (!_surfaceLive || _folder.Length == 0) return;
+        if (!_watchRefresh.Request(ExplorerRenameBox.IsEditing)) return;
         var folder = _folder;
         var watch = _watchSeq;
         var load = _loadSeq;
         var cancellation = _watchProbe.Begin();
         try
         {
-            var target = await Worker.Run(ctx => PathProbe.ExistingAncestor(folder, ctx.Cancellation), cancellation);
+            string target;
+            try
+            {
+                target = await Worker.Run(ctx => PathProbe.ExistingAncestor(folder, ctx.Cancellation), cancellation);
+            }
+            catch (OperationCanceledException) { return; }
+            catch { target = folder; } // 기존 열거 실패 안내 경로를 사용한다.
             if (!_surfaceLive || watch != _watchSeq || load != _loadSeq || folder != _folder) return;
-            if (ExplorerRenameBox.IsEditing) { _watchPending = true; return; }
-            NavigateTo(target, _extensions);
+            if (ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return; }
+            NavDiagnostics.Begin();
+            await NavigateToAsync(target, _extensions, fromWatch: true);
         }
         catch (OperationCanceledException) { }
-        catch (Exception)
+        catch (Exception ex)
         {
-            if (_surfaceLive && watch == _watchSeq && load == _loadSeq) NavigateTo(folder, _extensions);
+            DiagTrace.Write("watch", $"refresh failed {ex.GetType().Name}");
         }
         finally
         {
-            _watchProbeRunning = false;
-            if (_surfaceLive && _watchPending && !ExplorerRenameBox.IsEditing) RestartWatchDebounce();
+            _watchRefresh.Complete();
+            if (_surfaceLive && _watchRefresh.Pending && !ExplorerRenameBox.IsEditing)
+                _watcher?.RequestRefresh();
         }
     }
 
-    /// <summary>
-    /// 이름변경 편집 종료(커밋·취소·검증 실패 공통) 알림 수신 (A94 5차) — 편집 중 보류한 감시
-    /// 재스캔을 이제 소화한다. 만료 처리를 재사용하므로 다른 창의 편집이 아직 남아 있으면 도로
-    /// 보류되고, 커밋 성공 직후면 onRenamed의 재스캔(NavigateTo)이 방금 보류 플래그를 걷어 가
-    /// (TearDownWatch) 이중 스캔 없이 끝난다. 정적 이벤트 구독 — Loaded/Unloaded 수명 규칙.
-    /// </summary>
     private void OnRenameEditEnded()
     {
-        if (_watchPending) OnWatchDebounceExpired();
+        if (_watchRefresh.Pending) OnWatchDebounceExpired();
     }
 }

@@ -3,10 +3,10 @@ $ErrorActionPreference = 'Stop'
 if ($Rounds -lt 1 -or $Rounds -gt 10) { throw 'Rounds must be between 1 and 10.' }
 $repo = Split-Path $PSScriptRoot -Parent
 $tileSource = Get-Content -Raw -LiteralPath (Join-Path $repo 'src/KOTU.App/Controls/ThumbnailExplorer.xaml.cs')
-$paneSource = Get-Content -Raw -LiteralPath (Join-Path $repo 'src/KOTU.App/ExplorerPane.xaml.cs')
+$watchSource = Get-Content -Raw -LiteralPath (Join-Path $repo 'src/KOTU.Core/Threading/FolderWatch.cs')
 # 제품의 현재 메서드/필터를 추출한다. UI 전체를 실행하는 시험은 아니다.
 $miss = [regex]::Match($tileSource, '(?ms)^    private static void MarkPreviewMiss\(ExplorerEntryVm vm, bool timedOut\).*?^    }')
-$filter = [regex]::Match($paneSource, 'NotifyFilter = (NotifyFilters\.FileName[^,]+),')
+$filter = [regex]::Match($watchSource, 'Filters = (NotifyFilters\.FileName[^;]+);')
 if (!$miss.Success -or !$filter.Success) { throw 'Source shape changed; review the investigation probe.' }
 $method = $miss.Value.Replace('private static', 'public static')
 $filters = $filter.Groups[1].Value
@@ -105,7 +105,7 @@ try {
     if ($watch.WatcherErrors -ne 0 -or $watch.ContentControlCurrentEvents -lt 1 -or
         $watch.ContentControlWithAttributesEvents -lt 1) { throw 'Watcher control failed.' }
     foreach ($round in $watch.AttributeOnly) {
-        if ($round.CurrentEvents -ne 0 -or $round.WithAttributesEvents -lt 1 -or
+        if ($round.CurrentEvents -lt 1 -or $round.WithAttributesEvents -lt 1 -or
             !$round.LengthUnchanged -or !$round.ModifiedUnchanged) { throw 'Attribute-only observation differed.' }
     }
 } finally {
