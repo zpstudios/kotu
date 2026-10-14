@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -176,7 +177,7 @@ public sealed partial class ExplorerPane : UserControl
     private IReadOnlyList<ExplorerListing.Entry> _display = [];
     // A345 배치 1: _display와 같은 순서·같은 개수의 뷰모델 목록(데이터 축). 조립(Fill)은 이제
     // 이 목록을 소비하고 컨테이너 Tag에 뷰모델을 건다 — 공개 API가 돌려주는 Entry 목록은 무변경.
-    private IReadOnlyList<ExplorerEntryVm> _displayVms = [];
+    private readonly ObservableCollection<ExplorerEntryVm> _displayVms = [];
     private ExplorerListing.SortKey _sortKey = ExplorerListing.SortKey.Name;
     private bool _sortDesc; // A155 — 초기값 false = Name의 기본 방향(DefaultDescending(Name))과 일치
     private bool _showHidden; // A160 — explorer.showHidden(기본 false = 숨김·시스템 감춤)
@@ -287,13 +288,20 @@ public sealed partial class ExplorerPane : UserControl
             ExplorerRenameBox.EditEnded -= OnRenameEditEnded;
             ExplorerRenameBox.EditEnded += OnRenameEditEnded;
             _surfaceLive = true;
-            EnsureWatch(_folder); // 언로드 전에 항해한 폴더가 있으면(재오픈) 거기부터 다시 감시
+            if (_reloadAfterUnload && _folder.Length > 0)
+            {
+                _reloadAfterUnload = false;
+                NavigateTo(_folder, _extensions); // 해제 중 놓친 상태도 새로 열거한다.
+            }
+            else EnsureWatch(_folder); // 언로드 전에 항해한 폴더가 있으면(재오픈) 거기부터 다시 감시
         };
         Unloaded += (_, _) =>
         {
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             ExplorerRenameBox.EditEnded -= OnRenameEditEnded;
             _surfaceLive = false;
+            _reloadAfterUnload = true;
+            foreach (var vm in _displayVms) vm.Requests.Dispose();
             ++_loadSeq; // 해제 전 열거 결과가 재로드된 화면에 적용되지 않게 한다.
             // A345 배치 2: 분할 조립 루프(CompositionTarget.Rendering)와 완료 신호가 사라져
             // 여기서 풀어 줄 것이 없다 — 리스트는 ItemsSource 대입 한 줄로 동기 완결이다.
@@ -491,20 +499,18 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private void RefreshView(IReadOnlyList<ExplorerListing.Entry> input)
     {
-        var seq = ++_loadSeq; // 돌고 있던 길이·썸네일 루프 중단
+        var seq = ++_loadSeq; // 스캔/휴면 그리드 로더만 세대 변경. 재사용 행 요청은 유지.
         var arranged = ExplorerListing.Arrange(input, _sortKey, _sortDesc, _hiddenExts);
         DiagTrace.Write("nav", $"RefreshView {_folder} count={arranged.Count}"); // A352 배치 1
         _display = arranged; // A204 — 다음 정렬 변경의 입력(현재 표시 순서)
-        // A345 배치 1: 데이터 축을 여기서 한 번만 만든다 — 항목 컨테이너는 전부 이 뷰모델을 Tag로 든다.
-        _displayVms = arranged.Select(e => new ExplorerEntryVm(e)).ToList();
-        // A352: 상세 줄 초판(크기·날짜)을 여기서 전부 채운다 — 종전에는 RequestDetail이
-        // ContainerContentChanging(CCC) 안에서 행마다 대입했는데, 그 대입이 측정 중인 컨테이너의
-        // TextBlock을 바꿔 재측정을 부르고 한 레이아웃 패스에 수십 건이 겹치면 레이아웃 사이클로
-        // 프로세스가 소멸했다(0xC000027B — 관리 예외 없음). 여기는 ItemsSource 대입(Fill) 전이라
-        // 뷰모델이 아직 아무 컨테이너에도 바인딩돼 있지 않다 — 통지가 아무도 깨우지 않는다.
-        // 비용은 항목당 문자열 조립 2회뿐이라(10,000개 = 2만 회) 수 ms 수준이고, 그 대신
-        // "행 높이를 먼저 확보한다"는 초판의 목적은 실체화 이전에 값이 있으므로 더 잘 달성된다.
-        foreach (var vm in _displayVms) ApplyDetail(vm, DetailInfo.Empty);
+        var full = !ReferenceEquals(ListPane.ItemsSource, _displayVms);
+        var reuse = ExplorerEntryVm.Reconcile(_displayVms, arranged, vm =>
+        {
+            // 새 파일 상태는 옛 경로 캐시도 승계하지 않는다(명시 Refresh 포함).
+            _infoCache.Remove(vm.Path);
+            ApplyDetail(vm, DetailInfo.Empty);
+        });
+        DiagTrace.Write("reuse", $"list full={(full ? 1 : 0)} patch={(full ? 0 : 1)} reused={reuse.Reused} created={reuse.Created} removed={reuse.Removed}");
         _displayFolder = _folder; // A323 — 이 목록이 속한 폴더(셸 시드의 정합 판정용)
         Fill(arranged); // A345 배치 2 — 리스트는 ItemsSource 대입 한 줄(동기 완결)
         ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
@@ -676,7 +682,8 @@ public sealed partial class ExplorerPane : UserControl
     /// NavigateTo의 대기 가능형 (A94 2차) — 새 폴더 생성 직후 "재스캔 '완료 후' 그 항목으로
     /// 이름변경 편집 진입"(CreateFolderThenRenameAsync)이 스캔 완료 시점을 알아야 해서 분리했다.
     /// </summary>
-    private async Task NavigateToAsync(string folder, IReadOnlyList<string> extensions, bool fromWatch = false)
+    private async Task<bool> NavigateToAsync(string folder, IReadOnlyList<string> extensions, bool fromWatch = false,
+        WatchChanges? changes = null)
     {
         // A352 배치 1: 항해 시작 — 폴더와 담당 확장자 수(All Readable은 전 모듈 합집합이라 크다).
         DiagTrace.Write("nav", $"NavigateToAsync {folder} exts={extensions.Count}");
@@ -710,6 +717,10 @@ public sealed partial class ExplorerPane : UserControl
         // 편집 진입 대기(A192 WhenFillCompleteAsync)는 조립이 동기가 되며 함께 사라졌다.
         if (folderChanged)
         {
+            foreach (var vm in _displayVms) vm.Requests.Dispose();
+            _displayVms.Clear();
+            _entries = _display = [];
+            _displayFolder = string.Empty;
             IconGrid.Items.Clear();
             ListPane.ItemsSource = null; // A345 배치 2 — ItemsSource 상태에서 Items.Clear는 즉시 예외다
             EmptyText.Text = "Loading...";
@@ -745,12 +756,20 @@ public sealed partial class ExplorerPane : UserControl
         }
         catch (OperationCanceledException)
         {
-            return; // 페인이 내려가며 워커가 닫힘 — 그릴 곳도 없다
+            return false; // 페인이 내려가며 워커가 닫힘 — 그릴 곳도 없다
         }
         catch (Exception ex)
         {
-            if (seq != _loadSeq || (fromWatch && watchGeneration != _watchSeq)) return;
-            if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return; }
+            if (seq != _loadSeq || (fromWatch && watchGeneration != _watchSeq))
+            {
+                if (fromWatch && watchGeneration == _watchSeq) _watchRefresh.Defer();
+                return false;
+            }
+            if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return false; }
+            foreach (var vm in _displayVms) vm.Requests.Dispose();
+            _displayVms.Clear();
+            _entries = _display = [];
+            _displayFolder = string.Empty;
             IconGrid.Items.Clear();
             ListPane.ItemsSource = null; // A345 배치 2 — 위 folderChanged 경로와 같은 규칙
             EmptyText.Text = "Cannot read this folder: " + ex.Message;
@@ -761,7 +780,7 @@ public sealed partial class ExplorerPane : UserControl
             NavDiagnostics.Mark("fail");
             NavDiagnostics.ArmPaint("paint");
             DiagTrace.Write("nav", $"scan failed {folder} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
-            return;
+            return false;
         }
 
         // 계측 scan: 폴더 열거 결과 도착(= 워커 왕복 완료). yield>scan이 크면 정지의 원인은
@@ -769,9 +788,15 @@ public sealed partial class ExplorerPane : UserControl
         NavDiagnostics.Mark("scan");
         DiagTrace.Write("nav", $"scan done {folder} count={entries.Count}"); // A352 배치 1
 
-        if (seq != _loadSeq || (fromWatch && watchGeneration != _watchSeq)) return;
-        if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return; }
+        if (seq != _loadSeq || (fromWatch && watchGeneration != _watchSeq))
+        {
+            if (fromWatch && watchGeneration == _watchSeq) _watchRefresh.Defer();
+            return false;
+        }
+        if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return false; }
 
+        if (fromWatch && !folderChanged && changes is not null)
+            entries = ExplorerReuse.Entries(_entries, entries, changes);
         _entries = entries;
         // A179: 체크 집합 정리 — 재스캔 결과에 없는 경로(삭제·이동·이름변경·숨김 전환으로 소실)는
         // 걷어낸다. 세션 한정 확장자 필터(A7)는 열거가 아니라 표시 단계(Arrange)라 여기 안 걸린다 —
@@ -785,6 +810,7 @@ public sealed partial class ExplorerPane : UserControl
         // A204: 재스캔(폴더 감시 디바운스 포함)은 스캔 결과(이름순)에 최종 키 1개만 적용 —
         // 감시 재통지마다 화면이 흔들리지 않는다. 직전 표시 순서(_display)는 정렬 클릭 전용.
         RefreshView(_entries);
+        return true;
     }
 
     /// <summary>
@@ -806,12 +832,12 @@ public sealed partial class ExplorerPane : UserControl
     private void Fill(IReadOnlyList<ExplorerListing.Entry> entries)
     {
         IconGrid.Items.Clear();
-        ListPane.ItemsSource = null; // 옛 목록 해제(같은 참조 재대입이 무시되는 일도 함께 막는다)
+        // 같은 ObservableCollection을 유지해 변경 없는 행/표시 상세를 보존한다.
         // 계측 clr: 옛 목록 해제 비용을 새 목록 대입과 분리해 본다(둘 다 UI 스레드 동기다).
         NavDiagnostics.Mark("clr");
 
         // RefreshView가 방금 만든 뷰모델 목록 — entries와 같은 순서·같은 개수다.
-        ListPane.ItemsSource = _displayVms;
+        if (!ReferenceEquals(ListPane.ItemsSource, _displayVms)) ListPane.ItemsSource = _displayVms;
         // 계측 fill0: 리스트 대입 완료. 실제 컨테이너 생성은 레이아웃이 "보이는 행만" 하므로
         // 여기부터 fillN까지는 종전처럼 개수에 비례하지 않는다(가상화의 판별식).
         NavDiagnostics.Mark("fill0");
@@ -931,12 +957,11 @@ public sealed partial class ExplorerPane : UserControl
             // 그 구간에 셸 호출이 끼면 COM 대기가 메시지를 펌프해 XAML을 재진입시킨다).
             // RequestDetail의 첫 await 앞에는 셸 호출이 없지만(_infoCache 조회·게이트 WaitAsync뿐)
             // 대칭을 지켜 둔다 — 여기에 셸 호출이 하나 끼는 순간 되살아나는 종류의 사고다.
-            var seq = _loadSeq;
             DispatcherQueue.TryEnqueue(() =>
             {
                 // 한 틱 사이의 폴더 전환·컨테이너 재활용은 접는다(중앙 표면과 같은 두 겹 대조).
-                if (seq != _loadSeq || !ReferenceEquals(item.Content, vm)) return;
-                RequestDetail(vm, seq); // 보이는 행만 상세 조각 요청
+                if (vm.Requests.Token.IsCancellationRequested || !ReferenceEquals(item.Content, vm)) return;
+                RequestDetail(vm); // 보이는 행만 상세 조각 요청
             });
         }
     }
@@ -1360,8 +1385,10 @@ public sealed partial class ExplorerPane : UserControl
     /// 없다 — 대신 본문 전체를 try/catch로 감싸 예외가 UI 스레드로 새지 않게 한다.
     /// _infoCache와 뷰모델 대입은 종전대로 UI 스레드 단독이다(워커 람다는 순수 fetch뿐).
     /// </summary>
-    private async void RequestDetail(ExplorerEntryVm vm, int seq)
+    private async void RequestDetail(ExplorerEntryVm vm)
     {
+        var cancellation = vm.Requests.Token;
+        if (cancellation.IsCancellationRequested) return;
         try
         {
             // A352: 초판(크기·날짜) 대입은 RefreshView로 옮겼다 — 여기(CCC 호출 스택)에서
@@ -1380,28 +1407,28 @@ public sealed partial class ExplorerPane : UserControl
                 // 같은 폴더 재진입·재스캔은 전 항목이 히트라 한 레이아웃 패스에 수십 건이
                 // 겹치고, 그것이 이 사고의 실제 재현 경로였다(폴더 생성/복사 → 감시 재스캔).
                 // 디스패처 큐는 레이아웃 밖(현재 패스가 끝난 뒤 UI 스레드)이라 안전하다.
-                // 우선순위는 기본(Normal), 낡음 방어는 발사 시점 seq 대조 — 폴더가 바뀐 뒤
+                // 우선순위는 기본(Normal), 낡음 방어는 VM 요청 수명 대조 — 폴더가 바뀐 뒤
                 // 도착한 대입은 버린다(fetch 완료 경로와 같은 관용구).
                 if (hit.Details.Info.Length > 0)
                 {
                     var details = hit.Details;
                     DispatcherQueue.TryEnqueue(() =>
                     {
-                        if (seq == _loadSeq) ApplyDetail(vm, details);
+                        if (!cancellation.IsCancellationRequested) ApplyDetail(vm, details);
                     });
                 }
                 return; // 캐시 히트는 워커 없이 반영(종전 동작 — 이제 한 틱 뒤)
             }
 
-            await _detailGate.WaitAsync(); // UI 문맥 await — 후속부는 UI 스레드로 복귀
+            await _detailGate.WaitAsync(cancellation); // UI 문맥 await — 후속부는 UI 스레드로 복귀
             try
             {
-                if (seq != _loadSeq) return; // 폴더 전환 — 낡은 요청 폐기
+                if (cancellation.IsCancellationRequested) return; // 폴더 전환 — 낡은 요청 폐기
                 DetailInfo? details;
                 try
                 {
                     details = await FetchPool.Run(ctx => CloudFileAccess.ReadLocal(
-                        vm.Path, vm.IsPlaceholder, ctx.Cancellation, () => FetchDetailInfo(kind, vm.Path)));
+                        vm.Path, vm.IsPlaceholder, ctx.Cancellation, () => FetchDetailInfo(kind, vm.Path)), cancellation);
                 }
                 catch (OperationCanceledException)
                 {
@@ -1418,7 +1445,7 @@ public sealed partial class ExplorerPane : UserControl
                 // 수정시각이 그대로인 다운로드 완료 뒤 새 목록에서도 다시 조회할 수 있어야 한다.
                 if (details is null) return;
                 if (DiagTrace.Enabled) DiagTrace.Write("detail", "done " + vm.Path); // A352 배치 1
-                if (seq != _loadSeq) return; // 폴더 전환 — 낡은 결과 폐기
+                if (cancellation.IsCancellationRequested) return; // 폴더 전환 — 낡은 결과 폐기
                 if (_infoCache.Count > 4000) _infoCache.Clear(); // 장시간 세션 폭주 방지
                 _infoCache[vm.Path] = (vm.Entry.Modified, details); // 캐시 키는 종전대로 경로
                 if (details.Info.Length > 0) ApplyDetail(vm, details);
@@ -2451,6 +2478,8 @@ public sealed partial class ExplorerPane : UserControl
     private int _watchSeq;
     private readonly LatestRequest _watchProbe = new();
     private readonly RefreshRequestGate _watchRefresh = new();
+    private readonly WatchChanges _watchChanges = new();
+    private bool _reloadAfterUnload;
 
     /// <summary>OS 감시의 생성/해제는 워커에서, 채택/결과 반영은 UI에서 수행한다.</summary>
     private void EnsureWatch(string folder)
@@ -2464,12 +2493,14 @@ public sealed partial class ExplorerPane : UserControl
             FolderWatch made;
             try
             {
-                made = new FolderWatch(folder, action => queue.TryEnqueue(() => action()), error =>
+                made = new FolderWatch(folder, action => queue.TryEnqueue(() => action()), changes =>
                 {
                     // 이벤트마다 큐를 쓰지 않는다. 이 콜백은 400ms 정숙 뒤 한 번이며
                     // 생성 시 세대가 고정돼 옛 감시자의 일반 통지/오류 모두 폐기한다.
                     if (!_surfaceLive || seq != _watchSeq) return;
-                    if (error) EnsureWatch(_folder);
+                    // 재생성은 보류 집합을 지우므로 오류의 전체 무효화는 그 뒤 합친다.
+                    if (changes.Error) EnsureWatch(_folder);
+                    _watchChanges.Merge(changes);
                     OnWatchDebounceExpired();
                 });
             }
@@ -2509,6 +2540,7 @@ public sealed partial class ExplorerPane : UserControl
         // 실행 중 재조회는 끝날 때까지 하나로 유지한다. 새 폴더의 이벤트가
         // 도착해도 옛 작업의 finally가 두 번째 동시 작업을 허용하지 않는다.
         _watchRefresh.ResetPending();
+        _watchChanges.Clear();
     }
 
     /// <summary>
@@ -2523,6 +2555,8 @@ public sealed partial class ExplorerPane : UserControl
         var watch = _watchSeq;
         var load = _loadSeq;
         var cancellation = _watchProbe.Begin();
+        var changes = _watchChanges.Take();
+        var applied = false;
         try
         {
             string target;
@@ -2532,10 +2566,11 @@ public sealed partial class ExplorerPane : UserControl
             }
             catch (OperationCanceledException) { return; }
             catch { target = folder; } // 기존 열거 실패 안내 경로를 사용한다.
-            if (!_surfaceLive || watch != _watchSeq || load != _loadSeq || folder != _folder) return;
+            if (!_surfaceLive || watch != _watchSeq || folder != _folder) return;
+            if (load != _loadSeq) { _watchRefresh.Defer(); return; }
             if (ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return; }
             NavDiagnostics.Begin();
-            await NavigateToAsync(target, _extensions, fromWatch: true);
+            applied = await NavigateToAsync(target, _extensions, fromWatch: true, changes: changes);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -2544,6 +2579,7 @@ public sealed partial class ExplorerPane : UserControl
         }
         finally
         {
+            if (!applied && watch == _watchSeq) _watchChanges.Merge(changes);
             _watchRefresh.Complete();
             if (_surfaceLive && _watchRefresh.Pending && !ExplorerRenameBox.IsEditing)
                 _watcher?.RequestRefresh();

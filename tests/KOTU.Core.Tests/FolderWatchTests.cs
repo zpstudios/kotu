@@ -6,6 +6,31 @@ namespace KOTU.Core.Tests;
 
 public sealed class FolderWatchTests
 {
+    [Fact]
+    public void Debounce_delivers_both_rename_paths_and_preserves_new_dirty_during_apply()
+    {
+        var clock = new Clock(); var queue = new Queue<Action>();
+        var applied = new List<WatchChanges>();
+        DebouncedWatchEvents? events = null;
+        using (events = new DebouncedWatchEvents(TimeSpan.FromMilliseconds(400),
+            action => { queue.Enqueue(action); return true; }, changes =>
+            {
+                applied.Add(changes);
+                if (applied.Count == 1) events!.Signal(path: "later");
+            }, clock))
+        {
+            events.Signal(path: "new", oldPath: "old");
+            clock.Advance(400); queue.Dequeue()();
+            Assert.True(applied[0].Contains("old")); Assert.True(applied[0].Contains("new"));
+            Assert.False(applied[0].Contains("later"));
+            clock.Advance(400); queue.Dequeue()();
+            Assert.True(applied[1].Contains("later"));
+            events.Signal(); // 보류 작업을 깨우는 통지는 경로를 무효화하지 않는다.
+            clock.Advance(400); queue.Dequeue()();
+            Assert.False(applied[2].ForceAll); Assert.Equal(0, applied[2].PathCount);
+        }
+    }
+
     private sealed class Clock : TimeProvider
     {
         private long _ticks;
@@ -50,7 +75,7 @@ public sealed class FolderWatchTests
         var queue = new Queue<Action>();
         var applied = new List<bool>();
         using var events = new DebouncedWatchEvents(TimeSpan.FromMilliseconds(400),
-            action => { queue.Enqueue(action); return true; }, applied.Add, clock);
+            action => { queue.Enqueue(action); return true; }, changes => applied.Add(changes.Error), clock);
         for (var i = 0; i < 100; i++) { events.Signal(error: i == 5); clock.Advance(20); }
         Assert.Empty(queue);
         clock.Advance(379);
@@ -236,7 +261,7 @@ public sealed class FolderWatchTests
                 var seen = new TaskCompletionSource<ExplorerListing.Entry>(TaskCreationOptions.RunContinuationsAsynchronously);
                 using var watcher = new FolderWatch(root, action => { action(); return true; }, error =>
                 {
-                    if (error) seen.TrySetException(new IOException("Watcher error"));
+                    if (error.Error) seen.TrySetException(new IOException("Watcher error"));
                     else seen.TrySetResult(Assert.Single(ExplorerListing.List(root, ExplorerListing.AllFiles)));
                 });
                 File.SetAttributes(path, offline ? FileAttributes.Offline : FileAttributes.Normal);
@@ -268,7 +293,7 @@ public sealed class FolderWatchTests
             var length = before.Length;
             var modified = before.LastWriteTimeUtc;
             var seen = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var watcher = new FolderWatch(root, action => { action(); return true; }, error => seen.TrySetResult(error));
+            using var watcher = new FolderWatch(root, action => { action(); return true; }, error => seen.TrySetResult(error.Error));
             File.SetAttributes(path, File.GetAttributes(path) ^ FileAttributes.Hidden);
             Assert.False(await seen.Task.WaitAsync(TimeSpan.FromSeconds(10)));
             var after = new FileInfo(path);

@@ -20,7 +20,7 @@ public static class ExplorerListing
     /// </summary>
     public sealed record Entry(
         string Path, string Name, bool IsFolder, long Size, DateTime Modified, DateTime Created,
-        bool IsPlaceholder = false);
+        bool IsPlaceholder = false, FileAttributes Attributes = 0);
 
     /// <summary>
     /// 전체 파일 필터 (A196): 담당 확장자라는 개념이 없는 화면(설정·미지원 파일 안내)의 좌 리스트가
@@ -57,7 +57,8 @@ public static class ExplorerListing
                      .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
         {
             if (result.Count >= maxItems) return result;
-            result.Add(new Entry(d.FullName, d.Name, true, 0, d.LastWriteTime, d.CreationTime));
+            result.Add(new Entry(d.FullName, d.Name, true, 0, d.LastWriteTime, d.CreationTime,
+                Attributes: d.Attributes));
         }
 
         foreach (var f in info.EnumerateFiles()
@@ -66,7 +67,7 @@ public static class ExplorerListing
         {
             if (result.Count >= maxItems) return result;
             result.Add(new Entry(f.FullName, f.Name, false, f.Length, f.LastWriteTime, f.CreationTime,
-                IsCloudPlaceholder(f.Attributes))); // A175 — Where가 이미 읽은 Attributes 재사용
+                IsCloudPlaceholder(f.Attributes), f.Attributes)); // 열거한 속성 스냅샷 재사용
         }
 
         return result;

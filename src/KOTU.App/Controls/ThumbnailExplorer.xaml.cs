@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Text;
@@ -166,7 +167,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 목록을 돈다: 가상화 뒤에는 컨테이너가 화면 분량뿐이라 순회 결과가 스크롤 위치에 따라
     /// 달라지지만, 이 목록은 화면 밖 항목까지 전부 들고 있다.
     /// </summary>
-    private IReadOnlyList<ExplorerEntryVm> _vms = [];
+    private readonly ObservableCollection<ExplorerEntryVm> _vms = [];
 
     /// <summary>
     /// A233: 텍스트 프리뷰 읽기 전용 풀 — ExplorerPane._fetchPool과 같은 규칙(A194: 항목별
@@ -331,7 +332,11 @@ public sealed partial class ThumbnailExplorer : UserControl
                 _previewXamlRoot.Changed -= OnPreviewRasterScaleChanged;
                 _previewXamlRoot.Changed += OnPreviewRasterScaleChanged;
             }
-            if (_previewBatch.Token.IsCancellationRequested) _previewBatch.Restart();
+            if (_previewBatch.Token.IsCancellationRequested)
+            {
+                _previewBatch.Restart();
+                if (CurrentFolder is { } folder) ShowEntries(folder, _vms.Select(vm => vm.Entry).ToArray());
+            }
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
             ExplorerFileOps.CutMarksChanged += ApplyCutMarks;
         };
@@ -348,6 +353,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             // 지연 재생성으로 새 풀을 되살리는 길을 이 한 줄이 막는다.
             _showSeq++;
             _previewBatch.Dispose();
+            foreach (var vm in _vms) vm.Requests.Dispose();
             _textPool?.Dispose();
             _textPool = null;
             _thumbPool?.Dispose(); // A242 — 텍스트 풀과 같은 정리 규칙(보류 무산은 위 seq 선증가가 겸한다)
@@ -620,21 +626,21 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
-        _showSeq++;
-        _previewBatch.Restart(); // 진행 중이던 미리보기 요청 전부 낡음 처리(폴더 전환·재스캔 공통)
-        DiagTrace.Write("tiles", $"ShowEntries {folder} count={entries.Count}"); // A352 배치 1
+        if (!string.Equals(CurrentFolder, folder, StringComparison.OrdinalIgnoreCase))
+        {
+            _showSeq++;
+            _previewBatch.Restart();
+            foreach (var vm in _vms) vm.Requests.Dispose();
+        }
+        DiagTrace.Write("tiles", $"ShowEntries {folder} count={entries.Count}");
         CurrentFolder = folder;
         UpdateParentFolderButton();
-        TileGrid.ItemsSource = null; // 옛 목록 해제(같은 참조 재대입이 무시되는 일도 함께 막는다)
-
-        var vms = entries.Select(e => new ExplorerEntryVm(e)).ToList();
-        // A94 4차: 잘라내기 중인 경로면 처음부터 흐리게 — 종전 MakeTile의 생성 시점 반영을
-        // 뷰모델 쪽으로 옮긴 것이다(화면 반영은 x:Bind ContentOpacity).
-        foreach (var vm in vms) ExplorerFileOps.ApplyCutMark(vm);
-        _vms = vms;
+        var full = !ReferenceEquals(TileGrid.ItemsSource, _vms);
+        var reuse = ExplorerEntryVm.Reconcile(_vms, entries, ExplorerFileOps.ApplyCutMark);
+        DiagTrace.Write("reuse", $"tiles full={(full ? 1 : 0)} patch={(full ? 0 : 1)} reused={reuse.Reused} created={reuse.Created} removed={reuse.Removed}");
         EmptyText.Text = "No matching files here"; // A243 — ShowLoading의 "Loading..."을 원문구로 복원
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        TileGrid.ItemsSource = _vms;
+        if (!ReferenceEquals(TileGrid.ItemsSource, _vms)) TileGrid.ItemsSource = _vms;
         // 계측 cfill0: 목록 대입 완료(배치 3 이후의 뜻 — 종전 "첫 조각 60타일 생성 완료"가 아니다).
         // 실제 컨테이너 생성은 레이아웃이 보이는 만큼만 하므로 여기부터는 개수에 비례하지 않는다.
         NavDiagnostics.Mark("cfill0");
@@ -678,7 +684,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         CurrentFolder = folder;
         UpdateParentFolderButton(); // 좌 리스트(_folder)와 같은 시점 갱신 — 로딩 중 드랍·붙여넣기 대상 일치
         TileGrid.ItemsSource = null; // A345 배치 3 — 목록 해제가 곧 타일 비우기다
-        _vms = [];
+        foreach (var vm in _vms) vm.Requests.Dispose();
+        _vms.Clear();
         EmptyText.Text = "Loading...";
         EmptyText.Visibility = Visibility.Visible;
         // 계측 cload: 중앙 썸네일 쪽 로딩 화면 전환 완료(좌 리스트의 load 바로 뒤 — 두 표면의
@@ -718,6 +725,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             if (item.ContentTemplateRoot is Grid recycled)
             {
                 ExplorerRenameBox.ForceFinish(recycled); // 편집 중 스크롤 = 데이터 사고의 방지선
+                recycled.Tag = null;
                 PreviewHostOf(recycled)?.Children.Clear(); // 비트맵·텍스트 블록 해제
             }
             item.AllowDrop = false; // 잔존 방지 — 다음 항목이 파일이어도 드랍을 받지 않게
@@ -732,6 +740,14 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
         // A352 배치 1: 위상 0 = 타일 실체화. 대형 폴더에서 가장 뜨거운 지점이라 게이트 선검사.
         if (DiagTrace.Enabled) DiagTrace.Write("tiles", "phase0 " + vm.Path);
+        if (ReferenceEquals(root.Tag, vm) && host.Children.Count > 0)
+        {
+            // 같은 VM의 재측정은 표시 그림과 진행 중 요청을 그대로 둔다.
+            if (!vm.IsFolder && vm.PreviewText is null && !vm.PreviewKnownEmpty &&
+                !vm.PreviewInFlight && host.Tag is null) args.RegisterUpdateCallback(OnTilePreviewPhase);
+            return;
+        }
+        root.Tag = vm;
         host.Children.Clear(); // 재활용 잔존 방어(재활용 큐를 거치지 않고 바로 오는 경로 대비)
         host.Tag = null;
         host.SizeChanged -= OnPreviewHostSizeChanged;
@@ -880,7 +896,9 @@ public sealed partial class ThumbnailExplorer : UserControl
         DispatcherQueue.TryEnqueue(() =>
         {
             // 한 틱 사이에 폴더가 바뀌었거나 이 컨테이너가 다른 항목으로 재활용됐으면 접는다.
-            if (seq != _showSeq || !ReferenceEquals(item.Content, vm)) return;
+            if (seq != _showSeq || vm.Requests.Token.IsCancellationRequested ||
+                !ReferenceEquals(item.Content, vm) || vm.PreviewInFlight ||
+                vm.PreviewKnownEmpty || vm.PreviewText is not null) return;
             if (IsTextPreviewFile(entry)) // A233 — 내용 프리뷰
             {
                 if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill text " + entry.Path); // A352 배치 1
@@ -1204,7 +1222,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private async Task FillTextPreviewAsync(ExplorerEntryVm vm, int seq)
     {
-        var cancellation = _previewBatch.Token;
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(_previewBatch.Token, vm.Requests.Token);
+        var cancellation = request.Token;
         if (seq != _showSeq || cancellation.IsCancellationRequested) return;
         if (vm.PreviewInFlight) return; // 같은 항목의 중복 발사 방지
         vm.PreviewInFlight = true;
@@ -1226,6 +1245,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                     DiagTrace.Write("tiles", $"text failed {vm.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
                     return; // 읽기 실패·풀 닫힘(취소 Task) — 확장자 타일 유지(재시도 여지도 남긴다)
                 }
+                if (seq != _showSeq || cancellation.IsCancellationRequested) return;
                 if (text is null)
                 {
                     vm.PreviewKnownEmpty = true; // 빈 파일·전부 공백 — 다시 읽을 이유가 없다
@@ -1396,7 +1416,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private async Task FillShellThumbnailAsync(ExplorerEntryVm vm, int seq)
     {
-        var cancellation = _previewBatch.Token;
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(_previewBatch.Token, vm.Requests.Token);
+        var cancellation = request.Token;
         if (seq != _showSeq || cancellation.IsCancellationRequested) return;
         if (LivePreviewHostOf(vm) is not { } initialHost) return;
         var target = PreviewTarget(initialHost);

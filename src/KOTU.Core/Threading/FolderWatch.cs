@@ -8,7 +8,7 @@ public sealed class FolderWatch : IDisposable
     private readonly FileSystemWatcher _watcher;
     private readonly DebouncedWatchEvents _events;
 
-    public FolderWatch(string folder, Func<Action, bool> enqueue, Action<bool> apply)
+    public FolderWatch(string folder, Func<Action, bool> enqueue, Action<WatchChanges> apply)
     {
         _events = new DebouncedWatchEvents(TimeSpan.FromMilliseconds(400), enqueue, apply);
         try
@@ -33,7 +33,8 @@ public sealed class FolderWatch : IDisposable
         }
     }
 
-    private void OnChange(object sender, FileSystemEventArgs args) => _events.Signal();
+    private void OnChange(object sender, FileSystemEventArgs args) =>
+        _events.Signal(path: args.FullPath, oldPath: (args as RenamedEventArgs)?.OldFullPath);
     private void OnError(object sender, ErrorEventArgs args) => _events.Signal(error: true);
     public void RequestRefresh() => _events.Signal();
 

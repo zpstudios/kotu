@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using KOTU.Core.Routing;
+using KOTU.Core.Threading;
+using System.Collections.ObjectModel;
 
 namespace KOTU.App;
 
@@ -56,6 +58,19 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
 
     /// <summary>원본 스캔 결과 — 공개 API(SelectedEntry·ViewChanged·FillCompleted)가 돌려주는 값.</summary>
     internal ExplorerListing.Entry Entry { get; }
+
+    // Entry/VM은 한 파일 상태의 요청 세대다. 무효화 뒤 다시 살리지 않는다.
+    internal CancellableBatch Requests { get; } = new();
+
+    internal static (int Reused, int Created, int Removed) Reconcile(
+        ObservableCollection<ExplorerEntryVm> target, IReadOnlyList<ExplorerListing.Entry> entries,
+        Action<ExplorerEntryVm> initialize)
+    {
+        return ExplorerReuse.Items(target, entries, vm => vm.Entry,
+            vm => !vm.Requests.Token.IsCancellationRequested,
+            entry => { var vm = new ExplorerEntryVm(entry); initialize(vm); return vm; },
+            vm => vm.Requests.Dispose());
+    }
 
     // ---------- Entry 위임 getter ----------
     // Tag 패턴 매칭이 중첩 속성(Tag: ExplorerEntryVm { IsFolder: false })을 쓰므로 그대로 노출한다.

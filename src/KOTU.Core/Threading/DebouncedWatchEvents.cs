@@ -11,11 +11,12 @@ public sealed class DebouncedWatchEvents : IDisposable
     private readonly TimeSpan _delay;
     private readonly ITimer _timer;
     private readonly Func<Action, bool> _enqueue;
-    private readonly Action<bool> _apply;
+    private readonly Action<WatchChanges> _apply;
+    private readonly WatchChanges _changes = new();
     private long _lastEvent;
-    private bool _dirty, _error, _queued, _disposed;
+    private bool _dirty, _queued, _disposed;
 
-    public DebouncedWatchEvents(TimeSpan delay, Func<Action, bool> enqueue, Action<bool> apply,
+    public DebouncedWatchEvents(TimeSpan delay, Func<Action, bool> enqueue, Action<WatchChanges> apply,
         TimeProvider? clock = null)
     {
         if (delay <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(delay));
@@ -26,14 +27,16 @@ public sealed class DebouncedWatchEvents : IDisposable
         _timer = _clock.CreateTimer(_ => OnTimer(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
-    public void Signal(bool error = false)
+    public void Signal(bool error = false, string? path = null, string? oldPath = null)
     {
         lock (_sync)
         {
             if (_disposed) return;
             _lastEvent = _clock.GetTimestamp();
             _dirty = true;
-            _error |= error;
+            if (error) _changes.MarkError();
+            if (path is not null) _changes.Add(path);
+            if (oldPath is not null) _changes.Add(oldPath);
             if (!_queued) _timer.Change(_delay, Timeout.InfiniteTimeSpan);
         }
     }
@@ -59,7 +62,7 @@ public sealed class DebouncedWatchEvents : IDisposable
 
     private void Drain()
     {
-        bool error;
+        WatchChanges changes;
         lock (_sync)
         {
             if (_disposed) return;
@@ -70,10 +73,10 @@ public sealed class DebouncedWatchEvents : IDisposable
                 _timer.Change(remaining, Timeout.InfiniteTimeSpan);
                 return;
             }
-            error = _error;
-            _dirty = _error = false;
+            changes = _changes.Take();
+            _dirty = false;
         }
-        _apply(error);
+        _apply(changes);
     }
 
     public void Dispose()
@@ -82,7 +85,8 @@ public sealed class DebouncedWatchEvents : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            _dirty = _error = false;
+            _dirty = false;
+            _changes.Clear();
             _timer.Dispose();
         }
     }
