@@ -75,4 +75,9 @@ hydration은 이번에 재현하거나 측정하지 않았다. A401-b/c 성능 �
 시험 종료 후 KOTU 프로세스0, 합성 문서/이름변경 대상의 본문 불변을 확인했다.
 원래 설정을 복원한 SHA-256은
 `9C683168BCC5039A085C24678B8E4CE646241C9F73F027A36CECE331AFE775B1`로 백업과 일치한다.
-정본 `artifacts/a399-a/ui-cleanup.json`. 원격 발행은 아직 확인 전이다.
+정본 `artifacts/a399-a/ui-cleanup.json`.
+
+제품 커밋 `a245399` 저장 완료. master push는 자동 승인 검토가 공유 브랜치/자동 릴리스의
+명시적 원격 승인이 없다는 사유로 차단했다. 사용자에게 `github.com/zpstudios/kotu` master의
+제품 푸시와 v0.393.0 자동 릴리스 승인을 요청했으며 답변 전 우회하거나 재시도하지 않는다.
+원격 CI·정식 자산·새 설치/Standalone 실행은 아직 검증하지 않았다.
