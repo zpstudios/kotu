@@ -143,7 +143,24 @@ Prepare-Package의 자동 복사를 완료하지 못해 기존 `artifacts/native
 ## 배포 상태
 
 제품 v0.394.0 커밋은 `4e60cf7`이다. 첫 master push는 자동 승인 검토가 원격 대상과 자동 정식
-릴리스에 대한 이번 명시적 승인 근거 부족으로 차단했다. 원격 전송·새 release 성공으로 세지 않는다.
-사용자에게 `github.com/zpstudios/kotu` master 푸시와 v0.394.0 자동 릴리스 승인을 요청했다.
-승인되면 검증된 제품 커밋과 후속 기록을 전송하고 원격 build/release를 확인한다.
+릴리스에 대한 이번 명시적 승인 근거 부족으로 차단했다. 사용자가 `github.com/zpstudios/kotu`
+master 푸시와 v0.394.0 자동 릴리스를 명시 승인한 뒤 제품과 인계 기록을 포함한
+`ce6dd5d169e1e7339f1443b40041d0a28a0738c3` 전송을 완료했다.
+원격 build38535724777 / release38535724776 모두 이 HEAD에서 성공했다.
 A399 전체 제보의 실제 OneDrive 원인 해결이나 A399-c 재시도 완료는 선언하지 않는다.
+
+- [build38535724777](https://github.com/zpstudios/kotu/actions/runs/38535724777):
+  전체 솔루션 빌드0경고·0오류,8개 시험 프로젝트 합계621/621, 구조20·릴리스 게이트7,
+  Explorer COM3동사 및32K 초과 선택 전달 검증 성공.
+- [release38535724776](https://github.com/zpstudios/kotu/actions/runs/38535724776):
+  별도 전체 빌드0경고·0오류·621/621·COM 검사 성공. self-contained publish, 엔진/리소스와
+  실행본 시작 검사, 설치 및 설치본 해시 정합성, 업데이트 피드, Standalone 실행/설정·레지스트리
+  보존/정상 종료 정리 및 회귀 검사 성공. 워크플로의 Node20 폐기 안내와 vpk 업데이트 알림은
+  제품 컴파일 경고와 구분하며 이번 배치에서 도구 버전을 변경하지 않았다.
+- [v0.394.0 정식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.394.0)는
+  **2026-10-14 17:38:47 KST** 게시됐다. draft/prerelease=false, Latest 확인.
+  Setup·Portable·Standalone·full·delta(614,530bytes)·피드3개, 총8개 자산이 모두 uploaded다.
+  태그와 release target은 전송한 `ce6dd5d169e1e7339f1443b40041d0a28a0738c3`와 일치한다.
+- 로컬 증거는 `artifacts/a399-reuse/remote-build-summary.json`, `remote-release-verification.json`.
+  사용자의 설치본을 이번 배포물로 교체하는 별도 작업은 하지 않았다. 최종 결과 문서는
+  로컬 커밋으로 보존하고 문서만의 추가 push는 보류한다.
