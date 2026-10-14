@@ -77,7 +77,23 @@ hydration은 이번에 재현하거나 측정하지 않았다. A401-b/c 성능 �
 `9C683168BCC5039A085C24678B8E4CE646241C9F73F027A36CECE331AFE775B1`로 백업과 일치한다.
 정본 `artifacts/a399-a/ui-cleanup.json`.
 
-제품 커밋 `a245399` 저장 완료. master push는 자동 승인 검토가 공유 브랜치/자동 릴리스의
-명시적 원격 승인이 없다는 사유로 차단했다. 사용자에게 `github.com/zpstudios/kotu` master의
-제품 푸시와 v0.393.0 자동 릴리스 승인을 요청했으며 답변 전 우회하거나 재시도하지 않는다.
-원격 CI·정식 자산·새 설치/Standalone 실행은 아직 검증하지 않았다.
+제품 커밋 `a245399`의 첫 master push는 자동 승인 검토가 명시적 원격 승인 부족으로 차단했다.
+사용자가 `github.com/zpstudios/kotu` master의 제품 푸시·v0.393.0 자동 릴리스를 명시 승인한 뒤,
+제품과 인계 기록을 포함한 HEAD `4118594` 전송을 완료했다.
+
+## 원격 배포 검증
+
+- [build38514432119](https://github.com/zpstudios/kotu/actions/runs/38514432119)와
+  [release38514432120](https://github.com/zpstudios/kotu/actions/runs/38514432120) 모두 성공.
+  양쪽 전체 빌드0경고·0오류, 각609/609, Explorer COM3동사 검사를 로그로 확인했다.
+- 릴리스 작업의 실행본 정합성/시작·배포 피드·설치 및 설치본 정합성·Standalone 검사가 통과했다.
+  Standalone 로그에서 WinUI 시작·메모리 설정·업데이트 차단·AppData/레지스트리 보존·정상 종료 정리를 확인했다.
+- [v0.393.0](https://github.com/zpstudios/kotu/releases/tag/v0.393.0)은 **2026-10-14 14:09:35 KST** 정식 게시되었다.
+  Latest이며 draft/prerelease가 아니다. 태그와 두 실행의 HEAD는 모두
+  `41185947c5c1f039c8a47872154ead46678fd1e1`이다.
+- 자산8개가 모두 uploaded이며 크기가0보다 크다: Setup.exe, Portable.zip, Standalone.exe,
+  full/delta.nupkg, assets.win.json, releases.win.json, RELEASES. 델타도 생성됐다.
+  조회 근거 요약은 `artifacts/a399-a/remote-release.json`에 보존했다.
+
+위 설치/시작 검증은 GitHub의 일회용 Windows 러너 결과다. 로컬 사용자의 설치본을 교체하지 않았다.
+실제 OneDrive 공급자/제보 원인의 미검증 상태는 그대로다. 최종 기록의 문서 전용 추가 push는 보류한다.
