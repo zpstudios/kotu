@@ -142,5 +142,8 @@ Prepare-Package의 자동 복사를 완료하지 못해 기존 `artifacts/native
 
 ## 배포 상태
 
-제품 v0.394.0의 로컬 구현·검수·검증을 완료했다. 제품 커밋·push·원격 build/release 결과는
-확인 후 덧붙인다. A399 전체 제보의 실제 OneDrive 원인 해결이나 A399-c 재시도 완료는 선언하지 않는다.
+제품 v0.394.0 커밋은 `4e60cf7`이다. 첫 master push는 자동 승인 검토가 원격 대상과 자동 정식
+릴리스에 대한 이번 명시적 승인 근거 부족으로 차단했다. 원격 전송·새 release 성공으로 세지 않는다.
+사용자에게 `github.com/zpstudios/kotu` master 푸시와 v0.394.0 자동 릴리스 승인을 요청했다.
+승인되면 검증된 제품 커밋과 후속 기록을 전송하고 원격 build/release를 확인한다.
+A399 전체 제보의 실제 OneDrive 원인 해결이나 A399-c 재시도 완료는 선언하지 않는다.
