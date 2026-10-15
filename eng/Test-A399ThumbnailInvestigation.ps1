@@ -1,3 +1,5 @@
+# A399-c 이전 정책의 기준선 조사 도구. 새 정책 검증은 docs/A399-CONDITIONAL-RETRY.md 참조.
+# 제품 모양이 바뀌면 아래 추출 검사를 실패시킨다. 새 정책에 맞춰 옛 기준선을 변형하지 않는다.
 param([int]$Rounds = 3)
 $ErrorActionPreference = 'Stop'
 if ($Rounds -lt 1 -or $Rounds -gt 10) { throw 'Rounds must be between 1 and 10.' }

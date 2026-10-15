@@ -54,7 +54,11 @@ namespace KOTU.App;
 /// </summary>
 public sealed class ExplorerEntryVm : INotifyPropertyChanged
 {
-    internal ExplorerEntryVm(ExplorerListing.Entry entry) => Entry = entry;
+    internal ExplorerEntryVm(ExplorerListing.Entry entry)
+    {
+        Entry = entry;
+        Retry = new ThumbnailRetryCandidate(ThumbnailRetryRegistry.Process, entry.Path);
+    }
 
     /// <summary>원본 스캔 결과 — 공개 API(SelectedEntry·ViewChanged·FillCompleted)가 돌려주는 값.</summary>
     internal ExplorerListing.Entry Entry { get; }
@@ -120,18 +124,13 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
     internal string? AudioInfo { get; set; }
 
     /// <summary>
-    /// 미리보기로 얻을 것이 없다고 확정됐는지 (셸 썸네일 없음·파일 종류 아이콘·읽기 실패).
-    /// 확정된 항목은 재실체화돼도 다시 요청하지 않는다 — 없는 것을 스크롤할 때마다 다시
-    /// 물어보면 왕복 스크롤이 그대로 IO 폭주가 된다.
+    /// 최근 요청에서 표시할 미리보기를 얻지 못했는지. 일반 재실체화 요청은 억제한다.
+    /// 정상 완료 CacheMiss/Icon은 별도 Retry 후보가 유한하게 회복할 수 있다.
     /// </summary>
     internal bool PreviewKnownEmpty { get; set; }
 
-    /// <summary>
-    /// 미리보기 요청이 셸 시한(ShellFetch.Timeout)을 한 번 넘겼는지 (A352 배치 3).
-    /// 시한 초과는 파일이 아니라 동기화가 원인일 수 있어 한 번은 유예하고(재실체화 시 재시도),
-    /// 두 번째부터는 PreviewKnownEmpty로 굳힌다 — 무한 재시도 방지.
-    /// </summary>
-    internal bool PreviewTimedOut { get; set; }
+    /// <summary>정상 완료 miss의 유한 예약. 예산은 VM 밖 프로세스 경로 registry에 있다.</summary>
+    internal ThumbnailRetryCandidate Retry { get; }
 
     /// <summary>
     /// 지금 이 항목의 미리보기를 비동기로 요청해 둔 상태인지 — 같은 뷰모델이 위상 1을 두 번

@@ -39,6 +39,10 @@
     -->
     <ProjectPriFileName>resources.pri</ProjectPriFileName>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(KotuThumbnailHarness)' == 'true'">
+    <DefineConstants>$(DefineConstants);KOTU_THUMBNAIL_TEST_HARNESS</DefineConstants>
+    <StartupObject>KOTU.App.Integration.ThumbnailRetryHarness</StartupObject>
+  </PropertyGroup>
   <ItemGroup>
     <!-- 1.8: LibVLCSharp.WinUI(동영상 모듈)의 최소 요구 버전에 맞춰 전 프로젝트 통일 -->
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />

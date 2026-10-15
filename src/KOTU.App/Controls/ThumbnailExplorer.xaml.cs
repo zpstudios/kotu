@@ -325,6 +325,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         // (ExplorerPane과 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
         Loaded += (_, _) =>
         {
+            StartRetrySurface();
             _previewXamlRoot = XamlRoot;
             if (_previewXamlRoot is not null)
             {
@@ -342,6 +343,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         };
         Unloaded += (_, _) =>
         {
+            StopRetrySurface();
             if (_previewXamlRoot is not null) _previewXamlRoot.Changed -= OnPreviewRasterScaleChanged;
             _previewXamlRoot = null;
             ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
@@ -740,6 +742,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
         // A352 배치 1: 위상 0 = 타일 실체화. 대형 폴더에서 가장 뜨거운 지점이라 게이트 선검사.
         if (DiagTrace.Enabled) DiagTrace.Write("tiles", "phase0 " + vm.Path);
+        ConsiderRetry(vm);
         if (ReferenceEquals(root.Tag, vm) && host.Children.Count > 0)
         {
             // 같은 VM의 재측정은 표시 그림과 진행 중 요청을 그대로 둔다.
@@ -765,7 +768,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             host.Children.Add(MakeTextPreviewBlock(cached));
             return;
         }
-        if (vm.PreviewKnownEmpty) // 얻을 것이 없다고 확정된 항목 — 다시 요청하지 않는다
+        if (vm.PreviewKnownEmpty) // 일반 재실체화 요청 억제. 정상 miss의 유한 Retry는 별도다.
         {
             if (vm.AudioInfo is { } info) host.Children.Add(MakeAudioInfoText(vm.Entry, info)); // A270
             return;
@@ -831,7 +834,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             DependencyObject? node = host;
             while (node is not null && node is not GridViewItem) node = VisualTreeHelper.GetParent(node);
             if (node is not GridViewItem item || VmOf(item) is not { } vm || vm.IsFolder ||
-                vm.PreviewKnownEmpty || IsTextPreviewFile(vm.Entry) || !ReferenceEquals(LivePreviewHostOf(vm), host)) return;
+                vm.PreviewKnownEmpty || _retryReady.ContainsKey(vm) || IsTextPreviewFile(vm.Entry) || !ReferenceEquals(LivePreviewHostOf(vm), host)) return;
             var target = PreviewTarget(host);
             if (target.Width <= 0 || target.Height <= 0 || Equals(host.Tag, target)) return;
             _ = FillShellThumbnailAsync(vm, seq);
@@ -898,7 +901,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             // 한 틱 사이에 폴더가 바뀌었거나 이 컨테이너가 다른 항목으로 재활용됐으면 접는다.
             if (seq != _showSeq || vm.Requests.Token.IsCancellationRequested ||
                 !ReferenceEquals(item.Content, vm) || vm.PreviewInFlight ||
-                vm.PreviewKnownEmpty || vm.PreviewText is not null) return;
+                vm.PreviewKnownEmpty || _retryReady.ContainsKey(vm) || vm.PreviewText is not null) return;
             if (IsTextPreviewFile(entry)) // A233 — 내용 프리뷰
             {
                 if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill text " + entry.Path); // A352 배치 1
@@ -911,7 +914,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             // A352 배치 4: placeholder 갈래도 여기로 합쳐졌다 — 종전에는 배지 없이 돌았지만 두
             // 갈래가 다르게 보일 이유가 없어 배지 붙는 쪽으로 통일했다(잠깐 보였다 사라진다).
             // A352 배치 2·4: 로컬 이미지 원본도 클라우드 전용 파일도 여기로 온다. 셸이 이미지에
-            // 파일 종류 아이콘(ThumbnailType.Icon)을 돌려주는 건 손상·미지원 형식뿐이므로,
+            // 파일 종류 아이콘(ThumbnailType.Icon)은 현재 결과 유형일 뿐 영구 미제공 증거가 아니다.
             // FetchTilePreview의 A270 ③ 규칙(아이콘형 = Bytes null → 확장자 타일 유지)은
             // 이미지에도 그대로 옳고, placeholder는 entry.IsPlaceholder가 워커의 cachedOnly가
             // 되어 A175(하이드레이션 금지)를 그대로 지킨다.
@@ -1410,15 +1413,17 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 같다 — 재실체화된 새 자리에는 걷어낼 배지가 애초에 없다. 워커 결과는 그 판정보다
     /// <b>먼저</b> 뷰모델에 남긴다 — 오디오 정보는 AudioInfo에, "썸네일 없음"은
     /// PreviewKnownEmpty에. 그래야 화면에 못 얹은 결과도 다음 실체화에서 재사용된다.
-    /// 성공한 비트맵만은 남기지 않는다(메모리 — 재추출은 셸 썸네일 캐시 덕에 싸다, A242 근거).
-    /// 즉 재활용 뒤 그 항목이 다시 보이면 셸 썸네일은 다시 fetch된다(사양).
+    /// 일반 성공 비트맵은 재활용 뒤 다시 fetch한다. 자동 성공이 편집/비가시 상태에서 도착하면
+    /// Retry partial이 최대3개를 임시 보관하여 다음 표시 때 추가 요청 없이 적용한다.
     /// </para>
     /// </summary>
-    private async Task FillShellThumbnailAsync(ExplorerEntryVm vm, int seq)
+    private async Task FillShellThumbnailAsync(ExplorerEntryVm vm, int seq, bool automatic = false,
+        CancellationToken retryCancellation = default)
     {
-        using var request = CancellationTokenSource.CreateLinkedTokenSource(_previewBatch.Token, vm.Requests.Token);
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(_previewBatch.Token, vm.Requests.Token, retryCancellation);
         var cancellation = request.Token;
         if (seq != _showSeq || cancellation.IsCancellationRequested) return;
+        if (automatic && (!IsRetryVisible(vm) || ExplorerRenameBox.IsEditing)) return;
         if (LivePreviewHostOf(vm) is not { } initialHost) return;
         var target = PreviewTarget(initialHost);
         if (target.Width <= 0 || target.Height <= 0) return;
@@ -1429,35 +1434,40 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             using var lease = await CancellableBatch.EnterAsync(_thumbFetchGate, cancellation); // UI 문맥 await — 후속부는 UI 스레드로 복귀
             {
-                if (seq != _showSeq) return; // ① 대기 중 낡음 — 발사 자체를 접는다
+                if (seq != _showSeq || cancellation.IsCancellationRequested ||
+                    (automatic && (!IsRetryVisible(vm) || ExplorerRenameBox.IsEditing))) return;
                 var entry = vm.Entry;
-                var wantAudioInfo = IsAudioInfoFile(entry);
-                (ThumbnailRaster.Pixels? Pixels, string? Info) result;
-                var timedOut = false; // A352 배치 3: 시한 초과인가 — 없음 확정과 가르는 표지
+                var wantAudioInfo = !automatic && IsAudioInfoFile(entry);
+                TilePreview result;
                 try
                 {
-                    result = await ThumbPool.Run(
-                        ctx => FetchTilePreview(entry.Path, entry.IsPlaceholder, wantAudioInfo, target, ctx.Cancellation), cancellation);
-                    cancellation.ThrowIfCancellationRequested();
+                    result = await ThumbPool.Run(ctx => RunTilePreview(entry.Path, entry.IsPlaceholder,
+                        wantAudioInfo, target, ctx.Cancellation, automatic), cancellation);
                 }
                 catch (OperationCanceledException) { return; }
                 catch (Exception ex)
                 {
-                    result = (null, null); // 추출 실패·풀 닫힘(취소 Task) — 아래 공통 실패 경로로
-                    // 워커가 던진 예외는 풀이 그대로 옮겨 주므로(ModuleWorker.Run) 여기서 TimeoutException을
-                    // 원형 그대로 만난다 — 시한 초과만 "없음 확정"에서 빼고 나머지는 종전대로다.
-                    timedOut = ShellFetch.IsTimeout(ex);
-                    DiagTrace.Write("tiles", timedOut
-                        ? "shell timeout " + entry.Path // A352 배치 3
-                        : $"shell failed {entry.Path} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
+                    result = new(null, null, ClassifyPreviewFailure(ex));
                 }
+                if (result.Started) ObserveRetry(vm, result);
+                if (automatic && result.Pixels is not null && seq == _showSeq && !vm.Requests.Token.IsCancellationRequested)
+                {
+                    vm.PreviewKnownEmpty = false;
+                    if (!IsRetryVisible(vm) || ExplorerRenameBox.IsEditing || cancellation.IsCancellationRequested)
+                    {
+                        DeferReadyPreview(vm, result);
+                        return;
+                    }
+                }
+                if (result.Outcome == ThumbnailOutcome.Cancelled) return;
+                if (automatic && (!IsRetryVisible(vm) || ExplorerRenameBox.IsEditing)) return;
                 if (seq != _showSeq || cancellation.IsCancellationRequested) return;
                 // 완성 픽셀과 오디오 정보를 분리한다. 디코드·축소는 이미 워커에서 끝났다.
                 var pixels = result.Pixels;
-                var info = result.Info;
+                var info = result.Info ?? vm.AudioInfo;
                 // ② 화면 판정보다 먼저 캐시에 남긴다 — 재활용됐어도 다음 실체화가 재사용한다.
                 if (info is not null) vm.AudioInfo = info;
-                if (pixels is null) MarkPreviewMiss(vm, timedOut); // A352 배치 3 — 시한 초과는 1회 유예
+                vm.PreviewKnownEmpty = pixels is null;
                 if (seq != _showSeq) return; // ③ 폴더 전환
                 if (pixels is null)
                 {
@@ -1508,27 +1518,6 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 미리보기를 못 얻은 항목의 뒷정리 (A352 배치 3) — 종전에는 두 갈래(캐시 썸네일·셸 썸네일)가
-    /// 공유했고, 배치 4에서 캐시 썸네일 갈래가 사라져 지금 호출부는 셸 썸네일 갈래 한 곳이다.
-    /// <para>
-    /// 평범한 실패(썸네일 없음·아이콘형·읽기 실패)는 종전대로 <see cref="ExplorerEntryVm.PreviewKnownEmpty"/>로
-    /// 굳혀 재실체화 때 다시 묻지 않는다. <b>시한 초과만 다르다</b>: 그때는 파일이 아니라 동기화가
-    /// 원인이라 잠시 뒤에는 성공할 수 있으므로 한 번은 유예한다(재실체화 시 1회 재시도).
-    /// 무한 재시도를 막는 것이 <see cref="ExplorerEntryVm.PreviewTimedOut"/>이다 —
-    /// 두 번째 시한 초과부터는 없음 확정으로 넘긴다.
-    /// </para>
-    /// </summary>
-    private static void MarkPreviewMiss(ExplorerEntryVm vm, bool timedOut)
-    {
-        if (!timedOut || vm.PreviewTimedOut)
-        {
-            vm.PreviewKnownEmpty = true;
-            return;
-        }
-        vm.PreviewTimedOut = true; // 첫 시한 초과 — 다음 실체화가 한 번 더 물어본다
-    }
-
-    /// <summary>
     /// 워커 스레드: 타일 지연 교체 1회분 — 셸 썸네일 바이트(A242)와 오디오 정보 텍스트(A270)를
     /// 한 번의 왕복으로 함께 읽는다(StorageFile 취득도 1회. 파일당 워커 왕복이 2회가 되면
     /// 게이트 상한이 사실상 반토막 나고 seq 대조도 두 벌이 된다 — 통합이 그 둘을 다 막는다).
@@ -1549,45 +1538,76 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// (되돌리려면 Type 판정 한 줄만 지우면 A242 종전 동작으로 복귀한다).
     /// 예외(잠김·삭제 경합)는 호출부 catch가 삼킨다.
     /// </summary>
-    private static (ThumbnailRaster.Pixels? Pixels, string? Info) FetchTilePreview(
-        string path, bool cachedOnly, bool wantAudioInfo, ThumbnailRaster.Target target, CancellationToken cancellation)
-    {
-        // A399: 게이트 대기 중 온라인 전용으로 바뀔 수 있다. 속성 조회도 워커에서만 수행한다.
-        // 열거 시 보호는 낮추지 않으며, 조회 실패면 썸네일은 캐시 한정·오디오 속성은 생략한다.
-        // 검사와 셸 요청은 원자적이지 않고, ReturnOnlyIfCached도 제공자 전체 동작의 보증은 아니다.
-        cachedOnly = !CloudFileAccess.CanReadContent(path, cachedOnly, cancellation);
-        wantAudioInfo &= !cachedOnly;
-        var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path), cancellation);
+    private sealed record TilePreview(ThumbnailRaster.Pixels? Pixels, string? Info,
+        ThumbnailOutcome Outcome, bool AudioFailed = false, bool Started = true, ThumbnailRaster.Target Target = default);
 
+    private static ThumbnailOutcome ClassifyPreviewFailure(Exception ex) => ex switch
+    {
+        OperationCanceledException => ThumbnailOutcome.Cancelled,
+        TimeoutException => ThumbnailOutcome.Timeout,
+        InvalidDataException or ArgumentException => ThumbnailOutcome.InvalidOrOversized,
+        UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException => ThumbnailOutcome.AccessDeniedOrMissing,
+        _ => ThumbnailOutcome.OtherFailure,
+    };
+
+    private static TilePreview RunTilePreview(string path, bool listedPlaceholder, bool wantAudioInfo,
+        ThumbnailRaster.Target target, CancellationToken cancellation, bool automatic)
+    {
+        cancellation.ThrowIfCancellationRequested(); // 게이트/워커 대기 취소는 native 시도가 아니다.
+        using var attempt = ThumbnailRetryRegistry.Process.Begin(path, automatic);
+        if (automatic && attempt is null) return new(null, null, ThumbnailOutcome.Cancelled, Started: false);
+        TilePreview result;
+        try
+        {
+            result =
+#if KOTU_THUMBNAIL_TEST_HARNESS
+                HarnessProvider is { } provider ? provider(path, automatic, wantAudioInfo, target, cancellation) :
+#endif
+                FetchTilePreview(path, listedPlaceholder, wantAudioInfo, target, cancellation, automatic);
+        }
+        catch (Exception ex) { result = new(null, null, ClassifyPreviewFailure(ex)); }
+        result = result with { Target = target };
+        // 발사 뒤 취소는 제공자가 결과를 돌려줘도 잔류 위험을 보수적으로 기록한다.
+        attempt?.Complete(cancellation.IsCancellationRequested ? ThumbnailOutcome.Cancelled : result.Outcome, result.AudioFailed);
+        if (DiagTrace.Enabled) DiagTrace.Write("retry", $"result={(int)result.Outcome} auto={(automatic ? 1 : 0)} audioFailed={(result.AudioFailed ? 1 : 0)}");
+        return result;
+    }
+
+    private static TilePreview FetchTilePreview(string path, bool listedPlaceholder, bool wantAudioInfo,
+        ThumbnailRaster.Target target, CancellationToken cancellation, bool automatic)
+    {
+        var access = ThumbnailAccessPlan.Create(automatic,
+            CloudFileAccess.CanReadContent(path, listedPlaceholder, cancellation), wantAudioInfo);
+        var cachedOnly = access.CachedOnly;
+        wantAudioInfo = access.ReadAudio;
+        var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path), cancellation);
         string? info = null;
+        var audioFailed = false;
         if (wantAudioInfo)
         {
-            try
-            {
-                info = FetchAudioInfo(file, cancellation);
-            }
+            try { info = FetchAudioInfo(file, cancellation); }
             catch (OperationCanceledException) { throw; }
-            catch
-            {
-                info = null; // 속성 핸들러 없음·조회 실패 — 정보 없이 썸네일만 간다(조각 전부 생략)
-            }
+            catch { audioFailed = true; } // timeout이 삼켜져도 최종 miss의 재시도 자격은 낮춘다.
         }
-
-        cancellation.ThrowIfCancellationRequested();
-        using var thumb = ShellFetch.WaitOrThrow(cachedOnly
-            ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth,
-                ThumbnailOptions.ReturnOnlyIfCached)
-            : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth), cancellation, late => late?.Dispose());
-        if (thumb is null || thumb.Size == 0) return (null, info);
-        if (thumb.Type == ThumbnailType.Icon) return (null, info); // A270 ③ — 교체 생략(복구 = 이 줄 삭제)
-        if (thumb.Size > ThumbnailRaster.MaxEncodedBytes) return (null, info);
-
-        cancellation.ThrowIfCancellationRequested();
-        using var stream = thumb.AsStreamForRead();
-        using var buffer = new MemoryStream((int)thumb.Size);
-        stream.CopyTo(buffer);
-        cancellation.ThrowIfCancellationRequested();
-        return (ThumbnailRaster.Decode(buffer.ToArray(), target, cancellation), info);
+        try
+        {
+            cancellation.ThrowIfCancellationRequested();
+            using var thumb = ShellFetch.WaitOrThrow(cachedOnly
+                ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth, ThumbnailOptions.ReturnOnlyIfCached)
+                : file.GetThumbnailAsync(ThumbnailMode.SingleItem, PreviewDecodeWidth), cancellation, late => late?.Dispose());
+            if (thumb is null || thumb.Size == 0) return new(null, info, ThumbnailOutcome.CacheMiss, audioFailed);
+            if (thumb.Type == ThumbnailType.Icon) return new(null, info, ThumbnailOutcome.IconFallback, audioFailed);
+            if (thumb.Size > ThumbnailRaster.MaxEncodedBytes) return new(null, info, ThumbnailOutcome.InvalidOrOversized, audioFailed);
+            cancellation.ThrowIfCancellationRequested();
+            using var stream = thumb.AsStreamForRead();
+            using var buffer = new MemoryStream((int)thumb.Size);
+            stream.CopyTo(buffer);
+            cancellation.ThrowIfCancellationRequested();
+            try { return new(ThumbnailRaster.Decode(buffer.ToArray(), target, cancellation), info, ThumbnailOutcome.Available, audioFailed); }
+            catch (OperationCanceledException) { throw; }
+            catch { return new(null, info, ThumbnailOutcome.InvalidOrOversized, audioFailed); }
+        }
+        catch (Exception ex) { return new(null, info, ClassifyPreviewFailure(ex), audioFailed); }
     }
 
     // ---------- 오디오 타일 정보 (A270) ----------

@@ -28,8 +28,8 @@ internal static class ShellFetch
 
     /// <summary>
     /// 워커 스레드용 동기 대기 — 시한을 넘기면 <see cref="TimeoutException"/>.
-    /// 호출부는 이 예외를 "실패"로 접되 <b>"없음 확정"으로는 굳히지 않는다</b>
-    /// (동기화가 끝난 뒤 다시 물으면 성공할 수 있다 — ThumbnailExplorer의 PreviewTimedOut 규칙).
+    /// 중앙 타일은 이 결과로 자동 재시도를 차단한다. 원 작업의 종료를 뜻하지 않으므로
+    /// 새 VM에서도 프로세스 경로 registry의 보수 차단을 유지한다.
     /// </summary>
     internal static T WaitOrThrow<T>(IAsyncOperation<T> operation,
         CancellationToken cancellation = default, Action<T>? discard = null)
