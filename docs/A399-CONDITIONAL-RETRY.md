@@ -161,7 +161,20 @@ harness 형식·메서드·필드가 모두0이다. SHA-256은
 최종 소스 해시는 `current/final-source-hashes.json`, 사용자 상태는 `current/user-state-after.json`이다.
 설정 해시가 기준과 같고 데스크톱 목록에서 원래 설치본 ZIP 창1개·시험 창0개를 확인했다.
 제한 실행의 프로세스 목록만으로 실제 데스크톱 앱 부재를 추정하지 않았다. 설치/시작/Standalone과
-원격 정식 발행은 제품 push 뒤 확인한다.
+원격 정식 발행은 아래와 같이 확인했다.
+
+## 원격 배포 검증
+
+제품 커밋 `7cdbb0db7269eb4d8f8f457ccdeb5cb4e62f8acc`를 master에 전송했다.
+[build38714341045](https://github.com/zpstudios/kotu/actions/runs/38714341045)와
+[release38714341047](https://github.com/zpstudios/kotu/actions/runs/38714341047) 모두 성공했다.
+두 작업 각각 전체645/645·0경고·0오류·Explorer COM3동사가 통과했다. 릴리스의 실행본 시작·
+설치 및 설치본 정합성·Standalone 회귀/실제 시작·설정/레지스트리 보존·종료 정리 검사가 성공했다.
+
+2026-10-15 **18:46:01 KST** [v0.395.0 정식 게시](https://github.com/zpstudios/kotu/releases/tag/v0.395.0).
+태그/원격 master/제품 커밋이 일치하며 Latest·draft=false·prerelease=false를 확인했다.
+자산8개(델타967,601bytes 포함) 모두 존재한다. 로컬 증거는 `current/remote-build-summary.json`과
+`current/remote-release-summary.json`이다. 최종 확인 문서는 로컬 커밋으로 보존하고 추가 push는 보류한다.
 
 ## API 근거
 

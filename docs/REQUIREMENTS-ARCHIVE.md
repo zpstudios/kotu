@@ -1,6 +1,6 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
-## A399 — 완료된 보호·감시·재사용 배치
+## A399 — 완료된 보호·감시·재사용·조건부 재시도 배치
 
 - A399-b(v0.392.0): 요청 직전 placeholder/속성 실패를 워커에서 확인하고 캐시 한정·오디오 생략을
   적용했다. 전체580/580, 원격 설치·시작·Standalone·자산8개 확인. 정본 `A399-REQUEST-TIME-CLOUD-GUARD.md`.
@@ -11,8 +11,12 @@
   명시 Refresh 강제 요청. 전체621/621, 실제 지속450ms100회→69검색·전체 VM 교체0·불변 요청0.
   제품4e60cf7, 인계 포함ce6dd5d 전송 뒤 build38535724777 / release38535724776 성공.
   2026-10-14 17:38:47 KST 정식 게시, 설치·시작·Standalone·자산8개 확인. 정본 `A399-ENTRY-REUSE.md`.
-- 이 세 배치의 완료가 실제 OneDrive 제보 원인이나 제공자 hydration 검증 완료를 뜻하지 않는다.
-  현재 조건부 재시도 및 잔여 확인은 REQUIREMENTS 상단과 `A399-CONDITIONAL-RETRY.md`를 참조한다.
+- A399-c(v0.395.0): 정상 miss/Icon의 캐시 한정2회와 프로세스 경로 예산, 가시성·편집·수명 보호.
+  전체645/645·실제 WinUI 합성6시나리오·원격 build38714341045 / release38714341047 성공,
+  설치·시작·Standalone·자산8개 확인.2026-10-15 18:46:01 KST 정식 게시, 태그/제품7cdbb0d 일치.
+  정본 `A399-CONDITIONAL-RETRY.md`.
+- 이 네 배치의 완료가 실제 OneDrive 제보 원인이나 제공자 hydration 검증 완료를 뜻하지 않는다.
+  잔여 확인은 REQUIREMENTS 상단과 `A399-CONDITIONAL-RETRY.md`를 참조한다.
 
 ## A395 — 영상 Fit 통합 분할 버튼(v0.391.0)
 
