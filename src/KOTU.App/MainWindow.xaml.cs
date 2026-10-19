@@ -2183,6 +2183,19 @@ public sealed partial class MainWindow : Window
         // 먼저다(ExplorerRenameBox — e.Handled 존중). IME 조합 취소는 IME가 키를 먹어 여기 안 온다.
         if (e.Key == VirtualKey.Escape)
         {
+            // A396: Native popup light-dismiss can precede the bubble route and clear IsAnyPopupOpen.
+            // Give the current document a chance to consume that same search-popup Escape.
+            if (!e.Handled && !IsOpenFileBrowsing && !IsFocusWithin(JobsLayer) && !IsAltDown() &&
+                !Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+                    .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down) &&
+                !Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+                    .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down) &&
+                ModuleHost.Content is ITextSearchTarget search &&
+                search.TryTextSearchCommand(TextSearchCommand.ReturnToDocument, repeat: e.KeyStatus.WasKeyDown))
+            {
+                e.Handled = true;
+                return;
+            }
             if (IsAnyPopupOpen()) return;
             if (JobsPanel.Visibility == Visibility.Visible) { HideJobs(); e.Handled = true; return; }
             OnShellEscape(e);
@@ -2246,6 +2259,30 @@ public sealed partial class MainWindow : Window
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (IsFocusWithin(JobsLayer)) return;
+        // A396: The document bottom bar is outside the module visual tree.
+        if (!e.Handled && !IsOpenFileBrowsing && ModuleHost.Content is ITextSearchTarget search)
+        {
+            var control = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            var shift = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+            TextSearchCommand? command = !IsAltDown() ? e.Key switch
+            {
+                VirtualKey.F when control && !shift => TextSearchCommand.Find,
+                VirtualKey.H when control && !shift => TextSearchCommand.Replace,
+                VirtualKey.F3 when !control => shift ? TextSearchCommand.Previous : TextSearchCommand.Next,
+                VirtualKey.Enter when !control => shift ? TextSearchCommand.Previous : TextSearchCommand.Next,
+                VirtualKey.Escape when !control && !shift => TextSearchCommand.ReturnToDocument,
+                _ => null
+            } : null;
+            // Enter belongs to the editor itself unless the focused surface is a search field.
+            if (command is { } value && (e.Key != VirtualKey.Enter || IsTextInputFocused()) &&
+                search.TryTextSearchCommand(value, e.Key == VirtualKey.Enter, e.KeyStatus.WasKeyDown))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
         // A274: Enter(+Alt+Enter)도 이 터널링 층이다 — F11/F12와 키가 겹치지 않아 분기 순서는
         // 동작 무관하지만, 아래 SideForKey 조기 반환 형태를 보존하려 Enter를 먼저 가른다.
         // Alt 판정은 버블 시절(OnRootKeyDown의 구 분기)과 같은 IsAltDown 스냅샷 — 게이트 유무가
@@ -2314,6 +2351,9 @@ public sealed partial class MainWindow : Window
 
     private void OnRootKeyUp(object sender, KeyRoutedEventArgs e)
     {
+        // A396: End the physical search Escape even when native popup dismissal consumed KeyDown.
+        if (e.Key == VirtualKey.Escape && ModuleHost.Content is ITextSearchTarget search)
+            search.TryTextSearchCommand(TextSearchCommand.EscapeReleased);
         // A107: **우리 조합에 쓰인 Alt의 단독 up만 소비** — A86이 제거한 A58의 OS 메뉴 모드 회피를
         // 개작 재도입한 본체다. 조합 키 down을 우리가 소비하면 OS는 "Alt가 깨끗하게 눌렸다 떼졌다"로
         // 보고 up에서 창 메뉴 모드(SC_KEYMENU)에 들어가 포커스를 훔친다(Alt를 나중에 떼는 순서의 함정)

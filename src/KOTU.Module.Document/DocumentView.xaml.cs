@@ -49,7 +49,7 @@ namespace KOTU.Module.Document;
 /// </summary>
 public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     IContentStateSource, IBottomBarProvider, IBottomOverlayConsumer, IDriveStripHost, ICloseGuard, ITrayStatusProvider,
-    IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource, IContentInfoProvider, IContentInfoChangedSource
+    IUntitledContentSource, IPrintPageProvider, IContentPathChangedSource, IContentInfoProvider, IContentInfoChangedSource, ITextSearchTarget
 {
     /// <summary>파일을 열면 셸에 알린다(빈 상태 탐색기 내림·오버레이 기준 갱신).</summary>
     public event Action<string>? ContentOpened;
@@ -353,12 +353,14 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 뷰 모드·PDF·빈 화면도 종전 그대로 뷰 루트다(A277 "포커스 없음 = 캐럿 없음" 유지).
         Loaded += (_, _) =>
         {
+            ResumeTextSearch();
             _decor.Resume();
             if (EditorBox.Visibility == Visibility.Visible && !_viewMode) FocusEditorForEditing();
             else Focus(FocusState.Programmatic);
         };
         Unloaded += (_, _) =>
         {
+            SuspendTextSearch();
             _decor.Suspend();
             _performance?.Dispose();
             _performance = null;
@@ -389,6 +391,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             CloseHtmlPane();
         };
 
+        InitializeTextSearch();
         if (context.FilePath is { } path)
             OpenInitialPathAsync(path);
         else
@@ -507,15 +510,19 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         PrintButton.Visibility = Visibility.Visible; // A365: 빈 상태도 표시하고 기존 활성 판정은 그대로 둔다.
         FitControls.Visibility = Visibility.Visible;
         UpdateViewModeLabelVisibility(StatusBarGrid.ActualWidth);
+        UpdateSearchAvailability();
+        UpdateSearchToolbarLayout(StatusBarGrid.ActualWidth);
     }
 
-    // A340: 최소 창(720 DIP)에서 셸 여백을 뺀 모듈 바는 약 594 DIP다. 상태 라벨 폭과
-    // 파일명 최소 가독 영역을 더한 620 DIP부터 라벨을 보이고, 그 아래에서는 동작 버튼을 남긴 채
-    // 라벨만 먼저 접는다. 콘텐츠별 버튼이 접힌 뒤에도 같은 한 지점에서 다시 판정한다.
-    private const double ViewModeLabelMinBarWidth = 620;
+    // A396: 최소 창(720 DIP)의 모듈 바는 약 594 DIP다. 검색창을 상시 유지하도록
+    // 상태 라벨은 검색 보조 버튼과 함께 1100 DIP부터 보인다. 편집 전환 버튼은 계속 남는다.
+    private const double ViewModeLabelMinBarWidth = 1100;
 
-    private void OnStatusBarSizeChanged(object sender, SizeChangedEventArgs e) =>
+    private void OnStatusBarSizeChanged(object sender, SizeChangedEventArgs e)
+    {
         UpdateViewModeLabelVisibility(e.NewSize.Width);
+        UpdateSearchToolbarLayout(e.NewSize.Width);
+    }
 
     private void UpdateViewModeLabelVisibility(double barWidth)
     {
@@ -970,6 +977,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     private async void OpenInitialPathAsync(string path)
     {
         var seq = ++_openSeq;
+        UpdateSearchAvailability();
         try
         {
             var exists = await Worker.Run(_ => File.Exists(path));
@@ -1025,6 +1033,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     {
         DiagTrace.Write("document", "OpenPath " + path); // A352 배치 1
         var seq = ++_openSeq;
+        UpdateSearchAvailability();
         _performance?.Stop("document-replaced");
         _performance = null;
         if (TextPerformanceCapture.IsEnabled)
@@ -1211,6 +1220,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             ShowTruncatedHtmlUnavailable();
         }
 
+        SearchDocumentReady();
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
         _performance?.Applied();
@@ -1282,6 +1292,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         _performance = null;
         _decor.SetPerformance(null, suppress: false);
         ++_openSeq; // 진행 중 읽기(OpenPath)·지연 대입(A177)이 이 상태를 덮지 않게
+        UpdateSearchAvailability();
         HidePdf();
         ResetRenderState(false); // A190: 렌더 축 리셋 — 무제는 .txt 계열(무제 md는 범위 밖)
         _path = null;
@@ -1320,6 +1331,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // A224: 토글 재판정 — 위 ResetRenderState는 _untitled가 서기 전에 돌았다(직전이 PDF·빈
         // 화면이었으면 비활성으로 계산된 상태). 무제도 토글 활성(사양 — 일관성).
         UpdateViewToggle();
+        SearchDocumentReady();
         UntitledOpened?.Invoke(); // 셸 동기화 — 탐색기 내림·드라이브 줄 숨김·제목 "KOTU - Untitled"
         // A294: 곧바로 타이핑 가능하게. 종전의 직접 EditorBox.Focus는 두 분기 모두에서 무효였다 —
         // ① 새 창 분기: 트리 로드 전 호출(Focus = false), ② 자기 자리 분기: EditorBox가 Collapsed로
@@ -1613,6 +1625,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         EditorBox.IsReadOnly = _truncated || _capped || _viewMode;
         EditorBox.IsTabStop = !_viewMode; // A277 ⓑ — 잘림(읽기 전용)은 편집 모드라 탭 진입 유지
         _decor.SetViewSuppressed(_viewMode); // A277 ⓐ
+        UpdateSearchAvailability();
     }
 
     /// <summary>
@@ -2162,6 +2175,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         _performance = null;
         _decor.SetPerformance(null, suppress: false);
         var seq = ++_openSeq; // 텍스트 열기와 같은 경쟁 방지 시퀀스 공유
+        UpdateSearchAvailability();
 
         if (_pdfPane is null)
         {
@@ -2737,7 +2751,11 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         PageInfoText.Visibility = Visibility.Visible;
     }
 
-    private void OnEditorSelectionChanged(object sender, RoutedEventArgs e) => UpdateTextPosition();
+    private void OnEditorSelectionChanged(object sender, RoutedEventArgs e)
+    {
+        UpdateTextPosition();
+        SynchronizeSearchSelection();
+    }
 
     /// <summary>
     /// A113 ⓒ: 더티 = "기준 텍스트(로드·저장 시점)와 실제로 다른가". 길이가 다르면 그 자체가
@@ -2749,8 +2767,12 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// 다르다. 표시 문자열 갱신이 아래 SetDirty(true)의 가시화보다 먼저라 보일 때는 항상 최신 N이다.
     /// </summary>
     private void OnEditorTextChanged(object sender, TextChangedEventArgs e)
+        => EditorTextChangedCore();
+
+    private void EditorTextChangedCore()
     {
         _textSnapshot = null; // A142 ①ⓑ: 어떤 편집이든 스냅샷부터 무효화 — 조기 반환보다 먼저
+        QueueTextSearch();
         UpdateTextPosition();
         // A343 ⓑ: _capped도 잘림과 같은 비대상 — 더티가 서지 않으니 저장 버튼·닫기 가드가 조용하다.
         if (_loadingText || (_path is null && !_untitled) || _truncated || _capped) return; // A189: 무제도 더티 추적
@@ -2903,6 +2925,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// <summary>Tab이 포커스 이동 대신 탭 문자를 넣게 한다(에디터 기본기). Shift+Tab은 포커스 이동 유지.</summary>
     private void OnEditorKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        ObserveSearchBodyKey(e);
         if (e.Key != VirtualKey.Tab || EditorBox.IsReadOnly) return;
         if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return;
@@ -2948,6 +2971,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
         var operation = _documentSession.TryBeginSave();
         if (operation is null) return false;
+        UpdateSearchAvailability();
         try
         {
             return await SaveCoreAsync(operation);
@@ -2961,6 +2985,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         finally
         {
             _documentSession.EndSave(operation);
+            UpdateSearchAvailability();
         }
     }
 

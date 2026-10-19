@@ -15,12 +15,15 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
-    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer
+    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget
 {
     private readonly IReadOnlyList<IModule> _children;
     private readonly ChildContentHost _content;
     private bool _driveStripShown;
     private object? _bottomOverlay;
+
+    public bool TryTextSearchCommand(TextSearchCommand command, bool fromEnter = false, bool repeat = false) =>
+        (_content.Child as ITextSearchTarget)?.TryTextSearchCommand(command, fromEnter, repeat) == true;
 
     public void SetBottomOverlay(object overlay)
     {

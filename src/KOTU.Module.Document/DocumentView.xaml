@@ -70,6 +70,7 @@
             Visibility="Collapsed"
             ScrollViewer.VerticalScrollBarVisibility="Auto"
             TextChanged="OnEditorTextChanged"
+            TextChanging="OnSearchEditorTextChanging"
             SelectionChanged="OnEditorSelectionChanged"
             KeyDown="OnEditorKeyDown" />
 
@@ -155,8 +156,8 @@
              전부 흡수한다. A340 전에는 폭 임계 축약 로직이 없었고, 지금은 편집 상태 라벨만
              620 DIP 아래에서 먼저 접힌다.
              A340은 A362 이후의 10칸 구조에 상태 칸을 하나 더해 뒤 열을 모두 재계수했다.
-             현행은 11칸(c0~c10)·star 1개(c4)이며, star 칸이 남는 폭을 전부 흡수한다.
-             A340 상태 라벨의 620 DIP 임계만 예외다. -->
+             A396 현행은 12칸(c0~c11)·star 1개(c4)이며, c6의 검색창은 항상 남는다.
+             좁은 폭에서는 가이드·페이지·줌을 More tools로 옮기고 Print/Fit은 직접 유지한다. -->
         <Border x:Name="StatusBar" VerticalAlignment="Bottom" Padding="0,2,0,2">
             <!-- A364: 간격은 표시된 요소의 왼쪽 Margin 6이 소유한다.
                  Collapsed Auto 열은 여백까지 사라지며, Zoom/Print/Fit 실제 폭은 84/32/64다.
@@ -170,6 +171,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -212,7 +214,7 @@
                      발화 한 줄. A223(2026-08-24)에서 우측 끝(구 c8) → 좌측군, A245(2026-08-27)에서
                      편집/뷰 토글 앞으로 이동했다가 A362에서 다시 우측군(c8)으로 갔다.
                      A340의 상태 칸 추가로 현행은 c9다. -->
-                <Button x:Name="PrintButton" Grid.Column="9" Margin="6,0,0,0" Style="{StaticResource BottomBarButtonStyle}"
+                <Button x:Name="PrintButton" Grid.Column="10" Margin="6,0,0,0" Style="{StaticResource BottomBarButtonStyle}"
                         IsEnabled="False"
                         Click="OnPrintButtonClick"
                         ToolTipService.ToolTip="Print (Ctrl+P)">
@@ -255,7 +257,59 @@
                      채우므로 여기 Text는 없다). 창 제목의 ●는 셸이 UnsavedChanged로 다는
                      별개 축(A136)이라 이번 개편과 무관하게 그대로다. -->
                 <TextBlock x:Name="ModifiedText" Grid.Column="5" Margin="6,0,0,0" VerticalAlignment="Center"
-                           FontSize="12" Opacity="0.8" Visibility="Collapsed" />
+                           FontSize="12" Opacity="0.8" Visibility="Collapsed" MaxWidth="90" TextTrimming="CharacterEllipsis" />
+                <!-- A396: The keyword field stays visible even when the change count is hidden. -->
+                <StackPanel x:Name="SearchPanel" Grid.Column="6" Margin="6,0,0,0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBox x:Name="FindBox" Width="180" Height="32" MinHeight="32" Padding="8,4"
+                             PlaceholderText="Find text" IsEnabled="False" IsSpellCheckEnabled="False"
+                             AutomationProperties.Name="Find text" ToolTipService.ToolTip="Find text (Ctrl+F)"
+                             TextChanged="OnFindTextChanged" GotFocus="OnFindGotFocus" />
+                    <StackPanel x:Name="InlineFindNavigation" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock x:Name="FindCountText" MinWidth="48" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" />
+                        <Button x:Name="FindPreviousButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"
+                                Click="OnFindPreviousClick" AutomationProperties.Name="Previous match" ToolTipService.ToolTip="Previous match (Shift+F3)">
+                            <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                        </Button>
+                        <Button x:Name="FindNextButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"
+                                Click="OnFindNextClick" AutomationProperties.Name="Next match" ToolTipService.ToolTip="Next match (F3)">
+                            <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                        </Button>
+                    </StackPanel>
+                    <Button x:Name="FindOptionsButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"
+                            AutomationProperties.Name="Find and replace options" ToolTipService.ToolTip="Find and replace (Ctrl+H)">
+                        <FontIcon Glyph="&#xE721;" FontSize="16" />
+                        <Button.Flyout>
+                            <Flyout x:Name="FindFlyout" Placement="Top" Opened="OnFindFlyoutOpened"
+                                    Closing="OnFindFlyoutClosing" Closed="OnFindFlyoutClosed">
+                                <StackPanel x:Name="FindOptionsPanel" Width="280" Spacing="8" PreviewKeyDown="OnFindPanelKeyDown">
+                                    <TextBlock x:Name="FindDetailText" Text="Enter text to find" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Button x:Name="PopupPreviousButton" Content="Previous" Click="OnFindPreviousClick" IsEnabled="False" />
+                                        <Button x:Name="PopupNextButton" Content="Next" Click="OnFindNextClick" IsEnabled="False" />
+                                    </StackPanel>
+                                    <TextBox x:Name="ReplaceBox" PlaceholderText="Replace with" AutomationProperties.Name="Replace with"
+                                             IsSpellCheckEnabled="False" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Button x:Name="ReplaceCurrentButton" Content="Replace" Click="OnReplaceCurrentClick" IsEnabled="False" />
+                                        <Button x:Name="ReplaceAllButton" Content="Replace all" Click="OnReplaceAllClick" IsEnabled="False" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="ReplaceStatusText" TextWrapping="Wrap" FontSize="12" />
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+                <ContentControl x:Name="SearchToolsInlineHost" Grid.Column="7" Grid.ColumnSpan="3" VerticalAlignment="Center" IsTabStop="False" />
+                <Button x:Name="SearchMoreToolsButton" Grid.Column="7" Grid.ColumnSpan="3" Margin="6,0,0,0"
+                        Style="{StaticResource BottomBarButtonStyle}" Visibility="Collapsed"
+                        AutomationProperties.Name="More document tools" ToolTipService.ToolTip="More document tools">
+                    <FontIcon Glyph="&#xE712;" FontSize="16" />
+                    <Button.Flyout>
+                        <Flyout x:Name="SearchToolsFlyout" Placement="Top">
+                            <ContentControl x:Name="SearchToolsPopupHost" IsTabStop="False" />
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
                 <!-- A215(2026-08-24) → A245(2026-08-27) → A264/A265(2026-08-28): 편집 모드 표시
                      토글 2종 — ① 라인 가이드(줄 상/하단 선 — A115 ①) ② 펑츄에이션 마커(¶·EOF —
                      A115 ②). A215의 자리는 좌우 star 사이(바 가운데)였고, A245에서 우측 정렬군으로,
@@ -279,7 +333,7 @@
                      글리프: E7A5(가로줄 무리 — 가이드 근사) 대신 실존 확인이 쉬운 표준 글리프를
                      쓴다 — 가이드 = E8A9(AlignLeft류 가로줄), 마커 = 문자 '¶' 텍스트(글리프 탐색
                      불요 — 마커 자신이 최고의 아이콘이다). -->
-                <StackPanel x:Name="DecorTogglePanel" Grid.Column="6" Margin="6,0,0,0" Orientation="Horizontal"
+                <StackPanel x:Name="DecorTogglePanel" Grid.Column="7" Margin="6,0,0,0" Orientation="Horizontal"
                             Spacing="6" VerticalAlignment="Center">
                     <ToggleButton x:Name="GuideToggleButton" Style="{StaticResource BottomBarToggleButtonStyle}"
                                   IsEnabled="False"
@@ -298,7 +352,7 @@
                 <!-- 텍스트 커서 줄/전체 줄 또는 PDF 현재 페이지/전체 페이지.
                      A264: 칸 번호는 그대로(c7)지만 이웃이 바뀌었다 — 앞이 표시 토글, 뒤가 배율
                      버튼이다(사용자 미언급 자리라 "¶ 뒤·배율 앞" 제안을 채택). -->
-                <TextBlock x:Name="PageInfoText" Grid.Column="7" Margin="6,0,0,0" VerticalAlignment="Center"
+                <TextBlock x:Name="PageInfoText" Grid.Column="8" Margin="6,0,0,0" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed" />
                 <!-- A181 → A263(v0.262.0): 현재 줌 배율(document.zoom을 퍼센트로).
                      종전 표시 전용 TextBlock(ZoomText)을 프리셋 드롭다운으로 바꿨다 — 값 표기는
@@ -315,7 +369,7 @@
                      A364에서 실제 폭도 84로 고정한다(배율 문자열에 따라 버튼 외곽이 움직이지 않는다). A34 문자 핫키 없음(FitOptionsButton과
                      같은 부류 — 툴팁은 고정값). 아래 IsEnabled="False"가 첫 프레임 값이다
                      (초기 상태 = 빈 화면). -->
-                <DropDownButton x:Name="ZoomButton" Grid.Column="8" Margin="6,0,0,0"
+                <DropDownButton x:Name="ZoomButton" Grid.Column="9" Margin="6,0,0,0"
                                 Width="84" HorizontalAlignment="Left" Height="32" Padding="8,2" BorderThickness="1" CornerRadius="4"
                                 VerticalAlignment="Center" VerticalContentAlignment="Center"
                                 IsEnabled="False"
@@ -349,7 +403,7 @@
                      아니라 IsEnabled가 진다 — HotkeySupport의 통과 게이트가 IsEnabled와
                      Visibility를 함께 보기 때문이다(Shared/HotkeySupport.cs:61).
                      활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍만 한다. -->
-                <StackPanel x:Name="FitControls" Margin="6,0,0,0" Grid.Column="10" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <StackPanel x:Name="FitControls" Margin="6,0,0,0" Grid.Column="11" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
                             IsEnabled="False"
                             Click="OnFitClicked">
