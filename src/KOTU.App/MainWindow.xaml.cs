@@ -2197,6 +2197,12 @@ public sealed partial class MainWindow : Window
                 return;
             }
             if (IsAnyPopupOpen()) return;
+            // 취소에 쓰인 키와 반복 입력은 Jobs 패널까지 추가로 닫지 않는다.
+            if (e.Handled || e.KeyStatus.WasKeyDown)
+            {
+                MarkAltUseIfConsumed(e);
+                return;
+            }
             if (JobsPanel.Visibility == Visibility.Visible) { HideJobs(); e.Handled = true; return; }
             OnShellEscape(e);
             MarkAltUseIfConsumed(e); // A107: Alt 홀드 중 셸이 Esc를 소비(S4 복귀)한 경우도 Alt up 소비 대상
@@ -3218,7 +3224,7 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => RecoverChromeFocusOrphan()); // 람다 = 셸 TryEnqueue 관용구 그대로
     }
 
-    // ---------- Esc (A305 모드 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기) ----------
+    // ---------- Esc (A305 모드 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기 → A397 S1 창 닫기) ----------
 
     private void OnShellEscape(KeyRoutedEventArgs e)
     {
@@ -3234,8 +3240,17 @@ public sealed partial class MainWindow : Window
             ExitOpenFileBrowsing(restore: true);
             return;
         }
-        // A202: 말단 층 — 콘텐츠가 열려 있으면 닫고 기본 사이드바를 적용한다(위 요약 ③).
-        if (TryCloseContent(defaultSidebars: true)) e.Handled = true;
+        // 콘텐츠를 닫아 S1로 바뀌어도 같은 입력으로 창까지 닫지 않는다.
+        if (TryCloseContent(defaultSidebars: true))
+        {
+            e.Handled = true;
+            return;
+        }
+        if (IsEmptyFileModule)
+        {
+            e.Handled = true;
+            _ = ConfirmThenCloseAsync();
+        }
     }
 
     // ---------- '뒤로' 입력 (A112 — 마우스 XButton1 · 키보드 Browser Back) ----------
