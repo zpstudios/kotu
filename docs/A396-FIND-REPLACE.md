@@ -46,7 +46,8 @@ Print and Fit remain directly available at every supported width.
 The editing/viewing text label is shown from 1100 DIP. Existing view-toggle, save, new, print,
 and Fit button behavior is preserved. Controls retain 6-DIP spacing. With the smallest documented
 module bar of approximately 594 DIP, fixed controls plus maximum 90-DIP change label need about
-526 DIP, leaving roughly 68 DIP for filename space (actual fonts/layout require UI verification).
+526 DIP, leaving roughly 68 DIP for filename space. Actual minimum-width layout passed at
+100% and 150% application scaling in the default dark theme.
 The new icon buttons have English tooltips and automation names. All overflow operations remain
 keyboard reachable. Search options tooltip includes result count and preview scope at compact widths.
 
@@ -166,7 +167,7 @@ New event/property semantics were checked against official Windows App SDK docum
 - [TextChanging](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.controls.textbox.textchanging?view=windows-app-sdk-1.8): synchronous, unlike TextChanged; visual-tree mutations are avoided.
 - [TextCompositionStarted](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.controls.textbox.textcompositionstarted?view=windows-app-sdk-1.8): IME lifecycle and composition event ordering.
 - [SelectionHighlightColorWhenNotFocused](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.controls.textbox.selectionhighlightcolorwhennotfocused?view=windows-app-sdk-1.8): default template highlight is transparent, so an explicit active-search brush is needed.
-- [SelectedText](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.controls.textbox.selectedtext?view=windows-app-sdk-1.8): range content replacement. Undo grouping remains a native UI acceptance check.
+- [SelectedText](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.controls.textbox.selectedtext?view=windows-app-sdk-1.8): range content replacement. One-step undo was verified in the native editor.
 
 If the new unfocused-selection property proves incompatible on a target runtime, the minimal fallback
 is to remove that brush assignment while retaining native focused selection; this would leave the
@@ -214,4 +215,24 @@ Production metadata confirms `KOTU.App.Program.Main` and no thumbnail harness ty
 fields. The normal Core assembly independently reports `IsStandalone=false` and instance key
 `KOTU-Main`; the UI test executable used the separate Standalone policy. Core SHA-256 is
 `7D54BEA261796FB5EE38C8F58160FA6C88487CEC10A8DFC5291FD444CB58CC73`. Evidence is in
-`production-metadata.json` and `production-policy.json`. Remote build/release verification remains.
+`production-metadata.json` and `production-policy.json`.
+
+## Remote delivery
+
+Product commit `cd0ed8b31fbacd9d01609c051e7e4640ff6c495d` was pushed once to `master`.
+[Build 39207125677](https://github.com/zpstudios/kotu/actions/runs/39207125677) and
+[release 39207125639](https://github.com/zpstudios/kotu/actions/runs/39207125639) both completed
+successfully. Each passed **663/663 tests**, with **0 warnings / 0 errors**, and the three actual
+Explorer COM verbs. Release startup, installer/package integrity and Standalone verification all
+passed. The Standalone log confirms memory settings, disabled updates, preserved AppData/registry
+and normal-exit cleanup.
+
+[v0.396.0](https://github.com/zpstudios/kotu/releases/tag/v0.396.0) was published as a normal release
+on **2026-10-19 at 15:03:59 KST** (`06:03:59Z`). It is Latest; the tag and remote `master` both point
+to the product commit. All eight assets are uploaded: Setup, Portable, Standalone, full package,
+delta package (615,895 bytes), `RELEASES`, `releases.win.json` and `assets.win.json`.
+Compact evidence is saved in `artifacts/a396/main/remote-validation.json`.
+
+Final verification documentation is committed locally without an additional docs-only push.
+The subsequent WhatsApp copy-error report (A400) and right-click Copy image request (A410) are
+requirements only; they are not included as implemented features in this release.
