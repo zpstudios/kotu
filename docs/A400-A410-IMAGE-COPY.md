@@ -127,9 +127,24 @@ Changed/new C# content passed the Korean-escape scan, Directory.Build.props XML 
 `git diff --check` passes. Evidence: `artifacts/a400/main/{build,tests,architecture,release-gates,
 publish,package}.log`, `test-summary.json` and `production-metadata.json`.
 
-## Validation limits and remote release gate
+## Remote release verification
 
-Remote build/release verification is pending. Windows WhatsApp
+Product commit `b231ddddc6d049922a28478efc63db2fec38bf81` was pushed to master once.
+[Build 39212654342](https://github.com/zpstudios/kotu/actions/runs/39212654342) and
+[release 39212654335](https://github.com/zpstudios/kotu/actions/runs/39212654335) both completed
+successfully. Each independently passed **687/687 tests**, a build with zero warnings/errors,
+architecture/release gates and the actual Explorer COM selection check for all three verbs.
+Release executable startup, installer integrity and Standalone regressions/startup also passed.
+
+[v0.397.0](https://github.com/zpstudios/kotu/releases/tag/v0.397.0) was published on
+**2026-10-19 at 16:02:06 KST**. It is non-draft, non-prerelease and Latest. All eight assets
+(including delta, Setup, Portable and Standalone) are uploaded and nonempty; the tag resolves
+to the product commit above. Local evidence: `artifacts/a400/main/release-verification.json`.
+Final verification documentation is retained in a local-only commit without another push.
+
+## Validation limits
+
+Windows WhatsApp
 and Paint remain unverified because neither is installed in this execution environment. Word
 and native readback success do not substitute for the user's Windows WhatsApp acceptance check.
 Original failing input/application version are unknown. Full EXIF orientation 1–8 support remains
