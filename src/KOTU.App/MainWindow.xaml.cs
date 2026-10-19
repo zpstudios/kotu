@@ -2259,6 +2259,17 @@ public sealed partial class MainWindow : Window
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (IsFocusWithin(JobsLayer)) return;
+        // 분리된 이미지 하단 바도 현재 이미지 명령에 전달한다. 포커스 소유권은 뷰가 판정한다.
+        if (!e.Handled && !IsOpenFileBrowsing && e.Key == VirtualKey.C && !IsAltDown() &&
+            Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down) &&
+            !Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down) &&
+            ModuleHost.Content is IImageCopyTarget imageCopy && imageCopy.TryCopyImage(e.KeyStatus.WasKeyDown))
+        {
+            e.Handled = true;
+            return;
+        }
         // A396: The document bottom bar is outside the module visual tree.
         if (!e.Handled && !IsOpenFileBrowsing && ModuleHost.Content is ITextSearchTarget search)
         {

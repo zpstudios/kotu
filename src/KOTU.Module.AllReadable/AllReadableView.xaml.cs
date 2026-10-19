@@ -15,7 +15,7 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
-    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget
+    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget, IImageCopyTarget
 {
     private readonly IReadOnlyList<IModule> _children;
     private readonly ChildContentHost _content;
@@ -24,6 +24,9 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
 
     public bool TryTextSearchCommand(TextSearchCommand command, bool fromEnter = false, bool repeat = false) =>
         (_content.Child as ITextSearchTarget)?.TryTextSearchCommand(command, fromEnter, repeat) == true;
+
+    public bool TryCopyImage(bool repeat = false, object? focusScope = null) =>
+        (_content.Child as IImageCopyTarget)?.TryCopyImage(repeat, this) == true;
 
     public void SetBottomOverlay(object overlay)
     {

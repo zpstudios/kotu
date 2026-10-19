@@ -36,7 +36,7 @@ namespace KOTU.Module.Image;
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IPrintPageProvider, IBrowseOrderConsumer,
-    ICurrentPathSource
+    ICurrentPathSource, IImageCopyTarget
 {
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패, 회전(A191) 시점.</summary>
     public event Action? TrayStatusChanged;
@@ -203,15 +203,16 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         Loaded += (_, _) =>
         {
             Focus(FocusState.Programmatic);
+            UpdateImageCopyMenuState();
             if (!_imageLoading && !_copyReady && _navigator?.Current is not null)
                 _ = LoadCurrentAsync();
         };
         KeyDown += OnImageCopyKeyDown;
-        LosingFocus += (_, _) => _copyGate.Invalidate();
         Unloaded += (_, _) =>
         {
             _copyGate.Invalidate();
             _copyReady = false;
+            UpdateImageCopyMenuState();
             _imageLoading = false;
             _loadSequence++;
             _openSeq++;
@@ -233,9 +234,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         // "직전 표시 문자열과 같으면 조기 반환"으로 과다 대입을 막는다.
         Scroller.ViewChanged += OnScrollerViewChanged;
 
-        // A161(v0.174.0): 이미지 표면 우클릭 메뉴("Set as desktop background") — 메뉴를 코드에서
-        // 만들어 거는 것은 저장소 관례다(ExplorerPane.MakeSurfaceMenu·ThumbnailExplorer 동일).
-        Scroller.ContextFlyout = MakeSurfaceMenu();
+        // 포커스 가능한 뷰에 걸어 이미지 우클릭과 키보드 컨텍스트 요청이 같은 메뉴를 연다.
+        // 셸로 분리된 하단 바와 탐색기는 이 뷰의 자손이 아니므로 영향을 받지 않는다.
+        ContextFlyout = MakeSurfaceMenu();
 
         if (context.FilePath is { } path)
         {
@@ -303,6 +304,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         _loadSequence++;
         _imageLoading = true;
         _copyReady = false;
+        UpdateImageCopyMenuState();
         _copyGate.Invalidate();
         ImageFolderNavigator navigator;
         // A346: 셸이 주입한 좌 리스트 순서가 이 파일의 폴더 것이면 그것이 정본이다 —
@@ -531,13 +533,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     // ---------- 표면 우클릭 메뉴 / 바탕화면 배경 지정 (A161) ----------
 
     /// <summary>
-    /// 이미지 표면 우클릭 메뉴. 항목은 하나뿐이고, 파일이 열려 있을 때만 활성이다 —
-    /// 활성 판정을 Opening 한 곳에 모으는 것은 ExplorerPane·ThumbnailExplorer의 MakeSurfaceMenu 관용구다.
+    /// 이미지 표면의 복사와 배경 지정 메뉴. 열릴 때 최신 상태로 활성 여부를 다시 판정한다.
     /// <para>
-    /// 배선 지점이 <c>Scroller</c>인 이유: 휠 줌·팬(A148)을 건 콘텐츠 프레젠터에는
-    /// ContextFlyout이 없어 컨텍스트 요청이 여기까지 올라온다 = "뷰어 콘텐츠 표면 위에서만"
-    /// 규칙이 그대로 성립한다(플레이스홀더 텍스트는 형제 요소라 조상이 아니다 = 파일 없을 때
-    /// 그 위 우클릭은 메뉴 자체가 뜨지 않는다 — 등재문 ⓑ의 두 허용 동작 중 하나).
+    /// 뷰 자신에 연결하므로 포커스가 뷰에 있는 Shift+F10과 메뉴 키도 같은 메뉴를 연다.
+    /// 이미지가 없으면 복사를 비활성화한다. 탐색기와 분리된 바의 메뉴는 건드리지 않는다.
     /// </para>
     /// <para>
     /// A148 팬과 충돌하지 않는다: 팬은 <b>좌버튼 눌림 전이</b>만 태우므로(OnContentPointerPressed의
@@ -547,6 +546,14 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// </summary>
     private MenuFlyout MakeSurfaceMenu()
     {
+        _copyImageMenuItem = new MenuFlyoutItem
+        {
+            Text = "Copy image",
+            Icon = new FontIcon { Glyph = "\uE8C8" },
+            IsEnabled = false,
+        };
+        ToolTipService.SetToolTip(_copyImageMenuItem, "Copy image (Ctrl+C)");
+        _copyImageMenuItem.Click += OnCopyImageMenuClick;
         var setWallpaper = new MenuFlyoutItem
         {
             Text = "Set as desktop background",
@@ -555,10 +562,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         setWallpaper.Click += async (_, _) => await SetAsWallpaperAsync();
 
         var flyout = new MenuFlyout();
+        flyout.Items.Add(_copyImageMenuItem);
         flyout.Items.Add(setWallpaper);
         // 훅 배선 여부는 보지 않는다(A124 선례와 같다): 셸이 첫 창보다 먼저 배선하므로 미배선은
         // 이론상 도달 불가이고, 만약 비어 있어도 TrySet이 false를 돌려 실패 문구로 접힌다.
-        flyout.Opening += (_, _) => setWallpaper.IsEnabled = _navigator?.Current is not null;
+        flyout.Opening += (_, _) =>
+        {
+            UpdateImageCopyMenuState();
+            setWallpaper.IsEnabled = _navigator?.Current is not null;
+        };
         return flyout;
     }
 
@@ -631,6 +643,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         var loadSequence = ++_loadSequence;
         _copyReady = false;
+        UpdateImageCopyMenuState();
         _copyGate.Invalidate();
         _imageLoading = true;
         var path = _navigator?.Current;
@@ -1547,7 +1560,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// 셸 Ctrl+P는 이 버튼을 보지 않고 같은 속성을 직접 물으므로(MainWindow.RequestPrint)
     /// 버튼 표기와 키 동작이 어긋날 수 없다.
     /// </summary>
-    private void UpdatePrintButton() => PrintButton.IsEnabled = CanPrintNow;
+    private void UpdatePrintButton()
+    {
+        PrintButton.IsEnabled = CanPrintNow;
+        UpdateImageCopyMenuState();
+    }
 
     /// <summary>버튼 클릭 = 셸에 인쇄 요청 신호 1발(배선은 셸이 — 계약 문서 규정).</summary>
     private void OnPrintButtonClick(object sender, RoutedEventArgs e) => PrintRequested?.Invoke();

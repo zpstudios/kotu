@@ -4,8 +4,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Windows.ApplicationModel.DataTransfer;
-using Windows.Storage.Streams;
 using Windows.System;
 using Windows.UI.Core;
 using KOTU.Core.Diagnostics;
@@ -19,45 +17,86 @@ public sealed partial class ImageViewerView
     private bool _copyReady;
     private bool _imageLoading;
     private int _loadSequence;
+    private MenuFlyoutItem? _copyImageMenuItem;
 
-    // 전역 accelerator가 아니라 이미지 뷰 안에서 올라온 키만 처리한다.
-    private async void OnImageCopyKeyDown(object sender, KeyRoutedEventArgs e)
+    // 셸이 없는 호스트에서도 뷰 내부의 키는 같은 명령으로 처리한다.
+    private void OnImageCopyKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Handled || e.Key != VirtualKey.C || !IsCopyModifierDown(VirtualKey.Control)
-            || IsCopyModifierDown(VirtualKey.Menu) || IsCopyModifierDown(VirtualKey.Shift)
-            || !CanCopyImageHere()) return;
-        e.Handled = true;
-        if (e.KeyStatus.WasKeyDown || !_copyGate.TryBegin(out var request)) return;
+            || IsCopyModifierDown(VirtualKey.Menu) || IsCopyModifierDown(VirtualKey.Shift)) return;
+        e.Handled = TryCopyImage(e.KeyStatus.WasKeyDown);
+    }
+
+    public bool TryCopyImage(bool repeat = false, object? focusScope = null)
+    {
+        if (!CanCopyImageHere(focusScope)) return false;
+        if (!repeat) _ = CopyCurrentImageAsync();
+        return true;
+    }
+
+    // 키와 명시적 메뉴 명령이 공유할 유일한 복사 경로. 호출 뒤 포커스 이동은 취소가 아니다.
+    private async Task CopyCurrentImageAsync()
+    {
+        if (!CanCopyCurrentImage || !_copyGate.TryBegin(out var request)) return;
+        UpdateImageCopyMenuState();
         var bytes = _printBytes!;
         var rotation = TotalRotation;
-        var focused = FocusManager.GetFocusedElement(XamlRoot);
-        var clipboardSequence = GetClipboardSequenceNumber();
+        var loadSequence = _loadSequence;
         try
         {
-            // 디코드/회전/인코딩은 워커. 클립보드 호출만 UI 스레드로 돌아온다.
-            var png = await Worker.Run(_ => ImageClipboardSnapshot.EncodePngAsync(bytes, rotation)
-                .GetAwaiter().GetResult());
-            if (!_copyGate.IsCurrent(request) || !CanCopyImageHere()
-                || !ReferenceEquals(bytes, _printBytes) || rotation != TotalRotation
-                || !ReferenceEquals(focused, FocusManager.GetFocusedElement(XamlRoot))
-                || clipboardSequence != GetClipboardSequenceNumber()) return;
-            var stream = new MemoryStream(png); // 패키지의 참조가 소유한다. Flush 실패에도 스트림을 닫지 않는다.
-            var data = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
-            data.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream.AsRandomAccessStream()));
-            Clipboard.SetContent(data);
-            Clipboard.Flush(); // 원본 파일/뷰가 닫혀도 다른 앱에서 붙여넣을 수 있게 소유권을 넘긴다.
+            var owner = Microsoft.UI.Win32Interop.GetWindowFromWindowId(XamlRoot.ContentIslandEnvironment.AppWindowId);
+            var clipboardSequence = Win32ImageClipboard.Instance.Sequence;
+            // 선읽기 큐와 분리하되 게이트로 한 번에 하나만 실행한다. 큰 픽셀 복사도 워커에서 끝낸다.
+            using var prepared = await Task.Run(async () =>
+                ImageClipboardWriter.Prepare(await ImageClipboardSnapshot.CreateAsync(bytes, rotation)));
+            bool IsCurrent() => _copyGate.IsCurrent(request) && CanCopyCurrentImage
+                && loadSequence == _loadSequence && ReferenceEquals(bytes, _printBytes) && rotation == TotalRotation;
+            await prepared.PublishAsync(owner, clipboardSequence, IsCurrent);
         }
         catch (Exception ex)
         {
-            // 실패 시 Clear나 빈 패키지를 게시하지 않는다.
-            DiagTrace.Write("image", "Clipboard copy failed: " + ex.Message);
+            DiagTrace.Write("image", $"Clipboard copy failed: {ex.GetType().Name} (0x{ex.HResult:X8})");
         }
-        finally { _copyGate.Finish(request); }
+        finally
+        {
+            _copyGate.Finish(request);
+            UpdateImageCopyMenuState();
+        }
     }
 
-    private bool CanCopyImageHere()
+    private bool CanCopyCurrentImage => IsLoaded && _copyReady && CanPrintNow && XamlRoot is not null;
+
+    private void UpdateImageCopyMenuState()
     {
-        if (!IsLoaded || !_copyReady || !CanPrintNow || XamlRoot is not { } root
+        if (_copyImageMenuItem is { } item) item.IsEnabled = CanCopyCurrentImage && !_copyGate.IsPending;
+    }
+
+    private async void OnCopyImageMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _copyImageMenuItem) || !CanCopyFromImageMenu()) return;
+        await CopyCurrentImageAsync();
+    }
+
+    private bool CanCopyFromImageMenu()
+    {
+        if (!CanCopyCurrentImage || _copyGate.IsPending || _copyImageMenuItem is not { } item ||
+            XamlRoot is not { } root) return false;
+        try
+        {
+            if (GetForegroundWindow() != Microsoft.UI.Win32Interop.GetWindowFromWindowId(
+                root.ContentIslandEnvironment.AppWindowId)) return false;
+            // 명시적 메뉴 명령은 자신의 팝업만 허용한다. 이미 닫혔어도 현재 이미지로 실행한다.
+            foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(root))
+                if (popup.Child is not ToolTip && (popup.Child is not { } child || !IsWithin(item, child)))
+                    return false;
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private bool CanCopyImageHere(object? focusScope)
+    {
+        if (!CanCopyCurrentImage || XamlRoot is not { } root
             || HotkeySupport.ShouldPassThrough(this)) return false;
         try
         {
@@ -65,15 +104,27 @@ public sealed partial class ImageViewerView
                 root.ContentIslandEnvironment.AppWindowId)) return false;
             foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(root))
                 if (popup.Child is not ToolTip) return false;
-            for (var node = FocusManager.GetFocusedElement(root) as DependencyObject;
-                 node is not null; node = VisualTreeHelper.GetParent(node))
+            var focused = FocusManager.GetFocusedElement(root);
+            // 통합 뷰 자신에 포커스가 복원된 경우만 허용한다. 다른 형제 콘텐츠는 허용하지 않는다.
+            if (focusScope is DependencyObject scope && ReferenceEquals(focused, scope) && IsWithin(this, scope))
+                return true;
+            var node = focused as DependencyObject;
+            for (var depth = 0; node is not null && depth < 64; depth++, node = VisualTreeHelper.GetParent(node))
             {
                 if (node is TextBox or PasswordBox or RichEditBox or TextBlock or RichTextBlock)
                     return false;
-                if (ReferenceEquals(node, this)) return true;
+                if (ReferenceEquals(node, this) || ReferenceEquals(node, StatusBar)) return true;
             }
         }
         catch { return false; }
+        return false;
+    }
+
+    private static bool IsWithin(DependencyObject element, DependencyObject ancestor)
+    {
+        DependencyObject? node = element;
+        for (var depth = 0; node is not null && depth < 64; depth++, node = VisualTreeHelper.GetParent(node))
+            if (ReferenceEquals(node, ancestor)) return true;
         return false;
     }
 
@@ -83,6 +134,4 @@ public sealed partial class ImageViewerView
     [DllImport("user32.dll")]
     private static extern nint GetForegroundWindow();
 
-    [DllImport("user32.dll")]
-    private static extern uint GetClipboardSequenceNumber();
 }
