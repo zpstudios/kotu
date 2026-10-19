@@ -56,8 +56,8 @@ v0.396.0은2026-10-19 15:03:59 KST 정식 게시됐다. 최종 확인 문서만�
 - [완료 A396 · v0.396.0 · GPT-6 Astra/high] **TXT 찾기·바꾸기와 하단 검색 입력 상시 표시**.
   정식 배포 완료. 상세는 `REQUIREMENTS-ARCHIVE.md`와 `A396-FIND-REPLACE.md`.
 
-- [구현 완료 A397 · v0.398.0 · GPT-6 Astra/high] **빈 자체 탐색기 S1에서 Esc로 현재 창 닫기**.
-  메뉴·편집 취소, S4/전체화면/콘텐츠 복귀와 미저장·활성 작업 보호 검증 완료. 원격 배포 확인 진행 중.
+- [구현·배포 완료 A397 · v0.398.0 · GPT-6 Astra/high] **빈 자체 탐색기 S1에서 Esc로 현재 창 닫기**.
+  메뉴·편집 취소, S4/전체화면/콘텐츠 복귀와 미저장·활성 작업 보호 및 정식 배포 검증 완료.
   상세는 `REQUIREMENTS-ARCHIVE.md`와 `A397-EXPLORER-ESCAPE.md`. A407 트레이 정책은 별도다.
 
 - [미반영 A398 · Fable(위임 시 Opus) · Codex: Sol/high] **사진 EXIF 방향 기반 자동 회전 보완**

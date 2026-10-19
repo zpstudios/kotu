@@ -93,12 +93,22 @@ not inferred from unit tests.
 
 The packaging check used the existing repository 7-Zip DLL through an ignored temporary script.
 Tracked packaging scripts were unchanged. Normal startup/installer/Standalone release checks
-will run in CI, keeping the installed single-instance user window undisturbed locally.
+passed in CI, keeping the installed single-instance user window undisturbed locally.
 
 ## Remote release verification
 
-Local product validation is complete. Product commit/push and remote build/release verification
-are pending. Final deployment-only documentation will remain in a local-only commit.
+Product `4ee666bde835ec478540b6aee0bf1550c4415a03` was pushed to master once.
+[Build 39234812026](https://github.com/zpstudios/kotu/actions/runs/39234812026) and
+[release 39234811865](https://github.com/zpstudios/kotu/actions/runs/39234811865) succeeded.
+Each passed **687/687 tests**, builds with zero warnings/errors, architecture/release gates and
+the actual Explorer COM selection checks for all three verbs. Release executable startup,
+installer integrity and Standalone regression/startup checks passed.
+
+[v0.398.0](https://github.com/zpstudios/kotu/releases/tag/v0.398.0) was published at
+**2026-10-19 19:13:02 KST**. It is non-draft, non-prerelease and Latest. All eight assets are uploaded and
+nonempty; the tag resolves to the product commit above. Evidence is saved in
+`artifacts/a397/main/release-verification.json`. Final verification documentation is retained in a
+local-only commit without another push.
 
 ## Validation limits
 
