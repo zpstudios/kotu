@@ -20,8 +20,8 @@ namespace KOTU.Module.Document;
 /// LineHeight·LineStackingStrategy가 없어(TextBlock 전용) 균일 줄 높이를 강제할 수 없고,
 /// 실측이 유일한 정합 경로다(A115 조사 확정).
 ///
-/// <b>A142 추가분</b>: ①ⓐ 스크롤 중간(IsIntermediate) 이벤트는 50ms 간격으로 합쳐 그리고 최종
-/// 이벤트만 즉시 그린다(마지막 상태 렌더 보장) · ①ⓑ 전문 텍스트는 소유자(DocumentView)의
+/// <b>A142 추가분</b>: ①ⓐ 스크롤 이벤트 병합은 A401에서 텍스트 레이아웃·최종 이벤트까지
+/// 한 예약으로 확장했다(최소 50ms 간격·마지막 상태 렌더 보장) · ①ⓑ 전문 텍스트는 소유자(DocumentView)의
 /// 편집당 1회 스냅샷(_textProvider)을 함께 써서 Text 게터의 전문 마샬링 복사를 늘리지 않는다.
 /// ③ 행 번호 거터를 본문 텍스트 왼끝(pad.Left)의 왼쪽에 그린다 — 레이아웃(정렬·폭)은
 /// 일절 건드리지 않으므로 A115의 "EditorBox·DecorLayer 같은 제약 = 같은 원점" 계약이
@@ -140,9 +140,8 @@ internal sealed class EditorDecor
     internal static double GutterReserveWidth(int digits, double scale) =>
         (GutterTextGap + digits * GutterDigitWidth) * scale;
 
-    // A142 ①ⓐ: 스크롤 중간 이벤트의 렌더 상한(초당 ~20회). 최종(IsIntermediate=false) 이벤트는
-    // 이 스로틀을 거치지 않고 즉시 그린다 — 스크롤이 멈춘 화면에 옛 장식이 남지 않게(함정 3).
-    private const int ScrollRenderThrottleMs = 50;
+    // A401: 레이아웃·중간/최종 스크롤 요청을 같은 50ms 간격으로 합친다. 첫 표시·명시적 토글은 즉시다.
+    private const int RenderThrottleMs = 50;
 
     private const int MaxLines = 600;    // 방어: 4K 세로 화면도 수백 줄이 상한 — 그 이상은 비정상
     private const double YEpsilon = 0.5; // 같은 시각적 줄 판정의 y 허용 오차(px)
@@ -170,10 +169,10 @@ internal sealed class EditorDecor
     private long _rectMaxTicks;
     internal bool IsDisabled => _disabled || _experimentSuppressed || _unloaded;
     private int _hookAttempts;     // 레이아웃이 끝났는데도 ScrollViewer가 없으면 포기하는 카운터
-    private bool _pending;         // "다음 레이아웃 반영 후 렌더" 예약 — LayoutUpdated가 소비
+    private bool _pending;         // 다음 LayoutUpdated가 최신 배치를 확인하고 병합 예약기로 전달
     private SolidColorBrush _brush;
 
-    private DispatcherTimer? _scrollTimer; // A142 ①ⓐ: 스크롤 중간 이벤트 코얼레싱(1회 예약형)
+    private readonly EditorDecorScheduler _renderScheduler;
 
     // 좌표 기준 자가 확인: 공식 예제상 Rect는 뷰포트 기준이지만, 만에 하나 콘텐츠(문서) 기준으로
     // 나오는 환경이면 세로 오프셋을 빼서 맞춘다. 충분히 스크롤된 첫 순간 1회 판별하고 고정한다.
@@ -281,6 +280,8 @@ internal sealed class EditorDecor
         _textProvider = textProvider;
         _lineIndex = lineIndex;
         _brush = MakeBrush();
+        var queue = editor.DispatcherQueue;
+        _renderScheduler = new(action => queue.TryEnqueue(() => action()), Render, RenderThrottleMs);
 
         // 플래그만 — 무게 금지(A113). 전문 스냅샷 무효화는 소유자(DocumentView)가 한다(A142 ①ⓑ).
         _editor.TextChanged += (_, _) => Invalidate();
@@ -290,12 +291,12 @@ internal sealed class EditorDecor
         // 뷰 폭(margin)을 읽는 이상 방어 구독으로 유지한다(플래그 검사뿐이라 비용 없음).
         _themeSource.SizeChanged += (_, _) => { UpdateClip(); Invalidate(); };
         // 트리 레이아웃마다 불리지만 플래그 검사뿐이라 상시 구독 비용이 없다. 텍스트·크기 변경은
-        // 새 레이아웃이 반영된 뒤에 재야 해서(rect가 그 레이아웃을 읽는다) 이 시점으로 미룬다.
+        // 새 레이아웃을 읽을 준비가 된 뒤 공통 예약기로 넘겨 캐럿 스크롤과 함께 합친다.
         _editor.LayoutUpdated += (_, _) =>
         {
             if (!_pending) return;
             _pending = false;
-            Render(TextPerfEvent.DecorLayout);
+            _renderScheduler.Request(TextPerfEvent.DecorLayout);
         };
         // 스크롤은 레이아웃 패스 없이(컴포지션) 움직인다 — ViewChanged 구독은 EnsureScrollHook에서.
         _themeSource.ActualThemeChanged += (_, _) =>
@@ -304,7 +305,7 @@ internal sealed class EditorDecor
             foreach (var guide in _guides) guide.Fill = _brush;
             foreach (var marker in _markers) marker.Foreground = _brush;
             foreach (var number in _numbers) number.Foreground = _brush;
-            Render(TextPerfEvent.DecorTheme);
+            RenderImmediately(TextPerfEvent.DecorTheme);
         };
     }
 
@@ -326,19 +327,23 @@ internal sealed class EditorDecor
         if (suppress)
         {
             _pending = false;
-            _scrollTimer?.Stop();
+            _renderScheduler.Suspend();
             if (_scroll is { } scroll) scroll.ViewChanged -= OnScrollViewChanged;
             _scroll = null;
             ClearVisual(); // 거터·진단판까지 모두 제외한다. 본문 폭의 비교를 위해 패딩은 유지한다.
         }
-        else Invalidate();
+        else
+        {
+            if (!_unloaded && !_disabled) _renderScheduler.Resume();
+            Invalidate();
+        }
     }
 
     internal void Suspend()
     {
         _unloaded = true;
         _pending = false;
-        _scrollTimer?.Stop();
+        _renderScheduler.Suspend();
         if (_scroll is { } scroll) scroll.ViewChanged -= OnScrollViewChanged;
         _scroll = null;
         _performance = null;
@@ -348,6 +353,7 @@ internal sealed class EditorDecor
     {
         if (!_unloaded) return;
         _unloaded = false;
+        if (!_experimentSuppressed && !_disabled) _renderScheduler.Resume();
         Invalidate();
     }
 
@@ -374,39 +380,37 @@ internal sealed class EditorDecor
     /// 올렸다. 하단 바 토글 클릭은 레이아웃 패스를 보장하지 않아(IsChecked·브러시 시각 상태만
     /// 바뀐다) Invalidate만 걸면 예약(_pending)이 다음 편집·스크롤·리사이즈까지 소비되지 않고,
     /// 그동안 토글이 "눌리지만 화면 무반응"이 된다 — A277·A285가 각자 자리에서 이미 확정한
-    /// 같은 함정이며 이 setter만 A215 시점 형태로 남아 있었다. Render는 멱등한 전체 패스라
-    /// 예약분과 겹쳐 돌아도 결과가 같다(SetViewSuppressed와 같은 근거).</para>
+    /// 같은 함정이며 이 setter만 A215 시점 형태로 남아 있었다. A401은 이미 보류된 요청을
+    /// 즉시 패스가 소비하게 해 클릭 반응을 유지하면서 중복 패스를 없앤다.</para>
     /// </summary>
     public void SetDecorVisibility(bool guides, bool marks)
     {
         if (_disabled || (guides == _showGuides && marks == _showMarks)) return;
         _showGuides = guides;
         _showMarks = marks;
-        Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
-        Render(TextPerfEvent.DecorVisibility); // A295: 클릭 즉시 반영
+        RenderImmediately(TextPerfEvent.DecorVisibility); // A295: 클릭 즉시 반영
     }
 
     /// <summary>
     /// A277: 잠금 뷰(뷰 모드) 표시 억제 — true면 사용자 토글과 무관하게 가이드·¶·EOF를 그리지
     /// 않는다(거터는 축 밖이라 그대로). 소유자(DocumentView)의 뷰 모드 축 단일 산출 지점
     /// (UpdateEditorReadOnly)이 모드 전환 전수에서 이 값을 다시 먹인다.
-    /// <para>SetDecorVisibility·SetScale과 달리 <b>즉시 1회 렌더까지</b> 한다: 잠금 뷰 전환은
+    /// <para>SetScale과 달리 <b>즉시 1회 렌더까지</b> 한다: 잠금 뷰 전환은
     /// IsReadOnly·포커스만 바뀌어 레이아웃 패스가 보장되지 않으므로, Invalidate(다음 LayoutUpdated
     /// 대기)만 걸면 장식이 몇 프레임 남거나 아예 안 걷힐 수 있다(A277 최대 함정). Render는
-    /// 그 자체가 멱등한 전체 패스라 예약분과 겹쳐 돌아도 결과가 같다.</para>
+    /// 현재 상태를 반영하며 A401 예약분도 함께 소비한다.</para>
     /// </summary>
     public void SetViewSuppressed(bool suppressed)
     {
         if (_disabled || suppressed == _viewSuppressed) return;
         _viewSuppressed = suppressed;
-        Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
-        Render(TextPerfEvent.DecorMode); // 전환 즉시 반영
+        RenderImmediately(TextPerfEvent.DecorMode); // 전환 즉시 반영
     }
 
     /// <summary>
     /// A285: EOF 계측 오버레이 토글(diag.editorDecor) — 소유자(DocumentView)가 초기 1회 +
     /// EditorDecorDiagnostics.Changed마다 먹인다. SetViewSuppressed와 같은 관용구(같은 값 조기
-    /// 반환 + Invalidate + 즉시 Render — 설정 토글은 레이아웃 패스를 보장하지 않으므로 Invalidate만
+    /// 반환 + 보류 요청 소비 + 즉시 Render — 설정 토글은 레이아웃 패스를 보장하지 않으므로 Invalidate만
     /// 걸면 오버레이가 다음 편집·스크롤까지 안 나타나거나 안 걷힌다). 폴백 오프(_disabled)면 무동작.
     /// </summary>
     public void SetDiagnostics(bool on)
@@ -414,8 +418,7 @@ internal sealed class EditorDecor
         if (_disabled || on == _diagOn) return;
         _diagOn = on;
         if (!on && _diagPanel is { } panel) panel.Visibility = Visibility.Collapsed;
-        Invalidate(); // 레이아웃이 뒤따라오면 그때 한 번 더(관용구 유지)
-        Render(TextPerfEvent.DecorDiagnostic); // 전환 즉시 반영
+        RenderImmediately(TextPerfEvent.DecorDiagnostic); // 전환 즉시 반영
     }
 
     /// <summary>
@@ -428,7 +431,13 @@ internal sealed class EditorDecor
     /// </summary>
     public void DisableForLargeDocument() => Disable();
 
-    /// <summary>즉시 렌더(스크롤·테마 경로). 어떤 예외든 장식만 끈다 — 에디터 본기능 무영향.</summary>
+    private void RenderImmediately(TextPerfEvent trigger)
+    {
+        _pending = false;
+        _renderScheduler.RenderNow(trigger);
+    }
+
+    /// <summary>예약기가 호출하는 실제 렌더. 어떤 예외든 장식만 끈다 — 에디터 본기능 무영향.</summary>
     private void Render(TextPerfEvent trigger)
     {
         if (IsDisabled) return;
@@ -458,7 +467,7 @@ internal sealed class EditorDecor
         _performance?.Event(TextPerfEvent.DecorDisabled);
         _disabled = true;
         _pending = false;
-        _scrollTimer?.Stop(); // 예약된 스로틀 렌더도 함께 무른다(A142 ①ⓐ)
+        _renderScheduler.Dispose(); // 영구 폴백은 늦은 콜백의 뷰 참조까지 끊는다.
         if (_scroll is { } scroll) scroll.ViewChanged -= OnScrollViewChanged;
         _scroll = null;
         try
@@ -1375,34 +1384,15 @@ internal sealed class EditorDecor
     }
 
     /// <summary>
-    /// A142 ①ⓐ: 종전의 "ViewChanged마다 즉시 렌더"를 스로틀로 바꾼다. 중간(IsIntermediate)
-    /// 이벤트는 50ms 타이머로 합쳐 그리고(드래그·관성 중 초당 ~20회 상한), 최종 이벤트는
-    /// 즉시 그린다 — 스크롤이 멈춘 뒤 장식이 옛 위치에 남는 일이 없다(함정 3). 최종 이벤트가
-    /// 오지 않는 비정상 경로라도 마지막 중간 이벤트가 걸어 둔 타이머가 1회 렌더를 보장한다.
+    /// A401: 중간·최종 이벤트 모두 레이아웃과 같은 예약으로 합친다. 새 이벤트는 예약 시각을
+    /// 되감지 않으며, 최종 이벤트나 후속 레이아웃이 없어도 이미 걸린 마지막 요청은 실행된다.
+    /// 계측의 DecorScrollTimer 이름은 중간 스크롤에서 온 패스를 구분하는 기존 지표로 유지한다.
     /// </summary>
     private void OnScrollViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
     {
         if (IsDisabled) return;
-        if (!e.IsIntermediate)
-        {
-            _scrollTimer?.Stop(); // 예약분은 이 최종 렌더가 대체한다
-            Render(TextPerfEvent.DecorScrollFinal);
-            return;
-        }
-        if (_scrollTimer is { IsEnabled: true }) return; // 이번 간격의 렌더는 이미 예약돼 있다
-        (_scrollTimer ??= CreateScrollTimer()).Start();
-    }
-
-    /// <summary>1회 예약형 타이머(A113 디바운스와 같은 DispatcherTimer 관용구) — Tick에서 스스로 멈춘다.</summary>
-    private DispatcherTimer CreateScrollTimer()
-    {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ScrollRenderThrottleMs) };
-        timer.Tick += (_, _) =>
-        {
-            timer.Stop(); // 다음 중간 이벤트가 다시 시작한다
-            Render(TextPerfEvent.DecorScrollTimer);
-        };
-        return timer;
+        _renderScheduler.Request(e.IsIntermediate
+            ? TextPerfEvent.DecorScrollTimer : TextPerfEvent.DecorScrollFinal);
     }
 
     /// <summary>

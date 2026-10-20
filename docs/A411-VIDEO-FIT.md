@@ -95,4 +95,15 @@ Static app100 startup and playback in A411 are independently verified above.
 
 ## Release verification
 
-Local verification is complete; remote release verification is pending.
+Product and tag `ae086f73675199b2ee7a00390006ccead043654f` match.
+[Build39384843502](https://github.com/zpstudios/kotu/actions/runs/39384843502) and
+[release39384843535](https://github.com/zpstudios/kotu/actions/runs/39384843535) succeeded.
+Public job steps confirm solution tests, Explorer COM checks, release startup/integrity,
+installer verification and Standalone build/verification succeeded. Detailed remote logs were
+not collected: automatic approval review rejected extracting a credential from the Git remote.
+No credential workaround was used; remote test counts are not inferred from the local687 total.
+
+[v0.399.0](https://github.com/zpstudios/kotu/releases/tag/v0.399.0) was published at
+**2026-10-20 16:18:42 KST**. It is non-draft, non-prerelease and Latest, with eight uploaded,
+nonempty assets. Public evidence is in `artifacts/a411/main/final-release-verification.json`.
+Final documentation does not trigger a separate push; A401 is the selected next product work.

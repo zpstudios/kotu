@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\src\KOTU.Module.Document\TextPerformanceData.cs" Link="TextPerformanceData.cs" />
+    <Compile Include="..\..\src\KOTU.Module.Document\EditorDecorScheduler.cs" Link="EditorDecorScheduler.cs" />
     <Compile Include="..\..\src\KOTU.Module.Document\PdfFitGeometry.cs" Link="PdfFitGeometry.cs" />
     <Compile Include="..\..\src\KOTU.Module.Document\MarkdownParser.cs" Link="MarkdownParser.cs" />
     <Compile Include="..\..\src\KOTU.Module.Document\MarkdownRenderBatch.cs" Link="MarkdownRenderBatch.cs" />
