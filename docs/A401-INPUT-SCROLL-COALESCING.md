@@ -9,10 +9,10 @@ earlier investigation or a claim that all native TextBox performance costs are s
 
 ## Current baseline evidence
 
-The main uses normal-entry-point v0.399.0 production publish with existing opt-in text capture,
+The main used normal-entry-point v0.399.0 production publish with existing opt-in text capture,
 Wrap on and synthetic local copies. Standalone capture remains disabled. The installed empty
 Image/Downloads window was normally closed under the user's existing authorization; settings
-and restoration information are backed up in `artifacts/a401-enter/`. Restoration is required.
+and restoration information were backed up in `artifacts/a401-enter/`; restoration is completed below.
 
 | Case | Actual input and result | Stable work |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ and restoration information are backed up in `artifacts/a401-enter/`. Restoratio
 | Same text, decor off | One Enter10 burst; same final lines/characters | TextChanged10; decor0/rect0; getter13.512ms; line index4.333ms |
 | Near1M ordinary text, decor on | One Enter10 burst; lines13104→13114, characters1048319→1048329 | TextChanged10; Layout10 + Final11 =21 passes; Rect6987/1254.235ms; decor1292.718ms, max83.905ms; getter20.676ms; line index14.986ms |
 
-Both completed the existing120s stable window and both preserved all ten newlines. Idle time
+All input cases completed the existing120s stable window and preserved all ten newlines. Idle time
 is included in probe distributions; probe p95 and computer-use call duration are not input-to-pixel
 latency measurements. The first on case was exploratory and its split burst is recorded rather
 than presented as a controlled paired timing trial. Its event/rect counts directly establish
@@ -103,4 +103,20 @@ user settings were restored to SHA256
 `53637A39DA626118171CCF392C86FDE10033EC39C33DD74E5BCF039BF8CC5C1E` before restarting the
 installed app. Main restored Image explorer at Downloads with no file open. Evidence lives in
 `artifacts/a401-enter/main/` (before/after JSON, eight TRX files, build/publish/package logs,
-entry-point/policy metadata and restoration records). Remote release confirmation is pending.
+entry-point/policy metadata and restoration records).
+
+## Release verified
+
+Product/tag `fb9b531f8a0b4add29ec22eb16b789939a9554a6`; public build39390704159 and
+release39390704230 completed successfully. Job step metadata confirms solution tests and Explorer
+COM checks, plus release startup/integrity, installer and Standalone verification. Exact remote
+test counts and warning totals were not collected from logs;701/701 and zero warnings/errors
+above refer to the local run. Automatic approval review rejected credential extraction for
+detailed logs; public job/release metadata was used without authentication or a bypass.
+
+[v0.400.0](https://github.com/zpstudios/kotu/releases/tag/v0.400.0) was published
+**2026-10-20 17:11:48 KST**, nondraft/nonprerelease, Latest. All eight expected assets, including
+delta/full packages, setup/portable/Standalone and feeds, were uploaded with nonzero sizes.
+Tag commit matches the product. See `remote-verification.json`, `release.json` and
+`final-release-verification.json` in the local evidence directory. Final documentation is kept
+in a local commit without an additional push. No other backlog item is automatically started.
