@@ -240,6 +240,9 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
 
     private LibVLC? _libVlc;
     private MediaPlayer? _player;
+    private EventHandler<MediaPlayerVoutEventArgs>? _voutHandler;
+    private XamlRoot? _fitXamlRoot;
+    private bool _fitApplyQueued;
     private string[]? _swapChainOptions;   // 스왑체인 준비 전 OpenPath 대비 (Vlc.Initialized에서 1회 저장)
     private readonly SemaphoreSlim _playerGate = new(1, 1); // 생성 직렬화 (Initialized·OpenPath 경합 대비)
     private List<string> _subtitleFiles = [];
@@ -399,7 +402,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         UpdateFitEnabled();
 
         Vlc.Initialized += OnVlcInitialized;
-        Loaded += (_, _) => Focus(FocusState.Programmatic);
+        Loaded += OnVideoLoaded;
         Unloaded += OnUnloaded;
 
         // A306: 화면 꺼짐 억제 설정이 바뀌면 재생 중이어도 그 자리에서 반영한다(다음 재생부터가
@@ -420,8 +423,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         // 창 스냅(Win+화살표)·전체화면 전환까지 모든 크기 변경 공통.
         VideoSurface.SizeChanged += (_, _) =>
         {
-            if (_fitMode is VideoFitMode.Contain or VideoFitMode.FitWidth or VideoFitMode.FitHeight)
-                ApplyFitMode();
+            QueueFitAfterLayout();
             ClearEndedFrameOnResize();
         };
 
@@ -562,6 +564,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
 
         using var media = new Media(lib, new Uri(_filePath));
         _pendingStartOverlay = true; // A12: 실제 재생이 시작되면(Playing) 오버레이 표시
+        PrepareFitForPlayback(p);
         p.Play(media);
         PlaceholderText.Visibility = Visibility.Collapsed;
         ContentOpened?.Invoke(_filePath); // 셸 동기화 (v0.25.0)
@@ -591,6 +594,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         _pendingAutoSubtitle = true; // Playing 핸들러가 현재 _subtitleIndex를 재적용(위 ②)
 
         using var media = new Media(lib, new Uri(_filePath));
+        PrepareFitForPlayback(p);
         p.Play(media);
     }
 
@@ -917,7 +921,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
 
         // A30: 재생 영상이 바뀌면 핏 옵션은 Contain으로 회귀 — 이번 실행 내에서도 기억하지 않는다
         // (사용자 확정, A83에서 재확인). Manual(Ctrl+휠 줌, A98)·100%도 같은 규칙으로 회귀한다 —
-        // 실제 Scale 리셋은 Playing 핸들러의 ApplyFitMode() 재적용이 수행한다.
+        // 실제 Scale은 재생 직전에 준비하고 Playing·Vout에서 새 영상 크기로 다시 적용한다.
         if (_fitMode != VideoFitMode.Contain || _lastFitOption != VideoFitMode.Contain)
         {
             _lastFitOption = VideoFitMode.Contain;
@@ -943,9 +947,43 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         _settings.Set("video.volume", (int)VolumeSlider.Value);
     }
 
+    private void OnVideoLoaded(object sender, RoutedEventArgs e)
+    {
+        if (_tornDown) return;
+        Focus(FocusState.Programmatic);
+        if (_fitXamlRoot is not null) _fitXamlRoot.Changed -= OnFitXamlRootChanged;
+        _fitXamlRoot = XamlRoot;
+        if (_fitXamlRoot is not null) _fitXamlRoot.Changed += OnFitXamlRootChanged;
+        QueueFitAfterLayout();
+    }
+
+    private void OnFitXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) =>
+        QueueFitAfterLayout();
+
+    private void QueueFitAfterLayout()
+    {
+        if (_tornDown || _fitApplyQueued ||
+            _fitMode is not (VideoFitMode.Contain or VideoFitMode.FitWidth or VideoFitMode.FitHeight))
+            return;
+
+        _fitApplyQueued = true;
+        // 셸이 조상 RenderTransform과 역수 레이아웃을 함께 바꾼 뒤의 크기를 읽는다.
+        // 한 번만 예약하며, 대기 중 사용자가 고른 Original·수동 줌은 실행 시 다시 확인한다.
+        if (DispatcherQueue?.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _fitApplyQueued = false;
+            if (!_tornDown &&
+                _fitMode is VideoFitMode.Contain or VideoFitMode.FitWidth or VideoFitMode.FitHeight)
+                ApplyFitMode();
+        }) != true)
+            _fitApplyQueued = false;
+    }
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _tornDown = true;
+        if (_fitXamlRoot is not null) _fitXamlRoot.Changed -= OnFitXamlRootChanged;
+        _fitXamlRoot = null;
         _pathProbe.Dispose();
         var player = _player;
         var libVlc = _libVlc;
@@ -999,6 +1037,9 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         p.TimeChanged += OnPlayerTimeChanged;
         p.LengthChanged += OnPlayerLengthChanged;
         p.Playing += OnPlayerPlaying;
+        // Vout의 sender는 내부 이벤트 관리자다. 구독한 플레이어를 직접 캡처해 수명을 확인한다.
+        _voutHandler = (_, e) => OnPlayerVout(p, e);
+        p.Vout += _voutHandler;
         p.Paused += OnPlayerPaused;
         p.EndReached += OnPlayerEndReached;
         p.EncounteredError += OnPlayerError;
@@ -1009,9 +1050,26 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         p.TimeChanged -= OnPlayerTimeChanged;
         p.LengthChanged -= OnPlayerLengthChanged;
         p.Playing -= OnPlayerPlaying;
+        if (_voutHandler is { } voutHandler)
+        {
+            p.Vout -= voutHandler;
+            _voutHandler = null;
+        }
         p.Paused -= OnPlayerPaused;
         p.EndReached -= OnPlayerEndReached;
         p.EncounteredError -= OnPlayerError;
+    }
+
+    private void OnPlayerVout(MediaPlayer player, MediaPlayerVoutEventArgs e)
+    {
+        if (e.Count <= 0) return;
+        Dispatch(() =>
+        {
+            if (!ReferenceEquals(_player, player)) return;
+            // 늦은 알림은 현재 출력 상태를 다시 읽는 계기일 뿐이다. 이전 파일의 모드나 크기는
+            // 넘기지 않으며, 대기 중 사용자가 수동 줌으로 바꿨으면 ApplyFitMode가 그대로 보존한다.
+            ApplyFitMode();
+        });
     }
 
     private void OnPlayerTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
@@ -1838,7 +1896,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
                 // A83 "축소만": 레터박스 유효 배율이 1 이상(= 영상이 표면보다 작다)이면 원본 크기로
                 // 고정하고, 1 미만일 때만 libvlc 자동 맞춤(Scale 0 = 딱 그 축소 배율)에 맡긴다.
                 // 트랙·표면 정보가 아직 없으면(파싱 전) 판정할 수 없으므로 종전대로 자동 맞춤 —
-                // 크기를 알게 되는 Playing·SizeChanged에서 이 경로가 다시 돈다(A98 주석과 같은 안전 규칙).
+                // 크기를 알게 되는 Playing·Vout·SizeChanged에서 다시 판정한다.
                 var contain = ContainScale();
                 p.Scale = contain >= 1 ? 1 : 0;
                 break;
@@ -1864,6 +1922,19 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         }
     }
 
+    /// <summary>새 입력이 이전 영상의 배율을 물려받지 않도록 재생 전에 현재 모드를 준비한다.</summary>
+    private void PrepareFitForPlayback(MediaPlayer player)
+    {
+        // 아직 Media는 이전 파일이다. 맞춤 모드는 그 치수로 판정하지 않고 자동 맞춤으로
+        // 시작한 뒤 Playing·Vout에서 새 치수를 적용한다. 같은 파일 재시작의 수동 배율은 유지한다.
+        player.Scale = _fitMode switch
+        {
+            VideoFitMode.ActualSize => 1,
+            VideoFitMode.Manual => (float)_manualScale,
+            _ => 0,
+        };
+    }
+
     /// <summary>
     /// 레터박스(Contain) 유효 배율 = 두 축 비율 중 작은 쪽. 트랙·표면 크기를 아직 모르면 0
     /// (= 판정 불가 — 호출부가 자동 맞춤으로 안전하게 대체한다). A98의 계산식을 공유한다.
@@ -1876,11 +1947,26 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         return Math.Min(surfaceW / videoW, surfaceH / videoH);
     }
 
-    /// <summary>표시 표면의 물리 픽셀 크기(모니터 배율 반영) — 트랙 해상도와 같은 단위로 맞춘다.</summary>
+    /// <summary>조상 UI 배율과 모니터 배율을 반영한 표면의 물리 픽셀 크기. 미연결 상태는 (0, 0).</summary>
     private (double W, double H) SurfacePixelSize()
     {
-        var rs = XamlRoot?.RasterizationScale ?? 1.0;
-        return (VideoSurface.ActualWidth * rs, VideoSurface.ActualHeight * rs);
+        if (_tornDown || XamlRoot is not { Content: { } rootContent } root) return (0, 0);
+        try
+        {
+            // ActualWidth는 조상 RenderTransform 이전의 레이아웃 DIP다. 루트 DIP로 바꾸어
+            // 앱 UI 배율을 포함한 다음, 모니터 배율을 한 번만 곱해 물리 픽셀로 맞춘다.
+            var bounds = VideoSurface.TransformToVisual(rootContent).TransformBounds(
+                new Windows.Foundation.Rect(0, 0, VideoSurface.ActualWidth, VideoSurface.ActualHeight));
+            var width = bounds.Width * root.RasterizationScale;
+            var height = bounds.Height * root.RasterizationScale;
+            return double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0
+                ? (width, height) : (0, 0);
+        }
+        catch
+        {
+            // 초기 연결·해체 중 변환 실패는 잘못된 1:1 판정 대신 자동 맞춤으로 대체한다.
+            return (0, 0);
+        }
     }
 
     /// <summary>현재 미디어의 비디오 트랙 해상도. 없으면 (0, 0).</summary>
@@ -1915,7 +2001,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
     /// A98: Ctrl+휠 줌 — 현재 유효 배율에서 노치당 ×1.1(양방향), 0.1~8 클램프.
     /// VideoView는 스왑체인이라 XAML transform 줌이 불가 — libvlc Scale(A30)로만 구현한다.
     /// 수동 줌이 들어오면 Fit 추종은 해제된다(SizeChanged 재적용 대상에서 빠진다 — A49 UX와 동일).
-    /// 새 미디어로 바뀌면 OpenPath의 Fit 회귀 + Playing 핸들러의 ApplyFitMode 재적용이 줌을 리셋한다.
+    /// 새 미디어로 바뀌면 OpenPath의 Fit 회귀와 재생 전 준비·Playing·Vout의 재적용이 줌을 리셋한다.
     /// </summary>
     private void ZoomBy(int delta)
     {
