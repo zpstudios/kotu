@@ -20,7 +20,10 @@ The same build reproduced A409: with search input focused, moving the pointer in
 A409 is the next separate batch. Evidence/logs: `artifacts/a396-hint/main/`.
 Automatic approval review initially rejected the combined master commit/push before execution.
 The user explicitly approved sequential v0.401.0 and v0.402.0 push/releases on2026-10-23.
-This batch is being published first; remote release verification is pending.
+v0.401.0 was published first as9bd38f7: build39894524860 and release39894524827 succeeded.
+Startup, installation, Standalone and Explorer COM checks passed; eight uploaded release assets,
+the matching lightweight tag and Latest were confirmed. Published2026-10-23 12:28:14 KST.
+Remote test counts were not extracted;701/701 above describes local results.
 The exact product batch patch is retained at `artifacts/a396-hint/main/approved-batch.patch`.
 
 Implementation date: 2026-10-19. Starting source: `bbc62bf`, product `0.395.0`.
@@ -39,7 +42,9 @@ user document edit, or settings change was performed by the implementation agent
   body Enter remains a newline. Escape from search controls returns focus to the document.
   Ctrl+H or the search options button opens navigation and replacement controls.
 - The native current selection provides highlighting, including while the keyword field has
-  focus. The previous unfocused-selection brush is restored when no current match remains.
+  focus. Originally the previous unfocused brush was restored when no current match remained;
+  A409 v0.402.0 removes that restore because it hid manual selections after searching, and
+  keeps the editor's inactive selection bound to the same theme resource as active selection.
   Bringing a match into view queries at most two rectangles: current match and coordinate origin.
 - Ordinary body edits and mode refreshes update search results without moving the caret.
   Keyword changes, including completed IME input, and explicit navigation request selection.

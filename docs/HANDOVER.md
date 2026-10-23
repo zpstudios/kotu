@@ -1,6 +1,34 @@
 # KOTU 인수인계 문서
 
-## 새 세션 시작점 — 2026-10-20
+## 새 세션 시작점 — 2026-10-23
+
+사용자 선택: 전체 알파값 감사·A396의 `Enter text to find` 제거·A409 hover 배경 재확인/수정,
+A401 진행 상태 설명. 메인은 조율/검수, 구현은 GPT-6 Astra/high 직렬을 유지했다.
+
+- A396 로컬0.401.0: 빈 안내와 자리 제거. 전체701/701·빌드0경고/0오류·구조20·게이트7·
+  정상 publish/package, 실제 빈 검색/옵션·1/2·No matches·초기화 통과. 정본 `A396-FIND-REPLACE.md`.
+- A409 로컬0.402.0: 편집기만 상태 배경 고정. 전체701/701·빌드0경고/0오류·정상 publish/package,
+  실제 다크 hover 재현 전후·보기/편집·검색/캐럿/메뉴 확인. 격리 테마 probe는
+  다크→라이트→다크12표본·93/93 통과, 검색창과 기본 TextBox 상태 일치도 확인했다.
+  이후 선택 강조 추가 보강도 완료: 검색 후 일반 선택의 투명 브러시 복원을 제거했다.
+  최종 전체701/701·실제 드래그/Shift/Ctrl+A·검색 초기화/포커스 이동과 확장 probe134/134 통과.
+  증거 `artifacts/a409-selection/main/`. Viewing의 새 범위 생성 관측은 별도 미해결로 기록했다.
+  고대비 실기기는 미실행이다. 정본 `A409-EDITOR-BACKGROUND.md`, 증거 `artifacts/a409-background/`.
+- 알파 감사 정본 `ALPHA-TRANSPARENCY-AUDIT.md`, 세부 위치 `ALPHA-TRANSPARENCY-LOCATIONS.csv`.
+  351개 파일을 조사했고 개별 상태/픽셀 실측 전수검사와 구분했다. 일괄 alpha 변경은 하지 않았다.
+- **순차 배포 승인됨**: A396 master commit/push는 초기 자동 승인 검토에서 실행 전에 거부됐으나,
+  사용자가0.401.0과0.402.0의 순차 push/정식 릴리스를 명시 승인했다. 첫 배치 patch를 LF로
+  정규화한 뒤 index에만 적용해 A409와 분리했다. A396 HEAD9bd38f7은 정식 배포 완료:
+  build39894524860/release39894524827 성공·태그/자산8개/Latest 확인,12:28:14 KST 게시.
+  v0.402.0 발행 직전 사용자가 드래그/Shift+화살표 선택 강조 누락을 보고했다. 메인이 v401에서
+  검색 전 정상→검색 후 일반 선택 강조 없음(UIA 범위/포커스는 존재)을 재현했다.
+  Astra/high에 A409 선택 표시 보강을 직렬 위임했고, 실제 검증을 통과해0.402.0 발행 준비 중이다.
+  초기 기록은 `artifacts/a396-hint/main/approved-batch.patch`, 실제 적용은 `approved-batch-lf.patch`.
+- 실제 시험 창을 정상 종료했고 새 설정 백업 hash 일치 복원, 원래 설치본 Image/Downloads/파일 없음 재실행.
+  백업은 `artifacts/alpha-audit/settings-before.json`; 이전 날짜 백업을 덮어쓰지 않았다.
+- A401은 v0.400.0 첫 개선만 완료. 단일 rect·초기 긴 줄·연속 휠 병목은 잔여이며 이번에는 상태 설명만 했다.
+
+### 직전 시작점 — 2026-10-20
 
 사용자가 **A411 검증 후 A401 보강**을 선택했다. 메인은 조율·검수·실제 UI, 구현은 GPT-6 Astra/high 직렬.
 

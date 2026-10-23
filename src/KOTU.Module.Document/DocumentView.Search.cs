@@ -31,7 +31,6 @@ public sealed partial class DocumentView
     private StackPanel? _searchTools;
     private CancellationTokenSource? _replacementCancellation;
     private string? _replaceError;
-    private SolidColorBrush? _searchInactiveSelectionBrush;
     private UIElement? _searchFlyoutPresenter;
     private bool _searchFlyoutOpen;
     private bool _searchEscapePending;
@@ -52,7 +51,6 @@ public sealed partial class DocumentView
 
     private void InitializeTextSearch()
     {
-        _searchInactiveSelectionBrush = EditorBox.SelectionHighlightColorWhenNotFocused;
         _searchTools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var element in new FrameworkElement[] { DecorTogglePanel, PageInfoText, ZoomButton })
         {
@@ -291,8 +289,6 @@ public sealed partial class DocumentView
     {
         if (!_searchInitialized) return;
         var count = _searchResult?.Starts.Count ?? 0;
-        EditorBox.SelectionHighlightColorWhenNotFocused = _searchCurrent >= 0 && count > 0
-            ? EditorBox.SelectionHighlightColor : _searchInactiveSelectionBrush;
         var label = !CanSearchText ? "Text search unavailable" : FindBox.Text.Length == 0 ? string.Empty :
             _searchResult is null ? "Searching..." : count == 0 ? "No matches" : $"{_searchCurrent + 1:N0} / {count:N0}";
         FindCountText.Text = label;

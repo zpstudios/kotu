@@ -64,7 +64,8 @@
             AcceptsReturn="True"
             TextWrapping="Wrap"
             IsSpellCheckEnabled="False"
-            Background="Transparent"
+            Background="{ThemeResource TextControlBackground}"
+            SelectionHighlightColorWhenNotFocused="{ThemeResource TextControlSelectionHighlightColor}"
             BorderThickness="0"
             CornerRadius="0"
             Visibility="Collapsed"
@@ -72,11 +73,36 @@
             TextChanged="OnEditorTextChanged"
             TextChanging="OnSearchEditorTextChanging"
             SelectionChanged="OnEditorSelectionChanged"
-            KeyDown="OnEditorKeyDown" />
+            KeyDown="OnEditorKeyDown">
+            <TextBox.Resources>
+                <ResourceDictionary>
+                    <ResourceDictionary.ThemeDictionaries>
+                        <ResourceDictionary x:Key="Default">
+                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="Light">
+                            <SolidColorBrush x:Key="TextControlBackground" Color="White" />
+                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="White" />
+                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="White" />
+                            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="White" />
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="HighContrast">
+                            <SolidColorBrush x:Key="TextControlBackground" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                        </ResourceDictionary>
+                    </ResourceDictionary.ThemeDictionaries>
+                </ResourceDictionary>
+            </TextBox.Resources>
+        </TextBox>
 
         <!-- A115: 장식 레이어(라인 가이드·¶·EOF) — EditorBox 위(z)에 겹치되 IsHitTestVisible=False로
-             입력 불간섭. 그리기는 EditorDecor(코드)가 전담한다. 포커스된 TextBox는 템플릿 Focused
-             상태가 불투명 배경을 그려(A80 참고) 아래(z) 레이어는 가려진다 — 그래서 위에 얹고
+             입력 불간섭. 그리기는 EditorDecor(코드)가 전담한다. A409 이후 편집기 배경은 테마별로
+             모든 상태에서 일정하며, 라이트·고대비의 불투명 배경에도 보이도록 장식을 위에 얹고
              아주 옅게 긋는다(색·불투명도 상수는 EditorDecor 상단 한 곳).
              EditorDecor는 GetRectFromCharacterIndex가 주는 EditorBox 로컬 좌표를 이 Canvas 로컬에
              그대로 찍으므로, 두 요소의 레이아웃 제약(정렬·폭 제한)이 같아야 원점이 겹친다. 한쪽만
