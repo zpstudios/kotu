@@ -293,10 +293,12 @@ public sealed partial class DocumentView
         var count = _searchResult?.Starts.Count ?? 0;
         EditorBox.SelectionHighlightColorWhenNotFocused = _searchCurrent >= 0 && count > 0
             ? EditorBox.SelectionHighlightColor : _searchInactiveSelectionBrush;
-        var label = !CanSearchText ? "Text search unavailable" : FindBox.Text.Length == 0 ? "Enter text to find" :
+        var label = !CanSearchText ? "Text search unavailable" : FindBox.Text.Length == 0 ? string.Empty :
             _searchResult is null ? "Searching..." : count == 0 ? "No matches" : $"{_searchCurrent + 1:N0} / {count:N0}";
         FindCountText.Text = label;
-        FindDetailText.Text = label + (_capped || _truncated ? " · Loaded preview only" : " · Literal, ignore case");
+        FindCountText.Visibility = label.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        var detail = _capped || _truncated ? "Loaded preview only" : "Literal, ignore case";
+        FindDetailText.Text = label.Length == 0 ? detail : $"{label} · {detail}";
         ToolTipService.SetToolTip(FindOptionsButton, $"Find and replace (Ctrl+H) · {FindDetailText.Text}");
         var navigate = CanSearchText && count > 0;
         FindPreviousButton.IsEnabled = FindNextButton.IsEnabled = PopupPreviousButton.IsEnabled = PopupNextButton.IsEnabled = navigate;

@@ -1,5 +1,28 @@
 # A396 — Always-visible find and replace
 
+## 2026-10-23 reinforcement — v0.401.0
+
+Removed the idle `Enter text to find` helper in both initialization XAML and runtime presentation.
+The empty result label collapses, including its minimum width; the keyword input remains visible.
+The options detail retains `Literal, ignore case` or `Loaded preview only` without a leading separator.
+Searching, no-match, result count and unavailable labels keep their existing behavior.
+
+GPT-6 Astra/high implemented one batch. Main reviewed the diff and verified Release/x64 build
+(zero warnings/errors), all701/701 tests, architecture20, release gates7 and normal publish.
+Package validation used the existing local `artifacts/native/7zip/7z.dll` in place of the CI-only
+Program Files path; all other package checks were unchanged. No dependency change was made.
+Actual WinUI: empty input/idle options, `Searching...`→`1 / 2`, `No matches`, clearing the query,
+and retained keyword field/selection highlighting passed. Responsive thresholds were unchanged;
+no new narrow-width, preview-cap or inaccessible-document runtime test was performed.
+
+The same build reproduced A409: with search input focused, moving the pointer into the document
+(zero scroll delta) changed its black background to dark gray without editing the document.
+A409 is the next separate batch. Evidence/logs: `artifacts/a396-hint/main/`.
+Automatic approval review initially rejected the combined master commit/push before execution.
+The user explicitly approved sequential v0.401.0 and v0.402.0 push/releases on2026-10-23.
+This batch is being published first; remote release verification is pending.
+The exact product batch patch is retained at `artifacts/a396-hint/main/approved-batch.patch`.
+
 Implementation date: 2026-10-19. Starting source: `bbc62bf`, product `0.395.0`.
 This change sets product version `0.396.0`. No commit, push, deployment, application launch,
 user document edit, or settings change was performed by the implementation agent.

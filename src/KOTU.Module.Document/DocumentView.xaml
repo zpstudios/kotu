@@ -265,7 +265,7 @@
                              AutomationProperties.Name="Find text" ToolTipService.ToolTip="Find text (Ctrl+F)"
                              TextChanged="OnFindTextChanged" GotFocus="OnFindGotFocus" />
                     <StackPanel x:Name="InlineFindNavigation" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
-                        <TextBlock x:Name="FindCountText" MinWidth="48" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" />
+                        <TextBlock x:Name="FindCountText" MinWidth="48" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" Visibility="Collapsed" />
                         <Button x:Name="FindPreviousButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"
                                 Click="OnFindPreviousClick" AutomationProperties.Name="Previous match" ToolTipService.ToolTip="Previous match (Shift+F3)">
                             <FontIcon Glyph="&#xE70E;" FontSize="14" />
@@ -282,7 +282,7 @@
                             <Flyout x:Name="FindFlyout" Placement="Top" Opened="OnFindFlyoutOpened"
                                     Closing="OnFindFlyoutClosing" Closed="OnFindFlyoutClosed">
                                 <StackPanel x:Name="FindOptionsPanel" Width="280" Spacing="8" PreviewKeyDown="OnFindPanelKeyDown">
-                                    <TextBlock x:Name="FindDetailText" Text="Enter text to find" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="FindDetailText" Text="Literal, ignore case" TextWrapping="Wrap" />
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <Button x:Name="PopupPreviousButton" Content="Previous" Click="OnFindPreviousClick" IsEnabled="False" />
                                         <Button x:Name="PopupNextButton" Content="Next" Click="OnFindNextClick" IsEnabled="False" />
