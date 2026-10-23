@@ -1,9 +1,50 @@
 # KOTU 실기기 확인 대기 — 누적분(v0.162.0~v0.294.0)
 
+## 2026-10-24 A408 검수 이후 이전 A412 실제 검증 기록 이관
+
+### 실기기 확인 결과와 잔여 — A412 v0.405.0 정식 배포 완료
+
+정상 Program.Main 실행본에서 실제 재생/일시정지100/150/200 배율 변경·cold100의 네 가장자리,
+EOF의 마지막 프레임 유지 후 배율 변경에 따른 지우기·작은 영상 native cap·fit·탐색/이어보기·독립 종료,
+두 영상 동시100→200을 확인했다. 큰 영상150→200은 같은 창에서1:55→2:12 재생으로 재확인했다.
+가려진 가장자리와 다른 창이 찍힌 배경 캡처는 한계로 기록하며, 모호한 검은 캡처는 통과 근거에서 제외했다.
+Original은 고정200만 확인했고 실시간 배율 변경·수동 modifier휠·가청 음성·첫 이어보기 프레임 시각과
+정상 UI의 빠른 전이 전수는 미검증이다. 격리 수명 진단의37개 실제 배치 일치와 정상 앱 검증을 구분한다.
+
+최종22:59:02 시험 창/프로세스0·새 설정F1128448…복원·합성4 AVI/manifest 해시 일치.
+정본 `A412-VIDEO-COMPOSITION.md`, 결정적 화면/관측 `artifacts/a412-final/agent/`.
+현재 A408 후보 검증은 진행 중이며 이 결과로 대신 통과시키지 않는다.
+이전 A398 및 A401/A409의 검증 기록과 남은 범위는 `DEVICE-CHECKS.md`에 보존했다.
+
+## 2026-10-23 A412 배포 이후 이전 A398 실제 검증 기록 이관
+
+### 실기기 확인 결과와 잔여 — A398 v0.404.0 정식 배포 완료
+
+GPT-6 Astra/high 서브에이전트가 정상 production UI를 조작했고 메인은 코드·TRX·probe·보고서를 검수했다.
+JPEG/TIFF Orientation1~8·PSD5/6/7·수동5/7+90의 방향과 축, 실제 Ctrl+C JPEG7+90의 PNG/DIBV5/DIB
+480×320·DEF/ABC, TIFF8 세로/가로 용지와 수동90 인쇄 미리보기의 방향/중앙배치, GIF 두 프레임을 확인했다.
+프린터 초기 연결 지연은 이후 해소됐으며 실제 인쇄를 제출하지 않았다. Original 수동회전은 중앙배치가 맞았다.
+
+**fit native gate 통과**: 이전 TIFF8 Contain+R90 잘림은 단일 Image Panel의 native 측정 축 교환과
+중앙 배치로 보강했다. 같은1280×752에서 TIFF1/8×4각도가 중앙·허위scroll 없이 맞고, TIFF8R90은
+이전y205에서y22 시작으로 정상화됐다. 격리90표본/실패0은 native extent·모서리alpha·기존 크기 동일을 검증했다.
+정상 앱에서 Original·Fitwidth/height·양축팬·휠anchor·110%반복회전/reset·탐색/외부open·전체화면,
+회전GIF·PSD7·TIFF8R90복사3형식480×320 ABC/DEF·세로용지 인쇄 중앙배치를 확인했다.
+Ctrl/Shift+휠은 지원 UI도구에 modifier scroll이 없어 미실행, 복원창 전체/자유resize는 저장위치로 시야 제한,
+mid-drag unload는 미실행이다. 작은 Contain 확대는 기존 direct-Image native baseline과 크기가 같고 정책 불변이다.
+
+PNG eXIf5/6/7은 v404 실제 화면에서도 raw360×240이며 동일 PNG6의 v403도 같다. 실제 썸네일 제공자는
+Icon만 반환해 이미지 방향 일치는 미검증이다. 다른 codec·사용자 재현 원본은 미확인이고 Windows WhatsApp은
+미설치라 직접 붙여넣기 성공으로 세지 않는다. 클라우드 정책은 유지했다. A398 전체 완료가 아니다.
+첫 UI 배치20:39:42 프로세스0·최종 창0, 이번 설정 백업F1128448…복원·합성21+PNG3 해시 불변.
+추가 대응검증20:48:11과 보강검증21:20:16도 창/프로세스0·각 새 백업 복원·원본 불변이다(최종26개).
+정본 `A398-EXIF-ORIENTATION.md`, `A398-ROTATED-LAYOUT.md`; 최종 근거 `artifacts/a398-fit/agent/`.
+이전 A401/A409 대기는 `DEVICE-CHECKS.md` 상단으로 보존 이관했다.
+
 ## 2026-10-23 A398 회전 layout 후속 검증 한계
 
-v0.404.0 fit native gate는 통과했다. 현재 A398 결과 정본은 HANDOVER §4 및
-`A398-ROTATED-LAYOUT.md`이며 이전 §4를 다시 이관하지 않는다.
+v0.404.0 fit native gate는 통과했다. A398 결과 정본은 `A398-ROTATED-LAYOUT.md`이며,
+당시 HANDOVER §4는 위에 보존했다.
 Ctrl/Shift+휠은 UI도구의 modifier scroll 미지원, 복원창 전체/자유resize는 저장위치로 전체 시야 제한,
 mid-drag unload/capture-loss는 직접 미검증이다. PNG eXIf·실제 이미지 썸네일 제공자/codec·제보 원본 잔여를 유지한다.
 

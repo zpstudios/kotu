@@ -30,15 +30,75 @@ internal static class ToolbarIconGeometry
         ToolbarIconKind.OriginalRatio =>
         [
             // 바깥과 안쪽 윤곽은 짝홀 채움으로 테두리를 만든다. 메뉴·버튼 모두 같은 도형이다.
-            Polygon(3, 3, 21, 3, 23, 5, 23, 19, 21, 21, 3, 21, 1, 19, 1, 5),
-            Polygon(3, 4, 2, 5, 2, 19, 3, 20, 21, 20, 22, 19, 22, 5, 21, 4),
-            One(5), One(15), Box(11, 9, 2, 2), Box(11, 14, 2, 2),
+            OriginalRoundedBox(1, 3, 22, 18, 2),
+            OriginalRoundedBox(2, 4, 20, 16, 1),
+            One(5), One(15), OriginalRoundedBox(11, 8, 2, 2, 1), OriginalRoundedBox(11, 14, 2, 2, 1),
         ],
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 
     private static IconPoint[] Speaker() => Polygon(1, 7, 3, 7, 7, 3, 7, 15, 3, 11, 1, 11);
-    private static IconPoint[] One(double x) => Polygon(x, 9, x + 2, 7, x + 4, 7, x + 4, 17, x + 2, 17, x + 2, 9);
+    private static IconPoint[] One(double x)
+    {
+        var vertices = Polygon(x, 9, x + 2, 7, x + 4, 7, x + 4, 17, x + 2, 17, x + 2, 9);
+        var points = new List<IconPoint>();
+        for (var i = 0; i < vertices.Length; i++)
+        {
+            var corner = vertices[i];
+            // 깃 끝과 오목한 어깨는 그대로 두어 숫자의 폭과 위치를 보존한다.
+            if (i is 0 or 5)
+            {
+                points.Add(corner);
+                continue;
+            }
+
+            var start = TrimToward(corner, vertices[i - 1]);
+            var end = TrimToward(corner, vertices[i + 1]);
+            points.Add(start);
+            for (var step = 1; step <= 6; step++)
+            {
+                var t = step / 6.0;
+                var u = 1 - t;
+                points.Add(step == 6 ? end : new(
+                    u * u * start.X + 2 * u * t * corner.X + t * t * end.X,
+                    u * u * start.Y + 2 * u * t * corner.Y + t * t * end.Y));
+            }
+        }
+        return points.ToArray();
+
+        static IconPoint TrimToward(IconPoint corner, IconPoint neighbor)
+        {
+            var dx = neighbor.X - corner.X;
+            var dy = neighbor.Y - corner.Y;
+            var ratio = 0.35 / Math.Sqrt(dx * dx + dy * dy);
+            return new(corner.X + dx * ratio, corner.Y + dy * ratio);
+        }
+    }
+
+    private static IconPoint[] OriginalRoundedBox(double x, double y, double w, double h, double radius)
+    {
+        var centers = Polygon(x + w - radius, y + radius, x + w - radius, y + h - radius,
+            x + radius, y + h - radius, x + radius, y + radius);
+        var starts = Polygon(x + w - radius, y, x + w, y + h - radius,
+            x + radius, y + h, x, y + radius);
+        var ends = Polygon(x + w, y + radius, x + w - radius, y + h,
+            x, y + h - radius, x + radius, y);
+        var points = new List<IconPoint>();
+        for (var corner = 0; corner < 4; corner++)
+        {
+            for (var step = 0; step <= 8; step++)
+            {
+                var angle = (corner - 1 + step / 8.0) * Math.PI / 2;
+                // 접점은 삼각함수 오차 없이 보존하고 원형 콜론의 중복 접점은 생략한다.
+                var point = step == 0 ? starts[corner] : step == 8 ? ends[corner] : new IconPoint(
+                    centers[corner].X + radius * Math.Cos(angle),
+                    centers[corner].Y + radius * Math.Sin(angle));
+                if (points.Count == 0 || points[^1] != point) points.Add(point);
+            }
+        }
+        if (points[^1] == points[0]) points.RemoveAt(points.Count - 1);
+        return points.ToArray();
+    }
     private static IconPoint[] Box(double x, double y, double w, double h) => Polygon(x, y, x + w, y, x + w, y + h, x, y + h);
 
     private static IconPoint[] Polygon(params double[] coordinates)
