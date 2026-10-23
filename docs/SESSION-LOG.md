@@ -6,6 +6,14 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-23 — A401 v0.403.0 정식 배포 완료·A398 조사로 이동
+
+- 제품0a02530을 master에1회 push. build39940553956/release39940553943 attempt1 모두714/714,
+  0경고/0오류·시작/설치/Standalone/Explorer COM 통과. 태그/제품 일치·자산8개·Latest 확인.
+  19:46:33 KST 정식 게시. 증거 artifacts/a401-next/main/release-verification.json 및 remote-test-evidence.json.
+- 다음 A398 조사는 새 Astra/high 에이전트에 직렬 위임한다. A401 전체 잔여와 이메일 정책 대기는 유지한다.
+
+
 ### 2026-10-23 — A401 줄 탐색 힌트 v0.403.0 로컬 검증 완료·원격 검증 전
 
 - Astra/high의 native rect 탐색 조사안을 메인이 검수해 같은 패스의 두 동일 span만 후보로 삼고

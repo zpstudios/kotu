@@ -5,7 +5,7 @@
 This v0.403.0 batch reduces repeated native character-rectangle probes while preserving the
 existing TextBox and decoration geometry. It follows the v0.400.0 input/scroll request coalescing
 batch. Implementation, model tests and main's paired native trials are locally verified;
-commit/push and remote release verification are pending. Sustained-input, scroll-latency and
+v0.403.0 is now published from product commit0a02530. Sustained-input, scroll-latency and
 initial-layout improvement remain separate work; A401 as a whole is not complete.
 
 The current native rectangle cost remains a justified target: the recorded v0.400.0 near1M
@@ -130,7 +130,13 @@ ui-baseline-notes.md, main-review.md, restoration.json, raw captures and build/t
 
 ## Remaining work
 
-Commit/push and remote build/release/installer/Standalone verification remain pending.
+Product commit0a025308a6fe5a5d500337a00a0386316f24405e was pushed once. Remote build39940553956
+and release39940553943 attempt1 both passed714/714 tests with zero build warnings/errors.
+Startup, Explorer COM, installer and Standalone gates passed. Tag matched the product commit;
+all eight expected assets were uploaded and nonempty, and the nondraft/nonprerelease release was
+Latest when checked. Published2026-10-23 19:46:33 KST:
+[v0.403.0](https://github.com/zpstudios/kotu/releases/tag/v0.403.0).
+Evidence: artifacts/a401-next/main/release-verification.json and remote-test-evidence.json.
 A fresh ordinary256Ki performance pair, repeated trials, high-frequency continuous wheel input,
 genuine held-key input, initial long-line layout delay and end-to-end input/paint latency were not
 verified in this batch. The earlier incorrect NoWrap display remains outside this fix.
