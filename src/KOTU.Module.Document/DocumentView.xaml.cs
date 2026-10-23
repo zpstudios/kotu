@@ -1416,10 +1416,10 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     //   New text file (A189 무제)     | 무제 편집(렌더 축 리셋 — 무제 md는 범위 밖. 토글 활성)
     //   토글 클릭 (뷰 중)             | 편집(md 렌더면 에디터 표시·포커스 — 보류 중 파싱은
     //                                 | 시퀀스로 무산. 잠금 뷰면 IsReadOnly 해제 + A277 시각
-    //                                 | 복원(장식·토글 활성·IsTabStop·에디터 포커스))
+    //                                 | 복원(장식·토글 활성·에디터 포커스))
     //   토글 클릭 (편집 중)           | 뷰 — md 렌더 자격이면 렌더(현재 에디터 버퍼를 그 시점에
     //                                 | 재파싱. 미저장 변경도 렌더에 보인다), 아니면 잠금 뷰
-    //                                 | (A277: 잠금 뷰 = 캐럿·가이드·¶·EOF 없음 + 표시 토글 비활성.
+    //                                 | (A277: 잠금 뷰 = 진입 시 에디터 포커스 회피·장식 억제·표시 토글 비활성.
     //                                 | 사용자 토글 값은 보존 — 편집 복귀 시 그대로 되살아난다)
     //   저장 (Ctrl+S·버튼)            | 모드 불변 — 저장은 EditorText 기준이라 뷰 중에도 동작
     //                                 | (잠금은 "입력"만 막는다 — 더티가 있으면 저장 가능)
@@ -1564,7 +1564,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             return;
         }
         _viewMode = true;
-        UpdateEditorReadOnly(); // A277: IsReadOnly + 장식 억제 + IsTabStop 해제(단일 산출 지점)
+        UpdateEditorReadOnly(); // A277: IsReadOnly + 장식 억제(단일 산출 지점). A409: 포커스 가능 유지
         UpdateViewToggle();
         UpdateDecorToggles(); // A277: 잠금 뷰 = 표시 토글 비활성(Visibility는 안 바뀌므로 명시 호출)
         // A248: HTML인데 렌더 갈래를 못 탄 잠금 뷰 = 폴백 상태 — 이유를 1줄로 알린다.
@@ -1575,9 +1575,9 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         }
         // A277: 포커스를 에디터에 두지 않는다 — 캐럿을 숨길 공개 API가 없어(A115 ④ 판정: WinUI
         // TextBox·RichEditBox 모두 캐럿 색·표시 API 없음) "포커스가 없으면 캐럿도 없다"가 유일한
-        // 수단이다. 렌더 뷰·HTML 뷰가 이미 쓰는 관용구(뷰 루트로 이동)와 같다. 클릭 포커스는 그대로
-        // 살아 있어 선택·복사는 유지된다(포커스 차단 금지 — 사양). 종전 주석의 "캐럿 탐색"은
-        // 클릭 이후에도 그대로 가능하다 — 잠금 뷰에 들어서자마자 캐럿이 깜빡이지 않을 뿐이다.
+        // 수단이다. 렌더 뷰·HTML 뷰가 이미 쓰는 관용구(뷰 루트로 이동)와 같다. A409: 네이티브
+        // 선택·복사를 위해 IsTabStop은 유지한다. 사용자가 클릭하거나 Tab으로 에디터에 진입하면
+        // 캐럿 탐색도 가능하다 — 여기서는 진입 시 자동 에디터 포커스만 피하려는 의도다.
         Focus(FocusState.Programmatic);
     }
 
@@ -1614,16 +1614,16 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// <c>_viewMode</c> 하나이고 호출 전수가 위 목록과 같기 때문이다(따로 부르게 하면 전환 한 곳을
     /// 빠뜨려도 조용히 어긋난다 — 이 축에서 가장 비싼 실수). ⓐ 장식 억제(가이드·¶·EOF —
     /// EditorDecor.SetViewSuppressed. 사용자 토글 값·설정 키는 안 건드리고 표시만 막으므로 편집
-    /// 복귀 시 그대로 되살아난다) ⓑ IsTabStop 해제(뷰 모드에서 Tab이 에디터로 들어가 캐럿을
-    /// 세우지 않게 — 클릭 포커스는 그대로라 선택·복사는 유지된다. 캐럿 자체를 숨기는 공개 API는
-    /// 없다: A115 ④ 판정 참고).</para>
+    /// 복귀 시 그대로 되살아난다). A409: IsTabStop=false는 읽기 전용 TextBox의 네이티브 클릭
+    /// 포커스와 선택도 막으므로 항상 true를 유지한다. 명시적 Tab 진입도 허용하며, 진입 시 자동
+    /// 에디터 포커스 회피는 EnterViewMode의 뷰 루트 Focus 호출이 담당한다.</para>
     /// </summary>
     private void UpdateEditorReadOnly()
     {
         // A343 ⓑ: 상한 초과(_capped)도 잘림과 같은 영구 잠금 축이다 — 앞부분만 담긴 버퍼가
         // 저장으로 원본을 덮어쓰는 사고를 막는 첫 겹(3중 차단의 ⓐ).
         EditorBox.IsReadOnly = _truncated || _capped || _viewMode;
-        EditorBox.IsTabStop = !_viewMode; // A277 ⓑ — 잘림(읽기 전용)은 편집 모드라 탭 진입 유지
+        EditorBox.IsTabStop = true; // A409: 읽기 전용에서도 네이티브 포커스·선택·복사 허용
         _decor.SetViewSuppressed(_viewMode); // A277 ⓐ
         UpdateSearchAvailability();
     }

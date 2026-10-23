@@ -1,5 +1,59 @@
 # A409 — stable editor background
 
+## Current follow-up: Viewing selection (2026-10-24)
+
+**v0.407.0 local code,801 tests and normal native gate accepted; publication pending.**
+This is main's separate Viewing observation, not the user's original Editing highlight report.
+The user explicitly did not confirm Viewing was healthy. Background/Editing fixes below remain released.
+
+Normal multiline Latin/Hangul text selects in Editing and retains that blue range on entering Viewing,
+but a new drag clears it and Shift+Right/Ctrl+A/double-click produce no new range, without any search.
+A fresh process/file immediately switched to Viewing fails the same drag. Read-only Z input remains blocked.
+UIA still names EditorBox as focused; that alone does not prove effective native FocusState.
+
+An isolated stock native pair holds IsReadOnly=true and varies only IsTabStop. Real pointer input with
+IsTabStop=true gives Pointer focus and selection10→11 characters after Shift+Right; false receives pointer
+events but stays Unfocused with selection0 while keyboard input reaches the prior control. The probe is
+single-line due initializer order; normal-package evidence is multiline. Main read the probe and events
+and independently inspected normal/stock before-after JPEGs. The cause is the Viewing-specific
+`EditorBox.IsTabStop = !_viewMode`, not a missing selection brush or alpha change.
+
+Main approved keeping the editor focusable, preserving all read-only locks, root focus on Viewing entry,
+decoration suppression, search brushes and shortcut guards. **Explicit Tab navigation may now enter the
+Viewing editor**; this is the accepted tradeoff to restore required native selection. A277's no-automatic-caret
+entry intent remains and passed the bounded candidate checks below. No custom focus-routing handler is added.
+Contradictory comments were corrected. The only executable change keeps EditorBox.IsTabStop=true.
+Release build passed with zero warnings/errors; eight assemblies passed801/801, architecture20 and
+release-contract7 passed. Main independently parsed final TRX and rechecked source/package hashes.
+Normal Program.Main, engine/resources and startup passed with no probe types. The first sandbox testhost
+transport attempt aborted before the successful external whole-suite run and remains separately recorded.
+An immediate startup cleanup inventory saw an exiting process; a later external read found0 with unchanged
+settings, without a relaunch.
+
+The normal candidate passed multiline Latin/Hangul drag, Shift extension/reduction and Ctrl+A with visible
+blue ranges; Z/Delete/Backspace/Enter remain blocked in Viewing. Both Tab directions enter and leave the
+editor. Ctrl+zoom works, plain a/f do not trigger module commands, and the zoom returns to100%.
+Manual nonmatching selection after search remains visible when Find receives focus; Escape returns to the
+document while retaining the query. Separate query clearing, Editing input and settled Undo also passed.
+Fresh entry/re-entry show no visible caret, and Shift+Right before deliberate focus creates no new range
+or extension; this is bounded behavioral evidence, not an instrumented native FocusManager identity.
+UIA focused_element is unreliable here and is not treated as focus proof. Immediate Undo's stale Save-enabled
+capture is preserved as transitional; settled41/42 restore original text, Save disabled and no dirty marker.
+Main independently inspected decisive actual1280×752 JPEGs05/08/30/42 and selection records.
+
+Native cleanup01:42:33: normal close, native windows/external processes0; fresh settings, both fixtures,
+three product sources and five package hashes match. Clipboard transfer was not exercised because the
+supported input API cannot preserve the clipboard; no WhatsApp success is claimed. Truncated/capped locks
+have unchanged source/existing-test coverage, not a fresh huge-file native test. Light/high-contrast/touch
+and other OS scales remain outside this gate. Full report: `artifacts/a409-viewing-fix/agent/phase3-report.md`.
+
+Diagnosis cleanup01:11:44: external processes/native windows0, fresh settings/fixture/normal DLL/geometry
+hashes preserved. No user files, clipboard export, OS settings or recording work. Detailed source/route
+evidence and limits: `artifacts/a409-viewing/agent/report.md`; main-approved implementation scope:
+`artifacts/a409-viewing/main/implementation-scope.md`. Light/high-contrast/touch remain unverified.
+
+## Published background and Editing selection batch
+
 2026-10-23. User reconfirmed the document-editor hover brightness issue. Main coordinated and
 reviewed; GPT-6 Astra/high investigated then implemented serially after A396 validation.
 Product version:0.402.0, published as5ec5d35 on2026-10-23 at16:32:52 KST.
@@ -80,7 +134,7 @@ separate comparison. No additional behavior change was made for that observation
 The user initially did not remember the mode, then clarified that the reported selection
 highlight failure occurred in Editing. They explicitly cautioned that this does not confirm
 Viewing works correctly. Keep the user's Editing report and main's separate Viewing observation
-distinct; the latter remains unresolved.
+distinct; the latter was subsequently addressed by the v0.407.0 follow-up at the top of this document.
 
 ## Publication
 

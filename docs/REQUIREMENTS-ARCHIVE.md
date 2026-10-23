@@ -1,5 +1,17 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
+## A409 Viewing 선택 보강(v0.407.0 검수 완료·배포 준비)
+
+- 정상v406에서 새 드래그/Shift/Ctrl+A 실패를 재현했고 기본 읽기 전용 TextBox 대조로 IsTabStop=false의
+  포커스 차단을 확인했다. 사용자 원 제보는 Editing이며 Viewing은 메인의 별도 관측이다.
+- IsTabStop=true 최소 수정과 모순 주석 정리. 읽기 전용 잠금·진입 루트 포커스·장식/검색/브러시/alpha는 유지한다.
+  명시적 Tab 본문 진입 허용을 승인했다. 로컬801/801·빌드0/0·구조20·게이트7·정상 Program.Main/package/startup 통과.
+- 정상 다크100%의 여러 줄 한글 드래그·Shift/Ctrl+A, Tab 양방향 이동, 입력 차단, 검색 뒤 수동/비활성 강조,
+  Escape 복귀·별도 검색어 비우기·Editing/Undo·줌을 확인했다. 진입 시 행동/정지화면을 native FocusState 계측으로 주장하지 않는다.
+  Undo 직후 과도 상태와 안정 상태를 구분했으며 최종 원문·Save 비활성·더티 없음이다.
+- 01:42:33 정상 종료·창/외부 프로세스0, 새 설정/합성 자료/소스/패키지 보존. 클립보드 전송·새 잘림/상한 실제
+  대용량 검증·Light/고대비·터치·다른 OS배율은 미검증이다. 정본 `A409-EDITOR-BACKGROUND.md`, artifacts/a409-viewing-fix.
+
 ## A404 Record Open file 확인(2026-10-24 현재 동작 검증 종결·결번)
 
 - 현재v0.406.0의 직접 Record·Document↔Record·Settings→Record·Ctrl+O를 정상 화면에서 검수했다.
