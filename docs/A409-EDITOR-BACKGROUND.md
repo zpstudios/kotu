@@ -2,7 +2,8 @@
 
 2026-10-23. User reconfirmed the document-editor hover brightness issue. Main coordinated and
 reviewed; GPT-6 Astra/high investigated then implemented serially after A396 validation.
-Product version:0.402.0. This document does not yet claim this version's release publication.
+Product version:0.402.0, pushed as5ec5d35. Release attempt1 failed one existing archive test;
+the retry is waiting for explicit approval after automatic approval review rejected it.
 
 ## Cause and scope
 
@@ -90,3 +91,21 @@ That separate Astra/high implementation and main visual-validation batch passed 
 The approved v0.402.0 publication now includes both the background and selection corrections.
 The exact first-batch patch is retained at `artifacts/a396-hint/main/approved-batch.patch` so
 the two product batches can still be committed/pushed in order without combining their versions.
+
+v0.402.0 commit5ec5d35 was pushed after v0.401.0 verification. Build39896995024 passed701/701
+(verified through connected GitHub job logs). Release39896995019 attempt1 passed its build but
+failed one of701 tests: ArchiveJobCoordinatorTests.CreationCopiesSourcesAndUsesWorkerForBothFormats
+(use7z:true), line170, Assert.NotEqual(ownerThread,workerThread), both27. All700 others passed.
+Archive/Core implementation and the affected test are unchanged from v0.401.0. A focused local
+repeat passed10 runs ×2 formats=20/20; no test was weakened or skipped. The precise runtime cause
+is not proven. Astra/high's read-only audit found that .NET8 releases managed thread IDs when
+Thread objects are destroyed, while the test retains only the integer ID before awaiting.
+An async test caller is not guaranteed to stay alive throughout the test. ID reuse is therefore
+a plausible test-lifetime explanation, not an observed CI fact. Product dispatch remains
+Task.Run→CreateAsync→new ModuleWorker→new Thread; there is no direct-caller backend branch.
+If a single approved retry fails again, capture Thread object identity/liveness and worker name
+before changing either the product or the test. Do not classify this failed run as successful.
+
+Automatic approval review rejected the failed-job rerun itself as lacking explicit rerun approval,
+despite the earlier sequential push/release approval. No retry executed. A new user question asks
+permission for exactly one retry with all existing gates retained. No v0.402.0 release is claimed.
