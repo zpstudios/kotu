@@ -207,6 +207,7 @@ internal sealed class EditorDecor
     // 스냅샷(_textProvider)이 편집당 1회 새 인스턴스를 주므로 참조 비교로 재빌드를 판정한다.
     private readonly TextLineIndex _lineIndex;
     private readonly Dictionary<int, Rect> _rectCache = [];
+    private readonly Func<int, double> _topProvider; // 줄마다 인스턴스 메서드 델리게이트를 만들지 않는다.
 
     // 표시 토글 2축 — 라인 가이드·줄 번호 / ¶·EOF 마커. 줄 번호는 가이드 설정을 공유한다.
     // 잠금 뷰에서는 기존처럼 줄 번호를 허용하지만 가이드 토글을 끄면 함께 숨긴다. 끈 축의 요소는
@@ -279,6 +280,7 @@ internal sealed class EditorDecor
         _canvas = canvas;
         _textProvider = textProvider;
         _lineIndex = lineIndex;
+        _topProvider = TopOf;
         _brush = MakeBrush();
         var queue = editor.DispatcherQueue;
         _renderScheduler = new(action => queue.TryEnqueue(() => action()), Render, RenderThrottleMs);
@@ -564,6 +566,8 @@ internal sealed class EditorDecor
         // 실제 줄 간격보다 클 수 있으므로(2026-08-29 실측: 높이 24 vs 간격 16) 간격은 인접 줄의
         // Y 차이로만 잰다. NaN = 이번 패스에서 아직 두 번째 줄을 못 봤다(첫 줄 처리 중).
         var prevLineY = double.NaN;
+        // 좌표·줄 길이 힌트는 패스 밖으로 넘기지 않는다. 편집·배율·스크롤마다 새로 관측한다.
+        var lineHint = new EditorDecorLineHint();
         for (var lines = 0; idx >= 0 && lines < MaxLines; lines++)
         {
             var rect = RectOf(idx);
@@ -591,7 +595,7 @@ internal sealed class EditorDecor
 
             // A287: 기준은 현재 줄의 윗변(rect.Y)이다 — 밑변(rect.Y + rect.Height)을 넘기면 캐럿
             // 상자 높이 > 줄 간격인 환경에서 다음 줄을 영원히 못 찾는다(NextLineStart 주석 참고).
-            var next = NextLineStart(idx, rect.Y, len);
+            var next = NextLineStart(idx, rect.Y, len, lineHint.Span);
             if (next < 0)
             {
                 // A287 ⓑ·A289 ⓓ·A307: 마지막 줄 아래 산술은 위에서 구한 줄 간격(실측 → 캐시 →
@@ -615,6 +619,7 @@ internal sealed class EditorDecor
                 line++; // 하드 개행 = 다음 논리 줄(자동 줄바꿈은 같은 줄이라 번호가 늘지 않는다)
             }
             prevLineY = rect.Y; // A287: 다음 반복이 이 줄과의 Y 차이로 간격을 잰다
+            lineHint.Observe(next - idx);
             idx = next;
         }
         FlushPendingGuide(vw, vh, pad); // A142 ⑤: 마지막 줄 밑변 가이드 마감
@@ -913,34 +918,11 @@ internal sealed class EditorDecor
     /// 그친다. 종전 밑변 판정의 근거였던 "혼재 글꼴 줄에서 같은 줄 셀의 윗변이 흔들린다"는 우려는
     /// 캐럿 상자 확정(A286)으로 약해졌지만, 만에 하나 같은 줄 Y가 YEpsilon 이상 흔들리는 환경이
     /// 있으면 한 줄이 여러 줄로 쪼개져 보인다 — 그때는 이 허용 오차를 넓히는 것이 복구 지점이다.</para>
+    /// <para>A401: 직전 두 줄의 문자 길이가 같으면 그 길이를 후보로 먼저 쓴다. 후보와 직전 문자의
+    /// 현재 Y가 경계를 증명해야만 채택하며, 실패하면 종전 탐색으로 돌아간다.</para>
     /// </summary>
-    private int NextLineStart(int index, double refTop, int len)
-    {
-        if (index >= len - 1) return -1;
-        var threshold = refTop + YEpsilon; // 같은 줄 셀은 Y가 refTop과 같다 — 오차 이내는 같은 줄
-        var low = index; // 아직 현재 줄
-        var high = -1;   // 다음 줄 이후
-        var step = 32;
-        while (high < 0)
-        {
-            var probe = Math.Min(len - 1, low + step);
-            if (TopOf(probe) > threshold)
-            {
-                high = probe;
-                break;
-            }
-            if (probe == len - 1) return -1; // 끝까지 같은 줄
-            low = probe;
-            step *= 2;
-        }
-        while (low + 1 < high) // 처음으로 경계 아래로 내려가는 인덱스 = 다음 줄 시작
-        {
-            var mid = low + (high - low) / 2;
-            if (TopOf(mid) > threshold) high = mid;
-            else low = mid;
-        }
-        return high;
-    }
+    private int NextLineStart(int index, double refTop, int len, int hint) =>
+        EditorDecorLineSearch.FindNext(index, refTop, len, YEpsilon, hint, _topProvider);
 
     /// <summary>
     /// A289 ⓓ: 이 줄에서 쓸 줄 간격 — ① 이번 패스 실측(stepHere: 직전 시각적 줄과의 Y 차이)
