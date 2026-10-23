@@ -6,8 +6,9 @@ Selected by the user's 2026-10-23 continuous development instruction, following 
 Version **0.405.0**, baseline product `4c65d21` (v0.404.0), with main-owned documentation
 commit `e34a34c` already present. Main coordinates and reviews; GPT-6 Astra/high implements
 the bounded batch. **Main accepted the bounded normal-entry rendered playback gates and cleanup
-on2026-10-23 after reviewing source, checks and decisive saved screenshots.** Release verification
-is pending. The limits in the final acceptance section remain; this is not exhaustive A412 completion.
+on2026-10-23 after reviewing source, checks and decisive saved screenshots.** Version0.405.0 is
+released at23:11:01 KST, product/tag `786c113`. The final acceptance limits remain;
+this is not exhaustive A412 completion.
 
 ## Evidence and implementation
 
@@ -205,3 +206,15 @@ process/window remained; fresh settings were restored exactly to SHA256
 `F11284486319B6C38F988A3556CF6076B3CD2163F2156040E2109AE8242C73D9`, and all four AVI fixtures plus
 manifest retained their hashes. No user media was opened. Final release/reporting belongs to
 main; no commit, push or release is claimed by this delegate.
+
+## Main release verification — 2026-10-23 23:11:01 KST
+
+Product `786c113e2d002fbca0464c72284c3c992f7376a8` was pushed once to master. Build39966392419
+(job120457256695) and release39966392433 (job120457257550), both attempt1, passed801/801 tests
+across eight assemblies with0 warnings/errors. Release startup/integrity, installation,
+Standalone and Explorer COM checks passed. Tag matches the product; eight expected nonempty
+uploaded assets and latest stable/non-draft status were verified from the public API.
+
+[v0.405.0 release](https://github.com/zpstudios/kotu/releases/tag/v0.405.0).
+Full job logs/summaries and `release-verification.json` are under `artifacts/a412/main/`.
+The final documentation-only commit is kept local until the next product push.

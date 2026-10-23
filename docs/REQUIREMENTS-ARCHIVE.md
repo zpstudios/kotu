@@ -1,6 +1,6 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
-## A412 영상 composition/실제 배치 순서 보강(v0.405.0 로컬 검증 완료·배포 전)
+## A412 영상 composition/실제 배치 순서 보강(v0.405.0 정식 배포 완료)
 
 - 메인 조율/설계/검수, GPT-6 Astra/high 직렬 조사·구현·실제 UI. 공개 composition 이벤트와 실제 최종 배치를
   맞추는 단일 host를 추가했다. 누락 알림은 워커 일회100ms 기한으로 실제 최신 크기를 풀며 반복 요청이 기한을 미루지 않는다.
@@ -12,7 +12,9 @@
   가려진 가장자리·다른 창이 찍힌 배경 캡처 한계는 그대로 기록했다. Original은 고정200만, 수동 modifier휠·
   가청 음성·첫 이어보기 프레임 시각·모든 빠른 정상 UI 전이는 미검증이다. 전체 A412 완료로 일반화하지 않는다.
 - 22:59:02 시험 창/프로세스0·새 설정F1128448…해시 복원·합성4 AVI/manifest 불변. native 검증 후 소스 변경 없음.
-  배포 검증은 메인이 이어간다. 정본 `A412-VIDEO-COMPOSITION.md`, 증거 `artifacts/a412-final/agent/`.
+  제품/태그786c113, build39966392419/release39966392433 attempt1 각각801/801·빌드0/0·시작/설치/Standalone/COM,
+  자산8개·Latest 확인, **2026-10-23 23:11:01 KST 정식 게시**. 최종 문서 전용 추가 push는 보류한다.
+  정본 `A412-VIDEO-COMPOSITION.md`, 증거 `artifacts/a412-final/agent/`, 원격 검증 `artifacts/a412/main/`.
 
 ## A398 JPEG/TIFF·PSD 방향 및 회전 layout 보강(v0.404.0 정식 배포 완료)
 
