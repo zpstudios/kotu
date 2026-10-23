@@ -13,7 +13,8 @@
 | A412 | v0.405.0 제품786c113 정식 배포, 전체801/801; 영상 composition/실제 배치 보강 | `A412-VIDEO-COMPOSITION.md` |
 | A405 | 읽기 조사·격리18시험 완료; 기존 경로 충돌 정책 답변 대기, 제품 미변경 | `A405-COMMON-RECORDING-FOLDER.md` |
 | A408 | v0.406.0 제품76dbff0 정식 배포, 전체801/801; Original 도형 보강·상태 잔여 유지 | `A408-ORIGINAL-ICON.md` |
-| A404 | 새 Astra/high가 Record Open file 노출의 읽기/실제 화면 조사 중, 제품 미변경 | `REQUIREMENTS.md` A404 |
+| A404 | 현재v406의 노출·빈자리 없음 검증으로 종결, 제품 변경 없음 | `A404-RECORD-OPEN-FILE.md` |
+| A409 잔여 | 새 Astra/high가 Viewing 선택 생성 읽기/실제 화면 조사 중 | `A409-EDITOR-BACKGROUND.md` |
 
 **최근 정식 배포 A408**: 제품/태그76dbff0, build39980673882/release39980673822 attempt1 각각801/801·빌드0/0.
 시작·설치·Standalone·Explorer COM·자산8개·Latest 통과. **2026-10-24 00:50:21 KST 게시**.
@@ -34,10 +35,12 @@ Light/Dark×100/150/200×이전/현재×4상태의48표본·96불투명72×36/10
 최종00:36:51 창/프로세스0·설정F1128448…·합성4개·정상 패키지 해시 불변. 정본과 `artifacts/a408-native-final/agent/` 참조.
 도형 SHA256은836DF8D4F763E40E2322B69B6FA5F11DA390EE3FC57B2CF526AD0607B12D1186이며 정식 배포 완료다.
 
-**현재 조사 A404**: 새 Astra/high 한 명에게 Record Open file의 읽기/정상 화면 조사를 직렬 위임했다.
-별도의 Open result folder와 혼동하지 않는다. 범위는 `artifacts/continuous/main/next-a404-scope.md`.
-실제 결함이 있으면 최소 수정안을 메인이 검수하며 이미 충족하면 불필요한 버전 변경 없이 증거를 정리한다.
-A405 경로 충돌·A406 음원·A407 트레이 종료 정책3건은10월24일00:44 메일 조회에도 답변이 없다.
+**A404 종결/현재 A409 조사**: A404 정상5경로와 소스 감사를 검수해 현재 동작으로 종결했다.
+별도 Open result folder는 유지하며 원 제보 경로·과거 설치본·문자 그대로 빈 셸의 실제 화면은 미확인이다.
+설정 복원·창/프로세스0·합성 자료/실행본 불변 확인. 기존 Record 폴더 자동 쓰기 검사로 폴더 시각은 달라질 수 있다.
+다음 새 Astra/high 한 명에게 A409 Viewing의 새 선택 생성 여부만 읽기/정상 화면 조사로 위임했다.
+범위는 `artifacts/continuous/main/next-a409-viewing-scope.md`; 실제 결함 확인 전 제품 변경은 하지 않는다.
+A405 경로 충돌·A406 음원·A407 트레이 종료 정책3건은10월24일00:56 메일 조회에도 답변이 없다.
 답변을 확정으로 추정하지 않으며 정책 의존 녹화 묶음(A405→A402→A403→A406/A407)은 대기한다.
 A399 실제 제공자/원본·A400 Windows WhatsApp(미설치)·A409 Viewing 새 선택/고대비는 별도 잔여다.
 사용자 선택 표시 제보는 **Editing**으로 정정됐으며 **Viewing 정상 확인은 아니다**.
