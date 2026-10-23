@@ -11,10 +11,11 @@
 **현재 배포 완료**: A401 두 번째 보강v0.403.0의 구현·전체714/714·실제 대응 성능2쌍/UI 검증을 마쳤다.
 제품0a02530 정식 배포 완료이며 A401 전체 완료는 아니다. 완료 배치 상세는 `REQUIREMENTS-ARCHIVE.md`,
 정본은 `A401-VISUAL-LINE-SEARCH.md`다. A398의 현재 배치는 아래 상태다.
-**A398 v0.404.0 방향·회전 layout 로컬 검증 완료, 배포 전**. 최종772/772·집중119/119·빌드0/0,
+**A398 v0.404.0 방향·회전 layout 정식 배포 완료, 제품4c65d21**. 최종772/772·집중119/119·빌드0/0,
 단일 Image Panel 보강 후 TIFF1/8×4각도·양축fit/팬·GIF·복사·인쇄의 실제 fit gate를 통과했다.
 PNG/제공자/codec 잔여와 modifier휠·자유resize 등 검증 한계가 있어 A398 전체 완료는 아니다.
-상세는 ARCHIVE와 `A398-EXIF-ORIENTATION.md`, `A398-ROTATED-LAYOUT.md`. 배포 뒤 A412를 직렬 조사한다.
+원격 build39953510825/release39953510868 attempt1 모두772/772·0/0·시작/설치/Standalone/COM 통과,
+태그·자산8개·Latest 확인,21:36:15 KST 게시. 상세는 ARCHIVE와 두 A398 정본. 현재 A412 읽기 조사 중이며 제품 수정은 설계 검수 뒤다.
 A405/A406/A407 정책 이메일3건은21:22 재조회에도 답변 대기다.
 
 **배포 완료**: A396 안내 제거v0.401.0, A409 배경/편집 선택 강조v0.402.0.
@@ -75,7 +76,7 @@ v0.396.0은2026-10-19 15:03:59 KST 정식 게시됐다. 최종 확인 문서만�
 
 | ID | 할 일 | Codex 권장 모델 / 추론 | 우선순위·선행 관계 |
 |---|---|---|---|
-| A398 | EXIF 방향 자동 보정 보완 | Astra / high | v404 로컬 검증·fit gate 통과/배포 전 · PNG/제공자/codec 잔여 |
+| A398 | EXIF 방향 자동 보정 보완 | Astra / high | v404 정식 배포·fit gate 통과 · PNG/제공자/codec 잔여 |
 | A399 | OneDrive 폴더 썸네일 누락·갱신 조사 | Astra / high | 높음 · 원인 조사 우선 |
 | A401 | 큰 문서 스크롤·연속 Enter 입력 지연 조사·개선 | Astra / xhigh | 높음 · 편집/스크롤 비용과 병목 구분 |
 | A402 | 녹화 비디오 소스에 카메라 추가 | Sol / high | 중 · A403 카메라 버튼의 선행 |
@@ -96,7 +97,7 @@ v0.396.0은2026-10-19 15:03:59 KST 정식 게시됐다. 최종 확인 문서만�
   메뉴·편집 취소, S4/전체화면/콘텐츠 복귀와 미저장·활성 작업 보호 및 정식 배포 검증 완료.
   상세는 `REQUIREMENTS-ARCHIVE.md`와 `A397-EXPLORER-ESCAPE.md`. A407 트레이 정책은 별도다.
 
-- [부분 반영 A398 · v0.404.0 로컬 검증 완료/배포 전 · GPT-6 Astra/high] **사진 EXIF 방향 자동 보정 보완**
+- [부분 반영 A398 · v0.404.0 정식 배포 완료 · GPT-6 Astra/high] **사진 EXIF 방향 자동 보정 보완**
   - JPEG/TIFF native 경로와 PSD의 1~8 방향·수동회전·복사/인쇄 배치를 구현했다. 완료된 시험 상세는
     `REQUIREMENTS-ARCHIVE.md`, 정본은 `A398-EXIF-ORIENTATION.md`다. 원본 파일 저장은 하지 않는다.
   - **fit native gate 통과**: 단일 Image Panel 보강으로 TIFF1/8×4각도 중앙·허위scroll 없음을 확인했다.
@@ -3500,7 +3501,7 @@ A367~A369 공통 수정은 v0.363.0으로 로컬 구현·독립 검토를 완료
 | # | 항목 | 규모 | 비고 |
 |---|---|---|---|
 | A412 | 영상 재생 중 앱 UI 배율 변경의 출력 영역 갱신 | 조사 후 산정 | Fable(위임 시 Opus) · Codex Astra/high · 연속 승인/A398 다음·구현 미착수 |
-| A398 | EXIF 자동 방향 보정 보완 | 중 | GPT-6 Astra/high · v404 로컬 검증/배포 전 · fit gate 통과 · PNG/제공자/codec 잔여 |
+| A398 | EXIF 자동 방향 보정 보완 | 중 | GPT-6 Astra/high · v404 정식 배포 · fit gate 통과 · PNG/제공자/codec 잔여 |
 | A399 | OneDrive 썸네일 누락·갱신 조사 | 조사 | Fable(위임 시 Opus) · Codex Astra/high · 원인 미확정 |
 | A401 | 큰 문서 스크롤·연속 Enter 입력 지연 조사·개선 | 잔여 조사 후 산정 | Fable(위임 시 Opus) · 현재 위임 Astra/high · v403 로컬/원격714/714·정식 배포, 초기/연속 지연 잔여 |
 | A402 | 녹화 소스 카메라 지원 | 중~대 | Fable(위임 시 Opus) · Codex Sol/high |

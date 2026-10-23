@@ -1,6 +1,6 @@
 # A398 rotated image layout
 
-Status: v0.404.0 locally validated, release pending. Normal publish/package and the normal application fit UI gate passed after main review. No commit, push or release has been performed for this follow-up. A398 PNG eXIf, actual thumbnail-provider and other codec boundaries from `A398-EXIF-ORIENTATION.md` remain open; this is not completion of all A398 work.
+Status: v0.404.0 released, product4c65d21. Normal publish/package and the normal application fit UI gate passed after main review; both remote jobs passed772/772 and release gates. Published2026-10-23 21:36:15 KST with tag/assets8/Latest verified. Release evidence is in `A398-EXIF-ORIENTATION.md`. Earlier local release-pending wording below records the validation stage. A398 PNG eXIf, actual thumbnail-provider and other codec boundaries remain open; this is not completion of all A398 work.
 
 ## Problem and chosen scope
 

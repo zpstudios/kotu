@@ -9,7 +9,7 @@
 A399 실제 제공자·A400 Windows WhatsApp·A409 보기/고대비 검증도 가능한 조건에서 별도 수행한다.
 필수 질문은 사용자가 지정한 이메일로 보낸다(개인 주소는 저장소에 기록하지 않는다).
 A405 경로 충돌·A406 음원·A407 트레이 종료 정책3건을 메일로 질문했고 답변 대기 중이다.
-**현재 A398 v0.404.0 방향 보정·회전 layout 보강 로컬 검증 완료, 배포 전**.
+**현재 A398 v0.404.0 제품4c65d21 정식 배포 완료, A412 원인 조사 중**.
 GPT-6 Astra/high가 직렬 구현·실제 UI를 수행하고 메인이 설계·diff·TRX·probe·보고서를 검수했다.
 최종 전체772/772·집중119/119·빌드0경고/0오류·구조20·게이트7·정상 publish/package 통과.
 단일 Image Panel로 회전 후 extent를 맞췄으며 TIFF1/8×4각도 Contain 중앙·허위scroll 없음,
@@ -17,8 +17,12 @@ Original·fit축·팬·휠anchor·확대회전/reset·GIF·PSD·복사3형식·�
 PNG eXIf·실제 썸네일 제공자/codec 잔여로 A398 전체 완료는 아니다. Ctrl/Shift+휠·복원창 전체/자유resize·
 mid-drag unload는 별도 미검증이며 작은 이미지 확대 정책은 기존 direct-Image와 동일하게 유지했다.
 21:20:16 시험 창/프로세스0·이번 설정F1128448…해시 복원·합성26개 불변. 제품 코드 추가 변경 없음.
-정본 `A398-EXIF-ORIENTATION.md`와 `A398-ROTATED-LAYOUT.md`, 완료 상세는 ARCHIVE. 커밋/push/배포 미실행.
-다음은 이 배치 검수/배포 뒤 A412 직렬 조사다. Windows WhatsApp 미설치·사용자 재현 원본 없음 유지.
+정본 `A398-EXIF-ORIENTATION.md`와 `A398-ROTATED-LAYOUT.md`, 완료 상세는 ARCHIVE.
+build39953510825/release39953510868 attempt1 모두772/772·0경고/0오류, 시작·설치·Standalone·Explorer COM,
+제품/태그 일치·자산8개·Latest를 확인했다. **2026-10-23 21:36:15 KST 정식 게시**.
+새 Astra/high가 A412 읽기 조사를 진행 중이다. 실제 크기 배치와 composition scale 이벤트 순서가 원인 후보이며,
+공개 이벤트로 실제 배치 순서를 맞추는 격리 진단을 검수한다. 제품 수정은 설계 검수 이후에만 진행한다.
+Windows WhatsApp 미설치·사용자 재현 원본 없음 유지.
 정책 이메일3건은21:22 재조회에도 답변 대기이며 개인 주소는 기록하지 않는다.
 
 **최근 정식 배포: A401 v0.403.0 제품0a02530 완료**. build39940553956/release39940553943 attempt1
@@ -1245,7 +1249,7 @@ v0.161.0 이하 20묶음은 `docs/DEVICE-CHECKS-ARCHIVE.md`로 "미확인 종결
 
 ---
 
-## 4. 실기기 확인 결과와 잔여 — A398 v0.404.0 배포 전
+## 4. 실기기 확인 결과와 잔여 — A398 v0.404.0 정식 배포 완료
 
 GPT-6 Astra/high 서브에이전트가 정상 production UI를 조작했고 메인은 코드·TRX·probe·보고서를 검수했다.
 JPEG/TIFF Orientation1~8·PSD5/6/7·수동5/7+90의 방향과 축, 실제 Ctrl+C JPEG7+90의 PNG/DIBV5/DIB

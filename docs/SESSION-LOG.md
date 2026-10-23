@@ -6,6 +6,13 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-23 — A398 v0.404.0 정식 배포 완료·A412 조사
+
+- 제품4c65d21을 master에1회 push했다. build39953510825/release39953510868 attempt1 모두772/772·0경고/0오류,
+  시작·설치·Standalone·Explorer COM·제품/태그·자산8개·Latest 확인.21:36:15 KST 정식 게시.
+- 최종 문서 전용 추가 push는 보류한다. Astra/high의 다음 A412 읽기 조사는 원격 CI 중 시작했으며,
+  제품 수정은 앞 배치 배포 확인 및 설계 검수 뒤에만 진행한다. A398 PNG/제공자/codec 및 명시적 UI 한계는 유지한다.
+
 ### 2026-10-23 — A398 회전 layout 보강·772시험·정상 fit native gate 통과, 배포 전
 
 - 메인 승인 최소안으로 Astra/high가 단일 Image Panel을 직렬 구현했다. native Image.Measure/DesiredSize 축을

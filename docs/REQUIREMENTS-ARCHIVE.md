@@ -1,6 +1,6 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
-## A398 JPEG/TIFF·PSD 방향 및 회전 layout 보강(v0.404.0 로컬 검증 완료, 배포 전)
+## A398 JPEG/TIFF·PSD 방향 및 회전 layout 보강(v0.404.0 정식 배포 완료)
 
 - GPT-6 Astra/high가 조사·구현·실제 UI를 직렬 수행했고 메인은 설계/코드/TRX/probe/보고서를 검수했다.
   BitmapImage가 JPEG/TIFF EXIF를 이미 적용한다는 baseline 관측으로 이중회전을 제거했다. 추가 회전은
@@ -24,7 +24,9 @@
   정상 publish/package·Program.Main/Standalone=false/주입probe없음.21:20:16 창/프로세스0·새 설정hash복원·26원본불변.
 - PNG eXIf5/6/7은 v404 화면에서 raw360×240, 동일 PNG6 v403도 raw다. 실제 썸네일 제공자는 Icon을
   반환해 이미지 방향 증거가 없고 다른 codec/사용자 원본도 미확인이다. Windows WhatsApp 미설치 잔여 유지.
-  **배포 전이며 A398 전체 완료가 아니다.** 완료된 구현/시험만 이관했다. 정본 `A398-EXIF-ORIENTATION.md`,
+  **제품4c65d21 정식 배포 완료이며 A398 전체 완료는 아니다.** build39953510825/release39953510868 attempt1
+  각각772/772·0/0·시작/설치/Standalone/COM·태그/자산8개/Latest 확인,2026-10-23 21:36:15 KST 게시.
+  완료된 구현/시험만 이관했다. 정본 `A398-EXIF-ORIENTATION.md`,
   회전 layout 정본 `A398-ROTATED-LAYOUT.md`, 증거 `artifacts/a398/agent/`, `artifacts/a398-fit/agent/`와
   메인 검수 `artifacts/a398/main/`. 다음은 이 배치 배포 뒤 A412 직렬 조사다.
 
