@@ -103,7 +103,7 @@ public sealed class ImageClipboardSnapshotTests
             ["/ifd/{ushort=274}"] = new((ushort)6, Windows.Foundation.PropertyType.UInt16),
         });
         await encoder.FlushAsync();
-        var result = await ImageClipboardSnapshot.EncodePngAsync(input.ToArray(), 90);
+        var result = await ImageClipboardSnapshot.EncodePngAsync(input.ToArray(), 0);
         using var output = new MemoryStream(result);
         var decoder = await BitmapDecoder.CreateAsync(output.AsRandomAccessStream());
         Assert.Equal(1u, decoder.PixelWidth);

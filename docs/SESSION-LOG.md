@@ -6,6 +6,41 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-23 — A398 회전 layout 보강·772시험·정상 fit native gate 통과, 배포 전
+
+- 메인 승인 최소안으로 Astra/high가 단일 Image Panel을 직렬 구현했다. native Image.Measure/DesiredSize 축을
+  교환하고 child를 host 중앙에 배치해 TIFF8 R90의 잘못된 세로 extent를 고쳤다. 기존 transform/fit/DPI/휠/팬 유지.
+- 집중119/119·전체772/772·빌드0/0·구조20·게이트7. 격리 native90표본/실패0, 16개의5점 alpha 및16 R0 baseline 동일.
+  첫 probe44실패는 viewport 이하 content extent를 viewport로 올려 잡은 오라클 오류였다. 제품 변경 없이 기대값을 정정했다.
+- 정상 Program.Main/Standalone=false/주입 probe 없음 publish/package 뒤 실제 TIFF1/8×4각도 중앙·허위 scroll 없음,
+  Original/양축 fit·팬·휠 anchor·110% 반복 회전/reset·탐색/전체화면·GIF 회전 재생·PSD7·복사3표현 무손실·인쇄 중앙 확인.
+  TIFF8 R90은 같은1280×752에서 이전 y205 잘림이 y22 시작으로 정상화됐다. Ctrl/Shift+휠·복원창 전체/자유 resize·mid-drag는 미검증.
+- 21:20:16 정상 종료 후 창/프로세스0·이번 백업 F1128448…hash 복원·26개 합성 원본 불변. 실제 인쇄는 제출하지 않았다.
+- 사용자 선택 순서에 따라 배포 뒤 A412가 다음이다. A398 PNG/실제 제공자/codec 전체 잔여와 Windows WhatsApp 미설치 유지.
+  메인의21:22 메일 재조회에도 정책3건 답변 없음. A406은 메일의 마이크만 / 마이크+시스템 / 마지막 Record 음원 구성(추천)으로
+  문구만 일치시키고 확정으로 쓰지 않았다. 커밋/push 미실행. 정본 `A398-ROTATED-LAYOUT.md`, artifacts/a398-fit/agent.
+
+### 2026-10-23 — A398 v0.404.0 구현·764시험 완료, native fit 보강안 검수 대기
+
+- Astra/high가 조사·구현·실제 UI를 직렬 수행했고 메인은 설계·제품 diff·TRX·probe·보고서를 검수했다.
+  JPEG/TIFF native EXIF 이중적용 제거, 복사 RespectExif+수동/oriented 크기, PSD AutoOrient1회,
+  인쇄 bytes/크기/회전 동시 캡처를 구현했다. 전체764/764·집중111/111·빌드0경고/0오류·구조20·게이트7,
+  정상 Program.Main/Standalone=false/harness 없음·publish/package 검사를 통과했다.
+- 실제 JPEG/TIFF8방향·PSD5/6/7·수동5/7+90·정상 Ctrl+C3표현480×320·인쇄 세로/가로/수동90·GIF를
+  확인했다. 인쇄는 초기 연결 지연 후 정상 preview가 생성됐고 제출 없이 취소했다. PNG eXIf5/6/7은 v404에서
+  raw, 동일 PNG6 v403도 raw였다. 실제 제공자 Icon·다른 codec·사용자 원본·Windows WhatsApp은 잔여다.
+- TIFF8 Contain+R90의 세로 치우침/하단 잘림 때문에 메인이 같은 v403/v404·fixture·창·mode/zoom 조건의
+  TIFF1/8+R90 비교를 추가 배정했다. native gate와 배포는 아직 완료가 아니며 원인/최소안 검수 전 추가 수정 금지.
+  기존 작은 이미지 확대의 유사 관측만으로 A398에 귀속하지 않는다. Original·인쇄 중앙배치는 정상이다.
+- 첫 UI 배치20:39:42 시험 창/프로세스0, 이번 백업F1128448…설정 복원·합성24개 해시 불변. 추가 대응은 새
+  백업으로 수행한다. UI 뒤 제품 변경은 raw QuickInfo/oriented 화면 해상도를 구분하는 승인된 XML주석1줄뿐이다.
+- A398 전체 완료가 아니며 정본 `A398-EXIF-ORIENTATION.md`, 원시 근거 `artifacts/a398/agent/`다.
+  A401 v403 정식 배포 완료는 유지, 다음 A412 직렬 조사. 정책 질문은20:29 회신 없음. 커밋/push는 하지 않았다.
+- 20:48 대응검증 완료: TIFF1+R90은 양 버전 동일 정상, v403 TIFF8R0와 v404 TIFF8R90의 잘림 geometry가 같다.
+  v404 offset0에서 실패하고 팬183.3333으로 복구돼 회전 전 layout extent 문제로 좁혔다. 보강안은
+  `fit-layout-followup.md`에 남겼고 새 Astra/high 구현 배치의 메인 검수를 기다린다. 추가 시험도 정상종료·
+  새 백업F1128448…복원·원본21 불변이다. native gate는 아직 미해결이다.
+
 ### 2026-10-23 — A401 v0.403.0 정식 배포 완료·A398 조사로 이동
 
 - 제품0a02530을 master에1회 push. build39940553956/release39940553943 attempt1 모두714/714,

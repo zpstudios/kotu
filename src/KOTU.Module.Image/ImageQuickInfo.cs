@@ -96,7 +96,7 @@ public static class ImageQuickInfo
     /// <summary>
     /// EXIF 조회 키 전부 (A239에서 인라인 목록을 상수화 — 일괄 조회와 키별 폴백이 같은 키셋을
     /// 공유해야 한다). 키셋 = A150의 BitmapProperties 13키 + EXIF 스펙 확장 3키(FocalLengthInFilm·
-    /// ExposureBias·MaxAperture) + Orientation(ReadExifRotation이 이미 읽던 키의 표시 승격).
+    /// ExposureBias·MaxAperture) + Orientation(원본 메타데이터의 방향 표시).
     /// ⚠️ GPS 키(System.GPS.*)는 넣지 않는다 — 위치는 개인정보(부록 B 69). A200 반전·A239
     /// 폴백에서도 예외다(어느 갈래에서도 수집 0).
     /// </summary>
@@ -270,8 +270,8 @@ public static class ImageQuickInfo
         _ => null,
     };
 
-    /// <summary>EXIF Orientation → 영어 문구 — 회전 각 매핑은 ReadExifRotation(뷰어)과 같은 표.
-    /// 미러링 값(2·4·5·7)은 회전만 근사 표기(뷰어 회전 적용과 같은 근사). 미정의 값은 null(빈칸).</summary>
+    /// <summary>원본 EXIF Orientation의 기존 요약 문구. 미러링 값(2·4·5·7)은 회전만 근사 표기하며,
+    /// 실제 픽셀 방향 보정과는 별개다. 미정의 값은 null(빈칸).</summary>
     private static string? OrientationText(uint? v) => v switch
     {
         1 or 2 => "Normal",

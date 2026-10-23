@@ -1,5 +1,33 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
+## A398 JPEG/TIFF·PSD 방향 및 회전 layout 보강(v0.404.0 로컬 검증 완료, 배포 전)
+
+- GPT-6 Astra/high가 조사·구현·실제 UI를 직렬 수행했고 메인은 설계/코드/TRX/probe/보고서를 검수했다.
+  BitmapImage가 JPEG/TIFF EXIF를 이미 적용한다는 baseline 관측으로 이중회전을 제거했다. 추가 회전은
+  수동값만, 크기는 OrientedPixelWidth/Height, 복사는 RespectExif+수동회전과 출력 축 교환을 사용한다.
+  PSD는 실제 resource1058 EXIF를 AutoOrient1회 후 PNG로 정규화하며 alpha/ICC/첫 composite를 보존한다.
+  인쇄는 bytes·oriented 크기·수동회전을 await 전 같이 캡처한다. 원본/GIF/preload/클라우드/복사 수명은 유지한다.
+- 독립 literal8×4 방향·정확한 shape·PNG/DIBV5/DIB, 무태그/0/9/65535/decodable malformed,
+  실제 loader PSD8·alpha/ICC/composite·JPEG5/6/7 시험 포함 집중111/111, 전체764/764,
+  빌드0경고/0오류·구조20·게이트7·정상 publish/package 통과. 검증된 v403 7z.dll을 재사용했고 CI는 불변이다.
+- 실제 JPEG/TIFF8방향·PSD5/6/7·수동5/7+90, 정상 Ctrl+C JPEG7+90의3표현480×320·DEF/ABC,
+  TIFF8 세로/가로 용지 및 수동90 인쇄 미리보기 중앙배치, GIF 두 프레임을 확인했다. 인쇄는 제출하지 않았다.
+  첫 UI 배치20:39:42 시험 창/프로세스0·새 설정F1128448…복원·합성21+PNG3 해시 불변.
+- **후속 fit native gate 통과**: 기존 회전 전 extent 문제를 단일 Image Panel의 native Measure 축 교환과
+  중앙 child Arrange로 고쳤다. 기존 Image/RotateTransform/UpdateFit·DPI·휠/팬·복사/인쇄 정책은 유지한다.
+  최종 집중119/119·전체772/772·빌드0/0·구조20·게이트7. 격리native64조건+16R0baseline+10동적표본=90,
+  실패0이며16 Contain의80개 alpha점도 통과했다. 첫44실패는 max(viewport,content)로 둔 probe오라클 오류였다.
+  WinUI/baseline이 작은content extent를 그대로 반환함을 확인해 오라클만 수정했고 제품 수정/시험완화는 없었다.
+  실제 TIFF1/8×4각도 중앙/no허위scroll, Original·양축fit/팬·휠anchor·110%반복R/reset·탐색/외부open·전체화면,
+  GIFR90두프레임·PSD7·TIFF8R90 Ctrl+C3표현480×320 ABC/DEF무손실·인쇄 세로용지 중앙을 확인했다.
+  작은 Contain 확대는 기존 direct-Image와 동일. Ctrl/Shift+휠·복원창 전체/자유resize·mid-drag unload는 미검증이다.
+  정상 publish/package·Program.Main/Standalone=false/주입probe없음.21:20:16 창/프로세스0·새 설정hash복원·26원본불변.
+- PNG eXIf5/6/7은 v404 화면에서 raw360×240, 동일 PNG6 v403도 raw다. 실제 썸네일 제공자는 Icon을
+  반환해 이미지 방향 증거가 없고 다른 codec/사용자 원본도 미확인이다. Windows WhatsApp 미설치 잔여 유지.
+  **배포 전이며 A398 전체 완료가 아니다.** 완료된 구현/시험만 이관했다. 정본 `A398-EXIF-ORIENTATION.md`,
+  회전 layout 정본 `A398-ROTATED-LAYOUT.md`, 증거 `artifacts/a398/agent/`, `artifacts/a398-fit/agent/`와
+  메인 검수 `artifacts/a398/main/`. 다음은 이 배치 배포 뒤 A412 직렬 조사다.
+
 ## A401 두 번째 보강 — 패스 내 검증된 시각적 줄 탐색 힌트(v0.403.0 정식 배포 완료)
 
 - 2026-10-23 연속 개발 승인에 따라 GPT-6 Astra/high가 조사·최소 구현을 직렬 수행하고 메인이 검수했다.
@@ -18,7 +46,7 @@
   Viewing 선택 정상은 확인하지 않았다. 한글 랩 글리프 잘림은 v402에도 같은 메인 관측이며 정본에 한계로 남겼다.
 - 시험 창/프로세스0, 이번 설정 백업F1128448…해시 복원·원본2개 해시 일치 확인. 시작 시 앱0으로 재실행 없음.
 - **A401 ID는 부분 반영으로 유지**한다. 새 일반256Ki 성능쌍·고빈도 연속 휠·실제 held-key·반복 시행·
-  초기 긴 줄 배치·입력→paint 지연은 잔여다. 완료 배치만 이관했으며 전체 완료/정식 배포로 선언하지 않는다.
+  초기 긴 줄 배치·입력→paint 지연은 잔여다. 완료 배치만 이관했으며 A401 전체 완료로 선언하지 않는다.
   상세 정본 `A401-VISUAL-LINE-SEARCH.md`, 근거 `artifacts/a401-next/agent/`와 `main/`.
 
 ## A396 안내 제거 / A409 배경·편집 선택 강조 보강(v0.401.0~v0.402.0)

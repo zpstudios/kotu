@@ -2,6 +2,7 @@
     x:Class="KOTU.Module.Image.ImageViewerView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:KOTU.Module.Image"
     IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden"
     DoubleTapped="OnDoubleTapped">
@@ -36,18 +37,21 @@
             HorizontalScrollMode="Enabled"
             VerticalScrollMode="Enabled"
             SizeChanged="OnScrollerSizeChanged">
-            <Image
-                x:Name="ImageControl"
-                Stretch="Uniform"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                RenderTransformOrigin="0.5,0.5">
-                <Image.RenderTransform>
-                    <!-- EXIF 회전 + 사용자 회전(R 키) 합산 각도 -->
-                    <!-- 이름 주의: "Rotation"은 UIElement.Rotation을 가려 CS0108 발생 -->
-                    <RotateTransform x:Name="RotationTransform" />
-                </Image.RenderTransform>
-            </Image>
+            <local:RotatedImageHost x:Name="ImageLayoutHost"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Image
+                    x:Name="ImageControl"
+                    Stretch="Uniform"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <!-- BitmapImage가 EXIF를 보정한 뒤 사용자 회전(R 키)만 적용 -->
+                        <!-- 이름 주의: "Rotation"은 UIElement.Rotation을 가려 CS0108 발생 -->
+                        <RotateTransform x:Name="RotationTransform" />
+                    </Image.RenderTransform>
+                </Image>
+            </local:RotatedImageHost>
         </ScrollViewer>
 
         <TextBlock

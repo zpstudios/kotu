@@ -49,8 +49,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// 그리게 되면서 중복이 됐다. 32px 값은 셸이 경로에서 직접 계산하므로(MainWindow.OpenFileIconInfo)
     /// 이 메서드를 바꿔도 그쪽은 종전 그대로다 — 중복만 사라진다.
     /// </para>
-    /// 값은 <b>지금 화면에 보이는 축</b> 기준이다: EXIF 회전과 R 키 누적 회전이 90°/270°면
-    /// 가로·세로를 맞바꾼다(<see cref="RotationSwapsAxes"/> — 레이아웃 판정과 같은 축).
+    /// 값은 <b>지금 화면에 보이는 축</b> 기준이다: EXIF 보정 후 크기에 R 키 누적 회전이
+    /// 90°/270°면 가로·세로를 맞바꾼다(<see cref="RotationSwapsAxes"/> — 레이아웃과 같은 축).
     /// 아직 해상도를 못 구했으면(로드 실패·메타데이터 미지원) 그 줄이 "—"가 된다.
     /// </summary>
     public TrayStatus GetTrayStatus()
@@ -108,9 +108,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private IReadOnlyList<string> _browseFiles = [];
     private int _openSeq;        // OpenPath 경쟁 방지: 느린 폴더 스캔이 최신 열기를 덮지 않게
     private int _userRotation;   // R 키 누적 회전 (0/90/180/270)
-    private int _exifRotation;   // EXIF orientation에서 읽은 회전
-    private uint _pixelWidth;
-    private uint _pixelHeight;
+    private uint _pixelWidth;   // EXIF 방향 보정 후, 수동 회전 전의 가로 픽셀
+    private uint _pixelHeight;  // EXIF 방향 보정 후, 수동 회전 전의 세로 픽셀
     // A149: A9의 미리 조립된 한 덩어리(_metaText)를 조각으로 쪼갰다 — 표시 순서(해상도·확장자·용량·
     // 순번·EXIF)가 조립 순서와 달라졌고, 순번은 탐색 때마다 바뀌어 조립 시점에 확정할 수 없다.
     private string _sizeText = string.Empty; // 용량 (예: "2.41 MB")
@@ -186,7 +185,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// LoadCurrentAsync가 캐시를 조회하는 단방향 — 선읽기 완료가 화면을 직접 만지지 않는다.
     /// 모든 접근은 UI 스레드에서만(항해·선읽기 후속부 전부 UI 문맥 — 경쟁 없음).
     /// </summary>
-    private readonly Dictionary<string, Task<(byte[] Data, uint Width, uint Height, int ExifRotation,
+    private readonly Dictionary<string, Task<(byte[] Data, uint Width, uint Height,
         string Size, string Kind, string Exif)>> _preloadCache = new(StringComparer.OrdinalIgnoreCase);
 
     public ImageViewerView(OpenContext context)
@@ -666,11 +665,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
                 return;
             }
 
-            // 파일 읽기와 메타데이터 디코드(해상도·EXIF orientation·A9 메타 요약)는 워커에서(A42).
-            // BitmapImage는 EXIF 회전을 자동 반영하지 않으므로 여기서 읽어 RotateTransform에 합산한다.
+            // 파일 읽기와 메타데이터 디코드(EXIF 보정 후 해상도·A9 메타 요약)는 워커에서(A42).
+            // BitmapImage가 EXIF 회전·반전을 적용하므로 원본 바이트는 그대로 두고 중복 변환하지 않는다.
             // A194: 이웃 선읽기 캐시에 있으면(완료·진행 중 모두 Task) 그 결과를 받아 디코드를
             // 생략한다 — 진행 중이면 같은 Task를 await(직렬 큐라 새로 넣는 것보다 먼저 끝난다).
-            var (data, width, height, exifRotation, size, kind, exif) =
+            var (data, width, height, size, kind, exif) =
                 _preloadCache.TryGetValue(path, out var preloaded)
                     ? await preloaded
                     : await Worker.Run(_ => ReadImageFile(path));
@@ -679,18 +678,17 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             // (필드 대입 전이라 직전 파일 메타가 새 화면에 섞이지 않는다).
             if (_navigator?.Current != path || loadSequence != _loadSequence) return;
 
-            _pixelWidth = width;
-            _pixelHeight = height;
-            _exifRotation = exifRotation;
-            _sizeText = size;
-            _kindText = kind;
-            _exifText = exif;
-
             var bitmap = new BitmapImage(); // GIF 애니메이션은 BitmapImage 기본 지원
             using (var stream = new MemoryStream(data))
                 await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
             if (_navigator?.Current != path || loadSequence != _loadSequence) return; // A194 — SetSourceAsync 대기 중의 항해도 폐기
 
+            // 디코드가 끝난 소스와 크기를 함께 교체해 인쇄가 이전 바이트와 새 크기를 섞지 않게 한다.
+            _pixelWidth = width;
+            _pixelHeight = height;
+            _sizeText = size;
+            _kindText = kind;
+            _exifText = exif;
             ImageControl.Source = bitmap;
             _copyReady = true;
             _printBytes = data; // A211 — 인쇄 재료(표시 소스와 한 몸으로 세운다)
@@ -700,8 +698,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true); // 줌 초기화(창맞춤)
             UpdateStatusBar();
             ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
-            // A54 → A191: 트레이 = 해상도 2줄. 이 발화는 _pixelWidth/_pixelHeight와 _exifRotation이
-            // 모두 확정된 뒤라야 한다(위 대입 순서 유지 — 앞서 쏘면 직전 파일 해상도가 그려진다).
+            // A54 → A191: 트레이 = 해상도 2줄. EXIF 보정 후 크기와 수동 회전이 모두 확정된
+            // 뒤 발화한다(위 대입 순서 유지 — 앞서 쏘면 직전 파일 해상도가 그려진다).
             TrayStatusChanged?.Invoke();
             SchedulePreloads(); // A194 — 표시 완료 후에야 이웃 선읽기(표시 로드보다 후순위)
         }
@@ -746,26 +744,24 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         var (png, width, height, size, kind) = await Worker.Run(_ =>
         {
-            using var magick = new ImageMagick.MagickImage(path);
+            var decoded = MagickImageDecoder.Read(path);
             // A9: 비트뎁스 = 채널당 비트 × 채널 수 (Q8 빌드라 채널당 8비트 상한 — 근사값)
-            var bitDepth = (uint)(magick.Depth * magick.ChannelCount);
-            return (magick.ToByteArray(ImageMagick.MagickFormat.Png), magick.Width, magick.Height,
-                FormatSize(new FileInfo(path).Length), FormatKind(path, bitDepth));
+            return (decoded.Png, decoded.Width, decoded.Height,
+                FormatSize(new FileInfo(path).Length), FormatKind(path, decoded.BitDepth));
         });
 
         if (_navigator?.Current != path || loadSequence != _loadSequence) return; // 그새 다른 파일로 이동함
 
-        _pixelWidth = width;
-        _pixelHeight = height;
-        _exifRotation = 0; // Magick 디코드 경로에서는 EXIF 회전을 별도 적용하지 않는다
-        _sizeText = size;
-        _kindText = kind;
-        _exifText = string.Empty; // 이 경로는 EXIF를 읽지 않는다(psd 등) — 이전 파일 것이 남지 않게 비운다
         using var stream = new MemoryStream(png);
         var bitmap = new BitmapImage();
         await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
         if (_navigator?.Current != path || loadSequence != _loadSequence) return;
 
+        _pixelWidth = width;
+        _pixelHeight = height;
+        _sizeText = size;
+        _kindText = kind;
+        _exifText = string.Empty; // 이 경로는 EXIF 요약을 읽지 않는다 — 이전 파일 것이 남지 않게 비운다
         _copyReady = true;
         ImageControl.Source = bitmap;
         _printBytes = png; // A211 — psd도 이 시점엔 PNG 바이트라 인쇄 파이프가 같다(BitmapImage 디코드 가능)
@@ -780,13 +776,13 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     }
 
     /// <summary>
-    /// 워커 스레드: 파일 전체를 읽고 WIC로 해상도·EXIF 회전과 하단 바 메타 조각(A9 —
+    /// 워커 스레드: 파일 전체를 읽고 WIC로 EXIF 보정 후 해상도와 하단 바 메타 조각(A9 —
     /// 용량·종류(확장자·비트뎁스)·EXIF 요약)을 뽑는다. WinRT 비동기는
     /// 전용 스레드라 동기 대기해도 UI 교착이 없다. 메타데이터 실패는 0으로 두고 표시는 계속.
     /// A149: 조립된 한 줄 대신 조각으로 돌려준다 — 표시 순서에 순번이 끼어들고(탐색마다 변한다)
     /// 해상도는 이미 별도 필드라, 조립은 표시 시점(BuildMetaText)에서만 한다.
     /// </summary>
-    private static (byte[] Data, uint Width, uint Height, int ExifRotation,
+    private static (byte[] Data, uint Width, uint Height,
         string Size, string Kind, string Exif) ReadImageFile(string path)
     {
         // A353: File.ReadAllBytes는 FileShare.Read라 다른 프로세스가 쓰기로 잡고 있으면
@@ -799,7 +795,6 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
 
         uint width = 0, height = 0;
-        var exifRotation = 0;
         var size = FormatSize(data.LongLength);
         string kind;
         var exifSummary = string.Empty;
@@ -807,9 +802,8 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         {
             using var stream = new MemoryStream(data).AsRandomAccessStream();
             var decoder = BitmapDecoder.CreateAsync(stream).AsTask().GetAwaiter().GetResult();
-            width = decoder.PixelWidth;
-            height = decoder.PixelHeight;
-            exifRotation = ReadExifRotation(decoder);
+            width = decoder.OrientedPixelWidth;
+            height = decoder.OrientedPixelHeight;
             kind = FormatKind(path, ReadBitDepth(decoder));
             exifSummary = ReadExifSummary(decoder);
         }
@@ -818,7 +812,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             // 메타데이터를 못 읽어도 표시는 계속 시도한다 — 용량·확장자만이라도 보여준다.
             kind = FormatKind(path, 0);
         }
-        return (data, width, height, exifRotation, size, kind, exifSummary);
+        return (data, width, height, size, kind, exifSummary);
     }
 
     // ---------- 이웃 선읽기 (A194) ----------
@@ -972,51 +966,24 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
     }
 
-    /// <summary>EXIF orientation → 시계방향 회전 각도. 미러링 값은 회전만 근사 적용(TODO: 반전 처리).</summary>
-    private static int ReadExifRotation(BitmapDecoder decoder)
-    {
-        try
-        {
-            var props = decoder.BitmapProperties.GetPropertiesAsync(
-                new[] { "System.Photo.Orientation" }).AsTask().GetAwaiter().GetResult();
-            if (props.TryGetValue("System.Photo.Orientation", out var value) &&
-                value.Value is ushort orientation)
-            {
-                return orientation switch
-                {
-                    3 or 4 => 180,
-                    5 or 6 => 90,
-                    7 or 8 => 270,
-                    _ => 0,
-                };
-            }
-        }
-        catch
-        {
-            // BMP/GIF/ICO 등 orientation 미지원 포맷은 무시.
-        }
-        return 0;
-    }
-
     // ---------- 회전 / 창맞춤 ----------
 
     /// <summary>
-    /// 지금 화면에 적용 중인 총 회전 각도(도, 0/90/180/270) = EXIF 회전 + R 키 누적 회전.
-    /// <b>이 뷰에서 회전 각의 단일 원본</b>이다 — 표시 변환(<see cref="ApplyRotation"/>),
-    /// 축 교환 판정(<see cref="RotationSwapsAxes"/>), 인쇄 페이지 변환
-    /// (<see cref="CreatePrintPageAsync"/>)이 모두 이 한 값을 본다(A211 배치 2에서 이름을 붙였다 —
-    /// 식 자체는 v0.29.0부터 무변경이고 계산 결과도 종전과 같다).
+    /// EXIF 보정된 이미지 위에 추가하는 R 키 누적 회전(도, 0/90/180/270).
+    /// 표시·복사·인쇄와 축 교환이 같은 값을 사용한다. BitmapImage와 복사 디코더가
+    /// 이미 처리한 EXIF 회전·반전은 여기에 더하지 않는다.
     /// </summary>
-    private int TotalRotation => (_exifRotation + _userRotation) % 360;
+    private int TotalRotation => _userRotation;
 
     private void ApplyRotation()
     {
         RotationTransform.Angle = TotalRotation;
+        ImageLayoutHost.SwapsAxes = RotationSwapsAxes;
         UpdateFit();
     }
 
     /// <summary>
-    /// 표시 축이 원본 디코드 축과 뒤바뀐 상태인가 = 총 회전(EXIF + R 키 누적)이 90°/270°인가.
+    /// 표시 축이 EXIF 보정 후 축과 뒤바뀐 상태인가 = R 키 누적 회전이 90°/270°인가.
     /// 레이아웃 제한(<see cref="UpdateFit"/>)과 트레이 해상도 2줄(A191), 인쇄 맞춤 계산
     /// (A211 배치 2)이 <b>같은 한 판정</b>을 봐야 "보이는 모양"과 "표기"가 어긋나지 않는다.
     /// </summary>
@@ -1203,7 +1170,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         _copyGate.Invalidate();
         _userRotation = (_userRotation + 90) % 360;
         ApplyRotation();
-        // A191: 한 번 돌 때마다 트레이의 가로·세로 표기가 뒤바뀐다(총 회전 90°/270° ↔ 0°/180°).
+        // A191: 한 번 돌 때마다 트레이의 가로·세로 표기가 뒤바뀐다(수동 회전 90°/270° ↔ 0°/180°).
         // 두 번 눌러 180°가 된 경우처럼 표기가 그대로면 셸의 ComposeKey 선비교가 재합성을 막는다 —
         // 여기서 조건을 따지지 않는 이유다(정사각 이미지도 같은 방어에 걸린다).
         TrayStatusChanged?.Invoke();
@@ -1499,6 +1466,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         if (pageNumber != 1) return null;                       // 1페이지 고정 — 그 밖의 요청은 규격 위반
         if (_printBytes is not { Length: > 0 } bytes) return null;
+        // 대기 중 탐색·회전이 일어나도 이 페이지는 같은 표시 상태의 바이트·크기·각도를 사용한다.
+        var pixelWidth = _pixelWidth;
+        var pixelHeight = _pixelHeight;
+        var rotation = TotalRotation;
 
         // 매 호출 새 BitmapImage — 표시용 소스를 나눠 쓰지 않는다(_printBytes 주석의 공유 판정).
         // 스트림 → BitmapImage 변환은 LoadCurrentAsync와 같은 관용구다(dispose 시점 포함).
@@ -1506,10 +1477,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         using (var stream = new MemoryStream(bytes))
             await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
 
-        // 원본 픽셀 크기: 표시 경로가 WIC 헤더에서 확정해 둔 값이 정본이고, 그걸 못 읽은 파일
+        // EXIF 보정 후 크기: 표시 경로가 확정해 둔 값이 정본이고, 그걸 못 읽은 파일
         // (메타데이터 미지원·손상)은 방금 디코드한 비트맵 크기로 대신한다.
-        var sourceWidth = _pixelWidth > 0 ? (double)_pixelWidth : bitmap.PixelWidth;
-        var sourceHeight = _pixelHeight > 0 ? (double)_pixelHeight : bitmap.PixelHeight;
+        var sourceWidth = pixelWidth > 0 ? (double)pixelWidth : bitmap.PixelWidth;
+        var sourceHeight = pixelHeight > 0 ? (double)pixelHeight : bitmap.PixelHeight;
         if (sourceWidth <= 0 || sourceHeight <= 0) return null;
 
         // 인쇄 가능 영역. 규격이 영역을 안 주면(0 이하 — 이상 규격 방어) 용지 전체를 영역으로 본다
@@ -1521,7 +1492,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         if (areaWidth <= 0 || areaHeight <= 0) return null;
 
         // 종이 위에서 차지하는 축(회전 반영) 기준으로 배율을 구한다 — 90°/270°면 폭·높이 교환.
-        var swapped = RotationSwapsAxes;
+        var swapped = rotation % 180 != 0;
         var printedWidth = swapped ? sourceHeight : sourceWidth;
         var printedHeight = swapped ? sourceWidth : sourceHeight;
         var scale = Math.Min(areaWidth / printedWidth, areaHeight / printedHeight);
@@ -1538,7 +1509,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             Width = layoutWidth,
             Height = layoutHeight,
             RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5), // 요소 중앙을 회전 중심으로
-            RenderTransform = new RotateTransform { Angle = TotalRotation },
+            RenderTransform = new RotateTransform { Angle = rotation },
         };
         // 회전 중심(= 요소 중앙)을 인쇄 가능 영역 중앙에 맞춘다 → 회전 후 그림이 영역 한가운데.
         Canvas.SetLeft(image, areaX + ((areaWidth - layoutWidth) / 2));
@@ -1576,7 +1547,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// <see cref="ImageQuickInfo.BuildRows"/>(단일 빌더)로 이관했다 — 셸의 썸네일 선택 조회와
     /// 같은 출력을 내기 위함(두 경로 표시 불일치 금지). EXIF는 표시 키 전부 나열·값 없으면
     /// 빈칸(A150 "행 생략"의 반전 — 상세 규칙은 ImageQuickInfo 주석), 미지원 포맷은 기본 정보만.
-    /// 해상도도 빌더가 디코더 헤더에서 직접 읽는다(_pixelWidth와 같은 원천 값 — decoder.PixelWidth).
+    /// 해상도는 빌더가 원본 디코더 헤더에서 읽으며, 방향 보정 후 화면 기준인 _pixelWidth와 다를 수 있다.
     /// </summary>
     public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
     {

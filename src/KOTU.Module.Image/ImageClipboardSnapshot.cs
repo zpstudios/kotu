@@ -3,7 +3,7 @@ using Windows.Graphics.Imaging;
 
 namespace KOTU.Module.Image;
 
-/// <summary>표시 배율과 무관한 원본 픽셀의 첫 프레임. EXIF는 화면의 합산 회전에 이미 포함되어 있다.</summary>
+/// <summary>표시 배율과 무관한 첫 프레임. EXIF 방향을 먼저 보정한 뒤 화면의 수동 회전을 적용한다.</summary>
 internal static class ImageClipboardSnapshot
 {
     public static async Task<byte[]> EncodePngAsync(byte[] source, int rotation) =>
@@ -22,11 +22,11 @@ internal static class ImageClipboardSnapshot
         using var input = new MemoryStream(source, writable: false);
         var decoder = await BitmapDecoder.CreateAsync(input.AsRandomAccessStream());
         var swapped = rotation is 90 or 270;
-        var width = checked((int)(swapped ? decoder.PixelHeight : decoder.PixelWidth));
-        var height = checked((int)(swapped ? decoder.PixelWidth : decoder.PixelHeight));
+        var width = checked((int)(swapped ? decoder.OrientedPixelHeight : decoder.OrientedPixelWidth));
+        var height = checked((int)(swapped ? decoder.OrientedPixelWidth : decoder.OrientedPixelHeight));
         ValidatePixelSize(width, height);
         var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight,
-            new BitmapTransform { Rotation = turn }, ExifOrientationMode.IgnoreExifOrientation,
+            new BitmapTransform { Rotation = turn }, ExifOrientationMode.RespectExifOrientation,
             ColorManagementMode.ColorManageToSRgb);
         var bgra = pixels.DetachPixelData();
         var dibV5 = CreateDibV5(width, height, bgra);
