@@ -9,6 +9,14 @@ release39980673822/job120506819264 attempt1 각각801/801·8어셈블리·0경�
 설계 조사: `artifacts/a408/agent/investigation.md`.
 이번 증거: `artifacts/a408-implementation/agent/`.
 
+## 상태 색상 후속 조사 — 2026-10-24
+
+A409 v0.407.0 배포 검수 후 새 GPT-6 Astra/high 한 명에게 기존 비활성/눌림 Fill24건의
+원인 조사를 직렬 위임했다. 이는 메인의 검증 중 발견이며 사용자 제보가 아니다.
+공통 팩터리의 실제 색상 전달·이벤트·표시를 작은 네이티브 대조로 확인하고 최소 수정안을 검수한다.
+아직 제품 변경은 없으며 도형·테마/스타일/브러시/alpha 값·배치 재설계는 범위 밖이다.
+조사 정본은 완료 후 `artifacts/a408-color-state/agent/report.md`에 둔다.
+
 ## 범위와 구현
 
 Image·Video·Document의 Original 본문 버튼과 메뉴가 공유하는

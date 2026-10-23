@@ -2,7 +2,7 @@
 
 ## Current follow-up: Viewing selection (2026-10-24)
 
-**v0.407.0 local code,801 tests and normal native gate accepted; publication pending.**
+**v0.407.0 published as4a5389f; local and remote801 tests plus the bounded normal native gate passed.**
 This is main's separate Viewing observation, not the user's original Editing highlight report.
 The user explicitly did not confirm Viewing was healthy. Background/Editing fixes below remain released.
 
@@ -51,6 +51,18 @@ Diagnosis cleanup01:11:44: external processes/native windows0, fresh settings/fi
 hashes preserved. No user files, clipboard export, OS settings or recording work. Detailed source/route
 evidence and limits: `artifacts/a409-viewing/agent/report.md`; main-approved implementation scope:
 `artifacts/a409-viewing/main/implementation-scope.md`. Light/high-contrast/touch remain unverified.
+
+
+### v0.407.0 publication
+
+Product/tag4a5389f2b413ab834864c829ed317f10f075321f, build39989951274/job120538839706 and
+release39989951409/job120538840879 attempt1 passed801/801 across eight assemblies with
+zero build warnings/errors. Architecture/release contracts, production startup, installed-package,
+Standalone and Explorer COM checks passed. The matching tag, eight nonempty uploaded assets and Latest
+stable status were verified. Published **2026-10-24 01:57:03 KST**.
+Evidence: release-verification.json, build/release job logs and summaries under artifacts/a409-viewing-fix/main.
+Earlier final-v406/A404 documentation commits285e663 andfcca54c were included in this one product push.
+Final verification documentation is held locally for the next product push; no extra release/retry.
 
 ## Published background and Editing selection batch
 

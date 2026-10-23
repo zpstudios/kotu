@@ -1,6 +1,8 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
-## A409 Viewing 선택 보강(v0.407.0 검수 완료·배포 준비)
+## A409 Viewing 선택 보강(v0.407.0 정식 배포 완료)
+
+- 제품/태그4a5389f, build39989951274/release39989951409 attempt1 각각801/801·빌드0/0. 시작/설치/Standalone/Explorer COM·자산8개·Latest 확인, 2026-10-24 01:57:03 KST 정식 게시.
 
 - 정상v406에서 새 드래그/Shift/Ctrl+A 실패를 재현했고 기본 읽기 전용 TextBox 대조로 IsTabStop=false의
   포커스 차단을 확인했다. 사용자 원 제보는 Editing이며 Viewing은 메인의 별도 관측이다.
