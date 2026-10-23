@@ -77,8 +77,10 @@ Viewing retained the existing blue range on entry. A subsequent drag did not exp
 and Shift+Right did not create one; this is not counted as a highlight pass. Static review finds
 no TXT drag-pan handler and no product Shift-selection blocker; native read-only input needs
 separate comparison. No additional behavior change was made for that observation.
-The user later answered that they do not remember whether the reported screen was Editing or
-Viewing. The original report therefore cannot be assigned to either mode.
+The user initially did not remember the mode, then clarified that the reported selection
+highlight failure occurred in Editing. They explicitly cautioned that this does not confirm
+Viewing works correctly. Keep the user's Editing report and main's separate Viewing observation
+distinct; the latter remains unresolved.
 
 ## Publication
 
