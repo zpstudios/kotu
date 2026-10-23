@@ -3,7 +3,8 @@
 2026-10-23. User reconfirmed the document-editor hover brightness issue. Main coordinated and
 reviewed; GPT-6 Astra/high investigated then implemented serially after A396 validation.
 Product version:0.402.0, pushed as5ec5d35. Release attempt1 failed one existing archive test;
-the retry is waiting for explicit approval after automatic approval review rejected it.
+the user explicitly approved one failed-job retry, but the GitHub integration returned403.
+No retry started. Browser sign-in is required to continue the already approved action.
 
 ## Cause and scope
 
@@ -76,6 +77,8 @@ Viewing retained the existing blue range on entry. A subsequent drag did not exp
 and Shift+Right did not create one; this is not counted as a highlight pass. Static review finds
 no TXT drag-pan handler and no product Shift-selection blocker; native read-only input needs
 separate comparison. No additional behavior change was made for that observation.
+The user later answered that they do not remember whether the reported screen was Editing or
+Viewing. The original report therefore cannot be assigned to either mode.
 
 ## Publication
 
@@ -107,5 +110,10 @@ If a single approved retry fails again, capture Thread object identity/liveness 
 before changing either the product or the test. Do not classify this failed run as successful.
 
 Automatic approval review rejected the failed-job rerun itself as lacking explicit rerun approval,
-despite the earlier sequential push/release approval. No retry executed. A new user question asks
-permission for exactly one retry with all existing gates retained. No v0.402.0 release is claimed.
+despite the earlier sequential push/release approval. The user subsequently explicitly approved
+exactly one failed-job retry with all existing gates retained. The authorized connector call
+returned GitHub403 `Resource not accessible by integration`; no retry was scheduled. A fresh
+jobs read still returned the original failed job120229626113. Edge was signed out of GitHub,
+so main opened the sign-in page returning to the same run and requested user sign-in. No new
+approval is needed for the authorized single retry once access is available. No v0.402.0 release
+is claimed. Evidence:`artifacts/a409-selection/main/retry-access-status.json`.

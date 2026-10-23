@@ -5,10 +5,12 @@
 **현재 배포 상태**: v0.401.0(9bd38f7) 정식 배포 완료. v0.402.0(5ec5d35) push 완료,
 build39896995024는701/701 통과, release39896995019 attempt1은 기존 압축 워커 시험1건 실패
 (전체700/701 통과). 로컬 집중 반복10회×2형식=20/20 통과; 관련 압축/Core/시험 코드는 불변이다.
-실패 작업1회 재시도 도구가 자동 승인 검토에서 **재시도 자체의 명시적 승인 부족**으로 거부돼
-실행되지 않았다. 사용자에게 정확히1회 재실행 승인을 질문했고 답변 대기 중이다.
-승인 시 동일 release39896995019의 failed jobs만1회 재실행하고, 전 게이트·태그·자산을 확인한다.
-우회 push/새 workflow 실행으로 거부를 우회하지 않는다. 상세 `A409-EDITOR-BACKGROUND.md`.
+실패 작업1회 재시도는 초기 자동 승인 검토에서 거부됐으나, 사용자가 이후 **실패 작업1회 재실행을
+명시 승인했다**. 승인 후 연결 도구 호출은 GitHub403 `Resource not accessible by integration`으로
+실패했고, 최신 job은 기존120229626113 그대로여서 실제 재실행은 없었다. Edge도 GitHub 로그아웃
+상태라 로그인 화면을 열어 사용자 로그인을 요청했다. 현재 장애는 승인 부족이 아닌 실행 권한이다.
+로그인 완료 시 같은 release39896995019의 failed jobs만1회 재실행하고 전 게이트·태그·자산을
+확인한다. 추가 승인을 반복 요청하지 않는다. 상세 `A409-EDITOR-BACKGROUND.md`.
 
 사용자 선택: 전체 알파값 감사·A396의 `Enter text to find` 제거·A409 hover 배경 재확인/수정,
 A401 진행 상태 설명. 메인은 조율/검수, 구현은 GPT-6 Astra/high 직렬을 유지했다.
@@ -21,6 +23,7 @@ A401 진행 상태 설명. 메인은 조율/검수, 구현은 GPT-6 Astra/high �
   이후 선택 강조 추가 보강도 완료: 검색 후 일반 선택의 투명 브러시 복원을 제거했다.
   최종 전체701/701·실제 드래그/Shift/Ctrl+A·검색 초기화/포커스 이동과 확장 probe134/134 통과.
   증거 `artifacts/a409-selection/main/`. Viewing의 새 범위 생성 관측은 별도 미해결로 기록했다.
+  사용자는 제보 당시 Editing/Viewing 여부를 기억하지 못한다고 답했다. 이를 특정 모드 제보로 단정하지 않는다.
   고대비 실기기는 미실행이다. 정본 `A409-EDITOR-BACKGROUND.md`, 증거 `artifacts/a409-background/`.
 - 알파 감사 정본 `ALPHA-TRANSPARENCY-AUDIT.md`, 세부 위치 `ALPHA-TRANSPARENCY-LOCATIONS.csv`.
   351개 파일을 조사했고 개별 상태/픽셀 실측 전수검사와 구분했다. 일괄 alpha 변경은 하지 않았다.
@@ -31,7 +34,7 @@ A401 진행 상태 설명. 메인은 조율/검수, 구현은 GPT-6 Astra/high �
   v0.402.0 발행 직전 사용자가 드래그/Shift+화살표 선택 강조 누락을 보고했다. 메인이 v401에서
   검색 전 정상→검색 후 일반 선택 강조 없음(UIA 범위/포커스는 존재)을 재현했다.
   Astra/high에 A409 선택 표시 보강을 직렬 위임했고 실제 검증 뒤5ec5d35로 push했다.
-  원격 시험 실패/재실행 승인 대기는 위 최신 배포 상태를 따른다.
+  원격 시험 실패/재실행 권한 장애는 위 최신 배포 상태를 따른다.
   초기 기록은 `artifacts/a396-hint/main/approved-batch.patch`, 실제 적용은 `approved-batch-lf.patch`.
 - 실제 시험 창을 정상 종료했고 새 설정 백업 hash 일치 복원, 원래 설치본 Image/Downloads/파일 없음 재실행.
   백업은 `artifacts/alpha-audit/settings-before.json`; 이전 날짜 백업을 덮어쓰지 않았다.
