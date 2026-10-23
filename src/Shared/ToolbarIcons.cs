@@ -10,24 +10,13 @@ internal static class ToolbarIcons
 {
     internal static Grid Build(ToolbarIconKind kind)
     {
-        var sentinel = new TextBlock { Width = 0, Height = 0 };
-        var shape = new Microsoft.UI.Xaml.Shapes.Path
-        {
-            Data = Geometry(kind), Stretch = Stretch.None, Fill = sentinel.Foreground,
-        };
         var root = new Grid
         {
             Width = ToolbarIconGeometry.ViewportSize(kind), Height = ToolbarIconGeometry.ViewportSize(kind),
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
-        // Canvas는 좌표 원점을 옮기지 않는다. Path의 내용 자동 맞춤으로 여백이 사라지는 것을 막는다.
-        var canvas = new Canvas { Width = ToolbarIconGeometry.ViewportSize(kind), Height = ToolbarIconGeometry.ViewportSize(kind) };
-        canvas.Children.Add(shape);
-        root.Children.Add(sentinel);
-        root.Children.Add(canvas);
-        sentinel.RegisterPropertyChangedCallback(TextBlock.ForegroundProperty,
-            (sender, _) => shape.Fill = ((TextBlock)sender).Foreground);
-        root.Loaded += (_, _) => shape.Fill = sentinel.Foreground;
+        // 새 PathIcon이 부모의 현재 전경색을 따르며 기존 좌표와 뷰포트를 보존한다.
+        root.Children.Add(BuildMenu(kind));
         return root;
     }
 

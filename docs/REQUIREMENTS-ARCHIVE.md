@@ -1,5 +1,19 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
+## A408 공통 아이콘 상태 색상(v0.408.0 로컬 검수 완료·배포 준비)
+
+- 메인의 기존24개 Fill 불일치 조사에서 상속 Foreground 콜백/Binding 갱신 누락을 관측했다. 기존 native PathIcon은
+  상태를 따라갔다. 기존 중앙18/24Grid에 새 BuildMenu PathIcon을 넣는 최소 수정으로 수동 Fill/콜백을 제거했다.
+  BuildMenu/Geometry·도형/스타일/브러시/alpha/버튼 영역은 불변이며 별도 복합 아이콘 팩터리는 범위 밖이다.
+- 전체801/801·집중11/11·빌드0/0·구조20·계약7·정상 Program.Main/package/startup 통과.
+  실제 수정 팩터리353표본(정상42쌍 전체 원시 바이트 동일·42상태 묶음/직접 부모6/생명주기11)과 메인 독립 검수 완료.
+  이전84예상 실패/역사적24실패는 보존하며 ClearValue 테두리2픽셀 차이를 전체 일치로 덮지 않는다.
+- 정상 Dark/앱150의 Image/PDF Original·메뉴·키, Video 재생/음소거/메뉴키/Previous, 새 무음 WAV 재생/일시정지 확인.
+  일반 동일 인스턴스 disable/held-Pressed는 미관측, Next는 자동 진행과 겹쳤고 UIA 이름 일부가 빈 상태다.
+  화면29 검은 영상/후속31·36 프레임, 정상Light/고대비/다른OS배율/팝업 전체 원시 픽셀 한계는 정본에 유지한다.
+- 02:44:39 설정 복원·외부 프로세스0,02:44:48 창0·자료15개/새 WAV 해시 일치. 정본 `A408-ORIGINAL-ICON.md`,
+  상세 증거 `artifacts/a408-color-state-fix/`. 제품commit/push/원격 정식 릴리스 최종 검수는 아직 남아 있다.
+
 ## A409 Viewing 선택 보강(v0.407.0 정식 배포 완료)
 
 - 제품/태그4a5389f, build39989951274/release39989951409 attempt1 각각801/801·빌드0/0. 시작/설치/Standalone/Explorer COM·자산8개·Latest 확인, 2026-10-24 01:57:03 KST 정식 게시.
