@@ -2,9 +2,9 @@
 
 2026-10-23. User reconfirmed the document-editor hover brightness issue. Main coordinated and
 reviewed; GPT-6 Astra/high investigated then implemented serially after A396 validation.
-Product version:0.402.0, pushed as5ec5d35. Release attempt1 failed one existing archive test;
-the user explicitly approved one failed-job retry, but the GitHub integration returned403.
-No retry started. Browser sign-in is required to continue the already approved action.
+Product version:0.402.0, published as5ec5d35 on2026-10-23 at16:32:52 KST.
+Release attempt1 failed one existing archive test; the explicitly approved single retry passed
+all701 tests and every release gate. Eight assets, the matching tag and Latest were verified.
 
 ## Cause and scope
 
@@ -114,6 +114,17 @@ despite the earlier sequential push/release approval. The user subsequently expl
 exactly one failed-job retry with all existing gates retained. The authorized connector call
 returned GitHub403 `Resource not accessible by integration`; no retry was scheduled. A fresh
 jobs read still returned the original failed job120229626113. Edge was signed out of GitHub,
-so main opened the sign-in page returning to the same run and requested user sign-in. No new
-approval is needed for the authorized single retry once access is available. No v0.402.0 release
-is claimed. Evidence:`artifacts/a409-selection/main/retry-access-status.json`.
+so main opened the sign-in page returning to the same run and requested user sign-in.
+Evidence of that resolved access blocker:`artifacts/a409-selection/main/retry-access-status.json`.
+
+After the user confirmed sign-in, main used GitHub's Re-run failed jobs action exactly once.
+Release39896995019 attempt2, job120294131619, completed successfully on the unchanged5ec5d35.
+Decoded logs confirm701/701 tests, zero build warnings/errors and both archive-creation formats
+passing. Explorer COM, production startup, installed-package and Standalone checks all passed.
+The v0.402.0 lightweight tag points exactly to5ec5d358e963573bb337099b02943f64b1285795.
+All eight expected assets are uploaded and nonempty; the release is neither draft nor prerelease
+and is Latest. Published2026-10-23 16:32:52 KST. The first failure remains unexplained; passing
+one retry is not proof of a root-cause fix. No further retry, test weakening or source change occurred.
+Evidence:`retry-start.json`, `remote-jobs-attempt2.json`, `retry-test-evidence.json`,
+`remote-run-attempt2.json`, `release-verification.json` under `artifacts/a409-selection/main/`.
+Final verification documentation is committed locally without an additional documentation-only push.

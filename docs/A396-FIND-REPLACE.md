@@ -17,7 +17,8 @@ no new narrow-width, preview-cap or inaccessible-document runtime test was perfo
 
 The same build reproduced A409: with search input focused, moving the pointer into the document
 (zero scroll delta) changed its black background to dark gray without editing the document.
-A409 is the next separate batch. Evidence/logs: `artifacts/a396-hint/main/`.
+A409 was subsequently fixed and published as the separatev0.402.0 batch; see
+`A409-EDITOR-BACKGROUND.md`. A396 evidence/logs: `artifacts/a396-hint/main/`.
 Automatic approval review initially rejected the combined master commit/push before execution.
 The user explicitly approved sequential v0.401.0 and v0.402.0 push/releases on2026-10-23.
 v0.401.0 was published first as9bd38f7: build39894524860 and release39894524827 succeeded.

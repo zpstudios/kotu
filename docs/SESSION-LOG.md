@@ -6,6 +6,19 @@
 
 ## 세션 일지(HANDOVER 구 §1)
 
+### 2026-10-23 — 승인된1회 재실행 성공·v0.402.0 정식 발행
+
+- 사용자의 GitHub 로그인 완료 후 브라우저에서 같은 release39896995019의 실패 작업만1회 재실행했다.
+  attempt2/job120294131619를 확인했으며 추가 retry·새 push·시험/제품 코드 변경은 없었다.
+- 전체 빌드0경고/0오류, 원격 로그상701/701(앞서 실패한 압축 생성 두 형식 포함), Explorer COM·
+  시작/설치/Standalone 검사 모두 통과했다. 태그는 제품5ec5d358e963573bb337099b02943f64b1285795와 일치한다.
+- 2026-10-23 16:32:52 KST 정식 게시, draft/prerelease 아님·Latest·배포 자산8개 업로드/크기 확인.
+  최초 압축 시험 실패의 정확한 원인은 여전히 미확정이며 재실행 성공을 원인 수정으로 주장하지 않는다.
+- 증거는 `artifacts/a409-selection/main/`의 retry-start/remote-jobs-attempt2/retry-test-evidence/
+  remote-run-attempt2/release-verification JSON이다. 사용자 KOTU 앱/설정은 이 배포 재실행에서 조작하지 않았다.
+- A396/A409 완료 상세를 ARCHIVE로 이관하고 Viewing 새 범위·고대비 잔여와 A401 미완료를 보존했다.
+  HANDOVER §4의 이전 A401 확인 대기는 DEVICE-CHECKS로 이관했다. 최종 문서만 로컬 커밋하고 추가 push는 보류한다.
+
 ### 2026-10-23 — 릴리스 재실행1회 승인·GitHub 접근 권한 장애
 
 - 사용자가 release39896995019 실패 작업의1회 재실행을 명시 승인했다. 선택 누락 제보 당시
