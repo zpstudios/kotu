@@ -2,9 +2,9 @@
 
 ## Current status
 
-v0.409.0 implementation accepted for release by main on2026-10-26. Focused65/65 and full845/845
+v0.409.0 officially released on2026-10-26 at13:01:36 KST; product/tag125b0d2. Focused65/65 and full845/845
 in8assemblies passed, Release x64 zero warnings/errors, architecture20/release7, normal package
-and entry point verified. Remote release verification is pending. Native coverage is partial;
+and entry point verified. Build40266331584 and release40266331540 attempt1 each passed845/845 in8assemblies with zero compiler warnings/errors. Original package/startup/install/Standalone/COM gates, exact tag, eight uploaded assets and latest stable release verified. Native coverage is partial;
 the limitations below remain open. Camera integration belongs to the subsequent A402 batch.
 
 The user confirmed differing existing destinations switch directly to Windows Documents/KOTU,
