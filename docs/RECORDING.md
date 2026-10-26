@@ -5,20 +5,25 @@ saved MP4 and WAV files continue to open in Video and Audio.
 
 ## Behavior
 
-- Modes, screens/windows, system outputs and microphones use square icon tiles
+- Modes, screens/windows/cameras, system outputs and microphones use square icon tiles
   that wrap into columns. Screens (entire displays) and windows (individual apps)
-  have separate headings and different icons, with a single selection across both
+  and cameras have separate headings and different icons, with a single selection across the three
   groups. Native selection marks and keyboard navigation remain available. Longer
   grids scroll in place; full device and window names are available in tooltips.
 - Selected tiles have a 2 DIP accent border, tinted background and a top-right
   check badge. These decorations follow the actual container selection for mouse,
-  keyboard, restored preferences and recycled items in all five source grids.
-- **Screen recording**: choose one screen or open window and a save folder. Records
+  keyboard, restored preferences and recycled items in all source grids.
+- **Video recording**: choose one screen, open window or camera and a save folder. Records
   MP4 with H.264 video at 30 fps and optional AAC stereo audio. System audio and
   microphone inclusion have separate checkboxes. Choose the exact playback endpoint:
   its other applications' sounds are included even when only one window is selected.
   Uncheck both audio choices for silent video. With both audio sources, each is set
   to 70% to leave mixing headroom. No microphone monitoring is enabled.
+- Cameras use their automatic native format. Enumeration does not open a device;
+  a camera is opened only at explicit Start. No camera is selected automatically,
+  except restoring the exact remembered identity. A missing camera never falls back
+  to another camera or screen. Camera output uses `KOTU-camera-...mp4` and the same
+  captured common folder and selected audio sources as other video recordings.
 - **Microphone recording**: select an active input and save standard PCM WAV
   (48 kHz, 16-bit, mono). WASAPI shared-mode conversion avoids codec installation.
   This first implementation deliberately uses the allowed standard-file alternative
@@ -31,26 +36,27 @@ saved MP4 and WAV files continue to open in Video and Audio.
   the UI and recording tray status at most four times per second.
 - A compact main banner and the bottom bar show the same capture state, elapsed
   time and the source labels captured when Start was pressed. A red dot accompanies
-  **Recording screen** or **Recording microphone** only after the backend confirms
+  **Recording screen**, **Recording camera** or **Recording microphone** only after the backend confirms
   active capture. Preparing/Starting, Stopping, Saving, Finished and Error have no
   red capture indicator. Stop removes the indicator immediately; native completion
   and finalization take precedence over queued progress. Source list refreshes do
   not rename the active source labels. Full bottom-bar text is available in its
   tooltip and accessible name.
-- The tray uses the same cached state: red `VRC`/`ARC` while screen/audio capture is
+- The tray uses the same cached state: red `VRC`/`ARC` while video/audio capture is
   confirmed, and neutral `PRE`/`STP`/`SAV`/`END`/`ERR` during other phases. An idle
   Record view keeps the existing `REC` module label. Busy operations such as folder
   permission checks or publishing a file do not claim active recording.
-- The initial save folders are the Windows Videos library's `KOTU` folder for MP4
-  and the Music library's `KOTU` folder for WAV. Both paths and their separate
-  **Change video folder** / **Change audio folder** buttons remain visible regardless
-  of the selected mode. Either folder can also be changed during recording; the
-  active recording keeps its original destination and changes apply to the next one.
-  Source refresh, each folder and recording status have distinct cards with contrasting
-  backgrounds and borders; action buttons have their own contrasting fill and outline.
-  Folder initialization creates missing directories and checks
-  write access on the module worker; an error disables Start for that mode until a
-  valid folder is chosen. No alternate save location is silently used.
+- Audio and video share one **Save folder** card and **Change** action. The default
+  is the current Windows Documents known folder's `KOTU` directory, including Windows
+  redirects. Differing legacy audio/video destinations switch to this default;
+  equal valid destinations and an existing committed common setting remain shared.
+  Existing recordings never move. A running session keeps its captured destination;
+  later sessions use the newly committed setting. All Record views share updates.
+  Workers create/probe only the selected destination. An unresolved/invalid folder
+  shows an explicit error and disables Start; Retry handles preparation errors.
+  Failed persistence restores the prior setting and attempts a compensating save.
+  Failed compensation leaves a restart-uncertainty warning until an explicit save
+  succeeds. See `A405-COMMON-RECORDING-FOLDER.md` for the exact migration/ownership contract.
 - Start generates a timestamped filename with a full GUID suffix directly in the
   displayed folder. There is no per-recording Save dialog or empty destination file.
   **Open folder** opens the folder containing the last saved or recoverable partial
@@ -65,11 +71,11 @@ saved MP4 and WAV files continue to open in Video and Audio.
   the existing `ICloseGuard`: Stop and save / Discard / Keep recording. Unexpected
   view unload requests a stop and discards its temporary recording after completion.
 - Source/device enumeration updates automatically about every two seconds and is
-  capped at 32 screens, 200 windows, 64 microphones and 64 outputs. The selected
+  capped at 32 screens, 200 windows, 64 cameras, 64 microphones and 64 outputs. The selected
   available source stays included within each cap. Refresh requests an immediate
-  observation. Stable display IDs, window handle+PID, and audio endpoint IDs preserve
+  observation. Stable display IDs, window handle+PID, opaque camera IDs and audio endpoint IDs preserve
   selections across label/default-device changes. Initial default selection happens
-  only on the first successful observation without a remembered ID. Missing IDs
+  only on the first successful observation without a remembered ID, and never picks a camera. Missing IDs
   stay unselected; another source is never silently substituted.
 - A failed category preserves its last known rows and reports an independent source
   refresh error. It does not establish device removal. During recording, lists still
@@ -81,12 +87,10 @@ saved MP4 and WAV files continue to open in Video and Audio.
 - Settings: `record.mode` (`screen` by default), `record.includeMicrophone` (`true`),
   `record.includeSystemAudio` (`true`), `record.microphoneId`, `record.outputId` and
   `record.sourceKey`. These are saved on the module worker when starting.
-  `record.videoFolder` and `record.audioFolder` remember custom folders on the same
-  worker after a successful folder choice. Canceling the picker preserves the current
-  location. Switching mode displays its own folder. Selecting a folder or initializing
-  folders locks selectors and Start; late picker/initialization results after unload
-  are ignored.
-
+  `record.saveFolder` holds the common path: empty means dynamic Documents/KOTU;
+  an absolute path means custom. Legacy folder keys are migration inputs only.
+  Canceling the picker preserves the current location. Switching mode uses the same
+  folder. Shared initialization survives a view closing; late UI results honor lifetime.
 ## Windows and dependency evidence
 
 [Microsoft screen capture](https://learn.microsoft.com/en-us/windows/apps/develop/media-authoring-processing/screen-capture)
@@ -112,8 +116,9 @@ The package injects `build/x64/ScreenRecorderLib.dll` through
 [its build targets](https://github.com/sskodje/ScreenRecorderLib/blob/v7.0.1/Nuget/ScreenRecorderLib.targets).
 Both Record and the executable declare the package so the final publish resolves
 the reference. The unmodified package LICENSE is copied to
-`licenses/ScreenRecorderLib-LICENSE.txt`. No source interop is introduced into the
-module. The microphone backend reuses the repository's NAudio.Wasapi 2.2.1 dependency;
+`licenses/ScreenRecorderLib-LICENSE.txt`. Camera-only COM initialization is explicitly
+balanced on its recording worker; capture remains owned by the library. The microphone
+backend reuses the repository's NAudio.Wasapi 2.2.1 dependency;
 its [WasapiCapture source](https://github.com/naudio/NAudio/blob/v2.2.1/NAudio.Wasapi/WasapiCapture.cs)
 confirms shared-mode PCM conversion and the RecordingStopped completion contract.
 
@@ -131,6 +136,19 @@ UI update. Session callbacks complete tasks with asynchronous continuations.
 The timer snapshots only atomic elapsed/capture/completion state; the dispatcher
 applies a pure presentation result to the banner, bottom bar and cached tray state.
 No blinking timer or capture-state polling runs on the UI thread.
+
+Camera recording additionally requires both native Recording status and a fresh source
+frame before showing active capture. A 32×32 source callback records timestamps only;
+native Uniform/even rounding has nonzero dimensions for aspect ratios1:16 through16:1.
+A 250ms background check requests Stop once after 10s without initial readiness or 5s
+without a new source frame. Pending termination shows its reason and allows explicit
+Stop retry when a native stop request throws. User Stop freezes the displayed clock,
+while raw evidence remains available if that request fails. Native Finishing, guard
+failure and completion cannot be reversed by late callbacks. None of these deadlines
+manufactures completion, publishes a file or releases an in-flight native device.
+At Start only, one case-insensitive match supplies the native camera ID's original spelling;
+the WinRT selection key stays unchanged. MF startup precedes native metadata enumeration.
+Final disposal on the same worker releases recorder, camera source, MF and COM in order.
 
 `KOTU record source discovery` is a separate BelowNormal worker. A thread-pool timer
 queues one discovery at a time, including at most one waiting UI application. All
@@ -150,6 +168,15 @@ handles. WAV automatically stops and saves below its 4 GiB container limit (3.5 
 of sample data), with an explicit notice.
 
 ## Limits and verification
+
+- A402v0.410.0 local verification:105 focused and874 full tests across8 assemblies,
+  Release/x64 with0 warnings/errors, architecture20/release-contract7 and normal
+  package/entry-point/hash review. One actual silent camera MP4 was recorded, saved
+  and played in KOTU after the native ID/MF/preview corrections. Its video-only track
+  is640×360 H.264,11.27s; UI/tool timing exceeded the approximately5s target, so no
+  second recording was made. Same-device reuse and physical failure cases remain unverified. See
+  `A402-CAMERA-SOURCES.md`. Native camera initialization/driver teardown can block;
+  the frame guard does not make arbitrary driver hangs safely cancelable.
 
 - Screen capture needs the Microsoft Visual C++ 2015–2022 Redistributable **x64** and
   Windows Media Foundation; Windows N/KN may need the Media Feature Pack. These

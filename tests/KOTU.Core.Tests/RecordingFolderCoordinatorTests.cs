@@ -26,11 +26,13 @@ public sealed class RecordingFolderCoordinatorTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task CapturedSessionSurvivesACommitOrFailedCandidateBeforeItsQueuedPreparation(bool fail, bool screen)
+    [InlineData(false, 0)]
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    [InlineData(true, 1)]
+    [InlineData(false, 2)]
+    [InlineData(true, 2)]
+    public async Task CapturedSessionSurvivesACommitOrFailedCandidateBeforeItsQueuedPreparation(bool fail, int kindValue)
     {
         var settings = Existing();
         using var saveEntered = new ManualResetEventSlim();
@@ -68,8 +70,8 @@ public sealed class RecordingFolderCoordinatorTests : IDisposable
 
         // 변경 이후에도 이미 준비된 세션의 임시 파일과 결과 폴더는 이전 목적지를 따른다.
         Directory.CreateDirectory(capturedFolder);
-        var destination = RecordingOutput.CreateDestinationPath(capturedFolder, screen, DateTime.Now);
-        var extension = screen ? ".mp4" : ".wav";
+        var destination = RecordingOutput.CreateDestinationPath(capturedFolder, (RecordingKind)kindValue, DateTime.Now);
+        var extension = (RecordingKind)kindValue != RecordingKind.Microphone ? ".mp4" : ".wav";
         var temporary = RecordingOutput.CreateTemporaryPath(destination, extension);
         File.WriteAllText(temporary, "closed synthetic recording");
         RecordingOutput.Publish(temporary, destination, overwrite: false);

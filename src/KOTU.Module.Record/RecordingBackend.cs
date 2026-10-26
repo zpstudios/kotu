@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using KOTU.Core.Threading;
 
 namespace KOTU.Module.Record;
 
@@ -11,6 +12,6 @@ internal static class RecordingBackend
         ScreenRecordingSession.GetSources(ownWindow, preferred);
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static IRecordingSession StartScreen(CaptureSource source, string? microphoneId, string? outputId, string path) =>
-        new ScreenRecordingSession(source, microphoneId, outputId, path);
+    public static IRecordingSession StartScreen(CaptureSource source, string? microphoneId, string? outputId, string path, ModuleWorker worker) =>
+        new ScreenRecordingSession(source, microphoneId, outputId, path, worker);
 }

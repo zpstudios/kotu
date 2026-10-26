@@ -1,7 +1,12 @@
 namespace KOTU.Module.Record;
 
-internal sealed record CaptureSource(string Label, string? DisplayName, nint WindowHandle, int? ProcessId = null)
+internal enum CaptureSourceKind { Display, Window, Camera }
+internal enum RecordingKind { Screen, Microphone, Camera }
+
+internal sealed record CaptureSource(string Label, string? DisplayName, nint WindowHandle, int? ProcessId = null, string? CameraId = null)
 {
+    public CaptureSourceKind Kind => CameraId is not null ? CaptureSourceKind.Camera
+        : DisplayName is not null ? CaptureSourceKind.Display : CaptureSourceKind.Window;
     public override string ToString() => Label;
 }
 
@@ -27,5 +32,6 @@ internal interface IRecordingSession : IDisposable
     Task<RecordingResult> Completion { get; }
     TimeSpan Elapsed { get; }
     bool IsRecording { get; }
+    string? PendingStopReason => null;
     void Stop();
 }

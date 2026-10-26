@@ -25,13 +25,17 @@ internal static class RecordingOutput
         return folder;
     }
 
-    public static string CreateDestinationPath(string folder, bool screen, DateTime timestamp)
+    public static string CreateDestinationPath(string folder, bool screen, DateTime timestamp) =>
+        CreateDestinationPath(folder, screen ? RecordingKind.Screen : RecordingKind.Microphone, timestamp);
+
+    public static string CreateDestinationPath(string folder, RecordingKind kind, DateTime timestamp)
     {
-        var extension = screen ? ".mp4" : ".wav";
+        var extension = kind != RecordingKind.Microphone ? ".mp4" : ".wav";
+        var label = kind switch { RecordingKind.Camera => "camera", RecordingKind.Screen => "screen", _ => "microphone" };
         string path;
         do
         {
-            path = Path.Combine(folder, $"KOTU-{(screen ? "screen" : "microphone")}-{timestamp:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}{extension}");
+            path = Path.Combine(folder, $"KOTU-{label}-{timestamp:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}{extension}");
         }
         while (File.Exists(path) || Directory.Exists(path));
         return path;

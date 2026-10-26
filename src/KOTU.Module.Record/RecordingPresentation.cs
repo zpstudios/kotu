@@ -8,6 +8,10 @@ internal enum RecordingPhase { Ready, Starting, Active, Stopping, Saving, Finish
 internal sealed record RecordingPresentation(RecordingPhase Phase, bool IsRecording, string Text, string Detail, TrayStatus Tray)
 {
     public static RecordingPresentation Create(RecordingPhase phase, bool screen, bool recording,
+        bool completed, bool previouslyRecorded, TimeSpan elapsed, string sources) =>
+        Create(phase, screen ? RecordingKind.Screen : RecordingKind.Microphone, recording, completed, previouslyRecorded, elapsed, sources);
+
+    public static RecordingPresentation Create(RecordingPhase phase, RecordingKind kind, bool recording,
         bool completed, bool previouslyRecorded, TimeSpan elapsed, string sources)
     {
         // 정지 요청/종료 상태가 늦게 도착한 녹화 스냅샷보다 항상 우선한다.
@@ -18,8 +22,8 @@ internal sealed record RecordingPresentation(RecordingPhase Phase, bool IsRecord
         var clock = $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
         var label = phase switch
         {
-            RecordingPhase.Starting => screen ? "Starting screen recording" : "Starting microphone recording",
-            RecordingPhase.Active => screen ? "Recording screen" : "Recording microphone",
+            RecordingPhase.Starting => kind == RecordingKind.Camera ? "Starting camera recording" : kind == RecordingKind.Screen ? "Starting screen recording" : "Starting microphone recording",
+            RecordingPhase.Active => kind == RecordingKind.Camera ? "Recording camera" : kind == RecordingKind.Screen ? "Recording screen" : "Recording microphone",
             RecordingPhase.Stopping => "Stopping",
             RecordingPhase.Saving => "Saving",
             RecordingPhase.Finished => "Finished",
@@ -28,7 +32,7 @@ internal sealed record RecordingPresentation(RecordingPhase Phase, bool IsRecord
         };
         var text = phase == RecordingPhase.Ready ? label : label + " · " + clock;
         var detail = string.IsNullOrEmpty(sources) ? text : text + " · " + sources;
-        var tray = active ? TrayStatus.Open(screen ? "VRC" : "ARC", clock, 0xFFFF5050, 0xFFFF5050)
+        var tray = active ? TrayStatus.Open(kind != RecordingKind.Microphone ? "VRC" : "ARC", clock, 0xFFFF5050, 0xFFFF5050)
             : phase == RecordingPhase.Ready ? TrayStatus.Idle("REC")
             : TrayStatus.Open(phase switch
             {

@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
+using Windows.Devices.Enumeration;
+using Windows.Media.Devices;
 
 namespace KOTU.Module.Record;
 
@@ -10,7 +12,8 @@ internal static class RecordingSourceDiscovery
         IReadOnlyList<CaptureSource>? sources = null;
         IReadOnlyList<MicrophoneDevice>? microphones = null;
         IReadOnlyList<OutputDevice>? outputs = null;
-        string? screenError = null, microphoneError = null, outputError = null;
+        IReadOnlyList<CaptureSource>? cameras = null;
+        string? screenError = null, microphoneError = null, outputError = null, cameraError = null;
         cancellation.ThrowIfCancellationRequested();
         try
         {
@@ -24,7 +27,19 @@ internal static class RecordingSourceDiscovery
         try { outputs = GetOutputs(preferred.OutputId); }
         catch (Exception ex) { outputError = ex.Message; }
         cancellation.ThrowIfCancellationRequested();
-        return new(sources, microphones, outputs, screenError, microphoneError, outputError);
+        try { cameras = GetCameras(preferred.Source?.CameraId, cancellation); }
+        catch (OperationCanceledException) { throw; }
+        catch { cameraError = "Could not refresh cameras. Refresh sources to try again."; }
+        cancellation.ThrowIfCancellationRequested();
+        return new(sources, microphones, outputs, screenError, microphoneError, outputError, cameras, cameraError);
+    }
+
+    internal static IReadOnlyList<CaptureSource> GetCameras(string? preferredId, CancellationToken cancellation)
+    {
+        // 장치 인터페이스만 읽는다. 형식 조회나 카메라 활성화는 주기 관측에서 하지 않는다.
+        var devices = DeviceInformation.FindAllAsync(MediaDevice.GetVideoCaptureSelector()).AsTask(cancellation).GetAwaiter().GetResult();
+        return RecordingSourceCatalog.LimitCameras(devices.Where(d => d.IsEnabled)
+            .Select(d => new CaptureSource("Camera: " + d.Name, null, 0, CameraId: d.Id)), preferredId);
     }
 
     internal static IReadOnlyList<OutputDevice> GetOutputs(string? preferredId)
@@ -47,7 +62,7 @@ internal static class RecordingSourceDiscovery
     }
 
     // GetWindows may omit minimized/hidden windows. Only handle+PID loss establishes disappearance.
-    internal static bool WindowStillExists(CaptureSource source) => source.DisplayName is null &&
+    internal static bool WindowStillExists(CaptureSource source) => source.Kind == CaptureSourceKind.Window &&
         source.ProcessId is { } pid && IsWindow(source.WindowHandle) &&
         GetWindowThreadProcessId(source.WindowHandle, out var actualPid) != 0 && actualPid == (uint)pid;
 

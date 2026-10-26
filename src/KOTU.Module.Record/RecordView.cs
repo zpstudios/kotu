@@ -25,11 +25,14 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private readonly CancellationTokenSource _lifetime = new();
     private readonly GridView _mode = CreateSourceGrid("\uE714", "Recording mode", "", "{Binding}");
     private readonly GridView _source = CreateSourceGrid("\uE7F4", "Screens", "SCREEN");
+    private readonly GridView _camera = CreateSourceGrid("\uE722", "Cameras", "CAMERA");
+    private readonly TextBlock _cameraStatus = new() { Text = "Finding cameras...", TextWrapping = TextWrapping.Wrap };
     private readonly GridView _windows = CreateSourceGrid("\uE737", "Windows", "WINDOW");
     private readonly GridView _microphone = CreateSourceGrid("\uE720", "Microphones", "MICROPHONE");
     private readonly GridView _output = CreateSourceGrid("\uE767", "System audio outputs", "SYSTEM AUDIO");
     private readonly ObservableCollection<CaptureSource> _sources = [];
     private readonly ObservableCollection<CaptureSource> _windowSources = [];
+    private readonly ObservableCollection<CaptureSource> _cameras = [];
     private readonly ObservableCollection<MicrophoneDevice> _microphones = [];
     private readonly ObservableCollection<OutputDevice> _outputs = [];
     private readonly CheckBox _includeOutput = new() { Content = "Include system audio from the selected output" };
@@ -87,7 +90,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private int _discoveryPending;
     private RecordingPhase _phase = RecordingPhase.Ready;
     private RecordingPresentation _presentation = RecordingPresentation.Create(RecordingPhase.Ready, true, false, false, false, TimeSpan.Zero, "");
-    private bool _activeScreen;
+    private RecordingKind _activeKind;
     private bool _captureObserved;
     private TimeSpan _captureElapsed;
     private string _activeSourceLabels = "";
@@ -103,7 +106,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _selectedMicrophoneId = settings.Get("record.microphoneId", "");
         _selectedOutputId = settings.Get("record.outputId", "");
         _mode.ItemTemplate = null;
-        _mode.Items.Add(new GridViewItem { Content = CreateModeTile("\uE714", "Screen recording") });
+        _mode.Items.Add(new GridViewItem { Content = CreateModeTile("\uE714", "Video recording") });
         _mode.Items.Add(new GridViewItem { Content = CreateModeTile("\uE720", "Microphone recording") });
         foreach (GridViewItem item in _mode.Items) HookTileSelection(item);
         _mode.SelectedIndex = settings.Get("record.mode", "screen") == "microphone" ? 1 : 0;
@@ -111,12 +114,16 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _includeOutput.IsChecked = settings.Get("record.includeSystemAudio", true);
         _source.ItemsSource = _sources;
         _windows.ItemsSource = _windowSources;
+        _camera.ItemsSource = _cameras;
         _microphone.ItemsSource = _microphones;
         _output.ItemsSource = _outputs;
         _screenOptions.Children.Add(new TextBlock { Text = "Screens · Entire display", FontSize = 16 });
         _screenOptions.Children.Add(_source);
         _screenOptions.Children.Add(new TextBlock { Text = "Windows · Individual app", FontSize = 16, Margin = new Thickness(0, 8, 0, 0) });
         _screenOptions.Children.Add(_windows);
+        _screenOptions.Children.Add(new TextBlock { Text = "Cameras", FontSize = 16, Margin = new Thickness(0, 8, 0, 0) });
+        _screenOptions.Children.Add(_camera);
+        _screenOptions.Children.Add(_cameraStatus);
         _screenOptions.Children.Add(_includeOutput);
         _screenOptions.Children.Add(new TextBlock { Text = "System audio output" });
         _screenOptions.Children.Add(_output);
@@ -173,11 +180,12 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             UpdateControls();
             if (!_busy && !_catalogInitializing)
                 _status.Text = CurrentFolderError ?? (ScreenMode
-                    ? _screenError ?? "Choose a screen or window, then start recording."
+                    ? _screenError ?? "Choose a screen, window or camera, then start recording."
                     : _microphone.SelectedItem is MicrophoneDevice ? "Ready to record the selected microphone." : "Choose an available microphone.");
         };
-        _source.SelectionChanged += (_, _) => CaptureSelectionChanged(_source, _windows);
-        _windows.SelectionChanged += (_, _) => CaptureSelectionChanged(_windows, _source);
+        _source.SelectionChanged += (_, _) => CaptureSelectionChanged(_source);
+        _windows.SelectionChanged += (_, _) => CaptureSelectionChanged(_windows);
+        _camera.SelectionChanged += (_, _) => CaptureSelectionChanged(_camera);
         _microphone.SelectionChanged += (_, _) =>
         {
             if (!_applyingSources && _microphone.SelectedItem is MicrophoneDevice microphone) _selectedMicrophoneId = microphone.Id;
@@ -206,7 +214,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     }
 
     private bool ScreenMode => _mode.SelectedIndex == 0;
-    private CaptureSource? SelectedCaptureSource => _source.SelectedItem as CaptureSource ?? _windows.SelectedItem as CaptureSource;
+    private CaptureSource? SelectedCaptureSource => _source.SelectedItem as CaptureSource ?? _windows.SelectedItem as CaptureSource ?? _camera.SelectedItem as CaptureSource;
     private string? CurrentFolderError => _folderState.Error;
     public bool HasUnsavedChanges => _busy;
     public event Action<bool>? UnsavedChanged;
@@ -378,13 +386,13 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         return tile;
     }
 
-    private void CaptureSelectionChanged(GridView selected, GridView other)
+    private void CaptureSelectionChanged(GridView selected)
     {
         if (_applyingSources) return;
         if (selected.SelectedItem is CaptureSource source)
         {
             _applyingSources = true;
-            try { other.SelectedItem = null; }
+            try { foreach (var other in new[] { _source, _windows, _camera }) if (other != selected) other.SelectedItem = null; }
             finally { _applyingSources = false; }
             _selectedSourceKey = RecordingSourceCatalog.Key(source);
         }
@@ -401,7 +409,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private void UpdateRecordingPresentation(bool recording = false, bool completed = false)
     {
         if (_disposed) return;
-        _presentation = RecordingPresentation.Create(_phase, _activeScreen, recording, completed, _captureObserved, _captureElapsed, _activeSourceLabels);
+        _presentation = RecordingPresentation.Create(_phase, _activeKind, recording, completed, _captureObserved, _captureElapsed, _activeSourceLabels);
         _captureState.Text = _presentation.Text;
         _captureSources.Text = _activeSourceLabels;
         _captureSources.Visibility = string.IsNullOrEmpty(_activeSourceLabels) ? Visibility.Collapsed : Visibility.Visible;
@@ -447,12 +455,13 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         var screen = ScreenMode;
         _screenOptions.Visibility = screen ? Visibility.Visible : Visibility.Collapsed;
         _description.Text = screen
-            ? "MP4 video (H.264), 30 fps. Choose a screen or window and optional audio sources. System audio includes other apps on the selected output. Uncheck both audio choices for silent video. Keep the selected window open and visible."
+            ? "MP4 video (H.264), 30 fps. Choose a screen, window or camera and optional audio sources. Camera format is automatic. Windows must allow camera access for desktop apps. System audio includes other apps on the selected output. Uncheck both audio choices for silent video. Keep the selected window open and visible."
             : "WAV audio, 48 kHz / 16-bit mono. Only the selected microphone is recorded. Windows must allow microphone access for desktop apps.";
         var selectable = !_busy && !_folderInitializing && !_choosingFolder;
         _mode.IsEnabled = selectable;
         _source.IsEnabled = selectable;
         _windows.IsEnabled = selectable;
+        _camera.IsEnabled = selectable;
         _microphone.IsEnabled = selectable && (!screen || _mix.IsChecked == true);
         _output.IsEnabled = selectable && _includeOutput.IsChecked == true;
         _mix.IsEnabled = selectable;
@@ -558,24 +567,32 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _applyingSources = true;
         try
         {
+            var firstScreenObservation = snapshot.Sources is not null && !_sourcesInitialized;
             if (snapshot.Sources is { } sources)
             {
-                // Choose once across both categories, so only one capture target can be selected.
-                var selected = RecordingSourceCatalog.Select(sources, _selectedSourceKey, RecordingSourceCatalog.Key, _ => false, !_sourcesInitialized);
                 _sourcesInitialized = true;
-                if (selected is not null) _selectedSourceKey = RecordingSourceCatalog.Key(selected);
-                RecordingSourceCatalog.Apply(_sources, sources.Where(s => s.DisplayName is not null).ToArray(), RecordingSourceCatalog.Key);
-                RecordingSourceCatalog.Apply(_windowSources, sources.Where(s => s.DisplayName is null).ToArray(), RecordingSourceCatalog.Key);
-                _source.SelectedItem = selected is null ? null : _sources.FirstOrDefault(s => RecordingSourceCatalog.Key(s) == RecordingSourceCatalog.Key(selected));
-                _windows.SelectedItem = selected is null ? null : _windowSources.FirstOrDefault(s => RecordingSourceCatalog.Key(s) == RecordingSourceCatalog.Key(selected));
+                RecordingSourceCatalog.Apply(_sources, sources.Where(s => s.Kind == CaptureSourceKind.Display).ToArray(), RecordingSourceCatalog.Key);
+                RecordingSourceCatalog.Apply(_windowSources, sources.Where(s => s.Kind == CaptureSourceKind.Window).ToArray(), RecordingSourceCatalog.Key);
             }
+            if (snapshot.Cameras is { } cameras)
+            {
+                RecordingSourceCatalog.Apply(_cameras, cameras, RecordingSourceCatalog.Key);
+                _cameraStatus.Text = cameras.Count == 0 ? "No cameras available." : "Camera format: Automatic";
+            }
+            if (snapshot.CameraError is { } cameraError) _cameraStatus.Text = cameraError;
+            var selected = RecordingSourceCatalog.SelectVideo(_sources.Concat(_windowSources).ToArray(), _cameras,
+                _selectedSourceKey, firstScreenObservation);
+            if (selected is not null) _selectedSourceKey = RecordingSourceCatalog.Key(selected);
+            _source.SelectedItem = selected?.Kind == CaptureSourceKind.Display ? selected : null;
+            _windows.SelectedItem = selected?.Kind == CaptureSourceKind.Window ? selected : null;
+            _camera.SelectedItem = selected?.Kind == CaptureSourceKind.Camera ? selected : null;
             ApplySources(_microphone, _microphones, snapshot.Microphones, ref _microphonesInitialized, ref _selectedMicrophoneId, d => d.Id, d => d.IsDefault);
             ApplySources(_output, _outputs, snapshot.Outputs, ref _outputsInitialized, ref _selectedOutputId, d => d.Id, d => d.IsDefault);
         }
         finally { _applyingSources = false; }
         _catalogInitializing = false;
         _screenError = snapshot.ScreenError;
-        var errors = new[] { snapshot.ScreenError is { } screen ? "Screens/windows: " + screen : null,
+        var errors = new[] { snapshot.CameraError is { } camera ? "Cameras: " + camera : null, snapshot.ScreenError is { } screen ? "Screens/windows: " + screen : null,
             snapshot.MicrophoneError is { } mic ? "Microphones: " + mic : null,
             snapshot.OutputError is { } output ? "System outputs: " + output : null }.Where(s => s is not null);
         var message = string.Join("\n", errors);
@@ -682,11 +699,12 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         var keepTemporary = false;
         var destinationPrepared = false;
         var folderPreparationAttempted = false;
+        var kind = !screen ? RecordingKind.Microphone : source!.Kind == CaptureSourceKind.Camera ? RecordingKind.Camera : RecordingKind.Screen;
         _starting = true;
         try
         {
             _sourceLostReason = null;
-            _activeScreen = screen;
+            _activeKind = kind;
             _activeSourceLabels = string.Join(" · ", new[]
             {
                 screen ? source!.Label : null,
@@ -708,7 +726,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             {
                 var folder = _folders.PrepareCaptured(folderSnapshot.Spec!);
                 context.ThrowIfCancelled();
-                return RecordingOutput.CreateDestinationPath(folder, screen, DateTime.Now);
+                return RecordingOutput.CreateDestinationPath(folder, kind, DateTime.Now);
             }, _lifetime.Token);
             if (_disposed) return;
             destinationPrepared = true;
@@ -735,7 +753,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                 catch { /* A settings failure must not prevent recording. */ }
                 context.ThrowIfCancelled();
                 return screen
-                    ? RecordingBackend.StartScreen(source!, includeMicrophone ? microphone!.Id : null, includeSystemAudio ? outputDevice!.Id : null, output)
+                    ? RecordingBackend.StartScreen(source!, includeMicrophone ? microphone!.Id : null, includeSystemAudio ? outputDevice!.Id : null, output, _worker)
                     : new MicrophoneRecordingSession(microphone!.Id, output, _worker.Post);
             }, _lifetime.Token);
             _session = session;
@@ -812,10 +830,17 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         var elapsed = session.Elapsed;
         var recording = session.IsRecording;
         var completed = session.Completion.IsCompleted;
+        var pendingStopReason = session.PendingStopReason;
         if (!DispatcherQueue.TryEnqueue(() =>
         {
             Interlocked.Exchange(ref _tickQueued, 0);
-            if (_disposed || _session != session || _phase != RecordingPhase.Active) return;
+            if (_disposed || _session != session || _phase is not (RecordingPhase.Active or RecordingPhase.Stopping)) return;
+            if (pendingStopReason is not null && !session.Completion.IsCompleted)
+            {
+                _phase = RecordingPhase.Stopping;
+                _status.Text = pendingStopReason + " Waiting for the camera to stop. Use Stop and save to retry stopping.";
+                UpdateControls();
+            }
             _captureElapsed = elapsed;
             _captureObserved |= recording;
             // 완료가 UI 대기 중 발생했다면 이전 녹화 스냅샷을 활성 표식으로 쓰지 않는다.
