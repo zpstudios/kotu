@@ -45,24 +45,41 @@ initialization/cancellation/reentry/stale errors, actual prepared output paths a
 with restart. Eight full-suite TRX results total845 passed, zero failed/skipped. Source10/package5
 hashes match after native work. Early sandbox testhost/build failures remain separate evidence;
 identical external validation passed. Local packaging used an identical previously verified7z.dll
-through one artifact-local source-path substitution; the original release gate remains required.
+through one artifact-local source-path substitution; the original remote release gate subsequently passed unchanged.
 
 Normal native checks passed: screen/audio common card, picker open/cancel, two Record views with
 the same initial path and survivor after closing one, explicit file-as-folder error, Start disabled
 and Retry preserving error/sentinel. These do not prove successful Change or live shared updates.
 
-Successful picker selection, live X-to-Y propagation, newly selected path after restart, recovery
-through Change, captured X session while Y commits, actual output/save/playback remain unobserved.
+In the initial native run, successful picker selection, live X-to-Y propagation, newly selected path after restart, recovery
+through Change, captured X session while Y commits and actual output/save/playback were unobserved.
 PickerHost was absent from documented automation targets; synthetic fixture native calls stalled.
 Main stopped further attempts and accepted this implementation for release based on the reviewed
 routing, existing unchanged capture/publication backend, isolated filesystem/persistence tests and
 observed common UI behavior. This is a deliberate bounded release decision, not the originally
-planned full native gate passing. Device checks retain these limits; camera belongs to A402.
+planned full native gate passing. The subsequent manual check below closes only the stated folder-selection gaps; camera belongs to A402.
 
 No Start was pressed and no screen/audio/camera capture occurred. Original settings were restored
 byte-for-byte; protected file/source/package hashes match and external owned process inventory is
 empty. Final native inventory was not retried after provider stalls. No user app needed reopening.
 
+## Manual picker supplement — 2026-10-26
+
+After release, the user selected the prepared Y folder and explicitly reported completion.
+Both real Record views changed from X to Y, displayed Ready and enabled Change/Start. The actual
+common setting persisted Y. Closing one view preserved the other; after closing both and normal
+restart of the same verified package, Record displayed Y with no folder error. Main inspected
+the report, UI evidence/screenshot and persisted-key/cleanup records, and rehashed source10/package5.
+
+The fresh manual-run settings backup was restored byte-for-byte. Test apps closed normally;
+external processes0 and native owned windows[] were confirmed. X/Y remained empty and existing
+protected sentinel/backup hashes matched. No recording Start, capture or fixture was used.
+
+Successful normal picker commit, two-view propagation and restart persistence are now verified.
+Recovery from folder/save failure, active-recording X while Y commits and actual media save/playback
+remain unobserved. These results do not retroactively turn the initial limited run into a full pass.
+Evidence: `artifacts/a405-implementation/manual-20261026/report-manual.md` and accompanying files;
+main acceptance: `artifacts/a405-implementation/main/manual-review.md`. No product/release change.
 ## Evidence
 
 - Design: `artifacts/a405-implementation/agent/phase1-report.md`.
