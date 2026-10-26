@@ -2,6 +2,12 @@
 
 ## Status and scope
 
+Releasedv0.410.0, product/tagfaec5e60df1ef95f6055574631589f82547c22b2,2026-10-26 15:08:43 KST.
+Build40277205631 and release40277205635 attempt1 each passed874/874, compiler0warnings/0errors,
+architecture20/release-contract7, COM3 and all original package/startup/install/feed/Standalone gates.
+Exact tag/latest stable and8 uploaded nonempty assets verified; no retry. Full evidence in
+`artifacts/a402-camera/main/release-review.md` and adjacent logs/verification JSON.
+
 2026-10-26: v0.410.0 implementation and local verification accepted by main. The sole
 GPT-6 Astra/high delegate completed final focused105/105 and full874/874 tests across8 assemblies,
 Release/x64 with0 warnings/0 errors, architecture20 and release-contract7 checks. Main independently
