@@ -4,19 +4,20 @@ namespace KOTU.Module.Record;
 internal static class RecordingOutput
 {
     // A391: 알려진 폴더 조회와 폴더 생성/쓰기 검사는 호출자의 워커에서만 실행한다.
-    public static string PrepareFolder(string? configuredFolder, bool screen, Func<bool, string>? knownFolder = null)
+    public static string PrepareFolder(RecordingFolderSpec specification, Func<string>? documentsRoot = null)
     {
-        var folder = configuredFolder;
-        if (string.IsNullOrWhiteSpace(folder))
+        var folder = specification.ConfiguredPath;
+        if (folder.Length == 0)
         {
-            var root = knownFolder is null
-                ? Environment.GetFolderPath(screen ? Environment.SpecialFolder.MyVideos : Environment.SpecialFolder.MyMusic)
-                : knownFolder(screen);
-            if (string.IsNullOrWhiteSpace(root)) throw new IOException("Windows could not locate the recording library folder.");
+            var root = documentsRoot is null
+                ? RecordingFolderSettings.KnownFolder(Environment.SpecialFolder.MyDocuments)
+                : documentsRoot();
+            if (string.IsNullOrWhiteSpace(root) || !Path.IsPathFullyQualified(root))
+                throw new IOException("Windows could not locate the Documents folder. Choose a save folder.");
+            root = RecordingFolderSettings.Normalize(root);
             folder = Path.Combine(root, "KOTU");
         }
-        if (!Path.IsPathFullyQualified(folder)) throw new IOException("The recording folder must be an absolute path.");
-        folder = Path.GetFullPath(folder);
+        folder = RecordingFolderSettings.Normalize(folder);
         Directory.CreateDirectory(folder);
         // 최종 파일과 구분되는 탐침을 즉시 삭제한다. 빈 최종 파일은 만들지 않는다.
         var probe = Path.Combine(folder, $".kotu-write-check-{Guid.NewGuid():N}.tmp");

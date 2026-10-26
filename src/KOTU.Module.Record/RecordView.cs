@@ -18,6 +18,8 @@ namespace KOTU.Module.Record;
 public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, ITrayStatusProvider
 {
     private readonly ISettingsService _settings;
+    private readonly RecordingFolderCoordinator _folders;
+    private RecordingFolderState _folderState;
     private readonly ModuleWorker _worker = new("KOTU record worker");
     private readonly ModuleWorker _discoveryWorker = new("KOTU record source discovery", ThreadPriority.BelowNormal);
     private readonly CancellationTokenSource _lifetime = new();
@@ -38,12 +40,10 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private readonly Button _stop = new() { Content = "Stop and save", IsEnabled = false };
     private readonly Button _cancel = new() { Content = "Discard", IsEnabled = false };
     private readonly Button _folder = new() { Content = "Open folder", IsEnabled = false };
-    private readonly Button _changeVideoFolder = new() { Content = "Change video folder" };
-    private readonly Button _changeAudioFolder = new() { Content = "Change audio folder" };
-    private readonly TextBlock _videoFolderPath = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-    private readonly TextBlock _audioFolderPath = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
-    private readonly TextBlock _videoFolderNotice = new() { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
-    private readonly TextBlock _audioFolderNotice = new() { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+    private readonly Button _changeFolder = new() { Content = "Change save folder" };
+    private readonly Button _retryFolder = new() { Content = "Retry save folder", Visibility = Visibility.Collapsed };
+    private readonly TextBlock _folderPath = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
+    private readonly TextBlock _folderNotice = new() { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
     private readonly TextBlock _barClock = new() { Text = "Ready", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly TextBlock _captureState = new() { Text = "Ready", TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _captureSources = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
@@ -72,10 +72,6 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private bool _watchStarted;
     private string? _savedPath;
     private string? _screenError;
-    private string? _videoFolder;
-    private string? _audioFolder;
-    private string? _videoFolderError;
-    private string? _audioFolderError;
     private bool _folderInitializing = true;
     private bool _folderInitializationStarted;
     private bool _choosingFolder;
@@ -96,9 +92,12 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private TimeSpan _captureElapsed;
     private string _activeSourceLabels = "";
 
-    public RecordView(ISettingsService settings)
+    internal RecordView(ISettingsService settings, RecordingFolderCoordinator folders)
     {
         _settings = settings;
+        _folders = folders;
+        _folderState = folders.Current;
+        _folders.Changed += OnFolderChanged;
         _discoveryCancellation = _lifetime.Token;
         _selectedSourceKey = settings.Get("record.sourceKey", "");
         _selectedMicrophoneId = settings.Get("record.microphoneId", "");
@@ -142,11 +141,10 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         panel.Children.Add(new TextBlock { Text = "Microphone" });
         panel.Children.Add(_microphone);
         ConfigureActionButton(_refresh);
-        ConfigureActionButton(_changeVideoFolder);
-        ConfigureActionButton(_changeAudioFolder);
+        ConfigureActionButton(_changeFolder);
+        ConfigureActionButton(_retryFolder);
         panel.Children.Add(CreateSettingsCard("Sources", "\uE72C", _discoveryStatus, _refresh));
-        panel.Children.Add(CreateSettingsCard("Video save folder · MP4", "\uE714", _videoFolderPath, _videoFolderNotice, _changeVideoFolder));
-        panel.Children.Add(CreateSettingsCard("Audio save folder · WAV", "\uE720", _audioFolderPath, _audioFolderNotice, _changeAudioFolder));
+        panel.Children.Add(CreateSettingsCard("Save folder", "\uE8B7", _folderPath, _folderNotice, _changeFolder, _retryFolder));
         panel.Children.Add(CreateSettingsCard("Recording status", "\uE946", _status, _path));
         _path.Visibility = Visibility.Collapsed;
         _path.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) =>
@@ -199,8 +197,8 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _stop.Click += async (_, _) => await StopAsync(false);
         _cancel.Click += async (_, _) => await DiscardAsync();
         _folder.Click += async (_, _) => await OpenFolderAsync();
-        _changeVideoFolder.Click += async (_, _) => await ChangeFolderAsync(screen: true);
-        _changeAudioFolder.Click += async (_, _) => await ChangeFolderAsync(screen: false);
+        _changeFolder.Click += async (_, _) => await ChangeFolderAsync();
+        _retryFolder.Click += async (_, _) => await RetryFolderAsync();
         Loaded += async (_, _) => { StartDiscovery(); await InitializeFoldersAsync(); };
         Unloaded += OnUnloaded;
         UpdateDiscoverySelection();
@@ -209,8 +207,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
 
     private bool ScreenMode => _mode.SelectedIndex == 0;
     private CaptureSource? SelectedCaptureSource => _source.SelectedItem as CaptureSource ?? _windows.SelectedItem as CaptureSource;
-    private string? CurrentFolder => ScreenMode ? _videoFolder : _audioFolder;
-    private string? CurrentFolderError => ScreenMode ? _videoFolderError : _audioFolderError;
+    private string? CurrentFolderError => _folderState.Error;
     public bool HasUnsavedChanges => _busy;
     public event Action<bool>? UnsavedChanged;
     public event Action? TrayStatusChanged;
@@ -462,14 +459,13 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         _includeOutput.IsEnabled = selectable;
         _refresh.IsEnabled = !_disposed;
         var canChangeFolder = !_disposed && !_folderInitializing && !_choosingFolder && !_closeDialog;
-        _changeVideoFolder.IsEnabled = _changeAudioFolder.IsEnabled = canChangeFolder;
-        _videoFolderPath.Text = _folderInitializing ? "Preparing video save folder..." : _videoFolder ?? "Choose a video save folder.";
-        _audioFolderPath.Text = _folderInitializing ? "Preparing audio save folder..." : _audioFolder ?? "Choose an audio save folder.";
-        _videoFolderNotice.Text = _videoFolderError ?? "";
-        _audioFolderNotice.Text = _audioFolderError ?? "";
-        _videoFolderNotice.Visibility = _videoFolderError is null ? Visibility.Collapsed : Visibility.Visible;
-        _audioFolderNotice.Visibility = _audioFolderError is null ? Visibility.Collapsed : Visibility.Visible;
-        _start.IsEnabled = selectable && !_catalogInitializing && !_closeDialog && CurrentFolder is not null && CurrentFolderError is null &&
+        _changeFolder.IsEnabled = _retryFolder.IsEnabled = canChangeFolder;
+        _folderPath.Text = _folderInitializing ? "Preparing save folder..." : _folderState.DisplayPath ?? "Choose a save folder.";
+        _folderNotice.Text = string.Join("\n", new[] { _folderState.Error, _folderState.Notice, _folderState.PersistenceWarning }
+            .Where(text => !string.IsNullOrEmpty(text)).Distinct());
+        _folderNotice.Visibility = _folderNotice.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        _retryFolder.Visibility = _folderState.Error is null ? Visibility.Collapsed : Visibility.Visible;
+        _start.IsEnabled = selectable && !_catalogInitializing && !_closeDialog && _folderState.Ready &&
             (screen ? SelectedCaptureSource is not null && (_includeOutput.IsChecked != true || _output.SelectedItem is OutputDevice) &&
                 (_mix.IsChecked != true || _microphone.SelectedItem is MicrophoneDevice) : _microphone.SelectedItem is MicrophoneDevice);
         _stop.IsEnabled = _session is not null && !_stopRequested;
@@ -602,75 +598,76 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         }
     }
 
-    // A391: 기본 위치 복원, 폴더 생성 및 권한 확인은 장치 조회와 분리된 워커 초기화다.
+    private void OnFolderChanged()
+    {
+        if (_disposed) return;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_disposed) ApplyFolderState();
+        });
+    }
+
+    private void ApplyFolderState()
+    {
+        var state = _folders.Current;
+        if (_disposed || state.Revision < _folderState.Revision) return;
+        _folderState = state;
+        UpdateControls();
+    }
+
     private async Task InitializeFoldersAsync()
     {
         if (_disposed || _folderInitializationStarted) return;
         _folderInitializationStarted = true;
-        try
-        {
-            var result = await _worker.Run(_ =>
-            {
-                (string? Folder, string? Error) Resolve(bool screen)
-                {
-                    try { return (RecordingOutput.PrepareFolder(_settings.Get(screen ? "record.videoFolder" : "record.audioFolder", ""), screen), null); }
-                    catch (Exception ex) { return (null, "Could not prepare the save folder. " + DescribeError(ex)); }
-                }
-                return (Video: Resolve(true), Audio: Resolve(false));
-            }, _lifetime.Token);
-            if (_disposed) return;
-            (_videoFolder, _videoFolderError) = result.Video;
-            (_audioFolder, _audioFolderError) = result.Audio;
-        }
+        try { await _folders.EnsureInitializedAsync().WaitAsync(_lifetime.Token); }
         catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            if (!_disposed) _videoFolderError = _audioFolderError = "Could not prepare the save folder. " + DescribeError(ex);
-        }
+        catch (Exception ex) { if (!_disposed) _status.Text = "Could not prepare the save folder. " + DescribeError(ex); }
         finally
         {
             _folderInitializing = false;
-            if (!_disposed) UpdateControls();
+            if (!_disposed) ApplyFolderState();
         }
     }
 
-    private async Task ChangeFolderAsync(bool screen)
+    private async Task RetryFolderAsync()
+    {
+        if (_disposed || _folderInitializing || _choosingFolder || _closeDialog) return;
+        _folderInitializing = true;
+        UpdateControls();
+        try { await _folders.RetryAsync(_lifetime.Token); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { if (!_disposed) _status.Text = "Could not prepare the save folder. " + DescribeError(ex); }
+        finally
+        {
+            _folderInitializing = false;
+            if (!_disposed) ApplyFolderState();
+        }
+    }
+
+    private async Task ChangeFolderAsync()
     {
         if (_disposed || _folderInitializing || _choosingFolder || _closeDialog) return;
         _choosingFolder = true;
         UpdateControls();
         try
         {
-            var picker = new FolderPicker { SuggestedStartLocation = screen ? PickerLocationId.VideosLibrary : PickerLocationId.MusicLibrary };
+            var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
             picker.FileTypeFilter.Add("*");
             WinRT.Interop.InitializeWithWindow.Initialize(picker, GetHwnd());
             var selection = await picker.PickSingleFolderAsync();
             if (_disposed || selection is null) return;
-            var selectedPath = selection.Path;
-            var folder = await _worker.Run(context =>
-            {
-                var prepared = RecordingOutput.PrepareFolder(selectedPath, screen);
-                context.Cancellation.ThrowIfCancellationRequested();
-                var key = screen ? "record.videoFolder" : "record.audioFolder";
-                var previous = _settings.Get(key, "");
-                _settings.Set(key, prepared);
-                try { _settings.Save(); }
-                catch { _settings.Set(key, previous); throw; }
-                return prepared;
-            }, _lifetime.Token);
-            if (_disposed) return;
-            if (screen) { _videoFolder = folder; _videoFolderError = null; }
-            else { _audioFolder = folder; _audioFolderError = null; }
-            _status.Text = (screen ? "Video" : "Audio") + " save folder updated." + (_busy ? " Applies to the next recording." : "");
+            await _folders.ChangeAsync(selection.Path, _lifetime.Token);
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { if (!_disposed) _status.Text = "Could not change the " + (screen ? "video" : "audio") + " save folder. " + DescribeError(ex); }
-        finally { _choosingFolder = false; if (!_disposed) UpdateControls(); }
+        catch (Exception ex) { if (!_disposed) _status.Text = "Could not change the save folder. " + DescribeError(ex); }
+        finally { _choosingFolder = false; if (!_disposed) ApplyFolderState(); }
     }
 
     private async Task StartAsync()
     {
-        if (_disposed || _busy || _catalogInitializing || _closeDialog || _choosingFolder || _folderInitializing || CurrentFolderError is not null || CurrentFolder is not { } saveFolder) return;
+        if (_disposed || _busy || _starting || _catalogInitializing || _closeDialog || _choosingFolder || _folderInitializing) return;
+        // 첫 대기와 SetBusy 알림 전에 커밋된 명세를 고정한다. 다른 창의 후보 설정은 읽지 않는다.
+        if (_folders.CaptureCommitted() is not { } folderSnapshot) return;
         var screen = ScreenMode;
         var source = SelectedCaptureSource;
         var microphone = _microphone.SelectedItem as MicrophoneDevice;
@@ -681,33 +678,35 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         var includeSystemAudio = screen && _includeOutput.IsChecked == true;
         var mixPreference = _mix.IsChecked == true;
         var systemPreference = _includeOutput.IsChecked == true;
-        _sourceLostReason = null;
-        _activeScreen = screen;
-        _activeSourceLabels = string.Join(" · ", new[]
-        {
-            screen ? source!.Label : null,
-            includeSystemAudio ? "System audio: " + outputDevice!.Label : null,
-            !screen || includeMicrophone ? "Microphone: " + microphone!.Label : null,
-        }.Where(label => label is not null));
-        _captureObserved = false;
-        _captureElapsed = TimeSpan.Zero;
-        _phase = RecordingPhase.Starting;
-        UpdateRecordingPresentation();
-        Volatile.Write(ref _activeSelection, new(screen ? source : null,
-            !screen || includeMicrophone ? microphone!.Id : null, includeSystemAudio ? outputDevice!.Id : null));
-        _starting = true;
-        _discard = false;
-        _stopRequested = false;
-        SetBusy(true);
         string? temporaryPath = null;
         var keepTemporary = false;
         var destinationPrepared = false;
+        var folderPreparationAttempted = false;
+        _starting = true;
         try
         {
+            _sourceLostReason = null;
+            _activeScreen = screen;
+            _activeSourceLabels = string.Join(" · ", new[]
+            {
+                screen ? source!.Label : null,
+                includeSystemAudio ? "System audio: " + outputDevice!.Label : null,
+                !screen || includeMicrophone ? "Microphone: " + microphone!.Label : null,
+            }.Where(label => label is not null));
+            _captureObserved = false;
+            _captureElapsed = TimeSpan.Zero;
+            _phase = RecordingPhase.Starting;
+            UpdateRecordingPresentation();
+            Volatile.Write(ref _activeSelection, new(screen ? source : null,
+                !screen || includeMicrophone ? microphone!.Id : null, includeSystemAudio ? outputDevice!.Id : null));
+            _discard = false;
+            _stopRequested = false;
+            SetBusy(true);
             _status.Text = "Checking save folder...";
+            folderPreparationAttempted = true;
             var destination = await _worker.Run(context =>
             {
-                var folder = RecordingOutput.PrepareFolder(saveFolder, screen);
+                var folder = _folders.PrepareCaptured(folderSnapshot.Spec!);
                 context.ThrowIfCancelled();
                 return RecordingOutput.CreateDestinationPath(folder, screen, DateTime.Now);
             }, _lifetime.Token);
@@ -765,11 +764,10 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         {
             keepTemporary = true;
             _phase = RecordingPhase.Error;
-            if (!destinationPrepared && !_disposed)
+            if (folderPreparationAttempted && !destinationPrepared && !_disposed)
             {
                 var error = "Could not prepare the save folder. " + DescribeError(ex);
-                if (screen) _videoFolderError = error;
-                else _audioFolderError = error;
+                await _folders.ReportPreparationFailureAsync(folderSnapshot, error);
             }
             if (!_disposed) _status.Text = "Recording could not start. " + DescribeError(ex);
         }
@@ -1021,6 +1019,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     {
         if (_disposed) return;
         _disposed = true;
+        _folders.Changed -= OnFolderChanged;
         Interlocked.Increment(ref _refreshSequence);
         _watchTimer?.Dispose();
         _watchTimer = null;

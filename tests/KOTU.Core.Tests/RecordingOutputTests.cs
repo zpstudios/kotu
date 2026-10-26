@@ -9,40 +9,40 @@ public sealed class RecordingOutputTests : IDisposable
 
     public RecordingOutputTests() => Directory.CreateDirectory(_directory);
 
-    [Theory]
-    [InlineData(true, "Videos")]
-    [InlineData(false, "Music")]
-    public void DefaultFolderUsesTheMatchingLibraryAndCreatesKotu(bool screen, string library)
+    [Fact]
+    public void DefaultFolderUsesCurrentDocumentsAndKeepsPreparedDestination()
     {
-        var root = Path.Combine(_directory, library);
-        var folder = RecordingOutput.PrepareFolder(null, screen, mode =>
-        {
-            Assert.Equal(screen, mode);
-            return root;
-        });
+        var root = Path.Combine(_directory, "Documents");
+        var spec = new RecordingFolderSpec("");
+        var folder = RecordingOutput.PrepareFolder(spec, () => root);
         Assert.Equal(Path.Combine(root, "KOTU"), folder);
         Assert.True(Directory.Exists(folder));
         Assert.Empty(Directory.GetFileSystemEntries(folder));
-        Assert.Equal(folder, RecordingOutput.PrepareFolder(folder, screen));
+        Assert.Equal(folder, RecordingOutput.PrepareFolder(new(folder)));
         Assert.Empty(Directory.GetFileSystemEntries(folder));
+        root = Path.Combine(_directory, "RedirectedDocuments");
+        Assert.Equal(Path.Combine(root, "KOTU"), RecordingOutput.PrepareFolder(spec, () => root));
+        Assert.Equal(Path.Combine(_directory, "Documents", "KOTU"), folder);
     }
 
     [Fact]
     public void CustomFolderDoesNotResolveOrFallBackToLibrary()
     {
         var custom = Path.Combine(_directory, "custom");
-        Assert.Equal(custom, RecordingOutput.PrepareFolder(custom, true, _ => throw new InvalidOperationException("must not resolve")));
+        Assert.Equal(custom, RecordingOutput.PrepareFolder(new(custom), () => throw new InvalidOperationException("must not resolve")));
         var blocked = Path.Combine(_directory, "blocked");
         File.WriteAllText(blocked, "existing file");
-        Assert.Throws<IOException>(() => RecordingOutput.PrepareFolder(blocked, true));
+        Assert.Throws<IOException>(() => RecordingOutput.PrepareFolder(new(blocked)));
         Assert.Equal("existing file", File.ReadAllText(blocked));
     }
 
     [Fact]
     public void MissingLibraryOrRelativeFolderFailsExplicitly()
     {
-        Assert.Throws<IOException>(() => RecordingOutput.PrepareFolder(null, true, _ => ""));
-        Assert.Throws<IOException>(() => RecordingOutput.PrepareFolder("relative-folder", false));
+        Assert.Throws<IOException>(() => RecordingOutput.PrepareFolder(new(""), () => ""));
+        Assert.Throws<IOException>(() => RecordingOutput.PrepareFolder(new(""), () => "relative-documents"));
+        Assert.Throws<IOException>(() => RecordingOutput.PrepareFolder(new(""), () => Path.Combine(_directory, "invalid\0root")));
+        Assert.Throws<IOException>(() => RecordingOutput.PrepareFolder(new("relative-folder")));
     }
 
     [Theory]
