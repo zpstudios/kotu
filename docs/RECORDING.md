@@ -1,19 +1,21 @@
 # Record module (A14 / A15)
 
-The Start menu's **Record** module has two modes. It does not own file associations;
+The Start menu's **Record** module has two source-settings views and three explicit
+recording actions. It does not own file associations;
 saved MP4 and WAV files continue to open in Video and Audio.
 
 ## Behavior
 
-- Modes, screens/windows/cameras, system outputs and microphones use square icon tiles
+- Source-settings views, screens/windows/cameras, system outputs and microphones use square icon tiles
   that wrap into columns. Screens (entire displays) and windows (individual apps)
-  and cameras have separate headings and different icons, with a single selection across the three
-  groups. Native selection marks and keyboard navigation remain available. Longer
+  and cameras have separate headings and different icons. Screen/window selection is mutually
+  exclusive; camera selection is independent. Native selection marks and keyboard navigation remain available. Longer
   grids scroll in place; full device and window names are available in tooltips.
 - Selected tiles have a 2 DIP accent border, tinted background and a top-right
   check badge. These decorations follow the actual container selection for mouse,
   keyboard, restored preferences and recycled items in all source grids.
-- **Video recording**: choose one screen, open window or camera and a save folder. Records
+- **Video record / Camera record**: use the selected screen/window or selected camera, respectively,
+  and the common save folder. Records
   MP4 with H.264 video at 30 fps and optional AAC stereo audio. System audio and
   microphone inclusion have separate checkboxes. Choose the exact playback endpoint:
   its other applications' sounds are included even when only one window is selected.
@@ -24,15 +26,19 @@ saved MP4 and WAV files continue to open in Video and Audio.
   except restoring the exact remembered identity. A missing camera never falls back
   to another camera or screen. Camera output uses `KOTU-camera-...mp4` and the same
   captured common folder and selected audio sources as other video recordings.
-- **Microphone recording**: select an active input and save standard PCM WAV
+- **Audio record**: select an active microphone input and save standard PCM WAV
   (48 kHz, 16-bit, mono). WASAPI shared-mode conversion avoids codec installation.
   This first implementation deliberately uses the allowed standard-file alternative
   to M4A: there is no AAC export pass or falsely labeled audio-only MP4.
-- The bottom bar supplies compact 32 DIP Start, Stop and save, Discard, and Open
+- The bottom bar supplies compact32 DIP Audio record, Video record, Camera record,
+  shared Stop and save, Discard, and Open
   result folder buttons, followed by elapsed time/status. Every icon button has an
   explicit tooltip and accessible name. The main panel focuses on source choices,
   save-folder selection and result/error paths. The bottom bar stretches with the
-  shell; its status text trims before the four button columns. A worker timer updates
+  shell; its status text trims before the six button columns. Visible readiness rows explain
+  each action's selected source or unavailable reason. Each start uses its explicit kind,
+  independently of the displayed source-settings view. Audio always uses the selected microphone;
+  the optional audio checkboxes apply only to Video/Camera. A worker timer updates
   the UI and recording tray status at most four times per second.
 - A compact main banner and the bottom bar show the same capture state, elapsed
   time and the source labels captured when Start was pressed. A red dot accompanies
@@ -86,7 +92,9 @@ saved MP4 and WAV files continue to open in Video and Audio.
   available window. Native capture failures may finish first.
 - Settings: `record.mode` (`screen` by default), `record.includeMicrophone` (`true`),
   `record.includeSystemAudio` (`true`), `record.microphoneId`, `record.outputId` and
-  `record.sourceKey`. These are saved on the module worker when starting.
+  `record.sourceKey` (screen/window) and `record.cameraKey`. An absent cameraKey can lazily
+  migrate a legacy camera sourceKey; an explicit string including empty wins. Both remembered
+  visual choices are saved on the module worker when starting, including when temporarily absent.
   `record.saveFolder` holds the common path: empty means dynamic Documents/KOTU;
   an absolute path means custom. Legacy folder keys are migration inputs only.
   Canceling the picker preserves the current location. Switching mode uses the same
@@ -168,6 +176,14 @@ handles. WAV automatically stops and saves below its 4 GiB container limit (3.5 
 of sample data), with an explicit notice.
 
 ## Limits and verification
+
+- A403v0.411.0 accepted implementation:150 focused and919 full tests, compiler0 warnings/errors,
+  normal static package and main24-hash review passed. Actual six-control/readiness/selection,
+  narrow-window and150%/125% application-scale checks passed without capture. Fresh settings
+  restored exactly, owned windows/processes/temp cleared. Remote release pending. Three new native
+  start/stop paths are not claimed verified. Per-view ownership remains; A406/A407 global/quick
+  recording integration is later. A remembered identity beyond the first discovery cap may not
+  restore until enumerated. See `A403-RECORD-START-CONTROLS.md`.
 
 - A402v0.410.0 local verification:105 focused and874 full tests across8 assemblies,
   Release/x64 with0 warnings/errors, architecture20/release-contract7 and normal

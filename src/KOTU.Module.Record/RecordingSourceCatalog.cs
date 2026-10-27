@@ -4,6 +4,19 @@ namespace KOTU.Module.Record;
 
 internal sealed record RecordingSelection(CaptureSource? Source, string? MicrophoneId, string? OutputId);
 
+internal sealed record RecordingDiscoverySelection(CaptureSource? VideoSource, CaptureSource? CameraSource,
+    string? MicrophoneId, string? OutputId)
+{
+    // 활성 소스만 덮어 써서 다른 시각 소스의 독립 선택도 관측 한도 안에 유지한다.
+    public RecordingDiscoverySelection WithActive(RecordingSelection? active) => active is null ? this : this with
+    {
+        VideoSource = active.Source is { Kind: not CaptureSourceKind.Camera } video ? video : VideoSource,
+        CameraSource = active.Source is { Kind: CaptureSourceKind.Camera } camera ? camera : CameraSource,
+        MicrophoneId = active.MicrophoneId ?? MicrophoneId,
+        OutputId = active.OutputId ?? OutputId,
+    };
+}
+
 // A null category is a failed observation, not evidence that its sources disappeared.
 internal sealed record RecordingSourceSnapshot(
     IReadOnlyList<CaptureSource>? Sources, IReadOnlyList<MicrophoneDevice>? Microphones,
@@ -20,6 +33,15 @@ internal static class RecordingSourceCatalog
         (active.MicrophoneId is null || active.MicrophoneId == observed.MicrophoneId) &&
         (active.OutputId is null || active.OutputId == observed.OutputId);
 
+    internal static bool CoversObservation(RecordingSelection active, RecordingDiscoverySelection observed) =>
+        Covers(active, new RecordingSelection(active.Source?.Kind == CaptureSourceKind.Camera
+            ? observed.CameraSource : observed.VideoSource, observed.MicrophoneId, observed.OutputId));
+
+    internal static CaptureSource? SelectVisual(IReadOnlyList<CaptureSource> sources, string? rememberedKey,
+        bool camera, bool firstObservation) => !string.IsNullOrEmpty(rememberedKey)
+            ? sources.FirstOrDefault(s => (s.Kind == CaptureSourceKind.Camera) == camera && Key(s) == rememberedKey)
+            : !camera && firstObservation ? sources.FirstOrDefault(s => s.Kind != CaptureSourceKind.Camera) : null;
+
     internal static string? Missing(RecordingSelection selection, RecordingSourceSnapshot snapshot)
     {
         if (selection.Source is { } source)
@@ -35,13 +57,6 @@ internal static class RecordingSourceCatalog
             return "The selected microphone is no longer available.";
         return null;
     }
-
-    // 카메라는 최초 관측에도 기본 선택하지 않는다. 기억한 동일 장치만 복구한다.
-    internal static CaptureSource? SelectVideo(IReadOnlyList<CaptureSource> sources, IReadOnlyList<CaptureSource> cameras,
-        string? rememberedKey, bool firstScreenObservation) =>
-        !string.IsNullOrEmpty(rememberedKey)
-            ? sources.Concat(cameras).FirstOrDefault(s => Key(s) == rememberedKey)
-            : firstScreenObservation ? sources.FirstOrDefault() : null;
 
     internal static IReadOnlyList<CaptureSource> LimitCameras(IEnumerable<CaptureSource> cameras, string? preferredId)
     {

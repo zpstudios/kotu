@@ -20,7 +20,7 @@ public sealed class CameraRecordingTests
         var resolved = RecordingSourceCatalog.ResolveNativeCameraId(selected.CameraId!, ["other-camera", nativeId]);
         Assert.Equal(nativeId, resolved);
         Assert.Equal("camera:" + selectedId, RecordingSourceCatalog.Key(selected));
-        Assert.Same(selected, RecordingSourceCatalog.SelectVideo([], [selected], key, false));
+        Assert.Same(selected, RecordingSourceCatalog.SelectVisual([selected], key, true, false));
     }
 
     [Fact]
@@ -46,19 +46,19 @@ public sealed class CameraRecordingTests
         Assert.Equal("camera:test-camera", RecordingSourceCatalog.Key(Camera));
         Assert.NotEqual(RecordingSourceCatalog.Key(new("Window", null, 0)), RecordingSourceCatalog.Key(Camera));
         var renamed = Camera with { Label = "Camera: Renamed" };
-        Assert.Same(renamed, RecordingSourceCatalog.SelectVideo([Screen], [renamed], RecordingSourceCatalog.Key(Camera), false));
+        Assert.Same(renamed, RecordingSourceCatalog.SelectVisual([renamed], RecordingSourceCatalog.Key(Camera), true, false));
         Assert.Null(RecordingSourceCatalog.Missing(new(Camera, null, null), new([], [], [], Cameras: [renamed])));
     }
 
     [Fact]
     public void CameraIsNeverTheInitialOrReplacementDefault()
     {
-        Assert.Null(RecordingSourceCatalog.SelectVideo([], [Camera], null, true));
-        Assert.Null(RecordingSourceCatalog.SelectVideo([], [Camera], null, false));
-        Assert.Same(Screen, RecordingSourceCatalog.SelectVideo([Screen], [Camera], null, true));
-        Assert.Null(RecordingSourceCatalog.SelectVideo([Screen], [Camera], "camera:missing", true));
-        Assert.Null(RecordingSourceCatalog.SelectVideo([Screen], [Camera], "window:1:2", true));
-        Assert.Same(Camera, RecordingSourceCatalog.SelectVideo([Screen], [Camera], RecordingSourceCatalog.Key(Camera), false));
+        Assert.Null(RecordingSourceCatalog.SelectVisual([Camera], null, true, true));
+        Assert.Null(RecordingSourceCatalog.SelectVisual([Camera], null, true, false));
+        Assert.Same(Screen, RecordingSourceCatalog.SelectVisual([Screen], null, false, true));
+        Assert.Null(RecordingSourceCatalog.SelectVisual([Camera], "camera:missing", true, true));
+        Assert.Null(RecordingSourceCatalog.SelectVisual([Screen], "window:1:2", false, true));
+        Assert.Same(Camera, RecordingSourceCatalog.SelectVisual([Camera], RecordingSourceCatalog.Key(Camera), true, false));
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class CameraRecordingTests
         Assert.Equal(64, limited.Count);
         Assert.Equal("camera-99", limited[^1].CameraId);
         Assert.DoesNotContain(limited, c => c.CameraId == "camera-64");
-        Assert.Null(RecordingSourceCatalog.SelectVideo([], limited, null, true));
+        Assert.Null(RecordingSourceCatalog.SelectVisual(limited, null, true, true));
     }
 
     [Theory]

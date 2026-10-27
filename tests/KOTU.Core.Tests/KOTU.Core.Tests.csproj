@@ -15,6 +15,7 @@
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingFolderSettings.cs" Link="RecordingFolderSettings.cs" />
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingFolderCoordinator.cs" Link="RecordingFolderCoordinator.cs" />
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingSession.cs" Link="RecordingSession.cs" />
+    <Compile Include="..\..\src\KOTU.Module.Record\RecordingStartPolicy.cs" Link="RecordingStartPolicy.cs" />
     <Compile Include="..\..\src\KOTU.Module.Record\CameraRecordingGuard.cs" Link="CameraRecordingGuard.cs" />
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingSourceCatalog.cs" Link="RecordingSourceCatalog.cs" />
     <Compile Include="..\..\src\KOTU.Module.Record\RecordingPresentation.cs" Link="RecordingPresentation.cs" />

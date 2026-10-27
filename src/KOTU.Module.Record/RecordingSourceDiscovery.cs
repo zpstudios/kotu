@@ -7,7 +7,7 @@ namespace KOTU.Module.Record;
 
 internal static class RecordingSourceDiscovery
 {
-    internal static RecordingSourceSnapshot Read(nint ownWindow, RecordingSelection preferred, CancellationToken cancellation)
+    internal static RecordingSourceSnapshot Read(nint ownWindow, RecordingDiscoverySelection preferred, CancellationToken cancellation)
     {
         IReadOnlyList<CaptureSource>? sources = null;
         IReadOnlyList<MicrophoneDevice>? microphones = null;
@@ -17,7 +17,7 @@ internal static class RecordingSourceDiscovery
         cancellation.ThrowIfCancellationRequested();
         try
         {
-            sources = RecordingBackend.GetScreenSources(ownWindow, preferred.Source);
+            sources = RecordingBackend.GetScreenSources(ownWindow, preferred.VideoSource);
         }
         catch (Exception ex) { screenError = ex.Message; }
         cancellation.ThrowIfCancellationRequested();
@@ -27,7 +27,7 @@ internal static class RecordingSourceDiscovery
         try { outputs = GetOutputs(preferred.OutputId); }
         catch (Exception ex) { outputError = ex.Message; }
         cancellation.ThrowIfCancellationRequested();
-        try { cameras = GetCameras(preferred.Source?.CameraId, cancellation); }
+        try { cameras = GetCameras(preferred.CameraSource?.CameraId, cancellation); }
         catch (OperationCanceledException) { throw; }
         catch { cameraError = "Could not refresh cameras. Refresh sources to try again."; }
         cancellation.ThrowIfCancellationRequested();

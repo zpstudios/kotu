@@ -1,5 +1,19 @@
 # KOTU 요구사항 아카이브 — 완료 항목 상세
 
+## A403 세 종류 시작 버튼(v0.411.0 구현·비촬영 UI 검수 완료, 배포 준비)
+
+- 앱 하단 바에 Audio record / Video record / Camera record와 공용 Stop and save / Discard / 결과 폴더를 배치했다.
+  Windows 작업표시줄 요청으로 확대하지 않았다. Audio는 기존 마이크 PCM WAV, Video/Camera는 선택 음원의 MP4다.
+- 동일 production readiness/immutable request와 dispatcher starting/busy를 첫 callback/await 전에 예약한다.
+  실제 완료·native Dispose·출력 처리까지 소유권을 유지하고 이전 attempt가 새 상태를 지우지 않도록 보호했다.
+  화면/창은 배타, 카메라는 독립 선택이며 record.cameraKey만 lazy migration으로 추가했다.
+- 집중150/150·전체919/919·빌드0/0·구조20/계약7·정상 패키지와24해시 검수 완료.
+  실제 여섯 버튼/가시 안내·독립 선택·Refresh/pane 왕복·707폭·앱150/125%를 담당자가 확인했다.
+  녹화 Start/카메라 활성화0, 정상 종료·새 설정 byte복원·창/프로세스/출력/TEMP0·24해시 보존을 검수했다.
+- 실제 세 버튼의 시작/정지/저장/폐기·실패 복구·연타·A406 전역 중복 차단은 잔여다. 전체 native 통과로 주장하지 않는다.
+  최초 열거 제한 밖 기억 소스는 복원되지 않을 수 있다. 원격 원본 배포 게이트 확인 전이다.
+  정본 `A403-RECORD-START-CONTROLS.md`, 메인 판정 `artifacts/a403-start-controls/main/native-review.md`.
+
 ## A402 카메라 소스(v0.410.0 정식 배포 완료)
 
 - 제품/태그faec5e6, build40277205631/release40277205635 attempt1 각각874/874·빌드0/0.
