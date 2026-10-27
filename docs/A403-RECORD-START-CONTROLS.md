@@ -8,7 +8,7 @@ Release/x64 with0 warnings/errors, architecture20/release-contract7 and normal s
 checks. Main independently matched9 source/8 package/7 protected-backend hashes and parsed the
 final TRX results. Program.Main,IsStandalone=false,KOTU-Main and0.411.0.0 identity confirmed.
 2026-10-27: actual noncapturing UI checks passed and main accepted this implementation batch
-for release; remote release is pending. A402v0.410.0's earlier actual silent camera
+for release; the exact product8c22448 has since passed all remote gates and been released. A402v0.410.0's earlier actual silent camera
 capture/save/playback does not prove the new A403 button path.
 
 Replace the lower Record bar's single Start with Audio record, Video record and Camera record,
@@ -103,6 +103,18 @@ and rechecked all24 unchanged hashes. The earlier unsaved-document preflight rem
 Main accepts release of this implementation with these limits: new native three-button start/
 stop/save/discard paths, active-session races and cross-window ownership were not exercised.
 Portable production-policy tests and callback-order review support those code paths without
-claiming actual capture coverage. Remote original build/package/release gates remain required.
+claiming actual capture coverage. Remote original build/package/release gates subsequently passed; see the final release section.
 Evidence: `artifacts/a403-start-controls/native-20261027/resumed/native-report.md`,
 `artifacts/a403-start-controls/main/native-review.md` and `native-independent-check.json`.
+
+## Final release — 2026-10-27
+
+Product/tag8c224489155f86c6d04d6d0cccf075bafb96f8ee, build40443324691/job121988562979 and
+release40443324719/job121988563326 attempt1 passed. Each ran919/919 tests across8 assemblies with
+0 compiler warnings/errors. Architecture20, release-contract7, COM3 and original normal-package,
+startup, installer/update-feed and Standalone gates passed. No retry or gate weakening.
+Public API confirmed the exact tag, latest stable nondraft/nonprerelease and8 expected nonempty
+uploaded assets. Published 2026-10-27 12:25:17 KST.
+[Release v0.411.0](https://github.com/zpstudios/kotu/releases/tag/v0.411.0).
+Local evidence: main/release-verification.json, remote-log-review.json and the retained job logs
+under artifacts/a403-start-controls. Native coverage limits above remain unchanged.

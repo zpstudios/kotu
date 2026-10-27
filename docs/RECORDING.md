@@ -180,7 +180,7 @@ of sample data), with an explicit notice.
 - A403v0.411.0 accepted implementation:150 focused and919 full tests, compiler0 warnings/errors,
   normal static package and main24-hash review passed. Actual six-control/readiness/selection,
   narrow-window and150%/125% application-scale checks passed without capture. Fresh settings
-  restored exactly, owned windows/processes/temp cleared. Remote release pending. Three new native
+  restored exactly, owned windows/processes/temp cleared. Product8c22448 released as v0.411.0; both remote919/919 suites and original release gates passed. Three new native
   start/stop paths are not claimed verified. Per-view ownership remains; A406/A407 global/quick
   recording integration is later. A remembered identity beyond the first discovery cap may not
   restore until enumerated. See `A403-RECORD-START-CONTROLS.md`.
