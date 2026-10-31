@@ -2,27 +2,25 @@
 
 ## 새 세션 시작점 — 2026-10-31
 
-**최신 사용자 확인: B3e 수정본에서 연속 Enter가 “입력이 밀리지 않음”.** 이전 스냅샷 재사용 후보의 실패와 구분한다. 메인은 조율·독립 검수, 구현은 GPT-6 Astra/high 한 명씩 직렬 위임한다.
+**A401 v0.412.0 정식 배포 완료**. 사용자가 정상 B3e 수정본의 연속 Enter 시험에 **“입력이 밀리지 않음”**이라고 확인했고, 이어 **“v0.412.0 커밋·푸시·릴리스 승인”**을 답했다. 메인은 조율·독립 검수, GPT-6 Astra/high 한 명씩 직렬 구현을 유지했다. 이번 배치는 완료했으며 추가 개발이나 실제 UI 시험은 시작하지 않았다.
 
-**현재 B4 통합·B5 배포 검사 검수 완료, v0.412.0 커밋 준비 중**: source57을 원본에 반영했고 메인이56개 일반 파일/특수 MainWindow 병합을 대조했다. 보류 녹화와 닫기 승인 수명의 경합은 로컬 MainWindow 호환성 변경으로 처리했다. 실제 메서드 추출 시험8그룹/12사례, 기존 실패→수정 통과, 실제 통합 App 빌드4:42.61·경고0/오류0이다. root 기존 BuildTools2705는 통합 컴파일에만 명시 허용했고, 수락 후보/배포 소스의2957 검증과 구분한다. B5는 build/release 양쪽에 dependency-free 편집기 protocol/visual 시험을 연결한3파일 변경이다. Node24·공식 setup-node v7의 고정SHA를 사용하고 각 시험을 별도 단계로 실행한다. protocol/visual·구조20·기존7+신규24개 검사 우회 회귀·actionlint를 통과했으며 메인이 source/보존 해시를 검수했다.
+제품·태그는 `f0344ecb519e43780c22da32b147c13bf4112b45`, 발행은 **2026-10-31 11:55:39 KST**다. 일반 빌드41161508569/job124419860455와 릴리스41161508653/job124419860639는 모두 attempt1 성공, 각각 **963/963·8개 시험 어셈블리·경고0/오류0**이다. 양쪽 편집기 protocol/visual·구조20·배포 계약7+24 회귀, COM과 릴리스 실행본 시작/설치/Standalone 검사를 확인했다. 정확한 제품 태그·정식 Latest·델타를 포함한 자산8개 업로드도 검수했다. 재시도나 수동 발행은 없었다.
 
-**배포 분리 필수**: MainWindow working tree에는 보류 녹화가 포함된다. A401 index에는 accepted-source의 clean MainWindow blob30fe5fb2f16007619722dcfbe37e84421f8373b6만 포함하고, working tree의 merged SHA114E7F99608ED056D8B71B399A643B30C3BCDD6769292BF924F7B3E64E98A3FE와 녹화 호환성 변경은 미커밋으로 보존한다. 다른21개 보류 파일도 unchanged이다. main이 source57+Version+검수한CI/docs의68개 파일을 선별 stage했고 전체468개 빌드 입력을 수락 후보/B5와 대조했다. HEAD/origin은9b52faa, 최신 정식v0.411.0/8c22448이다. 원본 녹화 변경을 배포하지 않는다.
+**보류 녹화 분리 유지**: 제품은 검수한68개 파일이며 전체468개 빌드 입력을 수락 후보/B5와 대조했다. 커밋된 MainWindow는 clean A401 blob `30fe5fb2f16007619722dcfbe37e84421f8373b6`이다. working tree의 merged SHA `114E7F99608ED056D8B71B399A643B30C3BCDD6769292BF924F7B3E64E98A3FE`와 다른21개 보호 경로는 보류 녹화 구현을 담고 있어 미커밋으로 보존한다. 이를 통째로 stage하거나 배포하지 않는다. 녹화용으로 임시 표기했던412는 이제 정식 A401 버전이며 녹화 배포 승인을 뜻하지 않는다.
 
-**명시적 배포 승인 확인**: 사용자가 “v0.412.0 커밋·푸시·릴리스 승인”을 답했다. 앞선 자동 승인 검토 거절은 실행 전 발생했으므로 당시 커밋·push는 없었다. 이제 검수한68개 A401 변경만 master에 커밋·즉시1회 push하고 자동 검사 통과 후 정식 릴리스·태그·자산을 검수한다. 녹화 구현은 제외한다. 승인 범위와 검수 기록은 `artifacts/a401-editor-integration-20261031/deployment-approval-state.md`이다.
+B4는 수락 소스57개 통합, 닫기 승인과 녹화 제한 안내의 호환성12사례, 실제 통합 App 빌드 경고0/오류0을 검수했다. root BuildTools2705는 통합 컴파일에만 허용했고 수락 후보2957 검증과 구분했다. B5는 Node24·고정된 공식 setup-node v7과 독립 protocol/visual 단계를 양쪽 workflow에 연결했다. 구현 상세는 `A401-LOCAL-TEXT-EDITOR.md`, 원문 이력은 `SESSION-LOG.md`, 증거는 `artifacts/a401-editor-integration-20261031/release-verification.json`·`main-b3e-review.md`·`main-b4-source-review.md`다. 모든 하위 에이전트는 FINAL STOP이다.
 
-**사용자 시험 창 보존**: 정상 `artifacts/a401-editor-integration-20261031/src-copy/publish-b3e/KOTU.exe`를 원본 `SYNTHETIC-A401-Enter-manual-1M.txt`의6285:1·Editing100%·검색 비움·가이드/¶ OFF·최대화·저장 완료로 열어 둔 뒤 사용자에게 넘겼다. 이후 새 편집 가능성이 있으므로 자동 입력·종료·본문/설정 복원 금지다. 당시 원본/Undo SHA0E4ED95C...AAEA8와 초기 설정 SHAB4867D83...B2FB를 독립 확인했다. 열린 앱은 자체 탐색/창 위치를 나중에 저장할 수 있다.
+**사용자 시험 창 보존**: 정상 `artifacts/a401-editor-integration-20261031/src-copy/publish-b3e/KOTU.exe`를 원본 `SYNTHETIC-A401-Enter-manual-1M.txt`의6285:1·Editing100%·검색 비움·가이드/¶ OFF·최대화·저장 완료로 열어 둔 뒤 사용자에게 넘겼다. 이후 새 편집 가능성이 있으므로 자동 입력·종료·본문/설정 복원 금지다. 당시 원본/Undo SHA0E4ED95C...AAEA8와 초기 설정 SHAB4867D83...B2FB를 독립 확인했다. 배포 과정에서는 사용자 앱을 조작하지 않았다.
 
-B3의 실제6/36Enter·정확한 저장/Undo, 검색/메뉴 포커스와 명령 순서, 최신 미저장 Markdown/HTML 미리보기, 빈 문서/한 줄 문서 초기화를 검수했다. 전체963시험 이후 변경별 집중 검사, 최종buffer13/13·protocol/visual, source57/package1065/binary15/assets8 해시를 대조했다. CUA 시간은 물리 입력 지연/배속비가 아니다. 실제 IME·최종20/40% 재확인·인쇄 취소 등은 §4의 미확인으로 보존하며 A401 전체 완료는 아니다.
-
-정본: `A401-LOCAL-TEXT-EDITOR.md`, `artifacts/a401-editor-integration-20261031/main-b3e-review.md`·`main-b4-source-review.md`, `integration-b4/phase2-handoff.md`, `integration-b5-ci/` 및 `src-copy/evidence-b3e/`. a401_root_integration_b4_20261031(Astra/high)과 이전 UI 에이전트는 모두 FINAL STOP이며 이후 stage/커밋/푸시/배포 검수는 메인 소유다. 제품 커밋·push·릴리스와 UI 추가 시험은 아직 하지 않았다. 아래 녹화 보류는 계속 유지한다.
+사용자 체감은 해당 약100만 자 문서에서 확인됐다. 실제6/36Enter·정확한 저장/Undo, 검색/메뉴 명령 순서, 최신 미저장 Markdown/HTML 미리보기, 빈 문서/한 줄 초기화도 검수했다. 실제 IME·최종20/40% 선택 재확인·인쇄 취소 등은 §4에 남아 있으며 **A401 전체 완료는 아니다**. 추가 요청 전 같은 성공 시험을 반복하거나 녹화 보류를 해제하지 않는다.
 
 **10/29 사용자가 선택한 native Debug OFF 대조1회 실행·복원·메인 검수를 완료했다. 기존 오류 미재현, 원인 미확정으로 배포 보류를 유지한다.**
 메인은 조율·검수·문서·배포, 실제 구현과 UI 검증은 **GPT-6 Astra/high 한 명에게 직렬 위임**한다.
 녹화 진단 배치는 결과 보고 후 종료했고 녹화 쪽 다음 시험/제품 수정은 아직 선택하지 않았다. 현재 진행 중인 A401과 사용자 체감 질문은 위 최신 상태를 따른다.
 
-**현재 제품 상태**: 마지막 정식 배포는 A403 **v0.411.0 / 8c22448**(2026-10-27 12:25:17 KST).
-빌드·릴리스 각각919/919와 원본 배포 검사·태그·자산8개·Latest 검수 완료, 재시험 불필요.
-로컬 A406/A407 B1a/B1b 기반 구현은 **v0.412.0 미커밋·미배포, 실제 녹화 오류로 배포 보류**다.
+**현재 제품 상태**: 마지막 정식 배포는 A401 **v0.412.0 / f0344ec**(2026-10-31 11:55:39 KST).
+빌드·릴리스 각각963/963와 원본 배포 검사·태그·자산8개·Latest 검수 완료, 재시험 불필요.
+로컬 A406/A407 B1a/B1b 기반 구현은 **미커밋·미배포, 실제 녹화 오류로 배포 보류**다. 임시412 표기는 이번 A401 정식 배포와 구분한다.
 공용 녹화 예약·일반 Record 연결·실제 해제/파일 결과·닫기/재시작 처리를 구현했고 집중222/전체991·빌드0/0·구조20/배포계약7은 통과했다.
 **메뉴 길게 누르기 빠른 녹음, 새 음원 backend, Hardware 상태, 트레이 수명은 아직 구현하지 않았다.**
 
@@ -86,17 +84,17 @@ build40277205631/release40277205635 attempt1 각각874/874·빌드0/0·원본 �
 
 | 항목 | 완료 상태 | 정본 |
 | --- | --- | --- |
-| A401 | v403 제품0a02530; Enter 내부 처리 비용 보강·714시험 | `A401-VISUAL-LINE-SEARCH.md` |
+| A401 | v412 제품f0344ec; 로컬 편집기·사용자 Enter 밀림 해소 확인·963시험 | `A401-LOCAL-TEXT-EDITOR.md` |
 | A398 | v404 제품4c65d21; 이미지 방향/회전·772시험 | `A398-EXIF-ORIENTATION.md`, `A398-ROTATED-LAYOUT.md` |
 | A412 | v405 제품786c113; 영상 실제 배치/composition·801시험 | `A412-VIDEO-COMPOSITION.md` |
 | A408 | 도형v406·상태색v408 제품219538f; 801시험/353native/정상 대표 UI | `A408-ORIGINAL-ICON.md` |
 | A404 | 현재v406 노출/빈자리 없음 확인, 제품 변경 없음 | `A404-RECORD-OPEN-FILE.md` |
 | A409 | v407 제품4a5389f; Viewing 선택/읽기 전용 보호·801시험 | `A409-EDITOR-BACKGROUND.md` |
 
-최근 정식 배포는 **v0.411.0,8c22448,2026-10-27 12:25:17 KST**다.
-일반 빌드·릴리스 각각919/919와 원본 시작/설치/Standalone·COM·태그/자산8개/Latest를 확인했다.
+최근 정식 배포는 **v0.412.0,f0344ec,2026-10-31 11:55:39 KST**다.
+일반 빌드·릴리스 각각963/963와 편집기 protocol/visual·원본 시작/설치/Standalone·COM·태그/자산8개/Latest를 확인했다.
 재시도 없이 완료됐으며 재검증 불필요.
-앞서 보류한 최종 배포 확인 문서는 이번 인수인계 문서 갱신과 함께 보존한다. 문서 반영은 v412 제품 배포 보류를 해제하지 않는다.
+앞서 보류한 최종 배포 확인 문서는 이번 인수인계 문서 갱신과 함께 보존한다. 문서 반영은 A406/A407 녹화 제품 배포 보류를 해제하지 않는다.
 잔여 검증은 각 정본/§4/DEVICE-CHECKS에 유지한다. A401 held-key·입력→paint·초기 layout, A398 PNG/provider/codec,
 A399 실제 OneDrive 대상·A400 Windows WhatsApp(미설치), Light/고대비/다른OS배율 등을 전체 완료로 주장하지 않는다.
 사용자 선택 표시 제보는 **Editing**이며 Viewing 정상 확인은 아니었다. Viewing 수정은 메인의 별도 관측이다.
@@ -1321,7 +1319,7 @@ v0.161.0 이하 20묶음은 `docs/DEVICE-CHECKS-ARCHIVE.md`로 "미확인 종결
 
 ---
 
-## 4. 실기기 확인 결과와 잔여 — A401 v0.412.0 배포 대상·사용자 입력 확인
+## 4. 실기기 확인 결과와 잔여 — A401 v0.412.0 배포 완료·사용자 입력 확인
 
 사용자는 정상 B3e 수정본에서 연속 Enter 시험 후 **“입력이 밀리지 않음”**이라고 확인했다.
 약100만 자 복사본의6/36Enter는 정확한 줄 추가·저장·Undo/Redo와 이후 안정된 줄 수를 확인했고,
