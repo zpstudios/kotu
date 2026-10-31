@@ -1,10 +1,128 @@
 # KOTU 세션 일지(원문 보존)
 
+## 2026-10-31 A401 실제 체감 확인·B4 원본 통합·B5 CI 연결
+
+사용자가 B3e 수정본의 실제 Enter 시험에 “입력이 밀리지 않음”이라고 답했다. 기존 스냅샷 재사용 후보 실패와 구분하며 현재 창의 새 편집을 보호한다. 새 Astra/high 한 명을 직렬 위임했고 메인은78개 통합/보존 경로·38개 원본 백업·57개 수락 소스를 독립 확인했다. 원본에는56개 수락 파일+MainWindow 특수 병합을 적용했다. 닫기 승인 lease가 끝나기 전에 녹화 제한 안내가 사라지던 통합 함정을 보류 녹화 쪽 호환성 변경으로 처리했고, 실제 메서드 추출8그룹/12사례에서 이전 실패→수정 통과를 확인했다. 실제 통합 App 빌드는4:42.61·경고0/오류0이다. root BuildTools2705는 통합 컴파일 전용으로 명시 허용했고 clean 수락 후보2957/배포 검증과 구분했다.
+
+B5는 일반 build와 release에 Node24·고정된 공식 setup-node v7 SHA, protocol/visual 개별 단계를 추가했다. 시험을 누락하거나 실패를 무시하는 경우를 양쪽 workflow 계약으로 검사한다. protocol/visual·구조20·기존7+신규24개 우회 회귀·actionlint1.7.7이 통과했고 메인이3개 변경/78개 보호 경로를 대조했다. 원문 fixture·앱/설정·index는 에이전트가 변경하지 않았다. 에이전트 FINAL STOP, 메인이 clean A401 MainWindow blob을 포함한 선별 stage와 전체 빌드 입력 대조·커밋·즉시 push·정식 릴리스 검수를 이어간다. 보류 녹화는 working tree에 보존하고 이번 배포에서 제외한다.
+
+## 2026-10-31 A401 B3 실제 입력 배치 검수·사용자 수정본 준비
+
+메인은 조율·독립 검수, GPT-6 Astra/high 한 명이 직렬 구현·UI를 수행했다. 정상 B3e는 큰 원본6285:1·Editing100%·검색 비움·가이드/¶ OFF·최대화·저장 완료로 열려 있으며 사용자에게 실제 Enter 체감을 질문했다. 이후 앱/원본/설정은 건드리지 않는다. 최종6Enter 정확한6LF와6Undo 원본 복원, HTML 원본 복원, 초기 설정 bytes 복원을 메인이 독립 확인했다. 원본 SHA0E4ED95C...AAEA8, 설정 SHAB4867D83...B2FB다.
+
+B3a6/36Enter·B3b 검색 Esc 포커스·B3c 메뉴 명령 순서·B3d Markdown passive Find focus·B3e Windows 초기 EOL/version 경계까지 검수했다. 최종 source57/package1065/binary15/assets8/protected22, browser/visual·buffer13/13이 통과했다. 초기 전체963시험 이후 변경은 집중 검증했으며 최종 전체 재실행으로 과장하지 않는다. CUA burst wall534.156ms/6키,2920.406ms/36키는 물리 입력 지연이나 이전 native 대비 배속비가 아니다.
+
+실제 IME(공식 도구 Hangul 미지원), 최종20/40% 선택 재확인, 인쇄 미리보기 취소, 새 문서 초기 자동 포커스는 미확인이다. 앞선40% 드래그/비활성 선택 통과와100% JPEG 한글 표시 충실도 한계도 보존한다. 정본 artifacts/a401-editor-integration-20261031/main-b3e-review.md 및 src-copy/evidence-b3e/acceptance-ledger.md·handoff.md·final-verification.json. root 녹화22개 unchanged, 통합/커밋/배포 미진행, 정식411 유지. MainWindow 보류 녹화와 새 close lease 의미 충돌은 다음 통합 검수 대상이다.
+
+### 인수인계 본문에서 이관한 이전 A401 경과 — 아래 OPEN·대기 상태는 당시 기록
+
+**완료한 진단 배치**: 사람이 준비 위치보다 위로 이동해 같은 지연을 재현했다. 실제 삽입은 offset622361·6285:1이며, 저장본이 원본에 LF6개만 추가된 것임을 메인이 독립 대조했다. 매 Enter Preview→TextChanging205.02–207.30ms, 이후 관리 코드 중첩 제외 합14.90ms. 자동6Enter CPU 배치는 wall1309.05ms/UI CPU1296.875ms(약99.1%)로 계산 병목을 확인했다. NoWrap도216–243ms로 개선 없음. 공식 PDB가 WinUIEdit의 LS::MeasureLine/CMeasurer/Ptls6와 TextShaping/DWrite glyph shaping을 실제 실행 함수로 확인했다. native extent 높이 알림은 소스상 후보지만 독점 호출 원인은 미확정이다. 내부 view는 viewport 높이이고 extent와 별개여서 MinHeight 대조는 적용되지 않았으며 수정 경로에서 제외했다. 안전한 작은 제품 수정은 입증하지 못했다.
+측정 한계: 사람 창1280×729.333과 CPU/NoWrap 창2560×1369.333 차이, IP 최종 capture 첫135ms 누락·실행 helper 해시 미보존은 명시했다. 후속 capture에는 AX를 넣지 않았고 pause 총22.7ms/최대0.554ms, 후기206samples는 idle. OS 큐/물리 표시 지연을 직접 측정한 것은 아니다. 정본 artifacts/a401-input-pipeline-20261030/cpu-attribution/serial-handoff.md 및 각 raw/result.md. a401_input_pipeline_20261030은 응답 지연으로 중단, 후임 a401_cpu_attribution_20261031은 진단·복원 완료 후 중지했다.
+
+**로컬 편집기 가능성 배치 통과, 제품 통합 진행**: 단독 a401_virtual_editor_20261031(Astra/high)이 기존 WebView2 호스트와 공식 Microsoft Monaco의 완전 로컬 최소 편집 경로를 별도 clean 후보에 구현했다. UserControl 호스트로 실제 본문·캐럿/양의 크기를 확인한 뒤 동일 원본/offset622361에서 연속6Enter를 입력했다(중간 AX 없음). 브라우저 keydown→model18.6/5.0/2.9/2.8/3.0/3.5ms, 정확히6LF 추가. Undo/Redo·Shift선택·마우스선택·200자2LF 붙여넣기/Undo도 정확한 본문을 확인했고 메인이12개 raw export(validtrue/drop0)와 moduleSHA96AFCA43549E015FDC20B0D0B3F8EABC5EF41007DC98F760D5BAB569FEE28D9B를 독립 검수했다. 이전 native 측정과 이벤트 경계/입력 간격이 다르므로 물리 입력 배속비는 주장하지 않는다. prototype 저장/검색 등은 미연결이므로 A401 완료나 사용자 수정본이 아니다. 정본 artifacts/a401-virtual-editor-20261031/main-feasibility-review.md.
+
+**B1 제품 연결 코드 통과, 현재 B2 직렬 구현 중**: a401_editor_bridge_b1_20261031은 새 clean artifacts/a401-editor-integration-20261031/src-copy에서 LF/UTF16 atomic delta/epoch/managed buffer, save snapshot barrier, close freeze/요청 소유권/caller lease를 구현하고 완료·STOP했다. 메인이8Mi 상한 회귀·JSON/이모지 프레임 경계·닫기 허용 후 실제 작업 취소·AllReadable 전달·같은pane의 이전취소·shell 재진입·asset 실제 배치경로를 검수해 보강했다. 문서175/175·Core lifecycle26/26·browser protocol PASS, clean App x64 재귀178.01s 및 최종모듈0경고/0오류. 제한 환경 testhost 연결90초 실패는 별도 보존했고 exact scoped 실행은 통과했다. source34/34해시·보호22/22·최종Document DLL6E14A83A43E4F5CC7A2471D729C42F88E3F23103A06B6782C4AC5C6FB680956A를 메인이 독립 확인. main-b1-review.md/serial-handoff.md가 정본, b1-reviewed-source는34개 검수본 백업.
+
+**B2a 검색 소배치도 통과**: a401_editor_ui_b2_20261031은 active-editor adapter·검색/선택/치환·composition·state RAF합치기를 구현하고 완료·STOP했다. 메인 지적에 따라 연속Next의 늦은응답이 현재목표를되돌리는경합을 request/generation/epoch소유권으로막고, browser user-selection generation으로 직접선택을덮는늦은명령도거부한다. focused41/41·browserprotocol(5000events→1state/전문읽기0) PASS, module30.79s0/0. 메인12개최종source·binary해시독립검증, B1+B2a39개백업 b2a-reviewed-source. main-b2a-review.md/handoff-b2a.md 정본. B1 App출력은B2a이후갱신하지않아실행금지.
+
+**B2b 수명·보기·인쇄 연결 검수 통과**: 임시 Unloaded는 모델/WebView/Undo를 유지하고 App/Core/AllReadable의 명시적 ReleaseContent가 영구 해제를 맡는다. readOnly ACK→본문 snapshot 이후 모드를 확정하고 실패 시 되돌린다. 초기 Markdown/HTML은 렌더를 유지하며 첫 소스 편집부터 같은 모델을 재사용한다. 메인은 인쇄 준비 후 자식 교체 경합을 찾아 준비된 실제 provider/문서 generation을 고정했고, 활성화 후 실패가 조용한 native fallback으로 이어지지 않게 보강했다. 명시적 받은 본문 복구 기능 포함. 집중17+32+7 및 browser protocol PASS, App0/0·최종모듈18.37s0/0. 메인 source21/binary7/protected22 해시 확인, 누적49파일 b2b-reviewed-source 백업. 최종 한 줄 보호 조건은 모듈만 재빌드하여 App 출력은 STALE/실행금지다. 정본 handoff-b2b.md/main-b2b-review.md.
+
+**B2c 외관·확대 연결 검수 통과**: 초기 옵션은 활성화 전에 적용하고 이후에는 한 요청씩 합친다. 화면 안만 계산하는 가이드·거터·¶/EOF, 투명 dark/white light/system high contrast와 비활성 선택 표시를 연결했다. 메인이 화면 밖 커서로 튀는 현상과 매번 canvas 메모리를 재생성하는 경로를 찾아 수정했다. Monaco 최소 글자/줄 크기 때문에20–40%는 같은 앱 확대 값에서만 파생한 transform 보정을 사용하며 여백/스크롤바/좌표는 DIP를 유지한다. 집중42/42·browser/visual PASS. 처음 no-RID 출력과 오래된 manifest 경로를 메인이 발견해 정확한 x64/win-x64 Rebuild27.74s0/0·새 멤버를 대조했다. 최종 Doc SHA666153C12842A08EC92B5830ADA860A7869857F0900667BE7FD7DC2583334083. 메인 source12/binary7/protected22 확인, 누적52파일 b2c-reviewed-source 백업. main-b2c-review.md/handoff-b2c.md 정본. 실제 외관·20/40% 마우스 선택은 B3 대상이다.
+
+**B2d 입력 연결·일관된 패키지 검수 통과**: 별도 virtual text tag로 일반 문자/숫자 입력을 보호하고, browser 소유 검색/Escape만 native 경로에서 양보한다. 표준 키보드 복사/붙여넣기/Undo는 실제로 검증했던 trusted browser 경로를 유지하고, 우클릭 메뉴만 버전·선택 ticket을 가진 native text bridge를 쓴다. 메인은 과도한 native 조기 반환, 비동기 키보드 붙여넣기 순서 문제, 메뉴 붙여넣기→저장/보기/닫기 순서와 취소 후 늦은 freeze, literal Tab/포커스 이동을 검수해 보강했다. Core29/29·Document24/24·browser/visual PASS, 최종 self-contained x64/win-x64 Rebuild2m53.33s0/0 및 정상 publish. 메인 source16/전체package643/binary15/assets8/protected22 해시 확인, 누적56파일 b2d-reviewed-source 백업. B2d App SHA BFCDE571962FF5F690EBF8386E89BAA4E1E06576DF451620E31211DA0131BF7D, Doc7CF27574C2CC8C56B63520C52388A262595BBBA62E5FE88027A4482BCE42E1AE. src-copy/publish-b2d는 gateOFF 후보이며 사용자 최종본이 아니다. main-b2d-review.md 및 src-copy/evidence-b2d/handoff.md 정본. 기존 Archive content 경로에 승인된7zDLL을 입력으로 넣어 정상 publish했으며 SevenZipNativePath 속성은 이 csproj에서 사용되지 않는다.
+
+**B3 기본 사용 코드·패키지 gate 통과, 실제 UI에서 시작 오류 보강 중**: a401_editor_acceptance_b3_20261031(Astra/high)이 gate 한 줄을 기본ON으로 바꿨다(진단용 KOTU_NATIVE_TEXT_EDITOR=1만 native 강제). 기존 Standalone/cap/truncated/render/오류 복구 guard는 유지한다. 최종 Rebuild4m52.42s0/0, 전체8프로젝트963/963·실패/skip0, browser/visual/architecture/release계약 PASS. 메인이8TRX 합계, source1·전체package1065·binary15·asset8·protected22를 독립 대조하고 누적56파일 b3-phase1-reviewed-source에 보존했다. src-copy/publish-b3/KOTU.exe, App SHA12703C7FD099659D06C9DAD898528B4BCD10E2391415434327BD34E0542EC448, Doc3CB42B43FA59E0E9DF3466D0FA9D03870D306E189F339340866C3C97F95CA36C. B2d no-build publish에 빠졌던 기존VLC dependency422파일이 정상 publish에서 수집됐고 모두 NuGet입력과 동일하다. full test restore의 기존 wildcard BuildTools10.0.28000.2705→.2957 변경도 dependency-delta.json에 기록했다. final publish는 이 graph로 다시 빌드했다. 정본 main-b3-phase1-review.md 및 src-copy/evidence-b3/phase1-handoff.md.
+
+**잠금 해제 답변 후 08:11KST 화면 검증 재개**: 03:55KST 검정·지문 로그인 표시로 입력을 중단하고 채팅/승인된 이메일로 알렸으며, 사용자가 '잠금 해제 완료'라고 답했다. 같은 B3 에이전트가 단독 UI 소유권으로 fresh 화면·원본/설정 해시 일치를 확인하고 백업한 뒤 기존 창을 정상 종료했다. 공식 sky의 bare 경로 실행은 설치본을 반환했으므로 종료하고 `process:<정확한 publish-b3 경로>`로 후보 실행 경로를 확인했다. **08:13KST 첫 파일 열기에서 AccessibilitySettings.add_HighContrastChanged가 COMException0x80070490을 발생**시켰다. 원문 입력/저장은 하지 않았고 실제 Enter 시험 전이다. 정본 src-copy/evidence-b3/first-ui-startup-error.log 및 resume-preservation.json. 같은 에이전트가 데스크톱 고대비 알림 연결을 좁혀 수정하고, 메인의 새 코드/패키지 gate 뒤 실제 입력 검증을 재개한다. 원본SHA0E4ED95C.../설정SHAB4867D83...와 보호22개는 유지하며 root 제품 통합/배포는 아직 하지 않는다.
+
+화면 대기 중 artifact-only 원본 통합 감사: 누적56 중40new/15clean교체/1MainWindow삼자병합. root MainWindow의 보류 녹화7hunk와 A40126hunk를 보존하되 ConfirmThenCloseAsync의 _contentClosed 재시도 우회에 nullable close lease가 필요하다. 또한 lease 동안 _confirmInProgress=true가 보류 ShowRecordingUnavailableAsync 안내를 막는 통합 함정이 있어 추가 조정 전 merge-ready가 아니다. 원본 root 제품 파일에 적용/빌드하지 않았다. UI 수락 후 통합할 때 root-integration-audit 기록을 읽는다. 원본 녹화22 HOLD, 최신정식411, 새로운 commit/push/release 없음.
+
+**03:34KST fresh 읽기 전용 관측**: KOTU 프로세스가 없고 원래 합성 문서 SHA는0E4ED95C4C1414EEB1B2BB93E9AA3F42DF633C2F2E84E5788DCCC684FC6AAEA8로 동일했다. 종료 원인은 추정하지 않으며 메인은 종료/열기/파일 변경을 하지 않았다. main-pre-b3-readonly-state.json 참조. 아래 PID/window 복원 기록은 역사이며 B3 시작 전에 다시 확인한다.
+
+**현재 사용자 정상 창 복원 완료**: feasibility 후 delegate 보고 PID26964/window4589736, artifacts/a401-enter-fix-20261030/package/publish/KOTU.exe, 원래 SYNTHETIC-A401-Enter-manual-1M.txt를 Editing100%·6285:1·검색 비움·선택 없음·clean으로 열었다. 진단 플래그 모두 OFF. 원본1,000,087chars/10,088줄 SHA0E4ED95C4C1414EEB1B2BB93E9AA3F42DF633C2F2E84E5788DCCC684FC6AAEA8, fresh 설정 SHA B4867D83D21D924D49653BAE7B44259B2F2C907D611EFE11A90042846B72B2FB 복원. 정본 artifacts/a401-virtual-editor-20261031/native/final-restored-state.json 및 restored-ui.json. Human6LF 및 진단18LF는 별도 보존. 정상 실행의 lastFolder 기록은 보존 후 설정 원본 bytes를 복원했으며, 열린 앱의 향후 자연 저장 가능성은 남아 있다. 현재부터 사용자 추가 편집이 가능하므로 다음 전환 전에 fresh 관측·저장·백업한다. 같은 합성 문서의 전환 승인은 유지되지만 다른 실제 문서는 별도 보호한다.
+보류 녹화 변경22개·이전 패키지 보존, 최신 정식411, 새로운 제품 수정/commit/push/release 없음. 아래 A401 창/PID/대기 상태는 과거 기록이며 위 상태가 우선한다.
+
+**현재 A401: 사용자가 정상v411의 약100만 자·1만 줄 시험 문서에서 Enter 지연을 직접 확인했다.**
+줄 추가/화면 이동 모두 느리고 첫 표시 뒤 다음 Enter 반응도 늦다는 보고다. 가이드선과 ¶를 모두 꺼도 거의 차이가 없다고 답했다.
+앱에 도달하기 전 입력 대기라는 설명은 사용자 가설이며, 표시 뒤 handler·본문 복사/줄 색인·변경량 추적·native 배치 중 원인은 아직 미확정이다.
+단독 Astra/high의 읽기 전용 조사와 메인 검수를 마쳤다. 과거10 TextChanged 대비20 getter/index와 이중 스냅샷 무효화 경로를 확인했으나 심한 지연의 주원인으로 단정하지 않는다.
+조사 정본: artifacts/a401-enter-latency-20261030/investigation.md 및 main-review.md.
+**사용자가 조사에서 멈춘 점을 지적하여 실제 수정 배치를 완료했다.** 단독 Astra/high가 TextChanged의 중복 스냅샷 무효화를 제거했고 메인이 검수했다. 집중7/7·전체926/926, 수정 전 한 줄 복원 시4개 회귀 검출, 빌드/publish 경고·오류0, 정상 패키지 검증 통과다. 메인은 HEAD534개와 패키지 KOTU DLL12개 해시를 독립 대조했다. 체감 지연 해결은 아직 주장하지 않는다.
+현재 계약/검수: artifacts/a401-enter-fix-20261030/main-contract.md 및 main-code-review.md. 기존 녹화 변경22개를 보존하고 HEAD9b52faa에 A401 변경만 얹은 별도 소스에서 검증한다. 복사본 버전412는 A401 후보이며 미배포다. 제안된 별도 계측 호스트/입력 주입기는 구현하지 않았다.
+**실제 전후1쌍 검증·복원 완료**: 양쪽 Enter10회/선택12회에서 전문 읽기20→10·줄 색인 생성20→10, 전문 할당40,000,672→20,000,336bytes를 확인했다. 별도 시험 문서 두 개 모두 정확히 LF10개가 추가됐고, 각1회 Undo+저장으로 원본 해시가 복원됐다. 초기 기존 도구 지연으로 입력0회의 준비 실패는 제외했고 공식 CUA로 정상 비교1쌍만 수행했다.
+**체감 지연 해결은 미확정**: 수정본의 일부 즉시 접근성 관측이 이전 줄을 보여 추가 확인/약24초 입력 간격이 생겼다. 같은120초 관측이지만 입력 간격은 같지 않으며 UI probe P95/최대는0.265/243.599ms→0.517/367.127ms로 개선되지 않았다. 읽기/색인 중복 감소만 검증했고 앱 입력 큐·실제 표시 지연 원인을 확정하지 않는다. 정본은 artifacts/a401-enter-fix-20261030/native-report.md와 main-native-review.md다. 커밋·push·릴리스 없음, A401 전체 완료 아님.
+**현재 사용자 시험 창 OPEN**: artifacts/a401-enter-fix-20261030/package/publish/KOTU.exe(정상0.412.0.0) PID6552/창13042864. 같은 SYNTHETIC-A401-Enter-manual-1M.txt를 Editing100%·EOF10061/10061·저장 완료 상태로 열어 두었다. 성능 기록OFF·가이드/¶ OFF다. 사용자 저장 내용1,000,060bytes, SHA D5CFD4E541B73ED8C82C94CBDBA2257751363031B6ED9FCC2B6D62C592C7F1D5와 native/user-saved-backup.txt가 같고, fresh 설정3424bytes도 원래 해시로 복원됐다. 메인이 정상 실행 경로/응답·본문/백업/설정 해시와 UI 상태를 독립 검수했다.
+사용자 본문에 시험 입력·Undo·원문 재설정은 하지 않았다. 현재부터 추가 사용자 편집이 가능하므로 위 저장값을 이후 상태로 가정하지 않는다. 자동 종료/복원/재시험 금지. 모든 에이전트 정지, 질문 대기 없음. 아래 녹화 배포 보류와 기존 변경22개·패키지12개 해시 보존을 유지한다.
+
+
+
 > `docs/HANDOVER.md` §1에 세션마다 덧붙여 온 작업 일지를 2026-08-28에 그대로 옮긴 것이다(최신이 위).
 > 커밋별 상세는 `git log`가 정본이고, 여기에는 세션 단위의 배치 구성·결정·반전·교훈이 남아 있다.
 > 새 세션의 일지는 **이 파일 최상단**에 붙이고 HANDOVER §1은 현재 상태만 갱신한다.
 
 ## 세션 일지(HANDOVER 구 §1)
+
+### 2026-10-31 — 사용자 잠금 해제 후 B3 실제 실행, 시작 오류 발견
+
+- 사용자가 잠금 해제를 확인하여 같은 Astra/high 에이전트에게 단독 UI 검증을 재개시켰다. 원본/설정 해시 일치와 fresh 백업 후 기존 창을 정상 종료했다. 공식 sky의 bare 경로 실행은 설치본을 반환하여 종료했고, 명시적 `process:<후보 전체 경로>` 실행으로 실제 후보를 확인했다.
+- 첫 파일 열기에서 `AccessibilitySettings.add_HighContrastChanged`가 COMException0x80070490을 발생시켰다. 원문 입력/저장은 하지 않았으며 Enter 성능 시험 전 실패다. 메인이 실제 오류 로그를 확인하고, 지원되는 데스크톱 `ThemeSettings` API와 연결 수명/실패 처리를 좁혀 보강하도록 같은 에이전트에게 직렬 위임했다. 새 코드·패키지 검수 후 큰 문서 Enter 시험을 우선한다. root 통합·배포는 미진행이다.
+
+### 2026-10-31 — A401 제품 연결·963개 시험 통과, 실제 화면 시험은 잠금 표시로 대기
+
+- Astra/high 구현자를 B2a 검색→B2b 수명/보기/인쇄→B2c 외관/확대→B2d 키보드/컨텍스트→B3 기본 사용 순으로 직렬 위임하고 메인이 각 소스/시험/해시를 검수했다. 선택 경합, 인쇄 provider 교체, 임시 detach/영구 해제, 화면 밖 커서 이동, canvas 재할당, 단축키 이중 소유, 메뉴 붙여넣기와 저장/보기/닫기 순서·늦은 freeze, literal Tab을 보강했다. 표준 키보드 clipboard/Undo는 기존에 실제 검증된 trusted browser 경로를 유지했다.
+- B3는 gate 한 줄만 기본ON으로 바꾸고 전체8프로젝트963/963·실패/skip0, Rebuild0/0 및 정상 publish를 통과했다. 메인은 모든TRX 합계와 package1065파일/binary15/assets8/protected22를 독립 검증했다. B2d no-build publish에서 빠진 기존VLC422파일을 정상 publish가 수집했고 정확한 NuGet 입력과 대조했다. wildcard BuildTools .2705→.2957 복원 차이도 기록했다. canonical source/package review는 artifacts/a401-editor-integration-20261031/main-b3-phase1-review.md, 검증본은 src-copy/publish-b3다.
+- 공식 sky 첫 UI 관측은 기존 원본창·Save disabled·6285/10088·100%를 반환했으나 검정 화면과 지문 로그인 아이콘을 보여 잠금 상태로 판단해 즉시 중단했다(명시적 LockApp 오류 아님). 입력/종료/새 후보 실행0회. 원본/설정 해시와 읽기 전용 백업은 동일하다. 사용자 잠금 해제 요청을 채팅과 기존 승인된 이메일 주소로 보냈다. 실제 Enter/기능/IME 시험은 미완료이며 A401을 완료 처리하지 않는다.
+- 대기 중 root 통합 감사를 artifact에만 준비했다. 누적56파일 중 MainWindow만 보류 녹화와 의미상 겹친다. close lease와 _contentClosed 우회, 보류 recording veto 안내의 _confirmInProgress 충돌을 기록했고 draft는 merge-ready가 아니다. root 적용·held scope 빌드·git·release는 하지 않았다. B3 에이전트 FINAL STOP; 사용자 해제 후 동일 에이전트를 재개하고 fresh 관측부터 이어간다.
+
+### 2026-10-31 — A401 B1 저장·닫기 연결 검수 통과, B2 기능 연결 착수
+
+- 단독 Astra/high가 clean 후보에 atomic UTF16/LF 모델·epoch/요청/프레임 전송·저장 snapshot·close freeze/lease를 실제 구현했다. 메인은 기존16Mi 치환 대비8Mi 상한, surrogate 분할, 허용 후 shell veto/AllReadable 전달/같은pane 이전취소/재진입, asset publish/build 경로를 지적·검수했다. 후속수정으로 stale/native 저장 및 취소 뒤 잠금을 차단했다.
+- 문서175/175·Core lifecycle26/26·browser source protocol/wire PASS. 제한 testhost90초 연결실패는 별도 기록, scoped 실제시험은 통과. clean App x64 재귀178.01s와 최종모듈 빌드0/0, source34/34해시·보호22/22를 메인이 독립 확인하고 b1-reviewed-source로 검수본을 백업했다. B1은 UI미실행/기본gateOFF, A401 완료 아님.
+- B1담당 완료 후 새 단독 a401_editor_ui_b2_20261031(Astra/high)에 기존 검색·표시·테마·zoom·view/render·키보드/IME·reattach/recovery 연결을 위임했다. 계약 integration-b2-contract.md, B1정본 main-b1-review.md/serial-handoff.md. 원본정상앱/문서/설정/녹화22 보존, 제품commit/push/release 없음.
+
+### 2026-10-31 — A401 로컬 편집기 실측 통과, 제품 통합으로 진행
+
+- 단독 Astra/high의 격리된 local Monaco/WebView2 최소 동작본을 메인이 source/origin/권한/epoch/수명/패키지 검수했다. 접근성 auto와 초기화 실패 시 UI/decor 복구를 보강했다. 첫 ContentControl의 검은 본문은 측정에서 제외하고 기존 HtmlPane와 같은 UserControl로 양의 크기·실제 본문·캐럿을 확인했다.
+- 동일1000087자/offset622361의 연속6Enter에서 browser keydown→model18.6/5.0/2.9/2.8/3.0/3.5ms, 정확한6LF. Undo/Redo·Shift/마우스 선택·200자2LF 붙여넣기 후 Undo까지12개 export가 validtrue/drop0이며 메인이 독립 본문 대조했다. native 측정과 이벤트 경계/입력 간격이 달라 물리 입력 배속비는 주장하지 않는다.
+- 후보를 닫고 원래 패키지/문서/설정 복원(PID26964,6285:1,clean,진단OFF). 다음은 B1 모델/bridge/저장/dirty/닫기 barrier, B2 UI기능, B3 실제회귀를 직렬 구현·검수한다. 빠른 prototype만으로 A401 완료나 제품 수정본이라 하지 않는다. main-feasibility-review.md/integration-b1-contract.md가 정본. 기존 녹화22 보존, 커밋·push·릴리스 없음.
+
+### 2026-10-31 — A401 native 계산 병목 확인 및 실제 대체 경로 구현 착수
+
+- 이전 계측 에이전트 응답 지연으로 중단 후 같은 Astra/high의 a401_cpu_attribution_20261031을 직렬 투입했다. 실제 사용자6LF 저장·백업과 정확한 삽입 위치를 메인이 독립 대조했다. Preview→Changing UI CPU 합1296.875/wall1309.05ms, NoWrap 무효, 공식 PDB의 WinUIEdit 줄 배치·TextShaping/DWrite 함수 실행을 확인했다. IP capture 첫135ms 누락·실행 helper 해시 미보존과 사람/자동 창 차이를 숨기지 않았다. MinHeight probe는 미적용이며, metadata로 view/extent가 별개임을 확인해 제품 수정 후보에서 제외했다.
+- 정상 A401-only 후보 PID16872에 원본1000087chars·6285:1·진단OFF를 복원하고 fresh 설정 해시 B4867D83D21D924D49653BAE7B44259B2F2C907D611EFE11A90042846B72B2FB를 복원했다. 메인이 host 원본/설정 해시·경로·응답을 독립 확인했다. Human6LF·진단18LF·raw를 보존했고 진단 담당자는 완료·중지했다. 정본 artifacts/a401-input-pipeline-20261030/cpu-attribution/serial-handoff.md.
+- 실제 수정 목표를 이어가기 위해 메인이 내부 조사상의 에디터 대체 금지를 가역적 최소 동작본 범위에서 교체했다. 새 단독 Astra/high a401_virtual_editor_20261031에 기존 WebView2 + 완전 로컬 공식 Microsoft Monaco prototype을 위임했다. clean 후보의 별도 소스/패키지만 쓰며 제품 채택 전 같은 연속 입력 및 내용·선택·Undo/Redo 검수가 필요하다. 기존 기능 계약 연결 전에는 해결을 주장하지 않는다. 녹화22·기존 패키지 보존, 신규 제품 커밋·배포 없음.
+
+### 2026-10-30 — A401 사용자 직접 Enter 지연 재현
+
+- 진단 복사본에서 사용자가 준비 위치보다 위로 이동해 같은 지연을 재현했다. 첫 Enter07:44:14.252Z, PID23556,6Enter/265records/drop0/End 완전. 선택값으로 첫 삽입 offset622361·6285줄1열을 추론했다. 매 Preview→TextChanging205.02–207.30ms, 이후 관리 코드 중첩 제외 합14.90ms/TextChanged최대7.45ms. 입력2–6의 변경 알림이 마지막 입력 뒤로 밀려도 각 키의 앞쪽 지연은 유지된다. 메인이 원시 기록을 독립 대조하고 같은 Astra/high에 짧은 프로세스 한정 CPU/stack 추적을 직렬로 맡겼다. 아직 native 내부 원인이나 해결을 확정하지 않으며 실제 원인 기반 수정까지 계속한다. 원본1,000,087chars 및 백업 보존, 진단 복사본의 새6Enter도 전환 전에 보존한다.
+- 수정 후보를 다시 열어 준 뒤 사용자가 직접 시험하여 "여전히 느려. 엔터를 연달아 누르면 다음 입력이 밀리는 증상이 그대로"라고 확인했다. 중복 감소 배치로 사용자 증상은 해결되지 않았다. 실제 원인을 찾아 수정하라는 명시적 지시에 따라 새 단독 Astra/high a401_input_pipeline_20261030에 bounded 입력 경계 계측 구현을 위임했다. 기존 clean A401 후보를 기반으로 첫 Enter 후 짧은 수신/handler/배치 시각을 기록하고, per-key AX 관측을 제거한 입력 또는 실제 사람 입력으로 재현한다. 메인은 계측 패키지부터 검수하고 실제 원인 기반 수정·전후 검증을 계속한다. 새 사용자 입력은 기존10061줄 저장값과 다를 수 있어 보호한다.
+- 사용자 저장·백업/전환 승인 후 같은 Astra/high가 실제 전후1쌍과 복원을 완료했다. 정상411/수정후보412에서 각10Enter가 정확히 LF10개로 저장되고 각1회 Undo로 원본 해시가 복원됐다. 전문 getter/줄 색인20→10, 전문 할당40,000,672→20,000,336bytes. 초기 구형 도구 지연의 입력0회 준비 실패는 제외했다. 수정본의 즉시 AX 관측이 일부 이전 줄을 보여 추가 확인/약24초 입력 간격이 생겼고, UI probe 최대243.599→367.127ms로 개선되지 않았다. 중복 감소 검증이지 체감 지연 해결 증거는 아니다. 메인이 양쪽 원시 계측·결과 파일과 Undo 원문 일치를 독립 확인했다.
+- 사용자 입력은 정상 저장 후 별도 백업했고, 최종 정상 후보412 PID6552/창13042864에서 같은 문서1,000,060bytes/10061줄을 Editing100%·EOF·clean·성능기록OFF·가이드/¶OFF로 열어 두었다. 저장본/백업 SHA D5CFD4E541B73ED8C82C94CBDBA2257751363031B6ED9FCC2B6D62C592C7F1D5, fresh 설정3424bytes SHA CD4DCB39213DD557A266EE2A3D1488C2C13F4502EF8DCF8C975E2562F4C70A77 일치. 메인이 호스트 실행 경로/파일/설정과 공식 CUA의 Editing/Save비활성/10061/10061을 확인했다. 기존 변경22개·패키지12개 보존, 미커밋·미배포, 모든 에이전트 중지. artifacts/a401-enter-fix-20261030/native-report.md와 main-native-review.md에 근거/한계를 기록했다.
+- 사용자가 조사 이후 수정이 없음을 지적했다. 실제 수정 배치를 단독 Astra/high에 직렬 위임했다. TextChanged의 중복 무효화 한 줄 제거, 동기 TextChanging 및 로드/새 문서 갱신 보존을 메인이 검수했다. 기존 녹화 변경22개를 포함하지 않는 별도 후보에서 집중7/7·전체926/926·구조20·배포계약7, 빌드/publish0경고0오류와 정상 패키지를 확인했다. 분리된 수정 전 한 줄 복원 시험은4개 실패로 회귀를 잡았다. 메인이 후보 HEAD534개와 DLL12개의 해시도 독립 대조했다. 현재 사용자 편집 창은 dirty 상태로 열려 있으며 UI 조작은 없다. 저장·백업 후 전후1쌍 비교와 수정본에서 재개하는 질문의 답변 대기다. 체감 개선은 native 확인 전까지 미확정이며 커밋/배포하지 않았다.
+- 후속 가이드선/¶ OFF 대조에서도 거의 차이가 없다는 사용자 답변을 받았다. 읽기 전용 원문/기존 기록 조사에서 이중 무효화 및10변경 대비20 getter/index를 확인했으나 주원인·입력 큐 대기는 미확정이다. 메인이61줄 보고서를 검수했고 raw OS 입력 주입 제안은 기각했다. 후속 계측/제품 수정은 아직 실행하지 않았다.
+- 사용자 요청으로 정상v411에 새 합성999,999자/10,000줄을 Editing100%·가이드/¶ON·검색 비움·EOF로 준비해 열어 두었다. 메인이 파일/버전/PID를 확인했으며 준비 과정에서는 Enter 시험을 하지 않았다.
+- 사용자가 매우 더디게 내려간다고 직접 보고했다. 앞선 Enter 처리가 후속 입력 전달을 막는 듯하다는 설명은 사용자 원인 추정으로 구분했다.
+- 단독 Astra/high에 먼저 읽기 전용 입력/본문 변경/장식/배치 경로 조사와 가장 작은 대조 방법을 위임했다. 사용자의 현재 편집 창은 입력·저장·닫기·Undo/재설정하지 않는다.
+- 추가 답변으로 줄 추가와 화면 이동 모두 느리며 첫 표시 뒤 후속 Enter 반응도 늦음을 확인했다. 내부 추가 작업 때문에 앱으로 전달이 밀린다는 설명은 가설이고, OS 입력 대기·앱 수신 이후 처리·표시 이후 작업을 구분한다. 제품 수정/진단 실행은 이번 초기 조사에서 하지 않는다.
+- 준비 근거 `artifacts/a401-manual-20261030/`, 후속 조사 `artifacts/a401-enter-latency-20261030/`.
+
+### 2026-10-29 — native Debug OFF 대조1회 완료·오류 미재현
+
+- 승인된 합성 Window 무음 Video1회는 정상 저장됐다. owner1/observer2/target3·최대화1295×767은 유지했고 본문은 원본 미보존으로 새 합성 텍스트를 사용했다.
+- owner닫기47.496초/Stop클릭52.733초, 실제 nativeStop52.971359초. worker15의 Dispose 정상 반환 뒤 파일 열기/Published/finalize 성공, live 파일 읽기 성공.
+- 메인은 raw66이벤트 sequence1~66/단일attempt/최종drop0과 native.log 부재를 확인했다. MP4425078bytes/moov/video1/audio0/header50.688833초, 재생 미시험.
+- fresh backup과 설정3293bytes 완전 복원·호스트 KOTU0·기존/새 소스와 패키지104+이전 영상/로그6해시 보존을 독립 확인했다.
+- ON/OFF 모두 성공했지만 관리형 계측·시간·본문·환경 차이가 남는다. 기존0xc00d36b5/잠금 오류는 미재현·원인미확정, v412 배포 보류 유지.
+- 추가 녹화/제품 수정/커밋/push 없이 한 배치 결과에서 정지한다. 검수 `artifacts/a406-a407/main/control-20261029-review.md`, 상세 `control-20261029/evidence/stage-b-report.md`.
+
+### 2026-10-29 — native Debug OFF 대조1회 선택·Stage A 승인
+
+- 사용자가 “실행”으로 앞서 제안한 기존 Video 화면/창 녹화 저장 오류 대조1회를 선택했다.
+- 단독 Astra/high가 격리 진단본544입력 중 native IsLogEnabled 한 값만 false로 변경했다.
+  메인이544입력 해시/역변환·기존78보존·새package26을 독립 확인하고 정상 publish/진입점/버전을 검수했다.
+- SDK 자동 git suffix는 새 문서 HEAD로 달라져 apphost 버전 문자열37바이트 차이가 생겼다. 소스/녹화 옵션의 추가 차이는 없으며 편차를 명시해 수용했다.
+- Stage B는 새 설정 백업과 합성 Window·두 음원 OFF·최대1회 녹화 후 정상 복원/보고만 승인했다. v412 배포 보류 유지.
+  계약/검수 `artifacts/a406-a407/main/control-20261029-contract.md`, `control-20261029-stage-a-review.md`.
 
 ### 2026-10-28 — 사용자 요청으로 인수인계
 

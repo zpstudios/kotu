@@ -4,6 +4,11 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="EditorSurrogateWire.jsonl.gz" LogicalName="EditorSurrogateWire" />
+    <EmbeddedResource Include="..\..\src\KOTU.Module.Document\DocumentView.xaml.cs" LogicalName="DocumentViewSource" />
+    <EmbeddedResource Include="..\..\src\KOTU.Module.Document\DocumentView.Search.cs" LogicalName="DocumentSearchSource" />
+    <EmbeddedResource Include="..\..\src\KOTU.Module.Document\DocumentView.ActiveEditor.cs" LogicalName="DocumentActiveEditorSource" />
+    <EmbeddedResource Include="..\..\src\KOTU.Module.Document\DocumentView.xaml" LogicalName="DocumentXamlSource" />
     <Compile Include="..\..\src\KOTU.Module.Document\TextPerformanceData.cs" Link="TextPerformanceData.cs" />
     <Compile Include="..\..\src\KOTU.Module.Document\EditorDecorScheduler.cs" Link="EditorDecorScheduler.cs" />
     <Compile Include="..\..\src\KOTU.Module.Document\EditorDecorLineSearch.cs" Link="EditorDecorLineSearch.cs" />

@@ -37,14 +37,16 @@ public sealed partial class DocumentView
     private bool _searchInteractionActive;
     private bool _searchFlyoutDismissed;
     private bool _searchReturnFocusAfterClose;
+    private readonly EditorSelectionRequestTracker _searchSelectionRequests = new();
 
     private bool CanSearchText => _searchLoaded && _searchLoadedGeneration == _openSeq &&
         (_path is not null || _untitled) && !_htmlMode &&
         !(_truncated && _path is { } path && IsHtmlPath(path)) &&
-        (EditorBox.Visibility == Visibility.Visible || _renderMode);
+        (IsActiveEditorAvailable || _renderMode);
 
     private bool CanReplaceText => CanSearchText && !_truncated && !_capped && !_loadingText &&
-        !_viewMode && !_renderMode && !EditorBox.IsReadOnly && !_documentSession.IsSaving && !_editorComposing;
+        !_viewMode && !_renderMode && !IsActiveEditorReadOnly && !_documentSession.IsSaving &&
+        !_viewTransitionInProgress && !_virtualSaveBarrierInProgress && !_virtualCloseInProgress && !_editorComposing;
 
     private TextSearchSnapshot SearchSnapshot() => new(EditorText, _openSeq, _textRevision,
         !_truncated && !_capped, CanReplaceText);
@@ -66,8 +68,8 @@ public sealed partial class DocumentView
         FindBox.TextCompositionEnded += (_, _) => { _findComposing = false; QueueTextSearch(selectMatch: true); };
         ReplaceBox.TextCompositionStarted += (_, _) => _replaceComposing = true;
         ReplaceBox.TextCompositionEnded += (_, _) => _replaceComposing = false;
-        EditorBox.TextCompositionStarted += (_, _) => { _editorComposing = true; InvalidateTextSearch(); };
-        EditorBox.TextCompositionEnded += (_, _) => { _editorComposing = false; QueueTextSearch(); };
+        EditorBox.TextCompositionStarted += (_, _) => { if (_virtualEditor is not null) return; _editorComposing = true; InvalidateTextSearch(); };
+        EditorBox.TextCompositionEnded += (_, _) => { if (_virtualEditor is not null) return; _editorComposing = false; QueueTextSearch(); };
         EditorBox.AddHandler(PointerPressedEvent, new PointerEventHandler(OnSearchBodyPointerPressed), handledEventsToo: true);
         _searchInitialized = true;
         UpdateSearchAvailability();
@@ -108,6 +110,7 @@ public sealed partial class DocumentView
     // TextChanging must not modify the visual tree; all control updates happen in TextChanged instead.
     private void OnSearchEditorTextChanging(TextBox sender, TextBoxTextChangingEventArgs args)
     {
+        if (_virtualEditor is not null) return;
         _textRevision++;
         _textSnapshot = null;
         InvalidateTextSearch();
@@ -115,6 +118,7 @@ public sealed partial class DocumentView
 
     private void InvalidateTextSearch()
     {
+        _searchSelectionRequests.Cancel();
         _searchWorker?.Cancel();
         _replacementCancellation?.Cancel();
         _searchResult = null;
@@ -155,19 +159,15 @@ public sealed partial class DocumentView
         QueueTextSearch(selectMatch: true);
     }
 
-    private void OnFindGotFocus(object sender, RoutedEventArgs args)
-    {
-        _searchInteractionActive = true;
-        EnsureSearchSource();
-        if (_searchResult is null) QueueTextSearch();
-    }
-
+    // Focus can move here automatically when an editor or toolbar control is hidden/disabled.
+    // Only a query edit or explicit search command should switch Markdown to its source.
     private void EnsureSearchSource()
     {
         if (!_renderMode || !CanSearchText) return;
         // Searching Markdown exposes the source while retaining the existing read-only viewing guard.
-        ExitRenderMode();
+        ExitRenderMode(keepViewing: true);
         EnterViewModeForSearch();
+        TryOpenVirtualEditor();
         FindBox.Focus(FocusState.Programmatic);
     }
 
@@ -191,7 +191,7 @@ public sealed partial class DocumentView
         _searchResult = result;
         if (_searchSelectOnResult)
         {
-            _searchCurrent = result.AtOrAfter(EditorBox.SelectionStart);
+            _searchCurrent = result.AtOrAfter(ActiveSelectionStart);
             if (_searchPendingPrevious) _searchCurrent = result.Navigate(_searchCurrent, previous: true);
             SelectSearchMatch();
         }
@@ -200,26 +200,41 @@ public sealed partial class DocumentView
         _searchSelectOnResult = false;
     }
 
-    private void SelectSearchMatch()
+    private async void SelectSearchMatch()
     {
         if (_searchResult is not { } result || !CanSearchText || !result.IsCurrent(SearchSnapshot(), FindBox.Text)) return;
-        if (_searchCurrent >= 0 && _searchCurrent < result.Starts.Count)
+        if (_searchCurrent < 0 || _searchCurrent >= result.Starts.Count) { UpdateSearchPresentation(); return; }
+        var pane = _virtualEditor;
+        var generation = _openSeq;
+        var start = result.Starts[_searchCurrent];
+        var request = pane is null ? (EditorSelectionRequestTracker.Request?)null
+            : _searchSelectionRequests.Begin(generation, pane.Buffer.Epoch);
+        // 가상 선택은 응답 전에 state로 확인된다. 네이티브 동기 선택에만 재진입 가드를 건다.
+        _selectingSearchMatch = pane is null;
+        try
         {
-            _selectingSearchMatch = true;
-            try
-            {
-                // Only the current selection is highlighted; no per-match rectangle queries are issued.
-                EditorBox.SelectionStart = result.Starts[_searchCurrent];
-                EditorBox.SelectionLength = result.Query.Length;
-                BringSearchMatchIntoView(result.Starts[_searchCurrent]);
-            }
-            finally { _selectingSearchMatch = false; }
+            await SelectActiveEditorAsync(start, start + result.Query.Length, pane?.Buffer.Version ?? 0);
         }
-        UpdateSearchPresentation();
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            // 늦은 검색 결과로 최신 입력/사용자 선택을 덮지 않는다. 자동 재선택도 하지 않는다.
+            if (generation == _openSeq && ReferenceEquals(pane, _virtualEditor) && ReferenceEquals(result, _searchResult) &&
+                (request is null || _searchSelectionRequests.IsCurrent(request.Value)))
+                QueueTextSearch();
+        }
+        finally
+        {
+            if (pane is null) _selectingSearchMatch = false;
+            else if (request is { } completed && _searchSelectionRequests.Complete(completed) &&
+                generation == _openSeq && ReferenceEquals(pane, _virtualEditor)) SynchronizeSearchSelection();
+        }
+        if (generation == _openSeq && ReferenceEquals(pane, _virtualEditor)) UpdateSearchPresentation();
     }
 
     private void BringSearchMatchIntoView(int position)
     {
+        if (_virtualEditor is not null) return;
         if (FindDescendant<ScrollViewer>(EditorBox) is not { } scroll || EditorBox.ActualHeight <= 0) return;
         try
         {
@@ -257,12 +272,12 @@ public sealed partial class DocumentView
 
     private void SynchronizeSearchSelection()
     {
-        if (_selectingSearchMatch) return;
+        if (_selectingSearchMatch || _searchSelectionRequests.IsPending) return;
         _searchSelectOnResult = false;
         if (_searchResult is not { } result) return;
-        var candidate = result.AtOrAfter(EditorBox.SelectionStart);
-        _searchCurrent = candidate >= 0 && result.Starts[candidate] == EditorBox.SelectionStart &&
-            EditorBox.SelectionLength == result.Query.Length ? candidate : -1;
+        var candidate = result.AtOrAfter(ActiveSelectionStart);
+        _searchCurrent = candidate >= 0 && result.Starts[candidate] == ActiveSelectionStart &&
+            ActiveSelectionLength == result.Query.Length ? candidate : -1;
         UpdateSearchPresentation();
     }
 
@@ -277,7 +292,7 @@ public sealed partial class DocumentView
         }
         if (_searchCurrent < 0)
         {
-            _searchCurrent = result.AtOrAfter(EditorBox.SelectionStart);
+            _searchCurrent = result.AtOrAfter(ActiveSelectionStart);
             if (previous) _searchCurrent = result.Navigate(_searchCurrent, previous: true);
         }
         else _searchCurrent = result.Navigate(_searchCurrent, previous);
@@ -356,7 +371,7 @@ public sealed partial class DocumentView
                     ReferenceEquals(releasedFocus, ReplaceBox) || ReferenceEquals(releasedFocus, EditorBox)))
             {
                 _searchInteractionActive = false;
-                EditorBox.Focus(FocusState.Programmatic);
+                ReturnFocusFromSearch();
             }
             return false; // KeyUp is observed, never consumed.
         }
@@ -365,7 +380,7 @@ public sealed partial class DocumentView
         // Retain consumption until physical KeyUp, across native dismissal, focus restoration and bubbling.
         if (command == TextSearchCommand.ReturnToDocument && _searchEscapePending)
         {
-            if (!repeat) EditorBox.Focus(FocusState.Programmatic);
+            if (!repeat) ReturnFocusFromSearch();
             return true;
         }
         var focused = FocusManager.GetFocusedElement(root) as DependencyObject;
@@ -407,7 +422,7 @@ public sealed partial class DocumentView
                 _searchInteractionActive = false;
                 _searchReturnFocusAfterClose = _searchFlyoutOpen;
                 FindFlyout.Hide();
-                EditorBox.Focus(FocusState.Programmatic);
+                ReturnFocusFromSearch();
                 break;
         }
         return true;
@@ -453,6 +468,16 @@ public sealed partial class DocumentView
 
     private void OnSearchBodyPointerPressed(object sender, PointerRoutedEventArgs args)
         => _searchInteractionActive = _searchFlyoutDismissed = false;
+
+    private void ReturnFocusFromSearch()
+    {
+        if (_contentReleased || !IsLoaded) return;
+        // Passive Find focus does not expose Markdown source. Escape returns to that visible preview.
+        if (_renderMode && RenderPane.Visibility == Visibility.Visible)
+            RenderPane.Focus(FocusState.Programmatic);
+        else
+            _ = FocusActiveEditorAsync();
+    }
 
     private void ObserveSearchBodyKey(KeyRoutedEventArgs args)
     {
@@ -515,7 +540,7 @@ public sealed partial class DocumentView
         DetachSearchFlyoutPresenter();
         var returnFocus = _searchReturnFocusAfterClose;
         _searchReturnFocusAfterClose = false;
-        if (returnFocus && CanSearchText) EditorBox.Focus(FocusState.Programmatic);
+        if (returnFocus && CanSearchText) ReturnFocusFromSearch();
     }
 
     private void DetachSearchFlyoutPresenter()
@@ -536,8 +561,11 @@ public sealed partial class DocumentView
         if (_replaceBusy || !CanReplaceText || _findComposing || _replaceComposing ||
             _searchResult is not { } result || !result.CanApplyReplacement(SearchSnapshot(), FindBox.Text)) return;
         var current = _searchCurrent;
-        if (!all && (current < 0 || EditorBox.SelectionStart != result.Starts[current] || EditorBox.SelectionLength != result.Query.Length)) return;
+        if (!all && (current < 0 || ActiveSelectionStart != result.Starts[current] || ActiveSelectionLength != result.Query.Length)) return;
         var replacement = ReplaceBox.Text;
+        var pane = _virtualEditor;
+        var generation = _openSeq;
+        var version = pane?.Buffer.Version ?? 0;
         using var cancellation = new CancellationTokenSource();
         _replacementCancellation = cancellation;
         _replaceError = null;
@@ -545,27 +573,28 @@ public sealed partial class DocumentView
         UpdateSearchPresentation();
         try
         {
+            // 브라우저의 같은 버전에서 선택만 바뀌었을 수도 있다. 응답 전에 마지막 state를 받는다.
+            if (pane is not null) await CaptureVirtualSnapshotAsync(freeze: false);
+            if (!CanReplaceText || !result.CanApplyReplacement(SearchSnapshot(), FindBox.Text)) return;
+            if (!all && (ActiveSelectionStart != result.Starts[current] || ActiveSelectionLength != result.Query.Length)) return;
+            var expectedSelection = all ? (EditorSelection?)null : pane?.Buffer.Selection;
             var edit = await Task.Run(() => TextSearch.Replace(result, replacement, current, all, cancellation.Token));
             if (edit is null || cancellation.IsCancellationRequested || !CanReplaceText ||
                 !result.CanApplyReplacement(SearchSnapshot(), FindBox.Text)) return;
             // Selection may have moved without changing the text while the worker computed this edit.
-            if (!all && (EditorBox.SelectionStart != result.Starts[current] || EditorBox.SelectionLength != result.Query.Length)) return;
-            _selectingSearchMatch = true;
-            try
-            {
-                EditorBox.SelectionStart = edit.Start;
-                EditorBox.SelectionLength = edit.Length;
-                EditorBox.SelectedText = edit.Text;
-                EditorBox.SelectionStart = Math.Min(edit.Start + edit.Text.Length, EditorText.Length);
-                EditorBox.SelectionLength = 0;
-            }
-            finally { _selectingSearchMatch = false; }
-            // TextChanging invalidated the cache synchronously. Preserve the existing dirty/save machinery.
-            EditorTextChangedCore();
+            if (!all && (ActiveSelectionStart != result.Starts[current] || ActiveSelectionLength != result.Query.Length)) return;
+            _selectingSearchMatch = pane is null;
+            try { await ReplaceActiveEditorAsync(edit, version, expectedSelection); }
+            finally { if (pane is null) _selectingSearchMatch = false; }
+            if (generation != _openSeq || !ReferenceEquals(pane, _virtualEditor)) return;
             SettlePendingDirtyCheck();
         }
         catch (OperationCanceledException) { }
-        catch (Exception error) { _replaceError = "Could not replace text. " + error.Message; }
+        catch (Exception error)
+        {
+            if (generation == _openSeq && ReferenceEquals(pane, _virtualEditor))
+                _replaceError = "Could not replace text. " + error.Message;
+        }
         finally
         {
             if (ReferenceEquals(_replacementCancellation, cancellation)) _replacementCancellation = null;

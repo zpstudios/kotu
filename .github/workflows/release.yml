@@ -61,6 +61,23 @@ jobs:
           ./eng/Test-Architecture.ps1
           ./eng/Test-ReleaseWorkflow.ps1
 
+      - name: Set up Node.js 24
+        if: steps.ver.outputs.skip != 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Editor protocol tests
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: node src/KOTU.Module.Document/EditorSource/protocol.test.mjs
+
+      - name: Editor visual tests
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: node src/KOTU.Module.Document/EditorSource/visual.test.mjs
+
       - name: NuGet 복원
         if: steps.ver.outputs.skip != 'true'
         run: dotnet restore KOTU.sln -p:Platform=x64

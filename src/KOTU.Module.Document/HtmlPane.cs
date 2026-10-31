@@ -48,22 +48,26 @@ public sealed partial class HtmlPane : UserControl
     private int _loadSeq;         // 빠른 파일 전환·토글 연타의 낡은 항해 무산(_openSeq 관용구)
     private double _zoomScale = 1.0;
     private TaskCompletionSource<bool>? _pendingNav; // 진행 중 LoadAsync의 항해 완료 신호
+    private string? _snapshotUri;
+    private byte[]? _snapshotBytes;
 
     public HtmlPane() => IsTabStop = false;
 
     /// <summary>
-    /// path를 file:// URI로 항해한다(상대 리소스(이미지·CSS) 성립 — 사양). 저장된 파일
-    /// 기준이라 더티 미저장 내용은 반영되지 않는다(사양 수용). 반환 = 항해 성공 여부:
+    /// file:// 기준 경로를 유지하고, 전달된 최신 본문을 메모리 응답으로 공급한다.
+    /// 잘림/상한 초과의 뷰 전용 경로만 원본 파일을 그대로 연다. 반환 = 항해 성공 여부:
     /// 초기화 실패(런타임 부재)·Navigate 예외·항해 실패(파일 소실 등) 전부 false —
     /// 호출부가 잠금 뷰로 폴백한다. 재진입·연타는 시퀀스로 무산된다(낡은 호출은 false).
     /// </summary>
-    public async Task<bool> LoadAsync(string path)
+    public async Task<bool> LoadAsync(string path, string? text = null)
     {
         var seq = ++_loadSeq;
         _pendingNav?.TrySetResult(false); // 직전 호출이 아직 대기 중이면 깨워서 물러나게 한다
         _pendingNav = null;
         if (!await EnsureWebViewAsync()) return false;
         if (seq != _loadSeq || _closed) return false;
+        _snapshotUri = new Uri(path).AbsoluteUri;
+        _snapshotBytes = text is null ? null : System.Text.Encoding.UTF8.GetBytes(text);
 
         var nav = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingNav = nav;
@@ -77,8 +81,18 @@ public sealed partial class HtmlPane : UserControl
             if (ReferenceEquals(_pendingNav, nav)) _pendingNav = null;
             return false;
         }
-        var ok = await nav.Task; // NavigationCompleted(또는 Clear/Close/후속 Load)가 깨운다
+        bool ok;
+        try { ok = await nav.Task.WaitAsync(TimeSpan.FromSeconds(20)); }
+        catch (TimeoutException) { ok = false; }
         return ok && seq == _loadSeq && !_closed;
+    }
+
+    private void OnResourceRequested(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs args)
+    {
+        if (_closed || _snapshotBytes is not { } bytes || args.Request.Uri != _snapshotUri ||
+            args.ResourceContext != CoreWebView2WebResourceContext.Document) return;
+        args.Response = sender.Environment.CreateWebResourceResponse(new System.IO.MemoryStream(bytes, writable: false).AsRandomAccessStream(),
+            200, "OK", "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store");
     }
 
     /// <summary>앱 줌 축(_zoomPercent — A225)을 이 판에 적용한다. 초기화 전이면 배율만 기억해
@@ -93,6 +107,8 @@ public sealed partial class HtmlPane : UserControl
     /// 시퀀스와 대기 해제로 무산시키고, 이전 문서가 다음 표시 때 비치지 않게 빈 페이지로 보낸다.</summary>
     public void Clear()
     {
+        _snapshotUri = null;
+        _snapshotBytes = null;
         _loadSeq++;
         _pendingNav?.TrySetResult(false);
         _pendingNav = null;
@@ -113,12 +129,22 @@ public sealed partial class HtmlPane : UserControl
     /// </summary>
     public void Close()
     {
+        if (_closed) return;
         _closed = true;
+        _snapshotUri = null;
+        _snapshotBytes = null;
         _loadSeq++;
         _pendingNav?.TrySetResult(false);
         _pendingNav = null;
         if (_webView is not { } view) return;
         _webView = null;
+        if (view.CoreWebView2 is { } core)
+        {
+            core.WebResourceRequested -= OnResourceRequested;
+            core.NewWindowRequested -= OnNewWindowRequested;
+            core.NavigationStarting -= OnNavigationStarting;
+            core.NavigationCompleted -= OnNavigationCompleted;
+        }
         Content = null;
         try
         {
@@ -205,6 +231,9 @@ public sealed partial class HtmlPane : UserControl
             // 설정 실패는 표시를 막지 않는다 — 항해 차단(아래 이벤트)이 독립 방어선으로 남는다.
         }
         core.NewWindowRequested += OnNewWindowRequested;
+        core.AddWebResourceRequestedFilter("file:///*", CoreWebView2WebResourceContext.Document,
+            CoreWebView2WebResourceRequestSourceKinds.All);
+        core.WebResourceRequested += OnResourceRequested;
         core.NavigationStarting += OnNavigationStarting;
         core.NavigationCompleted += OnNavigationCompleted;
     }

@@ -3,8 +3,17 @@ using KOTU.Core.Contracts;
 namespace KOTU.Core.Tests;
 
 internal sealed class FakeContent : IContentStateSource, IContentPathChangedSource, ICurrentPathSource, ICloseGuard, IUntitledContentSource, IContentInfoChangedSource, ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IContentCloseRequestSource, IContentOpenFailedSource, IWindowShrinkSource, IMediaTransportTarget,
-    IContentInfoProvider, IBrowseOrderConsumer
+    IContentInfoProvider, IBrowseOrderConsumer, IContentLifetime
 {
+    public int ReleaseCount { get; private set; }
+    public Action? OnRelease { get; set; }
+    public void ReleaseContent() { ReleaseCount++; OnRelease?.Invoke(); }
+    public Task? PendingPreparation { get; set; }
+    public async Task<IPrintPageProvider> PreparePrintAsync()
+    {
+        if (PendingPreparation is { } pending) await pending;
+        return this;
+    }
     public event Action<string>? ContentOpened;
     public void RaiseContentOpened(string value) => ContentOpened?.Invoke(value);
     public event Action<string>? ContentPathChanged;

@@ -69,8 +69,10 @@ LibreHardwareMonitor)에 맡기고, KOTU는 **하나로 묶인 경험**에 집�
 > 활발히 개발 중인 앱입니다. 모든 릴리스는 Windows CI에서 빌드·단위 테스트를 통과하며, 실사용 환경
 > 검증은 계속 진행하고 있습니다. 문제는 [이슈](https://github.com/zpstudios/kotu/issues)로 알려 주세요.
 
-**요구 사항**: Windows 10 버전 1809 이상 또는 Windows 11 (x64). HTML 렌더 뷰는 Windows 11에 기본 포함된
-WebView2 런타임을 사용합니다(없으면 소스 보기로 대체).
+**요구 사항**: Windows 10 버전 1809 이상 또는 Windows 11 (x64). 문서 텍스트 편집과 HTML 렌더 뷰는
+WebView2 런타임을 사용합니다. 편집기 파일은 앱에 동봉되어 인터넷 연결 없이 사용할 수 있습니다.
+WebView2를 사용할 수 없으면 기존 텍스트 편집기와 HTML 소스 보기로 대체합니다.
+Standalone 배포물은 기존 텍스트 편집기를 사용합니다.
 
 ## 프로젝트 구조
 

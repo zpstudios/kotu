@@ -100,6 +100,14 @@ internal sealed class PrintHost : IDisposable
             }
             // 비UI 스레드 핸들러(PrintTaskRequested)가 쓸 값을 여기(UI 스레드)서 스냅샷한다 —
             // 뷰 속성을 비UI 스레드에서 읽지 않기 위한 규약(계약 문서와 한 쌍).
+            try { provider = await provider.PreparePrintAsync(); }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                await ShowPrintMessageAsync("Could not prepare this document for printing. " + ex.Message);
+                return;
+            }
+            if (_disposed || !_sessionActive || !provider.CanPrintNow) return;
             _provider = provider;
             var name = SafeJobName(provider);
             _jobName = string.IsNullOrWhiteSpace(name) ? Branding.AppName : name;

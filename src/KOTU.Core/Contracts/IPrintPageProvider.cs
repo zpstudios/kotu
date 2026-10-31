@@ -35,6 +35,9 @@ public sealed record PrintPageSpec(
 /// </summary>
 public interface IPrintPageProvider
 {
+    /// <summary>세션 시작 전에 최신 본문을 비동기로 확정한다. 실패하면 인쇄를 시작하지 않는다.</summary>
+    Task<IPrintPageProvider> PreparePrintAsync() => Task.FromResult<IPrintPageProvider>(this);
+
     /// <summary>
     /// 지금 인쇄할 콘텐츠가 실제로 있는가. 계약 구현 여부만으로는 "지금 인쇄 가능한가"를 알 수
     /// 없어서 두는 축이다 — IPlaybackStateSource.HasPlaybackSurface와 같은 이유: 호스트 뷰

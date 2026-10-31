@@ -23,4 +23,7 @@ public interface ICloseGuard
     /// false면 취소(현재 뷰 유지). 변경이 없으면 즉시 true.
     /// </summary>
     Task<bool> ConfirmCloseAsync();
+
+    /// <summary>승인한 닫기가 실제 교체 전에 중단되면 원래 콘텐츠의 편집을 다시 허용한다.</summary>
+    Func<Task> CaptureCloseCancellation() => () => Task.CompletedTask;
 }

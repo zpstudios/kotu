@@ -6,7 +6,96 @@ namespace KOTU.Core.Tests;
 
 public class ChildContentHostTests
 {
+    [Fact]
+    public void ReplacementPermanentlyReleasesOnlyOldChildAfterUnsubscribing()
+    {
+        var host = NewHost();
+        var old = new FakeContent();
+        var next = new FakeContent();
+        var notifications = new List<string>();
+        host.ContentOpened += notifications.Add;
+        old.OnRelease = () =>
+        {
+            Assert.Equal(0, old.SubscriptionCount);
+            old.RaiseContentOpened("stale");
+        };
+        host.Attach(old, "old");
+        host.Detach(() => Assert.Equal(0, old.ReleaseCount));
+        host.Attach(next, "next");
+        Assert.Equal(1, old.ReleaseCount);
+        Assert.Equal(0, next.ReleaseCount);
+        Assert.Empty(notifications);
+        host.Detach(() => { });
+        host.Detach(() => { });
+        Assert.Equal(1, next.ReleaseCount);
+    }
+
+    [Fact]
+    public void FailedVisualRemovalStillReleasesOldContent()
+    {
+        var host = NewHost();
+        var child = new FakeContent();
+        host.Attach(child, "old");
+        Assert.Throws<InvalidOperationException>(() => host.Detach(() => throw new InvalidOperationException()));
+        Assert.Equal(1, child.ReleaseCount);
+        Assert.Null(host.Child);
+    }
+
+    [Fact]
+    public async Task PrintPreparationWaitsAndRejectsReplacedChild()
+    {
+        var ready = new TaskCompletionSource();
+        var child = new FakeContent { PendingPreparation = ready.Task };
+        var host = NewHost();
+        host.Attach(child, "old");
+        var preparing = host.PreparePrintAsync();
+        Assert.False(preparing.IsCompleted);
+        host.Detach(() => { });
+        host.Attach(new FakeContent(), "new");
+        ready.SetResult();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => preparing);
+        await host.PreparePrintAsync();
+    }
+
+    [Fact]
+    public async Task FailedPrintPreparationDoesNotUseCachedPages()
+    {
+        var host = NewHost();
+        host.Attach(new FakeContent { PendingPreparation = Task.FromException(new TimeoutException()) }, "old");
+        await Assert.ThrowsAsync<TimeoutException>(() => host.PreparePrintAsync());
+    }
+
     private static readonly PrintPageSpec PageSpec = new(800, 1100, 0, 0, 800, 1100, 96, 96);
+    [Fact]
+    public async Task ChildReplacementAfterPreparationNeverReroutesPages()
+    {
+        var host = NewHost();
+        var old = new FakeContent();
+        var next = new FakeContent();
+        host.Attach(old, "old");
+        var prepared = await host.PreparePrintAsync();
+        host.Detach(() => { });
+        host.Attach(next, "next");
+        Assert.Same(old, prepared);
+        Assert.Same(old.PrintPage, await prepared.CreatePrintPageAsync(1, PageSpec));
+        Assert.NotSame(next.PrintPage, await prepared.CreatePrintPageAsync(1, PageSpec));
+    }
+
+    [Fact]
+    public async Task PreparedDocumentRejectsChangedGenerationAndLatePage()
+    {
+        var current = true;
+        var page = new TaskCompletionSource<object?>();
+        var child = new FakeContent { PendingPage = page.Task };
+        var prepared = new PreparedPrintPageProvider(child, "original", () => current);
+        var pending = prepared.CreatePrintPageAsync(1, PageSpec);
+        current = false;
+        page.SetResult(child.PrintPage);
+        Assert.Null(await pending);
+        Assert.False(prepared.CanPrintNow);
+        Assert.Equal("original", prepared.PrintJobName);
+        Assert.Equal(0, prepared.GetPrintPageCount(PageSpec));
+    }
     private static ChildContentHost NewHost() => new(action => action());
 
     [Fact]

@@ -1,0 +1,11 @@
+import { build } from 'esbuild';
+import { copyFile, mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+process.chdir(fileURLToPath(new URL('.', import.meta.url)));
+const outdir = '../VirtualEditor';
+await mkdir(outdir, { recursive: true });
+const result = await build({ absWorkingDir: process.cwd(), entryPoints: { editor: 'editor.js', 'editor.worker': 'node_modules/monaco-editor/esm/vs/editor/editor.worker.js' }, bundle: true, format: 'esm', target: 'chrome120', outdir, loader: { '.ttf': 'file' }, assetNames: '[name]', minify: true, legalComments: 'linked', metafile: true });
+await writeFile('bundle-metafile.json', JSON.stringify(result.metafile, null, 2));
+await copyFile('index.html', `${outdir}/index.html`);
+await copyFile('node_modules/monaco-editor/LICENSE', `${outdir}/monaco-LICENSE.txt`);
+await copyFile('node_modules/monaco-editor/ThirdPartyNotices.txt', `${outdir}/monaco-ThirdPartyNotices.txt`);

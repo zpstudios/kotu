@@ -886,7 +886,8 @@ public sealed partial class MainWindow : Window
         var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
         accelerator.Invoked += (_, e) =>
         {
-            if (IsFocusWithin(JobsLayer))
+            if (IsFocusWithin(JobsLayer) || (key == VirtualKey.P && modifiers == VirtualKeyModifiers.Control &&
+                HotkeySupport.IsVirtualTextInputFocused(RootLayout)))
             {
                 e.Handled = false;
                 return;
@@ -1321,7 +1322,8 @@ public sealed partial class MainWindow : Window
     private async Task ShowSettingsAsync()
     {
         if (RedirectFromWorkingArchive(window => window.ShowSettings())) return;
-        if (!await ConfirmDiscardAsync()) return; // 문서 편집 미저장 가드 (A37)
+        await using var contentClose = await ConfirmDiscardAsync();
+        if (contentClose is null) return; // 문서 편집 미저장 가드 (A37)
         _titleDirtyMark = false;
         SetTitle(Branding.AppName); // A103: 설정 화면도 파일이 없으니 "KOTU"뿐 (구: "KOTU Settings")
         var settings = new SettingsView(_router);
@@ -1364,7 +1366,8 @@ public sealed partial class MainWindow : Window
         // 아직 뷰가 없어 여기 걸리지 않는다 = 전용 모듈로 열리는 현행 동작 그대로다.
         if (ModuleHost.Content is IFileOpenTarget target)
         {
-            if (!await ConfirmDiscardAsync()) return; // 자식 문서의 미저장 변경 (A37)
+            await using var contentClose = await ConfirmDiscardAsync();
+            if (contentClose is null) return; // 자식 문서의 미저장 변경 (A37)
             if (!ReferenceEquals(ModuleHost.Content, target)) return;
             if (target.TryOpenFile(path))
             {
@@ -1381,7 +1384,8 @@ public sealed partial class MainWindow : Window
         var module = _router.Resolve(path);
         if (module is null)
         {
-            if (!await ConfirmDiscardAsync()) return; // 문서 편집 미저장 가드 (A37)
+            await using var contentClose = await ConfirmDiscardAsync();
+            if (contentClose is null) return; // 문서 편집 미저장 가드 (A37)
             _titleDirtyMark = false;
             ApplyTitle();
             // A196: 안내를 포커스 가능한 ContentControl로 감싼다(구 TextBlock 단독은 Control이
@@ -1499,7 +1503,8 @@ public sealed partial class MainWindow : Window
         DiagTrace.Write("shell", $"ShowModule {module.Id} path={context.FilePath ?? "(none)"}");
         // 현재 뷰에 미저장 변경이 있으면 먼저 정리(저장/버리기/취소) — 취소면 아무것도 안 바꾼다 (A37).
         // 제목 변경도 가드 뒤로 미뤄서, 취소 시 제목이 어긋나지 않는다.
-        if (!await ConfirmDiscardAsync()) return;
+        await using var contentClose = await ConfirmDiscardAsync();
+        if (contentClose is null) return;
         _titleDirtyMark = false;
         SetTitle(title);
 
@@ -1534,6 +1539,7 @@ public sealed partial class MainWindow : Window
         _contentSession = null;
         session?.Dispose();
         _mediaTransport?.Detach();
+        (session?.Content as IContentLifetime)?.ReleaseContent();
     }
 
     private void ReplaceContent(UIElement view)
@@ -1563,6 +1569,7 @@ public sealed partial class MainWindow : Window
         session.ContentOpenFailed += OnContentOpenFailed;
         session.PlaybackStateChanged += OnPlaybackStateChanged;
         session.PrintRequested += RequestPrint;
+        session.EditorEscapeRequested += OnEditorEscapeRequested;
         session.ShrinkToMinRequested += ShrinkToMinimum;
         session.UnsavedChanged += dirty =>
         {
@@ -1622,23 +1629,31 @@ public sealed partial class MainWindow : Window
         await Task.WhenAll(unloaded);
     }
 
-    /// <summary>현재 뷰(ICloseGuard)에 미저장 변경이 있으면 사용자에게 확인. true = 계속 진행.</summary>
-    private async Task<bool> ConfirmDiscardAsync()
+    /// <summary>현재 뷰의 닫기를 확인하고 승인 수명을 호출자의 scope까지 유지한다.</summary>
+    private async Task<ContentCloseLease?> ConfirmDiscardAsync()
     {
-        if (_contentClosed || _confirmInProgress) return false;
+        if (_contentClosed || _confirmInProgress) return null;
         var session = _contentSession;
         var content = ModuleHost.Content;
-        if (content is not ICloseGuard { HasUnsavedChanges: true }) return true;
+        var capturedLease = session?.CreateCloseLease();
         _confirmInProgress = true;
+        var lease = new ContentCloseLease(async () =>
+        {
+            try { if (capturedLease is not null) await capturedLease.DisposeAsync(); }
+            finally { _confirmInProgress = false; }
+        });
+        if (content is not ICloseGuard { HasUnsavedChanges: true }) return lease;
+        var allowed = false;
         try
         {
-            return session is not null && await session.ConfirmCloseAsync() &&
+            allowed = session is not null && await session.ConfirmCloseAsync() &&
                 !_contentClosed && ReferenceEquals(_contentSession, session) &&
                 ReferenceEquals(ModuleHost.Content, content);
+            return allowed ? lease : null;
         }
         finally
         {
-            _confirmInProgress = false;
+            if (!allowed) await lease.DisposeAsync();
         }
     }
     /// <summary>트레이 닫기·X 버튼 공용: 미저장 확인 후 닫는다.</summary>
@@ -1652,7 +1667,8 @@ public sealed partial class MainWindow : Window
             // 대화상자가 보이도록 먼저 복귀시킨다 — 숨긴 채 ContentDialog를 띄우면 응답할 방법이 없다.
             if (_hiddenInTray && ModuleHost.Content is ICloseGuard { HasUnsavedChanges: true })
                 BringToFront();
-            if (!await ConfirmDiscardAsync()) return;
+            await using var contentClose = await ConfirmDiscardAsync();
+            if (contentClose is null) return;
             if (_manager.TryBlockLastWindowClose(this)) return;
             if (!_manager.TryPrepareLastWindowClose(this, out var lease)) return;
             _jobCloseLease = lease;
@@ -2183,6 +2199,7 @@ public sealed partial class MainWindow : Window
         // 먼저다(ExplorerRenameBox — e.Handled 존중). IME 조합 취소는 IME가 키를 먹어 여기 안 온다.
         if (e.Key == VirtualKey.Escape)
         {
+            if (HotkeySupport.IsVirtualTextInputEvent(RootLayout, e)) return;
             // A396: Native popup light-dismiss can precede the bubble route and clear IsAnyPopupOpen.
             // Give the current document a chance to consume that same search-popup Escape.
             if (!e.Handled && !IsOpenFileBrowsing && !IsFocusWithin(JobsLayer) && !IsAltDown() &&
@@ -2277,7 +2294,8 @@ public sealed partial class MainWindow : Window
             return;
         }
         // A396: The document bottom bar is outside the module visual tree.
-        if (!e.Handled && !IsOpenFileBrowsing && ModuleHost.Content is ITextSearchTarget search)
+        if (!e.Handled && !IsOpenFileBrowsing && !HotkeySupport.IsVirtualTextInputEvent(RootLayout, e) &&
+            ModuleHost.Content is ITextSearchTarget search)
         {
             var control = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
@@ -3226,31 +3244,41 @@ public sealed partial class MainWindow : Window
 
     // ---------- Esc (A305 모드 복귀 → A90 S4 복귀 → A202 콘텐츠 닫기 → A397 S1 창 닫기) ----------
 
+    private void OnEditorEscapeRequested()
+    {
+        if (IsAnyPopupOpen()) return;
+        if (JobsPanel.Visibility == Visibility.Visible) { HideJobs(); return; }
+        ApplyShellEscape();
+    }
+
     private void OnShellEscape(KeyRoutedEventArgs e)
     {
         if (e.KeyStatus.WasKeyDown || e.Handled) return;
+        e.Handled = ApplyShellEscape();
+    }
+
+    private bool ApplyShellEscape()
+    {
         if (StepDownViewMode())
         {
-            e.Handled = true;
-            return;
+            return true;
         }
         if (IsOpenFileBrowsing)
         {
-            e.Handled = true;
             ExitOpenFileBrowsing(restore: true);
-            return;
+            return true;
         }
         // 콘텐츠를 닫아 S1로 바뀌어도 같은 입력으로 창까지 닫지 않는다.
         if (TryCloseContent(defaultSidebars: true))
         {
-            e.Handled = true;
-            return;
+            return true;
         }
         if (IsEmptyFileModule)
         {
-            e.Handled = true;
             _ = ConfirmThenCloseAsync();
+            return true;
         }
+        return false;
     }
 
     // ---------- '뒤로' 입력 (A112 — 마우스 XButton1 · 키보드 Browser Back) ----------

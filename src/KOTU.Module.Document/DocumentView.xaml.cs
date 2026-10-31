@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 using Windows.System;
 using KOTU.Core.Contracts;
+using KOTU.Core.Content;
 using KOTU.Core.Diagnostics; // A352 배치 1: 트레이스 로그(DiagTrace)
 using KOTU.Core.IO; // A353: 쓰기 잠금을 가진 파일도 읽는 공유 열기(SharedRead)
 using KOTU.Core.Settings;
@@ -214,7 +215,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     /// <summary>
     /// A142 ①ⓑ: <c>TextBox.Text</c> 게터는 호출마다 전문을 마샬링 복사한다(4MB급에서 지배적 비용) —
-    /// 편집(TextChanged)당 1회만 뜨는 공유 스냅샷. 더티 판정(길이·내용 비교)과 장식 렌더(EditorDecor)가
+    /// 동기 TextChanging에서 무효화하는 공유 스냅샷. 더티 판정(길이·내용 비교)과 장식 렌더(EditorDecor)가
     /// 같은 인스턴스를 재사용한다. A113 ⓒ의 비교 계약(길이 우선 + 250ms 디바운스 + 전문 비교)은
     /// 무변경이다 — 비교를 없애는 게 아니라 복사 횟수만 줄인다.
     /// </summary>
@@ -227,6 +228,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     {
         get
         {
+            if (_virtualEditor is { } virtualEditor) return virtualEditor.Buffer.Text;
             if (_textSnapshot is { } cached) return cached;
             using var measurement = _performance?.Data?.Measure(TextPerfMetric.TextGet);
             return _textSnapshot = EditorBox.Text;
@@ -235,13 +237,16 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     private void SetEditorText(string text)
     {
+        if (_virtualEditor is not null) throw new InvalidOperationException("Use a version-checked editor transaction.");
         using var measurement = _performance?.Data?.Measure(TextPerfMetric.TextSet);
         EditorBox.Text = text;
     }
 
-    private TextPerfState ReadPerformanceState() => new(_textSnapshot?.Length ?? 0, _performance?.Data?.KnownLines ?? 0,
+    private TextPerfState ReadPerformanceState() => new(_virtualEditor?.Buffer.Length ?? _textSnapshot?.Length ?? 0,
+        _virtualEditor?.Buffer.LineCount ?? _performance?.Data?.KnownLines ?? 0,
         _zoomPercent, EditorBox.TextWrapping != TextWrapping.NoWrap, _showGuides, _showMarks,
-        _viewMode, _decor.IsDisabled, _capped, _truncated, EditorBox.ActualWidth, EditorBox.ActualHeight);
+        _viewMode, _decor.IsDisabled, _capped, _truncated,
+        _virtualEditor?.Viewport.Width ?? EditorBox.ActualWidth, _virtualEditor?.Viewport.Height ?? EditorBox.ActualHeight);
 
     /// <summary>
     /// A177 ⓐ: 지연 대입을 기다리는 CompositionTarget.Rendering 핸들러(null = 대기 없음).
@@ -293,8 +298,6 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // Changed 구독으로 즉시 반영한다. static 이벤트라 Unloaded에서 반드시 해제한다(A88 규칙 —
         // SettingsView의 UiScale.Changed 구독과 같은 자리·같은 형태의 해제).
         _decor.SetDiagnostics(settings.Get(EditorDecorDiagnostics.SettingKey, false));
-        EditorDecorDiagnostics.Changed += ApplyEditorDecorDiagnostics;
-        Unloaded += (_, _) => EditorDecorDiagnostics.Changed -= ApplyEditorDecorDiagnostics;
 
         // A181: 저장된 줌 배율(전역 1벌)을 XAML 기본값(FontSize 14 = 100%) 위에 얹는다.
         // 파일을 열기 전에 적용해야 대용량 텍스트의 랩 계산이 최종 폰트로 한 번에 끝난다(A177).
@@ -353,21 +356,31 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 뷰 모드·PDF·빈 화면도 종전 그대로 뷰 루트다(A277 "포커스 없음 = 캐럿 없음" 유지).
         Loaded += (_, _) =>
         {
+            if (_contentReleased) return;
+            EditorDecorDiagnostics.Changed -= ApplyEditorDecorDiagnostics;
+            EditorDecorDiagnostics.Changed += ApplyEditorDecorDiagnostics;
+            if (_pendingApplyHandler is { } pendingApply)
+            {
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= pendingApply;
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += pendingApply;
+            }
+            SubscribeVirtualAppearance();
             ResumeTextSearch();
-            _decor.Resume();
-            if (EditorBox.Visibility == Visibility.Visible && !_viewMode) FocusEditorForEditing();
-            else Focus(FocusState.Programmatic);
+            RefreshActiveEditorSurface();
+            if (_renderMode) EnterRenderMode();
+            CompleteReadyFocus();
+            if (_virtualEditor is null && EditorBox.Visibility == Visibility.Visible && !_viewMode) FocusEditorForEditing();
+            else if (XamlRoot is { } root && FocusManager.GetFocusedElement(root) is null) Focus(FocusState.Programmatic);
         };
         Unloaded += (_, _) =>
         {
+            EditorDecorDiagnostics.Changed -= ApplyEditorDecorDiagnostics;
+            UnsubscribeVirtualAppearance();
             SuspendTextSearch();
             _decor.Suspend();
             _performance?.Dispose();
             _performance = null;
             _decor.SetPerformance(null, suppress: false);
-            _openSeq++;
-            _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
-            _worker = null;
             _dirtyTimer?.Stop(); // A113 ⓒ: 뷰가 내려간 뒤 디바운스 판정이 발화하지 않게
             // A261: 줌 합치기·디바운스 정리 — ① 보류 중 합치기 목표는 지금 적용(값 Set까지
             // 확정 — 버리면 마지막 노치가 증발한다), ② 렌더 정착 타이머는 그냥 정지(내려가는
@@ -382,13 +395,11 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             if (_pendingApplyHandler is { } pendingApply)
             {
                 Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= pendingApply;
-                _pendingApplyHandler = null;
             }
             // A193: 분할 조립 루프도 같은 static 이벤트 — 같은 해제 의무(남기면 뷰 누수 +
             // 닫힌 뷰의 RenderStack 조작).
             StopRenderAppendLoop();
-            // A248: WebView2는 별도 브라우저 프로세스 — Close 누락 = 프로세스 잔존(함정 ④).
-            CloseHtmlPane();
+            // 일시 분리에서는 브라우저와 Undo를 보존한다. 소유자의 ReleaseContent가 영구 해제를 맡는다.
         };
 
         InitializeTextSearch();
@@ -463,6 +474,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdateZoomText();
         ApplyRenderZoom();
         ApplyHtmlZoom();
+        QueueVirtualAppearance();
     }
 
     /// <summary>
@@ -505,7 +517,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         ZoomButton.Visibility = textVisibility;
         SaveButton.Visibility = textVisibility;
         ViewToggleButton.Visibility = textVisibility;
-        DecorTogglePanel.Visibility = text && EditorBox.Visibility == Visibility.Visible
+        DecorTogglePanel.Visibility = text && IsActiveEditorVisible
             ? Visibility.Visible : Visibility.Collapsed;
         PrintButton.Visibility = Visibility.Visible; // A365: 빈 상태도 표시하고 기존 활성 판정은 그대로 둔다.
         FitControls.Visibility = Visibility.Visible;
@@ -534,7 +546,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     private void UpdateZoomText()
     {
-        ZoomButton.IsEnabled = _path is not null || _untitled;
+        ZoomButton.IsEnabled = CanUseDocumentZoom;
         UpdateToolbarPresentation();
         var text = $"{_zoomPercent}%";
         if (ZoomText.Text == text) return;
@@ -564,6 +576,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void SetZoom(int percent)
     {
+        if (_virtualEditor is not null && !_renderMode && !_htmlMode && !CanUseDocumentZoom) return;
         _zoomApplyQueued = false; // A261: 보류 중 합치기 목표 무효화 — 이 호출 값이 최종이다
         var clamped = Math.Clamp(percent, MinZoomPercent, MaxZoomPercent);
         if (clamped == _zoomPercent) return;
@@ -812,6 +825,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void OnZoomKey(int step, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (HotkeySupport.IsVirtualTextInputFocused(this)) { args.Handled = false; return; }
         if (IsPdfFitBranch)
         {
             args.Handled = true;
@@ -1142,6 +1156,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void ApplyLoadedText(string path, LoadedText loaded)
     {
+        CloseVirtualEditor();
+        _nativeRecovery = false;
         HidePdf(); // PDF → 텍스트 전환 (A16)
         _path = path;
         _untitled = false; // A189: 실경로 열기 — 무제 표지를 걷는다(방어 — 현행 라우팅상 무제 중 열기는 새 뷰다)
@@ -1173,7 +1189,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // ② SaveAsync 첫 가드의 _truncated 조기 반환(무동작) ③ 더티 없음(HasUnsavedChanges false).
         SetEditorText(truncatedHtml ? string.Empty : loaded.Text);
         _loadingText = false;
-        _textSnapshot = null; // A142 ①ⓑ: TextChanged 무효화와 중복이어도 무해한 방어 — 옛 파일 잔상 금지
+        _textSnapshot = null; // 같은 값 대입으로 TextChanging이 없어도 새 문서의 기준은 다시 읽는다.
         // A113 ⓒ: 더티 판정 기준은 "TextBox가 실제로 보유한 텍스트"의 정규화본이다 — 로드 문자열
         // 대신 셋 직후 값을 쓰는 이유는, TextBox가 줄바꿈('\r') 외에 무언가를 더 손봐도 열자마자
         // 더티가 되는 오탐이 없게 하기 위함(undo 원복 판정의 기준점과도 일치한다).
@@ -1224,6 +1240,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = "1/1"(텍스트는 페이지 개념 없음)
         _performance?.Applied();
+        TryOpenVirtualEditor();
     }
 
     // A256(2026-08-27): 하단 바 Open 버튼(A223)과 그 클릭 핸들러(FileOpenPicker) ·
@@ -1288,6 +1305,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void StartUntitled()
     {
+        CloseVirtualEditor();
+        _nativeRecovery = false;
         _performance?.Stop("surface-changed");
         _performance = null;
         _decor.SetPerformance(null, suppress: false);
@@ -1338,6 +1357,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 시작해(XAML) "막 Visible로 바꾼 직후·레이아웃 전" 호출. 실패하면 재시도 표지를 세워
         // LayoutUpdated 훅이 레이아웃이 실제로 돈 뒤 다시 앉힌다(메서드 주석 참고).
         FocusEditorForEditing();
+        TryOpenVirtualEditor();
     }
 
     // ---------- 에디터 포커스 (A294 — 무제 캐럿 수리) ----------
@@ -1357,8 +1377,21 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// 같은 "표지 검사뿐" 관용구)이 레이아웃이 실제로 돈 뒤 수행한다 — 새 창 분기는 창 표시 후
     /// 첫 레이아웃, 자기 자리 분기는 Visible 전환 직후 레이아웃이 그 계기다.
     /// </summary>
-    private void FocusEditorForEditing() =>
+    private void FocusEditorForEditing()
+    {
+        if (_virtualEditor is { } pane)
+        {
+            _editorFocusPending = false;
+            if (pane.IsReady) _ = FocusActiveEditorAsync();
+            else
+            {
+                _readyFocusRequested = true;
+                _readyFocusOrigin = XamlRoot is { } root ? FocusManager.GetFocusedElement(root) : null;
+            }
+            return;
+        }
         _editorFocusPending = !EditorBox.Focus(FocusState.Programmatic);
+    }
 
     /// <summary>
     /// A294: LayoutUpdated마다 도는 재시도 — 표지가 없으면 즉시 반환(상시 비용 0). 표면이 그새
@@ -1367,7 +1400,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void RetryPendingEditorFocus()
     {
-        if (!_editorFocusPending) return;
+        if (!_editorFocusPending || _virtualEditor is not null || _contentReleased) return;
         if (EditorBox.Visibility != Visibility.Visible || _viewMode)
         {
             _editorFocusPending = false; // 편집 표면이 아니다 — 재시도 철회(포커스 강탈 금지)
@@ -1476,7 +1509,10 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// "편집으로 전환"을 약속할 수 없다(잘림과 같은 판단). 상한 초과 HTML은 열기 기본이 WebView2
     /// 판(디스크 전문)이라 그 판에 머무르고, md는 렌더 자격이 없어 편집 표면 그대로다.</para>
     /// </summary>
-    private bool CanToggleViewMode => (_path is not null || _untitled) && !_truncated && !_capped;
+    private bool CanToggleViewMode => (_path is not null || _untitled) && !_truncated && !_capped &&
+        !_contentReleased && !_viewTransitionInProgress && !_documentSession.IsSaving &&
+        !_virtualSaveBarrierInProgress && !_virtualCloseInProgress &&
+        (_virtualEditor is null || _virtualEditor is { IsReady: true, IsFailed: false, IsFrozen: false });
 
     /// <summary>true = 렌더 뷰 표시 중(에디터 Collapsed). 세우고 걷는 곳 = EnterRenderMode/
     /// ExitRenderMode/ResetRenderState 셋뿐이다.</summary>
@@ -1533,11 +1569,9 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// <summary>A190→A224: 하단 바 토글 클릭 — 편집 ↔ 뷰(형식 무관). 비활성 게이트(XAML
     /// IsEnabled)가 1차지만 방어 재확인. 게이트는 CanToggleViewMode다 — _renderEligible로 걸면
     /// 비md 토글이 죽는다(그 값은 EnterViewMode 안에서 "렌더 판이냐 잠금 뷰냐"만 가른다).</summary>
-    private void OnViewToggleClick(object sender, RoutedEventArgs e)
+    private async void OnViewToggleClick(object sender, RoutedEventArgs e)
     {
-        if (!CanToggleViewMode) return;
-        if (_viewMode) ExitViewMode();
-        else EnterViewMode();
+        await ChangeViewModeAsync();
     }
 
     /// <summary>
@@ -1601,7 +1635,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdateViewToggle();
         UpdateDecorToggles(); // A277: 편집 복귀 = 표시 토글 재활성(명시 호출 — 위와 같은 이유)
         ClearHtmlFallbackNotice(); // A248: 편집 복귀 — 파일명 칸을 원 표기로
-        EditorBox.Focus(FocusState.Programmatic);
+        FocusEditorForEditing();
     }
 
     /// <summary>
@@ -1672,7 +1706,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// 이 토글 2종에는 A34 문자 핫키가 없어(SetupHotkeys 등록은 Fit 2건뿐) 비활성 시 막을 키도 없다.</summary>
     private void UpdateDecorToggles()
     {
-        var onEditableSurface = EditorBox.Visibility == Visibility.Visible && !_viewMode;
+        var onEditableSurface = IsActiveEditorAvailable && !_viewMode;
         GuideToggleButton.IsEnabled = onEditableSurface;
         MarksToggleButton.IsEnabled = onEditableSurface;
         UpdateToolbarPresentation();
@@ -1685,6 +1719,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     {
         _showGuides = GuideToggleButton.IsChecked == true;
         _decor.SetDecorVisibility(_showGuides, _showMarks);
+        QueueVirtualAppearance();
         _settings.Set(DocumentModule.ShowGuidesSettingKey, _showGuides);
         _settings.RequestSave();
     }
@@ -1694,6 +1729,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     {
         _showMarks = MarksToggleButton.IsChecked == true;
         _decor.SetDecorVisibility(_showGuides, _showMarks);
+        QueueVirtualAppearance();
         _settings.Set(DocumentModule.ShowMarksSettingKey, _showMarks);
         _settings.RequestSave();
     }
@@ -1732,6 +1768,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdateEditorReadOnly(); // A224: 에디터는 Collapsed지만 축 정합 유지(단일 산출 지점)
         UpdateViewToggle();
         EditorBox.Visibility = Visibility.Collapsed;
+        if (_virtualEditor is { } virtualPane) virtualPane.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(OpenPdf 관용구)
         UpdateDecorToggles(); // A215→A265: 렌더 뷰 — 표시 토글 비활성(에디터 표면 전용)
         RenderPane.Visibility = Visibility.Visible;
@@ -1740,7 +1777,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // A261: 초기 표시는 정착 절반 직행 — 랩 폭까지 즉시 세워야 첫 그림부터 맞는다(디바운스는
         // 연속 줌 제스처 전용).
         SettleRenderZoom();
-        Focus(FocusState.Programmatic);
+        RenderPane.Focus(FocusState.Programmatic);
 
         var seq = ++_renderSeq;
         var text = EditorText; // A142 ①ⓑ: UI 스레드에서 스냅샷 확보 — 워커는 이 복사본만 읽는다
@@ -1791,6 +1828,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     private void StartRenderAppendLoop(int seq, IReadOnlyList<MdBlock> blocks, int start, string text)
     {
         StopRenderAppendLoop(); // 방어: 직전 루프가 남아 있으면 먼저 해제(DeferApplyAfterRender 관용구)
+        if (!IsLoaded || _contentReleased) return;
 
         var next = start;
         void OnTick(object? sender, object? e)
@@ -1863,20 +1901,20 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     }
 
     /// <summary>A190: 편집 모드 복귀 — 렌더 내용은 남겨 둔다(다음 진입 시 통째 교체 — 재렌더는 토글 시점, 사양).</summary>
-    private void ExitRenderMode()
+    private void ExitRenderMode(bool keepViewing = false)
     {
         _renderSeq++; // 보류 중 파싱 무산(A193: 분할 조립 루프의 seq 대조도 이걸로 무산된다)
         StopRenderAppendLoop(); // A193: 진행 중 루프는 즉시 명시 해제 — 다음 틱을 기다리지 않는다
         _renderMode = false;
-        _viewMode = false; // A224: 렌더 이탈 = 뷰 모드 이탈(편집 복귀)
+        _viewMode = keepViewing;
         _renderBlocks = null; // A211 배치 5: 편집 모드 = 렌더 갈래 종료(진행 중 인쇄 세션은 무관 — 자기 사본을 쥔다)
         UpdateEditorReadOnly(); // A224: 편집 복귀 — IsReadOnly 재산출(잘림 md는 렌더 자체가 없다)
         UpdateViewToggle();
         RenderPane.Visibility = Visibility.Collapsed;
-        EditorBox.Visibility = Visibility.Visible;
+        RefreshActiveEditorSurface();
         _decor.Invalidate(); // A115: 에디터 복귀 — 다음 레이아웃에서 장식 재개
         UpdateDecorToggles(); // A215→A265: 편집 모드 복귀 — 표시 토글 재활성
-        EditorBox.Focus(FocusState.Programmatic);
+        if (!keepViewing) FocusEditorForEditing();
     }
 
     /// <summary>
@@ -1960,6 +1998,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdateEditorReadOnly();
         UpdateViewToggle();
         EditorBox.Visibility = Visibility.Collapsed;
+        if (_virtualEditor is { } virtualPane) virtualPane.Visibility = Visibility.Collapsed;
         _decor.Invalidate(); // A115: 에디터가 내려갔다 — 다음 레이아웃에서 장식도 걷힌다(렌더 판 관용구)
         UpdateDecorToggles(); // A215→A265: 표시 토글 비활성(에디터 표면 전용)
         EnsureHtmlPane();
@@ -1974,7 +2013,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         bool ok;
         try
         {
-            ok = await pane.LoadAsync(path);
+            ok = await pane.LoadAsync(path, IsTruncatedHtml || _capped ? null : EditorText);
         }
         catch (Exception)
         {
@@ -1987,7 +2026,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         _htmlViewFailed = true;
         _htmlMode = false;
         pane.Visibility = Visibility.Collapsed;
-        EditorBox.Visibility = Visibility.Visible;
+        RefreshActiveEditorSurface();
         UpdateEditorReadOnly(); // _viewMode true — 잠금 뷰 산출 그대로(값 불변이지만 축 정합 재확인)
         UpdateViewToggle();
         _decor.Invalidate(); // 에디터 복귀 — 장식 재개
@@ -2009,10 +2048,10 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdateEditorReadOnly();
         UpdateViewToggle();
         if (_htmlPane is { } pane) pane.Visibility = Visibility.Collapsed;
-        EditorBox.Visibility = Visibility.Visible;
+        RefreshActiveEditorSurface();
         _decor.Invalidate(); // A115: 에디터 복귀 — 다음 레이아웃에서 장식 재개
         UpdateDecorToggles(); // A215→A265: 편집 복귀 — 표시 토글 재활성
-        EditorBox.Focus(FocusState.Programmatic);
+        FocusEditorForEditing();
     }
 
     /// <summary>A248: 판 지연 생성 + RootGrid 삽입(z 순서 맨 뒤 — PdfPane과 같은 자리 규칙.
@@ -2053,7 +2092,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         {
             // 판이 사라졌다 — 재부착 대비로 잠금 뷰 상태(_viewMode 유지)로 정돈해 둔다.
             _htmlMode = false;
-            EditorBox.Visibility = Visibility.Visible;
+            RefreshActiveEditorSurface();
             UpdateDecorToggles();
         }
     }
@@ -2171,6 +2210,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     private async void OpenPdf(string path)
     {
+        CloseVirtualEditor();
         _performance?.Stop("surface-changed");
         _performance = null;
         _decor.SetPerformance(null, suppress: false);
@@ -2392,7 +2432,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     {
         UpdateToolbarPresentation();
         // 판정은 줌 표기(UpdateZoomText)와 같은 축 — 잘림(잠금 뷰)도 _path가 있어 활성이다.
-        var active = _path is not null || _untitled;
+        var active = CanUseDocumentZoom;
         // A230 → A249(v0.246.0): 빈 화면에서 조절기를 접던 SetFitControlVisible(active) 호출은
         // 없앴다 — 조절기는 늘 보이고 아래 IsEnabled 두 줄만 상태를 가른다(A145 원칙 복원,
         // New text file 등 다른 "보이되 비활성" 요소와 같은 형).
@@ -2744,6 +2784,12 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             PageInfoText.Visibility = Visibility.Collapsed;
             return;
         }
+        if (_virtualEditor is { } pane)
+        {
+            PageInfoText.Text = $"{pane.Buffer.Selection.Line} / {pane.Buffer.LineCount}";
+            PageInfoText.Visibility = Visibility.Visible;
+            return;
+        }
         if (_performance?.Data is { } performance) performance.UpdateLineIndex(_textLines, EditorText);
         else _textLines.Update(EditorText);
         var text = $"{_textLines.GetLineIndex(EditorBox.SelectionStart) + 1} / {_textLines.Count}";
@@ -2771,7 +2817,9 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     private void EditorTextChangedCore()
     {
-        _textSnapshot = null; // A142 ①ⓑ: 어떤 편집이든 스냅샷부터 무효화 — 조기 반환보다 먼저
+        if (_virtualEditor is not null) return; // 숨은 네이티브 컨트롤의 늦은 이벤트는 무시한다.
+        // TextChanging에서 이미 무효화했다. 그 뒤 선택·장식이 읽은 최신 스냅샷과 줄 색인을 재사용한다.
+        // 비동기 TextChanged가 늦게 오거나 치환이 직접 호출해도 새로운 편집 리비전은 만들지 않는다.
         QueueTextSearch();
         UpdateTextPosition();
         // A343 ⓑ: _capped도 잘림과 같은 비대상 — 더티가 서지 않으니 저장 버튼·닫기 가드가 조용하다.
@@ -2925,6 +2973,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// <summary>Tab이 포커스 이동 대신 탭 문자를 넣게 한다(에디터 기본기). Shift+Tab은 포커스 이동 유지.</summary>
     private void OnEditorKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (_virtualEditor is not null) return;
         ObserveSearchBodyKey(e);
         if (e.Key != VirtualKey.Tab || EditorBox.IsReadOnly) return;
         if (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
@@ -2944,9 +2993,10 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 3경로(ApplyLoadedText·StartUntitled·OpenPdf)가 전부 이 한 지점을 지난다(함정 ③).
         if (!dirty) ResetChangeTracking();
         ModifiedText.Visibility = dirty ? Visibility.Visible : Visibility.Collapsed;
-        SaveButton.IsEnabled = dirty;
-        if (_dirty == dirty) return; // 값 무변경(파일 전환 직후 UI 초기화, ⓒ 재판정의 재확인) — 셸 통지 생략
+        var changed = _dirty != dirty;
         _dirty = dirty;
+        UpdateSaveAvailability();
+        if (!changed) return; // 값 무변경이면 셸 통지를 생략한다.
         UnsavedChanged?.Invoke(dirty);
     }
 
@@ -2961,12 +3011,24 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 저장 흐름이 이미 진행 중이다(대화상자 포함) — 완료를 주장하지 않는다
         // (ContentDialog는 동시 1개. A267: New 클릭은 더 이상 다이얼로그를 띄우지 않아
         // 여기 합류시켰던 _newFileConfirmInProgress 가드는 함께 사라졌다).
-        if (_documentSession.IsSaving) return false;
+        if (_contentReleased || _viewTransitionInProgress || _documentSession.IsSaving || _virtualSaveBarrierInProgress) return false;
         // 잘림·PDF·빈 화면 — 저장 대상이 없다(ⓐ~ⓓ 비적용). A189: 무제는 저장 대상이다 —
         // 경로 확정(Save as 피커)은 SaveCoreAsync 몫.
         // A343 ⓑ: _capped(앞부분만 담긴 버퍼)도 여기서 잘림과 같이 무동작으로 끝난다 — 3중 차단의 ⓑ.
         if ((_path is null && !_untitled) || _truncated || _capped) return true;
-        SettlePendingDirtyCheck(); // 250ms 창 안의 치환 편집이 "저장할 것 없음"으로 새지 않게
+        var savePane = _virtualEditor;
+        var saveGeneration = _openSeq;
+        EditorSnapshot? browserSnapshot = null;
+        _virtualSaveBarrierInProgress = true;
+        try
+        {
+            browserSnapshot = await CaptureVirtualSnapshotAsync(freeze: false);
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (Exception ex) { await ShowMessageAsync("Save failed", ex.Message); return false; }
+        finally { _virtualSaveBarrierInProgress = false; }
+        if (saveGeneration != _openSeq || !ReferenceEquals(savePane, _virtualEditor)) return false;
+        SettlePendingDirtyCheck();
         if (!_dirty) return true;
 
         var operation = _documentSession.TryBeginSave();
@@ -2974,7 +3036,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdateSearchAvailability();
         try
         {
-            return await SaveCoreAsync(operation);
+            return await SaveCoreAsync(operation, browserSnapshot);
         }
         catch (OperationCanceledException) { return false; }
         catch (Exception ex)
@@ -2989,7 +3051,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         }
     }
 
-    private async Task<bool> SaveCoreAsync(DocumentSession.SaveOperation operation)
+    private async Task<bool> SaveCoreAsync(DocumentSession.SaveOperation operation, EditorSnapshot? browserSnapshot)
     {
         // A189: 무제 문서는 저장 대상 경로가 아직 없다 — 먼저 Save as 피커로 경로를 확정한다
         // (A113 ⓐ의 "Save as..." 피커 재사용). 취소 = 저장 전체 취소(더티 유지 — ConfirmCloseAsync
@@ -3015,7 +3077,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
         if (!_documentSession.IsCurrentSave(operation)) return false;
         // WinUI TextBox는 줄바꿈을 '\r'로 정규화한다 — 기준(\n)으로 맞춘 뒤 원본 스타일로 되돌린다.
-        var normalized = NormalizeNewlines(EditorText, _performance?.Data); // A142 ①ⓑ: 마지막 편집 후 스냅샷 재사용
+        var normalized = browserSnapshot?.Text ?? NormalizeNewlines(EditorText, _performance?.Data);
 
         var text = _newLine == "\n" ? normalized : normalized.Replace("\n", _newLine);
 
@@ -3105,6 +3167,17 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             // 자격의 단일 출처를 지키는 방어라 축을 빠뜨리지 않는다(_truncated와 같은 이유).
             _renderEligible = IsMarkdownPath(path) && !_truncated && !_capped
                 && EditorText.Length <= LargeDocumentChars;
+            if ((_renderMode && !_renderEligible) || (_htmlMode && !IsHtmlPath(path)))
+            {
+                _renderSeq++;
+                StopRenderAppendLoop();
+                _renderMode = false;
+                _renderBlocks = null;
+                RenderPane.Visibility = Visibility.Collapsed;
+                ResetHtmlViewState();
+                UpdateEditorReadOnly();
+                RefreshActiveEditorSurface();
+            }
             UpdateViewToggle();
             // 창 제목 갱신은 셸 몫 — A279부터 경로가 갈리는 저장(Save as...·무제 첫 저장)을
             // ContentPathChanged로 따로 알려 셸이 제목을 새 파일 이름으로 다시 만든다
@@ -3258,6 +3331,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     private void OnSaveInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (HotkeySupport.IsVirtualTextInputFocused(this)) { args.Handled = false; return; }
         args.Handled = true;
         _ = SaveAsync();
     }
@@ -3273,12 +3347,14 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         get
         {
             SettlePendingDirtyCheck();
-            return _dirty || _documentSession.IsSaving;
+            return _virtualEditor is not null || _virtualSaveBarrierInProgress || _dirty || _documentSession.IsSaving;
         }
     }
 
     /// <summary>저장/버리기/취소 확인. 셸이 뷰 교체·창 닫기 전에 부르고, 뷰 내부 열기도 직접 부른다.</summary>
-    public async Task<bool> ConfirmCloseAsync()
+    public Task<bool> ConfirmCloseAsync() => _virtualEditor is not null ? ConfirmVirtualCloseAsync() : ConfirmCloseCoreAsync();
+
+    private async Task<bool> ConfirmCloseCoreAsync()
     {
         if (!HasUnsavedChanges) return true; // 보류 중 ⓒ 판정 확정 포함
         // ContentDialog는 동시 1개 — 저장 흐름(_documentSession.IsSaving)이 떠 있으면 닫기 보류
@@ -3381,7 +3457,25 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// 대용량(A177 임계 초과·4MB 잘림)도 true — 인쇄 자체는 억제되고 안내 페이지 1장이 나간다
     /// (부록 B 78 확정 — <see cref="GetPrintPageCount"/> 참고).
     /// </summary>
-    public bool CanPrintNow => PrintablePdfPane is not null || IsTextPrintTarget;
+    public bool CanPrintNow => !_contentReleased && !_viewTransitionInProgress &&
+        (_virtualEditor is null || _virtualEditor is { IsReady: true, IsFailed: false }) &&
+        (PrintablePdfPane is not null || IsTextPrintTarget);
+
+    private bool _printPrepared;
+    public async Task<IPrintPageProvider> PreparePrintAsync()
+    {
+        _printPrepared = false;
+        var seq = _openSeq;
+        var pane = _virtualEditor;
+        if (!CanPrintNow) throw new InvalidOperationException("The document is not ready to print.");
+        if (pane is not null) await CaptureVirtualSnapshotAsync(false);
+        if (_contentReleased || seq != _openSeq || !ReferenceEquals(pane, _virtualEditor))
+            throw new OperationCanceledException();
+        CapturePrintSnapshot();
+        _printPrepared = true;
+        return new PreparedPrintPageProvider(this, PrintJobName,
+            () => !_contentReleased && seq == _openSeq);
+    }
 
     /// <summary>
     /// OS 인쇄 큐·대화상자에 뜰 작업 이름 = 보고 있는 파일 이름(_shownPath — PDF·텍스트 공용),
@@ -3399,7 +3493,12 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     {
         get
         {
-            CapturePrintSnapshot();
+            if (!_printPrepared)
+            {
+                if (_virtualEditor is not null) throw new InvalidOperationException("Prepare the document before printing.");
+                CapturePrintSnapshot();
+            }
+            _printPrepared = false;
             return _shownPath is { } shown ? Path.GetFileName(shown)
                 : _untitled ? UntitledDisplayName
                 : string.Empty;
@@ -3422,7 +3521,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     {
         // 방어적 지연 스냅샷 — 정상 경로에서는 PrintJobName(세션 시작)이 항상 먼저라 무동작이다.
         // (_printText는 렌더 세션에서도 함께 잡히므로 이 한 조건이 두 갈래의 스냅샷 유무를 대표한다.)
-        if (_printText is null) CapturePrintSnapshot();
+        if (_printText is null && _virtualEditor is null) CapturePrintSnapshot();
         // 렌더 갈래(배치 5)가 먼저 — 팩킹이 성립하지 않으면 여기서 세션을 원문 갈래로 강등한다
         // (절 머리 주석의 "페이지네이션 1회 확정"). 이 아래로는 배치 4 코드가 그대로 돈다.
         if (_printBlocks is { } blocks)

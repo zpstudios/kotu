@@ -1,0 +1,23 @@
+[
+  {
+    "name": "monaco-editor",
+    "version": "0.52.2",
+    "url": "https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.52.2.tgz",
+    "integrity": "sha512-GEQWEZmfkOGLdd3XK8ryrfWz3AIP8YymVXiPHEdewrUq7mh0qrKrfHLNCXcbB6sTnMLnOZ3ztSiKcciFUkIJwQ==",
+    "archive": "monaco-editor.tgz"
+  },
+  {
+    "name": "esbuild",
+    "version": "0.25.11",
+    "url": "https://registry.npmjs.org/esbuild/-/esbuild-0.25.11.tgz",
+    "integrity": "sha512-KohQwyzrKTQmhXDW1PjCv3Tyspn9n5GcY2RTDqeORIdIJY8yKIF7sTSopFmn/wpMPW4rdPXI0UE5LJLuq3bx0Q==",
+    "archive": "esbuild.tgz"
+  },
+  {
+    "name": "@esbuild/win32-x64",
+    "version": "0.25.11",
+    "url": "https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.25.11.tgz",
+    "integrity": "sha512-D7Hpz6A2L4hzsRpPaCYkQnGOotdUpDzSGRIv9I+1ITdHROSFUWW95ZPZWQmGka1Fg7W3zFJowyn9WGwMJ0+KPA==",
+    "archive": "_esbuild_win32-x64.tgz"
+  }
+]

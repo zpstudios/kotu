@@ -15,12 +15,13 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
-    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget, IImageCopyTarget
+    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget, IImageCopyTarget, IContentLifetime, IEditorEscapeSource
 {
     private readonly IReadOnlyList<IModule> _children;
     private readonly ChildContentHost _content;
     private bool _driveStripShown;
     private object? _bottomOverlay;
+    private bool _contentReleased;
 
     public bool TryTextSearchCommand(TextSearchCommand command, bool fromEnter = false, bool repeat = false) =>
         (_content.Child as ITextSearchTarget)?.TryTextSearchCommand(command, fromEnter, repeat) == true;
@@ -83,6 +84,11 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
         add => _content.PlaybackStateChanged += value;
         remove => _content.PlaybackStateChanged -= value;
     }
+    public event Action? EditorEscapeRequested
+    {
+        add => _content.EditorEscapeRequested += value;
+        remove => _content.EditorEscapeRequested -= value;
+    }
     public event Action? PrintRequested
     {
         add => _content.PrintRequested += value;
@@ -122,9 +128,7 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
         };
         Unloaded += (_, _) =>
         {
-            _initialPathProbe.Dispose();
             RecordTransition(ContentTransitionStage.Unloaded);
-            DetachChild();
         };
         if (context.FilePath is { } path) OpenInitialPathAsync(path);
         UpdateBars();
@@ -136,6 +140,14 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
         if (AllReadableRouting.ResolveChild(_children, path) is not { } module) return false;
         ShowChild(module, OpenContext.ForFile(path));
         return true;
+    }
+
+    public void ReleaseContent()
+    {
+        if (_contentReleased) return;
+        _contentReleased = true;
+        _initialPathProbe.Dispose();
+        DetachChild();
     }
 
     private readonly KOTU.Core.Threading.LatestRequest _initialPathProbe = new();
@@ -154,6 +166,7 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
 
     private void ShowChild(IModule module, OpenContext context)
     {
+        if (_contentReleased) return;
         DiagTrace.Write("allread", $"ShowChild {module.Id} path={context.FilePath ?? "(none)"}");
         _transitionGeneration++;
         ContentTransitionJournal.Shared.Record(_journalView, _transitionGeneration, module.Id, ContentTransitionStage.Begin);
@@ -219,6 +232,7 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     public Guid? ActiveJobId => (_content.Child as IBackgroundJobOwner)?.ActiveJobId;
     public bool HasUnsavedChanges => _content.HasUnsavedChanges;
     public Task<bool> ConfirmCloseAsync() => _content.ConfirmCloseAsync();
+    public Func<Task> CaptureCloseCancellation() => _content.CaptureCloseCancellation();
     public void CaptureSettings() => (_content.Child as ISettingsSnapshotSource)?.CaptureSettings();
     public void SetFileSize(string path, long? bytes) => _content.SetFileSize(path, bytes);
     public void OpenUntitled() => _content.OpenUntitled();
@@ -233,6 +247,7 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     public void Pause() => _content.Pause();
     public bool CanPrintNow => _content.CanPrintNow;
     public string PrintJobName => _content.PrintJobName;
+    public Task<IPrintPageProvider> PreparePrintAsync() => _content.PreparePrintAsync();
     public int GetPrintPageCount(PrintPageSpec spec) => _content.GetPrintPageCount(spec);
     public Task<object?> CreatePrintPageAsync(int pageNumber, PrintPageSpec spec) =>
         _content.CreatePrintPageAsync(pageNumber, spec);

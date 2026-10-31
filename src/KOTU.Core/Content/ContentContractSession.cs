@@ -28,6 +28,7 @@ public sealed class ContentContractSession : IDisposable
         if (content is IContentInfoChangedSource sourceContentInfoChanged) sourceContentInfoChanged.ContentInfoChanged += OnContentInfoChanged;
         if (content is ITrayStatusProvider sourceTrayStatusChanged) sourceTrayStatusChanged.TrayStatusChanged += OnTrayStatusChanged;
         if (content is IPlaybackStateSource sourcePlaybackStateChanged) sourcePlaybackStateChanged.PlaybackStateChanged += OnPlaybackStateChanged;
+        if (content is IEditorEscapeSource escape) escape.EditorEscapeRequested += OnEditorEscapeRequested;
         if (content is IPrintPageProvider sourcePrintRequested) sourcePrintRequested.PrintRequested += OnPrintRequested;
         if (content is IContentCloseRequestSource sourceContentCloseRequested) sourceContentCloseRequested.ContentCloseRequested += OnContentCloseRequested;
         if (content is IContentOpenFailedSource sourceContentOpenFailed) sourceContentOpenFailed.ContentOpenFailed += OnContentOpenFailed;
@@ -61,6 +62,9 @@ public sealed class ContentContractSession : IDisposable
 
     public event Action? PlaybackStateChanged;
     private void OnPlaybackStateChanged() => Dispatch(() => PlaybackStateChanged?.Invoke());
+
+    public event Action? EditorEscapeRequested;
+    private void OnEditorEscapeRequested() => Dispatch(() => EditorEscapeRequested?.Invoke());
 
     public event Action? PrintRequested;
     private void OnPrintRequested() => Dispatch(() => PrintRequested?.Invoke());
@@ -96,6 +100,14 @@ public sealed class ContentContractSession : IDisposable
         return allowed && IsCurrent;
     }
 
+    public Func<Task> CaptureCloseCancellation()
+    {
+        var cancel = (Content as ICloseGuard)?.CaptureCloseCancellation();
+        return () => IsCurrent && cancel is not null ? cancel() : Task.CompletedTask;
+    }
+
+    public ContentCloseLease CreateCloseLease() => new(CaptureCloseCancellation());
+
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
@@ -108,6 +120,7 @@ public sealed class ContentContractSession : IDisposable
         if (Content is IContentInfoChangedSource sourceContentInfoChanged) sourceContentInfoChanged.ContentInfoChanged -= OnContentInfoChanged;
         if (Content is ITrayStatusProvider sourceTrayStatusChanged) sourceTrayStatusChanged.TrayStatusChanged -= OnTrayStatusChanged;
         if (Content is IPlaybackStateSource sourcePlaybackStateChanged) sourcePlaybackStateChanged.PlaybackStateChanged -= OnPlaybackStateChanged;
+        if (Content is IEditorEscapeSource escape) escape.EditorEscapeRequested -= OnEditorEscapeRequested;
         if (Content is IPrintPageProvider sourcePrintRequested) sourcePrintRequested.PrintRequested -= OnPrintRequested;
         if (Content is IContentCloseRequestSource sourceContentCloseRequested) sourceContentCloseRequested.ContentCloseRequested -= OnContentCloseRequested;
         if (Content is IContentOpenFailedSource sourceContentOpenFailed) sourceContentOpenFailed.ContentOpenFailed -= OnContentOpenFailed;

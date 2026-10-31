@@ -25,6 +25,7 @@ internal static class HotkeySupport
     /// 모듈은 이 값을 직접 읽지 않고 ShouldPassThrough를 통해서만 본다.
     /// </summary>
     internal const string PassThroughTag = "kotu.hotkey.passthrough";
+    internal const string VirtualTextInputTag = "kotu.text.virtual";
 
     /// <summary>비주얼 트리 상향 탐색 상한 — 비정상 트리에서의 무한 순회 방어.</summary>
     private const int MaxAncestorDepth = 64;
@@ -82,7 +83,20 @@ internal static class HotkeySupport
         => scope.XamlRoot is { } root && IsTextInput(FocusManager.GetFocusedElement(root));
 
     private static bool IsTextInput(object? focused)
-        => focused is TextBox or PasswordBox or RichEditBox;
+        => focused is TextBox or PasswordBox or RichEditBox || IsVirtualTextInput(focused as DependencyObject);
+
+    internal static bool IsVirtualTextInputFocused(UIElement scope) => scope.XamlRoot is { } root &&
+        IsVirtualTextInput(FocusManager.GetFocusedElement(root) as DependencyObject);
+
+    internal static bool IsVirtualTextInputEvent(UIElement scope, KeyRoutedEventArgs args) =>
+        IsVirtualTextInputFocused(scope) || IsVirtualTextInput(args.OriginalSource as DependencyObject);
+
+    private static bool IsVirtualTextInput(DependencyObject? node)
+    {
+        for (var depth = 0; node is not null && depth < MaxAncestorDepth; depth++, node = VisualTreeHelper.GetParent(node))
+            if (node is FrameworkElement element && Equals(element.Tag, VirtualTextInputTag)) return true;
+        return false;
+    }
 
     /// <summary>포커스 요소가 통과 표시된 표면(탐색기 리스트·트리) 안에 있는지 — 조상까지 훑는다.</summary>
     private static bool IsInPassThroughSurface(DependencyObject? element)

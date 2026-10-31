@@ -1,10 +1,24 @@
 # KOTU 인수인계 문서
 
-## 새 세션 시작점 — 2026-10-28
+## 새 세션 시작점 — 2026-10-31
 
-**사용자 요청으로 여기서 인수인계한다. 추가 시험·구현을 시작하지 않는다.**
+**최신 사용자 확인: B3e 수정본에서 연속 Enter가 “입력이 밀리지 않음”.** 이전 스냅샷 재사용 후보의 실패와 구분한다. 메인은 조율·독립 검수, 구현은 GPT-6 Astra/high 한 명씩 직렬 위임한다.
+
+**현재 B4 통합·B5 배포 검사 검수 완료, v0.412.0 커밋 준비 중**: source57을 원본에 반영했고 메인이56개 일반 파일/특수 MainWindow 병합을 대조했다. 보류 녹화와 닫기 승인 수명의 경합은 로컬 MainWindow 호환성 변경으로 처리했다. 실제 메서드 추출 시험8그룹/12사례, 기존 실패→수정 통과, 실제 통합 App 빌드4:42.61·경고0/오류0이다. root 기존 BuildTools2705는 통합 컴파일에만 명시 허용했고, 수락 후보/배포 소스의2957 검증과 구분한다. B5는 build/release 양쪽에 dependency-free 편집기 protocol/visual 시험을 연결한3파일 변경이다. Node24·공식 setup-node v7의 고정SHA를 사용하고 각 시험을 별도 단계로 실행한다. protocol/visual·구조20·기존7+신규24개 검사 우회 회귀·actionlint를 통과했으며 메인이 source/보존 해시를 검수했다.
+
+**배포 분리 필수**: MainWindow working tree에는 보류 녹화가 포함된다. A401 index에는 accepted-source의 clean MainWindow blob30fe5fb2f16007619722dcfbe37e84421f8373b6만 포함하고, working tree의 merged SHA114E7F99608ED056D8B71B399A643B30C3BCDD6769292BF924F7B3E64E98A3FE와 녹화 호환성 변경은 미커밋으로 보존한다. 다른21개 보류 파일도 unchanged이다. main이 source57+Version+검수한CI/docs의68개 파일을 선별 stage했고 전체468개 빌드 입력을 수락 후보/B5와 대조했다. HEAD/origin은9b52faa, 최신 정식v0.411.0/8c22448이다. 원본 녹화 변경을 배포하지 않는다.
+
+**명시적 배포 승인 확인**: 사용자가 “v0.412.0 커밋·푸시·릴리스 승인”을 답했다. 앞선 자동 승인 검토 거절은 실행 전 발생했으므로 당시 커밋·push는 없었다. 이제 검수한68개 A401 변경만 master에 커밋·즉시1회 push하고 자동 검사 통과 후 정식 릴리스·태그·자산을 검수한다. 녹화 구현은 제외한다. 승인 범위와 검수 기록은 `artifacts/a401-editor-integration-20261031/deployment-approval-state.md`이다.
+
+**사용자 시험 창 보존**: 정상 `artifacts/a401-editor-integration-20261031/src-copy/publish-b3e/KOTU.exe`를 원본 `SYNTHETIC-A401-Enter-manual-1M.txt`의6285:1·Editing100%·검색 비움·가이드/¶ OFF·최대화·저장 완료로 열어 둔 뒤 사용자에게 넘겼다. 이후 새 편집 가능성이 있으므로 자동 입력·종료·본문/설정 복원 금지다. 당시 원본/Undo SHA0E4ED95C...AAEA8와 초기 설정 SHAB4867D83...B2FB를 독립 확인했다. 열린 앱은 자체 탐색/창 위치를 나중에 저장할 수 있다.
+
+B3의 실제6/36Enter·정확한 저장/Undo, 검색/메뉴 포커스와 명령 순서, 최신 미저장 Markdown/HTML 미리보기, 빈 문서/한 줄 문서 초기화를 검수했다. 전체963시험 이후 변경별 집중 검사, 최종buffer13/13·protocol/visual, source57/package1065/binary15/assets8 해시를 대조했다. CUA 시간은 물리 입력 지연/배속비가 아니다. 실제 IME·최종20/40% 재확인·인쇄 취소 등은 §4의 미확인으로 보존하며 A401 전체 완료는 아니다.
+
+정본: `A401-LOCAL-TEXT-EDITOR.md`, `artifacts/a401-editor-integration-20261031/main-b3e-review.md`·`main-b4-source-review.md`, `integration-b4/phase2-handoff.md`, `integration-b5-ci/` 및 `src-copy/evidence-b3e/`. a401_root_integration_b4_20261031(Astra/high)과 이전 UI 에이전트는 모두 FINAL STOP이며 이후 stage/커밋/푸시/배포 검수는 메인 소유다. 제품 커밋·push·릴리스와 UI 추가 시험은 아직 하지 않았다. 아래 녹화 보류는 계속 유지한다.
+
+**10/29 사용자가 선택한 native Debug OFF 대조1회 실행·복원·메인 검수를 완료했다. 기존 오류 미재현, 원인 미확정으로 배포 보류를 유지한다.**
 메인은 조율·검수·문서·배포, 실제 구현과 UI 검증은 **GPT-6 Astra/high 한 명에게 직렬 위임**한다.
-한 배치의 결과를 메인이 검수하고 보고한 뒤 다음 배치를 정한다. 현재 실행 중인 에이전트·질문 대기는 없다.
+녹화 진단 배치는 결과 보고 후 종료했고 녹화 쪽 다음 시험/제품 수정은 아직 선택하지 않았다. 현재 진행 중인 A401과 사용자 체감 질문은 위 최신 상태를 따른다.
 
 **현재 제품 상태**: 마지막 정식 배포는 A403 **v0.411.0 / 8c22448**(2026-10-27 12:25:17 KST).
 빌드·릴리스 각각919/919와 원본 배포 검사·태그·자산8개·Latest 검수 완료, 재시험 불필요.
@@ -21,25 +35,27 @@
 | v411 비교1회 | 정상 저장, 실행 중 읽기 성공, 영상 헤더58.255초 | 시간·치수 동등성 미확인; 회귀 원인 확정 아님 |
 | 원본 v412 재비교1회 | 같은 오류, 실행 중 출력 사용 프로세스가 동일 KOTU임을 확인 | 정확한 native 호출/핸들 원인 미확정; Stop 클릭 전 이미 Saving |
 | 10/28 격리 진단1회 | 정상 저장,66이벤트/누락0,영상 헤더61.8초/video1/audio0 | 이전 오류 미재현; 진단 비용·창 배치·치수 영향 분리 못 함; 재생 시험 없음 |
+| 10/29 native Debug OFF 대조1회 | 정상 저장,66이벤트/누락0,live 읽기 성공,헤더50.689초/video1/audio0 | 상세 로그OFF도 성공; 관리형 계측·본문·시간·환경 영향은 미분리, 원인 미확정 |
 
-마지막 진단에서 실제 Stop/Dispose는 같은 worker, 완료 콜백 반환 → Dispose → 파일 열기 → Published 순서였다.
+두 진단 모두 실제 Stop/Dispose는 같은 worker, 완료 콜백 반환 → Dispose → 파일 열기 → Published 순서였다.
 **정상1회를 오류 해결로 판단하지 않는다. 원인 미확정과 v412 배포 보류를 유지한다.**
-시험창 정상 종료·원본 설정 byte 복원·원본 소스/패키지와 진단본 총78해시 보존을 메인이 독립 확인했다.
+10/29 시험창 정상 종료·fresh backup과 원본 설정3293bytes 복원·기존/새 소스와 패키지104개 및 이전 영상/로그6개 해시 보존을 메인이 독립 확인했다.
 
-**“대조하는 1회 시험”의 뜻 — 제안만 있고 미선택·미실행**:
-같은 격리 진단 빌드에서 **네이티브 인코더 상세 Debug 로그만 끄고 관리형 호출 순서 기록은 유지**하며,
-가능한 같은 창 크기·배치·입력으로 합성 문서 Window를 무음 녹화해 기존 Video 저장 오류 재현 여부를 비교하는 후보다.
-빠른 녹음·트레이 기능 시험이 아니다. 새 세션도 자동으로 실행하지 말고 이 후보 또는 다른 배치를 사용자와 정한 뒤 진행한다.
-선택되면 새 설정 백업/정확한 실행 파일·대상 창·두 음원 OFF 확인 → 한 번 실행 → 복원 → 메인 독립 검수/보고까지만 한다.
-추가 카메라 활성화는 포함하지 않는다. 영구 Busy/Exit 불가만 만드는 임시 수정은 채택하지 않는다.
+**10/29 대조 시험 완료**: 기존 Record의 Video 화면/창 녹화 저장 오류를 대상으로, 같은 격리 진단본에서 native 상세 로그 활성화 한 값만 껐다.
+owner1/observer2/합성 Document3과 최대화1295×767, 두 음원OFF를 유지했다. native.log는 없고 관리형 순서 기록은66개/최종drop0이었다.
+닫기47.496초/Stop클릭52.733초, 실제 nativeStop52.971초, 영상 헤더50.689초다. 앞선ON의61.8초와 길이가 다르고 원래 합성 문서 본문을 복구하지 못해 새 정적 문서를 사용했다.
+SDK git suffix 메타데이터 편차도 별도 기록했다. OFF 성공1회로 상세 로그 무관·회귀 해결·모든 native 자원 해제를 단정하지 않는다.
+빠른 녹음·트레이 기능 시험이 아니다. 원본 v412 제품은 그대로 보존하며 추가 시험/수정/배포로 자동 확장하지 않는다. 추가 카메라 활성화도 포함하지 않는다.
+최신 검수 `artifacts/a406-a407/main/control-20261029-review.md`, 상세 `control-20261029/evidence/stage-b-report.md`(같은 a406-a407 아래).
+다음 배치는 아직 선택하지 않았다. 기존 승인 빌드/991시험/이번 녹화를 자동 반복하지 않는다.
 
 **보존과 읽을 순서**:
 
 - 정본: `A406-A407-QUICK-RECORDING.md`; 세션 경과: `SESSION-LOG.md`; 백로그: `REQUIREMENTS.md`.
-- 마지막 진단 검수: `artifacts/a406-a407/main/diagnostic-batch-20261028-review.md`와 `diagnostic-stage-b-independent-check.json`.
+- 최신 대조 검수: `artifacts/a406-a407/main/control-20261029-review.md`와 `control-20261029-restoration-check.json`; 직전ON 검수는 `diagnostic-batch-20261028-review.md`.
 - 상세 결과: `artifacts/a406-a407/diagnostic-20261028/evidence/stage-b-report.md`; 실행 범위: `main/diagnostic-batch-20261028-contract.md`(같은 a406-a407 아래).
 - 기반 구현 검수: `artifacts/a406-a407/main/b1b-acceptance.md`; 오류/해제 조사: `trace-plan/encoder-trace-plan.md`, `main/encoder-trace-plan-review.md`.
-- 원본 시험 패키지: `artifacts/a406-a407/b1b/package/publish/KOTU.exe`; 격리 진단 패키지: `artifacts/a406-a407/diagnostic-20261028/package/publish/KOTU.exe`. 서로 바꿔 실행하지 않는다.
+- 패키지는 `artifacts/a406-a407/` 아래 원본 `b1b/package/publish/`, ON `diagnostic-20261028/package/publish/`, OFF `control-20261029/package/publish/`에 각각 보존했다. KOTU.exe 경로와 App/Record DLL 해시로 식별하고 서로 바꿔 실행하지 않는다.
 - 로컬 제품/시험22파일(`Directory.Build.props`의0.412.0 변경 포함)을 보존한다. 인수인계 문서 커밋에 제품 파일을 섞거나 reset/checkout으로 버리지 않는다.
 - `artifacts/`는 Git에 없는 로컬 근거다. 원본 영상·native 로그는 OneDrive 밖 TEMP에만 있으며 정확한 경로/해시는 각 보고서에 있다.
   다른 PC에서는 이 근거가 자동으로 따라오지 않는다. 증거가 없으면 기존 관측을 새로 확인했다고 주장하지 않는다.
@@ -1305,21 +1321,23 @@ v0.161.0 이하 20묶음은 `docs/DEVICE-CHECKS-ARCHIVE.md`로 "미확인 종결
 
 ---
 
-## 4. 실기기 확인 결과와 잔여 — A403 v0.411.0 정식 배포 완료·비촬영 UI 검수
+## 4. 실기기 확인 결과와 잔여 — A401 v0.412.0 배포 대상·사용자 입력 확인
 
-정상 패키지에서 Audio/Video/Camera와 Stop/Discard/결과 폴더의 여섯 버튼, 카메라 미선택 사유,
-마이크 WAV 안내·시각 음원 checkbox와의 구분, 독립 카메라/화면 선택·화면/창 배타·Refresh·설정 pane 왕복을 확인했다.
-707폭과 앱150/125%에서 버튼/상태/안내를 확인했다. OS 배율 변경이나 모든 테마 검증은 아니다.
-앱 Settings 왕복은 Record 재생성이며 시작 전 미저장 선택 유지로 주장하지 않는다.
+사용자는 정상 B3e 수정본에서 연속 Enter 시험 후 **“입력이 밀리지 않음”**이라고 확인했다.
+약100만 자 복사본의6/36Enter는 정확한 줄 추가·저장·Undo/Redo와 이후 안정된 줄 수를 확인했고,
+최종 후보6Enter도 정확한6LF와 Undo 원문 복원을 메인이 독립 대조했다. 도구 시간은 물리 키 지연/배속비가 아니다.
+검색·치환·복수 줄 붙여넣기, Find Escape 후 방향키 이동, 메뉴 Copy 후 이동/Paste→즉시 Save,
+최신 미저장 Markdown/HTML 미리보기·Undo와 새 빈 문서/한 줄 문서 초기화도 실제 통과했다.
 
-어떤 녹음/녹화 Start·카메라 활성화도0. 사용자 저장·종료 확인 후 새 백업을 사용했고 정상 종료 뒤
-설정 byte복원·native창/프로세스0·출력0·정확한 TEMP 제거·24해시 보존을 확인했다.
-메인은 보고서/접근성과 복원된 설정·프로세스·TEMP·24해시를 독립 대조했다. 픽셀은 담당자의 실제 관측이다.
+최종 원본·설정 bytes를 복원하고 수정본을6285:1·100%로 열어 둔 뒤 사용자에게 넘겼다.
+현재는 사용자가 추가 편집했을 수 있으므로 이전 깨끗한 상태를 가정해 종료·복원하지 않는다.
 
-잔여: 새 세 버튼의 실제 시작/정지/저장/폐기·활성 경합/실패 복구·전역/스텔스 중복 차단,
-초기 열거 제한 밖 기억 소스 복원. A406/A407 전역 수명은 후속이며 추가 카메라 촬영은 이번 실행에 포함하지 않는다.
-정본 `A403-RECORD-START-CONTROLS.md`, 증거 `artifacts/a403-start-controls/native-20261027/resumed/native-report.md`.
-이전 A402 결과/잔여는 `DEVICE-CHECKS.md`에 보존했다.
+잔여: 실제 한국어 IME(도구 Hangul 미지원), 최종 줄 높이 변경 후20/40% 선택 재확인,
+인쇄 미리보기 취소, 새 문서 초기 자동 포커스, light/high-contrast 실제 화면.
+앞선40% 드래그/비활성 선택은 통과,100% 한글 JPEG 캡처 충실도는 미확정이며
+상한/잘림/Standalone 대체 경로는 소스 검증만 했다. 기존 A401의 다른 스크롤·극단 조건도 전체 완료가 아니다.
+정본 `A401-LOCAL-TEXT-EDITOR.md`, 상세 `artifacts/a401-editor-integration-20261031/main-b3e-review.md`.
+이전 A403 실기기 결과/잔여는 `DEVICE-CHECKS.md`에 보존했다.
 
 ## 5. 사용자에게 물어야 할 미결 사항
 

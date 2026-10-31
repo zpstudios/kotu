@@ -15,6 +15,8 @@ KOTU는 아래 외부 구성요소를 사용합니다. 각 구성요소는 자�
 | [ScreenRecorderLib](https://github.com/sskodje/ScreenRecorderLib) 7.0.1 | 화면·창 캡처, WASAPI 시스템/마이크 믹스, Media Foundation H.264/AAC MP4 저장 (A14) | MIT | NuGet, x64 동적 링크. 배포본 `licenses/ScreenRecorderLib-LICENSE.txt`에 패키지의 원본 라이선스 동봉. Visual C++ x64 런타임 및 Windows Media Foundation 필요 |
 | [Magick.NET](https://github.com/dlemstra/Magick.NET) (Magick.NET-Q8-x64) | WIC가 못 읽는 이미지 포맷(psd 등) 디코드 | Apache-2.0 (동봉 네이티브 [ImageMagick](https://imagemagick.org/script/license.php)은 ImageMagick License) | NuGet |
 | Microsoft Windows App SDK / WinUI 3 | UI 프레임워크 (HTML 렌더 뷰의 WebView2 컨트롤 포함, A248) | MIT | NuGet |
+| [Monaco Editor](https://github.com/microsoft/monaco-editor) 0.52.2 | WebView2 안에서 실행하는 로컬 텍스트 편집기 (A401) | MIT | 배포본 `VirtualEditor/monaco-LICENSE.txt`, `VirtualEditor/monaco-ThirdPartyNotices.txt`, `VirtualEditor/editor.js.LEGAL.txt`에 원본 라이선스와 종속 고지 동봉. 실행 시 외부 편집기 서버를 사용하지 않음 |
+| [esbuild](https://github.com/evanw/esbuild) 0.25.11 | 로컬 편집기 자산 생성 | MIT | 개발 시에만 사용. 실행 파일은 앱 배포본에 포함하지 않음 |
 | System.Drawing.Common | 트레이·창 아이콘 GDI+ 합성(브랜드 표식) | MIT | NuGet |
 | Microsoft.Extensions.* (DI, Logging) | 공통 인프라 | MIT | NuGet |
 | System.Text.Encoding.CodePages | CP949 인코딩(압축 항목명·자막) | MIT | NuGet |

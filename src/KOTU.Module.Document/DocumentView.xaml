@@ -130,7 +130,7 @@
              A188 역수 폭 관용구. ZoomMode가 켜지면 콘텐츠 측정 제약이 무한이 되므로 명시 폭이
              랩의 유일한 기준이다). Min=Max 핀 고정은 핀치·내장 줌이 10% 단계 축 밖의 배율을
              만들지 못하게 하는 잠금 — 배율 변경은 ApplyRenderZoom의 ChangeView 한 곳뿐이다. -->
-        <ScrollViewer x:Name="RenderPane" Visibility="Collapsed"
+        <ScrollViewer x:Name="RenderPane" Visibility="Collapsed" IsTabStop="True"
                       VerticalScrollBarVisibility="Auto"
                       ZoomMode="Enabled" MinZoomFactor="1" MaxZoomFactor="1">
             <StackPanel x:Name="RenderStack" Padding="24,16,24,68" />
@@ -289,7 +289,7 @@
                     <TextBox x:Name="FindBox" Width="180" Height="32" MinHeight="32" Padding="8,4"
                              PlaceholderText="Find text" IsEnabled="False" IsSpellCheckEnabled="False"
                              AutomationProperties.Name="Find text" ToolTipService.ToolTip="Find text (Ctrl+F)"
-                             TextChanged="OnFindTextChanged" GotFocus="OnFindGotFocus" />
+                             TextChanged="OnFindTextChanged" />
                     <StackPanel x:Name="InlineFindNavigation" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
                         <TextBlock x:Name="FindCountText" MinWidth="48" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" Visibility="Collapsed" />
                         <Button x:Name="FindPreviousButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"

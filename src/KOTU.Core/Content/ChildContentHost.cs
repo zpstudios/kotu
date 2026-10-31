@@ -6,7 +6,7 @@ namespace KOTU.Core.Content;
 public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, IContentInfoProvider, ICloseGuard,
     ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource,
     IContentPathChangedSource, IContentInfoChangedSource, IBrowseOrderConsumer,
-    ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource, IContentOpenFailedSource
+    ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource, IContentOpenFailedSource, IEditorEscapeSource
 {
     private readonly Action<Action> _dispatch;
     private ContentContractSession? _session;
@@ -26,6 +26,7 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
     public event Action? ContentInfoChanged;
     public event Action? TrayStatusChanged;
     public event Action? PlaybackStateChanged;
+    public event Action? EditorEscapeRequested;
     public event Action? PrintRequested;
     public event Action? ContentCloseRequested;
     public event Action? ContentOpenFailed;
@@ -69,6 +70,7 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
         session.ContentInfoChanged += () => ContentInfoChanged?.Invoke();
         session.TrayStatusChanged += () => TrayStatusChanged?.Invoke();
         session.PlaybackStateChanged += () => PlaybackStateChanged?.Invoke();
+        session.EditorEscapeRequested += () => EditorEscapeRequested?.Invoke();
         session.PrintRequested += () => PrintRequested?.Invoke();
         session.ContentCloseRequested += () => ContentCloseRequested?.Invoke();
         session.ContentOpenFailed += () =>
@@ -93,7 +95,8 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
         var wasDirty = _dirty;
         _dirty = false;
         // 구독 해제 후 바와 센터를 제거한다. Unloaded가 보내는 옛 통지는 이미 무효다.
-        removeVisuals();
+        try { removeVisuals(); }
+        finally { (session?.Content as IContentLifetime)?.ReleaseContent(); }
         if (wasDirty && _generation == generation)
         {
             UnsavedChanged?.Invoke(false);
@@ -123,6 +126,7 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
 
     public bool HasUnsavedChanges => Child is ICloseGuard { HasUnsavedChanges: true };
     public Task<bool> ConfirmCloseAsync() => _session?.ConfirmCloseAsync() ?? Task.FromResult(true);
+    public Func<Task> CaptureCloseCancellation() => _session?.CaptureCloseCancellation() ?? (() => Task.CompletedTask);
     public bool HasPlaybackSurface => Child is IPlaybackStateSource { HasPlaybackSurface: true };
     public bool IsPlaying => Child is IPlaybackStateSource { IsPlaying: true };
     private IMediaTransportTarget? TransportChild => Child as IMediaTransportTarget;
@@ -136,6 +140,14 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
     public void OpenUntitled() => (Child as IUntitledContentSource)?.OpenUntitled();
     public bool CanPrintNow => Child is IPrintPageProvider { CanPrintNow: true };
     public string PrintJobName => (Child as IPrintPageProvider)?.PrintJobName ?? string.Empty;
+    public async Task<IPrintPageProvider> PreparePrintAsync()
+    {
+        var session = _session;
+        if (session?.Content is not IPrintPageProvider provider) throw new OperationCanceledException();
+        var prepared = await provider.PreparePrintAsync();
+        if (!ReferenceEquals(_session, session)) throw new OperationCanceledException();
+        return prepared;
+    }
     public int GetPrintPageCount(PrintPageSpec spec) => (Child as IPrintPageProvider)?.GetPrintPageCount(spec) ?? 0;
     public async Task<object?> CreatePrintPageAsync(int pageNumber, PrintPageSpec spec)
     {
