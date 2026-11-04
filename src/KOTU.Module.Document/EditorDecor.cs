@@ -303,17 +303,29 @@ internal sealed class EditorDecor
         // 스크롤은 레이아웃 패스 없이(컴포지션) 움직인다 — ViewChanged 구독은 EnsureScrollHook에서.
         _themeSource.ActualThemeChanged += (_, _) =>
         {
-            _brush = MakeBrush();
-            foreach (var guide in _guides) guide.Fill = _brush;
-            foreach (var marker in _markers) marker.Foreground = _brush;
-            foreach (var number in _numbers) number.Foreground = _brush;
+            RefreshAppearance();
             RenderImmediately(TextPerfEvent.DecorTheme);
         };
+        // 테마/포커스가 Foreground 브러시를 교체하면 기존 장식 풀도 새 브러시를 따른다.
+        // editor와 decor는 같은 뷰 수명이며 이 구독은 전역 루트가 아니다. Unloaded에서
+        // 끊지 않아 재로드 시에도 유지한다. RefreshAppearance는 editor의 DP를 쓰지 않는다.
+        _editor.RegisterPropertyChangedCallback(Control.ForegroundProperty, (_, _) => RefreshAppearance());
     }
 
-    /// <summary>다크 = 흰 선, 라이트 = 검은 선 — 테마 파생 한 쌍(불투명도는 위 상수가 정한다).</summary>
+    /// <summary>본문 전경을 따른다 — Light의 검정 Editing 바탕과 고대비도 같은 대비를 유지한다.</summary>
     private SolidColorBrush MakeBrush() =>
-        new(_themeSource.ActualTheme == ElementTheme.Dark ? Colors.White : Colors.Black);
+        // 같은 브러시의 Color 변경도 즉시 전파되도록 색을 복제하지 않는다.
+        _editor.Foreground as SolidColorBrush ??
+            new(_themeSource.ActualTheme == ElementTheme.Dark ? Colors.White : Colors.Black);
+
+    internal void RefreshAppearance()
+    {
+        _brush = MakeBrush();
+        foreach (var guide in _guides) guide.Fill = _brush;
+        foreach (var marker in _markers) marker.Foreground = _brush;
+        foreach (var number in _numbers) number.Foreground = _brush;
+        Invalidate();
+    }
 
     /// <summary>텍스트·크기·모드 변경 공용 진입점 — 다음 레이아웃 반영 후 다시 그린다.</summary>
     public void Invalidate()

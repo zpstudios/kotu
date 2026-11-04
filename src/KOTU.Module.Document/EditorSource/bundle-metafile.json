@@ -32954,12 +32954,12 @@
       "format": "esm"
     },
     "visual.js": {
-      "bytes": 9820,
+      "bytes": 11813,
       "imports": [],
       "format": "esm"
     },
     "editor.js": {
-      "bytes": 18825,
+      "bytes": 19372,
       "imports": [
         {
           "path": "node_modules/monaco-editor/esm/vs/editor/editor.main.js",
@@ -36148,13 +36148,13 @@
           "bytesInOutput": 442
         },
         "visual.js": {
-          "bytesInOutput": 5286
+          "bytesInOutput": 6161
         },
         "editor.js": {
-          "bytesInOutput": 11206
+          "bytesInOutput": 11517
         }
       },
-      "bytes": 3899648
+      "bytes": 3900834
     },
     "../VirtualEditor/codicon.ttf": {
       "imports": [],

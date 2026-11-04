@@ -19,8 +19,8 @@ internal static class ToolbarIconGeometry
         ToolbarIconKind.Sound =>
         [
             Speaker(),
-            Polygon(9, 6, 10, 5, 14, 9, 10, 13, 9, 12, 12, 9),
-            Polygon(12, 3, 13, 2, 18, 9, 13, 16, 12, 15, 16, 9),
+            SoundWave(new(10, 6), new(12.6, 7.4), new(12.6, 10.6), new(10, 12)),
+            SoundWave(new(12.5, 3.5), new(17.2, 6), new(17.2, 12), new(12.5, 14.5)),
         ],
         ToolbarIconKind.Muted =>
         [
@@ -38,6 +38,45 @@ internal static class ToolbarIconGeometry
     };
 
     private static IconPoint[] Speaker() => Polygon(1, 7, 3, 7, 7, 3, 7, 15, 3, 11, 1, 11);
+
+    // A415 승인 A안의 cubic 중심선 + 1.35 round stroke를 기존 PathIcon용 채움 윤곽으로 편다.
+    // 원본 배율 상자처럼 곡선을 세분화한다. 32구간·반원 16구간으로 200%에서도 각이 드러나지 않는다.
+    private static IconPoint[] SoundWave(IconPoint start, IconPoint control1, IconPoint control2, IconPoint end)
+    {
+        const int steps = 32;
+        const double radius = 1.35 / 2;
+        var left = new IconPoint[steps + 1];
+        var right = new IconPoint[steps + 1];
+        double startNormal = 0, endNormal = 0;
+        for (var i = 0; i <= steps; i++)
+        {
+            var t = i / (double)steps;
+            var u = 1 - t;
+            var x = u * u * u * start.X + 3 * u * u * t * control1.X + 3 * u * t * t * control2.X + t * t * t * end.X;
+            var y = u * u * u * start.Y + 3 * u * u * t * control1.Y + 3 * u * t * t * control2.Y + t * t * t * end.Y;
+            var dx = u * u * (control1.X - start.X) + 2 * u * t * (control2.X - control1.X) + t * t * (end.X - control2.X);
+            var dy = u * u * (control1.Y - start.Y) + 2 * u * t * (control2.Y - control1.Y) + t * t * (end.Y - control2.Y);
+            var scale = radius / Math.Sqrt(dx * dx + dy * dy);
+            left[i] = new(x - dy * scale, y + dx * scale);
+            right[i] = new(x + dy * scale, y - dx * scale);
+            if (i == 0) startNormal = Math.Atan2(dx, -dy);
+            if (i == steps) endNormal = Math.Atan2(dx, -dy);
+        }
+        var points = new List<IconPoint>(left);
+        AddCap(end, endNormal);
+        points.AddRange(right.Reverse());
+        AddCap(start, startNormal + Math.PI);
+        return points.ToArray();
+
+        void AddCap(IconPoint center, double normal)
+        {
+            for (var i = 1; i < 16; i++)
+            {
+                var angle = normal - i * Math.PI / 16;
+                points.Add(new(center.X + radius * Math.Cos(angle), center.Y + radius * Math.Sin(angle)));
+            }
+        }
+    }
     private static IconPoint[] One(double x)
     {
         var vertices = Polygon(x, 9, x + 2, 7, x + 4, 7, x + 4, 17, x + 2, 17, x + 2, 9);

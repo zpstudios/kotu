@@ -206,11 +206,16 @@
                  우측은 모드 버튼이 어느 화면에서도 숨지 않으므로(A249) 고정이다 — 단 코드
                  UpdateOpenFileButton의 대입이 이 Margin을 통째로 덮으므로 우측 값도 그쪽과
                  반드시 함께 고칠 것(한쪽만 고치면 화면에서 조용히 되돌아간다 — A305 배치 2 실사례). -->
+            <Grid x:Name="ModuleToolbarRegion" Margin="82,0,44,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition x:Name="ExplorerFilterColumn" Width="0" />
+                </Grid.ColumnDefinitions>
             <ContentControl x:Name="ModuleBarHost"
                             IsTabStop="False"
-                            Margin="82,0,44,0"
                             HorizontalAlignment="Stretch" VerticalAlignment="Center"
                             HorizontalContentAlignment="Stretch" />
+            </Grid>
 
             <!-- A27(v0.107.0): 메뉴 버튼도 1칸 공통 규격 — 투명 배경·테두리 0이던 예외를 없애
                  다른 하단 바 버튼과 외곽선을 통일. 규격 이력: 40×40 → 36×36(A97) → 32×32(A106).
@@ -327,6 +332,20 @@
                 HorizontalAlignment="Stretch"
                 Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                 Visibility="Collapsed" />
+
+        <!-- A414: one shell-owned input, above the S4 scrim; underlying module tools stay blocked. -->
+        <Grid x:Name="ExplorerFilterHost" Width="120" Height="32"
+              Margin="0,0,44,6" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+              Visibility="Collapsed">
+            <TextBox x:Name="ExplorerFilterBox" Height="32" MinHeight="32" Padding="8,4,28,4"
+                     PlaceholderText="Filter names" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
+                     AutomationProperties.Name="Filter file and folder names"
+                     ToolTipService.ToolTip="Filter file and folder names (Ctrl+F)" />
+            <Button x:Name="ExplorerFilterClear" Width="26" Height="28" MinWidth="0" Padding="0"
+                    BorderThickness="0" Background="Transparent" Content="×"
+                    HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Collapsed"
+                    AutomationProperties.Name="Clear filename filter" ToolTipService.ToolTip="Clear filename filter" />
+        </Grid>
 
         <!-- A234 배치 1: 셸 포커스 앵커 — RecoverChromeFocusOrphan 2단 복구의 최후 착지점.
              RootLayout(Grid)은 Control이 아니라 IsTabStop이 없어 포커스 대상이 될 수 없다

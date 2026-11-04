@@ -202,6 +202,7 @@ internal sealed partial class VirtualEditorPane : UserControl
                 var steps = root.GetProperty("steps").GetInt32();
                 if (steps is >= -100 and <= 100) ZoomRequested?.Invoke(steps);
             }
+            else if (kind == "panel-shortcut") HandlePanelShortcut(root);
             else if (kind == "shortcut") Shortcut?.Invoke(root.GetProperty("key").GetString()!);
             else if (kind == "context") ShowEditMenu(root);
             else if (kind == "clipboard") _ = HandleClipboardAsync(root.Clone());

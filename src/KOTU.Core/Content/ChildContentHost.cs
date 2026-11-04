@@ -1,4 +1,4 @@
-﻿using KOTU.Core.Contracts;
+using KOTU.Core.Contracts;
 
 namespace KOTU.Core.Content;
 
@@ -6,7 +6,7 @@ namespace KOTU.Core.Content;
 public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, IContentInfoProvider, ICloseGuard,
     ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource,
     IContentPathChangedSource, IContentInfoChangedSource, IBrowseOrderConsumer,
-    ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource, IContentOpenFailedSource, IEditorEscapeSource
+    ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource, IContentOpenFailedSource, IEditorEscapeSource, IEditorPanelShortcutSource
 {
     private readonly Action<Action> _dispatch;
     private ContentContractSession? _session;
@@ -26,6 +26,7 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
     public event Action? ContentInfoChanged;
     public event Action? TrayStatusChanged;
     public event Action? PlaybackStateChanged;
+    public event Action<EditorPanelShortcut>? EditorPanelShortcutRequested;
     public event Action? EditorEscapeRequested;
     public event Action? PrintRequested;
     public event Action? ContentCloseRequested;
@@ -70,6 +71,7 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
         session.ContentInfoChanged += () => ContentInfoChanged?.Invoke();
         session.TrayStatusChanged += () => TrayStatusChanged?.Invoke();
         session.PlaybackStateChanged += () => PlaybackStateChanged?.Invoke();
+        session.EditorPanelShortcutRequested += value => EditorPanelShortcutRequested?.Invoke(value);
         session.EditorEscapeRequested += () => EditorEscapeRequested?.Invoke();
         session.PrintRequested += () => PrintRequested?.Invoke();
         session.ContentCloseRequested += () => ContentCloseRequested?.Invoke();

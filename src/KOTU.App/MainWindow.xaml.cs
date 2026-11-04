@@ -72,8 +72,8 @@ public sealed partial class MainWindow : Window
     /// 정보 다건 캐시의 키 절반(경로+수정시각)이다 — 열거가 이미 아는 값이라 추가 조회가 없다.
     /// 세우는 곳 = OnBrowseSelectionChanged 하나, 내리는 곳 = 같은 메서드(해제) +
     /// SetContentState/OnContentOpened(열기 = 선택 축 리셋 — 열기 직후 선택이 열린 콘텐츠
-    /// 정보를 가리는 역전 방지)/OnUntitledOpened/ExitOpenFileBrowsing/ViewChanged(목록 재작성 =
-    /// 타일 전부 새로 만듦 — stale 경로 방지).
+    /// 정보를 가리는 역전 방지)/OnUntitledOpened/ExitOpenFileBrowsing.
+    /// A414: ViewChanged는 살아 있는 선택 경로를 유지하고 최신 메타데이터로 갱신한다.
     /// </summary>
     private (string Path, bool IsPlaceholder, long ModifiedTicks)? _selectedBrowse;
 
@@ -180,6 +180,7 @@ public sealed partial class MainWindow : Window
         InitializeJobs();
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
+        InitializeExplorerSearch();
         _iconMetadata = new((path, cancellation) => IconWorker.Run(_ => FileMetadata.Read(path), cancellation));
         _iconRefreshTimer.Tick += (_, _) => { _iconRefreshTimer.Stop(); InvalidateIconMetadata(); RefreshShellIcons(); };
         Closed += (_, _) =>
@@ -205,16 +206,11 @@ public sealed partial class MainWindow : Window
         // (S1과 S4는 동시에 성립하지 않는다: S1에서는 S4 진입 자체가 없음 — 강조만).
         ListOverlay.ViewChanged += (folder, entries) =>
         {
+            ResetExplorerPrefix();
             RememberBrowsedFolder(folder); // A174 — 브라우징 위치도 전역 마지막 폴더로(같은 값이면 무동작)
             RecordFolderHistory(folder);   // A244 — 폴더 실변경만 백스택 적재(정렬·감시 재발화는 무동작)
-            // A200: 목록 재작성(폴더 이동·정렬·감시 재스캔)은 타일을 전부 새로 만든다 — 선택 축도
-            // 여기서 확정 리셋한다(그리드 SelectionChanged가 Clear에서 안 와도 stale 경로가 우측
-            // 정보에 남지 않게). 이미 없으면 무동작 — 재스캔마다 정보 패널을 다시 그리지 않는다.
-            if (_selectedBrowse is not null)
-            {
-                _selectedBrowse = null;
-                RefreshInfoOverlayForSelection();
-            }
+            // A414: preserve selection by path, but refresh its metadata even without SelectionChanged.
+            RefreshExplorerSelectedMetadata(entries);
             if (_openFileBrowsing) _s4Explorer?.ShowEntries(folder, entries);
             else if (IsEmptyFileModule) _thumbnailExplorer?.ShowEntries(folder, entries);
             // A346: 열려 있는 콘텐츠 뷰가 표시 순서를 소비하면(이미지 뷰어) 그 순서를 주입한다 —
@@ -231,6 +227,7 @@ public sealed partial class MainWindow : Window
         // 선택이 스캔이 끝날 때까지 우측 정보에 남지 않게(위 A200 리셋과 같은 규칙·같은 무동작 가드).
         ListOverlay.NavigationStarted += folder =>
         {
+            ResetExplorerFilter();
             if (_openFileBrowsing) _s4Explorer?.ShowLoading(folder);
             else if (IsEmptyFileModule) _thumbnailExplorer?.ShowLoading(folder);
             if (_selectedBrowse is not null)
@@ -1570,6 +1567,7 @@ public sealed partial class MainWindow : Window
         session.PlaybackStateChanged += OnPlaybackStateChanged;
         session.PrintRequested += RequestPrint;
         session.EditorEscapeRequested += OnEditorEscapeRequested;
+        session.EditorPanelShortcutRequested += OnEditorPanelShortcutRequested;
         session.ShrinkToMinRequested += ShrinkToMinimum;
         session.UnsavedChanged += dirty =>
         {
@@ -1775,7 +1773,7 @@ public sealed partial class MainWindow : Window
         // 고정이다(모드 버튼은 어느 화면에서도 숨지 않는다 — A249). XAML ModuleBarHost.Margin의
         // 우측 값과 반드시 같아야 한다: 이 대입이 XAML 값을 통째로 덮어쓰므로, 한쪽만 고치면
         // 화면에서는 조용히 되돌아간다(A305 배치 2가 실제로 걸렸던 함정).
-        ModuleBarHost.Margin = new Thickness(hasFileContext ? 82 : 44, 0, 44, 0);
+        ModuleToolbarRegion.Margin = new Thickness(hasFileContext ? 82 : 44, 0, 44, 0);
     }
 
     /// <summary>
@@ -2281,6 +2279,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (HandleExplorerPreviewKey(e)) return;
         if (IsFocusWithin(JobsLayer)) return;
         // 분리된 이미지 하단 바도 현재 이미지 명령에 전달한다. 포커스 소유권은 뷰가 판정한다.
         if (!e.Handled && !IsOpenFileBrowsing && e.Key == VirtualKey.C && !IsAltDown() &&
@@ -2351,17 +2350,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnOverlaySideKey(OverlaySide side, KeyRoutedEventArgs e)
     {
-        // A90 keymap S4 행: 좌/우 키 = 무동작 (Q5 확정) — 토글에 태우지 않고 소비만 한다.
-        if (IsOpenFileBrowsing)
-        {
-            e.Handled = true;
-            return;
-        }
-        if (!e.KeyStatus.WasKeyDown) OnOverlaySideDown(side); // 오토리피트 제외 — 토글 연사 방지
-        // 패널 컨텍스트가 있으면 소비한다(오토리피트 포함) — F11/F12는 시스템 조합이 아니고
-        // 다른 수신자도 없다. A119: 패널 제공 뷰(정보 모듈)도 컨텍스트다(HasPanelContext).
-        // A196: 설정·미지원 안내·무제 문서도 편입 — 컨텍스트 없음(빈 셸)만 무소비로 남는다.
-        if (HasPanelContext) e.Handled = true;
+        if (HandlePanelShortcut(side, e.KeyStatus.WasKeyDown)) e.Handled = true;
     }
 
     /// <summary>
@@ -2571,9 +2560,12 @@ public sealed partial class MainWindow : Window
     ///   덮개가 걷히는 경로에 구멍이 없다). 대입 하나뿐이라 중복 호출은 멱등·무해하다.
     /// </summary>
     private void UpdateS4BarScrim()
-        => S4BarScrim.Visibility = _openFileBrowsing && BarVisible
+    {
+        UpdateExplorerSearchContext();
+        S4BarScrim.Visibility = _openFileBrowsing && BarVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
+    }
 
     /// <summary>
     /// 모드 버튼의 세 얼굴(A312) — 지금 상태에서 버튼이 무엇으로 보이고 무엇을 하는가.
@@ -3126,7 +3118,7 @@ public sealed partial class MainWindow : Window
     /// 3초 무입력 뒤 내려간다. 숨김은 종전대로 Visibility.Collapsed라(UpdateShellChrome)
     /// 숨은 바의 버튼은 히트 테스트에서 빠진다(유령 클릭 없음).
     /// </summary>
-    private bool BarVisible => !BarAutoHideContext || !_barAutoHidden;
+    private bool BarVisible => IsExplorerSearchContext || !BarAutoHideContext || !_barAutoHidden;
 
     /// <summary>포인터가 하단 가장자리 띠(바 44 + 근접 여유 EdgeProximity) 안에 있는가 —
     /// 시크바를 노리고 내려온 손 밑에서 바가 꺼지지 않게 틱 시점에 유예한다(경계 버튼 근접
@@ -3782,6 +3774,7 @@ public sealed partial class MainWindow : Window
     private void OnBrowseSelectionChanged(bool fromList)
     {
         if (_syncingBrowseSelection) return; // A336 — 표면 동기화가 만든 발화(아래 표지 주석)
+        ObserveExplorerSelection(fromList);
         (string Path, bool IsPlaceholder, long ModifiedTicks)? next;
         if (fromList)
         {

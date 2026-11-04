@@ -129,6 +129,8 @@ public sealed partial class DocumentView
     {
         if (!_searchInitialized) return;
         var available = CanSearchText;
+        // A414: the shell owns filename filtering while the empty document shows its explorer.
+        SearchPanel.Visibility = _path is not null || _untitled ? Visibility.Visible : Visibility.Collapsed;
         FindBox.IsEnabled = available;
         FindOptionsButton.IsEnabled = available;
         FindBox.PlaceholderText = available ? "Find text" : "Text search unavailable";

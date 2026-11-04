@@ -21,9 +21,10 @@ public sealed partial class DocumentView
         var highContrast = _virtualWindowTheme?.HighContrast ?? _virtualAccessibility.HighContrast;
         var light = ActualTheme == ElementTheme.Light;
         var foreground = highContrast ? _virtualColors.UIElementColor(UIElementType.ButtonText) :
+            !_viewMode ? Microsoft.UI.Colors.White :
             EditorBox.Foreground is SolidColorBrush brush ? brush.Color : light ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
         var background = highContrast ? _virtualColors.UIElementColor(UIElementType.ButtonFace) :
-            light ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Transparent;
+            !_viewMode ? Microsoft.UI.Colors.Black : light ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Transparent;
         var selection = highContrast ? _virtualColors.UIElementColor(UIElementType.Highlight) : (EditorBox.SelectionHighlightColor?.Color ?? _virtualColors.UIElementColor(UIElementType.Highlight));
         return new
         {
@@ -38,6 +39,25 @@ public sealed partial class DocumentView
     }
 
     private static string CssColor(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}{color.A:X2}";
+
+    // Native fallback uses the same mode palette. Mutate only the ordinary theme brushes;
+    // HighContrast retains its live system resources, including hover/focus/disabled states.
+    private void UpdateNativeEditorAppearance()
+    {
+        foreach (var theme in new[] { "Default", "Light" })
+        {
+            if (EditorBox.Resources.ThemeDictionaries[theme] is not ResourceDictionary resources) continue;
+            var background = !_viewMode ? Microsoft.UI.Colors.Black :
+                theme == "Light" ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Transparent;
+            var foreground = !_viewMode || theme == "Default" ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+            foreach (var state in new[] { "", "PointerOver", "Focused", "Disabled" })
+            {
+                if (resources["TextControlBackground" + state] is SolidColorBrush bg) bg.Color = background;
+                if (resources["TextControlForeground" + state] is SolidColorBrush fg) fg.Color = foreground;
+            }
+        }
+        _decor.RefreshAppearance();
+    }
 
     private void SubscribeVirtualAppearance()
     {

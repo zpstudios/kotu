@@ -6,9 +6,11 @@ export function visualMetrics(value = {}) {
   const layoutScale = Math.max(0.5, scale), renderScale = scale / layoutScale;
   // Pinned Monaco's Windows default (fontInfo.js): allow fallback glyphs room above/below the baseline.
   const fontSize = 14 * layoutScale, editorLineHeight = Math.max(8, Math.round(fontSize * 1.35));
-  return { scale, renderScale, fontSize, editorLineHeight,
+  // Monaco accepts integer decoration widths. Share that rounded width with every overlay.
+  const gutter = digits ? Math.round((12 + digits * 8) * scale / renderScale) * renderScale : 0;
+  return { scale, renderScale, fontSize, editorLineHeight, gutter,
     lineHeight: editorLineHeight * renderScale,
-    left: 24 + (digits ? (12 + digits * 8) * scale : 0), right: 24, top: 16, bottom: 68 };
+    left: 24, right: 24, textLeft: 24 + gutter, top: 16, bottom: 68 };
 }
 
 // Monaco의 공개 좌표 API만 사용한다. 길이가 긴 한 논리 줄도 화면 밖 랩을 순회하지 않는다.
@@ -31,8 +33,8 @@ export function visibleDecorations(editor, model, visual, metrics) {
     }
   }
   const digitWidth = String(count).length * 8 * metrics.scale;
-  const gutterX = Math.max(0, metrics.left - 12 * metrics.scale - digitWidth);
-  const gutterVisible = visual.showGuides && gutterX + digitWidth <= metrics.left - 2 * metrics.scale;
+  const gutterX = Math.max(metrics.left, metrics.textLeft - 12 * metrics.scale - digitWidth);
+  const gutterVisible = visual.showGuides && gutterX + digitWidth <= metrics.textLeft - 2 * metrics.scale;
   for (let line = first; line <= last && result.visited < 600; line++) {
     result.visited++;
     const y = editor.getTopForLineNumber(line) * q - top;
@@ -52,10 +54,32 @@ export function visibleDecorations(editor, model, visual, metrics) {
 
 export function createVisuals(monaco, editor, model, initial) {
   const host = document.getElementById('editor'), frameHost = document.getElementById('editor-frame'), canvas = document.getElementById('decor');
+  const numbersHost = document.getElementById('decor-numbers'), marksHost = document.getElementById('decor-marks');
+  const numbers = [], marks = [];
   const context = canvas.getContext('2d');
   let visual = {}, metrics = visualMetrics(), frame = null, disposed = false, applying = false;
   let previousHeight = editor.getLayoutInfo().height;
   const subscriptions = [];
+  // The editor and decorations share actual DOM font/line boxes, including the small-zoom transform.
+  // Canvas's 'top' baseline is a font metric, not Monaco's line-box top. No guessed y offset is used.
+  function drawLabels(parent, pool, items, rightAligned) {
+    for (let i = 0; i < items.length; i++) {
+      let label = pool[i];
+      if (!label) {
+        label = document.createElement('span');
+        label.style.position = 'absolute';
+        label.style.whiteSpace = 'pre';
+        if (rightAligned) label.style.transform = 'translateX(-100%)';
+        parent.appendChild(label); pool.push(label);
+      }
+      const item = items[i];
+      label.hidden = false;
+      if (label.textContent !== item.label) label.textContent = item.label;
+      label.style.left = `${item.x / metrics.renderScale}px`;
+      label.style.top = `${item.y / metrics.renderScale}px`;
+    }
+    for (let i = items.length; i < pool.length; i++) pool[i].hidden = true;
+  }
   function draw() {
     frame = null;
     if (disposed) return;
@@ -69,17 +93,18 @@ export function createVisuals(monaco, editor, model, initial) {
     context.clearRect(0, 0, width, height);
     const items = visibleDecorations(editor, model, visual, metrics);
     context.fillStyle = visual.foreground || '#ffffff';
-    context.font = `${12 * metrics.scale}px "Segoe UI", sans-serif`;
-    context.textBaseline = 'top';
     context.save(); context.beginPath(); context.rect(0, Math.max(0, metrics.top - editor.getScrollTop() * metrics.renderScale), width - metrics.right, height); context.clip();
     context.globalAlpha = 0.14;
-    for (const y of items.guides) context.fillRect(metrics.left, y, Math.max(0, width - metrics.left - metrics.right), 1);
-    context.globalAlpha = 0.4; context.textAlign = 'right';
-    for (const item of items.numbers) context.fillText(item.label, item.x, item.y);
-    context.globalAlpha = 0.25; context.textAlign = 'left';
-    context.save(); context.beginPath(); context.rect(metrics.left, 0, layout.contentWidth * metrics.renderScale, height); context.clip();
-    for (const item of items.marks) context.fillText(item.label, item.x, item.y);
-    context.restore(); context.restore();
+    for (const y of items.guides) context.fillRect(metrics.textLeft, y, Math.max(0, width - metrics.textLeft - metrics.right), 1);
+    context.restore();
+    const q = metrics.renderScale, clipTop = Math.max(0, metrics.top - editor.getScrollTop() * q);
+    numbersHost.style.clipPath = `inset(${clipTop / q}px ${metrics.right / q}px 0 ${metrics.left / q}px)`;
+    // Pinned Monaco's contentWidth includes the scrollbar (editorOptions.js, EditorLayoutInfoComputer).
+    // Keep end markers out of the gutter and the scrollbar, just like the editor's text viewport.
+    const contentRight = metrics.left + (layout.contentLeft + layout.contentWidth - layout.verticalScrollbarWidth) * q;
+    marksHost.style.clipPath = `inset(${clipTop / q}px ${Math.max(metrics.right, width - contentRight) / q}px 0 ${metrics.textLeft / q}px)`;
+    drawLabels(numbersHost, numbers, items.numbers, true);
+    drawLabels(marksHost, marks, items.marks, false);
   }
   function schedule() {
     if (!disposed && frame === null && document.visibilityState !== 'hidden') frame = requestAnimationFrame(draw);
@@ -125,10 +150,17 @@ export function createVisuals(monaco, editor, model, initial) {
       }
     });
     editor.updateOptions({ fontSize: metrics.fontSize, lineHeight: metrics.editorLineHeight,
+      lineDecorationsWidth: metrics.gutter / metrics.renderScale,
       scrollbar: { verticalScrollbarSize: 14 / metrics.renderScale, horizontalScrollbarSize: 14 / metrics.renderScale },
       padding: { top: metrics.top / metrics.renderScale, bottom: metrics.bottom / metrics.renderScale }, theme: 'kotu', autoDetectHighContrast: false });
     editor.layout();
-    const geometryChanged = previousMetrics.scale !== metrics.scale || previousMetrics.left !== metrics.left;
+    for (const layer of [numbersHost, marksHost]) {
+      editor.applyFontInfo(layer);
+      layer.style.color = foreground;
+      layer.style.width = `${100 / metrics.renderScale}%`; layer.style.height = `${100 / metrics.renderScale}%`;
+      layer.style.transform = `scale(${metrics.renderScale})`;
+    }
+    const geometryChanged = previousMetrics.scale !== metrics.scale || previousMetrics.gutter !== metrics.gutter;
     if (geometryChanged && position && before) editor.setScrollTop(editor.getTopForPosition(position.lineNumber, position.column) - before.top * previousMetrics.renderScale / metrics.renderScale);
     if (geometryChanged && caretWasVisible) keepCaretVisible();
     applying = false;
@@ -148,5 +180,6 @@ export function createVisuals(monaco, editor, model, initial) {
     disposed = true; if (frame !== null) cancelAnimationFrame(frame);
     for (const subscription of subscriptions) subscription.dispose();
     document.removeEventListener('visibilitychange', schedule);
+    numbersHost.replaceChildren(); marksHost.replaceChildren();
   } };
 }

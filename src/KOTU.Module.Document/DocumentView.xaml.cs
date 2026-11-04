@@ -1658,6 +1658,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 저장으로 원본을 덮어쓰는 사고를 막는 첫 겹(3중 차단의 ⓐ).
         EditorBox.IsReadOnly = _truncated || _capped || _viewMode;
         EditorBox.IsTabStop = true; // A409: 읽기 전용에서도 네이티브 포커스·선택·복사 허용
+        UpdateNativeEditorAppearance();
         _decor.SetViewSuppressed(_viewMode); // A277 ⓐ
         UpdateSearchAvailability();
     }

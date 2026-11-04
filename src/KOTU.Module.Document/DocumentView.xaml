@@ -65,6 +65,7 @@
             TextWrapping="Wrap"
             IsSpellCheckEnabled="False"
             Background="{ThemeResource TextControlBackground}"
+            Foreground="{ThemeResource TextControlForeground}"
             SelectionHighlightColorWhenNotFocused="{ThemeResource TextControlSelectionHighlightColor}"
             BorderThickness="0"
             CornerRadius="0"
@@ -82,18 +83,30 @@
                             <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
                             <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
                             <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
+                            <SolidColorBrush x:Key="TextControlForeground" Color="White" />
+                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="White" />
+                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="White" />
+                            <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="White" />
                         </ResourceDictionary>
                         <ResourceDictionary x:Key="Light">
                             <SolidColorBrush x:Key="TextControlBackground" Color="White" />
                             <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="White" />
                             <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="White" />
                             <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="White" />
+                            <SolidColorBrush x:Key="TextControlForeground" Color="Black" />
+                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="Black" />
+                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="Black" />
+                            <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="Black" />
                         </ResourceDictionary>
                         <ResourceDictionary x:Key="HighContrast">
                             <SolidColorBrush x:Key="TextControlBackground" Color="{ThemeResource SystemColorButtonFaceColor}" />
                             <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{ThemeResource SystemColorButtonFaceColor}" />
                             <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{ThemeResource SystemColorButtonFaceColor}" />
                             <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                            <SolidColorBrush x:Key="TextControlForeground" Color="{ThemeResource SystemColorButtonTextColor}" />
+                            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="{ThemeResource SystemColorButtonTextColor}" />
+                            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="{ThemeResource SystemColorButtonTextColor}" />
+                            <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="{ThemeResource SystemColorGrayTextColor}" />
                         </ResourceDictionary>
                     </ResourceDictionary.ThemeDictionaries>
                 </ResourceDictionary>
@@ -101,8 +114,8 @@
         </TextBox>
 
         <!-- A115: 장식 레이어(라인 가이드·¶·EOF) — EditorBox 위(z)에 겹치되 IsHitTestVisible=False로
-             입력 불간섭. 그리기는 EditorDecor(코드)가 전담한다. A409 이후 편집기 배경은 테마별로
-             모든 상태에서 일정하며, 라이트·고대비의 불투명 배경에도 보이도록 장식을 위에 얹고
+             입력 불간섭. 그리기는 EditorDecor(코드)가 전담한다. A413: 일반 테마의 Editing 배경은
+             검정, Viewing은 기존 테마 바탕이다. 고대비의 시스템 배경에도 보이도록 장식을 위에 얹고
              아주 옅게 긋는다(색·불투명도 상수는 EditorDecor 상단 한 곳).
              EditorDecor는 GetRectFromCharacterIndex가 주는 EditorBox 로컬 좌표를 이 Canvas 로컬에
              그대로 찍으므로, 두 요소의 레이아웃 제약(정렬·폭 제한)이 같아야 원점이 겹친다. 한쪽만
@@ -356,16 +369,285 @@
                      상태는 document.* 키 2개로 즉시 저장(A181 줌 관용구). 초기 IsChecked는
                      코드(생성자)가 설정값으로 맞춘다. 이 토글 2종에는 A34 문자 핫키가 없다 —
                      따라서 비활성 시 차단할 키도 없다(HotkeySupport 게이트는 등록된 키에만 건다).
-                     글리프: E7A5(가로줄 무리 — 가이드 근사) 대신 실존 확인이 쉬운 표준 글리프를
-                     쓴다 — 가이드 = E8A9(AlignLeft류 가로줄), 마커 = 문자 '¶' 텍스트(글리프 탐색
-                     불요 — 마커 자신이 최고의 아이콘이다). -->
+                     A415: 네 칸 모양의 E8A9 대신 승인된 숫자 1/2와 가로줄 도형을 쓴다.
+                     마커 = 문자 '¶' 텍스트(마커 자신이 최고의 아이콘이다). -->
                 <StackPanel x:Name="DecorTogglePanel" Grid.Column="7" Margin="6,0,0,0" Orientation="Horizontal"
                             Spacing="6" VerticalAlignment="Center">
                     <ToggleButton x:Name="GuideToggleButton" Style="{StaticResource BottomBarToggleButtonStyle}"
                                   IsEnabled="False"
                                   Click="OnGuideToggleClick"
                                   ToolTipService.ToolTip="Line guides and numbers">
-                        <FontIcon Glyph="&#xE8A9;" FontSize="18" />
+                        <PathIcon x:Name="GuidePathIcon" Width="18" Height="18">
+                            <PathIcon.Data>
+                                <PathGeometry FillRule="Nonzero">
+                                    <PathFigure StartPoint="0,0" IsFilled="False" IsClosed="False">
+                                        <LineSegment Point="18,18" />
+                                    </PathFigure>
+                                    <PathFigure StartPoint="2.35355329514,3.35355329514" IsClosed="True">
+                                        <BezierSegment Point1="2.15829133987,3.54881548882" Point2="1.84170877934,3.54881548882" Point3="1.64644658566,3.35355329514" />
+                                        <BezierSegment Point1="1.45118451118,3.15829133987" Point2="1.45118451118,2.84170866013" Point3="1.64644658566,2.64644670486" />
+                                        <LineSegment Point="2.64644670486,1.64644658566" />
+                                        <BezierSegment Point1="2.78944563866,1.50344765186" Point2="3.00450444221,1.46066975594" Point3="3.19134163857,1.53806018829" />
+                                        <BezierSegment Point1="3.37817883492,1.61545073986" Point2="3.5,1.79776883125" Point3="3.5,2" />
+                                        <LineSegment Point="3.5,6" />
+                                        <BezierSegment Point1="3.5,6.2761425972" Point2="3.27614235878,6.5" Point3="3,6.5" />
+                                        <BezierSegment Point1="2.72385764122,6.5" Point2="2.5,6.2761425972" Point3="2.5,6" />
+                                        <LineSegment Point="2.5,2" />
+                                        <LineSegment Point="3,2" />
+                                        <LineSegment Point="3.35355329514,2.35355329514" />
+                                        <LineSegment Point="2.35355329514,3.35355329514" />
+                                    </PathFigure>
+                                    <PathFigure StartPoint="2,6.5" IsClosed="True">
+                                        <BezierSegment Point1="1.72385764122,6.5" Point2="1.5,6.2761425972" Point3="1.5,6" />
+                                        <BezierSegment Point1="1.5,5.7238574028" Point2="1.72385764122,5.5" Point3="2,5.5" />
+                                        <LineSegment Point="4,5.5" />
+                                        <BezierSegment Point1="4.2761425972,5.5" Point2="4.5,5.7238574028" Point3="4.5,6" />
+                                        <BezierSegment Point1="4.5,6.2761425972" Point2="4.2761425972,6.5" Point3="4,6.5" />
+                                        <LineSegment Point="2,6.5" />
+                                    </PathFigure>
+                                    <PathFigure StartPoint="4,9" IsClosed="True">
+                                        <LineSegment Point="4.00099563599,8.98258686066" />
+                                        <LineSegment Point="4.5,9" />
+                                        <LineSegment Point="4,9" />
+                                    </PathFigure>
+                                    <PathFigure StartPoint="4.00099563599,8.98258686066" IsClosed="True">
+                                        <LineSegment Point="4.00187826157,8.97715854645" />
+                                        <LineSegment Point="4.4970703125,9.04511737823" />
+                                        <LineSegment Point="4.00099563599,8.98258686066" />
+                                    </PathFigure>
+                                    <PathFigure StartPoint="2,9" IsClosed="True">
+                                        <BezierSegment Point1="2,9.27614212036" Point2="1.77614235878,9.5" Point3="1.5,9.5" />
+                                        <BezierSegment Point1="1.22385764122,9.5" Point2="1,9.27614212036" Point3="1,9" />
+                                        <LineSegment Point="1.00187087059,8.90602684021" />
+                                        <LineSegment Point="1.00758647919,8.813164711" />
+                                        <LineSegment Point="1.01731216908,8.72142601013" />
+                                        <LineSegment Point="1.03122365475,8.63085460663" />
+                                        <LineSegment Point="1.04950165749,8.54153728485" />
+                                        <LineSegment Point="1.07232260704,8.4536075592" />
+                                        <LineSegment Point="1.09984815121,8.36724662781" />
+                                        <LineSegment Point="1.13221156597,8.28269195557" />
+                                        <LineSegment Point="1.16950297356,8.20022964478" />
+                                        <LineSegment Point="1.21175611019,8.12018299103" />
+                                        <LineSegment Point="1.25893688202,8.04290390015" />
+                                        <LineSegment Point="1.31093752384,7.96875" />
+                                        <LineSegment Point="1.367577672,7.89806318283" />
+                                        <LineSegment Point="1.42861199379,7.83114814758" />
+                                        <LineSegment Point="1.49374544621,7.76825523376" />
+                                        <LineSegment Point="1.56265258789,7.7095656395" />
+                                        <LineSegment Point="1.63499832153,7.65518808365" />
+                                        <LineSegment Point="1.71045851707,7.60515928268" />
+                                        <LineSegment Point="1.78873598576,7.55945253372" />
+                                        <LineSegment Point="1.86957204342,7.51798868179" />
+                                        <LineSegment Point="1.95275330544,7.48064899445" />
+                                        <LineSegment Point="2.0381128788,7.44729089737" />
+                                        <LineSegment Point="2.12552857399,7.41775608063" />
+                                        <LineSegment Point="2.21491885185,7.39188241959" />
+                                        <LineSegment Point="2.30623579025,7.36951303482" />
+                                        <LineSegment Point="2.39946079254,7.35049676895" />
+                                        <LineSegment Point="2.49459671974,7.3346953392" />
+                                        <LineSegment Point="2.59166431427,7.32198381424" />
+                                        <LineSegment Point="2.6906952858,7.31225061417" />
+                                        <LineSegment Point="2.79173064232,7.30539751053" />
+                                        <LineSegment Point="2.89481592178,7.30133867264" />
+                                        <LineSegment Point="3,7.30000019073" />
+                                        <LineSegment Point="3.10518407822,7.30133867264" />
+                                        <LineSegment Point="3.20826935768,7.30539751053" />
+                                        <LineSegment Point="3.3093047142,7.31225061417" />
+                                        <LineSegment Point="3.40833568573,7.32198381424" />
+                                        <LineSegment Point="3.50540328026,7.3346953392" />
+                                        <LineSegment Point="3.60053920746,7.35049676895" />
+                                        <LineSegment Point="3.69376420975,7.36951303482" />
+                                        <LineSegment Point="3.78508114815,7.39188241959" />
+                                        <LineSegment Point="3.87447142601,7.41775608063" />
+                                        <LineSegment Point="3.9618871212,7.44729089737" />
+                                        <LineSegment Point="4.04724645615,7.48064899445" />
+                                        <LineSegment Point="4.13042783737,7.51798868179" />
+                                        <LineSegment Point="4.21126413345,7.55945253372" />
+                                        <LineSegment Point="4.28954172134,7.60515928268" />
+                                        <LineSegment Point="4.36500167847,7.65518808365" />
+                                        <LineSegment Point="4.43734741211,7.7095656395" />
+                                        <LineSegment Point="4.506254673,7.76825523376" />
+                                        <LineSegment Point="4.57138824463,7.83114814758" />
+                                        <LineSegment Point="4.6324224472,7.89806318283" />
+                                        <LineSegment Point="4.68906259537,7.96875" />
+                                        <LineSegment Point="4.74106311798,8.04290390015" />
+                                        <LineSegment Point="4.7882437706,8.12018299103" />
+                                        <LineSegment Point="4.83049678802,8.20022964478" />
+                                        <LineSegment Point="4.86778831482,8.28269195557" />
+                                        <LineSegment Point="4.90015172958,8.36724662781" />
+                                        <LineSegment Point="4.92767763138,8.4536075592" />
+                                        <LineSegment Point="4.95049858093,8.54153728485" />
+                                        <LineSegment Point="4.96877622604,8.63085460663" />
+                                        <LineSegment Point="4.98268795013,8.72142601013" />
+                                        <LineSegment Point="4.99241352081,8.813164711" />
+                                        <LineSegment Point="4.99812936783,8.90602684021" />
+                                        <LineSegment Point="5,9" />
+                                        <LineSegment Point="4.99314498901,9.10764789581" />
+                                        <LineSegment Point="4.97468423843,9.20877933502" />
+                                        <LineSegment Point="4.94725751877,9.30380344391" />
+                                        <LineSegment Point="4.91269731522,9.39383506775" />
+                                        <LineSegment Point="4.87213850021,9.48016452789" />
+                                        <LineSegment Point="4.82621717453,9.56400299072" />
+                                        <LineSegment Point="4.77525043488,9.64637565613" />
+                                        <LineSegment Point="4.71936655045,9.72811889648" />
+                                        <LineSegment Point="4.65858650208,9.80989360809" />
+                                        <LineSegment Point="4.59287405014,9.89222049713" />
+                                        <LineSegment Point="4.52216625214,9.97550868988" />
+                                        <LineSegment Point="4.44639015198,10.0600776672" />
+                                        <LineSegment Point="4.36546993256,10.1461811066" />
+                                        <LineSegment Point="4.27933454514,10.2340221405" />
+                                        <LineSegment Point="4.18791770935,10.3237600327" />
+                                        <LineSegment Point="4.09115934372,10.4155273438" />
+                                        <LineSegment Point="3.98900532722,10.5094280243" />
+                                        <LineSegment Point="3.88140821457,10.6055498123" />
+                                        <LineSegment Point="3.76832604408,10.703962326" />
+                                        <LineSegment Point="3.64972114563,10.8047275543" />
+                                        <LineSegment Point="3.52556061745,10.9078922272" />
+                                        <LineSegment Point="3.39581537247,11.0134992599" />
+                                        <LineSegment Point="3.26045942307,11.1215839386" />
+                                        <LineSegment Point="3.11947035789,11.232175827" />
+                                        <LineSegment Point="2.97282767296,11.3453006744" />
+                                        <LineSegment Point="2.82051324844,11.4609804153" />
+                                        <LineSegment Point="2.66251111031,11.5792341232" />
+                                        <LineSegment Point="2.49880695343,11.7000770569" />
+                                        <LineSegment Point="2.32938790321,11.8235254288" />
+                                        <LineSegment Point="2.15424227715,11.9495916367" />
+                                        <LineSegment Point="1.97335982323,12.0782842636" />
+                                        <LineSegment Point="1.78673124313,12.2096157074" />
+                                        <LineSegment Point="1.5,11.8000001907" />
+                                        <LineSegment Point="1.5,11.3000001907" />
+                                        <LineSegment Point="4.5,11.3000001907" />
+                                        <BezierSegment Point1="4.7761425972,11.3000001907" Point2="5,11.5238580704" Point3="5,11.8000001907" />
+                                        <BezierSegment Point1="5,12.0761423111" Point2="4.7761425972,12.3000001907" Point3="4.5,12.3000001907" />
+                                        <LineSegment Point="1.5,12.3000001907" />
+                                        <BezierSegment Point1="1.28176486492,12.3000001907" Point2="1.08874118328,12.1584587097" Point3="1.02313101292,11.9503202438" />
+                                        <BezierSegment Point1="0.957520961761,11.7421808243" Point2="1.03448367119,11.5155344009" Point3="1.21326875687,11.3903846741" />
+                                        <LineSegment Point="1.39578080177,11.2619495392" />
+                                        <LineSegment Point="1.57232022285,11.136346817" />
+                                        <LineSegment Point="1.742877841,11.013584137" />
+                                        <LineSegment Point="1.90744304657,10.8936729431" />
+                                        <LineSegment Point="2.06600451469,10.7766256332" />
+                                        <LineSegment Point="2.21854925156,10.6624574661" />
+                                        <LineSegment Point="2.36506295204,10.5511837006" />
+                                        <LineSegment Point="2.50552964211,10.44282341" />
+                                        <LineSegment Point="2.63993120193,10.3374004364" />
+                                        <LineSegment Point="2.76824712753,10.2349376678" />
+                                        <LineSegment Point="2.89045500755,10.1354665756" />
+                                        <LineSegment Point="3.00652885437,10.0390224457" />
+                                        <LineSegment Point="3.11643958092,9.94564628601" />
+                                        <LineSegment Point="3.22015428543,9.85538768768" />
+                                        <LineSegment Point="3.31763529778,9.7683057785" />
+                                        <LineSegment Point="3.4088408947,9.68447208405" />
+                                        <LineSegment Point="3.49372291565,9.60397338867" />
+                                        <LineSegment Point="3.57222795486,9.52691459656" />
+                                        <LineSegment Point="3.64429569244,9.45342731476" />
+                                        <LineSegment Point="3.70986008644,9.38367176056" />
+                                        <LineSegment Point="3.76884937286,9.31785011292" />
+                                        <LineSegment Point="3.82118868828,9.25621604919" />
+                                        <LineSegment Point="3.86680412292,9.19909000397" />
+                                        <LineSegment Point="3.90563321114,9.14688014984" />
+                                        <LineSegment Point="3.93763995171,9.10010814667" />
+                                        <LineSegment Point="3.96284532547,9.05943489075" />
+                                        <LineSegment Point="3.98137688637,9.02569389343" />
+                                        <LineSegment Point="3.99355244637,8.99991512299" />
+                                        <LineSegment Point="4.00000810623,8.98330593109" />
+                                        <LineSegment Point="4.00187826157,8.97715854645" />
+                                        <LineSegment Point="4.48828125,9.09296894073" />
+                                        <LineSegment Point="4.00099563599,8.98258686066" />
+                                        <LineSegment Point="4.4970703125,9.04511737823" />
+                                        <LineSegment Point="4,9" />
+                                        <LineSegment Point="3.99894118309,8.94631671906" />
+                                        <LineSegment Point="3.99586772919,8.89621067047" />
+                                        <LineSegment Point="3.99094510078,8.84966850281" />
+                                        <LineSegment Point="3.98434877396,8.80664539337" />
+                                        <LineSegment Point="3.97625946999,8.76705551147" />
+                                        <LineSegment Point="3.96685385704,8.73076820374" />
+                                        <LineSegment Point="3.95629358292,8.69759750366" />
+                                        <LineSegment Point="3.94471144676,8.6673078537" />
+                                        <LineSegment Point="3.93219828606,8.63961410522" />
+                                        <LineSegment Point="3.9187874794,8.61419200897" />
+                                        <LineSegment Point="3.90444469452,8.59068965912" />
+                                        <LineSegment Point="3.88906264305,8.56875038147" />
+                                        <LineSegment Point="3.8724603653,8.54803085327" />
+                                        <LineSegment Point="3.85439324379,8.52822685242" />
+                                        <LineSegment Point="3.83456587791,8.50908851624" />
+                                        <LineSegment Point="3.81265258789,8.49043464661" />
+                                        <LineSegment Point="3.78831863403,8.47215557098" />
+                                        <LineSegment Point="3.76123976707,8.45421600342" />
+                                        <LineSegment Point="3.73111867905,8.43664169312" />
+                                        <LineSegment Point="3.69769716263,8.41951179504" />
+                                        <LineSegment Point="3.66076111794,8.40294456482" />
+                                        <LineSegment Point="3.6201441288,8.38708400726" />
+                                        <LineSegment Point="3.57572388649,8.37208843231" />
+                                        <LineSegment Point="3.52741885185,8.35811805725" />
+                                        <LineSegment Point="3.47518110275,8.34533119202" />
+                                        <LineSegment Point="3.41899204254,8.33387851715" />
+                                        <LineSegment Point="3.35885453224,8.32389831543" />
+                                        <LineSegment Point="3.29478931427,8.31551647186" />
+                                        <LineSegment Point="3.2268280983,8.30884361267" />
+                                        <LineSegment Point="3.15501189232,8.30397796631" />
+                                        <LineSegment Point="3.07938623428,8.30100536346" />
+                                        <LineSegment Point="3,8.30000019073" />
+                                        <LineSegment Point="2.92061376572,8.30100536346" />
+                                        <LineSegment Point="2.84498810768,8.30397796631" />
+                                        <LineSegment Point="2.7731719017,8.30884361267" />
+                                        <LineSegment Point="2.70521068573,8.31551647186" />
+                                        <LineSegment Point="2.64114546776,8.32389831543" />
+                                        <LineSegment Point="2.58100795746,8.33387851715" />
+                                        <LineSegment Point="2.52481889725,8.34533119202" />
+                                        <LineSegment Point="2.47258114815,8.35811805725" />
+                                        <LineSegment Point="2.42427611351,8.37208843231" />
+                                        <LineSegment Point="2.3798558712,8.38708400726" />
+                                        <LineSegment Point="2.33923888206,8.40294456482" />
+                                        <LineSegment Point="2.30230283737,8.41951179504" />
+                                        <LineSegment Point="2.26888132095,8.43664169312" />
+                                        <LineSegment Point="2.23876023293,8.45421600342" />
+                                        <LineSegment Point="2.21168136597,8.47215557098" />
+                                        <LineSegment Point="2.18734741211,8.49043464661" />
+                                        <LineSegment Point="2.16543412209,8.50908851624" />
+                                        <LineSegment Point="2.14560675621,8.52822685242" />
+                                        <LineSegment Point="2.1275396347,8.54803085327" />
+                                        <LineSegment Point="2.11093735695,8.56875038147" />
+                                        <LineSegment Point="2.09555530548,8.59068965912" />
+                                        <LineSegment Point="2.0812125206,8.61419200897" />
+                                        <LineSegment Point="2.06780171394,8.63961410522" />
+                                        <LineSegment Point="2.05528855324,8.6673078537" />
+                                        <LineSegment Point="2.04370641708,8.69759750366" />
+                                        <LineSegment Point="2.03314614296,8.73076820374" />
+                                        <LineSegment Point="2.02374053001,8.76705551147" />
+                                        <LineSegment Point="2.01565122604,8.80664539337" />
+                                        <LineSegment Point="2.00905489922,8.84966850281" />
+                                        <LineSegment Point="2.00413227081,8.89621067047" />
+                                        <LineSegment Point="2.00105881691,8.94631671906" />
+                                        <LineSegment Point="2,9" />
+                                    </PathFigure>
+                                    <PathFigure StartPoint="7,4.625" IsClosed="True">
+                                        <BezierSegment Point1="6.65482187271,4.625" Point2="6.375,4.34517812729" Point3="6.375,4" />
+                                        <BezierSegment Point1="6.375,3.65482211113" Point2="6.65482187271,3.375" Point3="7,3.375" />
+                                        <LineSegment Point="16,3.375" />
+                                        <BezierSegment Point1="16.3451786041,3.375" Point2="16.625,3.65482211113" Point3="16.625,4" />
+                                        <BezierSegment Point1="16.625,4.34517812729" Point2="16.3451786041,4.625" Point3="16,4.625" />
+                                        <LineSegment Point="7,4.625" />
+                                    </PathFigure>
+                                    <PathFigure StartPoint="7,10.625" IsClosed="True">
+                                        <BezierSegment Point1="6.65482187271,10.625" Point2="6.375,10.3451776505" Point3="6.375,10" />
+                                        <BezierSegment Point1="6.375,9.65482234955" Point2="6.65482187271,9.375" Point3="7,9.375" />
+                                        <LineSegment Point="16,9.375" />
+                                        <BezierSegment Point1="16.3451786041,9.375" Point2="16.625,9.65482234955" Point3="16.625,10" />
+                                        <BezierSegment Point1="16.625,10.3451776505" Point2="16.3451786041,10.625" Point3="16,10.625" />
+                                        <LineSegment Point="7,10.625" />
+                                    </PathFigure>
+                                    <PathFigure StartPoint="7,15.625" IsClosed="True">
+                                        <BezierSegment Point1="6.65482187271,15.625" Point2="6.375,15.3451776505" Point3="6.375,15" />
+                                        <BezierSegment Point1="6.375,14.6548223495" Point2="6.65482187271,14.375" Point3="7,14.375" />
+                                        <LineSegment Point="12,14.375" />
+                                        <BezierSegment Point1="12.3451776505,14.375" Point2="12.625,14.6548223495" Point3="12.625,15" />
+                                        <BezierSegment Point1="12.625,15.3451776505" Point2="12.3451776505,15.625" Point3="12,15.625" />
+                                        <LineSegment Point="7,15.625" />
+                                    </PathFigure>
+                                </PathGeometry>
+                            </PathIcon.Data>
+                        </PathIcon>
                     </ToggleButton>
                     <ToggleButton x:Name="MarksToggleButton" Style="{StaticResource BottomBarToggleButtonStyle}"
                                   IsEnabled="False"

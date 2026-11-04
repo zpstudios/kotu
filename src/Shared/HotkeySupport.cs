@@ -26,6 +26,7 @@ internal static class HotkeySupport
     /// </summary>
     internal const string PassThroughTag = "kotu.hotkey.passthrough";
     internal const string VirtualTextInputTag = "kotu.text.virtual";
+    internal const string ExplorerLetterContextTag = "kotu.explorer.letters";
 
     /// <summary>비주얼 트리 상향 탐색 상한 — 비정상 트리에서의 무한 순회 방어.</summary>
     private const int MaxAncestorDepth = 64;
@@ -59,7 +60,9 @@ internal static class HotkeySupport
             // 통과(삼키지 않음): 텍스트 입력·파일 리스트 포커스이거나, 버튼이 지금 눌릴 수 없는 상태.
             // KeyboardAcceleratorInvokedEventArgs.Handled는 기본값이 true라 명시적으로 되돌린다
             // (셸 MainWindow.AddShortcut의 A32 통과 분기와 같은 처리).
-            if (ShouldPassThrough(scope) || button is not { IsEnabled: true, Visibility: Visibility.Visible })
+            if (ShouldPassThrough(scope) ||
+                scope.XamlRoot?.Content is FrameworkElement { Tag: ExplorerLetterContextTag } ||
+                button is not { IsEnabled: true, Visibility: Visibility.Visible })
             {
                 args.Handled = false;
                 return;

@@ -104,6 +104,11 @@ public sealed partial class FileListOverlay : UserControl
     /// </summary>
     public IReadOnlyList<ExplorerListing.Entry> CurrentEntries => _list?.DisplayEntries ?? [];
 
+    internal void SetNameFilter(string query) => _list?.SetNameFilter(query);
+    internal bool OwnsFileListFocus(DependencyObject focused) => IsOpen && _list?.OwnsFileListFocus(focused) == true;
+    internal bool SelectNameMatch(string path) => IsOpen && _list?.SelectNameMatch(path) == true;
+    internal void FocusNameSelection() { if (IsOpen) _list?.FocusNameSelection(); }
+
     /// <summary>
     /// A323: <see cref="CurrentEntries"/>가 속한 폴더 — 스캔이 도는 중이면 <see cref="CurrentFolder"/>와
     /// 다르다(ExplorerPane.DisplayFolder 주석). 셸의 시드는 두 값이 같을 때만 한다.

@@ -6,8 +6,9 @@ using KOTU.Core.Contracts;
 
 namespace KOTU.Module.Document;
 
-public sealed partial class DocumentView : IContentLifetime, IEditorEscapeSource
+public sealed partial class DocumentView : IContentLifetime, IEditorEscapeSource, IEditorPanelShortcutSource
 {
+    public event Action<EditorPanelShortcut>? EditorPanelShortcutRequested;
     public event Action? EditorEscapeRequested;
     private VirtualEditorPane? _virtualEditor;
     private bool _virtualCloseInProgress;
@@ -70,6 +71,12 @@ public sealed partial class DocumentView : IContentLifetime, IEditorEscapeSource
             }
             UpdateTextPosition();
             SynchronizeSearchSelection();
+        };
+        pane.PanelShortcutRequested += request =>
+        {
+            if (ReferenceEquals(pane, _virtualEditor) && !_contentReleased && IsLoaded &&
+                IsActiveEditorAvailable && pane.OwnsPanelShortcutFocus)
+                EditorPanelShortcutRequested?.Invoke(request);
         };
         pane.Shortcut += key => { if (ReferenceEquals(pane, _virtualEditor)) OnVirtualShortcut(key); };
         pane.ActionFailed += reason => { if (ReferenceEquals(pane, _virtualEditor)) _ = ShowMessageAsync("Could not edit text", reason); };

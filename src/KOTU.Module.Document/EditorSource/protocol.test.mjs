@@ -11,6 +11,7 @@ function harness(text = 'a', readOnly = false) {
   let eol = text.includes('\n') ? '\n' : '\r\n';
   let anchor = 0, position = 0, scrollTop = 0, frameId = 0, textReads = 0, undoStops = 0, focuses = 0, revealed, modelCreations = 0;
   const frames = new Map(), windowEvents = {}, documentEvents = {};
+  let documentFocused = true, textFocused = true;
   const options = {}, triggers = [], undo = [], redo = [];
   const getPositionAt = n => {
     const lines = current.slice(0, n).split('\n');
@@ -36,6 +37,7 @@ function harness(text = 'a', readOnly = false) {
     getOffsetAt, getPositionAt, dispose() {}
   };
   const editor = {
+    hasTextFocus: () => textFocused,
     updateOptions(o) { Object.assign(options, o); }, getLayoutInfo: () => ({ width: 800, height: 600 }),
     getSelection: selection,
     setSelection(s) { anchor = getOffsetAt(s.getSelectionStart()); position = getOffsetAt(s.getPosition()); cursor({ source: 'api' }); },
@@ -66,7 +68,7 @@ function harness(text = 'a', readOnly = false) {
       return true;
     }
   };
-  const document = { visibilityState: 'visible', getElementById() { return {}; }, addEventListener(name, callback) { documentEvents[name] = callback; } };
+  const document = { hasFocus: () => documentFocused, visibilityState: 'visible', getElementById() { return {}; }, addEventListener(name, callback) { documentEvents[name] = callback; } };
   const context = vm.createContext({ location: { hash: '#test' }, URL, Worker: class {},
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; }, cancelAnimationFrame(id) { frames.delete(id); },
     chrome: { webview: { postMessage(value) { raw.push(JSON.stringify(value)); }, addEventListener(_, callback) { receive = callback; } } },
@@ -83,6 +85,7 @@ function harness(text = 'a', readOnly = false) {
   };
   send({ kind: 'load', text, readOnly });
   return { send, options, raw, context, triggers,
+    focus(documentValue, textValue) { documentFocused = documentValue; textFocused = textValue; },
     key(key, modifiers = {}) { let prevented = 0; windowEvents.keydown({ key, preventDefault() { prevented++; }, stopImmediatePropagation() {}, ...modifiers }); return prevented; },
     keyup(key) { windowEvents.keyup({ key }); },
     menu() { windowEvents.contextmenu({ clientX: 20, clientY: 40, preventDefault() {}, stopImmediatePropagation() {} }); return raw.map(JSON.parse).at(-1); },
@@ -328,7 +331,8 @@ for (const key of ['a', '1', '`', 'Backspace', 'Enter', 'ArrowLeft', 'Home', 'En
 for (const key of ['c', 'x', 'v', 'a', 'z', 'y']) assert.equal(keys.key(key, { ctrlKey: true }), 0);
 assert.equal(keys.key('z', { ctrlKey: true, shiftKey: true }), 0);
 for (const key of ['Insert', 'Delete']) assert.equal(keys.key(key, { shiftKey: true }), 0);
-assert.equal(keys.key('F11'), 0); assert.equal(keys.key('F12'), 0);
+assert.equal(keys.key('F11'), 1); assert.equal(keys.key('F12'), 1);
+assert.deepEqual(keys.messages().filter(m => m.kind === 'panel-shortcut').map(m => m.side), ['left', 'right']);
 assert.equal(keys.messages().filter(m => m.kind === 'clipboard').length, 0, 'trusted native clipboard keys never create asynchronous bridge actions');
 assert.equal(keys.options.emptySelectionClipboard, false); assert.equal(keys.options.copyWithSyntaxHighlighting, false); assert.equal(keys.options.multiCursorLimit, 1);
 
@@ -391,3 +395,35 @@ tabs.key('Tab', { shiftKey: true }); assert.equal(tabs.messages().at(-1).key, 'f
 tabs.send({ kind: 'options', id: 701, expectedVersion: 2, payload: { readOnly: true } });
 tabs.key('Tab'); assert.equal(tabs.messages().at(-1).key, 'focus-next');
 console.log('PASS: literal Tab and Shift+Tab/read-only focus navigation');
+
+for (const readOnly of [false, true]) {
+  const panel = harness('panel text', readOnly); panel.send({ kind: 'activate' });
+  for (const [key, side] of [['F11', 'left'], ['F12', 'right']]) {
+    for (let mask = 0; mask < 16; mask++) {
+      const modifiers = { ctrlKey: !!(mask & 1), shiftKey: !!(mask & 2), altKey: !!(mask & 4), metaKey: !!(mask & 8) };
+      for (const repeat of [false, true]) {
+        assert.equal(panel.key(key, { ...modifiers, repeat }), 1);
+        assert.deepEqual(panel.messages().at(-1), { epoch: 'test', kind: 'panel-shortcut', version: 1, side, repeat,
+          control: modifiers.ctrlKey, shift: modifiers.shiftKey, alt: modifiers.altKey, meta: modifiers.metaKey });
+      }
+    }
+  }
+  assert.equal(panel.text, 'panel text');
+  assert.equal(panel.textReads, 1, 'panel keys do not snapshot the document');
+}
+const panelGuards = harness(); panelGuards.send({ kind: 'activate' });
+const panelCount = () => panelGuards.messages().filter(m => m.kind === 'panel-shortcut').length;
+panelGuards.compose(true);
+assert.equal(panelGuards.key('F11'), 0);
+panelGuards.compose(false);
+assert.equal(panelGuards.key('F12', { isComposing: true }), 0);
+assert.equal(panelGuards.key('F11', { keyCode: 229 }), 0);
+panelGuards.focus(false, true); assert.equal(panelGuards.key('F11'), 0);
+panelGuards.focus(true, false); assert.equal(panelGuards.key('F12'), 0);
+panelGuards.focus(true, true);
+for (const key of ['F10', 'F13', 'a']) assert.equal(panelGuards.key(key), 0);
+assert.equal(panelCount(), 0, 'composing, unfocused and non-allowlisted keys never request panels');
+panelGuards.key('f', { ctrlKey: true }); assert.equal(panelGuards.messages().at(-1).key, 'ctrl+f');
+panelGuards.key('Escape'); assert.equal(panelGuards.messages().at(-1).key, 'escape');
+panelGuards.keyup('Escape'); assert.equal(panelGuards.messages().at(-1).key, 'escape-released');
+console.log('PASS: F11/F12 typed panel requests preserve all modifiers/repeats in Editing/Viewing; composition/focus/allowlist guards and Ctrl+F/Escape unchanged');

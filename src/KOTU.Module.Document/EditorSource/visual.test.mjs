@@ -7,7 +7,10 @@ for (const zoom of [20, 30, 40, 50, 100, 130, 200, 500]) {
   assert.ok(Math.abs(m.fontSize * m.renderScale - 14 * zoom / 100) < 1e-10);
   assert.ok(m.fontSize >= 6 && m.editorLineHeight >= 8, 'supported Monaco metrics at all saved zoom values');
   assert.equal(m.lineHeight, m.editorLineHeight * m.renderScale);
-  assert.ok(Math.abs(m.left - (24 + 36 * zoom / 100)) < 1e-10);
+  assert.equal(m.left, 24); assert.equal(m.right, 24, 'outer frame margins stay symmetric');
+  assert.ok(Math.abs(m.gutter - 36 * zoom / 100) <= 0.5 * m.renderScale + 1e-10);
+  assert.equal(m.gutter / m.renderScale, Math.round(m.gutter / m.renderScale), 'Monaco integer gutter and overlays agree');
+  assert.equal(m.textLeft, m.left + m.gutter, 'gutter is inside the frame');
   assert.equal(m.bottom, 68);
   assert.deepEqual(m, visualMetrics({ ...visual, zoomPercent: zoom, showGuides: false }));
 }
@@ -58,12 +61,18 @@ assert.equal(items.numbers[0].y, 16); assert.equal(items.marks[0].x, g.metrics.l
 // 실제 옵션/그리기 수명과 스크롤 보존을 DOM/Monaco 공개 API 대역으로 검증한다.
 const frames = new Map(), listeners = new Map(), drawCalls = [];
 let serial = 0, subscriptions = 0, unsubscriptions = 0, scroll = 1000, caretTop = 5000;
+function element() {
+  return { style: {}, children: [], hidden: false, textContent: '',
+    appendChild(child) { this.children.push(child); }, replaceChildren() { this.children.length = 0; } };
+}
 const nodes = { editor: { style: {} }, 'editor-frame': { style: {}, clientWidth: 700 },
+  'decor-numbers': element(), 'decor-marks': element(),
   decor: { style: {}, getContext: () => new Proxy({}, { get: (_, method) => (...args) => drawCalls.push([method, ...args]) }) } };
 let backingWrites = 0, pixelWidth = 0, pixelHeight = 0;
 Object.defineProperties(nodes.decor, { width: { get: () => pixelWidth, set: v => { pixelWidth = v; backingWrites++; } },
   height: { get: () => pixelHeight, set: v => { pixelHeight = v; backingWrites++; } } });
 globalThis.document = { visibilityState: 'visible', documentElement: { style: {} }, body: { style: {} },
+  createElement: element,
   getElementById: id => nodes[id], addEventListener: (name, handler) => listeners.set(name, handler), removeEventListener: name => listeners.delete(name) };
 globalThis.window = { devicePixelRatio: 2 };
 globalThis.requestAnimationFrame = callback => { frames.set(++serial, callback); return serial; };
@@ -75,13 +84,18 @@ const editor = {
   getVisibleRanges: () => [{ startLineNumber: 5, startColumn: 3, endLineNumber: 8 }],
   getScrolledVisiblePosition: p => ({ top: p.lineNumber === 99 ? caretTop : -4, left: 20 }),
   hasTextFocus: () => true, getPosition: () => ({ lineNumber: 99, column: 1 }),
-  getLayoutInfo: () => ({ width: 700, height: 600, contentWidth: 686 }),
+  getLayoutInfo: () => ({ width: 700, height: 600, contentLeft: options.lineDecorationsWidth,
+    contentWidth: 700 - options.lineDecorationsWidth, verticalScrollbarWidth: 14 }),
   getScrollTop: () => scroll, getScrollLeft: () => 0, setScrollTop(value) { scrolls.push(value); scroll = value; },
   getTopForPosition: () => 1200, updateOptions(value) { Object.assign(options, value); }, layout() {},
+  getTopForLineNumber: line => 1200 + (line - 5) * options.lineHeight,
+  getBottomForLineNumber: line => 1200 + (line - 4) * options.lineHeight,
+  applyFontInfo(node) { Object.assign(node.style, { fontFamily: 'Consolas, monospace',
+    fontSize: `${options.fontSize}px`, fontWeight: 'normal', lineHeight: `${options.lineHeight}px`, letterSpacing: '0px' }); },
   onDidScrollChange: subscribe('scroll'), onDidLayoutChange: subscribe('layout'),
   onDidContentSizeChange: subscribe('size'), onDidChangeCursorSelection: subscribe('cursor')
 };
-const model = { onDidChangeContent: subscribe('change') };
+const model = { onDidChangeContent: subscribe('change'), getLineCount: () => 8, getLineMaxColumn: () => 8 };
 const api = createVisuals({ editor: { defineTheme: (_, theme) => themes.push(theme) } }, editor, model, { ...visual, decorEnabled: false });
 scrolls.length = 0;
 api.apply({ background: '#00000000', foreground: '#eeeeee', showGuides: false });
@@ -89,7 +103,8 @@ assert.equal(scrolls.length, 0, 'theme/toggle never jumps to a scrolled-away car
 api.apply({ zoomPercent: 200 });
 assert.deepEqual(scrolls, [1204], 'zoom restores top anchor without revealing far-off caret');
 assert.equal(options.fontSize, 28); assert.equal(options.lineHeight, 38); assert.equal(options.padding.bottom, 68);
-assert.equal(nodes['editor-frame'].style.left, '96px');
+assert.equal(nodes['editor-frame'].style.left, '24px'); assert.equal(nodes['editor-frame'].style.right, '24px');
+assert.equal(options.lineDecorationsWidth, 72, 'reserve moves into Monaco so the outline encloses the gutter');
 assert.equal(document.body.style.background, '#00000000');
 assert.equal(themes.at(-1).colors['editor.selectionBackground'], themes.at(-1).colors['editor.inactiveSelectionBackground']);
 api.apply({ highContrast: true, light: true, background: '#112233ff', foreground: '#abcdefFF', selectionBackground: '#abcdef', selectionForeground: '#123456' });
@@ -109,5 +124,55 @@ assert.equal(options.fontSize, 7); assert.equal(options.lineHeight, 9);
 assert.equal(options.padding.bottom, 170); assert.equal(nodes.editor.style.transform, 'scale(0.4)');
 assert.equal(options.scrollbar.verticalScrollbarSize * 0.4, 14);
 assert.equal(api.viewport().height, 240); assert.equal(api.viewport().top, scroll * 0.4);
+caretTop = 5000;
+for (const zoom of [20, 40, 100, 200, 500]) {
+  scroll = 1200;
+  api.apply({ zoomPercent: zoom, decorEnabled: true, showGuides: true, showMarks: true });
+  for (const callback of frames.values()) callback(); frames.clear();
+  const q = visualMetrics({ zoomPercent: zoom }).renderScale;
+  for (const id of ['decor-numbers', 'decor-marks']) {
+    assert.equal(nodes[id].style.fontFamily, 'Consolas, monospace');
+    assert.equal(nodes[id].style.fontSize, `${options.fontSize}px`);
+    assert.equal(nodes[id].style.lineHeight, `${options.lineHeight}px`);
+    assert.equal(nodes[id].style.transform, nodes.editor.style.transform, 'same font rasterization scale as body');
+    const visible = nodes[id].children.filter(label => !label.hidden);
+    assert.ok(visible.length > 0);
+    for (const label of visible) assert.ok(Number.isFinite(parseFloat(label.style.top)));
+  }
+  assert.equal(nodes['decor-marks'].children[0].style.top, '-4px', 'line-box top has no arbitrary baseline correction');
+  assert.equal(options.lineDecorationsWidth * q, visualMetrics({ ...visual, zoomPercent: zoom }).gutter);
+}
+assert.ok(!drawCalls.some(c => c[0] === 'fillText'), 'text uses editor font/line boxes, never canvas top-baseline');
+const pooled = nodes['decor-numbers'].children[0], poolCount = nodes['decor-numbers'].children.length;
+api.apply({ viewSuppressed: true });
+for (const callback of frames.values()) callback(); frames.clear();
+assert.ok(nodes['decor-marks'].children.every(label => label.hidden), 'Viewing suppresses markers');
+assert.ok(nodes['decor-numbers'].children.some(label => !label.hidden), 'Viewing keeps requested logical numbers');
+api.apply({ showGuides: false });
+for (const callback of frames.values()) callback(); frames.clear();
+assert.ok(nodes['decor-numbers'].children.every(label => label.hidden));
+api.apply({ showGuides: true });
+for (const callback of frames.values()) callback(); frames.clear();
+assert.equal(nodes['decor-numbers'].children[0], pooled); assert.equal(nodes['decor-numbers'].children.length, poolCount);
+// Exercise the real DOM pool at minimum zoom with an adversarial visible-range count.
+// Adding distant document rows must not allocate labels or read text beyond the visible-work cap.
+let inspectedEnds = 0;
+model.getValue = model.getLineContent = () => { throw Error('full/line text read forbidden'); };
+model.getLineCount = () => 100000000;
+model.getLineMaxColumn = () => { inspectedEnds++; return 8; };
+editor.getVisibleRanges = () => [{ startLineNumber: 5, startColumn: 1, endLineNumber: 100000000 }];
+editor.hasTextFocus = () => false;
+editor.getScrolledVisiblePosition = () => ({ left: 20, top: 0 });
+scroll = 1200;
+api.apply({ zoomPercent: 20, viewSuppressed: false });
+scroll = 1200; // keep the adversarial rows visible after the zoom anchor adjustment
+for (const callback of frames.values()) callback(); frames.clear();
+assert.equal(inspectedEnds, 600);
+assert.ok(nodes['decor-numbers'].children.length <= 600); assert.equal(nodes['decor-marks'].children.length, 600);
+const boundedPool = [...nodes['decor-marks'].children];
+inspectedEnds = 0;
+events.scroll(); for (const callback of frames.values()) callback(); frames.clear();
+assert.equal(inspectedEnds, 600); assert.deepEqual(nodes['decor-marks'].children, boundedPool, 'large-document scrolling reuses the bounded pool');
 api.dispose(); assert.equal(unsubscriptions, subscriptions); assert.equal(frames.size, 0); assert.equal(listeners.size, 0);
-console.log('PASS: zoom 20–500, fixed reserve, viewport geometry/wrap/partial/EOF, bounded 100M line/row cases, theme/selection, anchor/caret, coalescing and disposal');
+assert.equal(nodes['decor-numbers'].children.length, 0); assert.equal(nodes['decor-marks'].children.length, 0);
+console.log('PASS: zoom 20–500, symmetric frame/internal reserve, shared font/line boxes, viewport geometry/wrap/partial/EOF, bounded 100M line/row cases, theme/selection, anchor/caret, label reuse, coalescing and disposal');

@@ -628,6 +628,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
+        var selectedPath = SelectedEntry?.Path;
         if (!string.Equals(CurrentFolder, folder, StringComparison.OrdinalIgnoreCase))
         {
             _showSeq++;
@@ -643,6 +644,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         EmptyText.Text = "No matching files here"; // A243 — ShowLoading의 "Loading..."을 원문구로 복원
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (!ReferenceEquals(TileGrid.ItemsSource, _vms)) TileGrid.ItemsSource = _vms;
+        if (selectedPath is not null)
+            TileGrid.SelectedItem = _vms.FirstOrDefault(vm => string.Equals(vm.Path, selectedPath, StringComparison.OrdinalIgnoreCase));
         // 계측 cfill0: 목록 대입 완료(배치 3 이후의 뜻 — 종전 "첫 조각 60타일 생성 완료"가 아니다).
         // 실제 컨테이너 생성은 레이아웃이 보이는 만큼만 하므로 여기부터는 개수에 비례하지 않는다.
         NavDiagnostics.Mark("cfill0");

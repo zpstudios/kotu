@@ -15,7 +15,7 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
-    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget, IImageCopyTarget, IContentLifetime, IEditorEscapeSource
+    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget, IImageCopyTarget, IContentLifetime, IEditorEscapeSource, IEditorPanelShortcutSource
 {
     private readonly IReadOnlyList<IModule> _children;
     private readonly ChildContentHost _content;
@@ -83,6 +83,11 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     {
         add => _content.PlaybackStateChanged += value;
         remove => _content.PlaybackStateChanged -= value;
+    }
+    public event Action<EditorPanelShortcut>? EditorPanelShortcutRequested
+    {
+        add => _content.EditorPanelShortcutRequested += value;
+        remove => _content.EditorPanelShortcutRequested -= value;
     }
     public event Action? EditorEscapeRequested
     {

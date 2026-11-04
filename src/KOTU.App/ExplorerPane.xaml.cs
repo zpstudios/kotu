@@ -171,10 +171,10 @@ public sealed partial class ExplorerPane : UserControl
     private ModuleWorker? _worker;            // 폴더 스캔 전용(순서 의존) — 페인별 분리(A42 정책)
     private ModuleWorkerPool? _fetchPool;     // 썸네일·상세 조각 fetch 전용(A194 — 항목별 독립 작업만)
     private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 재스캔 없는 재배치의 원본(A5)
-    // A204: 마지막 Arrange 결과(현재 표시 순서). 정렬 키·방향 변경(헤더 클릭)은 이것을 입력으로
-    // stable 재정렬해 직전 기준이 동률의 2차 순서로 살아남는다. 재스캔·필터 변경은 _entries
-    // (스캔 결과 = 이름순)를 입력으로 — 안정성은 세션 내 정렬 조작 간에만 성립, 재스캔은 리셋.
-    private IReadOnlyList<ExplorerListing.Entry> _display = [];
+    // A414: Ordered retains the whole sorted listing; Display is its keyword projection.
+    // Sort clicks use Ordered so filtered-out items retain their stable tie order when restored.
+    private readonly ExplorerNameView _nameView = new();
+    private IReadOnlyList<ExplorerListing.Entry> _display => _nameView.Display;
     // A345 배치 1: _display와 같은 순서·같은 개수의 뷰모델 목록(데이터 축). 조립(Fill)은 이제
     // 이 목록을 소비하고 컨테이너 Tag에 뷰모델을 건다 — 공개 API가 돌려주는 Entry 목록은 무변경.
     private readonly ObservableCollection<ExplorerEntryVm> _displayVms = [];
@@ -464,7 +464,7 @@ public sealed partial class ExplorerPane : UserControl
     /// 않는다(안정성은 세션 내 표시 순서 승계로만 성립 — 재시작·재스캔이면 리셋).
     /// 재그리기는 RefreshView(재스캔 없음) — ViewChanged로 중앙 썸네일까지 같은 순서가 흐르고,
     /// 트리 동기(A134 SyncTreeToFolder)는 같은 폴더 조기 반환으로 걸러진다(재통지 무해).
-    /// A204: 입력은 _display(직전 Arrange 결과 = 현재 표시 순서) — Arrange가 stable이라
+    /// A204/A414: 입력은 _nameView.Ordered(키워드 적용 전 전체 정렬 결과) — Arrange가 stable이라
     /// "이름 오름 → 크기" 전환 시 같은 크기끼리 이름 오름 순서가 유지된다. 같은 키 재클릭
     /// (방향 토글)도 같은 경로 — stable이라 동률 내 직전 순서가 그대로다(별도 처리 없음).
     /// </summary>
@@ -483,26 +483,37 @@ public sealed partial class ExplorerPane : UserControl
         _settings?.Set(SortDescSettingKey, _sortDesc);
         _settings?.RequestSave();
         SyncSortHeaders();
-        RefreshView(_display);
+        RefreshView(_nameView.Ordered);
     }
 
     /// <summary>
     /// 입력 목록을 현재 정렬·필터로 재배치해 다시 그린다. 재스캔 없음.
     /// 항목이 새로 만들어지므로 썸네일도 다시 채운다(셸 썸네일 캐시라 재추출은 싸다).
     /// A204 — 입력 선택이 안정성의 전부다:
-    /// · 정렬 키·방향 변경(OnSortHeaderClick) = _display(직전 표시 순서) → 직전 기준이 동률의
+    /// · 정렬 키·방향 변경(OnSortHeaderClick) = _nameView.Ordered(직전 전체 순서) → 직전 기준이 동률의
     ///   2차 순서로 승계(stable sort).
     /// · 재스캔(NavigateToAsync — 감시 디바운스 포함)·필터 토글(A7) = _entries(스캔 결과 = 이름순)
     ///   → 최종 키 1개만 적용 = 종전과 같은 화면. 감시 재통지마다 순서가 흔들리지 않도록
-    ///   재스캔 경로는 절대 _display를 입력으로 쓰지 않는다(이전 화면 순서의 재정렬 금지).
-    ///   필터 해제로 돌아오는 항목은 _display에 없으므로 필터 경로도 _entries가 맞다.
+    ///   재스캔/확장자 변경은 _entries에서 시작한다. 키워드 변경은 Ordered의 투영만 바꾼다.
     /// </summary>
     private void RefreshView(IReadOnlyList<ExplorerListing.Entry> input)
     {
         var seq = ++_loadSeq; // 스캔/휴면 그리드 로더만 세대 변경. 재사용 행 요청은 유지.
-        var arranged = ExplorerListing.Arrange(input, _sortKey, _sortDesc, _hiddenExts);
+        _nameView.Arrange(input, _sortKey, _sortDesc, _hiddenExts);
+        ApplyNameView(seq);
+    }
+
+    internal void SetNameFilter(string query)
+    {
+        // A414: changing a projection must not cancel an in-flight directory scan.
+        if (_nameView.SetQuery(query) && _displayFolder == _folder) ApplyNameView(_loadSeq);
+    }
+
+    private void ApplyNameView(int seq)
+    {
+        var selected = SelectedEntry?.Path;
+        var arranged = _nameView.Display;
         DiagTrace.Write("nav", $"RefreshView {_folder} count={arranged.Count}"); // A352 배치 1
-        _display = arranged; // A204 — 다음 정렬 변경의 입력(현재 표시 순서)
         var full = !ReferenceEquals(ListPane.ItemsSource, _displayVms);
         var reuse = ExplorerEntryVm.Reconcile(_displayVms, arranged, vm =>
         {
@@ -513,6 +524,7 @@ public sealed partial class ExplorerPane : UserControl
         DiagTrace.Write("reuse", $"list full={(full ? 1 : 0)} patch={(full ? 0 : 1)} reused={reuse.Reused} created={reuse.Created} removed={reuse.Removed}");
         _displayFolder = _folder; // A323 — 이 목록이 속한 폴더(셸 시드의 정합 판정용)
         Fill(arranged); // A345 배치 2 — 리스트는 ItemsSource 대입 한 줄(동기 완결)
+        if (selected is not null) RestoreNameSelection(selected);
         ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
         // A345 배치 2: 조립이 항상 동기로 끝나므로 마무리도 항상 여기서 한다(종전 분할 조립
         // 루프의 "마지막 틱이 부른다" 분기는 사라졌다). 순서는 종전 그대로 Fill → ViewChanged → 로더.
@@ -719,7 +731,8 @@ public sealed partial class ExplorerPane : UserControl
         {
             foreach (var vm in _displayVms) vm.Requests.Dispose();
             _displayVms.Clear();
-            _entries = _display = [];
+            _entries = [];
+            _nameView.ClearFolder();
             _displayFolder = string.Empty;
             IconGrid.Items.Clear();
             ListPane.ItemsSource = null; // A345 배치 2 — ItemsSource 상태에서 Items.Clear는 즉시 예외다
@@ -768,7 +781,8 @@ public sealed partial class ExplorerPane : UserControl
             if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return false; }
             foreach (var vm in _displayVms) vm.Requests.Dispose();
             _displayVms.Clear();
-            _entries = _display = [];
+            _entries = [];
+            _nameView.ClearEntries(); // a failed refresh must not silently discard the visible query
             _displayFolder = string.Empty;
             IconGrid.Items.Clear();
             ListPane.ItemsSource = null; // A345 배치 2 — 위 folderChanged 경로와 같은 규칙
@@ -826,8 +840,7 @@ public sealed partial class ExplorerPane : UserControl
     /// </para>
     /// A179 유의: 체크(작업 집합)는 경로 키 집합(_checkedPaths)이 진실이라 이 재작성(폴더 감시
     /// 400ms 재스캔 포함)이 돌아도 생존한다 — 시각 복원은 뷰모델을 만드는 RefreshView가 하고,
-    /// x:Bind가 그것을 읽는다. **선택**(하이라이트)은 여전히 재작성과 함께 사라진다
-    /// (선택 복원은 별도 설계가 필요해 범위 밖 — 등재 후보 유지).
+    /// x:Bind가 그것을 읽는다. A414는 표시 결과에 살아 있는 선택 경로도 복원한다.
     /// </summary>
     private void Fill(IReadOnlyList<ExplorerListing.Entry> entries)
     {

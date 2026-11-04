@@ -138,6 +138,16 @@ window.addEventListener('keyup', event => { if (event.key === 'Escape') releaseE
 window.addEventListener('keydown', event => {
   if (!loaded || event.isComposing || event.keyCode === 229 || composing) return;
   const key = event.key.toLowerCase();
+  // Keep the shell's modifier policy; only these two keys cross this typed bridge.
+  if (key === 'f11' || key === 'f12') {
+    if (!document.hasFocus() || !editor.hasTextFocus()) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    flushState();
+    post({ kind: 'panel-shortcut', version: wireVersion(), side: key === 'f11' ? 'left' : 'right',
+      repeat: event.repeat === true, control: event.ctrlKey === true, shift: event.shiftKey === true,
+      alt: event.altKey === true, meta: event.metaKey === true });
+    return;
+  }
   if (key === 'tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
     event.preventDefault(); event.stopImmediatePropagation();
     if (!event.shiftKey && editable()) { bodyInteraction(); replaceSelection(ticket(), '\t'); }
