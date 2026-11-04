@@ -65,7 +65,7 @@ public class ExplorerSearchTests
         search.Reset();
         Assert.Equal(1, search.Find("b", 2, entries, 0));
         search.Reset();
-        Assert.Equal(0, search.Find("b", 3, entries.Reverse().ToArray(), -1));
+        Assert.Equal(0, search.Find("b", 3, Enumerable.Reverse(entries).ToArray(), -1));
     }
 
     [Fact]

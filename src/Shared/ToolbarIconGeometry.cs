@@ -64,7 +64,7 @@ internal static class ToolbarIconGeometry
         }
         var points = new List<IconPoint>(left);
         AddCap(end, endNormal);
-        points.AddRange(right.Reverse());
+        points.AddRange(Enumerable.Reverse(right));
         AddCap(start, startNormal + Math.PI);
         return points.ToArray();
 
