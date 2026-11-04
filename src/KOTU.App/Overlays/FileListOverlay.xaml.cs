@@ -109,6 +109,12 @@ public sealed partial class FileListOverlay : UserControl
     internal bool SelectNameMatch(string path) => IsOpen && _list?.SelectNameMatch(path) == true;
     internal void FocusNameSelection() { if (IsOpen) _list?.FocusNameSelection(); }
 
+    internal event Action? ChecksChanged;
+    internal IReadOnlyList<string> CheckedPathsForFolder(string? folder) => _list?.CheckedPathsForFolder(folder) ?? [];
+    internal void SetItemChecked(string? folder, string path, bool value) => _list?.SetItemChecked(folder, path, value);
+    internal bool ToggleFocusedCheck(DependencyObject focused, bool repeat) =>
+        IsOpen && _list?.ToggleFocusedCheck(focused, repeat) == true;
+
     /// <summary>
     /// A323: <see cref="CurrentEntries"/>가 속한 폴더 — 스캔이 도는 중이면 <see cref="CurrentFolder"/>와
     /// 다르다(ExplorerPane.DisplayFolder 주석). 셸의 시드는 두 값이 같을 때만 한다.
@@ -242,6 +248,7 @@ public sealed partial class FileListOverlay : UserControl
         if (_list is null)
         {
             _list = new ExplorerPane { Settings = Settings }; // 정렬 키 저장(A5)
+            _list.ChecksChanged += () => ChecksChanged?.Invoke();
             _list.ConfigureListOnly();
             // A91(v0.115.0): 주소·필터 줄을 리스트에서 떼어 패널 최상단(트리 위)에 올린다.
             // Child가 비어 있을 때만 붙인다 — 같은 UIElement를 두 부모에 넣으면 죽는다.

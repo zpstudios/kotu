@@ -162,8 +162,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     private readonly CancellableBatch _previewBatch = new();
 
     /// <summary>
-    /// 지금 그리고 있는 표시 목록의 뷰모델 (A345 배치 3) — <c>TileGrid.ItemsSource</c>에 대입한
-    /// 바로 그 목록이다. 경로 조회(FindVmByPath)·잘라내기 흐림 재적용이 컨테이너가 아니라 이
+    /// 지금 그리고 있는 실제 파일 목록의 뷰모델. A416의 표시 목록은 앞에 탐색 버튼 하나를
+    /// 더하지만 이 목록은 파일만 유지한다. 경로 조회·잘라내기 흐림 재적용이 컨테이너가 아니라 이
     /// 목록을 돈다: 가상화 뒤에는 컨테이너가 화면 분량뿐이라 순회 결과가 스크롤 위치에 따라
     /// 달라지지만, 이 목록은 화면 밖 항목까지 전부 들고 있다.
     /// </summary>
@@ -222,11 +222,16 @@ public sealed partial class ThumbnailExplorer : UserControl
         catch (ArgumentException) { return null; }
     }
 
-    private void UpdateParentFolderButton() => ParentFolderButton.IsEnabled = ParentFolderPath() is not null;
+    private void UpdateParentFolderButton() =>
+        _parentTile.CanNavigate = !_parentNavigationPending && ParentFolderPath() is not null;
 
     private void OnParentFolderClick(object sender, RoutedEventArgs e)
     {
-        if (ParentFolderPath() is { } parent) FolderActivated?.Invoke(parent);
+        if (!_parentTile.CanNavigate || ParentFolderPath() is not { } parent) return;
+        KeepGridFocusBeforeRemovingTiles();
+        _parentNavigationPending = true;
+        UpdateParentFolderButton();
+        FolderActivated?.Invoke(parent);
     }
 
     /// <summary>
@@ -292,12 +297,13 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     public ThumbnailExplorer()
     {
+        _tileItems = new(_parentTile, _vms);
         InitializeComponent();
         // A34: 타일 그리드에 포커스가 있어도 모듈 버튼 핫키는 통과 — 타이핑 탐색(첫 글자 점프) 우선
         // (ExplorerPane의 IconGrid·ListPane과 같은 규칙). A90의 S4 키맵("A34 문자 핫키 = 무동작")도
         // 이 태그 하나로 충족된다 — S4 그리드에 포커스가 있는 동안 HotkeySupport가 전부 통과시킨다.
         TileGrid.Tag = HotkeySupport.PassThroughTag;
-        ParentFolderButton.Tag = HotkeySupport.PassThroughTag;
+        TileGrid.PreviewKeyDown += OnParentTilePreviewKeyDown;
         // A90: Enter = 선택 항목 열기 (keymap S1 "선택 파일 있으면 열기"·S4 "선택 열기 우선"의
         // 그리드 쪽 구현). GridView의 기본 Enter 처리(ItemClick — 이 클래스에선 더블클릭 판정에만
         // 쓰여 단발 Enter로는 안 열린다)가 이벤트를 Handled로 만들 수 있어 handledEventsToo로 받는다
@@ -363,7 +369,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         };
         // A200: 선택 변경을 셸로 중계 — 우측 정보 패널의 선택 우선 표시(파일 정보 직접 조회)용.
         // 그리드 자체 이벤트를 얇게 감싸기만 한다(선택 판정·해석은 셸 몫 — SelectedEntry 질의).
-        TileGrid.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
+        TileGrid.SelectionChanged += OnTileSelectionChanged;
+        TileGrid.Loaded += (_, _) => ApplyTileSize();
         // A94 6차: 빈 영역(타일이 아닌 곳) 우클릭 메뉴 — New folder / Paste / Refresh.
         // 타일 메뉴와의 이중 발화는 ContextFlyout 규칙이 원천 차단한다: 컨텍스트 요청은 원본
         // 요소에서 위로 버블링하며 **가장 안쪽의 ContextFlyout 하나만** 뜨므로, 타일 위 우클릭은
@@ -394,6 +401,21 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>썸네일 그리드로 포커스 이동 (A90: S4 진입 시) — 실패해도 무해(포커스만 안 옮겨진다).</summary>
     public void FocusGrid() => TileGrid.Focus(FocusState.Programmatic);
 
+    private void KeepGridFocusBeforeRemovingTiles()
+    {
+        // WinUI otherwise moves focus from a disabled/removed tile to the sidebar's Up button.
+        // Transfer only our own current focus, synchronously before mutation; never reclaim focus
+        // after async navigation, or from the footer, sidebar, editor, or a popup.
+        if (XamlRoot is not { } root) return;
+        var node = FocusManager.GetFocusedElement(root) as DependencyObject;
+        for (var depth = 0; node is not null && depth < 64; depth++, node = VisualTreeHelper.GetParent(node))
+        {
+            if (!ReferenceEquals(node, TileGrid)) continue;
+            FocusGrid();
+            return;
+        }
+    }
+
     /// <summary>
     /// Enter = 선택 항목 열기 (A90 — 위 생성자 주석 참고. 선택이 없으면 셸 분배로 흘린다) +
     /// 클립보드 키 (A94): Ctrl+C/X/V/A + 2차(v0.125.0): F2 = 이름변경(첫 선택 타일만),
@@ -404,6 +426,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private async void OnGridKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (IsParentTileSource(e.OriginalSource) &&
+            !(e.Key == VirtualKey.A && ExplorerFileOps.IsCtrlDown())) return;
         if (e.KeyStatus.WasKeyDown) return;
         // A94 2차: 이름변경 편집 상자(TextBox) 안의 키는 전부 편집 몫 — handledEventsToo 구독이라
         // 편집 상자가 Handled를 걸어도 여기까지 오므로 원본 요소로 걸러낸다
@@ -414,6 +438,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             if (SelectedEntry is not { } entry) return; // 선택 없음 — 비소비(A151: 탐색기 표면 포커스의 Enter는 셸도 양보라 무동작)
             e.Handled = true; // 다른 버블 수신자 방지 — 셸(A274 터널링 OnShellEnter)은 ShouldPassThrough로 이 표면에 이미 양보했다
             _lastClick = null; // 같은 Enter가 만든 ItemClick 기록이 더블클릭 판정에 섞이지 않게
+            if (CheckedPaths().Count > 0 && OpenFiles(WorkingFilePaths())) return;
             // A94 6차: 다중 선택이면 선택된 '파일' 전부를 연다(폴더는 일괄 열기에서 제외).
             // 선택에 파일이 하나도 없으면(폴더만 다중) 아래 현행 첫 항목 동작으로 떨어진다.
             if (TileGrid.SelectedItems.Count > 1 && OpenFiles(SelectedFilePaths())) return;
@@ -440,7 +465,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             // Del = 휴지통 / Shift+Del = 영구 삭제(A94 4차). Ctrl+Del은 우리 조합이 아니라 비켜 준다.
             if (ExplorerFileOps.IsCtrlDown()) return;
-            var targets = SelectedPaths();
+            var targets = WorkingPaths();
             if (targets.Count == 0) return;
             e.Handled = true;
             if (ExplorerFileOps.IsShiftDown()) await PermanentDeleteWithConfirmAsync(targets);
@@ -473,7 +498,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                 break;
             case VirtualKey.C:
             case VirtualKey.X:
-                var paths = SelectedPaths();
+                var paths = WorkingPaths();
                 if (paths.Count == 0) return;
                 e.Handled = true;
                 await CopyWithNoticeAsync(paths, cut: e.Key == VirtualKey.X);
@@ -559,13 +584,13 @@ public sealed partial class ThumbnailExplorer : UserControl
             .ToList();
 
     /// <summary>
-    /// 잡은 타일의 조작 대상 (A94: 드래그·삭제 규칙 — 그 타일이 선택에 포함돼 있으면 선택 전부,
-    /// 아니면 그 타일 하나). 6차에서 Cut·Copy도 같은 규칙을 쓰게 메서드로 뽑았다(동작 무변경).
+    /// 잡은 타일의 조작 대상 — A416부터 좌 리스트와 같은 체크 우선 작업 집합이다.
+    /// 그 타일이 작업 집합에 포함돼 있으면 집합 전부, 아니면 그 타일 하나.
     /// </summary>
     private IReadOnlyList<string> PathsFor(ExplorerListing.Entry entry)
     {
-        var selected = SelectedPaths();
-        return selected.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) ? selected : [entry.Path];
+        var working = WorkingPaths();
+        return working.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) ? working : [entry.Path];
     }
 
     /// <summary>
@@ -574,7 +599,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// ※ A151: 셸 Enter가 모드 순환이 되면서 셸 호출부는 사라졌다 — 그리드 자체 Enter 처리와
     /// 대칭인 공개 실행 API로 남긴다(외부 소비자 0인 상태 유지 무해).
     /// </summary>
-    public bool OpenSelectedFiles() => OpenFiles(SelectedFilePaths());
+    public bool OpenSelectedFiles() => OpenFiles(WorkingFilePaths());
 
     /// <summary>
     /// 일괄 열기 실행 (A94 6차): 상한(10) 적용 뒤 **첫 파일 = 기존 단일 열기 경로**
@@ -597,7 +622,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>열 수 지정(A213: 8 − 2×열린 도크 수 = 둘 다 4 / 하나 6 / 없음 8). 바뀌면 타일 크기 재계산.</summary>
     public void SetColumns(int columns)
     {
-        if (columns == _columns) return;
+        // The same column count can arrive after ItemsPanelRoot is recreated or the host is restored.
         _columns = columns;
         ApplyTileSize();
     }
@@ -621,10 +646,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 이미지 미리보기는 BitmapImage가 스스로 비동기 디코드하므로 별도 로드 루프가 없다.
     /// ※ 좌 리스트와 뷰모델 <b>객체</b>를 공유하지 않는다 — <b>배치 4에서 확정(v0.338.0)</b>이다
     /// (조사 문서의 "ViewChanged 훅 변경"은 채택하지 않는다). 근거: 표시 상태가 표면별로 독립인
-    /// 것이 맞다 — 체크(A179)는 좌 리스트에만 있고 미리보기 캐시(PreviewText·AudioInfo·
-    /// PreviewKnownEmpty)는 중앙에만 있다. 공유하려면 공개 시그니처(ShowEntries의 Entry 목록)를
-    /// 바꿔 셸까지 손대야 하는데 얻는 것이 없다. 그래서 이 표면은 앞으로도 자기 뷰모델을 따로
-    /// 만든다(셸 시그니처 무변경 확정).
+    /// 것이 맞다 — 미리보기 캐시(PreviewText·AudioInfo·PreviewKnownEmpty)는 중앙에만 있다.
+    /// A416의 체크 작업 집합은 좌 리스트가 소유하고, 중앙 VM은 변경 통지/재표시 때 그 값을
+    /// 다시 읽는다. VM 객체와 ShowEntries 시그니처는 공유하지 않는다.
     /// </summary>
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
@@ -637,13 +661,15 @@ public sealed partial class ThumbnailExplorer : UserControl
         }
         DiagTrace.Write("tiles", $"ShowEntries {folder} count={entries.Count}");
         CurrentFolder = folder;
+        _parentNavigationPending = false;
         UpdateParentFolderButton();
-        var full = !ReferenceEquals(TileGrid.ItemsSource, _vms);
+        var full = !ReferenceEquals(TileGrid.ItemsSource, _tileItems);
         var reuse = ExplorerEntryVm.Reconcile(_vms, entries, ExplorerFileOps.ApplyCutMark);
+        RefreshChecks();
         DiagTrace.Write("reuse", $"tiles full={(full ? 1 : 0)} patch={(full ? 0 : 1)} reused={reuse.Reused} created={reuse.Created} removed={reuse.Removed}");
         EmptyText.Text = "No matching files here"; // A243 — ShowLoading의 "Loading..."을 원문구로 복원
         EmptyText.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (!ReferenceEquals(TileGrid.ItemsSource, _vms)) TileGrid.ItemsSource = _vms;
+        if (!ReferenceEquals(TileGrid.ItemsSource, _tileItems)) TileGrid.ItemsSource = _tileItems;
         if (selectedPath is not null)
             TileGrid.SelectedItem = _vms.FirstOrDefault(vm => string.Equals(vm.Path, selectedPath, StringComparison.OrdinalIgnoreCase));
         // 계측 cfill0: 목록 대입 완료(배치 3 이후의 뜻 — 종전 "첫 조각 60타일 생성 완료"가 아니다).
@@ -683,14 +709,17 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     public void ShowLoading(string folder)
     {
+        KeepGridFocusBeforeRemovingTiles();
         _showSeq++;
         _previewBatch.Restart();
         DiagTrace.Write("tiles", "ShowLoading " + folder); // A352 배치 1
         CurrentFolder = folder;
+        _parentNavigationPending = true;
         UpdateParentFolderButton(); // 좌 리스트(_folder)와 같은 시점 갱신 — 로딩 중 드랍·붙여넣기 대상 일치
         TileGrid.ItemsSource = null; // A345 배치 3 — 목록 해제가 곧 타일 비우기다
         foreach (var vm in _vms) vm.Requests.Dispose();
         _vms.Clear();
+        TileGrid.ItemsSource = _tileItems; // navigation keeps its ordinary first tile slot during loading
         EmptyText.Text = "Loading...";
         EmptyText.Visibility = Visibility.Visible;
         // 계측 cload: 중앙 썸네일 쪽 로딩 화면 전환 완료(좌 리스트의 load 바로 뒤 — 두 표면의
@@ -736,8 +765,18 @@ public sealed partial class ThumbnailExplorer : UserControl
             item.AllowDrop = false; // 잔존 방지 — 다음 항목이 파일이어도 드랍을 받지 않게
             return;
         }
+        if (args.Item is ExplorerParentTile)
+        {
+            item.AllowDrop = false;
+            item.CanDrag = false;
+            item.IsDoubleTapEnabled = false;
+            item.ContextFlyout = null;
+            return;
+        }
         if (args.Item is not ExplorerEntryVm vm) return;
         EnsureTileHooks(item);        // 컨테이너당 1회
+        item.CanDrag = true;
+        item.IsDoubleTapEnabled = true;
         item.AllowDrop = vm.IsFolder; // 매 재사용마다 재설정(폴더만 드랍 대상 — A94)
         if (args.Phase != 0) return;
         // 템플릿 루트 조회는 훅 부착 뒤에 둔다 — 어떤 이유로든 루트를 못 얻어도(템플릿 미적용 등)
@@ -931,15 +970,16 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     /// <summary>
     /// 타일 컨테이너에 계약 훅을 1회만 건다 (A345 배치 3 — 좌 리스트 EnsureListItemHooks와 같은
-    /// 구조·같은 근거). "이미 붙였는가"의 표지는 <see cref="UIElement.ContextFlyout"/> 유무다 —
-    /// 아래에서 반드시 하나를 걸기 때문에 별도 플래그(첨부 속성·사전)가 필요 없는 가장 값싼
-    /// 판정이다. 훅은 전부 <b>지연 해석</b>이다(핸들러 안에서 VmOf로 다시 푼다) — 컨테이너는
+    /// 구조·같은 근거). A416의 부모 타일은 ContextFlyout을 지우므로 훅 부착 여부는 약한 키로
+    /// 따로 기억한다. 파일로 재사용되면 메뉴만 복원하고 드래그/더블탭 구독은 중복하지 않는다.
+    /// 훅은 전부 <b>지연 해석</b>이다(핸들러 안에서 VmOf로 다시 푼다) — 컨테이너는
     /// 재활용돼도 훅은 남으므로, 여기서 vm이나 entry를 캡처하면 옛 파일을 조작하게 된다.
     /// </summary>
     private void EnsureTileHooks(GridViewItem item)
     {
-        if (item.ContextFlyout is not null) return; // 이미 부착됨
-        AttachContextMenu(item); // A24 + A94 2차(Rename·Delete) — A335 Opening 재구성
+        if (item.ContextFlyout is null) AttachContextMenu(item);
+        if (_tileHooks.TryGetValue(item, out _)) return;
+        _tileHooks.Add(item, new object());
         AttachDragDrop(item);    // A94 — 드래그 아웃 + 폴더 타일 드랍
         item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
         item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
@@ -1906,6 +1946,18 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private void OnSurfacePointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (IsParentTileSource(e.OriginalSource))
+        {
+            _lastClick = null;
+            _lastPress = null;
+            return;
+        }
+        if (IsInCheckBox(e.OriginalSource))
+        {
+            _lastClick = null;
+            _lastPress = null;
+            return;
+        }
         if (e.GetCurrentPoint(TileGrid).Properties.PointerUpdateKind
             != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
@@ -1978,6 +2030,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
+        if (IsInCheckBox(e.OriginalSource)) return;
         if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
         if (sender is not GridViewItem item || VmOf(item) is not { } vm) return; // A345 배치 3
         e.Handled = true;
@@ -2005,10 +2058,10 @@ public sealed partial class ThumbnailExplorer : UserControl
             .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
-        // A94 6차 — 다중 선택 일괄 열기(잡은 타일이 선택 밖이면 그 타일만: 드래그·삭제와 같은 규칙)
-        if (TileGrid.SelectedItems.Count > 1 &&
-            SelectedPaths().Contains(entry.Path, StringComparer.OrdinalIgnoreCase) &&
-            OpenFiles(SelectedFilePaths(), shift))
+        // A416: 좌 리스트와 같은 체크 우선 일괄 열기. 집합 밖 타일은 그 타일만 연다.
+        if (WorkingPaths() is { Count: > 1 } working &&
+            working.Contains(entry.Path, StringComparer.OrdinalIgnoreCase) &&
+            OpenFiles(WorkingFilePaths(), shift))
             return;
 
         if (entry.IsFolder)
@@ -2029,12 +2082,26 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 타일 자체 핸들러(AttachDragDrop)가 먼저 Handled로 받는다. 목록이 아직 없으면(폴더 미정)
     /// None으로 소비만 — 어느 쪽이든 Handled라 창 전체 "열기" 폴백(OnWindowDrop)에 안 넘어간다.
     /// </summary>
-    private void OnDragOver(object sender, DragEventArgs e) =>
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        if (IsParentTileDrop(e))
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+            e.Handled = true;
+            return;
+        }
         ExplorerFileOps.HandleTargetDragOver(e, CurrentFolder);
+    }
 
     /// <summary>빈 영역·파일 타일 위 드랍 — 대상 = 현재 폴더.</summary>
     private void OnDrop(object sender, DragEventArgs e)
     {
+        if (IsParentTileDrop(e))
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+            e.Handled = true;
+            return;
+        }
         if (CurrentFolder is { Length: > 0 } folder) HandleDrop(e, folder);
         else e.Handled = true; // 폴더 미정 — A93 때처럼 소비만
     }

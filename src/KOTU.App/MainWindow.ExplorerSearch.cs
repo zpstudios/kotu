@@ -164,6 +164,18 @@ public sealed partial class MainWindow
             VirtualKey.Home or VirtualKey.End or VirtualKey.PageUp or VirtualKey.PageDown or
             VirtualKey.Tab or VirtualKey.Enter or VirtualKey.Escape or VirtualKey.Back or VirtualKey.Space or VirtualKey.F2 || control || alt)
             ResetExplorerPrefix();
+        // A416: consume before GridView's default Space changes selection or generates ItemClick.
+        // Only the actual file surface owns this command; footer text/IME, popups and editors do not.
+        if (!e.Handled && e.Key == VirtualKey.Space && !control && !alt && !shift &&
+            !ExplorerKeyDown(VirtualKey.LeftWindows) && !ExplorerKeyDown(VirtualKey.RightWindows) &&
+            !ExplorerInputBlocked() && RootLayout.XamlRoot is { } checkRoot &&
+            FocusManager.GetFocusedElement(checkRoot) is DependencyObject checkFocus &&
+            (ListOverlay.ToggleFocusedCheck(checkFocus, e.KeyStatus.WasKeyDown) ||
+             ActiveExplorer?.ToggleFocusedCheck(checkFocus, e.KeyStatus.WasKeyDown) == true))
+        {
+            e.Handled = true;
+            return true;
+        }
         var filterFocused = IsFocusWithin(ExplorerFilterHost);
         if (!e.Handled && filterFocused && IsExplorerSearchContext && !control && !alt && !shift &&
             e.Key is VirtualKey.Escape or VirtualKey.Enter)

@@ -181,6 +181,7 @@ public sealed partial class MainWindow : Window
         _router = App.Services.GetRequiredService<FileTypeRouter>();
         _settings = App.Services.GetRequiredService<ISettingsService>();
         InitializeExplorerSearch();
+        InitializeSidebarGeometry();
         _iconMetadata = new((path, cancellation) => IconWorker.Run(_ => FileMetadata.Read(path), cancellation));
         _iconRefreshTimer.Tick += (_, _) => { _iconRefreshTimer.Stop(); InvalidateIconMetadata(); RefreshShellIcons(); };
         Closed += (_, _) =>
@@ -199,6 +200,11 @@ public sealed partial class MainWindow : Window
         ListOverlay.Settings = _settings;                                  // 정렬 키 저장(A5)
         ListOverlay.FileActivated += OpenFileRouted;                       // 재사용 규칙 적용(A24)
         ListOverlay.FileActivatedNewWindow += _manager.OpenFileInNewWindow; // Shift+더블클릭·우클릭 메뉴
+        ListOverlay.ChecksChanged += () =>
+        {
+            _thumbnailExplorer?.RefreshChecks();
+            _s4Explorer?.RefreshChecks();
+        };
         // A93: S1 중앙 썸네일 뷰는 좌 리스트(ExplorerPane)와 폴더·필터(A7)·정렬(A5) 상태를 공유한다 —
         // 리스트가 다시 그려질 때마다 같은 목록을 받아 타일로 그린다.
         // A90: S4('오픈 파일' 탐색)가 떠 있는 동안은 같은 목록이 S4 오버레이 썸네일로만 흐른다 —
@@ -2090,6 +2096,8 @@ public sealed partial class MainWindow : Window
                 _thumbnailExplorer = new ThumbnailExplorer
                 {
                     ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
+                    CheckedPathsProvider = ListOverlay.CheckedPathsForFolder,
+                    CheckRequested = ListOverlay.SetItemChecked,
                 };
                 // 폴더 더블클릭 = 좌 리스트를 같은 폴더로 항해 — 결과가 ViewChanged로 돌아와
                 // 양쪽이 함께 이동한다(A93 상태 공유). 파일 열기는 기존 라우팅 그대로(A24).
@@ -2103,6 +2111,7 @@ public sealed partial class MainWindow : Window
                 _thumbnailExplorer.SelectionChanged +=
                     () => OnBrowseSelectionChanged(fromList: false); // A200 — 선택 우선 정보(A240 표면 인자)
                 ExplorerHost.Children.Add(_thumbnailExplorer);
+                ApplySidebarGeometry();
             }
             // A174: 빈 모듈 전환은 좌 리스트의 현재 위치를 리셋하지 않는다 — ExplorerStartFolder가
             // 세션 현재 폴더를 그대로 돌려주고, 필터만 새 모듈 것으로 바뀐다(A57 ③ 모듈 필터 유지).
@@ -3655,49 +3664,7 @@ public sealed partial class MainWindow : Window
         var backdropOpacity = s4Float ? S4TranslucentOpacity : 1.0;
         ListOverlay.SetBackdropOpacity(backdropOpacity);
         InfoOverlay.SetBackdropOpacity(backdropOpacity);
-        var left = !s4Float && LeftPanelIsOpen ? dockPercent / 10 : 0;
-        var right = !s4Float && RightPanelIsOpen ? dockPercent / 10 : 0;
-        LeftDockColumn.Width = new GridLength(left, GridUnitType.Star);
-        RightDockColumn.Width = new GridLength(right, GridUnitType.Star);
-        CenterColumn.Width = new GridLength(10 - left - right, GridUnitType.Star);
-
-        // A60 3차 → A119 개정: 공간을 차지 중인 도크 수(0/1/2)를 모듈 뷰에 민다(Core
-        // ISidebarAwareView — 정보 모듈의 센터 타일 그리드가 열 수 4/3/2를 이 신호로 정한다.
-        // 구 bool "양쪽 열림"의 4/8 매핑은 폐지). 오버레이(반투명)는 메인 폭을 안 줄이므로 세지
-        // 않는다(도크만 — A93 썸네일과 같은 해석). 이 메서드가 사이드바 상태 변경의 단일
-        // 종착점이라(F11/F12·2연타·모드 전이 복귀·경계 버튼·모듈 진입 기본 전부 경유) 재푸시 누락이 없고,
-        // 미구현 뷰(다른 모듈·설정)는 캐스트 실패로 no-op이다.
-        var dockCount = (left > 0 ? 1 : 0) + (right > 0 ? 1 : 0);
-        (ModuleHost.Content as ISidebarAwareView)?.SetSidebarsState(dockCount);
-
-        // A93: S1 중앙은 항상 썸네일 뷰다 — A81의 "좌 도크가 불투명이면 중앙 탐색기 숨김"
-        // (중복 목록 제거)을 대체한다. 중앙이 리스트가 아니라 타일이라 중복으로 보이지 않는다.
-        // A213: 열 수 = 8 − 2×(열린 도크 수) → 둘 다 4 · 하나 6 · 없음 8 (구 A93의 4/8 2단을
-        // 3단으로 — A168 H/W 센터 열 산식과 동형. 타일 크기는 SizeChanged에서 floor(실폭/열수)로
-        // 따라온다). dockCount는 위 A119 블록이 이미 셌다(도크만 — 오버레이 불산입 해석 공유).
-        if (emptyModule)
-            _thumbnailExplorer?.SetColumns(8 - 2 * dockCount);
-
-        // A90 S4: 중앙 썸네일 영역을 좌/우 패널 폭만큼 비켜 세운다. S4 호스트는 ColumnSpan=3
-        // 전폭이라 도크 컬럼과 별개로 같은 %의 스페이서를 스스로 잡아야 패널과 픽셀 정렬된다
-        // (SetPanelPercent 산식). A176: S4가 추가하는 패널도 사이드바(도크)라 스페이서와 도크
-        // 컬럼이 같은 25%로 일치한다. A317: 부유 표시(s4Float — 도크 컬럼 0)에서도 이 산식은
-        // 그대로 맞는다 — 패널(ColumnSpan=3 내부 분할)과 이 스페이서가 **둘 다 전폭 기준 같은
-        // %**라, 도크 컬럼이 폭을 차지하든(도크) 안 하든(부유) 패널 경계와 픽셀 단위로 일치한다
-        // (도크 컬럼은 ModuleHost 폭에만 관여). A213: 열 수는 A93 규칙 준용(8 − 2×열린 패널 수 =
-        // 4/6/8) — S4는 양쪽을 항상 채우므로 통상 4, 폴더 소실로 한쪽이 못 뜬 경우(IsOpen=false)에만
-        // 6 또는 8로 넓어진다.
-        if (_openFileBrowsing)
-        {
-            var s4Left = ListOverlay.IsOpen ? dockPercent : 0;
-            var s4Right = InfoOverlay.IsOpen ? dockPercent : 0;
-            S4LeftSpacer.Width = new GridLength(s4Left, GridUnitType.Star);
-            S4RightSpacer.Width = new GridLength(s4Right, GridUnitType.Star);
-            S4CenterColumn.Width = new GridLength(100 - s4Left - s4Right, GridUnitType.Star);
-            _s4Explorer?.SetColumns(8 - 2 * ((s4Left > 0 ? 1 : 0) + (s4Right > 0 ? 1 : 0)));
-        }
-
-        UpdateEdgeButtons();
+        ApplySidebarGeometry();
         UpdateViewModeButton();
         UpdateS4BarScrim(); // A313: S4 진입/종료가 모드 전이 없이 지나는 종착점 — 덮개도 여기서 따라온다
 
@@ -4165,6 +4132,8 @@ public sealed partial class MainWindow : Window
         _s4Explorer = new ThumbnailExplorer
         {
             ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
+            CheckedPathsProvider = ListOverlay.CheckedPathsForFolder,
+            CheckRequested = ListOverlay.SetItemChecked,
         };
         // A176: 구 "중앙을 반투명으로 덮는다"(A90 원문)의 반투명 배경 교체(A129 폴백 포함)는
         // 반투명 축과 함께 철거됐었다. A316: S4 중앙은 다시 반투명이다 — 단 인스턴스별 배경
@@ -4179,6 +4148,7 @@ public sealed partial class MainWindow : Window
         _s4Explorer.SelectionChanged +=
             () => OnBrowseSelectionChanged(fromList: false); // A200 — S1 쪽과 동일 배선(A240 표면 인자)
         S4CenterHost.Children.Add(_s4Explorer);
+        ApplySidebarGeometry();
     }
 
     /// <summary>A90-b "이미 열려 있음" 강조 지속 시간 — 2연타 판정 창(450ms)과 같은 "잠깐"의 감각.</summary>

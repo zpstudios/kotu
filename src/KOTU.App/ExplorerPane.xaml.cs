@@ -521,6 +521,8 @@ public sealed partial class ExplorerPane : UserControl
             _infoCache.Remove(vm.Path);
             ApplyDetail(vm, DetailInfo.Empty);
         });
+        // A416: a filtered-out or replaced VM is new even though its checked path survives.
+        foreach (var vm in _displayVms) vm.IsChecked = _checkedPaths.Contains(vm.Path);
         DiagTrace.Write("reuse", $"list full={(full ? 1 : 0)} patch={(full ? 0 : 1)} reused={reuse.Reused} created={reuse.Created} removed={reuse.Removed}");
         _displayFolder = _folder; // A323 — 이 목록이 속한 폴더(셸 시드의 정합 판정용)
         Fill(arranged); // A345 배치 2 — 리스트는 ItemsSource 대입 한 줄(동기 완결)
@@ -1941,6 +1943,7 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private async void OnSurfaceKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Key == Windows.System.VirtualKey.Space && e.Handled) return; // A416: preview already toggled
         if (e.KeyStatus.WasKeyDown || sender is not ListViewBase owner) return;
         // A94 2차: 이름변경 편집 상자(TextBox) 안의 키는 전부 편집 몫 — handledEventsToo 구독이라
         // 편집 상자가 Handled를 걸어도 여기까지 오므로 원본 요소로 걸러낸다
@@ -2292,10 +2295,7 @@ public sealed partial class ExplorerPane : UserControl
     {
         if (sender is not CheckBox box) return;
         if (VmOf(ItemFromSource(box)) is not { } vm) return; // A345 배치 2 — VmOf 단일 해석
-        var nowChecked = box.IsChecked == true;
-        if (nowChecked) _checkedPaths.Add(vm.Path);
-        else _checkedPaths.Remove(vm.Path);
-        vm.IsChecked = nowChecked; // 시각 반영은 x:Bind(OneWay)가 맡는다 — 컨테이너 직접 대입 없음
+        SetItemChecked(_displayFolder, vm.Path, box.IsChecked == true);
     }
 
     /// <summary>
@@ -2308,10 +2308,7 @@ public sealed partial class ExplorerPane : UserControl
     private void ToggleCheckOf(SelectorItem item)
     {
         if (VmOf(item) is not { } vm) return; // A345 배치 2 — VmOf 단일 해석
-        var nowChecked = !_checkedPaths.Contains(vm.Path);
-        if (nowChecked) _checkedPaths.Add(vm.Path);
-        else _checkedPaths.Remove(vm.Path);
-        vm.IsChecked = nowChecked;
+        SetItemChecked(_displayFolder, vm.Path, !_checkedPaths.Contains(vm.Path));
     }
 
     /// <summary>
