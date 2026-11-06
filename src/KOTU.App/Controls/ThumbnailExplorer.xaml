@@ -14,7 +14,7 @@
          가상화라 화면에 보이는 타일만 실체화된다 — ShowEntries는 목록을 대입할 뿐 컨테이너를
          만들지 않는다(종전 "항목은 전부 코드(ShowEntries)에서 채운다"의 폐기). 미리보기 4갈래는
          코드가 위상 0(폴백 즉시)·위상 1(비동기 요청)로 TilePreviewHost 안에 채운다.
-         열 수는 셸이 SetColumns로 준다(A213: 8 − 2×열린 도크 수 = 4/6/8 — A63 대체 계보).
+         열 수는 셸이 SetColumns로 준다(A417: 12 − 3×보이는 패널 수 = 6/9/12).
          타일 크기 = floor(실폭/열수), SizeChanged마다 재계산(ApplyTileSize).
          드래그 앤 드랍(A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로 전환):
          빈 영역·파일 타일 드랍 = 현재 폴더로 이동/복사, 폴더 타일 드랍 = 그 폴더로(코드가
@@ -30,59 +30,7 @@
          Transparent는 null 배경과 달리 히트 테스트에 잡힌다 — 빈 영역 우클릭 메뉴·눌림 구독·드랍
          ("배경 있는 LayoutRoot가 원본" — 코드 A212 주석의 히트 보장)이 종전대로 유지되고,
          S4에서 아래 레이어(미디어)로 포인터가 새지 않는 모달 차단(A313)도 그대로다. -->
-    <Grid x:Name="LayoutRoot" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
-          Background="Transparent">
-        <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 콘텐츠 영역이 창 전체가 되면서(행 분할 폐지)
-             모드1에서는 이 그리드의 하단 44px가 바에 덮인다 — 마지막 타일 줄이 바 뒤에 숨지
-             않게 스크롤 끝 여백으로 보정한다(모드 불변 상수 — ExplorerPane과 같은 규칙).
-             좌우 패딩은 0 그대로 — 타일 폭 계산 floor(실폭/열수)(ApplyTileSize)에 영향 없다. -->
-        <GridView x:Name="TileGrid" IsTabStop="True"
-                  Padding="0,0,0,44"
-                  SelectionMode="Extended"
-                  IsItemClickEnabled="True"
-                  ItemClick="OnItemClick"
-                  ContainerContentChanging="OnTileContainerContentChanging"
-                  SizeChanged="OnSizeChanged">
-            <!-- A93 타일(위 미리보기 + 아래 캡션 1줄)을 그대로 옮긴 템플릿 (A345 배치 3).
-                 루트는 반드시 **평평한 Grid 하나**다(중첩 패널 금지) — 인라인 이름변경
-                 (ExplorerRenameBox.Begin)이 이 Grid에 편집 상자를 Insert하고 캡션 자리에
-                 앉히기 때문이다. x:Name 둘은 코드의 조회 키 상수(TilePreviewHostName·
-                 TileCaptionName)와 반드시 같은 값이어야 한다(조회가 이름 기반 — 종전
-                 tile.Children[1] 인덱스 계약은 배치 3에서 폐기했다).
-                 TilePreviewHost = 미리보기 4갈래가 들어가는 빈 자리(코드가 채우고 비운다.
-                 컨테이너가 재활용 큐로 갈 때 비워야 비트맵이 해제된다). -->
-            <GridView.Resources>
-                <DataTemplate x:Key="FileTileTemplate" x:DataType="local:ExplorerEntryVm">
-                    <Grid Opacity="{x:Bind ContentOpacity, Mode=OneWay}"
-                          ToolTipService.ToolTip="{x:Bind Name}">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <Grid x:Name="TilePreviewHost" />
-                        <CheckBox IsChecked="{x:Bind IsChecked, Mode=OneWay}"
-                                  Click="OnTileCheckClick"
-                                  MinWidth="0" MinHeight="0" Padding="0" Margin="8"
-                                  HorizontalAlignment="Left" VerticalAlignment="Top"
-                                  ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
-                        <!-- A337: 클라우드 전용(온라인 전용) 파일 배지 — 대기 배지(코드
-                             MakePendingBadge)와 같은 한 벌이고 자리만 반대쪽 위다. 표시 여부는
-                             뷰모델이 정한다(CloudBadgeVisibility) — 종전에는 조립 코드가 배지를
-                             만들지 말지로 갈랐다. 히트 테스트에서 빼지 않는 것도 종전 그대로다
-                             (툴팁이 이 배지의 존재 이유를 설명하는 유일한 자리). -->
-                        <FontIcon x:Name="TileCloudBadge"
-                                  Glyph="&#xE753;" FontSize="10" Opacity="0.55"
-                                  HorizontalAlignment="Right" VerticalAlignment="Top"
-                                  Margin="0,12,12,0"
-                                  Visibility="{x:Bind CloudBadgeVisibility}"
-                                  ToolTipService.ToolTip="Online-only file — preview needs a download" />
-                        <TextBlock x:Name="TileCaption" Grid.Row="1"
-                                   Text="{x:Bind Name}" FontSize="14"
-                                   TextTrimming="CharacterEllipsis"
-                                   TextAlignment="Center"
-                                   Margin="4,0,4,4" />
-                    </Grid>
-                </DataTemplate>
+    <UserControl.Resources>
                 <DataTemplate x:Key="ParentTileTemplate" x:DataType="controls:ExplorerParentTile">
                     <Button Click="OnParentFolderClick" Loaded="OnParentTileLoaded"
                             IsEnabled="{x:Bind CanNavigate, Mode=OneWay}"
@@ -172,6 +120,97 @@
                         </Grid>
                     </Button>
                 </DataTemplate>
+    </UserControl.Resources>
+    <Grid x:Name="LayoutRoot" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
+          Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <!-- A417: independent atomic tool groups share a row and wrap together at narrow widths. -->
+        <Grid x:Name="ExplorerTools" Background="Transparent" Padding="10,8" SizeChanged="OnToolsSizeChanged">
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <Grid x:Name="SortGroup" ColumnSpacing="8" MaxWidth="260"
+                  HorizontalAlignment="Left" AutomationProperties.Name="Sort">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Sort" FontSize="12" Opacity="0.75" VerticalAlignment="Center" />
+                <DropDownButton x:Name="SortKeyButton" Grid.Column="1" Padding="8,5" MinWidth="0"
+                                HorizontalAlignment="Stretch" AutomationProperties.Name="Sort by"
+                                ToolTipService.ToolTip="Sort by">
+                    <TextBlock x:Name="SortKeyText" Text="Name" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </DropDownButton>
+                <Button x:Name="SortDirectionButton" Grid.Column="2" Padding="8,5" MinWidth="0"
+                        Click="OnSortDirectionClick" AutomationProperties.Name="Sort direction">
+                    <FontIcon x:Name="SortDirectionIcon" Glyph="&#xE70E;" FontSize="13" />
+                </Button>
+            </Grid>
+            <StackPanel x:Name="ViewGroup" Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                        Margin="16,0,0,0" HorizontalAlignment="Left" AutomationProperties.Name="View">
+                <Border x:Name="ToolSeparator" Width="1" Height="20" VerticalAlignment="Center"
+                        Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                <TextBlock Text="View" FontSize="12" Opacity="0.75" VerticalAlignment="Center" />
+                <DropDownButton x:Name="ViewButton" Padding="8,5" MinWidth="0" AutomationProperties.Name="View mode">
+                    <TextBlock x:Name="ViewText" Text="Preview" FontSize="12" />
+                </DropDownButton>
+            </StackPanel>
+        </Grid>
+        <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 콘텐츠 영역이 창 전체가 되면서(행 분할 폐지)
+             모드1에서는 이 그리드의 하단 44px가 바에 덮인다 — 마지막 타일 줄이 바 뒤에 숨지
+             않게 스크롤 끝 여백으로 보정한다(모드 불변 상수 — ExplorerPane과 같은 규칙).
+             좌우 패딩은 0 그대로 — 타일 폭 계산 floor(실폭/열수)(ApplyTileSize)에 영향 없다. -->
+        <GridView x:Name="TileGrid" Grid.Row="1" IsTabStop="True" Background="Transparent"
+                  Padding="0,0,0,44"
+                  SelectionMode="Extended"
+                  IsItemClickEnabled="True"
+                  ItemClick="OnItemClick"
+                  ContainerContentChanging="OnTileContainerContentChanging"
+                  SizeChanged="OnSizeChanged">
+            <!-- A93 타일(위 미리보기 + 아래 캡션 1줄)을 그대로 옮긴 템플릿 (A345 배치 3).
+                 루트는 반드시 **평평한 Grid 하나**다(중첩 패널 금지) — 인라인 이름변경
+                 (ExplorerRenameBox.Begin)이 이 Grid에 편집 상자를 Insert하고 캡션 자리에
+                 앉히기 때문이다. x:Name 둘은 코드의 조회 키 상수(TilePreviewHostName·
+                 TileCaptionName)와 반드시 같은 값이어야 한다(조회가 이름 기반 — 종전
+                 tile.Children[1] 인덱스 계약은 배치 3에서 폐기했다).
+                 TilePreviewHost = 미리보기 4갈래가 들어가는 빈 자리(코드가 채우고 비운다.
+                 컨테이너가 재활용 큐로 갈 때 비워야 비트맵이 해제된다). -->
+            <GridView.Resources>
+                <DataTemplate x:Key="FileTileTemplate" x:DataType="local:ExplorerEntryVm">
+                    <Grid Opacity="{x:Bind ContentOpacity, Mode=OneWay}"
+                          ToolTipService.ToolTip="{x:Bind Name}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid x:Name="TilePreviewHost" />
+                        <CheckBox IsChecked="{x:Bind IsChecked, Mode=OneWay}"
+                                  Click="OnTileCheckClick"
+                                  MinWidth="0" MinHeight="0" Padding="0" Margin="8"
+                                  HorizontalAlignment="Left" VerticalAlignment="Top"
+                                  ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
+                        <!-- A337: 클라우드 전용(온라인 전용) 파일 배지 — 대기 배지(코드
+                             MakePendingBadge)와 같은 한 벌이고 자리만 반대쪽 위다. 표시 여부는
+                             뷰모델이 정한다(CloudBadgeVisibility) — 종전에는 조립 코드가 배지를
+                             만들지 말지로 갈랐다. 히트 테스트에서 빼지 않는 것도 종전 그대로다
+                             (툴팁이 이 배지의 존재 이유를 설명하는 유일한 자리). -->
+                        <FontIcon x:Name="TileCloudBadge"
+                                  Glyph="&#xE753;" FontSize="10" Opacity="0.55"
+                                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                                  Margin="0,12,12,0"
+                                  Visibility="{x:Bind CloudBadgeVisibility}"
+                                  ToolTipService.ToolTip="Online-only file — preview needs a download" />
+                        <TextBlock x:Name="TileCaption" Grid.Row="1"
+                                   Text="{x:Bind Name}" FontSize="14"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextAlignment="Center"
+                                   Margin="4,0,4,4" />
+                    </Grid>
+                </DataTemplate>
+
             </GridView.Resources>
             <GridView.ItemTemplateSelector>
                 <controls:ExplorerTileTemplateSelector FileTemplate="{StaticResource FileTileTemplate}"
@@ -187,12 +226,70 @@
                 </Style>
             </GridView.ItemContainerStyle>
         </GridView>
-        <TextBlock x:Name="EmptyText" Text="No matching files here"
+        <ListView x:Name="DetailList" Grid.Row="1" Visibility="Collapsed" IsTabStop="True"
+                  Background="Transparent" Margin="0,0,0,44" SelectionMode="Extended"
+                  IsItemClickEnabled="True" ItemClick="OnItemClick"
+                  ContainerContentChanging="OnListContainerContentChanging">
+            <ListView.ItemsPanel>
+                <ItemsPanelTemplate><ItemsStackPanel Orientation="Vertical" /></ItemsPanelTemplate>
+            </ListView.ItemsPanel>
+            <ListView.Resources>
+                <DataTemplate x:Key="FileListTemplate" x:DataType="local:ExplorerEntryVm">
+                    <Grid Opacity="{x:Bind ContentOpacity, Mode=OneWay}" Padding="8,6" ColumnSpacing="8"
+                          ToolTipService.ToolTip="{x:Bind Path}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" /><ColumnDefinition Width="{x:Bind ListSizeWidth, Mode=OneWay}" />
+                            <ColumnDefinition Width="{x:Bind ListTypeWidth, Mode=OneWay}" />
+                            <ColumnDefinition Width="{x:Bind ListModifiedWidth, Mode=OneWay}" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <CheckBox Grid.RowSpan="2" IsChecked="{x:Bind IsChecked, Mode=OneWay}" Click="OnTileCheckClick"
+                                  MinWidth="0" MinHeight="0" Padding="0" VerticalAlignment="Center"
+                                  ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
+                        <FontIcon Grid.Column="1" Grid.RowSpan="2" Glyph="{x:Bind Glyph}" FontSize="13" VerticalAlignment="Center" />
+                        <TextBlock x:Name="TileCaption" Grid.Column="2" Text="{x:Bind Name}" FontSize="12"
+                                   Grid.ColumnSpan="{x:Bind ListNameSpan, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,18,0" />
+                        <FontIcon x:Name="RowCloudBadge" Grid.Column="2" Glyph="&#xE753;" FontSize="10" Opacity="0.55"
+                                  Grid.ColumnSpan="{x:Bind ListNameSpan, Mode=OneWay}"
+                                  HorizontalAlignment="Right" VerticalAlignment="Center"
+                                  Visibility="{x:Bind CloudBadgeVisibility}"
+                                  ToolTipService.ToolTip="Online-only file — preview needs a download" />
+                        <TextBlock x:Name="RowSizeText" Grid.Column="3" Text="{x:Bind ListSize}" FontSize="12"
+                                   Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" TextAlignment="Right" />
+                        <TextBlock x:Name="RowTypeText" Grid.Column="4" Text="{x:Bind ListType}" FontSize="12"
+                                   Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock x:Name="RowModifiedText" Grid.Column="5" Text="{x:Bind ListModified}" FontSize="12"
+                                   Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock x:Name="RowSummaryText" Grid.Column="2" Grid.Row="1" Grid.ColumnSpan="4"
+                                   Text="{x:Bind ListSummary}" FontSize="11" Opacity="0.65"
+                                   Visibility="{x:Bind ListSummaryVisibility, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.Resources>
+            <ListView.ItemTemplateSelector>
+                <controls:ExplorerTileTemplateSelector FileTemplate="{StaticResource FileListTemplate}"
+                                                       ParentTemplate="{StaticResource ParentTileTemplate}" />
+            </ListView.ItemTemplateSelector>
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                </Style>
+            </ListView.ItemContainerStyle>
+        </ListView>
+        <TextBlock x:Name="EmptyText" Grid.Row="1" Text="No matching files here"
                    Visibility="Collapsed" Opacity="0.6"
                    HorizontalAlignment="Center" VerticalAlignment="Center" />
         <!-- A152: 하단 여백 54 = 종전 10 + 하단 바 44 — 바닥 정렬 일시 안내가 모드1에서
              오버레이 바에 가려지지 않게 띄운다(위 TileGrid 패딩과 같은 보정) -->
-        <TextBlock x:Name="NoticeText"
+        <TextBlock x:Name="NoticeText" Grid.Row="1"
                    Visibility="Collapsed" FontSize="12" Opacity="0.8"
                    TextTrimming="CharacterEllipsis"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom"

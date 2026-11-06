@@ -6,10 +6,10 @@ namespace KOTU.Core.Tests;
 public class SidebarGeometryTests
 {
     [Theory]
-    [InlineData(false, false, 8)]
-    [InlineData(true, false, 6)]
-    [InlineData(false, true, 6)]
-    [InlineData(true, true, 4)]
+    [InlineData(false, false, 12)]
+    [InlineData(true, false, 9)]
+    [InlineData(false, true, 9)]
+    [InlineData(true, true, 6)]
     public void BrowserFitsBetweenVisiblePanelsAtEveryViewport(bool left, bool right, int columns)
     {
         foreach (var width in new[] { 640d, 947d, 1280d, 1920d })
@@ -32,18 +32,18 @@ public class SidebarGeometryTests
     public void DelayedLeftOpenAndRepeatedContentReturnRecomputeFromActualSurfaces()
     {
         // Content hides both; on Esc the right placeholder appears immediately, then the left
-        // folder probe completes. Replaying must not retain the intermediate 75%/6-column layout.
+        // folder probe completes. Replaying must not retain the intermediate 75%/9-column layout.
         for (var cycle = 0; cycle < 3; cycle++)
         {
             var hidden = SidebarGeometry.FromVisiblePanels(false, false, false, 25);
             Assert.Equal(100, hidden.ContentCenterPercent);
             var pending = SidebarGeometry.FromVisiblePanels(false, true, false, 25);
             Assert.Equal(75, pending.ContentCenterPercent);
-            Assert.Equal(6, pending.ExplorerColumns);
+            Assert.Equal(9, pending.ExplorerColumns);
             var complete = SidebarGeometry.FromVisiblePanels(true, true, false, 25);
             Assert.Equal(25, complete.ContentLeftPercent);
             Assert.Equal(50, complete.ContentCenterPercent);
-            Assert.Equal(4, complete.ExplorerColumns);
+            Assert.Equal(6, complete.ExplorerColumns);
             // Failed/hidden left must release its reserve, even after a previous successful open.
             Assert.Equal(pending, SidebarGeometry.FromVisiblePanels(false, true, false, 25));
         }
@@ -60,6 +60,8 @@ public class SidebarGeometryTests
         var floating = SidebarGeometry.FromVisiblePanels(left, right, true, 25);
         Assert.Equal(100, floating.ContentCenterPercent);
         Assert.Equal(0, floating.DockCount);
+        Assert.Equal(12, floating.ContentColumns);
+        Assert.Equal(12 - 3 * ((left ? 1 : 0) + (right ? 1 : 0)), floating.ExplorerColumns);
         Assert.Equal(docked.CenterPercent, floating.CenterPercent);
         Assert.Equal(docked.ExplorerColumns, floating.ExplorerColumns);
         Assert.Equal(docked.LeftPercent, floating.LeftPercent);

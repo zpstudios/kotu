@@ -4,22 +4,21 @@ namespace KOTU.App;
 
 public sealed partial class ExplorerPane
 {
-    // A416: the sidebar remains the sole owner of the checked workset, including when hidden.
+    // A417: the legacy sidebar presents the session's workset, including when hidden.
     internal event Action? ChecksChanged;
 
     internal IReadOnlyList<string> CheckedPathsForFolder(string? folder) =>
-        string.Equals(folder, _displayFolder, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(folder, _folder, StringComparison.OrdinalIgnoreCase)
-            ? CheckedPathsInView() : [];
+        _session.CheckedPathsForFolder(folder);
 
     internal void SetItemChecked(string? folder, string path, bool value)
     {
-        if (!string.Equals(folder, _folder, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(folder, _displayFolder, StringComparison.OrdinalIgnoreCase) ||
-            FindVmByPath(path) is not { } vm) return;
-        var changed = value ? _checkedPaths.Add(vm.Path) : _checkedPaths.Remove(vm.Path);
-        vm.IsChecked = value;
-        if (changed) ChecksChanged?.Invoke();
+        _session.SetItemChecked(folder, path, value);
+    }
+
+    private void OnSessionChecksChanged()
+    {
+        foreach (var vm in _displayVms) vm.IsChecked = _session.IsChecked(vm.Path);
+        ChecksChanged?.Invoke();
     }
 
     internal bool ToggleFocusedCheck(DependencyObject focused, bool repeat)
@@ -27,7 +26,7 @@ public sealed partial class ExplorerPane
         if (!OwnsFileListFocus(focused) || VmOf(ItemFromSource(focused)) is not { } vm) return false;
         _lastClick = null;
         _lastPress = null;
-        if (!repeat) SetItemChecked(_displayFolder, vm.Path, !_checkedPaths.Contains(vm.Path));
+        if (!repeat) SetItemChecked(_displayFolder, vm.Path, !_session.IsChecked(vm.Path));
         return true;
     }
 }

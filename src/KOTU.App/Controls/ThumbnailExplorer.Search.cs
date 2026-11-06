@@ -9,12 +9,13 @@ public sealed partial class ThumbnailExplorer
     {
         var vm = _vms.FirstOrDefault(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase));
         if (vm is null) return false;
-        TileGrid.SelectedItems.Clear();
-        TileGrid.SelectedItem = vm;
-        TileGrid.ScrollIntoView(vm);
-        TileGrid.UpdateLayout();
-        if (TileGrid.ContainerFromItem(vm) is Control container) container.Focus(FocusState.Keyboard);
-        else TileGrid.Focus(FocusState.Keyboard);
+        BeginUserFocusNavigation();
+        ActiveItems.SelectedItems.Clear();
+        ActiveItems.SelectedItem = vm;
+        ActiveItems.ScrollIntoView(vm);
+        ActiveItems.UpdateLayout();
+        if (ActiveItems.ContainerFromItem(vm) is Control container) container.Focus(FocusState.Keyboard);
+        else ActiveItems.Focus(FocusState.Keyboard);
         return true;
     }
 

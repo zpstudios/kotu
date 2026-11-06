@@ -116,11 +116,10 @@ public sealed partial class MainWindow
 
     private void RefreshExplorerSelectedMetadata(IReadOnlyList<ExplorerListing.Entry> entries)
     {
-        if (_selectedBrowse is not { } selected) return;
-        var next = ExplorerNameView.SelectionMetadata(entries, selected.Path);
+        if (_selectedBrowse.Path is not { } selectedPath) return;
+        var next = ExplorerNameView.SelectionMetadata(entries, selectedPath, ListOverlay.MetadataGeneration);
         if (next == _selectedBrowse) return;
         _selectedBrowse = next;
-        RefreshInfoOverlayForSelection();
     }
 
     private void ObserveExplorerSelection(bool fromList)
@@ -132,8 +131,13 @@ public sealed partial class MainWindow
     private static bool ExplorerKeyDown(VirtualKey key) => InputKeyboardSource.GetKeyStateForCurrentThread(key)
         .HasFlag(CoreVirtualKeyStates.Down);
 
+    private bool ExplorerToolsOwnFocus() => RootLayout.XamlRoot is { } root &&
+        FocusManager.GetFocusedElement(root) is DependencyObject focused &&
+        ActiveExplorer?.OwnsToolFocus(focused) == true;
+
     private bool ExplorerInputBlocked()
     {
+        if (ExplorerToolsOwnFocus()) return true;
         if (ExplorerRenameBox.IsEditing || IsAnyPopupOpen() || IsFocusWithin(JobsLayer) || IsTextInputFocused()) return true;
         var node = RootLayout.XamlRoot is { } root ? FocusManager.GetFocusedElement(root) as DependencyObject : null;
         for (; node is not null; node = VisualTreeHelper.GetParent(node))
@@ -198,7 +202,7 @@ public sealed partial class MainWindow
         }
         if (!e.Handled && IsExplorerSearchContext && !IsAnyPopupOpen() && !ExplorerRenameBox.IsEditing &&
             e.Key == VirtualKey.F && control && !alt && !shift &&
-            (filterFocused || TryExplorerOwner(out _)))
+            (filterFocused || ExplorerToolsOwnFocus() || TryExplorerOwner(out _)))
         {
             e.Handled = true;
             if (!e.KeyStatus.WasKeyDown)

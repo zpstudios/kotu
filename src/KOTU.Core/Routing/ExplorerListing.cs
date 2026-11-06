@@ -16,7 +16,8 @@ public static class ExplorerListing
     /// 이미 읽는 Attributes로 판정해 담는다(추가 IO 0). 소비처(썸네일·상세 지연 로드)는 이 값이
     /// 참이면 파일 내용을 여는 자동 조회를 생략한다(내용을 여는 순간 클라우드 필터 드라이버가
     /// 전체를 내려받는 하이드레이션이 일어나기 때문). 폴더는 항상 false — 폴더 내용을 여는
-    /// 소비처가 없고, 열거 자체는 하이드레이션을 유발하지 않는다.
+    /// 소비처가 없다. 폴더 열거도 원격 조회를 유발할 수 있으므로 상세정보는 추가 열거하지 않는다.
+    /// Attributes=0은 미확인 값이다. 확인된 Normal/Directory와 구분해 자동 내용 조회를 차단한다.
     /// </summary>
     public sealed record Entry(
         string Path, string Name, bool IsFolder, long Size, DateTime Modified, DateTime Created,
@@ -193,7 +194,7 @@ public static class ExplorerListing
     /// OneDrive 등 클라우드 필터 드라이버가 온라인 전용 파일에 다는 속성 3축:
     /// Offline(0x1000) · RecallOnDataAccess(0x400000) · RecallOnOpen(0x40000).
     /// 하나라도 켜져 있으면 내용을 여는 순간 전체 다운로드(하이드레이션)가 일어난다.
-    /// 속성 읽기·열거 자체는 하이드레이션을 유발하지 않으므로 판정 비용은 0이다.
+    /// 이 함수는 전달된 속성만 판정한다. 속성 취득이나 폴더 열거의 원격 비용은 보장하지 않는다.
     /// </summary>
     public static bool IsCloudPlaceholder(FileAttributes attributes) =>
         (attributes & (FileAttributes.Offline | RecallOnDataAccess | RecallOnOpen)) != 0;

@@ -39,6 +39,12 @@ namespace KOTU.App;
 /// </summary>
 public sealed partial class ExplorerPane : UserControl
 {
+    private static int _constructionCount;
+    private static int _listPaneConstructionCount;
+    internal static int ConstructionCount => Volatile.Read(ref _constructionCount);
+    internal static int ListPaneConstructionCount => Volatile.Read(ref _listPaneConstructionCount);
+    internal ExplorerSession Session => _session;
+
     private const int ThumbnailLimit = 300;   // 썸네일 로드 상한 (초대형 폴더 보호)
     private const int FetchConcurrency = 3;   // 썸네일·상세 조각 fetch 동시성 상한 (A194 — 풀 워커 수와 동일)
     private const int DoubleClickMs = 500;
@@ -133,17 +139,10 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     internal string DisplayFolder => _displayFolder;
 
-    /// <summary>A323: <see cref="DisplayFolder"/>의 실값 — 갱신은 RefreshView 한 곳(_display와 같은 자리).</summary>
-    private string _displayFolder = string.Empty;
-
-    // "name"/"size"/"modified"/"created"(A117)/"type"(A155) — SortKey.ToString().ToLowerInvariant()와
-    // 수동 동기. 모르는 값(구 버전·손편집)은 이름순으로 폴백한다(아래 switch의 _ 분기).
-    private const string SortSettingKey = "explorer.sort";
-
-    // 정렬 방향 (A155, 부록 B 69 ①) — true = 내림차순. explorer.sort와 같은 층·같은 왕복(전역 1벌).
-    // 키가 없으면(구 버전 설정) 현재 정렬 키의 종전 고정 방향(DefaultDescending)으로 폴백해
-    // 업데이트 전과 같은 화면을 유지한다 — 마이그레이션 없음.
-    private const string SortDescSettingKey = "explorer.sortDesc";
+    // A417: the host owns the nonvisual session, including scans/watch/lifetime.
+    // These read-only aliases keep unrelated legacy presentation/command paths intact.
+    private readonly ExplorerSession _session;
+    private string _displayFolder => _session.DisplayFolder;
 
     /// <summary>
     /// 숨김·시스템 파일 표시 여부 (A160, v0.169.0) — explorer.sort와 같은 층의 탐색기 설정이라
@@ -151,11 +150,11 @@ public sealed partial class ExplorerPane : UserControl
     /// private이 아니라 internal인 이유: 좌 패널 폴더 트리(FileListOverlay)가 같은 값을 읽어야
     /// 리스트와 트리가 같은 집합을 보인다 — 키 문자열을 복제하지 않으려고 여기를 단일 출처로 쓴다.
     /// </summary>
-    internal const string ShowHiddenSettingKey = "explorer.showHidden";
+    internal const string ShowHiddenSettingKey = ExplorerSession.ShowHiddenSettingKey;
 
-    private IReadOnlyList<string> _extensions = [];
-    private string _folder = string.Empty;
-    private int _loadSeq;                     // 빠른 연속 탐색 시 늦은 결과 폐기
+    private IReadOnlyList<string> _extensions => _session.Extensions;
+    private string _folder => _session.CurrentFolder;
+    private int _loadSeq; // presentation loader generation; scan generation belongs to the session
 
     /// <summary>
     /// A345 배치 2: 상세 조각 fetch의 동시 발사 상한 — 페인 수명 1벌이다(종전 LoadDetailInfoAsync가
@@ -168,20 +167,17 @@ public sealed partial class ExplorerPane : UserControl
     private (string Path, DateTime At)? _lastClick;
     private (string Path, DateTime At)? _lastActivation; // A85: ItemClick 쌍·DoubleTapped 겹침을 1회로 억제
     private (string Path, DateTime At)? _lastPress;      // A131: 원시 눌림 쌍 — 항목 재구축을 건너 살아남는 최후 폴백
-    private ModuleWorker? _worker;            // 폴더 스캔 전용(순서 의존) — 페인별 분리(A42 정책)
     private ModuleWorkerPool? _fetchPool;     // 썸네일·상세 조각 fetch 전용(A194 — 항목별 독립 작업만)
-    private IReadOnlyList<ExplorerListing.Entry> _entries = []; // 마지막 스캔 결과 — 재스캔 없는 재배치의 원본(A5)
+    private IReadOnlyList<ExplorerListing.Entry> _entries => _session.Entries;
     // A414: Ordered retains the whole sorted listing; Display is its keyword projection.
     // Sort clicks use Ordered so filtered-out items retain their stable tie order when restored.
-    private readonly ExplorerNameView _nameView = new();
-    private IReadOnlyList<ExplorerListing.Entry> _display => _nameView.Display;
+    private IReadOnlyList<ExplorerListing.Entry> _display => _session.Display;
     // A345 배치 1: _display와 같은 순서·같은 개수의 뷰모델 목록(데이터 축). 조립(Fill)은 이제
     // 이 목록을 소비하고 컨테이너 Tag에 뷰모델을 건다 — 공개 API가 돌려주는 Entry 목록은 무변경.
     private readonly ObservableCollection<ExplorerEntryVm> _displayVms = [];
-    private ExplorerListing.SortKey _sortKey = ExplorerListing.SortKey.Name;
-    private bool _sortDesc; // A155 — 초기값 false = Name의 기본 방향(DefaultDescending(Name))과 일치
-    private bool _showHidden; // A160 — explorer.showHidden(기본 false = 숨김·시스템 감춤)
-    private ISettingsService? _settings;
+    private ExplorerListing.SortKey _sortKey => _session.SortKey;
+    private bool _sortDesc => _session.Descending;
+    private bool _showHidden => _session.ShowHidden;
 
     /// <summary>
     /// 정렬 키(A5)·숨김 표시(A160) 저장용. 셸(MainWindow)이 페인 생성 직후 주입한다 —
@@ -189,37 +185,22 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     public ISettingsService? Settings
     {
-        get => _settings;
+        get => _session.Settings;
         set
         {
-            _settings = value;
-            _sortKey = value?.Get(SortSettingKey, "name") switch
-            {
-                "size" => ExplorerListing.SortKey.Size,
-                "modified" => ExplorerListing.SortKey.Modified,
-                "created" => ExplorerListing.SortKey.Created, // A117
-                "type" => ExplorerListing.SortKey.Type, // A155
-                _ => ExplorerListing.SortKey.Name,
-            };
-            // A155: 방향은 키 다음에 읽는다 — 저장값이 없으면 그 키의 종전 고정 방향으로 폴백.
-            _sortDesc = value?.Get(SortDescSettingKey, DefaultDescending(_sortKey))
-                ?? DefaultDescending(_sortKey);
-            _showHidden = value?.Get(ShowHiddenSettingKey, false) ?? false; // A160 — 정렬과 같은 왕복
+            _session.Settings = value;
             SyncSortHeaders();
-            SyncShowHiddenCheck(); // A160 — 필터 메뉴가 이미 만들어져 있으면 체크도 새 값에 맞춘다
+            PathBar.Sync();
         }
     }
 
-    /// <summary>지연 생성: Unloaded로 정리된 뒤 다시 로드돼도(좌 리스트 오버레이 재오픈) 되살아난다.</summary>
-    private ModuleWorker Worker => _worker ??= new ModuleWorker("KOTU explorer worker");
-
     /// <summary>
-    /// 썸네일·상세 조각 fetch 전용 풀 (A194 — 워커 3, Worker와 같은 지연 생성·Unloaded 정리 규칙).
-    /// 항목별로 독립인 fetch만 여기로 — 순서 의존 작업(폴더 스캔)은 단일 Worker에 남는다
+    /// 썸네일·상세 조각 fetch 전용 풀 (A194 — 워커 3, 표시 뷰의 지연 생성·Unloaded 정리 규칙).
+    /// 항목별로 독립인 fetch만 여기로 — 순서 의존 작업(폴더 스캔)은 세션 워커에 남는다
     /// (풀은 배정 간 순서를 보장하지 않는다 — ModuleWorkerPool 계약).
     /// <para>
     /// A333: 우선순위는 BelowNormal — 상세 조각·썸네일은 <b>이미 그려진 목록에 뒤늦게 얹히는</b>
-    /// 배경성 작업이라, 사용자가 결과를 기다리는 폴더 스캔(<see cref="Worker"/> = Normal 유지)이나
+    /// 배경성 작업이라, 사용자가 결과를 기다리는 폴더 스캔(세션 워커 = Normal 유지)이나
     /// UI 스레드와 CPU를 다투면 안 된다(ModuleWorker의 priority 계약 · 선례 App.xaml.cs
     /// 셸 등록 정비 · DriveStrip 워커 · PollingWorker 기본값). 순수 스레드 우선순위 변경이라
     /// 결과 반영 경로(UI 문맥 await 후속부 = 디스패처 큐 = UI 스레드)는 전혀 달라지지 않는다.
@@ -229,9 +210,16 @@ public sealed partial class ExplorerPane : UserControl
         _fetchPool ??= new ModuleWorkerPool(
             "KOTU explorer fetch", FetchConcurrency, ThreadPriority.BelowNormal);
 
-    public ExplorerPane()
+    public ExplorerPane(ExplorerSession session)
     {
+        _session = session;
+        Interlocked.Increment(ref _constructionCount);
         InitializeComponent();
+        if (ListPane is null) throw new InvalidOperationException("Legacy ListPane was not constructed.");
+        Interlocked.Increment(ref _listPaneConstructionCount);
+        PathBar.Attach(_session);
+        PathBar.ShowHiddenChanged += () => ShowHiddenChanged?.Invoke();
+        _session.ChecksChanged += OnSessionChecksChanged;
         BuildListHeader(); // A155 — 컬럼 헤더(정렬 버튼) 조립 + 초기 정렬 지표 동기
         // A34: 파일 리스트에 포커스가 있는 동안에는 모듈 버튼 핫키를 삼키지 않는다 —
         // 리스트의 타이핑 탐색(첫 글자 점프)이 우선(빈 모듈 탐색기·좌측 오버레이 공통).
@@ -254,7 +242,7 @@ public sealed partial class ExplorerPane : UserControl
             new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
         ListPane.AddHandler(UIElement.PointerPressedEvent,
             new PointerEventHandler(OnSurfacePointerPressed), handledEventsToo: true);
-        // A179: 체크는 선택과 분리된 작업 집합(_checkedPaths)이 단일 원본이다 — 종전 A157의
+        // A179/A417: 체크는 선택과 분리된 세션 작업 집합이 단일 원본이다 — 종전 A157의
         // "선택 → 체크 동기"(SelectionChanged 거울)는 철거했다. 행 클릭 = 선택(하이라이트)만,
         // 체크 토글 = 체크박스 클릭(OnItemCheckClick) 또는 Space(OnSurfaceKeyDown)뿐이다.
         // 시각 규칙: 하이라이트 = 선택 / 체크 = 파일 조작 작업 집합(체크 0개면 선택이 대신한다).
@@ -275,42 +263,9 @@ public sealed partial class ExplorerPane : UserControl
         // 셸 표지(MainWindow._syncingBrowseSelection)가 끊는다.
         IconGrid.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
         ListPane.SelectionChanged += (_, _) => SelectionChanged?.Invoke();
-        // A94 4차: 잘라내기 표시(전역 1벌)가 바뀌면 이미 그려 둔 항목의 흐림만 다시 맞춘다.
-        // 구독을 Loaded/Unloaded로 묶는 이유 = 정적 이벤트가 닫힌 창의 컨트롤을 붙들지 않게
-        // (Unloaded로 워커를 정리하는 아래 관용구와 같은 수명 규칙). 중복 구독은 -= 선행으로 막는다.
-        // A94 5차: 폴더 감시(FileSystemWatcher)와 편집 종료 알림(EditEnded)도 같은 수명 규칙 —
-        // Loaded에서 (재)시작·구독, Unloaded에서 해제. 좌 도크 "닫힘"은 Visibility 변경이라
-        // Unloaded가 아니다 — 도크가 닫혀 있어도 감시는 살아 중앙 썸네일(ViewChanged)이 계속 갱신된다.
-        Loaded += (_, _) =>
-        {
-            ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
-            ExplorerFileOps.CutMarksChanged += ApplyCutMarks;
-            ExplorerRenameBox.EditEnded -= OnRenameEditEnded;
-            ExplorerRenameBox.EditEnded += OnRenameEditEnded;
-            _surfaceLive = true;
-            if (_reloadAfterUnload && _folder.Length > 0)
-            {
-                _reloadAfterUnload = false;
-                NavigateTo(_folder, _extensions); // 해제 중 놓친 상태도 새로 열거한다.
-            }
-            else EnsureWatch(_folder); // 언로드 전에 항해한 폴더가 있으면(재오픈) 거기부터 다시 감시
-        };
-        Unloaded += (_, _) =>
-        {
-            ExplorerFileOps.CutMarksChanged -= ApplyCutMarks;
-            ExplorerRenameBox.EditEnded -= OnRenameEditEnded;
-            _surfaceLive = false;
-            _reloadAfterUnload = true;
-            foreach (var vm in _displayVms) vm.Requests.Dispose();
-            ++_loadSeq; // 해제 전 열거 결과가 재로드된 화면에 적용되지 않게 한다.
-            // A345 배치 2: 분할 조립 루프(CompositionTarget.Rendering)와 완료 신호가 사라져
-            // 여기서 풀어 줄 것이 없다 — 리스트는 ItemsSource 대입 한 줄로 동기 완결이다.
-            TearDownWatch(); // 감시 이벤트 전부 해제 + Dispose + 디바운스 정지 — 창 통째 누수 방지
-            _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
-            _worker = null;
-            _fetchPool?.Dispose(); // A194 — 풀 전파 Dispose. 닫힌 뒤의 Run은 취소 Task(계약)라
-            _fetchPool = null;     // 발사 루프의 OperationCanceledException 처리로 조용히 끝난다.
-        };
+        _session.Updated += OnSessionUpdated;
+        Loaded += OnPresentationLoaded;
+        Unloaded += OnPresentationUnloaded;
     }
 
     /// <summary>
@@ -342,16 +297,6 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>키별 방향 지표 아이콘 — SyncSortHeaders가 활성 헤더 하나만 켠다.</summary>
     private readonly Dictionary<ExplorerListing.SortKey, FontIcon> _sortHeaderArrows = new();
-
-    /// <summary>
-    /// 키의 기본(첫 클릭) 정렬 방향 (A155) — Arrange가 방향 인자화되기 전의 종류별 고정 방향과
-    /// 같은 값이다(Size = 큰 것부터, Modified/Created = 최신부터, Name/Type = 오름차순).
-    /// 저장값 없는 구 설정의 폴백(Settings 세터)과 헤더 전환 첫 클릭이 같은 표를 쓴다.
-    /// </summary>
-    private static bool DefaultDescending(ExplorerListing.SortKey key) =>
-        key is ExplorerListing.SortKey.Size
-            or ExplorerListing.SortKey.Modified
-            or ExplorerListing.SortKey.Created;
 
     /// <summary>
     /// 리스트 컬럼 헤더 조립 (A155 → A199) — XAML의 빈 ListHeader 그리드에 정렬 5칸을 채운다
@@ -462,57 +407,35 @@ public sealed partial class ExplorerPane : UserControl
     /// 리셋 — 탐색기 관례). 저장은 종전 OnSortChanged와 같은 즉시 Set + Save(전역 1벌) —
     /// A204에서도 저장은 <b>최종 기준 1개</b>(explorer.sort/sortDesc)뿐이고 정렬 이력은 저장하지
     /// 않는다(안정성은 세션 내 표시 순서 승계로만 성립 — 재시작·재스캔이면 리셋).
-    /// 재그리기는 RefreshView(재스캔 없음) — ViewChanged로 중앙 썸네일까지 같은 순서가 흐르고,
+    /// 재그리기는 ApplyNameView(재스캔 없음) — ViewChanged로 중앙 썸네일까지 같은 순서가 흐르고,
     /// 트리 동기(A134 SyncTreeToFolder)는 같은 폴더 조기 반환으로 걸러진다(재통지 무해).
-    /// A204/A414: 입력은 _nameView.Ordered(키워드 적용 전 전체 정렬 결과) — Arrange가 stable이라
+    /// A204/A414: 입력은 세션 Ordered(키워드 적용 전 전체 정렬 결과) — Arrange가 stable이라
     /// "이름 오름 → 크기" 전환 시 같은 크기끼리 이름 오름 순서가 유지된다. 같은 키 재클릭
     /// (방향 토글)도 같은 경로 — stable이라 동률 내 직전 순서가 그대로다(별도 처리 없음).
     /// </summary>
     private void OnSortHeaderClick(ExplorerListing.SortKey key)
     {
-        if (key == _sortKey)
-        {
-            _sortDesc = !_sortDesc;
-        }
-        else
-        {
-            _sortKey = key;
-            _sortDesc = DefaultDescending(key);
-            _settings?.Set(SortSettingKey, key.ToString().ToLowerInvariant());
-        }
-        _settings?.Set(SortDescSettingKey, _sortDesc);
-        _settings?.RequestSave();
-        SyncSortHeaders();
-        RefreshView(_nameView.Ordered);
+        _session.SelectSort(key);
     }
 
     /// <summary>
-    /// 입력 목록을 현재 정렬·필터로 재배치해 다시 그린다. 재스캔 없음.
+    /// 원 스캔 목록을 현재 정렬·필터로 재배치해 다시 그린다. 재스캔 없음.
     /// 항목이 새로 만들어지므로 썸네일도 다시 채운다(셸 썸네일 캐시라 재추출은 싸다).
     /// A204 — 입력 선택이 안정성의 전부다:
-    /// · 정렬 키·방향 변경(OnSortHeaderClick) = _nameView.Ordered(직전 전체 순서) → 직전 기준이 동률의
+    /// · 정렬 키·방향 변경(OnSortHeaderClick) = 세션 Ordered(직전 전체 순서) → 직전 기준이 동률의
     ///   2차 순서로 승계(stable sort).
     /// · 재스캔(NavigateToAsync — 감시 디바운스 포함)·필터 토글(A7) = _entries(스캔 결과 = 이름순)
     ///   → 최종 키 1개만 적용 = 종전과 같은 화면. 감시 재통지마다 순서가 흔들리지 않도록
     ///   재스캔/확장자 변경은 _entries에서 시작한다. 키워드 변경은 Ordered의 투영만 바꾼다.
     /// </summary>
-    private void RefreshView(IReadOnlyList<ExplorerListing.Entry> input)
-    {
-        var seq = ++_loadSeq; // 스캔/휴면 그리드 로더만 세대 변경. 재사용 행 요청은 유지.
-        _nameView.Arrange(input, _sortKey, _sortDesc, _hiddenExts);
-        ApplyNameView(seq);
-    }
+    private void RefreshView() => _session.RefreshView();
 
-    internal void SetNameFilter(string query)
-    {
-        // A414: changing a projection must not cancel an in-flight directory scan.
-        if (_nameView.SetQuery(query) && _displayFolder == _folder) ApplyNameView(_loadSeq);
-    }
+    internal void SetNameFilter(string query) => _session.SetNameFilter(query);
 
-    private void ApplyNameView(int seq)
+    private void PrepareNameView()
     {
-        var selected = SelectedEntry?.Path;
-        var arranged = _nameView.Display;
+        _restoreNameSelectionPath = SelectedEntry?.Path;
+        var arranged = _session.Display;
         DiagTrace.Write("nav", $"RefreshView {_folder} count={arranged.Count}"); // A352 배치 1
         var full = !ReferenceEquals(ListPane.ItemsSource, _displayVms);
         var reuse = ExplorerEntryVm.Reconcile(_displayVms, arranged, vm =>
@@ -522,124 +445,19 @@ public sealed partial class ExplorerPane : UserControl
             ApplyDetail(vm, DetailInfo.Empty);
         });
         // A416: a filtered-out or replaced VM is new even though its checked path survives.
-        foreach (var vm in _displayVms) vm.IsChecked = _checkedPaths.Contains(vm.Path);
+        foreach (var vm in _displayVms) vm.IsChecked = _session.IsChecked(vm.Path);
         DiagTrace.Write("reuse", $"list full={(full ? 1 : 0)} patch={(full ? 0 : 1)} reused={reuse.Reused} created={reuse.Created} removed={reuse.Removed}");
-        _displayFolder = _folder; // A323 — 이 목록이 속한 폴더(셸 시드의 정합 판정용)
+    }
+
+    private void ApplyNameView(int seq, bool publish = true)
+    {
+        var arranged = _session.Display;
         Fill(arranged); // A345 배치 2 — 리스트는 ItemsSource 대입 한 줄(동기 완결)
-        if (selected is not null) RestoreNameSelection(selected);
-        ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
+        if (_restoreNameSelectionPath is { } selected) RestoreNameSelection(selected);
+        if (publish) ViewChanged?.Invoke(_folder, arranged); // A93 — 중앙 썸네일 뷰가 같은 목록을 받아 그린다
         // A345 배치 2: 조립이 항상 동기로 끝나므로 마무리도 항상 여기서 한다(종전 분할 조립
         // 루프의 "마지막 틱이 부른다" 분기는 사라졌다). 순서는 종전 그대로 Fill → ViewChanged → 로더.
-        FinishFill(arranged, seq);
-    }
-
-    // ---------- 파일 종류 필터 (A7) ----------
-
-    private readonly HashSet<string> _hiddenExts = new(StringComparer.OrdinalIgnoreCase);
-    private IReadOnlyList<string> _filterBuiltFor = []; // 마지막으로 플라이아웃을 만든 확장자 목록
-    private Brush? _filterDefaultBrush;                 // 아이콘 원래 색 (활성 표시 해제용)
-    private ToggleMenuFlyoutItem? _showHiddenItem;      // A160 — 같은 메뉴 안의 숨김 표시 토글(체크 동기용)
-
-    /// <summary>
-    /// 담당 확장자 목록으로 필터 플라이아웃을 만든다. 목록이 그대로면 재사용(체크 상태 유지),
-    /// 모듈 전환 등으로 바뀌면 새로 만들고 필터를 초기화한다. 필터는 저장하지 않는다(세션 한정).
-    /// A160(v0.169.0): 같은 메뉴 아래쪽에 구분선 + "숨김·시스템 표시" 토글이 붙는다. 그쪽은
-    /// 세션 한정이 아니라 저장되는 설정(explorer.showHidden)이라 여기서 초기화하지 않고
-    /// 현재 값으로 체크만 맞춘다. 메뉴 조립 지점은 이 함수 하나뿐이라(확장자 목록이 폴더·모듈마다
-    /// 달라 재생성돼도 여기로만 온다) 구분선·토글이 빠진 채 다시 만들어질 경로가 없다.
-    /// </summary>
-    private void EnsureFilterFlyout()
-    {
-        if (_extensions.SequenceEqual(_filterBuiltFor)) return;
-        _filterBuiltFor = _extensions;
-        _hiddenExts.Clear();
-
-        var flyout = new MenuFlyout { Placement = FlyoutPlacementMode.BottomEdgeAlignedRight };
-        // "Show all"이 되돌릴 대상 목록 — A160의 숨김 토글은 여기 담지 않는다(아래 주석).
-        var extensionToggles = new List<ToggleMenuFlyoutItem>();
-        foreach (var ext in _extensions)
-        {
-            // A196: 전체 파일 필터(ExplorerListing.AllFiles — 설정·미지원 안내 화면)의 "*"는
-            // 토글로 만들지 않는다 — 좁힐 확장자 목록 자체가 없고, 숨김 판정(Arrange의
-            // hiddenExtensions)은 실제 확장자 문자열이라 "*" 토글은 아무 일도 못 하는 거짓 UI다.
-            if (ext == "*") continue;
-            var toggle = new ToggleMenuFlyoutItem { Text = ext, IsChecked = true };
-            toggle.Click += (_, _) =>
-            {
-                if (toggle.IsChecked) _hiddenExts.Remove(ext);
-                else _hiddenExts.Add(ext);
-                UpdateFilterVisual();
-                RefreshView(_entries); // A204 — 필터 변경은 스캔 결과 입력(안정성 리셋, 계약대로)
-            };
-            extensionToggles.Add(toggle);
-            flyout.Items.Add(toggle);
-        }
-        flyout.Items.Add(new MenuFlyoutSeparator());
-        var showAll = new MenuFlyoutItem { Text = "Show all" };
-        showAll.Click += (_, _) =>
-        {
-            if (_hiddenExts.Count == 0) return;
-            _hiddenExts.Clear();
-            // A160: 확장자 토글만 되돌린다. 종전처럼 flyout.Items를 타입(ToggleMenuFlyoutItem)으로
-            // 훑으면 아래 숨김 표시 토글까지 체크돼, 설정은 그대로인 채 메뉴만 거짓말을 한다.
-            foreach (var t in extensionToggles) t.IsChecked = true;
-            UpdateFilterVisual();
-            RefreshView(_entries); // A204 — 위 확장자 토글과 같은 입력 선택(스캔 결과)
-        };
-        flyout.Items.Add(showAll);
-
-        // A160: 확장자 필터(세션 한정)와 표시 정책(저장·전역 1벌)은 다른 층이라 구분선으로 나눈다.
-        flyout.Items.Add(new MenuFlyoutSeparator());
-        var showHidden = new ToggleMenuFlyoutItem
-        {
-            Text = "Show hidden and system files",
-            // Settings 주입이 첫 NavigateTo(=이 메뉴의 첫 조립)보다 앞서므로 여기서 이미 실값이다.
-            // 주입이 뒤로 밀리는 경로가 생겨도 Settings 세터의 SyncShowHiddenCheck가 다시 맞춘다.
-            IsChecked = _showHidden,
-        };
-        showHidden.Click += (_, _) =>
-        {
-            // ToggleMenuFlyoutItem은 Click 시점에 IsChecked가 이미 뒤집혀 있다(위 확장자 토글이
-            // 기대는 것과 같은 성질). 저장은 A5 정렬과 같은 관용구 — 즉시 Set + Save.
-            _showHidden = showHidden.IsChecked;
-            _settings?.Set(ShowHiddenSettingKey, _showHidden);
-            _settings?.RequestSave();
-            // 좌 패널 폴더 트리는 자기 열거를 따로 한다 — 같은 설정으로 다시 만들라고 알린다.
-            ShowHiddenChanged?.Invoke();
-            // ⚠️ RefreshView(_entries)가 아니라 **재열거**여야 한다: 그건 마지막 스캔 결과를
-            // 다시 배열할 뿐인데 숨김 항목은 애초에 그 목록에 없다(거르기가 열거 시점에 일어난다).
-            // RefreshAfterFileOp = 현재 폴더 NavigateTo(재스캔) — 빈 영역 메뉴의 Refresh와 같은 경로다.
-            RefreshAfterFileOp();
-        };
-        flyout.Items.Add(showHidden);
-        _showHiddenItem = showHidden;
-
-        FilterButton.Flyout = flyout;
-        UpdateFilterVisual();
-    }
-
-    /// <summary>
-    /// 필터 메뉴의 숨김 표시 토글 체크를 _showHidden에 맞춘다 (A160 — SyncSortHeaders와 같은 역할).
-    /// 정렬 헤더는 생성자(BuildListHeader)에서 만들어져 늘 존재하지만 이 항목은 첫 항해
-    /// (EnsureFilterFlyout) 때 만들어지므로,
-    /// 그전에는 맞출 대상이 없다(null이면 조용히 넘어간다 — 만들어질 때 현재 값으로 초기화된다).
-    /// </summary>
-    private void SyncShowHiddenCheck()
-    {
-        if (_showHiddenItem is { } item) item.IsChecked = _showHidden;
-    }
-
-    /// <summary>필터가 걸려 있으면 아이콘을 강조색으로 — 걸린 걸 잊지 않게.</summary>
-    private void UpdateFilterVisual()
-    {
-        _filterDefaultBrush ??= FilterIcon.Foreground;
-        FilterIcon.Foreground = _hiddenExts.Count > 0 &&
-            Application.Current.Resources["AccentTextFillColorPrimaryBrush"] is Brush accent
-            ? accent
-            : _filterDefaultBrush;
-        ToolTipService.SetToolTip(FilterButton, _hiddenExts.Count > 0
-            ? $"Filter file types ({_hiddenExts.Count} hidden)"
-            : "Filter file types");
+        if (ReferenceEquals(arranged, _session.Display) && _session.IsStarted) FinishFill(arranged, seq, publish);
     }
 
     /// <summary>
@@ -688,7 +506,6 @@ public sealed partial class ExplorerPane : UserControl
         // 항해 계측(diag.navTiming, 기본 꺼짐)의 합류점 — 세 진입 경로(트리 선택·리스트 활성화·
         // 중앙 썸네일 더블클릭)가 전부 이 메서드로 모인다. 출처만 각 진입점이 미리 적어 둔다
         // (NavDiagnostics.NoteSource). 꺼져 있으면 Begin이 앞단 게이트에서 즉시 반환한다.
-        NavDiagnostics.Begin();
         _ = NavigateToAsync(folder, extensions); // 발사 후 망각 — 본문이 예외를 스스로 처리(종전 async void와 동일 소비)
     }
 
@@ -696,138 +513,8 @@ public sealed partial class ExplorerPane : UserControl
     /// NavigateTo의 대기 가능형 (A94 2차) — 새 폴더 생성 직후 "재스캔 '완료 후' 그 항목으로
     /// 이름변경 편집 진입"(CreateFolderThenRenameAsync)이 스캔 완료 시점을 알아야 해서 분리했다.
     /// </summary>
-    private async Task<bool> NavigateToAsync(string folder, IReadOnlyList<string> extensions, bool fromWatch = false,
-        WatchChanges? changes = null)
-    {
-        // A352 배치 1: 항해 시작 — 폴더와 담당 확장자 수(All Readable은 전 모듈 합집합이라 크다).
-        DiagTrace.Write("nav", $"NavigateToAsync {folder} exts={extensions.Count}");
-        _extensions = extensions;
-        EnsureFilterFlyout(); // A7 — 확장자 목록이 바뀌었으면 필터 재구성
-        // A179: 폴더가 바뀌면 체크 집합을 비운다 — 다른 폴더의 체크가 보이지 않는 채 작업 집합에
-        // 남으면 삭제·복사 대상이 화면 밖 항목이 된다(위험). 같은 폴더 재스캔(폴더 감시·조작 후
-        // 갱신)은 여기 걸리지 않아 체크가 생존한다.
-        var folderChanged = !string.Equals(folder, _folder, StringComparison.OrdinalIgnoreCase);
-        if (folderChanged) _checkedPaths.Clear();
-        _folder = folder;
-        PathText.Text = folder;
-        ToolTipService.SetToolTip(PathText, folder); // 잘려도 전체 경로 확인 가능(A8)
-        UpButton.IsEnabled = Directory.GetParent(folder) is not null;
-        // 자동 갱신은 감시를 유지해 열거 중 통지도 다음 한 번으로 병합한다.
-        // 명시 Refresh는 종전처럼 감시/보류를 새로 시작하고 모든 미리보기를 재조회한다.
-        if (!fromWatch || folderChanged) EnsureWatch(folder);
-        var watchGeneration = _watchSeq;
-        // 계측 pre: 여기까지가 "스캔 전 준비" 전부다(필터 재구성·부모 계산·감시자 재대상).
-        // nav>pre가 크면 정지는 스캔이 아니라 이 준비 구간에 있다는 뜻이다.
-        NavDiagnostics.Mark("pre");
-
-        var seq = ++_loadSeq;
-        // A243: 폴더 실변경이면 스캔 완료를 기다리지 않고 즉시 옛 폴더 화면을 지우고 로딩 문구를
-        // 띄운다(대형·OneDrive 폴더에서 수 초 무반응으로 보이던 체감 해소 — 스캔 완료 시 Fill이
-        // 문구·목록을 덮고, 실패 경로도 "Cannot read..."가 덮는다). 같은 폴더 재스캔(감시 400ms
-        // 디바운스·조작 후 갱신)은 이 갈래에 안 들어와 종전대로 무Clear(깜빡임 방지)다.
-        // Clear ~ Fill 사이의 소비자는 전부 빈 목록에 안전하다: 선택 소멸 발화는 A240의 null 선택
-        // 규칙(닫힌 도크는 FileListOverlay가 차단), ApplyCutMarks·CheckedPathsInView·FindVmByPath는
-        // 빈 순회(A345 배치 2부터 순회 대상이 _displayVms다), 낡은 로더는 위 seq 증가가 접는다.
-        // 편집 진입 대기(A192 WhenFillCompleteAsync)는 조립이 동기가 되며 함께 사라졌다.
-        if (folderChanged)
-        {
-            foreach (var vm in _displayVms) vm.Requests.Dispose();
-            _displayVms.Clear();
-            _entries = [];
-            _nameView.ClearFolder();
-            _displayFolder = string.Empty;
-            IconGrid.Items.Clear();
-            ListPane.ItemsSource = null; // A345 배치 2 — ItemsSource 상태에서 Items.Clear는 즉시 예외다
-            EmptyText.Text = "Loading...";
-            EmptyText.Visibility = Visibility.Visible;
-            // 계측 load: "Loading..." 대입 직후 = 사용자가 보게 될 화면 상태가 정해진 시점.
-            // 중앙 썸네일 중계(아래 NavigationStarted)보다 앞에 둬야 좌/중앙 비용이 분리된다.
-            NavDiagnostics.Mark("load");
-            NavigationStarted?.Invoke(folder); // 셸이 중앙 썸네일에도 같은 로딩 화면을 중계(A93 경로)
-        }
-        else
-        {
-            // 계측 same: 같은 폴더 재스캔(감시 디바운스·조작 후 갱신) — Clear도 로딩 문구도 없다.
-            // load 자리에 이 마크가 보이면 "화면을 지우지 않은 갱신"이라는 뜻이다(오해 방지).
-            NavDiagnostics.Mark("same");
-        }
-        // A160: 표시 정책은 스캔 시작 시점에 스냅샷해 워커로 넘긴다 — 워커 스레드에서 UI 필드를
-        // 읽지 않는다(스캔 도중 토글이 바뀌면 그 토글이 자기 재스캔을 다시 건다).
-        var includeHidden = _showHidden;
-        IReadOnlyList<ExplorerListing.Entry> entries;
-        // 계측 yield: UI 스레드가 **메시지 루프로 실제로 돌아온** 시점을 잰다. await 뒤에서는
-        // 잴 수 없다(그건 결과 도착이다) — await 직전에 큐에 넣어 두면 UI 스레드가 풀리는
-        // 즉시 이 콜백이 먼저 돌고(같은 우선순위 FIFO, await 재개보다 앞서 큐에 든다),
-        // load>yield가 크면 "await로 넘겼는데도 UI 스레드가 풀리지 않았다"가 확정된다.
-        if (NavDiagnostics.Enabled)
-        {
-            var navSession = NavDiagnostics.Session; // 그새 다른 항해가 시작되면 이 마크는 버려진다
-            DispatcherQueue.TryEnqueue(() => NavDiagnostics.MarkFor(navSession, "yield"));
-        }
-        try
-        {
-            entries = await Worker.Run(_ =>
-                ExplorerListing.List(folder, extensions, includeHidden: includeHidden));
-        }
-        catch (OperationCanceledException)
-        {
-            return false; // 페인이 내려가며 워커가 닫힘 — 그릴 곳도 없다
-        }
-        catch (Exception ex)
-        {
-            if (seq != _loadSeq || (fromWatch && watchGeneration != _watchSeq))
-            {
-                if (fromWatch && watchGeneration == _watchSeq) _watchRefresh.Defer();
-                return false;
-            }
-            if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return false; }
-            foreach (var vm in _displayVms) vm.Requests.Dispose();
-            _displayVms.Clear();
-            _entries = [];
-            _nameView.ClearEntries(); // a failed refresh must not silently discard the visible query
-            _displayFolder = string.Empty;
-            IconGrid.Items.Clear();
-            ListPane.ItemsSource = null; // A345 배치 2 — 위 folderChanged 경로와 같은 규칙
-            EmptyText.Text = "Cannot read this folder: " + ex.Message;
-            EmptyText.Visibility = Visibility.Visible;
-            ViewChanged?.Invoke(folder, []); // A93 — 썸네일 뷰도 옛 폴더 목록을 남기지 않는다
-            // 계측 fail: 실패로 끝난 항해도 반드시 한 번은 조립돼 화면에 남는다
-            // (렌더 프레임 마크까지 가지 못하는 유일한 정상 경로다).
-            NavDiagnostics.Mark("fail");
-            NavDiagnostics.ArmPaint("paint");
-            DiagTrace.Write("nav", $"scan failed {folder} {ex.GetType().Name}: {ex.Message}"); // A352 배치 1
-            return false;
-        }
-
-        // 계측 scan: 폴더 열거 결과 도착(= 워커 왕복 완료). yield>scan이 크면 정지의 원인은
-        // 워커 쪽 열거 시간이고, load>yield가 크면 UI 스레드가 애초에 풀리지 않은 것이다.
-        NavDiagnostics.Mark("scan");
-        DiagTrace.Write("nav", $"scan done {folder} count={entries.Count}"); // A352 배치 1
-
-        if (seq != _loadSeq || (fromWatch && watchGeneration != _watchSeq))
-        {
-            if (fromWatch && watchGeneration == _watchSeq) _watchRefresh.Defer();
-            return false;
-        }
-        if (fromWatch && ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return false; }
-
-        if (fromWatch && !folderChanged && changes is not null)
-            entries = ExplorerReuse.Entries(_entries, entries, changes);
-        _entries = entries;
-        // A179: 체크 집합 정리 — 재스캔 결과에 없는 경로(삭제·이동·이름변경·숨김 전환으로 소실)는
-        // 걷어낸다. 세션 한정 확장자 필터(A7)는 열거가 아니라 표시 단계(Arrange)라 여기 안 걸린다 —
-        // 필터로 가려진 체크는 집합에 남고, 소비 시점의 "화면에 있는 것만" 교집합(CheckedPathsInView)이
-        // 조작 대상에서 뺀다(WYSIWYG — 필터를 풀면 체크가 복원돼 보인다).
-        if (_checkedPaths.Count > 0)
-        {
-            var alive = new HashSet<string>(entries.Select(e => e.Path), StringComparer.OrdinalIgnoreCase);
-            _checkedPaths.RemoveWhere(p => !alive.Contains(p));
-        }
-        // A204: 재스캔(폴더 감시 디바운스 포함)은 스캔 결과(이름순)에 최종 키 1개만 적용 —
-        // 감시 재통지마다 화면이 흔들리지 않는다. 직전 표시 순서(_display)는 정렬 클릭 전용.
-        RefreshView(_entries);
-        return true;
-    }
+    private Task<bool> NavigateToAsync(string folder, IReadOnlyList<string> extensions) =>
+        _session.NavigateAsync(folder, extensions);
 
     /// <summary>
     /// 표시 목록을 채운다 — A345 배치 2부터 두 표면의 방식이 다르다.
@@ -840,7 +527,7 @@ public sealed partial class ExplorerPane : UserControl
     /// (_fillDone)·상한 초과 안내 행(MakeOverflowNotice). ItemsSource 대입은 동기 1회라
     /// 기다릴 것이 없고, 안내 행은 ItemsSource 상태에서 Items.Add가 즉시 예외라 성립하지 않는다.
     /// </para>
-    /// A179 유의: 체크(작업 집합)는 경로 키 집합(_checkedPaths)이 진실이라 이 재작성(폴더 감시
+    /// A179 유의: 체크(작업 집합)는 세션 경로 키 집합이 진실이라 이 재작성(폴더 감시
     /// 400ms 재스캔 포함)이 돌아도 생존한다 — 시각 복원은 뷰모델을 만드는 RefreshView가 하고,
     /// x:Bind가 그것을 읽는다. A414는 표시 결과에 살아 있는 선택 경로도 복원한다.
     /// </summary>
@@ -878,7 +565,7 @@ public sealed partial class ExplorerPane : UserControl
     /// </para>
     /// 낡은 완료(폐기된 회차)는 seq 대조로 걸러진다.
     /// </summary>
-    private void FinishFill(IReadOnlyList<ExplorerListing.Entry> entries, int seq)
+    private void FinishFill(IReadOnlyList<ExplorerListing.Entry> entries, int seq, bool publish = true)
     {
         if (seq != _loadSeq) return; // 방어 — 낡은 완료가 로더를 기동하지 않게
         // 계측 fillN: 목록 반영이 끝난 시점(로더 기동 직전). 뒤이어 무장하는 paint는
@@ -894,7 +581,7 @@ public sealed partial class ExplorerPane : UserControl
         _ = LoadDetailsAsync(seq);
         // A241: 조립 완료 훅 — 셸이 우측 정보 패널의 EXIF 프리페치를 여기서 기동한다(뼈대 우선).
         // 감시 재스캔의 재통지는 소비 쪽 캐시(경로+수정시각)가 흡수한다 — 여기서 거르지 않는다.
-        FillCompleted?.Invoke(entries);
+        if (publish) FillCompleted?.Invoke(entries);
     }
 
     // ---------- 항목 해석의 단일 지점 (A345 배치 2) ----------
@@ -1402,6 +1089,7 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private async void RequestDetail(ExplorerEntryVm vm)
     {
+        if (_presentationDisposed || _presentationUnloaded) return;
         var cancellation = vm.Requests.Token;
         if (cancellation.IsCancellationRequested) return;
         try
@@ -2266,15 +1954,6 @@ public sealed partial class ExplorerPane : UserControl
     // ---------- 작업 집합 체크박스 (A157, v0.168.0 → A179 반전) ----------
 
     /// <summary>
-    /// 체크 집합 (A179) — 파일 조작 작업 집합의 **단일 원본**. 체크박스 클릭(OnItemCheckClick)과
-    /// Space(OnSurfaceKeyDown)로만 늘고 준다 — 행 클릭 선택은 여기 손대지 않는다.
-    /// 경로 키인 이유 = 목록 전량 재작성(폴더 감시 400ms 재스캔 포함)을 건너 생존해야 해서
-    /// (ExplorerFileOps.ApplyCutMark의 경로 집합 관용구). 폴더가 바뀌면 비우고, 재스캔 결과에
-    /// 없는 경로는 걷어낸다 — 둘 다 NavigateToAsync가 한다.
-    /// </summary>
-    private readonly HashSet<string> _checkedPaths = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
     /// 체크박스 클릭 = 그 항목의 체크 토글 (A179 — 종전 A157의 "선택 토글"에서 반전).
     /// 컨트롤의 IsChecked는 Click 시점에 이미 뒤집혀 있으므로(EnsureFilterFlyout의
     /// ToggleMenuFlyoutItem과 같은 성질) 그 값을 집합에 반영만 한다 — 선택은 건드리지 않는다.
@@ -2308,7 +1987,7 @@ public sealed partial class ExplorerPane : UserControl
     private void ToggleCheckOf(SelectorItem item)
     {
         if (VmOf(item) is not { } vm) return; // A345 배치 2 — VmOf 단일 해석
-        SetItemChecked(_displayFolder, vm.Path, !_checkedPaths.Contains(vm.Path));
+        SetItemChecked(_displayFolder, vm.Path, !_session.IsChecked(vm.Path));
     }
 
     /// <summary>
@@ -2316,20 +1995,11 @@ public sealed partial class ExplorerPane : UserControl
     /// 집합이 아니라 리스트 항목을 기준으로 거르는 이유 = WYSIWYG: 세션 필터(A7)로 가려진
     /// 체크가 조작 대상에 섞이면 화면 밖 항목이 지워지는 사고가 된다. 항목 순서 = 표시 순서라
     /// 일괄 열기(OpenFiles)의 상한 절단도 화면 순서를 따른다.
-    /// 리스트(ListPane)만 보는 근거 = 체크박스가 리스트 행에만 있고, 리스트는 그리드와 같은
-    /// 폴더·같은 목록을 항상 담는다(Fill이 두 표면을 한 번에 채운다).
-    /// <para>
-    /// A345 배치 2: 순회 대상이 컨테이너에서 <b>표시 목록(_displayVms)</b>으로 바뀌었다 —
-    /// 가상화 뒤에는 컨테이너가 화면 분량뿐이라 컨테이너를 세면 "스크롤 위치에 따라 작업 집합이
-    /// 달라지는" 사고가 된다. _displayVms는 정렬·필터가 적용된 표시 목록이라 WYSIWYG 계약
-    /// (필터로 가려진 체크는 제외)과 순서(일괄 열기의 상한 절단)가 종전과 완전히 같다.
-    /// </para>
+    /// A417: 세션 Display가 같은 순서·집합을 제공한다. 컨테이너나 표시 VM을 생성하지 않고도
+    /// 같은 작업 집합을 얻는다. 선택·포커스는 여전히 각 표면 소유이며 체크와 동기화하지 않는다.
     /// </summary>
     private IReadOnlyList<string> CheckedPathsInView(bool filesOnly = false) =>
-        _displayVms
-            .Where(vm => (!filesOnly || !vm.IsFolder) && _checkedPaths.Contains(vm.Path))
-            .Select(vm => vm.Path)
-            .ToList();
+        _session.CheckedPathsInView(filesOnly);
 
     /// <summary>
     /// 작업 집합 (A179 확정 규칙): 화면에 보이는 체크가 1개 이상이면 체크 집합, 0개면 선택 집합
@@ -2460,144 +2130,5 @@ public sealed partial class ExplorerPane : UserControl
         else FileActivated?.Invoke(entry.Path);
     }
 
-    private void OnUpClicked(object sender, RoutedEventArgs e)
-    {
-        if (Directory.GetParent(_folder) is { } parent)
-            NavigateTo(parent.FullName, _extensions);
-    }
 
-    /// <summary>
-    /// 홈으로 이동 (A282) — 홈 = 사용자 프로필 폴더(%UserProfile%, 설정 키 없음).
-    /// 이동은 위로 가기(OnUpClicked)와 같은 내부 경로(NavigateTo + 현재 담당 확장자)를 그대로 쓴다.
-    /// 이미 홈이거나 홈 경로를 못 얻으면 무동작 — 버튼을 비활성화하지는 않는다(사용자 확정:
-    /// 깜빡이며 켜졌다 꺼지는 것보다 눌러도 아무 일이 없는 편이 낫다). 폴더 비교는 NavigateToAsync의
-    /// 폴더 변경 판정과 같은 OrdinalIgnoreCase(윈도우 경로 관례).
-    /// </summary>
-    private void OnHomeClicked(object sender, RoutedEventArgs e)
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (home.Length == 0) return; // 프로필 경로를 못 얻는 환경 — 조용히 무동작
-        if (string.Equals(home, _folder, StringComparison.OrdinalIgnoreCase)) return;
-        NavigateTo(home, _extensions);
-    }
-
-    // ---------- 폴더 감시 (A399-a) ----------
-
-    private FolderWatch? _watcher;
-    private bool _surfaceLive;
-    private int _watchSeq;
-    private readonly LatestRequest _watchProbe = new();
-    private readonly RefreshRequestGate _watchRefresh = new();
-    private readonly WatchChanges _watchChanges = new();
-    private bool _reloadAfterUnload;
-
-    /// <summary>OS 감시의 생성/해제는 워커에서, 채택/결과 반영은 UI에서 수행한다.</summary>
-    private void EnsureWatch(string folder)
-    {
-        TearDownWatch();
-        if (!_surfaceLive || folder.Length == 0) return;
-        var seq = _watchSeq;
-        var queue = DispatcherQueue;
-        _ = Task.Run(() =>
-        {
-            FolderWatch made;
-            try
-            {
-                made = new FolderWatch(folder, action => queue.TryEnqueue(() => action()), changes =>
-                {
-                    // 이벤트마다 큐를 쓰지 않는다. 이 콜백은 400ms 정숙 뒤 한 번이며
-                    // 생성 시 세대가 고정돼 옛 감시자의 일반 통지/오류 모두 폐기한다.
-                    if (!_surfaceLive || seq != _watchSeq) return;
-                    // 재생성은 보류 집합을 지우므로 오류의 전체 무효화는 그 뒤 합친다.
-                    if (changes.Error) EnsureWatch(_folder);
-                    _watchChanges.Merge(changes);
-                    OnWatchDebounceExpired();
-                });
-            }
-            catch { return; } // 접근 불가/소실 폴더는 명시 Refresh만 남긴다.
-            if (!queue.TryEnqueue(() => AdoptWatch(made, seq))) DiscardWatcher(made);
-        });
-    }
-
-    private void AdoptWatch(FolderWatch watcher, int seq)
-    {
-        if (seq != _watchSeq || !_surfaceLive) { DiscardWatcher(watcher); return; }
-        _watcher = watcher;
-        // 오류 후 재생성 중 끝난 재조회가 보류분을 남겼을 수도 있다.
-        if (_watchRefresh.Pending && !_watchRefresh.Running && !ExplorerRenameBox.IsEditing)
-            watcher.RequestRefresh();
-    }
-
-    private static void DiscardWatcher(FolderWatch watcher)
-    {
-        watcher.StopNotifications(); // 이미 큐에 오른 콜백도 즉시 무효화한다.
-        _ = Task.Run(() =>
-        {
-            try { watcher.Dispose(); }
-            catch { /* OS 감시 정리 실패는 이미 버린 세대의 문제다. */ }
-        });
-    }
-
-    private void TearDownWatch()
-    {
-        _watchProbe.Cancel();
-        _watchSeq++;
-        if (_watcher is { } watcher)
-        {
-            _watcher = null;
-            DiscardWatcher(watcher);
-        }
-        // 실행 중 재조회는 끝날 때까지 하나로 유지한다. 새 폴더의 이벤트가
-        // 도착해도 옛 작업의 finally가 두 번째 동시 작업을 허용하지 않는다.
-        _watchRefresh.ResetPending();
-        _watchChanges.Clear();
-    }
-
-    /// <summary>
-    /// 경로 확인부터 목록 반영까지 실행 하나 + 보류 하나. 편집 중은 시작도 반영도 보류한다.
-    /// 같은 폴더 자동 갱신은 감시를 끊지 않으며 늦은 결과는 load/watch 세대로 폐기한다.
-    /// </summary>
-    private async void OnWatchDebounceExpired()
-    {
-        if (!_surfaceLive || _folder.Length == 0) return;
-        if (!_watchRefresh.Request(ExplorerRenameBox.IsEditing)) return;
-        var folder = _folder;
-        var watch = _watchSeq;
-        var load = _loadSeq;
-        var cancellation = _watchProbe.Begin();
-        var changes = _watchChanges.Take();
-        var applied = false;
-        try
-        {
-            string target;
-            try
-            {
-                target = await Worker.Run(ctx => PathProbe.ExistingAncestor(folder, ctx.Cancellation), cancellation);
-            }
-            catch (OperationCanceledException) { return; }
-            catch { target = folder; } // 기존 열거 실패 안내 경로를 사용한다.
-            if (!_surfaceLive || watch != _watchSeq || folder != _folder) return;
-            if (load != _loadSeq) { _watchRefresh.Defer(); return; }
-            if (ExplorerRenameBox.IsEditing) { _watchRefresh.Defer(); return; }
-            NavDiagnostics.Begin();
-            applied = await NavigateToAsync(target, _extensions, fromWatch: true, changes: changes);
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            DiagTrace.Write("watch", $"refresh failed {ex.GetType().Name}");
-        }
-        finally
-        {
-            if (!applied && watch == _watchSeq) _watchChanges.Merge(changes);
-            _watchRefresh.Complete();
-            if (_surfaceLive && _watchRefresh.Pending && !ExplorerRenameBox.IsEditing)
-                _watcher?.RequestRefresh();
-        }
-    }
-
-    private void OnRenameEditEnded()
-    {
-        if (_watchRefresh.Pending) OnWatchDebounceExpired();
-    }
 }

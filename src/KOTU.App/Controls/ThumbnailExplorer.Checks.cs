@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -20,10 +21,10 @@ public sealed partial class ThumbnailExplorer
     internal bool ToggleFocusedCheck(DependencyObject focused, bool repeat)
     {
         var node = focused;
-        while (node is not null && !ReferenceEquals(node, TileGrid)) node = VisualTreeHelper.GetParent(node);
+        while (node is not null && !ReferenceEquals(node, ActiveItems)) node = VisualTreeHelper.GetParent(node);
         if (node is null) return false;
         // A Ctrl+arrow focus move need not change SelectedItem. Resolve the focused container first.
-        var entry = EntryFromSource(focused) ?? (ReferenceEquals(focused, TileGrid) ? SelectedEntry : null);
+        var entry = EntryFromSource(focused) ?? (ReferenceEquals(focused, ActiveItems) ? SelectedEntry : null);
         if (entry is null || !_vms.Any(vm => ReferenceEquals(vm.Entry, entry))) return false;
         _lastClick = null;
         _lastPress = null;
@@ -48,7 +49,7 @@ public sealed partial class ThumbnailExplorer
         for (var depth = 0; node is not null && depth < 64; depth++)
         {
             if (node is CheckBox) return true;
-            if (node is GridViewItem) return false;
+            if (node is SelectorItem) return false;
             node = VisualTreeHelper.GetParent(node);
         }
         return false;

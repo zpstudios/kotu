@@ -5,12 +5,12 @@ public readonly record struct SidebarGeometry(double LeftPercent, double RightPe
 {
     public double CenterPercent => 100 - LeftPercent - RightPercent;
     public int VisibleCount => (LeftPercent > 0 ? 1 : 0) + (RightPercent > 0 ? 1 : 0);
-    public int ExplorerColumns => 8 - 2 * VisibleCount;
+    public int ExplorerColumns => 12 - 3 * VisibleCount;
     public double ContentLeftPercent => Floating ? 0 : LeftPercent;
     public double ContentRightPercent => Floating ? 0 : RightPercent;
     public double ContentCenterPercent => 100 - ContentLeftPercent - ContentRightPercent;
     public int DockCount => Floating ? 0 : VisibleCount;
-    public int ContentColumns => 8 - 2 * DockCount;
+    public int ContentColumns => 12 - 3 * DockCount;
 
     public static SidebarGeometry FromVisiblePanels(bool left, bool right, bool floating, double panelPercent)
         => new(left ? panelPercent : 0, right ? panelPercent : 0, floating);

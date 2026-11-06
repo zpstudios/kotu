@@ -10,24 +10,19 @@ using KOTU.Input;
 namespace KOTU.App.Overlays;
 
 /// <summary>
-/// 파일 리스트 패널 공용 컨트롤 (A57 ②) — 기존 MainWindow의 AltOverlayRoot(우측,
-/// v0.25.0)를 추출해 좌측으로 스왑(A57 ①)한 것. 내부는 ExplorerPane 리스트 전용 모드 재사용.
-/// A176: 반투명(오버레이) 축 폐지 — 열림 상태는 사이드바(불투명 도크) 하나뿐이다.
-/// 패널 폭은 전 상태 공통 25%(A116 — 종전 "콘텐츠 30% / S1 25%" 2값 폐지, SetPanelPercent).
-/// 컨텍스트는 모듈이 주입한다: Show(folder, extensions)의 확장자 목록이 모듈별 필터(A57 ③)가 되고,
-/// ExplorerPane의 A7 드롭다운은 그 안에서 추가로 좁힌다. 적용 대상은 파일 모듈
-/// (Image·Video·Audio·Document·Archive) — 정보(H/W)·설정 모듈은 셸이 파일 경로가 없어
-/// 애초에 Show를 부르지 않는다(현행 동작 유지).
-/// 상단 25%는 디스크 계층 트리(A57 ④): 폴더만 표시, 노드 펼침 시점 지연 로드,
-/// Show() 시 현재 폴더까지 자동 펼침·선택·스크롤. 트리 선택은 하단 리스트를 그 폴더로 옮긴다
-/// (NavigateTo 재사용이라 A5 정렬·A7 필터·A8 경로 표시가 그대로 따라온다).
-/// 입력(A176: F11 단타 = 열기/닫기 토글, 핀 버튼 동일)은 셸(MainWindow)이 담당한다 —
-/// 이 컨트롤은 Show/Hide/SetPanelPercent만 받는다(구 SetState는 반투명 축과 함께 폐지 —
-/// 사이드바 안내 문구는 Show가 직접 띄운다).
+/// A417: window-owned ExplorerSession plus independent pathbar and lazy folder tree.
+/// The tree fills the sidebar by default. Internal legacy fallback restores the 1:3 tree/list
+/// split and attaches the preserved ExplorerPane to this same session, never a second owner.
+/// Visibility controls presentation only; the session keeps scanning/watching while hidden.
+/// Width, backdrop, hints and shell input retain the existing sidebar contracts.
 /// </summary>
 public sealed partial class FileListOverlay : UserControl
 {
-    private ExplorerPane? _list; // 지연 생성 (기존 MainWindow._altList와 동일 수명)
+    // Internal fallback/verification switch, fixed before XAML creation; default false.
+    public bool IsLegacyListEnabled { get; }
+    private ExplorerPane? _list; // only the explicitly enabled legacy fallback constructs this view
+    private readonly ExplorerSession _session = new();
+    private bool _explorerDisposed;
     private IReadOnlyList<string> _extensions = []; // 마지막 Show()의 모듈 필터 — 트리 이동에 재사용
     private int _expandSeq; // 연속 Show() 시 늦은 자동 펼침 폐기
 
@@ -48,12 +43,7 @@ public sealed partial class FileListOverlay : UserControl
     /// <summary>명시적 새 창 열기(A24: Shift+더블클릭·우클릭 메뉴) — 셸이 항상 새 창으로.</summary>
     public event Action<string>? FileActivatedNewWindow;
 
-    /// <summary>
-    /// 내부 리스트(ExplorerPane)의 표시 목록이 다시 그려질 때 폴더 경로와 함께 그대로 전달 (A93 —
-    /// 폴더 인자는 A94: 썸네일 뷰가 드랍·붙여넣기 대상 폴더를 알아야 한다).
-    /// 셸이 구독해 S1 중앙 썸네일 뷰(ThumbnailExplorer)를 같은 목록으로 갱신한다 —
-    /// 좌 리스트와 중앙이 폴더·필터(A7)·정렬(A5) 상태를 공유하는 유일한 통로.
-    /// </summary>
+    /// <summary>Session display publication, after presentation adapters; independent of legacy UI.</summary>
     public event Action<string, IReadOnlyList<ExplorerListing.Entry>>? ViewChanged;
 
     /// <summary>
@@ -64,19 +54,10 @@ public sealed partial class FileListOverlay : UserControl
     /// </summary>
     public event Action? SelectionChanged;
 
-    /// <summary>
-    /// A241: 내부 리스트의 조립 완료(FinishFill) 중계 — 셸이 우측 정보 패널의 폴더 단위 EXIF
-    /// 프리페치를 기동한다. ViewChanged와 달리 표시 여부와 무관하게 흘린다(도크가 닫혀 있어도
-    /// 이 리스트가 폴더 상태의 단일 원본 — 캐시를 데워 두는 게 목적이라 가시성 조건이 없다).
-    /// </summary>
+    /// <summary>Current publication completion after central ViewChanged returns; stale nested work is discarded.</summary>
     public event Action<IReadOnlyList<ExplorerListing.Entry>>? FillCompleted;
 
-    /// <summary>
-    /// A243: 내부 리스트의 폴더 실변경 항해 시작 중계(ExplorerPane.NavigationStarted) — 셸이
-    /// 중앙 썸네일(ThumbnailExplorer.ShowLoading)에 즉시 화면 전환을 지시한다. ViewChanged
-    /// (스캔 완료)와 같은 축의 앞 단 통지라 가시성 조건 없이 흘린다(도크가 닫혀 있어도 이
-    /// 리스트가 폴더 상태의 단일 원본 — A93. FillCompleted의 무조건 중계와 같은 방침).
-    /// </summary>
+    /// <summary>Real folder-change start from the session, even with the sidebar hidden or legacy uncreated.</summary>
     public event Action<string>? NavigationStarted;
 
     /// <summary>
@@ -86,32 +67,25 @@ public sealed partial class FileListOverlay : UserControl
     public ExplorerListing.Entry? SelectedEntry => IsOpen ? _list?.SelectedEntry : null;
 
     /// <summary>정렬 키 저장용(A5) — 셸이 리스트 첫 생성 전에 주입한다. 없어도 동작(기본 이름순).</summary>
-    public ISettingsService? Settings { get; set; }
+    public ISettingsService? Settings { get => _session.Settings; set { _session.Settings = value; ExplorerPath.Sync(); } }
 
     /// <summary>오버레이가 화면에 떠 있는지 — 셸의 표시 갱신·경계 버튼 위치 판단에 쓴다.</summary>
     public bool IsOpen => Visibility == Visibility.Visible;
 
-    /// <summary>
-    /// 내부 리스트가 지금 보고 있는 폴더 — 리스트 미생성·항해 전이면 null (A174).
-    /// 셸이 "모듈 전환에도 현재 위치 유지"의 세션 위치 원본으로 읽는다(ExplorerStartFolder).
-    /// 표시 여부와 무관하다: 도크가 닫혀 있어도 이 리스트가 폴더 상태의 단일 원본(A93)이다.
-    /// </summary>
-    public string? CurrentFolder => _list?.CurrentFolder is { Length: > 0 } folder ? folder : null;
+    /// <summary>Session location, set at navigation start; null before the first navigation.</summary>
+    public string? CurrentFolder => _session.CurrentFolder is { Length: > 0 } folder ? folder : null;
 
-    /// <summary>
-    /// A323: 지금 표시 중인 목록(정렬·필터 반영) — 리스트 미생성이면 빈 목록.
-    /// 셸이 재스캔 없이 S4 그리드를 시드할 때만 읽는다(ExplorerPane.DisplayEntries 주석 참고).
-    /// </summary>
-    public IReadOnlyList<ExplorerListing.Entry> CurrentEntries => _list?.DisplayEntries ?? [];
+    /// <summary>Current sorted/filtered session snapshot, usable before any legacy view exists.</summary>
+    public IReadOnlyList<ExplorerListing.Entry> CurrentEntries => _session.Display;
 
-    internal void SetNameFilter(string query) => _list?.SetNameFilter(query);
+    internal void SetNameFilter(string query) => _session.SetNameFilter(query);
     internal bool OwnsFileListFocus(DependencyObject focused) => IsOpen && _list?.OwnsFileListFocus(focused) == true;
     internal bool SelectNameMatch(string path) => IsOpen && _list?.SelectNameMatch(path) == true;
     internal void FocusNameSelection() { if (IsOpen) _list?.FocusNameSelection(); }
 
     internal event Action? ChecksChanged;
-    internal IReadOnlyList<string> CheckedPathsForFolder(string? folder) => _list?.CheckedPathsForFolder(folder) ?? [];
-    internal void SetItemChecked(string? folder, string path, bool value) => _list?.SetItemChecked(folder, path, value);
+    internal IReadOnlyList<string> CheckedPathsForFolder(string? folder) => _session.CheckedPathsForFolder(folder);
+    internal void SetItemChecked(string? folder, string path, bool value) => _session.SetItemChecked(folder, path, value);
     internal bool ToggleFocusedCheck(DependencyObject focused, bool repeat) =>
         IsOpen && _list?.ToggleFocusedCheck(focused, repeat) == true;
 
@@ -119,7 +93,7 @@ public sealed partial class FileListOverlay : UserControl
     /// A323: <see cref="CurrentEntries"/>가 속한 폴더 — 스캔이 도는 중이면 <see cref="CurrentFolder"/>와
     /// 다르다(ExplorerPane.DisplayFolder 주석). 셸의 시드는 두 값이 같을 때만 한다.
     /// </summary>
-    public string? DisplayFolder => _list?.DisplayFolder is { Length: > 0 } folder ? folder : null;
+    public string? DisplayFolder => _session.DisplayFolder is { Length: > 0 } folder ? folder : null;
 
     /// <summary>
     /// A323 → A351: 셸이 "지금 열려 있는 콘텐츠 파일"을 알려 준다 — 내부 리스트가 그 항목에
@@ -154,13 +128,53 @@ public sealed partial class FileListOverlay : UserControl
     /// </summary>
     public bool OpenSelectedFiles() => IsOpen && _list is { } list && list.OpenSelectedFiles();
 
-    public FileListOverlay()
+    public FileListOverlay() : this(AppContext.TryGetSwitch("KOTU.Explorer.LegacyList", out var enabled) && enabled) { }
+
+    internal FileListOverlay(bool legacyListEnabled)
     {
+        IsLegacyListEnabled = legacyListEnabled;
         InitializeComponent();
+        if (IsLegacyListEnabled) LegacyListRow.Height = new GridLength(3, GridUnitType.Star);
+        // A152: the shell's 44-DIP bottom bar overlays content. The full-height tree needs
+        // the same reserved bottom area; the legacy 1:3 tree ends above the bar already.
+        // TreeView's shipped template does not forward Padding, so reserve it on its host.
+        else TreeHost.Padding = new Thickness(0, 0, 0, 44);
+        ExplorerPath.Attach(_session);
+        ExplorerPath.ShowHiddenChanged += RebuildTree;
+        _session.Updated += OnSessionUpdated;
+        _session.ChecksChanged += OnSessionChecksChanged;
+        _session.NavigationStarted += OnSessionNavigationStarted;
+        _session.ViewChanged += OnSessionViewChanged;
+        _session.FillCompleted += OnSessionFillCompleted;
         Unloaded += (_, _) => _expandSeq++;
         // A34: 폴더 트리에 포커스가 있는 동안에도 모듈 버튼 핫키는 통과시킨다
         // (트리 타이핑 탐색 우선 — 하단 리스트는 ExplorerPane이 같은 표시를 건다).
         FolderTree.Tag = HotkeySupport.PassThroughTag;
+    }
+
+    internal void StartExplorerSession()
+    {
+        if (_explorerDisposed || _session.IsStarted) return;
+        var queue = DispatcherQueue; // capture on the owner; background services never access this control
+        _session.Start(new ExplorerSessionServices(action => queue.TryEnqueue(() => action()),
+            () => ExplorerRenameBox.IsEditing));
+        ExplorerRenameBox.EditEnded += _session.NotifyEditEnded;
+    }
+
+    internal void DisposeExplorerSession()
+    {
+        if (_explorerDisposed) return;
+        _explorerDisposed = true;
+        ExplorerRenameBox.EditEnded -= _session.NotifyEditEnded;
+        _session.Updated -= OnSessionUpdated;
+        _session.ChecksChanged -= OnSessionChecksChanged;
+        _session.NavigationStarted -= OnSessionNavigationStarted;
+        _session.ViewChanged -= OnSessionViewChanged;
+        _session.FillCompleted -= OnSessionFillCompleted;
+        ExplorerPath.ShowHiddenChanged -= RebuildTree;
+        ExplorerPath.Detach();
+        _list?.DisposePresentation();
+        _session.Dispose();
     }
 
     /// <summary>
@@ -170,6 +184,7 @@ public sealed partial class FileListOverlay : UserControl
     /// </summary>
     public void Show(string folder, IReadOnlyList<string> extensions)
     {
+        if (_explorerDisposed) return;
         // A323(깜빡임 수리): 같은 폴더·같은 필터면 목록을 **다시 만들지 않는다**.
         // 종전에는 표시 종착점(ApplyOverlayStates)이 이 메서드를 부를 때마다 NavigateList →
         // ExplorerPane.NavigateToAsync가 무조건 재스캔하고 Fill이 Items.Clear로 항목을 통째로
@@ -179,8 +194,8 @@ public sealed partial class FileListOverlay : UserControl
         // 반영하므로 여기서 재스캔을 걸러도 목록이 낡지 않는다.
         // 폴더·필터가 실제로 바뀌면 종전대로 재항해한다(그때의 재작성은 정상 — A323 사양 ④).
         var reopened = !IsOpen; // 숨김 → 표시 전이(드라이브 구성·트리 동기를 한 번은 확인한다)
-        var sameView = _list is not null
-                       && string.Equals(TrimSep(_list.CurrentFolder), TrimSep(folder),
+        var sameView = _session.CurrentFolder.Length > 0
+                       && string.Equals(TrimSep(_session.CurrentFolder), TrimSep(folder),
                            StringComparison.OrdinalIgnoreCase)
                        && _extensions.SequenceEqual(extensions, StringComparer.OrdinalIgnoreCase);
         if (!sameView) NavigateList(folder, extensions);
@@ -224,58 +239,39 @@ public sealed partial class FileListOverlay : UserControl
     /// <para>
     /// 늦은 완료 폐기: 종전 동기 호출과 달리 이 사이에 다른 폴더로 Show/항해가 끼어들 수 있다 —
     /// 그때 이 옛 폴더로 트리를 펼치면 트리가 뒤로 되감긴다. 리스트의 현재 폴더(항해 시작 즉시
-    /// 갱신되는 단일 원본 — ExplorerPane.CurrentFolder)와 다르면 조용히 접는다. 새 폴더 쪽은
+    /// 갱신되는 단일 원본 — ExplorerSession.CurrentFolder)와 다르면 조용히 접는다. 새 폴더 쪽은
     /// 자기 Show가 자기 갈래로 동기하므로 동기가 통째로 빠지는 일은 없다.
     /// </para></summary>
     private async Task EnsureDriveRootsThenSyncAsync(string folder)
     {
         await EnsureDriveRootsAsync();
-        if (_list is { } list && !string.Equals(TrimSep(list.CurrentFolder), TrimSep(folder),
+        if (!string.Equals(TrimSep(_session.CurrentFolder), TrimSep(folder),
                 StringComparison.OrdinalIgnoreCase))
             return;
         SyncTreeToFolder(folder);
     }
 
-    /// <summary>
-    /// 표시 여부를 바꾸지 않고 리스트만 만들어 항해시킨다 (A93 — Show에서 분리).
-    /// S1에서는 좌 도크가 닫혀 있어도 이 리스트가 폴더 상태의 원본이라, 셸이 중앙 썸네일 뷰를
-    /// 채우기 위해 이 경로를 쓴다(결과는 ViewChanged로 돌아온다). extensions를 생략하면
-    /// 마지막 모듈 필터 유지 — 썸네일 뷰의 폴더 더블클릭이 이 형태로 온다.
-    /// </summary>
+    /// <summary>Navigate the session without changing panel visibility. An omitted filter preserves the module filter.</summary>
     public void NavigateList(string folder, IReadOnlyList<string>? extensions = null)
     {
+        if (_explorerDisposed) return;
         if (extensions is not null) _extensions = extensions;
-        if (_list is null)
+        if (IsLegacyListEnabled && _list is null)
         {
-            _list = new ExplorerPane { Settings = Settings }; // 정렬 키 저장(A5)
-            _list.ChecksChanged += () => ChecksChanged?.Invoke();
+            // NavigateList can run before Loaded/OneTime binding initialization.
+            // Only the enabled branch evaluates x:Load; default never calls FindName.
+            Bindings.Update();
+            _list = new ExplorerPane(_session);
             _list.ConfigureListOnly();
-            // A91(v0.115.0): 주소·필터 줄을 리스트에서 떼어 패널 최상단(트리 위)에 올린다.
-            // Child가 비어 있을 때만 붙인다 — 같은 UIElement를 두 부모에 넣으면 죽는다.
-            // (FrameworkElement.Parent는 라이브 트리 부착 전 null이라 중복 가드로 못 쓴다:
-            //  v0.111.0 COMException 0x800F1000 전례. DetachPathBar도 멱등이라 이중 안전.)
-            PathBarHost.Child ??= _list.DetachPathBar();
+            // Keep a single independent pathbar; the preserved legacy surface uses the same session.
+            (_list.DetachPathBar() as ExplorerPathBar)?.Detach();
             _list.FileActivated += path => FileActivated?.Invoke(path);
             _list.FileActivatedNewWindow += path => FileActivatedNewWindow?.Invoke(path);
-            _list.ViewChanged += (folder, entries) =>
-            {
-                ViewChanged?.Invoke(folder, entries); // A93 — 중앙 썸네일 동기화
-                SyncTreeToFolder(folder);             // A134 — 상단 트리 동기
-            };
-            // A243: 폴더 실변경 항해 시작 — 중앙 썸네일 로딩 화면 중계(위 이벤트 주석 참고)
-            _list.NavigationStarted += folder => NavigationStarted?.Invoke(folder);
-            // A240: 닫힌 채의 선택 변화(재작성이 만드는 소멸 포함)는 발화하지 않는다 — 위
-            // SelectionChanged 계약 주석 참고. A241: 조립 완료는 가시성 무관 중계(캐시 데우기).
-            _list.SelectionChanged += () =>
-            {
-                if (IsOpen) SelectionChanged?.Invoke();
-            };
-            _list.FillCompleted += entries => FillCompleted?.Invoke(entries);
-            _list.Notice += ShowTransientNotice; // A94 — 리스트 항목 드랍·클립보드 실패 안내
-            _list.ShowHiddenChanged += RebuildTree; // A160 — 트리도 같은 표시 정책으로 다시 만든다
+            _list.SelectionChanged += () => { if (IsOpen) SelectionChanged?.Invoke(); };
+            _list.Notice += ShowTransientNotice;
             ListHost.Content = _list;
         }
-        _list.NavigateTo(folder, _extensions);
+        _ = _session.NavigateAsync(folder, _extensions);
     }
 
     /// <summary>
@@ -306,13 +302,13 @@ public sealed partial class FileListOverlay : UserControl
     /// 안 넘어간다(OnWindowDrop).
     /// </summary>
     private void OnPanelDragOver(object sender, DragEventArgs e) =>
-        ExplorerFileOps.HandleTargetDragOver(e, _list?.CurrentFolder);
+        ExplorerFileOps.HandleTargetDragOver(e, CurrentFolder);
 
     /// <summary>빈 영역·파일 항목·트리 영역 드랍 — 대상 = 현재 폴더 (A94).</summary>
     private async void OnPanelDrop(object sender, DragEventArgs e)
     {
         e.Handled = true; // 창 수준 라우팅과의 이중 처리 방지 (await 전에 동기로 지정해야 유효)
-        if (_list?.CurrentFolder is not { Length: > 0 } folder) return;
+        if (CurrentFolder is not { Length: > 0 } folder) return;
         var operation = ExplorerFileOps.DecideOperation(e, folder);
         if (operation == DataPackageOperation.None ||
             !e.DataView.Contains(StandardDataFormats.StorageItems))
@@ -553,7 +549,7 @@ public sealed partial class FileListOverlay : UserControl
 
         // A160: 설정은 UI 스레드에서 한 번 읽어 스냅샷 — 아래 Task.Run 안에서 다시 읽지 않는다.
         // 리스트 쪽(ExplorerPane.NavigateToAsync)과 같은 키·같은 기본값이라 두 표면이 늘 일치한다.
-        var includeHidden = Settings?.Get(ExplorerPane.ShowHiddenSettingKey, false) ?? false;
+        var includeHidden = _session.ShowHidden;
         string[] children;
         try
         {
@@ -676,7 +672,7 @@ public sealed partial class FileListOverlay : UserControl
     /// <summary>
     /// 리스트가 다른 폴더로 옮겨갔을 때 상단 트리를 따라오게 한다 (A134 — 종전에는 Show()만
     /// ExpandToFolderAsync를 불러, 하단 리스트·중앙 썸네일에서 폴더로 들어가도 트리가 그대로였다).
-    /// 배선은 NavigateList의 ViewChanged 람다 하나 — 리스트 항해의 모든 경로가 그리로 모인다.
+    /// 배선은 OnSessionViewChanged 하나 — 리스트 항해의 모든 경로가 그리로 모인다.
     /// 닫혀 있으면 하지 않는다: 보이지 않는 트리를 펼칠 이유가 없고, 다시 열릴 때 Show()가
     /// 어차피 그 폴더로 ExpandToFolderAsync를 부른다(EnsureDriveRoots도 Show() 몫 — 여기서는
     /// IsOpen이므로 루트가 이미 만들어져 있다).
@@ -710,8 +706,8 @@ public sealed partial class FileListOverlay : UserControl
          string.Equals(TrimSep(selected.Path), TrimSep(folder), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// 숨김·시스템 표시(A160)가 바뀌면 트리를 루트부터 다시 만든다 — 내부 리스트의
-    /// ShowHiddenChanged가 부른다(배선은 NavigateList의 리스트 생성 블록 한 곳).
+    /// 숨김·시스템 표시(A160)가 바뀌면 트리를 루트부터 다시 만든다 — 독립 경로줄의
+    /// ShowHiddenChanged가 부른다(생성자에서 한 번 연결).
     /// 제자리 갱신이 불가능해서 통째로 다시 만든다: 이미 펼쳐 둔 노드는 HasUnrealizedChildren이
     /// 내려가 있어 LoadChildrenAsync가 조기 반환하므로, 루트를 비우는 것 말고는 재열거를
     /// 강제할 방법이 없다. 비우면 EnsureDriveRoots가 드라이브 구성 비교에서 불일치를 보고 새로
@@ -734,7 +730,7 @@ public sealed partial class FileListOverlay : UserControl
     private async Task RebuildTreeAsync()
     {
         await EnsureDriveRootsAsync();
-        if (_list?.CurrentFolder is { Length: > 0 } folder) _ = ExpandToFolderAsync(folder);
+        if (CurrentFolder is { Length: > 0 } folder) _ = ExpandToFolderAsync(folder);
     }
 
     private static string TrimSep(string path) =>
@@ -761,17 +757,17 @@ public sealed partial class FileListOverlay : UserControl
         return null;
     }
 
-    /// <summary>트리에서 드라이브/폴더 선택 → 하단 리스트를 그 폴더로 이동(모듈 필터 유지).</summary>
+    /// <summary>트리에서 드라이브/폴더 선택 → 세션을 그 폴더로 이동(모듈 필터 유지).</summary>
     private void OnTreeItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
     {
         var content = args.InvokedItem is TreeViewNode node ? node.Content : args.InvokedItem;
-        if (content is FolderNode folder && _list is not null)
+        if (content is FolderNode folder && !_explorerDisposed)
         {
             // A324: 사용자가 트리에서 고른 자리가 곧 "트리가 가리키는 폴더"다 — 기억을 여기서
             // 맞춰 두지 않으면 옛 값이 남아, 나중에 그 옛 폴더로 Show될 때 동기가 통째로 걸러진다.
             _treeFolder = folder.Path;
             NavDiagnostics.NoteSource("tree"); // 계측 출처 — 트리 선택
-            _list.NavigateTo(folder.Path, _extensions);
+            NavigateList(folder.Path);
         }
     }
 }

@@ -23,30 +23,7 @@
              A282(홈 버튼)는 그 빈자리에 열 1개를 새로 끼웠다 — 뒤 열(경로·필터)은 한 칸씩 밀렸다.
              버튼은 반드시 이 PathBar 안에 둔다: 이 줄은 통째로 떼어져 오버레이로 옮겨 가므로
              (DetachPathBar, A91) 밖에 두면 홈 버튼만 옛 자리에 남는다. -->
-        <Grid x:Name="PathBar" Grid.Row="0" ColumnSpacing="8" Padding="10,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Button x:Name="UpButton" Click="OnUpClicked" ToolTipService.ToolTip="Up one folder">
-                <FontIcon Glyph="&#xE74A;" FontSize="13" />
-            </Button>
-            <!-- A282: 사용자 프로필 폴더로 한 번에 복귀. 비활성화하지 않는다(이미 홈이면 무동작) -->
-            <Button x:Name="HomeButton" Grid.Column="1" Click="OnHomeClicked"
-                    ToolTipService.ToolTip="Home">
-                <FontIcon Glyph="&#xE80F;" FontSize="13" />
-            </Button>
-            <TextBlock x:Name="PathText" Grid.Column="2" VerticalAlignment="Center"
-                       HorizontalAlignment="Right" TextAlignment="Right"
-                       Opacity="0.75" FontSize="12" TextTrimming="CharacterEllipsis" />
-            <!-- 항목은 담당 확장자에 따라 코드에서 채운다(EnsureFilterFlyout) -->
-            <DropDownButton x:Name="FilterButton" Grid.Column="3" Padding="8,5"
-                            ToolTipService.ToolTip="Filter file types">
-                <FontIcon x:Name="FilterIcon" Glyph="&#xE71C;" FontSize="13" />
-            </DropDownButton>
-        </Grid>
+        <local:ExplorerPathBar x:Name="PathBar" Grid.Row="0" />
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>

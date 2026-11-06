@@ -29,13 +29,10 @@ public sealed class ExplorerNameView
 
     public void ClearEntries() => _arranged = Display = [];
 
-    public static (string Path, bool IsPlaceholder, long ModifiedTicks)? SelectionMetadata(
-        IReadOnlyList<ExplorerListing.Entry> entries, string path)
-    {
-        var entry = entries.FirstOrDefault(item => !item.IsFolder &&
-            string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase));
-        return entry is null ? null : (entry.Path, entry.IsPlaceholder, entry.Modified.Ticks);
-    }
+    public static BrowseSelection SelectionMetadata(
+        IReadOnlyList<ExplorerListing.Entry> entries, string path, int generation = 0) =>
+        BrowseSelection.From(entries.FirstOrDefault(item =>
+            string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase)), generation);
 
     public void ClearFolder()
     {

@@ -85,6 +85,32 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
 
     public bool IsFolder => Entry.IsFolder;
 
+    // A417 list columns are projections of the existing scan snapshot, never extra metadata I/O.
+    public string ListSize => IsFolder ? "" : ExplorerListing.FormatSize(Entry.Size);
+    public string ListType => IsFolder ? "Folder" : System.IO.Path.GetExtension(Name).TrimStart('.').ToUpperInvariant();
+    public string ListModified => Entry.Modified.ToString("yyyy-MM-dd HH:mm");
+    public string ListSummary => string.Join("  ·  ", new[] { ListSize, ListType, ListModified }.Where(s => s.Length > 0));
+
+    // Set before a row is first realized. A virtualized row must not grow after its first measure.
+    private bool _narrowList = true;
+    public Microsoft.UI.Xaml.Visibility ListColumnsVisibility => _narrowList
+        ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
+    public Microsoft.UI.Xaml.Visibility ListSummaryVisibility => _narrowList
+        ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public int ListNameSpan => _narrowList ? 4 : 1;
+    public Microsoft.UI.Xaml.GridLength ListSizeWidth => new(_narrowList ? 0 : 80);
+    public Microsoft.UI.Xaml.GridLength ListTypeWidth => new(_narrowList ? 0 : 80);
+    public Microsoft.UI.Xaml.GridLength ListModifiedWidth => new(_narrowList ? 0 : 130);
+
+    internal void SetNarrowList(bool narrow)
+    {
+        if (_narrowList == narrow) return;
+        _narrowList = narrow;
+        foreach (var name in new[] { nameof(ListColumnsVisibility), nameof(ListSummaryVisibility),
+            nameof(ListNameSpan), nameof(ListSizeWidth), nameof(ListTypeWidth), nameof(ListModifiedWidth) })
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
     /// <summary>A175 — 클라우드 전용(하이드레이션 유발) 파일인지. 상세·썸네일 취득이 이 값으로 갈린다.</summary>
     public bool IsPlaceholder => Entry.IsPlaceholder;
 

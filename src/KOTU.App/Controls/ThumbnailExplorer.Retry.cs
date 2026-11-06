@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml.Controls.Primitives;
 using KOTU.Core.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -96,7 +97,7 @@ public sealed partial class ThumbnailExplorer
         // 비가시 후보가 상한을 차지해도 현재 보이는 후보를 굶기지 않는다.
         // 밀려난 VM의 due/경로 예산은 그대로 남고 다시 실체화되면 복귀한다.
         if (TileGrid.ItemsPanelRoot is Panel panel)
-            foreach (var item in panel.Children.OfType<GridViewItem>())
+            foreach (var item in panel.Children.OfType<SelectorItem>())
                 if (VmOf(item) is { } vm && !_retryCandidates.Contains(vm) && IsRetryVisible(vm) &&
                     vm.Retry.Remaining(true, false, true) is not null)
                 {

@@ -17,29 +17,12 @@ namespace KOTU.App;
 /// </summary>
 internal static class SelectionQuickInfo
 {
-    /// <summary>
-    /// 선택 파일의 정보 행: 이미지 = ImageQuickInfo.BuildRows 전체(파일 기본 + EXIF 키 전부),
-    /// **오디오 = AudioQuickInfo.BuildRows 전체(파일 기본 + 태그·스트림 키 전부 — A327)**,
-    /// **영상 = VideoQuickInfo.BuildRows 전체(파일 기본 + 메타데이터·비디오·오디오 키 전부 — A328)**,
-    /// **문서 = DocumentQuickInfo.BuildRows 전체(파일 기본 + PDF 속성 키 전부 또는 텍스트 계산값 — A329)**,
-    /// **압축 = ArchiveQuickInfo.BuildRows 전체(파일 기본 + 내용 통계 — A329)**,
-    /// 그 외(담당 모듈 없음) = 파일 기본 정보(ContentInfoOverlay.BuildBasicFileInfo)만.
-    /// A175 방어선: 호출부(ContentInfoOverlay)가 placeholder를 걸러 오지만, 속성이 클라우드 전용으로
-    /// 판정되면(IsCloudPlaceholder) 여기서도 내용 조회를 생략한다 — 어떤 경로로도 하이드레이션 금지
-    /// (A239 ②: 그 경우에도 이미지면 EXIF 라벨은 나열한다 — BuildPlaceholderRows).
-    /// </summary>
-    public static IReadOnlyList<ContentInfoItem> Build(string path)
-    {
-        try
-        {
-            if (ExplorerListing.IsCloudPlaceholder(File.GetAttributes(path)))
-                return BuildPlaceholderRows(path);
-        }
-        catch
-        {
-            // 속성을 못 읽으면(삭제 경합 등) 아래 일반 경로가 각 단계에서 다시 실패 처리한다.
-        }
+    /// <summary>Worker-only: snapshot gate plus fresh attributes, then the existing module builder. Failures are safe rows.</summary>
+    public static IReadOnlyList<ContentInfoItem> Build(ExplorerListing.Entry entry, CancellationToken cancellation) =>
+        BrowseInfo.BuildVerified(entry, File.GetAttributes, BuildRichRows, BuildSafeRows, cancellation);
 
+    private static IReadOnlyList<ContentInfoItem> BuildRichRows(string path)
+    {
         var name = Path.GetFileName(path);
         if (ExplorerListing.MatchesExtension(name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions))
             return KOTU.Module.Image.ImageQuickInfo.BuildRows(path); // 단일 빌더 — 열린 콘텐츠와 동일 출력
@@ -54,23 +37,16 @@ internal static class SelectionQuickInfo
 
         // 담당 모듈이 없는 종류 — 파일 기본 정보만(A329에서 종류별 조각 한 행 갈래는 전부
         // 각 모듈의 단일 빌더로 흡수됐다: PDF Pages·텍스트 Encoding·zip Compression).
-        return Overlays.ContentInfoOverlay.BuildBasicFileInfo(path);
+        return [];
     }
 
-    /// <summary>
-    /// A239 ②: placeholder(A175 — 클라우드 전용) 파일의 행 — 기본 4행(BuildBasicFileInfo:
-    /// FileInfo 메타데이터만 — 하이드레이션 없음, 조회 0회 유지) + **이미지 확장자면** EXIF
-    /// 16키 라벨(전부 빈칸), **오디오 확장자면 태그·스트림 키 라벨**(A327 — 전부 빈칸),
-    /// **영상 확장자면 메타데이터·비디오·오디오 키 라벨**(A328 — 전부 빈칸),
-    /// **문서·압축 확장자면 갈래별 라벨**(A329 — 전부 빈칸)을 붙인다.
-    /// 그 밖의 placeholder는 기본 행만 — 라벨 나열 대상인 절이 없다(등재문 "기본 4행 뒤 라벨
-    /// 16행"은 EXIF 축 서술 — 구현 시 해석). 조회가 없어 UI 스레드에서 불러도 된다 — ContentInfoOverlay의 placeholder
-    /// 갈래(워커 불경유)도 이 메서드를 쓴다.
-    /// </summary>
-    internal static IReadOnlyList<ContentInfoItem> BuildPlaceholderRows(string path)
+    /// <summary>Pure snapshot rows and existing blank module labels. No filesystem calls, including for folders.</summary>
+    internal static IReadOnlyList<ContentInfoItem> BuildSafeRows(ExplorerListing.Entry entry)
     {
-        var name = Path.GetFileName(path);
-        var rows = new List<ContentInfoItem>(Overlays.ContentInfoOverlay.BuildBasicFileInfo(path));
+        var path = entry.Path;
+        var name = entry.Name;
+        var rows = new List<ContentInfoItem>(BrowseInfo.BasicRows(entry));
+        if (entry.IsFolder) return rows;
         if (ExplorerListing.MatchesExtension(name, KOTU.Module.Image.ImageFolderNavigator.SupportedExtensions))
         {
             rows.Add(ContentInfoItem.Separator); // 파일 정보 / 촬영 정보 그룹 구분 (A150 관례)

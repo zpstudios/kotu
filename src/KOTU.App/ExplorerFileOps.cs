@@ -324,7 +324,7 @@ internal static class ExplorerFileOps
     /// 충돌 대화상자·진행 문구). 반환 = 결과 집계(안내 문구는 OpResult.Notice).
     /// </summary>
     internal static async Task<OpResult> TransferDroppedAsync(
-        DataPackageView view, string targetFolder, bool move, OpUi ui)
+        DataPackageView view, string targetFolder, bool move, OpUi ui, Func<Task<bool>>? canCommit = null)
     {
         IReadOnlyList<IStorageItem> items;
         try
@@ -337,6 +337,7 @@ internal static class ExplorerFileOps
         }
         var paths = items.Select(i => i.Path).Where(p => !string.IsNullOrEmpty(p)).ToList();
         if (paths.Count == 0) return OpResult.Empty;
+        if (canCommit is not null && !await canCommit()) return OpResult.Empty;
         return await TransferAsync(paths, targetFolder, move, ui);
     }
 
@@ -457,10 +458,12 @@ internal static class ExplorerFileOps
     /// (새 클립보드 내용이 앞선 잘라내기를 무효화한다 — 탐색기 동등). 클립보드 적재가
     /// 실패했으면 표시는 건드리지 않는다(클립보드와 표시가 어긋나지 않게).
     /// </summary>
-    internal static async Task<string?> CopyToClipboardAsync(IReadOnlyList<string> paths, bool cut)
+    internal static async Task<string?> CopyToClipboardAsync(IReadOnlyList<string> paths, bool cut, Func<Task<bool>>? canCommit = null)
     {
         if (paths.Count == 0) return null;
         var items = await CollectStorageItemsAsync(paths);
+        if (canCommit is not null && !await canCommit()) return null;
+        if (canCommit is not null && items.Count != paths.Count) return "Some items could not be collected. Open the menu again";
         if (items.Count == 0) return "Nothing to copy";
 
         var data = new DataPackage
@@ -495,7 +498,7 @@ internal static class ExplorerFileOps
     /// 표시와 클립보드가 어긋나지 않게 한 조건으로 묶었다.
     /// </summary>
     internal static async Task<(bool DidWork, OpResult Result, string? Notice)> PasteFromClipboardAsync(
-        string targetFolder, OpUi ui)
+        string targetFolder, OpUi ui, Func<Task<bool>>? canCommit = null)
     {
         var clipboardSequence = GetClipboardSequenceNumber();
         DataPackageView view;
@@ -513,7 +516,7 @@ internal static class ExplorerFileOps
         // (아래 TransferAsync가 전송 서비스로 옮긴다 — 탐색기 쪽에 알릴 것은 없다).
         var move = await PreferredDropEffectIsMoveAsync(view)
             ?? view.RequestedOperation.HasFlag(DataPackageOperation.Move);
-        var result = await TransferDroppedAsync(view, targetFolder, move, ui);
+        var result = await TransferDroppedAsync(view, targetFolder, move, ui, canCommit);
         if (move && !result.Cancelled && result.Failed == 0 && result.Done > 0 &&
             !result.SourcesRemain && TryClearClipboard(clipboardSequence))
         {
@@ -553,8 +556,8 @@ internal static class ExplorerFileOps
     /// COM 인터롭(SHFileOperation류) 없이 성립한다). 확인 대화상자 없음(윈도우 탐색기도
     /// 휴지통행은 기본 무확인). 항목별 실패 격리 — Skipped = 그새 사라져 수집조차 안 된 항목.
     /// </summary>
-    internal static Task<OpResult> DeleteToRecycleAsync(IReadOnlyList<string> paths) =>
-        DeleteAsync(paths, StorageDeleteOption.Default);
+    internal static Task<OpResult> DeleteToRecycleAsync(IReadOnlyList<string> paths, Func<Task<bool>>? canCommit = null) =>
+        DeleteAsync(paths, StorageDeleteOption.Default, canCommit);
 
     /// <summary>
     /// Shift+Del = 영구 삭제 (A94 4차): 휴지통을 거치지 않는다 — 같은 WinRT DeleteAsync의
@@ -570,10 +573,13 @@ internal static class ExplorerFileOps
     /// 삭제 공통 실행부 — 휴지통(Default)과 영구(PermanentDelete)가 옵션 하나만 다르다.
     /// 항목별 실패 격리(하나 실패해도 나머지 계속) + 접근 거부 구분 집계(A94 4차).
     /// </summary>
-    private static async Task<OpResult> DeleteAsync(IReadOnlyList<string> paths, StorageDeleteOption option)
+    private static async Task<OpResult> DeleteAsync(IReadOnlyList<string> paths, StorageDeleteOption option, Func<Task<bool>>? canCommit = null)
     {
         if (paths.Count == 0) return OpResult.Empty;
         var items = await CollectStorageItemsAsync(paths);
+        if (canCommit is not null && !await canCommit()) return OpResult.Empty;
+        if (canCommit is not null && items.Count != paths.Count)
+            return new OpResult(0, 0, 1, "Some items could not be collected. Open the menu again");
         int done = 0, failed = 0, denied = 0;
         string? firstError = null;
         foreach (var item in items)

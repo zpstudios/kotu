@@ -150,9 +150,9 @@ public class ExplorerSearchTests
         var changed = item with { IsPlaceholder = true, Modified = item.Modified.AddMinutes(1) };
         var after = ExplorerNameView.SelectionMetadata(new[] { changed }, item.Path.ToUpperInvariant());
         Assert.NotEqual(before, after);
-        Assert.Equal((changed.Path, true, changed.Modified.Ticks), after);
-        Assert.Null(ExplorerNameView.SelectionMetadata([], item.Path));
-        Assert.Null(ExplorerNameView.SelectionMetadata(new[] { item with { IsFolder = true } }, item.Path));
+        Assert.Equal(changed, after.Entry);
+        Assert.True(ExplorerNameView.SelectionMetadata([], item.Path).IsNone);
+        Assert.Equal(BrowseSelectionKind.Folder, ExplorerNameView.SelectionMetadata(new[] { item with { IsFolder = true } }, item.Path).Kind);
     }
 
     [Fact]

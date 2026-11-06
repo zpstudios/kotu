@@ -91,7 +91,8 @@ internal static class ExplorerRenameBox
     /// 이미 편집 중(TextBlock이 Collapsed)이면 중복 진입하지 않는다.
     /// </summary>
     internal static void Begin(Panel host, TextBlock nameBlock, string path, bool isFolder,
-        ExplorerFileOps.OpUi ui, Action onRenamed)
+        ExplorerFileOps.OpUi ui, Action onRenamed,
+        Func<string, Task<(string? Notice, bool Denied)>>? renameAsync = null)
     {
         if (nameBlock.Visibility == Visibility.Collapsed) return; // 이미 편집 중 — 중복 진입 방지
         var originalName = Path.GetFileName(path);
@@ -119,7 +120,7 @@ internal static class ExplorerRenameBox
         box.Unloaded += (_, _) => ClearActive(box);
 
         var done = false;
-        void Finish(bool commit)
+        async void Finish(bool commit)
         {
             if (done) return; // Enter 커밋의 포커스 이동이 LostFocus를 재발화시킨다 — 1회만
             done = true;
@@ -128,7 +129,8 @@ internal static class ExplorerRenameBox
             nameBlock.Visibility = Visibility.Visible; // 원복 — 성공해도 재스캔이 올 때까지는 옛 이름 표시
             if (commit && !string.Equals(typed.Trim(), originalName, StringComparison.Ordinal)) // 무변경 = 조용히 취소
             {
-                var (error, denied) = ExplorerFileOps.Rename(path, typed);
+                var (error, denied) = renameAsync is null
+                    ? ExplorerFileOps.Rename(path, typed) : await renameAsync(typed);
                 if (error is not null)
                     // 커밋하지 않음 — 원복 유지 (충돌·빈 이름·잘못된 문자·잠김 등). 발사 후 망각:
                     // 권한 부족이면 관리자 재시작 제안 대화상자가 뜨고, 그 대기가 편집 종료를 막지 않는다.
