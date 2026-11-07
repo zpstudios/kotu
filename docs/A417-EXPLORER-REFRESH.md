@@ -10,7 +10,7 @@
 
 **v0.417.0 정식 배포 완료**: 제품·태그 `9cad9fe9c8bfb7cfb5783f8ff16dd12be10b99aa`, 2026-11-07 19:04:13 KST 발행. [일반 빌드](https://github.com/zpstudios/kotu/actions/runs/42361870775)와 [릴리스](https://github.com/zpstudios/kotu/actions/runs/42361870455)는 attempt1 성공, 각각1,145/1,145·컴파일 경고0/오류0·COM 전달 통과다. 설치·시작·Standalone 보존/정상 종료, 태그·Latest8자산과 공개 업데이트 피드 해시를 확인했다. [다운로드](https://github.com/zpstudios/kotu/releases/tag/v0.417.0).
 
-정확한 커밋으로 만든 계측 없는 로컬 실행본도 Rebuild/Publish0경고0오류,12어셈블리 버전/커밋과21실제 컴파일 명령의 private 입력0을 확인했다. 해당 실행본의 추가 로컬 화면 검수는 도구의 `Computer Use app approval timed out` 때문에 아직 미완료이며 실행 승인 응답을 기다린다. 다크/라이트 수락과 원격 공식 시작 검사를 이 추가 화면 검수로 대신 주장하지 않는다.
+정확한 커밋으로 만든 계측 없는 로컬 실행본도 Rebuild/Publish0경고0오류,12어셈블리 버전/커밋과21실제 컴파일 명령의 private 입력0을 확인했다. 사용자 실행 재승인 뒤 최종 다크 S4의 두 폴더 선택/텍스트 미선택·키보드 포커스·독립 체크, S4→문서→S1 왕복·텍스트 선택 표시와 정상 종료를 확인했다. 설정·331등록정보·합성 텍스트2파일·실행1067파일 동일, 검수 창/프로세스 종료 및 사용자 설치앱 무조작을 확인해 최종 수락했다. 앞선 다크/라이트 전체 검수와 이번 다크 최종 실행을 구분하며, 로컬 Standalone 실행본이 공식 단일 실행 파일과 동일한 포장이라고 주장하지 않는다. 정본은 main-review/production-9cad9fe9c8bf/final-native-review.json이다. 추가 사용자 응답 대기는 없다.
 
 ## v0.416.0 배포 이력
 
