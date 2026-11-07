@@ -208,6 +208,11 @@
                                    TextTrimming="CharacterEllipsis"
                                    TextAlignment="Center"
                                    Margin="4,0,4,4" />
+                        <!-- 일반 선택만 표시하며 콘텐츠와 체크의 의미는 바꾸지 않는다. -->
+                        <Border x:Name="TileSelectionOutline" Grid.RowSpan="2"
+                                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                BorderThickness="2" CornerRadius="4"
+                                IsHitTestVisible="False" Visibility="Collapsed" />
                     </Grid>
                 </DataTemplate>
 

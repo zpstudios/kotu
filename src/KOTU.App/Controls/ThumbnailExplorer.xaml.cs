@@ -781,6 +781,8 @@ public sealed partial class ThumbnailExplorer : UserControl
                 ExplorerRenameBox.ForceFinish(recycled); // 편집 중 스크롤 = 데이터 사고의 방지선
                 recycled.Tag = null;
                 PreviewHostOf(recycled)?.Children.Clear(); // 비트맵·텍스트 블록 해제
+                if (recycled.FindName("TileSelectionOutline") is Border outline)
+                    outline.Visibility = Visibility.Collapsed;
             }
             item.AllowDrop = false; // 잔존 방지 — 다음 항목이 파일이어도 드랍을 받지 않게
             return;
@@ -802,6 +804,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         // 템플릿 루트 조회는 훅 부착 뒤에 둔다 — 어떤 이유로든 루트를 못 얻어도(템플릿 미적용 등)
         // 메뉴·드래그·더블클릭은 붙어 있어야 한다(미리보기만 비는 것이 최악의 실패다).
         if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
+        UpdateTileSelectionOutline(item);
         // A352 배치 1: 위상 0 = 타일 실체화. 대형 폴더에서 가장 뜨거운 지점이라 게이트 선검사.
         if (DiagTrace.Enabled) DiagTrace.Write("tiles", "phase0 " + vm.Path);
         ConsiderRetry(vm);
@@ -998,9 +1001,24 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (item.ContextFlyout is null) AttachContextMenu(item);
         if (_tileHooks.TryGetValue(item, out _)) return;
         _tileHooks.Add(item, new object());
+        if (item is GridViewItem)
+        {
+            // 재사용 때마다 현재 루트를 조회하며 선택 상태를 별도로 저장하지 않는다.
+            item.RegisterPropertyChangedCallback(SelectorItem.IsSelectedProperty,
+                (sender, _) => UpdateTileSelectionOutline((SelectorItem)sender));
+            item.Loaded += (sender, _) => UpdateTileSelectionOutline((SelectorItem)sender);
+        }
         AttachDragDrop(item);    // A94 — 드래그 아웃 + 폴더 타일 드랍
         item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
         item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
+    }
+
+    private static void UpdateTileSelectionOutline(SelectorItem item)
+    {
+        if (item.ContentTemplateRoot is Grid root &&
+            root.FindName("TileSelectionOutline") is Border outline)
+            outline.Visibility = item.Content is ExplorerEntryVm && item.IsSelected
+                ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ---------- 선택 · 이름변경 (A345 — 보수안 ⓐ, 배치 4에서 확정) ----------
