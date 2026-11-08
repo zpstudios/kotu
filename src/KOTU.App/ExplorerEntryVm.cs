@@ -89,6 +89,7 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
     public string ListSize => IsFolder ? "" : ExplorerListing.FormatSize(Entry.Size);
     public string ListType => IsFolder ? "Folder" : System.IO.Path.GetExtension(Name).TrimStart('.').ToUpperInvariant();
     public string ListModified => Entry.Modified.ToString("yyyy-MM-dd HH:mm");
+    public string ListCreated => Entry.Created.ToString("yyyy-MM-dd HH:mm");
     public string ListSummary => string.Join("  ·  ", new[] { ListSize, ListType, ListModified }.Where(s => s.Length > 0));
 
     // Set before a row is first realized. A virtualized row must not grow after its first measure.
@@ -97,17 +98,20 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
         ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
     public Microsoft.UI.Xaml.Visibility ListSummaryVisibility => _narrowList
         ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
-    public int ListNameSpan => _narrowList ? 4 : 1;
+    public int ListNameSpan => _narrowList ? 5 : 1;
+    public double ListRowHeight => _narrowList ? 44 : 32;
     public Microsoft.UI.Xaml.GridLength ListSizeWidth => new(_narrowList ? 0 : 80);
     public Microsoft.UI.Xaml.GridLength ListTypeWidth => new(_narrowList ? 0 : 80);
     public Microsoft.UI.Xaml.GridLength ListModifiedWidth => new(_narrowList ? 0 : 130);
+    public Microsoft.UI.Xaml.GridLength ListCreatedWidth => new(_narrowList ? 0 : 130);
 
     internal void SetNarrowList(bool narrow)
     {
         if (_narrowList == narrow) return;
         _narrowList = narrow;
         foreach (var name in new[] { nameof(ListColumnsVisibility), nameof(ListSummaryVisibility),
-            nameof(ListNameSpan), nameof(ListSizeWidth), nameof(ListTypeWidth), nameof(ListModifiedWidth) })
+            nameof(ListNameSpan), nameof(ListSizeWidth), nameof(ListTypeWidth), nameof(ListModifiedWidth),
+            nameof(ListCreatedWidth), nameof(ListRowHeight) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 

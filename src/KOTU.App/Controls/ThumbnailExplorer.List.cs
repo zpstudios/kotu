@@ -88,6 +88,8 @@ public sealed partial class ThumbnailExplorer
             Presentation.Mode = mode;
             TileGrid.Visibility = mode == ExplorerPresentationState.ViewMode.Preview ? Visibility.Visible : Visibility.Collapsed;
             DetailList.Visibility = mode == ExplorerPresentationState.ViewMode.List ? Visibility.Visible : Visibility.Collapsed;
+            ListHost.Visibility = DetailList.Visibility;
+            UpdateListLayout();
             ActiveItems.UpdateLayout();
             ApplyTileSize();
             if (restore) RestoreDisplaySelection(previous);
@@ -131,10 +133,12 @@ public sealed partial class ThumbnailExplorer
     {
         var width = DetailList.ActualWidth > 0 ? DetailList.ActualWidth : ActualWidth;
         if (width <= 0) return;
-        var narrow = width < 560;
+        var narrow = width < 700;
         if (_narrowList == narrow) return;
         _narrowList = narrow;
+        _parentTile.SetNarrowList(narrow);
         foreach (var vm in _vms) vm.SetNarrowList(narrow);
+        SyncViewTools();
     }
 
     private void OnListSurfaceSizeChanged(object sender, SizeChangedEventArgs e)
@@ -156,6 +160,25 @@ public sealed partial class ThumbnailExplorer
     private void LayoutToolGroups(double width)
     {
         if (width <= 0 || ViewGroup is null) return;
+        var columns = _viewMode == ExplorerPresentationState.ViewMode.List && !_narrowList;
+        var focused = XamlRoot is { } xamlRoot ? FocusManager.GetFocusedElement(xamlRoot) : null;
+        var moveSortFocus = focused is not null && IsToolDescendant(focused, columns ? SortGroup : ListColumnHeaders);
+        ListColumnHeaders.Visibility = columns ? Visibility.Visible : Visibility.Collapsed;
+        SortGroup.Visibility = columns ? Visibility.Collapsed : Visibility.Visible;
+        if (moveSortFocus)
+        {
+            var key = SortStateProvider?.Invoke().Key ?? ExplorerListing.SortKey.Name;
+            (columns ? (Control)_sortHeaders[key].Button : SortKeyButton).Focus(FocusState.Programmatic);
+        }
+        if (columns)
+        {
+            Grid.SetRow(ViewGroup, 0);
+            Grid.SetColumn(ViewGroup, 0);
+            Grid.SetColumnSpan(ViewGroup, 2);
+            ViewGroup.Margin = new Thickness(0);
+            ToolSeparator.Visibility = Visibility.Collapsed;
+            return;
+        }
         // The group widths are measured as units; their individual controls never wrap.
         SortGroup.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         ViewGroup.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -180,6 +203,7 @@ public sealed partial class ThumbnailExplorer
 
     private void OnPresentationLayout(object? sender, object args)
     {
+        SyncListHeaderBounds();
         var scroll = FindRetryDescendant<ScrollViewer>(ActiveItems);
         if (!ReferenceEquals(scroll, _presentationScroll))
         {
@@ -195,6 +219,25 @@ public sealed partial class ThumbnailExplorer
             _anchorCaptureRevision++;
             QueueUserAnchorCapture();
         }
+    }
+
+    private void SyncListHeaderBounds()
+    {
+        if (!IsLoaded || !ListHost.IsLoaded || ListColumnHeaders.Visibility != Visibility.Visible ||
+            DetailList.ItemsPanelRoot is not Panel panel) return;
+        // 기본 컨테이너 여백과 스크롤바를 추정하지 않고 현재 행의 실제 가용 폭에 맞춘다.
+        var row = panel.Children.OfType<SelectorItem>().Select(item => item.ContentTemplateRoot switch
+        {
+            Grid grid => grid,
+            Button { Content: Grid grid } => grid,
+            _ => null
+        }).FirstOrDefault(grid => grid is { IsLoaded: true, ActualWidth: > 0 });
+        if (row is null) return;
+        var bounds = row.TransformToVisual(ListHost).TransformBounds(new Rect(0, 0, row.ActualWidth, row.ActualHeight));
+        var left = Math.Max(0, bounds.Left);
+        var right = Math.Max(0, ListHost.ActualWidth - bounds.Right);
+        if (Math.Abs(ListColumnHeaders.Margin.Left - left) > 0.25 || Math.Abs(ListColumnHeaders.Margin.Right - right) > 0.25)
+            ListColumnHeaders.Margin = new Thickness(left, 0, right, 0);
     }
 
     private void OnPresentationScroll(object? sender, ScrollViewerViewChangedEventArgs args)

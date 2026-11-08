@@ -120,6 +120,97 @@
                         </Grid>
                     </Button>
                 </DataTemplate>
+                <DataTemplate x:Key="ParentListTemplate" x:DataType="controls:ExplorerParentTile">
+                    <Button Click="OnParentFolderClick" Loaded="OnParentTileLoaded"
+                            IsEnabled="{x:Bind CanNavigate, Mode=OneWay}" MinHeight="{x:Bind ListRowHeight, Mode=OneWay}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                            MinWidth="0" Padding="0" BorderThickness="0" Background="Transparent"
+                            AutomationProperties.Name="Up one folder" ToolTipService.ToolTip="Up one folder">
+                        <Grid x:Name="ParentListRow" Padding="8,6" ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="20" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Border Grid.RowSpan="2" Width="20" Height="20" VerticalAlignment="Center" IsHitTestVisible="False" />
+                            <Viewbox Grid.Column="1" Grid.RowSpan="2" Width="16" Height="16"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform">
+                                <Grid Width="40" Height="40">
+                                <PathIcon Width="40" Height="40" Opacity="0.3">
+                                    <PathIcon.Data>
+                                        <GeometryGroup>
+                                            <PathGeometry>
+                                                <PathFigure StartPoint="0,0" IsFilled="False">
+                                                    <LineSegment Point="40,40" />
+                                                </PathFigure>
+                                            </PathGeometry>
+                                            <PathGeometry>
+                                                <PathFigure StartPoint="5,11" IsClosed="True">
+                                                    <LineSegment Point="12,11" />
+                                                    <LineSegment Point="16,15" />
+                                                    <LineSegment Point="25,15" />
+                                                    <QuadraticBezierSegment Point1="27,15" Point2="27,17" />
+                                                    <LineSegment Point="27,31" />
+                                                    <LineSegment Point="2,31" />
+                                                    <LineSegment Point="2,14" />
+                                                    <QuadraticBezierSegment Point1="2,11" Point2="5,11" />
+                                                </PathFigure>
+                                            </PathGeometry>
+                                        </GeometryGroup>
+                                    </PathIcon.Data>
+                                </PathIcon>
+                                <PathIcon Width="40" Height="40" Opacity="0.8">
+                                    <PathIcon.Data>
+                                        <GeometryGroup>
+                                            <PathGeometry>
+                                                <PathFigure StartPoint="0,0" IsFilled="False">
+                                                    <LineSegment Point="40,40" />
+                                                </PathFigure>
+                                            </PathGeometry>
+                                            <PathGeometry>
+                                                <PathFigure StartPoint="4,19" IsClosed="True">
+                                                    <LineSegment Point="27,19" />
+                                                    <QuadraticBezierSegment Point1="29,19" Point2="28.6,21" />
+                                                    <LineSegment Point="26.3,33" />
+                                                    <QuadraticBezierSegment Point1="26,35" Point2="24,35" />
+                                                    <LineSegment Point="4,35" />
+                                                    <QuadraticBezierSegment Point1="2,35" Point2="2,33" />
+                                                    <LineSegment Point="2,21" />
+                                                    <QuadraticBezierSegment Point1="2,19" Point2="4,19" />
+                                                </PathFigure>
+                                            </PathGeometry>
+                                        </GeometryGroup>
+                                    </PathIcon.Data>
+                                </PathIcon>
+                                <PathIcon Width="40" Height="40">
+                                    <PathIcon.Data>
+                                        <GeometryGroup>
+                                            <PathGeometry>
+                                                <PathFigure StartPoint="0,0" IsFilled="False">
+                                                    <LineSegment Point="40,40" />
+                                                </PathFigure>
+                                            </PathGeometry>
+                                            <PathGeometry>
+                                                <PathFigure StartPoint="32,3" IsClosed="True">
+                                                    <LineSegment Point="39,10" />
+                                                    <LineSegment Point="34.5,10" />
+                                                    <LineSegment Point="34.5,23" />
+                                                    <LineSegment Point="29.5,23" />
+                                                    <LineSegment Point="29.5,10" />
+                                                    <LineSegment Point="25,10" />
+                                                </PathFigure>
+                                            </PathGeometry>
+                                        </GeometryGroup>
+                                    </PathIcon.Data>
+                                </PathIcon>
+                                </Grid>
+                            </Viewbox>
+                            <TextBlock x:Name="ParentListCaption" Grid.Column="2" Text="Up one folder" FontSize="12"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,18,0" />
+                            <TextBlock Grid.Column="2" Grid.Row="1" Text=" " FontSize="11" Opacity="0"
+                                       IsHitTestVisible="False" Visibility="{x:Bind ListSummaryVisibility, Mode=OneWay}" />
+                        </Grid>
+                    </Button>
+                </DataTemplate>
     </UserControl.Resources>
     <Grid x:Name="LayoutRoot" AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
           Background="Transparent">
@@ -231,8 +322,37 @@
                 </Style>
             </GridView.ItemContainerStyle>
         </GridView>
+        <Grid x:Name="ListHost" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,44">
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+            <Grid x:Name="ListColumnHeaders" Padding="8,6" ColumnSpacing="8" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="20" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="80" /><ColumnDefinition Width="80" />
+                    <ColumnDefinition Width="130" /><ColumnDefinition Width="130" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="SortNameHeader" Grid.Column="2" MinWidth="0" MinHeight="0" Padding="0"
+                        BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <TextBlock x:Name="SortNameHeaderText" Text="Name" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </Button>
+                <Button x:Name="SortSizeHeader" Grid.Column="3" MinWidth="0" MinHeight="0" Padding="0"
+                        BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Right">
+                    <TextBlock x:Name="SortSizeHeaderText" Text="Size" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </Button>
+                <Button x:Name="SortTypeHeader" Grid.Column="4" MinWidth="0" MinHeight="0" Padding="0"
+                        BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <TextBlock x:Name="SortTypeHeaderText" Text="Type" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </Button>
+                <Button x:Name="SortCreatedHeader" Grid.Column="5" MinWidth="0" MinHeight="0" Padding="0"
+                        BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <TextBlock x:Name="SortCreatedHeaderText" Text="Created" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </Button>
+                <Button x:Name="SortModifiedHeader" Grid.Column="6" MinWidth="0" MinHeight="0" Padding="0"
+                        BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <TextBlock x:Name="SortModifiedHeaderText" Text="Modified" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </Button>
+            </Grid>
         <ListView x:Name="DetailList" Grid.Row="1" Visibility="Collapsed" IsTabStop="True"
-                  Background="Transparent" Margin="0,0,0,44" SelectionMode="Extended"
+                  Background="Transparent" SelectionMode="Extended"
                   IsItemClickEnabled="True" ItemClick="OnItemClick"
                   ContainerContentChanging="OnListContainerContentChanging">
             <ListView.ItemsPanel>
@@ -241,18 +361,20 @@
             <ListView.Resources>
                 <DataTemplate x:Key="FileListTemplate" x:DataType="local:ExplorerEntryVm">
                     <Grid Opacity="{x:Bind ContentOpacity, Mode=OneWay}" Padding="8,6" ColumnSpacing="8"
+                          MinHeight="{x:Bind ListRowHeight, Mode=OneWay}"
                           ToolTipService.ToolTip="{x:Bind Path}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="20" /><ColumnDefinition Width="16" />
                             <ColumnDefinition Width="*" /><ColumnDefinition Width="{x:Bind ListSizeWidth, Mode=OneWay}" />
                             <ColumnDefinition Width="{x:Bind ListTypeWidth, Mode=OneWay}" />
+                            <ColumnDefinition Width="{x:Bind ListCreatedWidth, Mode=OneWay}" />
                             <ColumnDefinition Width="{x:Bind ListModifiedWidth, Mode=OneWay}" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                         <CheckBox Grid.RowSpan="2" IsChecked="{x:Bind IsChecked, Mode=OneWay}" Click="OnTileCheckClick"
                                   MinWidth="0" MinHeight="0" Padding="0" VerticalAlignment="Center"
                                   ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
-                        <FontIcon Grid.Column="1" Grid.RowSpan="2" Glyph="{x:Bind Glyph}" FontSize="13" VerticalAlignment="Center" />
+                        <FontIcon Grid.Column="1" Grid.RowSpan="2" Glyph="{x:Bind Glyph}" FontSize="13" Width="16" VerticalAlignment="Center" />
                         <TextBlock x:Name="TileCaption" Grid.Column="2" Text="{x:Bind Name}" FontSize="12"
                                    Grid.ColumnSpan="{x:Bind ListNameSpan, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,18,0" />
@@ -267,10 +389,13 @@
                         <TextBlock x:Name="RowTypeText" Grid.Column="4" Text="{x:Bind ListType}" FontSize="12"
                                    Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                        <TextBlock x:Name="RowModifiedText" Grid.Column="5" Text="{x:Bind ListModified}" FontSize="12"
+                        <TextBlock x:Name="RowCreatedText" Grid.Column="5" Text="{x:Bind ListCreated}" FontSize="12"
                                    Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                        <TextBlock x:Name="RowSummaryText" Grid.Column="2" Grid.Row="1" Grid.ColumnSpan="4"
+                        <TextBlock x:Name="RowModifiedText" Grid.Column="6" Text="{x:Bind ListModified}" FontSize="12"
+                                   Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock x:Name="RowSummaryText" Grid.Column="2" Grid.Row="1" Grid.ColumnSpan="5"
                                    Text="{x:Bind ListSummary}" FontSize="11" Opacity="0.65"
                                    Visibility="{x:Bind ListSummaryVisibility, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" />
@@ -279,7 +404,7 @@
             </ListView.Resources>
             <ListView.ItemTemplateSelector>
                 <controls:ExplorerTileTemplateSelector FileTemplate="{StaticResource FileListTemplate}"
-                                                       ParentTemplate="{StaticResource ParentTileTemplate}" />
+                                                       ParentTemplate="{StaticResource ParentListTemplate}" />
             </ListView.ItemTemplateSelector>
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
@@ -289,6 +414,7 @@
                 </Style>
             </ListView.ItemContainerStyle>
         </ListView>
+        </Grid>
         <TextBlock x:Name="EmptyText" Grid.Row="1" Text="No matching files here"
                    Visibility="Collapsed" Opacity="0.6"
                    HorizontalAlignment="Center" VerticalAlignment="Center" />

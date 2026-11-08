@@ -12,10 +12,18 @@ public sealed partial class ThumbnailExplorer
     internal Func<(ExplorerListing.SortKey Key, bool Descending, bool Available)>? SortStateProvider { get; set; }
     internal Action<ExplorerListing.SortKey>? SortRequested { get; set; }
     private readonly Dictionary<ExplorerListing.SortKey, ToggleMenuFlyoutItem> _sortOptions = new();
+    private readonly Dictionary<ExplorerListing.SortKey, (Button Button, TextBlock Label)> _sortHeaders = new();
 
     private void InitializeExplorerTools()
     {
         ExplorerTools.Tag = HotkeySupport.PassThroughTag;
+        ListColumnHeaders.Tag = HotkeySupport.PassThroughTag;
+        _sortHeaders.Add(ExplorerListing.SortKey.Name, (SortNameHeader, SortNameHeaderText));
+        _sortHeaders.Add(ExplorerListing.SortKey.Size, (SortSizeHeader, SortSizeHeaderText));
+        _sortHeaders.Add(ExplorerListing.SortKey.Type, (SortTypeHeader, SortTypeHeaderText));
+        _sortHeaders.Add(ExplorerListing.SortKey.Created, (SortCreatedHeader, SortCreatedHeaderText));
+        _sortHeaders.Add(ExplorerListing.SortKey.Modified, (SortModifiedHeader, SortModifiedHeaderText));
+        foreach (var (key, header) in _sortHeaders) header.Button.Click += (_, _) => RequestSort(key);
         var menu = new MenuFlyout();
         foreach (var key in new[] { ExplorerListing.SortKey.Name, ExplorerListing.SortKey.Type,
             ExplorerListing.SortKey.Size, ExplorerListing.SortKey.Created, ExplorerListing.SortKey.Modified })
@@ -41,6 +49,17 @@ public sealed partial class ThumbnailExplorer
         ToolTipService.SetToolTip(SortDirectionButton, state.Descending
             ? "Descending. Click for ascending" : "Ascending. Click for descending");
         foreach (var (key, item) in _sortOptions) item.IsChecked = key == state.Key;
+        foreach (var (key, header) in _sortHeaders)
+        {
+            var selected = key == state.Key;
+            header.Label.Text = key + (selected ? (state.Descending ? " ↓" : " ↑") : "");
+            header.Button.IsEnabled = state.Available;
+            var description = selected
+                ? $"Sort by {key}. {(state.Descending ? "Descending. Click for ascending" : "Ascending. Click for descending")}"
+                : $"Sort by {key}";
+            AutomationProperties.SetName(header.Button, description);
+            ToolTipService.SetToolTip(header.Button, description);
+        }
         LayoutToolGroups(ExplorerTools.ActualWidth);
     }
 
@@ -58,11 +77,14 @@ public sealed partial class ThumbnailExplorer
 
     internal bool OwnsToolFocus(DependencyObject focused) => IsToolSource(focused);
 
-    private bool IsToolSource(object source)
+    private bool IsToolSource(object source) =>
+        IsToolDescendant(source, ExplorerTools) || IsToolDescendant(source, ListColumnHeaders);
+
+    private static bool IsToolDescendant(object source, DependencyObject ancestor)
     {
         var node = source as DependencyObject;
         for (var depth = 0; node is not null && depth < 64; depth++, node = VisualTreeHelper.GetParent(node))
-            if (ReferenceEquals(node, ExplorerTools)) return true;
+            if (ReferenceEquals(node, ancestor)) return true;
         return false;
     }
 }

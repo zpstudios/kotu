@@ -7,6 +7,17 @@ namespace KOTU.App.Controls;
 // This is deliberately not an ExplorerEntryVm: navigation has no file/check/workset identity.
 public sealed class ExplorerParentTile : INotifyPropertyChanged
 {
+    private bool _narrowList = true;
+    public double ListRowHeight => _narrowList ? 44 : 32;
+    public Visibility ListSummaryVisibility => _narrowList ? Visibility.Visible : Visibility.Collapsed;
+    internal void SetNarrowList(bool narrow)
+    {
+        if (_narrowList == narrow) return;
+        _narrowList = narrow;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ListRowHeight)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ListSummaryVisibility)));
+    }
+
     private bool _canNavigate;
     public bool CanNavigate
     {
