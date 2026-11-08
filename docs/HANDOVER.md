@@ -1,8 +1,12 @@
 # KOTU 인수인계 문서
 
-## 현재 실행 — 2026-11-08 A417 v0.420.0 배포 준비
+## 현재 실행 — 2026-11-08 A417 v0.420.0 정식 배포 완료
 
-보기 전환 왼쪽 고정·정렬 도구 오른쪽 정렬과 문서를 열어 둔 탐색 화면의 뒤비침 개선을 반영하고 독립 로컬 검수를 수락했다. 전체1,145/1,145·앱0경고0오류와 실제 화면 검수의 범위/한계는 [A417 정본](A417-EXPLORER-REFRESH.md) 및 artifacts/a417-toolbar-backdrop-followup-20261108/main-review/native-review.json이다. [v0.420.0 노트](RELEASE-v0.420.0.md)를 준비했으며 제품 커밋/즉시push 후 정식 릴리스와 동일 커밋의 일반 실행본을 확인한다. 다른 백로그는 포함하지 않는다. 아래는 이전 이력이다.
+보기 전환 버튼을 왼쪽, 정렬 선택 도구를 오른쪽 끝에 배치했다. 폭이 부족하면 정렬 묶음만 다음 줄 오른쪽으로 옮긴다. 문서 위 Open file 탐색 화면의 중앙과 떠 있는 패널을 불투명하게 해 글자 뒤비침을 막는다. All Readable 문서에도 적용하며 미디어의 반투명과 문서 상태/복귀를 유지한다. [수정 사항](RELEASE-v0.420.0.md), [검수 범위와 한계](A417-EXPLORER-REFRESH.md)를 따른다.
+
+제품·태그 `671d0ea7ab519c7fc6bd5eeddd1e8323aa121976`, 2026-11-08 16:20:03 KST 정식 발행이다. [일반 빌드](https://github.com/zpstudios/kotu/actions/runs/42457870400)와 [릴리스](https://github.com/zpstudios/kotu/actions/runs/42457870315)는 각각1,145/1,145·컴파일 경고/오류0, 설치·Standalone 시작/설정 보존·정상 종료를 통과했다. 정확한 태그·Latest·자산8개·업데이트 피드3개와 공개 본문을 대조했다. [정식 다운로드](https://github.com/zpstudios/kotu/releases/tag/v0.420.0).
+
+계측 없는 동일 제품 커밋의 최종 실행본도 버전/커밋과 검수 입력 미포함, 실제 도구 배치·문서 탐색/복귀·정상 종료를 확인했다. 설정·331등록정보와 합성 자료·실행본·원본 보호 파일을 보존했다. 작업 사본 artifacts/a417-toolbar-backdrop-followup-20261108/main-review/의 native-review.json, final-release-review.json, production-671d0ea7ab51/final-native-review.json이 근거다. 이번 배포에는 다른 백로그와 보류 녹화를 포함하지 않는다. 사용자가 이어서 선택한 후보2(좁은 창·고배율),3(폴더별 보기·정렬 기억),4(목록 열 사용자 설정)는 이 배포 검수 완료 뒤 순서대로 진행하며 인수인계에 이어갈 상태를 남긴다.
 
 ## 현재 실행 — 2026-11-08 A417 v0.419.0 정식 배포 완료
 
