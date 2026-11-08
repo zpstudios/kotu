@@ -19,17 +19,22 @@ function Assert-Rejected([string]$name, [scriptblock]$action) {
 try {
     & $generator -RepositoryRoot $repository -OutputPath $body | Out-Null
     $currentBody = Get-Content -LiteralPath $body -Raw
-    if ($currentBody -notmatch '(?m)^## Choose a download$' -or
+    if ($currentBody -notmatch '(?m)^## Choose a download\r?$' -or
         $currentBody -match '앱 이름이[^\r\n]*바뀌었습니다[^\r\n]*v0\.86\.0|이번에는[^\r\n]*이관되지|v0\.88\.0\*\*: 실행 파일 이름이') {
         throw 'Current body must contain current download guidance without the obsolete migration announcement'
     }
     Set-Content -LiteralPath (Join-Path $fixture 'Directory.Build.props') -Value '<Project><PropertyGroup><Version>1.2.3</Version></PropertyGroup></Project>' -Encoding utf8
-    Copy-Item -LiteralPath (Join-Path $repository 'eng/Release-Downloads.md') -Destination (Join-Path $fixture 'eng/Release-Downloads.md')
-    Set-Content -LiteralPath $note -Value $valid -Encoding utf8
-    & $generator -RepositoryRoot $fixture -Version '1.2.3' -OutputPath $body | Out-Null
-    $generated = Get-Content -LiteralPath $body -Raw
-    if (!$generated.StartsWith($valid) -or [regex]::Matches($generated, '(?m)^## Choose a download$').Count -ne 1) {
-        throw 'Versioned changes and download guidance must each appear once'
+    $downloads = [IO.File]::ReadAllText((Join-Path $repository 'eng/Release-Downloads.md')).Replace("`r`n", "`n")
+    # Windows 체크아웃의 CRLF와 로컬 LF를 실제 생성 입력으로 모두 검사한다.
+    foreach ($lineEnding in @("`n", "`r`n")) {
+        $validInput = $valid.Replace("`n", $lineEnding)
+        [IO.File]::WriteAllText($note, $validInput)
+        [IO.File]::WriteAllText((Join-Path $fixture 'eng/Release-Downloads.md'), $downloads.Replace("`n", $lineEnding))
+        & $generator -RepositoryRoot $fixture -Version '1.2.3' -OutputPath $body | Out-Null
+        $generated = Get-Content -LiteralPath $body -Raw
+        if (!$generated.StartsWith($validInput) -or [regex]::Matches($generated, '(?m)^## Choose a download\r?$').Count -ne 1) {
+            throw 'Versioned changes and download guidance must each appear once for LF and CRLF inputs'
+        }
     }
     Assert-Rejected 'wrong requested version' { & $generator -RepositoryRoot $fixture -Version '1.2.4' -OutputPath $body }
     Remove-Item -LiteralPath $note
@@ -55,7 +60,7 @@ try {
     Set-Content -LiteralPath $note -Value $valid -Encoding utf8
     Set-Content -LiteralPath (Join-Path $fixture 'Directory.Build.props') -Value '<Project><PropertyGroup><Version>1.2.4</Version></PropertyGroup></Project>' -Encoding utf8
     Assert-Rejected 'future version without new notes' { & $generator -RepositoryRoot $fixture -OutputPath $body }
-    Write-Output "Current release body and synthetic valid body passed; $cases invalid release-note cases rejected."
+    Write-Output "Current release body and LF/CRLF synthetic bodies passed; $cases invalid release-note cases rejected."
 } finally {
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     $resolved = [IO.Path]::GetFullPath($fixture)
