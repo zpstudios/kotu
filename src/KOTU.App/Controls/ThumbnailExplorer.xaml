@@ -244,10 +244,18 @@
                         Margin="16,0,0,0" HorizontalAlignment="Left" AutomationProperties.Name="View">
                 <Border x:Name="ToolSeparator" Width="1" Height="20" VerticalAlignment="Center"
                         Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                <TextBlock Text="View" FontSize="12" Opacity="0.75" VerticalAlignment="Center" />
-                <DropDownButton x:Name="ViewButton" Padding="8,5" MinWidth="0" AutomationProperties.Name="View mode">
-                    <TextBlock x:Name="ViewText" Text="Preview" FontSize="12" />
-                </DropDownButton>
+                <StackPanel Orientation="Horizontal" Spacing="0">
+                    <ToggleButton x:Name="PreviewViewButton" Width="32" Height="32" MinWidth="0" Padding="4"
+                                  CornerRadius="4,0,0,4" AutomationProperties.Name="Preview"
+                                  ToolTipService.ToolTip="Preview">
+                        <FontIcon Glyph="&#xE8A9;" FontSize="16" />
+                    </ToggleButton>
+                    <ToggleButton x:Name="ListViewButton" Width="32" Height="32" MinWidth="0" Padding="4"
+                                  CornerRadius="0,4,4,0" AutomationProperties.Name="List"
+                                  ToolTipService.ToolTip="List">
+                        <FontIcon Glyph="&#xEA37;" FontSize="16" />
+                    </ToggleButton>
+                </StackPanel>
             </StackPanel>
         </Grid>
         <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 콘텐츠 영역이 창 전체가 되면서(행 분할 폐지)

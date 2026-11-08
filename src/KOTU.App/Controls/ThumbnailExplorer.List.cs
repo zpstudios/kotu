@@ -28,7 +28,6 @@ public sealed partial class ThumbnailExplorer
     private bool _anchorCaptureQueued;
     private bool _anchorScrollIntermediate;
     private long _anchorCaptureRevision;
-    private readonly Dictionary<ExplorerPresentationState.ViewMode, ToggleMenuFlyoutItem> _viewOptions = new();
 
     private void InitializeListSurface()
     {
@@ -54,22 +53,15 @@ public sealed partial class ThumbnailExplorer
             _anchorCapturePending = false;
             _scrollState.BeginRestore(_scrollState.Logical);
         };
-        var menu = new MenuFlyout();
-        foreach (var mode in Enum.GetValues<ExplorerPresentationState.ViewMode>())
-        {
-            var item = new ToggleMenuFlyoutItem { Text = mode.ToString() };
-            item.Click += (_, _) => ApplyViewMode(mode, restore: true);
-            _viewOptions.Add(mode, item);
-            menu.Items.Add(item);
-        }
-        ViewButton.Flyout = menu;
+        PreviewViewButton.Click += (_, _) => ApplyViewMode(ExplorerPresentationState.ViewMode.Preview, restore: true);
+        ListViewButton.Click += (_, _) => ApplyViewMode(ExplorerPresentationState.ViewMode.List, restore: true);
         SyncViewTools();
     }
 
     private void SyncViewTools()
     {
-        ViewText.Text = _viewMode.ToString();
-        foreach (var (mode, item) in _viewOptions) item.IsChecked = mode == _viewMode;
+        PreviewViewButton.IsChecked = _viewMode == ExplorerPresentationState.ViewMode.Preview;
+        ListViewButton.IsChecked = _viewMode == ExplorerPresentationState.ViewMode.List;
         LayoutToolGroups(ExplorerTools.ActualWidth);
     }
 
@@ -78,7 +70,7 @@ public sealed partial class ThumbnailExplorer
         if (_viewMode == mode) { SyncViewTools(); return; }
         // Toolbar clicks finish inline editing by the existing focus-loss contract. A programmatic
         // mode request must not remove an editor still owned by a recycled container.
-        if (ExplorerRenameBox.IsEditing) return;
+        if (ExplorerRenameBox.IsEditing) { SyncViewTools(); return; }
         CommitUserAnchor();
         var previous = CaptureDisplaySelection(true);
         _restoringSelection = true;
