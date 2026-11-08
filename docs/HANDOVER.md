@@ -1,8 +1,12 @@
 # KOTU 인수인계 문서
 
-## 현재 실행 — 2026-11-08 A417 v0.418.0 배포 준비
+## 현재 실행 — 2026-11-08 A417 v0.418.0 정식 배포 완료
 
-목록의 상위 이동 행과5열 제목 정렬을 구현·독립 검수했다. 전체1,145/1,145·최종App0경고0오류, 다크S1/S4 동작과 아이콘 수정본 다크/라이트S1 화면을 수락했다. 원본28·설정/331키·합성186·private실행1067 보존을 확인했다. [A417 정본](A417-EXPLORER-REFRESH.md)과 [이번 버전 설명](RELEASE-v0.418.0.md)을 따른다. 제품 커밋/즉시push 뒤 원격 빌드·정식릴리스·공개본문·정확한커밋의 계측없는 최종화면을 확인한다. 최종 결과는 artifacts/a417-column-parent-followup-20261108/main-review/에 보존한다. 원본 OneDrive 제품WIP와 보류 녹화는 이 배포에 포함하지 않는다.
+사용자가 승인한 목록의 상위 이동 행과 열 제목 정렬을 반영했다. 상위 이동은 파일·폴더와 같은 행으로 목록의 첫 위치를 유지하고 함께 스크롤한다. 넓은 목록은 Name/Size/Type/Created/Modified 열 제목으로 기준·방향을 바꾸며 좁은 목록과 Preview는 기존 메뉴를 유지한다. [수정 사항](RELEASE-v0.418.0.md)과 [검수 범위·한계](A417-EXPLORER-REFRESH.md)를 따른다.
+
+제품·태그는 `786d1e53c7704482392c165f08ef5b7e33d12c0c`, 2026-11-08 12:54:39 KST 정식 발행이다. [일반 빌드](https://github.com/zpstudios/kotu/actions/runs/42444104598)와 [릴리스](https://github.com/zpstudios/kotu/actions/runs/42444104638)는 모두 성공했으며 각각 8개 시험 어셈블리의 1,145/1,145, 컴파일 경고·오류 0을 확인했다. 설치본·Standalone 시작과 보존 검사, 정확한 태그·Latest·자산 8개·업데이트 피드 및 공개 본문이 검수한 v0.418.0 설명과 일치함을 대조했다. [정식 다운로드](https://github.com/zpstudios/kotu/releases/tag/v0.418.0).
+
+같은 제품 커밋의 계측 없는 최종 실행본도 빌드 경고·오류 0, 12개 어셈블리의 버전·커밋, 실제 컴파일 명령 21개의 검수 입력 없음과 다크 S1 목록/정렬/정상 종료를 확인했다. 앞선 다크 S1/S4 및 라이트 S1 검수와 구분한다. 검수 앱은 모두 종료했으며 설정·331등록정보·샘플·원본 보호 파일은 보존했다. 원본 OneDrive의 제품 WIP와 보류 녹화는 이번 배포에 포함하지 않았다. 근거는 작업 사본 artifacts/a417-column-parent-followup-20261108/main-review/의 final-release-review.json과 production-786d1e53c770/final-native-review.json이다. 이 선택 범위는 완료했고 다른 백로그는 착수하지 않는다.
 
 ## 현재 실행 — 2026-11-08 릴리스 본문·자동화 정정
 
