@@ -9,8 +9,41 @@ $ErrorActionPreference = 'Stop'
 $nodeSetup = 'uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
 $protocolTest = 'node src/KOTU.Module.Document/EditorSource/protocol.test.mjs'
 $visualTest = 'node src/KOTU.Module.Document/EditorSource/visual.test.mjs'
+$notesTest = './eng/Test-ReleaseNotes.ps1'
+$notesPrepare = './eng/New-ReleaseBody.ps1 -Version ''${{ steps.ver.outputs.version }}'' -OutputPath artifacts/release-body.md'
 function Get-WorkflowSteps([string]$text) {
     @([regex]::Split($text, '(?m)^      - name: ') | Select-Object -Skip 1)
+}
+
+function Assert-ReleaseNotesGates([string]$text, [bool]$release) {
+    $steps = @(Get-WorkflowSteps $text)
+    $commands = if ($release) { @($notesTest, $notesPrepare) } else { @($notesTest) }
+    $previous = -1
+    $architecture = @(for ($i = 0; $i -lt $steps.Count; $i++) { if ($steps[$i].Contains('./eng/Test-Architecture.ps1')) { $i } })
+    if ($architecture.Count -ne 1) { throw 'Expected one architecture gate after release-note validation' }
+    foreach ($command in $commands) {
+        $indices = @(for ($i = 0; $i -lt $steps.Count; $i++) { if ($steps[$i].Contains($command)) { $i } })
+        if ($indices.Count -ne 1 -or $indices[0] -le $previous -or $indices[0] -ge $architecture[0]) {
+            throw "Missing, combined or reordered release-note gate: $command"
+        }
+        $step = $steps[$indices[0]]
+        $conditions = [regex]::Matches($step, '(?m)^        if: (.+)\r?$')
+        $runs = [regex]::Matches($step, '(?m)^        run: (.+)\r?$')
+        if (($release -and ($conditions.Count -ne 1 -or $conditions[0].Groups[1].Value.Trim() -ne "steps.ver.outputs.skip != 'true'")) -or
+            (!$release -and $conditions.Count -ne 0) -or $step -match '(?m)^        continue-on-error:' -or
+            $runs.Count -ne 1 -or $runs[0].Groups[1].Value.Trim() -ne $command -or
+            $step -notmatch '(?m)^        shell: pwsh\r?$') { throw "Bypassable release-note gate: $command" }
+        $previous = $indices[0]
+    }
+    if ($release) {
+        $publication = @($steps | Where-Object { $_.Contains('uses: softprops/action-gh-release@v2') })
+        if ($publication.Count -ne 1 -or
+            [regex]::Matches($publication[0], '(?m)^          body_path: artifacts/release-body\.md\r?$').Count -ne 1 -or
+            [regex]::Matches($text, '(?m)^          body_path:').Count -ne 1 -or
+            $publication[0] -match '(?m)^          (?:body|generate_release_notes|append_body):') {
+            throw 'Publication must use only the validated versioned body file'
+        }
+    }
 }
 
 function Assert-EditorGates([string]$text, [bool]$release) {
@@ -46,6 +79,7 @@ function Assert-BuildWorkflow([string]$text) {
         throw 'Expected push, pull_request, workflow_dispatch and one build job layout'
     }
     Assert-EditorGates $text $false
+    Assert-ReleaseNotesGates $text $false
 }
 
 function Assert-ReleaseWorkflow([string]$text) {
@@ -94,6 +128,7 @@ function Assert-ReleaseWorkflow([string]$text) {
     if ($download -notmatch [regex]::Escape("if: $gate && github.ref == 'refs/heads/master'")) { throw 'Dry run must not download release assets' }
     if (!$text.Contains('if ($exists -and $env:GITHUB_REF -eq ''refs/heads/master'')')) { throw 'Version idempotence/dry run rule changed' }
     Assert-EditorGates $text $true
+    Assert-ReleaseNotesGates $text $true
 }
 
 $source = Get-Content -LiteralPath $WorkflowPath -Raw
@@ -154,4 +189,45 @@ foreach ($kind in @('release', 'build')) {
     }
 }
 Write-Output "Release/build gate contracts passed; seven existing release and $editorMutationCount editor regressions rejected."
+
+$notesMutationCount = 0
+foreach ($kind in @('release', 'build')) {
+    $original = if ($kind -eq 'release') { $source } else { $buildSource }
+    $steps = @(Get-WorkflowSteps $original)
+    $validation = '      - name: ' + ($steps | Where-Object { $_.Contains($notesTest) })
+    $wrongCondition = if ($kind -eq 'release') { $validation.Replace("if: steps.ver.outputs.skip != 'true'", 'if: false') }
+        else { $validation.Replace('        shell:', "        if: github.event_name != 'pull_request'`n        shell:") }
+    $noteMutations = @(
+        @{ Name = 'missing validation'; Text = $original.Replace($validation, '') },
+        @{ Name = 'conditional validation bypass'; Text = $original.Replace($validation, $wrongCondition) },
+        @{ Name = 'ignored validation failure'; Text = $original.Replace($validation, $validation.Replace('        run:', "        continue-on-error: true`n        run:")) },
+        @{ Name = 'masked validation failure'; Text = $original.Replace("run: $notesTest", "run: $notesTest; exit 0") }
+    )
+    if ($kind -eq 'release') {
+        $prepare = '      - name: ' + ($steps | Where-Object { $_.Contains($notesPrepare) })
+        $noteMutations += @(
+            @{ Name = 'missing generation'; Text = $original.Replace($prepare, '') },
+            @{ Name = 'wrong version input'; Text = $original.Replace($notesPrepare, $notesPrepare.Replace('${{ steps.ver.outputs.version }}', '0.86.0')) },
+            @{ Name = 'wrong output file'; Text = $original.Replace($notesPrepare, $notesPrepare.Replace('artifacts/release-body.md', 'artifacts/other.md')) },
+            @{ Name = 'ignored generation failure'; Text = $original.Replace($prepare, $prepare.Replace('        run:', "        continue-on-error: true`n        run:")) },
+            @{ Name = 'conditional generation bypass'; Text = $original.Replace($prepare, $prepare.Replace("if: steps.ver.outputs.skip != 'true'", 'if: false')) },
+            @{ Name = 'masked generation failure'; Text = $original.Replace("run: $notesPrepare", "run: $notesPrepare; exit 0") },
+            @{ Name = 'generation before validation'; Text = $original.Replace($validation, '__NOTES_SWAP__').Replace($prepare, $validation).Replace('__NOTES_SWAP__', $prepare) },
+            @{ Name = 'static body replacement'; Text = $original.Replace('body_path: artifacts/release-body.md', 'body: obsolete announcement') },
+            @{ Name = 'wrong body file'; Text = $original.Replace('body_path: artifacts/release-body.md', 'body_path: docs/RELEASE-v0.86.0.md') },
+            @{ Name = 'generated notes override'; Text = $original.Replace('body_path: artifacts/release-body.md', "body_path: artifacts/release-body.md`n          generate_release_notes: true") },
+            @{ Name = 'old body append'; Text = $original.Replace('body_path: artifacts/release-body.md', "body_path: artifacts/release-body.md`n          append_body: true") }
+        )
+    }
+    foreach ($mutation in $noteMutations) {
+        if ($mutation.Text -eq $original) { throw "Release-note mutation did not change ${kind}: $($mutation.Name)" }
+        $rejected = $false
+        try {
+            if ($kind -eq 'release') { Assert-ReleaseWorkflow $mutation.Text } else { Assert-BuildWorkflow $mutation.Text }
+        } catch { $rejected = $true }
+        if (!$rejected) { throw "Release-note bypass accepted in ${kind}: $($mutation.Name)" }
+        $notesMutationCount++
+    }
+}
+Write-Output "$notesMutationCount release-note workflow regressions rejected."
 

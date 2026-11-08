@@ -17,6 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Release notes validation
+        shell: pwsh
+        run: ./eng/Test-ReleaseNotes.ps1
+
       - name: 구조 정합성 검사
         shell: pwsh
         run: |

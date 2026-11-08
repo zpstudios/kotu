@@ -48,6 +48,16 @@ jobs:
           "skip=$(if ($exists -and $env:GITHUB_REF -eq 'refs/heads/master') { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
           Write-Host "version=$ver, tag=$tag, 이미 릴리스됨=$([bool]$exists)"
 
+      - name: Release notes validation
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: ./eng/Test-ReleaseNotes.ps1
+
+      - name: Prepare versioned release body
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: ./eng/New-ReleaseBody.ps1 -Version '${{ steps.ver.outputs.version }}' -OutputPath artifacts/release-body.md
+
       - name: .NET 8 SDK 설치
         if: steps.ver.outputs.skip != 'true'
         uses: actions/setup-dotnet@v4
@@ -202,24 +212,4 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           target_commitish: ${{ github.sha }}
           files: vpk_out/*
-          body: |
-            ## 앱 이름이 **KOTU (King Of The Util)** 로 바뀌었습니다 (v0.86.0, A46)
-
-            ## Choose a download
-            - **`KOTU-win-Setup.exe`** — Installed version with Start menu registration and automatic updates.
-            - **`KOTU-win-Portable.zip`** — Extract to a folder and run. Includes automatic updates and saved settings.
-            - **`KOTU-win-Standalone.exe`** — Run one file directly. Updates and Explorer registration are disabled; settings and playback history last only for the session. Files are automatically extracted to a private temporary folder and removed on normal exit. Uses the Windows .NET Framework runtime for the launcher; the application includes .NET 8.
-
-            > **구 `ZP`(v0.85.0 이하) 또는 `WinUtil`(v0.32.0 이하) 설치본을 쓰고 있다면** 자동 업데이트가
-            > 여기서 끊깁니다 — 새 `KOTU-win-Setup.exe`를 한 번 설치해 주세요.
-            > 이번에는 **설정·이어보기 기록이 이관되지 않습니다**(사용자 결정) — 기본값으로 시작하고,
-            > 파일 연결·우클릭 메뉴는 설정 화면에서 다시 켜 주세요. 구 ZP 등록 흔적은 첫 실행에서 자동 청소됩니다.
-            > 구 설정이 필요하면 `%AppData%\ZP\settings.json`에 그대로 남아 있습니다.
-
-            > **v0.88.0**: 실행 파일 이름이 `WinUtil.App.exe` → **`KOTU.exe`** 로 바뀌었습니다(A64).
-            > 관리자 권한 재실행(UAC) 대화상자에도 이제 `KOTU.exe`로 표시됩니다.
-            > 자동 업데이트로 올라오면 바로가기는 새 exe로 갱신되지만, **구 exe를 직접 가리키던
-            > 작업표시줄 고정·바로가기는 다시 만들어 주세요.**
-
-            둘 다 압축·이미지·동영상 엔진(7z.dll·libvlc, 각 LGPL — THIRD-PARTY-NOTICES.md 참고)이 동봉되어 바로 동작합니다.
-            _그 외 파일(`*.nupkg` — 델타 `*-delta.nupkg` 포함, `*.json`, `RELEASES`)은 자동 업데이트 시스템이 읽는 내부 파일입니다 — 받지 마세요._
+          body_path: artifacts/release-body.md
