@@ -8,6 +8,8 @@ namespace KOTU.App.Controls;
 public sealed partial class ThumbnailExplorer
 {
     private bool _restoringSelection;
+    private long _tileSelectionRevision;
+    private Action? _pendingTileSelectionSync;
     private sealed record DisplaySelection(string? Active, string[] Selected, string? Focused,
         bool ParentFocused, string? Anchor, bool ParentAnchor, bool RestoreFocus);
 
@@ -33,6 +35,7 @@ public sealed partial class ThumbnailExplorer
 
     private void RestoreDisplaySelection(DisplaySelection previous)
     {
+        _tileSelectionRevision++;
         _scrollState.BeginRestore(new(previous.Anchor, previous.ParentAnchor));
         _focusedPath = previous.Focused;
         _parentFocused = previous.ParentFocused;
@@ -47,5 +50,6 @@ public sealed partial class ThumbnailExplorer
         foreach (var vm in selected)
             if (!ActiveItems.SelectedItems.Contains(vm)) ActiveItems.SelectedItems.Add(vm);
         RestoreAnchor(previous.Anchor, previous.ParentAnchor);
+        ReconcileTileSelection(immediate: true);
     }
 }

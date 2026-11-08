@@ -801,6 +801,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         item.IsDoubleTapEnabled = true;
         item.AllowDrop = vm.IsFolder; // 매 재사용마다 재설정(폴더만 드랍 대상 — A94)
         if (args.Phase != 0) return;
+        ReconcileTileSelection(immediate: false);
         // 템플릿 루트 조회는 훅 부착 뒤에 둔다 — 어떤 이유로든 루트를 못 얻어도(템플릿 미적용 등)
         // 메뉴·드래그·더블클릭은 붙어 있어야 한다(미리보기만 비는 것이 최악의 실패다).
         if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
@@ -1013,6 +1014,40 @@ public sealed partial class ThumbnailExplorer : UserControl
         item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
     }
 
+    private void ReconcileTileSelection(bool immediate)
+    {
+        if (_viewMode != ExplorerPresentationState.ViewMode.Preview) return;
+        var owner = TileGrid;
+        var generation = _showSeq;
+        var folder = CurrentFolder;
+        var revision = _tileSelectionRevision;
+        void SyncRealizedOutlines()
+        {
+            if (generation != _showSeq || folder != CurrentFolder || revision != _tileSelectionRevision ||
+                _viewMode != ExplorerPresentationState.ViewMode.Preview || !ReferenceEquals(owner, ActiveItems) ||
+                !IsVisibleSurface() || !owner.IsLoaded || owner.Visibility != Visibility.Visible ||
+                owner.ItemsPanelRoot is not Panel panel) return;
+            foreach (var item in panel.Children.OfType<GridViewItem>())
+            {
+                // 재활용 중인 옛 내용은 건너뛰고 현재 컨테이너의 선택과 루트만 읽는다.
+                if (item.Content is not { } content || !ReferenceEquals(owner.ContainerFromItem(content), item)) continue;
+                UpdateTileSelectionOutline(item);
+            }
+        }
+        // 복원 뒤에는 즉시 맞추고, 실체화 중에는 항목별 순회 없이 최신 요청 하나로 합친다.
+        if (immediate) SyncRealizedOutlines();
+        var queued = _pendingTileSelectionSync is not null;
+        _pendingTileSelectionSync = SyncRealizedOutlines;
+        if (queued) return;
+        if (!DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            // 실행 전에 비워 재진입한 새 요청을 보존하고, 오래된 예약도 최신 수명만 검사한다.
+            var sync = _pendingTileSelectionSync;
+            _pendingTileSelectionSync = null;
+            sync?.Invoke();
+        })) _pendingTileSelectionSync = null;
+    }
+
     private static void UpdateTileSelectionOutline(SelectorItem item)
     {
         if (item.ContentTemplateRoot is Grid root &&
@@ -1145,7 +1180,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         wrap.ItemWidth = size;
         // A387: 11에서 14 DIP로 커진 캡션의 기본 줄 높이 증가분을 셀 높이에 더한다.
         // 캡션 Auto 행이 미리보기의 공간을 가져가지 않도록 세로에만 4 DIP를 확보한다.
-        wrap.ItemHeight = size + 4;
+        // 좁은 셀도 캡션과 체크박스가 들어갈 세로 공간을 확보한다.
+        wrap.ItemHeight = Math.Max(size + 4, 64);
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
@@ -1203,12 +1239,13 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>폴더 타일: Segoe Fluent 폴더 글리프 — ExplorerPane 그리드/리스트와 같은 E8B7.</summary>
-    private static FontIcon MakeFolderGlyph() => new()
+    private static Viewbox MakeFolderGlyph() => new()
     {
-        Glyph = "\uE8B7",
-        FontSize = 40,
+        Stretch = Stretch.Uniform,
+        StretchDirection = StretchDirection.DownOnly,
         HorizontalAlignment = HorizontalAlignment.Center,
         VerticalAlignment = VerticalAlignment.Center,
+        Child = new FontIcon { Glyph = "\uE8B7", FontSize = 40 },
     };
 
     // A352 배치 4: 이미지 확장자 판정(IsImageFile — ImageFolderNavigator.SupportedExtensions

@@ -36,7 +36,7 @@
                             IsEnabled="{x:Bind CanNavigate, Mode=OneWay}"
                             HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
-                            Padding="0" BorderThickness="0" Background="Transparent"
+                            MinWidth="0" MinHeight="0" Padding="0" BorderThickness="0" Background="Transparent"
                             AutomationProperties.Name="Up one folder" ToolTipService.ToolTip="Up one folder">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -45,6 +45,8 @@
                             </Grid.RowDefinitions>
                             <!-- Approved C silhouette. PathIcon inherits the button foreground;
                                  unfilled viewport diagonals preserve the 40px coordinates (ToolbarIcons). -->
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Grid Width="40" Height="40"
                                   HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <PathIcon Width="40" Height="40" Opacity="0.3">
@@ -115,6 +117,7 @@
                                     </PathIcon.Data>
                                 </PathIcon>
                             </Grid>
+                            </Viewbox>
                             <TextBlock Grid.Row="1" Text="Up one folder" FontSize="14"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="4,0,4,4" />
                         </Grid>
@@ -286,7 +289,7 @@
                         <Grid x:Name="TilePreviewHost" />
                         <CheckBox IsChecked="{x:Bind IsChecked, Mode=OneWay}"
                                   Click="OnTileCheckClick"
-                                  MinWidth="0" MinHeight="0" Padding="0" Margin="8"
+                                  MinWidth="0" MinHeight="0" Padding="0" Margin="4"
                                   HorizontalAlignment="Left" VerticalAlignment="Top"
                                   ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
                         <!-- A337: 클라우드 전용(온라인 전용) 파일 배지 — 대기 배지(코드
@@ -323,6 +326,8 @@
                  균일해진다. 이 Setter 둘을 지우면 타일이 셀 안에서 가운데로 쪼그라든다. -->
             <GridView.ItemContainerStyle>
                 <Style TargetType="GridViewItem">
+                    <Setter Property="MinWidth" Value="0" />
+                    <Setter Property="MinHeight" Value="0" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                     <Setter Property="VerticalContentAlignment" Value="Stretch" />
                 </Style>
