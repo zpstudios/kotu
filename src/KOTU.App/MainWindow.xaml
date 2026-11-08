@@ -137,11 +137,11 @@
                  무관 — S4BarScrim이 재생 중 미디어 위에서 반투명으로 보인다는 실기기 관측이 근거).
                  아래 backdrop Border가 중앙 컬럼의 유일한 바탕이다(ThumbnailExplorer의 LayoutRoot는
                  A316부터 Transparent — 그쪽 XAML 주석 참고). Opacity는 XAML에 두지 않는다:
-                 코드 상수 S4TranslucentOpacity(단일 출처)가 생성자에서 S4BarScrim과 함께 대입한다.
+                 ApplyOverlayStates가 문서에는 1, 미디어에는 S4TranslucentOpacity를 대입한다.
                  좌/우 사이드바(S1~S3 공용 도크 ListOverlay/InfoOverlay 재사용)는 A316이 반투명
                  대상에서 제외했었으나("도크가 열리면 뒤에 비칠 콘텐츠가 없다") A317이 모드별로
                  갈랐다: 모드1의 S4는 종전대로 불투명 도크(뒤에 실제 도크 — 현행 유지), 모드2·3의
-                 S4는 도크 컬럼을 키우지 않고 컨텐츠 위에 떠서 바탕만 같은 값으로 반투명이다
+                 S4는 도크 컬럼을 키우지 않고 컨텐츠 위에 뜨며 문서 바탕은 불투명, 미디어는 반투명이다
                  (S4SidebarsFloat + 각 오버레이 PanelBackdrop — 분기는 ApplyOverlayStates 한 곳). -->
             <Grid x:Name="S4Host" Grid.ColumnSpan="3" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
@@ -322,8 +322,8 @@
              RootLayout의 handledEventsToo 구독(A186 자동 숨김 입력·A112 '뒤로')에는 그대로
              닿으므로 A311 부상 판정은 산다. 반투명 값: A313 최초값은 DiagStrip 계열 0.85였으나
              A316부터 XAML에 두지 않는다 — "바만 반투명하고 중앙은 불투명"이 갈리던 증상의
-             재발 방지로, S4 레이어 전 표면(이 덮개 + S4CenterBackdrop)의 Opacity를 코드 상수
-             S4TranslucentOpacity(단일 출처)가 생성자에서 함께 대입한다. 높이 44 = BottomBar와
+             현재 덮개의 Opacity는 코드 상수
+             S4TranslucentOpacity를 생성자에서 대입한다. 문서용 중앙 불투명 예외와 독립이다. 높이 44 = BottomBar와
              동일(코드 상수 BottomBarHeight와 짝 — 한쪽만
              고치면 덮개가 바에서 어긋난다). 가시성은 코드 UpdateS4BarScrim 한 곳(S4 중 + 바
              실표시일 때만 — 바가 자동 숨김(A311)으로 내려가 있으면 덮을 것도 없다). -->

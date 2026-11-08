@@ -56,7 +56,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private bool _untitledContent;
     private ThumbnailExplorer? _thumbnailExplorer; // S1 중앙 썸네일 뷰 (A93, 지연 생성 — 구 ExplorerPane 대체)
-    // S4('오픈 파일' 탐색, A90) 중앙 반투명 썸네일 — S1 인스턴스와 공유하지 않는 별도 인스턴스.
+    // S4('오픈 파일' 탐색, A90) 중앙 탐색기 — S1 인스턴스와 공유하지 않는 별도 인스턴스.
     // 두 그리드가 동시에 뜨는 상태는 없지만(S1에서는 S4 진입 자체가 없음 — 강조만), 공유하면
     // 부모(ExplorerHost/S4CenterHost) 사이를 옮겨 다니는 reparent 함정(옛 부모에서 먼저 제거 —
     // v0.111.0 COMException 전례)에 걸려서다.
@@ -270,12 +270,7 @@ public sealed partial class MainWindow : Window
         // 빈 셸(콘텐츠 없음)은 시나리오 B(1↔3)라 초기 얼굴은 ⓑ "Full screen"이 된다.
         UpdateViewModeButton();
 
-        // A316: S4 레이어 반투명의 단일 출처 적용 — 중앙 backdrop과 하단 바 덮개(A313)가
-        // 같은 값을 쓴다(XAML에는 Opacity를 두지 않는다: 값이 두 곳으로 갈리면 "바만 반투명,
-        // 중앙은 불투명"이던 이번 증상이 재발한다). 조정은 상수 S4TranslucentOpacity 한 곳.
-        // A317: 세 번째 소비처(모드2·3 S4의 부유 사이드바 바탕)는 상태에 따라 1.0과 오가므로
-        // 생성자 1회가 아니라 ApplyOverlayStates가 같은 상수로 대입한다.
-        S4CenterBackdrop.Opacity = S4TranslucentOpacity;
+        // 하단 모달 덮개는 미디어 인지용 반투명을 유지한다. 중앙과 사이드바는 ApplyOverlayStates가 정한다.
         S4BarScrim.Opacity = S4TranslucentOpacity;
 
         BuildStartMenu();
@@ -2552,12 +2547,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A316: S4('오픈 파일' 탐색) 레이어 반투명의 **단일 출처** — 중앙 backdrop(S4CenterBackdrop)과
-    /// 하단 바 모달 덮개(S4BarScrim, A313)가 생성자에서 이 값 하나를 함께 받는다(사양: 값이
-    /// 갈리면 "바만 반투명, 중앙은 불투명" 증상이 재발한다 — XAML에는 Opacity를 두지 않는다).
-    /// A317: 세 번째 소비처 — 모드2·3의 S4에서 부유하는 좌/우 사이드바 바탕(각 오버레이의
-    /// PanelBackdrop)도 같은 값이다(적용은 ApplyOverlayStates의 SetBackdropOpacity — 상태에 따라
-    /// 1.0과 오가므로 생성자 1회 대입이 아니라 종착점 대입이다. 새 값 금지 사양은 동일).
+    /// S4 미디어 바탕과 하단 모달 덮개의 반투명 값. 문서 위 중앙과 부유 사이드바는
+    /// 가독성을 위해 불투명하게 두며 ApplyOverlayStates에서 현재 콘텐츠에 맞춰 갱신한다.
     /// 값 0.65의 근거: 사용자 요구 = "뒤에서 미디어가 열려 있다는 걸 인식할 수 있어야 한다" —
     /// A313의 0.85(DiagStrip 계열)로는 사실상 불투명하게 보였으므로 확실히 낮춘 0.6~0.7 계열의
     /// 중간값. 뒤 콘텐츠의 윤곽·색이 비치되 S4 썸네일·파일명(불투명 타일·텍스트가 이 backdrop
@@ -2568,6 +2559,19 @@ public sealed partial class MainWindow : Window
     /// 되살리지 않는다(A176 철거 사유 중 지금도 유효한 부분).
     /// </summary>
     private const double S4TranslucentOpacity = 0.65;
+
+    private bool IsDocumentContent
+    {
+        get
+        {
+            if (_currentModule?.Id == "document") return true;
+            if (_currentModule?.Id != KOTU.Module.AllReadable.AllReadableModule.ModuleId) return false;
+            // 무제 알림은 문서 자식에서만 오며 파일 라우팅 재정의는 All Readable 자식 선택에 적용되지 않는다.
+            return _untitledContent || _currentFilePath is { } path &&
+                AllReadableRouting.ResolveChild(AllReadableRouting.ChildModules(_router.Modules,
+                    KOTU.Module.AllReadable.AllReadableModule.ModuleId), path)?.Id == "document";
+        }
+    }
 
     /// <summary>
     /// A313: S4('오픈 파일' 탐색) 하단 바 모달 덮개(XAML S4BarScrim)의 표시 판정 단일 지점 —
@@ -3562,7 +3566,7 @@ public sealed partial class MainWindow : Window
     /// 컨텐츠 축소) 대신 **컨텐츠 위에 떠 있는 반투명 표면**으로 그린다. 근거 = "뒤에 무엇이
     /// 있느냐": 모드1(과 오버라이드 선 모드3 = 커스텀 전체화면)은 S4 뒤에 실제 도크가 있어
     /// 불투명이 맞고(뒤 도크와 내용이 달라도 글자 겹침이 안 드러난다 — 사용자 "현재가 맞음"),
-    /// 모드2·3은 뒤가 전폭 컨텐츠라 비쳐야 하고 도크가 컨텐츠를 밀어내면 안 된다.
+    /// 모드2·3은 뒤가 전폭 컨텐츠라 미디어만 비치게 하며 도크가 컨텐츠를 밀어내면 안 된다.
     /// A108/A176이 폐지한 "밀어내지 않는 반투명 오버레이" 축의 S4 한정 부활이되 방식이 다르다 —
     /// 홀드/피닝/2연타 상태 기계 없이(폐지 사유 ①은 그대로 유효) 기존 축들의 순수 계산이고,
     /// 아크릴·스왑체인 폴백(폐지 사유 ② — A129) 대신 A316이 실기기로 판정한 "불투명 테마
@@ -3570,7 +3574,7 @@ public sealed partial class MainWindow : Window
     /// 실효 상태(<see cref="EffectiveSidebarStates"/>)는 그대로 양쪽 열림이고(A305 구조 무변경),
     /// 소비처는 표시 종착점 <see cref="ApplyOverlayStates"/> **한 곳**뿐이다(분기가 흩어지면
     /// 증상 재발 — A317 최대 함정 ③). 반투명 값 = A316 단일 출처
-    /// <see cref="S4TranslucentOpacity"/>(새 값 금지 — 값이 갈리면 A316 증상 재발).
+    /// <see cref="S4TranslucentOpacity"/>이며 문서 뒤비침은 불투명 예외로 막는다.
     /// </summary>
     private bool S4SidebarsFloat => IsOpenFileBrowsing && ModeSuppressesSidebars;
 
@@ -3666,16 +3670,12 @@ public sealed partial class MainWindow : Window
         InfoOverlay.SetPanelPercent(dockPercent);
         LeftPanelHost.SetPanelPercent(dockPercent);
         RightPanelHost.SetPanelPercent(dockPercent);
-        // A317: S4 사이드바 표시 방식 분기의 **단일 적용 지점** — 모드2·3의 S4(S4SidebarsFloat)는
-        // 사이드바가 컨텐츠를 밀어내지 않는다: 도크 컬럼을 0으로 두어 중앙(ModuleHost)이 전폭을
-        // 유지하고, 패널은 ColumnSpan=3 내부 분할(같은 25% — 전폭 기준이라 도크 컬럼 없이도 같은
-        // 자리)로 컨텐츠 위에 **떠서** 그려지며, 바탕만 반투명으로 낮춘다(SetBackdropOpacity —
-        // 리스트·글자는 불투명하게 남는 A316 중앙과 같은 층 구조. 값 = 단일 출처
-        // S4TranslucentOpacity). 그 외 전부(모드1의 S4·오버라이드 S4·S1~S3)는 1.0 = 종전 불투명
-        // 도크 그대로다. 대입이 무조건이라 S4 종료·모드 복귀 경로에서 반투명이 잔존할 구멍이 없다
-        // (이 메서드가 상태 변경의 단일 종착점 — S4BarScrim과 같은 보장).
+        // 떠 있는 사이드바의 기하는 유지한다. 문서만 불투명하게 덮고 미디어와 하단 바 정책은 보존한다.
+        // 매 상태 반영 때 다시 대입하여 문서와 미디어를 오갈 때 이전 불투명도가 남지 않게 한다.
         var s4Float = S4SidebarsFloat;
-        var backdropOpacity = s4Float ? S4TranslucentOpacity : 1.0;
+        var contentBackdropOpacity = IsDocumentContent ? 1.0 : S4TranslucentOpacity;
+        S4CenterBackdrop.Opacity = contentBackdropOpacity;
+        var backdropOpacity = s4Float ? contentBackdropOpacity : 1.0;
         ListOverlay.SetBackdropOpacity(backdropOpacity);
         InfoOverlay.SetBackdropOpacity(backdropOpacity);
         ApplySidebarGeometry();

@@ -162,27 +162,18 @@ public sealed partial class ThumbnailExplorer
             var key = SortStateProvider?.Invoke().Key ?? ExplorerListing.SortKey.Name;
             (columns ? (Control)_sortHeaders[key].Button : SortKeyButton).Focus(FocusState.Programmatic);
         }
-        if (columns)
-        {
-            Grid.SetRow(ViewGroup, 0);
-            Grid.SetColumn(ViewGroup, 0);
-            Grid.SetColumnSpan(ViewGroup, 2);
-            ViewGroup.Margin = new Thickness(0);
-            ToolSeparator.Visibility = Visibility.Collapsed;
-            return;
-        }
-        // The group widths are measured as units; their individual controls never wrap.
+        if (columns) return;
+        // 현재 행과 여백을 제외한 자연 폭으로 비교하여 줄바꿈 왕복에서 판정이 흔들리지 않게 한다.
         SortGroup.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         ViewGroup.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var viewWidth = ViewGroup.DesiredSize.Width - ViewGroup.Margin.Left - ViewGroup.Margin.Right
-            + (ToolSeparator.Visibility == Visibility.Collapsed ? 9 : 0);
-        var wrap = width - 20 < SortGroup.DesiredSize.Width + viewWidth + 16;
-        Grid.SetRow(ViewGroup, wrap ? 1 : 0);
-        Grid.SetColumn(ViewGroup, wrap ? 0 : 1);
-        Grid.SetColumnSpan(ViewGroup, wrap ? 2 : 1);
+        var sortWidth = SortGroup.DesiredSize.Width - SortGroup.Margin.Left - SortGroup.Margin.Right;
+        var viewWidth = ViewGroup.DesiredSize.Width;
+        var availableWidth = width - ExplorerTools.Padding.Left - ExplorerTools.Padding.Right;
+        var wrap = availableWidth < viewWidth + sortWidth + 16;
+        Grid.SetRow(SortGroup, wrap ? 1 : 0);
+        Grid.SetColumn(SortGroup, wrap ? 0 : 1);
         Grid.SetColumnSpan(SortGroup, wrap ? 2 : 1);
-        ViewGroup.Margin = wrap ? new Thickness(0, 8, 0, 0) : new Thickness(16, 0, 0, 0);
-        ToolSeparator.Visibility = wrap ? Visibility.Collapsed : Visibility.Visible;
+        SortGroup.Margin = wrap ? new Thickness(0, 8, 0, 0) : new Thickness(16, 0, 0, 0);
     }
 
     private void OnPresentationFocus(object sender, RoutedEventArgs e)

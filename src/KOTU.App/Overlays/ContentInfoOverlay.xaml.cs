@@ -126,7 +126,7 @@ public sealed partial class ContentInfoOverlay : UserControl
 
     /// <summary>
     /// A317: 패널 바탕(PanelBackdrop)의 불투명도 지정 — 셸이 표시 종착점(ApplyOverlayStates)에서
-    /// 모드2·3의 S4는 S4TranslucentOpacity(A316 단일 출처), 그 외 전부는 1.0을 넘긴다.
+    /// 모드2·3의 S4 미디어는 S4TranslucentOpacity, 문서와 도크 상태는 1.0을 넘긴다.
     /// 바탕만 낮춘다(요소 Opacity — S4CenterBackdrop과 같은 관용구): 정보 글자는 이 바탕
     /// **위**에 불투명하게 남아 읽힌다. FileListOverlay에도 같은 메서드가 있다.
     /// </summary>

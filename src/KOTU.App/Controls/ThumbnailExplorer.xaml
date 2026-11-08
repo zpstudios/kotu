@@ -25,7 +25,7 @@
          반투명 축과 함께 철거됐고, A316부터는 방향이 반대다: 이 컨트롤 자체는 배경을 갖지 않고
          (Transparent — DocumentView RootGrid와 같은 형태) 바탕은 호스트가 댄다.
          S1 = ExplorerHost(불투명 SolidBackgroundFillColorBase, MainWindow.xaml) /
-         S4 = S4CenterBackdrop(같은 브러시 + 코드 상수 S4TranslucentOpacity 반투명 — 뒤에 열린
+         S4 = S4CenterBackdrop(문서는 불투명, 미디어는 S4TranslucentOpacity 반투명 — 뒤에 열린
          미디어가 비치는 게 사양이다). 인스턴스별 분기 없이 XAML 한 벌이 양쪽에 성립한다.
          Transparent는 null 배경과 달리 히트 테스트에 잡힌다 — 빈 영역 우클릭 메뉴·눌림 구독·드랍
          ("배경 있는 LayoutRoot가 원본" — 코드 A212 주석의 히트 보장)이 종전대로 유지되고,
@@ -218,12 +218,27 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <!-- A417: independent atomic tool groups share a row and wrap together at narrow widths. -->
+        <!-- 보기는 왼쪽 첫 행에 고정하고 폭이 모자라면 정렬 묶음만 다음 행 오른쪽으로 보낸다. -->
         <Grid x:Name="ExplorerTools" Background="Transparent" Padding="10,8" SizeChanged="OnToolsSizeChanged">
             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-            <Grid x:Name="SortGroup" ColumnSpacing="8" MaxWidth="260"
-                  HorizontalAlignment="Left" AutomationProperties.Name="Sort">
+            <StackPanel x:Name="ViewGroup" Orientation="Horizontal" Spacing="8"
+                        Margin="0" HorizontalAlignment="Left" AutomationProperties.Name="View">
+                <StackPanel Orientation="Horizontal" Spacing="0">
+                    <ToggleButton x:Name="PreviewViewButton" Width="32" Height="32" MinWidth="0" Padding="4"
+                                  CornerRadius="4,0,0,4" AutomationProperties.Name="Preview"
+                                  ToolTipService.ToolTip="Preview">
+                        <FontIcon Glyph="&#xE8A9;" FontSize="16" />
+                    </ToggleButton>
+                    <ToggleButton x:Name="ListViewButton" Width="32" Height="32" MinWidth="0" Padding="4"
+                                  CornerRadius="0,4,4,0" AutomationProperties.Name="List"
+                                  ToolTipService.ToolTip="List">
+                        <FontIcon Glyph="&#xEA37;" FontSize="16" />
+                    </ToggleButton>
+                </StackPanel>
+            </StackPanel>
+            <Grid x:Name="SortGroup" Grid.Column="1" ColumnSpacing="8" MaxWidth="260" Margin="16,0,0,0"
+                  HorizontalAlignment="Right" AutomationProperties.Name="Sort">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -240,23 +255,6 @@
                     <FontIcon x:Name="SortDirectionIcon" Glyph="&#xE70E;" FontSize="13" />
                 </Button>
             </Grid>
-            <StackPanel x:Name="ViewGroup" Grid.Column="1" Orientation="Horizontal" Spacing="8"
-                        Margin="16,0,0,0" HorizontalAlignment="Left" AutomationProperties.Name="View">
-                <Border x:Name="ToolSeparator" Width="1" Height="20" VerticalAlignment="Center"
-                        Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
-                <StackPanel Orientation="Horizontal" Spacing="0">
-                    <ToggleButton x:Name="PreviewViewButton" Width="32" Height="32" MinWidth="0" Padding="4"
-                                  CornerRadius="4,0,0,4" AutomationProperties.Name="Preview"
-                                  ToolTipService.ToolTip="Preview">
-                        <FontIcon Glyph="&#xE8A9;" FontSize="16" />
-                    </ToggleButton>
-                    <ToggleButton x:Name="ListViewButton" Width="32" Height="32" MinWidth="0" Padding="4"
-                                  CornerRadius="0,4,4,0" AutomationProperties.Name="List"
-                                  ToolTipService.ToolTip="List">
-                        <FontIcon Glyph="&#xEA37;" FontSize="16" />
-                    </ToggleButton>
-                </StackPanel>
-            </StackPanel>
         </Grid>
         <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 콘텐츠 영역이 창 전체가 되면서(행 분할 폐지)
              모드1에서는 이 그리드의 하단 44px가 바에 덮인다 — 마지막 타일 줄이 바 뒤에 숨지
