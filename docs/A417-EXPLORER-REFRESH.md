@@ -2,6 +2,8 @@
 
 ## v0.419.0 보기 전환 UI 누락 보완
 
+**정식 배포 완료**: 제품·태그 `2001436711a69fdc4b62f476b34d41125968422a`, 2026-11-08 14:21:32 KST 발행. 원격 두 작업 각각1,145/1,145·컴파일0경고0오류, 자산8개·Latest·피드·공개 본문 일치와 최종 일반 실행본의 화면을 확인했다. [다운로드](https://github.com/zpstudios/kotu/releases/tag/v0.419.0).
+
 사용자가 기존 View 선택 UI가 남아 있음을 지적했다. 승인 시안의 두 아이콘 버튼을 v0.418.0 범위에서 제외했던 메인의 누락을 보완한다. View label/dropdown과 메뉴 구성을 제거하고 기본 WinUI ToggleButton 두 개를32px로 붙였다. Preview 격자·List 아이콘, 영어 tooltip/접근성 이름과 기본 테마 선택 표시를 사용한다. 현재 실제 보기에서 두 IsChecked를 동기화하고 같은 버튼 재클릭·이름변경으로 전환이 거부되는 경로에도 다시 동기화한다.
 
 기존 ApplyViewMode와 세션·선택/체크·스크롤 복원, 도구 키보드 경계, 그룹 단위 폭 측정, 상위 첫 행과5열 정렬은 유지했다. 제품은 ThumbnailExplorer.xaml과 ThumbnailExplorer.List.cs 두 파일만 수정했다. 단독 Astra/high 구현 뒤 메인이 독립 코드 검토·전체1,145/1,145·앱0경고0오류·구조/릴리스 검사를 확인했다. native 관측 상세와 미검수 한계는 로컬 native-review.json에 보존한다. 비공개 관측 입력은 제품에 포함하지 않는다.

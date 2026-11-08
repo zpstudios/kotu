@@ -1,9 +1,12 @@
 # KOTU 인수인계 문서
 
-## 현재 실행 — 2026-11-08 A417 v0.419.0 배포 준비
+## 현재 실행 — 2026-11-08 A417 v0.419.0 정식 배포 완료
 
-보기 선택 UI 누락을 보완하고 메인의 독립 로컬 검수를 수락했다. 기존 View 메뉴 대신 항상 보이는 Preview/List 아이콘 버튼을 제공한다. 전체1,145/1,145·앱0경고0오류와 실제 화면 검수 근거는 [A417 정본](A417-EXPLORER-REFRESH.md) 및 artifacts/a417-view-switch-followup-20261108/main-review/native-review.json이다. 버전별 본문은 [v0.419.0 노트](RELEASE-v0.419.0.md)를 따른다. 제품 커밋/즉시push 후 정식 릴리스와 정확한 커밋의 일반 실행본을 별도로 확인한다. 아래 내용은 이전 이력이다.
+승인 시안에서 누락했던 보기 선택 UI를 보완했다. View 드롭다운을 항상 보이는 Preview 격자·List 아이콘 두 버튼으로 교체했고 현재 보기 하나만 선택 표시한다. 재클릭·키보드 전환과 기존 선택/체크 복원을 유지한다. [수정 사항](RELEASE-v0.419.0.md), [검수 범위와 한계](A417-EXPLORER-REFRESH.md)를 따른다.
 
+제품·태그 `2001436711a69fdc4b62f476b34d41125968422a`, 2026-11-08 14:21:32 KST 정식 발행이다. [일반 빌드](https://github.com/zpstudios/kotu/actions/runs/42449952291)와 [릴리스](https://github.com/zpstudios/kotu/actions/runs/42449952345)는 각각1,145/1,145·컴파일 경고/오류0, 설치·Standalone 시작/설정 보존·정상 종료를 통과했다. 정확한 태그·Latest·자산8개·업데이트 피드3개와 공개 본문을 대조했다. [정식 다운로드](https://github.com/zpstudios/kotu/releases/tag/v0.419.0).
+
+계측 없는 동일 제품 커밋의 최종 실행본도 버전/커밋과 검수 입력 미포함, 실제 보기 전환 화면·정상 종료를 확인했다. 설정·331등록정보와 합성 자료·실행본·원본 보호 파일을 보존했다. 작업 사본 artifacts/a417-view-switch-followup-20261108/main-review/의 native-review.json, final-release-review.json, production-2001436711a6/final-native-review.json이 근거다. 다른 백로그와 보류 녹화는 포함하지 않는다.
 
 ## 현재 실행 — 2026-11-08 A417 v0.418.0 정식 배포 완료
 
