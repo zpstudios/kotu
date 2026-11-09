@@ -52,7 +52,7 @@
                     <local:ExplorerPathBar x:Name="ExplorerPath" />
                 </Border>
                 <!-- 트리는 기본 전체 남은 높이. 지연 자식열거와 ItemInvoked 항해는 유지한다. -->
-                <Border x:Name="TreeHost" Grid.Row="1"
+                <Border x:Name="TreeHost" Grid.Row="1" Background="Transparent"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="0,0,0,1">
                     <TreeView x:Name="FolderTree"

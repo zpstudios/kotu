@@ -150,6 +150,7 @@ public sealed partial class FileListOverlay : UserControl
         // A34: 폴더 트리에 포커스가 있는 동안에도 모듈 버튼 핫키는 통과시킨다
         // (트리 타이핑 탐색 우선 — 하단 리스트는 ExplorerPane이 같은 표시를 건다).
         FolderTree.Tag = HotkeySupport.PassThroughTag;
+        if (!IsLegacyListEnabled) InitializeTreeBackgroundFocus();
     }
 
     internal void StartExplorerSession()
@@ -165,6 +166,7 @@ public sealed partial class FileListOverlay : UserControl
     {
         if (_explorerDisposed) return;
         _explorerDisposed = true;
+        DetachTreeFocusInput();
         ExplorerRenameBox.EditEnded -= _session.NotifyEditEnded;
         _session.Updated -= OnSessionUpdated;
         _session.ChecksChanged -= OnSessionChecksChanged;
@@ -336,6 +338,7 @@ public sealed partial class FileListOverlay : UserControl
 
     public void Hide()
     {
+        CancelTreeBackgroundFocus();
         Visibility = Visibility.Collapsed;
         HideHint(); // A92 — 다시 열릴 때 안내가 처음부터 다시 보이게 상태를 비운다
     }
