@@ -17,6 +17,9 @@ public sealed partial class ExplorerSession
     private readonly HashSet<string> _hiddenExtensions = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _checkedPaths = new(StringComparer.OrdinalIgnoreCase);
     private ISettingsService? _settings;
+    private readonly MemorySettingsService _memoryPreferences = new();
+    private ISettingsService PreferenceStore => _settings ?? _memoryPreferences;
+    public ExplorerPresentationState Presentation { get; } = new();
 
     public event Action? ChecksChanged;
 
@@ -42,16 +45,7 @@ public sealed partial class ExplorerSession
         set
         {
             _settings = value;
-            SortKey = value?.Get(SortSettingKey, "name") switch
-            {
-                "size" => ExplorerListing.SortKey.Size,
-                "modified" => ExplorerListing.SortKey.Modified,
-                "created" => ExplorerListing.SortKey.Created,
-                "type" => ExplorerListing.SortKey.Type,
-                _ => ExplorerListing.SortKey.Name,
-            };
-            Descending = value?.Get(SortDescSettingKey, DefaultDescending(SortKey))
-                ?? DefaultDescending(SortKey);
+            RestoreFolderPreferences();
             ShowHidden = value?.Get(ShowHiddenSettingKey, false) ?? false;
         }
     }
@@ -62,20 +56,81 @@ public sealed partial class ExplorerSession
 
     public void SelectSort(ExplorerListing.SortKey key)
     {
-        if (_disposed) return;
+        if (_disposed || !Enum.IsDefined(key)) return;
         if (key == SortKey) Descending = !Descending;
         else
         {
             SortKey = key;
             Descending = DefaultDescending(key);
-            _settings?.Set(SortSettingKey, key.ToString().ToLowerInvariant());
         }
-        _settings?.Set(SortDescSettingKey, Descending);
+        var store = PreferenceStore;
+        store.Set(SortSettingKey, key.ToString().ToLowerInvariant());
+        store.Set(SortDescSettingKey, Descending);
+        if (ExplorerFolderPreferences.KeyFor(CurrentFolder) is { } folderKey)
+        {
+            InitializeMissingFolderPreferences(folderKey);
+            store.Set(folderKey + ".sort", key.ToString().ToLowerInvariant());
+            store.Set(folderKey + ".sortDesc", Descending);
+        }
         _settings?.RequestSave();
         // Keyword filtering must never become the next stable sort's input.
         _nameView.Arrange(Ordered, SortKey, Descending, _hiddenExtensions);
         AdvanceViewGeneration();
         if (IsStarted) PublishDisplay();
+    }
+
+    // 표면이 표시하던 폴더를 전달해야 이동 중이거나 숨겨진 옛 표면의 요청을 거부할 수 있다.
+    public bool SelectSort(string? folder, ExplorerListing.SortKey key)
+    {
+        if (_disposed || !Enum.IsDefined(key) || !CanChangeFolderPreferences(folder)) return false;
+        SelectSort(key);
+        return true;
+    }
+
+    public bool SelectViewMode(string? folder, ExplorerPresentationState.ViewMode mode)
+    {
+        if (_disposed || !Enum.IsDefined(mode) || !CanChangeFolderPreferences(folder) ||
+            Presentation.Mode == mode) return false;
+        var key = ExplorerFolderPreferences.KeyFor(CurrentFolder)!;
+        InitializeMissingFolderPreferences(key);
+        Presentation.Mode = mode;
+        PreferenceStore.Set(key + ".view",
+            mode == ExplorerPresentationState.ViewMode.List ? "list" : "preview");
+        _settings?.RequestSave();
+        return true;
+    }
+
+    // 첫 변경 때 당시의 전체 설정을 기억한다. 기존 필드는 다른 창의 최신값이므로 보존한다.
+    private void InitializeMissingFolderPreferences(string key)
+    {
+        var store = PreferenceStore;
+        if (store.Get<string?>(key + ".view", null) is null)
+            store.Set(key + ".view", Presentation.Mode == ExplorerPresentationState.ViewMode.List ? "list" : "preview");
+        if (store.Get<string?>(key + ".sort", null) is null)
+            store.Set(key + ".sort", SortKey.ToString().ToLowerInvariant());
+        if (store.Get<bool?>(key + ".sortDesc", null) is null)
+            store.Set(key + ".sortDesc", Descending);
+    }
+
+    private bool CanChangeFolderPreferences(string? folder)
+    {
+        var normalized = ExplorerFolderPreferences.Normalize(folder);
+        return normalized is not null && normalized == ExplorerFolderPreferences.Normalize(CurrentFolder) &&
+            IsDisplayingFolder(CurrentFolder);
+    }
+
+    private void RestoreFolderPreferences()
+    {
+        var store = PreferenceStore;
+        var defaultSort = ExplorerFolderPreferences.ReadSort(store, SortSettingKey, ExplorerListing.SortKey.Name);
+        var defaultDirection = store.Get(SortDescSettingKey, DefaultDescending(defaultSort));
+        var key = ExplorerFolderPreferences.KeyFor(CurrentFolder);
+        var folderSort = key is null ? null : ExplorerFolderPreferences.ReadSort(store, key + ".sort");
+        SortKey = folderSort ?? defaultSort;
+        Descending = key is null ? defaultDirection : store.Get(key + ".sortDesc",
+            folderSort.HasValue ? DefaultDescending(SortKey) : defaultDirection);
+        Presentation.Mode = key is null ? ExplorerPresentationState.ViewMode.Preview :
+            ExplorerFolderPreferences.ReadView(store, key + ".view");
     }
 
     public void SetExtensions(IReadOnlyList<string> extensions)
@@ -105,8 +160,12 @@ public sealed partial class ExplorerSession
     public bool BeginNavigation(string folder)
     {
         var changed = !string.Equals(folder, CurrentFolder, StringComparison.OrdinalIgnoreCase);
+        var normalized = ExplorerFolderPreferences.Normalize(folder);
+        var preferencesChanged = changed && (normalized is null ||
+            normalized != ExplorerFolderPreferences.Normalize(CurrentFolder));
         if (changed) _checkedPaths.Clear();
         CurrentFolder = folder;
+        if (preferencesChanged) RestoreFolderPreferences();
         return changed;
     }
 

@@ -660,6 +660,75 @@ public class ExplorerSessionRuntimeTests
         Assert.Single(f.Services.Scans);
     }
 
+    [Fact]
+    public async Task Folder_preferences_restore_before_navigation_notifications_and_stale_surfaces_cannot_cancel_scan()
+    {
+        using var f = new Fixture();
+        await f.Load(E("alpha.txt"));
+        Assert.True(f.Session.SelectViewMode(Folder, ExplorerPresentationState.ViewMode.List));
+        Assert.True(f.Session.SelectSort(Folder, ExplorerListing.SortKey.Size));
+        var secondFolder = "C:/second";
+        var observed = false;
+        f.Session.Updated += update =>
+        {
+            if (update.Kind != ExplorerSessionUpdateKind.FolderRequested || update.Folder != secondFolder) return;
+            observed = true;
+            Assert.Equal(ExplorerPresentationState.ViewMode.Preview, f.Session.Presentation.Mode);
+            Assert.False(f.Session.SelectViewMode(Folder, ExplorerPresentationState.ViewMode.List));
+            Assert.False(f.Session.SelectViewMode(secondFolder, ExplorerPresentationState.ViewMode.List));
+            Assert.False(f.Session.SelectSort(Folder, ExplorerListing.SortKey.Name));
+            Assert.False(f.Session.SelectSort(secondFolder, ExplorerListing.SortKey.Name));
+        };
+        var navigation = f.Session.NavigateAsync(secondFolder, ExplorerListing.AllFiles);
+        Assert.True(observed);
+        var generation = f.Session.Generation;
+        Assert.False(f.Session.SelectSort(Folder, ExplorerListing.SortKey.Modified));
+        Assert.Equal(generation, f.Session.Generation);
+        Assert.False(f.Services.Scans[^1].Cancellation.IsCancellationRequested);
+        f.Services.Scans[^1].Complete(E("beta.txt", secondFolder));
+        Assert.True(await f.Finish(navigation));
+        Assert.False(f.Session.SelectViewMode(Folder, ExplorerPresentationState.ViewMode.List));
+        var returning = f.Session.NavigateAsync(Folder, ExplorerListing.AllFiles);
+        Assert.Equal(ExplorerPresentationState.ViewMode.List, f.Session.Presentation.Mode);
+        Assert.Equal(ExplorerListing.SortKey.Size, f.Session.SortKey);
+        f.Services.Scans[^1].Complete(E("alpha.txt"));
+        Assert.True(await f.Finish(returning));
+    }
+
+    [Fact]
+    public async Task Watch_rescan_keeps_current_preferences_until_departure_even_when_another_window_saved_new_values()
+    {
+        var settings = new KOTU.Core.Settings.MemorySettingsService();
+        using var f = new Fixture();
+        f.Session.Settings = settings;
+        await f.Load(E("alpha.txt"));
+        f.Session.SelectViewMode(Folder, ExplorerPresentationState.ViewMode.List);
+        f.Session.SelectSort(Folder, ExplorerListing.SortKey.Size);
+        var watch = await f.AdoptWatch();
+        using var other = new ExplorerSession { Settings = settings };
+        other.BeginNavigation(Folder);
+        other.AcceptScan(new[] { E("alpha.txt") });
+        other.ArrangeFromScan();
+        other.MarkDisplayed();
+        other.SelectViewMode(Folder, ExplorerPresentationState.ViewMode.Preview);
+        other.SelectSort(Folder, ExplorerListing.SortKey.Modified);
+        watch.Fire(Folder + "/alpha.txt");
+        await f.Until(() => f.Services.Probes.Count == 1);
+        f.Services.Probes[0].Complete(Folder);
+        await f.Until(() => f.Services.Scans.Count == 2);
+        f.Services.Scans[1].Complete(E("alpha.txt"), E("beta.txt"));
+        await f.Until(() => f.Session.Display.Count == 2);
+        Assert.Equal(ExplorerPresentationState.ViewMode.List, f.Session.Presentation.Mode);
+        Assert.Equal(ExplorerListing.SortKey.Size, f.Session.SortKey);
+        var departing = f.Session.NavigateAsync("C:/elsewhere", ExplorerListing.AllFiles);
+        var returning = f.Session.NavigateAsync(Folder, ExplorerListing.AllFiles);
+        Assert.False(await departing);
+        Assert.Equal(ExplorerPresentationState.ViewMode.Preview, f.Session.Presentation.Mode);
+        Assert.Equal(ExplorerListing.SortKey.Modified, f.Session.SortKey);
+        f.Services.Scans[^1].Complete(E("alpha.txt"));
+        Assert.True(await f.Finish(returning));
+    }
+
     private static async Task Until(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);

@@ -10,7 +10,7 @@ namespace KOTU.App.Controls;
 public sealed partial class ThumbnailExplorer
 {
     internal Func<(ExplorerListing.SortKey Key, bool Descending, bool Available)>? SortStateProvider { get; set; }
-    internal Action<ExplorerListing.SortKey>? SortRequested { get; set; }
+    internal Action<string?, ExplorerListing.SortKey>? SortRequested { get; set; }
     private readonly Dictionary<ExplorerListing.SortKey, ToggleMenuFlyoutItem> _sortOptions = new();
     private readonly Dictionary<ExplorerListing.SortKey, (Button Button, TextBlock Label)> _sortHeaders = new();
 
@@ -66,7 +66,7 @@ public sealed partial class ThumbnailExplorer
     private void RequestSort(ExplorerListing.SortKey key)
     {
         // The session alone toggles the current key or chooses a new key's default direction.
-        SortRequested?.Invoke(key);
+        SortRequested?.Invoke(CurrentFolder, key);
         SyncSortTools();
     }
 

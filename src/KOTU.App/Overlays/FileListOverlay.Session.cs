@@ -6,16 +6,20 @@ public sealed partial class FileListOverlay
 {
     internal int MetadataGeneration => _session.MetadataGeneration;
     internal BrowseCheckSummary CheckSummary => _session.CheckSummary;
+    internal ExplorerPresentationState Presentation => _session.Presentation;
+
+    internal bool SelectViewMode(string? folder, ExplorerPresentationState.ViewMode mode) =>
+        _session.SelectViewMode(folder, mode);
 
     private int _viewPublications;
     private int _fillPublications;
 
     internal (ExplorerListing.SortKey Key, bool Descending, bool Available) CurrentSort =>
         (_session.SortKey, _session.Descending, _session.IsDisplayingFolder(CurrentFolder));
-    internal void SelectSort(ExplorerListing.SortKey key)
+    internal void SelectSort(string? folder, ExplorerListing.SortKey key)
     {
         // During a real folder transition the pending scan must not be cancelled by old entries.
-        if (CurrentSort.Available) _session.SelectSort(key);
+        if (CurrentSort.Available) _session.SelectSort(folder, key);
     }
 
     internal bool TrySeedCurrentDisplay(IReadOnlyList<string> extensions,

@@ -13,6 +13,7 @@ namespace KOTU.App.Controls;
 public sealed partial class ThumbnailExplorer
 {
     internal ExplorerPresentationState Presentation { get; set; } = new();
+    internal Func<string?, ExplorerPresentationState.ViewMode, bool>? ViewModeRequested { get; set; }
     private ExplorerPresentationState.ViewMode _viewMode;
     private ListViewBase ActiveItems => _viewMode == ExplorerPresentationState.ViewMode.List ? DetailList : TileGrid;
     private long _previewTextRequests;
@@ -71,13 +72,19 @@ public sealed partial class ThumbnailExplorer
         // Toolbar clicks finish inline editing by the existing focus-loss contract. A programmatic
         // mode request must not remove an editor still owned by a recycled container.
         if (ExplorerRenameBox.IsEditing) { SyncViewTools(); return; }
+        // 복원은 읽기만 한다. 사용자 요청은 세션의 현재 표시 폴더 검사를 통과한 뒤에만 반영한다.
+        if (restore && ViewModeRequested is { } request && !request(CurrentFolder, mode))
+        {
+            SyncViewTools();
+            return;
+        }
         CommitUserAnchor();
         var previous = CaptureDisplaySelection(true);
         _restoringSelection = true;
         try
         {
             _viewMode = mode;
-            Presentation.Mode = mode;
+            if (restore && ViewModeRequested is null) Presentation.Mode = mode;
             TileGrid.Visibility = mode == ExplorerPresentationState.ViewMode.Preview ? Visibility.Visible : Visibility.Collapsed;
             DetailList.Visibility = mode == ExplorerPresentationState.ViewMode.List ? Visibility.Visible : Visibility.Collapsed;
             ListHost.Visibility = DetailList.Visibility;

@@ -60,7 +60,7 @@ public sealed partial class MainWindow : Window
     // 두 그리드가 동시에 뜨는 상태는 없지만(S1에서는 S4 진입 자체가 없음 — 강조만), 공유하면
     // 부모(ExplorerHost/S4CenterHost) 사이를 옮겨 다니는 reparent 함정(옛 부모에서 먼저 제거 —
     // v0.111.0 COMException 전례)에 걸려서다.
-    private readonly ExplorerPresentationState _explorerPresentation = new();
+    private ExplorerPresentationState _explorerPresentation => ListOverlay.Presentation;
     private ThumbnailExplorer? _s4Explorer;
 
     /// <summary>
@@ -2101,6 +2101,7 @@ public sealed partial class MainWindow : Window
                     SortStateProvider = () => ListOverlay.CurrentSort,
                     SortRequested = ListOverlay.SelectSort,
                     Presentation = _explorerPresentation,
+                    ViewModeRequested = ListOverlay.SelectViewMode,
                 };
                 // 폴더 더블클릭 = 좌 리스트를 같은 폴더로 항해 — 결과가 ViewChanged로 돌아와
                 // 양쪽이 함께 이동한다(A93 상태 공유). 파일 열기는 기존 라우팅 그대로(A24).
@@ -4153,6 +4154,7 @@ public sealed partial class MainWindow : Window
             SortStateProvider = () => ListOverlay.CurrentSort,
             SortRequested = ListOverlay.SelectSort,
             Presentation = _explorerPresentation,
+            ViewModeRequested = ListOverlay.SelectViewMode,
         };
         // A176: 구 "중앙을 반투명으로 덮는다"(A90 원문)의 반투명 배경 교체(A129 폴백 포함)는
         // 반투명 축과 함께 철거됐었다. A316: S4 중앙은 다시 반투명이다 — 단 인스턴스별 배경

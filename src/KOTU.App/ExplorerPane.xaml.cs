@@ -404,9 +404,8 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>
     /// 헤더 클릭 (A155): 같은 헤더 = 방향 토글, 다른 헤더 = 그 키로 전환(방향은 키의 기본값으로
-    /// 리셋 — 탐색기 관례). 저장은 종전 OnSortChanged와 같은 즉시 Set + Save(전역 1벌) —
-    /// A204에서도 저장은 <b>최종 기준 1개</b>(explorer.sort/sortDesc)뿐이고 정렬 이력은 저장하지
-    /// 않는다(안정성은 세션 내 표시 순서 승계로만 성립 — 재시작·재스캔이면 리셋).
+    /// 리셋 — 탐색기 관례). 세션이 폴더별 최종 기준과 전역 기본값을 저장한다. 정렬 이력은
+    /// 저장하지 않는다(안정성은 세션 내 표시 순서 승계로만 성립 — 재시작·재스캔이면 리셋).
     /// 재그리기는 ApplyNameView(재스캔 없음) — ViewChanged로 중앙 썸네일까지 같은 순서가 흐르고,
     /// 트리 동기(A134 SyncTreeToFolder)는 같은 폴더 조기 반환으로 걸러진다(재통지 무해).
     /// A204/A414: 입력은 세션 Ordered(키워드 적용 전 전체 정렬 결과) — Arrange가 stable이라
@@ -415,7 +414,7 @@ public sealed partial class ExplorerPane : UserControl
     /// </summary>
     private void OnSortHeaderClick(ExplorerListing.SortKey key)
     {
-        _session.SelectSort(key);
+        _session.SelectSort(_displayFolder, key);
     }
 
     /// <summary>
