@@ -765,7 +765,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 표시값(캡션·툴팁·잘라내기 흐림·클라우드 배지)은 x:Bind가 새 항목 값으로 다시 평가하므로
     /// 여기서 손대지 않는다. 손대는 것은 미리보기 하나뿐이고 그것이 위상 0/1의 일이다:
     /// 위상 0 = <b>동기로 확실히 그릴 수 있는 것</b>(폴더 글리프·확장자 타일·뷰모델에 남아 있는
-    /// 캐시), 위상 1 = 파일을 읽어야 하는 것(RegisterUpdateCallback — PdfPane 선례).
+    /// 캐시), 위상 1 = 선택 표시 동기화와 필요한 파일 읽기(RegisterUpdateCallback — PdfPane 선례).
     /// </summary>
     private void OnTileContainerContentChanging(
         ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -802,6 +802,22 @@ public sealed partial class ThumbnailExplorer : UserControl
         item.AllowDrop = vm.IsFolder; // 매 재사용마다 재설정(폴더만 드랍 대상 — A94)
         if (args.Phase != 0) return;
         ReconcileTileSelection(immediate: false);
+        var owner = sender;
+        var generation = _showSeq;
+        var folder = CurrentFolder;
+        var needsPreview = false;
+        // 네이티브 콜백 슬롯은 하나다. 모든 VM의 준비 신호와 기존 미리보기 의도를 합친다.
+        args.RegisterUpdateCallback((phaseOwner, phaseArgs) =>
+        {
+            if (phaseArgs.InRecycleQueue || !ReferenceEquals(phaseOwner, owner) ||
+                generation != _showSeq || folder != CurrentFolder ||
+                !ReferenceEquals(phaseArgs.ItemContainer, item) || !ReferenceEquals(phaseArgs.Item, vm) ||
+                item.ContentTemplateRoot is not Grid currentRoot ||
+                !IsCurrentTileRoot(owner, item, vm, currentRoot)) return;
+            // 복원 회차가 바뀌어도 현재 선택만 읽으므로 살아 있는 준비 신호는 버리지 않는다.
+            UpdateTileSelectionOutline(item);
+            if (needsPreview) OnTilePreviewPhase(phaseOwner, phaseArgs);
+        });
         // 템플릿 루트 조회는 훅 부착 뒤에 둔다 — 어떤 이유로든 루트를 못 얻어도(템플릿 미적용 등)
         // 메뉴·드래그·더블클릭은 붙어 있어야 한다(미리보기만 비는 것이 최악의 실패다).
         if (item.ContentTemplateRoot is not Grid root || PreviewHostOf(root) is not { } host) return;
@@ -813,7 +829,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             // 같은 VM의 재측정은 표시 그림과 진행 중 요청을 그대로 둔다.
             if (!vm.IsFolder && vm.PreviewText is null && !vm.PreviewKnownEmpty &&
-                !vm.PreviewInFlight && host.Tag is null) args.RegisterUpdateCallback(OnTilePreviewPhase);
+                !vm.PreviewInFlight && host.Tag is null) needsPreview = true;
             return;
         }
         root.Tag = vm;
@@ -838,7 +854,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             return;
         }
-        args.RegisterUpdateCallback(OnTilePreviewPhase); // 위상 1 — 파일을 읽는 갈래로
+        needsPreview = true; // 위상 1 — 파일을 읽는 갈래로
     }
 
     /// <summary>
@@ -1012,6 +1028,27 @@ public sealed partial class ThumbnailExplorer : UserControl
         AttachDragDrop(item);    // A94 — 드래그 아웃 + 폴더 타일 드랍
         item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
         item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
+    }
+
+    private bool IsCurrentTileRoot(ListViewBase owner, SelectorItem item, ExplorerEntryVm vm, Grid root) =>
+        _viewMode == ExplorerPresentationState.ViewMode.Preview &&
+        ReferenceEquals(owner, TileGrid) && ReferenceEquals(owner, ActiveItems) &&
+        IsVisibleSurface() && owner.IsLoaded && owner.Visibility == Visibility.Visible &&
+        item is GridViewItem && ReferenceEquals(item.Content, vm) &&
+        ReferenceEquals(owner.ContainerFromItem(vm), item) && ReferenceEquals(item.ContentTemplateRoot, root);
+
+    private void OnFileTileRootLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Grid root) return;
+        // 컨테이너가 이미 로드된 채 루트만 바뀌어도 실제 새 루트의 준비 시점에 맞춘다.
+        DependencyObject? node = root;
+        for (var depth = 0; node is not null && depth < 64; depth++, node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is not GridViewItem item) continue;
+            if (item.Content is ExplorerEntryVm vm && IsCurrentTileRoot(TileGrid, item, vm, root))
+                UpdateTileSelectionOutline(item);
+            return;
+        }
     }
 
     private void ReconcileTileSelection(bool immediate)
