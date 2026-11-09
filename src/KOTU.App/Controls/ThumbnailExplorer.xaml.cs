@@ -302,6 +302,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         InitializeComponent();
         InitializeExplorerTools();
         InitializeListSurface();
+        InitializeColumnTools();
         // A34: 타일 그리드에 포커스가 있어도 모듈 버튼 핫키는 통과 — 타이핑 탐색(첫 글자 점프) 우선
         // (ExplorerPane의 IconGrid·ListPane과 같은 규칙). A90의 S4 키맵("A34 문자 핫키 = 무동작")도
         // 이 태그 하나로 충족된다 — S4 그리드에 포커스가 있는 동안 HotkeySupport가 전부 통과시킨다.
@@ -656,6 +657,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
         _menuGeneration++;
+        CancelColumnDrag();
+        _columnLayout = ColumnSession?.ReadColumns() ?? _columnLayout;
         SyncSortTools();
         var sameFolder = string.Equals(CurrentFolder, folder, StringComparison.OrdinalIgnoreCase);
         var selection = SharedSelection(folder, entries.Select(entry => entry.Path));

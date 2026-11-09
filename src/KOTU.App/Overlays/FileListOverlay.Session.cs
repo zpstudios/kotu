@@ -6,6 +6,7 @@ public sealed partial class FileListOverlay
 {
     internal int MetadataGeneration => _session.MetadataGeneration;
     internal BrowseCheckSummary CheckSummary => _session.CheckSummary;
+    internal ExplorerSession ColumnSession => _session;
     internal ExplorerPresentationState Presentation => _session.Presentation;
 
     internal bool SelectViewMode(string? folder, ExplorerPresentationState.ViewMode mode) =>

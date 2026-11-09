@@ -63,6 +63,7 @@ public sealed partial class ThumbnailExplorer
     {
         PreviewViewButton.IsChecked = _viewMode == ExplorerPresentationState.ViewMode.Preview;
         ListViewButton.IsChecked = _viewMode == ExplorerPresentationState.ViewMode.List;
+        ColumnsButton.Visibility = _viewMode == ExplorerPresentationState.ViewMode.List ? Visibility.Visible : Visibility.Collapsed;
         LayoutToolGroups(ExplorerTools.ActualWidth);
     }
 
@@ -78,6 +79,7 @@ public sealed partial class ThumbnailExplorer
             SyncViewTools();
             return;
         }
+        CancelColumnDrag();
         CommitUserAnchor();
         var previous = CaptureDisplaySelection(true);
         _restoringSelection = true;
@@ -125,7 +127,7 @@ public sealed partial class ThumbnailExplorer
     private void InitializeListEntry(ExplorerEntryVm vm)
     {
         ExplorerFileOps.ApplyCutMark(vm);
-        vm.SetNarrowList(_narrowList);
+        vm.SetListColumns(_narrowList, _columnLayout, _columnWidths);
     }
 
     private void UpdateListLayout()
@@ -133,10 +135,9 @@ public sealed partial class ThumbnailExplorer
         var width = DetailList.ActualWidth > 0 ? DetailList.ActualWidth : ActualWidth;
         if (width <= 0) return;
         var narrow = width < 700;
-        if (_narrowList == narrow) return;
         _narrowList = narrow;
         _parentTile.SetNarrowList(narrow);
-        foreach (var vm in _vms) vm.SetNarrowList(narrow);
+        ApplyColumnGeometry();
         SyncViewTools();
     }
 
@@ -161,15 +162,10 @@ public sealed partial class ThumbnailExplorer
         if (width <= 0 || ViewGroup is null) return;
         var columns = _viewMode == ExplorerPresentationState.ViewMode.List && !_narrowList;
         var focused = XamlRoot is { } xamlRoot ? FocusManager.GetFocusedElement(xamlRoot) : null;
-        var moveSortFocus = focused is not null && IsToolDescendant(focused, columns ? SortGroup : ListColumnHeaders);
+        var moveSortFocus = !columns && focused is not null && IsToolDescendant(focused, ListColumnHeaders);
         ListColumnHeaders.Visibility = columns ? Visibility.Visible : Visibility.Collapsed;
-        SortGroup.Visibility = columns ? Visibility.Collapsed : Visibility.Visible;
-        if (moveSortFocus)
-        {
-            var key = SortStateProvider?.Invoke().Key ?? ExplorerListing.SortKey.Name;
-            (columns ? (Control)_sortHeaders[key].Button : SortKeyButton).Focus(FocusState.Programmatic);
-        }
-        if (columns) return;
+        SortGroup.Visibility = Visibility.Visible;
+        if (moveSortFocus) SortKeyButton.Focus(FocusState.Programmatic);
         // 현재 행과 여백을 제외한 자연 폭으로 비교하여 줄바꿈 왕복에서 판정이 흔들리지 않게 한다.
         SortGroup.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         ViewGroup.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -194,6 +190,8 @@ public sealed partial class ThumbnailExplorer
     private void OnPresentationLayout(object? sender, object args)
     {
         SyncListHeaderBounds();
+        if (_columnDrag is null && ColumnSession is { } session && session.Columns != _columnLayout)
+            QueueColumnGeometry();
         var scroll = FindRetryDescendant<ScrollViewer>(ActiveItems);
         if (!ReferenceEquals(scroll, _presentationScroll))
         {
@@ -224,6 +222,11 @@ public sealed partial class ThumbnailExplorer
         }).FirstOrDefault(grid => grid is { IsLoaded: true, ActualWidth: > 0 });
         if (row is null) return;
         var bounds = row.TransformToVisual(ListHost).TransformBounds(new Rect(0, 0, row.ActualWidth, row.ActualHeight));
+        if (Math.Abs(_columnRowWidth - row.ActualWidth) > 0.25)
+        {
+            _columnRowWidth = row.ActualWidth;
+            QueueColumnGeometry();
+        }
         var left = Math.Max(0, bounds.Left);
         var right = Math.Max(0, ListHost.ActualWidth - bounds.Right);
         if (Math.Abs(ListColumnHeaders.Margin.Left - left) > 0.25 || Math.Abs(ListColumnHeaders.Margin.Right - right) > 0.25)

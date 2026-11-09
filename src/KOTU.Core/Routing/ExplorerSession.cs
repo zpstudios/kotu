@@ -46,6 +46,7 @@ public sealed partial class ExplorerSession
         {
             _settings = value;
             RestoreFolderPreferences();
+            ReadColumns();
             ShowHidden = value?.Get(ShowHiddenSettingKey, false) ?? false;
         }
     }

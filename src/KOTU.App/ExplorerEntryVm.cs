@@ -90,28 +90,41 @@ public sealed class ExplorerEntryVm : INotifyPropertyChanged
     public string ListType => IsFolder ? "Folder" : System.IO.Path.GetExtension(Name).TrimStart('.').ToUpperInvariant();
     public string ListModified => Entry.Modified.ToString("yyyy-MM-dd HH:mm");
     public string ListCreated => Entry.Created.ToString("yyyy-MM-dd HH:mm");
-    public string ListSummary => string.Join("  ·  ", new[] { ListSize, ListType, ListModified }.Where(s => s.Length > 0));
+    public string ListSummary => string.Join("  ·  ", new[]
+    {
+        _listColumns.SizeVisible ? ListSize : "", _listColumns.TypeVisible ? ListType : "",
+        _listColumns.CreatedVisible ? ListCreated : "", _listColumns.ModifiedVisible ? ListModified : "",
+    }.Where(value => value.Length > 0));
 
-    // Set before a row is first realized. A virtualized row must not grow after its first measure.
+    // 모든 행의 기하는 실체화 전에 준비하며 숨긴 열은 간격까지 함께 제거한다.
     private bool _narrowList = true;
-    public Microsoft.UI.Xaml.Visibility ListColumnsVisibility => _narrowList
-        ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
+    private ExplorerColumnLayout _listColumns = ExplorerColumnLayout.Default;
+    private double[] _listWidths = ExplorerColumnLayout.Default.Measure(800);
     public Microsoft.UI.Xaml.Visibility ListSummaryVisibility => _narrowList
         ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
     public int ListNameSpan => _narrowList ? 5 : 1;
     public double ListRowHeight => _narrowList ? 44 : 32;
-    public Microsoft.UI.Xaml.GridLength ListSizeWidth => new(_narrowList ? 0 : 80);
-    public Microsoft.UI.Xaml.GridLength ListTypeWidth => new(_narrowList ? 0 : 80);
-    public Microsoft.UI.Xaml.GridLength ListModifiedWidth => new(_narrowList ? 0 : 130);
-    public Microsoft.UI.Xaml.GridLength ListCreatedWidth => new(_narrowList ? 0 : 130);
+    public Microsoft.UI.Xaml.GridLength ListSizeWidth => new(_narrowList ? 0 : _listWidths[1]);
+    public Microsoft.UI.Xaml.GridLength ListTypeWidth => new(_narrowList ? 0 : _listWidths[2]);
+    public Microsoft.UI.Xaml.GridLength ListCreatedWidth => new(_narrowList ? 0 : _listWidths[3]);
+    public Microsoft.UI.Xaml.GridLength ListModifiedWidth => new(_narrowList ? 0 : _listWidths[4]);
+    public Microsoft.UI.Xaml.Visibility ListSizeVisibility => ColumnVisibility(ExplorerColumnLayout.Column.Size);
+    public Microsoft.UI.Xaml.Visibility ListTypeVisibility => ColumnVisibility(ExplorerColumnLayout.Column.Type);
+    public Microsoft.UI.Xaml.Visibility ListCreatedVisibility => ColumnVisibility(ExplorerColumnLayout.Column.Created);
+    public Microsoft.UI.Xaml.Visibility ListModifiedVisibility => ColumnVisibility(ExplorerColumnLayout.Column.Modified);
+    private Microsoft.UI.Xaml.Visibility ColumnVisibility(ExplorerColumnLayout.Column column) =>
+        !_narrowList && _listColumns.IsVisible(column) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
-    internal void SetNarrowList(bool narrow)
+    internal void SetListColumns(bool narrow, ExplorerColumnLayout columns, double[] widths)
     {
-        if (_narrowList == narrow) return;
+        if (_narrowList == narrow && _listColumns == columns && _listWidths.SequenceEqual(widths)) return;
         _narrowList = narrow;
-        foreach (var name in new[] { nameof(ListColumnsVisibility), nameof(ListSummaryVisibility),
+        _listColumns = columns;
+        _listWidths = widths;
+        foreach (var name in new[] { nameof(ListSummaryVisibility), nameof(ListSummary),
             nameof(ListNameSpan), nameof(ListSizeWidth), nameof(ListTypeWidth), nameof(ListModifiedWidth),
-            nameof(ListCreatedWidth), nameof(ListRowHeight) })
+            nameof(ListCreatedWidth), nameof(ListRowHeight), nameof(ListSizeVisibility), nameof(ListTypeVisibility),
+            nameof(ListCreatedVisibility), nameof(ListModifiedVisibility) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 

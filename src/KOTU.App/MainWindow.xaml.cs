@@ -2101,6 +2101,7 @@ public sealed partial class MainWindow : Window
                     SortStateProvider = () => ListOverlay.CurrentSort,
                     SortRequested = ListOverlay.SelectSort,
                     Presentation = _explorerPresentation,
+                    ColumnSession = ListOverlay.ColumnSession,
                     ViewModeRequested = ListOverlay.SelectViewMode,
                 };
                 // 폴더 더블클릭 = 좌 리스트를 같은 폴더로 항해 — 결과가 ViewChanged로 돌아와
@@ -4154,6 +4155,7 @@ public sealed partial class MainWindow : Window
             SortStateProvider = () => ListOverlay.CurrentSort,
             SortRequested = ListOverlay.SelectSort,
             Presentation = _explorerPresentation,
+            ColumnSession = ListOverlay.ColumnSession,
             ViewModeRequested = ListOverlay.SelectViewMode,
         };
         // A176: 구 "중앙을 반투명으로 덮는다"(A90 원문)의 반투명 배경 교체(A129 폴백 포함)는

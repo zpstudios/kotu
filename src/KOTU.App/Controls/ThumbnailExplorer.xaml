@@ -239,6 +239,8 @@
                         <FontIcon Glyph="&#xEA37;" FontSize="16" />
                     </ToggleButton>
                 </StackPanel>
+                <DropDownButton x:Name="ColumnsButton" Content="Columns" Height="32" MinWidth="0" Padding="8,4"
+                                Visibility="Collapsed" AutomationProperties.Name="Columns" ToolTipService.ToolTip="Choose columns" />
             </StackPanel>
             <Grid x:Name="SortGroup" Grid.Column="1" ColumnSpacing="8" MaxWidth="260" Margin="16,0,0,0"
                   HorizontalAlignment="Right" AutomationProperties.Name="Sort">
@@ -336,9 +338,9 @@
         </GridView>
         <Grid x:Name="ListHost" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,44">
             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-            <Grid x:Name="ListColumnHeaders" Padding="8,6" ColumnSpacing="8" Visibility="Collapsed">
+            <Grid x:Name="ListColumnHeaders" Padding="8,6" ColumnSpacing="0" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="20" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="28" /><ColumnDefinition Width="24" /><ColumnDefinition Width="*" />
                     <ColumnDefinition Width="80" /><ColumnDefinition Width="80" />
                     <ColumnDefinition Width="130" /><ColumnDefinition Width="130" />
                 </Grid.ColumnDefinitions>
@@ -346,19 +348,19 @@
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
                     <TextBlock x:Name="SortNameHeaderText" Text="Name" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
-                <Button x:Name="SortSizeHeader" Grid.Column="3" MinWidth="0" MinHeight="0" Padding="0"
+                <Button x:Name="SortSizeHeader" Margin="8,0,0,0" Grid.Column="3" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Right">
                     <TextBlock x:Name="SortSizeHeaderText" Text="Size" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
-                <Button x:Name="SortTypeHeader" Grid.Column="4" MinWidth="0" MinHeight="0" Padding="0"
+                <Button x:Name="SortTypeHeader" Margin="8,0,0,0" Grid.Column="4" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
                     <TextBlock x:Name="SortTypeHeaderText" Text="Type" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
-                <Button x:Name="SortCreatedHeader" Grid.Column="5" MinWidth="0" MinHeight="0" Padding="0"
+                <Button x:Name="SortCreatedHeader" Margin="8,0,0,0" Grid.Column="5" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
                     <TextBlock x:Name="SortCreatedHeaderText" Text="Created" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
-                <Button x:Name="SortModifiedHeader" Grid.Column="6" MinWidth="0" MinHeight="0" Padding="0"
+                <Button x:Name="SortModifiedHeader" Margin="8,0,0,0" Grid.Column="6" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
                     <TextBlock x:Name="SortModifiedHeaderText" Text="Modified" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
@@ -372,21 +374,21 @@
             </ListView.ItemsPanel>
             <ListView.Resources>
                 <DataTemplate x:Key="FileListTemplate" x:DataType="local:ExplorerEntryVm">
-                    <Grid Opacity="{x:Bind ContentOpacity, Mode=OneWay}" Padding="8,6" ColumnSpacing="8"
+                    <Grid Opacity="{x:Bind ContentOpacity, Mode=OneWay}" Padding="8,6" ColumnSpacing="0"
                           MinHeight="{x:Bind ListRowHeight, Mode=OneWay}"
                           ToolTipService.ToolTip="{x:Bind Path}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="20" /><ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="28" /><ColumnDefinition Width="24" />
                             <ColumnDefinition Width="*" /><ColumnDefinition Width="{x:Bind ListSizeWidth, Mode=OneWay}" />
                             <ColumnDefinition Width="{x:Bind ListTypeWidth, Mode=OneWay}" />
                             <ColumnDefinition Width="{x:Bind ListCreatedWidth, Mode=OneWay}" />
                             <ColumnDefinition Width="{x:Bind ListModifiedWidth, Mode=OneWay}" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                        <CheckBox Grid.RowSpan="2" IsChecked="{x:Bind IsChecked, Mode=OneWay}" Click="OnTileCheckClick"
+                        <CheckBox Margin="0,0,8,0" Grid.RowSpan="2" IsChecked="{x:Bind IsChecked, Mode=OneWay}" Click="OnTileCheckClick"
                                   MinWidth="0" MinHeight="0" Padding="0" VerticalAlignment="Center"
                                   ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
-                        <FontIcon Grid.Column="1" Grid.RowSpan="2" Glyph="{x:Bind Glyph}" FontSize="13" Width="16" VerticalAlignment="Center" />
+                        <FontIcon Margin="0,0,8,0" HorizontalAlignment="Left" Grid.Column="1" Grid.RowSpan="2" Glyph="{x:Bind Glyph}" FontSize="13" Width="16" VerticalAlignment="Center" />
                         <TextBlock x:Name="TileCaption" Grid.Column="2" Text="{x:Bind Name}" FontSize="12"
                                    Grid.ColumnSpan="{x:Bind ListNameSpan, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,18,0" />
@@ -395,20 +397,20 @@
                                   HorizontalAlignment="Right" VerticalAlignment="Center"
                                   Visibility="{x:Bind CloudBadgeVisibility}"
                                   ToolTipService.ToolTip="Online-only file — preview needs a download" />
-                        <TextBlock x:Name="RowSizeText" Grid.Column="3" Text="{x:Bind ListSize}" FontSize="12"
-                                   Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
+                        <TextBlock x:Name="RowSizeText" Margin="8,0,0,0" Grid.Column="3" Text="{x:Bind ListSize}" FontSize="12"
+                                   Visibility="{x:Bind ListSizeVisibility, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" TextAlignment="Right" />
-                        <TextBlock x:Name="RowTypeText" Grid.Column="4" Text="{x:Bind ListType}" FontSize="12"
-                                   Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
+                        <TextBlock x:Name="RowTypeText" Margin="8,0,0,0" Grid.Column="4" Text="{x:Bind ListType}" FontSize="12"
+                                   Visibility="{x:Bind ListTypeVisibility, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                        <TextBlock x:Name="RowCreatedText" Grid.Column="5" Text="{x:Bind ListCreated}" FontSize="12"
-                                   Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
+                        <TextBlock x:Name="RowCreatedText" Margin="8,0,0,0" Grid.Column="5" Text="{x:Bind ListCreated}" FontSize="12"
+                                   Visibility="{x:Bind ListCreatedVisibility, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                        <TextBlock x:Name="RowModifiedText" Grid.Column="6" Text="{x:Bind ListModified}" FontSize="12"
-                                   Visibility="{x:Bind ListColumnsVisibility, Mode=OneWay}"
+                        <TextBlock x:Name="RowModifiedText" Margin="8,0,0,0" Grid.Column="6" Text="{x:Bind ListModified}" FontSize="12"
+                                   Visibility="{x:Bind ListModifiedVisibility, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <TextBlock x:Name="RowSummaryText" Grid.Column="2" Grid.Row="1" Grid.ColumnSpan="5"
-                                   Text="{x:Bind ListSummary}" FontSize="11" Opacity="0.65"
+                                   Text="{x:Bind ListSummary, Mode=OneWay}" FontSize="11" Opacity="0.65"
                                    Visibility="{x:Bind ListSummaryVisibility, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis" />
                     </Grid>
