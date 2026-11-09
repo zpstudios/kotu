@@ -1,6 +1,8 @@
 # A417 — 탐색기 보기·정보·폴더 작업
 
-## v0.423.0 목록 열 사용자 설정 — 로컬 검수 수락
+## v0.423.0 목록 열 사용자 설정 — 정식 배포 완료
+
+사용자가 수정·설명17파일의 커밋·푸시·정식 배포를 직접 승인한 뒤 제품·태그 d750380974943713594a476ed83d8404b05fb92f를 2026-11-09 19:42:09 KST 정식 발행했다. 원격 build42601842669/release42601842641는 attempt1 각각1,199/1,199·8어셈블리·컴파일0경고0오류, COM 전달·설치본/Standalone 시작과 보존·정상 종료를 통과했다. 태그·Latest·공개 본문·자산8개·피드3개 SHA256·현재423 Full/Delta와 이전422 metadata를 대조했다. [다운로드](https://github.com/zpstudios/kotu/releases/tag/v0.423.0). 동일496입력의 정확한 커밋 재빌드는12어셈블리 버전/커밋·실제20컴파일 명령·관측 주입0·경고/오류0을 확인했다. 추가 UI 실행 없이 metadata를 확인했으며 전체 공개 설치파일을 다시 내려받은 것은 아니다. 정본은 같은 main-review의 final-release-review.json·remote-ci-review.json·committed-source-review.json·production-d75038097494/metadata-review.json이다.
 
 List의 Columns 메뉴에서 Size/Type/Created/Modified를 선택하며 Name은 항상 표시한다. 숨긴 열의 slot과 간격은 함께 사라지고 좁은 두 줄 목록 요약도 같은 표시 설정을 따른다. 모두 숨겨도 행 높이는 유지한다. 오른쪽 정렬 메뉴는 넓은 목록에도 남아 숨긴 열을 기준으로 정렬할 수 있다. Restore default layout은 열의 표시·너비만 복원한다.
 
@@ -12,7 +14,7 @@ List의 Columns 메뉴에서 Size/Type/Created/Modified를 선택하며 Name은 
 
 비계측 원본 App의 Dark1280×752 화면에서 넓은/좁은 목록, 드래그·방향키, 숨긴Created 정렬, 모든 보조열 숨김과 기본 복원, beta선택/gamma체크, Preview/List·F2/Escape, 폴더A/B와 S1/S4 공유를 확인했다.140합성 항목에서 좁은/넓은 스크롤 왕복 후 선택·체크와 수정 배치를 유지하고 스크롤 중 초기화도 위치를 유지했다. Standalone 정상 종료·동일 후보 재실행은 Preview/Name오름·기본 열 폭으로 돌아왔다. 라이트/고배율, 정확한 컨테이너 재사용 횟수·이벤트 순서·IO횟수는 이번에 측정하지 않았다. JSON 검수는 별도 설정 인스턴스 시험이며 설치 앱 재시작 화면이나 별도 프로세스 검증으로 확대하지 않는다.
 
-후보 소스/시험/버전496입력·실행12어셈블리, 원본28보호 파일·기존자료6·복사자료6·합성140·331등록정보는 검수 뒤 일치한다. 사용자 설정 해시는 최초18:20기록과 다르며 마지막 변경18:35:45가 검수 앱 최초 실행18:44:38보다 앞선다. 변경 주체는 관측하지 못했고 되돌리지 않았다. 검수 앱은 정상 종료했고 설치 앱에는 입력하지 않았다. 첫 직접 실행에서 후보 창이 노출되지 않아 기존 ReviewLauncher의 동일 바이트를 재사용했다. 이 사실을 설정 변경 원인으로 단정하지 않는다. 근거는 artifacts/a417-list-columns-20261109/main-review의 native-review.json·local-test-review.json·final-preservation-review.json·candidate-20261109-094003/metadata-review.json이다. 아직 정식 발행 전이다.
+후보 소스/시험/버전496입력·실행12어셈블리, 원본28보호 파일·기존자료6·복사자료6·합성140·331등록정보는 검수 뒤 일치한다. 사용자 설정 해시는 최초18:20기록과 다르며 마지막 변경18:35:45가 검수 앱 최초 실행18:44:38보다 앞선다. 변경 주체는 관측하지 못했고 되돌리지 않았다. 검수 앱은 정상 종료했고 설치 앱에는 입력하지 않았다. 첫 직접 실행에서 후보 창이 노출되지 않아 기존 ReviewLauncher의 동일 바이트를 재사용했다. 이 사실을 설정 변경 원인으로 단정하지 않는다. 근거는 artifacts/a417-list-columns-20261109/main-review의 native-review.json·local-test-review.json·final-preservation-review.json·candidate-20261109-094003/metadata-review.json이다. 정식 발행 검증은 이 절의 첫 문단을 따른다.
 
 
 ## v0.422.0 폴더별 보기·정렬 기억 — 정식 배포 완료
