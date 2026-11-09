@@ -32,6 +32,7 @@ public sealed partial class ThumbnailExplorer
 
     private void InitializeListSurface()
     {
+        InitializeBackgroundFocusSettlement();
         DetailList.Tag = HotkeySupport.PassThroughTag;
         DetailList.PreviewKeyDown += OnParentTilePreviewKeyDown;
         DetailList.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnGridKeyDown), true);
@@ -41,6 +42,7 @@ public sealed partial class ThumbnailExplorer
         foreach (var surface in new ListViewBase[] { TileGrid, DetailList })
         {
             surface.PreviewKeyDown += OnPresentationNavigationKey;
+            surface.GettingFocus += OnPresentationGettingFocus;
             surface.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(OnPresentationUserPointer), true);
             surface.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnPresentationUserPointer), true);
         }
@@ -79,6 +81,7 @@ public sealed partial class ThumbnailExplorer
             SyncViewTools();
             return;
         }
+        CancelBackgroundFocus();
         CancelColumnDrag();
         CommitUserAnchor();
         var previous = CaptureDisplaySelection(true);
@@ -113,7 +116,8 @@ public sealed partial class ThumbnailExplorer
         }
         if (args.Item is ExplorerParentTile)
         {
-            item.AllowDrop = item.CanDrag = item.IsDoubleTapEnabled = false;
+            item.AllowDrop = item.CanDrag = false;
+            item.IsDoubleTapEnabled = true;
             EnsureParentContextMenu(item);
             return;
         }
@@ -413,6 +417,7 @@ public sealed partial class ThumbnailExplorer
             IsPresentationTextInput(e.OriginalSource) || e.Key is not (VirtualKey.Up or VirtualKey.Down or
                 VirtualKey.Left or VirtualKey.Right or VirtualKey.Home or VirtualKey.End or
                 VirtualKey.PageUp or VirtualKey.PageDown)) return;
+        ++_surfaceFocusRevision;
         BeginUserFocusNavigation(); // Observe native navigation; do not handle or replace the key.
     }
 

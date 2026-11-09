@@ -32,7 +32,7 @@
          S4에서 아래 레이어(미디어)로 포인터가 새지 않는 모달 차단(A313)도 그대로다. -->
     <UserControl.Resources>
                 <DataTemplate x:Key="ParentTileTemplate" x:DataType="controls:ExplorerParentTile">
-                    <Button Click="OnParentFolderClick" Loaded="OnParentTileLoaded"
+                    <Button Loaded="OnParentTileLoaded" IsDoubleTapEnabled="True"
                             IsEnabled="{x:Bind CanNavigate, Mode=OneWay}"
                             HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
@@ -43,80 +43,15 @@
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <!-- Approved C silhouette. PathIcon inherits the button foreground;
-                                 unfilled viewport diagonals preserve the 40px coordinates (ToolbarIcons). -->
+                            <!-- 기존 폴더 윤곽과 같은 글리프를 쓰고 작은 위쪽 화살표는 바깥 모서리에 둔다. -->
                             <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
                                      HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Grid Width="40" Height="40"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <PathIcon Width="40" Height="40" Opacity="0.3">
-                                    <PathIcon.Data>
-                                        <GeometryGroup>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="0,0" IsFilled="False">
-                                                    <LineSegment Point="40,40" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="5,11" IsClosed="True">
-                                                    <LineSegment Point="12,11" />
-                                                    <LineSegment Point="16,15" />
-                                                    <LineSegment Point="25,15" />
-                                                    <QuadraticBezierSegment Point1="27,15" Point2="27,17" />
-                                                    <LineSegment Point="27,31" />
-                                                    <LineSegment Point="2,31" />
-                                                    <LineSegment Point="2,14" />
-                                                    <QuadraticBezierSegment Point1="2,11" Point2="5,11" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                        </GeometryGroup>
-                                    </PathIcon.Data>
-                                </PathIcon>
-                                <PathIcon Width="40" Height="40" Opacity="0.8">
-                                    <PathIcon.Data>
-                                        <GeometryGroup>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="0,0" IsFilled="False">
-                                                    <LineSegment Point="40,40" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="4,19" IsClosed="True">
-                                                    <LineSegment Point="27,19" />
-                                                    <QuadraticBezierSegment Point1="29,19" Point2="28.6,21" />
-                                                    <LineSegment Point="26.3,33" />
-                                                    <QuadraticBezierSegment Point1="26,35" Point2="24,35" />
-                                                    <LineSegment Point="4,35" />
-                                                    <QuadraticBezierSegment Point1="2,35" Point2="2,33" />
-                                                    <LineSegment Point="2,21" />
-                                                    <QuadraticBezierSegment Point1="2,19" Point2="4,19" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                        </GeometryGroup>
-                                    </PathIcon.Data>
-                                </PathIcon>
-                                <PathIcon Width="40" Height="40">
-                                    <PathIcon.Data>
-                                        <GeometryGroup>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="0,0" IsFilled="False">
-                                                    <LineSegment Point="40,40" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="32,3" IsClosed="True">
-                                                    <LineSegment Point="39,10" />
-                                                    <LineSegment Point="34.5,10" />
-                                                    <LineSegment Point="34.5,23" />
-                                                    <LineSegment Point="29.5,23" />
-                                                    <LineSegment Point="29.5,10" />
-                                                    <LineSegment Point="25,10" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                        </GeometryGroup>
-                                    </PathIcon.Data>
-                                </PathIcon>
-                            </Grid>
+                                <Grid Width="40" Height="40">
+                                    <FontIcon Glyph="&#xE8B7;" FontSize="28" Width="28" Height="28"
+                                              HorizontalAlignment="Left" VerticalAlignment="Bottom" />
+                                    <FontIcon Glyph="&#xE74A;" FontSize="12" Width="12" Height="12"
+                                              HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                </Grid>
                             </Viewbox>
                             <TextBlock Grid.Row="1" Text="Up one folder" FontSize="14"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="4,0,4,4" />
@@ -124,7 +59,7 @@
                     </Button>
                 </DataTemplate>
                 <DataTemplate x:Key="ParentListTemplate" x:DataType="controls:ExplorerParentTile">
-                    <Button Click="OnParentFolderClick" Loaded="OnParentTileLoaded"
+                    <Button Loaded="OnParentTileLoaded" IsDoubleTapEnabled="True"
                             IsEnabled="{x:Bind CanNavigate, Mode=OneWay}" MinHeight="{x:Bind ListRowHeight, Mode=OneWay}"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
                             MinWidth="0" Padding="0" BorderThickness="0" Background="Transparent"
@@ -138,73 +73,10 @@
                             <Viewbox Grid.Column="1" Grid.RowSpan="2" Width="16" Height="16"
                                      HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform">
                                 <Grid Width="40" Height="40">
-                                <PathIcon Width="40" Height="40" Opacity="0.3">
-                                    <PathIcon.Data>
-                                        <GeometryGroup>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="0,0" IsFilled="False">
-                                                    <LineSegment Point="40,40" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="5,11" IsClosed="True">
-                                                    <LineSegment Point="12,11" />
-                                                    <LineSegment Point="16,15" />
-                                                    <LineSegment Point="25,15" />
-                                                    <QuadraticBezierSegment Point1="27,15" Point2="27,17" />
-                                                    <LineSegment Point="27,31" />
-                                                    <LineSegment Point="2,31" />
-                                                    <LineSegment Point="2,14" />
-                                                    <QuadraticBezierSegment Point1="2,11" Point2="5,11" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                        </GeometryGroup>
-                                    </PathIcon.Data>
-                                </PathIcon>
-                                <PathIcon Width="40" Height="40" Opacity="0.8">
-                                    <PathIcon.Data>
-                                        <GeometryGroup>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="0,0" IsFilled="False">
-                                                    <LineSegment Point="40,40" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="4,19" IsClosed="True">
-                                                    <LineSegment Point="27,19" />
-                                                    <QuadraticBezierSegment Point1="29,19" Point2="28.6,21" />
-                                                    <LineSegment Point="26.3,33" />
-                                                    <QuadraticBezierSegment Point1="26,35" Point2="24,35" />
-                                                    <LineSegment Point="4,35" />
-                                                    <QuadraticBezierSegment Point1="2,35" Point2="2,33" />
-                                                    <LineSegment Point="2,21" />
-                                                    <QuadraticBezierSegment Point1="2,19" Point2="4,19" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                        </GeometryGroup>
-                                    </PathIcon.Data>
-                                </PathIcon>
-                                <PathIcon Width="40" Height="40">
-                                    <PathIcon.Data>
-                                        <GeometryGroup>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="0,0" IsFilled="False">
-                                                    <LineSegment Point="40,40" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                            <PathGeometry>
-                                                <PathFigure StartPoint="32,3" IsClosed="True">
-                                                    <LineSegment Point="39,10" />
-                                                    <LineSegment Point="34.5,10" />
-                                                    <LineSegment Point="34.5,23" />
-                                                    <LineSegment Point="29.5,23" />
-                                                    <LineSegment Point="29.5,10" />
-                                                    <LineSegment Point="25,10" />
-                                                </PathFigure>
-                                            </PathGeometry>
-                                        </GeometryGroup>
-                                    </PathIcon.Data>
-                                </PathIcon>
+                                    <FontIcon Glyph="&#xE8B7;" FontSize="28" Width="28" Height="28"
+                                              HorizontalAlignment="Left" VerticalAlignment="Bottom" />
+                                    <FontIcon Glyph="&#xE74A;" FontSize="12" Width="12" Height="12"
+                                              HorizontalAlignment="Right" VerticalAlignment="Top" />
                                 </Grid>
                             </Viewbox>
                             <TextBlock x:Name="ParentListCaption" Grid.Column="2" Text="Up one folder" FontSize="12"
@@ -228,18 +100,18 @@
             <StackPanel x:Name="ViewGroup" Orientation="Horizontal" Spacing="8"
                         Margin="0" HorizontalAlignment="Left" AutomationProperties.Name="View">
                 <StackPanel Orientation="Horizontal" Spacing="0">
-                    <ToggleButton x:Name="PreviewViewButton" Width="32" Height="32" MinWidth="0" Padding="4"
+                    <ToggleButton x:Name="PreviewViewButton" Width="32" Height="32" MinWidth="0" Padding="4" VerticalAlignment="Center"
                                   CornerRadius="4,0,0,4" AutomationProperties.Name="Preview"
                                   ToolTipService.ToolTip="Preview">
                         <FontIcon Glyph="&#xE8A9;" FontSize="16" />
                     </ToggleButton>
-                    <ToggleButton x:Name="ListViewButton" Width="32" Height="32" MinWidth="0" Padding="4"
+                    <ToggleButton x:Name="ListViewButton" Width="32" Height="32" MinWidth="0" Padding="4" VerticalAlignment="Center"
                                   CornerRadius="0,4,4,0" AutomationProperties.Name="List"
                                   ToolTipService.ToolTip="List">
                         <FontIcon Glyph="&#xEA37;" FontSize="16" />
                     </ToggleButton>
                 </StackPanel>
-                <DropDownButton x:Name="ColumnsButton" Content="Columns" Height="32" MinWidth="0" Padding="8,4"
+                <DropDownButton x:Name="ColumnsButton" Content="Columns" Height="32" MinWidth="0" Padding="8,4" VerticalAlignment="Center"
                                 Visibility="Collapsed" AutomationProperties.Name="Columns" ToolTipService.ToolTip="Choose columns" />
             </StackPanel>
             <Grid x:Name="SortGroup" Grid.Column="1" ColumnSpacing="8" MaxWidth="260" Margin="16,0,0,0"
@@ -250,12 +122,12 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="Sort" FontSize="12" Opacity="0.75" VerticalAlignment="Center" />
-                <DropDownButton x:Name="SortKeyButton" Grid.Column="1" Padding="8,5" MinWidth="0"
-                                HorizontalAlignment="Stretch" AutomationProperties.Name="Sort by"
+                <DropDownButton x:Name="SortKeyButton" Grid.Column="1" Height="32" Padding="8,4" MinWidth="0" VerticalAlignment="Center"
+                                HorizontalAlignment="Right" AutomationProperties.Name="Sort by"
                                 ToolTipService.ToolTip="Sort by">
                     <TextBlock x:Name="SortKeyText" Text="Name" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </DropDownButton>
-                <Button x:Name="SortDirectionButton" Grid.Column="2" Padding="8,5" MinWidth="0"
+                <Button x:Name="SortDirectionButton" Grid.Column="2" Width="32" Height="32" Padding="4" MinWidth="0" VerticalAlignment="Center"
                         Click="OnSortDirectionClick" AutomationProperties.Name="Sort direction">
                     <FontIcon x:Name="SortDirectionIcon" Glyph="&#xE70E;" FontSize="13" />
                 </Button>

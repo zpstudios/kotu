@@ -2732,10 +2732,24 @@ public sealed partial class MainWindow : Window
         _focusWasOrphan = true; // 에지 축 갱신도 이 함수 한 곳뿐(호출부 산개 금지 — 배치 3 규칙)
         // 복구 실행 누적(RECOV) — 성공 여부와 무관하게 "판정이 발동해 복구가 돌았다"가 신호다.
         if (_diagOn) _diagRecovCount++;
+        // 빈 영역 놓기 뒤 분리된 스크롤 부품은 현재 탐색기의 유효한 요청에 먼저 돌려준다.
+        // 정상 생존·팝업 포커스는 위에서 이미 반환했고, null·숨김 복구는 기존 모듈 경로를 유지한다.
+        if (reason == "detach" && state.Focused is { } detached &&
+            ActiveExplorer?.TryRecoverBackgroundFocusOrphan(xr, detached) == true)
+        {
+            if (_diagOn) _diagGuardLast = "orphan(detach)>explorer ok";
+            return;
+        }
+        // 탐색기 피어 선택 콜백이 초점을 바꿨다면 최초 고아 판정으로 새 초점을 덮지 않는다.
+        if (reason == "detach" && !ReferenceEquals(FocusManager.GetFocusedElement(xr), state.Focused)) return;
         // 1단: 종전과 같은 모듈 뷰(중앙 콘텐츠). 성공하면 여기서 끝.
         var host = ModuleHost.Content as Control;
+        var fallbackExplorer = reason == "detach" ? ActiveExplorer : null;
+        var acceptFallback = host is not null && state.Focused is { } beforeHost
+            ? fallbackExplorer?.CaptureBackgroundFocusFallback(xr, beforeHost) : null;
         if (host is not null && host.Focus(FocusState.Programmatic))
         {
+            if (ReferenceEquals(fallbackExplorer, ActiveExplorer)) acceptFallback?.Invoke(host);
             if (_diagOn) _diagGuardLast = "orphan(" + reason + ")>host=" + host.GetType().Name + " ok";
             return;
         }
@@ -2743,7 +2757,11 @@ public sealed partial class MainWindow : Window
         // 남긴다. GUARD 문자열 조립은 진단 켜짐일 때만(복구는 전이 시점에만 돌아 비용 무해).
         // 1단 실패 갈래만 host= 접두어를 생략한다 — 사유가 붙으면서 40자 상한을 넘는 유일한
         // 조합이라서다(최장 뷰 타입 15자 기준 "orphan(detach)>VideoPlayerView fail>a:ok" = 40자).
+        // host 실패 뒤 실제 초점이 원래 고아인지 다시 확인한 권한만 앵커 시도에 쓴다.
+        acceptFallback = ReferenceEquals(fallbackExplorer, ActiveExplorer) && state.Focused is { } beforeAnchor
+            ? fallbackExplorer?.CaptureBackgroundFocusFallback(xr, beforeAnchor) : null;
         var anchored = ShellFocusAnchor.Focus(FocusState.Programmatic);
+        if (anchored && ReferenceEquals(fallbackExplorer, ActiveExplorer)) acceptFallback?.Invoke(ShellFocusAnchor);
         if (!_diagOn) return;
         _diagGuardLast = host is null
             ? "orphan(" + reason + ")>anchor " + (anchored ? "ok" : "fail")

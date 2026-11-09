@@ -15,11 +15,22 @@ public sealed partial class ThumbnailExplorer
     private bool _removingParentSelection;
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<SelectorItem, object> _tileHooks = new();
 
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<SelectorItem, object> _tileActivationHooks = new();
+
+    private void EnsureTileActivationHook(SelectorItem item)
+    {
+        if (_tileActivationHooks.TryGetValue(item, out _)) return;
+        _tileActivationHooks.Add(item, new object());
+        // 버튼이 제스처를 처리해도 한 번 받는다. 재사용 뒤 현재 Content는 핸들러에서 다시 확인한다.
+        item.AddHandler(UIElement.DoubleTappedEvent, new DoubleTappedEventHandler(OnItemDoubleTapped), true);
+    }
+
     private void EnsureParentContextMenu(SelectorItem item)
     {
         // 자체 메뉴가 없으면 WinUI 행 클래스가 목록의 빈 공간 메뉴를 대신 연다.
         // 공통 메뉴는 현재 VM이 없는 부모 행에서 Opening 중 동기 취소된다.
         if (item.ContextFlyout is null) AttachContextMenu(item);
+        EnsureTileActivationHook(item);
     }
 
     private static bool IsParentTileSource(object source)

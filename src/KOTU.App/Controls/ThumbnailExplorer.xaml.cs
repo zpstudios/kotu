@@ -279,6 +279,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     internal void ClearSelection()
     {
+        CancelBackgroundFocus();
+        ++_surfaceFocusRevision;
         if (ActiveItems.SelectedItems.Count == 0) return; // 이미 없음 — 잉여 발화도 만들지 않는다
         ActiveItems.SelectedItems.Clear();
     }
@@ -402,7 +404,10 @@ public sealed partial class ThumbnailExplorer : UserControl
     // S4는 셸 S4CenterBackdrop 반투명 — XAML LayoutRoot 주석 참고). 인스턴스 상태 분기 0.
 
     /// <summary>썸네일 그리드로 포커스 이동 (A90: S4 진입 시) — 실패해도 무해(포커스만 안 옮겨진다).</summary>
-    public void FocusGrid() => FocusPresentationItem();
+    public void FocusGrid()
+    {
+        if (!TrySelectFirstRealEntry(replaceSelection: false)) FocusPresentationItem();
+    }
 
     private void KeepGridFocusBeforeRemovingTiles()
     {
@@ -656,6 +661,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     public void ShowEntries(string folder, IReadOnlyList<ExplorerListing.Entry> entries)
     {
+        CancelBackgroundFocus();
+        ++_surfaceFocusRevision;
         _menuGeneration++;
         CancelColumnDrag();
         _columnLayout = ColumnSession?.ReadColumns() ?? _columnLayout;
@@ -728,6 +735,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     public void ShowLoading(string folder)
     {
+        CancelBackgroundFocus();
         SyncSortTools();
         KeepGridFocusBeforeRemovingTiles();
         PreserveLogicalAnchor();
@@ -794,7 +802,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             item.AllowDrop = false;
             item.CanDrag = false;
-            item.IsDoubleTapEnabled = false;
+            item.IsDoubleTapEnabled = true;
             EnsureParentContextMenu(item);
             return;
         }
@@ -1018,6 +1026,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private void EnsureTileHooks(SelectorItem item)
     {
+        EnsureTileActivationHook(item);
         if (item.ContextFlyout is null) AttachContextMenu(item);
         if (_tileHooks.TryGetValue(item, out _)) return;
         _tileHooks.Add(item, new object());
@@ -1030,7 +1039,6 @@ public sealed partial class ThumbnailExplorer : UserControl
         }
         AttachDragDrop(item);    // A94 — 드래그 아웃 + 폴더 타일 드랍
         item.IsDoubleTapEnabled = true; // A85 — 압축 모듈 내부 리스트(ArchiveView)와 같은 명시
-        item.DoubleTapped += OnItemDoubleTapped; // A85 — 더블클릭 열기의 기본 경로
     }
 
     private bool IsCurrentTileRoot(ListViewBase owner, SelectorItem item, ExplorerEntryVm vm, Grid root) =>
@@ -2009,11 +2017,13 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 제외한다(Shift는 제외하지 않는다 — Shift+더블클릭 = 새 창(A24)은 Activate가 해석한다).
     /// 정상 환경에서는 기존 두 판정과 같은 제스처에서 겹쳐 발화하지만 Activate의 _lastActivation
     /// 억제(A85)가 1회로 누른다 — 두 번째 눌림 시점 발화는 탐색기 관례(WM_LBUTTONDBLCLK)와 같다.
-    /// A212: 빈 영역(타일 밖) 눌림의 포커스 정착(FocusGrid)도 여기서 한다 — 구독이 LayoutRoot로
-    /// 올라간 근거·고아 갈래 설명은 생성자와 본문 주석 참고.
+    /// 빈 영역 눌림은 의도만 보관하고 실제 놓기에서 선택·포커스를 정착한다.
+    /// 구독이 LayoutRoot로 올라간 근거·고아 갈래 설명은 생성자와 본문 주석 참고.
     /// </summary>
     private void OnSurfacePointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        CancelBackgroundFocus();
+        ++_surfaceFocusRevision;
         if (IsToolSource(e.OriginalSource)) return;
         if (IsParentTileSource(e.OriginalSource))
         {
@@ -2029,21 +2039,15 @@ public sealed partial class ThumbnailExplorer : UserControl
         }
         if (e.GetCurrentPoint(ActiveItems).Properties.PointerUpdateKind
             != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
-        if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
-        // A212: 빈 영역(타일 밖) 눌림 = 그리드로 포커스 정착. 빈 공간의 히트 대상(LayoutRoot·
-        // 스크롤 표면)은 전부 비포커스 요소라, 이 클릭이 포커스를 XAML 트리 밖/null로 흘리면
-        // 이후 셸 KeyDown(RootLayout 버블 수신 — F11/F12·Enter·Esc 전부)이 아예 안 와 키가
-        // 전멸한다(A135 감사 §표1 34행 확정 갈래·A209 RecoverChromeFocusOrphan과 같은 계보 —
-        // 그쪽은 크롬 붕괴 "전이 시점"만 지키고 클릭 시점은 무방비였다). FocusGrid = S4 진입
-        // (A90)과 같은 정착 관용구 재사용이다. Ctrl 판정보다 앞에 두는 이유: Ctrl+빈 영역
-        // 클릭도 같은 고아 갈래다 — 두 갈래 모두 쌍을 끊고 반환하므로 순서 교환은 A131 의미론
-        // 무변경. 이름변경 편집 상자 위 눌림은 위 TextBox 가드가 먼저 걸러 포커스를 뺏지 않고,
-        // 편집 중 빈 영역 클릭은 포커스 이동의 LostFocus 커밋(ExplorerRenameBox — "딴 곳 클릭 =
-        // 커밋" 탐색기 관례)이 그대로 성립한다.
+        if (IsPresentationTextInput(e.OriginalSource)) return;
         if (EntryFromSource(e.OriginalSource) is not { } entry)
         {
-            ActiveItems.Focus(FocusState.Programmatic);
-            _lastPress = null; // 빈 영역·스크롤바 — 항목 밖 눌림은 쌍을 끊는다
+            _lastClick = null;
+            _lastPress = null;
+            if (!IsExplorerBackground(e.OriginalSource) || _restoringSelection || !IsVisibleSurface()) return;
+            // 편집 중 빈 곳을 누르면 기존 포커스 상실 계약만 수행하고 기본 선택은 끼어들지 않는다.
+            if (ExplorerRenameBox.IsEditing) ActiveItems.Focus(FocusState.Pointer);
+            else ArmBackgroundPress(e.Pointer.PointerId);
             return;
         }
         if (ExplorerFileOps.IsCtrlDown())
@@ -2099,9 +2103,18 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
-        if (IsInCheckBox(e.OriginalSource)) return;
-        if (e.OriginalSource is TextBox) return; // 이름변경 편집 상자(A94 2차) — 더블클릭은 텍스트 선택 몫
-        if (sender is not SelectorItem item || VmOf(item) is not { } vm) return; // A345 배치 3
+        if (IsInCheckBox(e.OriginalSource) || IsPresentationTextInput(e.OriginalSource)) return;
+        if (sender is not SelectorItem item || !IsVisibleSurface()) return;
+        if (item.Content is ExplorerParentTile)
+        {
+            if (!ReferenceEquals(ActiveItems.ContainerFromItem(_parentTile), item)) return;
+            e.Handled = true;
+            _lastClick = null;
+            _lastPress = null;
+            OnParentFolderClick(sender, e);
+            return;
+        }
+        if (VmOf(item) is not { } vm || !ReferenceEquals(ActiveItems.ContainerFromItem(vm), item)) return;
         e.Handled = true;
         _lastClick = null; // 이 제스처를 이룬 클릭 기록이 다음 클릭 쌍 판정에 섞이지 않게
         Activate(vm.Entry);
