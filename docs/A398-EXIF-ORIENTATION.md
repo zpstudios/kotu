@@ -1,6 +1,8 @@
 # A398 EXIF orientation — PNG/TIFF/APNG follow-ups
 
-Current candidate: v0.426.0, extending the released v0.404.0 orientation/layout work with static PNG eXIf, local PNG/TIFF thumbnails and APNG. The user authorized commit, push and release on 2026-11-14. The sections below retain earlier checkpoints; the newest follow-up takes precedence. A398 remains partial for untested source/codec boundaries and the unavailable original reporter file.
+Current release: v0.426.0, product/tag `c2164e19dac3e2d0d8d1dc9e49c369f57db7c1e4`, published2026-11-14 01:32:20 KST and verified Latest. This extends the released v0.404.0 orientation/layout work with static PNG eXIf, local PNG/TIFF thumbnails and APNG. The user authorized commit, push and release on2026-11-14. Earlier checkpoints remain below; the newest follow-up takes precedence. A398 remains partial for untested source/codec boundaries and the unavailable original reporter file.
+
+Release verification: [build43462225602](https://github.com/zpstudios/kotu/actions/runs/43462225602) and [release43462225423](https://github.com/zpstudios/kotu/actions/runs/43462225423) succeeded on attempt1, each1,406/1,406 tests across8 assemblies with normal managed build0 warnings/errors. Recording-engine compilation/contract, COM transfer, package startup, installer and Standalone preservation/normal-exit gates passed. [Releasev0.426.0](https://github.com/zpstudios/kotu/releases/tag/v0.426.0) has8 uploaded assets; the exact tag/target, Latest, published notes, three downloaded feed SHA256 values and current full/delta package hashes/sizes match. The full installer binaries were not downloaded and re-executed on this PC; installation evidence is the remote gate. Local evidence: `github-build-426.log`, `github-release-426.log`, `release-426-verification.json` under `artifacts/a398-png/`.
 
 ## Local thumbnails and APNG follow-up (2026-11-14)
 
