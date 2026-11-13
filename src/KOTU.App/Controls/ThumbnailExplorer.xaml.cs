@@ -1299,7 +1299,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     // A352 배치 4: 이미지 확장자 판정(IsImageFile — ImageFolderNavigator.SupportedExtensions
     // 재사용, A93)을 삭제했다. 마지막 사용처가 "클라우드 전용 이미지만 캐시 전용 썸네일" 갈래
     // 였는데 그 갈래 자체가 사라져(아래 문단) 이미지인지 여부는 이 표면의 미리보기 선택에 더는
-    // 영향을 주지 않는다 — 폴더가 아니면 전부 같은 길로 간다.
+    // 영향을 주지 않았다. A398은 로컬 PNG/APNG/TIFF에만 워커 디코드를 추가한다.
+    // 셸 결과에 다시 회전하지 않고 원본의 방향을 적용한 BGRA를 기존 WriteableBitmap으로 보낸다.
+    // 캐시 전용 요청·클라우드 placeholder는 원본을 열지 않으며 URI 기반 XAML 디코드는 쓰지 않는다.
 
     // A352 배치 2: 로컬 이미지 원본 전용 갈래(StartImagePreview — BitmapImage.UriSource +
     // DecodePixelWidth 직접 디코드, A93)를 삭제했다. 근거 = A352 트레이스
@@ -1781,6 +1783,13 @@ public sealed partial class ThumbnailExplorer : UserControl
             CloudFileAccess.CanReadContent(path, listedPlaceholder, cancellation), wantAudioInfo);
         var cachedOnly = access.CachedOnly;
         wantAudioInfo = access.ReadAudio;
+        if (!cachedOnly && LocalImageThumbnail.Supports(path))
+        {
+            var local = LocalImageThumbnail.Read(path, listedPlaceholder, cachedOnly, target, cancellation);
+            if (local is not null) return new(local, null, ThumbnailOutcome.Available);
+            // Attributes changed after the initial access plan: stay on the cached-only route.
+            cachedOnly = true;
+        }
         var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path), cancellation);
         string? info = null;
         var audioFailed = false;

@@ -119,7 +119,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     /// <summary>
     /// A211 배치 2: 인쇄 페이지의 비트맵 재료 = <b>지금 표시 중인 이미지의 인코딩 바이트</b>
-    /// (일반 경로는 원본 파일 바이트, psd는 Magick이 만든 PNG 바이트). 표시 상태와 한 몸이라
+    /// (PNG는 필요 시 메모리에서 방향을 보정하고, psd는 Magick이 만든 PNG를 사용한다). 표시 상태와 한 몸이라
     /// <c>ImageControl.Source</c>와 <b>같은 자리에서 함께 세우고 함께 비운다</b>.
     /// <para>
     /// 표시용 <c>BitmapImage</c>를 인쇄 페이지의 Image에 그대로 물리지 않는 이유(소스 공유 판정):
@@ -179,14 +179,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// <summary>
     /// 이웃 선읽기 캐시 (A194): 경로 → ReadImageFile 결과의 Task. <b>현재 파일의 양옆 각 1장,
     /// 최대 2건</b>만 담고 양옆을 벗어나면 즉시 버린다(PrunePreloadCache) — 메모리는 인코딩
-    /// 원본 바이트 그대로라 대형 이미지 2장 분량까지 허용(등재 확정). Task를 담는 이유:
+    /// 표시용 바이트로 대형 이미지 2장 분량까지 허용(등재 확정). Task를 담는 이유:
     /// 선읽기가 아직 워커 큐에 있을 때 항해가 오면 표시 경로가 <b>같은 Task를 await</b>해
     /// 중복 디코드 없이 결과를 받는다(직렬 큐라 표시보다 먼저 완료된다). 표시는 항상
     /// LoadCurrentAsync가 캐시를 조회하는 단방향 — 선읽기 완료가 화면을 직접 만지지 않는다.
     /// 모든 접근은 UI 스레드에서만(항해·선읽기 후속부 전부 UI 문맥 — 경쟁 없음).
     /// </summary>
-    private readonly Dictionary<string, Task<(byte[] Data, uint Width, uint Height,
-        string Size, string Kind, string Exif)>> _preloadCache = new(StringComparer.OrdinalIgnoreCase);
+    private sealed record LoadedImage(byte[] Data, uint Width, uint Height,
+        string Size, string Kind, string Exif, ApngImage? Animation);
+    private readonly Dictionary<string, Task<LoadedImage>> _preloadCache = new(StringComparer.OrdinalIgnoreCase);
 
     public ImageViewerView(OpenContext context)
     {
@@ -209,6 +210,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         KeyDown += OnImageCopyKeyDown;
         Unloaded += (_, _) =>
         {
+            StopAnimation();
             _copyGate.Invalidate();
             _copyReady = false;
             UpdateImageCopyMenuState();
@@ -640,6 +642,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     private async Task LoadCurrentAsync()
     {
+        StopAnimation();
         var loadSequence = ++_loadSequence;
         _copyReady = false;
         UpdateImageCopyMenuState();
@@ -666,10 +669,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             }
 
             // 파일 읽기와 메타데이터 디코드(EXIF 보정 후 해상도·A9 메타 요약)는 워커에서(A42).
-            // BitmapImage가 EXIF 회전·반전을 적용하므로 원본 바이트는 그대로 두고 중복 변환하지 않는다.
+            // JPEG/TIFF는 BitmapImage가 EXIF를 적용하고, PNG는 워커에서 표시용 바이트만 보정한다.
+            // APNG의 첫 프레임은 복사·인쇄에 쓰고 애니메이션은 별도 워커가 보정된 캔버스를 전달한다.
             // A194: 이웃 선읽기 캐시에 있으면(완료·진행 중 모두 Task) 그 결과를 받아 디코드를
             // 생략한다 — 진행 중이면 같은 Task를 await(직렬 큐라 새로 넣는 것보다 먼저 끝난다).
-            var (data, width, height, size, kind, exif) =
+            var (data, width, height, size, kind, exif, animation) =
                 _preloadCache.TryGetValue(path, out var preloaded)
                     ? await preloaded
                     : await Worker.Run(_ => ReadImageFile(path));
@@ -701,6 +705,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             // A54 → A191: 트레이 = 해상도 2줄. EXIF 보정 후 크기와 수동 회전이 모두 확정된
             // 뒤 발화한다(위 대입 순서 유지 — 앞서 쏘면 직전 파일 해상도가 그려진다).
             TrayStatusChanged?.Invoke();
+            if (animation is not null) StartAnimation(animation, path, loadSequence);
             SchedulePreloads(); // A194 — 표시 완료 후에야 이웃 선읽기(표시 로드보다 후순위)
         }
         catch (Exception ex)
@@ -782,8 +787,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// A149: 조립된 한 줄 대신 조각으로 돌려준다 — 표시 순서에 순번이 끼어들고(탐색마다 변한다)
     /// 해상도는 이미 별도 필드라, 조립은 표시 시점(BuildMetaText)에서만 한다.
     /// </summary>
-    private static (byte[] Data, uint Width, uint Height,
-        string Size, string Kind, string Exif) ReadImageFile(string path)
+    private static LoadedImage ReadImageFile(string path)
     {
         // A353: File.ReadAllBytes는 FileShare.Read라 다른 프로세스가 쓰기로 잡고 있으면
         // 열기 자체가 실패한다 — 공유 읽기로 열고 길이만큼 한 번에 채운다(DocumentView와 같은 관용구).
@@ -796,6 +800,9 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
         uint width = 0, height = 0;
         var size = FormatSize(data.LongLength);
+        var animation = ApngImage.Parse(data);
+        data = (animation is null ? PngExifOrientation.NormalizeAsync(data) : animation.FirstFrameAsync())
+            .GetAwaiter().GetResult();
         string kind;
         var exifSummary = string.Empty;
         try
@@ -812,7 +819,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             // 메타데이터를 못 읽어도 표시는 계속 시도한다 — 용량·확장자만이라도 보여준다.
             kind = FormatKind(path, 0);
         }
-        return (data, width, height, size, kind, exifSummary);
+        return new(data, width, height, size, kind, exifSummary, animation);
     }
 
     // ---------- 이웃 선읽기 (A194) ----------
@@ -970,7 +977,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     /// <summary>
     /// EXIF 보정된 이미지 위에 추가하는 R 키 누적 회전(도, 0/90/180/270).
-    /// 표시·복사·인쇄와 축 교환이 같은 값을 사용한다. BitmapImage와 복사 디코더가
+    /// 표시·복사·인쇄와 축 교환이 같은 값을 사용한다. PNG 보정 또는 네이티브 디코더가
     /// 이미 처리한 EXIF 회전·반전은 여기에 더하지 않는다.
     /// </summary>
     private int TotalRotation => _userRotation;
@@ -1023,6 +1030,27 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         ImageControl.ClearValue(FrameworkElement.HeightProperty);
         ImageControl.MaxWidth = double.PositiveInfinity;
         ImageControl.MaxHeight = double.PositiveInfinity;
+
+        // WriteableBitmap의 네이티브 DesiredSize는 고배율에서 반복 확대되거나 MaxHeight를
+        // 넘길 수 있다. 애니메이션은 두 축을 함께 지정하고 수동 회전 전 크기로 맞춘다.
+        if (ImageControl.Source is WriteableBitmap && _pixelWidth > 0 && _pixelHeight > 0)
+        {
+            var scale = XamlRoot?.RasterizationScale ?? 1.0;
+            var naturalWidth = _pixelWidth / scale;
+            var naturalHeight = _pixelHeight / scale;
+            var widthLimit = swapped ? vh : vw;
+            var heightLimit = swapped ? vw : vh;
+            var ratio = _fitMode switch
+            {
+                FitMode.Contain => Math.Min(1, Math.Min(widthLimit / naturalWidth, heightLimit / naturalHeight)),
+                FitMode.FitWidth => swapped ? heightLimit / naturalHeight : widthLimit / naturalWidth,
+                FitMode.FitHeight => swapped ? widthLimit / naturalWidth : heightLimit / naturalHeight,
+                _ => 1,
+            };
+            ImageControl.Width = naturalWidth * ratio;
+            ImageControl.Height = naturalHeight * ratio;
+            return;
+        }
 
         switch (_fitMode)
         {

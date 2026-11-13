@@ -19,6 +19,8 @@ internal static class ImageClipboardSnapshot
             270 => BitmapRotation.Clockwise270Degrees,
             _ => throw new ArgumentOutOfRangeException(nameof(rotation)),
         };
+        source = ApngImage.Parse(source) is { } animation
+            ? await animation.FirstFrameAsync() : await PngExifOrientation.NormalizeAsync(source);
         using var input = new MemoryStream(source, writable: false);
         var decoder = await BitmapDecoder.CreateAsync(input.AsRandomAccessStream());
         var swapped = rotation is 90 or 270;

@@ -1339,6 +1339,13 @@ public sealed partial class ExplorerPane : UserControl
     {
         // A399: 휴면 그리드도 요청 직전 상태를 확인한다. 이 함수는 FetchPool 워커에서만 호출된다.
         cachedOnly = !CloudFileAccess.CanReadContent(path, cachedOnly, default);
+        if (!cachedOnly && Controls.LocalImageThumbnail.Supports(path))
+        {
+            var local = Controls.LocalImageThumbnail.Read(path, false, cachedOnly,
+                new Controls.ThumbnailRaster.Target(96, 96), default);
+            if (local is not null) return Controls.LocalImageThumbnail.Encode(local);
+            cachedOnly = true;
+        }
         var file = ShellFetch.WaitOrThrow(StorageFile.GetFileFromPathAsync(path));
         using var thumb = ShellFetch.WaitOrThrow(cachedOnly
             ? file.GetThumbnailAsync(ThumbnailMode.SingleItem, 96, ThumbnailOptions.ReturnOnlyIfCached)

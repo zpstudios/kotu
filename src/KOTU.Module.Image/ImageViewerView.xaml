@@ -46,7 +46,7 @@
                     VerticalAlignment="Center"
                     RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform>
-                        <!-- BitmapImage가 EXIF를 보정한 뒤 사용자 회전(R 키)만 적용 -->
+                        <!-- PNG 메모리 보정 또는 BitmapImage의 EXIF 보정 뒤 사용자 회전(R 키)만 적용 -->
                         <!-- 이름 주의: "Rotation"은 UIElement.Rotation을 가려 CS0108 발생 -->
                         <RotateTransform x:Name="RotationTransform" />
                     </Image.RenderTransform>
