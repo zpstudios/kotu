@@ -6,8 +6,15 @@ using KOTU.Core.Contracts;
 
 namespace KOTU.Module.Document;
 
-public sealed partial class DocumentView : IContentLifetime, IEditorEscapeSource, IEditorPanelShortcutSource
+public sealed partial class DocumentView : IContentLifetime, IEditorEscapeSource, IEditorPanelShortcutSource, IEditorFullscreenShortcutSource
 {
+    public event Action<EditorFullscreenShortcut>? EditorFullscreenShortcutRequested;
+    public bool OwnsNativeFullscreenShortcutFocus => !_contentReleased && IsLoaded &&
+        !_viewTransitionInProgress && !_virtualCloseInProgress && !_virtualSaveBarrierInProgress &&
+        XamlRoot is { } root && FocusManager.GetFocusedElement(root) is { } focused &&
+        ((ReferenceEquals(focused, EditorBox) && _virtualEditor is null && IsActiveEditorAvailable && !_editorComposing) ||
+         (ReferenceEquals(focused, FindBox) && !_findComposing) ||
+         (ReferenceEquals(focused, ReplaceBox) && !_replaceComposing));
     public event Action<EditorPanelShortcut>? EditorPanelShortcutRequested;
     public event Action? EditorEscapeRequested;
     private VirtualEditorPane? _virtualEditor;
@@ -77,6 +84,13 @@ public sealed partial class DocumentView : IContentLifetime, IEditorEscapeSource
             if (ReferenceEquals(pane, _virtualEditor) && !_contentReleased && IsLoaded &&
                 IsActiveEditorAvailable && pane.OwnsPanelShortcutFocus)
                 EditorPanelShortcutRequested?.Invoke(request);
+        };
+        pane.FullscreenShortcutRequested += request =>
+        {
+            bool Current() => ReferenceEquals(pane, _virtualEditor) && !_contentReleased && IsLoaded &&
+                IsActiveEditorAvailable && !_viewTransitionInProgress && !_virtualCloseInProgress &&
+                !_virtualSaveBarrierInProgress && pane.OwnsPanelShortcutFocus;
+            if (Current()) EditorFullscreenShortcutRequested?.Invoke(request.WithLifetime(Current));
         };
         pane.Shortcut += key => { if (ReferenceEquals(pane, _virtualEditor)) OnVirtualShortcut(key); };
         pane.ActionFailed += reason => { if (ReferenceEquals(pane, _virtualEditor)) _ = ShowMessageAsync("Could not edit text", reason); };

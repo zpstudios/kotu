@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +45,12 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      - name: Build patched recording engine
+        shell: pwsh
+        run: |
+          ./eng/Test-RecordingEngineContract.ps1
+          ./eng/Build-RecordingEngine.ps1
 
       - name: NuGet 복원
         run: dotnet restore KOTU.sln -p:Platform=x64

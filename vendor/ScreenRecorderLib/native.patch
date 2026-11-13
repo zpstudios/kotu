@@ -1,0 +1,122 @@
+diff --git a/baseline/ScreenRecorderLibNative/RecordingManager.cpp b/candidate/ScreenRecorderLibNative/RecordingManager.cpp
+index 0f72681..f72dcf2 100644
+--- a/baseline/ScreenRecorderLibNative/RecordingManager.cpp
++++ b/candidate/ScreenRecorderLibNative/RecordingManager.cpp
+@@ -494,6 +494,42 @@ void RecordingManager::SetRecordingCompleteStatus(_In_ REC_RESULT result, _In_ s
+ 	}
+ }
+ 
++static bool RequiresInitialWindowFrame(const std::vector<RECORDING_SOURCE *> &sources)
++{
++	return std::any_of(sources.begin(), sources.end(), [](const RECORDING_SOURCE *source) {
++		return source && source->Type == RecordingSourceType::Window && source->IsVideoCaptureEnabled.value_or(true);
++	});
++}
++
++static CAPTURE_RESULT WaitForInitialWindowFrame(ScreenCaptureManager *capture, HANDLE errorEvent,
++	const Concurrency::cancellation_token &token)
++{
++	const ULONGLONG started = GetTickCount64();
++	while (true) {
++		if (token.is_canceled())
++			return CAPTURE_RESULT(HRESULT_FROM_WIN32(ERROR_CANCELLED), L"Window recording was canceled before its first frame.");
++		if (WaitForSingleObjectEx(errorEvent, 0, FALSE) == WAIT_OBJECT_0)
++			return CAPTURE_RESULT(E_FAIL, L"Window capture failed before its first frame.");
++		const ULONGLONG elapsed = GetTickCount64() - started;
++		if (elapsed >= 5000)
++			return CAPTURE_RESULT(HRESULT_FROM_WIN32(ERROR_TIMEOUT), L"The selected window did not provide a frame within 5 seconds. Show the window and try again.");
++		const INT64 slice = static_cast<INT64>(std::min<ULONGLONG>(100, 5000 - elapsed)) * 10000;
++		// Frame은 capture 소유의 빌린 포인터이므로 보관하거나 Release하지 않는다.
++		CAPTURED_FRAME frame{};
++		const HRESULT hr = capture->AcquireNextFrame(slice, slice, token, &frame);
++		if (token.is_canceled())
++			return CAPTURE_RESULT(HRESULT_FROM_WIN32(ERROR_CANCELLED), L"Window recording was canceled before its first frame.");
++		if (FAILED(hr) && hr != DXGI_ERROR_WAIT_TIMEOUT)
++			return CAPTURE_RESULT(hr, L"Window capture failed before its first frame.");
++		if (WaitForSingleObjectEx(errorEvent, 0, FALSE) == WAIT_OBJECT_0)
++			return CAPTURE_RESULT(E_FAIL, L"Window capture failed before its first frame.");
++		if (GetTickCount64() - started >= 5000)
++			return CAPTURE_RESULT(HRESULT_FROM_WIN32(ERROR_TIMEOUT), L"The selected window did not provide a frame within 5 seconds. Show the window and try again.");
++		if (SUCCEEDED(hr) && capture->IsInitialFrameWriteComplete())
++			return CAPTURE_RESULT(S_OK);
++	}
++}
++
+ REC_RESULT RecordingManager::StartRecorderLoop(_In_ const std::vector<RECORDING_SOURCE *> &sources, _In_ const std::vector<RECORDING_OVERLAY *> &overlays, _In_opt_ IStream *pStream)
+ {
+ 	std::optional<PTR_INFO> pPtrInfo = std::nullopt;
+@@ -519,6 +555,14 @@ REC_RESULT RecordingManager::StartRecorderLoop(_In_ const std::vector<RECORDING_
+ 
+ 	SetViewPort(m_DxResources.Context, static_cast<float>(videoOutputFrameSize.cx), static_cast<float>(videoOutputFrameSize.cy));
+ 
++	cancellation_token token = m_TaskWrapperImpl->m_RecordTaskCts.get_token();
++	if (RequiresInitialWindowFrame(sources)) {
++		// 파일과 미디어 시계는 실제 원본 쓰기가 확인된 뒤에만 시작한다.
++		const auto initial = WaitForInitialWindowFrame(m_CaptureManager.get(), ErrorEvent, token);
++		if (FAILED(initial.RecordingResult)) return initial;
++	}
++	if (token.is_canceled())
++		return CAPTURE_RESULT(HRESULT_FROM_WIN32(ERROR_CANCELLED), L"Recording was canceled before output started.");
+ 	if (recorderMode == RecorderModeInternal::Video) {
+ 		m_AudioManager->StartCapture();
+ 		m_AudioManager->PauseCapture();
+@@ -531,8 +575,6 @@ REC_RESULT RecordingManager::StartRecorderLoop(_In_ const std::vector<RECORDING_
+ 	}
+ 	m_AudioManager->ResumeCapture();
+ 
+-	cancellation_token token = m_TaskWrapperImpl->m_RecordTaskCts.get_token();
+-
+ 	while (true)
+ 	{
+ 		if (token.is_canceled()) {
+diff --git a/baseline/ScreenRecorderLibNative/WindowsGraphicsCapture.cpp b/candidate/ScreenRecorderLibNative/WindowsGraphicsCapture.cpp
+index d80deec..32e4a81 100644
+--- a/baseline/ScreenRecorderLibNative/WindowsGraphicsCapture.cpp
++++ b/candidate/ScreenRecorderLibNative/WindowsGraphicsCapture.cpp
+@@ -31,6 +31,7 @@ WindowsGraphicsCapture::WindowsGraphicsCapture() :
+ 	m_session(nullptr),
+ 	m_LastFrameRect{},
+ 	m_HaveDeliveredFirstFrame(false),
++	m_HasWrittenNativeFrame(false),
+ 	m_IsInitialized(false),
+ 	m_MouseManager(nullptr),
+ 	m_QPCFrequency{ 0 },
+@@ -180,6 +181,7 @@ HRESULT WindowsGraphicsCapture::WriteNextFrameToSharedSurface(_In_ DWORD timeout
+ 			Box.bottom = desc.Height - textureOffsetY;
+ 		}
+ 		m_DeviceContext->CopySubresourceRegion(pSharedSurf, 0, textureOffsetX, textureOffsetY, 0, pProcessedTexture, 0, &Box);
++		m_HasWrittenNativeFrame = true;
+ 		m_LastFrameRect = finalFrameRect;
+ 		m_CursorOffsetX = cursorOffsetX;
+ 		m_CursorOffsetY = cursorOffsetY;
+@@ -425,6 +427,8 @@ HRESULT WindowsGraphicsCapture::ProcessRecordingTimeout(_Inout_ GRAPHICS_FRAME_D
+ 			return E_ABORT;
+ 		}
+ 		else if (IsIconic(m_RecordingSource->SourceWindow)) {
++			// 첫 실제 프레임 전에는 최소화 대체 화면을 준비 완료로 취급하지 않는다.
++			if (!m_HasWrittenNativeFrame) return DXGI_ERROR_WAIT_TIMEOUT;
+ 			//IsIconic means the window is minimized, and not rendered, so a blank placeholder texture is used instead.
+ 			SIZE windowSize;
+ 			if (!pData->Frame) {
+@@ -566,7 +570,8 @@ HRESULT WindowsGraphicsCapture::GetNextFrame(_In_ DWORD timeoutMillis, _Inout_ G
+ 			hr = S_OK;
+ 		}
+ 		else {
+-			hr = DXGI_ERROR_WAIT_TIMEOUT;
++			// 빈 프레임 풀도 기존 시간 초과 복구 경로를 거친다.
++			hr = ProcessRecordingTimeout(pData);
+ 		}
+ 	}
+ 	else if (result == WAIT_TIMEOUT) {
+diff --git a/baseline/ScreenRecorderLibNative/WindowsGraphicsCapture.h b/candidate/ScreenRecorderLibNative/WindowsGraphicsCapture.h
+index 0a67aaf..b4d25f4 100644
+--- a/baseline/ScreenRecorderLibNative/WindowsGraphicsCapture.h
++++ b/candidate/ScreenRecorderLibNative/WindowsGraphicsCapture.h
+@@ -38,6 +38,7 @@ private:
+ 	bool m_IsInitialized;
+ 	HANDLE m_NewFrameEvent;
+ 	bool m_HaveDeliveredFirstFrame;
++	bool m_HasWrittenNativeFrame;
+ 	std::atomic<bool> m_closed;
+ 	RECT m_LastFrameRect;
+ 	GRAPHICS_FRAME_DATA m_CurrentData;

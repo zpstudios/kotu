@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
         with:
@@ -87,6 +87,13 @@ jobs:
         if: steps.ver.outputs.skip != 'true'
         shell: pwsh
         run: node src/KOTU.Module.Document/EditorSource/visual.test.mjs
+
+      - name: Build patched recording engine
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          ./eng/Test-RecordingEngineContract.ps1
+          ./eng/Build-RecordingEngine.ps1
 
       - name: NuGet 복원
         if: steps.ver.outputs.skip != 'true'

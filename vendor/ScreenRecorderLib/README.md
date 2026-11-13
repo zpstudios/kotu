@@ -1,0 +1,26 @@
+# ScreenRecorderLib source pin
+
+Upstream: [ScreenRecorderLib v7.0.1](https://github.com/sskodje/ScreenRecorderLib/tree/646383234187efd3854e6b1069612b80c3ab9981), commit `646383234187efd3854e6b1069612b80c3ab9981`.
+The 97 source/resource/license files needed by its x64 native and C++/CLI projects are retained here. `source-manifest.json` records the upstream Git blob, upstream SHA-256, and current SHA-256 for each file. `.gitattributes` preserves their exact bytes on checkout. No compiled engine is checked in.
+
+`native.patch` contains the only functional changes to upstream, in three files:
+
+- An empty Windows Graphics Capture frame pool processes the existing timeout/restart path instead of bypassing it.
+- A window source becomes initialized only after a real native frame is written to its shared surface. Legitimately black pixels qualify. A minimized-window placeholder cannot qualify as its first frame; later restarts retain the initialized state.
+- An enabled window source must complete that first write before audio and the output clock start. Cancellation, capture failure, or a nominal five-second deadline exits through existing cleanup. A blocked operating-system capture call is not forcibly terminated by that deadline. Screen-only and camera-only recordings retain their previous startup behavior.
+
+This source contains no diagnostic counters, preview hooks, foreground activation, or pixel-brightness gate. The KOTU recording module's separate software-transform policy remains in managed code.
+
+Build with `eng/Build-RecordingEngine.ps1` before building or publishing KOTU. The script supports VS 2022 discovery and explicit portable tool roots; it never installs tools or changes machine environment variables. The native and managed flags mirror upstream Release/x64, with `/GL-` for direct compilation and explicit Framework 4.8 references. The existing package is a Framework 4.8 mixed-mode assembly consumed by the .NET 8 application. Building a different CLR variant would change its contract.
+
+Two generated build-only inputs preserve the shipped assembly contract: `AssemblyVersion` is pinned to `1.0.9745.611` instead of upstream's wildcard, and the normal MSBuild Framework 4.8 attribute is generated explicitly. Neither changes these pinned source files. The public assembly identity is unchanged. The DLL records only `ScreenRecorderLib.pdb` as its debug-file reference. PDBs and detailed compiler logs are generated under ignored build output; managed publish may also copy the adjacent PDB as a related file.
+
+Two additional build-only header prefixes prevent native inline logging from embedding private build directories: `cleanup.h` receives `#line 1 "ScreenRecorderLibNative\\cleanup.h"`, and `CMFSinkWriterCallback.h` receives `#line 1 "ScreenRecorderLibNative\\CMFSinkWriterCallback.h"`. Each UTF-8 directive and CRLF is prepended to the exact original bytes in the temporary build copy. Original line 1 remains logical line 1. The pinned vendor files are untouched; the build receipt records both prefixes and original hashes. This is documented [C/C++ source-name metadata](https://learn.microsoft.com/en-us/cpp/preprocessor/hash-line-directive-c-cpp), not a runtime capture change. It is an explicit generated-input difference from the earlier private native acceptance build. Relative include paths alone did not remove these strings in actual native object sections; the final DLL must still pass the strict UTF-8/UTF-16 private-path scan.
+
+Both consuming projects exclude the NuGet package's assets, including its `InjectReference` target, and reference the built engine explicitly. The NuGet 7.0.1 declaration retains the dependency provenance. The source manifest, build procedure, output identity/hash, resolved reference, and published DLL/license are checked. Missing or stale builds fail instead of falling back to the package DLL.
+
+Every fresh native build runs `eng/Test-RecordingEngineNative.ps1`: it extracts the actual patched gate and WGC statements, compiles a control-flow harness with warnings as errors, and checks 17 cases including the previous empty-pool behavior, real black-frame eligibility, placeholder rejection, cancellation, and the initial deadline. OS capture and time are simulated in this harness; it does not replace native recording/decode acceptance. Extraction also checks that the gate precedes audio/output startup and that initialization is retained across restarts. Changes to the harness invalidate the build receipt and require a new test/build.
+
+CI uses `windows-2022` for its VS 2022 v143 C++/CLI and ATL toolchain. See the [official Windows 2022 runner inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md) and [runner label table](https://github.com/actions/runner-images/blob/main/README.md); `windows-latest` can move to a newer Visual Studio generation. Hosted images still evolve, so the build records actual compiler and SDK versions rather than claiming byte-for-byte reproducibility across toolchain updates.
+
+Upstream's MIT license is retained verbatim in `LICENSE` and copied into application packages as `licenses/ScreenRecorderLib-LICENSE.txt`. The manifest covers upstream inputs and the three patched files; this explanation, the patch, and build scripts are auxiliary repository files.

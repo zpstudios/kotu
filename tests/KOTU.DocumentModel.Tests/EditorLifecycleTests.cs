@@ -5,6 +5,23 @@ namespace KOTU.DocumentModel.Tests;
 public class EditorLifecycleTests
 {
     [Fact]
+    public void ReattachingSurfaceInvalidatesPreviouslyCapturedAttachment()
+    {
+        var surface = new EditorSurfaceLifetime();
+        surface.Attach();
+        var attachment = surface.AttachmentGeneration;
+        surface.Attach();
+        Assert.Equal(attachment, surface.AttachmentGeneration);
+        surface.Detach(); surface.Attach();
+        Assert.NotEqual(attachment, surface.AttachmentGeneration);
+        surface.Release();
+        var released = surface.AttachmentGeneration;
+        surface.Attach();
+        Assert.False(surface.IsAttached);
+        Assert.Equal(released, surface.AttachmentGeneration);
+    }
+
+    [Fact]
     public async Task TransitionWaitsForLockThenCurrentSnapshot()
     {
         var locked = new TaskCompletionSource();

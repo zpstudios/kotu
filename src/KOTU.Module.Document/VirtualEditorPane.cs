@@ -203,6 +203,7 @@ internal sealed partial class VirtualEditorPane : UserControl
                 if (steps is >= -100 and <= 100) ZoomRequested?.Invoke(steps);
             }
             else if (kind == "panel-shortcut") HandlePanelShortcut(root);
+            else if (kind == "fullscreen-shortcut") HandleFullscreenShortcut(root);
             else if (kind == "shortcut") Shortcut?.Invoke(root.GetProperty("key").GetString()!);
             else if (kind == "context") ShowEditMenu(root);
             else if (kind == "clipboard") _ = HandleClipboardAsync(root.Clone());

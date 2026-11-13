@@ -152,6 +152,8 @@ internal sealed class ScreenRecordingSession : IRecordingSession
             options.VideoEncoderOptions.Framerate = 30;
             options.VideoEncoderOptions.IsFixedFramerate = true;
             options.VideoEncoderOptions.Encoder = new H264VideoEncoder();
+            // 하드웨어 변환을 끈 검수에서는 기본 경로의 샘플 할당 실패가 재현되지 않았다.
+            options.VideoEncoderOptions.IsHardwareEncodingEnabled = false;
             options.VideoEncoderOptions.IsThrottlingDisabled = false;
             _recorder = Recorder.CreateRecorder(options);
             _recorder.OnStatusChanged += OnStatusChanged;

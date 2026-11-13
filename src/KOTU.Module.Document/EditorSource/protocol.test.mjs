@@ -101,6 +101,7 @@ function harness(text = 'a', readOnly = false) {
     scroll(top) { scrollTop = top; scroll(); },
     frame() { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(callback => callback()); },
     blur() { windowEvents.blur(); },
+    unload() { windowEvents.unload(); },
     visibility(value) { document.visibilityState = value; documentEvents.visibilitychange(); }
   };
 }
@@ -427,3 +428,46 @@ panelGuards.key('f', { ctrlKey: true }); assert.equal(panelGuards.messages().at(
 panelGuards.key('Escape'); assert.equal(panelGuards.messages().at(-1).key, 'escape');
 panelGuards.keyup('Escape'); assert.equal(panelGuards.messages().at(-1).key, 'escape-released');
 console.log('PASS: F11/F12 typed panel requests preserve all modifiers/repeats in Editing/Viewing; composition/focus/allowlist guards and Ctrl+F/Escape unchanged');
+
+for (const readOnly of [false, true]) {
+  const fullscreen = harness('one\ntwo', readOnly); fullscreen.send({ kind: 'activate' });
+  if (!readOnly) fullscreen.key('Tab'); // an actual edit that must remain the next Undo
+  fullscreen.select(2, 1);
+  const before = { text: fullscreen.text, selection: fullscreen.selection, version: fullscreen.version,
+    undoStops: fullscreen.undoStops, textReads: fullscreen.textReads };
+  for (const repeat of [false, true, true]) {
+    assert.equal(fullscreen.key('Enter', { altKey: true, repeat }), 1, 'Alt+Enter must suppress Monaco newline/default actions');
+    assert.deepEqual(fullscreen.messages().at(-1), { epoch: 'test', kind: 'fullscreen-shortcut', version: readOnly ? 1 : 2,
+      repeat, control: false, shift: false, alt: true, meta: false });
+  }
+  assert.deepEqual({ text: fullscreen.text, selection: fullscreen.selection, version: fullscreen.version,
+    undoStops: fullscreen.undoStops, textReads: fullscreen.textReads }, before,
+    'fullscreen and held repeats preserve text, reversed selection, revision and Undo grouping without snapshotting');
+  assert.equal(fullscreen.key('Enter'), 0, 'plain Enter continues to Monaco');
+  for (let mask = 1; mask < 8; mask++)
+    assert.equal(fullscreen.key('Enter', { altKey: true, ctrlKey: !!(mask & 1), shiftKey: !!(mask & 2), metaKey: !!(mask & 4) }), 0);
+  assert.equal(fullscreen.messages().filter(m => m.kind === 'fullscreen-shortcut').length, 3);
+  if (!readOnly) {
+    menuAction(fullscreen, 'undo');
+    assert.equal(fullscreen.text, 'one\ntwo', 'one Undo still reverses the edit made before fullscreen');
+    menuAction(fullscreen, 'redo'); assert.equal(fullscreen.text, before.text);
+  }
+}
+const fullscreenGuards = harness('typing'); fullscreenGuards.send({ kind: 'activate' });
+const altEnter = modifiers => fullscreenGuards.key('Enter', { altKey: true, ...modifiers });
+fullscreenGuards.compose(true); assert.equal(altEnter(), 0);
+fullscreenGuards.compose(false);
+assert.equal(altEnter({ isComposing: true }), 0);
+assert.equal(altEnter({ keyCode: 229 }), 0);
+fullscreenGuards.focus(false, true); assert.equal(altEnter(), 0);
+fullscreenGuards.focus(true, false); assert.equal(altEnter(), 0);
+fullscreenGuards.focus(true, true);
+fullscreenGuards.visibility('hidden'); assert.equal(altEnter(), 0);
+fullscreenGuards.visibility('visible');
+fullscreenGuards.send({ kind: 'freeze', id: 950, expectedVersion: 1 }); assert.equal(altEnter(), 0);
+fullscreenGuards.send({ kind: 'release', freezeId: 950 });
+assert.equal(fullscreenGuards.messages().filter(m => m.kind === 'fullscreen-shortcut').length, 0);
+assert.equal(altEnter(), 1, 'restored editor owns a new press');
+fullscreenGuards.unload(); assert.equal(altEnter(), 0);
+assert.equal(fullscreenGuards.messages().filter(m => m.kind === 'fullscreen-shortcut').length, 1);
+console.log('PASS: exact Alt+Enter capture/repeats, plain Enter and modifier pass-through, text/selection/Undo preservation, IME/focus/hidden/frozen/disposal guards');

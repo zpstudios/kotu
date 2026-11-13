@@ -29,6 +29,7 @@ public sealed class ContentContractSession : IDisposable
         if (content is ITrayStatusProvider sourceTrayStatusChanged) sourceTrayStatusChanged.TrayStatusChanged += OnTrayStatusChanged;
         if (content is IPlaybackStateSource sourcePlaybackStateChanged) sourcePlaybackStateChanged.PlaybackStateChanged += OnPlaybackStateChanged;
         if (content is IEditorPanelShortcutSource panel) panel.EditorPanelShortcutRequested += OnEditorPanelShortcutRequested;
+        if (content is IEditorFullscreenShortcutSource fullscreen) fullscreen.EditorFullscreenShortcutRequested += OnEditorFullscreenShortcutRequested;
         if (content is IEditorEscapeSource escape) escape.EditorEscapeRequested += OnEditorEscapeRequested;
         if (content is IPrintPageProvider sourcePrintRequested) sourcePrintRequested.PrintRequested += OnPrintRequested;
         if (content is IContentCloseRequestSource sourceContentCloseRequested) sourceContentCloseRequested.ContentCloseRequested += OnContentCloseRequested;
@@ -66,6 +67,12 @@ public sealed class ContentContractSession : IDisposable
 
     public event Action<EditorPanelShortcut>? EditorPanelShortcutRequested;
     private void OnEditorPanelShortcutRequested(EditorPanelShortcut value) => Dispatch(() => EditorPanelShortcutRequested?.Invoke(value));
+
+    public event Action<EditorFullscreenShortcut>? EditorFullscreenShortcutRequested;
+    private void OnEditorFullscreenShortcutRequested(EditorFullscreenShortcut value) => Dispatch(() =>
+    {
+        if (value.IsCurrent) EditorFullscreenShortcutRequested?.Invoke(value.WithLifetime(() => IsCurrent));
+    });
 
     public event Action? EditorEscapeRequested;
     private void OnEditorEscapeRequested() => Dispatch(() => EditorEscapeRequested?.Invoke());
@@ -125,6 +132,7 @@ public sealed class ContentContractSession : IDisposable
         if (Content is ITrayStatusProvider sourceTrayStatusChanged) sourceTrayStatusChanged.TrayStatusChanged -= OnTrayStatusChanged;
         if (Content is IPlaybackStateSource sourcePlaybackStateChanged) sourcePlaybackStateChanged.PlaybackStateChanged -= OnPlaybackStateChanged;
         if (Content is IEditorPanelShortcutSource panel) panel.EditorPanelShortcutRequested -= OnEditorPanelShortcutRequested;
+        if (Content is IEditorFullscreenShortcutSource fullscreen) fullscreen.EditorFullscreenShortcutRequested -= OnEditorFullscreenShortcutRequested;
         if (Content is IEditorEscapeSource escape) escape.EditorEscapeRequested -= OnEditorEscapeRequested;
         if (Content is IPrintPageProvider sourcePrintRequested) sourcePrintRequested.PrintRequested -= OnPrintRequested;
         if (Content is IContentCloseRequestSource sourceContentCloseRequested) sourceContentCloseRequested.ContentCloseRequested -= OnContentCloseRequested;

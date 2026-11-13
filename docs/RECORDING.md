@@ -1,5 +1,26 @@
 # Record module (A14 / A15)
 
+## Building the recording engine
+
+Before the first solution build, run `pwsh -File eng/Build-RecordingEngine.ps1`
+on Windows x64. It builds the pinned, patched source in `vendor/ScreenRecorderLib`
+into `artifacts/recording-engine`. VS 2022 needs the C++ x64/x86, C++/CLI, and ATL
+components, a Windows SDK with FXC, and the .NET Framework 4.8 reference assemblies
+and SDK import library. The script can use existing portable tools through
+`-VcToolsPath`, `-WindowsSdkPath`, `-WindowsSdkLibraryPath`,
+`-WindowsSdkVersion`, `-FrameworkReferencePath`, and `-NetFxSdkLibraryPath`.
+It does not install tools. `-PrepareOnly` writes the compiler recipe without
+executing it; `-Force` rebuilds an otherwise current engine with the selected tools.
+
+Run this native build once before parallel managed builds. Both App and Record
+then validate and use the same DLL, including standalone publishing. A missing
+engine, stale source/build receipt, unexpected resolved reference, or different
+published DLL/license fails the build. The NuGet 7.0.1 declaration supplies
+dependency provenance; its DLL-injection build target is excluded. See
+`vendor/ScreenRecorderLib/README.md` for the pin, patch, license, and toolchain
+contract. `eng/Test-RecordingEngineContract.ps1` exercises failure cases without
+opening the app or recording.
+
 The Start menu's **Record** module has two source-settings views and three explicit
 recording actions. It does not own file associations;
 saved MP4 and WAV files continue to open in Video and Audio.

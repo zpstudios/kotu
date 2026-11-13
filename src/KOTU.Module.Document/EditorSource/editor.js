@@ -138,6 +138,14 @@ window.addEventListener('keyup', event => { if (event.key === 'Escape') releaseE
 window.addEventListener('keydown', event => {
   if (!loaded || event.isComposing || event.keyCode === 229 || composing) return;
   const key = event.key.toLowerCase();
+  if (key === 'enter' && event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey) {
+    if (!document.hasFocus() || !editor.hasTextFocus() || document.visibilityState === 'hidden' || freezeId !== null) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    flushState();
+    post({ kind: 'fullscreen-shortcut', version: wireVersion(), repeat: event.repeat === true,
+      control: false, shift: false, alt: true, meta: false });
+    return;
+  }
   // Keep the shell's modifier policy; only these two keys cross this typed bridge.
   if (key === 'f11' || key === 'f12') {
     if (!document.hasFocus() || !editor.hasTextFocus()) return;
@@ -346,6 +354,7 @@ function handleHostMessage(event, queued = false) {
 }
 chrome.webview.addEventListener('message', handleHostMessage);
 window.addEventListener('unload', () => {
+  loaded = false;
   if (stateFrame !== null) cancelAnimationFrame(stateFrame);
   visuals?.dispose(); editor?.dispose(); model?.dispose();
 });

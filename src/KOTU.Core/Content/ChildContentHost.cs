@@ -6,7 +6,7 @@ namespace KOTU.Core.Content;
 public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, IContentInfoProvider, ICloseGuard,
     ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource,
     IContentPathChangedSource, IContentInfoChangedSource, IBrowseOrderConsumer,
-    ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource, IContentOpenFailedSource, IEditorEscapeSource, IEditorPanelShortcutSource
+    ICurrentPathSource, IMediaTransportTarget, IContentCloseRequestSource, IContentOpenFailedSource, IEditorEscapeSource, IEditorPanelShortcutSource, IEditorFullscreenShortcutSource
 {
     private readonly Action<Action> _dispatch;
     private ContentContractSession? _session;
@@ -27,6 +27,9 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
     public event Action? TrayStatusChanged;
     public event Action? PlaybackStateChanged;
     public event Action<EditorPanelShortcut>? EditorPanelShortcutRequested;
+    public event Action<EditorFullscreenShortcut>? EditorFullscreenShortcutRequested;
+    public bool OwnsNativeFullscreenShortcutFocus =>
+        Child is IEditorFullscreenShortcutSource { OwnsNativeFullscreenShortcutFocus: true };
     public event Action? EditorEscapeRequested;
     public event Action? PrintRequested;
     public event Action? ContentCloseRequested;
@@ -72,6 +75,7 @@ public sealed class ChildContentHost : IFileSizeConsumer, IContentStateSource, I
         session.TrayStatusChanged += () => TrayStatusChanged?.Invoke();
         session.PlaybackStateChanged += () => PlaybackStateChanged?.Invoke();
         session.EditorPanelShortcutRequested += value => EditorPanelShortcutRequested?.Invoke(value);
+        session.EditorFullscreenShortcutRequested += value => EditorFullscreenShortcutRequested?.Invoke(value);
         session.EditorEscapeRequested += () => EditorEscapeRequested?.Invoke();
         session.PrintRequested += () => PrintRequested?.Invoke();
         session.ContentCloseRequested += () => ContentCloseRequested?.Invoke();

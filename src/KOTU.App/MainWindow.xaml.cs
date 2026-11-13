@@ -1574,6 +1574,7 @@ public sealed partial class MainWindow : Window
         session.PrintRequested += RequestPrint;
         session.EditorEscapeRequested += OnEditorEscapeRequested;
         session.EditorPanelShortcutRequested += OnEditorPanelShortcutRequested;
+        session.EditorFullscreenShortcutRequested += OnEditorFullscreenShortcutRequested;
         session.ShrinkToMinRequested += ShrinkToMinimum;
         session.UnsavedChanged += dirty =>
         {
@@ -2438,9 +2439,13 @@ public sealed partial class MainWindow : Window
 
     private void OnShellAltEnter(KeyRoutedEventArgs e)
     {
-        if (e.KeyStatus.WasKeyDown || IsTextInputFocused() || IsAnyPopupOpen()) return;
+        // The WebView capture bridge exclusively owns its key; native routing must never toggle it too.
+        if (e.Handled || HotkeySupport.IsVirtualTextInputEvent(RootLayout, e) ||
+            !IsPlainAltEnter() || IsAnyPopupOpen() || ExplorerRenameBox.IsEditing) return;
+        if (IsTextInputFocused() && ModuleHost.Content is not
+            IEditorFullscreenShortcutSource { OwnsNativeFullscreenShortcutFocus: true }) return;
         e.Handled = true;
-        JumpViewMode();
+        if (!e.KeyStatus.WasKeyDown) JumpViewMode();
         MarkAltUseIfConsumed(e);
     }
 

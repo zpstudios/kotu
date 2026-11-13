@@ -6,7 +6,13 @@ public sealed class EditorSurfaceLifetime
     public bool IsAttached { get; private set; }
     public bool IsFailed { get; private set; }
     public bool IsReleased { get; private set; }
-    public void Attach() { if (!IsReleased) IsAttached = true; }
+    public long AttachmentGeneration { get; private set; }
+    public void Attach()
+    {
+        if (IsReleased || IsAttached) return;
+        AttachmentGeneration++;
+        IsAttached = true;
+    }
     public void Detach() => IsAttached = false;
     public bool Fail()
     {

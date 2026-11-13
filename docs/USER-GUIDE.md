@@ -39,42 +39,32 @@ centre narrower. Either panel is 25% of the window width.
 
 ### 1.1 Screen modes
 
-The window has three screen modes, and you step through them rather than flipping a single switch.
+The window switches between **windowed** and **full screen**. Side panels keep their arrangement
+independently; use `F11` and `F12` to show or hide them in either state.
 
-| Mode | What you see |
-|---|---|
-| **1** | everything — title bar, side panels, bottom bar. This is where a window starts |
-| **2** | the side panels step aside; the title bar and the bottom bar stay |
-| **3** | full screen: the window fills the screen, taskbar included, and the panels stay away |
+- `Enter` toggles full screen when the focused control does not need Enter for typing, opening a
+  selected file, or another action of its own.
+- `Alt`+`Enter` toggles full screen while typing in the document editor, including documents opened
+  through All Readable. It preserves text, selection and Undo; plain `Enter` remains a line break.
+  Hold the chord and it toggles only once. Adding `Ctrl`, `Shift` or the Windows key leaves the
+  chord to the focused control. IME composition, dialogs, renaming and Jobs keep their own input.
+- `Esc` and the mouse back button leave full screen before continuing with the next thing they can
+  undo (see [3.6](#36-going-back)). The Open file browser takes priority when it is open.
+- The **screen mode** button at the right end of the bottom bar uses the same toggle. Its tooltip
+  says *Full screen* or *Exit full screen*.
 
-- `Enter` moves to the **next** mode and wraps around: 1 → 2 → 3 → 1.
-- `Alt`+`Enter` goes **straight to full screen**, and straight back to mode 1 from there. It skips
-  mode 2, and it works while you are typing, where plain `Enter` is a line break.
-- `Esc` and the mouse back button step **one mode down** — 3 → 2 → 1 — and then carry on to the
-  next thing they can undo (see [3.6](#36-going-back)).
-- The **screen mode** button at the right end of the bottom bar is one button with three faces. It
-  always does what `Enter` would do next, and its icon and tooltip say so: *Hide side panels*,
-  *Full screen*, *Exit full screen*.
-
-**With nothing open** — the module's own file browser, before you pick a file — mode 2 has nothing
-to offer, so the ladder is just mode 1 ↔ mode 3.
+The same two states apply before a file is open. While the **Open file** overlay is up, its browsing
+controls own the keyboard and screen mode does not change.
 
 **In full screen the bottom bar gets out of the way.** After three seconds without mouse or touch
 input it slides out of sight, whatever you are looking at; move the pointer, tap, or bring the
 pointer near the bottom edge and it comes back. The same auto-hide runs in a window while a video
 is playing — see [2.2](#22-video). The mouse pointer itself is never hidden.
 
-Switching module keeps the mode you are in, except that mode 2 falls back to mode 1 when the module
-you arrive at has nothing open yet.
+Switching module keeps the current fullscreen state.
 
-**`F11` and `F12` override all of this.** The moment you drive a panel yourself, the window stops
-applying the modes to the panels and keeps exactly the arrangement you asked for, in every mode,
-full screen included. Mode 2 is then no longer a separate step, so `Enter` becomes a straight
-toggle between your arrangement and full screen. The override lasts until you switch to another
-module, which restores the default (both panels open).
-
-**Opening a file** does not change the mode. Opening the **Open file** browser suspends the modes
-entirely — see [5](#5-the-built-in-file-browser).
+**Opening a file** does not change the fullscreen state. Opening the **Open file** browser
+suspends fullscreen shortcuts until you leave it — see [5](#5-the-built-in-file-browser).
 
 ### 1.2 The title bar
 
@@ -146,8 +136,8 @@ Eight modules. Switch between them from the menu at the bottom left.
   in a tooltip, since a narrow window trims it.
 - To the right of that run sits the current zoom level — `100%`. The Fit options resize the picture
   without touching that figure, so it stays at 100% until you zoom with the wheel or a pinch.
-- A double-click on the picture goes straight to full screen, as does `Alt`+`Enter`; `Enter` steps
-  through the screen modes and `Esc` steps back down ([1.1](#11-screen-modes)).
+- A double-click on the picture toggles full screen, as do `Alt`+`Enter` and `Enter`;
+  `Esc` leaves full screen ([1.1](#11-screen-modes)).
 
 ### 2.2 Video
 
@@ -181,8 +171,7 @@ Eight modules. Switch between them from the menu at the bottom left.
   on regardless.
 - **Zoom** with `Ctrl`+wheel, from 10% to 800%.
 - **Fit** — see [2.9](#29-the-fit-button). Each new file starts at Contain again.
-- `Alt`+`Enter` goes straight to full screen and back; `Enter` steps through the screen modes and
-  `Esc` steps back down ([1.1](#11-screen-modes)).
+- `Alt`+`Enter` and `Enter` toggle full screen; `Esc` leaves full screen ([1.1](#11-screen-modes)).
   In full screen, play, pause, seek, volume, mute and zoom each flash a short caption in the middle
   of the picture.
 - **The bottom bar keeps out of the way while you watch.** Once a video has been playing for
@@ -232,8 +221,8 @@ Eight modules. Switch between them from the menu at the bottom left.
   point; every pass starts at 0:00.
   **Auto-play next file** in [Settings → Playback](#playback) governs this here too — it is one
   setting shared by Video and Audio.
-- `Alt`+`Enter` goes straight to full screen and back; `Enter` steps through the screen modes and
-  `Esc` steps back down ([1.1](#11-screen-modes)). In a window the bottom bar stays put — the
+- `Alt`+`Enter` and `Enter` toggle full screen; `Esc` leaves full screen
+  ([1.1](#11-screen-modes)). In a window the bottom bar stays put — the
   playing-video auto-hide above is a Video-module behaviour — but in full screen it hides after
   three seconds like everywhere else, and only the pointer brings it back.
 - Press ▶ with nothing open to play a built-in 18-second sample tune.
@@ -448,7 +437,7 @@ Controls:
 | Graph size | `Ctrl` + `+` / `-` | one step bigger / smaller text and lines on every graph, Small ↔ Medium ↔ Large (numpad `+` / `-` work too; `Ctrl`+wheel over the graphs does the same, wheel up = bigger) |
 | Graph size reset | `Ctrl` + numpad `*` | back to Medium |
 | Always on top | `P` | pins the window over other windows and shrinks it once to the smallest window size — grow it back freely; unpinning leaves the window as it is |
-| Screen mode | `Enter` / `Alt`+`Enter` / `Esc` | the same three-mode ladder as every other module ([1.1](#11-screen-modes)) — a full-screen dashboard at the top of it |
+| Screen mode | `Enter` / `Alt`+`Enter` / `Esc` | toggle or leave full screen, as in every other module ([1.1](#11-screen-modes)) |
 
 The graph size steps affect the text and line thickness of every graph — the two long graphs in the
 bottom bar, the ten centre tiles and the enlarged graphs in the left panel. The graphs themselves
@@ -508,10 +497,11 @@ file opens.
 
 ### 2.10 Record
 
-Choose **Screen recording** to select a display or open window, then Start and choose an `.mp4`
-destination. Recording uses H.264 video at 30 fps and AAC audio. The default system playback audio
-is always included, even when recording one window; enable **Include microphone with system audio**
-to mix an available microphone. Choose **Microphone recording** to save only the selected microphone
+Choose **Video and camera**, select a display or open window, then use **Video record**. Use
+**Camera record** for the independently selected camera. Video is saved as H.264 MP4 at 30 fps
+in the **Save folder** shown in the settings. The microphone and system audio choices are optional;
+uncheck both for silent video. System audio includes other apps playing through the selected output.
+Use **Audio (microphone)** to select a microphone and **Audio record** to save only that microphone
 as 48 kHz, 16-bit mono WAV. This module does not register file associations; saved MP4 and WAV files
 open in Video and Audio.
 
@@ -522,6 +512,8 @@ While recording, closing the window, switching modules, or opening Settings asks
 save, discard, or keep recording. Screen capture requires the x64 Microsoft Visual C++ 2015–2022
 Redistributable and Windows Media Foundation; Windows N/KN may need the Media Feature Pack. Window
 capture requires Windows 10 version 1903 or newer and the selected window kept open and restored.
+If the selected window does not supply its first frame within five seconds, recording stops with
+an explanation. Show or restore the window, then try again.
 Microphone access follows Windows privacy settings. Protected content, device/display removal, or
 sleep can interrupt capture. A forced app termination can leave an unfinished temporary file, and
 an incomplete MP4 is not guaranteed to be playable.
@@ -539,21 +531,22 @@ These work in every module.
 | ``Alt+` `` | open the menu (bottom left) |
 | `F11` | left panel open / closed |
 | `F12` | right panel open / closed |
-| `Enter` | next screen mode ([1.1](#11-screen-modes)) |
-| `Alt`+`Enter` | full screen and back again, in one step — typing-proof (see below) |
-| `Esc` | one step back: one screen mode down, out of the Open file browser, or close the open file |
+| `Enter` | toggle full screen when the focused control does not need Enter ([1.1](#11-screen-modes)) |
+| `Alt`+`Enter` | toggle full screen, including while typing in a document (see below) |
+| `Esc` | one step back: leave full screen, leave the Open file browser, or close the open file |
 | `Shift+N` | new window of the module you are looking at |
 | `Ctrl+S` | save (text document) |
 | `Ctrl+P` | print what you are looking at (picture, PDF or text document) |
 | `Browser Back` | go back one step — see [3.6](#36-going-back) |
 
-``Alt+` ``, `Alt`+`Enter`, `F11` / `F12` and `Ctrl+P` work even while you are typing in a text box.
+``Alt+` ``, `F11` / `F12` and `Ctrl+P` work even while you are typing in a text box.
+`Alt`+`Enter` also works in document text and the document's Find field, in Document or All Readable;
+composition and popup controls retain their input. Other text fields keep their own shortcuts.
 These keys produce no character of their own, so nothing is taken away from the text — pressing
 `Ctrl+P` mid-edit prints the document just as it stands. Plain `Enter` does
 give way to typing — in a text document it is a line break — and `Shift+N` gives way as well.
 
-`Esc` undoes one layer per press: the screen mode first — one step down, so from full screen you
-land in mode 2 and need another press to get back to mode 1 — then the Open file browser, then the
+`Esc` undoes one layer per press: leave full screen, then the Open file browser, then the
 file itself. Closing the file this way lands on the module's own browser with **both sidebars
 open** — the same screen as starting the module from the menu — so a file opened straight from
 Windows Explorer is one `Esc` away from the standard screen. A document with unsaved changes asks
@@ -574,12 +567,9 @@ the module you are already in changes nothing.
 press closes it. That is the whole story — there is no hold, double-press or translucent variant.
 Press both keys and both sides toggle, in any order.
 
-**The first press also takes the panels off the screen modes.** From then on the window keeps
-exactly the arrangement you set, in every mode and in full screen, and `Enter` becomes a straight
-toggle between that arrangement and full screen rather than a three-step ladder. Whatever was on
-screen when you pressed is what the key toggles, so the first press never appears to do nothing.
-The arrangement is handed back to the modes when you switch to another module, which reopens both
-panels; there is no way to release it from the keyboard.
+**Panels and full screen are independent.** The window keeps the arrangement you set when you
+enter or leave full screen. Whatever was on screen when you pressed is what the panel key toggles.
+Switching to another module reopens both panels.
 
 When a panel opens, a short hint appears next to it on a small dark plate, so it stays readable
 over whatever is behind it — *Sidebar - press F11 or the pin button to close* — and fades after a
@@ -704,7 +694,7 @@ scrolls there.
 The mouse back button, and the `Browser Back` key on keyboards that have one, undo one step at a
 time, in this order:
 
-1. step **one screen mode down** ([1.1](#11-screen-modes));
+1. **leave full screen** ([1.1](#11-screen-modes));
 2. leave the Open file browser, returning to the arrangement you had;
 3. while browsing with nothing open, go back to the folder you were in before;
 4. close the file and go back to the module's own browser, keeping the side panels as they were.
@@ -751,8 +741,8 @@ opened straight from Windows Explorer starts with no panels, so nothing covers w
 see. Press `Esc` when you are done and the file closes onto that standard screen — both sidebars
 and thumbnails — as if you had started the module from the menu.
 
-Screen modes 2 and 3 put the panels away ([1.1](#11-screen-modes)), and `F11` / `F12` take them
-back off the modes for as long as you stay in that module ([3.2](#32-panels-how-f11-and-f12-behave)).
+Entering or leaving full screen keeps the panel arrangement ([1.1](#11-screen-modes)). Use
+`F11` / `F12` to toggle either panel ([3.2](#32-panels-how-f11-and-f12-behave)).
 
 ---
 
@@ -862,9 +852,9 @@ down their usual order.
 **It shows through.** The browser is drawn on a translucent ground, so the picture, the video or the
 document you already had open stays visible behind it and you can tell that you are choosing a
 replacement rather than starting from nothing. Thumbnails and file names themselves stay solid. In
-modes 2 and 3 — where the panels were away — the side panels come back **floating over** the
-content, translucent like the rest of the layer, and the content keeps its full width instead of
-being squeezed. In mode 1 the panels are the ordinary opaque sidebars they always were.
+places where panels were hidden, they come back **floating over** the content, and the content
+keeps its full width. Panels that were already open stay as ordinary opaque sidebars. This follows
+the panel arrangement in either windowed or full-screen state.
 
 Press `Esc`, or the button again, to go back to exactly the arrangement you had. Choosing a file
 also ends it. If the browser is already what you are looking at, the button flashes the centre view

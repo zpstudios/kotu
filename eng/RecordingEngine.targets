@@ -1,0 +1,26 @@
+<Project>
+  <PropertyGroup>
+    <RecordingEngineRepository>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RecordingEngineRepository>
+    <RecordingEnginePath Condition="'$(RecordingEnginePath)' == ''">$(RecordingEngineRepository)\artifacts\recording-engine\ScreenRecorderLib.dll</RecordingEnginePath>
+    <RecordingEnginePath>$([System.IO.Path]::GetFullPath('$(RecordingEnginePath)'))</RecordingEnginePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ScreenRecorderLib">
+      <HintPath>$(RecordingEnginePath)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="ValidateRecordingEngine" BeforeTargets="ResolveAssemblyReferences" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="!Exists('$(RecordingEnginePath)')" Text="Patched recording engine is missing. Run eng/Build-RecordingEngine.ps1 before building KOTU." />
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)Test-RecordingEngine.ps1&quot; -EnginePath &quot;$(RecordingEnginePath)&quot;" />
+  </Target>
+  <Target Name="CheckResolvedRecordingEngine" AfterTargets="ResolveAssemblyReferences" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_ResolvedRecordingEngine Include="@(ReferencePath)" Condition="'%(ReferencePath.Filename)' == 'ScreenRecorderLib'" />
+    </ItemGroup>
+    <Error Condition="'@(_ResolvedRecordingEngine->'%(FullPath)')' != '$(RecordingEnginePath)'" Text="ScreenRecorderLib resolved outside the patched engine. Check NuGet build target injection." />
+  </Target>
+  <Target Name="CheckPublishedRecordingEngine" AfterTargets="Publish" Condition="'$(MSBuildProjectName)' == 'KOTU.App'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)Test-RecordingEngine.ps1&quot; -EnginePath &quot;$(RecordingEnginePath)&quot; -PublishedPath &quot;$(PublishDir)ScreenRecorderLib.dll&quot;" />
+  </Target>
+</Project>
