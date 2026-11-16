@@ -350,7 +350,7 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         // 그린다 — 종전에는 XAML 인라인 도형이라 본체와 미세하게 다른 그림이었다(사용자 보고).
         // MenuFlyoutItem.Icon은 IconElement만 받아 본체의 Border를 못 꽂으므로, 같은 치수표로
         // 그린 PathIcon 판본을 받는다. 호출마다 새 인스턴스라 v0.174.1의 공유 크래시와 무관하다.
-        FitIcons.ConfigureOriginalMenuItem(FitOriginalItem);
+        FitIcons.ConfigureMenu(FitOriginalItem, FitContainItem, FitWidthItem, FitHeightItem);
         _settings = settings;
         _resumeStore = new PlaybackResumeStore(settings);
         _filePath = context.FilePath;
@@ -1836,12 +1836,12 @@ public sealed partial class VideoPlayerView : UserControl, ISettingsSnapshotSour
         (object content, string tip) = _lastFitOption switch
         {
             VideoFitMode.FitWidth =>
-                ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
+                ((object)ToolbarIcons.Build(ToolbarIconKind.FitWidth), "Fit width"),
             VideoFitMode.FitHeight =>
-                (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
+                (ToolbarIcons.Build(ToolbarIconKind.FitHeight), "Fit height"),
             VideoFitMode.ActualSize =>
                 (FitIcons.BuildOriginalRatioBox(), "Original size"),
-            _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
+            _ => (ToolbarIcons.Build(ToolbarIconKind.FitContain),
                 "Contain - the whole video fits, never enlarged"),
         };
         FitButton.Content = content;

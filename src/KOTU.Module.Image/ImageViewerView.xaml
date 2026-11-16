@@ -164,7 +164,7 @@
                     Click="OnRotateButtonClick">
                     <FontIcon Glyph="&#xE7AD;" FontSize="18" />
                 </Button>
-                <!-- A365: Fit은 독립 버튼32 + 간격6 + 화살표32 = 70폭이다. 두 버튼 모두 전체 테두리와 둥근 모서리를 쓴다. -->
+                <!-- Fit은 본체30 + 메뉴20을 연결한 50x32 버튼이다. 재적용/옵션 선택 동작은 분리한다. -->
                 <!-- A230(v0.234.0) → A249(v0.246.0, 정면 반전): 빈 상태(볼 파일 없음 = 중앙이 셸
                      썸네일 탐색기)에서 조절기 2개를 접던 것을 되돌려 **항상 표시 + 비활성**으로 간다
                      (A145 "항상 보이되 비활성" 원칙의 전 모듈 복원 — 2026-08-27 사용자 지시).
@@ -173,10 +173,10 @@
                      정합. 3모듈 일관). A·F 키 차단은 가시성이 아니라 IsEnabled가 진다 —
                      HotkeySupport의 통과 게이트가 IsEnabled와 Visibility를 함께 보기 때문에
                      (Shared/HotkeySupport.cs:61) 비활성만으로 키가 새지 않는다. 칸은 A252에서 3 → 4. -->
-                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="0" Width="50" Height="32" VerticalAlignment="Center">
                     <Button
                         x:Name="FitButton"
-                        Style="{StaticResource BottomBarButtonStyle}"
+                        Style="{StaticResource BottomBarFitButtonStyle}"
                         IsEnabled="False"
                         Click="OnFitClick">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
@@ -206,21 +206,9 @@
                                      최소 복구법 = 생성자의 Icon 대입 한 줄을 지우기(A231의 "아이콘 없음"
                                      으로 되돌아간다. 다른 변경 무관). -->
                                 <MenuFlyoutItem x:Name="FitOriginalItem" Text="Original" Click="OnFitActualSizeClick" />
-                                <MenuFlyoutItem Text="Contain" Click="OnFitContainClick">
-                                    <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="&#xE9A6;" />
-                                    </MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
-                                <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClick">
-                                    <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="&#xE8AB;" />
-                                    </MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
-                                <MenuFlyoutItem Text="Fit height" Click="OnFitHeightClick">
-                                    <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="&#xE8CB;" />
-                                    </MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="FitContainItem" Text="Contain" Click="OnFitContainClick" />
+                                <MenuFlyoutItem x:Name="FitWidthItem" Text="Fit width" Click="OnFitWidthClick" />
+                                <MenuFlyoutItem x:Name="FitHeightItem" Text="Fit height" Click="OnFitHeightClick" />
                             </MenuFlyout>
                         </DropDownButton.Flyout>
                     </DropDownButton>

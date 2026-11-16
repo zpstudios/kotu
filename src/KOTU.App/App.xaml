@@ -56,17 +56,77 @@
                 <Setter Property="HorizontalContentAlignment" Value="Center" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
             </Style>
-            <!-- 2칸 Button — Height 32는 위 1칸 스타일에서 상속받는다(폭만 덮어쓴다) -->
-            <!-- A365 공통 Fit 화살표: 본체와 6px 떨어진 독립 32px 버튼. -->
+            <!-- Fit 본체는 오른쪽 메뉴 조작부와 외곽을 연결한다. -->
+            <Style x:Key="BottomBarFitButtonStyle" TargetType="Button" BasedOn="{StaticResource BottomBarButtonStyle}">
+                <Setter Property="Width" Value="30" />
+                <Setter Property="CornerRadius" Value="4,0,0,4" />
+                <Setter Property="BorderThickness" Value="1,1,0,1" />
+            </Style>
+            <!-- Fit 본체30 + 메뉴20 = 50x32 분할 버튼. 기본 DropDownButton은 빈 콘텐츠 옆에 8px 여백과
+                 작은 AnimatedIcon을 배치한다. 좁은 메뉴 조작부에서는 정적 도형을
+                 중앙에 그려 첫 표시부터 보이게 한다. 두 조작부는 하나의 외곽을 공유한다. -->
             <Style x:Key="BottomBarFitOptionsStyle" TargetType="DropDownButton">
-                <Setter Property="Width" Value="32" />
+                <Setter Property="Width" Value="20" />
                 <Setter Property="Height" Value="32" />
-                <Setter Property="Padding" Value="4" />
+                <Setter Property="Padding" Value="1" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="CornerRadius" Value="0,4,4,0" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="{ThemeResource ButtonBackground}" />
+                <Setter Property="Foreground" Value="{ThemeResource ButtonForeground}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource ButtonBorderBrush}" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="FocusVisualMargin" Value="-3" />
+                <Setter Property="AutomationProperties.Name" Value="Fit options" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="DropDownButton">
+                            <Grid x:Name="RootGrid"
+                                  Background="{TemplateBinding Background}"
+                                  BorderBrush="{TemplateBinding BorderBrush}"
+                                  BorderThickness="{TemplateBinding BorderThickness}"
+                                  CornerRadius="{TemplateBinding CornerRadius}"
+                                  Padding="{TemplateBinding Padding}">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Background" Value="{ThemeResource ButtonBackgroundPointerOver}" />
+                                                <Setter Target="RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrushPointerOver}" />
+                                                <Setter Target="FitChevron.Stroke" Value="{ThemeResource ButtonForegroundPointerOver}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Background" Value="{ThemeResource ButtonBackgroundPressed}" />
+                                                <Setter Target="RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrushPressed}" />
+                                                <Setter Target="FitChevron.Stroke" Value="{ThemeResource ButtonForegroundPressed}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Background" Value="{ThemeResource ButtonBackgroundDisabled}" />
+                                                <Setter Target="RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrushDisabled}" />
+                                                <Setter Target="FitChevron.Stroke" Value="{ThemeResource ButtonForegroundDisabled}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <Path x:Name="FitChevron" Width="12" Height="10"
+                                      Data="M 1,2 L 6,7 L 11,2" Stretch="None"
+                                      Stroke="{TemplateBinding Foreground}" StrokeThickness="1.6"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
+            <!-- 2칸 Button — Height 32는 위 1칸 스타일에서 상속받는다(폭만 덮어쓴다) -->
             <Style x:Key="BottomBarWideButtonStyle" TargetType="Button" BasedOn="{StaticResource BottomBarButtonStyle}">
                 <Setter Property="Width" Value="84" />
             </Style>

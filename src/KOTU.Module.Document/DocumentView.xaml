@@ -700,7 +700,7 @@
                      내용·툴팁은 코드(ShowPdfFitState/ShowTextFitState/UpdateFitButton)가 갱신하므로
                      아래 FontIcon은 초기값일 뿐이다(생성자에서 곧바로 빈 화면 표시 "1:1" 상자가 된다 — A260).
                      A111(v0.133.0): 1:1 별도 버튼 제거(100%가 플라이아웃 옵션이 됐다) · 구 Auto-fit = 새 Contain. -->
-                <!-- A365: Fit은 독립 버튼32 + 간격6 + 화살표32 = 70폭이다. 두 버튼 모두 전체 테두리와 둥근 모서리를 쓴다. -->
+                <!-- Fit은 본체30 + 메뉴20을 연결한 50x32 버튼이다. 재적용/옵션 선택 동작은 분리한다. -->
                 <!-- A145→A214: 조절기는 콘텐츠가 있는 동안 보이고, PDF는 4옵션 전부·텍스트 갈래
                      (파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)는 Fit height만 뺀 3옵션이 활성이다
                      (높이 무한 — 2026-08-24 사용자 지시로 부록 B 67의 "텍스트 비활성"을 반전).
@@ -711,8 +711,8 @@
                      아니라 IsEnabled가 진다 — HotkeySupport의 통과 게이트가 IsEnabled와
                      Visibility를 함께 보기 때문이다(Shared/HotkeySupport.cs:61).
                      활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍만 한다. -->
-                <StackPanel x:Name="FitControls" Margin="6,0,0,0" Grid.Column="11" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
+                <StackPanel x:Name="FitControls" Margin="6,0,0,0" Grid.Column="11" Orientation="Horizontal" Spacing="0" Width="50" Height="32" VerticalAlignment="Center">
+                    <Button x:Name="FitButton" Style="{StaticResource BottomBarFitButtonStyle}"
                             IsEnabled="False"
                             Click="OnFitClicked">
                         <FontIcon Glyph="&#xE9A6;" FontSize="18" />
@@ -740,23 +740,11 @@
                                      최소 복구법 = 생성자의 Icon 대입 한 줄을 지우기(A231의 "아이콘 없음"
                                      으로 되돌아간다. 다른 변경 무관). -->
                                 <MenuFlyoutItem x:Name="FitOriginalItem" Text="Original" Click="OnFitActualSizeClicked" />
-                                <MenuFlyoutItem Text="Contain" Click="OnFitContainClicked">
-                                    <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="&#xE9A6;" />
-                                    </MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
-                                <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClicked">
-                                    <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="&#xE8AB;" />
-                                    </MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="FitContainItem" Text="Contain" Click="OnFitContainClicked" />
+                                <MenuFlyoutItem x:Name="FitWidthItem" Text="Fit width" Click="OnFitWidthClicked" />
                                 <!-- A214: 텍스트 갈래에서는 이 항목만 비활성(높이 무한 — Fit height
                                      불성립. IsEnabled 전환도 ShowPdfFitState/ShowTextFitState 쌍이 한다) -->
-                                <MenuFlyoutItem x:Name="FitHeightItem" Text="Fit height" Click="OnFitHeightClicked">
-                                    <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="&#xE8CB;" />
-                                    </MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="FitHeightItem" Text="Fit height" Click="OnFitHeightClicked" />
                             </MenuFlyout>
                         </DropDownButton.Flyout>
                     </DropDownButton>

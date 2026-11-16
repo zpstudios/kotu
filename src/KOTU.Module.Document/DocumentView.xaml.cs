@@ -276,7 +276,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 그린다 — 종전에는 XAML 인라인 도형이라 본체와 미세하게 다른 그림이었다(사용자 보고).
         // MenuFlyoutItem.Icon은 IconElement만 받아 본체의 Border를 못 꽂으므로, 같은 치수표로
         // 그린 PathIcon 판본을 받는다. 호출마다 새 인스턴스라 v0.174.1의 공유 크래시와 무관하다.
-        FitIcons.ConfigureOriginalMenuItem(FitOriginalItem);
+        FitIcons.ConfigureMenu(FitOriginalItem, FitContainItem, FitWidthItem, FitHeightItem);
         _settings = settings;
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
         SetupZoomAccelerators(); // A246: Ctrl+± 문서 줌 — XAML에 못 쓰는 (VirtualKey)187/189 포함 코드 등록
@@ -2450,7 +2450,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         // 복원으로 다시 빈 화면 갈래의 실제 표시가 됐다(비활성 버튼 표시 + "No document open").
         // A373: 빈 상태는 선택된 배율이 없으므로 ActualSize의 "1:1"을 암시하지 않는다.
         // 이미지·영상 모듈의 빈 상태 XAML과 같은 공통 Fit(Contain) 글리프를 쓴다.
-        FitButton.Content = new FontIcon { Glyph = "\uE9A6", FontSize = 18 };
+        FitButton.Content = ToolbarIcons.Build(ToolbarIconKind.FitContain);
         ToolTipService.SetToolTip(FitButton, "No document open");
         ToolTipService.SetToolTip(FitOptionsButton, "No document open");
     }
@@ -2488,12 +2488,12 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         (object content, string tip) = option switch
         {
             PdfFitMode.FitWidth =>
-                ((object)new FontIcon { Glyph = "\uE8AB", FontSize = 18 }, "Fit width"),
+                ((object)ToolbarIcons.Build(ToolbarIconKind.FitWidth), "Fit width"),
             PdfFitMode.FitHeight =>
-                (new FontIcon { Glyph = "\uE8CB", FontSize = 18 }, "Fit height"),
+                (ToolbarIcons.Build(ToolbarIconKind.FitHeight), "Fit height"),
             PdfFitMode.ActualSize =>
                 (FitIcons.BuildOriginalRatioBox(), "Original size"),
-            _ => (new FontIcon { Glyph = "\uE9A6", FontSize = 18 },
+            _ => (ToolbarIcons.Build(ToolbarIconKind.FitContain),
                 "Contain - the whole page fits, never enlarged"),
         };
         FitButton.Content = content;

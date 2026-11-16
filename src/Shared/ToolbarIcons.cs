@@ -28,9 +28,12 @@ internal static class ToolbarIcons
 
     private static PathGeometry Geometry(ToolbarIconKind kind)
     {
-        var geometry = new PathGeometry { FillRule = FillRule.EvenOdd };
+        var geometry = new PathGeometry
+        {
+            FillRule = ToolbarIconGeometry.UsesStrokeContours(kind) ? FillRule.Nonzero : FillRule.EvenOdd,
+        };
         // 채우지 않는 대각선은 잉크 없이 종류별 뷰포트 경계를 확정한다. PathIcon이 실제 잉크 범위만
-        // 확대해 메뉴의 1:1 상자를 늘리지 않도록 버튼과 같은 원점·배율을 보존한다.
+        // 확대하지 않도록 버튼과 메뉴에서 같은 원점·배율을 보존한다.
         var viewport = new PathFigure { StartPoint = new Point(0, 0), IsFilled = false, IsClosed = false };
         viewport.Segments.Add(new LineSegment { Point = new Point(ToolbarIconGeometry.ViewportSize(kind), ToolbarIconGeometry.ViewportSize(kind)) });
         geometry.Figures.Add(viewport);

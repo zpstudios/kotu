@@ -192,7 +192,7 @@
                  A111(v0.133.0): 플라이아웃이 A83 4옵션(100%·Contain·Fit width·Fit height)이 되고
                  본체 표기에 1:1이 추가됐다(구 Auto-fit = 새 Contain, 본체 표기 A는 소멸). -->
             <!-- A395: 기존32+6+32 영역 전체를 본체38+화살표32의 연결된 분할 버튼으로 채운다.
-                 외곽70x32와 화살표 시작 위치는 유지하고 중앙 테두리는 화살표 왼쪽 한 줄만 쓴다. -->
+                 현재는 공통50x32(본체30 + 화살표20)이며 중앙 테두리는 화살표 왼쪽 한 줄만 쓴다. -->
             <!-- 본체 툴팁(키 표기 포함)은 UpdateFitButton()이 상태와 함께 갱신한다 — A34 -->
             <!-- A230(v0.234.0) → A249(v0.246.0, 정면 반전): 빈 상태(재생 파일 없음 = 중앙이 셸
                  썸네일 탐색기)에서 조절기 2개를 접던 것을 되돌려 **항상 표시 + 비활성**으로 간다
@@ -202,14 +202,12 @@
                  IsEnabled가 진다 — HotkeySupport의 통과 게이트가 IsEnabled와 Visibility를 함께
                  보기 때문이다(Shared/HotkeySupport.cs:61). 빈 상태 ▶ = 테스트 클립(A207) 등
                  다른 버튼은 빈 상태에도 그대로 쓰이므로 종전대로 손대지 않는다. -->
-            <StackPanel Grid.Column="11" Orientation="Horizontal" Spacing="0" Width="70" Height="32" VerticalAlignment="Center">
-                <Button x:Name="FitButton" Style="{StaticResource BottomBarButtonStyle}"
-                        Width="38" CornerRadius="4,0,0,4" BorderThickness="1,1,0,1"
+            <StackPanel Grid.Column="11" Orientation="Horizontal" Spacing="0" Width="50" Height="32" VerticalAlignment="Center">
+                <Button x:Name="FitButton" Style="{StaticResource BottomBarFitButtonStyle}"
                         IsEnabled="False" Click="OnFitClicked">
                     <FontIcon Glyph="&#xE9A6;" FontSize="18" />
                 </Button>
                 <DropDownButton x:Name="FitOptionsButton" Style="{StaticResource BottomBarFitOptionsStyle}"
-                                CornerRadius="0,4,4,0"
                                 IsEnabled="False"
                                 ToolTipService.ToolTip="Fit options">
                     <DropDownButton.Flyout>
@@ -234,21 +232,9 @@
                                  최소 복구법 = 생성자의 Icon 대입 한 줄을 지우기(A231의 "아이콘 없음"
                                  으로 되돌아간다. 다른 변경 무관). -->
                             <MenuFlyoutItem x:Name="FitOriginalItem" Text="Original" Click="OnFitActualSizeClicked" />
-                            <MenuFlyoutItem Text="Contain" Click="OnFitContainClicked">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE9A6;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="Fit width" Click="OnFitWidthClicked">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE8AB;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="Fit height" Click="OnFitHeightClicked">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE8CB;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Name="FitContainItem" Text="Contain" Click="OnFitContainClicked" />
+                            <MenuFlyoutItem x:Name="FitWidthItem" Text="Fit width" Click="OnFitWidthClicked" />
+                            <MenuFlyoutItem x:Name="FitHeightItem" Text="Fit height" Click="OnFitHeightClicked" />
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>

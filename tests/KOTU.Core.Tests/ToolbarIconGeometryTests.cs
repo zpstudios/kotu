@@ -6,19 +6,20 @@ namespace KOTU.Core.Tests;
 public class ToolbarIconGeometryTests
 {
     [Fact]
-    public void OnlyOriginalExpandsAndStillFitsButtonContent()
+    public void FitIconsShareViewportAndStillFitButtonContent()
     {
         foreach (var kind in Enum.GetValues<ToolbarIconKind>())
-            Assert.Equal(kind == ToolbarIconKind.OriginalRatio ? 24 : 18, ToolbarIconGeometry.ViewportSize(kind));
-        var contours = ToolbarIconGeometry.Create(ToolbarIconKind.OriginalRatio);
-        Assert.Equal(22, contours[0].Max(p => p.X) - contours[0].Min(p => p.X));
-        Assert.Equal(18, contours[0].Max(p => p.Y) - contours[0].Min(p => p.Y));
-        foreach (var digit in contours.Skip(2).Take(2))
+            Assert.Equal(kind is ToolbarIconKind.OriginalRatio or ToolbarIconKind.FitContain or
+                ToolbarIconKind.FitWidth or ToolbarIconKind.FitHeight ? 24 : 18, ToolbarIconGeometry.ViewportSize(kind));
+        foreach (var kind in new[] { ToolbarIconKind.OriginalRatio, ToolbarIconKind.FitContain,
+            ToolbarIconKind.FitWidth, ToolbarIconKind.FitHeight })
         {
-            Assert.Equal(10, digit.Max(p => p.Y) - digit.Min(p => p.Y));
-            Assert.All(digit, p => { Assert.InRange(p.X, 3, 21); Assert.InRange(p.Y, 5, 19); });
+            var ink = ToolbarIconGeometry.Create(kind).SelectMany(c => c).ToArray();
+            Assert.All(ink, p => { Assert.InRange(p.X, 2, 22); Assert.InRange(p.Y, 2, 22); });
+            Assert.Equal(24, ink.Min(p => p.X) + ink.Max(p => p.X), precision: 6);
+            Assert.Equal(24, ink.Min(p => p.Y) + ink.Max(p => p.Y), precision: 6);
+            Assert.True(ToolbarIconGeometry.ViewportSize(kind) <= 30 - 2 * (1 + 2));
         }
-        Assert.True(ToolbarIconGeometry.ViewportSize(ToolbarIconKind.OriginalRatio) <= 32 - 2 * (1 + 2));
     }
 
     [Theory]
@@ -29,6 +30,9 @@ public class ToolbarIconGeometryTests
     [InlineData(4)]
     [InlineData(5)]
     [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
     public void PaintedContoursStayInsideSharedViewportAndHaveArea(int kind)
     {
         foreach (var contour in ToolbarIconGeometry.Create((ToolbarIconKind)kind))
@@ -41,6 +45,8 @@ public class ToolbarIconGeometryTests
             var area = contour.Select((p, i) => p.X * contour[(i + 1) % contour.Length].Y
                 - p.Y * contour[(i + 1) % contour.Length].X).Sum() / 2;
             Assert.NotEqual(0, area);
+            // 겹치는 둥근 선은 같은 winding이어야 Nonzero 채움에서 접합부가 지워지지 않는다.
+            if (ToolbarIconGeometry.UsesStrokeContours((ToolbarIconKind)kind)) Assert.True(area > 0);
         }
     }
 
@@ -73,13 +79,13 @@ public class ToolbarIconGeometryTests
     [Fact]
     public void RatioOutlineIsCenteredAndPreviewUsesProductionContours()
     {
-        var outline = ToolbarIconGeometry.Create(ToolbarIconKind.OriginalRatio)[0];
-        Assert.Equal(24, outline.Min(p => p.X) + outline.Max(p => p.X));
-        Assert.Equal(24, outline.Min(p => p.Y) + outline.Max(p => p.Y));
+        var outline = ToolbarIconGeometry.Create(ToolbarIconKind.OriginalRatio).SelectMany(c => c).ToArray();
+        Assert.Equal(24, outline.Min(p => p.X) + outline.Max(p => p.X), precision: 6);
+        Assert.Equal(24, outline.Min(p => p.Y) + outline.Max(p => p.Y), precision: 6);
         // 요청된 디자인 검토 산출물만 내보낸다. WinUI 화면 캡처가 아니라 같은 원본 좌표다.
         if (Environment.GetEnvironmentVariable("KOTU_ICON_PREVIEW_PATH") is { Length: > 0 } path)
         {
-            var icons = Enum.GetValues<ToolbarIconKind>().Select(kind => new { Name = kind.ToString(), Size = ToolbarIconGeometry.ViewportSize(kind), Contours = ToolbarIconGeometry.Create(kind) });
+            var icons = Enum.GetValues<ToolbarIconKind>().Select(kind => new { Name = kind.ToString(), Size = ToolbarIconGeometry.ViewportSize(kind), FillRule = ToolbarIconGeometry.UsesStrokeContours(kind) ? "nonzero" : "evenodd", Contours = ToolbarIconGeometry.Create(kind) });
             File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(icons));
         }
     }
