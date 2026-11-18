@@ -11,10 +11,10 @@
 
 | 범위 | 확인된 경계 | 남은 확인과 착수 조건 | 정본/원문 |
 |---|---|---|---|
-| A401 로컬 편집기 | Monaco 기반 로컬 편집기 v412와 원격 v426 정확성 검수. 지정 약 100만 자 문서의 사용자 ‘입력이 밀리지 않음’ 확인은 그 문서/환경에 한정. | 실제 한국어 IME 조합·물리 키 연속 입력·입력→paint 지연, 고대비·극단 장문/긴 줄 조건. 합성 Unicode 입력을 IME 성공으로 세지 않음. | [로컬 편집기](features/editor/local-text-editor-A401.md), [성능 조사](features/editor/document-performance-investigation-A401.md) |
+| A401 로컬 편집기 | 2026-11-18 CC0028 설치형 v0.427.0 Monaco 다크에서 910,045자(UTF-16)·10,003줄 문서에 Enter 12회와 `kotu`를 개별 입력했다. 저장본 전체가 기존 CRLF를 유지한 예상 내용과 일치했다. 자동 휠로 끝에서 9,875행까지 올린 뒤 끝으로 돌아왔다. 이전 사용자 ‘입력이 밀리지 않음’ 확인은 당시 지정 문서·환경에 한정. | 자동화에서 한/영 키를 지원하지 않았고 대체 키로는 `gks`가 입력됐다. 실제 한국어 IME 조합, 물리 키 연속 입력·휠 체감과 입력부터 화면 반영까지의 지연, 고대비·극단 장문/긴 줄은 미검수. | [v412·v426 검수](features/editor/local-text-editor-A401.md), [성능 조사](features/editor/document-performance-investigation-A401.md) |
 | A401 네이티브 대체 경로 | 과거 near1M/긴 줄256Ki Enter10·Undo·혼합 문자·줌/검색/모드 전환 관측. | 당시 held-key·고빈도 휠·초기 긴 줄 지연 미검증, 혼합 한글 wrap 글리프 잘림 원인 미확정. 현재 Monaco 주 경로와 구분하여 관련 경로를 바꿀 때 확인. | [과거 관측 L167](history/device-checks-index.md#l167), [visual line/search](features/editor/visual-line-search-A401.md) |
-| A142→A283→A291→A307 | A291 스크린샷 판정은 수령 완료. 글자 있는 마지막 줄의 trailing 채택 확인, 빈 마지막 줄 문제는 A307 v294 수리. | 빈 마지막 줄 EOF·¶·행 번호·가이드의 실제 판정 잔여. 옛 ‘A142 스크린샷 미수신’을 다시 요구하지 않는다. 현재 네이티브/로컬 편집기 적용 범위를 먼저 확인. | [판정/원문 L325](history/device-checks-index.md#l325), [과거 완료 상세](history/completed-requirements.md) A307 |
-| A115 커서 | 네이티브 장식 ①~③은 구현. 커서 색은 당시 공개 API 제약. | 로컬 편집기의 현재 커서와 fallback 경로를 나누어 ④가 남는지 확인. 아직 자동 완료 처리하지 않는다. | [열린 요구 A115](REQUIREMENTS.md#a115) |
+| A142→A283→A291→A307 | A291에서 글자가 있는 마지막 줄의 trailing 배치를 채택했고 A307(v294)에서 빈 마지막 줄을 수정했다. 위 설치형 Monaco의 문서 배율 100%·200%에서 10,002행에 ¶, 마지막 빈 10,003행에 ·EOF가 보였고 두 행의 번호와 수평 가이드가 맞았다. | 네이티브 편집기의 마지막 빈 줄 배치는 실화면 검수 잔여. | [판정/원문 L325](history/device-checks-index.md#l325), [과거 완료 상세](history/completed-requirements.md) A307 |
+| A115 커서 | 위 설치형 Monaco 다크 화면에서 커서는 약 한 줄 높이의 가는 흰색 세로선이었다. | 형광 녹색·검정 테두리 요구는 미충족. Standalone의 네이티브 편집기는 이번에 실행하지 않았다. | [A115 판정과 근거](REQUIREMENTS.md#a115) |
 | A396·A409 선택/검색 | 정상 다크 UI에서 편집·보기 선택, drag/Shift/Ctrl+A, 읽기 전용 보호·포커스/검색 관측. Viewing 선택은 후속 v407 결과가 기준. | 실제 Clipboard 복사, 라이트/고대비 픽셀·터치·다른 OS DPI, 좁은 폭·상한/접근 거부 조합은 별도. 초기 Viewing 실패 관측은 v407 후속과 구분. | [A409](features/editor/editor-background-A409.md), [v407 관측 L81](history/device-checks-index.md#l81) |
 | A340·A341·PDF·인쇄 | 편집/보기 상태 분리, 마크다운 표·인쇄 분할, PDF Contain/여백/상단 고정 개선은 구현. | 실제 인쇄 제출·프린터별 결과·모든 테마/DPI 검증으로 확대하지 않음. 관련 변경 시 PDF 크기/바 가림/가장자리와 텍스트 인쇄를 분리 확인. | [PDF A381](features/editor/pdf-viewport-fit-2026-10-02-A381.md), [과거 시나리오](history/device-checks-index.md) |
 
