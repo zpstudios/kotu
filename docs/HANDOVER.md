@@ -2,8 +2,8 @@
 
 ## 현재 상태
 
-- 제품 v0.427.0의 공식 배포와 지정 PC 설치는 2026-11-16 완료됐다. 해당 PC에서 설치 파일 대조와 설정 보존을 확인했다. [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.427.0) · [제품 커밋](https://github.com/zpstudios/kotu/commit/72a25d757696450d894a14bdd639c365f14bfcd6) · [A408 검수 범위](features/shell/original-icon-A408.md).
-- 공식 설치 백업은 해당 PC의 `%USERPROFILE%/KOTU-Validation/20261116-official-v0.427.0/`, 설치 근거는 당시 작업 폴더의 `artifacts/a408-release-427/`에 기록했다. 다른 체크아웃에서는 경로 존재를 먼저 확인한다.
+- v0.428.0의 정식 설치 파일과 v0.427.0 기준 차등 업데이트가 2026-11-18 공개됐다. Windows에서 정식 v0.427.0과 KOTU Test 동시 실행, 테스트판 제거 후 정식 파일·설정·등록 보존을 검증했다. [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.428.0) · [제품 커밋](https://github.com/zpstudios/kotu/commit/91ee169484942d625cf9e17cdc586f8f0e1c3d26) · [설치 검증](https://github.com/zpstudios/kotu/actions/runs/44325584622).
+- 지정 PC에서 마지막으로 확인한 공식 설치는 v0.427.0이다. 당시 공식 설치 백업은 `%USERPROFILE%/KOTU-Validation/20261116-official-v0.427.0/`, 대조 근거는 당시 작업 폴더의 `artifacts/a408-release-427/`에 있다. [A408 검수 범위](features/shell/original-icon-A408.md).
 - 11월 17일 복구 문서 4개의 대조와 중복 원문 폐기를 마쳤다. 독립 복구 보존본은 보호 대상이다. [나중에 반영한 요구와 폐기 근거](history/recovered-notes-review-A417.md).
 - 문서 정리로 지침과 현재 상태를 줄이고, 과거 기록과 기능 자료를 목적별로 찾을 수 있게 했다. 문서 수정 후 `pwsh -File eng/Test-Documentation.ps1`로 확인한다. [문서 지도](README.md)
 
@@ -11,7 +11,7 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 테스트 Setup 분리 A418 | 기존 정식 v0.427.0에서 다음 웹 업데이트 수신을 직접 확인할 수 있도록 정식판 설치·적용은 검수 시점까지 보존한다. [패키지와 검수 절차](development/official-release-and-install.md) |
+| 웹 업데이트 실기기 검수 A418 | 사용자가 기존 정식판의 Settings → Updates에서 v0.428.0 수신을 직접 확인할 차례다. 해당 PC에서 Setup 실행이나 업데이트 적용은 진행하지 않았다. [패키지와 검수 절차](development/official-release-and-install.md) |
 | 문서 편집 A401 | 원격 검수에서 저장·선택·편집·인쇄 취소 등을 확인했다. 직접 접속 시 실제 한국어 IME와 연속 입력·스크롤 체감, 다른 테마·배율 및 극단 조건이 남았다. [편집기 검수](features/editor/local-text-editor-A401.md) |
 | 이미지 A398 | v0.426.0에서 PNG/TIFF 썸네일과 APNG 일부 경로를 검수했다. 사용자 원본·다른 코덱·클라우드 캐시 조건 등은 부분 반영으로 남았다. [이미지 방향](features/image/exif-orientation-A398.md) |
 | 녹음·녹화 | 일반 녹화 저장과 검은 프레임 수정은 v0.426.0에 포함됐다. 원격 환경에서 미뤘던 실기기 검수 및 앱 내 재생의 검증 한계를 구분한다. 빠른 녹음·트레이 A406/A407은 보류다. [녹화 검수](features/recording/recording-save-and-editor-fullscreen.md) · [보류 범위](features/recording/quick-recording-A406-A407.md) |
