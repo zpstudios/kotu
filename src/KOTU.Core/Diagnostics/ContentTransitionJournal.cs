@@ -18,7 +18,7 @@ public enum ContentTransitionStage
 public sealed class ContentTransitionJournal : IDisposable
 {
     public const int MaxBytes = 64 * 1024;
-    public static string LogPath => Path.Combine(Path.GetTempPath(), "KOTU", "content-transitions.log");
+    public static string LogPath => Path.Combine(Path.GetTempPath(), DistributionPolicy.ProductId, "content-transitions.log");
     public static ContentTransitionJournal Shared { get; } = new(LogPath);
     private static readonly string Version = typeof(ContentTransitionJournal).Assembly.GetName().Version?.ToString() ?? "?";
 

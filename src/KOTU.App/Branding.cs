@@ -8,7 +8,7 @@ namespace KOTU.App;
 /// </summary>
 internal static class Branding
 {
-    public const string AppName = "KOTU";
+    public static string AppName => KOTU.Core.Integration.DistributionPolicy.IsTestBuild ? "KOTU Test" : "KOTU";
 
     /// <summary>
     /// 저장소 주소 — 설정 About 줄의 링크가 쓴다. 링크용 주소를 코드 여기저기에 흩뿌리지 않으려고

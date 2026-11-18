@@ -15,7 +15,7 @@ internal static class ShellSelectionRequest
 
     internal const string Token = "--shell-selection";
     private const long MaxBytes = 16 * 1024 * 1024;
-    private static string RequestDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KOTU", "ShellRequests");
+    private static string RequestDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), KOTU.Core.Integration.DistributionPolicy.ProductId, "ShellRequests");
     private sealed record Envelope(int Version, string Nonce, DateTimeOffset Created, LaunchVerb Verb, string[] Paths);
 
     internal static Task<LaunchRequest> ParseAsync(IReadOnlyList<string> args)

@@ -78,6 +78,12 @@ function Assert-BuildWorkflow([string]$text) {
     if ([regex]::Matches($text, '(?m)^  [\w-]+:[ \t]*\r?$').Count -ne 4) {
         throw 'Expected push, pull_request, workflow_dispatch and one build job layout'
     }
+    foreach ($command in @('-p:KotuTestBuild=true', 'vpk pack --packId KOTU.Test --packVersion',
+        '--packTitle "KOTU Test"', './eng/Test-ReleasePackage.ps1 -PackagePath artifacts/installer -Version $version -PackageId KOTU.Test',
+        './eng/Test-Installer.ps1 -SetupPath artifacts/installer/KOTU.Test-win-Setup.exe -PackagePath artifacts/KOTU -PackageId KOTU.Test -StableSetupPath artifacts/stable-baseline/KOTU-win-Setup.exe',
+        'path: artifacts/installer/KOTU.Test-win-Setup.exe')) {
+        if (!$text.Contains($command)) { throw "Missing branch test package contract: $command" }
+    }
     Assert-EditorGates $text $false
     Assert-ReleaseNotesGates $text $false
 }
@@ -90,6 +96,12 @@ function Assert-ReleaseWorkflow([string]$text) {
         $text -notmatch '(?m)^  cancel-in-progress: false\r?$') { throw 'Release serialization changed' }
     $steps = @(Get-WorkflowSteps $text)
     $gate = "steps.ver.outputs.skip != 'true'"
+    foreach ($binding in @('KOTU_PACKAGE_ID: ${{ github.ref == ''refs/heads/master'' && ''KOTU'' || ''KOTU.Test'' }}',
+        '-p:KotuTestBuild=${{ env.KOTU_PACKAGE_ID == ''KOTU.Test'' }}',
+        '$title = if ($env:KOTU_PACKAGE_ID -eq ''KOTU.Test'') { ''KOTU Test'' } else { ''KOTU'' }',
+        '--packTitle $title')) {
+        if (!$text.Contains($binding)) { throw "Release package identity selection changed: $binding" }
+    }
     $required = @(
         './eng/Test-Architecture.ps1',
         $nodeSetup,
@@ -102,9 +114,9 @@ function Assert-ReleaseWorkflow([string]$text) {
         'dotnet publish src/KOTU.App',
         './eng/Prepare-Package.ps1 -PackagePath artifacts/KOTU',
         './eng/Test-AppStartup.ps1 -PackagePath artifacts/KOTU',
-        'vpk pack --packId KOTU',
+        'vpk pack --packId $env:KOTU_PACKAGE_ID',
         './eng/Test-ReleasePackage.ps1 -PackagePath vpk_out',
-        './eng/Test-Installer.ps1 -SetupPath vpk_out/KOTU-win-Setup.exe -PackagePath artifacts/KOTU',
+        './eng/Test-Installer.ps1 -SetupPath "vpk_out/$env:KOTU_PACKAGE_ID-win-Setup.exe" -PackagePath artifacts/KOTU -PackageId $env:KOTU_PACKAGE_ID',
         './eng/Build-Standalone.ps1',
         './eng/Test-Standalone.ps1 -ExecutablePath vpk_out/KOTU-win-Standalone.exe',
         'uses: softprops/action-gh-release@v2'
@@ -140,7 +152,7 @@ $mutations = @(
     $source.Replace("success() && steps.ver.outputs.skip != 'true' && github.ref == 'refs/heads/master'", "steps.ver.outputs.skip != 'true'"),
     $source.Replace('dotnet test KOTU.sln', 'dotnet test tests/OneProject.csproj'),
     $source.Replace('run: dotnet test KOTU.sln', "continue-on-error: true`n        run: dotnet test KOTU.sln"),
-    $source.Replace('./eng/Test-Installer.ps1 -SetupPath vpk_out', './eng/Skipped.ps1 -SetupPath vpk_out'),
+    $source.Replace('./eng/Test-Installer.ps1', './eng/Skipped.ps1'),
     $source.Replace('dotnet run --project eng/ShellVerbSmoke/ShellVerbSmoke.csproj', 'dotnet run --project eng/Skipped.csproj'),
     $source.Replace('./eng/Build-Standalone.ps1', './eng/Skipped.ps1'),
     $source.Replace('./eng/Test-Standalone.ps1', './eng/Skipped.ps1')

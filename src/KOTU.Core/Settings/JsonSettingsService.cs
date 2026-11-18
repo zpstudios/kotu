@@ -34,7 +34,7 @@ public sealed class JsonSettingsService : ISettingsService
     private static string DefaultPath() =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "KOTU", "settings.json");
+            KOTU.Core.Integration.DistributionPolicy.ProductId, "settings.json");
 
     /// <summary>실제 저장 경로 (A36) — 설정 화면 표기·직접 열기에 쓴다.</summary>
     public string FilePath => _path;

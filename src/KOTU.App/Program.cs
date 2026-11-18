@@ -22,7 +22,7 @@ public static class Program
 
     /// <summary>시작 실패 로그 경로: %TEMP%\KOTU\startup-error.log</summary>
     private static string LogPath =>
-        Path.Combine(Path.GetTempPath(), Branding.AppName, "startup-error.log");
+        Path.Combine(Path.GetTempPath(), KOTU.Core.Integration.DistributionPolicy.ProductId, "startup-error.log");
 
     [STAThread]
     private static int Main(string[] args)
@@ -47,7 +47,7 @@ public static class Program
                 .OnFirstRun(_ => IsFirstRun = true)
                 .Run();
 
-            if (!KOTU.Core.Integration.DistributionPolicy.IsStandalone &&
+            if (KOTU.Core.Integration.DistributionPolicy.IsStableDistribution &&
                 Integration.ShellVerbServer.TryRun(args, out var shellExitCode)) return shellExitCode;
 
             WinRT.ComWrappersSupport.InitializeComWrappers();

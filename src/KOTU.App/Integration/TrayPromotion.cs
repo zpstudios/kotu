@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using System.Runtime.InteropServices;
 
 namespace KOTU.App.Integration;
 
@@ -10,7 +11,7 @@ namespace KOTU.App.Integration;
 /// NIM_ADD 후 이 키를 스캔해 자기 exe 항목의 IsPromoted(DWORD)=1을 직접 써서 없앤다.
 /// IsPromoted=1은 탐색기 재시작 없이 즉시 반영된다.
 /// 항목의 ExecutablePath 값은 known-folder GUID 접두 형태(예: "{GUID}\...\KOTU.exe")일 수
-/// 있어 전체 경로 비교가 아니라 파일명 접미사 비교로 판별한다.
+/// 있어 GUID 접두사를 실제 경로로 해석한 뒤 현재 실행 파일과 비교한다.
 /// 비공식 레지스트리 직접 쓰기(A38 UserChoice와 같은 성격)라 실패는 전부 조용히 무시한다
 /// (현상 유지 폴백 — 승격이 안 되면 지금처럼 사용자가 수동으로 켜면 될 뿐, 동작은 정상).
 /// </summary>
@@ -23,7 +24,7 @@ internal static class TrayPromotion
     /// </summary>
     public static void Request()
     {
-        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
+        if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution) return;
         _ = Task.Run(async () =>
         {
             try
@@ -45,10 +46,9 @@ internal static class TrayPromotion
     /// <summary>NotifyIconSettings를 1회 스캔해 자기 exe의 꺼진 항목을 IsPromoted=1로 만든다.</summary>
     private static void Promote()
     {
-        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
-        // 파일명 하드코딩 금지 — 리브랜딩으로 exe 이름이 바뀌어도 이 코드는 그대로 유효해야 한다.
-        var exeName = Path.GetFileName(Environment.ProcessPath);
-        if (string.IsNullOrEmpty(exeName)) return;
+        if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution) return;
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath)) return;
 
         using var root = Registry.CurrentUser.OpenSubKey(@"Control Panel\NotifyIconSettings", writable: false);
         if (root is null) return; // 키 부재(구 Windows 등) = 승격 개념 자체가 없음 — 무동작
@@ -62,7 +62,7 @@ internal static class TrayPromotion
                 if (entry is null) continue;
                 var path = entry.GetValue("ExecutablePath") as string;
                 if (path is null) continue;
-                if (!path.EndsWith("\\" + exeName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!MatchesExecutable(path, exePath)) continue;
                 if (entry.GetValue("IsPromoted") is int v && v == 1) continue; // 이미 켜짐 — 불필요한 쓰기(churn) 방지
                 entry.SetValue("IsPromoted", 1, RegistryValueKind.DWord); // 종류 명시 — 문자열로 쓰면 조용히 무효
             }
@@ -72,4 +72,24 @@ internal static class TrayPromotion
             }
         }
     }
+
+    private static bool MatchesExecutable(string registeredPath, string exePath)
+    {
+        // Explorer also stores paths such as "{FOLDERID_LocalAppData}\KOTU\current\KOTU.exe".
+        var separator = registeredPath.IndexOf('\\');
+        if (separator > 0 && Guid.TryParse(registeredPath[..separator], out var folderId))
+        {
+            var result = SHGetKnownFolderPath(ref folderId, 0, IntPtr.Zero, out var folder);
+            try
+            {
+                if (result < 0 || Marshal.PtrToStringUni(folder) is not { } resolved) return false;
+                registeredPath = Path.Combine(resolved, registeredPath[(separator + 1)..]);
+            }
+            finally { Marshal.FreeCoTaskMem(folder); }
+        }
+        return string.Equals(registeredPath, exePath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [DllImport("shell32.dll", ExactSpelling = true)]
+    private static extern int SHGetKnownFolderPath(ref Guid folderId, uint flags, IntPtr token, out IntPtr path);
 }

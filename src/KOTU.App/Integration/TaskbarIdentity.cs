@@ -67,7 +67,7 @@ internal static class TaskbarIdentity
                 var value = new PropVariant
                 {
                     vt = VtLpwstr,
-                    p = Marshal.StringToCoTaskMemUni($"{Branding.AppName}.Instance.{sequence}"),
+                    p = Marshal.StringToCoTaskMemUni($"{KOTU.Core.Integration.DistributionPolicy.ProductId}.Instance.{sequence}"),
                 };
                 try
                 {

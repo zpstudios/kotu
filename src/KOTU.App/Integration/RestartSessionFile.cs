@@ -57,7 +57,7 @@ internal static class RestartSessionFile
 
     private static string PathOf() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        Branding.AppName, "restart-session.json");
+        KOTU.Core.Integration.DistributionPolicy.ProductId, "restart-session.json");
 
     /// <summary>
     /// 창 세트 스냅샷을 기록한다. 예외는 호출 계층(RestartSession.TryWrite)이 삼키므로

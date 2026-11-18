@@ -1,6 +1,6 @@
 # KOTU 요구사항 — 열린 작업과 유효 결정
 
-이 문서는 현재 열린 일·보류 조건·유효한 제품 결정의 정본이다. 현재 작업 선택과 다음 시작점은 [HANDOVER](HANDOVER.md), 기능 설계는 [문서 지도](README.md), 실제 관측·미검증 경계는 [DEVICE-CHECKS](DEVICE-CHECKS.md)를 따른다. 미선택 백로그를 자동으로 착수하지 않는다. A번호는 영구 ID이며 마지막 등록 번호는 **A417**이다.
+이 문서는 현재 열린 일·보류 조건·유효한 제품 결정의 정본이다. 현재 작업 선택과 다음 시작점은 [HANDOVER](HANDOVER.md), 기능 설계는 [문서 지도](README.md), 실제 관측·미검증 경계는 [DEVICE-CHECKS](DEVICE-CHECKS.md)를 따른다. 미선택 백로그를 자동으로 착수하지 않는다. A번호는 영구 ID이며 마지막 등록 번호는 **A418**이다.
 
 완료 항목은 [A1–A417 결과 색인](history/requirements-completed-index.md)에 번호당 한 줄로 모았다. 그 색인의 고정 Git 원문·행 범위와 [과거 완료 상세](history/completed-requirements.md)에서 고유한 구현·재현·판단 근거를 회수한다. 날짜별 배포·시험 수치·해시 목록을 이 문서에 다시 누적하지 않는다. 기존 지침의 정본은 [CLAUDE.md](../CLAUDE.md)이며 이 파일에서 복제하지 않는다.
 
@@ -11,6 +11,7 @@
 
 | ID | 상태 | 현재 결과와 남은 범위 | 다음 시작점 |
 |---|---|---|---|
+| <a id="a418"></a>A418 | 구현·실기기 검수 대기 | 테스트 Setup을 정식판과 함께 설치해도 정식판에서 다음 GitHub 업데이트를 직접 받을 수 있어야 한다. | [패키지와 검수 절차](development/official-release-and-install.md) |
 | <a id="a19"></a>A19 | 미착수 | H/W 랭킹 제출은 서버가 필요한 장기 후보다. 전송·서버·개인정보 범위 미정. | 서버와 제출 정책부터 정한다. [원문 위치](history/requirements-completed-index.md#a19) |
 | <a id="a45"></a>A45 | 부분 | HWP 5.x·HWPX·ODT·ODS·ODP 본문/표 셀의 읽기 전용 텍스트 미리보기 v374 완료. 원본 페이지 배치·이미지·차트·수식 렌더링 미완료. 원본 편집/저장/인쇄, 암호·DRM·배포용 HWP·HWP 3.x는 지원 결과에 포함하지 않는다. | [Office 텍스트 미리보기](features/editor/office-text-preview-A45.md). 경량 렌더러 성립 여부부터 조사. |
 | <a id="a115"></a>A115 | 부분 | 장식 ①~③은 v142 구현. ④ 형광 녹색·검정 테두리는 설치형 v0.427.0 Monaco 다크 화면에서도 미적용을 확인했다. [테마 코드](../src/KOTU.Module.Document/EditorSource/visual.js)는 커서에 본문색을 지정한다. | Monaco에는 ④가 남고 네이티브 TextBox의 색상 변경은 API 제약으로 보류했다. [실기기 검수](DEVICE-CHECKS.md#editor), [원문 위치](history/requirements-completed-index.md#a115) |

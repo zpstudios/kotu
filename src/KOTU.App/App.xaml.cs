@@ -163,7 +163,7 @@ public partial class App : Application
     /// </summary>
     private static void ShellRegistrationMaintenance()
     {
-        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
+        if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution) return;
         var settings = Services.GetRequiredService<ISettingsService>();
         const string key = "integration.legacyBrandCleanupDone";
         var needsLegacyCleanup = !settings.Get(key, false);

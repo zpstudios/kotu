@@ -151,12 +151,14 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         // A222(2026-08-24): Windows 섹션(A24 "Always open files in a new instance" 토글 하나뿐이었다)은
         // 옵션 폐지와 함께 통째로 제거 — 창 재사용 규칙은 이제 설정 없이 고정이다(WindowManager 주석).
 
-        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+        if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution)
         {
-            AddHeader("Standalone build");
+            AddHeader(KOTU.Core.Integration.DistributionPolicy.IsStandalone ? "Standalone build" : "Test build");
             Root.Children.Add(new TextBlock
             {
-                Text = "Settings and playback history last only for this session. Explorer integration and updates are disabled.",
+                Text = KOTU.Core.Integration.DistributionPolicy.IsStandalone
+                    ? "Settings and playback history last only for this session. Explorer integration and updates are disabled."
+                    : "KOTU Test saves its own settings. Windows file associations are managed by KOTU.",
                 TextWrapping = TextWrapping.Wrap,
                 Opacity = 0.7,
             });
@@ -690,6 +692,8 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var currentVersion = typeof(SettingsView).Assembly.GetName().Version?.ToString(3) ?? "?";
         if (KOTU.Core.Integration.DistributionPolicy.IsStandalone)
             Root.Children.Add(new TextBlock { Text = "Updates are disabled in the standalone build.", Opacity = 0.7 });
+        else if (KOTU.Core.Integration.DistributionPolicy.IsTestBuild)
+            Root.Children.Add(new TextBlock { Text = "Install a new test build to update KOTU Test.", Opacity = 0.7 });
         else
             BuildUpdatesSection(currentVersion);
 
@@ -698,7 +702,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var aboutLine = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         aboutLine.Children.Add(new TextBlock
         {
-            Text = $"KOTU v{currentVersion} ·",
+            Text = $"{Branding.AppName} v{currentVersion} ·",
             Opacity = 0.7,
             VerticalAlignment = VerticalAlignment.Center,
         });

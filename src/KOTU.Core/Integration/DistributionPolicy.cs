@@ -15,5 +15,20 @@ public static class DistributionPolicy
         }
     }
 
-    public static string InstanceKey => IsStandalone ? "KOTU-Standalone-Main" : "KOTU-Main";
+    public static bool IsTestBuild
+    {
+        get
+        {
+#if KOTU_TEST_BUILD
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
+
+    // Stable owns the public update feed and the Windows Explorer registrations.
+    public static bool IsStableDistribution => !IsStandalone && !IsTestBuild;
+    public static string ProductId => IsTestBuild ? "KOTU.Test" : "KOTU";
+    public static string InstanceKey => IsStandalone ? "KOTU-Standalone-Main" : ProductId + "-Main";
 }

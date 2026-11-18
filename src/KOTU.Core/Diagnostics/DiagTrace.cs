@@ -33,10 +33,8 @@ namespace KOTU.Core.Diagnostics;
 /// </summary>
 public static class DiagTrace
 {
-    /// <summary>로그 폴더 이름 — %TEMP% 아래 앱 폴더다(Program.LogPath의 startup-error.log와 같은 자리).
-    /// Branding.AppName은 KOTU.App에 있어 Core에서 참조할 수 없으므로 리터럴을 쓴다 —
-    /// JsonSettingsService가 설정 폴더에 같은 리터럴을 쓰는 선례가 이미 있다(리네이밍 시 함께 손댈 곳).</summary>
-    private const string BrandFolder = "KOTU";
+    /// <summary>배포판별 임시 로그 폴더. Program.LogPath와 같은 위치를 쓴다.</summary>
+    private static string BrandFolder => KOTU.Core.Integration.DistributionPolicy.ProductId;
 
     /// <summary>회전 임계치(바이트) — 넘으면 trace.1.log로 밀고 새 파일을 연다. 보관은 1개뿐이다
     /// (사용자가 재현 직후 파일을 전달하는 용도라 더 오래된 이력은 필요 없다).</summary>

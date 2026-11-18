@@ -208,7 +208,7 @@ internal sealed class TextPerformanceCapture : IDisposable
                 {
                     var summary = request.Data.Snapshot(request.Session, request.Reason, request.Pending,
                         request.PendingAge, request.EndingProbeAge);
-                    var directory = Path.Combine(Path.GetTempPath(), "KOTU", "text-performance");
+                    var directory = Path.Combine(Path.GetTempPath(), DistributionPolicy.ProductId, "text-performance");
                     Directory.CreateDirectory(directory);
                     var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true });
                     // 고정 enum과 숫자만 담는다. 슬롯 8개·각 128 KiB 이내로 결과 파일도 제한한다.

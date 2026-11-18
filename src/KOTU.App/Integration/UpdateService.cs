@@ -21,7 +21,7 @@ public static class UpdateService
     {
         get
         {
-            if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return false;
+            if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution) return false;
             try { return CreateManager().IsInstalled; }
             catch { return false; }
         }
@@ -30,7 +30,7 @@ public static class UpdateService
     /// <summary>업데이트 확인. 업데이트 불가 빌드거나 최신이면 null.</summary>
     public static async Task<UpdateInfo?> CheckAsync()
     {
-        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return null;
+        if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution) return null;
         var manager = CreateManager();
         if (!manager.IsInstalled) return null;
         return await manager.CheckForUpdatesAsync();
@@ -39,7 +39,7 @@ public static class UpdateService
     /// <summary>업데이트 다운로드. 진행률(0~100)을 콜백으로 알린다(백그라운드 스레드에서 호출됨).</summary>
     public static async Task DownloadAsync(UpdateInfo info, Action<int>? progress = null)
     {
-        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return;
+        if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution) return;
         var manager = CreateManager();
         await manager.DownloadUpdatesAsync(info, progress);
     }
@@ -47,7 +47,7 @@ public static class UpdateService
     /// <summary>다운로드된 업데이트를 적용하고 앱을 재시작한다.</summary>
     public static async Task<bool> ApplyAndRestartAsync(UpdateInfo info)
     {
-        if (KOTU.Core.Integration.DistributionPolicy.IsStandalone) return false;
+        if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution) return false;
         var windows = App.Services.GetRequiredService<WindowManager>();
         if (!windows.TryBeginRestart()) return false;
         try

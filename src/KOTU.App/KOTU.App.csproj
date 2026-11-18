@@ -25,7 +25,8 @@
     <RootNamespace>KOTU.App</RootNamespace>
     <!-- 표시 이름 "KOTU": 탐색기 '연결 프로그램' 목록·작업 관리자 등에 노출 -->
     <Product>KOTU</Product>
-    <AssemblyTitle>KOTU</AssemblyTitle>
+    <Product Condition="'$(KotuTestBuild)' == 'true'">KOTU Test</Product>
+    <AssemblyTitle>$(Product)</AssemblyTitle>
     <!--
       이름과 달리 MSIX 패키징이 아니라 단일 프로젝트 도구(특히 resources.pri 생성·병합)를 켜는 속성.
       WinUI 템플릿 기본값인데 누락돼 있었고, 그 결과 publish에 resources.pri가 없어
