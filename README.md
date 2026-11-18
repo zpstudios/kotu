@@ -8,7 +8,7 @@
 ![UI](https://img.shields.io/badge/UI-WinUI%203-41b883)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-### 📖 User Guide — **[한국어](docs/USER-GUIDE.ko.md)** · **[English](docs/USER-GUIDE.md)**
+### 📖 User Guide — **[한국어](docs/guides/user-guide.ko.md)** · **[English](docs/guides/user-guide.en.md)**
 
 모듈별 조작법과 단축키 전체 표. 처음이라면 여기부터.
 
@@ -47,7 +47,7 @@ LibreHardwareMonitor)에 맡기고, KOTU는 **하나로 묶인 경험**에 집�
   관리자 권한이 필요 없고, 스위치를 끄면 흔적 없이 해제됩니다.
 - **UI 배율** — 시스템 기본 또는 100~350% 고정(KOTU 창에만 적용).
 
-자세한 조작법과 단축키 전체 표는 위의 **User Guide**([한국어](docs/USER-GUIDE.ko.md) · [English](docs/USER-GUIDE.md))
+자세한 조작법과 단축키 전체 표는 위의 **User Guide**([한국어](docs/guides/user-guide.ko.md) · [English](docs/guides/user-guide.en.md))
 — 웹 게시본은 `site/guide.ko.html` · `site/guide.html`.
 
 ## 다운로드
@@ -76,11 +76,21 @@ Standalone 배포물은 기존 텍스트 편집기를 사용합니다.
 
 ## 프로젝트 구조
 
+작업을 이어갈 때는 [문서 지도](docs/README.md)에서 현행 상태·기능별 설계·검수 근거를 찾을 수 있습니다.
+
 ```
 src/KOTU.Core        # 모듈 계약(IModule)·파일 라우터·설정 — UI 비의존
 src/KOTU.App         # WinUI 3 셸: 단일 인스턴스, 다중 창, 파일 → 모듈 라우팅
 src/KOTU.Module.*    # 기능 모듈 (AllReadable, Image, Video, Audio, Document, Archive, Hardware, Record)
+src/KOTU.DocumentModel  # 문서 편집·검색·저장 모델
+src/KOTU.FileOperations # 파일 복사·이동
+src/Shared           # 여러 프로젝트가 공유하는 UI 소스
 tests/               # 단위 테스트 (xunit)
+eng/                 # 빌드·검증·배포 도구
+packaging/           # 설치 자산과 생성 스크립트
+vendor/              # 고정한 외부 녹화 엔진 소스·패치·라이선스
+site/                # 웹사이트 게시 파일
+docs/                # 사용 설명서·개발 문서·기능 설계·검수·이력
 ```
 
 설계 배경과 로드맵은 [ARCHITECTURE.md](ARCHITECTURE.md), 남은 작업 목록은

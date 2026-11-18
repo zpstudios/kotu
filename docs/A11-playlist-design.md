@@ -207,7 +207,7 @@ RadioMenuFlyoutItem   "Repeat this file: Infinite"
   형태 자체는 선례 다수(E9A6·E190 등)라 CI 위험은 없고, 렌더 모양만 실기기 확인 포인트.
 - 핫키 = `L`(Loop) 제안 — `HotkeySupport.Bind`로 플라이아웃 열기(자막 C 선례 —
   VideoPlayerView.xaml.cs:1223-1224). 영상 기사용 키 M·S·C·A·F(:1220-1227)·오디오 M·S(:938-940)와
-  충돌 없음. docs/A86-keymap.md·A196-key-audit 대조는 구현 배치의 통과 조건으로.
+  충돌 없음. docs/features/shell/keymap-A86.md·A196-key-audit 대조는 구현 배치의 통과 조건으로.
 
 **폭 산식 영향(축약 임계 640)**: A144 주석이 "A151이 전체화면 칸(버튼 32+간격 6 = 38)을 제거했을 때
 임계를 안 내려 38이 여유분으로 남아 있다"고 명기(VideoPlayerView.xaml.cs:160-162). 새 c9(32+6 = 38)가

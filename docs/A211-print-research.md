@@ -164,7 +164,7 @@
   큰 단일 블록(긴 코드 블록)의 분할 규칙만 결정 필요(§4 질문 3) — 불가 시 폴백은 등재문대로
   원문 텍스트 경로.
 - **진입점·키**: Ctrl 조합 현황 — 앱에 남은 Ctrl 조합은 Ctrl+S 하나(MainWindow.xaml.cs:803-804,
-  A86-keymap.md:117)라 **Ctrl+P는 비어 있다**. 관용구 = DocumentView의
+  features/shell/keymap-A86.md:117)라 **Ctrl+P는 비어 있다**. 관용구 = DocumentView의
   `<KeyboardAccelerator Key="S" Modifiers="Control">`(DocumentView.xaml:15-17). P 단독 키는
   Hardware 모듈이 사용 중(HardwareView.xaml.cs:1583)이나 Ctrl 조합과는 무충돌. 버튼은 모듈
   하단 바 + HotkeySupport 관용구가 그대로 쓰인다. 다중 창(Shift+N)은 창마다 ⓐ 등록이 필요
@@ -228,7 +228,7 @@ n페이지 요소 팩토리)를 꽂는 구조. 인쇄 대상 3모듈만 공급�
    (자체 프리뷰 화면·자체 옵션 UI는 만들지 않는 전제. 커스텀 옵션이 필요해지면
    PrintTaskOptionDetails로 후일 확장.)
 2. **[A211] Ctrl+P 키 배정** — Ctrl+P(3모듈 한정, DocumentView Ctrl+S 액셀러레이터 관용구)로
-   확정하는가? 하단 바 인쇄 버튼을 병행 배치하는가(A86-keymap.md에 Ctrl+P 행 추가 필요)?
+   확정하는가? 하단 바 인쇄 버튼을 병행 배치하는가(features/shell/keymap-A86.md에 Ctrl+P 행 추가 필요)?
 3. **[A211] 텍스트 인쇄 기본값** — 폰트(제안: 에디터와 같은 기본 글꼴·14px 상당 → 프린터
    DIP 그대로) / 여백(제안: ImageableRect + 소여백 고정, 사용자 옵션 없음) / 머리글·바닥글
    (제안: 없음 — 페이지 번호도 생략)? 마크다운의 페이지보다 큰 코드 블록은 잘라 넘기는

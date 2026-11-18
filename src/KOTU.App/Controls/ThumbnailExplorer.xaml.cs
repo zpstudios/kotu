@@ -1305,7 +1305,7 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     // A352 배치 2: 로컬 이미지 원본 전용 갈래(StartImagePreview — BitmapImage.UriSource +
     // DecodePixelWidth 직접 디코드, A93)를 삭제했다. 근거 = A352 트레이스
-    // (docs/assets/A352-trace-2026-09-06.log): 그 경로가 세션 전체에서 딱 3번 돌았고
+    // (docs/verification/thumbnail-crash-trace-A352.md 첫 채취 구간): 그 경로가 세션 전체에서 딱 3번 돌았고
     // 그 직후 프로세스가 사라졌다 — 관리 예외(exc 줄)도 ImageOpened/ImageFailed도 없이
     // 이벤트 1000(Microsoft.UI.Xaml.dll · 0xC000027B stowed)만 남았다. 즉 XAML 네이티브
     // 이미지 파이프라인 안에서 죽었다. 문제의 PNG 3장은 파일 자체가 정상이었고(8비트 RGBA ·

@@ -6,4 +6,4 @@
 
 폴더 메뉴에 Open, Open in Windows Explorer, Copy path, Show details를 추가했다. 기존 Cut / Copy / Paste / Rename / Delete도 유지하며, 체크된 항목과 우클릭한 폴더의 작업 범위를 구분한다. 상위 폴더 항목은 파일 작업과 메뉴 대상에서 제외한다.
 
-검수 범위와 한계는 [A417 구현 기록](A417-EXPLORER-REFRESH.md)을 따른다.
+검수 범위와 한계는 [A417 구현 기록](features/explorer/explorer-refresh-A417.md)을 따른다.

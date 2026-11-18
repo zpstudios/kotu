@@ -1,7 +1,7 @@
 # KOTU — 올인원 Windows 유틸리티 아키텍처 설계
 
 > v0.354.0 작업 브랜치의 파일 전송 구조 분리는
-> [FILE-TRANSFER-MIGRATION.md](docs/FILE-TRANSFER-MIGRATION.md)를 참조한다.
+> [docs/history/file-transfer-migration.md](docs/history/file-transfer-migration.md)를 참조한다.
 
 > v0.353.0 작업 브랜치의 문서 세션 분리와 단계적 구조 변경은
 > [ARCHITECTURE-MIGRATION.md](docs/ARCHITECTURE-MIGRATION.md)를 참조한다.
@@ -292,7 +292,7 @@ UI 스레드(디스패처)에서 발견되면 즉시 수리 대상:
    이름변경·폴더 생성급 — `ExplorerFileOps.Rename` 선례)뿐이며, 예외를 쓰면 근거를 주석으로 남긴다.
    **A386 보강**: 이 예외는 네트워크/이동식 경로의 지연 보장이 아니다. 사용자 경로 존재 조회·
    아이콘 크기는 워커로 이관했다. 남은 단일 변경·기본 정보·선읽기 속성 조회도 잔여 수리 후보로
-   분류한다. 코드별 현행·잔여 문제 정본은 [A386 감사](docs/A386-UI-WORKER-AUDIT.md)다.
+   분류한다. 코드별 현행·잔여 문제 정본은 [A386 감사](docs/verification/ui-worker-audit-A386.md)다.
 2. **입력 크기에 상한이 없는 루프·대형 문자열 처리.** 상한 없는 입력(폴더 항목 수·파일 크기·
    아카이브 항목 수)을 도는 루프는 상한(Take/Limit — `TreeChildLimit`·`ThumbnailLimit` 선례)·
    분할·워커행 중 하나를 반드시 고른다. 임계 감각 = A177(문서 1M자).

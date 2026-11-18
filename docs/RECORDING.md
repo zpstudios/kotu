@@ -83,7 +83,7 @@ saved MP4 and WAV files continue to open in Video and Audio.
   shows an explicit error and disables Start; Retry handles preparation errors.
   Failed persistence restores the prior setting and attempts a compensating save.
   Failed compensation leaves a restart-uncertainty warning until an explicit save
-  succeeds. See `A405-COMMON-RECORDING-FOLDER.md` for the exact migration/ownership contract.
+  succeeds. See `features/recording/common-recording-folder-A405.md` for the exact migration/ownership contract.
 - Start generates a timestamped filename with a full GUID suffix directly in the
   displayed folder. There is no per-recording Save dialog or empty destination file.
   **Open folder** opens the folder containing the last saved or recoverable partial
@@ -204,7 +204,7 @@ of sample data), with an explicit notice.
   restored exactly, owned windows/processes/temp cleared. Product8c22448 released as v0.411.0; both remote919/919 suites and original release gates passed. Three new native
   start/stop paths are not claimed verified. Per-view ownership remains; A406/A407 global/quick
   recording integration is later. A remembered identity beyond the first discovery cap may not
-  restore until enumerated. See `A403-RECORD-START-CONTROLS.md`.
+  restore until enumerated. See `features/recording/record-start-controls-A403.md`.
 
 - A402v0.410.0 local verification:105 focused and874 full tests across8 assemblies,
   Release/x64 with0 warnings/errors, architecture20/release-contract7 and normal
@@ -212,7 +212,7 @@ of sample data), with an explicit notice.
   and played in KOTU after the native ID/MF/preview corrections. Its video-only track
   is640×360 H.264,11.27s; UI/tool timing exceeded the approximately5s target, so no
   second recording was made. Same-device reuse and physical failure cases remain unverified. See
-  `A402-CAMERA-SOURCES.md`. Native camera initialization/driver teardown can block;
+  `features/recording/camera-sources-A402.md`. Native camera initialization/driver teardown can block;
   the frame guard does not make arbitrary driver hangs safely cancelable.
 
 - Screen capture needs the Microsoft Visual C++ 2015–2022 Redistributable **x64** and

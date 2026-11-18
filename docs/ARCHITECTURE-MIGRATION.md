@@ -1,6 +1,6 @@
 # 구조 개선 작업 브랜치
 
-> 2단계 A357(v0.354.0)는 [FILE-TRANSFER-MIGRATION.md](FILE-TRANSFER-MIGRATION.md)에 기록한다.
+> 2단계 A357(v0.354.0)는 [history/file-transfer-migration.md](history/file-transfer-migration.md)에 기록한다.
 > 아래는 완료된 1단계 A356의 범위와 검증 이력이다.
 
 2026-09-07 · v0.353.2 · A356 · `codex/architecture-document-session`
@@ -93,7 +93,7 @@ All Readable에서 문서→다른 모듈 전환, 저장 후 닫기, 읽기 전�
 ## 당시 후속 계획
 
 아래는 1단계 완료 당시의 계획이다. 현재 완료·검증 상태는
-[비동기·미디어 공통 정책 분리](ASYNC-MEDIA-MIGRATION.md)의 다섯 단계 표를 따른다.
+[비동기·미디어 공통 정책 분리](history/async-media-migration.md)의 다섯 단계 표를 따른다.
 
 1. 파일 복사·이동의 계획/실행/원본 정리를 분리하고 동시 변경·연결 폴더를 검증한다.
 2. 공식 release 워크플로도 테스트 성공을 필수로 묶는다(이번에는 브랜치 실행본만 연결).
