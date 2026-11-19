@@ -14,7 +14,7 @@ public sealed partial class ImageViewerView
         _animation = null;
     }
 
-    private void StartAnimation(ApngImage image, string path, int sequence)
+    private void StartAnimation(ApngImage image, string path)
     {
         var lifetime = new CancellationTokenSource();
         _animation = lifetime;
@@ -31,7 +31,8 @@ public sealed partial class ImageViewerView
                     {
                         try
                         {
-                            if (token.IsCancellationRequested || sequence != _loadSequence || _navigator?.Current != path)
+                            if (token.IsCancellationRequested ||
+                                !string.Equals(_navigator?.Current, path, StringComparison.OrdinalIgnoreCase))
                             {
                                 shown.TrySetCanceled(token);
                                 return;

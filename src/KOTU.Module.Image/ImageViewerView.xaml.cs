@@ -36,10 +36,11 @@ namespace KOTU.Module.Image;
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IPrintPageProvider, IBrowseOrderConsumer,
-    ICurrentPathSource, IImageCopyTarget
+    ICurrentPathSource, IImageCopyTarget, IContentInfoChangedSource
 {
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패, 회전(A191) 시점.</summary>
     public event Action? TrayStatusChanged;
+    public event Action? ContentInfoChanged;
 
     /// <summary>
     /// 트레이 아이콘 내용: 열림 = <b>해상도 2줄</b>(위 = 가로 px, 아래 = 세로 px — 예 "4032"/"3024"),
@@ -187,7 +188,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// </summary>
     private sealed record LoadedImage(byte[] Data, uint Width, uint Height,
         string Size, string Kind, string Exif, ApngImage? Animation);
-    private readonly Dictionary<string, Task<LoadedImage>> _preloadCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Task<LoadedImage?>> _preloadCache = new(StringComparer.OrdinalIgnoreCase);
+    private ImageFileWatch? _fileWatch;
+    private string? _displayedPath;
+    private bool _refreshPending;
 
     public ImageViewerView(OpenContext context)
     {
@@ -217,6 +221,10 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             _imageLoading = false;
             _loadSequence++;
             _openSeq++;
+            _fileWatch?.SetFolder(null);
+            _fileWatch = null;
+            _displayedPath = null;
+            _refreshPending = false;
             _worker?.Dispose(); // 진행 중 작업은 워커가 마저 끝내고 스레드 종료
             _worker = null;
             _preloadCache.Clear(); // A194 — 뷰 언로드 = 선읽기 캐시 무효화(대형 바이트를 붙들지 않는다)
@@ -301,6 +309,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     private async void OpenPath(string path)
     {
         DiagTrace.Write("image", "OpenPath " + path); // A352 배치 1
+        StopAnimation();
         var seq = ++_openSeq;
         _loadSequence++;
         _imageLoading = true;
@@ -579,7 +588,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// 현재 이미지를 바탕화면 배경으로 건다(A161).
     /// <para>
     /// 변환은 <b>항상 PNG</b>다 — SPI_SETDESKWALLPAPER가 못 읽는 형식(psd·webp·ico 등)이 있어
-    /// 원본을 그대로 넘길 수 없다. 변환기는 이 모듈이 이미 쓰는 Magick.NET(LoadViaMagickAsync와
+    /// 원본을 그대로 넘길 수 없다. 변환기는 이 모듈이 이미 쓰는 Magick.NET(MagickImageDecoder와
     /// 같은 MagickFormat.Png)이라 형식을 가리지 않는다.
     /// </para>
     /// <para>
@@ -624,7 +633,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// 다음 지정에서 이 파일을 다시 써도 현재 배경이 깨지지 않는다.
     /// 경로 조립은 설정 파일(KOTU.Core.Settings.JsonSettingsService.DefaultPath)과 같은 관용구이고,
     /// 폴더명은 <b>현재 브랜드 "KOTU"만</b> 쓴다(구 브랜드 폴더는 청소 대상일 뿐 쓰기 대상이 아니다).
-    /// 바이트 변환은 LoadViaMagickAsync가 이미 쓰는 ToByteArray(MagickFormat.Png) 그대로다.
+    /// 바이트 변환은 MagickImageDecoder가 쓰는 ToByteArray(MagickFormat.Png) 그대로다.
     /// </summary>
     private static string WriteWallpaperPng(string sourcePath)
     {
@@ -640,17 +649,34 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
     // ---------- 이미지 로드 ----------
 
-    private async Task LoadCurrentAsync()
+    private void OnImageFilesChanged(WatchChanges changes)
     {
-        StopAnimation();
+        foreach (var path in _preloadCache.Keys.Where(path => changes.Contains(Path.GetFullPath(path))).ToArray())
+            _preloadCache.Remove(path);
+        if (_navigator?.Current is not { } current || !changes.Contains(Path.GetFullPath(current))) return;
+        if (_imageLoading) _refreshPending = true;
+        else _ = LoadCurrentAsync(externalChange: true);
+    }
+
+    private async Task LoadCurrentAsync(bool externalChange = false)
+    {
+        var path = _navigator?.Current;
+        var preserveView = externalChange && path is not null &&
+            string.Equals(path, _displayedPath, StringComparison.OrdinalIgnoreCase);
+        if (!preserveView)
+        {
+            StopAnimation();
+            _displayedPath = null;
+            _copyReady = false;
+        }
+        _refreshPending = false;
         var loadSequence = ++_loadSequence;
-        _copyReady = false;
         UpdateImageCopyMenuState();
         _copyGate.Invalidate();
         _imageLoading = true;
-        var path = _navigator?.Current;
         if (path is null)
         {
+            _fileWatch?.SetFolder(null);
             _imageLoading = false;
             ImageControl.Source = null;
             _printBytes = null; // A211 — 표시가 비면 인쇄 재료도 비운다(CanPrintNow false)
@@ -662,30 +688,15 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
 
         try
         {
-            if (NeedsMagickDecode(path))
-            {
-                await LoadViaMagickAsync(path, loadSequence);
-                return;
-            }
-
-            // 파일 읽기와 메타데이터 디코드(EXIF 보정 후 해상도·A9 메타 요약)는 워커에서(A42).
-            // JPEG/TIFF는 BitmapImage가 EXIF를 적용하고, PNG는 워커에서 표시용 바이트만 보정한다.
-            // APNG의 첫 프레임은 복사·인쇄에 쓰고 애니메이션은 별도 워커가 보정된 캔버스를 전달한다.
-            // A194: 이웃 선읽기 캐시에 있으면(완료·진행 중 모두 Task) 그 결과를 받아 디코드를
-            // 생략한다 — 진행 중이면 같은 Task를 await(직렬 큐라 새로 넣는 것보다 먼저 끝난다).
-            var (data, width, height, size, kind, exif, animation) =
-                _preloadCache.TryGetValue(path, out var preloaded)
-                    ? await preloaded
-                    : await Worker.Run(_ => ReadImageFile(path));
-            // A194: 캐시 히트는 대기 없이 완료될 수 있어 종전 직렬 큐의 "요청 순서 = 적용 순서"가
-            // 깨질 수 있다 — Magick 경로와 같은 현재 파일 재검증으로 낡은 결과를 버린다
-            // (필드 대입 전이라 직전 파일 메타가 새 화면에 섞이지 않는다).
-            if (_navigator?.Current != path || loadSequence != _loadSequence) return;
-
-            var bitmap = new BitmapImage(); // GIF 애니메이션은 BitmapImage 기본 지원
-            using (var stream = new MemoryStream(data))
-                await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
-            if (_navigator?.Current != path || loadSequence != _loadSequence) return; // A194 — SetSourceAsync 대기 중의 항해도 폐기
+            var queue = DispatcherQueue;
+            _fileWatch ??= new ImageFileWatch(Worker, action => queue.TryEnqueue(() => action()), OnImageFilesChanged);
+            _fileWatch.SetFolder(Path.GetDirectoryName(Path.GetFullPath(path)));
+            var prepared = await PrepareCurrentImageAsync(path, loadSequence, externalChange);
+            if (prepared is null || loadSequence != _loadSequence ||
+                !string.Equals(_navigator?.Current, path, StringComparison.OrdinalIgnoreCase)) return;
+            var (image, bitmap) = prepared.Value;
+            var (data, width, height, size, kind, exif, animation) = image;
+            StopAnimation();
 
             // 디코드가 끝난 소스와 크기를 함께 교체해 인쇄가 이전 바이트와 새 크기를 섞지 않게 한다.
             _pixelWidth = width;
@@ -695,22 +706,29 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
             _exifText = exif;
             ImageControl.Source = bitmap;
             _copyReady = true;
+            _displayedPath = path;
             _printBytes = data; // A211 — 인쇄 재료(표시 소스와 한 몸으로 세운다)
             PlaceholderText.Visibility = Visibility.Collapsed;
-            _userRotation = 0;
+            if (!preserveView) _userRotation = 0;
             ApplyRotation();
-            Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true); // 줌 초기화(창맞춤)
+            if (!preserveView) Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true);
             UpdateStatusBar();
-            ContentOpened?.Invoke(path); // 셸 동기화 (v0.25.0)
+            if (preserveView) ContentInfoChanged?.Invoke();
+            else ContentOpened?.Invoke(path); // 새 항해만 셸 선택을 동기화한다.
             // A54 → A191: 트레이 = 해상도 2줄. EXIF 보정 후 크기와 수동 회전이 모두 확정된
             // 뒤 발화한다(위 대입 순서 유지 — 앞서 쏘면 직전 파일 해상도가 그려진다).
             TrayStatusChanged?.Invoke();
-            if (animation is not null) StartAnimation(animation, path, loadSequence);
+            if (animation is not null) StartAnimation(animation, path);
             SchedulePreloads(); // A194 — 표시 완료 후에야 이웃 선읽기(표시 로드보다 후순위)
         }
         catch (Exception ex)
         {
             if (loadSequence != _loadSequence) return;
+            if (preserveView)
+            {
+                FileNameText.Text = $"Could not refresh {Path.GetFileName(path)}. Showing the previous image.";
+                return;
+            }
             _copyReady = false;
             ImageControl.Source = null;
             _printBytes = null; // A211 — 로드 실패도 "인쇄할 그림 없음"이다(표시 소스와 같은 처리)
@@ -731,8 +749,50 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
         }
         finally
         {
-            if (loadSequence == _loadSequence) _imageLoading = false;
+            if (loadSequence == _loadSequence)
+            {
+                _imageLoading = false;
+                if (_refreshPending) _ = LoadCurrentAsync(externalChange: true);
+            }
         }
+    }
+
+    private async Task<(LoadedImage Image, BitmapImage Bitmap)?> PrepareCurrentImageAsync(
+        string path, int sequence, bool externalChange)
+    {
+        var worker = Worker;
+        LoadedImage? image = null;
+        if (!externalChange && _preloadCache.TryGetValue(path, out var preloaded))
+        {
+            try { image = await preloaded; }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // An explicit open retries a failed preload or a neighbor that has become local.
+            }
+        }
+
+        for (var attempt = 0; sequence == _loadSequence; attempt++)
+        {
+            try
+            {
+                image ??= await worker.Run(_ =>
+                    externalChange && ExplorerListing.IsCloudPlaceholder(File.GetAttributes(path))
+                        ? null : ReadImageFile(path));
+                if (image is null || sequence != _loadSequence) return null;
+                var bitmap = new BitmapImage();
+                using var stream = new MemoryStream(image.Data);
+                await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
+                return (image, bitmap);
+            }
+            catch (Exception ex) when (externalChange && attempt < 2 && sequence == _loadSequence &&
+                ex is not (OperationCanceledException or OutOfMemoryException))
+            {
+                // An editor may still be writing bytes or holding an exclusive handle after notification.
+                image = null;
+                await Task.Delay(TimeSpan.FromMilliseconds(250 * (attempt + 1)));
+            }
+        }
+        return null;
     }
 
     // ---------- Magick.NET 디코드 경로 (v0.34.0) ----------
@@ -745,39 +805,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// psd 등을 Magick.NET으로 PNG 바이트로 변환해 표시한다. psd는 첫 이미지가
     /// 병합(composite) 미리보기라 레이어 펼침 없이 그대로 쓴다. 디코드는 워커에서(A42).
     /// </summary>
-    private async Task LoadViaMagickAsync(string path, int loadSequence)
+    private static LoadedImage ReadMagickImage(string path)
     {
-        var (png, width, height, size, kind) = await Worker.Run(_ =>
-        {
-            var decoded = MagickImageDecoder.Read(path);
-            // A9: 비트뎁스 = 채널당 비트 × 채널 수 (Q8 빌드라 채널당 8비트 상한 — 근사값)
-            return (decoded.Png, decoded.Width, decoded.Height,
-                FormatSize(new FileInfo(path).Length), FormatKind(path, decoded.BitDepth));
-        });
-
-        if (_navigator?.Current != path || loadSequence != _loadSequence) return; // 그새 다른 파일로 이동함
-
-        using var stream = new MemoryStream(png);
-        var bitmap = new BitmapImage();
-        await bitmap.SetSourceAsync(stream.AsRandomAccessStream());
-        if (_navigator?.Current != path || loadSequence != _loadSequence) return;
-
-        _pixelWidth = width;
-        _pixelHeight = height;
-        _sizeText = size;
-        _kindText = kind;
-        _exifText = string.Empty; // 이 경로는 EXIF 요약을 읽지 않는다 — 이전 파일 것이 남지 않게 비운다
-        _copyReady = true;
-        ImageControl.Source = bitmap;
-        _printBytes = png; // A211 — psd도 이 시점엔 PNG 바이트라 인쇄 파이프가 같다(BitmapImage 디코드 가능)
-        PlaceholderText.Visibility = Visibility.Collapsed;
-        _userRotation = 0;
-        ApplyRotation();
-        Scroller.ChangeView(0, 0, 1.0f, disableAnimation: true);
-        UpdateStatusBar();
-        ContentOpened?.Invoke(path);
-        TrayStatusChanged?.Invoke(); // A54 → A191: 트레이 = 해상도 2줄(Magick 경로도 크기를 먼저 대입했다)
-        SchedulePreloads(); // A194 — psd의 이웃이 일반 이미지면 선읽기가 그대로 통한다
+        var decoded = MagickImageDecoder.Read(path);
+        return new(decoded.Png, decoded.Width, decoded.Height, FormatSize(decoded.SourceLength),
+            FormatKind(path, decoded.BitDepth), string.Empty, null);
     }
 
     /// <summary>
@@ -789,10 +821,11 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     /// </summary>
     private static LoadedImage ReadImageFile(string path)
     {
+        if (NeedsMagickDecode(path)) return ReadMagickImage(path);
         // A353: File.ReadAllBytes는 FileShare.Read라 다른 프로세스가 쓰기로 잡고 있으면
         // 열기 자체가 실패한다 — 공유 읽기로 열고 길이만큼 한 번에 채운다(DocumentView와 같은 관용구).
         byte[] data;
-        using (var file = SharedRead.Open(path))
+        using (var file = SharedRead.OpenReplaceable(path))
         {
             data = new byte[file.Length];
             file.ReadExactly(data);
@@ -851,27 +884,22 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         if (_preloadCache.ContainsKey(path)) return;
         if (NeedsMagickDecode(path)) return;
-        try
-        {
-            if (ExplorerListing.IsCloudPlaceholder(File.GetAttributes(path))) return;
-        }
-        catch
-        {
-            return; // 속성도 못 읽는 파일(그새 소실 등) — 선읽기 포기(표시 경로가 자기 오류를 띄운다)
-        }
-
-        var task = Worker.Run(_ => ReadImageFile(path));
+        var task = Worker.Run(ctx => CloudFileAccess.ReadLocal(path, false, ctx.Cancellation, () => ReadImageFile(path)));
         _preloadCache[path] = task;
         try
         {
-            await task;
+            if (await task is not null)
+            {
+                PrunePreloadCache();
+                return;
+            }
         }
         catch
         {
-            _preloadCache.Remove(path); // 디코드 실패·워커 닫힘 — 조용히 무시, 캐시에 안 남김
-            return;
+            // A failed background read must not prevent an explicit open.
         }
-        PrunePreloadCache(); // 선읽는 사이 항해가 진행됐으면 여기서 걸러진다(낡은 결과 폐기)
+        if (_preloadCache.TryGetValue(path, out var stored) && ReferenceEquals(stored, task))
+            _preloadCache.Remove(path);
     }
 
     /// <summary>양옆(PeekNext·PeekPrevious)이 아닌 캐시 항목을 전부 버린다 — 진행 중 Task도 함께
@@ -1277,7 +1305,7 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     {
         // A211: 인쇄 버튼 활성은 아래 두 분기(파일 있음·없음)에 공통이라 분기 앞에서 한 번 갱신한다.
         // 이 메서드는 표시 상태가 확정된 뒤에만 불린다(Source·_printBytes 대입 다음) — 호출 지점
-        // 전수: 생성자 빈 상태 · LoadCurrentAsync 성공/빈 상태 · LoadViaMagickAsync 성공.
+        // 생성자 빈 상태와 LoadCurrentAsync 성공/빈 상태에서 호출한다.
         // 예외는 로드 실패 경로 하나뿐이고 거기서는 직접 부른다(그쪽 주석 참조).
         // A230 → A249: Fit 조절기의 활성 전환도 이 메서드의 두 분기가 겸한다 — 판정 축은 이미
         // 여기 있는 "현재 파일 경로"(_navigator.Current) 하나뿐이라 전환 지점을 새로 만들지 않는다.

@@ -28,4 +28,8 @@ public static class SharedRead
     /// </summary>
     public static FileStream Open(string path) =>
         new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+    /// <summary>Permit an editor to atomically replace a file while the viewer finishes reading its old handle.</summary>
+    public static FileStream OpenReplaceable(string path) =>
+        new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 }
