@@ -11,7 +11,8 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 웹 업데이트 실기기 검수 A418 | 사용자가 기존 정식판의 Settings → Updates에서 v0.428.0 수신을 직접 확인할 차례다. 해당 PC에서 Setup 실행이나 업데이트 적용은 진행하지 않았다. [패키지와 검수 절차](development/official-release-and-install.md) |
+| 웹 업데이트 실기기 검수 A418 | 사용자가 기존 정식판의 Settings → Updates에서 최신 공개 버전 수신을 직접 확인할 차례다. [패키지와 검수 절차](development/official-release-and-install.md) |
+| 문서 편집기 커서 A115 | v0.429.0에서 기본 편집기의 라이트·다크 입력 커서에 형광 녹색과 검은 테두리를 적용했다. 정식판 업데이트 후 실제 문서에서 가독성을 확인할 수 있다. [검수 범위](DEVICE-CHECKS.md#editor) |
 | 문서 편집 A401 | 원격 검수에서 저장·선택·편집·인쇄 취소 등을 확인했다. 직접 접속 시 실제 한국어 IME와 연속 입력·스크롤 체감, 다른 테마·배율 및 극단 조건이 남았다. [편집기 검수](features/editor/local-text-editor-A401.md) |
 | 이미지 A398 | v0.426.0에서 PNG/TIFF 썸네일과 APNG 일부 경로를 검수했다. 사용자 원본·다른 코덱·클라우드 캐시 조건 등은 부분 반영으로 남았다. [이미지 방향](features/image/exif-orientation-A398.md) |
 | 녹음·녹화 | 일반 녹화 저장과 검은 프레임 수정은 v0.426.0에 포함됐다. 원격 환경에서 미뤘던 실기기 검수 및 앱 내 재생의 검증 한계를 구분한다. 빠른 녹음·트레이 A406/A407은 보류다. [녹화 검수](features/recording/recording-save-and-editor-fullscreen.md) · [보류 범위](features/recording/quick-recording-A406-A407.md) |
