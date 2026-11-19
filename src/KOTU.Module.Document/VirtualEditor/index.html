@@ -6,6 +6,8 @@
   #editor .monaco-editor:is(.vs, .vs-dark) .cursor-line-style > .cursor {
     background-color: #39ff14;
     outline: 1px solid #000;
+    /* Keep the left outline inside the text viewport at the first column. */
+    translate: 1px 0;
   }
 }
 </style>
