@@ -1,4 +1,5 @@
 using KOTU.App.Controls;
+using KOTU.Core.Contracts;
 using KOTU.Core.Routing;
 using KOTU.Input;
 using Microsoft.UI.Input;
@@ -20,6 +21,7 @@ public sealed partial class MainWindow
     private bool _explorerLastFromList;
     private bool _explorerCharactersAllowed;
     private bool _explorerFilterResetting;
+    private FrameworkElement? _explorerFilterSlot;
     private (string? Module, string? Path, bool Untitled, bool S4)? _explorerSearchContext;
     private bool IsExplorerSearchContext => IsEmptyFileModule || IsOpenFileBrowsing;
     private ThumbnailExplorer? ActiveExplorer => IsOpenFileBrowsing ? _s4Explorer : IsEmptyFileModule ? _thumbnailExplorer : null;
@@ -61,7 +63,11 @@ public sealed partial class MainWindow
             new PointerEventHandler((_, _) => ResetExplorerPrefix()), true);
         RootLayout.SizeChanged += (_, _) => UpdateExplorerSearchLayout();
         Activated += (_, e) => { if (e.WindowActivationState == WindowActivationState.Deactivated) ResetExplorerPrefix(); };
-        Closed += (_, _) => _explorerFilterTimer.Stop();
+        Closed += (_, _) =>
+        {
+            _explorerFilterTimer.Stop();
+            SetExplorerFilterSlot(null);
+        };
     }
 
     private void UpdateExplorerSearchContext()
@@ -83,7 +89,40 @@ public sealed partial class MainWindow
     {
         var width = RootLayout.ActualWidth >= 1000 ? 180 : 120;
         ExplorerFilterHost.Width = width;
-        ExplorerFilterColumn.Width = new GridLength(IsExplorerSearchContext ? width + 6 : 0);
+        var slot = IsExplorerSearchContext
+            ? (ModuleHost.Content as IBottomBarProvider)?.ExplorerFilterSlot as FrameworkElement : null;
+        SetExplorerFilterSlot(slot);
+        ExplorerFilterColumn.Width = new GridLength(IsExplorerSearchContext && slot is null ? width + 6 : 0);
+        if (slot is null)
+        {
+            ExplorerFilterHost.Margin = new Thickness(0, 0, ModuleToolbarRegion.Margin.Right, 6);
+            return;
+        }
+        slot.Width = width;
+        slot.Visibility = Visibility.Visible;
+    }
+
+    private void SetExplorerFilterSlot(FrameworkElement? slot)
+    {
+        if (ReferenceEquals(slot, _explorerFilterSlot)) return;
+        if (_explorerFilterSlot is { } previous)
+        {
+            previous.LayoutUpdated -= AlignExplorerFilterToSlot;
+            previous.Visibility = Visibility.Collapsed;
+        }
+        _explorerFilterSlot = slot;
+        if (slot is not null) slot.LayoutUpdated += AlignExplorerFilterToSlot;
+    }
+
+    // The live input stays above the S4 scrim. Its placeholder participates in normal module layout.
+    private void AlignExplorerFilterToSlot(object? sender, object e)
+    {
+        if (_explorerFilterSlot is not { ActualWidth: > 0 } slot ||
+            slot.XamlRoot is null || slot.XamlRoot != RootLayout.XamlRoot) return;
+        var edge = slot.TransformToVisual(RootLayout).TransformPoint(new Windows.Foundation.Point(slot.ActualWidth, 0));
+        var right = RootLayout.ActualWidth - edge.X;
+        if (Math.Abs(ExplorerFilterHost.Margin.Right - right) > 0.01)
+            ExplorerFilterHost.Margin = new Thickness(0, 0, right, 6);
     }
 
     private void QueueExplorerFilter()

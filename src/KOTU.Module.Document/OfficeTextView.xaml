@@ -36,7 +36,10 @@
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="FileNameText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <ContentControl x:Name="DriveStripHost" Visibility="Collapsed" />
-            <Button x:Name="CopyButton" Grid.Column="1" Content="Copy text" Click="CopyText" IsEnabled="False" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border x:Name="FilenameFilterSlot" Height="32" Margin="0,0,6,0" Visibility="Collapsed" />
+                <Button x:Name="CopyButton" Content="Copy text" Click="CopyText" IsEnabled="False" />
+            </StackPanel>
             <Button x:Name="TextSmaller" Grid.Column="2" Content="A−" Click="SmallerText" ToolTipService.ToolTip="Smaller preview text"
                     AutomationProperties.Name="Smaller preview text" />
             <Button x:Name="TextLarger" Grid.Column="3" Content="A+" Click="LargerText" ToolTipService.ToolTip="Larger preview text"

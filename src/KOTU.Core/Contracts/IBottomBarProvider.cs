@@ -13,4 +13,7 @@ public interface IBottomBarProvider
     /// 셸은 모듈 뷰를 띄운 직후 1회 호출한다.
     /// </summary>
     object? TakeBottomBar();
+
+    /// <summary>Optional layout slot for the shell's filename filter, ahead of persistent toolbar actions.</summary>
+    object? ExplorerFilterSlot => null;
 }

@@ -298,6 +298,9 @@
                      별개 축(A136)이라 이번 개편과 무관하게 그대로다. -->
                 <TextBlock x:Name="ModifiedText" FontFamily="{StaticResource KotuControlFontFamily}" Grid.Column="5" Margin="6,0,0,0" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed" MaxWidth="90" TextTrimming="CharacterEllipsis" />
+                <!-- The filename filter replaces the text field while browsing, including S4 over an editor. -->
+                <Border x:Name="FilenameFilterSlot" Grid.Column="6" Height="32" Margin="6,0,0,0"
+                        HorizontalAlignment="Left" Visibility="Collapsed" />
                 <!-- A396: The keyword field stays visible even when the change count is hidden. -->
                 <StackPanel x:Name="SearchPanel" Grid.Column="6" Margin="6,0,0,0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <TextBox x:Name="FindBox" Width="180" Height="32" MinHeight="32" Padding="8,4"

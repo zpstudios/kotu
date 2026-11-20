@@ -163,6 +163,8 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
     private void SmallerText(object sender, RoutedEventArgs e) => TextList.FontSize = Math.Max(10, TextList.FontSize - 2);
     private void LargerText(object sender, RoutedEventArgs e) => TextList.FontSize = Math.Min(40, TextList.FontSize + 2);
     public object? TakeBottomBar() { RootGrid.Children.Remove(BottomBar); PageHost.Margin = new Thickness(0); return BottomBar; }
+
+    public object ExplorerFilterSlot => FilenameFilterSlot;
     public void SetBottomOverlay(object overlay)
     {
         _bottomOverlay = overlay;

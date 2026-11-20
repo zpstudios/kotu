@@ -73,7 +73,7 @@ public sealed partial class DocumentView
         EditorBox.AddHandler(PointerPressedEvent, new PointerEventHandler(OnSearchBodyPointerPressed), handledEventsToo: true);
         _searchInitialized = true;
         UpdateSearchAvailability();
-        UpdateSearchToolbarLayout(StatusBarGrid.ActualWidth);
+        UpdateDocumentToolsLayout();
     }
 
     private void ResumeTextSearch()
@@ -328,7 +328,10 @@ public sealed partial class DocumentView
     private void UpdateSearchToolbarLayout(double width)
     {
         if (!_searchInitialized || _searchTools is null) return;
-        FindBox.Width = width < 700 ? 120 : 180;
+        var filteringNames = FilenameFilterSlot.Visibility == Visibility.Visible;
+        FindBox.Width = filteringNames ? FilenameFilterSlot.Width : width < 700 ? 120 : 180;
+        FindBox.Opacity = filteringNames ? 0 : 1;
+        FindBox.IsTabStop = !filteringNames;
         InlineFindNavigation.Visibility = width >= 1100 ? Visibility.Visible : Visibility.Collapsed;
         var compact = width < 900;
         if (compact == _searchCompactTools) return;

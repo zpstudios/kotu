@@ -274,6 +274,8 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
         return StatusBar;
     }
 
+    public object? ExplorerFilterSlot => (_content.Child as IBottomBarProvider)?.ExplorerFilterSlot;
+
     public void AttachDriveStrip(object strip) => DriveStripHost.Content = strip as UIElement;
     public void ShowDriveStrip(bool show)
     {

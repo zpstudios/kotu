@@ -41,4 +41,28 @@ foreach ($entry in $entries) {
         if (!$solution.Contains($mapping)) { throw "Missing solution build configuration: $mapping" }
     }
 }
-Write-Output "Architecture consistency passed: $($projects.Count) projects; references, dependency cycles, model isolation, solution build mappings."
+
+# Expanding the filename filter must consume space to the left of the document actions.
+foreach ($bar in @(
+    @{ File = 'DocumentView'; Grid = 'StatusBarGrid'; Pinned = @('PrintButton', 'FitControls') },
+    @{ File = 'OfficeTextView'; Grid = 'BottomBar'; Pinned = @('PageControls') }
+)) {
+    $path = Join-Path $repository "src/KOTU.Module.Document/$($bar.File).xaml"
+    [xml]$view = [IO.File]::ReadAllText($path)
+    $ns = [Xml.XmlNamespaceManager]::new($view.NameTable)
+    $ns.AddNamespace('x', 'http://schemas.microsoft.com/winfx/2006/xaml')
+    $grid = $view.SelectSingleNode("//*[@x:Name='$($bar.Grid)']", $ns)
+    $columns = @($grid.SelectNodes("./*[local-name()='Grid.ColumnDefinitions']/*"))
+    $previous = -1
+    foreach ($name in @('FilenameFilterSlot') + $bar.Pinned) {
+        $child = $grid.SelectSingleNode("./*[descendant-or-self::*[@x:Name='$name']]", $ns)
+        if (!$child) { throw "Missing $name in $($bar.File)" }
+        $column = [int]$child.GetAttribute('Grid.Column')
+        if ($column -le $previous) { throw "$name must follow its preceding action in $($bar.File)" }
+        if ($columns[$column].Width -eq '*') { throw "$name must keep its intrinsic width in $($bar.File)" }
+        $previous = $column
+    }
+    if ($previous -ne $columns.Count - 1) { throw "Trailing column shifts the pinned actions in $($bar.File)" }
+    if ('*' -notin $columns.Width) { throw "Missing flexible space before the pinned actions in $($bar.File)" }
+}
+Write-Output "Architecture consistency passed: $($projects.Count) projects; references, dependency cycles, model isolation, solution build mappings, document toolbar layout."

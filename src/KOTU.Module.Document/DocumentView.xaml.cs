@@ -272,6 +272,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     public DocumentView(OpenContext context, ISettingsService settings)
     {
         InitializeComponent();
+        FilenameFilterSlot.RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => UpdateDocumentToolsLayout());
+        FilenameFilterSlot.RegisterPropertyChangedCallback(WidthProperty, (_, _) => UpdateDocumentToolsLayout());
         FitControls.Selected += SelectFitOption;
         FitControls.Reapplied += ReapplyFit;
         _settings = settings;
@@ -518,19 +520,21 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
             ? Visibility.Visible : Visibility.Collapsed;
         PrintButton.Visibility = Visibility.Visible; // A365: 빈 상태도 표시하고 기존 활성 판정은 그대로 둔다.
         FitControls.Visibility = Visibility.Visible;
-        UpdateViewModeLabelVisibility(StatusBarGrid.ActualWidth);
         UpdateSearchAvailability();
-        UpdateSearchToolbarLayout(StatusBarGrid.ActualWidth);
+        UpdateDocumentToolsLayout();
     }
 
     // A396: 최소 창(720 DIP)의 모듈 바는 약 594 DIP다. 검색창을 상시 유지하도록
     // 상태 라벨은 검색 보조 버튼과 함께 1100 DIP부터 보인다. 편집 전환 버튼은 계속 남는다.
     private const double ViewModeLabelMinBarWidth = 1100;
 
-    private void OnStatusBarSizeChanged(object sender, SizeChangedEventArgs e)
+    private void OnStatusBarSizeChanged(object sender, SizeChangedEventArgs e) => UpdateDocumentToolsLayout();
+
+    private void UpdateDocumentToolsLayout()
     {
-        UpdateViewModeLabelVisibility(e.NewSize.Width);
-        UpdateSearchToolbarLayout(e.NewSize.Width);
+        var width = StatusBarGrid.ActualWidth;
+        UpdateViewModeLabelVisibility(width);
+        UpdateSearchToolbarLayout(width);
     }
 
     private void UpdateViewModeLabelVisibility(double barWidth)
@@ -1021,6 +1025,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         RootGrid.Children.Remove(StatusBar);
         return StatusBar;
     }
+
+    public object ExplorerFilterSlot => FilenameFilterSlot;
 
     /// <summary>
     /// A22(v0.108.0): 셸이 만든 공용 드라이브 줄을 하단 바 슬롯에 끼운다.
