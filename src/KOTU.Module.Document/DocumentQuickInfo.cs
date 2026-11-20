@@ -93,8 +93,6 @@ public static class DocumentQuickInfo
         try
         {
             var info = new FileInfo(path);
-            // 크기 표기는 셸 폴백(ContentInfoOverlay.BuildBasicFileInfo)과 같은 FormatSize다 —
-            // 문서·압축은 KB 단위 파일이 흔해 이미지·오디오의 MB 고정 표기가 "0 MB"가 된다.
             rows.Add(new ContentInfoItem("Size", ExplorerListing.FormatSize(info.Length)));
             rows.Add(new ContentInfoItem("Modified", $"{info.LastWriteTime:yyyy-MM-dd HH:mm}"));
         }

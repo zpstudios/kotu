@@ -1,6 +1,7 @@
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using KOTU.Core.Contracts;
+using KOTU.Core.Routing;
 
 namespace KOTU.Module.Image;
 
@@ -35,7 +36,7 @@ public static class ImageQuickInfo
         try
         {
             var info = new FileInfo(path);
-            rows.Add(new ContentInfoItem("Size", $"{info.Length / 1024.0 / 1024.0:0.##} MB"));
+            rows.Add(new ContentInfoItem("Size", ExplorerListing.FormatSize(info.Length)));
             rows.Add(new ContentInfoItem("Modified", $"{info.LastWriteTime:yyyy-MM-dd HH:mm}"));
         }
         catch
