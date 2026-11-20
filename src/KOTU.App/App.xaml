@@ -7,6 +7,62 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- Styles are selected before the first view loads. Text boxes, document text
+                 and tooltips retain the font chosen by their own control templates. -->
+            <FontFamily x:Key="KotuControlFontFamily">ms-appx:///Assets/KotuFit.ttf#KOTU Fit, Segoe UI</FontFamily>
+            <FontFamily x:Key="KotuIconFontFamily">ms-appx:///Assets/KotuIcons.ttf#KOTU Icons, Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+            <x:Double x:Key="KotuIconStrokeWidth">1.4</x:Double>
+            <Style TargetType="Button">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="ToggleButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="DropDownButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="RepeatButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="MenuFlyoutItem">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="ToggleMenuFlyoutItem">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="RadioMenuFlyoutItem">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="MenuFlyoutSubItem">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="ComboBox">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="ComboBoxItem">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="RadioButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="ToggleSwitch">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="CheckBox">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="HyperlinkButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="AppBarButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="AppBarToggleButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
+            </Style>
+            <Style TargetType="FontIcon">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuIconFontFamily}" />
+            </Style>
             <!-- A176: 오버레이 전용 아크릴(A33 OverlayAcrylicBrush)·스왑체인 반투명 폴백
                  (A129 OverlayTranslucentFallbackBrush)의 ThemeDictionaries 2벌을 통째로 철거 —
                  반투명 표시 축 자체가 폐지되어 소비처(OverlayBackdrop.Pick)가 사라졌다.
@@ -47,6 +103,7 @@
                  2개로 재구성, 3모듈)의 화살표만 예외: CornerRadius 좌/우 분리가 필요해
                  전역 스타일 대신 뷰에서 인라인 값으로 지정한다(위 BasedOn 금지 사유와 동일 계열). -->
             <Style x:Key="BottomBarButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
                 <Setter Property="Width" Value="32" />
                 <Setter Property="Height" Value="32" />
                 <Setter Property="Padding" Value="2" />
@@ -66,6 +123,7 @@
                  작은 AnimatedIcon을 배치한다. 좁은 메뉴 조작부에서는 정적 도형을
                  중앙에 그려 첫 표시부터 보이게 한다. 두 조작부는 하나의 외곽을 공유한다. -->
             <Style x:Key="BottomBarFitOptionsStyle" TargetType="DropDownButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
                 <Setter Property="Width" Value="20" />
                 <Setter Property="Height" Value="32" />
                 <Setter Property="Padding" Value="1" />
@@ -117,7 +175,7 @@
                                 </VisualStateManager.VisualStateGroups>
                                 <Path x:Name="FitChevron" Width="12" Height="10"
                                       Data="M 1,2 L 6,7 L 11,2" Stretch="None"
-                                      Stroke="{TemplateBinding Foreground}" StrokeThickness="1.6"
+                                      Stroke="{TemplateBinding Foreground}" StrokeThickness="{ThemeResource KotuIconStrokeWidth}"
                                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                       IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
@@ -132,6 +190,7 @@
             </Style>
             <!-- 1칸 토글(정보 모듈 Always on top) -->
             <Style x:Key="BottomBarToggleButtonStyle" TargetType="ToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
                 <Setter Property="Width" Value="32" />
                 <Setter Property="Height" Value="32" />
                 <Setter Property="Padding" Value="2" />
@@ -145,6 +204,7 @@
                  Padding은 A106에서도 4 유지 — 내용이 FontSize 12 텍스트 + 화살표(줄 높이 약 16)라
                  32 − 테두리 2 − 패딩 8 = 22px 안에 여유 있게 들어간다(아이콘 18과 사정이 다르다). -->
             <Style x:Key="BottomBarWideDropDownButtonStyle" TargetType="DropDownButton">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
                 <Setter Property="Width" Value="84" />
                 <Setter Property="Height" Value="32" />
                 <Setter Property="Padding" Value="4" />
@@ -161,6 +221,7 @@
                  ⚠️ 실기기에서 "1.0×" 글자가 위아래로 잘리면 이 스타일에 Padding 세터를 추가해
                  상하만 줄인다(화살표 칸이 어긋날 수 있으니 좌우 값은 기본값 그대로 옮겨 적을 것). -->
             <Style x:Key="BottomBarWideComboBoxStyle" TargetType="ComboBox">
+                <Setter Property="FontFamily" Value="{ThemeResource KotuControlFontFamily}" />
                 <Setter Property="Width" Value="84" />
                 <Setter Property="Height" Value="32" />
                 <Setter Property="CornerRadius" Value="4" />

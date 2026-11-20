@@ -355,6 +355,7 @@ public sealed partial class ExplorerPane : UserControl
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         content.Children.Add(new TextBlock
         {
+            FontFamily = (FontFamily)Application.Current.Resources["KotuControlFontFamily"],
             Text = label,
             FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,

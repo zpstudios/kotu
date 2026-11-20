@@ -134,7 +134,7 @@
                      폭 여유는 그대로다. 플라이아웃(50ms 부하 경고 툴팁 포함)은 코드에서 채운다. -->
                 <DropDownButton x:Name="IntervalButton" Grid.Column="3"
                                 Style="{StaticResource BottomBarWideDropDownButtonStyle}">
-                    <TextBlock x:Name="IntervalText" FontSize="12" Text="500 ms" />
+                    <TextBlock x:Name="IntervalText" FontFamily="{StaticResource KotuControlFontFamily}" FontSize="12" Text="500 ms" />
                 </DropDownButton>
                 <!-- 구 하단 바 크기 버튼(A62 — E71E 돋보기, S→M→L 순환)은 A237에서 제거:
                      그래프 크기는 Ctrl+±(코드 등록 액셀러레이터)·콘텐츠 표면 Ctrl+휠 스텝이 대체한다.

@@ -76,7 +76,7 @@
                 Background="#CC202020"
                 Padding="18,10">
                 <TextBlock
-                    x:Name="FeedbackText"
+                    x:Name="FeedbackText" FontFamily="{StaticResource KotuControlFontFamily}"
                     Foreground="White"
                     FontSize="20"
                     TextAlignment="Center" />
@@ -152,12 +152,12 @@
                     IsEnabled="False" Click="OnNextClicked">
                 <!-- 공통 벡터 아이콘은 생성자에서 새 인스턴스로 공급한다. -->
             </Button>
-            <TextBlock x:Name="PositionText" Grid.Column="4" Text="0:00"
+            <TextBlock x:Name="PositionText" FontFamily="{StaticResource KotuControlFontFamily}" Grid.Column="4" Text="0:00"
                        VerticalAlignment="Center" />
             <Slider x:Name="SeekSlider" Grid.Column="5" Minimum="0" Maximum="1000"
                     IsThumbToolTipEnabled="False" VerticalAlignment="Center"
                     ValueChanged="OnSeekSliderChanged" />
-            <TextBlock x:Name="DurationText" Grid.Column="6" Text="0:00"
+            <TextBlock x:Name="DurationText" FontFamily="{StaticResource KotuControlFontFamily}" Grid.Column="6" Text="0:00"
                        VerticalAlignment="Center" />
             <Button x:Name="MuteButton" Grid.Column="7" Style="{StaticResource BottomBarButtonStyle}"
                     Click="OnMuteClicked" />

@@ -121,7 +121,7 @@
                         VerticalAlignment="Center"
                         TextTrimming="CharacterEllipsis" />
                     <TextBlock
-                        x:Name="MetaText"
+                        x:Name="MetaText" FontFamily="{StaticResource KotuControlFontFamily}"
                         Grid.Column="1"
                         Margin="12,0,0,0"
                         FontSize="12"
@@ -144,7 +144,7 @@
                      칸 번호는 A252에서 1 → 2(앞에 인쇄 칸이 들어와 한 칸씩 밀렸다).
                      Fit 버튼 본체는 "모드"(1:1/Contain/Fit width/Fit height), 여기는 "실제 배율"이라 역할이 다르다. -->
                 <TextBlock
-                    x:Name="ZoomText" Width="84" TextAlignment="Center"
+                    x:Name="ZoomText" FontFamily="{StaticResource KotuControlFontFamily}" Width="84" TextAlignment="Center"
                     Grid.Column="2"
                     VerticalAlignment="Center" />
                 <!-- 우측 공통 메뉴(v0.53.0 사용자 스펙): Rotate = 1칸, Fit = 1칸 버튼 2개

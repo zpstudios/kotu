@@ -10,6 +10,7 @@ namespace KOTU.App;
 
 public partial class App : Application
 {
+    internal const string ThinControlsSetting = "display.thinControls";
     private WindowManager? _windowManager;
     private Microsoft.UI.Dispatching.DispatcherQueue? _uiDispatcher;
 
@@ -75,6 +76,7 @@ public partial class App : Application
     {
         // 재전달 활성화가 창이 다 닫히는 순간과 겹쳐도 큐잉할 수 있게 UI 디스패처를 잡아둔다
         _uiDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        SelectControlAppearance(Services.GetRequiredService<ISettingsService>().Get(ThinControlsSetting, false));
         _windowManager = Services.GetRequiredService<WindowManager>();
 
         // A124: 관리자 재시작(runas) 창 세트 훅 배선 — 하드웨어 모듈은 Core에만 의존하므로

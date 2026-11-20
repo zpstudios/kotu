@@ -1626,6 +1626,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
             GroupName = "audio-output",
             IsChecked = string.Equals(deviceId, _outputDeviceId, StringComparison.Ordinal),
         };
+        if (deviceId.Length > 0) item.FontFamily = Microsoft.UI.Xaml.Media.FontFamily.XamlAutoFontFamily;
         item.Click += (_, _) => SelectOutputDevice(deviceId);
         _outputMenu.Items.Add(item);
     }
@@ -1683,6 +1684,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
                 var id = device.Id; // 클로저 캡처용 — WinRT 장치 인터페이스 ID
                 var item = new RadioMenuFlyoutItem
                 {
+                    FontFamily = Microsoft.UI.Xaml.Media.FontFamily.XamlAutoFontFamily,
                     Text = device.Name,
                     GroupName = "audio-input",
                     IsChecked = string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase),
@@ -2262,20 +2264,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
     /// <summary>XAML Click 배선(OnPlayClicked 관용구) — 본체 클릭 = 모드 순환.</summary>
     private void OnLoopClicked(object sender, RoutedEventArgs e) => CycleLoopMode();
 
-    /// <summary>
-    /// 루프 버튼 본체를 상태형으로 갱신 — 영상 UpdateLoopButton과 같은 규칙(아이콘 + 툴팁을
-    /// 상태에서 만든다). A255 3상태 표지: 루프 없음 / 목록 루프 = E8EE(RepeatAll) /
-    /// 한 파일 루프 = E8ED(RepeatOne).
-    /// <b>A318 개정</b>: "루프 없음"은 종전엔 같은 E8EE를 Opacity 0.4로 흐리게 그린 것이라
-    /// 사용자가 비활성 버튼으로 읽었다(실기기 보고 — "지금 못 누르나?"). 이제 세 상태가 모두
-    /// <b>같은 밝기·같은 전경색</b>이고, "반복 안함"만 같은 글리프 위에 <b>금지 사선</b>을 얹어
-    /// 구별한다(MediaIcons.BuildLoopOffIcon — 디자인 정본은 그 파일 한 곳, 영상과 공유).
-    /// A255가 남긴 "빗금 도형은 v0.174.1 크래시 함정이라 기각"은 <b>인스턴스 공유</b>가 원인이었고,
-    /// 그 팩토리는 호출마다 새 Grid·FontIcon·Path·Geometry를 만들어 그 함정에 걸리지 않는다.
-    /// 툴팁은 현행 유지 — 3상태 + 횟수 병기에 우클릭 안내를
-    /// 덧붙인다(횟수 플라이아웃 진입이 우클릭뿐이라 이 표기가 유일한 발견 경로다).
-    /// 표기는 A34 규칙대로 키 상수에서 조립한다.
-    /// </summary>
+    /// <summary>반복 상태를 같은 밝기로 표시한다. 끔만 사선이 있고 우클릭으로 횟수를 고른다.</summary>
     private void UpdateLoopButton()
     {
         (string glyph, string state) = _loopMode switch
@@ -2284,11 +2273,8 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
             LoopMode.File => ("\uE8ED", $"Repeat this file: {CountLabel(_fileLoopLimit)}"),
             _ => ("\uE8EE", "Loop: off"),
         };
-        // A318: 끔만 합성 아이콘(같은 글리프 + 금지 사선), 나머지 둘은 글리프 그대로 —
-        // 셋 다 같은 밝기·같은 도상 가족이라 서로 비교돼 읽힌다(영상과 같은 배선).
         LoopButton.Content = _loopMode == LoopMode.Off
-            // 캐스트는 필수다 — Grid와 FontIcon은 서로 변환되지 않아 공통 타입을 명시해야 한다.
-            ? (FrameworkElement)MediaIcons.BuildLoopOffIcon(glyph)
+            ? MediaIcons.BuildLoopOffIcon()
             : new FontIcon { Glyph = glyph, FontSize = 18 };
         ToolTipService.SetToolTip(LoopButton,
             HotkeySupport.Tip($"{state} · right-click for count", LoopKey));

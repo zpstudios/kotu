@@ -852,8 +852,10 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         var stroke = new SolidColorBrush(accent);
         var fill = new SolidColorBrush(Windows.UI.Color.FromArgb(56, accent.R, accent.G, accent.B));
 
+        var labelFont = (FontFamily)Application.Current.Resources["KotuControlFontFamily"];
         var titleText = new TextBlock
         {
+            FontFamily = labelFont,
             Text = channel.ShortTitle, // 초단축 제목(v0.64.3) — 전체 이름은 툴팁에
             FontSize = BaseTitleFontSize,
             Opacity = 0.55,
@@ -874,6 +876,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             };
         var valueText = new TextBlock
         {
+            FontFamily = labelFont,
             Text = "—",
             FontSize = BaseValueFontSize,
             FontWeight = FontWeights.SemiBold,
@@ -910,6 +913,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         // 세로(Bottom)·글꼴(BaseSmallFontSize)·투명도(0.55)는 현행 유지 — 가로만 바뀐다.
         var yAxisText = new TextBlock
         {
+            FontFamily = labelFont,
             FontSize = BaseSmallFontSize,
             Opacity = 0.55,
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -918,6 +922,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
         };
         var xAxisText = new TextBlock
         {
+            FontFamily = labelFont,
             FontSize = BaseSmallFontSize,
             Opacity = 0.55,
             HorizontalAlignment = inBar ? HorizontalAlignment.Center : HorizontalAlignment.Right,

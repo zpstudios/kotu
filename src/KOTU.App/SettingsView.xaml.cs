@@ -59,6 +59,10 @@ namespace KOTU.App;
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
     private readonly TextBlock _status = new() { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
+    private static event Action? ControlStylePreferenceChanged;
+    private static Microsoft.UI.Xaml.Media.FontFamily ControlLabelFont =>
+        (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["KotuControlFontFamily"];
+
     private readonly ISettingsService _settings;
     private bool _suppressToggle;
 
@@ -287,6 +291,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var menuTitle = new TextBlock
         {
             Text = "Explorer right-click menu",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -388,6 +393,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var masterTitle = new TextBlock
         {
             Text = "Register all file associations",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -481,6 +487,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             var moduleTitle = new TextBlock
             {
                 Text = module.BrandName,
+                FontFamily = ControlLabelFont,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -723,6 +730,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(new TextBlock
         {
             Text = "Mission Statement",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 4, 0, 0),
         });
@@ -835,6 +843,31 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(scaleBox);
         Root.Children.Add(offListNote);
 
+        // 독립 실행본은 종료하면 설정이 사라지므로 재시작용 선택은 설치본에서 제공한다.
+        if (!KOTU.Core.Integration.DistributionPolicy.IsStandalone)
+        {
+            var styleBox = new ComboBox { Header = "Control style (after restart)", MinWidth = 200 };
+            styleBox.Items.Add("KOTU Geometric");
+            styleBox.Items.Add("Thin line");
+            int SavedStyleIndex() => _settings.Get(App.ThinControlsSetting, false) ? 1 : 0;
+            styleBox.SelectedIndex = SavedStyleIndex();
+            void SyncChoice() => styleBox.SelectedIndex = SavedStyleIndex();
+            styleBox.Loaded += (_, _) =>
+            {
+                SyncChoice();
+                ControlStylePreferenceChanged += SyncChoice;
+            };
+            styleBox.Unloaded += (_, _) => ControlStylePreferenceChanged -= SyncChoice;
+            styleBox.SelectionChanged += (_, _) =>
+            {
+                if (styleBox.SelectedIndex < 0 || styleBox.SelectedIndex == SavedStyleIndex()) return;
+                _settings.Set(App.ThinControlsSetting, styleBox.SelectedIndex == 1);
+                ControlStylePreferenceChanged?.Invoke();
+                _settings.RequestSave();
+            };
+            Root.Children.Add(styleBox);
+        }
+
         // A48(v0.214.0)의 "Windows display scale (all apps)" 콤보·안내·딥링크 폴백은
         // A221(2026-08-24)에서 전면 제거 — OS 배율은 이 앱이 건드릴 축이 아니라는 사용자 지시.
         // Integration/DisplayScale.cs(비공식 DisplayConfig 래퍼)도 함께 삭제됐다.
@@ -882,6 +915,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var title = new TextBlock
         {
             Text = "Shell key diagnostics",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -934,6 +968,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var title = new TextBlock
         {
             Text = "Editor decor diagnostics",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -986,6 +1021,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var title = new TextBlock
         {
             Text = "Audio visualizer diagnostics",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1038,6 +1074,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var title = new TextBlock
         {
             Text = "Folder navigation timing",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1098,6 +1135,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var title = new TextBlock
         {
             Text = "Trace log",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1194,6 +1232,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var title = new TextBlock
         {
             Text = "Auto-play next file",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1240,6 +1279,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         var awakeTitle = new TextBlock
         {
             Text = "Keep the display awake while a video plays",
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1657,6 +1697,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         {
             Text = text,
             FontSize = 20,
+            FontFamily = ControlLabelFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 8, 0, 0),
         });

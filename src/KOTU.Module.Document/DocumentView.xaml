@@ -263,7 +263,7 @@
                 <!-- A340: 현재 모드는 글자, 버튼은 누르면 갈 동작으로 축을 분리한다. 이 라벨은
                      표시 전용이고 UpdateViewToggle의 _viewMode 한 값에서 버튼 얼굴과 함께 정한다.
                      좁은 폭에서는 버튼보다 먼저 접힌다(UpdateViewModeLabelVisibility). -->
-                <TextBlock x:Name="ViewModeText" Grid.Column="2" Margin="6,0,0,0"
+                <TextBlock x:Name="ViewModeText" FontFamily="{StaticResource KotuControlFontFamily}" Grid.Column="2" Margin="6,0,0,0"
                            VerticalAlignment="Center" FontSize="12" Opacity="0.8"
                            Text="Editing" Visibility="Collapsed" />
                 <!-- A190 → A224 → A340: 편집 ↔ 뷰 토글(전 텍스트 형식). 텍스트 편집 대상(파일·무제)이
@@ -296,7 +296,7 @@
                      max(제거 폭, 삽입 폭)의 합 — 문자열은 코드(UpdateChangedText)가 편집마다
                      채우므로 여기 Text는 없다). 창 제목의 ●는 셸이 UnsavedChanged로 다는
                      별개 축(A136)이라 이번 개편과 무관하게 그대로다. -->
-                <TextBlock x:Name="ModifiedText" Grid.Column="5" Margin="6,0,0,0" VerticalAlignment="Center"
+                <TextBlock x:Name="ModifiedText" FontFamily="{StaticResource KotuControlFontFamily}" Grid.Column="5" Margin="6,0,0,0" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed" MaxWidth="90" TextTrimming="CharacterEllipsis" />
                 <!-- A396: The keyword field stays visible even when the change count is hidden. -->
                 <StackPanel x:Name="SearchPanel" Grid.Column="6" Margin="6,0,0,0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -305,24 +305,24 @@
                              AutomationProperties.Name="Find text" ToolTipService.ToolTip="Find text (Ctrl+F)"
                              TextChanged="OnFindTextChanged" />
                     <StackPanel x:Name="InlineFindNavigation" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
-                        <TextBlock x:Name="FindCountText" MinWidth="48" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" Visibility="Collapsed" />
+                        <TextBlock x:Name="FindCountText" FontFamily="{StaticResource KotuControlFontFamily}" MinWidth="48" MaxWidth="100" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" Visibility="Collapsed" />
                         <Button x:Name="FindPreviousButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"
                                 Click="OnFindPreviousClick" AutomationProperties.Name="Previous match" ToolTipService.ToolTip="Previous match (Shift+F3)">
-                            <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                            <FontIcon Glyph="&#xE70E;" FontSize="18" />
                         </Button>
                         <Button x:Name="FindNextButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"
                                 Click="OnFindNextClick" AutomationProperties.Name="Next match" ToolTipService.ToolTip="Next match (F3)">
-                            <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                            <FontIcon Glyph="&#xE70D;" FontSize="18" />
                         </Button>
                     </StackPanel>
                     <Button x:Name="FindOptionsButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"
                             AutomationProperties.Name="Find and replace options" ToolTipService.ToolTip="Find and replace (Ctrl+H)">
-                        <FontIcon Glyph="&#xE721;" FontSize="16" />
+                        <FontIcon Glyph="&#xE721;" FontSize="18" />
                         <Button.Flyout>
                             <Flyout x:Name="FindFlyout" Placement="Top" Opened="OnFindFlyoutOpened"
                                     Closing="OnFindFlyoutClosing" Closed="OnFindFlyoutClosed">
                                 <StackPanel x:Name="FindOptionsPanel" Width="280" Spacing="8" PreviewKeyDown="OnFindPanelKeyDown">
-                                    <TextBlock x:Name="FindDetailText" Text="Literal, ignore case" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="FindDetailText" FontFamily="{StaticResource KotuControlFontFamily}" Text="Literal, ignore case" TextWrapping="Wrap" />
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <Button x:Name="PopupPreviousButton" Content="Previous" Click="OnFindPreviousClick" IsEnabled="False" />
                                         <Button x:Name="PopupNextButton" Content="Next" Click="OnFindNextClick" IsEnabled="False" />
@@ -333,7 +333,7 @@
                                         <Button x:Name="ReplaceCurrentButton" Content="Replace" Click="OnReplaceCurrentClick" IsEnabled="False" />
                                         <Button x:Name="ReplaceAllButton" Content="Replace all" Click="OnReplaceAllClick" IsEnabled="False" />
                                     </StackPanel>
-                                    <TextBlock x:Name="ReplaceStatusText" TextWrapping="Wrap" FontSize="12" />
+                                    <TextBlock x:Name="ReplaceStatusText" FontFamily="{StaticResource KotuControlFontFamily}" TextWrapping="Wrap" FontSize="12" />
                                 </StackPanel>
                             </Flyout>
                         </Button.Flyout>
@@ -343,7 +343,7 @@
                 <Button x:Name="SearchMoreToolsButton" Grid.Column="7" Grid.ColumnSpan="3" Margin="6,0,0,0"
                         Style="{StaticResource BottomBarButtonStyle}" Visibility="Collapsed"
                         AutomationProperties.Name="More document tools" ToolTipService.ToolTip="More document tools">
-                    <FontIcon Glyph="&#xE712;" FontSize="16" />
+                    <FontIcon Glyph="&#xE712;" FontSize="18" />
                     <Button.Flyout>
                         <Flyout x:Name="SearchToolsFlyout" Placement="Top">
                             <ContentControl x:Name="SearchToolsPopupHost" IsTabStop="False" />
@@ -661,7 +661,7 @@
                 <!-- 텍스트 커서 줄/전체 줄 또는 PDF 현재 페이지/전체 페이지.
                      A264: 칸 번호는 그대로(c7)지만 이웃이 바뀌었다 — 앞이 표시 토글, 뒤가 배율
                      버튼이다(사용자 미언급 자리라 "¶ 뒤·배율 앞" 제안을 채택). -->
-                <TextBlock x:Name="PageInfoText" Grid.Column="8" Margin="6,0,0,0" VerticalAlignment="Center"
+                <TextBlock x:Name="PageInfoText" FontFamily="{StaticResource KotuControlFontFamily}" Grid.Column="8" Margin="6,0,0,0" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.8" Visibility="Collapsed" />
                 <!-- A181 → A263(v0.262.0): 현재 줌 배율(document.zoom을 퍼센트로).
                      종전 표시 전용 TextBlock(ZoomText)을 프리셋 드롭다운으로 바꿨다 — 값 표기는
@@ -683,7 +683,7 @@
                                 VerticalAlignment="Center" VerticalContentAlignment="Center"
                                 IsEnabled="False"
                                 ToolTipService.ToolTip="Zoom">
-                    <TextBlock x:Name="ZoomText" FontSize="12" />
+                    <TextBlock x:Name="ZoomText" FontFamily="{StaticResource KotuControlFontFamily}" FontSize="12" />
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="Top">
                             <MenuFlyoutItem Text="20%" Tag="20" Click="OnZoomPresetClick" />

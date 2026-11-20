@@ -53,7 +53,7 @@
                                               HorizontalAlignment="Right" VerticalAlignment="Top" />
                                 </Grid>
                             </Viewbox>
-                            <TextBlock Grid.Row="1" Text="Up one folder" FontSize="14"
+                            <TextBlock Grid.Row="1" FontFamily="{StaticResource KotuControlFontFamily}" Text="Up one folder" FontSize="14"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="4,0,4,4" />
                         </Grid>
                     </Button>
@@ -79,7 +79,7 @@
                                               HorizontalAlignment="Right" VerticalAlignment="Top" />
                                 </Grid>
                             </Viewbox>
-                            <TextBlock x:Name="ParentListCaption" Grid.Column="2" Text="Up one folder" FontSize="12"
+                            <TextBlock x:Name="ParentListCaption" FontFamily="{StaticResource KotuControlFontFamily}" Grid.Column="2" Text="Up one folder" FontSize="12"
                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,18,0" />
                             <TextBlock Grid.Column="2" Grid.Row="1" Text=" " FontSize="11" Opacity="0"
                                        IsHitTestVisible="False" Visibility="{x:Bind ListSummaryVisibility, Mode=OneWay}" />
@@ -103,12 +103,12 @@
                     <ToggleButton x:Name="PreviewViewButton" Width="32" Height="32" MinWidth="0" Padding="4" VerticalAlignment="Center"
                                   CornerRadius="4,0,0,4" AutomationProperties.Name="Preview"
                                   ToolTipService.ToolTip="Preview">
-                        <FontIcon Glyph="&#xE8A9;" FontSize="16" />
+                        <FontIcon Glyph="&#xE8A9;" FontSize="18" />
                     </ToggleButton>
                     <ToggleButton x:Name="ListViewButton" Width="32" Height="32" MinWidth="0" Padding="4" VerticalAlignment="Center"
                                   CornerRadius="0,4,4,0" AutomationProperties.Name="List"
                                   ToolTipService.ToolTip="List">
-                        <FontIcon Glyph="&#xEA37;" FontSize="16" />
+                        <FontIcon Glyph="&#xEA37;" FontSize="18" />
                     </ToggleButton>
                 </StackPanel>
                 <DropDownButton x:Name="ColumnsButton" Content="Columns" Height="32" MinWidth="0" Padding="8,4" VerticalAlignment="Center"
@@ -121,15 +121,15 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="Sort" FontSize="12" Opacity="0.75" VerticalAlignment="Center" />
+                <TextBlock FontFamily="{StaticResource KotuControlFontFamily}" Text="Sort" FontSize="12" Opacity="0.75" VerticalAlignment="Center" />
                 <DropDownButton x:Name="SortKeyButton" Grid.Column="1" Height="32" Padding="8,4" MinWidth="0" VerticalAlignment="Center"
                                 HorizontalAlignment="Right" AutomationProperties.Name="Sort by"
                                 ToolTipService.ToolTip="Sort by">
-                    <TextBlock x:Name="SortKeyText" Text="Name" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="SortKeyText" FontFamily="{StaticResource KotuControlFontFamily}" Text="Name" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </DropDownButton>
                 <Button x:Name="SortDirectionButton" Grid.Column="2" Width="32" Height="32" Padding="4" MinWidth="0" VerticalAlignment="Center"
                         Click="OnSortDirectionClick" AutomationProperties.Name="Sort direction">
-                    <FontIcon x:Name="SortDirectionIcon" Glyph="&#xE70E;" FontSize="13" />
+                    <FontIcon x:Name="SortDirectionIcon" Glyph="&#xE70E;" FontSize="18" />
                 </Button>
             </Grid>
         </Grid>
@@ -218,23 +218,23 @@
                 </Grid.ColumnDefinitions>
                 <Button x:Name="SortNameHeader" Grid.Column="2" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                    <TextBlock x:Name="SortNameHeaderText" Text="Name" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="SortNameHeaderText" FontFamily="{StaticResource KotuControlFontFamily}" Text="Name" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
                 <Button x:Name="SortSizeHeader" Margin="8,0,0,0" Grid.Column="3" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Right">
-                    <TextBlock x:Name="SortSizeHeaderText" Text="Size" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="SortSizeHeaderText" FontFamily="{StaticResource KotuControlFontFamily}" Text="Size" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
                 <Button x:Name="SortTypeHeader" Margin="8,0,0,0" Grid.Column="4" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                    <TextBlock x:Name="SortTypeHeaderText" Text="Type" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="SortTypeHeaderText" FontFamily="{StaticResource KotuControlFontFamily}" Text="Type" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
                 <Button x:Name="SortCreatedHeader" Margin="8,0,0,0" Grid.Column="5" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                    <TextBlock x:Name="SortCreatedHeaderText" Text="Created" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="SortCreatedHeaderText" FontFamily="{StaticResource KotuControlFontFamily}" Text="Created" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
                 <Button x:Name="SortModifiedHeader" Margin="8,0,0,0" Grid.Column="6" MinWidth="0" MinHeight="0" Padding="0"
                         BorderThickness="0" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                    <TextBlock x:Name="SortModifiedHeaderText" Text="Modified" FontSize="12" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="SortModifiedHeaderText" FontFamily="{StaticResource KotuControlFontFamily}" Text="Modified" FontSize="12" TextTrimming="CharacterEllipsis" />
                 </Button>
             </Grid>
         <ListView x:Name="DetailList" Grid.Row="1" Visibility="Collapsed" IsTabStop="True"

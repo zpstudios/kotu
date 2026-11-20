@@ -7,59 +7,65 @@ internal readonly record struct IconPoint(double X, double Y);
 internal static class ToolbarIconGeometry
 {
     internal const double Size = 18;
-    internal static bool UsesStrokeContours(ToolbarIconKind kind) => kind is
-        ToolbarIconKind.OriginalRatio or ToolbarIconKind.FitContain or ToolbarIconKind.FitWidth or ToolbarIconKind.FitHeight;
-    internal static double ViewportSize(ToolbarIconKind kind) => UsesStrokeContours(kind) ? 24 : Size;
+    internal static double ViewportSize(ToolbarIconKind kind) => kind is ToolbarIconKind.OriginalRatio
+        or ToolbarIconKind.FitContain or ToolbarIconKind.FitWidth or ToolbarIconKind.FitHeight ? 24 : Size;
 
-    internal static IconPoint[][] Create(ToolbarIconKind kind) => kind switch
+    internal static IconPoint[][] Create(ToolbarIconKind kind, bool thin = false)
     {
-        // 삼각형은 질량이 왼쪽에 몰리므로 반 픽셀보다 조금 오른쪽으로 둔다.
-        ToolbarIconKind.Play => [Polygon(5, 2, 16, 9, 5, 16)],
-        ToolbarIconKind.Pause => [Box(4, 2, 3, 14), Box(11, 2, 3, 14)],
-        ToolbarIconKind.Previous => [Box(2, 2, 2, 14), Polygon(16, 2, 5, 9, 16, 16)],
-        ToolbarIconKind.Next => [Box(14, 2, 2, 14), Polygon(2, 2, 13, 9, 2, 16)],
-        ToolbarIconKind.Sound =>
-        [
-            Speaker(),
-            SoundWave(new(10, 6), new(12.6, 7.4), new(12.6, 10.6), new(10, 12)),
-            SoundWave(new(12.5, 3.5), new(17.2, 6), new(17.2, 12), new(12.5, 14.5)),
-        ],
-        ToolbarIconKind.Muted =>
-        [
-            Speaker(),
-            Polygon(10, 5, 13, 8, 16, 5, 17, 6, 14, 9, 17, 12, 16, 13, 13, 10, 10, 13, 9, 12, 12, 9, 9, 6),
-        ],
-        ToolbarIconKind.OriginalRatio =>
-        [
-            .. Stroke(4.5, 8, 7, 6, 7, 18), .. Stroke(4.5, 18, 9.5, 18),
-            .. Stroke(14.5, 8, 17, 6, 17, 18), .. Stroke(14.5, 18, 19.5, 18),
-            OriginalRoundedBox(11.2, 9.2, 1.6, 1.6, 0.8), OriginalRoundedBox(11.2, 14.2, 1.6, 1.6, 0.8),
-        ],
-        // 원본 비율·화면 여백·가로·세로를 서로 다른 기호로 표시한다. 24px 좌표와 1.4px 둥근 선을 공유한다.
-        ToolbarIconKind.FitContain =>
-        [
-            .. Stroke(7, 4, 4, 4, 4, 7), .. Stroke(17, 4, 20, 4, 20, 7),
-            .. Stroke(20, 17, 20, 20, 17, 20), .. Stroke(7, 20, 4, 20, 4, 17),
-            .. Stroke(9, 8, 15, 8, 15, 16, 9, 16, 9, 8),
-        ],
-        ToolbarIconKind.FitWidth => FitWidth(),
-        ToolbarIconKind.FitHeight => FitWidth()
-            .Select(contour => contour.Select(p => new IconPoint(24 - p.Y, p.X)).ToArray()).ToArray(),
-        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
-    };
-
-    private static IconPoint[][] FitWidth() =>
-    [
-        .. Stroke(4, 6, 4, 18), .. Stroke(20, 6, 20, 18),
-        .. Stroke(7, 12, 17, 12),
-        .. Stroke(10, 9, 7, 12, 10, 15), .. Stroke(14, 9, 17, 12, 14, 15),
-    ];
+        var radius = thin ? 0.5 : 0.7;
+        var dot = radius + 0.1;
+        // Fit, playback and volume are drawn from centerlines, so the same weight
+        // changes the whole family without moving its optical centers or hit targets.
+        IconPoint[][] Line(params double[] points) => Stroke(radius, points);
+        IconPoint[][] Speaker() => Line(1.4, 7, 4, 7, 7.5, 3.4, 7.5, 14.6, 4, 11, 1.4, 11, 1.4, 7);
+        IconPoint[][] Previous() => [
+            .. Line(3, 2 + radius, 3, 16 - radius),
+            .. Line(14.8, 2 + radius, 5.4, 9, 14.8, 16 - radius, 14.8, 2 + radius),
+        ];
+        IconPoint[][] FitWidth() => [
+            .. Line(4, 6, 4, 18), .. Line(20, 6, 20, 18), .. Line(7, 12, 17, 12),
+            .. Line(10, 9, 7, 12, 10, 15), .. Line(14, 9, 17, 12, 14, 15),
+        ];
+        return kind switch
+        {
+            ToolbarIconKind.Play => Line(5.4, 2 + radius, 15.6, 9, 5.4, 16 - radius, 5.4, 2 + radius),
+            ToolbarIconKind.Pause => [
+                .. Line(6, 2 + radius, 6, 16 - radius), .. Line(12, 2 + radius, 12, 16 - radius),
+            ],
+            ToolbarIconKind.Previous => Previous(),
+            // Reflection reverses winding; reverse traversal to keep nonzero fills consistent.
+            ToolbarIconKind.Next => Previous()
+                .Select(c => Enumerable.Reverse(c).Select(p => new IconPoint(Size - p.X, p.Y)).ToArray())
+                .ToArray(),
+            ToolbarIconKind.Sound => [
+                .. Speaker(),
+                SoundWave(new(10, 6), new(12.6, 7.4), new(12.6, 10.6), new(10, 12), radius),
+                SoundWave(new(12.5, 3.5), new(17.2, 6), new(17.2, 12), new(12.5, 14.5), radius),
+            ],
+            ToolbarIconKind.Muted => [ .. Speaker(), .. Line(10.1, 6, 16.1, 12), .. Line(16.1, 6, 10.1, 12) ],
+            ToolbarIconKind.OriginalRatio => [
+                .. Line(4.5, 8, 7, 6, 7, 18), .. Line(4.5, 18, 9.5, 18),
+                .. Line(14.5, 8, 17, 6, 17, 18), .. Line(14.5, 18, 19.5, 18),
+                OriginalRoundedBox(12 - dot, 10 - dot, 2 * dot, 2 * dot, dot),
+                OriginalRoundedBox(12 - dot, 15 - dot, 2 * dot, 2 * dot, dot),
+            ],
+            ToolbarIconKind.FitContain => [
+                .. Line(7, 4, 4, 4, 4, 7), .. Line(17, 4, 20, 4, 20, 7),
+                .. Line(20, 17, 20, 20, 17, 20), .. Line(7, 20, 4, 20, 4, 17),
+                .. Line(9, 8, 15, 8, 15, 16, 9, 16, 9, 8),
+            ],
+            ToolbarIconKind.FitWidth => FitWidth(),
+            ToolbarIconKind.FitHeight => FitWidth()
+                .Select(c => c.Select(p => new IconPoint(24 - p.Y, p.X)).ToArray())
+                .ToArray(),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+    }
 
     // PathIcon은 Stroke를 지원하지 않아 둥근 선을 같은 방향의 채움 윤곽으로 만든다.
     // Nonzero 채움으로 겹쳐 화살표 접합부가 EvenOdd의 빈 구멍으로 잘리지 않게 한다.
-    private static IconPoint[][] Stroke(params double[] coordinates)
+    private static IconPoint[][] Stroke(double radius, double[] coordinates)
     {
-        const double radius = 0.7;
         const int capSteps = 12;
         var vertices = Polygon(coordinates);
         return vertices.Zip(vertices.Skip(1), (start, end) =>
@@ -81,14 +87,12 @@ internal static class ToolbarIconGeometry
         }).ToArray();
     }
 
-    private static IconPoint[] Speaker() => Polygon(1, 7, 3, 7, 7, 3, 7, 15, 3, 11, 1, 11);
-
-    // A415 승인 A안의 cubic 중심선 + 1.35 round stroke를 기존 PathIcon용 채움 윤곽으로 편다.
+    // 스피커의 곡선 중심선을 선택한 획 굵기의 채움 윤곽으로 편다.
     // 원본 배율 상자처럼 곡선을 세분화한다. 32구간·반원 16구간으로 200%에서도 각이 드러나지 않는다.
-    private static IconPoint[] SoundWave(IconPoint start, IconPoint control1, IconPoint control2, IconPoint end)
+    private static IconPoint[] SoundWave(IconPoint start, IconPoint control1, IconPoint control2, IconPoint end, double radius)
     {
         const int steps = 32;
-        const double radius = 1.35 / 2;
+
         var left = new IconPoint[steps + 1];
         var right = new IconPoint[steps + 1];
         double startNormal = 0, endNormal = 0;
@@ -110,6 +114,7 @@ internal static class ToolbarIconGeometry
         AddCap(end, endNormal);
         points.AddRange(Enumerable.Reverse(right));
         AddCap(start, startNormal + Math.PI);
+        points.Reverse();
         return points.ToArray();
 
         void AddCap(IconPoint center, double normal)
@@ -121,6 +126,7 @@ internal static class ToolbarIconGeometry
             }
         }
     }
+
     private static IconPoint[] OriginalRoundedBox(double x, double y, double w, double h, double radius)
     {
         var centers = Polygon(x + w - radius, y + radius, x + w - radius, y + h - radius,
@@ -145,7 +151,6 @@ internal static class ToolbarIconGeometry
         if (points[^1] == points[0]) points.RemoveAt(points.Count - 1);
         return points.ToArray();
     }
-    private static IconPoint[] Box(double x, double y, double w, double h) => Polygon(x, y, x + w, y, x + w, y + h, x, y + h);
 
     private static IconPoint[] Polygon(params double[] coordinates)
     {

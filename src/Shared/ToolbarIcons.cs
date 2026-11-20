@@ -8,6 +8,8 @@ namespace KOTU.Ui;
 /// <summary>같은 좌표 원본을 버튼과 메뉴의 새 UI 인스턴스로 만든다.</summary>
 internal static class ToolbarIcons
 {
+    internal static double StrokeWidth => (double)Application.Current.Resources["KotuIconStrokeWidth"];
+
     internal static Grid Build(ToolbarIconKind kind)
     {
         var root = new Grid
@@ -30,14 +32,14 @@ internal static class ToolbarIcons
     {
         var geometry = new PathGeometry
         {
-            FillRule = ToolbarIconGeometry.UsesStrokeContours(kind) ? FillRule.Nonzero : FillRule.EvenOdd,
+            FillRule = FillRule.Nonzero,
         };
         // 채우지 않는 대각선은 잉크 없이 종류별 뷰포트 경계를 확정한다. PathIcon이 실제 잉크 범위만
         // 확대하지 않도록 버튼과 메뉴에서 같은 원점·배율을 보존한다.
         var viewport = new PathFigure { StartPoint = new Point(0, 0), IsFilled = false, IsClosed = false };
         viewport.Segments.Add(new LineSegment { Point = new Point(ToolbarIconGeometry.ViewportSize(kind), ToolbarIconGeometry.ViewportSize(kind)) });
         geometry.Figures.Add(viewport);
-        foreach (var contour in ToolbarIconGeometry.Create(kind))
+        foreach (var contour in ToolbarIconGeometry.Create(kind, thin: StrokeWidth < 1.4))
         {
             var figure = new PathFigure { StartPoint = new Point(contour[0].X, contour[0].Y), IsClosed = true };
             foreach (var point in contour.Skip(1)) figure.Segments.Add(new LineSegment { Point = new Point(point.X, point.Y) });

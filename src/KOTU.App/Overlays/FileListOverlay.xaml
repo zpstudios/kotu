@@ -116,7 +116,7 @@
                 HorizontalAlignment="Left" VerticalAlignment="Center"
                 Margin="14,0,0,0"
                 Background="#CC202020" CornerRadius="4" Padding="10,6">
-            <TextBlock x:Name="PinnedText" FontSize="11" Foreground="White" />
+            <TextBlock x:Name="PinnedText" FontFamily="{StaticResource KotuControlFontFamily}" FontSize="11" Foreground="White" />
         </Border>
     </Grid>
 </UserControl>

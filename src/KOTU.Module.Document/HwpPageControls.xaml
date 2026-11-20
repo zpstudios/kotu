@@ -7,14 +7,14 @@
         <Button x:Name="Previous" Style="{StaticResource BottomBarButtonStyle}"
                 Click="PreviousClicked" ToolTipService.ToolTip="Previous page"
                 AutomationProperties.Name="Previous page" IsEnabled="False">
-            <FontIcon Glyph="&#xE76B;" FontSize="14" />
+            <FontIcon Glyph="&#xE76B;" FontSize="18" />
         </Button>
-        <TextBlock x:Name="Position" VerticalAlignment="Center" FontSize="12" Opacity="0.8"
+        <TextBlock x:Name="Position" FontFamily="{StaticResource KotuControlFontFamily}" VerticalAlignment="Center" FontSize="12" Opacity="0.8"
                    AutomationProperties.LiveSetting="Polite" />
         <Button x:Name="Next" Style="{StaticResource BottomBarButtonStyle}"
                 Click="NextClicked" ToolTipService.ToolTip="Next page"
                 AutomationProperties.Name="Next page" IsEnabled="False">
-            <FontIcon Glyph="&#xE76C;" FontSize="14" />
+            <FontIcon Glyph="&#xE76C;" FontSize="18" />
         </Button>
         <local:DocumentFitControls x:Name="Fit" />
     </StackPanel>

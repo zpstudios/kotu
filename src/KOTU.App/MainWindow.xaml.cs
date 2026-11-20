@@ -1123,6 +1123,7 @@ public sealed partial class MainWindow : Window
         content.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16 });
         content.Children.Add(new TextBlock
         {
+            FontFamily = (FontFamily)Application.Current.Resources["KotuControlFontFamily"],
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -2623,8 +2624,8 @@ public sealed partial class MainWindow : Window
         {
             case ViewModeButtonFace.ToFullScreen:
                 // E740(FullScreen) — 구 FullScreenButton의 XAML 인라인 글리프를 코드로 이관
-                // (FontSize 16 = 하단 바 1칸 버튼 규격, StartButton·OpenFileButton과 동일).
-                ViewModeButton.Content = new FontIcon { Glyph = "\uE740", FontSize = 16 };
+                // (FontSize 18 = 하단 바 1칸 버튼 규격, StartButton·OpenFileButton과 동일).
+                ViewModeButton.Content = new FontIcon { Glyph = "\uE740", FontSize = 18 };
                 ToolTipService.SetToolTip(ViewModeButton, "Full screen");
                 break;
             default:

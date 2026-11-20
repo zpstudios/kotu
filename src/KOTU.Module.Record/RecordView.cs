@@ -17,6 +17,8 @@ namespace KOTU.Module.Record;
 
 public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, ITrayStatusProvider
 {
+    private static FontFamily ControlFont => (FontFamily)Application.Current.Resources["KotuControlFontFamily"];
+
     private readonly ISettingsService _settings;
     private readonly RecordingFolderCoordinator _folders;
     private RecordingFolderState _folderState;
@@ -52,8 +54,8 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private readonly Button _retryFolder = new() { Content = "Retry save folder", Visibility = Visibility.Collapsed };
     private readonly TextBlock _folderPath = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly TextBlock _folderNotice = new() { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
-    private readonly TextBlock _barClock = new() { Text = "Ready", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-    private readonly TextBlock _captureState = new() { Text = "Ready", TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _barClock = new() { FontFamily = ControlFont, Text = "Ready", VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly TextBlock _captureState = new() { FontFamily = ControlFont, Text = "Ready", TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _captureSources = new() { TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
     private readonly Ellipse _captureDot = CreateRecordingDot();
     private readonly Ellipse _barDot = CreateRecordingDot();
@@ -235,7 +237,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     {
         var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         heading.Children.Add(new FontIcon { Glyph = glyph, FontSize = 18 });
-        heading.Children.Add(new TextBlock { Text = title, FontSize = 16, TextWrapping = TextWrapping.Wrap });
+        heading.Children.Add(new TextBlock { FontFamily = ControlFont, Text = title, FontSize = 16, TextWrapping = TextWrapping.Wrap });
         var content = new StackPanel { Spacing = 12 };
         content.Children.Add(heading);
         foreach (var control in controls) content.Children.Add(control);
@@ -290,7 +292,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                                 <RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="36"/>
                             </Grid.RowDefinitions>
                             <FontIcon Glyph="{{glyph}}" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Row="1" Text="{{category}}" FontSize="10" Opacity="0.65" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Row="1" FontFamily="{StaticResource KotuControlFontFamily}" Text="{{category}}" FontSize="10" Opacity="0.65" HorizontalAlignment="Center"/>
                             <TextBlock Grid.Row="2" Text="{{labelBinding}}" FontSize="12" TextWrapping="Wrap"
                                        TextTrimming="CharacterEllipsis" MaxLines="2" TextAlignment="Center"/>
                             <Border Name="SelectionBadge" Grid.RowSpan="3" Width="22" Height="22" CornerRadius="11"
@@ -373,7 +375,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     {
         var panel = new StackPanel { Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
         panel.Children.Add(new FontIcon { Glyph = glyph, FontSize = 30 });
-        panel.Children.Add(new TextBlock { Text = label, FontSize = 12, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center });
+        panel.Children.Add(new TextBlock { FontFamily = ControlFont, Text = label, FontSize = 12, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center });
         var content = new Grid();
         content.Children.Add(panel);
         content.Children.Add(new Border

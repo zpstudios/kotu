@@ -11,12 +11,12 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Button x:Name="UpButton" Width="32" Height="32" MinWidth="0" Padding="4" VerticalAlignment="Center" Click="OnUpClicked" ToolTipService.ToolTip="Up one folder">
-                <FontIcon Glyph="&#xE74A;" FontSize="13" />
+                <FontIcon Glyph="&#xE74A;" FontSize="18" />
             </Button>
             <!-- A282: 사용자 프로필 폴더로 한 번에 복귀. 비활성화하지 않는다(이미 홈이면 무동작) -->
             <Button x:Name="HomeButton" Grid.Column="1" Width="32" Height="32" MinWidth="0" Padding="4" VerticalAlignment="Center" Click="OnHomeClicked"
                     ToolTipService.ToolTip="Home">
-                <FontIcon Glyph="&#xE80F;" FontSize="13" />
+                <FontIcon Glyph="&#xE80F;" FontSize="18" />
             </Button>
             <TextBlock x:Name="PathText" Grid.Column="2" VerticalAlignment="Center"
                        HorizontalAlignment="Right" TextAlignment="Right"
@@ -24,7 +24,7 @@
             <!-- 항목은 담당 확장자에 따라 코드에서 채운다(EnsureFilterFlyout) -->
             <DropDownButton x:Name="FilterButton" Grid.Column="3" Height="32" MinWidth="0" Padding="8,4" VerticalAlignment="Center"
                             ToolTipService.ToolTip="Filter file types">
-                <FontIcon x:Name="FilterIcon" Glyph="&#xE71C;" FontSize="13" />
+                <FontIcon x:Name="FilterIcon" Glyph="&#xE71C;" FontSize="18" />
             </DropDownButton>
         </Grid>
 </UserControl>

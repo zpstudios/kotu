@@ -13,7 +13,7 @@ internal static class FitIcons
     internal static void ConfigureMenu(MenuFlyoutItem original, MenuFlyoutItem contain,
         MenuFlyoutItem width, MenuFlyoutItem height)
     {
-        var lettering = new FontFamily("ms-appx:///Assets/KotuFit.ttf#KOTU Fit");
+        var lettering = (FontFamily)Application.Current.Resources["KotuControlFontFamily"];
         ConfigureMenuItem(original, ToolbarIconKind.OriginalRatio, lettering);
         ConfigureMenuItem(contain, ToolbarIconKind.FitContain, lettering);
         ConfigureMenuItem(width, ToolbarIconKind.FitWidth, lettering);
