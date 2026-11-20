@@ -170,7 +170,7 @@ public sealed partial class PdfPane : UserControl
             };
             items.Add(item);
             offsets[i] = y;
-            y += item.Height + 18; // ItemTemplate 테두리 2 + 상하 마진 8+8
+            y += item.Height + PdfFitGeometry.PageFrameExtent;
         }
         _items = items;
         _pageOffsets = offsets;
@@ -470,7 +470,6 @@ public sealed partial class PdfPane : UserControl
         var item = _items[idx];
         if (item.Width <= 0 || item.Height <= 0) return;
 
-        // 페이지 실측: 가로 = 비트맵 폭 + 테두리 2, 세로 = 높이 + 테두리 2 + 상하 마진 16(전부 보이게)
         var zoom = PdfFitGeometry.Zoom(viewportW, viewportH, item.Width, item.Height,
             item.NativeWidth, mode, _scroll.MinZoomFactor, _scroll.MaxZoomFactor);
 
@@ -483,8 +482,8 @@ public sealed partial class PdfPane : UserControl
         // 좌상단 기준으로 놓아 ItemContainerStyle의 Center가 무력화되기 때문(원인 상세는
         // EnsureContentMinWidth 주석). UpdateLayout으로 반영한 뒤의 ExtentWidth라야 아래
         // 중앙 계산(baseWidth)이 이번 배율의 실제 패널 폭을 읽는다(낡은 값 방지).
-        // FitWidth는 산식상 페이지 폭 == 뷰포트다. 이 경계도 Left여야 확대되는 Center 선행 여백이 없다.
-        var alignLeft = (item.Width + 2) * zoom >= viewportW - 0.5;
+        // FitWidth는 여백을 포함한 페이지 폭이 뷰포트와 같다. 이 경계도 Left여야 확대되는 Center 선행 여백이 없다.
+        var alignLeft = (item.Width + PdfFitGeometry.PageFrameExtent) * zoom >= viewportW - 0.5;
         SetPageHorizontalAlignment(alignLeft);
         EnsureContentMinWidth(zoom);
         PageList.UpdateLayout();
@@ -517,7 +516,7 @@ public sealed partial class PdfPane : UserControl
         var viewportW = _scroll.ViewportWidth;
         if (viewportW <= 0) return;
         var item = _items[CurrentPageIndex()];
-        SetPageHorizontalAlignment((item.Width + 2) * zoom >= viewportW - 0.5);
+        SetPageHorizontalAlignment((item.Width + PdfFitGeometry.PageFrameExtent) * zoom >= viewportW - 0.5);
     }
 
     private void SetPageHorizontalAlignment(bool alignLeft)

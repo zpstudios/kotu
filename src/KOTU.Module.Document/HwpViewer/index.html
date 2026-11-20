@@ -8,11 +8,15 @@
   <style>
     :root { color-scheme: light dark; font: 14px 'Segoe UI', sans-serif; }
     body { margin: 0; }
-    main { box-sizing: border-box; height: 100vh; padding: 8px 1px; overflow: auto; background: #777; }
-    #page { display: block; margin: 0 auto; background: white; }
+    main { box-sizing: border-box; height: 100vh; padding: 9px; overflow: auto; background: #777; }
+    #page { display: block; margin: 0 auto; outline: 1px solid #404040; background: white; }
     main[data-fit="Contain"] #page { max-width: 100%; max-height: 100%; }
     main[data-fit="FitWidth"] #page { width: 100%; height: auto; }
     main[data-fit="FitHeight"] #page { height: 100%; width: auto; }
+    @media (forced-colors: active) {
+      main { background: Canvas; }
+      #page { outline-color: CanvasText; }
+    }
     #page[hidden] { display: none; }
   </style>
   <script type="module" src="./viewer.js"></script>

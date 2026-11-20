@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Editable outlines for the four Fit menu labels. To export:
+     fontforge -lang=ff -c 'Open($1); Generate($2)' packaging/KotuFit.svg src/KOTU.App/Assets/KotuFit.ttf
+     Coordinates are in font space (positive Y is up). -->
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+  <defs>
+    <font id="KotuFit" horiz-adv-x="570">
+      <font-face font-family="KOTU Fit" font-weight="400" units-per-em="1000" ascent="850" descent="220" cap-height="700" x-height="525"/>
+      <missing-glyph horiz-adv-x="590" d="M65 700 L525 700 L525 0 L65 0 Z M150 615 L150 85 L440 85 L440 615 Z"/>
+      <glyph unicode=" " glyph-name="space" horiz-adv-x="280"/>
+      <glyph unicode="O" glyph-name="O" horiz-adv-x="685" d="M250 700 L435 700 Q620 700 620 515 L620 185 Q620 0 435 0 L250 0 Q65 0 65 185 L65 515 Q65 700 250 700 Z M253 609 Q160 609 160 511 L160 189 Q160 91 253 91 L432 91 Q525 91 525 189 L525 511 Q525 609 432 609 Z"/>
+      <glyph unicode="C" glyph-name="C" horiz-adv-x="636" d="M250 700 L425 700 Q534 700 598 624 L530 561 Q488 609 422 609 L253 609 Q160 609 160 511 L160 189 Q160 91 253 91 L422 91 Q488 91 530 139 L598 76 Q534 0 425 0 L250 0 Q65 0 65 185 L65 515 Q65 700 250 700 Z"/>
+      <glyph unicode="F" glyph-name="F" horiz-adv-x="576" d="M78 700 L548 700 L548 609 L173 609 L173 399 L490 399 L490 308 L173 308 L173 0 L78 0 Z"/>
+      <glyph unicode="a" glyph-name="a" d="M230 525 L288 525 Q372 525 413 476 L413 525 L505 525 L505 0 L413 0 L413 49 Q371 0 288 0 L230 0 Q55 0 55 170 L55 355 Q55 525 230 525 Z M236 438 Q148 438 148 349 L148 176 Q148 87 236 87 L294 87 Q413 87 413 204 L413 320 Q413 438 294 438 Z"/>
+      <glyph unicode="d" glyph-name="d" d="M230 525 L288 525 Q372 525 413 476 L413 715 L505 715 L505 0 L413 0 L413 49 Q371 0 288 0 L230 0 Q55 0 55 170 L55 355 Q55 525 230 525 Z M236 438 Q148 438 148 349 L148 176 Q148 87 236 87 L294 87 Q413 87 413 204 L413 320 Q413 438 294 438 Z"/>
+      <glyph unicode="e" glyph-name="e" horiz-adv-x="555" d="M230 525 L327 525 Q499 525 499 355 L499 223 L148 223 L148 176 Q148 87 236 87 L326 87 Q392 87 438 127 L493 62 Q435 0 326 0 L230 0 Q55 0 55 170 L55 355 Q55 525 230 525 Z M236 438 Q148 438 148 349 L148 301 L407 301 L407 349 Q407 438 321 438 Z"/>
+      <glyph unicode="g" glyph-name="g" d="M230 525 L288 525 Q372 525 413 476 L413 525 L505 525 L505 -27 Q505 -198 328 -198 L158 -198 L158 -111 L322 -111 Q413 -111 413 -23 L413 49 Q371 0 288 0 L230 0 Q55 0 55 170 L55 355 Q55 525 230 525 Z M236 438 Q148 438 148 349 L148 176 Q148 87 236 87 L294 87 Q413 87 413 204 L413 320 Q413 438 294 438 Z"/>
+      <glyph unicode="h" glyph-name="h" d="M67 715 L160 715 L160 473 Q205 525 288 525 L328 525 Q504 525 504 355 L504 0 L411 0 L411 349 Q411 438 322 438 L276 438 Q160 438 160 321 L160 0 L67 0 Z"/>
+      <glyph unicode="i" glyph-name="i" horiz-adv-x="234" d="M70 525 L164 525 L164 0 L70 0 Z M70 710 L164 710 L164 615 L70 615 Z"/>
+      <glyph unicode="l" glyph-name="l" horiz-adv-x="292" d="M66 715 L159 715 L159 128 Q159 87 202 87 L256 87 L256 0 L191 0 Q66 0 66 122 Z"/>
+      <glyph unicode="n" glyph-name="n" d="M67 525 L160 525 L160 473 Q205 525 288 525 L328 525 Q504 525 504 355 L504 0 L411 0 L411 349 Q411 438 322 438 L276 438 Q160 438 160 321 L160 0 L67 0 Z"/>
+      <glyph unicode="o" glyph-name="o" horiz-adv-x="562" d="M230 525 L332 525 Q507 525 507 355 L507 170 Q507 0 332 0 L230 0 Q55 0 55 170 L55 355 Q55 525 230 525 Z M236 438 Q148 438 148 349 L148 176 Q148 87 236 87 L326 87 Q414 87 414 176 L414 349 Q414 438 326 438 Z"/>
+      <glyph unicode="r" glyph-name="r" horiz-adv-x="405" d="M67 525 L160 525 L160 463 Q207 525 296 525 L374 525 L374 435 L301 435 Q160 435 160 290 L160 0 L67 0 Z"/>
+      <glyph unicode="t" glyph-name="t" horiz-adv-x="395" d="M110 665 L203 665 L203 525 L349 525 L349 438 L203 438 L203 150 Q203 87 266 87 L352 87 L352 0 L259 0 Q110 0 110 145 L110 438 L34 438 L34 525 L110 525 Z"/>
+      <glyph unicode="w" glyph-name="w" horiz-adv-x="770" d="M33 525 L131 525 L231 133 L340 525 L430 525 L539 133 L639 525 L737 525 L590 0 L492 0 L385 376 L278 0 L180 0 Z"/>
+    </font>
+  </defs>
+</svg>

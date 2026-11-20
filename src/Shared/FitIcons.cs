@@ -13,15 +13,17 @@ internal static class FitIcons
     internal static void ConfigureMenu(MenuFlyoutItem original, MenuFlyoutItem contain,
         MenuFlyoutItem width, MenuFlyoutItem height)
     {
-        ConfigureMenuItem(original, ToolbarIconKind.OriginalRatio);
-        ConfigureMenuItem(contain, ToolbarIconKind.FitContain);
-        ConfigureMenuItem(width, ToolbarIconKind.FitWidth);
-        ConfigureMenuItem(height, ToolbarIconKind.FitHeight);
+        var lettering = new FontFamily("ms-appx:///Assets/KotuFit.ttf#KOTU Fit");
+        ConfigureMenuItem(original, ToolbarIconKind.OriginalRatio, lettering);
+        ConfigureMenuItem(contain, ToolbarIconKind.FitContain, lettering);
+        ConfigureMenuItem(width, ToolbarIconKind.FitWidth, lettering);
+        ConfigureMenuItem(height, ToolbarIconKind.FitHeight, lettering);
     }
 
-    private static void ConfigureMenuItem(MenuFlyoutItem item, ToolbarIconKind kind)
+    private static void ConfigureMenuItem(MenuFlyoutItem item, ToolbarIconKind kind, FontFamily lettering)
     {
         item.Icon = ToolbarIcons.BuildMenu(kind);
+        item.FontFamily = lettering;
         // WinUI의 16px 아이콘 슬롯을 네 항목 모두 24px로 맞춘다.
         // 텍스트 시작 위치28과 행 높이는 유지해 아이콘 뒤4px 여유를 둔다.
         item.Loaded += (_, _) =>

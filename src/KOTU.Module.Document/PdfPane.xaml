@@ -3,6 +3,21 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Default">
+                    <SolidColorBrush x:Key="PdfCanvasBrush" Color="#777777" />
+                    <SolidColorBrush x:Key="PdfPageEdgeBrush" Color="#404040" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <SolidColorBrush x:Key="PdfCanvasBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="PdfPageEdgeBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
     <!-- A16: 세로 연속 스크롤 PDF 뷰어. ListView 가상화로 보이는 페이지만 렌더하고,
          줌은 Ctrl+휠(A98 — 내장 줌 대신 코드의 수동 줌)·내장 핀치(비트맵 확대 — 재렌더 없음). -->
     <!-- A152: 아래 패딩 44 = 셸 하단 바 두께. 바가 콘텐츠 위 오버레이가 되면서(행 분할 폐지)
@@ -12,6 +27,7 @@
          A381: 이 패딩만으로 Fit의 가시 높이는 줄지 않으므로 코드에서 실제 하단 오버레이를 측정한다. 줌 배율이 걸리면 이 여백도 함께 스케일된다(허용). -->
     <ListView
         x:Name="PageList"
+        Background="{ThemeResource PdfCanvasBrush}"
         Padding="0,0,0,44"
         SelectionMode="None"
         IsItemClickEnabled="False"
@@ -22,8 +38,8 @@
         <ListView.ItemTemplate>
             <DataTemplate>
                 <!-- PDF 페이지는 흰 배경 전제 — 다크 테마에서도 종이처럼 보이게 고정 -->
-                <Border Background="White" Margin="0,8,0,8" BorderThickness="1"
-                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                <Border Background="White" Margin="8" BorderThickness="1"
+                        BorderBrush="{ThemeResource PdfPageEdgeBrush}">
                     <Image Stretch="Uniform" />
                 </Border>
             </DataTemplate>

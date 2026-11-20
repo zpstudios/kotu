@@ -10,6 +10,9 @@ public enum PdfFitMode { Contain, FitWidth, FitHeight, ActualSize }
 /// <summary>PDF 맞춤 산식. 모든 입력은 같은 뷰포트 좌표의 DIP이며 줌 전 페이지 크기를 받는다.</summary>
 internal static class PdfFitGeometry
 {
+    // Each sheet has an 8 DIP margin and a 1 DIP border on both sides.
+    internal const double PageFrameExtent = 18;
+
     public static double VisibleHeight(double width, double height,
         double overlayX, double overlayY, double overlayWidth, double overlayHeight)
     {
@@ -23,8 +26,8 @@ internal static class PdfFitGeometry
     public static double Zoom(double width, double visibleHeight, double pageWidth,
         double pageHeight, double nativeWidth, PdfFitMode mode, double minZoom, double maxZoom)
     {
-        var fitWidth = width / (pageWidth + 2);
-        var fitHeight = visibleHeight / (pageHeight + 18);
+        var fitWidth = width / (pageWidth + PageFrameExtent);
+        var fitHeight = visibleHeight / (pageHeight + PageFrameExtent);
         var actual = nativeWidth > 0 ? nativeWidth / pageWidth : 1.0;
         var zoom = mode switch
         {

@@ -29,8 +29,19 @@ public sealed class PdfFitGeometryTests
         var zoom = PdfFitGeometry.Zoom(width, visible, 900, 900 * 792.0 / 612,
             816, PdfFitMode.Contain, 0.1, 10);
         Assert.True((900 * 792.0 / 612 + 18) * zoom <= visible + 0.00001);
-        Assert.True(902 * zoom <= width + 0.00001);
+        Assert.True(918 * zoom <= width + 0.00001);
         Assert.True(zoom <= 816.0 / 900);
+    }
+
+    [Theory]
+    [InlineData(PdfFitMode.Contain)]
+    [InlineData(PdfFitMode.FitWidth)]
+    public void WidthLimitedPageLeavesBothPaperEdgesVisible(PdfFitMode mode)
+    {
+        const double width = 600, pageWidth = 1200;
+        var zoom = PdfFitGeometry.Zoom(width, 800, pageWidth, 800, pageWidth, mode, 0.1, 10);
+        // The image, a one-DIP stroke and eight-DIP margin on each side fit together.
+        Assert.Equal(width, (pageWidth + 18) * zoom, precision: 8);
     }
 
     [Fact]
@@ -41,7 +52,7 @@ public sealed class PdfFitGeometryTests
         Assert.True(Zoom(556, PdfFitMode.Contain) < Zoom(600, PdfFitMode.Contain));
         Assert.True(Zoom(600, PdfFitMode.Contain) < Zoom(800, PdfFitMode.Contain));
         Assert.Equal(556.0 / 1218, Zoom(556, PdfFitMode.FitHeight));
-        Assert.Equal(1000.0 / 902, Zoom(556, PdfFitMode.FitWidth));
+        Assert.Equal(1000.0 / 918, Zoom(556, PdfFitMode.FitWidth));
         Assert.Equal(Zoom(556, PdfFitMode.FitWidth), Zoom(600, PdfFitMode.FitWidth));
         Assert.Equal(816.0 / 900, Zoom(556, PdfFitMode.ActualSize));
         Assert.Equal(Zoom(556, PdfFitMode.ActualSize), Zoom(600, PdfFitMode.ActualSize));
