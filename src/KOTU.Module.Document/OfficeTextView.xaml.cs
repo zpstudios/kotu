@@ -9,7 +9,7 @@ namespace KOTU.Module.Document;
 
 /// <summary>A45: HWP 쪽 보기와 오피스 본문 읽기 화면.</summary>
 public sealed partial class OfficeTextView : UserControl, IContentStateSource, IContentOpenFailedSource,
-    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IContentInfoProvider
+    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IContentInfoProvider, IEditorEscapeSource
 {
     private readonly string _path;
     private readonly CancellationTokenSource _cancel = new();
@@ -23,6 +23,7 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
 
     public event Action<string>? ContentOpened;
     public event Action? ContentOpenFailed;
+    public event Action? EditorEscapeRequested;
     public event Action? TrayStatusChanged;
 
     public OfficeTextView(string path)
@@ -72,7 +73,7 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
             CopyButton.IsEnabled = _preview.Text.Length > 0;
             if (result.Source is not null)
             {
-                _pages = new HwpPagePane(PageHost);
+                _pages = new HwpPagePane(PageHost, () => EditorEscapeRequested?.Invoke());
                 _pages.Failed += PageFailed;
             }
             SetView(_pages is not null);

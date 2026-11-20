@@ -5,7 +5,7 @@ using Microsoft.Web.WebView2.Core;
 namespace KOTU.Module.Document;
 
 /// <summary>검사를 마친 HWP 스냅샷 한 개를 로컬 전용 페이지 뷰에 전달한다.</summary>
-internal sealed class HwpPagePane(ContentControl host)
+internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
 {
     private const string HostName = "kotu-hwp.invalid";
     private const string PageUrl = "https://" + HostName + "/index.html";
@@ -95,6 +95,15 @@ internal sealed class HwpPagePane(ContentControl host)
             var root = message.RootElement;
             switch (root.GetProperty("kind").GetString())
             {
+                case "escape":
+                    // 셸이 이 WebView를 닫을 수 있으므로 WebView2 콜백에서 나온 뒤 전달한다.
+                    host.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (!_closed && !_failed && host.IsLoaded &&
+                            host.Visibility == Microsoft.UI.Xaml.Visibility.Visible && ReferenceEquals(host.Content, _view))
+                            requestEscape();
+                    });
+                    break;
                 case "ready" when _source is not null && _offset == 0:
                     sender.PostWebMessageAsJson(JsonSerializer.Serialize(new { kind = "open", length = _source.Length }));
                     break;

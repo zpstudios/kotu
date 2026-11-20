@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { runInNewContext } from 'node:vm';
 import { packageDirectory, restoreHwpRenderer } from './Restore-HwpRenderer.mjs';
 
 // The corresponding .hwp.formatted.xml files specify the section labels, paper dimensions,
@@ -59,6 +60,31 @@ function assertEmbeddedImage(page, type, expectedHash) {
     `Missing source ${type} image`);
 }
 
+// Exercise the shipped page's keyboard listener at the WebView message boundary.
+async function testPageEscape() {
+  const messages = [];
+  const bridge = Object.assign(new EventTarget(), { postMessage: message => messages.push(message.kind) });
+  const window = Object.assign(new EventTarget(), { chrome: { webview: bridge } });
+  const source = await readFile(new URL('../src/KOTU.Module.Document/HwpViewer/viewer.js', import.meta.url), 'utf8');
+  runInNewContext(source, { window, document: { querySelector: () => ({}) }, clearTimeout });
+  function press(key, options = {}) {
+    const event = Object.assign(new Event('keydown', { cancelable: true }), { key, ...options });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+  assert.equal(press('Escape'), true);
+  assert.equal(press('Escape', { repeat: true }), true);
+  for (const modifier of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey', 'isComposing'])
+    assert.equal(press('Escape', { [modifier]: true }), false, modifier);
+  assert.equal(press('Escape', { keyCode: 229 }), false);
+  assert.equal(press('Enter'), false);
+  assert.equal(press('Escape'), true);
+  window.dispatchEvent(new Event('pagehide'));
+  assert.equal(press('Escape'), false);
+  assert.deepEqual(messages, ['ready', 'escape', 'escape']);
+}
+
+await testPageEscape();
 await restoreHwpRenderer();
 const { default: init, HwpDocument } = await import(pathToFileURL(join(packageDirectory, 'rhwp.js')));
 await init({ module_or_path: await readFile(join(packageDirectory, 'rhwp_bg.wasm')) });

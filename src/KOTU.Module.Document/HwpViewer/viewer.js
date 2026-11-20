@@ -124,5 +124,12 @@ next.onclick = () => requestPage(index + 1);
 smaller.onclick = () => setZoom(zoom - 25);
 larger.onclick = () => setZoom(zoom + 25);
 fit.onclick = () => setZoom(100);
+window.addEventListener('keydown', event => {
+  if (closed || event.key !== 'Escape' || event.isComposing || event.keyCode === 229 ||
+      event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (!event.repeat) bridge.postMessage({ kind: 'escape' });
+}, true);
 window.addEventListener('pagehide', release, { once: true });
 bridge.postMessage({ kind: 'ready' });
