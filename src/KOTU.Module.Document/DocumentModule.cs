@@ -11,7 +11,7 @@ namespace KOTU.Module.Document;
 /// 마크다운(md·markdown)은 편집에 더해 렌더 뷰(자체 최소 렌더러 — MarkdownParser/Renderer)를
 /// 하단 바 토글로 오간다. A224: 비md 텍스트 형식의 뷰 모드는 잠금 뷰(에디터 그대로 +
 /// IsReadOnly — HTML 렌더는 A248에서 붙었다). A277: 잠금 뷰는 편집 전용 시각 요소(캐럿·가이드·
-/// ¶·EOF)를 걷어 편집 화면과 구분된다. A45: HWP·HWPX·ODT·ODS·ODP는 본문 미리보기 전용이다.
+/// ¶·EOF)를 걷어 편집 화면과 구분된다. A45: HWP는 쪽·본문 보기, HWPX·ODT·ODS·ODP는 본문 보기를 제공한다.
 /// </summary>
 public sealed class DocumentModule : IModule
 {

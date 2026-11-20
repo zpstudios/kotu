@@ -1,10 +1,18 @@
-# A45: offline office text preview
+# A45: offline HWP pages and office text previews
 
 This product was developed by referring to Hancom's public HWP document file specification.
 
 본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
 
-## Delivered scope
+## HWP page view (v0.431.0)
+
+The Document module and All Readable use the bundled [rhwp](https://github.com/edwardkim/rhwp/tree/v0.9.1) engine to lay out HWP 5.x files locally. Readers can move between pages containing text, table borders and embedded pictures, or switch to the existing selectable text preview. Documents stay on the PC. Available fonts and the engine's support for a document's objects can affect line breaks and placement. Editing, printing and page rendering for the other office formats remain outside this change.
+
+The text reader validates the file and passes the same in-memory bytes to the page viewer. A local WebView2 worker renders the selected page as an SVG image. The viewer discards the previous image when the new one is ready. If WebView2 or page rendering fails, the native text preview remains available.
+
+The [renderer test](../../../eng/Test-HwpRenderer.mjs) opens two public documents. In `pagedefs.hwp` it checks portrait and landscape A4 page sizes and the text on each page. In `sample-5017.hwp` it checks table borders and cell text on the first page, Korean text on the second page, and the original JPEG and PNG embedded in the corresponding pages. These checks cover four pages. Visual comparison with the source application on representative user documents remains open.
+
+## Text preview (v0.374.0)
 
 The Document module and All Readable can open `.hwp`, `.hwpx`, `.odt`, `.ods` and
 `.odp` as **read-only text previews**. The screen explicitly labels the result as
@@ -13,9 +21,8 @@ rendered. Copy text copies only the displayed preview. Text size controls and
 virtualized, selectable text support reading long results. No save or print
 contract is exposed for these binary/package formats.
 
-This is partial delivery of A45, not a page-faithful office viewer. The original
-page layout requirement remains open. Export to PDF in the authoring application
-is the recommended way to see the original appearance in KOTU.
+For documents that require the exact pagination of the authoring application,
+its PDF export can also be opened in KOTU.
 
 | Format | Readable content | Limits |
 |---|---|---|
@@ -41,16 +48,15 @@ be used to verify the visual fidelity or completeness of a document.
 - Module extension registration is the source for the router, All Readable,
   file filters and optional Explorer associations. Standalone builds retain A43's
   registry-write prohibition.
-- Quick info identifies these files as their format plus “Text preview”; it
+- Quick info identifies HWP as supporting page and text previews and labels the other formats as text previews. It
   does not misclassify ZIP/binary bytes as text encoding or line counts.
 - Explorer tiles and detail rows exclude office formats from raw plain-text
   preview and encoding detection, retaining their format tiles instead.
 - The parser runs on a dedicated module worker. Unload cancels parsing and
   invalidates UI results. Text is split on the worker into chunks of at most
   2,048 UTF-16 code units for a virtualized ListView, avoiding a huge TextBox.
-- No new packages, native libraries, external office applications, converters,
-  browser engines, network calls or temporary files are used. The same code
-  works in self-contained Windows x64 and the standalone distribution.
+- Text extraction uses .NET and the bounded reader in both Windows x64
+  distributions. It also provides the fallback when HWP page rendering fails.
 
 ## Input bounds
 

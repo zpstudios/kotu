@@ -27,14 +27,20 @@ public static class OfficeTextReader
 
     public static bool Supports(string path) => Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
 
-    public static OfficeTextPreview Read(string path, CancellationToken cancellation = default)
+    public static OfficeTextPreview Read(string path, CancellationToken cancellation = default) =>
+        ReadForDisplay(path, cancellation).Preview;
+
+    public static (OfficeTextPreview Preview, byte[]? HwpSource) ReadForDisplay(string path, CancellationToken cancellation = default)
     {
         // 공유 읽기 스냅샷만 소비한다. 소스 파일·AppData·TEMP에는 아무것도 쓰지 않는다.
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        return Read(stream, Path.GetExtension(path), cancellation);
+        return ReadForDisplay(stream, Path.GetExtension(path), cancellation);
     }
 
-    public static OfficeTextPreview Read(Stream stream, string extension, CancellationToken cancellation = default)
+    public static OfficeTextPreview Read(Stream stream, string extension, CancellationToken cancellation = default) =>
+        ReadForDisplay(stream, extension, cancellation).Preview;
+
+    internal static (OfficeTextPreview Preview, byte[]? HwpSource) ReadForDisplay(Stream stream, string extension, CancellationToken cancellation = default)
     {
         cancellation.ThrowIfCancellationRequested();
         extension = extension.ToLowerInvariant();
@@ -47,7 +53,9 @@ public static class OfficeTextReader
             else ReadPackage(bytes, extension, output, cancellation);
         }
         catch (PreviewLimitException) { output.Truncated = true; }
-        return new OfficeTextPreview(extension[1..].ToUpperInvariant(), output.ToString().Trim(), output.Truncated);
+        // 보호 여부를 검사한 바로 그 스냅샷만 조판기에 건넨다. 경로를 다시 열면 검사 이후 파일이 바뀔 수 있다.
+        var preview = new OfficeTextPreview(extension[1..].ToUpperInvariant(), output.ToString().Trim(), output.Truncated);
+        return (preview, extension == ".hwp" ? bytes : null);
     }
 
     private static void ReadPackage(byte[] bytes, string extension, PreviewText output, CancellationToken cancel)

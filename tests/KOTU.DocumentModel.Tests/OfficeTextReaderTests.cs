@@ -83,6 +83,23 @@ public sealed class OfficeTextReaderTests
     }
 
     [Fact]
+    public void PageViewReceivesTheSameUnprotectedSnapshotAsTextView()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".hwp");
+        var original = Hwp("본문", true);
+        try
+        {
+            File.WriteAllBytes(path, original);
+            var display = OfficeTextReader.ReadForDisplay(path);
+            File.WriteAllBytes(path, Hwp("protected", false, flags: 2));
+            Assert.Equal("본문", display.Preview.Text);
+            Assert.Equal(original, display.HwpSource);
+            Assert.Throws<NotSupportedException>(() => OfficeTextReader.ReadForDisplay(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void CompoundDirectoryCyclesAreRejected()
     {
         var bytes = Hwp("body", false);

@@ -38,5 +38,5 @@ This product was developed by referring to Hancom's public HWP document file spe
 본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
 
 The HWP text-preview parser is original KOTU code based on [Hancom's public HWP 5.0 specification](https://www.hancom.com/support/downloadCenter/hwpOwpml).
-No Hancom rendering engine or third-party HWP parser is bundled. Original page layout is not rendered.
+HWP 5.x page previews use [rhwp](https://github.com/edwardkim/rhwp) (`@rhwp/core` 0.9.1, MIT). KOTU includes its JavaScript and WebAssembly renderer in `HwpViewer/engine`. The upstream license is in `HwpViewer/engine/LICENSE`. Third-party notices and license texts are in `HwpViewer/engine/notices/`.
 The distribution also includes `licenses/HWP-Format-NOTICE.txt`.

@@ -126,7 +126,9 @@ public static class DocumentQuickInfo
             : BuildTextRowsFrom(null);
 
     private static List<ContentInfoItem> OfficePreviewRows(string path) =>
-        [new("Format", Path.GetExtension(path).TrimStart('.').ToUpperInvariant()), new("View", "Text preview (not original layout)")];
+        [new("Format", Path.GetExtension(path).TrimStart('.').ToUpperInvariant()),
+         new("View", Path.GetExtension(path).Equals(".hwp", StringComparison.OrdinalIgnoreCase)
+             ? "Page and text preview" : "Text preview (not original layout)")];
 
     /// <summary>PDF 갈래 판정 — 라우팅(DocumentModule.Extensions의 .pdf)과 같은 짝.</summary>
     private static bool IsPdfPath(string path) =>

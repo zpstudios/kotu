@@ -7,8 +7,16 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <TextBlock x:Name="Notice" Margin="24,16,24,8" TextWrapping="Wrap" Opacity="0.75"
-                   Text="Text preview. Original layout, images, charts and formulas are not rendered. Tables are flattened; reading order may differ. Export to PDF for the original appearance." />
+        <Grid Margin="24,12,24,8" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="Notice" TextWrapping="Wrap" Opacity="0.75"
+                       Text="Text preview. Original layout, images, charts and formulas are not rendered. Tables are flattened; reading order may differ. Export to PDF for the original appearance." />
+            <Button x:Name="ViewMode" Grid.Column="1" VerticalAlignment="Top" Visibility="Collapsed"
+                    Content="Text view" Click="SwitchView" />
+        </Grid>
         <ListView x:Name="TextList" Grid.Row="1" Padding="16,0,16,68" FontSize="16"
                   SelectionMode="None" IsItemClickEnabled="False" HorizontalContentAlignment="Stretch">
             <ListView.ItemContainerStyle>
@@ -22,7 +30,9 @@
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
-        <TextBlock x:Name="StatusText" Grid.Row="1" Margin="24" TextWrapping="Wrap" Text="Loading text preview..." />
+        <ContentControl x:Name="PageHost" Grid.Row="1" Margin="0,0,0,52" Visibility="Collapsed"
+                        VerticalContentAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+        <TextBlock x:Name="StatusText" Grid.Row="1" Margin="24" VerticalAlignment="Top" TextWrapping="Wrap" Text="Loading preview..." />
         <Grid x:Name="BottomBar" Grid.Row="1" VerticalAlignment="Bottom" ColumnSpacing="6">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -33,9 +43,9 @@
             <TextBlock x:Name="FileNameText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <ContentControl x:Name="DriveStripHost" Visibility="Collapsed" />
             <Button x:Name="CopyButton" Grid.Column="1" Content="Copy text" Click="CopyText" IsEnabled="False" />
-            <Button Grid.Column="2" Content="A−" Click="SmallerText" ToolTipService.ToolTip="Smaller preview text"
+            <Button x:Name="TextSmaller" Grid.Column="2" Content="A−" Click="SmallerText" ToolTipService.ToolTip="Smaller preview text"
                     AutomationProperties.Name="Smaller preview text" />
-            <Button Grid.Column="3" Content="A+" Click="LargerText" ToolTipService.ToolTip="Larger preview text"
+            <Button x:Name="TextLarger" Grid.Column="3" Content="A+" Click="LargerText" ToolTipService.ToolTip="Larger preview text"
                     AutomationProperties.Name="Larger preview text" />
         </Grid>
     </Grid>

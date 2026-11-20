@@ -28,6 +28,9 @@ foreach ($file in @('LICENSE', 'THIRD-PARTY-NOTICES.md')) {
 Copy-Item -LiteralPath (Join-Path $repository 'packaging/standalone-policy.txt') -Destination $payload
 Copy-Item -LiteralPath (Join-Path $repository 'packaging/standalone-vc-runtime-notice.txt') -Destination (Join-Path $payload 'licenses/Microsoft-VC-Runtime-NOTICE.txt')
 foreach ($file in @('KOTU.exe', 'KOTU.Core.dll', 'resources.pri', '7z.dll', 'ScreenRecorderLib.dll',
+                    'HwpViewer/index.html', 'HwpViewer/viewer.js', 'HwpViewer/render-worker.js',
+                    'HwpViewer/engine/rhwp.js', 'HwpViewer/engine/rhwp_bg.wasm',
+                    'HwpViewer/engine/LICENSE', 'HwpViewer/engine/notices/THIRD_PARTY_LICENSES.md',
                     'Assets/app.ico', 'Assets/test-clip.mp4', 'Assets/sample.mp3', 'licenses/ScreenRecorderLib-LICENSE.txt')) {
     if (!(Test-Path -LiteralPath (Join-Path $payload $file))) { throw "Standalone payload missing: $file" }
 }

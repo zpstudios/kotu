@@ -7,7 +7,7 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace KOTU.Module.Document;
 
-/// <summary>A45: 오피스 본문 전용 읽기 화면. 에디터·저장·인쇄 계약을 구현하지 않는다.</summary>
+/// <summary>A45: HWP 쪽 보기와 오피스 본문 읽기 화면.</summary>
 public sealed partial class OfficeTextView : UserControl, IContentStateSource, IContentOpenFailedSource,
     IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IContentInfoProvider
 {
@@ -15,6 +15,9 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
     private readonly CancellationTokenSource _cancel = new();
     private ModuleWorker? _worker;
     private OfficeTextPreview? _preview;
+    private HwpPagePane? _pages;
+    private string _textNotice;
+    private bool _showPages;
     private bool _started;
     private bool _closed;
 
@@ -25,12 +28,13 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
     public OfficeTextView(string path)
     {
         InitializeComponent();
+        _textNotice = Notice.Text;
         _path = path;
         FileNameText.Text = Path.GetFileName(path);
         if (Path.GetExtension(path).Equals(".hwp", StringComparison.OrdinalIgnoreCase)
             || Path.GetExtension(path).Equals(".hwpx", StringComparison.OrdinalIgnoreCase))
-            Notice.Text += "\nThis product was developed by referring to Hancom's public HWP document file specification."
-                + "\n본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.";
+            _textNotice += "\n" + HancomNotice;
+        Notice.Text = _textNotice;
         Loaded += OnLoaded;
         Unloaded += (_, _) =>
         {
@@ -42,6 +46,8 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
             else _cancel.Dispose();
             _worker?.Dispose();
             _worker = null;
+            _pages?.Close();
+            _pages = null;
             _preview = null;
             TextList.ItemsSource = null;
         };
@@ -56,18 +62,23 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
         {
             var result = await _worker.Run(_ =>
             {
-                var preview = OfficeTextReader.Read(_path, _cancel.Token);
-                return (Preview: preview, Chunks: Chunk(preview.Text));
+                var (preview, source) = OfficeTextReader.ReadForDisplay(_path, _cancel.Token);
+                return (Preview: preview, Source: source, Chunks: Chunk(preview.Text));
             }, _cancel.Token);
             if (_closed) return;
             _preview = result.Preview;
             TextList.ItemsSource = result.Chunks;
-            StatusText.Text = _preview.Text.Length == 0 ? "No previewable text was found. Export to PDF to view graphical content." : "";
-            StatusText.Visibility = _preview.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-            if (_preview.Truncated) Notice.Text += " Preview limited to the first 200,000 characters; Copy text also copies only this preview.";
+            if (_preview.Truncated) _textNotice += " Preview limited to the first 200,000 characters; Copy text also copies only this preview.";
             CopyButton.IsEnabled = _preview.Text.Length > 0;
+            if (result.Source is not null)
+            {
+                _pages = new HwpPagePane(PageHost);
+                _pages.Failed += PageFailed;
+            }
+            SetView(_pages is not null);
             ContentOpened?.Invoke(_path);
-            TrayStatusChanged?.Invoke();
+            if (!_closed && result.Source is not null && _pages is { } pane)
+                await pane.OpenAsync(result.Source, _cancel.Token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -77,6 +88,38 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
             FileNameText.Text = "No file open";
             ContentOpenFailed?.Invoke();
         }
+    }
+
+    private const string HancomNotice = "This product was developed by referring to Hancom's public HWP document file specification."
+        + "\n본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.";
+
+    private void PageFailed()
+    {
+        // WebView2 이벤트 핸들러가 반환된 다음 컨트롤을 닫는다.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_closed || _pages is null) return;
+            _pages.Close();
+            _pages = null;
+            _textNotice = "Page preview unavailable for this document. " + _textNotice;
+            SetView(false);
+        });
+    }
+
+    private void SwitchView(object sender, RoutedEventArgs e) => SetView(!_showPages && _pages is not null);
+
+    private void SetView(bool pages)
+    {
+        _showPages = pages;
+        ViewMode.Visibility = _pages is null ? Visibility.Collapsed : Visibility.Visible;
+        ViewMode.Content = pages ? "Text view" : "Page view";
+        PageHost.Visibility = pages ? Visibility.Visible : Visibility.Collapsed;
+        Notice.Text = pages ? HancomNotice : _textNotice;
+        var textVisibility = pages ? Visibility.Collapsed : Visibility.Visible;
+        TextList.Visibility = CopyButton.Visibility = TextSmaller.Visibility = TextLarger.Visibility = textVisibility;
+        StatusText.Text = "No previewable text was found. Export to PDF to view graphical content.";
+        StatusText.Visibility = !pages && _preview?.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        TrayStatusChanged?.Invoke();
     }
 
     // 한 개의 거대한 TextBox 대입 대신 짧은 문자열 목록을 가상화한다.
@@ -112,14 +155,14 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
 
     private void SmallerText(object sender, RoutedEventArgs e) => TextList.FontSize = Math.Max(10, TextList.FontSize - 2);
     private void LargerText(object sender, RoutedEventArgs e) => TextList.FontSize = Math.Min(40, TextList.FontSize + 2);
-    public object? TakeBottomBar() { RootGrid.Children.Remove(BottomBar); return BottomBar; }
+    public object? TakeBottomBar() { RootGrid.Children.Remove(BottomBar); PageHost.Margin = new Thickness(0); return BottomBar; }
     public void AttachDriveStrip(object strip) => DriveStripHost.Content = strip as UIElement;
     public void ShowDriveStrip(bool show)
     {
         DriveStripHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         FileNameText.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
     }
-    public TrayStatus GetTrayStatus() => _preview is null ? TrayStatus.Idle("DOC") : TrayStatus.Open(_preview.Format, "TXT");
+    public TrayStatus GetTrayStatus() => _preview is null ? TrayStatus.Idle("DOC") : TrayStatus.Open(_preview.Format, _showPages ? "PAGE" : "TXT");
     public async Task<IReadOnlyList<ContentInfoItem>?> GetContentInfoAsync()
     {
         if (_closed || _preview is null || _worker is null) return null;

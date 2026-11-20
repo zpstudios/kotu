@@ -7,6 +7,9 @@ Copy-Item $sevenZip $package
 Copy-Item LICENSE, THIRD-PARTY-NOTICES.md $package
 $required = @('KOTU.exe', 'resources.pri', '7z.dll',
               'KOTU.DocumentModel.dll', 'KOTU.FileOperations.dll',
+              'HwpViewer/index.html', 'HwpViewer/viewer.js', 'HwpViewer/render-worker.js',
+              'HwpViewer/engine/rhwp.js', 'HwpViewer/engine/rhwp_bg.wasm',
+              'HwpViewer/engine/LICENSE', 'HwpViewer/engine/notices/THIRD_PARTY_LICENSES.md',
               'LICENSE', 'THIRD-PARTY-NOTICES.md', 'Assets/app.ico', 'Assets/test-clip.mp4', 'Assets/sample.mp3')
 foreach ($file in $required) {
   if (!(Test-Path (Join-Path $package $file))) { throw "Package missing: $file" }

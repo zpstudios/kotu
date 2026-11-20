@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; img-src blob:; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HWP page preview</title>
+  <style>
+    :root { color-scheme: light dark; font: 14px 'Segoe UI', sans-serif; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
+    nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5em; padding: .4em; }
+    button { font: inherit; padding: .25em .65em; }
+    #position { min-width: 6ch; text-align: center; }
+    main { flex: 1; min-height: 0; overflow: auto; background: #777; }
+    #page { display: block; margin: .75em auto; background: white; height: auto; }
+    #page[hidden] { display: none; }
+  </style>
+  <script type="module" src="./viewer.js"></script>
+</head>
+<body>
+  <nav aria-label="Document pages">
+    <button id="previous" type="button" disabled>Previous</button>
+    <span id="position" aria-live="polite">Loading…</span>
+    <button id="next" type="button" disabled>Next</button>
+    <button id="smaller" type="button" aria-label="Zoom out" disabled>−</button>
+    <button id="fit" type="button" title="Fit to width" disabled>Fit width</button>
+    <button id="larger" type="button" aria-label="Zoom in" disabled>+</button>
+  </nav>
+  <main><img id="page" alt="" hidden></main>
+</body>
+</html>

@@ -90,6 +90,10 @@ jobs:
         shell: pwsh
         run: node src/KOTU.Module.Document/EditorSource/visual.test.mjs
 
+      - name: HWP page rendering on real documents
+        if: steps.ver.outputs.skip != 'true'
+        run: node eng/Test-HwpRenderer.mjs
+
       - name: Build patched recording engine
         if: steps.ver.outputs.skip != 'true'
         shell: pwsh

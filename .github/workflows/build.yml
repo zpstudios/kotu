@@ -41,6 +41,9 @@ jobs:
         shell: pwsh
         run: node src/KOTU.Module.Document/EditorSource/visual.test.mjs
 
+      - name: HWP page rendering on real documents
+        run: node eng/Test-HwpRenderer.mjs
+
       - name: .NET 8 SDK 설치
         uses: actions/setup-dotnet@v4
         with:
