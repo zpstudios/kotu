@@ -715,6 +715,13 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(aboutLine);
         Root.Children.Add(new TextBlock
         {
+            Text = "This product was developed by referring to Hancom's public HWP document file specification.\n"
+                + "본 제품은 한컴의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.",
+            Opacity = 0.8,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        Root.Children.Add(new TextBlock
+        {
             Text = "Mission Statement",
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 4, 0, 0),

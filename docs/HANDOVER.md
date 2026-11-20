@@ -2,6 +2,7 @@
 
 ## 현재 상태
 
+- v0.431.3은 HWP 페이지 보기에 문서 공통 맞춤 선택을 적용하고 한컴 고지를 Settings → About으로 옮긴다. [A422](REQUIREMENTS.md#a422).
 - v0.431.2는 HWP 페이지 본문을 클릭한 뒤에도 Esc로 탐색기에 돌아간다. [A421](REQUIREMENTS.md#a421).
 - v0.431.1은 이미지·오디오·영상 정보 패널에서 작은 파일의 크기를 탐색기와 같은 단위로 표시한다. [버전별 변경](RELEASE-v0.431.1.md) · [A420](REQUIREMENTS.md#a420).
 - v0.431.0은 HWP 5.x 문서의 페이지·표·그림을 오프라인에서 표시한다. [버전별 변경](RELEASE-v0.431.0.md) · [A45](REQUIREMENTS.md#a45).

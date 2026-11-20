@@ -2,6 +2,7 @@
     x:Class="KOTU.Module.Document.DocumentView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:KOTU.Module.Document"
     IsTabStop="True"
     KeyboardAcceleratorPlacementMode="Hidden">
 
@@ -696,59 +697,7 @@
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
-                <!-- A30 상태형 Fit — 본체 = 마지막 옵션 표시·클릭 시 재적용, 화살표 = A83 4옵션.
-                     내용·툴팁은 코드(ShowPdfFitState/ShowTextFitState/UpdateFitButton)가 갱신하므로
-                     아래 FontIcon은 초기값일 뿐이다(생성자에서 곧바로 빈 화면 표시 "1:1" 상자가 된다 — A260).
-                     A111(v0.133.0): 1:1 별도 버튼 제거(100%가 플라이아웃 옵션이 됐다) · 구 Auto-fit = 새 Contain. -->
-                <!-- Fit은 본체30 + 메뉴20을 연결한 50x32 버튼이다. 재적용/옵션 선택 동작은 분리한다. -->
-                <!-- A145→A214: 조절기는 콘텐츠가 있는 동안 보이고, PDF는 4옵션 전부·텍스트 갈래
-                     (파일·무제 — 편집·잠금 뷰·렌더 뷰 공통)는 Fit height만 뺀 3옵션이 활성이다
-                     (높이 무한 — 2026-08-24 사용자 지시로 부록 B 67의 "텍스트 비활성"을 반전).
-                     A230(v0.234.0) → A249(v0.246.0, 정면 반전): 빈 화면(중앙 = 셸 썸네일 탐색기)
-                     에서 조절기 2개를 접던 것을 되돌려 A145의 "항상 보이되 비활성"으로 복귀했다
-                     (2026-08-27 사용자 지시 — 전 모듈 통일). 초기 IsEnabled=False가 그 기본
-                     상태다(초기 상태 = 빈 화면이라 첫 프레임부터 정합). A·F 키 차단은 가시성이
-                     아니라 IsEnabled가 진다 — HotkeySupport의 통과 게이트가 IsEnabled와
-                     Visibility를 함께 보기 때문이다(Shared/HotkeySupport.cs:61).
-                     활성 전환은 코드 ShowPdfFitState/ShowTextFitState 한 쌍만 한다. -->
-                <StackPanel x:Name="FitControls" Margin="6,0,0,0" Grid.Column="11" Orientation="Horizontal" Spacing="0" Width="50" Height="32" VerticalAlignment="Center">
-                    <Button x:Name="FitButton" Style="{StaticResource BottomBarFitButtonStyle}"
-                            IsEnabled="False"
-                            Click="OnFitClicked">
-                        <FontIcon Glyph="&#xE9A6;" FontSize="18" />
-                    </Button>
-                    <DropDownButton x:Name="FitOptionsButton" Style="{StaticResource BottomBarFitOptionsStyle}" IsEnabled="False">
-                        <DropDownButton.Flyout>
-                            <MenuFlyout Placement="Top">
-                                <!-- 계보 = "1:1" 글자 도형(A143) → 네 모서리 꺾쇠 + 중앙 사각(A184) →
-                                     텍스트 "100%"·아이콘 없음(A231) → FontIcon(Segoe UI, 두 글자 "OR")
-                                     (A253) → A260(5차·확정, 2026-08-27 사용자 지시) → A310(본체와 통일).
-                                     A253의 다문자 Glyph는 저장소 선례 0건의 1순위 위험 후보였고 그대로
-                                     현실화됐다 — 실기기에서 아이콘 칸이 비어 나온다는 사용자 보고.
-                                     그래서 FontIcon 다문자 형태는 폐기하고 PathIcon 도형으로 갔다.
-                                     A310: 그 PathIcon의 Data 인라인 문자열(정사각 링 + 세로 막대 2 + 점 2)을
-                                     지우고 아이콘 자체를 코드에서 대입한다 — 도형이 본체 버튼의 상자와
-                                     달라 "위아래 1:1이 미세하게 다르다"는 사용자 보고가 났기 때문이다.
-                                     이제 두 그림 모두 Shared/FitIcons 한 파일이 그린다
-                                     (본체 = BuildOriginalRatioBox · 여기 = BuildOriginalRatioIcon).
-                                     x:Name은 그 대입을 위해 붙였다(대입 지점 = 생성자 한 줄.
-                                     아래 FitHeightItem과 같은 형태다).
-                                     ⚠ 아이콘은 항목마다 새 인스턴스여야 한다 — Geometry·요소를 공유
-                                     리소스로 두고 여러 부모에 걸면 런타임에 앱이 죽는다(v0.174.1 실사례.
-                                     App.xaml의 경고 주석 참고). 팩토리가 호출마다 새로 만들어 돌려주므로
-                                     그 규칙은 지켜진다.
-                                     최소 복구법 = 생성자의 Icon 대입 한 줄을 지우기(A231의 "아이콘 없음"
-                                     으로 되돌아간다. 다른 변경 무관). -->
-                                <MenuFlyoutItem x:Name="FitOriginalItem" Text="Original" Click="OnFitActualSizeClicked" />
-                                <MenuFlyoutItem x:Name="FitContainItem" Text="Contain" Click="OnFitContainClicked" />
-                                <MenuFlyoutItem x:Name="FitWidthItem" Text="Fit width" Click="OnFitWidthClicked" />
-                                <!-- A214: 텍스트 갈래에서는 이 항목만 비활성(높이 무한 — Fit height
-                                     불성립. IsEnabled 전환도 ShowPdfFitState/ShowTextFitState 쌍이 한다) -->
-                                <MenuFlyoutItem x:Name="FitHeightItem" Text="Fit height" Click="OnFitHeightClicked" />
-                            </MenuFlyout>
-                        </DropDownButton.Flyout>
-                    </DropDownButton>
-                </StackPanel>
+                <local:DocumentFitControls x:Name="FitControls" Grid.Column="11" Margin="6,0,0,0" VerticalAlignment="Center" />
                 <!-- A223→A245: 인쇄 버튼은 좌측군(c2)에 있다 — 선언도 좌측군 자리에 있다. -->
             </Grid>
         </Border>

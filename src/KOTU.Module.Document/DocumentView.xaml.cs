@@ -272,11 +272,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     public DocumentView(OpenContext context, ISettingsService settings)
     {
         InitializeComponent();
-        // A310: 플라이아웃 "Original" 항목의 아이콘도 본체 1:1 상자와 같은 파일(Shared/FitIcons)이
-        // 그린다 — 종전에는 XAML 인라인 도형이라 본체와 미세하게 다른 그림이었다(사용자 보고).
-        // MenuFlyoutItem.Icon은 IconElement만 받아 본체의 Border를 못 꽂으므로, 같은 치수표로
-        // 그린 PathIcon 판본을 받는다. 호출마다 새 인스턴스라 v0.174.1의 공유 크래시와 무관하다.
-        FitIcons.ConfigureMenu(FitOriginalItem, FitContainItem, FitWidthItem, FitHeightItem);
+        FitControls.Selected += SelectFitOption;
+        FitControls.Reapplied += ReapplyFit;
         _settings = settings;
         SetupHotkeys(); // A34: 하단 바 버튼 핫키 + 툴팁 표기
         SetupZoomAccelerators(); // A246: Ctrl+± 문서 줌 — XAML에 못 쓰는 (VirtualKey)187/189 포함 코드 등록
@@ -2401,7 +2398,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     private bool IsPdfFitBranch => _pdfPane is not null && _pdfPane.Visibility == Visibility.Visible;
 
     /// <summary>
-    /// A145: PDF 모드 진입 — Fit 조절기(본체 + 화살표) 활성. 본체 내용·툴팁은 UpdateFitButton()이
+    /// A145: PDF 모드 진입 — Fit 조절기(본체 + 화살표) 활성. 본체 내용·툴팁은 공통 Fit 조절기가
     /// 마지막 옵션으로 맞춘다. 짝은 아래 ShowTextFitState() — 활성/비활성 전환은 이 한 쌍만 한다.
     /// A214: 텍스트 갈래가 꺼 둔 Fit height 항목도 여기서 되살린다(PDF는 4옵션 전부).
     /// A230이 여기에 얹었던 표시(Visibility) 전환은 A249(v0.246.0)에서 폐기됐다 — 조절기는 상태와
@@ -2410,11 +2407,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     private void ShowPdfFitState()
     {
         UpdateToolbarPresentation();
-        FitButton.IsEnabled = true;
-        FitOptionsButton.IsEnabled = true;
-        FitHeightItem.IsEnabled = true; // A214: 텍스트 갈래에서 꺼졌을 수 있다 — PDF는 항상 활성
-        ToolTipService.SetToolTip(FitOptionsButton, "Fit options"); // 형제 모듈 XAML 고정값과 동일
-        UpdateFitButton();
+        FitControls.Show(_lastFitOption, allowHeight: true);
     }
 
     /// <summary>
@@ -2434,79 +2427,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdateToolbarPresentation();
         // 판정은 줌 표기(UpdateZoomText)와 같은 축 — 잘림(잠금 뷰)도 _path가 있어 활성이다.
         var active = CanUseDocumentZoom;
-        // A230 → A249(v0.246.0): 빈 화면에서 조절기를 접던 SetFitControlVisible(active) 호출은
-        // 없앴다 — 조절기는 늘 보이고 아래 IsEnabled 두 줄만 상태를 가른다(A145 원칙 복원,
-        // New text file 등 다른 "보이되 비활성" 요소와 같은 형).
-        FitButton.IsEnabled = active;
-        FitOptionsButton.IsEnabled = active;
-        if (active)
-        {
-            FitHeightItem.IsEnabled = false; // 높이 무한 — 이 항목만 제외(PDF 복귀 시 짝이 되살린다)
-            ToolTipService.SetToolTip(FitOptionsButton, "Fit options");
-            UpdateFitButton();
-            return;
-        }
-        // A230 기간에는 접힌 상태의 내용이라 화면에 닿지 않던 세 줄 — A249(v0.246.0)의 표시 정책
-        // 복원으로 다시 빈 화면 갈래의 실제 표시가 됐다(비활성 버튼 표시 + "No document open").
-        // A373: 빈 상태는 선택된 배율이 없으므로 ActualSize의 "1:1"을 암시하지 않는다.
-        // 이미지·영상 모듈의 빈 상태 XAML과 같은 공통 Fit(Contain) 글리프를 쓴다.
-        FitButton.Content = ToolbarIcons.Build(ToolbarIconKind.FitContain);
-        ToolTipService.SetToolTip(FitButton, "No document open");
-        ToolTipService.SetToolTip(FitOptionsButton, "No document open");
+        FitControls.Show(active ? _lastTextFitOption : null, allowHeight: false);
     }
-
-    /// <summary>
-    /// A30 규격: Fit 버튼 본체 내용(4옵션 아이콘)과 툴팁을 마지막 옵션에 맞춘다.
-    /// A144: 본체가 SplitButton에서 일반 Button(32×32)이 됐다 — 화살표는 별도
-    /// DropDownButton(FitOptionsButton, 플라이아웃 전담·A34 키 없음)이라 이 메서드는
-    /// 종전대로 본체(FitButton)만 만진다. A214: 갈래별 마지막 옵션을 골라 표시한다
-    /// (PDF = _lastFitOption / 텍스트 = _lastTextFitOption — 빈 화면은 ShowTextFitState가
-    /// 비활성 공통 Fit 아이콘을 직접 그리므로 여기 안 온다). 텍스트 갈래는 FitHeight가 될 수 없다(항목 비활성).
-    /// A143: 100%도 아이콘이 됐다 — 종전 "1:1" 텍스트(FontSize 13) 대신 PathIcon(부록 B 69).
-    /// A184: 그 PathIcon 도형을 글자 "1:1" 형상에서 꺾쇠 프레임으로 바꿨다.
-    /// A231(3차): 도형 자체를 폐기하고 <b>소형 텍스트 "100%"</b>로 갔다 — 2026-08-25
-    /// "무슨 아이콘인지 알 수 없다"는 사용자 재보고 때문이다. 본체는 Button이라 Content에
-    /// TextBlock을 넣을 수 있다(위 ShowTextFitState의 비활성 표시와 같은 방식 — IconElement만
-    /// 받는 MenuFlyoutItem.Icon과 다르다).
-    /// A253(4차): 옵션 이름을 "100%" → <b>"Original"</b>로 바꾸고(플라이아웃 항목 텍스트),
-    /// 본체 상태 표시는 그 약자 "OR" 두 글자로 갔다(2026-08-27 사용자 지시).
-    /// A260(5차·확정): 그 "OR"을 <b>테두리 상자 안의 "1:1"</b>로 바꾼다(2026-08-27 사용자 지시 —
-    /// 약자보다 배율 기호가 즉시 읽힌다. A143의 "1:1" 글자가 상자를 얻어 돌아온 형태다).
-    /// 조립은 <see cref="FitIcons.BuildOriginalRatioBox"/> 한 곳에서 맡는다.
-    /// 본체는 Button이라 Content에 임의 UIElement를 넣을 수 있다(IconElement만 받는
-    /// MenuFlyoutItem.Icon과 다르다).
-    /// 툴팁 "Original size"·항목 이름 "Original"·A 키 표기는 A253 그대로 무변경.
-    /// A298: 그 조립을 세 모듈이 복제해 갖던 것을 공용 파일 하나로 모았다(Shared/FitIcons.cs —
-    /// csproj Compile Link 공유. HotkeySupport와 같은 방식). 디자인을 고칠 곳은 이제 그 한 곳이다.
-    /// A299: 비활성일 때 테두리도 글자와 함께 회색이 된다(수리 내용은 그 팩토리 주석).
-    /// A310: 플라이아웃 "Original" 항목도 같은 파일의 PathIcon 판본
-    /// (<see cref="FitIcons.BuildOriginalRatioIcon"/>)을 쓴다 — 대입은 생성자 한 줄이다.
-    /// </summary>
-    private void UpdateFitButton()
-    {
-        var option = IsPdfFitBranch ? _lastFitOption : _lastTextFitOption; // A214: 갈래별 상태
-        (object content, string tip) = option switch
-        {
-            PdfFitMode.FitWidth =>
-                ((object)ToolbarIcons.Build(ToolbarIconKind.FitWidth), "Fit width"),
-            PdfFitMode.FitHeight =>
-                (ToolbarIcons.Build(ToolbarIconKind.FitHeight), "Fit height"),
-            PdfFitMode.ActualSize =>
-                (FitIcons.BuildOriginalRatioBox(), "Original size"),
-            _ => (ToolbarIcons.Build(ToolbarIconKind.FitContain),
-                "Contain - the whole page fits, never enlarged"),
-        };
-        FitButton.Content = content;
-        ToolTipService.SetToolTip(FitButton, FitTip(tip)); // A34: 표기는 키 상수에서
-    }
-
-    /// <summary>
-    /// 본체 툴팁 = "지금 표시 중인 옵션 (F) · Original (A)" — 1:1 버튼이 사라져도 A 키 표기가
-    /// 남게 병합한다(A111). 두 표기 모두 키 상수에서 조립한다(A34 표기 규칙).
-    /// A253: 뒤쪽 표기어가 "100%" → "Original"(플라이아웃 항목 이름과 같은 말로 통일).
-    /// </summary>
-    private static string FitTip(string description) =>
-        $"{HotkeySupport.Tip(description, FitKey)} · {HotkeySupport.Tip("Original", ActualSizeKey)}";
 
     /// <summary>플라이아웃에서 옵션 선택 — 즉시 적용하고 버튼 표시를 그 옵션으로 바꾼다.
     /// A214: 갈래 분기 — PDF는 종전 그대로(PdfPane.ApplyFit), 텍스트 갈래는 상태 갱신 후
@@ -2517,13 +2439,13 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         if (IsPdfFitBranch)
         {
             _lastFitOption = option;
-            UpdateFitButton();
+            FitControls.Show(option, allowHeight: true);
             _pdfPane?.ApplyFit(option);
             return;
         }
         if (option == PdfFitMode.FitHeight) return; // 방어 — 텍스트는 높이 무한(항목도 비활성)
         _lastTextFitOption = option;
-        UpdateFitButton();
+        FitControls.Show(option, allowHeight: false);
         ApplyTextFit();
     }
 
@@ -2537,12 +2459,6 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void ApplyTextFit() => SetZoom(DefaultZoomPercent);
 
-    /// <summary>A30 규격: 본체 클릭 = 버튼에 표시된 마지막 옵션 재적용
-    /// (A144: SplitButton 본체 → 일반 Button — 시그니처만 RoutedEventArgs로 바뀌었다).
-    /// A214: 텍스트 갈래도 활성 — 재적용은 갈래 공용 ReapplyFit으로(F 키와 같은 경로).
-    /// 빈 화면에서는 버튼이 비활성이라 이 핸들러에 못 온다.</summary>
-    private void OnFitClicked(object sender, RoutedEventArgs e) => ReapplyFit();
-
     /// <summary>
     /// A214: 본체 클릭·F 키 공용 — 현재 갈래의 마지막 옵션 재적용(A30). 사용자가 Ctrl+휠로
     /// 줌을 바꿔도 본체 상태는 그대로 두는(A149 관용구 — 줌과 Fit 상태는 별개 축) 대신,
@@ -2553,19 +2469,6 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         if (IsPdfFitBranch) _pdfPane?.ApplyFit(_lastFitOption);
         else ApplyTextFit(); // 텍스트 갈래 — 어느 옵션이든 결과는 SetZoom(100)
     }
-
-    /// <summary>플라이아웃 100%·A 키(A34) 공용 경로 — 구 1:1 버튼 자리(A111).</summary>
-    private void OnFitActualSizeClicked(object sender, RoutedEventArgs e) =>
-        SelectFitOption(PdfFitMode.ActualSize);
-
-    private void OnFitContainClicked(object sender, RoutedEventArgs e) =>
-        SelectFitOption(PdfFitMode.Contain);
-
-    private void OnFitWidthClicked(object sender, RoutedEventArgs e) =>
-        SelectFitOption(PdfFitMode.FitWidth);
-
-    private void OnFitHeightClicked(object sender, RoutedEventArgs e) =>
-        SelectFitOption(PdfFitMode.FitHeight);
 
     // ---------- 인코딩 감지·보존 (A37) ----------
 
@@ -4267,15 +4170,6 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     // ---------- 하단 바 버튼 핫키 (A34) ----------
 
-    /// <summary>Fit 키 — 툴팁 표기(UpdateFitButton)와 액셀러레이터가 이 한 값을 함께 쓴다.</summary>
-    private const VirtualKey FitKey = VirtualKey.F;
-
-    /// <summary>
-    /// 100%(1:1) 키 — A111에서 1:1 버튼이 사라진 뒤로도 A는 그대로 100% 적용이다(A107 확정:
-    /// 문자 핫키 전부 유지). 대상만 Fit 버튼의 100% 옵션 적용 액션으로 옮겼다.
-    /// </summary>
-    private const VirtualKey ActualSizeKey = VirtualKey.A;
-
     /// <summary>
     /// A34: 하단 바 버튼에 단독 문자 키를 걸고 툴팁 "(키)" 표기까지 같은 호출에서 만든다.
     /// **이 모듈은 에디터(TextBox)가 본문**이라 통과 규칙이 특히 중요하다 — 타이핑 중에는
@@ -4289,9 +4183,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// </summary>
     private void SetupHotkeys()
     {
-        HotkeySupport.Register(this, FitButton, ActualSizeKey,
-            () => SelectFitOption(PdfFitMode.ActualSize));
-        HotkeySupport.Register(this, FitButton, FitKey, ReapplyFit); // A214: 갈래 공용 재적용
+        FitControls.RegisterHotkeys(this);
         ShowTextFitState(); // A145→A373: 초기 상태(파일 없음) = 빈 화면 갈래(비활성 공통 Fit 아이콘)
     }
 }

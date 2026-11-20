@@ -46,14 +46,7 @@ public sealed partial class PdfPane : UserControl
     {
         if (_scroll is null) return 0;
         var height = _scroll.ViewportHeight;
-        if (_bottomOverlay is not { } overlay || overlay.XamlRoot != XamlRoot || XamlRoot is null)
-            return height;
-        for (DependencyObject? node = overlay; node is not null; node = VisualTreeHelper.GetParent(node))
-            if (node is UIElement element && element.Visibility != Visibility.Visible) return height;
-        var bounds = overlay.TransformToVisual(_scroll).TransformBounds(
-            new Rect(0, 0, overlay.ActualWidth, overlay.ActualHeight));
-        return PdfFitGeometry.VisibleHeight(_scroll.ViewportWidth, height,
-            bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        return PageViewport.VisibleHeight(_scroll, _scroll.ViewportWidth, height, _bottomOverlay);
     }
 
     // A381: 바의 숨김·재배치·배율 변화는 PdfPane.SizeChanged 없이도 일어난다.

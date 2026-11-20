@@ -60,18 +60,75 @@ function assertEmbeddedImage(page, type, expectedHash) {
     `Missing source ${type} image`);
 }
 
-// Exercise the shipped page's keyboard listener at the WebView message boundary.
-async function testPageEscape() {
+// Run the shipped viewer with the same incoming/outgoing messages as the native WebView host.
+async function testPageViewer() {
+  const viewer = new URL('../src/KOTU.Module.Document/HwpViewer/', import.meta.url);
+  const html = await readFile(new URL('index.html', viewer), 'utf8');
+  assert.doesNotMatch(html, /<(button|nav)\b/i, 'Page and fit controls belong in the native document toolbar');
   const messages = [];
-  const bridge = Object.assign(new EventTarget(), { postMessage: message => messages.push(message.kind) });
+  const bridge = Object.assign(new EventTarget(), { postMessage: message => messages.push(message) });
   const window = Object.assign(new EventTarget(), { chrome: { webview: bridge } });
-  const source = await readFile(new URL('../src/KOTU.Module.Document/HwpViewer/viewer.js', import.meta.url), 'utf8');
-  runInNewContext(source, { window, document: { querySelector: () => ({}) }, clearTimeout });
+  const viewport = {
+    dataset: {}, clientWidth: 600, clientHeight: 600, scrollTop: 0,
+    scrollTo(_left, top) { this.scrollTop = top; }, scrollBy() {}
+  };
+  const page = {
+    style: {}, naturalWidth: 800, parentElement: viewport, async decode() {},
+    get clientHeight() { return viewport.dataset.fit === 'ActualSize' ? 1000 : 750; },
+    getBoundingClientRect() { return { left: 0, top: 0, width: 400, height: 500 }; }
+  };
+  const workerMessages = [];
+  let worker;
+  class RenderWorker {
+    constructor() { worker = this; }
+    postMessage(message) { workerMessages.push(message); }
+    terminate() {}
+  }
+  const source = await readFile(new URL('viewer.js', viewer), 'utf8');
+  const document = { querySelector: selector => selector === '#page' ? page : viewport };
+  runInNewContext(source, { window, document, Worker: RenderWorker, atob, Blob, URL, clearTimeout, setTimeout });
+  const send = data => bridge.dispatchEvent(new MessageEvent('message', { data }));
+  send({ kind: 'open', length: 1 });
+  send({ kind: 'chunk', offset: 0, data: 'AA==' });
+  assert.equal(workerMessages.at(-1)?.kind, 'open');
+  async function show(index) {
+    await worker.onmessage({ data: { index, count: 2, svg: '<svg/>' } });
+    const state = messages.findLast(message => message.kind === 'shown');
+    assert.equal(state?.index, index);
+    assert.equal(state?.count, 2);
+  }
+  await show(0);
+  viewport.scrollTop = 150;
+  for (const mode of ['ActualSize', 'FitWidth', 'FitHeight', 'Contain']) {
+    const fraction = viewport.scrollTop / page.clientHeight;
+    send({ kind: 'fit', mode });
+    assert.equal(viewport.dataset.fit, mode);
+    const preservesPosition = mode === 'ActualSize' || mode === 'FitWidth';
+    assert.equal(viewport.scrollTop, preservesPosition ? fraction * page.clientHeight : 0);
+    viewport.scrollTop = 150;
+  }
+  send({ kind: 'page', index: 1 });
+  assert.equal(workerMessages.at(-1).index, 1);
+  await show(1);
+  send({ kind: 'page', index: 0 });
+  assert.equal(workerMessages.at(-1).index, 0);
+  await show(0);
+
   function press(key, options = {}) {
     const event = Object.assign(new Event('keydown', { cancelable: true }), { key, ...options });
     window.dispatchEvent(event);
     return event.defaultPrevented;
   }
+  for (const [key, kind] of [['f', 'reapply'], ['a', 'original'], ['PageDown', 'next'], ['PageUp', 'previous']]) {
+    assert.equal(press(key), true, key);
+    assert.equal(messages.at(-1)?.kind, kind);
+  }
+  assert.equal(press('+', { ctrlKey: true }), true);
+  assert.equal(viewport.dataset.fit, 'Manual');
+  assert.ok(Math.abs(parseFloat(page.style.width) - 440) < 0.01);
+  send({ kind: 'fit', mode: 'FitWidth' });
+  assert.equal(page.style.width, '', 'Choosing Fit after manual zoom restores responsive sizing');
+  assert.equal(viewport.dataset.fit, 'FitWidth');
   assert.equal(press('Escape'), true);
   assert.equal(press('Escape', { repeat: true }), true);
   for (const modifier of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey', 'isComposing'])
@@ -81,10 +138,11 @@ async function testPageEscape() {
   assert.equal(press('Escape'), true);
   window.dispatchEvent(new Event('pagehide'));
   assert.equal(press('Escape'), false);
-  assert.deepEqual(messages, ['ready', 'escape', 'escape']);
+  assert.equal(messages.filter(message => message.kind === 'escape').length, 2);
+  assert.ok(!messages.some(message => message.kind === 'failed'));
 }
 
-await testPageEscape();
+await testPageViewer();
 await restoreHwpRenderer();
 const { default: init, HwpDocument } = await import(pathToFileURL(join(packageDirectory, 'rhwp.js')));
 await init({ module_or_path: await readFile(join(packageDirectory, 'rhwp_bg.wasm')) });

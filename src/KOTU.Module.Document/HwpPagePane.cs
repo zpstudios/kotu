@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
 
@@ -16,7 +17,49 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
     private int _offset;
     private bool _closed;
     private bool _failed;
+    private FrameworkElement? _bottomOverlay;
     public event Action? Failed;
+    public event Action? StateChanged;
+    public int PageIndex { get; private set; }
+    public int PageCount { get; private set; }
+    public bool IsPagePending { get; private set; }
+    public PdfFitMode FitMode { get; private set; } = PdfFitMode.Contain;
+
+    public void SetBottomOverlay(object overlay) => _bottomOverlay = overlay as FrameworkElement;
+
+    private void UpdateViewport(object? sender, object args)
+    {
+        if (_view is null || host.Visibility != Visibility.Visible) return;
+        var height = host.ActualHeight;
+        var bottom = height - PageViewport.VisibleHeight(host, host.ActualWidth, height, _bottomOverlay);
+        if (Math.Abs(_view.Margin.Bottom - bottom) > 0.01)
+            _view.Margin = new Thickness(0, 0, 0, bottom);
+    }
+
+    public void ApplyFit(PdfFitMode mode)
+    {
+        if (PageCount == 0 || _closed || _failed) return;
+        FitMode = mode;
+        Send(new { kind = "fit", mode = mode.ToString() });
+        StateChanged?.Invoke();
+    }
+
+    public void ReapplyFit() => ApplyFit(FitMode);
+
+    public void MovePage(int step)
+    {
+        var target = PageIndex + step;
+        if (IsPagePending || target < 0 || target >= PageCount || _closed || _failed) return;
+        IsPagePending = true;
+        StateChanged?.Invoke();
+        Send(new { kind = "page", index = target });
+    }
+
+    private void Send<T>(T message)
+    {
+        try { _view?.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(message)); }
+        catch (Exception) { Fail(); }
+    }
 
     public async Task OpenAsync(byte[] source, CancellationToken cancel)
     {
@@ -36,6 +79,7 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
                 Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", Path.Combine(Path.GetTempPath(), "WebView2"));
             _view = new WebView2();
             host.Content = _view;
+            host.LayoutUpdated += UpdateViewport;
             await _view.EnsureCoreWebView2Async().AsTask().WaitAsync(TimeSpan.FromSeconds(30), cancel);
             if (_closed || cancel.IsCancellationRequested) return;
             var core = _view.CoreWebView2 ?? throw new InvalidOperationException("WebView2 unavailable.");
@@ -104,6 +148,18 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
                             requestEscape();
                     });
                     break;
+                case "previous":
+                    MovePage(-1);
+                    break;
+                case "next":
+                    MovePage(1);
+                    break;
+                case "original":
+                    ApplyFit(PdfFitMode.ActualSize);
+                    break;
+                case "reapply":
+                    ReapplyFit();
+                    break;
                 case "ready" when _source is not null && _offset == 0:
                     sender.PostWebMessageAsJson(JsonSerializer.Serialize(new { kind = "open", length = _source.Length }));
                     break;
@@ -115,6 +171,14 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
                     if (_offset == _source.Length) _source = null;
                     break;
                 case "shown" when _source is null:
+                    var index = root.GetProperty("index").GetInt32();
+                    var pages = root.GetProperty("count").GetInt32();
+                    if (pages is < 1 or > 10000 || index < 0 || index >= pages ||
+                        (PageCount > 0 && pages != PageCount)) throw new InvalidDataException();
+                    PageIndex = index;
+                    PageCount = pages;
+                    IsPagePending = false;
+                    StateChanged?.Invoke();
                     _firstPage.TrySetResult(true);
                     break;
                 default:
@@ -151,6 +215,7 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
             core.ProcessFailed -= ProcessFailed;
             core.WebMessageReceived -= MessageReceived;
         }
+        host.LayoutUpdated -= UpdateViewport;
         host.Content = null;
         try { _view?.Close(); } catch (Exception) { /* 셸 종료 중 이미 해제될 수 있다. */ }
         _view = null;

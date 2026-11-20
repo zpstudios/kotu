@@ -1,11 +1,6 @@
 const bridge = window.chrome.webview;
 const page = document.querySelector('#page');
-const position = document.querySelector('#position');
-const previous = document.querySelector('#previous');
-const next = document.querySelector('#next');
-const smaller = document.querySelector('#smaller');
-const larger = document.querySelector('#larger');
-const fit = document.querySelector('#fit');
+const viewport = page.parentElement;
 
 let bytes;
 let offset = 0;
@@ -16,7 +11,7 @@ let closed = false;
 let pending = true;
 let index = 0;
 let total = 0;
-let zoom = 100;
+let manualPercent;
 
 function release() {
   closed = true;
@@ -37,25 +32,33 @@ function startTimer() {
   timer = setTimeout(fail, 30000);
 }
 
-function controls() {
-  previous.disabled = pending || index === 0;
-  next.disabled = pending || index + 1 >= total;
-  smaller.disabled = !total || zoom <= 50;
-  larger.disabled = !total || zoom >= 300;
-  fit.disabled = !total;
+function applyFit(mode) {
+  if (!['Contain', 'FitWidth', 'FitHeight', 'ActualSize'].includes(mode)) return;
+  const before = page.clientHeight;
+  const relativeTop = before ? viewport.scrollTop / before : 0;
+  manualPercent = undefined;
+  page.style.width = '';
+  viewport.dataset.fit = mode;
+  const keepPosition = mode === 'FitWidth' || mode === 'ActualSize';
+  viewport.scrollTo(0, keepPosition ? relativeTop * page.clientHeight : 0);
 }
 
-function setZoom(value) {
-  zoom = Math.min(300, Math.max(50, value));
-  page.style.width = zoom + '%';
-  fit.textContent = zoom === 100 ? 'Fit width' : zoom + '%';
-  controls();
+function zoomBy(factor, x, y) {
+  if (!total || !page.naturalWidth) return;
+  const before = page.getBoundingClientRect();
+  if (!before.width) return;
+  const positionX = (x - before.left) / before.width;
+  const positionY = (y - before.top) / before.height;
+  manualPercent = Math.min(500, Math.max(20, before.width / page.naturalWidth * 100 * factor));
+  viewport.dataset.fit = 'Manual';
+  page.style.width = page.naturalWidth * manualPercent / 100 + 'px';
+  const after = page.getBoundingClientRect();
+  viewport.scrollBy(after.left + positionX * after.width - x, after.top + positionY * after.height - y);
 }
 
 function requestPage(target) {
-  if (closed || pending || target < 0 || target >= total) return;
+  if (closed || pending || !Number.isInteger(target) || target < 0 || target >= total) return;
   pending = true;
-  controls();
   startTimer();
   worker.postMessage({ kind: 'page', index: target });
 }
@@ -72,17 +75,15 @@ async function showPage({ data }) {
     if (closed) { URL.revokeObjectURL(url); return; }
     if (displayedUrl) URL.revokeObjectURL(displayedUrl);
     displayedUrl = url;
-    const first = total === 0;
     index = data.index;
     total = data.count;
     pending = false;
     clearTimeout(timer);
     page.alt = 'Page ' + (index + 1);
     page.hidden = false;
-    page.parentElement.scrollTo(0, 0);
-    position.textContent = (index + 1) + ' / ' + total;
-    setZoom(zoom);
-    if (first) bridge.postMessage({ kind: 'shown' });
+    if (manualPercent !== undefined) page.style.width = page.naturalWidth * manualPercent / 100 + 'px';
+    viewport.scrollTo(0, 0);
+    bridge.postMessage({ kind: 'shown', index, count: total });
   } catch {
     if (url) URL.revokeObjectURL(url);
     fail();
@@ -92,6 +93,8 @@ async function showPage({ data }) {
 bridge.addEventListener('message', ({ data }) => {
   if (closed) return;
   try {
+    if (data.kind === 'fit') { applyFit(data.mode); return; }
+    if (data.kind === 'page') { requestPage(data.index); return; }
     if (data.kind === 'open' && !bytes && !worker) {
       if (!Number.isInteger(data.length) || data.length <= 0 || data.length > 64 * 1024 * 1024)
         throw new Error('Invalid size.');
@@ -119,17 +122,27 @@ bridge.addEventListener('message', ({ data }) => {
   } catch { fail(); }
 });
 
-previous.onclick = () => requestPage(index - 1);
-next.onclick = () => requestPage(index + 1);
-smaller.onclick = () => setZoom(zoom - 25);
-larger.onclick = () => setZoom(zoom + 25);
-fit.onclick = () => setZoom(100);
+window.addEventListener('wheel', event => {
+  if (!total || !event.ctrlKey || event.deltaY === 0) return;
+  event.preventDefault();
+  zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1, event.clientX, event.clientY);
+}, { passive: false });
 window.addEventListener('keydown', event => {
-  if (closed || event.key !== 'Escape' || event.isComposing || event.keyCode === 229 ||
-      event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  if (closed || event.isComposing || event.keyCode === 229 || event.altKey || event.metaKey) return;
+  const key = event.key;
+  if (total && event.ctrlKey && ['+', '=', '-', '0'].includes(key)) {
+    event.preventDefault();
+    if (key === '0') bridge.postMessage({ kind: 'original' });
+    else zoomBy(key === '-' ? 1 / 1.1 : 1.1, viewport.clientWidth / 2, viewport.clientHeight / 2);
+    return;
+  }
+  if (event.ctrlKey || event.shiftKey) return;
+  const commands = { Escape: 'escape', f: 'reapply', a: 'original', PageUp: 'previous', PageDown: 'next' };
+  const command = Object.hasOwn(commands, key) && commands[key];
+  if (!command || (!total && command !== 'escape')) return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  if (!event.repeat) bridge.postMessage({ kind: 'escape' });
+  if (!event.repeat) bridge.postMessage({ kind: command });
 }, true);
 window.addEventListener('pagehide', release, { once: true });
 bridge.postMessage({ kind: 'ready' });

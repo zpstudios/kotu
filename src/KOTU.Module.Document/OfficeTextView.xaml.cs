@@ -2,6 +2,7 @@ using KOTU.Core.Contracts;
 using KOTU.Core.Threading;
 using KOTU.DocumentModel;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -9,13 +10,14 @@ namespace KOTU.Module.Document;
 
 /// <summary>A45: HWP 쪽 보기와 오피스 본문 읽기 화면.</summary>
 public sealed partial class OfficeTextView : UserControl, IContentStateSource, IContentOpenFailedSource,
-    IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IContentInfoProvider, IEditorEscapeSource
+    IBottomBarProvider, IBottomOverlayConsumer, IDriveStripHost, ITrayStatusProvider, IContentInfoProvider, IEditorEscapeSource
 {
     private readonly string _path;
     private readonly CancellationTokenSource _cancel = new();
     private ModuleWorker? _worker;
     private OfficeTextPreview? _preview;
     private HwpPagePane? _pages;
+    private object? _bottomOverlay;
     private string _textNotice;
     private bool _showPages;
     private bool _started;
@@ -29,13 +31,11 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
     public OfficeTextView(string path)
     {
         InitializeComponent();
-        _textNotice = Notice.Text;
         _path = path;
         FileNameText.Text = Path.GetFileName(path);
-        if (Path.GetExtension(path).Equals(".hwp", StringComparison.OrdinalIgnoreCase)
-            || Path.GetExtension(path).Equals(".hwpx", StringComparison.OrdinalIgnoreCase))
-            _textNotice += "\n" + HancomNotice;
-        Notice.Text = _textNotice;
+        _textNotice = Path.GetExtension(path).Equals(".hwp", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : "Text preview. Original layout, images, charts and formulas are not rendered. Tables are flattened; reading order may differ. Export to PDF for the original appearance.";
         Loaded += OnLoaded;
         Unloaded += (_, _) =>
         {
@@ -47,6 +47,7 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
             else _cancel.Dispose();
             _worker?.Dispose();
             _worker = null;
+            PageControls.Detach();
             _pages?.Close();
             _pages = null;
             _preview = null;
@@ -69,12 +70,15 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
             if (_closed) return;
             _preview = result.Preview;
             TextList.ItemsSource = result.Chunks;
-            if (_preview.Truncated) _textNotice += " Preview limited to the first 200,000 characters; Copy text also copies only this preview.";
+            if (_preview.Truncated)
+                _textNotice = (_textNotice + " Preview limited to the first 200,000 characters; Copy text also copies only this preview.").TrimStart();
             CopyButton.IsEnabled = _preview.Text.Length > 0;
             if (result.Source is not null)
             {
                 _pages = new HwpPagePane(PageHost, () => EditorEscapeRequested?.Invoke());
+                if (_bottomOverlay is { } overlay) _pages.SetBottomOverlay(overlay);
                 _pages.Failed += PageFailed;
+                PageControls.Attach(_pages);
             }
             SetView(_pages is not null);
             ContentOpened?.Invoke(_path);
@@ -91,18 +95,16 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
         }
     }
 
-    private const string HancomNotice = "This product was developed by referring to Hancom's public HWP document file specification."
-        + "\n본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.";
-
     private void PageFailed()
     {
         // WebView2 이벤트 핸들러가 반환된 다음 컨트롤을 닫는다.
         DispatcherQueue.TryEnqueue(() =>
         {
             if (_closed || _pages is null) return;
+            PageControls.Detach();
             _pages.Close();
             _pages = null;
-            _textNotice = "Page preview unavailable for this document. " + _textNotice;
+            _textNotice = ("Page preview unavailable for this document. Showing text preview. " + _textNotice).TrimEnd();
             SetView(false);
         });
     }
@@ -113,9 +115,13 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
     {
         _showPages = pages;
         ViewMode.Visibility = _pages is null ? Visibility.Collapsed : Visibility.Visible;
-        ViewMode.Content = pages ? "Text view" : "Page view";
-        PageHost.Visibility = pages ? Visibility.Visible : Visibility.Collapsed;
-        Notice.Text = pages ? HancomNotice : _textNotice;
+        var viewAction = pages ? "Text view" : "Page view";
+        AutomationProperties.SetName(ViewMode, viewAction);
+        ToolTipService.SetToolTip(ViewMode, viewAction);
+        ViewModeIcon.Glyph = pages ? "\uE8A5" : "\uE890";
+        PageControls.Visibility = PageHost.Visibility = pages ? Visibility.Visible : Visibility.Collapsed;
+        Notice.Text = _textNotice;
+        Notice.Visibility = !pages && _textNotice.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         var textVisibility = pages ? Visibility.Collapsed : Visibility.Visible;
         TextList.Visibility = CopyButton.Visibility = TextSmaller.Visibility = TextLarger.Visibility = textVisibility;
         StatusText.Text = "No previewable text was found. Export to PDF to view graphical content.";
@@ -157,6 +163,11 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
     private void SmallerText(object sender, RoutedEventArgs e) => TextList.FontSize = Math.Max(10, TextList.FontSize - 2);
     private void LargerText(object sender, RoutedEventArgs e) => TextList.FontSize = Math.Min(40, TextList.FontSize + 2);
     public object? TakeBottomBar() { RootGrid.Children.Remove(BottomBar); PageHost.Margin = new Thickness(0); return BottomBar; }
+    public void SetBottomOverlay(object overlay)
+    {
+        _bottomOverlay = overlay;
+        _pages?.SetBottomOverlay(overlay);
+    }
     public void AttachDriveStrip(object strip) => DriveStripHost.Content = strip as UIElement;
     public void ShowDriveStrip(bool show)
     {

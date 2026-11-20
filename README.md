@@ -108,4 +108,4 @@ KOTU 자체 코드는 [MIT](LICENSE)입니다. 함께 배포·사용되는 외�
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 참고 (7-Zip: LGPL, libvlc: LGPL,
 LibreHardwareMonitor: MPL-2.0 등).
 
-본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
+본 제품은 한컴의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.

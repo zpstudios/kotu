@@ -358,17 +358,16 @@ editor either way.
   once, and a password-protected PDF prints without asking for the password again while it is open.
   The button is greyed out while there is nothing to print.
 
-### Document — HWP and OpenDocument text preview
+### Document — HWP pages and office text previews
 
-- `.hwp` (HWP 5.x), `.hwpx`, `.odt`, `.ods` and `.odp` open as an **offline, read-only text preview**.
-  Paragraphs and table-cell text are shown; use **Copy text** to copy the displayed preview and `A−` / `A+`
-  to change its text size.
-- This is not the original page layout. Images, charts, formulas, styling and pagination are not rendered,
-  and reading order may differ. Export the document to PDF in its authoring app when appearance matters.
+- HWP 5.x files open in page view with tables and embedded images. Use the bottom bar to turn pages
+  or choose **Original**, **Contain**, **Fit width** or **Fit height**, as you would for a PDF.
+- Choose **Text view** in the bottom bar to select and copy HWP text. `.hwpx`, `.odt`, `.ods` and `.odp`
+  open directly as text previews. **Copy text** copies the displayed text and `A−` / `A+` change its size.
 - HWP 3.x and encrypted, DRM-protected or distribution-only documents are not supported. Very large previews
   stop at 200,000 characters and say so on screen. KOTU never uploads or modifies these documents.
-- This product was developed by referring to Hancom's public HWP document file specification.
-  **본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.**
+- The HWP format notice appears in **Settings → About**. This product was developed by referring to Hancom's public HWP document file specification.
+  **본 제품은 한컴의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.**
 
 ### 2.6 Archive
 

@@ -35,7 +35,7 @@ MPL-2.0 구성요소(LibreHardwareMonitor 계열)는 해당 파일을 수정하�
 
 This product was developed by referring to Hancom's public HWP document file specification.
 
-본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
+본 제품은 한컴의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
 
 The HWP text-preview parser is original KOTU code based on [Hancom's public HWP 5.0 specification](https://www.hancom.com/support/downloadCenter/hwpOwpml).
 HWP 5.x page previews use [rhwp](https://github.com/edwardkim/rhwp) (`@rhwp/core` 0.9.1, MIT). KOTU includes its JavaScript and WebAssembly renderer in `HwpViewer/engine`. The upstream license is in `HwpViewer/engine/LICENSE`. Third-party notices and license texts are in `HwpViewer/engine/notices/`.
