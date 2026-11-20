@@ -47,7 +47,7 @@ public sealed partial class DocumentFitControls : UserControl
     private void Reapply(object sender, RoutedEventArgs e) => Reapplied?.Invoke();
 
     private void Choose(object sender, RoutedEventArgs e) => Selected?.Invoke(
-        sender == OriginalItem ? PdfFitMode.ActualSize :
-        sender == WidthItem ? PdfFitMode.FitWidth :
-        sender == HeightItem ? PdfFitMode.FitHeight : PdfFitMode.Contain);
+        ReferenceEquals(sender, OriginalItem) ? PdfFitMode.ActualSize :
+        ReferenceEquals(sender, WidthItem) ? PdfFitMode.FitWidth :
+        ReferenceEquals(sender, HeightItem) ? PdfFitMode.FitHeight : PdfFitMode.Contain);
 }
