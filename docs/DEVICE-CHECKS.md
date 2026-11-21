@@ -24,6 +24,7 @@
 
 | 범위 | 확인된 경계 | 남은 확인과 착수 조건 | 정본/원문 |
 |---|---|---|---|
+| A112 뒤로 가기 | v0.432.2 독립 실행 검수본에서 PDF를 열고 앱의 뒤로 가기 동작을 호출했다. 양쪽 닫힘·왼쪽만·오른쪽만·양쪽 열림 네 배치 모두 탐색기에 복귀한 뒤 실제 패널 너비가 유지됐다. Esc 동작은 네 배치 모두 양쪽을 열었다. 임시 탐색기에서 뒤로 가면 오른쪽 패널만 열어 둔 원래 PDF로 돌아왔다. | 물리 버튼·키 입력의 전달은 미검증. 사용자의 Mac Windows App 원격 세션에서는 Windows 파일 탐색기에서도 마우스 뒤로 버튼에 반응이 없었다. | [A112](REQUIREMENTS.md#a112) |
 | A398 EXIF·회전·APNG | JPEG/TIFF 방향, PSD 일부 방향, 회전/배치/복사/인쇄 미리보기 관측. PNG eXIf/TIFF 썸네일/APNG 후속은 v426에서 보강. | 다른 codec·원제보 원본·실제 클라우드 cache/provider. Ctrl/Shift+휠, 자유 resize·mid-drag unload 등 당시 도구로 못 한 조합을 통과로 세지 않음. 실제 인쇄 제출·미설치 WhatsApp 붙여넣기 미검증. | [EXIF](features/image/exif-orientation-A398.md), [회전 배치](features/image/rotated-layout-A398.md), [과거 L133](history/device-checks-index.md#l133) |
 | A399 OneDrive | 요청 직전 보호·감시 병합·재사용·조건부 재시도 구현 및 실제 WinUI 합성 provider 시나리오. | 실제 재현 파일/상태 미확보. 온라인 전용/로컬/동기화중 별 제공자 지연과 캐시 회복, hydration 부재, 취소 뒤 영구 잔류/장시간 S4·다중 창을 합성 성공으로 대체하지 않음. | [OneDrive 조사](features/explorer/onedrive-thumbnail-investigation-A399.md), [과거 L260](history/device-checks-index.md#l260) |
 | A399·후보40 원본 비접근 | ReturnOnlyIfCached·placeholder 보호 코드 조사와 실제 원본 비접근 관측은 다르다. | 상세 줄·텍스트 미리보기·재생 전 속성 경로를 필요할 때 감사. 자동 다운로드 알림 제보와 디스크 증가 증거는 철회된 사실이며 재현 근거로 사용 금지. | [후보40](REQUIREMENTS.md#candidates), [요청 직전 보호](features/explorer/request-time-cloud-guard-A399.md) |

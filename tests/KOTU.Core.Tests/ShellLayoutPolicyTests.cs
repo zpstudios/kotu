@@ -67,6 +67,27 @@ public class ShellLayoutPolicyTests
         Assert.True(policy.HasContent);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void BackToExplorerKeepsPanelsVisibleAtClose(bool list, bool info)
+    {
+        var policy = new ShellLayoutPolicy();
+        policy.Reset("file.pdf");
+        if (list) policy.ToggleSidebar(true);
+        if (info) policy.ToggleSidebar(false);
+
+        policy.Reset(preserveSidebarsOnClose: true);
+
+        Assert.False(policy.HasContent);
+        Assert.Null(policy.OpenedPath);
+        Assert.Equal(list, policy.EffectiveListVisible);
+        Assert.Equal(info, policy.EffectiveInfoVisible);
+        Assert.Equal(list || info, policy.IsOverride);
+    }
+
     [Fact]
     public void DuplicateCompletionAndSavePreserveUserLayout()
     {

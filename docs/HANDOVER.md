@@ -2,6 +2,7 @@
 
 ## 현재 상태
 
+- v0.432.2는 뒤로 가기로 파일을 닫을 때 좌우 패널 배치를 유지한다. [A112](REQUIREMENTS.md#a112) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.432.2).
 - v0.432.1은 문서를 열거나 Esc로 돌아올 때 공통 하단 버튼의 위치를 유지한다. [A426](REQUIREMENTS.md#a426) · [실기기 검수](DEVICE-CHECKS.md#editor) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.432.1).
 - v0.432.0은 조작부의 아이콘과 글자에 코투 기하체를 기본 적용하고 얇은 선 스타일도 제공한다. [A425](REQUIREMENTS.md#a425).
 - v0.431.4는 PDF·HWP 용지 경계를 표시하고 문서·이미지·영상 맞춤 메뉴에 아이콘과 짝을 이루는 글꼴을 적용한다. [A423](REQUIREMENTS.md#a423) · [A424](REQUIREMENTS.md#a424).
@@ -20,7 +21,6 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 뒤로 가기 시 패널 상태 보존 A112 | v0.432.1에서 파일을 닫을 때 좌우 패널이 모두 열리는 경로를 확인했다. [재현 조건과 검수 기준](REQUIREMENTS.md#a112) |
 | 웹 업데이트 실기기 검수 A418 | 사용자가 기존 정식판의 Settings → Updates에서 최신 공개 버전 수신을 직접 확인할 차례다. [패키지와 검수 절차](development/official-release-and-install.md) |
 | 문서 편집기 커서 A115 | 정식판 웹 업데이트 후 실제 문서의 줄 처음·중간·끝에서 가독성을 확인할 수 있다. [검수 범위](DEVICE-CHECKS.md#editor) |
 | 문서 편집 A401 | 원격 검수에서 저장·선택·편집·인쇄 취소 등을 확인했다. 직접 접속 시 실제 한국어 IME와 연속 입력·스크롤 체감, 다른 테마·배율 및 극단 조건이 남았다. [편집기 검수](features/editor/local-text-editor-A401.md) |

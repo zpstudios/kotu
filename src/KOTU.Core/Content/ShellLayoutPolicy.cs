@@ -13,12 +13,15 @@ public sealed class ShellLayoutPolicy
     public string? OpenedPath { get; private set; }
     public bool HasContent { get; private set; }
 
-    public void Reset(string? path = null, bool untitled = false)
+    public void Reset(string? path = null, bool untitled = false, bool preserveSidebarsOnClose = false)
     {
         OpenedPath = path;
         HasContent = path is not null || untitled;
-        ListVisible = InfoVisible = !HasContent;
-        IsOverride = false;
+        if (HasContent || !preserveSidebarsOnClose)
+        {
+            ListVisible = InfoVisible = !HasContent;
+            IsOverride = false;
+        }
         IsFullScreen = false;
     }
 

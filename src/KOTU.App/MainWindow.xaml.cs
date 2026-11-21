@@ -1303,7 +1303,7 @@ public sealed partial class MainWindow : Window
     private void OpenModule(IModule module)
     {
         if (RedirectFromWorkingArchive(window => window.OpenModule(module))) return;
-        ShowModule(module, OpenContext.Empty, Branding.AppName, defaultSidebars: true);
+        ShowModule(module, OpenContext.Empty, Branding.AppName);
     }
 
     /// <summary>
@@ -1499,10 +1499,10 @@ public sealed partial class MainWindow : Window
         entries.Where(e => !e.IsFolder).Select(e => e.Path).ToList();
 
     private async void ShowModule(IModule module, OpenContext context, string title,
-        bool defaultSidebars = false)
+        bool preserveSidebarsOnClose = false)
     {
         if ((module.Id != CurrentModuleId || context.FilePath is not null) &&
-            RedirectFromWorkingArchive(window => window.ShowModule(module, context, title, defaultSidebars))) return;
+            RedirectFromWorkingArchive(window => window.ShowModule(module, context, title, preserveSidebarsOnClose))) return;
         // A352 배치 1: 트레이스 — 모듈 전환의 진입점(어떤 모듈로 어떤 파일을 여는가).
         DiagTrace.Write("shell", $"ShowModule {module.Id} path={context.FilePath ?? "(none)"}");
         // 현재 뷰에 미저장 변경이 있으면 먼저 정리(저장/버리기/취소) — 취소면 아무것도 안 바꾼다 (A37).
@@ -1530,8 +1530,7 @@ public sealed partial class MainWindow : Window
         if (view is IMediaTransportTarget mediaTarget)
             (_mediaTransport ??= new Integration.MediaTransport(this, _tray.Hwnd, DispatcherQueue))
                 .Attach(mediaTarget, context.FilePath);
-        SetContentState(module, context.FilePath);
-        if (defaultSidebars && context.FilePath is null) ApplyDefaultSidebars();
+        SetContentState(module, context.FilePath, preserveSidebarsOnClose);
     }
 
     private ContentContractSession? _contentSession;
@@ -1569,7 +1568,7 @@ public sealed partial class MainWindow : Window
         session.ContentPathChanged += OnContentPathChanged;
         session.CurrentPathChanged += OnCurrentPathChanged;
         session.ContentInfoChanged += OnContentInfoChanged;
-        session.ContentCloseRequested += () => TryCloseContent(defaultSidebars: true);
+        session.ContentCloseRequested += () => TryCloseContent();
         session.ContentOpenFailed += OnContentOpenFailed;
         session.PlaybackStateChanged += OnPlaybackStateChanged;
         session.PrintRequested += RequestPrint;
@@ -1729,11 +1728,11 @@ public sealed partial class MainWindow : Window
     // ---------- 내장 탐색기 + 좌/우 오버레이 (v0.25.0 → A58 상태 머신) ----------
 
     /// <summary>현재 모듈·파일 상태를 바꾸고 탐색기/오버레이 표시를 갱신한다.</summary>
-    private void SetContentState(IModule? module, string? filePath)
+    private void SetContentState(IModule? module, string? filePath, bool preserveSidebarsOnClose = false)
     {
         ResetBarAutoHide();
         ExitOpenFileBrowsing(restore: false, refresh: false);
-        _shellLayout.Reset(filePath);
+        _shellLayout.Reset(filePath, preserveSidebarsOnClose: preserveSidebarsOnClose);
         ApplyPolicySidebars();
         SetViewMode(false, refresh: false);
         HideS1Flash(); // A90-b 강조가 콘텐츠 전환 뒤까지 남지 않게
@@ -3314,7 +3313,7 @@ public sealed partial class MainWindow : Window
             return true;
         }
         // 콘텐츠를 닫아 S1로 바뀌어도 같은 입력으로 창까지 닫지 않는다.
-        if (TryCloseContent(defaultSidebars: true))
+        if (TryCloseContent())
         {
             return true;
         }
@@ -3383,16 +3382,15 @@ public sealed partial class MainWindow : Window
         if (IsEmptyFileModule && TryPopFolderHistory()) return true;
         // A189: 무제 문서도 닫을 콘텐츠다 — 경로는 없지만 ④와 같은 "콘텐츠 닫기 → S1" 층.
         // 미저장 가드는 종전대로 ShowModule 안의 ConfirmDiscardAsync가 담당한다(취소 = 무변경).
-        // A202: 닫기 실행부는 Esc 말단 층과 공용(TryCloseContent) — '뒤로'는 defaultSidebars=false
-        // (좌/우 상태를 닫기 직전 그대로 보존 — A112 명시 요구라 Esc의 true와 다르다).
-        return TryCloseContent(defaultSidebars: false);
+        // A112: 뒤로 가기로 닫을 때는 탐색기에서도 닫기 직전의 좌우 패널 구성을 유지한다.
+        return TryCloseContent(preserveSidebarsOnClose: true);
     }
 
-    private bool TryCloseContent(bool defaultSidebars)
+    private bool TryCloseContent(bool preserveSidebarsOnClose = false)
     {
         if ((_currentFilePath is null && !_untitledContent) || _currentModule is not { } module)
             return false;
-        ShowModule(module, OpenContext.Empty, Branding.AppName, defaultSidebars);
+        ShowModule(module, OpenContext.Empty, Branding.AppName, preserveSidebarsOnClose);
         return true;
     }
 
