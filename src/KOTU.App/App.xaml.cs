@@ -5,6 +5,7 @@ using Microsoft.Windows.AppLifecycle;
 using KOTU.Core.Cli;
 using KOTU.Core.Routing;
 using KOTU.Core.Settings;
+using KOTU.Core.Appearance;
 
 namespace KOTU.App;
 
@@ -36,6 +37,7 @@ public partial class App : Application
             services.AddSingleton<ISettingsService, MemorySettingsService>();
         else
             services.AddSingleton<ISettingsService, JsonSettingsService>();
+        services.AddSingleton<DesignPreferences>();
         services.AddSingleton<KOTU.Core.Jobs.BackgroundJobService>();
         services.AddSingleton(sp => new KOTU.Module.Archive.ArchiveJobCoordinator(
             sp.GetRequiredService<KOTU.Core.Jobs.BackgroundJobService>()));
@@ -76,7 +78,7 @@ public partial class App : Application
     {
         // 재전달 활성화가 창이 다 닫히는 순간과 겹쳐도 큐잉할 수 있게 UI 디스패처를 잡아둔다
         _uiDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-        SelectControlAppearance(Services.GetRequiredService<ISettingsService>().Get(ThinControlsSetting, false));
+        Appearance.AppDesignService.Initialize(Services.GetRequiredService<DesignPreferences>());
         _windowManager = Services.GetRequiredService<WindowManager>();
 
         // A124: 관리자 재시작(runas) 창 세트 훅 배선 — 하드웨어 모듈은 Core에만 의존하므로

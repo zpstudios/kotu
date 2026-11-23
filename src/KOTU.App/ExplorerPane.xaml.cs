@@ -637,7 +637,7 @@ public sealed partial class ExplorerPane : UserControl
             if (DiagTrace.Enabled)
                 DiagTrace.Write("list", "recycle " + ((args.Item as ExplorerEntryVm)?.Path ?? "(none)"));
             // 인라인 이름변경 상자가 이 컨테이너에 남아 있으면 커밋으로 끝낸다(보수안 ⓐ의 짝).
-            if (item.ContentTemplateRoot is Panel host)
+            if (ContentPanelOf(item) is Panel host)
             {
                 if (DiagTrace.Enabled) DiagTrace.Write("list", "ForceFinish(recycle)");
                 ExplorerRenameBox.ForceFinish(host);
@@ -930,8 +930,8 @@ public sealed partial class ExplorerPane : UserControl
 
     /// <summary>
     /// 항목 콘텐츠 패널에서 이름으로 TextBlock을 찾는다 (A156).
-    /// 항목 루트는 평평한 패널 하나(중첩 없음)라 한 레벨 탐색으로 충분하다 — 시각 트리 상향
-    /// 탐색(ItemFromSource)과 달리 여기는 우리가 만든 구조만 본다.
+    /// 불투명 선택 표면 안의 콘텐츠 패널에서 한 레벨만 탐색한다. 잘라내기 투명도는 이 내부
+    /// 패널에만 적용하고, 이름변경 편집기도 같은 콘텐츠 부모에 붙인다.
     /// <para>
     /// A345 배치 2: 콘텐츠 패널을 얻는 길이 표면마다 다르다 — 리스트는 DataTemplate이 만든
     /// <see cref="ContentControl.ContentTemplateRoot"/>이고, 그리드(휴면)는 코드가 직접 넣은
@@ -942,12 +942,16 @@ public sealed partial class ExplorerPane : UserControl
         ContentPanelOf(item)?.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == name);
 
     /// <summary>항목의 콘텐츠 패널 (A345 배치 2) — 리스트 = 템플릿 루트, 그리드 = 직접 넣은 Content.</summary>
-    private static Panel? ContentPanelOf(object item) => item switch
+    private static Panel? ContentPanelOf(object item)
     {
-        ContentControl { ContentTemplateRoot: Panel templated } => templated,
-        ContentControl { Content: Panel direct } => direct,
-        _ => null,
-    };
+        var root=item switch
+        {
+            ContentControl { ContentTemplateRoot: Panel templated } => templated,
+            ContentControl { Content: Panel direct } => direct,
+            _ => null,
+        };
+        return root?.Children.OfType<Panel>().FirstOrDefault(panel=>panel.Name=="ExplorerItemContent") ?? root;
+    }
 
     /// <summary>
     /// 지연 로드로 채우는 상세 조각 한 벌 (A6 길이 → A155 확장 → A199 모듈별 1조각으로 정리).

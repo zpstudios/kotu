@@ -1,0 +1,224 @@
+<ResourceDictionary xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <!-- ListViewItemPresenter must remain the direct template root; wrapping it fails at runtime. Native template portions: Copyright (c) Microsoft Corporation, MIT license; see THIRD-PARTY-NOTICES.md. No control is re-templated when a design changes. -->
+  <ControlTemplate
+  TargetType="ListViewItem"
+  x:Key="KotuListViewItemTemplate"
+
+ >
+    <ListViewItemPresenter
+      x:Name="Root"
+      ContentTransitions="{TemplateBinding ContentTransitions}"
+      Control.IsTemplateFocusTarget="True"
+      FocusVisualMargin="{TemplateBinding FocusVisualMargin}"
+      FocusVisualPrimaryBrush="{TemplateBinding FocusVisualPrimaryBrush}"
+      FocusVisualPrimaryThickness="{TemplateBinding FocusVisualPrimaryThickness}"
+      FocusVisualSecondaryBrush="{TemplateBinding FocusVisualSecondaryBrush}"
+      FocusVisualSecondaryThickness="{TemplateBinding FocusVisualSecondaryThickness}"
+      SelectionCheckMarkVisualEnabled="{ThemeResource ListViewItemSelectionCheckMarkVisualEnabled}"
+      CheckBrush="{ThemeResource ListViewItemCheckBrush}"
+      CheckBoxBrush="{ThemeResource ListViewItemCheckBoxBrush}"
+      DragBackground="{ThemeResource ListViewItemDragBackground}"
+      DragForeground="{ThemeResource ListViewItemDragForeground}"
+      FocusBorderBrush="{ThemeResource ListViewItemFocusBorderBrush}"
+      FocusSecondaryBorderBrush="{ThemeResource ListViewItemFocusSecondaryBorderBrush}"
+      PlaceholderBackground="{ThemeResource ListViewItemPlaceholderBackground}"
+      PointerOverBackground="{ThemeResource ListViewItemBackgroundPointerOver}"
+      PointerOverForeground="{ThemeResource ListViewItemForegroundPointerOver}"
+      SelectedBackground="{ThemeResource ListViewItemBackgroundSelected}"
+      SelectedForeground="{ThemeResource ListViewItemForegroundSelected}"
+      SelectedPointerOverBackground="{ThemeResource ListViewItemBackgroundSelectedPointerOver}"
+      PressedBackground="{ThemeResource ListViewItemBackgroundPressed}"
+      SelectedPressedBackground="{ThemeResource ListViewItemBackgroundSelectedPressed}"
+      DisabledOpacity="{ThemeResource ListViewItemDisabledThemeOpacity}"
+      DragOpacity="{ThemeResource ListViewItemDragThemeOpacity}"
+      ReorderHintOffset="{ThemeResource ListViewItemReorderHintThemeOffset}"
+      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+      ContentMargin="{TemplateBinding Padding}"
+      CheckMode="{ThemeResource ListViewItemCheckMode}"
+      CornerRadius="{ThemeResource ListViewItemCornerRadius}"
+      CheckPressedBrush="{ThemeResource ListViewItemCheckPressedBrush}"
+      CheckDisabledBrush="{ThemeResource ListViewItemCheckDisabledBrush}"
+      CheckBoxPointerOverBrush="{ThemeResource ListViewItemCheckBoxPointerOverBrush}"
+      CheckBoxPressedBrush="{ThemeResource ListViewItemCheckBoxPressedBrush}"
+      CheckBoxDisabledBrush="{ThemeResource ListViewItemCheckBoxDisabledBrush}"
+      CheckBoxSelectedBrush="{ThemeResource ListViewItemCheckBoxSelectedBrush}"
+      CheckBoxSelectedPointerOverBrush="{ThemeResource ListViewItemCheckBoxSelectedPointerOverBrush}"
+      CheckBoxSelectedPressedBrush="{ThemeResource ListViewItemCheckBoxSelectedPressedBrush}"
+      CheckBoxSelectedDisabledBrush="{ThemeResource ListViewItemCheckBoxSelectedDisabledBrush}"
+      CheckBoxBorderBrush="{ThemeResource ListViewItemCheckBoxBorderBrush}"
+      CheckBoxPointerOverBorderBrush="{ThemeResource ListViewItemCheckBoxPointerOverBorderBrush}"
+      CheckBoxPressedBorderBrush="{ThemeResource ListViewItemCheckBoxPressedBorderBrush}"
+      CheckBoxDisabledBorderBrush="{ThemeResource ListViewItemCheckBoxDisabledBorderBrush}"
+      CheckBoxCornerRadius="{ThemeResource ListViewItemCheckBoxCornerRadius}"
+      SelectionIndicatorCornerRadius="{ThemeResource ListViewItemSelectionIndicatorCornerRadius}"
+      SelectionIndicatorVisualEnabled="{ThemeResource ListViewItemSelectionIndicatorVisualEnabled}"
+      SelectionIndicatorBrush="{ThemeResource ListViewItemSelectionIndicatorBrush}"
+      SelectionIndicatorPointerOverBrush="{ThemeResource ListViewItemSelectionIndicatorPointerOverBrush}"
+      SelectionIndicatorPressedBrush="{ThemeResource ListViewItemSelectionIndicatorPressedBrush}"
+      SelectionIndicatorDisabledBrush="{ThemeResource ListViewItemSelectionIndicatorDisabledBrush}"
+      SelectedDisabledBackground="{ThemeResource ListViewItemBackgroundSelectedDisabled}" />
+</ControlTemplate>
+  <ControlTemplate
+  TargetType="GridViewItem"
+  x:Key="KotuGridViewItemTemplate"
+
+ >
+    <ListViewItemPresenter
+      x:Name="Root"
+      ContentTransitions="{TemplateBinding ContentTransitions}"
+      Control.IsTemplateFocusTarget="True"
+      FocusVisualMargin="{TemplateBinding FocusVisualMargin}"
+      FocusVisualPrimaryBrush="{TemplateBinding FocusVisualPrimaryBrush}"
+      FocusVisualPrimaryThickness="{TemplateBinding FocusVisualPrimaryThickness}"
+      FocusVisualSecondaryBrush="{TemplateBinding FocusVisualSecondaryBrush}"
+      FocusVisualSecondaryThickness="{TemplateBinding FocusVisualSecondaryThickness}"
+      SelectionCheckMarkVisualEnabled="{ThemeResource GridViewItemSelectionCheckMarkVisualEnabled}"
+      CheckBrush="{ThemeResource GridViewItemCheckBrush}"
+      CheckBoxBrush="{ThemeResource GridViewItemCheckBoxBrush}"
+      DragBackground="{ThemeResource GridViewItemDragBackground}"
+      DragForeground="{ThemeResource GridViewItemDragForeground}"
+      FocusBorderBrush="{ThemeResource GridViewItemFocusBorderBrush}"
+      PlaceholderBackground="{ThemeResource GridViewItemPlaceholderBackground}"
+      PointerOverBackground="{ThemeResource GridViewItemBackgroundPointerOver}"
+      PointerOverForeground="{ThemeResource GridViewItemForegroundPointerOver}"
+      SelectedBackground="{ThemeResource GridViewItemBackgroundSelected}"
+      SelectedForeground="{ThemeResource GridViewItemForegroundSelected}"
+      SelectedPointerOverBackground="{ThemeResource GridViewItemBackgroundSelectedPointerOver}"
+      PressedBackground="{ThemeResource GridViewItemBackgroundPressed}"
+      SelectedPressedBackground="{ThemeResource GridViewItemBackgroundSelectedPressed}"
+      DisabledOpacity="{ThemeResource ListViewItemDisabledThemeOpacity}"
+      DragOpacity="{ThemeResource ListViewItemDragThemeOpacity}"
+      ReorderHintOffset="{ThemeResource GridViewItemReorderHintThemeOffset}"
+      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+      ContentMargin="{TemplateBinding Padding}"
+      CheckMode="{ThemeResource GridViewItemCheckMode}"
+      SelectedBorderThickness="{ThemeResource GridViewItemSelectedBorderThickness}"
+      SelectedPointerOverBorderBrush="{ThemeResource GridViewItemSelectedPointerOverBorderBrush}"
+      CornerRadius="{ThemeResource GridViewItemCornerRadius}"
+      CheckBoxCornerRadius="{ThemeResource GridViewItemCheckBoxCornerRadius}"
+      CheckPressedBrush="{ThemeResource GridViewItemCheckPressedBrush}"
+      CheckDisabledBrush="{ThemeResource GridViewItemCheckDisabledBrush}"
+      CheckBoxPointerOverBrush="{ThemeResource GridViewItemCheckBoxPointerOverBrush}"
+      CheckBoxPressedBrush="{ThemeResource GridViewItemCheckBoxPressedBrush}"
+      CheckBoxDisabledBrush="{ThemeResource GridViewItemCheckBoxDisabledBrush}"
+      CheckBoxSelectedBrush="{ThemeResource GridViewItemCheckBoxSelectedBrush}"
+      CheckBoxSelectedPointerOverBrush="{ThemeResource GridViewItemCheckBoxSelectedPointerOverBrush}"
+      CheckBoxSelectedPressedBrush="{ThemeResource GridViewItemCheckBoxSelectedPressedBrush}"
+      CheckBoxSelectedDisabledBrush="{ThemeResource GridViewItemCheckBoxSelectedDisabledBrush}"
+      CheckBoxBorderBrush="{ThemeResource GridViewItemCheckBoxBorderBrush}"
+      CheckBoxPointerOverBorderBrush="{ThemeResource GridViewItemCheckBoxPointerOverBorderBrush}"
+      CheckBoxPressedBorderBrush="{ThemeResource GridViewItemCheckBoxPressedBorderBrush}"
+      CheckBoxDisabledBorderBrush="{ThemeResource GridViewItemCheckBoxDisabledBorderBrush}"
+      PointerOverBorderBrush="{ThemeResource GridViewItemPointerOverBorderBrush}"
+      SelectedDisabledBackground="{ThemeResource GridViewItemBackgroundSelectedDisabled}"
+      SelectedBorderBrush="{ThemeResource GridViewItemSelectedBorderBrush}"
+      SelectedPressedBorderBrush="{ThemeResource GridViewItemSelectedPressedBorderBrush}"
+      SelectedDisabledBorderBrush="{ThemeResource GridViewItemSelectedDisabledBorderBrush}"
+      SelectedInnerBorderBrush="{ThemeResource GridViewItemSelectedInnerBorderBrush}" />
+</ControlTemplate>
+  <ControlTemplate
+  TargetType="FlyoutPresenter"
+  x:Key="KotuFlyoutPresenterTemplate"
+
+ >
+  <Grid
+    x:Name="KotuPopupRoot">
+    <Border
+      Background="{TemplateBinding Background}"
+      BorderBrush="{TemplateBinding BorderBrush}"
+      BorderThickness="{TemplateBinding BorderThickness}"
+      CornerRadius="{TemplateBinding CornerRadius}"
+      BackgroundSizing="InnerBorderEdge">
+      <ScrollViewer
+        x:Name="ScrollViewer"
+        ZoomMode="{TemplateBinding ScrollViewer.ZoomMode}"
+        HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
+        HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+        VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"
+        VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+        AutomationProperties.AccessibilityView="Raw">
+        <ContentPresenter
+          Content="{TemplateBinding Content}"
+          ContentTemplate="{TemplateBinding ContentTemplate}"
+          ContentTransitions="{TemplateBinding ContentTransitions}"
+          Margin="{TemplateBinding Padding}"
+          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</ControlTemplate>
+  <ControlTemplate
+  TargetType="MenuFlyoutPresenter"
+  x:Key="KotuMenuFlyoutPresenterTemplate"
+
+ >
+  <Grid
+    x:Name="KotuPopupRoot">
+    <Border
+      Background="{TemplateBinding Background}"
+      BorderBrush="{TemplateBinding BorderBrush}"
+      BorderThickness="{TemplateBinding BorderThickness}"
+      CornerRadius="{TemplateBinding CornerRadius}"
+      BackgroundSizing="InnerBorderEdge">
+      <ScrollViewer
+        x:Name="MenuFlyoutPresenterScrollViewer"
+        Margin="{TemplateBinding Padding}"
+        MinWidth="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=TemplateSettings.FlyoutContentMinWidth}"
+        HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
+        HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+        VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"
+        VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+        IsHorizontalRailEnabled="{TemplateBinding ScrollViewer.IsHorizontalRailEnabled}"
+        IsVerticalRailEnabled="{TemplateBinding ScrollViewer.IsVerticalRailEnabled}"
+        ZoomMode="{TemplateBinding ScrollViewer.ZoomMode}"
+        AutomationProperties.AccessibilityView="Raw">
+        <ItemsPresenter />
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</ControlTemplate>
+  <ControlTemplate
+  TargetType="ToolTip"
+  x:Key="KotuToolTipTemplate"
+
+ >
+  <Grid
+    x:Name="KotuPopupRoot">
+    <VisualStateManager.VisualStateGroups>
+      <VisualStateGroup
+        x:Name="OpenStates">
+        <VisualState
+          x:Name="Closed">
+          <Storyboard>
+            <FadeOutThemeAnimation
+              TargetName="KotuPopupRoot" />
+          </Storyboard>
+        </VisualState>
+        <VisualState
+          x:Name="Opened">
+          <Storyboard>
+            <FadeInThemeAnimation
+              TargetName="KotuPopupRoot" />
+          </Storyboard>
+        </VisualState>
+      </VisualStateGroup>
+    </VisualStateManager.VisualStateGroups>
+    <ContentPresenter
+      x:Name="LayoutRoot"
+      BorderThickness="{TemplateBinding BorderThickness}"
+      Background="{TemplateBinding Background}"
+      BackgroundSizing="{TemplateBinding BackgroundSizing}"
+      BorderBrush="{TemplateBinding BorderBrush}"
+      MaxWidth="{TemplateBinding MaxWidth}"
+      Content="{TemplateBinding Content}"
+      ContentTransitions="{TemplateBinding ContentTransitions}"
+      ContentTemplate="{TemplateBinding ContentTemplate}"
+      Padding="{TemplateBinding Padding}"
+      TextWrapping="Wrap"
+      CornerRadius="{TemplateBinding CornerRadius}"></ContentPresenter>
+  </Grid>
+</ControlTemplate>
+</ResourceDictionary>

@@ -44,6 +44,13 @@
     <DefineConstants>$(DefineConstants);KOTU_THUMBNAIL_TEST_HARNESS</DefineConstants>
     <StartupObject>KOTU.App.Integration.ThumbnailRetryHarness</StartupObject>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(KotuDesignHarness)' == 'true'">
+    <DefineConstants>$(DefineConstants);KOTU_DESIGN_TEST_HARNESS</DefineConstants>
+    <StartupObject>KOTU.App.Integration.DesignHarness</StartupObject>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(KotuDesignLiveProbe)' == 'true'">
+    <DefineConstants>$(DefineConstants);KOTU_DESIGN_LIVE_PROBE</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <!-- 1.8: LibVLCSharp.WinUI(동영상 모듈)의 최소 요구 버전에 맞춰 전 프로젝트 통일 -->
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
@@ -78,6 +85,8 @@
          (레벨 0의 모습으로 조용히 떨어진다). 원본 시트는 동봉하지 않는다 — 조각만. -->
     <Content Include="Assets\Brand\*.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\KotuFit.ttf;Assets\KotuIcons.ttf;Assets\KotuIconsThin.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Fonts\*.ttf;Assets\Fonts\*-OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\WinUI-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <!--
@@ -127,6 +136,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\ToolbarIconGeometry.cs" Link="ToolbarIconGeometry.cs" />
     <Compile Include="..\Shared\ToolbarIcons.cs" Link="ToolbarIcons.cs" />
+    <Compile Include="..\Shared\DesignIcons.cs" Link="DesignIcons.cs" />
   </ItemGroup>
   <Import Project="..\..\eng\RecordingEngine.targets" />
 </Project>

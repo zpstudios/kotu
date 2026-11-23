@@ -14,7 +14,7 @@ KOTU는 아래 외부 구성요소를 사용합니다. 각 구성요소는 자�
 | [NAudio](https://github.com/naudio/NAudio) (NAudio.Wasapi) | 오디오 VU 미터의 WASAPI 루프백 레벨 캡처 (A304), 마이크 PCM WAV 녹음 (A15) | MIT | NuGet |
 | [ScreenRecorderLib](https://github.com/sskodje/ScreenRecorderLib) 7.0.1 | 화면·창 캡처, WASAPI 시스템/마이크 믹스, Media Foundation H.264/AAC MP4 저장 (A14) | MIT | 고정된 upstream 소스에 초기 프레임 대기·빈 프레임 풀 복구 패치를 적용해 x64 동적 라이브러리로 빌드. `vendor/ScreenRecorderLib`에 출처·패치·해시를 보존하며 배포본 `licenses/ScreenRecorderLib-LICENSE.txt`에 원본 MIT 라이선스 동봉. Visual C++ x64 런타임 및 Windows Media Foundation 필요 |
 | [Magick.NET](https://github.com/dlemstra/Magick.NET) (Magick.NET-Q8-x64) | WIC가 못 읽는 이미지 포맷(psd 등) 디코드 | Apache-2.0 (동봉 네이티브 [ImageMagick](https://imagemagick.org/script/license.php)은 ImageMagick License) | NuGet |
-| Microsoft Windows App SDK / WinUI 3 | UI 프레임워크 (HTML 렌더 뷰의 WebView2 컨트롤 포함, A248) | MIT | NuGet |
+| Microsoft Windows App SDK / WinUI 3 | UI 프레임워크 (HTML 렌더 뷰의 WebView2 컨트롤 포함, A248) | Windows App SDK 패키지 조건 / WinUI 소스 MIT | NuGet. A427 초기 컨테이너 템플릿의 WinUI 원본 부분은 Microsoft 저작권을 보존하며, [공식 소스 라이선스](https://github.com/microsoft/microsoft-ui-xaml/blob/main/LICENSE)를 배포본 `Assets/WinUI-LICENSE.txt`에 동봉한다. |
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) 0.52.2 | WebView2 안에서 실행하는 로컬 텍스트 편집기 (A401) | MIT | 배포본 `VirtualEditor/monaco-LICENSE.txt`, `VirtualEditor/monaco-ThirdPartyNotices.txt`, `VirtualEditor/editor.js.LEGAL.txt`에 원본 라이선스와 종속 고지 동봉. 실행 시 외부 편집기 서버를 사용하지 않음 |
 | [esbuild](https://github.com/evanw/esbuild) 0.25.11 | 로컬 편집기 자산 생성 | MIT | 개발 시에만 사용. 실행 파일은 앱 배포본에 포함하지 않음 |
 | System.Drawing.Common | 트레이·창 아이콘 GDI+ 합성(브랜드 표식) | MIT | NuGet |
@@ -40,3 +40,11 @@ This product was developed by referring to Hancom's public HWP document file spe
 The HWP text-preview parser is original KOTU code based on [Hancom's public HWP 5.0 specification](https://www.hancom.com/support/downloadCenter/hwpOwpml).
 HWP 5.x page previews use [rhwp](https://github.com/edwardkim/rhwp) (`@rhwp/core` 0.9.1, MIT). KOTU includes its JavaScript and WebAssembly renderer in `HwpViewer/engine`. The upstream license is in `HwpViewer/engine/LICENSE`. Third-party notices and license texts are in `HwpViewer/engine/notices/`.
 The distribution also includes `licenses/HWP-Format-NOTICE.txt`.
+
+## Offline interface fonts / 오프라인 UI 글꼴
+
+KOTU distributes the original, unmodified Nunito Sans (Regular/SemiBold), Barlow Semi Condensed (Regular/SemiBold), Nanum Myeongjo (Regular/Bold), Nanum Gothic Coding (Regular/Bold), Galmuri11 (Regular/Bold), and Gaegu (Regular/Bold) fonts under the SIL Open Font License 1.1. The six complete copyright and license texts are beside the fonts in `Assets/Fonts/*-OFL.txt`. System fonts are referenced by name and are not redistributed.
+
+Pinned sources: [Nunito Sans](https://github.com/googlefonts/NunitoSans/tree/058bd7a2f33d6ad5ef1df985b3db403622016a8c), [Google Fonts](https://github.com/google/fonts/tree/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl) (`barlowsemicondensed`, `nanummyeongjo`, `nanumgothiccoding`, `gaegu`), and [Galmuri](https://github.com/quiple/galmuri/tree/bdb86ae89466a361eb8df861222736b81ff975ef/dist).
+
+The `KotuDesign-*.ttf` symbol fonts are original ZP Studios icon outlines generated from KOTU's design catalog; they contain no outlines from these third-party text fonts.

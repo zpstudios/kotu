@@ -1,50 +1,32 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
-using Windows.Foundation;
 
 namespace KOTU.Ui;
 
-/// <summary>같은 좌표 원본을 버튼과 메뉴의 새 UI 인스턴스로 만든다.</summary>
+/// <summary>Toolbar/menu compatibility entry points use the full design factory.</summary>
 internal static class ToolbarIcons
 {
-    internal static double StrokeWidth => (double)Application.Current.Resources["KotuIconStrokeWidth"];
-
     internal static Grid Build(ToolbarIconKind kind)
     {
+        var size = ToolbarIconGeometry.ViewportSize(kind);
         var root = new Grid
         {
-            Width = ToolbarIconGeometry.ViewportSize(kind), Height = ToolbarIconGeometry.ViewportSize(kind),
+            Width = size, Height = size,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
-        // 새 PathIcon이 부모의 현재 전경색을 따르며 기존 좌표와 뷰포트를 보존한다.
         root.Children.Add(BuildMenu(kind));
         return root;
     }
 
-    internal static PathIcon BuildMenu(ToolbarIconKind kind) => new()
-    {
-        Width = ToolbarIconGeometry.ViewportSize(kind), Height = ToolbarIconGeometry.ViewportSize(kind),
-        Data = Geometry(kind),
-    };
+    internal static IconSourceElement BuildMenu(ToolbarIconKind kind)
+        => DesignIcons.CreateLive(Symbol(kind), ToolbarIconGeometry.ViewportSize(kind));
 
-    private static PathGeometry Geometry(ToolbarIconKind kind)
+    private static string Symbol(ToolbarIconKind kind) => kind switch
     {
-        var geometry = new PathGeometry
-        {
-            FillRule = FillRule.Nonzero,
-        };
-        // 채우지 않는 대각선은 잉크 없이 종류별 뷰포트 경계를 확정한다. PathIcon이 실제 잉크 범위만
-        // 확대하지 않도록 버튼과 메뉴에서 같은 원점·배율을 보존한다.
-        var viewport = new PathFigure { StartPoint = new Point(0, 0), IsFilled = false, IsClosed = false };
-        viewport.Segments.Add(new LineSegment { Point = new Point(ToolbarIconGeometry.ViewportSize(kind), ToolbarIconGeometry.ViewportSize(kind)) });
-        geometry.Figures.Add(viewport);
-        foreach (var contour in ToolbarIconGeometry.Create(kind, thin: StrokeWidth < 1.4))
-        {
-            var figure = new PathFigure { StartPoint = new Point(contour[0].X, contour[0].Y), IsClosed = true };
-            foreach (var point in contour.Skip(1)) figure.Segments.Add(new LineSegment { Point = new Point(point.X, point.Y) });
-            geometry.Figures.Add(figure);
-        }
-        return geometry;
-    }
+        ToolbarIconKind.Previous => "PreviousTrack",
+        ToolbarIconKind.Next => "NextTrack",
+        ToolbarIconKind.Sound => "Speaker",
+        ToolbarIconKind.FitContain => "Fit",
+        _ => kind.ToString(),
+    };
 }

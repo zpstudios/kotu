@@ -1,6 +1,4 @@
-using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 
 namespace KOTU.Ui;
 
@@ -13,15 +11,8 @@ internal static class MediaIcons
     internal static Grid BuildNextIcon() => ToolbarIcons.Build(ToolbarIconKind.Next);
     internal static Grid BuildSoundIcon(bool muted = false) => ToolbarIcons.Build(muted ? ToolbarIconKind.Muted : ToolbarIconKind.Sound);
 
-    internal static FontIcon BuildEqualizerIcon() => Glyph("\uE000");
-    internal static FontIcon BuildVisualizerIcon() => Glyph("\uE001");
-    internal static FontIcon BuildExitFullScreenIcon() => Glyph("\uE003");
-    internal static FontIcon BuildLoopOffIcon() => Glyph("\uE004");
-
-    private static FontIcon Glyph(string glyph) => new()
-    {
-        Glyph = glyph,
-        FontSize = 18,
-        FontFamily = (FontFamily)Application.Current.Resources["KotuIconFontFamily"],
-    };
+    internal static IconSourceElement BuildEqualizerIcon() => DesignIcons.CreateLive("Equalizer");
+    internal static IconSourceElement BuildVisualizerIcon() => DesignIcons.CreateLive("Analyzer");
+    internal static IconSourceElement BuildExitFullScreenIcon() => DesignIcons.CreateLive("ExitFullscreen");
+    internal static IconSourceElement BuildLoopOffIcon() => DesignIcons.CreateLive("RepeatOff");
 }

@@ -360,11 +360,14 @@ internal sealed class PrintHost : IDisposable
             if (_provider is { } provider
                 && await provider.CreatePrintPageAsync(pageNumber, spec) is UIElement page)
             {
+                KOTU.Core.Appearance.DesignScope.ProtectContent(page);
                 return page;
             }
         }
         catch { /* 공급자 실패 — 안내 페이지로 */ }
-        return BuildFallbackPage(spec);
+        var fallback = BuildFallbackPage(spec);
+        KOTU.Core.Appearance.DesignScope.ProtectContent(fallback);
+        return fallback;
     }
 
     /// <summary>

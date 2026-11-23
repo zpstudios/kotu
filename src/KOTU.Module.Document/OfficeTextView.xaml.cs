@@ -31,6 +31,8 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
     public OfficeTextView(string path)
     {
         InitializeComponent();
+        KOTU.Core.Appearance.DesignScope.ProtectContent(TextList);
+        KOTU.Core.Appearance.DesignScope.ProtectContent(PageHost);
         _path = path;
         FileNameText.Text = Path.GetFileName(path);
         _textNotice = Path.GetExtension(path).Equals(".hwp", StringComparison.OrdinalIgnoreCase)

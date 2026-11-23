@@ -20,8 +20,8 @@
                 x:Name="Root"
                 Spacing="12"
                 Padding="24"
-                MaxWidth="680"
-                HorizontalAlignment="Left" />
+                MaxWidth="1200"
+                HorizontalAlignment="Stretch" />
         </ScrollViewer>
 
         <!-- 하단 바: 좌측 Patreon 후원 문구(v0.52.0 — 광고 배너는 사용자 정정으로 철회).

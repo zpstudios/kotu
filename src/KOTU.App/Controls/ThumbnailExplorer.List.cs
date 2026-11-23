@@ -107,10 +107,13 @@ public sealed partial class ThumbnailExplorer
 
     private void OnListContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
+#if KOTU_DESIGN_TEST_HARNESS
+        KOTU.App.Integration.DesignExplorerHarness.ObserveListContainer(sender, args);
+#endif
         if (args.ItemContainer is not SelectorItem item) return;
         if (args.InRecycleQueue)
         {
-            if (item.ContentTemplateRoot is Grid root) ExplorerRenameBox.ForceFinish(root);
+            if (item.ContentTemplateRoot is Grid root) ExplorerRenameBox.ForceFinish(ContentHostOf(root));
             item.AllowDrop = false;
             return;
         }
@@ -220,7 +223,7 @@ public sealed partial class ThumbnailExplorer
         // 기본 컨테이너 여백과 스크롤바를 추정하지 않고 현재 행의 실제 가용 폭에 맞춘다.
         var row = panel.Children.OfType<SelectorItem>().Select(item => item.ContentTemplateRoot switch
         {
-            Grid grid => grid,
+            Grid grid => ContentHostOf(grid),
             Button { Content: Grid grid } => grid,
             _ => null
         }).FirstOrDefault(grid => grid is { IsLoaded: true, ActualWidth: > 0 });

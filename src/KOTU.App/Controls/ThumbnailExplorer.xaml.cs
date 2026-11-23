@@ -789,7 +789,7 @@ public sealed partial class ThumbnailExplorer : UserControl
                 DiagTrace.Write("tiles", "recycle " + ((args.Item as ExplorerEntryVm)?.Path ?? "(none)"));
             if (item.ContentTemplateRoot is Grid recycled)
             {
-                ExplorerRenameBox.ForceFinish(recycled); // 편집 중 스크롤 = 데이터 사고의 방지선
+                ExplorerRenameBox.ForceFinish(ContentHostOf(recycled)); // 편집 중 스크롤 = 데이터 사고의 방지선
                 recycled.Tag = null;
                 PreviewHostOf(recycled)?.Children.Clear(); // 비트맵·텍스트 블록 해제
                 if (recycled.FindName("TileSelectionOutline") is Border outline)
@@ -873,8 +873,11 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 루트가 평평한 Grid 하나라 한 레벨 탐색으로 충분하다(좌 리스트 FindItemBlock과 같은 관용구).
     /// XAML의 x:Name과 <see cref="TilePreviewHostName"/>이 어긋나면 미리보기가 예외 없이 전멸한다.
     /// </summary>
+    private static Grid ContentHostOf(Grid tile) =>
+        tile.Children.OfType<Grid>().FirstOrDefault(grid=>grid.Name=="ExplorerTileContent") ?? tile;
+
     private static Grid? PreviewHostOf(Grid tile) =>
-        tile.Children.OfType<Grid>().FirstOrDefault(g => g.Name == TilePreviewHostName);
+        ContentHostOf(tile).Children.OfType<Grid>().FirstOrDefault(g => g.Name == TilePreviewHostName);
 
     /// <summary>
     /// 이 뷰모델이 <b>지금</b> 얹혀 있는 미리보기 자리 — 없으면 null (A345 배치 4, 낙수 42).
@@ -1051,6 +1054,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     private void OnFileTileRootLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not Grid root) return;
+        KOTU.Core.Appearance.DesignScope.SetRole(root,KOTU.Core.Appearance.DesignElementRole.Card);
+        KOTU.App.Appearance.LiveDesign.AttachTree(root);
         // 컨테이너가 이미 로드된 채 루트만 바뀌어도 실제 새 루트의 준비 시점에 맞춘다.
         DependencyObject? node = root;
         for (var depth = 0; node is not null && depth < 64; depth++, node = VisualTreeHelper.GetParent(node))
@@ -1152,16 +1157,17 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 바꾼다. 캡션 조회 = <b>이름 기반</b>(A345 배치 3 — 종전 tile.Children[1] 인덱스 계약은
     /// 템플릿에 클라우드 배지가 끼어 자리가 밀릴 수 있어 폐기했다. 어긋나도 예외 없이 조용한
     /// return이라 증상이 "F2 무반응"으로만 보인다 — 좌 리스트가 A156에서 같은 이유로 이미
-    /// 이름 조회로 옮겼다). 편집 상자를 끼울 host = 템플릿 루트 Grid(평평한 한 겹).
+    /// 이름 조회로 옮겼다). 편집 상자는 잘라내기 투명도를 가진 내부 콘텐츠 Grid에 붙인다.
     /// 커밋 성공 갱신 = RefreshViaShell(편집이 끝난 뒤에만 — 편집 중 재스캔 금지).
     /// </summary>
     private void BeginRenameOf(SelectorItem item, Func<string, Task<(string? Notice, bool Denied)>>? renameAsync = null)
     {
         if (VmOf(item) is not { } vm) return; // A345 배치 3 — VmOf 단일 해석
         if (item.ContentTemplateRoot is not Grid tile) return;
-        if (tile.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == TileCaptionName)
+        var content=ContentHostOf(tile);
+        if (content.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == TileCaptionName)
             is not { } caption) return;
-        ExplorerRenameBox.Begin(tile, caption, vm.Path, vm.IsFolder, MakeOpUi(), RefreshViaShell, renameAsync);
+        ExplorerRenameBox.Begin(content, caption, vm.Path, vm.IsFolder, MakeOpUi(), RefreshViaShell, renameAsync);
     }
 
     /// <summary>조작 후 갱신 — 폴더 상태의 단일 원본(좌 리스트)을 셸이 다시 항해시키는 A93 경로.</summary>
@@ -1342,6 +1348,8 @@ public sealed partial class ThumbnailExplorer : UserControl
         };
         if (accent is not null) // 액센트 배경 위에서만 흰 글자 — 중립 배경은 테마 기본색 유지
             label.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        // A427's neutral card face owns this label's contrast; artwork overlay labels keep theirs.
+        KOTU.Core.Appearance.DesignScope.SetRole(label,KOTU.Core.Appearance.DesignElementRole.NeutralText);
 
         UIElement content = label;
         Grid? audioRows = null;
@@ -1358,6 +1366,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             rows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             rows.Children.Add(label);
             var summary = MakeAudioInfoText(entry, audioInfo);
+            KOTU.Core.Appearance.DesignScope.SetRole(summary,KOTU.Core.Appearance.DesignElementRole.NeutralText);
             Grid.SetRow(summary, 1);
             rows.Children.Add(summary);
             var fit = new Viewbox { Child = rows, Stretch = Stretch.Uniform,
@@ -1365,6 +1374,8 @@ public sealed partial class ThumbnailExplorer : UserControl
             // 두 행은 아래 Border의 가용 폭으로 측정하고 Viewbox는 필요한 만큼만 축소한다.
             content = fit;
         }
+        var face = new Grid();
+        face.Children.Add(content);
         var tile = new Border
         {
             Margin = new Thickness(8),
@@ -1372,8 +1383,9 @@ public sealed partial class ThumbnailExplorer : UserControl
             Background = accent is { } color
                 ? new SolidColorBrush(color)
                 : (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
-            Child = content,
+            Child = face,
         };
+        KOTU.Core.Appearance.DesignScope.SetRole(tile, KOTU.Core.Appearance.DesignElementRole.Card);
         if (audioRows is { } boundedRows)
         {
             // Border는 바깥 preview host 슬롯에 stretch된다. 자식 Viewbox의 크기와 독립적이다.
@@ -1553,6 +1565,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private static UIElement MakeTextPreviewBlock(string text) => new Border
     {
+        Name = "DocumentTextPreview",
         Margin = new Thickness(8),
         CornerRadius = new CornerRadius(6),
         Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],

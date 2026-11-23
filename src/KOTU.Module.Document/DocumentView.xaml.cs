@@ -272,6 +272,9 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     public DocumentView(OpenContext context, ISettingsService settings)
     {
         InitializeComponent();
+        KOTU.Core.Appearance.DesignScope.ProtectContent(EditorBox);
+        KOTU.Core.Appearance.DesignScope.ProtectContent(DecorLayer);
+        KOTU.Core.Appearance.DesignScope.ProtectContent(RenderPane);
         FilenameFilterSlot.RegisterPropertyChangedCallback(VisibilityProperty, (_, _) => UpdateDocumentToolsLayout());
         FilenameFilterSlot.RegisterPropertyChangedCallback(WidthProperty, (_, _) => UpdateDocumentToolsLayout());
         FitControls.Selected += SelectFitOption;

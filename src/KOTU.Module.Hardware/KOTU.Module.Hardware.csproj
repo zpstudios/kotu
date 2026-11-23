@@ -7,6 +7,9 @@
     <UseWinUI>true</UseWinUI>
     <Description>하드웨어 모듈: WMI 기반 스펙 표시(CPU·메인보드·메모리·그래픽·저장장치) + 센서 모니터링 그래프(A17). 스트레스는 Phase 5c.</Description>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(KotuDesignLiveProbe)' == 'true'">
+    <DefineConstants>$(DefineConstants);KOTU_DESIGN_LIVE_PROBE</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.*" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />

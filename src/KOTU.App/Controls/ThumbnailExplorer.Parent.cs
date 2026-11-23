@@ -46,7 +46,13 @@ public sealed partial class ThumbnailExplorer
 
     private void OnParentTileLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is Button button) button.Tag = KOTU.Input.HotkeySupport.PassThroughTag;
+        if (sender is not Button button) return;
+        button.Tag = KOTU.Input.HotkeySupport.PassThroughTag;
+#if KOTU_DESIGN_TEST_HARNESS
+        KOTU.App.Integration.DesignExplorerHarness.ObserveParent(button);
+#endif
+        // Parent templates realize independently of the ordinary file-tile Loaded hook.
+        KOTU.App.Appearance.LiveDesign.AttachTree(button);
     }
 
     private void OnParentTilePreviewKeyDown(object sender, KeyRoutedEventArgs e)

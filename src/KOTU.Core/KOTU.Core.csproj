@@ -6,6 +6,7 @@
     <DefineConstants Condition="'$(KotuTestBuild)' == 'true'">$(DefineConstants);KOTU_TEST_BUILD</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Appearance\IconCenterlines.txt" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
   </ItemGroup>

@@ -435,6 +435,7 @@ public sealed partial class ContentInfoOverlay : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 2, 12, 2),
         };
+        KOTU.Core.Appearance.DesignScope.RequestManagement(label);
         var value = new TextBlock
         {
             Text = item.Value,
@@ -443,6 +444,7 @@ public sealed partial class ContentInfoOverlay : UserControl
             IsTextSelectionEnabled = true,
             Margin = new Thickness(0, 2, 0, 2),
         };
+        KOTU.Core.Appearance.DesignScope.RequestManagement(value);
         Grid.SetColumn(value, 1);
         grid.Children.Add(label);
         grid.Children.Add(value);

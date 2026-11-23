@@ -15,7 +15,16 @@ public sealed partial class ExplorerPathBar : UserControl
     private bool _showHidden => _session?.ShowHidden ?? false;
     internal event Action? ShowHiddenChanged;
 
-    public ExplorerPathBar() => InitializeComponent();
+    public ExplorerPathBar()
+    {
+        InitializeComponent();
+        // A collapsed path bar can load before its buttons realize their content.
+        // Track only these authored icons now so their own Loaded events connect them.
+        foreach (var button in new ContentControl[] { UpButton, HomeButton, FilterButton })
+            if (button.Content is FontIcon icon) Appearance.LiveDesign.AttachTree(icon);
+        // The path bar can be created after its window's initial realized-tree pass.
+        Loaded += (_, _) => Appearance.LiveDesign.AttachTree(this);
+    }
 
     internal void Attach(ExplorerSession session)
     {

@@ -90,6 +90,7 @@ public sealed partial class SidePanelHost : UserControl
         // (SolidBackgroundFillColorBase — ExplorerHost·셸 하단 바와 같은 관용구. 조회는
         // Application.Current.Resources — ThemeDictionaries 키라 현재 테마 값이 나온다).
         _border.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
+        KOTU.Core.Appearance.DesignScope.SetRole(_border, KOTU.Core.Appearance.DesignElementRole.Panel);
         _border.BorderBrush = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"];
         _border.BorderThickness = panelOnRight ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
         _border.Child = _content;

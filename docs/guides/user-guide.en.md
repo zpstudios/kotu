@@ -948,6 +948,21 @@ This list is the only way to change the scale — there is no keyboard shortcut 
 document ([2.4](#24-document--plain-text)), and `Ctrl`+wheel zooms an image or a PDF as it
 always did.
 
+### Interface design
+
+**Added in v0.433.0.** Under **Settings → Display**, choose from 11 designs for the interface's
+icons, text, check marks, panels and bottom controls.
+
+- **Single view** shows one preview; use **Previous** and **Next** to browse the designs.
+- **Gallery view** shows several previews together. Scroll to compare them and select a card
+  to change the preview. Both views share the same preview selection.
+- Browsing previews leaves the current design in place. **Apply design** applies the selected
+  design to every open KOTU window immediately, without restarting the app.
+
+Open files, unsaved edits, playback and file selections remain in place when you apply a design.
+Light and dark appearance follow Windows independently of the chosen design; document and media
+content keep their own presentation.
+
 ### Explorer integration
 
 The file-type switches and the right-click-menu switch, described in full in

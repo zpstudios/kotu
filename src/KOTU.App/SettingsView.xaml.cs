@@ -59,7 +59,6 @@ namespace KOTU.App;
 public sealed partial class SettingsView : UserControl, IBottomBarProvider
 {
     private readonly TextBlock _status = new() { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
-    private static event Action? ControlStylePreferenceChanged;
     private static Microsoft.UI.Xaml.Media.FontFamily ControlLabelFont =>
         (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["KotuControlFontFamily"];
 
@@ -843,30 +842,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(scaleBox);
         Root.Children.Add(offListNote);
 
-        // 독립 실행본은 종료하면 설정이 사라지므로 재시작용 선택은 설치본에서 제공한다.
-        if (!KOTU.Core.Integration.DistributionPolicy.IsStandalone)
-        {
-            var styleBox = new ComboBox { Header = "Control style (after restart)", MinWidth = 200 };
-            styleBox.Items.Add("KOTU Geometric");
-            styleBox.Items.Add("Thin line");
-            int SavedStyleIndex() => _settings.Get(App.ThinControlsSetting, false) ? 1 : 0;
-            styleBox.SelectedIndex = SavedStyleIndex();
-            void SyncChoice() => styleBox.SelectedIndex = SavedStyleIndex();
-            styleBox.Loaded += (_, _) =>
-            {
-                SyncChoice();
-                ControlStylePreferenceChanged += SyncChoice;
-            };
-            styleBox.Unloaded += (_, _) => ControlStylePreferenceChanged -= SyncChoice;
-            styleBox.SelectionChanged += (_, _) =>
-            {
-                if (styleBox.SelectedIndex < 0 || styleBox.SelectedIndex == SavedStyleIndex()) return;
-                _settings.Set(App.ThinControlsSetting, styleBox.SelectedIndex == 1);
-                ControlStylePreferenceChanged?.Invoke();
-                _settings.RequestSave();
-            };
-            Root.Children.Add(styleBox);
-        }
+        Root.Children.Add(new Appearance.DesignPicker(App.Services.GetRequiredService<KOTU.Core.Appearance.DesignPreferences>()));
 
         // A48(v0.214.0)의 "Windows display scale (all apps)" 콤보·안내·딥링크 폴백은
         // A221(2026-08-24)에서 전면 제거 — OS 배율은 이 앱이 건드릴 축이 아니라는 사용자 지시.

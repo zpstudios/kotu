@@ -176,6 +176,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(WindowManager manager)
     {
         InitializeComponent();
+        Appearance.LiveDesign.AttachWindow(this, RootLayout);
         Title = Branding.AppName;
         _manager = manager;
         InitializeJobs();
@@ -1535,9 +1536,16 @@ public sealed partial class MainWindow : Window
 
     private ContentContractSession? _contentSession;
     private bool _contentClosed;
+#if KOTU_DESIGN_LIVE_PROBE
+    private Integration.DesignLiveModuleProbe? _designLiveProbe;
+#endif
 
     private void DetachContentBindings()
     {
+#if KOTU_DESIGN_LIVE_PROBE
+        _designLiveProbe?.Dispose();
+        _designLiveProbe = null;
+#endif
         var session = _contentSession;
         _contentSession = null;
         session?.Dispose();
@@ -1553,6 +1561,9 @@ public sealed partial class MainWindow : Window
         ClearModulePanels();
         AttachDriveStrip(null);
         ModuleHost.Content = view;
+#if KOTU_DESIGN_LIVE_PROBE
+        _designLiveProbe = Integration.DesignLiveModuleProbe.TryStart(view, RootLayout);
+#endif
         (view as IBottomOverlayConsumer)?.SetBottomOverlay(BottomBar);
         var session = new ContentContractSession(view, action =>
         {

@@ -101,7 +101,7 @@ internal static class ExplorerRenameBox
         var box = new TextBox
         {
             Text = originalName,
-            FontSize = nameBlock.FontSize,
+            FontSize = KOTU.Core.Appearance.DesignScope.OriginalFontSize(nameBlock,nameBlock.FontSize),
             Margin = nameBlock.Margin,
             MinWidth = 64,
             VerticalAlignment = VerticalAlignment.Center,

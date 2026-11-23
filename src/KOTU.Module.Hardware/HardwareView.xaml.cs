@@ -264,18 +264,29 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
     private const double SpecValueFontSize = 11;  // 항목 값:  테마 기본(14) → 11
     private const double SpecLabelWidth = 96;     // 라벨 열 고정폭: 120 → 96 (폰트와 같은 80%)
 
+#if KOTU_DESIGN_LIVE_PROBE
+    internal int DiagnosticRenderCount { get; private set; }
+    internal long DiagnosticRenderTimestamp { get; private set; }
+#endif
     private void Render()
     {
+#if KOTU_DESIGN_LIVE_PROBE
+        DiagnosticRenderCount++;
+        DiagnosticRenderTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
         Root.Children.Clear();
         foreach (var section in _sections)
         {
-            Root.Children.Add(new TextBlock
+            var title = new TextBlock
             {
                 Text = section.Title,
                 FontSize = SpecTitleFontSize,
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 16, 0, 6),
-            });
+            };
+            // 갱신 때 새로 만든 사양 글자도 Loaded 전에 기존 디자인 관리에 등록한다.
+            KOTU.Core.Appearance.DesignScope.RequestManagement(title);
+            Root.Children.Add(title);
 
             // 라벨 폭: 우측 구획이 전폭의 25%라(최소 창 720에서 약 170px) 구 값 170이면 값 칸이
             // 사라진다 — 라벨은 말줄임되므로 값이 안 잘리는 쪽을 우선했다(A60 3차 = 120).
@@ -300,6 +311,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 2, 12, 2),
         };
+        KOTU.Core.Appearance.DesignScope.RequestManagement(label);
         var value = new TextBlock
         {
             Text = item.Value,
@@ -308,6 +320,7 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             IsTextSelectionEnabled = true,
             Margin = new Thickness(0, 2, 0, 2),
         };
+        KOTU.Core.Appearance.DesignScope.RequestManagement(value);
         Grid.SetColumn(value, 1);
         grid.Children.Add(label);
         grid.Children.Add(value);
@@ -950,6 +963,14 @@ public sealed partial class HardwareView : UserControl, IBottomBarProvider, IWin
             Opacity = 0.45, // 값이 들어오면 1로 (채널별 공유 상태 HasEverHadValue)
             Child = panel,
         };
+        KOTU.Core.Appearance.DesignScope.SetRole(root,KOTU.Core.Appearance.DesignElementRole.Card);
+        // 선택 변경으로 새로 만든 그래프도 각 요소의 Loaded 전에 기존 디자인 관리에 등록한다.
+        KOTU.Core.Appearance.DesignScope.RequestManagement(root);
+        KOTU.Core.Appearance.DesignScope.RequestManagement(titleText);
+        KOTU.Core.Appearance.DesignScope.RequestManagement(valueText);
+        KOTU.Core.Appearance.DesignScope.RequestManagement(xAxisText);
+        KOTU.Core.Appearance.DesignScope.RequestManagement(yAxisText);
+        if (pinIcon is not null) KOTU.Core.Appearance.DesignScope.RequestManagement(pinIcon);
         // 하단 바 표면의 y축 라벨은 상단 겹침 헤더와 겹칠 수 있어, 좁은 바 높이(32)에서는
         // 헤더를 수직 중앙으로 되돌린다 — 구 카드와 같은 배치.
         if (inBar) header.VerticalAlignment = VerticalAlignment.Center;

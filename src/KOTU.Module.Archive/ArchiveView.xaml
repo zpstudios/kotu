@@ -87,6 +87,7 @@
                       HorizontalContentAlignment="Stretch">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:ArchiveBatchItem">
+                      <Grid>
                         <StackPanel Spacing="8" Margin="0,8" HorizontalAlignment="Stretch">
                             <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBlock Text="{x:Bind Status, Mode=OneWay}" TextWrapping="Wrap" />
@@ -100,6 +101,7 @@
                                         IsEnabled="{x:Bind CanCancel, Mode=OneWay}" />
                             </StackPanel>
                         </StackPanel>
+                      </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>

@@ -241,19 +241,13 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
         var content = new StackPanel { Spacing = 12 };
         content.Children.Add(heading);
         foreach (var control in controls) content.Children.Add(control);
+        var face=new Grid();
+        face.Children.Add(content);
         var card = new Border
         {
-            Child = content, Padding = new Thickness(16), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+            Child = face, Padding = new Thickness(16), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
         };
-        void ApplyColors()
-        {
-            var dark = card.ActualTheme == ElementTheme.Dark;
-            card.Background = new SolidColorBrush(dark ? ColorHelper.FromArgb(255, 32, 32, 32) : ColorHelper.FromArgb(255, 243, 243, 243));
-            card.BorderBrush = new SolidColorBrush(dark ? ColorHelper.FromArgb(255, 98, 98, 98) : ColorHelper.FromArgb(255, 138, 138, 138));
-        }
-        card.Loaded += (_, _) => ApplyColors();
-        card.ActualThemeChanged += (_, _) => ApplyColors();
-        ApplyColors();
+        KOTU.Core.Appearance.DesignScope.SetRole(card,KOTU.Core.Appearance.DesignElementRole.Card);
         return card;
     }
 
@@ -291,14 +285,14 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="36"/>
                             </Grid.RowDefinitions>
-                            <FontIcon Glyph="{{glyph}}" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Row="1" FontFamily="{StaticResource KotuControlFontFamily}" Text="{{category}}" FontSize="10" Opacity="0.65" HorizontalAlignment="Center"/>
-                            <TextBlock Grid.Row="2" Text="{{labelBinding}}" FontSize="12" TextWrapping="Wrap"
+                            <FontIcon Style="{StaticResource KotuManagedFontIconStyle}" Glyph="{{glyph}}" FontSize="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource KotuManagedTextBlockStyle}" Grid.Row="1" FontFamily="{StaticResource KotuControlFontFamily}" Text="{{category}}" FontSize="10" Opacity="0.65" HorizontalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource KotuManagedTextBlockStyle}" Grid.Row="2" Text="{{labelBinding}}" FontSize="12" TextWrapping="Wrap"
                                        TextTrimming="CharacterEllipsis" MaxLines="2" TextAlignment="Center"/>
                             <Border Name="SelectionBadge" Grid.RowSpan="3" Width="22" Height="22" CornerRadius="11"
                                     HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed"
                                     Background="{ThemeResource SystemControlHighlightAccentBrush}" IsHitTestVisible="False">
-                                <FontIcon Glyph="&#xE73E;" FontSize="12" Foreground="White"/>
+                                <FontIcon Style="{StaticResource KotuManagedFontIconStyle}" Glyph="&#xE73E;" FontSize="12" Foreground="White"/>
                             </Border>
                         </Grid>
                     </Border>
@@ -311,6 +305,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                 """),
             ItemContainerStyle = (Style)XamlReader.Load("""
                 <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="GridViewItem">
+                    <Setter Property="Template" Value="{StaticResource KotuGridViewItemTemplate}"/>
                     <Setter Property="Margin" Value="0,0,8,8"/>
                     <Setter Property="Padding" Value="0"/>
                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -362,11 +357,8 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
     private static void ApplyTileSelection(GridViewItem container)
     {
         if ((container.Content as Border ?? container.ContentTemplateRoot as Border) is not { Child: Grid content } tile) return;
-        var accent = (SolidColorBrush)Application.Current.Resources["SystemControlHighlightAccentBrush"];
-        tile.BorderBrush = container.IsSelected ? accent : (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"];
-        tile.Background = container.IsSelected
-            ? new SolidColorBrush(accent.Color) { Opacity = 0.22 }
-            : new SolidColorBrush(Colors.Transparent);
+        // The shared design surface owns the selection outline/wash; this badge remains the
+        // source choice marker. Do not restore a rectangular background after a design change.
         foreach (var badge in content.Children.OfType<Border>().Where(b => b.Name == "SelectionBadge"))
             badge.Visibility = container.IsSelected ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -392,6 +384,7 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
             CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(2),
             BorderBrush = (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"],
         };
+        KOTU.Core.Appearance.DesignScope.SetRole(tile,KOTU.Core.Appearance.DesignElementRole.Card);
         AutomationProperties.SetName(tile, label);
         ToolTipService.SetToolTip(tile, label);
         return tile;

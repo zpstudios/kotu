@@ -1,0 +1,4 @@
+# Preserve bundled font and third-party license bytes across checkouts.
+src/KOTU.App/Assets/Fonts/*.ttf -text
+src/KOTU.App/Assets/Fonts/*-OFL.txt -text -whitespace
+src/KOTU.App/Assets/WinUI-LICENSE.txt -text
