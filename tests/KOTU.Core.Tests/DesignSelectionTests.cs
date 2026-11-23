@@ -24,24 +24,6 @@ public sealed class DesignSelectionTests
     }
 
     [Fact]
-    public void BrowsingAndChangingViewsNeverAppliesOrPersists()
-    {
-        var settings = new TrackingSettings();
-        var preferences = new DesignPreferences(settings);
-        var selection = new DesignSelection(preferences.Current.Id);
-        selection.Move(-1);
-        Assert.Equal("ink", selection.Preview.Id);
-        selection.Mode = DesignPickerMode.Gallery;
-        selection.Select("paper");
-        selection.Mode = DesignPickerMode.Single;
-        Assert.Equal("paper", selection.Preview.Id);
-        Assert.Equal("precision", preferences.Current.Id);
-        Assert.True(selection.HasPendingChange);
-        Assert.Equal(0, settings.Writes);
-        Assert.Equal(0, settings.Saves);
-    }
-
-    [Fact]
     public void ApplyPersistsOnlyNewKeyAndNotifiesOtherViewsOnce()
     {
         var settings = new TrackingSettings();
@@ -49,16 +31,13 @@ public sealed class DesignSelectionTests
         settings.Set("document.font", "Consolas");
         settings.Writes = 0;
         var preferences = new DesignPreferences(settings);
-        var first = new DesignSelection(preferences.Current.Id);
-        var second = new DesignSelection(preferences.Current.Id);
+        var observedId = preferences.Current.Id;
         var notifications = 0;
-        preferences.Changed += () => { notifications++; second.SynchronizeApplied(preferences.Current.Id); };
-        first.Select("pixel");
-        first.Apply(preferences);
-        first.Apply(preferences);
+        preferences.Changed += () => { notifications++; observedId = preferences.Current.Id; };
+        Assert.True(preferences.Apply("pixel"));
+        Assert.False(preferences.Apply("pixel"));
         Assert.Equal("pixel", settings.Get(DesignPreferences.SettingKey, ""));
-        Assert.Equal("pixel", second.Preview.Id);
-        Assert.False(first.HasPendingChange);
+        Assert.Equal("pixel", observedId);
         Assert.True(settings.Get("display.thinControls", false));
         Assert.Equal("Consolas", settings.Get("document.font", ""));
         Assert.Equal(1, notifications);
@@ -106,19 +85,6 @@ public sealed class DesignSelectionTests
         }
     }
 
-    [Fact]
-    public void OtherWindowApplyPreservesLocalUnappliedPreview()
-    {
-        var selection = new DesignSelection("precision");
-        selection.Select("terminal");
-        selection.SynchronizeApplied("humanist");
-        Assert.Equal("terminal", selection.Preview.Id);
-        Assert.Equal("humanist", selection.Applied.Id);
-        Assert.True(selection.HasPendingChange);
-        selection.SynchronizeApplied("terminal");
-        Assert.False(selection.HasPendingChange);
-    }
-
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -142,22 +108,7 @@ public sealed class DesignSelectionTests
         var settings = new TrackingSettings();
         var preferences = new DesignPreferences(settings);
         Assert.Throws<ArgumentException>(() => preferences.Apply("missing"));
-        Assert.Throws<ArgumentException>(() => new DesignSelection("precision").Select("missing"));
         Assert.Equal(0, settings.Writes);
-    }
-
-    [Fact]
-    public void NavigationWrapsInBothDirectionsIncludingLargeOffsets()
-    {
-        var selection = new DesignSelection("ink");
-        selection.Move(1);
-        Assert.Equal("precision", selection.Preview.Id);
-        selection.Move(-1);
-        Assert.Equal("ink", selection.Preview.Id);
-        selection.Move(int.MaxValue);
-        Assert.InRange(selection.PreviewIndex, 0, 10);
-        selection.Move(int.MinValue);
-        Assert.Equal("pixel", selection.Preview.Id);
     }
 
     [Fact]

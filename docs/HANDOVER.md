@@ -16,7 +16,7 @@
 - v0.430.0은 다른 프로그램에서 같은 경로에 저장한 이미지를 뷰어에 다시 표시한다. [버전별 변경](RELEASE-v0.430.0.md) · [A419](REQUIREMENTS.md#a419).
 - v0.429.1의 기본 문서 편집기는 라이트·다크 테마에서 형광 녹색 입력 커서와 검은 테두리를 표시한다. 줄 맨 앞에서도 테두리 전체가 보이도록 조정했다. [공식 배포 및 제품 커밋](https://github.com/zpstudios/kotu/releases/tag/v0.429.1) · [커서 검수](DEVICE-CHECKS.md#editor).
 - v0.428.0의 정식 설치 파일과 v0.427.0 기준 차등 업데이트가 2026-11-18 공개됐다. Windows에서 정식 v0.427.0과 KOTU Test 동시 실행, 테스트판 제거 후 정식 파일·설정·등록 보존을 검증했다. [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.428.0) · [제품 커밋](https://github.com/zpstudios/kotu/commit/91ee169484942d625cf9e17cdc586f8f0e1c3d26) · [설치 검증](https://github.com/zpstudios/kotu/actions/runs/44325584622).
-- 지정 PC의 2026-11-23 공식 설치는 v0.432.2·제품 커밋 `d87dc7d`다. 사용자 직접 업데이트 전에 설치·설정 1,151개(595,534,591바이트)를 `artifacts/a427-review/pre-update-backup/`에 백업하고 SHA-256을 대조했다. 백업 후 설정 변경은 없었으며 공식 PID 14856은 조작하지 않았다. 과거 v0.427.0 백업 기록 경로 `%USERPROFILE%/KOTU-Validation/20261116-official-v0.427.0/`는 이번 조회에서 없었고, 기존 복구 보존 자료는 건드리지 않았다. [A408 검수 범위](features/shell/original-icon-A408.md).
+- 지정 PC는 사용자가 v0.433.0으로 업데이트했고, 2026-11-23 공식 패키지와 설치 파일 1,177개의 SHA-256이 일치했다. 기존 설정 36개 키의 누락은 없었고 `hardware.traySensors`, `update.lastCheckedAt`, `explorer.lastFolder` 값 변경과 `display.design` 추가를 읽었다. 업데이트 전부터 있던 시작 오류 로그는 변경되지 않았다. 근거는 `artifacts/a427-review/installed-release-verification.json`, 이전 v0.432.2 설치·설정 백업은 같은 폴더의 `pre-update-backup/`이다. 과거 v0.427.0 백업 기록 경로 `%USERPROFILE%/KOTU-Validation/20261116-official-v0.427.0/`는 이번 조회에서 없었고 기존 복구 보존 자료는 건드리지 않았다.
 - 11월 17일 복구 문서 4개의 대조와 중복 원문 폐기를 마쳤다. 독립 복구 보존본은 보호 대상이다. [나중에 반영한 요구와 폐기 근거](history/recovered-notes-review-A417.md).
 - 문서 정리로 지침과 현재 상태를 줄이고, 과거 기록과 기능 자료를 목적별로 찾을 수 있게 했다. 문서 수정 후 `pwsh -File eng/Test-Documentation.ps1`로 확인한다. [문서 지도](README.md)
 
@@ -24,8 +24,8 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 전체 UI 디자인 A427 | v0.433.0 공식 배포·다운로드 검증을 마쳤다. 사용자 Settings → Updates 업데이트·재시작 응답을 기다린 뒤 공식 패키지와 설치 파일·설정 보존을 확인한다. 로컬 최종 일반 빌드·Core 721개·구조·릴리스·문서 검사도 통과했다. 11개 재실행·160행·Archive·Hardware·Record·메타 정보·최대화/복원·반투명·슬라이더 실제 근거와 원래 진단 실패 판정은 유지한다. 공식 앱·OS·배율은 조작하지 않았고 Test 적용값은 Ink다. [사양](features/shell/design-library-A427.md) · [검수 한계](DEVICE-CHECKS.md#native-media). 실제 화면 receipt17/run41·42, 빌드 `final-build-verification.json`, 배포 `official-release/verification.json`, 백업 `pre-update-backup/manifest.json`과 다음 절차는 `artifacts/a427-review/handoff.md`에 있다. |
-| 웹 업데이트 실기기 검수 A418 | 사용자가 기존 정식판의 Settings → Updates에서 최신 공개 버전 수신을 직접 확인할 차례다. [패키지와 검수 절차](development/official-release-and-install.md) |
+| 디자인 선택 단순화 A428 | 사용자 요청에 따라 v0.433.1에서 갤러리만 남기고 카드 선택 즉시 적용·Applied 표식을 제공한다. Single view·보기 전환·큰 미리보기·별도 적용/현재 디자인 보기 버튼과 전용 미리보기 상태를 제거했다. 복원 기준은 v0.433.0 제품 커밋 `db101e7`이며 앱 옵션이나 중복 소스 사본은 남기지 않는다. Core 718개·일반 빌드·독립 검토·문서 검사를 통과했다. 실제 11개 카드·즉시 적용·두 Settings 표식 동기화·하단 스크롤을 확인하고 검수 창을 정상 종료했다. 근거는 `artifacts/a428-review/visual-review.json`이다. 공식 배포와 사용자 업데이트가 남았다. [요구](REQUIREMENTS.md#a428) · [선택·복원 사양](features/shell/design-library-A427.md#설정에서-선택). A427의 기존 실제 근거·진단 실패·검수 한계는 `artifacts/a427-review/handoff.md`와 [실기기 목록](DEVICE-CHECKS.md#native-media)에 보존한다. |
+| 웹 업데이트 실기기 검수 A418 | 사용자 v0.433.0 업데이트 후 공식 설치 파일 해시·설정 키 보존·실행을 확인했다. 다음 v0.433.1도 사용자가 Settings → Updates에서 직접 적용한다. [패키지와 검수 절차](development/official-release-and-install.md) |
 | 문서 편집기 커서 A115 | 정식판 웹 업데이트 후 실제 문서의 줄 처음·중간·끝에서 가독성을 확인할 수 있다. [검수 범위](DEVICE-CHECKS.md#editor) |
 | 문서 편집 A401 | 원격 검수에서 저장·선택·편집·인쇄 취소 등을 확인했다. 직접 접속 시 실제 한국어 IME와 연속 입력·스크롤 체감, 다른 테마·배율 및 극단 조건이 남았다. [편집기 검수](features/editor/local-text-editor-A401.md) |
 | 이미지 A398 | v0.426.0에서 PNG/TIFF 썸네일과 APNG 일부 경로를 검수했다. 사용자 원본·다른 코덱·클라우드 캐시 조건 등은 부분 반영으로 남았다. [이미지 방향](features/image/exif-orientation-A398.md) |

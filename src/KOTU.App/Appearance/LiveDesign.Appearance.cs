@@ -216,7 +216,7 @@ public sealed partial class LiveDesign
             if (DesignScope.GetRole(control) == DesignElementRole.PreviewChoice)
             {
                 EnsureSurface();
-                // Its template border is the picker's pending-choice marker, independent of the applied design.
+                // Its template border is the picker's applied-card marker; the surface overlay must leave it intact.
                 _surfaceOverlay?.Draw((surface,w,h)=>surface.Draw(d,p with { Border=0, Foreground=0 },w,h,HighContrast,fill:fill));
                 return;
             }

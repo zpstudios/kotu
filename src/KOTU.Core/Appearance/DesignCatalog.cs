@@ -68,12 +68,6 @@ public static class DesignCatalog
     public static DesignDefinition Default => All[0];
     public static DesignDefinition? Find(string? id) => All.FirstOrDefault(d => StringComparer.Ordinal.Equals(d.Id, id));
     public static DesignDefinition Resolve(string? id) => Find(id) ?? Default;
-    public static int IndexOf(string id)
-    {
-        for (var i = 0; i < All.Count; i++) if (All[i].Id == id) return i;
-        return -1;
-    }
-
     private static DesignPalette P(uint bg, uint panel, uint card, uint ink, uint muted, uint line, uint accent, uint wash, uint on)
         => new(bg|0xff000000, panel|0xff000000, card|0xff000000, ink|0xff000000, muted|0xff000000,
             line|0xff000000, accent|0xff000000, wash|0xff000000, on|0xff000000);

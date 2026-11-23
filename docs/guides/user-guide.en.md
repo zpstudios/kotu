@@ -950,14 +950,12 @@ always did.
 
 ### Interface design
 
-**Added in v0.433.0.** Under **Settings → Display**, choose from 11 designs for the interface's
-icons, text, check marks, panels and bottom controls.
+**Added in v0.433.0; selection simplified in v0.433.1.** Under **Settings → Display**, compare
+11 designs for the interface's icons, text, check marks, panels and bottom controls in a gallery.
 
-- **Single view** shows one preview; use **Previous** and **Next** to browse the designs.
-- **Gallery view** shows several previews together. Scroll to compare them and select a card
-  to change the preview. Both views share the same preview selection.
-- Browsing previews leaves the current design in place. **Apply design** applies the selected
-  design to every open KOTU window immediately, without restarting the app.
+Scroll through the gallery and select a card to apply it to every open KOTU window immediately.
+The current design has an **Applied** label and a highlighted border. There is no separate preview
+or Apply button, and no restart is needed.
 
 Open files, unsaved edits, playback and file selections remain in place when you apply a design.
 Light and dark appearance follow Windows independently of the chosen design; document and media
