@@ -14,7 +14,6 @@ public sealed partial class LiveDesign
         private DesignSurface? _surface;
         private DesignOverlay? _surfaceOverlay;
         private bool _sizeHook;
-        private string? _collapsedGlyph, _expandedGlyph;
         private bool InToolbar => HasAncestor(e => e.Name is "BottomBar" or "TransportBar" or "StatusBar" || DesignScope.GetRole(e) == DesignElementRole.Toolbar);
         private SelectorItem? OwnerSelector
         {
@@ -68,8 +67,7 @@ public sealed partial class LiveDesign
                 }
                 if (text.Name is "CollapsedGlyph" or "ExpandedGlyph")
                 {
-                    text.FontFamily = new FontFamily(DesignIconCatalog.FontFamily(d));
-                    return; // Owner glyph properties keep the template bindings and visibility intact.
+                    return; // TreeViewItem keeps its native bindings; drawing peers follow their state.
                 }
                 if (text.Text.Any(c => c is >= '\uE000' and <= '\uF8FF') ||
                     (_originalFont?.Source.Contains("Symbol",StringComparison.OrdinalIgnoreCase) ?? false)) return;
@@ -116,14 +114,7 @@ public sealed partial class LiveDesign
                         control.FontWeight = new Windows.UI.Text.FontWeight { Weight = DesignScope.FontWeight(weight,d) };
                 }
                 if (control is TreeViewItem tree)
-                {
-                    _collapsedGlyph ??= tree.CollapsedGlyph;
-                    _expandedGlyph ??= tree.ExpandedGlyph;
-                    tree.CollapsedGlyph = d.Decoration == DesignDecoration.Terminal ? ">" : _collapsedGlyph;
-                    tree.ExpandedGlyph = d.Decoration == DesignDecoration.Terminal ? "v" : _expandedGlyph;
-                    foreach(var part in Descendants(tree).OfType<TextBlock>().Where(t => t.Name is "CollapsedGlyph" or "ExpandedGlyph"))
-                        part.FontFamily = new FontFamily(DesignIconCatalog.FontFamily(d));
-                }
+                    ApplyTree(tree,d);
                 if (control is CheckBox check) { ApplyCheck(check,d,p,false); return; }
                 if (control is RadioButton radio) { ApplyCheck(radio,d,p,true); return; }
                 if (control is Slider slider) { ApplySlider(slider,d,p); return; }

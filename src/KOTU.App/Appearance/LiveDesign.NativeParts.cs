@@ -28,6 +28,48 @@ public sealed partial class LiveDesign
         private Grid? _menuCheckVisual;
         private DesignSurface? _progressTrack;
         private readonly List<(Grid Host,Brush Brush)> _hitSurfaces=[];
+        private ContentPresenter? _treePresenter;
+        private readonly List<(TextBlock Original,IconSourceElement Visual,long TextToken,long SizeToken)> _treeGlyphs=[];
+
+        private void ApplyTree(TreeViewItem tree,DesignDefinition d)
+        {
+            // Only the owner's native template parts qualify, never a nested content control.
+            if (VisualTreeHelper.GetChildrenCount(tree)==0 || VisualTreeHelper.GetChild(tree,0) is not Grid { Name:"ContentPresenterGrid" } root ||
+                root.Children.OfType<Grid>().FirstOrDefault(g=>g.Name=="MultiSelectGrid") is not { } row) return;
+            if (_treePresenter is null && row.Children.OfType<ContentPresenter>().FirstOrDefault(p=>p.Name=="ContentPresenter") is { } presenter &&
+                presenter.ReadLocalValue(ContentPresenter.VerticalContentAlignmentProperty)==DependencyProperty.UnsetValue)
+            {
+                // The native presenter centers its 20-DIP box but leaves the shorter label at its top.
+                // Center inside that box too, retaining the compact row's height and authored bindings.
+                presenter.VerticalContentAlignment=VerticalAlignment.Center;
+                _treePresenter=presenter;
+            }
+            if (row.Children.OfType<Grid>().FirstOrDefault(g=>g.Name=="ExpandCollapseChevron") is not { } host) return;
+            foreach(var original in host.Children.OfType<TextBlock>().Where(t=>t.Name is "CollapsedGlyph" or "ExpandedGlyph").ToArray())
+            {
+                var symbol=original.Name=="CollapsedGlyph" ? "Next" : "Down";
+                var entry=_treeGlyphs.FirstOrDefault(pair=>ReferenceEquals(pair.Original,original));
+                if (entry.Visual is null)
+                {
+                    // The native 12x12 TextBlock has Segoe-specific Padding=2. A centered icon peer
+                    // uses the existing design geometry instead of inheriting that font's line box.
+                    var visual=DesignIcons.Create(symbol,d,original.FontSize);
+                    CopySlot(original,visual);
+                    Bind(visual,FrameworkElement.WidthProperty,original,"Width");
+                    Bind(visual,FrameworkElement.HeightProperty,original,"Height");
+                    Bind(visual,IconElement.ForegroundProperty,original,"Foreground");
+                    HideDrawing(original);
+                    host.Children.Insert(host.Children.IndexOf(original)+1,visual);
+                    var textToken=original.RegisterPropertyChangedCallback(TextBlock.TextProperty,(_,_)=>QueuePaint());
+                    var sizeToken=original.RegisterPropertyChangedCallback(TextBlock.FontSizeProperty,(_,_)=>QueuePaint());
+                    entry=(original,visual,textToken,sizeToken);
+                    _treeGlyphs.Add(entry);
+                }
+                var glyph=CanonicalNativeGlyph(original.Text);
+                if (DesignIconCatalog.TryResolveGlyph(glyph,out var currentSymbol)) symbol=currentSymbol;
+                DesignIcons.Apply(entry.Visual,symbol,d,original.FontSize);
+            }
+        }
 
         private void EnsureHitSurface(Grid host)
         {
@@ -160,6 +202,16 @@ public sealed partial class LiveDesign
 
         private void ReleaseNativeParts()
         {
+            foreach(var (original,visual,textToken,sizeToken) in _treeGlyphs)
+            {
+                original.UnregisterPropertyChangedCallback(TextBlock.TextProperty,textToken);
+                original.UnregisterPropertyChangedCallback(TextBlock.FontSizeProperty,sizeToken);
+                RemoveDecoration(visual);
+            }
+            _treeGlyphs.Clear();
+            if (_treePresenter is not null && _treePresenter.ReadLocalValue(ContentPresenter.VerticalContentAlignmentProperty) is VerticalAlignment.Center)
+                _treePresenter.ClearValue(ContentPresenter.VerticalContentAlignmentProperty);
+            _treePresenter=null;
             if (_switchCommonStates is not null) _switchCommonStates.CurrentStateChanged-=SwitchStateChanged;
             _switchCommonStates=null;
             foreach (var (original,visual,_,_) in _switchParts) { original.SizeChanged-=NativePartSizeChanged; RemoveDecoration(visual); }
