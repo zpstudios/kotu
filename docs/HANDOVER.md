@@ -21,7 +21,7 @@
 - v0.430.0은 다른 프로그램에서 같은 경로에 저장한 이미지를 뷰어에 다시 표시한다. [버전별 변경](RELEASE-v0.430.0.md) · [A419](REQUIREMENTS.md#a419).
 - v0.429.1의 기본 문서 편집기는 라이트·다크 테마에서 형광 녹색 입력 커서와 검은 테두리를 표시한다. 줄 맨 앞에서도 테두리 전체가 보이도록 조정했다. [공식 배포 및 제품 커밋](https://github.com/zpstudios/kotu/releases/tag/v0.429.1) · [커서 검수](DEVICE-CHECKS.md#editor).
 - v0.428.0의 정식 설치 파일과 v0.427.0 기준 차등 업데이트가 2026-11-18 공개됐다. Windows에서 정식 v0.427.0과 KOTU Test 동시 실행, 테스트판 제거 후 정식 파일·설정·등록 보존을 검증했다. [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.428.0) · [제품 커밋](https://github.com/zpstudios/kotu/commit/91ee169484942d625cf9e17cdc586f8f0e1c3d26) · [설치 검증](https://github.com/zpstudios/kotu/actions/runs/44325584622).
-- 지정 PC는 사용자가 v0.433.2로 업데이트·재시작했고, 2026-11-23 공식 패키지와 설치 파일 1,177개의 SHA-256 및 제품 커밋이 일치했다. 기존 설정 37개 키의 누락·추가는 없었으며 창 크기·위치, 마지막 폴더와 업데이트 확인 시각 값이 바뀌었다. 공식 실행 프로세스와 기존 시작 오류 로그의 동일성을 확인했다. 근거는 `artifacts/a429-review/installed-release-verification.json`이다. v0.433.0 복구용 백업은 `artifacts/a428-review/pre-update-backup/`, 적용 직전 최신 설정과 백업 대조는 `artifacts/a429-review/pre-update-request-settings.json`, `pre-update-request.json`, `backup-coverage.json`에 있다. 이전 v0.432.2 백업과 독립 복구 보존본은 보호한다. 과거 v0.427.0 백업 기록 경로가 조회 때 없었던 사실은 A427 기록에 남아 있다.
+- 지정 PC는 v0.433.3 업데이트·재시작이 반영됐고, 2026-11-23 공식 패키지와 설치 파일 1,177개의 SHA-256 및 제품 커밋이 일치했다. 기존 설정 37개 키가 보존됐으며 폴더별 보기·정렬 설정 3개 키가 추가됐다. 바뀐 기존 값은 업데이트 확인 시각과 창 높이·가로 위치다. 새 공식 프로세스와 기존 시작 오류 로그의 동일성을 확인했다. 근거는 `artifacts/a430-review/installed-release-verification.json`이다. 업데이트 전 v0.433.2 설치·설정 백업은 `artifacts/a430-review/pre-update-backup/`, 기준 설정·실행·오류 기록은 상위 `a430-review/`의 `pre-update-request-settings.json`, `pre-update-request.json`, `pre-update-startup-log.json`에 있다. 이전 v0.433.0·v0.432.2 백업과 독립 복구 보존본도 보호한다. 과거 v0.427.0 백업 경로가 조회 때 없었던 사실은 A427 기록에 남아 있다.
 - 11월 17일 복구 문서 4개의 대조와 중복 원문 폐기를 마쳤다. 독립 복구 보존본은 보호 대상이다. [나중에 반영한 요구와 폐기 근거](history/recovered-notes-review-A417.md).
 - 문서 정리로 지침과 현재 상태를 줄이고, 과거 기록과 기능 자료를 목적별로 찾을 수 있게 했다. 문서 수정 후 `pwsh -File eng/Test-Documentation.ps1`로 확인한다. [문서 지도](README.md)
 
@@ -29,10 +29,10 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 폴더 트리 정렬 A430 | v0.433.3 공식 배포·공개 파일 검증과 v0.433.2 설치·설정 1,180개 파일의 새 백업을 완료했다. 백업은 `artifacts/a430-review/pre-update-backup/`, 설정·오류 로그·실행 기준은 `artifacts/a430-review/`의 `pre-update-request.json`, `pre-update-request-settings.json`, `pre-update-startup-log.json`에 있다. 사용자에게 Settings → Updates 직접 적용·재시작을 요청했으며 이후 공식 파일·설정·실행 대조가 남았다. Core 718개·일반 검수본·독립 검토와 Light의 11개 디자인 관측을 마쳤고 검수 창은 정상 종료했다. 창 크기 복원과 미확인 조건은 [검수 경계](DEVICE-CHECKS.md#native-media)에 유지한다. [요구](REQUIREMENTS.md#a430) |
+| 폴더 트리 정렬 A430 | v0.433.3 공식 배포·공개 파일 검증, 업데이트 전 백업과 사용자 업데이트 후 설치 파일·설정·실행 대조까지 완료했다. Core 718개·일반 검수본·독립 검토와 Light의 11개 디자인 관측을 마쳤고 검수 창은 정상 종료했다. 창 크기 복원과 미확인 조건은 [검수 경계](DEVICE-CHECKS.md#native-media)에 유지한다. [요구](REQUIREMENTS.md#a430) |
 | 메뉴 배경 비침 A429 | v0.433.2 공식 배포·사용자 업데이트 후 설치 대조까지 완료했다. Core 718개·일반 빌드·독립 검토와 Light의 11개 시작 메뉴·Ink 정렬 메뉴·대표 툴팁 관측을 마쳤다. 실제 범위와 기존 실패·미확인 한계는 [실기기 기록](DEVICE-CHECKS.md#native-media)에 유지한다. |
 | 디자인 선택 단순화 A428 | 갤러리 단순화는 v0.433.2에 포함되어 사용자 업데이트 후 공식 설치 대조를 마쳤다. 별도 보기의 Git 복원 기준과 기존 진단 실패·검수 한계는 [선택 사양](features/shell/design-library-A427.md#설정에서-선택)과 [실기기 기록](DEVICE-CHECKS.md#native-media)에 유지한다. |
-| 웹 업데이트 실기기 검수 A418 | 사용자 직접 v0.433.2 적용·재시작 후 공식 파일·설정 키·실행·기존 오류 로그 대조를 완료했다. 복구 백업과 설정 스냅샷은 위 설치 기록을 따른다. [공식 절차](development/official-release-and-install.md) |
+| 웹 업데이트 실기기 검수 A418 | 사용자 직접 v0.433.3 적용·재시작 후 공식 파일·설정 키·실행·기존 오류 로그 대조를 완료했다. 복구 백업과 설정 스냅샷은 위 설치 기록을 따른다. [공식 절차](development/official-release-and-install.md) |
 | 문서 편집기 커서 A115 | 정식판 웹 업데이트 후 실제 문서의 줄 처음·중간·끝에서 가독성을 확인할 수 있다. [검수 범위](DEVICE-CHECKS.md#editor) |
 | 문서 편집 A401 | 원격 검수에서 저장·선택·편집·인쇄 취소 등을 확인했다. 직접 접속 시 실제 한국어 IME와 연속 입력·스크롤 체감, 다른 테마·배율 및 극단 조건이 남았다. [편집기 검수](features/editor/local-text-editor-A401.md) |
 | 이미지 A398 | v0.426.0에서 PNG/TIFF 썸네일과 APNG 일부 경로를 검수했다. 사용자 원본·다른 코덱·클라우드 캐시 조건 등은 부분 반영으로 남았다. [이미지 방향](features/image/exif-orientation-A398.md) |
