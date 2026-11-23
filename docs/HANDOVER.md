@@ -2,6 +2,8 @@
 
 ## 현재 상태
 
+- v0.433.0은 Settings → Display에서 전체 UI 디자인 11종과 Single/Gallery 미리보기를 제공한다. [A427](REQUIREMENTS.md#a427) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.433.0).
+- A427 제품 커밋 [`db101e7`](https://github.com/zpstudios/kotu/commit/db101e765d12a35a77f954d2674b18bb912221cc)의 [전체 빌드](https://github.com/zpstudios/kotu/actions/runs/45116084495)와 [공식 배포·설치 검사](https://github.com/zpstudios/kotu/actions/runs/45116084502)가 2026-11-23 통과했다. 공개 태그·설명·자산·피드, 실제 Full·Delta 크기·SHA-1·SHA-256, Setup SHA-256, 동봉 글꼴·라이선스 29개와 진단 기능 제외를 확인했다. 근거는 `artifacts/a427-review/official-release/verification.json`과 `workflows.json`이다. 실제 화면 검수의 한계는 [실기기 확인 목록](DEVICE-CHECKS.md#native-media)에 유지한다.
 - v0.432.2는 뒤로 가기로 파일을 닫을 때 좌우 패널 배치를 유지한다. [A112](REQUIREMENTS.md#a112) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.432.2).
 - A112 제품 커밋 [`d87dc7d`](https://github.com/zpstudios/kotu/commit/d87dc7db79a8674fdd2799874c0587523d269c63)의 [공식 빌드](https://github.com/zpstudios/kotu/actions/runs/44888855105)와 [배포·설치 검사](https://github.com/zpstudios/kotu/actions/runs/44888855037)가 2026-11-21 통과했다. 최신 정식 태그·제품 커밋·공개 설명·자산·업데이트 피드를 대조했고, Full·Delta 실제 다운로드의 크기·SHA-1·SHA-256도 일치했다. 로컬 근거는 `artifacts/a112-review/release-verification.txt`, 패널 검수는 [실기기 확인 목록](DEVICE-CHECKS.md#editor)과 `artifacts/a112-review/probe/result-2.txt`에 있다.
 - v0.432.1은 문서를 열거나 Esc로 돌아올 때 공통 하단 버튼의 위치를 유지한다. [A426](REQUIREMENTS.md#a426) · [실기기 검수](DEVICE-CHECKS.md#editor) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.432.1).
@@ -14,7 +16,7 @@
 - v0.430.0은 다른 프로그램에서 같은 경로에 저장한 이미지를 뷰어에 다시 표시한다. [버전별 변경](RELEASE-v0.430.0.md) · [A419](REQUIREMENTS.md#a419).
 - v0.429.1의 기본 문서 편집기는 라이트·다크 테마에서 형광 녹색 입력 커서와 검은 테두리를 표시한다. 줄 맨 앞에서도 테두리 전체가 보이도록 조정했다. [공식 배포 및 제품 커밋](https://github.com/zpstudios/kotu/releases/tag/v0.429.1) · [커서 검수](DEVICE-CHECKS.md#editor).
 - v0.428.0의 정식 설치 파일과 v0.427.0 기준 차등 업데이트가 2026-11-18 공개됐다. Windows에서 정식 v0.427.0과 KOTU Test 동시 실행, 테스트판 제거 후 정식 파일·설정·등록 보존을 검증했다. [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.428.0) · [제품 커밋](https://github.com/zpstudios/kotu/commit/91ee169484942d625cf9e17cdc586f8f0e1c3d26) · [설치 검증](https://github.com/zpstudios/kotu/actions/runs/44325584622).
-- 지정 PC의 2026-11-21 읽기 확인에서 정식 경로 실행 파일은 v0.431.0 메타데이터를 보였다. 현재 설치본의 공식 패키지 해시 대조는 아직 하지 않았다. 보호 중인 v0.427.0 공식 설치 백업은 `%USERPROFILE%/KOTU-Validation/20261116-official-v0.427.0/`, 당시 대조 근거는 `artifacts/a408-release-427/`에 있다. [A408 검수 범위](features/shell/original-icon-A408.md).
+- 지정 PC의 2026-11-23 공식 설치는 v0.432.2·제품 커밋 `d87dc7d`다. 사용자 직접 업데이트 전에 설치·설정 1,151개(595,534,591바이트)를 `artifacts/a427-review/pre-update-backup/`에 백업하고 SHA-256을 대조했다. 백업 후 설정 변경은 없었으며 공식 PID 14856은 조작하지 않았다. 과거 v0.427.0 백업 기록 경로 `%USERPROFILE%/KOTU-Validation/20261116-official-v0.427.0/`는 이번 조회에서 없었고, 기존 복구 보존 자료는 건드리지 않았다. [A408 검수 범위](features/shell/original-icon-A408.md).
 - 11월 17일 복구 문서 4개의 대조와 중복 원문 폐기를 마쳤다. 독립 복구 보존본은 보호 대상이다. [나중에 반영한 요구와 폐기 근거](history/recovered-notes-review-A417.md).
 - 문서 정리로 지침과 현재 상태를 줄이고, 과거 기록과 기능 자료를 목적별로 찾을 수 있게 했다. 문서 수정 후 `pwsh -File eng/Test-Documentation.ps1`로 확인한다. [문서 지도](README.md)
 
@@ -22,7 +24,7 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 전체 UI 디자인 A427 | 11개 구현과 v0.433.0 버전·변경 설명·양국어 가이드를 준비했다. 최종 일반 PersistentTest 빌드에 진단 타입이 없고 소스 528개·글꼴/OFL 28개·WinUI 라이선스가 일치한다. Core 721개·아키텍처·릴리스·문서 검사 통과. 로컬 네이티브 DLL은 공식본 재사용이므로 제품 커밋·즉시 push 뒤 해당 커밋의 GitHub 전체 네이티브 빌드·공식 배포가 필요하다. 실제 Hardware 수리 후 Render 세대 81개·글자 534건, Record 부모·내부 글자 2,737쌍이 일치했다. 메타 정보·최대화/복원·반투명 탐색기·영상 탐색/음량 손잡이·Hardware 간격/휠을 확인했고, 기존 11개 재실행·160행·Archive·그래프 근거와 실패 판정은 보존한다. 공식 업데이트는 백업 후 사용자가 Settings → Updates에서 직접 수행한다. 검수 창은 모두 정상 종료했고 공식 PID 14856은 조작하지 않았다. OS·앱 배율 변경 없음, Test 적용값 Ink. 유효한 승인을 반복 질문하지 않는다. [사양](features/shell/design-library-A427.md) · [검수 한계](DEVICE-CHECKS.md#native-media). 상세는 `artifacts/a427-review/handoff.md`, 실제 화면은 receipt17/run41·42, 최종 빌드는 `final-build-verification.json`과 `review-copies.json`이다. |
+| 전체 UI 디자인 A427 | v0.433.0 공식 배포·다운로드 검증을 마쳤다. 사용자 Settings → Updates 업데이트·재시작 응답을 기다린 뒤 공식 패키지와 설치 파일·설정 보존을 확인한다. 로컬 최종 일반 빌드·Core 721개·구조·릴리스·문서 검사도 통과했다. 11개 재실행·160행·Archive·Hardware·Record·메타 정보·최대화/복원·반투명·슬라이더 실제 근거와 원래 진단 실패 판정은 유지한다. 공식 앱·OS·배율은 조작하지 않았고 Test 적용값은 Ink다. [사양](features/shell/design-library-A427.md) · [검수 한계](DEVICE-CHECKS.md#native-media). 실제 화면 receipt17/run41·42, 빌드 `final-build-verification.json`, 배포 `official-release/verification.json`, 백업 `pre-update-backup/manifest.json`과 다음 절차는 `artifacts/a427-review/handoff.md`에 있다. |
 | 웹 업데이트 실기기 검수 A418 | 사용자가 기존 정식판의 Settings → Updates에서 최신 공개 버전 수신을 직접 확인할 차례다. [패키지와 검수 절차](development/official-release-and-install.md) |
 | 문서 편집기 커서 A115 | 정식판 웹 업데이트 후 실제 문서의 줄 처음·중간·끝에서 가독성을 확인할 수 있다. [검수 범위](DEVICE-CHECKS.md#editor) |
 | 문서 편집 A401 | 원격 검수에서 저장·선택·편집·인쇄 취소 등을 확인했다. 직접 접속 시 실제 한국어 IME와 연속 입력·스크롤 체감, 다른 테마·배율 및 극단 조건이 남았다. [편집기 검수](features/editor/local-text-editor-A401.md) |
