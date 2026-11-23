@@ -2,6 +2,8 @@
 
 ## 현재 상태
 
+- v0.433.3은 폴더 트리 이름과 펼침·접힘 표시의 세로 중심을 맞춘다. 기존 행 간격·들여쓰기·선택·펼침 입력은 유지한다. [A430](REQUIREMENTS.md#a430) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.433.3).
+- A430 제품 커밋 [`cb30bb8`](https://github.com/zpstudios/kotu/commit/cb30bb8819f1805f428927d0e08266fc33a59eaf)의 [전체 빌드](https://github.com/zpstudios/kotu/actions/runs/45164961921)와 [공식 배포·설치 검사](https://github.com/zpstudios/kotu/actions/runs/45164961949)가 2026-11-23 통과했다. 공개 태그·최신 릴리스·설명·자산 8개·피드, 실제 Full·Delta 크기·SHA-1·SHA-256, Setup SHA-256, 글꼴·라이선스 29개와 진단 기능 제외를 검증했다. 근거는 `artifacts/a430-review/official-release/verification.json`과 `workflows.json`이다. Setup은 실행하지 않았다.
 - v0.433.2는 시작 메뉴의 항목 사이·구분선·여백으로 뒤 콘텐츠가 비치던 문제를 수정했다. 기존 메뉴 배치와 디자인별 버튼 모양은 유지한다. [A429](REQUIREMENTS.md#a429) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.433.2).
 - A429 제품 커밋 [`06b2db2`](https://github.com/zpstudios/kotu/commit/06b2db2472557a6decd54fafc8616da2987b2f17)의 [전체 빌드](https://github.com/zpstudios/kotu/actions/runs/45125165342)와 [공식 배포·설치 검사](https://github.com/zpstudios/kotu/actions/runs/45125165315)가 2026-11-23 통과했다. 공개 태그·최신 릴리스·설명·자산 8개·피드, 실제 Full·Delta 크기·SHA-1·SHA-256, Setup SHA-256, 글꼴·라이선스 29개와 진단 기능 제외를 검증했다. 근거는 `artifacts/a429-review/official-release/verification.json`과 `workflows.json`이다. Setup은 실행하지 않았다.
 - v0.433.1은 Settings → Display에서 전체 UI 디자인 11종을 갤러리로만 제공하고 카드 선택 즉시 적용·Applied 표식을 표시한다. 제거한 별도 보기의 복원 기준은 v0.433.0 제품 커밋 `db101e7`이다. [A428](REQUIREMENTS.md#a428) · [선택·복원 사양](features/shell/design-library-A427.md#설정에서-선택) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.433.1).
@@ -27,7 +29,7 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 폴더 트리 정렬 A430 | v0.433.3은 기본 템플릿 안에서 이름을 중앙 정렬하고 펼침 표시를 공통 디자인 아이콘으로 그린다. Core 718개·일반 검수본 빌드·독립 검토·배포 게이트를 통과했고, 사용자 재시도 요청 후 Light의 11개 디자인에서 정렬을 관측했다. 검수 앱의 Ink·배율·원래 폴더·비최대화 상태를 복원하고 두 창을 정상 종료했다. 창 크기는 기존의 화면 밖 크기로 돌리지 않았다. 공식 창은 그대로 유지했다. 정확한 제품 커밋의 전체 빌드·공식 배포, v0.433.2 설치 백업과 사용자 직접 업데이트 후 대조가 남았다. 근거는 `artifacts/a430-review/build-verification.json`, `visual-review.json`이다. [요구](REQUIREMENTS.md#a430) · [검수 경계](DEVICE-CHECKS.md#native-media) |
+| 폴더 트리 정렬 A430 | v0.433.3 공식 배포·공개 파일 검증과 v0.433.2 설치·설정 1,180개 파일의 새 백업을 완료했다. 백업은 `artifacts/a430-review/pre-update-backup/`, 설정·오류 로그·실행 기준은 `artifacts/a430-review/`의 `pre-update-request.json`, `pre-update-request-settings.json`, `pre-update-startup-log.json`에 있다. 사용자에게 Settings → Updates 직접 적용·재시작을 요청했으며 이후 공식 파일·설정·실행 대조가 남았다. Core 718개·일반 검수본·독립 검토와 Light의 11개 디자인 관측을 마쳤고 검수 창은 정상 종료했다. 창 크기 복원과 미확인 조건은 [검수 경계](DEVICE-CHECKS.md#native-media)에 유지한다. [요구](REQUIREMENTS.md#a430) |
 | 메뉴 배경 비침 A429 | v0.433.2 공식 배포·사용자 업데이트 후 설치 대조까지 완료했다. Core 718개·일반 빌드·독립 검토와 Light의 11개 시작 메뉴·Ink 정렬 메뉴·대표 툴팁 관측을 마쳤다. 실제 범위와 기존 실패·미확인 한계는 [실기기 기록](DEVICE-CHECKS.md#native-media)에 유지한다. |
 | 디자인 선택 단순화 A428 | 갤러리 단순화는 v0.433.2에 포함되어 사용자 업데이트 후 공식 설치 대조를 마쳤다. 별도 보기의 Git 복원 기준과 기존 진단 실패·검수 한계는 [선택 사양](features/shell/design-library-A427.md#설정에서-선택)과 [실기기 기록](DEVICE-CHECKS.md#native-media)에 유지한다. |
 | 웹 업데이트 실기기 검수 A418 | 사용자 직접 v0.433.2 적용·재시작 후 공식 파일·설정 키·실행·기존 오류 로그 대조를 완료했다. 복구 백업과 설정 스냅샷은 위 설치 기록을 따른다. [공식 절차](development/official-release-and-install.md) |
