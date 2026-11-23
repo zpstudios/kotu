@@ -240,7 +240,12 @@ public sealed partial class LiveDesign
             if (host is null && Element is Border { Name:"PopupBorder",Child:ScrollViewer scroll })
                 host=Descendants(scroll).OfType<Grid>().FirstOrDefault();
             if (host is null && Element is Control control)
-                host = Descendants(control).OfType<Grid>().FirstOrDefault(g => g.Name is "KotuControlRoot" or "KotuPopupRoot" or "KotuSelectorRoot");
+            {
+                // A presenter's content can contain another control's named root. Only its
+                // own template root may replace its background; native templates keep theirs.
+                host = VisualTreeHelper.GetChildrenCount(control) > 0 ? VisualTreeHelper.GetChild(control,0) as Grid : null;
+                if (host?.Name is not ("KotuControlRoot" or "KotuPopupRoot" or "KotuSelectorRoot")) return;
+            }
             if (host is not null)
             {
                 var source=Element is Border { Child:Grid } ? Element : host;
