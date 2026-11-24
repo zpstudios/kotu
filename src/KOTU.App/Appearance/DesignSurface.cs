@@ -60,6 +60,14 @@ internal sealed class DesignSurface : Canvas
         }
         switch (kind)
         {
+            case DesignDecoration.Original:
+                if (!panel && !selected && fill is null) break;
+                Box(.5,.5,w,h,radius ?? (panel ? design.PanelRadius : design.ControlRadius),line,design.BorderWidth);
+                // The native control's quiet lower edge survives normalization to the same
+                // fixed slots. Panels and check indicators remain flat, without an inset rim.
+                if (!panel && !selected && !pressed && height > 22 && fill is not null)
+                    Line([new(4,h),new(Math.Max(4,w-4),h)],DesignPalette.Composite(0x14000000,p.Card),1);
+                break;
             case DesignDecoration.Precision:
                 Box(.5,.5,w,h,radius ?? design.ControlRadius,line,1); break;
             case DesignDecoration.Rounded:
@@ -95,7 +103,7 @@ internal sealed class DesignSurface : Canvas
                 Line(Outline(kind,w,h),selected ? line : p.Foreground,1.5);
                 Line([new(4,h-2),new(w*.51,h-1),new(w-4,h-3)],selected ? line : p.Foreground,.6); break;
         }
-        if (pressed) Box(2,2,Math.Max(1,w-4),Math.Max(1,h-4),radius ?? (panel ? design.PanelRadius : design.ControlRadius),p.Foreground,1);
+        if (pressed && kind != DesignDecoration.Original) Box(2,2,Math.Max(1,w-4),Math.Max(1,h-4),radius ?? (panel ? design.PanelRadius : design.ControlRadius),p.Foreground,1);
     }
 
     private static Point[] Outline(DesignDecoration kind, double w, double h, bool panel = false) => kind switch

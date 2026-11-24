@@ -49,9 +49,14 @@ internal sealed class DesignPreviewRoot : UserControl
 
     private void OnWindowThemeChanged(ThemeSettings sender, object args)
     {
-        DispatcherQueue.TryEnqueue(() => { if (IsLoaded && ReferenceEquals(sender, _windowTheme)) Refresh(); });
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!IsLoaded || !ReferenceEquals(sender, _windowTheme)) return;
+            AppDesignService.RefreshSystemColors();
+            Refresh();
+        });
     }
 
-    private void Refresh() => _viewport.Child = DesignPreviewRenderer.Create(_design,
+    private void Refresh() => _viewport.Child = DesignPreviewRenderer.Create(AppDesignService.PreviewDesign(_design),
         ActualTheme == ElementTheme.Dark, _windowTheme?.HighContrast ?? _accessibility.HighContrast);
 }

@@ -8,6 +8,34 @@ namespace KOTU.Core.Tests;
 public sealed class DesignLivePolicyTests
 {
     [Fact]
+    public void OriginalProfilesKeepAuthoredSizesEmphasisAndIconSlots()
+    {
+        foreach (var thin in new[] { false, true })
+        {
+            var design = DesignCatalog.Resolve("original", thin);
+            foreach (var size in new[] { 10d, 12, 14, 18, 32, 38 })
+            {
+                Assert.Equal(size, DesignScope.FontSize(size, design));
+                Assert.Equal(size, DesignScope.IconSize(size, design));
+            }
+            Assert.Equal(400, DesignScope.FontWeight(400, design));
+            Assert.Equal(600, DesignScope.FontWeight(600, design));
+            Assert.Equal(4, design.ControlRadius);
+            Assert.Equal(0, design.PanelRadius);
+            Assert.Equal(1, design.BorderWidth);
+        }
+    }
+
+    [Theory]
+    [InlineData(0x00ffffffu, 0xff202020u, 0xff202020u)]
+    [InlineData(0xb3ffffffu, 0xfff3f3f3u, 0xfffbfbfbu)]
+    [InlineData(0x09000000u, 0xfff3f3f3u, 0xffeaeaeau)]
+    [InlineData(0x0fffffffu, 0xff202020u, 0xff2d2d2du)]
+    [InlineData(0xff123456u, 0xfff3f3f3u, 0xff123456u)]
+    public void NativeTransparentColorsBecomeOpaqueOnTheirOriginalSurface(uint token, uint background, uint expected)
+        => Assert.Equal(expected, DesignPalette.Composite(token, background));
+
+    [Fact]
     public void ExplicitManagementRequestsAreImmediateAndSeparateFromRoleMetadata()
     {
         var element=new object();

@@ -6,11 +6,13 @@ namespace KOTU.Core.Tests;
 
 public class DesignIconTests
 {
+    private static IEnumerable<DesignDefinition> FontDesigns => DesignCatalog.All
+        .Where(d => d.Decoration != DesignDecoration.Terminal).Append(DesignCatalog.Resolve("original", true));
     [Fact]
     public void EverySemanticIconHasFiniteBoundedDrawingsForEveryDesign()
     {
         Assert.True(DesignIconCatalog.Names.Count >= 70);
-        foreach (var design in DesignCatalog.All)
+        foreach (var design in DesignCatalog.All.Append(DesignCatalog.Resolve("original", true)))
         foreach (var name in DesignIconCatalog.Names)
         {
             var drawing = DesignIconCatalog.Create(name,design);
@@ -38,10 +40,10 @@ public class DesignIconTests
     }
 
     [Fact]
-    public void AllElevenConstructionsDifferBeyondColorAndEachCallOwnsItsData()
+    public void AllTwelveConstructionsDifferBeyondColorAndEachCallOwnsItsData()
     {
         var signatures = DesignCatalog.All.Select(d => JsonSerializer.Serialize(DesignIconCatalog.Create("Folder",d))).ToArray();
-        Assert.Equal(11,signatures.Distinct().Count());
+        Assert.Equal(12,signatures.Distinct().Count());
         var first = DesignIconCatalog.Create("Folder",DesignCatalog.Default);
         var second = DesignIconCatalog.Create("Folder",DesignCatalog.Default);
         first.Contours[0][0] = new(99,99);
@@ -82,9 +84,9 @@ public class DesignIconTests
         var folder = new DirectoryInfo(AppContext.BaseDirectory);
         while (folder is not null && !File.Exists(Path.Combine(folder.FullName,"Directory.Build.props"))) folder = folder.Parent;
         Assert.NotNull(folder);
-        foreach (var design in DesignCatalog.All.Where(d => d.Decoration != DesignDecoration.Terminal))
+        foreach (var design in FontDesigns)
         {
-            var font = File.ReadAllBytes(Path.Combine(folder.FullName,"src","KOTU.App","Assets","Fonts",$"KotuDesign-{design.Id}.ttf"));
+            var font = File.ReadAllBytes(Path.Combine(folder.FullName,"src","KOTU.App","Assets","Fonts",$"KotuDesign-{DesignIconCatalog.FontId(design)}.ttf"));
             int U16(int at) => (font[at]<<8)|font[at+1];
             int I16(int at) => (short)U16(at);
             int U32(int at) => (U16(at)<<16)|U16(at+2);
@@ -128,9 +130,9 @@ public class DesignIconTests
     public void FontPackExportUsesTheSameLiveAndPreviewContours()
     {
         if (Environment.GetEnvironmentVariable("KOTU_DESIGN_ICON_EXPORT") is not { Length: > 0 } path) return;
-        var export = DesignCatalog.All.Where(d => d.Decoration != DesignDecoration.Terminal).Select(d => new
+        var export = FontDesigns.Select(d => new
         {
-            d.Id, Family = $"KOTU Icons {d.Id}",
+            Id = DesignIconCatalog.FontId(d), Family = $"KOTU Icons {DesignIconCatalog.FontId(d)}",
             Icons = DesignIconCatalog.Names.Select(n => new
             {
                 Name = n, Codepoint = (int)DesignIconCatalog.GlyphFor(n), Drawing = DesignIconCatalog.Create(n,d),

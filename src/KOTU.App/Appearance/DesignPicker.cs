@@ -66,7 +66,7 @@ internal sealed class DesignPicker : UserControl
 
     private void ArrangeGallery(double width)
     {
-        // Eleven fixed specimens are bounded; no file enumeration or unbounded item generation.
+        // Twelve fixed specimens are bounded; no file enumeration or unbounded item generation.
         var columns = width >= 1000 ? 3 : width >= 600 ? 2 : 1;
         if (_columns == columns) return;
         _columns = columns; _gallery.ColumnDefinitions.Clear(); _gallery.RowDefinitions.Clear();

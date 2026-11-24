@@ -162,6 +162,7 @@ public sealed partial class LiveDesign : DependencyObject
         private void OnThemeChanged(ThemeSettings sender, object args) => _root.DispatcherQueue.TryEnqueue(() =>
         {
             if (_closed) return;
+            AppDesignService.RefreshSystemColors();
             foreach (var state in LoadedStates.ToArray())
                 if (NativeIdentity(state.OwnerRoot) == NativeIdentity(_xamlRoot)) state.Refresh();
         });
@@ -193,7 +194,7 @@ public sealed partial class LiveDesign : DependencyObject
 
     internal static DesignPalette Palette(FrameworkElement element)
     {
-        if (!Accessibility.HighContrast) return DesignRuntime.Current.Palette(element.ActualTheme == ElementTheme.Dark);
+        if (!Accessibility.HighContrast) return AppDesignService.Palette(DesignRuntime.Current, element.ActualTheme == ElementTheme.Dark);
         uint C(UIElementType type) { var c = UiSettings.UIElementColor(type); return (uint)(c.A << 24 | c.R << 16 | c.G << 8 | c.B); }
         return new(C(UIElementType.Window), C(UIElementType.Window), C(UIElementType.ButtonFace), C(UIElementType.WindowText),
             C(UIElementType.GrayText), C(UIElementType.WindowText), C(UIElementType.Highlight), C(UIElementType.Highlight), C(UIElementType.HighlightText));
@@ -343,6 +344,7 @@ public sealed partial class LiveDesign : DependencyObject
         private ushort _fontWeight;
         private DesignGlyphState? _glyph;
         private bool _nativeText;
+        private bool _originalControlLettering;
         private bool _inheritsFontWeight, _inheritsFontSize;
         private FontFamily? _originalFont;
         private readonly List<(DependencyProperty Property, long Token)> _callbacks = [];
@@ -483,6 +485,10 @@ public sealed partial class LiveDesign : DependencyObject
                             text.ReadLocalValue(TextBlock.FontFamilyProperty) == DependencyProperty.UnsetValue &&
                             VisualTreeHelper.GetParent(text) is ContentPresenter;
                         _fontSize = text.FontSize; _fontWeight = text.FontWeight.Weight; _originalFont = text.FontFamily;
+                        _originalControlLettering = text.ReadLocalValue(TextBlock.FontFamilyProperty) is FontFamily authoredFamily &&
+                            (authoredFamily.Source.Contains("KotuFit.ttf", StringComparison.OrdinalIgnoreCase) ||
+                            Application.Current.Resources.TryGetValue("KotuControlFontFamily", out var lettering) &&
+                            lettering is FontFamily controlFamily && authoredFamily.Source == controlFamily.Source);
                         // Font size/family may be authored while weight still inherits. Never turn
                         // a managed parent's already displayed weight into this label's baseline.
                         _inheritsFontWeight=!_nativeText && InheritsManagedProperty(text,TextBlock.FontWeightProperty);

@@ -23,7 +23,7 @@ internal sealed class DesignPreviewRenderer
     {
         _d = design;
         _highContrast = highContrast;
-        _p = highContrast ? SystemPalette() : design.Palette(dark);
+        _p = highContrast ? SystemPalette() : AppDesignService.Palette(design, dark);
     }
 
     internal static FrameworkElement Create(DesignDefinition design, bool dark, bool highContrast)
@@ -56,9 +56,10 @@ internal sealed class DesignPreviewRenderer
         var floating = Kind is DesignDecoration.Rounded or DesignDecoration.Mechanical or DesignDecoration.Paper or DesignDecoration.Isometric;
         var gutter = floating ? 8d : 0d;
         var sideWidth = 177 - 2 * gutter;
-        Add(shell, Surface(sideWidth, 300, Kind == DesignDecoration.Paper ? _p.Card : _p.Panel,
+        var sideFill = Kind == DesignDecoration.Paper ? _p.Card : Kind == DesignDecoration.Original ? _p.Background : _p.Panel;
+        Add(shell, Surface(sideWidth, 300, sideFill,
             _p.Border, _d.PanelRadius, panel: true), gutter, 82);
-        Add(shell, Surface(201 - 2 * gutter, 300, Kind == DesignDecoration.Paper ? _p.Card : _p.Panel,
+        Add(shell, Surface(201 - 2 * gutter, 300, sideFill,
             _p.Border, _d.PanelRadius, panel: true), 699 + gutter, 82);
         Add(shell, Text("Locations", 15, true), 14 + gutter, 93);
         var rows = new[] { "Home", "Documents", "사진", "Downloads", "Music", "Videos" };
@@ -138,7 +139,7 @@ internal sealed class DesignPreviewRenderer
         Add(shell, Command("fit", 32, inverse: inverse), 825, 400);
         Add(shell, Command("expand", 32, inverse: inverse), 863, 400);
 
-        Add(shell, Text("Aa 0123", 17, true), 14, 449);
+        Add(shell, Text("Aa 0123", 17, true, command:true), 14, 449);
         var states = new[] { (0, "Unchecked"), (1, "Checked"), (2, "Mixed"), (3, "Disabled") };
         for (var i = 0; i < states.Length; i++)
         {
@@ -167,7 +168,7 @@ internal sealed class DesignPreviewRenderer
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(Icon(symbol, 18, foreground));
-        if (label is not null) row.Children.Add(Text(label, 12, color: foreground));
+        if (label is not null) row.Children.Add(Text(label, 12, color: foreground, command:true));
         grid.Children.Add(row);
         return grid;
     }
@@ -186,7 +187,9 @@ internal sealed class DesignPreviewRenderer
             return Text(state == 1 ? "[x]" : state == 2 ? "[-]" : "[ ]", 13, color: state == 3 ? _p.Muted : _p.Foreground);
         var selected = state is 1 or 2;
         var grid = new Grid { Width = 17, Height = 17, Opacity = state == 3 ? .35 : 1 };
-        grid.Children.Add(Surface(17, 17, selected ? _p.Accent : _p.Card, selected ? _p.Accent : _p.Border, _d.CheckRadius));
+        var original = Kind == DesignDecoration.Original && !_highContrast;
+        grid.Children.Add(Surface(17, 17, selected ? _p.Accent : original ? _p.Background : _p.Card,
+            selected ? _p.Accent : original ? _p.Muted : _p.Border, _d.CheckRadius));
         if (selected)
         {
             var check = KOTU.Ui.DesignIcons.Create(state == 1 ? "Check" : "Mixed", _d, 13);
@@ -207,9 +210,9 @@ internal sealed class DesignPreviewRenderer
         icon.Foreground = Brush(color ?? _p.Foreground);
         return icon;
     }
-    private TextBlock Text(string value, double size, bool heading = false, uint? color = null) => new()
+    private TextBlock Text(string value, double size, bool heading = false, uint? color = null, bool command = false) => new()
     {
-        Text = value, FontFamily = new FontFamily(heading ? _d.HeadingFontFamily : _d.FontFamily),
+        Text = value, FontFamily = new FontFamily(Kind == DesignDecoration.Original && !command ? "Segoe UI" : heading ? _d.HeadingFontFamily : _d.FontFamily),
         FontSize = Kind == DesignDecoration.Ink ? size * 1.18 : size,
         FontWeight = new Windows.UI.Text.FontWeight { Weight = heading ? (ushort)600 : _d.FontWeight },
         Foreground = Brush(color ?? _p.Foreground), TextTrimming = TextTrimming.CharacterEllipsis,

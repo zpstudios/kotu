@@ -1,9 +1,9 @@
 namespace KOTU.Core.Appearance;
 
-/// <summary>The single source of appearance tokens for live controls and all eleven previews.</summary>
+/// <summary>The single source of appearance tokens for live controls and all twelve previews.</summary>
 public static class DesignCatalog
 {
-    public const string DefaultId = "precision";
+    public const string DefaultId = "original";
     private const string Sans = "Segoe UI";
     private const string Nunito = "ms-appx:///Assets/Fonts/NunitoSans-Regular.ttf#Nunito Sans, Malgun Gothic, Segoe UI";
     private const string NunitoHeading = "ms-appx:///Assets/Fonts/NunitoSans-SemiBold.ttf#Nunito Sans, Malgun Gothic, Segoe UI";
@@ -21,6 +21,13 @@ public static class DesignCatalog
 
     public static IReadOnlyList<DesignDefinition> All { get; } = Array.AsReadOnly(new[]
     {
+        new DesignDefinition("original", "Original", "The original KOTU lettering, geometric symbols and Windows surfaces.",
+            DesignDecoration.Original, "ms-appx:///Assets/KotuFit.ttf#KOTU Fit, Segoe UI", "ms-appx:///Assets/KotuFit.ttf#KOTU Fit, Segoe UI",
+            14, 400, 4, 0, 0, 1, 1.4, 0,
+            // Opaque fallbacks composited from WinUI 1.8 generic.xaml's native color tokens.
+            // The app resolves those original tokens and the current system accent at runtime.
+            P(0xf3f3f3,0xf9f9f9,0xfbfbfb,0x1a1a1a,0x5c5c5c,0xe5e5e5,0x005fb8,0xeaeaea,0xffffff),
+            P(0x202020,0x282828,0x2d2d2d,0xffffff,0xcccccc,0x303030,0x60cdff,0x2d2d2d,0x000000)),
         new DesignDefinition("precision", "Precision line", "Fine geometric lines, restrained frames and clear spacing.",
             DesignDecoration.Precision, Sans, Sans, 14, 400, 4, 4, 2, 1, 1.6, 0, PrecisionLight, PrecisionDark),
         new DesignDefinition("humanist", "Rounded humanist", "Round-ended icons, soft panels and generous curved controls.",
@@ -67,7 +74,11 @@ public static class DesignCatalog
 
     public static DesignDefinition Default => All[0];
     public static DesignDefinition? Find(string? id) => All.FirstOrDefault(d => StringComparer.Ordinal.Equals(d.Id, id));
-    public static DesignDefinition Resolve(string? id) => Find(id) ?? Default;
+    public static DesignDefinition Resolve(string? id, bool thinControls = false) => WithLegacyControls(Find(id) ?? Default, thinControls);
+    public static DesignDefinition WithLegacyControls(DesignDefinition design, bool thinControls) =>
+        design.Decoration != DesignDecoration.Original ? design : thinControls
+            ? design with { FontFamily="Segoe UI Semilight, Segoe UI", HeadingFontFamily="Segoe UI Semilight, Segoe UI", IconStrokeWidth=1, ThinControls=true }
+            : Default;
     private static DesignPalette P(uint bg, uint panel, uint card, uint ink, uint muted, uint line, uint accent, uint wash, uint on)
         => new(bg|0xff000000, panel|0xff000000, card|0xff000000, ink|0xff000000, muted|0xff000000,
             line|0xff000000, accent|0xff000000, wash|0xff000000, on|0xff000000);

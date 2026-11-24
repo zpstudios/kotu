@@ -7,13 +7,15 @@ public sealed class DesignPreferences(ISettingsService settings)
 {
     public const string SettingKey = "display.design";
     private readonly object _gate = new();
-    private DesignDefinition _current = DesignCatalog.Resolve(settings.Get<string?>(SettingKey, null));
+    private DesignDefinition _current = DesignCatalog.Resolve(settings.Get<string?>(SettingKey, null), settings.Get("display.thinControls", false));
+    public bool LegacyThinControls { get; } = settings.Get("display.thinControls", false);
     public DesignDefinition Current => Volatile.Read(ref _current);
     public event Action? Changed;
 
     public bool Apply(string id)
     {
-        var design = DesignCatalog.Find(id) ?? throw new ArgumentException("Unknown interface design.", nameof(id));
+        var design = DesignCatalog.WithLegacyControls(
+            DesignCatalog.Find(id) ?? throw new ArgumentException("Unknown interface design.", nameof(id)), LegacyThinControls);
         lock (_gate)
         {
             if (settings.Get<string?>(SettingKey, null) == id) return false;

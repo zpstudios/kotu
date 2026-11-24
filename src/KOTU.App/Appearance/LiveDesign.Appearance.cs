@@ -66,6 +66,8 @@ public sealed partial class LiveDesign
         private uint SurfaceFill(DesignDefinition d, DesignPalette p, bool panel)
         {
             // Map only the normal face. Selection, hover and disabled colors are resolved afterwards.
+            if (d.Decoration == DesignDecoration.Original && panel && Element is Border { Name: "PanelBackdrop" or "S4CenterBackdrop" })
+                return p.Background;
             if (UsePaperSurfaces(d))
             {
                 if (panel && Element is Border { Name: "PanelBackdrop" } &&
@@ -179,6 +181,9 @@ public sealed partial class LiveDesign
                     var family = filename && d.Decoration == DesignDecoration.Editorial
                         ? "Georgia, ms-appx:///Assets/Fonts/NanumMyeongjo-Regular.ttf#NanumMyeongjo, Segoe UI"
                         : heading ? d.HeadingFontFamily : d.FontFamily;
+                    if (d.Decoration == DesignDecoration.Original)
+                        family = _originalControlLettering || FindTypographyOwner(text) is { } textOwner && OriginalControlLettering(textOwner)
+                            ? d.FontFamily : "Segoe UI";
                     text.FontFamily = new FontFamily(family);
                     if (!_inheritsFontSize) text.FontSize = DesignScope.FontSize(size,d);
                     if (!_inheritsFontWeight)
@@ -207,7 +212,8 @@ public sealed partial class LiveDesign
                 {
                     var weight=AuthoredWeight;
                     var size=AuthoredSize;
-                    control.FontFamily = new FontFamily(size >= 18 || weight >= 600 ? d.HeadingFontFamily : d.FontFamily);
+                    control.FontFamily = new FontFamily(d.Decoration == DesignDecoration.Original && !OriginalControlLettering(control)
+                        ? "Segoe UI" : size >= 18 || weight >= 600 ? d.HeadingFontFamily : d.FontFamily);
                     if (!_inheritsFontSize) control.FontSize = DesignScope.FontSize(size,d);
                     if (!_inheritsFontWeight)
                         control.FontWeight = new Windows.UI.Text.FontWeight { Weight = DesignScope.FontWeight(weight,d) };
@@ -293,6 +299,11 @@ public sealed partial class LiveDesign
         }
         private bool _neutralText;
 
+        // Before skins, KOTU Fit styled commands and their labels, not the file/tree body,
+        // editors or tooltips. Keep that distinction even after another design was active.
+        private static bool OriginalControlLettering(Control control) => control is
+            ButtonBase or MenuFlyoutItemBase or ComboBox or ComboBoxItem or ToggleSwitch;
+
         private void ApplyControl(Control control, DesignDefinition d, DesignPalette p)
         {
             var pressed = control is ButtonBase { IsPressed: true };
@@ -329,8 +340,12 @@ public sealed partial class LiveDesign
             return control.IsEnabled ? (fill,foreground) : (typographic ? p.Background : p.Card,p.Muted);
         }
 
-        private static CornerRadius Radius(DesignDefinition d,bool panel) => d.Decoration == DesignDecoration.Ink
-            ? new CornerRadius(7,3,9,2) : new CornerRadius(panel ? d.PanelRadius : d.ControlRadius);
+        private double? OriginalSurfaceRadius(DesignDefinition d,bool panel) => d.Decoration != DesignDecoration.Original || !panel
+            ? null : Element is ToolTip ? 4 :
+            Element is MenuFlyoutPresenter or FlyoutPresenter or ContentDialog or Border { Name:"PopupBorder" } ? 8 : null;
+
+        private CornerRadius Radius(DesignDefinition d,bool panel) => d.Decoration == DesignDecoration.Ink
+            ? new CornerRadius(7,3,9,2) : new CornerRadius(OriginalSurfaceRadius(d,panel) ?? (panel ? d.PanelRadius : d.ControlRadius));
 
         private void EnsureSurface()
         {
@@ -380,7 +395,8 @@ public sealed partial class LiveDesign
                 if (Element is not (ButtonBase or DropDownButton)) fill=p.Card;
                 p = p with { Foreground=p.Muted, Border=p.Muted, Accent=p.Muted };
             }
-            _surfaceOverlay?.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,Element is ButtonBase { IsPressed:true },panel,selected,_surfaceBacking ? fill : null));
+            _surfaceOverlay?.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,Element is ButtonBase { IsPressed:true },panel,selected,
+                _surfaceBacking ? fill : null,radius:OriginalSurfaceRadius(d,panel)));
         }
         private bool _paintQueued;
         private void SizeChanged(object sender,SizeChangedEventArgs e) => QueuePaint();

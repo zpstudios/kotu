@@ -10,9 +10,11 @@ public static class DesignIconCatalog
     private static readonly Dictionary<char, string> Glyphs = Symbols.Values.ToDictionary(s => s.Glyph, s => s.Name);
     public static IReadOnlyCollection<string> Names => Symbols.Keys;
     public static char GlyphFor(string symbol) => Symbols[symbol].Glyph;
+    public static string FontId(DesignDefinition design) => design.Decoration == DesignDecoration.Original && design.ThinControls
+        ? "original-thin" : design.Id;
     public static string FontFamily(DesignDefinition design) => design.Decoration == DesignDecoration.Terminal
         ? design.FontFamily
-        : $"ms-appx:///Assets/Fonts/KotuDesign-{design.Id}.ttf#KOTU Icons {design.Id}";
+        : $"ms-appx:///Assets/Fonts/KotuDesign-{FontId(design)}.ttf#KOTU Icons {FontId(design)}";
 
     public static bool TryResolveGlyph(string? glyph, out string symbol)
     {
@@ -36,7 +38,7 @@ public static class DesignIconCatalog
             figures = IconCenterlineParser.Parse("M3 19 V5 H9 L12 8 H19 V10 M3 19 L6.7 11 H22 L18.5 19 Z M19 10 L16 13 H21");
         var contours = new List<DesignIconPoint[]>();
         var radius = design.IconStrokeWidth / 2;
-        var rounded = kind == DesignDecoration.Rounded;
+        var rounded = kind == DesignDecoration.Rounded || kind == DesignDecoration.Original && !design.ThinControls;
         var fill = kind == DesignDecoration.Solid && source.Name is
             "Folder" or "File" or "Document" or "Play" or "PreviousTrack" or "NextTrack" or "Video" or "Stop" or "StopLegacy" or "Filter" or "NewFolder" or "ZipFolder" or "Speaker" or "Muted";
         foreach (var figure in figures)
@@ -53,7 +55,7 @@ public static class DesignIconCatalog
                 continue;
             }
             if (kind == DesignDecoration.Pixel) RasterStroke(contours, points, figure.Closed);
-            else Stroke(contours, points, figure.Closed, radius, rounded);
+            else Stroke(contours, points, figure.Closed, radius, rounded, kind == DesignDecoration.Original && design.ThinControls);
         }
 
         if (kind == DesignDecoration.Solid && source.Name is "Document" or "NewFolder" or "ZipFolder")
@@ -159,7 +161,7 @@ public static class DesignIconCatalog
         for (var i = 0; i < contours.Count; i++) contours[i] = contours[i].Select(convert).ToArray();
     }
 
-    private static void Stroke(List<DesignIconPoint[]> contours, DesignIconPoint[] points, bool closed, double radius, bool rounded)
+    private static void Stroke(List<DesignIconPoint[]> contours, DesignIconPoint[] points, bool closed, double radius, bool rounded, bool flatCaps = false)
     {
         var count = closed ? points.Length : points.Length-1;
         for (var i = 0; i < count; i++)
@@ -171,7 +173,7 @@ public static class DesignIconCatalog
             AddContour(contours, [new(a.X-y,a.Y+x),new(a.X+y,a.Y-x),new(b.X+y,b.Y-x),new(b.X-y,b.Y+x)]);
         }
         // Square joins are crisp, round joins/caps are circular. Curves remain smoothly sampled.
-        foreach (var p in points)
+        foreach (var p in flatCaps && !closed ? points.Skip(1).SkipLast(1) : points)
         {
             if (rounded)
                 AddContour(contours, Enumerable.Range(0,12).Select(i => new DesignIconPoint(

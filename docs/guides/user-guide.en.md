@@ -950,8 +950,10 @@ always did.
 
 ### Interface design
 
-**Added in v0.433.0; selection simplified in v0.433.1.** Under **Settings → Display**, compare
-11 designs for the interface's icons, text, check marks, panels and bottom controls in a gallery.
+**Added in v0.433.0; Original restored in v0.433.8.** Under **Settings → Display**, compare
+12 designs for the interface's icons, text, check marks, panels and bottom controls in a gallery.
+**Original** is the first and default design. Updates from versions before design selection keep
+the original appearance and thin-control preference; an explicitly selected design is preserved.
 
 Scroll through the gallery and select a card to apply it to every open KOTU window immediately.
 The current design has an **Applied** label and a highlighted border. There is no separate preview

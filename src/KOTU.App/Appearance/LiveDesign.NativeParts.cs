@@ -120,7 +120,7 @@ public sealed partial class LiveDesign
                 var border = !control.IsEnabled ? p.Muted : on ? p.Accent : _hover ? p.Accent : p.Border;
                 var palette = p with { Foreground=knob ? color : border, Border=knob ? color : border };
                 visual.Draw(d,palette,original.ActualWidth,original.ActualHeight,HighContrast,pressed,false,false,face,
-                    d.Decoration==DesignDecoration.Rounded ? (knob ? 7 : 10) : d.CheckRadius);
+                    d.Decoration is DesignDecoration.Rounded or DesignDecoration.Original ? (knob ? 7 : 10) : d.CheckRadius);
                 if (knob && d.Decoration==DesignDecoration.Terminal)
                 {
                     visual.Children.Clear();
@@ -178,7 +178,7 @@ public sealed partial class LiveDesign
             control.Foreground=DesignSurface.Brush(control.IsEnabled ? p.Accent : p.Muted);
             control.Background=DesignSurface.Brush(p.Border);
             control.MinHeight=Math.Max(8,control.MinHeight);
-            var radius=HighContrast ? 0 : d.Decoration is DesignDecoration.Rounded or DesignDecoration.Precision or DesignDecoration.Solid ? 2 : 0;
+            var radius=HighContrast ? 0 : d.Decoration is DesignDecoration.Rounded or DesignDecoration.Precision or DesignDecoration.Solid or DesignDecoration.Original ? 2 : 0;
             control.CornerRadius=new CornerRadius(radius);
             var track=Descendants(control).OfType<Rectangle>().FirstOrDefault(e=>e.Name=="ProgressBarTrack");
             if (track is null || VisualTreeHelper.GetParent(track) is not Grid host) return;
@@ -227,7 +227,9 @@ public sealed partial class LiveDesign
 
         private void ApplyScrollBar(ScrollBar control,DesignDefinition d,DesignPalette p)
         {
-            control.CornerRadius=new CornerRadius(d.Decoration is DesignDecoration.Rounded or DesignDecoration.Precision ? 4 : 0);
+            // WinUI's native ScrollBarCornerRadius is 3, independent of the button radius.
+            control.CornerRadius=new CornerRadius(d.Decoration == DesignDecoration.Original ? 3 :
+                d.Decoration is DesignDecoration.Rounded or DesignDecoration.Precision ? 4 : 0);
             foreach(var track in Descendants(control).OfType<Rectangle>().Where(e=>e.Name is "HorizontalTrackRect" or "VerticalTrackRect").ToArray())
             {
                 if (VisualTreeHelper.GetParent(track) is not Grid host) continue;
@@ -235,7 +237,8 @@ public sealed partial class LiveDesign
                 {
                     HideDrawing(track); overlay=new DesignOverlay(track,host); _chromeParts.Add(track,overlay);
                 }
-                overlay.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,fill:p.Card));
+                overlay.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,fill:p.Card,
+                    radius:d.Decoration == DesignDecoration.Original ? 3 : null));
             }
             foreach(var thumb in Descendants(control).OfType<Thumb>().ToArray())
             {
@@ -272,6 +275,11 @@ public sealed partial class LiveDesign
             var specimenCheck = !radio && d.Decoration != DesignDecoration.Paper && !HighContrast;
             var line = !control.IsEnabled ? p.Muted : _hover || specimenCheck && selected ? p.Accent : p.Border;
             var fill = selected ? p.Accent : _hover ? p.Selection : p.Card;
+            if (d.Decoration == DesignDecoration.Original && !HighContrast && !selected)
+            {
+                line = _hover ? p.Foreground : p.Muted;
+                fill = _hover ? p.Selection : p.Background;
+            }
             var ink = !control.IsEnabled ? p.Muted : selected ? p.OnAccent : p.Foreground;
             if (!control.IsEnabled) { fill = p.Card; p = p with { Foreground=p.Muted, Border=p.Muted, Accent=p.Muted }; }
             if (d.Decoration == DesignDecoration.Terminal)
@@ -334,12 +342,16 @@ public sealed partial class LiveDesign
         {
             slider.Foreground = DesignSurface.Brush(slider.IsEnabled ? p.Accent : p.Muted);
             slider.Background = DesignSurface.Brush(p.Border);
-            slider.CornerRadius = new CornerRadius(d.Decoration is DesignDecoration.Rounded or DesignDecoration.Precision ? 4 : 0);
+            // Native slider tokens: track 2, outer thumb 10, inner ellipse 12x12.
+            // Only the drawing changes; dimensions, hit targets and native animations remain owned by the template.
+            slider.CornerRadius = new CornerRadius(d.Decoration == DesignDecoration.Original ? 2 :
+                d.Decoration is DesignDecoration.Rounded or DesignDecoration.Precision ? 4 : 0);
             foreach(var thumb in Descendants(slider).OfType<Thumb>().ToArray())
             {
                 var inner = Descendants(thumb).OfType<Ellipse>().FirstOrDefault(e => e.Name == "SliderInnerThumb");
                 if (inner is null) continue;
-                if (VisualTreeHelper.GetParent(inner) is Border outer) outer.CornerRadius = Radius(d,false);
+                if (VisualTreeHelper.GetParent(inner) is Border outer)
+                    outer.CornerRadius = d.Decoration == DesignDecoration.Original ? new CornerRadius(10) : Radius(d,false);
                 if (VisualTreeHelper.GetParent(thumb) is not Grid host) continue;
                 var existing = _thumbVisuals.FirstOrDefault(v => ReferenceEquals(v.Tag,inner));
                 if (existing is null)
@@ -365,7 +377,8 @@ public sealed partial class LiveDesign
                     DesignScope.ProtectContent(existing);
                     host.Children.Add(existing); _thumbVisuals.Add(existing);
                 }
-                existing.CornerRadius = new CornerRadius(d.Decoration is DesignDecoration.Rounded or DesignDecoration.Precision or DesignDecoration.Solid ? 7 :
+                existing.CornerRadius = new CornerRadius(d.Decoration == DesignDecoration.Original ? 6 :
+                    d.Decoration is DesignDecoration.Rounded or DesignDecoration.Precision or DesignDecoration.Solid ? 7 :
                     d.Decoration == DesignDecoration.Ink ? 3 : 0);
                 existing.BorderBrush = DesignSurface.Brush(p.Foreground);
                 existing.BorderThickness = new Thickness(d.Decoration is DesignDecoration.Frame or DesignDecoration.Mechanical ? 1 : 0);

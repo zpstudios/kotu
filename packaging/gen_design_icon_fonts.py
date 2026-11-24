@@ -86,7 +86,7 @@ def make_font(profile):
     bearings = [min((x for c in glyph for x, y in c), default=0) for glyph in outlines]
     right_edges = [max((x for c in glyph for x, y in c), default=0) for glyph in outlines]
     mapping = {32: 1, **{icon['Codepoint']: i + 2 for i, icon in enumerate(icons)}}
-    # head, hhea and OS/2 deliberately share fixed metrics across all ten packs.
+    # head, hhea and OS/2 deliberately share fixed metrics across all packs.
     head = pack('IIIIHHQQhhhhHHhhh', 0x10000, 0x10000, 0, 0x5f0f3cf5, 3, 1000,
                 0, 0, 0, -150, 1000, 850, 0, 8, 2, 1, 0)
     hhea = pack('IhhhHhhhhhhhhhhhH', 0x10000, 850, -150, 0, 1000, min(bearings), 1000-max(right_edges), max(right_edges),
@@ -175,7 +175,9 @@ def main():
     parser.add_argument('--verify', action='store_true')
     args = parser.parse_args()
     profiles = json.loads(args.export.read_text(encoding='utf-8-sig'))
-    assert len(profiles) == 10 and all(p['Id'] != 'terminal' for p in profiles)
+    expected_ids = {'original', 'original-thin', 'precision', 'humanist', 'solid', 'editorial',
+                    'mechanical', 'frame', 'paper', 'isometric', 'pixel', 'ink'}
+    assert len(profiles) == len(expected_ids) and {p['Id'] for p in profiles} == expected_ids
     args.output.mkdir(parents=True, exist_ok=True)
     for profile in profiles:
         built, outlines, mapping = make_font(profile)

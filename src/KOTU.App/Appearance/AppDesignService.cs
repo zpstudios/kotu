@@ -22,6 +22,17 @@ internal static class AppDesignService
         internal Dictionary<string,SolidColorBrush> Brushes { get; }=new(StringComparer.Ordinal);
     }
     internal static DesignDefinition Current => DesignRuntime.Current;
+    internal static DesignDefinition PreviewDesign(DesignDefinition design) =>
+        DesignCatalog.WithLegacyControls(design, s_preferences?.LegacyThinControls ?? false);
+    internal static DesignPalette Palette(DesignDefinition design, bool dark) => design.Decoration == DesignDecoration.Original
+        ? OriginalDesignPalette.Get(dark) : design.Palette(dark);
+
+    internal static void RefreshSystemColors()
+    {
+        if (s_resources is null) return;
+        OriginalDesignPalette.Refresh(s_resources);
+        if (s_preferences?.Current.Decoration == DesignDecoration.Original) RefreshResources();
+    }
 
     internal static void Initialize(DesignPreferences preferences)
     {
@@ -29,6 +40,7 @@ internal static class AppDesignService
         s_preferences = preferences;
         s_dispatcher = DispatcherQueue.GetForCurrentThread();
         s_resources ??= Application.Current.Resources;
+        OriginalDesignPalette.Refresh(s_resources);
         preferences.Changed += RefreshResources;
         RefreshResources();
         LiveDesign.Initialize();
@@ -47,6 +59,9 @@ internal static class AppDesignService
         }
         var design = s_preferences!.Current;
         var resources = s_resources!;
+        // Applying Original after a period without visible windows must read the current
+        // system colors even if no window-owned ThemeSettings callback ran meanwhile.
+        if (design.Decoration == DesignDecoration.Original) OriginalDesignPalette.Refresh(resources);
         resources["KotuControlFontFamily"] = new FontFamily(design.FontFamily);
         resources["KotuHeadingFontFamily"] = new FontFamily(design.HeadingFontFamily);
         resources["KotuUiFontSize"] = design.FontSize;
@@ -58,8 +73,8 @@ internal static class AppDesignService
         resources["KotuControlBorderThickness"] = new Thickness(design.BorderWidth);
         // The complete profile is also available to linked icon factories via DesignRuntime.
         // Do not infer a design from a font name or a thin/thick threshold.
-        UpdatePalette(resources, "Light", design.Light);
-        UpdatePalette(resources, "Default", design.Dark);
+        UpdatePalette(resources, "Light", Palette(design, false));
+        UpdatePalette(resources, "Default", Palette(design, true));
         // HighContrast remains the live system-bound dictionary in App.xaml.
     }
 

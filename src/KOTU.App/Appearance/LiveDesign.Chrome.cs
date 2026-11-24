@@ -124,6 +124,11 @@ public sealed partial class LiveDesign
             if (UseFileTileComposition(d) && FileTileOwner is { } tile)
                 overlay.Draw((surface,w,h)=>surface.DrawFileTile(d,p,w,h,selected,FileTileCheck(tile)?.IsChecked==true,
                     NativeHot,NativePressed,control.IsEnabled));
+            else if (d.Decoration == DesignDecoration.Original && control is TreeViewItem && !HighContrast)
+                // The native selection indicator remains the accent cue; ordinary rows have
+                // a neutral wash rather than a separate frame around every tree entry.
+                overlay.Draw((surface,w,h)=>surface.Draw(d,p with { Border=0 },w,h,false,
+                    fill:active ? p.Selection : null));
             else
                 overlay.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,NativePressed,selected:selected,
                     fill:active ? p.Selection : null));
@@ -173,10 +178,11 @@ public sealed partial class LiveDesign
                 grid.Background=DesignSurface.Brush(0);
             foreach(var presenter in parts.OfType<ContentPresenter>().Where(e=>e.Name=="Content"))
             {
-                presenter.FontFamily=new FontFamily(d.FontFamily);
+                presenter.FontFamily=new FontFamily(d.Decoration == DesignDecoration.Original ? "Segoe UI" : d.FontFamily);
                 presenter.FontSize=DesignScope.FontSize(14,d);
             }
-            overlay.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,panel:true,fill:p.Card));
+            overlay.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,panel:true,fill:p.Card,
+                radius:OriginalSurfaceRadius(d,true)));
         }
 
         private void ReleaseChromeParts()
