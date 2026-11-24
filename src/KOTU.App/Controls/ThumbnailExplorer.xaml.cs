@@ -27,9 +27,8 @@ namespace KOTU.App.Controls;
 /// 셸이 ShowEntries로 밀어 넣는다(ExplorerPane.ViewChanged 경유) — 어느 쪽에서 폴더를 바꿔도
 /// 둘 다 같은 목록을 그린다. 더블클릭 열기·새 인스턴스 이벤트도 ExplorerPane과 같은 배선이라
 /// 셸의 기존 라우팅(OpenFileRouted·A24)을 그대로 쓴다.
-/// 열 수 = 8 − 2×(열린 도크 수) → 둘 다 열림 4 · 하나 6 · 없음 8(A213 — 구 A93의 4/8 2단 개정.
-/// A63 대체 계보: 크기 고정·열 수 가변이던 종전 규칙을 열 수 고정·크기 가변으로 뒤집은 위에
-/// 3단화). 타일 한 변 = floor(실폭/열수).
+/// 기본 열 수 = 12 − 3×(열린 패널 수), 즉 6/9/12(A417). A433은 타일이 96 DIP보다
+/// 좁아질 때만 실제 열 수를 줄인다. 창을 넓히면 지정한 열 수와 기존 타일 크기로 돌아간다.
 /// <para>
 /// A345 배치 3(UI 가상화): 이 표면은 더 이상 타일 컨테이너를 직접 만들지 않는다 —
 /// <c>ShowEntries</c>가 뷰모델 목록(<see cref="ExplorerEntryVm"/>)을 <c>ItemsSource</c>로
@@ -154,6 +153,7 @@ public sealed partial class ThumbnailExplorer : UserControl
     public Func<string, string?>? ModuleIdForFile { get; set; }
 
     private int _columns = 12; // 기본 = 전폭; 셸이 실제 보이는 패널 수로 SetColumns(6/9/12)를 준다
+    private bool _tileSizeQueued;
 
     /// <summary>A192: 재진입 가드 — ShowEntries·ShowLoading·Unloaded가 올 때마다 증가
     /// (ExplorerPane._loadSeq 관용구). A345 배치 3부터 이 값의 역할은 <b>폴더 전환</b> 한 가지다:
@@ -627,7 +627,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         return true;
     }
 
-    /// <summary>열 수 지정(A417: 12 − 3×보이는 패널 수 = 둘 다 6 / 하나 9 / 없음 12). 바뀌면 타일 크기 재계산.</summary>
+    /// <summary>기본 열 수 지정(A417: 둘 다 6 / 하나 9 / 없음 12). 좁은 창의 실제 열 수와 별도로 보존한다.</summary>
     public void SetColumns(int columns)
     {
         // The same column count can arrive after ItemsPanelRoot is recreated or the host is restored.
@@ -1215,9 +1215,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// 타일 폭 = floor(그리드 실폭 / 열 수) (A93 확정 수식). GridView의 기본 아이템 패널
-    /// (ItemsWrapGrid)의 셀 크기(ItemWidth/ItemHeight)로 지정한다 — 셀이 균일하면 줄바꿈이
-    /// 정확히 열 수대로 떨어진다.
+    /// A433: 체크·캡션을 축소하지 않고 최소 96-DIP 셀이 들어가는 실제 열 수를 계산한다.
+    /// 충분히 넓으면 기존 floor(가용 폭 / 기본 열 수)와 같다. ItemsWrapGrid의 셀 슬롯에
+    /// 지정하므로 컨테이너의 내부 여백을 다시 빼거나 개별 타일을 재작성하지 않는다.
     /// <para>
     /// A345 배치 3: 패널이 없을 때의 폴백(타일 컨테이너를 순회하며 직접 크기 대입)을 삭제했다 —
     /// ItemsSource 상태에서 <c>Items</c>는 컨테이너가 아니라 <b>데이터</b>라 그 순회가 아무것도
@@ -1229,23 +1229,31 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// </summary>
     private void ApplyTileSize()
     {
-        var width = TileGrid.ActualWidth;
-        if (width <= 0) return;
-        var size = Math.Floor(width / _columns);
-        if (size < 24) return; // 극단적으로 좁은 창 보호 — 이전 크기 유지가 낫다
-
         if (TileGrid.ItemsPanelRoot is not ItemsWrapGrid wrap) return; // 아직 첫 레이아웃 전
-        wrap.ItemWidth = size;
+        var width = TileGrid.ActualWidth - TileGrid.Padding.Left - TileGrid.Padding.Right -
+            TileGrid.BorderThickness.Left - TileGrid.BorderThickness.Right;
+        if (FindRetryDescendant<ScrollContentPresenter>(TileGrid) is { ActualWidth: > 0 } viewport)
+            width = Math.Min(width, viewport.ActualWidth);
+        if (ExplorerTileLayout.Measure(width, _columns) is not { } layout) return;
+        if (wrap.ItemWidth != layout.ItemWidth) wrap.ItemWidth = layout.ItemWidth;
         // A387: 11에서 14 DIP로 커진 캡션의 기본 줄 높이 증가분을 셀 높이에 더한다.
         // 캡션 Auto 행이 미리보기의 공간을 가져가지 않도록 세로에만 4 DIP를 확보한다.
         // 좁은 셀도 캡션과 체크박스가 들어갈 세로 공간을 확보한다.
-        wrap.ItemHeight = Math.Max(size + 4, 64);
+        if (wrap.ItemHeight != layout.ItemHeight) wrap.ItemHeight = layout.ItemHeight;
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
         PreserveLogicalAnchor();
-        ApplyTileSize();
+        if (_tileSizeQueued) return;
+        _tileSizeQueued = true;
+        // 부모의 SizeChanged 안에서는 내부 뷰포트가 아직 이전 폭일 수 있다.
+        // 현재 배치를 마친 뒤 한 번만 읽어 넓히기 때 이전 열 수에 머무르지 않게 한다.
+        if (!DispatcherQueue.TryEnqueue(() =>
+        {
+            _tileSizeQueued = false;
+            if (IsLoaded) ApplyTileSize();
+        })) _tileSizeQueued = false;
     }
 
     // ---------- 타일 구성 ----------
