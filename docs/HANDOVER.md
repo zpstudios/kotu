@@ -2,6 +2,9 @@
 
 ## 현재 상태
 
+- v0.433.4는 Folded paper의 패널·일반 타일 면과 폴더 아이콘 색을 정식 적용한다. 기존 밀도·배치·Paper 도형·글꼴은 유지한다. [A431](REQUIREMENTS.md#a431) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.433.4).
+- A431 제품 커밋 [`87d261d`](https://github.com/zpstudios/kotu/commit/87d261d6076af03ad47d0c8148eda6b75d1b262a)의 [전체 빌드](https://github.com/zpstudios/kotu/actions/runs/45306262232)와 [공식 배포·설치 검사](https://github.com/zpstudios/kotu/actions/runs/45306262229)가 2026-11-24 통과했다. 공개 태그·최신 릴리스·설명·자산 8개·피드, 실제 Full·Delta 크기·SHA-1·SHA-256, Setup SHA-256, 글꼴·라이선스 29개와 진단 기능 제외를 검증했다. 근거는 `artifacts/a431-review/official-release/verification.json`과 `workflows.json`이다. Setup은 실행하지 않았다. 이 PC는 아직 v0.433.3이며 사용자 업데이트·재시작을 요청했다. 교체 전 1,180개 설치·설정 파일의 검증 백업은 `artifacts/a431-review/pre-update-backup/`, 설정·실행·오류 기준은 같은 상위 폴더의 `pre-update-request*.json`·`pre-update-startup-log.json`에 있다.
+
 - v0.433.3은 폴더 트리 이름과 펼침·접힘 표시의 세로 중심을 맞춘다. 기존 행 간격·들여쓰기·선택·펼침 입력은 유지한다. [A430](REQUIREMENTS.md#a430) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.433.3).
 - A430 제품 커밋 [`cb30bb8`](https://github.com/zpstudios/kotu/commit/cb30bb8819f1805f428927d0e08266fc33a59eaf)의 [전체 빌드](https://github.com/zpstudios/kotu/actions/runs/45164961921)와 [공식 배포·설치 검사](https://github.com/zpstudios/kotu/actions/runs/45164961949)가 2026-11-23 통과했다. 공개 태그·최신 릴리스·설명·자산 8개·피드, 실제 Full·Delta 크기·SHA-1·SHA-256, Setup SHA-256, 글꼴·라이선스 29개와 진단 기능 제외를 검증했다. 근거는 `artifacts/a430-review/official-release/verification.json`과 `workflows.json`이다. Setup은 실행하지 않았다.
 - v0.433.2는 시작 메뉴의 항목 사이·구분선·여백으로 뒤 콘텐츠가 비치던 문제를 수정했다. 기존 메뉴 배치와 디자인별 버튼 모양은 유지한다. [A429](REQUIREMENTS.md#a429) · [공식 릴리스](https://github.com/zpstudios/kotu/releases/tag/v0.433.2).
@@ -29,7 +32,7 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 스킨 미리보기 차이 A431 | v0.433.4 제품 구현·독립 코드 검토·Core 718개·일반 빌드·별도 앱 검수를 마쳤다. 선택한 Folded paper의 면·폴더 아이콘 색을 적용하고 기존 밀도·배치·도형을 유지한다. Light에서 체크/선택·트리 펼침/접힘·키보드 이동·Paper→Ink→Paper 왕복을 확인했으며 설정 28키를 정확히 복원하고 정상 종료했다. [구현 사양](features/shell/design-library-A427.md#사용성을-보존한-대표-검수)과 [실제 관측·한계](DEVICE-CHECKS.md#native-media)를 구분한다. 근거는 `artifacts/a431-review/product-build-verification.json`, `product-visual-review.json`, `product-restoration-verification.json`이다. 다음은 제품 커밋·즉시 push, 공식 CI/공개 파일 검증, 백업 후 이 PC 공식 업데이트·설치 대조다. 공식 v0.433.3 창에는 사용자 작업이 열려 있어 조작하지 않았다. |
+| 스킨 미리보기 차이 A431 | v0.433.4 제품 구현·독립 코드 검토·Core 718개·일반 빌드·별도 앱 검수를 마쳤다. 선택한 Folded paper의 면·폴더 아이콘 색을 적용하고 기존 밀도·배치·도형을 유지한다. Light에서 체크/선택·트리 펼침/접힘·키보드 이동·Paper→Ink→Paper 왕복을 확인했으며 설정 28키를 정확히 복원하고 정상 종료했다. [구현 사양](features/shell/design-library-A427.md#사용성을-보존한-대표-검수)과 [실제 관측·한계](DEVICE-CHECKS.md#native-media)를 구분한다. 근거는 `artifacts/a431-review/product-build-verification.json`, `product-visual-review.json`, `product-restoration-verification.json`이다. 제품 커밋·즉시 push와 공식 CI/공개 파일 검증·교체 전 백업까지 완료했다. 공식 v0.433.3 창의 작업 보존을 위해 사용자에게 v0.433.4 업데이트·재시작을 요청했으며, 적용 후 공식 패키지와 설치 파일·설정·실행 대조가 남았다. |
 | 폴더 트리 정렬 A430 | v0.433.3 공식 배포·공개 파일 검증, 업데이트 전 백업과 사용자 업데이트 후 설치 파일·설정·실행 대조까지 완료했다. Core 718개·일반 검수본·독립 검토와 Light의 11개 디자인 관측을 마쳤고 검수 창은 정상 종료했다. 창 크기 복원과 미확인 조건은 [검수 경계](DEVICE-CHECKS.md#native-media)에 유지한다. [요구](REQUIREMENTS.md#a430) |
 | 메뉴 배경 비침 A429 | v0.433.2 공식 배포·사용자 업데이트 후 설치 대조까지 완료했다. Core 718개·일반 빌드·독립 검토와 Light의 11개 시작 메뉴·Ink 정렬 메뉴·대표 툴팁 관측을 마쳤다. 실제 범위와 기존 실패·미확인 한계는 [실기기 기록](DEVICE-CHECKS.md#native-media)에 유지한다. |
 | 디자인 선택 단순화 A428 | 갤러리 단순화는 v0.433.2에 포함되어 사용자 업데이트 후 공식 설치 대조를 마쳤다. 별도 보기의 Git 복원 기준과 기존 진단 실패·검수 한계는 [선택 사양](features/shell/design-library-A427.md#설정에서-선택)과 [실기기 기록](DEVICE-CHECKS.md#native-media)에 유지한다. |
