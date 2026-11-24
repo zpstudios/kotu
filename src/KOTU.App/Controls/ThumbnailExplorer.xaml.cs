@@ -27,8 +27,8 @@ namespace KOTU.App.Controls;
 /// 셸이 ShowEntries로 밀어 넣는다(ExplorerPane.ViewChanged 경유) — 어느 쪽에서 폴더를 바꿔도
 /// 둘 다 같은 목록을 그린다. 더블클릭 열기·새 인스턴스 이벤트도 ExplorerPane과 같은 배선이라
 /// 셸의 기존 라우팅(OpenFileRouted·A24)을 그대로 쓴다.
-/// 기본 열 수 = 12 − 3×(열린 패널 수), 즉 6/9/12(A417). A433은 타일이 96 DIP보다
-/// 좁아질 때만 실제 열 수를 줄인다. 창을 넓히면 지정한 열 수와 기존 타일 크기로 돌아간다.
+/// 열 수 = 12 − 3×(열린 패널 수), 즉 6/9/12(A417). A433 정정은 열 수를 고정하고
+/// 타일 폭에 맞춰 체크·배지와 그 여백만 축소한다. 충분히 넓으면 원래 조작부 크기를 쓴다.
 /// <para>
 /// A345 배치 3(UI 가상화): 이 표면은 더 이상 타일 컨테이너를 직접 만들지 않는다 —
 /// <c>ShowEntries</c>가 뷰모델 목록(<see cref="ExplorerEntryVm"/>)을 <c>ItemsSource</c>로
@@ -627,7 +627,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         return true;
     }
 
-    /// <summary>기본 열 수 지정(A417: 둘 다 6 / 하나 9 / 없음 12). 좁은 창의 실제 열 수와 별도로 보존한다.</summary>
+    /// <summary>고정 열 수 지정(A417: 둘 다 6 / 하나 9 / 없음 12). 창 크기는 열 수를 바꾸지 않는다.</summary>
     public void SetColumns(int columns)
     {
         // The same column count can arrive after ItemsPanelRoot is recreated or the host is restored.
@@ -936,7 +936,14 @@ public sealed partial class ThumbnailExplorer : UserControl
         });
     }
 
-    private void OnPreviewHostSizeChanged(object sender, SizeChangedEventArgs args) => QueuePreviewResize((Grid)sender);
+    private void OnPreviewHostSizeChanged(object sender, SizeChangedEventArgs args)
+    {
+        var host = (Grid)sender;
+        // 미리보기 host는 폴백·이미지·정보·배지 몇 개만 가진다. 새 비동기 배지도 현재 폭을 따른다.
+        if (host.Children.OfType<Viewbox>().FirstOrDefault(child => child.Name == "TilePendingBadgeScale") is { } badge)
+            SetTileOverlaySize(badge, args.NewSize.Width);
+        QueuePreviewResize(host);
+    }
 
     private void OnPreviewRasterScaleChanged(XamlRoot sender, XamlRootChangedEventArgs args)
     {
@@ -1012,7 +1019,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             // FetchTilePreview의 A270 ③ 규칙(아이콘형 = Bytes null → 확장자 타일 유지)은
             // 이미지에도 그대로 옳고, placeholder는 entry.IsPlaceholder가 워커의 cachedOnly가
             // 되어 A175(하이드레이션 금지)를 그대로 지킨다.
-            if (LivePreviewHostOf(vm) is { } live) live.Children.Add(MakePendingBadge());
+            if (LivePreviewHostOf(vm) is { } live) live.Children.Add(MakePendingBadge(live.ActualWidth));
             // A352 배치 1: 셸 썸네일 갈래 — 인프로세스 셸 핸들러가 도는 유일한 경로다.
             // 마지막 줄이 여기서 멈추면 그 파일의 핸들러를 의심한다.
             if (DiagTrace.Enabled) DiagTrace.Write("tiles", "fill shell " + entry.Path);
@@ -1056,6 +1063,7 @@ public sealed partial class ThumbnailExplorer : UserControl
         if (sender is not Grid root) return;
         KOTU.Core.Appearance.DesignScope.SetRole(root,KOTU.Core.Appearance.DesignElementRole.Card);
         KOTU.App.Appearance.LiveDesign.AttachTree(root);
+        ApplyTileOverlaySize(root, root.ActualWidth);
         // 컨테이너가 이미 로드된 채 루트만 바뀌어도 실제 새 루트의 준비 시점에 맞춘다.
         DependencyObject? node = root;
         for (var depth = 0; node is not null && depth < 64; depth++, node = VisualTreeHelper.GetParent(node))
@@ -1069,6 +1077,51 @@ public sealed partial class ThumbnailExplorer : UserControl
             }
             return;
         }
+    }
+
+    private void OnFileTileRootSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (sender is Grid root) ApplyTileOverlaySize(root, e.NewSize.Width);
+    }
+
+    private static void ApplyTileOverlaySize(Grid root, double width)
+    {
+        // 이 템플릿의 고정 두 요소만 갱신한다. VM·ItemsSource·컨테이너 목록은 만지지 않는다.
+        if (root.FindName("TileCheckScale") is Viewbox check) SetTileOverlaySize(check, width);
+        if (root.FindName("TileCloudBadgeScale") is Viewbox cloud) SetTileOverlaySize(cloud, width);
+    }
+
+    private void OnTileOverlayNaturalSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Viewbox의 자식은 축소 전 자연 크기로 배치된다. 스킨·폰트가 바뀐 이 요소만
+        // 다시 맞추며, 재활용되어 타일에서 떨어진 요소는 갱신하지 않는다.
+        if (sender is not FrameworkElement content) return;
+        Viewbox? overlay = null;
+        DependencyObject? node = VisualTreeHelper.GetParent(content);
+        for (var depth = 0; node is not null && node is not SelectorItem && depth < 32;
+             depth++, node = VisualTreeHelper.GetParent(node))
+        {
+            if (overlay is null && node is Viewbox box) overlay = box;
+            if (node is Grid { Name: "ExplorerFileTile" } root && overlay is not null)
+            {
+                SetTileOverlaySize(overlay, root.ActualWidth);
+                return;
+            }
+        }
+    }
+
+    private static void SetTileOverlaySize(Viewbox overlay, double tileWidth)
+    {
+        if (overlay.Child is not FrameworkElement content) return;
+        // 글리프 크기는 native 컨트롤·폰트의 자연 높이가 아니다. 고정 28/22 슬롯으로
+        // 자르지 않고 여백까지 무제한 측정한다. Viewbox의 축소된 크기를 재입력하지 않는다.
+        content.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var natural = content.DesiredSize;
+        var scale = ExplorerTileLayout.MeasureOverlayScale(tileWidth);
+        var width = natural.Width * scale;
+        var height = natural.Height * scale;
+        if (overlay.Width != width) overlay.Width = width;
+        if (overlay.Height != height) overlay.Height = height;
     }
 
     private void ReconcileTileSelection(bool immediate)
@@ -1215,8 +1268,8 @@ public sealed partial class ThumbnailExplorer : UserControl
     }
 
     /// <summary>
-    /// A433: 체크·캡션을 축소하지 않고 최소 96-DIP 셀이 들어가는 실제 열 수를 계산한다.
-    /// 충분히 넓으면 기존 floor(가용 폭 / 기본 열 수)와 같다. ItemsWrapGrid의 셀 슬롯에
+    /// A433 정정: 열 수를 고정하고 기존 floor(가용 폭 / 열 수)로 타일 폭을 계산한다.
+    /// 체크·상태 배지는 자기 타일의 실제 폭에 맞춰 별도로 축소한다. ItemsWrapGrid의 셀 슬롯에
     /// 지정하므로 컨테이너의 내부 여백을 다시 빼거나 개별 타일을 재작성하지 않는다.
     /// <para>
     /// A345 배치 3: 패널이 없을 때의 폴백(타일 컨테이너를 순회하며 직접 크기 대입)을 삭제했다 —
@@ -1602,16 +1655,31 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 우하단 소형·저투명으로 겹치고, 히트 테스트에서도 뺀다(타일 히트 판정은 조상 탐색
     /// (EntryFromSource)이라 영향이 없지만 명시해 둔다).
     /// </summary>
-    private static FontIcon MakePendingBadge() => new()
+    private Viewbox MakePendingBadge(double tileWidth)
     {
-        Glyph = "\uE895",
-        FontSize = 10,
-        Opacity = 0.55,
-        HorizontalAlignment = HorizontalAlignment.Right,
-        VerticalAlignment = VerticalAlignment.Bottom,
-        Margin = new Thickness(0, 0, 12, 12),
-        IsHitTestVisible = false,
-    };
+        var content = new Grid();
+        content.SizeChanged += OnTileOverlayNaturalSizeChanged;
+        content.Children.Add(new FontIcon
+        {
+            Glyph = "\uE895",
+            FontSize = 10,
+            Opacity = 0.55,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 12, 12),
+            IsHitTestVisible = false,
+        });
+        var badge = new Viewbox
+        {
+            Name = "TilePendingBadgeScale", Child = content,
+            Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            IsHitTestVisible = false,
+        };
+        SetTileOverlaySize(badge, tileWidth);
+        return badge;
+    }
 
     // A337 클라우드 배지는 A345 배치 3에서 XAML DataTemplate으로 옮겼다(TileCloudBadge) —
     // 대기 배지와 같은 한 벌이고 자리만 반대쪽 위다. 표시 여부 = ExplorerEntryVm.

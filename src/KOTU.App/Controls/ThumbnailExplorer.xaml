@@ -16,8 +16,8 @@
          만들지 않는다(종전 "항목은 전부 코드(ShowEntries)에서 채운다"의 폐기). 미리보기 4갈래는
          코드가 위상 0(폴백 즉시)·위상 1(비동기 요청)로 TilePreviewHost 안에 채운다.
          기본 열 수는 셸이 SetColumns로 준다(A417: 12 − 3×보이는 패널 수 = 6/9/12).
-         A433: 96-DIP 타일이 들어가지 않는 좁은 영역에서만 실제 열 수를 줄이며,
-         넓히면 기본 열 수로 복귀한다. SizeChanged마다 셀 크기를 재계산(ApplyTileSize).
+         A433 정정: 열 수는 고정하고 작은 타일의 체크·배지만 여백과 함께 비례 축소한다.
+         SizeChanged마다 셀 크기를 재계산한다(ApplyTileSize).
          드래그 앤 드랍(A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로 전환):
          빈 영역·파일 타일 드랍 = 현재 폴더로 이동/복사, 폴더 타일 드랍 = 그 폴더로(코드가
          타일 컨테이너에 건다). 루트 Grid가 AllowDrop을 받는 구조는 MainWindow.RootLayout과
@@ -156,7 +156,7 @@
                  컨테이너가 재활용 큐로 갈 때 비워야 비트맵이 해제된다). -->
             <GridView.Resources>
                 <DataTemplate x:Key="FileTileTemplate" x:DataType="local:ExplorerEntryVm">
-                    <Grid x:Name="ExplorerFileTile" Loaded="OnFileTileRootLoaded"
+                    <Grid x:Name="ExplorerFileTile" Loaded="OnFileTileRootLoaded" SizeChanged="OnFileTileRootSizeChanged"
                           ToolTipService.ToolTip="{x:Bind Name}">
                       <Grid x:Name="ExplorerTileContent" Opacity="{x:Bind ContentOpacity, Mode=OneWay}">
                         <Grid.RowDefinitions>
@@ -164,22 +164,33 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid x:Name="TilePreviewHost" />
-                        <CheckBox x:Name="FileTileCheck" IsChecked="{x:Bind IsChecked, Mode=OneWay}"
-                                  Click="OnTileCheckClick"
-                                  MinWidth="0" MinHeight="0" Padding="0" Margin="4"
-                                  HorizontalAlignment="Left" VerticalAlignment="Top"
-                                  ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
+                        <!-- native 체크·스킨과 여백을 함께 축소하여 보이는 크기와 히트 영역을 맞춘다. -->
+                        <Viewbox x:Name="TileCheckScale" Stretch="Uniform" StretchDirection="DownOnly"
+                                 HorizontalAlignment="Left" VerticalAlignment="Top">
+                            <Grid SizeChanged="OnTileOverlayNaturalSizeChanged">
+                                <CheckBox x:Name="FileTileCheck" IsChecked="{x:Bind IsChecked, Mode=OneWay}"
+                                          Click="OnTileCheckClick"
+                                          MinWidth="0" MinHeight="0" Padding="0" Margin="4"
+                                          HorizontalAlignment="Left" VerticalAlignment="Top"
+                                          ToolTipService.ToolTip="Check to target file operations (copy, cut, delete, drag, open). No checks = selection." />
+                            </Grid>
+                        </Viewbox>
                         <!-- A337: 클라우드 전용(온라인 전용) 파일 배지 — 대기 배지(코드
                              MakePendingBadge)와 같은 한 벌이고 자리만 반대쪽 위다. 표시 여부는
                              뷰모델이 정한다(CloudBadgeVisibility) — 종전에는 조립 코드가 배지를
                              만들지 말지로 갈랐다. 히트 테스트에서 빼지 않는 것도 종전 그대로다
                              (툴팁이 이 배지의 존재 이유를 설명하는 유일한 자리). -->
-                        <FontIcon x:Name="TileCloudBadge"
-                                  Glyph="&#xE753;" FontSize="10" Opacity="0.55"
-                                  HorizontalAlignment="Right" VerticalAlignment="Top"
-                                  Margin="0,12,12,0"
-                                  Visibility="{x:Bind CloudBadgeVisibility}"
-                                  ToolTipService.ToolTip="Online-only file — preview needs a download" />
+                        <Viewbox x:Name="TileCloudBadgeScale" Stretch="Uniform" StretchDirection="DownOnly"
+                                 HorizontalAlignment="Right" VerticalAlignment="Top"
+                                 Visibility="{x:Bind CloudBadgeVisibility}">
+                            <Grid SizeChanged="OnTileOverlayNaturalSizeChanged">
+                                <FontIcon x:Name="TileCloudBadge"
+                                          Glyph="&#xE753;" FontSize="10" Opacity="0.55"
+                                          HorizontalAlignment="Right" VerticalAlignment="Top"
+                                          Margin="0,12,12,0"
+                                          ToolTipService.ToolTip="Online-only file — preview needs a download" />
+                            </Grid>
+                        </Viewbox>
                         <TextBlock x:Name="TileCaption" Grid.Row="1"
                                    Text="{x:Bind Name}" FontSize="14"
                                    TextTrimming="CharacterEllipsis"
