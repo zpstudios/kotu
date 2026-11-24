@@ -269,7 +269,8 @@ public sealed partial class LiveDesign
             }
             _checkVisual.Children.Clear();
             var selected = control.IsChecked != false;
-            var line = !control.IsEnabled ? p.Muted : _hover ? p.Accent : p.Border;
+            var specimenCheck = !radio && d.Decoration != DesignDecoration.Paper && !HighContrast;
+            var line = !control.IsEnabled ? p.Muted : _hover || specimenCheck && selected ? p.Accent : p.Border;
             var fill = selected ? p.Accent : _hover ? p.Selection : p.Card;
             var ink = !control.IsEnabled ? p.Muted : selected ? p.OnAccent : p.Foreground;
             if (!control.IsEnabled) { fill = p.Card; p = p with { Foreground=p.Muted, Border=p.Muted, Accent=p.Muted }; }
@@ -294,7 +295,8 @@ public sealed partial class LiveDesign
             if (!radio || d.Decoration is DesignDecoration.Pixel or DesignDecoration.Frame)
             {
                 var surface = new DesignSurface();
-                surface.Draw(d,p with { Border=line },20,20,HighContrast,control.IsPressed,false,selected,fill,d.CheckRadius);
+                surface.Draw(d,p with { Border=line },20,20,HighContrast,control.IsPressed,false,
+                    selected && !specimenCheck,fill,d.CheckRadius);
                 _checkVisual.Children.Add(surface);
             }
             if (selected)

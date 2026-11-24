@@ -121,8 +121,12 @@ public sealed partial class LiveDesign
                 overlay=new DesignOverlay(nativePresenter ? control : root,root,descendantHost:nativePresenter);
                 _chromeParts.Add(root,overlay);
             }
-            overlay.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,NativePressed,selected:selected,
-                fill:active ? p.Selection : null));
+            if (UseFileTileComposition(d) && FileTileOwner is { } tile)
+                overlay.Draw((surface,w,h)=>surface.DrawFileTile(d,p,w,h,selected,FileTileCheck(tile)?.IsChecked==true,
+                    NativeHot,NativePressed,control.IsEnabled));
+            else
+                overlay.Draw((surface,w,h)=>surface.Draw(d,p,w,h,HighContrast,NativePressed,selected:selected,
+                    fill:active ? p.Selection : null));
             if (control.ContentTemplateRoot is Border { Child:Grid } card)
             {
                 DesignScope.SetRole(card,DesignElementRole.Card);

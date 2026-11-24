@@ -524,14 +524,18 @@ public sealed partial class LiveDesign : DependencyObject
                 Watch(Control.FontSizeProperty,()=>ObserveSize(Control.FontSizeProperty,sizedControl.FontSize));
             if (Element is Control)
             {
-                Watch(Control.IsEnabledProperty, Refresh);
+                Watch(Control.IsEnabledProperty, () =>
+                {
+                    if (Element is SelectorItem && FileTileOwner is not null) RefreshSelection();
+                    else Refresh();
+                });
                 Watch(Control.FocusStateProperty, Refresh);
                 Watch(Control.TemplateProperty, () => { TraceLifecycle("ReleaseParts requested","Template changed"); ReleaseParts(); QueueTree(); QueueTemplateReady(); });
                 Element.PointerEntered += Entered;
                 Element.PointerExited += Exited;
             }
             if (Element is ButtonBase) Watch(ButtonBase.IsPressedProperty, Refresh);
-            if (Element is ToggleButton) Watch(ToggleButton.IsCheckedProperty, Refresh);
+            if (Element is ToggleButton) Watch(ToggleButton.IsCheckedProperty, RefreshCheckState);
             if (Element is ToggleSwitch) Watch(ToggleSwitch.IsOnProperty, Refresh);
             if (Element is ToggleMenuFlyoutItem) Watch(ToggleMenuFlyoutItem.IsCheckedProperty, Refresh);
             if (Element is RadioMenuFlyoutItem) Watch(RadioMenuFlyoutItem.IsCheckedProperty, Refresh);

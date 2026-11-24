@@ -19,6 +19,25 @@ internal sealed class DesignSurface : Canvas
         VerticalAlignment = VerticalAlignment.Stretch;
     }
 
+    // Only the explorer's file-item surface uses this composition. Internal preview cards,
+    // native high-contrast states and the accepted Paper composition keep their own policy.
+    internal void DrawFileTile(DesignDefinition design, DesignPalette p, double width, double height,
+        bool selected, bool checkedItem, bool hot, bool pressed, bool enabled)
+    {
+        var active = selected || checkedItem || hot || pressed;
+        if (!enabled) p = p with { Foreground=p.Muted, Border=p.Muted, Accent=p.Muted };
+        if (active || design.Decoration == DesignDecoration.Frame)
+        {
+            var fill = !enabled ? p.Card : selected && design.Decoration == DesignDecoration.Solid ? p.Accent :
+                selected || hot || pressed ? p.Selection : checkedItem ? p.Panel : p.Background;
+            Draw(design,p,width,height,false,pressed,selected:selected,fill:fill);
+            return;
+        }
+        Children.Clear();
+        if (width > 2 && height > 2 && (design.Decoration is DesignDecoration.Editorial or DesignDecoration.Terminal))
+            Line([new(0,height-1),new(width-1,height-1)],p.Border,1);
+    }
+
     internal void Draw(DesignDefinition design, DesignPalette p, double width, double height,
         bool highContrast, bool pressed = false, bool panel = false, bool selected = false, uint? fill = null, double? radius = null)
     {

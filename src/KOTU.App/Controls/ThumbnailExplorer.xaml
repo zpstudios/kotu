@@ -155,7 +155,7 @@
                  컨테이너가 재활용 큐로 갈 때 비워야 비트맵이 해제된다). -->
             <GridView.Resources>
                 <DataTemplate x:Key="FileTileTemplate" x:DataType="local:ExplorerEntryVm">
-                    <Grid Loaded="OnFileTileRootLoaded"
+                    <Grid x:Name="ExplorerFileTile" Loaded="OnFileTileRootLoaded"
                           ToolTipService.ToolTip="{x:Bind Name}">
                       <Grid x:Name="ExplorerTileContent" Opacity="{x:Bind ContentOpacity, Mode=OneWay}">
                         <Grid.RowDefinitions>
@@ -163,7 +163,7 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid x:Name="TilePreviewHost" />
-                        <CheckBox IsChecked="{x:Bind IsChecked, Mode=OneWay}"
+                        <CheckBox x:Name="FileTileCheck" IsChecked="{x:Bind IsChecked, Mode=OneWay}"
                                   Click="OnTileCheckClick"
                                   MinWidth="0" MinHeight="0" Padding="0" Margin="4"
                                   HorizontalAlignment="Left" VerticalAlignment="Top"

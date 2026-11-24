@@ -1062,7 +1062,11 @@ public sealed partial class ThumbnailExplorer : UserControl
         {
             if (node is not GridViewItem item) continue;
             if (item.Content is ExplorerEntryVm vm && IsCurrentTileRoot(TileGrid, item, vm, root))
+            {
+                // Re-evaluate the selector's paint host after a recycled template actually loads.
+                KOTU.Core.Appearance.DesignScope.RequestManagement(item);
                 UpdateTileSelectionOutline(item);
+            }
             return;
         }
     }
