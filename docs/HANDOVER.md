@@ -29,7 +29,7 @@
 
 | 항목 | 다음 작업을 선택할 때 확인할 것 |
 |---|---|
-| 스킨 미리보기 차이 A431 | **정정한 기준의 세 화면 비교를 완료했다.** 스킨 개편 전 소스 `f74a289` 검수본, Paper 원안 수치 재현본, 기존 밀도를 보존한 Paper를 같은 Light·200%·1710×1025·검수 폴더로 비교했다. 촘촘한 안에도 Paper 조형은 남지만 여유 배치의 인상과 정보량은 다르다. [비교 계약과 판단](features/shell/design-library-A427.md#사용성을-보존한-대표-검수) · [실제 관측과 한계](DEVICE-CHECKS.md#native-media). 원본 세 장과 조작·복원 근거는 `artifacts/a431-review/layout-visual-review.json`, 빌드 근거는 `preskin-build-verification.json`·`layout-build-verification.json`이다. 검수 설정 28개가 작업 전과 정확히 일치하고 앱은 정상 종료했다. 제품 입력 527개·공식 설치 v0.433.3은 그대로다. 이전 두 장은 색상 시험으로만 보존하며, 제품 반영·11종 확대는 결정하지 않았다. |
+| 스킨 미리보기 차이 A431 | **2026-11-24 사용자가 기존 밀도를 유지한 외형의 제품 반영을 승인했다.** Folded paper의 트리 줄 간격·버튼 크기·패널 비율을 고정하고 [구현 범위](features/shell/design-library-A427.md#사용성을-보존한-대표-검수)에 따라 진행한다. 직전 세 화면 비교·기본 조작은 완료했으며 원본과 근거는 `artifacts/a431-review/layout-visual-review.json`, `preskin-build-verification.json`·`layout-build-verification.json`에 있다. 검수 설정 28개를 정확히 복원하고 앱을 정상 종료했다. 승인 시점의 제품 입력 527개·공식 설치는 v0.433.3 그대로이며 새 제품 구현·배포는 아직 시작하지 않았다. 다음은 구현 위임 → 독립 검토·별도 앱 검수 → 버전·공식 배포·설치 검증이다. 11종 확대는 선택하지 않았다. |
 | 폴더 트리 정렬 A430 | v0.433.3 공식 배포·공개 파일 검증, 업데이트 전 백업과 사용자 업데이트 후 설치 파일·설정·실행 대조까지 완료했다. Core 718개·일반 검수본·독립 검토와 Light의 11개 디자인 관측을 마쳤고 검수 창은 정상 종료했다. 창 크기 복원과 미확인 조건은 [검수 경계](DEVICE-CHECKS.md#native-media)에 유지한다. [요구](REQUIREMENTS.md#a430) |
 | 메뉴 배경 비침 A429 | v0.433.2 공식 배포·사용자 업데이트 후 설치 대조까지 완료했다. Core 718개·일반 빌드·독립 검토와 Light의 11개 시작 메뉴·Ink 정렬 메뉴·대표 툴팁 관측을 마쳤다. 실제 범위와 기존 실패·미확인 한계는 [실기기 기록](DEVICE-CHECKS.md#native-media)에 유지한다. |
 | 디자인 선택 단순화 A428 | 갤러리 단순화는 v0.433.2에 포함되어 사용자 업데이트 후 공식 설치 대조를 마쳤다. 별도 보기의 Git 복원 기준과 기존 진단 실패·검수 한계는 [선택 사양](features/shell/design-library-A427.md#설정에서-선택)과 [실기기 기록](DEVICE-CHECKS.md#native-media)에 유지한다. |
