@@ -32,6 +32,65 @@ public sealed partial class LiveDesign
             return false;
         }
 
+        private static bool UsePaperSurfaces(DesignDefinition d) => d.Decoration == DesignDecoration.Paper && !HighContrast;
+        private GridViewItem? PaperFileTileOwner => OwnerSelector is GridViewItem { ContentTemplateRoot: Grid root } item &&
+            DesignScope.GetRole(root) == DesignElementRole.Card && HasAncestor(e => e is KOTU.App.Controls.ThumbnailExplorer) ? item : null;
+        private uint SurfaceFill(DesignDefinition d, DesignPalette p, bool panel)
+        {
+            // Map only the normal face. Selection, hover and disabled colors are resolved afterwards.
+            if (UsePaperSurfaces(d))
+            {
+                if (panel && Element is Border { Name: "PanelBackdrop" } &&
+                    HasAncestor(e => (e is KOTU.App.Overlays.FileListOverlay or KOTU.App.Overlays.ContentInfoOverlay) &&
+                        ReferenceEquals(e.FindName("PanelBackdrop"), Element))) return p.Card;
+                if (!panel && PaperFileTileOwner is { } item && ReferenceEquals(item.ContentTemplateRoot, Element))
+                    return p.Background;
+            }
+            return panel ? p.Panel : p.Card;
+        }
+
+        private SolidColorBrush? _paperFolderForeground;
+        private GridViewItem? _paperFolderOwner;
+        private long _paperFolderEnabledToken, _paperFolderForegroundToken;
+        private void ApplyPaperFolderForeground(FontIcon icon, DesignDefinition d, DesignPalette p)
+        {
+            var owner = UsePaperSurfaces(d) && _glyph?.Canonical == "\uE8B7" ? PaperFileTileOwner : null;
+            if (!ReferenceEquals(owner, _paperFolderOwner)) ReleasePaperFolderForeground();
+            if (owner is null) return;
+            var local = icon.ReadLocalValue(IconElement.ForegroundProperty);
+            // Respect an authored color or binding, including one installed while Paper was active.
+            if (_paperFolderForeground is null && local != DependencyProperty.UnsetValue) return;
+            if (_paperFolderForeground is not null && !ReferenceEquals(local, _paperFolderForeground))
+            {
+                ReleasePaperFolderForeground();
+                return;
+            }
+            if (_paperFolderForeground is null)
+            {
+                _paperFolderForeground = DesignSurface.Brush(owner.IsEnabled ? p.Foreground : p.Muted);
+                _paperFolderOwner = owner;
+                _paperFolderEnabledToken = owner.RegisterPropertyChangedCallback(Control.IsEnabledProperty, (_, _) => Refresh());
+                _paperFolderForegroundToken = icon.RegisterPropertyChangedCallback(IconElement.ForegroundProperty,
+                    (_, _) => { if (!_applying && _loaded) Refresh(); });
+                icon.Foreground = _paperFolderForeground;
+            }
+            else _paperFolderForeground.Color = DesignSurface.Color(owner.IsEnabled ? p.Foreground : p.Muted);
+        }
+        private void ReleasePaperFolderForeground()
+        {
+            if (_paperFolderOwner is not null)
+            {
+                _paperFolderOwner.UnregisterPropertyChangedCallback(Control.IsEnabledProperty, _paperFolderEnabledToken);
+                Element.UnregisterPropertyChangedCallback(IconElement.ForegroundProperty, _paperFolderForegroundToken);
+            }
+            if (_paperFolderForeground is not null && Element is FontIcon icon &&
+                ReferenceEquals(icon.ReadLocalValue(IconElement.ForegroundProperty), _paperFolderForeground))
+                icon.ClearValue(IconElement.ForegroundProperty);
+            _paperFolderForeground = null;
+            _paperFolderOwner = null;
+            _paperFolderEnabledToken = _paperFolderForegroundToken = 0;
+        }
+
         private void Apply(DesignDefinition d, DesignPalette p)
         {
             var role = DesignScope.GetRole(Element);
@@ -47,6 +106,7 @@ public sealed partial class LiveDesign
                     icon.IsTextScaleFactorEnabled = false;
                 }
                 else { icon.FontFamily = _originalFont!; icon.FontSize = _fontSize; }
+                ApplyPaperFolderForeground(icon,d,p);
                 return;
             }
             if (Element is TextBlock text)
@@ -156,7 +216,7 @@ public sealed partial class LiveDesign
                 }
                 if (role == DesignElementRole.Card)
                 {
-                    grid.Background = DesignSurface.Fill(d,p,p.Card,false,false,HighContrast);
+                    grid.Background = DesignSurface.Fill(d,p,SurfaceFill(d,p,false),false,false,HighContrast);
                     grid.CornerRadius = Radius(d,false);
                     EnsureSurface(); DrawSurface(d,p,false);
                     if (_surface is not null) grid.Background = DesignSurface.Brush(0);
@@ -168,7 +228,7 @@ public sealed partial class LiveDesign
                 var selection = role == DesignElementRole.Selection || border.Name == "TileSelectionOutline";
                 if (panel || role == DesignElementRole.Card)
                 {
-                    border.Background = DesignSurface.Fill(d,p,panel ? p.Panel : p.Card,false,panel,HighContrast);
+                    border.Background = DesignSurface.Fill(d,p,SurfaceFill(d,p,panel),false,panel,HighContrast);
                     border.CornerRadius = Radius(d,panel);
                     EnsureSurface(); DrawSurface(d,p,panel);
                     if (_surface is not null) border.Background = DesignSurface.Brush(0);
@@ -254,7 +314,7 @@ public sealed partial class LiveDesign
         private void DrawSurface(DesignDefinition d,DesignPalette p,bool panel,bool selected=false)
         {
             if (_surface is null) return;
-            var fill = panel ? p.Panel : selected ? p.Accent : _hover || Element is ButtonBase { IsPressed:true } ? p.Selection : p.Card;
+            var fill = !panel && selected ? p.Accent : !panel && (_hover || Element is ButtonBase { IsPressed:true }) ? p.Selection : SurfaceFill(d,p,panel);
             if (DesignScope.GetRole(Element)==DesignElementRole.Card && OwnerSelector is { IsSelected:true }) { fill=p.Selection; selected=true; }
             if (InToolbar && d.Decoration == DesignDecoration.Solid && !HighContrast && !selected) fill = p.Foreground;
             if (Element is Control { IsEnabled: false }) { fill = p.Card; p = p with { Foreground=p.Muted, Border=p.Muted, Accent=p.Muted }; }
@@ -272,6 +332,7 @@ public sealed partial class LiveDesign
         private void ReleaseParts()
         {
             TraceLifecycle("ReleaseParts enter");
+            ReleasePaperFolderForeground();
             ReleaseNativeParts();
             ReleaseChromeParts();
             if (_sizeHook) Element.SizeChanged -= SizeChanged;
