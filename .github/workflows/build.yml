@@ -16,6 +16,16 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Validate fixed Git evidence links, including historical line ranges.
+
+      - name: Documentation lifecycle
+        shell: pwsh
+        run: ./eng/Test-Documentation.ps1
+
+      - name: Documentation checker regression
+        shell: pwsh
+        run: ./eng/Test-Documentation.Tests.ps1
 
       - name: Release notes validation
         shell: pwsh

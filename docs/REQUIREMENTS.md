@@ -1,8 +1,8 @@
 # KOTU 요구사항 — 열린 작업과 유효 결정
 
-이 문서는 현재 열린 일·보류 조건·유효한 제품 결정의 정본이다. 현재 작업 선택과 다음 시작점은 [HANDOVER](HANDOVER.md), 기능 설계는 [문서 지도](README.md), 실제 관측·미검증 경계는 [DEVICE-CHECKS](DEVICE-CHECKS.md)를 따른다. 미선택 백로그를 자동으로 착수하지 않는다. A번호는 영구 ID이며 마지막 등록 번호는 **A435**이다.
+이 문서는 현재 열린 일·보류 조건·유효한 제품 결정의 정본이다. 현재 작업 선택과 다음 시작점은 [HANDOVER](HANDOVER.md), 기능 설계는 [문서 지도](README.md), 실제 관측·미검증 경계는 [DEVICE-CHECKS](DEVICE-CHECKS.md)를 따른다. 미선택 백로그를 자동으로 착수하지 않는다. A번호는 영구 ID이며 마지막 등록 번호는 **A436**이다.
 
-완료 항목은 [A1–A417 결과 색인](history/requirements-completed-index.md)에 번호당 한 줄로 모았다. 그 색인의 고정 Git 원문·행 범위와 [과거 완료 상세](history/completed-requirements.md)에서 고유한 구현·재현·판단 근거를 회수한다. 날짜별 배포·시험 수치·해시 목록을 이 문서에 다시 누적하지 않는다. 기존 지침의 정본은 [CLAUDE.md](../CLAUDE.md)이며 이 파일에서 복제하지 않는다.
+모든 A번호는 [요구사항 결과 색인](history/requirements-completed-index.md)에 번호당 한 줄로 등록한다. 색인의 `열림` 행은 아래 현재 상태를 가리키며, 완료 항목의 현재 결과는 색인이 정본이다. 그 색인의 고정 Git 원문·행 범위와 [과거 완료 상세](history/completed-requirements.md)에서 고유한 구현·재현·판단 근거를 회수한다. 날짜별 배포·시험 수치·해시 목록을 이 문서에 다시 누적하지 않는다. 완료·인계 때는 [문서 정리 절차](development/maintenance-notes.md#document-lifecycle)를 적용한다.
 
 <a id="open-work"></a>
 ## 열린 작업과 보류
@@ -11,54 +11,26 @@
 
 | ID | 상태 | 현재 결과와 남은 범위 | 다음 시작점 |
 |---|---|---|---|
-| <a id="a435"></a>A435 | v0.433.9 공식 배포·설치 대조 완료 | 2026-11-25 사용자는 다크 모드로 바꿨을 때 탐색기 필터 아이콘이 검게 남는 문제를 이어서 수정하도록 요청했다. | 최초 기본 브러시 캐시를 없애 Light/Dark 전환·필터 적용/해제에서 현재 테마의 기본색과 활성 표시를 유지한다. 필터 동작·상태·기존 디자인·배치는 보존한다. 구현·독립 검토·대표 실화면 검수·공식 배포를 마쳤고, 보호 백업 재검증 후 상시 승인에 따라 정식 Updates 다운로드·재시작과 이 PC 설치·설정 대조까지 완료했다. [실제 관측과 한계](DEVICE-CHECKS.md#native-media) · [배포·설치 근거](HANDOVER.md) |
-| <a id="a434"></a>A434 | v0.433.8 공식 배포·설치 대조 완료 | 2026-11-25 사용자는 11종 추가 전에 쓰던 원래 디자인을 공통 간격·획 굵기 등 규격 통일을 유지한 상태로 복원하도록 요청했다. 총 12종으로 구성하고 원래 디자인을 첫 번째 기본 항목으로 둔다. | 스킨 도입 전 버전에서 직접 업데이트해도 디자인 선택이 없는 기존 사용자는 복원된 기본 디자인을 유지한다. 이미 명시적으로 선택한 11종의 저장 ID와 선택은 보존한다. 단순 과거 코드 복제나 Precision 이름 변경이 아니라 기존 외형을 현재 공통 디자인 체계에 통합한다. 6/9/12열·타일 조작부 비례 축소·현재 밀도/배치/입력과 문서·재생 상태는 보존한다. 구현·독립 검토·대표 실화면 검수·공식 배포와 사용자 업데이트·재시작 후 이 PC 설치·설정 대조까지 완료했다. 실제 관측과 한계는 [실기기 기록](DEVICE-CHECKS.md#native-media)을 따른다. [디자인 정본](features/shell/design-library-A427.md) |
-| <a id="a433"></a>A433 | v0.433.7 정정·공식 배포·설치 대조 완료 | 2026-11-24 사용자는 “창이 어느 정도 이하로 작아지면 체크박스 등 처럼 크기가 항상 일정한 녀석들이 주변을 너무 많이 가리거나 차지하는 문제 있어. 이거 수정 필요”라고 요청했다. 첨부 화면에서 작은 탐색기 타일의 체크박스가 폴더·미리보기와 겹친다. | 원본은 `artifacts/a433-review/reference.png`. 좁아진 영역에서 체크박스·상태 배지 등 고정 크기 요소의 비율과 겹침을 점검하고 수정한다. 2026-11-24 사용자는 “타일 열수는 동일한게 이 앱의 컨셉”이며 타일이 작아지는 데 비해 체크박스 등이 같은 크기여서 문제라고 정정했다. v0.433.6의 열 수 감소 해석은 취소한다. 기존 6/9/12열을 고정하고 작은 타일의 체크박스·상태 배지 등 조작부를 타일에 비례해 줄이는 v0.433.7로 바로잡는다. [정정 사양](features/explorer/tile-captions-A387.md#a433-고정-열-수와-조작부-비례-축소--v04337). 정정판 첫 화면의 체크 하단 잘림을 수정하고 Core 753개·독립 검토·일반 재빌드와 Ink/Humanist 실화면 재검수를 통과했다. [실제 관측과 한계](DEVICE-CHECKS.md#native-media)를 구분한다. v0.433.6 배포 검증·백업은 끝났으나 사용자 의도에 맞는 완료로 인정하지 않는다. v0.433.6 설치 요청은 철회했다. v0.433.7 정정본의 공식 CI·공개 파일 검증, 기존 보호 백업 재검증 및 사용자 Updates 다운로드·재시작 후 이 PC 설치 파일·설정·실행·오류 대조까지 완료했다. |
-| <a id="a432"></a>A432 | v0.433.5 공식 배포·설치 대조 완료 | 2026-11-24 사용자는 “그럼 나머지 디자인들도 기존 밀도랑 배치는 유지하면서 미리보기 느낌에 맞게 모양만 다듬는 방향으로 진행해줘.”라고 요청했다. A431의 Paper를 제외한 나머지 10종의 면·선·모서리·층·아이콘·글꼴 적용을 미리보기와 대조해 다듬는다. 기존 밀도·배치·입력 동작을 유지한다. | v0.433.5의 일반 타일·선택/체크 면, Solid 대비색, Editorial/Terminal 버튼과 체크 외형을 구현했다. [적용 사양](features/shell/design-library-A427.md#a432) · [실제 관측과 한계](DEVICE-CHECKS.md#native-media). 독립 검토·Core 718개·일반 빌드·Light 10종과 Paper 왕복·스크롤 검수, 검수 설정 28키 복원을 마쳤다. 공식 CI·공개 파일 검증과 새 교체 전 백업, 사용자 업데이트·재시작 후 이 PC 설치 파일·설정·실행 대조까지 완료했다. |
-| <a id="a431"></a>A431 | v0.433.4 공식 배포·설치 대조 완료 | 세 화면 비교 후 2026-11-24 사용자가 “기존 밀도 유지한 채 디자인(배치 말고 모양만) 바꾸는 거 진행해도 될 것 같은데?”라고 승인했다. Folded paper의 패널·일반 타일 면과 폴더 아이콘 색을 정식 적용했다. 기존 트리 줄 간격·버튼 크기·타일 배치·패널 비율과 Paper 도형·글꼴은 유지한다. | [구현 사양](features/shell/design-library-A427.md#사용성을-보존한-대표-검수), [실제 관측·미검수 경계](DEVICE-CHECKS.md#native-media). 사용자 업데이트·재시작 후 이 PC의 공식 설치 파일·설정·실행 대조까지 완료했다. 11종 전체 재설계는 범위 밖이다. |
-| <a id="a430"></a>A430 | v0.433.3 공식 배포·설치 대조 완료 | 2026-11-23 사용자는 v0.433.2 업데이트 후 폴더명과 펼침·접힘 표시의 세로 줄 맞춤이 어긋난다고 보고했다. 첨부 화면에서는 표시가 이름보다 아래에 놓여 보이며, 스킨별 차이는 사용자 관측으로 확정하지 않았다. 트리 행 안에서 두 요소의 시각적 중심을 맞추고 펼침·접힘, 들여쓰기, 선택·키보드 조작과 디자인별 모양을 유지한다. | 원본은 `artifacts/a430-review/reference.png`. 수정본은 Light의 11개 디자인을 관측했다. [정렬 사양](features/explorer/tree-density-A384.md#a430-이름과-펼침-표시-정렬)과 [실기기 확인 범위](DEVICE-CHECKS.md#native-media)를 구분한다. |
-| <a id="a429"></a>A429 | v0.433.2 공식 배포·설치 대조 완료 | 2026-11-23 사용자는 시작 메뉴 항목 사이가 투명해 뒤쪽 글자가 일부 보이고 지저분하게 느껴진다고 보고했다. 첨부 화면은 Folded paper 모양이며 다른 스킨은 아직 보지 않았다고 명시했다. 메뉴의 항목 간격·구분선·내부 여백을 연속된 배경으로 가려 가독성을 유지한다. 컨트롤 자신의 템플릿 루트만 배경 장식 대상으로 인정하도록 수정했다. | [디자인 적용 사양](features/shell/design-library-A427.md) · [실제 검수 범위](DEVICE-CHECKS.md#native-media). 사용자 원본은 `artifacts/a429-review/reference.png`. 항목 순서·간격·메뉴 밀착 위치와 고유 디자인은 유지한다. |
-| <a id="a428"></a>A428 | v0.433.1 배포, v0.433.2 설치 대조 완료 | 2026-11-23 사용자는 디자인 선택을 갤러리 하나로 단순화하고 Single view·보기 전환·별도 큰 미리보기·현재 적용 디자인 보기·Open single view를 없애도록 요청했다. 카드 선택으로 적용하고 현재 적용 카드에 표식을 둔다. 제거 기능은 Git 이력에서 복원할 수 있게 보존하며, 앱의 선택 옵션으로 남기지 않는다. | [갤러리 선택과 복원 기준](features/shell/design-library-A427.md#설정에서-선택). 복원 기준은 v0.433.0 제품 커밋 `db101e7`이며 기존 소스를 별도 보관 사본으로 늘리지 않는다. |
-| <a id="a427"></a>A427 | v0.433.0 공식 배포·설치 대조 완료 | 2026-11-21 승인한 11개 디자인을 전체 UI에 적용했다. v0.433.0의 Single/Gallery 두 보기는 A428 요청으로 갤러리 하나로 단순화한다. 사용자 업데이트 후 설치 파일 1,177개가 공식 패키지와 일치했고 기존 설정 키의 누락은 없었다. | [디자인 선택과 적용 사양](features/shell/design-library-A427.md) · [검수 범위](DEVICE-CHECKS.md#native-media). A425의 조작부 통일보다 넓은 범위다. |
-| <a id="a112"></a>A112 | v0.432.2 | 마우스 뒤로 버튼이나 키보드 `Browser Back`으로 파일을 닫으면 탐색기가 닫기 직전의 좌우 패널 상태를 유지한다. v0.432.1에서 빈 탐색기로 전환하며 양쪽을 다시 열던 오류를 수정했다. | [검수 범위](DEVICE-CHECKS.md#image-cloud) · [뒤로 가기 사양](guides/user-guide.ko.md#36-뒤로-가기) · [변경 설명](RELEASE-v0.432.2.md) |
-| <a id="a426"></a>A426 | v0.432.1 | 문서 탐색기와 열린 문서 사이를 전환할 때 양쪽에 보이는 하단 버튼은 활성 여부와 관계없이 같은 창 너비에서 자리를 유지한다. | [버전별 변경](RELEASE-v0.432.1.md) |
-| <a id="a425"></a>A425 | v0.432.0 | 버튼·메뉴·쪽수·재생 시간과 아이콘의 획을 통일한다. 기본은 시안 ④ 코투 기하체, 시안 ① 얇은 선도 한 번에 전환한다. 영상·음악의 재생·일시정지·스피커·음소거를 포함한다. | [버전별 변경](RELEASE-v0.432.0.md) |
-| <a id="a424"></a>A424 | v0.431.4 | 문서·이미지·영상의 맞춤 메뉴를 펼치면 네 항목의 글자와 아이콘이 같은 획 느낌으로 보인다. 마우스를 올렸을 때의 툴팁에는 시스템 글꼴을 사용한다. | [버전별 변경](RELEASE-v0.431.4.md) |
-| <a id="a423"></a>A423 | v0.431.4 | PDF와 HWP 페이지 보기에서 흰 용지의 가장자리와 바깥 여백을 구분할 수 있어야 한다. | [버전별 변경](RELEASE-v0.431.4.md) |
-| <a id="a422"></a>A422 | v0.431.3 | HWP의 맞춤 선택과 페이지 이동을 문서 공통 조작부로 통합하고, 한컴 고지는 설정의 About에서 확인한다. | [버전별 변경](RELEASE-v0.431.3.md) |
-| <a id="a421"></a>A421 | v0.431.2 | HWP 페이지 본문을 클릭한 뒤에도 일반 창에서 Esc를 한 번 누르면 탐색기로 돌아온다. 마우스로 좌우 사이드바를 펼쳐도 같은 규칙을 적용한다. | [버전별 변경](RELEASE-v0.431.2.md) |
-| <a id="a419"></a>A419 | v0.430.0 구현 | 이미지 뷰어에서 연 파일을 다른 프로그램으로 수정·저장하면 화면을 자동 갱신한다. 변경된 이웃 사진의 선읽기 캐시도 비운다. | Windows 임시 파일에서 덮어쓰기·이름 교체·연속 저장·폴더 전환을 확인했다. [버전별 변경](RELEASE-v0.430.0.md) |
-| <a id="a418"></a>A418 | 구현·실기기 검수 대기 | 테스트 Setup을 정식판과 함께 설치해도 정식판에서 다음 GitHub 업데이트를 직접 받을 수 있어야 한다. | [패키지와 검수 절차](development/official-release-and-install.md) |
+| <a id="a436"></a>A436 | 검토 대기 | 2026-11-25 사용자는 현행 문서를 문서 역할에 맞게 정리하고 작업 완료마다 정리가 되도록 절차·검사를 보완하되 고유한 요구사항·결정·근거를 보존하도록 요청했다. | 현행 문서와 완료 절차·구조 검사·회귀시험·CI 연결을 정리했다. 독립 검토와 고유 정보 보존 대조 후 현재 제품 버전으로 커밋·푸시하고 원격 검사를 확인한다. [절차](development/maintenance-notes.md#document-lifecycle) |
+| <a id="a418"></a>A418 | 부분 | KOTU.Test 동시 설치 중 정식판이 다음 GitHub 업데이트를 직접 받는 조건은 미관측이다. v0.428.0의 병행 실행·테스트판 제거 후 보존 검증과 이후 정식판의 일반 Updates 성공은 이 조건의 완료를 뜻하지 않는다. | [패키지와 검수 절차](development/official-release-and-install.md) |
 | <a id="a19"></a>A19 | 미착수 | H/W 랭킹 제출은 서버가 필요한 장기 후보다. 전송·서버·개인정보 범위 미정. | 서버와 제출 정책부터 정한다. [원문 위치](history/requirements-completed-index.md#a19) |
-| <a id="a45"></a>A45 | 부분 · HWP 5.x 페이지 보기 | v0.431.0부터 HWP 5.x 페이지의 글·표·그림을 PC에서 읽는다. HWP·HWPX·ODT·ODS·ODP의 본문/표 셀 텍스트 보기도 제공한다. | 한글 원본과의 정밀 비교, 다른 형식의 페이지 보기, 차트·수식 호환성은 남아 있다. 원본 편집·저장·인쇄, 암호·DRM·배포용 HWP와 HWP 3.x는 지원 범위 밖이다. [구현·검수 범위](features/editor/office-text-preview-A45.md) |
-| <a id="a115"></a>A115 | Monaco 구현 | 장식 ①~③은 v142에 구현했다. v0.429.0부터 기본 편집기의 라이트·다크 테마에서 입력 커서는 형광 녹색에 검은 테두리로 표시한다. 고대비에서는 기존 테마 색상을 사용한다. | 네이티브 TextBox의 커서 색 변경은 API 제약으로 보류했다. [커서 스타일](../src/KOTU.Module.Document/EditorSource/index.html), [실기기 검수](DEVICE-CHECKS.md#editor) |
-| <a id="a142"></a>A142 | 네이티브 후속 검증 | ①②③⑤ v179 완료. ④ ¶/EOF 스크린샷은 2026-08-29 수신 후 A283→A291→A307으로 이관됐다. 설치형 v0.427.0 Monaco에서 마지막 빈 줄의 표식 배치를 확인했다. | 네이티브 편집기의 마지막 빈 줄 배치 실화면 검수 잔여. [편집기 검수](DEVICE-CHECKS.md#editor) |
-| <a id="a281"></a>A281 | 조건부 보류 | 기본 브랜드 레벨 0에서는 노출되지 않는다. `branding.assetLevel`을 실제 1 이상으로 올릴 때 16px 중립 표식 가독성을 평가한다. 안 읽히면 16px만 KO/TU로 복귀하고 48px 이상은 유지. | 조건이 성립할 때만 착수. [원문 위치](history/requirements-completed-index.md#a281) |
+| <a id="a45"></a>A45 | 부분 | v0.431.0부터 HWP 5.x 페이지의 글·표·그림을 PC에서 읽는다. HWP·HWPX·ODT·ODS·ODP의 본문/표 셀 텍스트 보기도 제공한다. | 한글 원본과의 정밀 비교, 다른 형식의 페이지 보기, 차트·수식 호환성은 남아 있다. 원본 편집·저장·인쇄, 암호·DRM·배포용 HWP와 HWP 3.x는 지원 범위 밖이다. [구현·검수 범위](features/editor/office-text-preview-A45.md) |
+| <a id="a115"></a>A115 | 부분 | 장식 ①~③은 v142에 구현했다. v0.429.0부터 기본 편집기의 라이트·다크 테마에서 입력 커서는 형광 녹색에 검은 테두리로 표시한다. 고대비에서는 기존 테마 색상을 사용한다. | 네이티브 TextBox의 커서 색 변경은 API 제약으로 보류했다. [커서 스타일](../src/KOTU.Module.Document/EditorSource/index.html), [실기기 검수](DEVICE-CHECKS.md#editor) |
+| <a id="a142"></a>A142 | 부분 | ①②③⑤ v179 완료. ④ ¶/EOF 스크린샷은 2026-08-29 수신 후 A283→A291→A307으로 이관됐다. 설치형 v0.427.0 Monaco에서 마지막 빈 줄의 표식 배치를 확인했다. | 네이티브 편집기의 마지막 빈 줄 배치 실화면 검수 잔여. [편집기 검수](DEVICE-CHECKS.md#editor) |
+| <a id="a281"></a>A281 | 보류 | 기본 브랜드 레벨 0에서는 노출되지 않는다. `branding.assetLevel`을 실제 1 이상으로 올릴 때 16px 중립 표식 가독성을 평가한다. 안 읽히면 16px만 KO/TU로 복귀하고 48px 이상은 유지. | 조건이 성립할 때만 착수. [원문 위치](history/requirements-completed-index.md#a281) |
 | <a id="a363"></a>A363 | 백로그 | 광고 서버·분석 기능은 요청 등록만 완료. 데이터 수집 범위, 서버, 도구, 일정과 착수는 미정. | 별도 선택 시 정책·범위를 먼저 정한다. [원문 위치](history/requirements-completed-index.md#a363) |
-| <a id="a380"></a>A380 | 원인 조사 | All Readable 파일 전환 중 프로세스 종료의 원인은 미확정. v375의 전이 진단 보강을 원인 수리로 세지 않는다. 2026-10-02 일시정지 MP3→F11→손상 ZIP 전환 제보가 기준이며 유효한 원인 스택/덤프는 없었다. | 새 재현 시 현재/회전 로그와 WER·덤프를 연결해 원인을 좁힌다. 파일 경로·내용·예외 메시지를 진단 로그에 추가하지 않는다. [원문 위치](history/requirements-completed-index.md#a380) |
+| <a id="a380"></a>A380 | 조사 | All Readable 파일 전환 중 프로세스 종료의 원인은 미확정. v375의 전이 진단 보강을 원인 수리로 세지 않는다. 2026-10-02 일시정지 MP3→F11→손상 ZIP 전환 제보가 기준이며 유효한 원인 스택/덤프는 없었다. | 새 재현 시 현재/회전 로그와 WER·덤프를 연결해 원인을 좁힌다. 파일 경로·내용·예외 메시지를 진단 로그에 추가하지 않는다. [원문 위치](history/requirements-completed-index.md#a380) |
 | <a id="a398"></a>A398 | 부분 | EXIF·회전 배치 v404, PNG/TIFF 썸네일·APNG v426 완료. 다른 codec·사용자 원본·클라우드 제공자/캐시 상태와 일부 실제 입력 조합은 미확인. 합성 이미지 성공이 원제보의 원인 확정을 뜻하지 않는다. | [EXIF](features/image/exif-orientation-A398.md), [회전 배치](features/image/rotated-layout-A398.md), [검증 경계](DEVICE-CHECKS.md#image-cloud). 원본 확보와 제공자별 조건 분리. |
-| <a id="a399"></a>A399 | 구현 완료·원인 미확정 | 요청 직전 보호 v392, 감시 병합 v393, 항목 재사용 v394, 조건부 재시도 v395 완료. 사용자는 제보 파일 형식/다운로드 상태를 기억하지 못했고 실제 재현 대상이 없다. | [OneDrive 조사](features/explorer/onedrive-thumbnail-investigation-A399.md), [검증 경계](DEVICE-CHECKS.md#image-cloud). 로컬 보유/온라인 전용/동기화 중, 최초 진입/재진입/Refresh를 분리한다. 원본 강제 다운로드·무한 UI 재시도 금지. |
-| <a id="a401"></a>A401 | 부분·실기기 잔여 | 로컬 Monaco 편집기 v412 이후 사용자는 지정한 약 100만 자 문서에서 입력이 밀리지 않는다고 확인했다. 설치형 v0.427.0에서는 자동 입력 후 저장 정확성과 휠 왕복을 추가 확인했다. | 실제 한국어 IME·물리 입력과 스크롤 체감·입력 지연·고대비·극단 문서 조건이 남았다. [로컬 편집기](features/editor/local-text-editor-A401.md), [성능 조사](features/editor/document-performance-investigation-A401.md), [실기기 검수](DEVICE-CHECKS.md#editor) |
+| <a id="a399"></a>A399 | 조사 | 요청 직전 보호 v392, 감시 병합 v393, 항목 재사용 v394, 조건부 재시도 v395 완료. 사용자는 제보 파일 형식/다운로드 상태를 기억하지 못했고 실제 재현 대상이 없다. | [OneDrive 조사](features/explorer/onedrive-thumbnail-investigation-A399.md), [검증 경계](DEVICE-CHECKS.md#image-cloud). 로컬 보유/온라인 전용/동기화 중, 최초 진입/재진입/Refresh를 분리한다. 원본 강제 다운로드·무한 UI 재시도 금지. |
+| <a id="a401"></a>A401 | 부분 | 로컬 Monaco 편집기 v412 이후 사용자는 지정한 약 100만 자 문서에서 입력이 밀리지 않는다고 확인했다. 설치형 v0.427.0에서는 자동 입력 후 저장 정확성과 휠 왕복을 추가 확인했다. | 실제 한국어 IME·물리 입력과 스크롤 체감·입력 지연·고대비·극단 문서 조건이 남았다. [로컬 편집기](features/editor/local-text-editor-A401.md), [성능 조사](features/editor/document-performance-investigation-A401.md), [실기기 검수](DEVICE-CHECKS.md#editor) |
 | <a id="a406"></a>A406 | 보류 | 메뉴 약 3초 누름 빠른 녹음·H/W 상태 표시. 미구현·미배포. B1a admission/B1b 후보 작업은 정식 통합 결과가 아니다. 2026-11-10/14 보류 지시 유지. | [빠른 녹음 설계](features/recording/quick-recording-A406-A407.md). 재개 승인 전 구현/실녹음 금지. 마지막 Record 음원 구성을 재사용한다. H/W 수집 주기 유지안은 아직 제안. |
 | <a id="a407"></a>A407 | 보류 | 빠른 녹음 중 닫기→트레이·전용 표시. A406과 함께 미구현·미배포. | [같은 설계](features/recording/quick-recording-A406-A407.md). 확정 정책은 일반 닫기→녹음 계속/트레이, 트레이 Stop and save, 명시적 Exit→저장 후 종료. |
 
 **사용자 판단 대기** — 셸 키 진단 스트립(`diag.shellKeyOverlay`) 제거는 사용자의 별도 지시와 A309 실기기 확인을 기다린다. 기본 꺼짐 설정을 유지한다. [당시 판단 근거](https://github.com/zpstudios/kotu/blob/070e21af070996ba3d78fb440db9b4552f75a723/docs/HANDOVER.md#L1813-L1815)
 
-### 완료·흡수·종결에서 혼동하기 쉬운 항목
+### 완료·흡수·종결 판정
 
-| ID | 현재 판정 | 상세/검증 |
-|---|---|---|
-| A4 | 자체 탐색기 권한 조사·OS 탐색기 임베드 재검토 폐기. 구체적 권한 재현 기록 없음. | [결과](history/requirements-completed-index.md#a4) |
-| A170 | 2026-08-29 사용자 확정으로 미확인 종결. 통과나 원인 규명으로 바꾸지 않는다. | [과거 미확인 종결](history/device-checks-closed-unverified.md) |
-| A331 | 좌 리스트를 현재 모듈만으로 거르는 변경은 v321에서 철회. All Readable은 읽을 수 있는 모든 형식 유지. | [결과](history/requirements-completed-index.md#a331) |
-| A342·A345 | 진입 정지 계측/개선과 가상화 완료. 옛 500개 상한의 유지/복원 질문은 가상화로 소진. 스트리밍 열거 후보는 별도. | [가상화](features/explorer/virtualization-research-A345.md), 후보 41 |
-| A347 | A346에 흡수. 좌·중앙 순서 어긋남이 현 버전에서 재현될 때만 새 문제를 등록한다. | [결과](history/requirements-completed-index.md#a347) |
-| A352 | v345~349 완료. UI 스레드 StorageFile 동기 호출의 COM 펌프→XAML 재진입을 덤프로 확정하고 수리. 옛 ‘미반영’ 제목을 현재 상태로 읽지 않는다. | [결과](history/requirements-completed-index.md#a352) |
-| A382 | 편집 중 Alt+Enter와 녹화 저장 후속은 v426 정식 배포 완료. 옛 v425 이후 ‘배포 전’ 체크포인트는 이력. | [통합 후속](features/recording/recording-save-and-editor-fullscreen.md) |
-| A383 | 상위 첫 항목 요구는 후속 A416·A417에서 다뤘다. 예전 `..` 타일 모양 제안은 현재 아이콘 계약을 덮어쓰지 않는다. | [A416](features/explorer/explorer-selection-layout-A416.md), [A417](features/explorer/explorer-refresh-A417.md) |
-| A402·A403·A405 | 카메라 소스·시작 3버튼·공통 저장 폴더 구현/배포 완료. 실제 장치 실패·활성 녹음/녹화 통합 검증은 별도이며 현재 보류. | [녹음·녹화 검증](DEVICE-CHECKS.md#recording) |
-| A408·A409·A411·A412 | 구현/배포 완료. A408의 최신 맞춤 메뉴는 v427이다. 실제 클립보드·테마·네이티브 재생의 미실행 조합은 남긴다. | [실기기 확인](DEVICE-CHECKS.md) |
-| A413–A417 | 후속 UI·탐색기 개선 완료. 복구 문서 4개의 대조도 완료했으며 같은 요구를 새 백로그로 등록하지 않는다. | [UI 후속](features/shell/ui-followups-A413-A415.md), [A417](features/explorer/explorer-refresh-A417.md), [복구 대조](history/recovered-notes-review-A417.md) |
+철회·흡수·미확인 종결 등 유효 판정은 [A번호 결과 색인](history/requirements-completed-index.md)의 해당 행에 통합했다. 옛 미완료 제목이나 중간 검수 기록으로 현재 결정을 덮어쓰지 않는다.
 
 <a id="candidates"></a>
 ## 부록 A-2 — 등재 후보
@@ -147,3 +119,25 @@
 ## 다음 시작점
 
 현재 선택된 작업은 HANDOVER에서 확인한다. 이 목록을 갱신할 때는 결과/남은 조건을 덮어쓰고, 해당 기능 정본과 실기기 경계를 링크한다. A406 H/W 주기처럼 아직 제안인 정책은 관련 배치가 선택됐을 때 확정한다. A347의 재현 자료나 A399의 원본이 없다는 사실을 모든 세션의 반복 질문으로 만들지 않는다.
+
+## 이전 완료 링크 호환
+
+기존 주소를 유지하는 링크이며 상세·현재 결과는 색인에서만 갱신한다.
+
+<a id="a112"></a>[A112](history/requirements-completed-index.md#a112)
+<a id="a419"></a>[A419](history/requirements-completed-index.md#a419)
+<a id="a421"></a>[A421](history/requirements-completed-index.md#a421)
+<a id="a422"></a>[A422](history/requirements-completed-index.md#a422)
+<a id="a423"></a>[A423](history/requirements-completed-index.md#a423)
+<a id="a424"></a>[A424](history/requirements-completed-index.md#a424)
+<a id="a425"></a>[A425](history/requirements-completed-index.md#a425)
+<a id="a426"></a>[A426](history/requirements-completed-index.md#a426)
+<a id="a427"></a>[A427](history/requirements-completed-index.md#a427)
+<a id="a428"></a>[A428](history/requirements-completed-index.md#a428)
+<a id="a429"></a>[A429](history/requirements-completed-index.md#a429)
+<a id="a430"></a>[A430](history/requirements-completed-index.md#a430)
+<a id="a431"></a>[A431](history/requirements-completed-index.md#a431)
+<a id="a432"></a>[A432](history/requirements-completed-index.md#a432)
+<a id="a433"></a>[A433](history/requirements-completed-index.md#a433)
+<a id="a434"></a>[A434](history/requirements-completed-index.md#a434)
+<a id="a435"></a>[A435](history/requirements-completed-index.md#a435)

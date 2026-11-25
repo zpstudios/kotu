@@ -15,6 +15,29 @@ function Get-WorkflowSteps([string]$text) {
     @([regex]::Split($text, '(?m)^      - name: ') | Select-Object -Skip 1)
 }
 
+function Assert-DocumentationGates([string]$text, [bool]$release) {
+    $steps = @(Get-WorkflowSteps $text)
+    $previous = -1
+    $boundary = if ($release) { '        id: ver' } else { './eng/Test-ReleaseNotes.ps1' }
+    $boundaries = @(for ($i=0; $i -lt $steps.Count; $i++) { if ($steps[$i].Contains($boundary)) { $i } })
+    if ($boundaries.Count -ne 1) { throw 'Expected one documentation gate boundary' }
+    foreach ($command in @('./eng/Test-Documentation.ps1', './eng/Test-Documentation.Tests.ps1')) {
+        $indices = @(for ($i=0; $i -lt $steps.Count; $i++) { if ($steps[$i].Contains($command)) { $i } })
+        if ($indices.Count -ne 1 -or $indices[0] -le $previous -or $indices[0] -ge $boundaries[0]) {
+            throw "Missing, combined or late documentation gate: $command"
+        }
+        $step = $steps[$indices[0]]
+        $runs = [regex]::Matches($step, '(?m)^        run: (.+)\r?$')
+        if ($step -match '(?m)^        (?:if|continue-on-error):' -or
+            $runs.Count -ne 1 -or $runs[0].Groups[1].Value.Trim() -ne $command -or
+            $step -notmatch '(?m)^        shell: pwsh\r?$') { throw "Bypassable documentation gate: $command" }
+        $previous = $indices[0]
+    }
+    if ($text -notmatch '(?m)^          fetch-depth: 0(?:\s+#.*)?\r?$') {
+        throw 'Fixed Git evidence checks require full checkout history'
+    }
+}
+
 function Assert-ReleaseNotesGates([string]$text, [bool]$release) {
     $steps = @(Get-WorkflowSteps $text)
     $commands = if ($release) { @($notesTest, $notesPrepare) } else { @($notesTest) }
@@ -75,6 +98,7 @@ function Assert-EditorGates([string]$text, [bool]$release) {
 }
 
 function Assert-BuildWorkflow([string]$text) {
+    Assert-DocumentationGates $text $false
     if ([regex]::Matches($text, '(?m)^  [\w-]+:[ \t]*\r?$').Count -ne 4) {
         throw 'Expected push, pull_request, workflow_dispatch and one build job layout'
     }
@@ -89,6 +113,7 @@ function Assert-BuildWorkflow([string]$text) {
 }
 
 function Assert-ReleaseWorkflow([string]$text) {
+    Assert-DocumentationGates $text $true
     if ([regex]::Matches($text, '(?m)^  [\w-]+:[ \t]*\r?$').Count -ne 3) {
         throw 'Expected push, workflow_dispatch and one job layout'
     }
@@ -242,4 +267,35 @@ foreach ($kind in @('release', 'build')) {
     }
 }
 Write-Output "$notesMutationCount release-note workflow regressions rejected."
+
+$documentationMutationCount = 0
+foreach ($kind in @('release', 'build')) {
+    $original = if ($kind -eq 'release') { $source } else { $buildSource }
+    $steps = @(Get-WorkflowSteps $original)
+    $validation = '      - name: ' + ($steps | Where-Object { $_.Contains('./eng/Test-Documentation.ps1') })
+    $regression = '      - name: ' + ($steps | Where-Object { $_.Contains('./eng/Test-Documentation.Tests.ps1') })
+    $boundary = '      - name: ' + ($steps | Where-Object {
+        if ($kind -eq 'release') { $_.Contains('        id: ver') } else { $_.Contains($notesTest) }
+    })
+    $mutations = @(
+        @{ Name='missing documentation'; Text=$original.Replace($validation, '') },
+        @{ Name='missing regression'; Text=$original.Replace($regression, '') },
+        @{ Name='conditional documentation'; Text=$original.Replace($validation, $validation.Replace('        shell:', "        if: steps.ver.outputs.skip != 'true'`n        shell:")) },
+        @{ Name='conditional regression'; Text=$original.Replace($regression, $regression.Replace('        shell:', "        if: false`n        shell:")) },
+        @{ Name='ignored documentation failure'; Text=$original.Replace($validation, $validation.Replace('        run:', "        continue-on-error: true`n        run:")) },
+        @{ Name='masked regression failure'; Text=$original.Replace('run: ./eng/Test-Documentation.Tests.ps1', 'run: ./eng/Test-Documentation.Tests.ps1; exit 0') },
+        @{ Name='late validation'; Text=$original.Replace($validation, '').Replace($boundary, $boundary + $validation) },
+        @{ Name='shallow evidence checkout'; Text=$original.Replace('fetch-depth: 0', 'fetch-depth: 1') }
+    )
+    foreach ($mutation in $mutations) {
+        if ($mutation.Text -eq $original) { throw "Documentation mutation did not change ${kind}: $($mutation.Name)" }
+        $rejected = $false
+        try {
+            if ($kind -eq 'release') { Assert-ReleaseWorkflow $mutation.Text } else { Assert-BuildWorkflow $mutation.Text }
+        } catch { $rejected = $true }
+        if (!$rejected) { throw "Documentation bypass accepted in ${kind}: $($mutation.Name)" }
+        $documentationMutationCount++
+    }
+}
+Write-Output "$documentationMutationCount documentation workflow regressions rejected."
 

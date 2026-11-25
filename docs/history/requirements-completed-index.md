@@ -1,8 +1,8 @@
 # 요구사항 A번호 결과 색인
 
-현재 작업은 [REQUIREMENTS](../REQUIREMENTS.md), 실기기 범위는 [DEVICE-CHECKS](../DEVICE-CHECKS.md)를 따른다. A번호는 재사용하지 않는다. 완료는 해당 구현 범위의 결과이며 모든 환경의 실기기 통과를 뜻하지 않는다.
+현재 작업은 [REQUIREMENTS](../REQUIREMENTS.md), 실기기 범위는 [DEVICE-CHECKS](../DEVICE-CHECKS.md)를 따른다. 모든 A번호를 이 표에 한 번 등록하고 재사용하지 않는다. `열림`은 REQUIREMENTS의 열린 표로 연결하며 현재 상태는 그 표만 갱신한다. 나머지는 종결 결과의 정본이다. 옛 부분·보류 표기는 당시 판정이며 현재 열린 일로 자동 재개하지 않는다. 완료는 해당 구현 범위의 결과이며 모든 환경의 실기기 통과를 뜻하지 않는다.
 
-원문 정본: [정리 전 REQUIREMENTS 고정 스냅샷](https://github.com/zpstudios/kotu/blob/070e21af070996ba3d78fb440db9b4552f75a723/docs/REQUIREMENTS.md). 아래 원문 행은 이 커밋의 줄 번호다. Git에서 git show 070e21af070996ba3d78fb440db9b4552f75a723:docs/REQUIREMENTS.md로 검색·회수할 수 있다. 이미 이관된 더 오래된 상세는 [완료 요구사항 원문](completed-requirements.md)의 같은 A번호를 검색한다. 과거 모델 지정·배포 대기·시험 수치가 현재 지시를 대체하지 않는다.
+원문 정본: [정리 전 REQUIREMENTS 고정 스냅샷](https://github.com/zpstudios/kotu/blob/070e21af070996ba3d78fb440db9b4552f75a723/docs/REQUIREMENTS.md). 링크 없는 L숫자 원문 행은 이 커밋의 줄 번호다. 새 결과의 고정 링크는 각 링크에 표시된 커밋을 사용한다. Git에서 git show 070e21af070996ba3d78fb440db9b4552f75a723:docs/REQUIREMENTS.md로 검색·회수할 수 있다. 이미 이관된 더 오래된 상세는 [완료 요구사항 원문](completed-requirements.md)의 같은 A번호를 검색한다. 과거 모델 지정·배포 대기·시험 수치가 현재 지시를 대체하지 않는다.
 
 [과거 승인·상태 변화 L1–174](https://github.com/zpstudios/kotu/blob/070e21af070996ba3d78fb440db9b4552f75a723/docs/REQUIREMENTS.md#L1-L174), [후속 사용자 답변·질문 소진 L4610–4719](https://github.com/zpstudios/kotu/blob/070e21af070996ba3d78fb440db9b4552f75a723/docs/REQUIREMENTS.md#L4610-L4719).
 
@@ -11,7 +11,7 @@
 | <a id="a1"></a>A1 | 완료 | 메뉴 힌트 지연 툴팁 | L953–953 |
 | <a id="a2"></a>A2 | 완료 | 인스턴스 배지 | L953–953 |
 | <a id="a3"></a>A3 | 완료 | 아이콘 반전 | L953–953 |
-| <a id="a4"></a>A4 | 폐기 | 자체 탐색기 권한 조사·OS 탐색기 임베드 계획 폐기 | L1205–1209 |
+| <a id="a4"></a>A4 | 폐기 | 자체 탐색기 권한 조사·OS 탐색기 임베드 재검토 폐기. 구체적 권한 재현 기록 없음. | L1205–1209 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L51) |
 | <a id="a5"></a>A5 | 완료 | 리스트 정렬 이름/크기/수정일 — 그리드도 동일 순서 적용, explorer.sort 저장 | L1170–1174 |
 | <a id="a6"></a>A6 | 완료 | 리스트 길이 컬럼 — 미디어만, System.Media.Duration 지연 로드+캐시 | L1172–1172 |
 | <a id="a7"></a>A7 | 완료 | 파일 종류 필터 — 확장자별 체크 드롭다운+Show all, 세션 한정, 활성 시 아이콘 강조 | L1173–1173 |
@@ -26,7 +26,7 @@
 | <a id="a16"></a>A16 | 완료 | PDF 뷰어 — OS 내장 Windows.Data.Pdf 렌더(외부 의존성 없음)·.pdf 확장자 라우팅 추가 | L1759–1759 |
 | <a id="a17"></a>A17 | 완료 | 센서 모니터링 하단 그래프 10개 — LibreHardwareMonitor, 저하 모드 + Restart as admin 버튼 | L2566–2568 |
 | <a id="a18"></a>A18 | 완료 | 선택 센서 최대 2개 트레이 표시 — 카드 클릭 토글, 아이콘 1개에 2값 세로, 앱 실행 중 상시 | L2569–2575 |
-| <a id="a19"></a>A19 | 미착수 | HW 랭킹 제출 버튼 — 서버·개인정보 정책 설계 필요 (장기). | L2557–2557 |
+| <a id="a19"></a>A19 | 열림 | [현재 범위](../REQUIREMENTS.md#a19) | L2557–2557 |
 | <a id="a20"></a>A20 | 완료 | 네트워크 상태 — Network 섹션(Storage와 System 사이): 연결 여부·대표 어댑터(게이트웨이 기준)· | L2558–2558 |
 | <a id="a21"></a>A21 | 완료 | 현재 윈도우 디스플레이 배율 % 표시 — Display 섹션, 모니터별·변경 추종 | L3072–3072 |
 | <a id="a22"></a>A22 | 완료 | 드라이브 정보 표시 전면 개편 | L3178–3178 |
@@ -52,7 +52,7 @@
 | <a id="a42"></a>A42 | 완료 | 모듈별 설계 + UI/워커 스레드 분리 구조 정리 | L3139–3140 |
 | <a id="a43"></a>A43 | 완료 | 진짜 포터블 단일 파일 실행본 | L3220–3234 |
 | <a id="a44"></a>A44 | 완료 | A21 보강 — 배율 목록 항목 옆 "(current Windows setting)" 표기, 일치 없으면 별도 안내 줄, 기존 텍스트 줄 제거 | L3073–3073 |
-| <a id="a45"></a>A45 | 부분 완료 | HWP·오픈오피스(ODT 등) 뷰어 | L1760–1765 |
+| <a id="a45"></a>A45 | 열림 | [현재 범위](../REQUIREMENTS.md#a45) | L1760–1765 |
 | <a id="a46"></a>A46 | 완료 | 앱 이름 ZP → KOTU (King Of The Util) | L779–779 |
 | <a id="a47"></a>A47 | 완료 | "Restart as admin" 없이 센서 읽기 | L2576–2576 |
 | <a id="a48"></a>A48 | 완료 | 윈도우 디스플레이 배율 변경 | L3074–3074 |
@@ -119,10 +119,10 @@
 | <a id="a109"></a>A109 | 완료 | 모듈 전환 시 기본 화면 = 좌·우 사이드바 | L1270–1270 |
 | <a id="a110"></a>A110 | 완료 | [확인] 다중 인스턴스 오버레이/사이드바 상태·키 꼬임 검증 | L1271–1271 |
 | <a id="a111"></a>A111 | 완료 | Fit·1:1 버튼 전 모듈 규격 통일 | L3268–3268 |
-| <a id="a112"></a>A112 | 완료 | 마우스 뒤로가기 = 콘텐츠 닫기(썸네일 뷰 복귀) | L3269–3282 |
+| <a id="a112"></a>A112 | 완료 | 뒤로 가기 때 좌우 패널 상태 유지 — [사양](../guides/user-guide.ko.md#36-뒤로-가기) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L23) · 이전 L3269–3282 |
 | <a id="a113"></a>A113 | 완료 | 문서 모듈 정합성·편집 범위 확정 + 런타임 체크 ⓐ~ⓓ | L1770–1795 |
 | <a id="a114"></a>A114 | 완료 | 업데이트 체크 정책 4차 개정 | L3088–3088 |
-| <a id="a115"></a>A115 | 부분·재확인 | 장식 ①~③ 구현; 녹색 커서 ④는 네이티브 제약과 현 에디터 적용 여부 재확인 | L1796–1824 |
+| <a id="a115"></a>A115 | 열림 | [현재 범위](../REQUIREMENTS.md#a115) | L1796–1824 |
 | <a id="a116"></a>A116 | 완료 | [버그] 사이드바 25:50:25 비율 — 원인 규명·수정 | L1273–1273 |
 | <a id="a117"></a>A117 | 완료 | 탐색기 정렬에 '만든 날짜(date created)' 추가 | L1274–1279 |
 | <a id="a118"></a>A118 | 완료 | 오버레이/사이드바 키 = F1(좌)/F2(우) 전면 교체 — Alt+Z/X 폐지 | L1272–1272 |
@@ -149,7 +149,7 @@
 | <a id="a139"></a>A139 | 완료 | 아이콘 여백 최소화 + 배경·테두리 색 규칙 | L1094–1095 |
 | <a id="a140"></a>A140 | 완료 | 아이콘 여백 최소화 + 배경·테두리 색 규칙 | L1094–1095 |
 | <a id="a141"></a>A141 | 완료 | 하단 바 인스턴스 번호 배지 제거 | L1096–1097 |
-| <a id="a142"></a>A142 | 후속 검증 | ①②③⑤ 구현, ④는 A283→A291→A307 후속 검증으로 이관 | L1843–1860; L4718–4719 |
+| <a id="a142"></a>A142 | 열림 | [현재 범위](../REQUIREMENTS.md#a142) | L1843–1860; L4718–4719 |
 | <a id="a143"></a>A143 | 완료 | Fit 100% 옵션 아이콘 신설 | L3283–3283 |
 | <a id="a144"></a>A144 | 완료 | Fit 조절기 = 정사각 2버튼(32+32) | L3286–3286 |
 | <a id="a145"></a>A145 | 완료 | 전 모듈 공통 요소 전수조사 + 문서 Fit 존치 | L3287–3287 |
@@ -177,7 +177,7 @@
 | <a id="a167"></a>A167 | 완료 | 업데이트 재확인까지 남은 시간 카운트다운 | L3113–3114 |
 | <a id="a168"></a>A168 | 완료 | 센터 타일 열 수 = 4 / 6 / 8 | L2850–2861 |
 | <a id="a169"></a>A169 | 완료 | 트레이 아이콘 값 글씨를 채널 색으로 복원 | L2862–2863 |
-| <a id="a170"></a>A170 | 미확인 종결 | 밝기 변화 관찰은 사용자 지시로 미확인 종결 | L1105–1108 |
+| <a id="a170"></a>A170 | 미확인 종결 | 2026-08-29 사용자 확정으로 미확인 종결. 통과나 원인 규명으로 바꾸지 않는다. [과거 미확인 종결](device-checks-closed-unverified.md) | L1105–1108 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L52) |
 | <a id="a171"></a>A171 | 완료 | 문서 편집기 폭 조절 설정 | L1882–1908 |
 | <a id="a172"></a>A172 | 완료 | H/W 우 패널(스펙 텍스트) 폰트 80% | L2864–2864 |
 | <a id="a173"></a>A173 | 완료 | 업데이트 델타 다운로드 활성화 — release.yml `vpk download` 단계 | L3120–3121 |
@@ -288,7 +288,7 @@
 | <a id="a278"></a>A278 | 완료 | 업데이트 체크를 UI 스레드에서 백그라운드 워커로 이관 | L3314–3314 |
 | <a id="a279"></a>A279 | 완료 | 'Save as...' 후 창 제목이 옛 파일 이름으로 남는다 | L1929–1930 |
 | <a id="a280"></a>A280 | 완료 | 비활성 창에 가장자리 버튼이 남아 보인다 | L1356–1356 |
-| <a id="a281"></a>A281 | 조건부 보류 | 브랜드 에셋 레벨 1의 16px 중립 표식 가독성 재검토 | L789–793 |
+| <a id="a281"></a>A281 | 열림 | [현재 범위](../REQUIREMENTS.md#a281) | L789–793 |
 | <a id="a282"></a>A282 | 완료 | 자체 탐색기 PathBar에 홈(Home) 버튼 추가 | L1357–1358 |
 | <a id="a283"></a>A283 | 완료 | 에디터 가이드·EOF 마커 정합성 3건 | L2221–2264 |
 | <a id="a284"></a>A284 | 완료 | A283 재수리 3건 | L2179–2189 |
@@ -338,7 +338,7 @@
 | <a id="a328"></a>A328 | 완료 | 영상 정보 패널에 포맷상 정의된 속성 전부 나열 | L1509–1521 |
 | <a id="a329"></a>A329 | 완료 | 문서·압축 모듈 정보 패널에 포맷상 정의된 속성 전부 나열 | L1646–1664 |
 | <a id="a330"></a>A330 | 완료 | 오디오 실기기 결함 3건 | L1601–1616 |
-| <a id="a331"></a>A331 | 철회 | All Readable 좌 리스트 모듈 필터를 v321에서 되돌림 | L3021–3029 |
+| <a id="a331"></a>A331 | 철회 | 좌 리스트를 현재 모듈만으로 거르는 변경은 v321에서 철회. All Readable은 읽을 수 있는 모든 형식 유지. | L3021–3029 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L53) |
 | <a id="a332"></a>A332 | 완료 | 정보 패널 열림 축이 빈 값으로 굳는 결함 | L1617–1634 |
 | <a id="a333"></a>A333 | 완료 | 대용량 폴더 첫 진입에 좌 리스트·중앙 썸네일이 몇 초 정지 | L3483–3526 |
 | <a id="a334"></a>A334 | 완료 | 폴더 진입 구간 계측판 `diag.navTiming` 신설 — 구간 축 + 정지 축 | L3527–3543 |
@@ -349,17 +349,17 @@
 | <a id="a339"></a>A339 | 완료 | 타일 미리보기를 보이는 것만 — `DeferPreview` 신설 | L3573–3593 |
 | <a id="a340"></a>A340 | 완료 | 편집/보기 토글의 모드 모호성 해소 | L2290–2293 |
 | <a id="a341"></a>A341 | 완료 | 마크다운 표 지원 | L2294–2295 |
-| <a id="a342"></a>A342 | 완료 | 진입 정지 계측·개선, 500개 상한은 A345 가상화로 소진 | L2296–2409; L3626 |
+| <a id="a342"></a>A342 | 완료 | 진입 정지 계측/개선과 가상화 완료. 옛 500개 상한의 유지/복원 질문은 가상화로 소진. 스트리밍 열거 후보는 별도. [가상화](../features/explorer/virtualization-research-A345.md), 후보 41 | L2296–2409; L3626 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L54) |
 | <a id="a343"></a>A343 | 완료 | 대용량 텍스트/HTML 열기 — ⓐ | L2416–2416 |
 | <a id="a344"></a>A344 | 완료 | HTML 렌더 뷰 스크립트 허용 — A248 "스크립트 off" 반전 | L2410–2415 |
-| <a id="a345"></a>A345 | 완료 | 탐색기 좌 리스트·중앙 타일 UI 가상화 — ItemsSource + x:Bind DataTemplate + ContainerContentChanging | L2450–2456 |
+| <a id="a345"></a>A345 | 완료 | 진입 정지 계측/개선과 가상화 완료. 옛 500개 상한의 유지/복원 질문은 가상화로 소진. 스트리밍 열거 후보는 별도. [가상화](../features/explorer/virtualization-research-A345.md), 후보 41 | L2450–2456 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L54) |
 | <a id="a346"></a>A346 | 완료 | 이미지 ←/→ 순서 = 탐색기 좌 리스트 표시 순서 | L1426–1433 |
-| <a id="a347"></a>A347 | A346에 흡수 | 좌 리스트 ↔ 중앙 썸네일 순서 동기화 | L1403–1406 |
+| <a id="a347"></a>A347 | A346에 흡수 | A346에 흡수. 좌·중앙 순서 어긋남이 현 버전에서 재현될 때만 새 문제를 등록한다. | L1403–1406 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L55) |
 | <a id="a348"></a>A348 | 완료 | ←/→ 오토리피트 중 좌 리스트 현재 파일 표시 건너뜀 → 항해 시점 통지로 즉시 추종 | L1407–1414 |
 | <a id="a349"></a>A349 | 완료 | 영상·오디오 재생 중 이전/다음 파일 이동 — 키(`Ctrl+←`/`Ctrl+→` + `PageUp`/`PageDown`) · 하단 바 ⏮ ⏭ 버튼 · 미디어 키(Previous/Next Track) — 순서 = 탐색기 좌 리스트 표시 순서(낙수 43 흡수) | L1457–1508 |
 | <a id="a350"></a>A350 | 완료 | 미디어 플라이아웃 "알 수 없는 앱" → KOTU + 아이콘 | L796–814 |
 | <a id="a351"></a>A351 | 완료 | 좌 리스트의 "열린 콘텐츠 표시"를 선택 표시와 분리 — 전용 시각 요소 | L1374–1402 |
-| <a id="a352"></a>A352 | 완료 | StorageFile COM 펌프→XAML 재진입을 덤프로 확정·v349 수리 | L2867–3018; L3633 |
+| <a id="a352"></a>A352 | 완료 | v345~349 완료. UI 스레드 StorageFile 동기 호출의 COM 펌프→XAML 재진입을 덤프로 확정하고 수리. 옛 ‘미반영’ 제목을 현재 상태로 읽지 않는다. | L2867–3018; L3633 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L56) |
 | <a id="a353"></a>A353 | 완료 | 쓰기 중인 파일(로그 등)을 문서 모듈이 못 연다 → `FileShare.ReadWrite` | L2472–2476 |
 | <a id="a354"></a>A354 | 완료 | 전원 차단 복원 후 ❚❚ 무반응 — 일시정지 복원 + 자가 복구 | L1436–1436 |
 | <a id="a355"></a>A355 | 완료 | UI 스레드 StorageFile 잔여 4곳 워커 이관 | L2457–2457 |
@@ -370,7 +370,7 @@
 | <a id="a360"></a>A360 | 완료 | 비동기 시한·취소·늦은 결과 및 미디어 정책 공통화 | L697–735 |
 | <a id="a361"></a>A361 | 완료 | 전역 압축 백그라운드 작업 | L683–695 |
 | <a id="a362"></a>A362 | 완료 | 셸 모드·하단 바·문서·압축 UX 개선 | L668–675 |
-| <a id="a363"></a>A363 | 백로그 | 광고 서버와 분석 기능 | L677–776 |
+| <a id="a363"></a>A363 | 열림 | [현재 범위](../REQUIREMENTS.md#a363) | L677–776 |
 | <a id="a364"></a>A364 | 완료 | 하단 바 아이콘·치수·빈 화면 정합성 | L655–666 |
 | <a id="a365"></a>A365 | 완료 | 모듈별 하단 바 버튼 간격 정합성 | L641–653 |
 | <a id="a366"></a>A366 | 완료 | Fit 원본 배율(1:1) 아이콘 크기 보정 | L625–676 |
@@ -387,10 +387,10 @@
 | <a id="a377"></a>A377 | 완료 | PDF Fit width에서 내부 패널의 가운데 확대 때문에 생기는 왼쪽 여백과 우측 잘림 수리 | L542–549 |
 | <a id="a378"></a>A378 | 완료 | 손상·비압축 ZIP을 암호 파일로 오판하고 취소 후 `Reading archive...`가 남는 문제 | L504–522 |
 | <a id="a379"></a>A379 | 완료 | Settings Mission Statement의 `settings.ini beside the app` 문구를 실제 설정 정책과 일치시키기 | L523–535 |
-| <a id="a380"></a>A380 | 원인 조사 | All Readable 파일 전환 중 전체 프로세스 강제 종료 조사 | L467–479 |
+| <a id="a380"></a>A380 | 열림 | [현재 범위](../REQUIREMENTS.md#a380) | L467–479 |
 | <a id="a381"></a>A381 | 완료 | PDF Contain이 하단 바를 제외한 가시 영역에 페이지 전체를 넣지 못함 | L480–495 |
-| <a id="a382"></a>A382 | 완료 | 편집 중 Alt+Enter의 사용자 가이드와 실행 동작 정합성 | L496–503 |
-| <a id="a383"></a>A383 | 후속 A416·A417로 대체 | 상위 이동 첫 항목은 후속 A416·A417 계약을 따름; 옛 타일 제안 자동 착수 금지 | L447–466 |
+| <a id="a382"></a>A382 | 완료 | 편집 중 Alt+Enter와 녹화 저장 후속은 v426 정식 배포 완료. 옛 v425 이후 ‘배포 전’ 체크포인트는 이력. [통합 후속](../features/recording/recording-save-and-editor-fullscreen.md) | L496–503 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L57) |
+| <a id="a383"></a>A383 | 후속 A416·A417로 대체 | 상위 첫 항목 요구는 후속 A416·A417에서 다뤘다. 예전 `..` 타일 모양 제안은 현재 아이콘 계약을 덮어쓰지 않는다. [A416](../features/explorer/explorer-selection-layout-A416.md), [A417](../features/explorer/explorer-refresh-A417.md) | L447–466 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L58) |
 | <a id="a384"></a>A384 | 완료 | 좌측 폴더 트리의 글자와 행 높이를 압축 | L394–399 |
 | <a id="a385"></a>A385 | 완료 | 중앙 썸네일 축소 품질 개선 | L400–407 |
 | <a id="a386"></a>A386 | 완료 | UI와 작업 스레드 분리 구조 종합 검토 | L408–415 |
@@ -405,23 +405,42 @@
 | <a id="a395"></a>A395 | 완료 | 영상 Fit 본체와 ▼ 통합, 기존 전체70×32 DIP 유지 | L358–361 |
 | <a id="a396"></a>A396 | 완료 | TXT 찾기·바꾸기와 하단 검색 입력 상시 표시 | L175–177 |
 | <a id="a397"></a>A397 | 완료 | 빈 자체 탐색기 S1에서 Esc로 현재 창 닫기 | L178–181 |
-| <a id="a398"></a>A398 | 부분 완료 | 사진 EXIF 방향 자동 보정 보완 | L182–193 |
-| <a id="a399"></a>A399 | 구현 완료·원인 미확정 | OneDrive 연동 폴더 썸네일 누락·새로고침 불량 | L194–209 |
+| <a id="a398"></a>A398 | 열림 | [현재 범위](../REQUIREMENTS.md#a398) | L182–193 |
+| <a id="a399"></a>A399 | 열림 | [현재 범위](../REQUIREMENTS.md#a399) | L194–209 |
 | <a id="a400"></a>A400 | 완료 | 이미지 Ctrl+C의 빈 데이터·키 전달 보강 | L210–213 |
-| <a id="a401"></a>A401 | 부분 완료·실기기 잔여 | 아주 큰 문서 스크롤·연속 Enter 입력 지연 조사와 개선 | L214–257 |
-| <a id="a402"></a>A402 | 완료 | 녹화 비디오 소스 후보에 카메라 장치 추가 | L258–264 |
-| <a id="a403"></a>A403 | 완료 | 녹음·화면·카메라 시작 버튼 분리 | L265–269 |
+| <a id="a401"></a>A401 | 열림 | [현재 범위](../REQUIREMENTS.md#a401) | L214–257 |
+| <a id="a402"></a>A402 | 완료 | 녹화 비디오 소스 후보에 카메라 장치 추가. 실제 장치 실패·활성 통합 검증은 [보류](../DEVICE-CHECKS.md#recording). | L258–264 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L59) |
+| <a id="a403"></a>A403 | 완료 | 녹음·화면·카메라 시작 버튼 분리. [실제 녹음·녹화 범위](../DEVICE-CHECKS.md#recording)는 별도 보류. | L265–269 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L59) |
 | <a id="a404"></a>A404 | 현행 검증 종결 | Record Open file 노출·빈자리 없음 확인 | L270–273 |
-| <a id="a405"></a>A405 | 완료 | 공통 Documents/KOTU 저장 폴더 | L274–278 |
-| <a id="a406"></a>A406 | 보류 | 메뉴를 약 3초 누르면 스텔스 녹음 시작 | L279–293 |
-| <a id="a407"></a>A407 | 보류 | 스텔스 녹음 중 닫기 동작과 트레이 표시 | L294–303 |
-| <a id="a408"></a>A408 | 완료 | 1:1 원본 배율 아이콘과 버튼을 매끄럽게 개선 | L304–317 |
-| <a id="a409"></a>A409 | 완료 | 편집기 hover 배경·검색 후 선택 강조 안정화 | L318–323 |
+| <a id="a405"></a>A405 | 완료 | 공통 Documents/KOTU 저장 폴더. [활성 녹음·녹화 검증](../DEVICE-CHECKS.md#recording)은 별도 보류. | L274–278 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L59) |
+| <a id="a406"></a>A406 | 열림 | [현재 범위](../REQUIREMENTS.md#a406) | L279–293 |
+| <a id="a407"></a>A407 | 열림 | [현재 범위](../REQUIREMENTS.md#a407) | L294–303 |
+| <a id="a408"></a>A408 | 완료 | 1:1 원본 배율 아이콘과 버튼을 매끄럽게 개선. 최신 맞춤 메뉴 v427. [미실행 조합](../DEVICE-CHECKS.md) 유지. | L304–317 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L60) |
+| <a id="a409"></a>A409 | 완료 | 편집기 hover 배경·검색 후 선택 강조 안정화. [실제 클립보드·테마 검증](../DEVICE-CHECKS.md#editor)은 별도. | L318–323 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L60) |
 | <a id="a410"></a>A410 | 완료 | 이미지 우클릭 Copy image 메뉴 | L324–327 |
-| <a id="a411"></a>A411 | 완료 | 영상 Contain 표시와 실제 배율 동기화 | L328–331 |
-| <a id="a412"></a>A412 | 완료 | 영상 재생 중 앱 UI 배율 변경의 출력 영역 갱신 | L332–355 |
-| <a id="a413"></a>A413 | 완료 | 문서 편집기 여백·정렬·검정 배경 — [기능 정본](../features/shell/ui-followups-A413-A415.md) | 기능 정본의 A413 절 |
-| <a id="a414"></a>A414 | 완료 | 탐색기 파일명 필터·Windows식 문자 선택 탐색 — [기능 정본](../features/shell/ui-followups-A413-A415.md) | 기능 정본의 A414 절 |
-| <a id="a415"></a>A415 | 완료 | 아이콘 감사와 승인 A안(줄번호·EQ·스피커) 반영 — [기능 정본](../features/shell/ui-followups-A413-A415.md) | 기능 정본의 A415 절 |
-| <a id="a416"></a>A416 | 완료 | 중앙 Space 체크·상위 첫 타일·패널 배치 복원 | L57–65 |
-| <a id="a417"></a>A417 | 완료 | 탐색기 갱신·선택·탐색 입력·트리 초점 정리 | L5–59 |
+| <a id="a411"></a>A411 | 완료 | 영상 Contain 표시와 실제 배율 동기화. [네이티브 재생 검증](../DEVICE-CHECKS.md#native-media)은 별도. | L328–331 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L60) |
+| <a id="a412"></a>A412 | 완료 | 영상 재생 중 앱 UI 배율 변경의 출력 영역 갱신. [네이티브 재생 검증](../DEVICE-CHECKS.md#native-media)은 별도. | L332–355 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L60) |
+| <a id="a413"></a>A413 | 완료 | 문서 편집기 여백·정렬·검정 배경 — [기능 정본](../features/shell/ui-followups-A413-A415.md). 같은 요구의 재등록 방지는 [A417](#a417) 참조. | 기능 정본의 A413 절 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L61) |
+| <a id="a414"></a>A414 | 완료 | 탐색기 파일명 필터·Windows식 문자 선택 탐색 — [기능 정본](../features/shell/ui-followups-A413-A415.md). 같은 요구의 재등록 방지는 [A417](#a417) 참조. | 기능 정본의 A414 절 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L61) |
+| <a id="a415"></a>A415 | 완료 | 아이콘 감사와 승인 A안(줄번호·EQ·스피커) 반영 — [기능 정본](../features/shell/ui-followups-A413-A415.md). 같은 요구의 재등록 방지는 [A417](#a417) 참조. | 기능 정본의 A415 절 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L61) |
+| <a id="a416"></a>A416 | 완료 | 중앙 Space 체크·상위 첫 타일·패널 배치 복원. 같은 요구의 재등록 방지는 [A417](#a417) 참조. | L57–65 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L61) |
+| <a id="a417"></a>A417 | 완료 | 탐색기 갱신·선택·탐색 입력·트리 초점 정리. 복구 4문서 [대조](recovered-notes-review-A417.md) 완료; 같은 요구를 재등록하지 않는다. | L5–59 · [유효 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L61) |
+| <a id="a418"></a>A418 | 열림 | 테스트판 동시 설치 중 정식판 웹 업데이트 검수 — [현재 범위](../REQUIREMENTS.md#a418) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L31) |
+| <a id="a419"></a>A419 | 완료 | 외부 저장 이미지와 이웃 캐시 자동 갱신 — [v0.430.0](../RELEASE-v0.430.0.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L30) |
+| <a id="a420"></a>A420 | 완료 | 정보 패널의 작은 파일 크기를 탐색기와 같은 단위로 표시 — [v0.431.1](../RELEASE-v0.431.1.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L109) |
+| <a id="a421"></a>A421 | 완료 | HWP 본문 초점 뒤 한 번의 Esc로 탐색 복귀 — [v0.431.2](../RELEASE-v0.431.2.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L29) |
+| <a id="a422"></a>A422 | 완료 | HWP 공통 맞춤·쪽 이동 및 About 고지 — [v0.431.3](../RELEASE-v0.431.3.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L28) |
+| <a id="a423"></a>A423 | 완료 | PDF/HWP 용지 가장자리 구분 — [v0.431.4](../RELEASE-v0.431.4.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L27) |
+| <a id="a424"></a>A424 | 완료 | 맞춤 메뉴 획 통일·시스템 툴팁 글꼴 — [v0.431.4](../RELEASE-v0.431.4.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L26) |
+| <a id="a425"></a>A425 | 완료 | 공통 조작부 기본 기하체·얇은 선 전환 — [v0.432.0](../RELEASE-v0.432.0.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L25) |
+| <a id="a426"></a>A426 | 완료 | 탐색기·문서 공통 하단 버튼 위치 유지 — [v0.432.1](../RELEASE-v0.432.1.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L24) |
+| <a id="a427"></a>A427 | 완료 | 11종 전체 UI 디자인 적용 — [현재 사양](../features/shell/design-library-A427.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L22) |
+| <a id="a428"></a>A428 | 완료 | 갤러리 하나로 선택 단순화, 제거 기능 Git 복원 — [선택 계약](../features/shell/design-library-A427.md#설정에서-선택) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L21) |
+| <a id="a429"></a>A429 | 완료 | 시작 메뉴 항목 사이 배경 비침 수리 — [배경 소유권](../features/shell/design-library-A427.md#실제-요소-연결-원칙) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L20) |
+| <a id="a430"></a>A430 | 완료 | 폴더명과 펼침 표시 중심 정렬 — [정렬 사양](../features/explorer/tree-density-A384.md#a430-이름과-펼침-표시-정렬) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L19) |
+| <a id="a431"></a>A431 | 완료 | 밀도·배치를 유지한 Paper 외형, 색상 시험 판정 정정 — [비교 계약](../features/shell/design-library-A427.md#사용성을-보존한-대표-검수) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L18) |
+| <a id="a432"></a>A432 | 완료 | 나머지 10종 외형을 기존 밀도·배치 안에서 정리 — [적용 사양](../features/shell/design-library-A427.md#a432) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L17) |
+| <a id="a433"></a>A433 | 완료 | 자동 열 감소·v0.433.6 설치 요청 철회, 고정 6/9/12열·조작부 비례 축소로 정정 — [정정 사양](../features/explorer/tile-captions-A387.md#a433-고정-열-수와-조작부-비례-축소--v04337) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L16) |
+| <a id="a434"></a>A434 | 완료 | Original을 첫 기본 디자인으로 복원, 기존 11종 선택 보존 — [현재 사양](../features/shell/design-library-A427.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L15) |
+| <a id="a435"></a>A435 | 완료 | 테마 전환·필터 적용/해제 시 현재 기본·활성색 유지 — [v0.433.9](../RELEASE-v0.433.9.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L14) |
+| <a id="a436"></a>A436 | 열림 | 문서 역할 정리·완료 절차·구조 검사와 CI — [현재 범위](../REQUIREMENTS.md#a436) | [정리 절차](../development/maintenance-notes.md#document-lifecycle) |

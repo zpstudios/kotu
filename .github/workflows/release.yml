@@ -36,6 +36,15 @@ jobs:
         with:
           fetch-depth: 0   # 태그 존재 확인용
 
+      # These gates run even when the product version is already released (documentation-only changes).
+      - name: Documentation lifecycle
+        shell: pwsh
+        run: ./eng/Test-Documentation.ps1
+
+      - name: Documentation checker regression
+        shell: pwsh
+        run: ./eng/Test-Documentation.Tests.ps1
+
       - name: 버전 읽기 + 릴리스 필요 여부 판단
         id: ver
         shell: pwsh

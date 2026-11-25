@@ -1,0 +1,29 @@
+# 작업 근거 회수 색인
+
+현재 사양은 기능 문서, 현재 열린 상태는 [요구사항](../REQUIREMENTS.md), 현재 검증 경계는 [실기기 확인](../DEVICE-CHECKS.md)이 정본이다. 여기는 원문을 복사하지 않고 고유한 요구·정정·실패·보호 자료를 회수하는 공용 입구다. 향후 작업도 기존 주제/행을 갱신하며 작업별 장문 보관 문서를 추가하지 않는다.
+
+## 고정 원문
+
+| 회수할 내용 | 위치 |
+|---|---|
+| A418–A435 및 A112의 요구·당시 판단 | [결과 색인](requirements-completed-index.md)에 A번호별 정본·고정 행 링크 |
+| v0.428.0–v0.433.9 제품 커밋·CI번호·배포/설치 결과·근거 파일 | [2026-11-25 HANDOVER](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L1-L38) |
+| A427–A435 화면 조건·측정·복원 차이·실패·미관측 | [당시 실기기 원문](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L54-L65). 현재 남은 조건은 실기기 표에서만 갱신 |
+| A433 자동 열 감소 해석·설치 요청 철회와 고정 열 정정 | [요구와 사용자 정정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L16) · [철회 검수](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L56-L57) · [정정 사양](../features/explorer/tile-captions-A387.md#a433-고정-열-수와-조작부-비례-축소--v04337) |
+| A431 색상 시험 판정 취소·격리 역사본/대표 비교의 정확한 조건 | [세 차례 관측과 한계](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L59-L61) |
+| A434 당시 필터 검정 잔류·기존 결함 판정·슬라이더 관측 한계 | [당시 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L55). 필터 후속 수리는 [A435](requirements-completed-index.md#a435)이며 당시 관측을 바꾸지 않음 |
+| 이전 문서 다이어트의 원문과 회수 경로 | [요구 색인](requirements-completed-index.md) · [실기기 색인](device-checks-index.md) · [인수인계 색인](handover-index-through-2026-11-17.md) |
+
+<a id="protected-material"></a>
+## 보호 자료 위치
+
+최신 설치 백업은 [HANDOVER](../HANDOVER.md)의 현재 상태로 찾는다. 아래는 이전 보호 대상을 찾는 경로다. 로컬 자료의 존재 여부와 Git 원문에 경로가 남아 있다는 사실은 다르다. 삭제·수정·재생성으로 부재 사실을 덮지 않는다.
+
+| 자료 | 회수 위치와 보호 범위 |
+|---|---|
+| 이전 설치·설정·기준 JSON | [전체 보호 경로 및 설치 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L36). A434 v0.433.7, A433 v0.433.5, A432 v0.433.4, A431/A430 및 이전 v0.433.3·v0.433.2·v0.433.0·v0.432.2 백업과 독립 복구 보존본 포함 |
+| 백업별 상세 근거·철회된 A433 배포 | [당시 배포 기록](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L7-L26). A433 정정판은 기존 v0.433.5 보호 백업을 재사용했으며 철회판을 요구 완료로 세지 않음 |
+| 과거 v0.427.0 백업 경로 조회 부재 | [A427 당시 기록](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L23) · [최종 확인](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L36). 현재 존재를 주장하지 않음 |
+| 복구 문서 4개와 독립 복구 보존본 | [이관·중복 폐기 판단](recovered-notes-review-A417.md). 독립 보존본은 보호를 유지 |
+
+고정 링크의 커밋은 67c4b1c834a15e45b53f8d5f8e29466dc5ce9172 이며 파일과 행 범위는 그 스냅샷 기준이다. 로컬에서도 git show 커밋:경로로 회수할 수 있다. 이 색인은 과거 결과를 현재 승인이나 전 환경 통과로 승격하지 않는다.
