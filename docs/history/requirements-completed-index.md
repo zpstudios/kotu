@@ -491,7 +491,7 @@
 | <a id="candidate-36"></a>36 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-36) | L3804–3813 |
 | <a id="candidate-37"></a>37 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-37) | L3814–3822 |
 | <a id="candidate-38"></a>38 | A420 완료 | 이미지·오디오·영상 정보 패널의 크기 표기를 탐색기의 B/KB/MB/GB 기준으로 통일했다. [버전별 변경](../RELEASE-v0.431.1.md) | L3823–3830 |
-| <a id="candidate-39"></a>39 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-39) | L3831–3842 |
+| <a id="candidate-39"></a>39 | 소진 A386 | 탐색의 동기 UI 저장은 v0.387.0 비동기 직렬 저장·최신 대기 병합·정상 종료 최종 저장으로 해소됐다. 현 소스·시험 재대조와 관측 한계는 [설정 저장](../verification/ui-worker-audit-A386.md#settings-persistence)을 따른다. | L3831–3842 |
 | <a id="candidate-40"></a>40 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-40) | L3843–3871 |
 | <a id="candidate-41"></a>41 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-41) | L3872–3879 |
 | <a id="candidate-42"></a>42 | 소진 A345 | 재실체화된 컨테이너에 미리보기 완료 적용, v338. | L3880–3884 |

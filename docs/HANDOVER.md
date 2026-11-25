@@ -8,6 +8,7 @@
 - **보호 백업**: 교체 전 v0.433.8의 `artifacts/a435-review/pre-update-backup/` 1,182파일과 43설정키 기준을 재검증했다. 상위 `artifacts/a435-review/`의 `backup-coverage.json`, `pre-update-request*.json`, `pre-update-revalidation.json`을 함께 보존한다. 이전 백업·독립 복구 보존본·과거 경로 부재 사실은 [보호 자료 위치](history/evidence-index.md#protected-material)를 통해 회수한다. 문서 정리는 이 자료의 수정·삭제 근거가 아니다.
 - **작업 환경**: `C:/Users/tsusa/github/kotu`의 master를 유지한다. 사용자 `.codex/`는 작업·검사 입력에서 제외하며 추적하지 않는다. 공식 앱 업데이트·재시작과 별도 검수 앱의 상시 승인은 [공식 절차](development/official-release-and-install.md)에 기록된 범위를 따른다.
 - **문서 운영**: [A436](history/requirements-completed-index.md#a436)에서 실제 남은 일·완료 결과·확정 계약·검수 대기를 각각 정본으로 분리하고 고유 정보·근거와 기존 주소를 보존했다. [완료·인계 절차](development/maintenance-notes.md#document-lifecycle)와 역할·상태·중복·링크 검사, 회귀시험을 build/release에 연결했다.
+- **최근 작업**: [후보 39](history/requirements-completed-index.md#candidate-39)는 현재 탐색·종료의 저장 경로와 관련 시험을 재대조해 A386 소진으로 종결했다. [재대조 근거·관측 한계](verification/ui-worker-audit-A386.md#settings-persistence). 제품 코드·버전·설치본 변경은 없다.
 
 ## 열린 작업과 다음 시작점
 

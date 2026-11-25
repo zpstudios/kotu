@@ -4,6 +4,7 @@
 검토 계획의 우선 개선 1→2→3→4 순차 구현이다. 다른 백로그는 구현하지 않는다.
 코드 사실·자동 시험·실환경 측정을 구분하며 빌드 통과를 UI 응답성 입증으로 표현하지 않는다.
 
+<a id="settings-persistence"></a>
 ## 1. 설정 저장 — v0.387.0
 
 최대 함정은 비동기화하면서 저장 순서와 해제 시 마지막 스냅샷을 잃는 것이다.
@@ -30,6 +31,14 @@ UI 호출자(셸·탐색기·설정·문서·영상·오디오·압축·하드�
 구조20프로젝트·릴리스 게이트7변형·diff·한글 이스케이프 검사 통과.
 증거: `artifacts/a386-1-build.log`, `a386-1-tests-final.log`, `a386-1-fileops-unrestricted.log`,
 `TestResults/a386-1-final`, `TestResults/a386-1-unrestricted`.
+
+**2026-11-26 후보 39 재대조**: `710920f77ed45f1980d32496f29c973c8e367022`의 탐색 경로는
+`RememberBrowsedFolder` → `RequestSave`이며 `RecordFolderHistory`는 메모리 목록만 갱신한다.
+저장 워커·최신 배치 순서·정상 닫기/재시작의 최종 `SaveAsync`를 독립 검토하고,
+`JsonSettingsServiceTests`·`MemorySettingsServiceTests`·`ExplorerSessionTests`·`ExplorerFolderPreferencesTests`
+55개를 Release/x64로 다시 빌드·실행해 전부 통과했다. 제품 변경 없이 [후보 39](../history/requirements-completed-index.md#candidate-39)를
+A386 소진으로 종결한다. 이는 동기 디스크 저장 경로의 해소와 자동 회귀 확인이며, 실제 탐색 지연 시간·프레임 반응성의
+새 측정이나 강제 종료·전원 차단 때 마지막 위치 보존을 입증한 결과는 아니다. 기존 저장 실패 UI 등 미관측 범위는 유지한다.
 
 ## 2. 사용자 경로 조회 — v0.388.0
 
