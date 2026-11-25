@@ -12,22 +12,29 @@ $baseline = @{
     'docs/REQUIREMENTS.md' = @'
 # Requirements
 
-마지막 등록 번호는 **A2**이다.
+마지막 등록 번호는 **A2**, 마지막 후보 번호는 **1**이다.
 
 ## 열린 작업과 보류
 
-| ID | 상태 | 범위 | 다음 |
+| ID | 상태 | 남은 일 유형 | 남은 일·착수 조건 | 근거 |
+|---|---|---|---|---|
+| <a id="a2"></a>A2 | 부분 | 개발 | Another format still needs a decoder. | Select the remaining implementation. |
+
+## 미해결 후보
+
+| 후보 | 상태 | 남은 일 유형 | 남은 일·판단 조건 |
 |---|---|---|---|
-| <a id="a2"></a>A2 | 부분 | Implemented scope is complete; real input remains unobserved. | Observe only when selected. |
+| <a id="candidate-1"></a>1 | 재확인 | 조사 | Compare an unresolved report with the current implementation. |
 
-## 이전 완료 링크 호환
+## 이전 주소 호환
 
-<a id="a1"></a>[A1](history/requirements-completed-index.md#a1)
+<a id="current-decisions"></a>[Current contracts](features/product-contracts.md)
 '@
     'docs/DEVICE-CHECKS.md' = "# Verification`n`n[Open](REQUIREMENTS.md#a2)`n`n| Scope | Observed | Remaining |`n|---|---|---|`n| Input | Automatic input only | Physical input remains |"
     'docs/README.md' = '# Map'
     'docs/development/maintenance-notes.md' = '# Lifecycle procedure'
     'docs/development/official-release-and-install.md' = '# Release procedure'
+    'docs/features/product-contracts.md' = '# Current product contracts'
     'docs/history/requirements-completed-index.md' = @'
 # Requirement index
 
@@ -35,6 +42,10 @@ $baseline = @{
 |---|---|---|---|
 | <a id="a1"></a>A1 | 완료 | Initial scope | Existing source |
 | <a id="a2"></a>A2 | 열림 | [Current scope](../REQUIREMENTS.md#a2) | Existing source |
+
+| 후보 | 상태 | 결과 또는 현재 위치 | 원문 행 |
+|---|---|---|---|
+| <a id="candidate-1"></a>1 | 열림 | [Remaining work](../REQUIREMENTS.md#candidate-1) | Original source |
 '@
 }
 function Write-Fixture([string]$file, [string]$body) {
@@ -67,6 +78,12 @@ function Assert-HostExit([string]$name, [string]$invocation, [bool]$success, [st
     }
     $script:passed++
 }
+function Move-FixtureToVerification {
+    Write-Fixture 'docs/REQUIREMENTS.md' ($baseline['docs/REQUIREMENTS.md'] -replace '(?m)^\| <a id="a2"[^\n]*\n','')
+    Write-Fixture 'docs/history/requirements-completed-index.md' $baseline['docs/history/requirements-completed-index.md'].Replace('A2 | 열림 |','A2 | 검수 대기 |').Replace('(../REQUIREMENTS.md#a2)','(../DEVICE-CHECKS.md#a2)')
+    Write-Fixture 'docs/DEVICE-CHECKS.md' ("# Verification`n`n| Scope | Remaining |`n|---|---|`n| <a id=`"a2`"></a>A2 | Physical input remains unobserved. |")
+    Write-Fixture 'docs/HANDOVER.md' $baseline['docs/HANDOVER.md'].Replace('A2 부분','A2 검수 대기').Replace('(REQUIREMENTS.md#a2)','(DEVICE-CHECKS.md#a2)')
+}
 try {
     Assert-Case 'partial implementation remains legitimately open' {}
     Assert-Case 'completed result cannot stay in open table' {
@@ -81,9 +98,9 @@ try {
     Assert-Case 'open state must agree with index' {
         Write-Fixture 'docs/history/requirements-completed-index.md' $baseline['docs/history/requirements-completed-index.md'].Replace('A2 | 열림 |','A2 | 완료 |')
     } 'status-reference'
-    Assert-Case 'lost compatibility anchor breaks old links' {
-        Write-Fixture 'docs/README.md' '[Old URL](REQUIREMENTS.md#a1)'
-        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('<a id="a1"></a>','')
+    Assert-Case 'lost current anchor breaks existing links' {
+        Write-Fixture 'docs/README.md' '[Existing URL](REQUIREMENTS.md#a2)'
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('<a id="a2"></a>','')
     } 'local-link'
     Assert-Case 'missing local file' { Write-Fixture 'docs/README.md' '[Broken](missing.md)' } 'local-link'
     $paragraph = 'A unique observation must retain its boundary and source. ' * 4
@@ -104,6 +121,9 @@ try {
     Assert-Case 'handover growing item count' {
         Write-Fixture 'docs/HANDOVER.md' ($baseline['docs/HANDOVER.md'] + ((1..10 | ForEach-Object { "`n- Old item $_." }) -join ''))
     } 'handover-role'
+    Assert-Case 'an indented history table still violates the handover role' {
+        Write-Fixture 'docs/HANDOVER.md' ($baseline['docs/HANDOVER.md'] + "`n  | Release | Old result |`n  |---|---|`n  | v1 | Completed |")
+    } 'handover-role'
     Assert-Case 'long completed detail in one handover item' {
         Write-Fixture 'docs/HANDOVER.md' ($baseline['docs/HANDOVER.md'] + "`n- " + ('Finished detail. ' * 50))
     } 'handover-role'
@@ -120,10 +140,95 @@ try {
         Write-Fixture 'docs/HANDOVER.md' ($baseline['docs/HANDOVER.md'] + "`n- **Context**: A1 is an earlier result; A2 remains open.")
     }
     Assert-Case 'new selected coverage may grow registration and current rows' {
-        $req = $baseline['docs/REQUIREMENTS.md'].Replace('**A2**','**A3**').Replace('## 이전 완료 링크 호환', "| <a id=`"a3`"></a>A3 | 보류 | New scope with distinct limits. | Await selected work. |`n`n## 이전 완료 링크 호환")
+        $req = $baseline['docs/REQUIREMENTS.md'].Replace('**A2**','**A3**').Replace('## 미해결 후보', "| <a id=`"a3`"></a>A3 | 보류 | 개발 | New scope with distinct limits. | Await selected work. |`n`n## 미해결 후보")
         Write-Fixture 'docs/REQUIREMENTS.md' $req
         Write-Fixture 'docs/history/requirements-completed-index.md' ($baseline['docs/history/requirements-completed-index.md'] + "`n| <a id=`"a3`"></a>A3 | 열림 | [Current](../REQUIREMENTS.md#a3) | Source |")
     }
+    Assert-Case 'verification-only work does not belong in development requirements' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('A2 | 부분 | 개발 |','A2 | 부분 | 검수 대기 |')
+    } 'remaining-work'
+    Assert-Case 'settled policy is not an unresolved decision type' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('A2 | 부분 | 개발 |','A2 | 부분 | 확정 결정 |')
+    } 'remaining-work'
+    Assert-Case 'verification migration retains its own pending state and selectable action' {
+        Move-FixtureToVerification
+    }
+    Assert-Case 'verification must not point back to remaining development' {
+        Move-FixtureToVerification
+        Write-Fixture 'docs/history/requirements-completed-index.md' $baseline['docs/history/requirements-completed-index.md'].Replace('A2 | 열림 |','A2 | 검수 대기 |')
+    } 'verification-reference'
+    Assert-Case 'verification must have a precise destination anchor' {
+        Move-FixtureToVerification
+        Write-Fixture 'docs/DEVICE-CHECKS.md' '# Verification without an anchor'
+    } 'verification-reference'
+    Assert-Case 'verification cannot also remain in the development table' {
+        Move-FixtureToVerification
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md']
+    } 'verification-reference'
+    Assert-Case 'settled decisions cannot return as a requirements appendix' {
+        Write-Fixture 'docs/REQUIREMENTS.md' ($baseline['docs/REQUIREMENTS.md'] + "`n## Current product decisions`n`nA settled policy.")
+    } 'requirements-role'
+    Assert-Case 'a decision table cannot hide inside legacy redirects' {
+        Write-Fixture 'docs/REQUIREMENTS.md' ($baseline['docs/REQUIREMENTS.md'] + "`n| Topic | Settled contract |`n|---|---|`n| Rendering | Fixed policy |")
+    } 'requirements-role'
+    Assert-Case 'a decision table cannot hide in the introduction' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('## 열린 작업과 보류',"| Topic | Settled contract |`n|---|---|`n| Rendering | Fixed policy |`n`n## 열린 작업과 보류")
+    } 'requirements-role'
+    Assert-Case 'an indented decision table cannot hide in the introduction' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('## 열린 작업과 보류'," | Topic | Settled contract |`n |---|---|`n | Rendering | Fixed policy |`n`n## 열린 작업과 보류")
+    } 'requirements-role'
+    Assert-Case 'an indented decision table cannot hide among remaining requirements' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('## 미해결 후보'," | Topic | Settled contract |`n |---|---|`n | Rendering | Fixed policy |`n`n## 미해결 후보")
+    } 'requirements-role'
+    Assert-Case 'an indented decision table cannot hide among unresolved candidates' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('## 이전 주소 호환'," | Topic | Settled contract |`n |---|---|`n | Rendering | Fixed policy |`n`n## 이전 주소 호환")
+    } 'requirements-role'
+    Assert-Case 'an indented decision table cannot hide inside legacy redirects' {
+        Write-Fixture 'docs/REQUIREMENTS.md' ($baseline['docs/REQUIREMENTS.md'] + "`n  | Topic | Settled contract |`n  |---|---|`n  | Rendering | Fixed policy |")
+    } 'requirements-role'
+    Assert-Case 'normal indented current and permanent tables remain valid' {
+        Write-Fixture 'docs/REQUIREMENTS.md' ([regex]::Replace($baseline['docs/REQUIREMENTS.md'],'(?m)^\|','  |'))
+        Write-Fixture 'docs/history/requirements-completed-index.md' ([regex]::Replace($baseline['docs/history/requirements-completed-index.md'],'(?m)^\|','  |'))
+    }
+    Assert-Case 'completed candidate cannot remain among unresolved candidates' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('1 | 재확인 | 조사 |','1 | 소진 A1 | 조사 |')
+    } 'candidate-status'
+    Assert-Case 'candidate registry cannot lose an old number' {
+        Write-Fixture 'docs/history/requirements-completed-index.md' ($baseline['docs/history/requirements-completed-index.md'] -replace '(?m)^\| <a id="candidate-1"[^\n]*\n?','')
+    } 'candidate-id'
+    Assert-Case 'candidate registry cannot duplicate a number' {
+        Write-Fixture 'docs/history/requirements-completed-index.md' ($baseline['docs/history/requirements-completed-index.md'] + "`n| <a id=`"candidate-1`"></a>1 | 열림 | [Remaining](../REQUIREMENTS.md#candidate-1) | Source |")
+    } 'candidate-id'
+    Assert-Case 'candidate state and current location must agree' {
+        Write-Fixture 'docs/history/requirements-completed-index.md' $baseline['docs/history/requirements-completed-index.md'].Replace('1 | 열림 | [Remaining','1 | 완료 | [Remaining')
+    } 'candidate-reference'
+    Assert-Case 'terminal candidate details cannot accumulate in an index row' {
+        Write-Fixture 'docs/history/requirements-completed-index.md' $baseline['docs/history/requirements-completed-index.md'].Replace('Original source',('Historical details. ' * 60))
+    } 'row-detail'
+    Assert-Case 'non-reproduced candidate can leave current work without being declared passed' {
+        Write-Fixture 'docs/REQUIREMENTS.md' ($baseline['docs/REQUIREMENTS.md'] -replace '(?m)^\| <a id="candidate-1"[^\n]*\n','')
+        Write-Fixture 'docs/history/requirements-completed-index.md' $baseline['docs/history/requirements-completed-index.md'].Replace('1 | 열림 | [Remaining work](../REQUIREMENTS.md#candidate-1)','1 | 재현 안 함 | No active reproduction; this is not a passing observation.')
+    }
+    Assert-Case 'new candidate coverage may grow the permanent registry' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('후보 번호는 **1**','후보 번호는 **2**').Replace('## 이전 주소 호환',"| <a id=`"candidate-2`"></a>2 | 보류 | 결정 | Define scope when selected. |`n`n## 이전 주소 호환")
+        Write-Fixture 'docs/history/requirements-completed-index.md' ($baseline['docs/history/requirements-completed-index.md'] + "`n| <a id=`"candidate-2`"></a>2 | 열림 | [Remaining](../REQUIREMENTS.md#candidate-2) | Source |")
+    }
+    Assert-Case 'completion cannot append another legacy redirect' {
+        Write-Fixture 'docs/REQUIREMENTS.md' ($baseline['docs/REQUIREMENTS.md'] + "`n<a id=`"a1`"></a>[A1](history/requirements-completed-index.md#a1)")
+    } 'legacy-growth'
+    Assert-Case 'a new legacy redirect cannot hide before the first section' {
+        Write-Fixture 'docs/REQUIREMENTS.md' $baseline['docs/REQUIREMENTS.md'].Replace('## 열린 작업과 보류',"<a id=`"a1`"></a>[A1](history/requirements-completed-index.md#a1)`n`n## 열린 작업과 보류")
+    } 'legacy-growth'
+    Assert-Case 'new work can close through its permanent address without a requirements redirect' {
+        Write-Fixture 'docs/REQUIREMENTS.md' ($baseline['docs/REQUIREMENTS.md'] -replace '(?m)^\| <a id="a2"[^\n]*\n','')
+        Write-Fixture 'docs/history/requirements-completed-index.md' $baseline['docs/history/requirements-completed-index.md'].Replace('A2 | 열림 | [Current scope](../REQUIREMENTS.md#a2)','A2 | 완료 | Implemented scope and preserved source')
+        Write-Fixture 'docs/HANDOVER.md' $baseline['docs/HANDOVER.md'].Replace('- **A2 부분**: [Remaining scope](REQUIREMENTS.md#a2).','- No selected work.')
+        Write-Fixture 'docs/DEVICE-CHECKS.md' '# Verification'
+    }
+    Assert-Case 'current product contracts participate in duplicate checking' {
+        Write-Fixture 'docs/features/product-contracts.md' ("# Contracts`n`n$paragraph")
+        Write-Fixture 'docs/README.md' ("# Map`n`n$paragraph")
+    } 'duplicate-text'
     # Historical duplicates are not current-role violations. The generated private fixture must never be read.
     Assert-Case 'history and private documents are outside duplicate input' {
         Write-Fixture 'docs/history/old.md' ("$paragraph`n`n$paragraph")

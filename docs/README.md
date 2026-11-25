@@ -3,7 +3,9 @@
 | 찾는 내용 | 시작할 곳 |
 |---|---|
 | 지금 배포된 버전과 다음 작업 | [현재 상태와 인수인계](HANDOVER.md) |
-| 미완료·부분 완료·보류·결정 | [요구사항](REQUIREMENTS.md)에서 A번호나 기능명 검색 |
+| 남은 개발·조사·결정·보류 | [요구사항](REQUIREMENTS.md) |
+| 구현 결과·후보의 영구 주소 | [결과 색인](history/requirements-completed-index.md) |
+| 현재 확정 사양·결정 | [제품 계약](features/product-contracts.md)에서 주제별 기능 정본으로 이동 |
 | 실기기에서 확인할 동작 | [검수 목록](DEVICE-CHECKS.md) |
 | 사용법과 단축키 | [한국어 설명서](guides/user-guide.ko.md) · [English guide](guides/user-guide.en.md). 가이드 상단의 기준 버전을 확인한다. |
 | 개발·빌드·배포 | [내부 빌드](development/build.md) · [공식 설치](development/official-release-and-install.md) · [릴리스 본문 작성](development/release-notes-workflow.md) · [구현 시 참고](development/maintenance-notes.md) |

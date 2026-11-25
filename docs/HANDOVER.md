@@ -7,11 +7,11 @@
 - **현재 근거**: `artifacts/a435-review/official-release/verification.json`, `workflows.json`, `installed-release-verification.json`, `post-update-settings-verification.json`, `official-update-ui.json`. 대표 화면 관측과 남은 조건은 [DEVICE-CHECKS](DEVICE-CHECKS.md#native-media), 요구 결과는 [A435](history/requirements-completed-index.md#a435)를 따른다.
 - **보호 백업**: 교체 전 v0.433.8의 `artifacts/a435-review/pre-update-backup/` 1,182파일과 43설정키 기준을 재검증했다. 상위 `artifacts/a435-review/`의 `backup-coverage.json`, `pre-update-request*.json`, `pre-update-revalidation.json`을 함께 보존한다. 이전 백업·독립 복구 보존본·과거 경로 부재 사실은 [보호 자료 위치](history/evidence-index.md#protected-material)를 통해 회수한다. 문서 정리는 이 자료의 수정·삭제 근거가 아니다.
 - **작업 환경**: `C:/Users/tsusa/github/kotu`의 master를 유지한다. 사용자 `.codex/`는 작업·검사 입력에서 제외하며 추적하지 않는다. 공식 앱 업데이트·재시작과 별도 검수 앱의 상시 승인은 [공식 절차](development/official-release-and-install.md)에 기록된 범위를 따른다.
-- **문서 운영**: [A436](history/requirements-completed-index.md#a436)에서 현행 문서의 중복 이력을 정리하고 고유한 요구·결정·근거를 연결했다. [완료·인계 절차](development/maintenance-notes.md#document-lifecycle)와 역할·상태·중복·링크 검사, 회귀시험을 build/release에 연결했다.
+- **문서 운영**: [A436](history/requirements-completed-index.md#a436)에서 실제 남은 일·완료 결과·확정 계약·검수 대기를 각각 정본으로 분리하고 고유 정보·근거와 기존 주소를 보존했다. [완료·인계 절차](development/maintenance-notes.md#document-lifecycle)와 역할·상태·중복·링크 검사, 회귀시험을 build/release에 연결했다.
 
 ## 열린 작업과 다음 시작점
 
-- **다음 선택**: 새로 선택된 구현 작업은 없다. [열린 요구사항](REQUIREMENTS.md#open-work)과 후보에서 사용자가 선택한 범위만 착수한다.
-- **선택 밖 범위**: 열린·부분·보류와 후보/B 결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work)에 남아 있다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다.
+- **다음 선택**: 새로 선택된 구현 작업은 없다. [남은 요구사항](REQUIREMENTS.md#open-work)과 미해결 후보에서 사용자가 선택한 범위만 착수한다.
+- **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 계약은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다.
 
 이전 세션의 배포·관측·정정 근거는 [공유 근거 색인](history/evidence-index.md)에서 찾는다. 완료·인계 때 이 파일은 최신 상태와 바로 다음 행동으로 고쳐 쓴다.
