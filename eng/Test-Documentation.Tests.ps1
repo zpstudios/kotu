@@ -1,6 +1,6 @@
 # Behavior tests for the document lifecycle gate; no product build or user files are involved.
 [CmdletBinding()]
-param()
+param([switch]$SkipHostExitTests)
 $ErrorActionPreference = 'Stop'
 $checker = Join-Path $PSScriptRoot 'Test-Documentation.ps1'
 $fixtureParent = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../artifacts')) + [IO.Path]::DirectorySeparatorChar
@@ -55,6 +55,18 @@ function Assert-Case([string]$name, [scriptblock]$change, [string]$expectedRule 
     } elseif ($failed) { throw "$name unexpectedly failed: $($output -join ' / ')" }
     $script:passed++
 }
+function Assert-HostExit([string]$name, [string]$invocation, [bool]$success, [string]$expectedText) {
+    # Match the GitHub pwsh host: a dot-sourced script followed by LASTEXITCODE propagation.
+    $wrapper = '$ErrorActionPreference = "Stop"' + "`n" + $invocation + "`n" +
+        'if (Test-Path -LiteralPath variable:\LASTEXITCODE) { exit $LASTEXITCODE }'
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($wrapper))
+    $output = @(& (Join-Path $PSHOME 'pwsh') -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1) -join "`n"
+    $code = $LASTEXITCODE
+    if (($code -eq 0) -ne $success -or !$output.Contains($expectedText)) {
+        throw "${name}: unexpected host result (exit $code): $output"
+    }
+    $script:passed++
+}
 try {
     Assert-Case 'partial implementation remains legitimately open' {}
     Assert-Case 'completed result cannot stay in open table' {
@@ -98,6 +110,15 @@ try {
     Assert-Case 'completed requirement is no longer a selected next action' {
         Write-Fixture 'docs/HANDOVER.md' $baseline['docs/HANDOVER.md'].Replace('**A2 부분**','**A1 완료**')
     } 'handover-status'
+    Assert-Case 'plain completed requirement cannot remain a selected next action' {
+        Write-Fixture 'docs/HANDOVER.md' $baseline['docs/HANDOVER.md'].Replace('**A2 부분**','A1 완료')
+    } 'handover-status'
+    Assert-Case 'plain open requirement remains a valid selected next action' {
+        Write-Fixture 'docs/HANDOVER.md' $baseline['docs/HANDOVER.md'].Replace('**A2 부분**','A2 부분')
+    }
+    Assert-Case 'context may refer to a completed requirement without selecting it' {
+        Write-Fixture 'docs/HANDOVER.md' ($baseline['docs/HANDOVER.md'] + "`n- **Context**: A1 is an earlier result; A2 remains open.")
+    }
     Assert-Case 'new selected coverage may grow registration and current rows' {
         $req = $baseline['docs/REQUIREMENTS.md'].Replace('**A2**','**A3**').Replace('## 이전 완료 링크 호환', "| <a id=`"a3`"></a>A3 | 보류 | New scope with distinct limits. | Await selected work. |`n`n## 이전 완료 링크 호환")
         Write-Fixture 'docs/REQUIREMENTS.md' $req
@@ -130,7 +151,21 @@ try {
     Assert-Case 'missing historical commit' {
         Write-Fixture 'docs/README.md' '[Evidence](https://github.com/zpstudios/kotu/blob/0000000000000000000000000000000000000000/docs/HANDOVER.md#L1)'
     } 'fixed-git-link'
-    Write-Output "Documentation checker: $passed behavior cases passed."
+    if (!$SkipHostExitTests) {
+        $scriptPath = $PSCommandPath.Replace("'", "''")
+        Assert-HostExit 'successful regressions must return success to the CI host' ". '$scriptPath' -SkipHostExitTests" $true 'behavior cases passed.'
+
+        foreach ($file in $baseline.Keys) { Write-Fixture $file $baseline[$file] }
+        Write-Fixture 'docs/README.md' '[Broken](missing.md)'
+        $checkerPath = $checker.Replace("'", "''"); $rootPath = $fixture.Replace("'", "''")
+        Assert-HostExit 'invalid documentation must fail the CI host' ". '$checkerPath' -Root '$rootPath'" $false '[local-link]'
+
+        # A deliberately faulty checker proves that a regression assertion also reaches the host.
+        Write-Fixture 'host-regression/eng/Test-Documentation.Tests.ps1' ([IO.File]::ReadAllText($PSCommandPath))
+        Write-Fixture 'host-regression/eng/Test-Documentation.ps1' 'param([string]$Root) # Deliberately accepts every fixture.'
+        $brokenSuite = (Join-Path $fixture 'host-regression/eng/Test-Documentation.Tests.ps1').Replace("'", "''")
+        Assert-HostExit 'failed regression assertions must fail the CI host' ". '$brokenSuite' -SkipHostExitTests" $false 'did not fail for [open-status]'
+    }
 } finally {
     # Only the unique, resolved temporary fixture created above is eligible for recursive deletion.
     $resolved = [IO.Path]::GetFullPath($fixture)
@@ -138,3 +173,7 @@ try {
         [IO.Path]::GetFileName($resolved) -notmatch '^kotu-doc-tests-[0-9a-f]{32}$') { throw 'Unsafe fixture cleanup path.' }
     if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
 }
+# Expected failing Git probes are consumed by the assertions above. Publish success only
+# after every assertion and cleanup succeeds; exceptions never reach this assignment.
+$global:LASTEXITCODE = 0
+Write-Output "Documentation checker: $passed behavior cases passed."

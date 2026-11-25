@@ -96,7 +96,9 @@ foreach ($id in $indexRows.Keys) {
     if ($indexRows[$id].Status -eq '열림' -and !$openRows.ContainsKey($id)) { Fail 'status-reference' "A$id marked open without current row." }
     if ($indexRows[$id].Line.Length -gt 900) { Fail 'row-detail' "Index A$id exceeds 900 characters." }
 }
-foreach ($m in [regex]::Matches($nextSection, '(?m)^-\s+\*\*A(\d+)\b')) {
+# A leading requirement ID selects an action, with or without Markdown emphasis.
+# IDs mentioned later in a context/remaining-scope item are only references.
+foreach ($m in [regex]::Matches($nextSection, '(?m)^-[ \t]+(?:\*\*|__)?A(\d+)\b')) {
     if (!$openRows.ContainsKey([int]$m.Groups[1].Value)) { Fail 'handover-status' "Selected A$($m.Groups[1].Value) is no longer open." }
 }
 foreach ($file in @('docs/REQUIREMENTS.md','docs/DEVICE-CHECKS.md')) {

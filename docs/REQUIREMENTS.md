@@ -11,7 +11,6 @@
 
 | ID | 상태 | 현재 결과와 남은 범위 | 다음 시작점 |
 |---|---|---|---|
-| <a id="a436"></a>A436 | 검토 대기 | 2026-11-25 사용자는 현행 문서를 문서 역할에 맞게 정리하고 작업 완료마다 정리가 되도록 절차·검사를 보완하되 고유한 요구사항·결정·근거를 보존하도록 요청했다. | 현행 문서와 완료 절차·구조 검사·회귀시험·CI 연결을 정리했다. 독립 검토와 고유 정보 보존 대조 후 현재 제품 버전으로 커밋·푸시하고 원격 검사를 확인한다. [절차](development/maintenance-notes.md#document-lifecycle) |
 | <a id="a418"></a>A418 | 부분 | KOTU.Test 동시 설치 중 정식판이 다음 GitHub 업데이트를 직접 받는 조건은 미관측이다. v0.428.0의 병행 실행·테스트판 제거 후 보존 검증과 이후 정식판의 일반 Updates 성공은 이 조건의 완료를 뜻하지 않는다. | [패키지와 검수 절차](development/official-release-and-install.md) |
 | <a id="a19"></a>A19 | 미착수 | H/W 랭킹 제출은 서버가 필요한 장기 후보다. 전송·서버·개인정보 범위 미정. | 서버와 제출 정책부터 정한다. [원문 위치](history/requirements-completed-index.md#a19) |
 | <a id="a45"></a>A45 | 부분 | v0.431.0부터 HWP 5.x 페이지의 글·표·그림을 PC에서 읽는다. HWP·HWPX·ODT·ODS·ODP의 본문/표 셀 텍스트 보기도 제공한다. | 한글 원본과의 정밀 비교, 다른 형식의 페이지 보기, 차트·수식 호환성은 남아 있다. 원본 편집·저장·인쇄, 암호·DRM·배포용 HWP와 HWP 3.x는 지원 범위 밖이다. [구현·검수 범위](features/editor/office-text-preview-A45.md) |
@@ -141,3 +140,4 @@
 <a id="a433"></a>[A433](history/requirements-completed-index.md#a433)
 <a id="a434"></a>[A434](history/requirements-completed-index.md#a434)
 <a id="a435"></a>[A435](history/requirements-completed-index.md#a435)
+<a id="a436"></a>[A436](history/requirements-completed-index.md#a436)
