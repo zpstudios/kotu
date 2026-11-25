@@ -1,7 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Media;
 using KOTU.Core.Routing;
 
 namespace KOTU.App;
@@ -76,7 +75,6 @@ public sealed partial class ExplorerPathBar : UserControl
     // ---------- 파일 종류 필터 (A7) ----------
 
     private IReadOnlyList<string>? _filterBuiltFor; // 마지막으로 플라이아웃을 만든 확장자 목록
-    private Brush? _filterDefaultBrush;                 // 아이콘 원래 색 (활성 표시 해제용)
     private ToggleMenuFlyoutItem? _showHiddenItem;      // A160 — 같은 메뉴 안의 숨김 표시 토글(체크 동기용)
 
     /// <summary>
@@ -171,13 +169,15 @@ public sealed partial class ExplorerPathBar : UserControl
     /// <summary>필터가 걸려 있으면 아이콘을 강조색으로 — 걸린 걸 잊지 않게.</summary>
     private void UpdateFilterVisual()
     {
-        _filterDefaultBrush ??= FilterIcon.Foreground;
-        FilterIcon.Foreground = _session!.HiddenExtensionCount > 0 &&
-            Application.Current.Resources["AccentTextFillColorPrimaryBrush"] is Brush accent
-            ? accent
-            : _filterDefaultBrush;
-        ToolTipService.SetToolTip(FilterButton, _session!.HiddenExtensionCount > 0
-            ? $"Filter file types ({_session!.HiddenExtensionCount} hidden)"
+        var hiddenCount = _session!.HiddenExtensionCount;
+        // A435: 활성색은 ThemeResource로 추적하고, 해제하면 현재 버튼색 상속으로 돌아간다.
+        // 첫 실행 시의 브러시를 저장하면 Light/Dark 전환 뒤에도 그 색으로 고정된다.
+        if (hiddenCount > 0)
+            FilterIcon.Style = (Style)Resources["ActiveFilterIconStyle"];
+        else
+            FilterIcon.ClearValue(FrameworkElement.StyleProperty);
+        ToolTipService.SetToolTip(FilterButton, hiddenCount > 0
+            ? $"Filter file types ({hiddenCount} hidden)"
             : "Filter file types");
     }
 
