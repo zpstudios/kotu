@@ -1,6 +1,6 @@
 # KOTU 요구사항 — 실제 남은 일
 
-개발·조사·미확정 결정과 착수 조건만 둔다. 완료 결과·후보의 영구 주소는 [결과 색인](history/requirements-completed-index.md), 구현 후 검수는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [제품 계약](features/product-contracts.md)이 정본이다. 미선택 항목은 착수 승인이 아니다. 마지막 등록 번호는 **A437**, 마지막 후보 번호는 **44**이다.
+개발·조사·미확정 결정과 착수 조건만 둔다. 완료 결과·후보의 영구 주소는 [결과 색인](history/requirements-completed-index.md), 구현 후 검수는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [제품 계약](features/product-contracts.md)이 정본이다. 미선택 항목은 착수 승인이 아니다. 마지막 등록 번호는 **A438**, 마지막 후보 번호는 **44**이다.
 
 <a id="open-work"></a>
 ## 열린 작업과 보류
@@ -15,6 +15,7 @@
 | <a id="a399"></a>A399 | 조사 | 조사 | 실제 재현 파일·다운로드 상태를 확보해 로컬/온라인 전용/동기화 중과 최초/재진입/Refresh를 분리 조사한다. 원본 강제 다운로드·무한 UI 재시도 금지. 원본 부재를 매 세션 반복 질문하지 않는다. | [조사](features/explorer/onedrive-thumbnail-investigation-A399.md) · [검수 경계](DEVICE-CHECKS.md#image-cloud) |
 | <a id="a406"></a>A406 | 보류 | 개발 | 메뉴 약 3초 누름 빠른 녹음·H/W 상태 표시를 구현한다. 2026-11-10/14 보류 유지: 재개 승인 전 구현·실녹음 금지. H/W 수집 주기 유지안은 아직 확정할 결정이다. | [설계·정책](features/recording/quick-recording-A406-A407.md) |
 | <a id="a407"></a>A407 | 보류 | 개발 | 빠른 녹음 중 닫기→트레이·전용 표시를 구현한다. A406과 함께 미구현·미배포이며 재개 승인 전 착수하지 않는다. | [설계·닫기 정책](features/recording/quick-recording-A406-A407.md) |
+| <a id="a438"></a>A438 | 진행 | 개발 | HWP·PDF의 Ctrl+F를 본문 검색에 연결하고 결과 이동·포커스 복귀를 구현한다. Document와 All Readable, HWP 페이지/본문 보기, 검색 가능한 텍스트가 없는 PDF의 안내를 구분해 검증한다. 기존 텍스트 검색·페이지 이동·읽기 전용 보호를 유지한다. | [사용자 제보](history/requirements-completed-index.md#a438) |
 
 **사용자 판단 대기** — 셸 키 진단 스트립(`diag.shellKeyOverlay`) 제거는 별도 지시와 A309 실기기 확인을 기다린다. 기본 꺼짐을 유지한다. [판단 근거](https://github.com/zpstudios/kotu/blob/070e21af070996ba3d78fb440db9b4552f75a723/docs/HANDOVER.md#L1813-L1815)
 

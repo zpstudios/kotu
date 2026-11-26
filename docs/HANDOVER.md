@@ -11,7 +11,7 @@
 
 ## 열린 작업과 다음 시작점
 
-- **A437 남은 검수 조건**: [오디오 EQ](features/media/audio-equalizer-A437.md)의 구현·독립 검토·대표 검수와 공식 배포·이 PC 설치를 마쳤다. 실제 청음·실패 안내·고대비/DPI·동시 해체·열린 팝업 리사이즈의 미관측 범위는 [검수 행](DEVICE-CHECKS.md#a437)에 유지한다. 다음 관련 검수에서는 이 조건만 확인하며 완료한 구현·배포 검증을 반복하지 않는다.
+- **A438 HWP·PDF 검색**: 사용자가 두 형식에서 Ctrl+F가 동작하지 않는다고 제보해 [수정 작업](REQUIREMENTS.md#a438)을 시작했다. 코드에서 PDF의 검색 비활성화와 HWP `OfficeTextView`의 `ITextSearchTarget` 미구현을 확인했다. 아직 제품 수정·실화면 재현은 하지 않았다. 다음은 페이지 본문·결과 위치를 얻는 경로를 확정하고 직렬 구현·독립 검토·별도 앱 검수 후 공식 배포·설치까지 진행하는 것이다. A437의 남은 미관측 조건은 [검수 행](DEVICE-CHECKS.md#a437)에 유지한다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 계약은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다.
 
 이전 세션의 배포·관측·정정 근거는 [공유 근거 색인](history/evidence-index.md)에서 찾는다. 완료·인계 때 이 파일은 최신 상태와 바로 다음 행동으로 고쳐 쓴다.
