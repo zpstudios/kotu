@@ -1,6 +1,6 @@
 # A438 — Find in PDF and HWP documents
 
-This is the A438 implementation contract for the unreleased v0.435.0 draft. The installed official product remains v0.434.0. Focus and delayed-selection fixes have passed code review and local validation; the initial Ctrl+F failure still needs [focus investigation](../../REQUIREMENTS.md#open-work) on the revised app. Observed results and remaining device checks are separate from the behavior specified here.
+This is the A438 implementation contract for the unreleased v0.435.0 draft. The installed official product remains v0.434.0. Focus and delayed-selection fixes have passed code review and local validation. The initial PDF failure was observed with actual focus on the shell Start button; after explicit neutral-shell routing was added, first-open Ctrl+F and query input succeeded without a body click. Broader [device checks](../../DEVICE-CHECKS.md#a438) remain separate from the behavior specified here.
 
 ## Behavior
 
@@ -26,7 +26,7 @@ PDF indexing accepts snapshots up to 256 MiB, at most 10,000 pages and 8,388,608
 
 HWP searching runs in the existing local renderer worker. The rhwp API returns all results synchronously, so the 16-MiB result-string check and retained-match cap apply after that call and cannot bound its internal allocation. A timeout reports search failure separately from rendering. Worker dispatch has one active operation and one latest mailbox each for page, query and selection; host messages carry bounded result state rather than the complete match list. After a timeout the current page remains visible, but further rendering must wait for the synchronous engine call to return.
 
-Document/view lifetimes, query revisions and selection requests are checked before applying results. Query changes, composition, source replacement and unload invalidate earlier requests. Body pointer and wheel interaction cancel pending automatic selection, including handled PDF zoom-wheel events. Find/Find options entry also accepts the explicitly forwarded neutral All Readable host itself; this does not extend Enter/Escape ownership or capture other inputs. HWP browser shortcuts and Escape key release are bridged to the host, including when focus is inside the page.
+Document/view lifetimes, query revisions and selection requests are checked before applying results. Query changes, composition, source replacement and unload invalidate earlier requests. Body pointer and wheel interaction cancel pending automatic selection, including handled PDF zoom-wheel events. Find/Find options entry also accepts the explicitly forwarded neutral All Readable host itself and the shell's exact Start button or focus-recovery anchor. Current focus identity and visual ownership are checked; this does not extend Enter/Escape ownership or capture other inputs. HWP browser shortcuts and Escape key release are bridged to the host, including when focus is inside the page.
 
 ## Implementation evidence
 
