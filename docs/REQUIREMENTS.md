@@ -15,7 +15,6 @@
 | <a id="a399"></a>A399 | 조사 | 조사 | 실제 재현 파일·다운로드 상태를 확보해 로컬/온라인 전용/동기화 중과 최초/재진입/Refresh를 분리 조사한다. 원본 강제 다운로드·무한 UI 재시도 금지. 원본 부재를 매 세션 반복 질문하지 않는다. | [조사](features/explorer/onedrive-thumbnail-investigation-A399.md) · [검수 경계](DEVICE-CHECKS.md#image-cloud) |
 | <a id="a406"></a>A406 | 보류 | 개발 | 메뉴 약 3초 누름 빠른 녹음·H/W 상태 표시를 구현한다. 2026-11-10/14 보류 유지: 재개 승인 전 구현·실녹음 금지. H/W 수집 주기 유지안은 아직 확정할 결정이다. | [설계·정책](features/recording/quick-recording-A406-A407.md) |
 | <a id="a407"></a>A407 | 보류 | 개발 | 빠른 녹음 중 닫기→트레이·전용 표시를 구현한다. A406과 함께 미구현·미배포이며 재개 승인 전 착수하지 않는다. | [설계·닫기 정책](features/recording/quick-recording-A406-A407.md) |
-| <a id="a437"></a>A437 | 진행 | 개발 | 선택된 후보 8의 오디오 EQ 개별 밴드 조절을 구현한다. 기존 프리셋·하단 버튼 배치를 유지하며 수동 값의 적용·저장·재시작 복원과 좁은 창·키보드 조작을 검증한 뒤 공식 배포·설치를 마친다. | [후보 8·선택 근거](history/requirements-completed-index.md#a437) |
 
 **사용자 판단 대기** — 셸 키 진단 스트립(`diag.shellKeyOverlay`) 제거는 별도 지시와 A309 실기기 확인을 기다린다. 기본 꺼짐을 유지한다. [판단 근거](https://github.com/zpstudios/kotu/blob/070e21af070996ba3d78fb440db9b4552f75a723/docs/HANDOVER.md#L1813-L1815)
 

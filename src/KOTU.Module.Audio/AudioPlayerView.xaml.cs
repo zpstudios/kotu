@@ -301,10 +301,9 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
 
     // ---------- 이퀄라이저 · 오디오 장치 상태 (A163 · A164) ----------
     // 저장 키는 전역 1벌(설정 화면 노출 없음): audio.equalizer = 프리셋 이름("" = Off),
+    // A437 Custom 식별자·별도 값 저장은 EqualizerState가 담당한다.
     // audio.outputDevice = libvlc 장치 ID("" = 시스템 기본 — 이름이 아니라 ID인 이유는
     // 장치 이름이 OS 로캘 문자열이라 재부팅·언어 변경으로 바뀔 수 있어서다).
-    private string[] _eqPresetNames = []; // libvlc 내장 프리셋 이름 — 플레이어 생성 워커에서 1회 열거
-    private string _eqPreset;             // 현재 프리셋 이름("" = Off) — 상태는 로컬 소유(_muted와 동일 규칙)
     private string _outputDeviceId;       // 현재 출력 장치 ID("" = 시스템 기본)
     private readonly MenuFlyoutSubItem _outputMenu = new() { Text = "Output device" };
     private readonly MenuFlyoutSubItem _inputMenu = new() { Text = "Input device" };
@@ -479,18 +478,21 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
         // A300: EQ·비주얼라이저 아이콘 — 글리프(E9E9·E8D6)가 기능을 드러내지 못한다는 사용자
         // 보고로 코드 조립 도형으로 교체(Shared/MediaIcons — FitIcons의 A298 공용화·A299 전경
         // 동기 관용구를 그대로 승계. 도형 산술·비활성 회색 근거는 그 파일 주석).
-        // 버튼 상자·플라이아웃·핸들러·툴팁은 무접촉 — Content만 갈아 끼운다.
+        // 버튼 상자는 그대로 두고 Content만 갈아 끼운다. EQ 패널은 A437에서 확장했다.
         EqButton.Content = MediaIcons.BuildEqualizerIcon();
         VisualizerButton.Content = MediaIcons.BuildVisualizerIcon();
 
-        _eqPreset = _settings.Get("audio.equalizer", string.Empty);
+        _equalizer = new EqualizerState(_settings.Get(EqualizerState.SelectionKey, string.Empty),
+            _settings.Get(EqualizerState.CustomKey, string.Empty));
+        _eqApply = new EqualizerApplyQueue<MediaPlayer>(
+            (player, values, current) => Worker.Run(_ => EqualizerNative.Apply(player, values, current)),
+            EqualizerApplied);
+        _eqSaveTimer.Tick += (_, _) => SaveEqualizer();
         _outputDeviceId = _settings.Get("audio.outputDevice", string.Empty);
 
-        // A330 ⓑ: EQ 플라이아웃도 열 때마다 채운다(장치·비주얼라이저와 같은 Opening 재구성).
-        // 종전에는 플레이어 생성 워커가 1회 채우며 버튼 활성화까지 겸했는데, 프리셋 열거가
-        // 실패하면 버튼이 영구 비활성으로 굳어 "아이콘만 어둡고 흐리다"로 보였다
-        // (FillEqualizerFlyout 주석의 판정 근거). 버튼은 이제 항상 활성이다.
+        // A330/A437: 버튼은 항상 활성이다. 메타데이터를 못 읽어도 Off는 선택할 수 있다.
         EqFlyout.Opening += (_, _) => FillEqualizerFlyout();
+        EqFlyout.Closed += (_, _) => CloseEqualizerFlyout();
 
         // A164: 장치 플라이아웃 뼈대 — 서브메뉴 2개(출력 / Windows 기본 입력)는 코드로 만든다
         // (MenuFlyoutSubItem은 XAML 선례가 없어 코드 구성만 쓴다 — 탐색기 우클릭 메뉴와 같은 방식).
@@ -615,7 +617,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
             var style = _visualizer;
             string[] options = BuildPlayerOptions(swapOptions, style);
 
-            var (libVlc, player, presetNames) = await Worker.Run(_ =>
+            var (libVlc, player, equalizerCatalog) = await Worker.Run(_ =>
             {
                 // libvlc 네이티브 dll은 libvlc\win-x64\ 하위에 배포되므로 검색 경로 등록이 선행돼야 한다.
                 // 주의: 그냥 Core라고 쓰면 KOTU.Core 네임스페이스로 해석된다(상위 네임스페이스 우선).
@@ -623,24 +625,8 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
                 var lib = new LibVLC(options);
                 var mp = new MediaPlayer(lib);
 
-                // A163: 내장 프리셋 이름 열거 — LibVLCSharp 3.x의 PresetCount·PresetName은
-                // 인스턴스 멤버라(4.x 문서와 다름) 빈 인스턴스를 하나 만들어 읽고 바로 해제한다.
-                // libvlc 네이티브 호출이므로 Core.Initialize 이후 이 워커에서 함께 처리한다.
-                var names = Array.Empty<string>();
-                try
-                {
-                    using var eq = new Equalizer();
-                    var count = eq.PresetCount;
-                    names = new string[count];
-                    for (var i = 0u; i < count; i++)
-                        names[i] = eq.PresetName(i) ?? string.Empty;
-                }
-                catch
-                {
-                    // 프리셋 열거 실패 — EQ 버튼만 비활성으로 남고 재생은 정상 진행한다.
-                }
-
-                return (lib, mp, names);
+                // A437: 주파수·프리셋·preamp까지 워커에서 읽어 UI에는 불변 값만 넘긴다.
+                return (lib, mp, EqualizerNative.ReadCatalog());
             });
 
             if (_tornDown)
@@ -665,16 +651,10 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
             MuteButton.Content = MediaIcons.BuildSoundIcon();
             HookPlayerEvents(player);
 
-            // A163: 프리셋 목록 확정 + 저장값 적용(볼륨과 같은 UI 스레드 적용 경로).
-            // 이퀄라이저는 한 번 걸면 이후 미디어에도 유지되므로(libvlc 문서) 이 1회가
-            // "재생 시작 시 재적용"을 충족한다. 출력 장치는 aout이 생겨야 걸리는 값이라
-            // Playing 이벤트에서 재적용한다(OnPlayerPlaying 주석 참고).
-            _eqPresetNames = presetNames;
-            if (_eqPreset.Length > 0 && Array.IndexOf(_eqPresetNames, _eqPreset) < 0)
-                _eqPreset = string.Empty; // 저장 이름이 이 libvlc 목록에 없다 — Off 폴백(설정 파일은 유지)
-            // A330 ⓑ: 여기서 플라이아웃을 채우던 호출은 뺐다 — 목록은 열 때마다 이 배열에서
-            // 다시 만들어지고(생성자의 EqFlyout.Opening), 버튼 활성화 축도 사라졌다.
-            ApplyEqualizer(player);
+            if (equalizerCatalog is not null && !_equalizer.SetCatalog(equalizerCatalog))
+                _eqStatus = "Saved equalizer settings are unavailable or invalid. EQ is off.";
+            if (_eqFlyoutOpen) FillEqualizerFlyout();
+            await QueueEqualizer(); // 첫 재생 전에 복원값 적용을 끝내되 UI는 막지 않는다.
         }
         catch (Exception ex)
         {
@@ -981,6 +961,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
     /// <summary>A349: Ctrl+← · PageUp = 이전 파일.</summary>
     private void OnPreviousFileInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (_eqFlyoutOpen) { args.Handled = false; return; }
         args.Handled = true;
         MoveToNeighbor(forward: false);
     }
@@ -988,6 +969,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
     /// <summary>A349: Ctrl+→ · PageDown = 다음 파일.</summary>
     private void OnNextFileInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (_eqFlyoutOpen) { args.Handled = false; return; }
         args.Handled = true;
         MoveToNeighbor(forward: true);
     }
@@ -1041,6 +1023,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
 
     public void CaptureSettings()
     {
+        SaveEqualizer(); // A437: 저장 병합 타이머보다 먼저 창이 닫혀도 마지막 조절값을 캡처한다.
         if (_player is { } player && _filePath is { } path && !IsSampleTrack(path) && _durationMs > 0)
             _resumeStore.Report(path, player.Time, _durationMs);
         _settings.Set("audio.volume", (int)VolumeSlider.Value);
@@ -1049,6 +1032,8 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _tornDown = true;
+        _eqApply.Invalidate();
+        CloseEqualizerFlyout();
         _pathProbe.Dispose();
         SetTrayTimer(false); // A54: 뷰가 내려가면 1초 타이머도 반드시 멈춘다
         _ceremonyTimer?.Stop(); // A302: 해체 후 틱 방지(영상 A12·A13과 같은 자리·같은 형태)
@@ -1525,77 +1510,6 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
     // A151: 전체화면 토글(ToggleFullScreen·⛶ 버튼·F11/Esc 액셀러레이터)은 전부 제거 —
     // 전체화면은 셸의 3단 모드 체계(MainWindow — Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다.
 
-    // ---------- 이퀄라이저 (A163) ----------
-
-    /// <summary>
-    /// EQ 플라이아웃을 Off + libvlc 내장 프리셋 목록으로 채운다(자막 플라이아웃과 같은
-    /// 라디오 구성).
-    /// <b>A330 ⓑ 개정</b>: 종전에는 플레이어 생성 워커가 이 함수를 1회 부르며
-    /// <c>EqButton.IsEnabled = 프리셋 있음</c>까지 겸했다. 그래서 프리셋 열거가 실패하면
-    /// (EnsurePlayerAsync의 try/catch가 빈 배열을 남긴다) 버튼이 <b>영구 비활성</b>으로
-    /// 굳었고, 실기기에서는 "EQ 아이콘만 어둡고 흐리다"로 보였다 — 흐림의 정체는 아이콘
-    /// 렌더가 아니라 <b>버튼의 Disabled 전경색</b>이다(옆 비주얼라이저 버튼이 같은
-    /// MediaIcons 팩토리·같은 A299 전경 동기를 쓰는데 멀쩡하다는 것이 그 증거이고,
-    /// EQ 도형의 잉크량 138px²는 비주얼라이저 88px²보다 오히려 많다).
-    /// 이제 버튼은 <b>항상 활성</b>이고(비주얼라이저 버튼 선례 — "선택은 플레이어가 없어도
-    /// 저장된다") 목록은 <b>열 때마다</b> 다시 채운다(장치·비주얼라이저 플라이아웃의 Opening
-    /// 재구성 관례). 프리셋을 아직·끝내 못 읽은 상태에서 열면 Off 한 줄이 나오고, 그 Off는
-    /// 실제로 동작하는 선택이라 막다른 길이 아니다(UnsetEqualizer).
-    /// 프리셋 목록은 libvlc 빌드 수명 동안 불변이라 재열거 비용은 없다(문자열 배열 순회).
-    /// </summary>
-    private void FillEqualizerFlyout()
-    {
-        EqFlyout.Items.Clear();
-        AddEqualizerChoice("Off", string.Empty);
-        foreach (var name in _eqPresetNames)
-            AddEqualizerChoice(name, name);
-    }
-
-    private void AddEqualizerChoice(string label, string presetName)
-    {
-        var item = new RadioMenuFlyoutItem
-        {
-            Text = label,
-            GroupName = "equalizer",
-            IsChecked = string.Equals(presetName, _eqPreset, StringComparison.Ordinal),
-        };
-        item.Click += (_, _) => SelectEqualizerPreset(presetName);
-        EqFlyout.Items.Add(item);
-    }
-
-    /// <summary>프리셋 선택: 로컬 상태 갱신 + 즉시 저장(이어듣기 Report와 같은 즉시 기록) + 적용.</summary>
-    private void SelectEqualizerPreset(string presetName)
-    {
-        _eqPreset = presetName;
-        _settings.Set("audio.equalizer", presetName);
-        _settings.RequestSave();
-        if (_player is { } p) ApplyEqualizer(p);
-    }
-
-    /// <summary>
-    /// 현재 프리셋(_eqPreset)을 플레이어에 적용한다. 재생 중이든 아니든 즉시 적용되고
-    /// 이후 미디어에도 유지된다(libvlc 문서). 이름이 목록에 없으면 Off로 폴백.
-    /// </summary>
-    private void ApplyEqualizer(MediaPlayer p)
-    {
-        try
-        {
-            var index = Array.IndexOf(_eqPresetNames, _eqPreset);
-            if (_eqPreset.Length == 0 || index < 0)
-            {
-                p.UnsetEqualizer();
-                return;
-            }
-            // 플레이어가 값을 복사하므로 핸들은 바로 해제해도 안전하다(libvlc 문서).
-            using var eq = new Equalizer((uint)index);
-            p.SetEqualizer(eq);
-        }
-        catch
-        {
-            // EQ 적용 실패가 재생을 막으면 안 된다 — 소리는 프리셋 없이 계속 나온다.
-        }
-    }
-
     // ---------- 오디오 장치 (A164) ----------
 
     /// <summary>
@@ -1803,7 +1717,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
         }
     }
 
-    /// <summary>플라이아웃을 스타일 라디오 5택으로 채운다(EQ의 AddEqualizerChoice 관용구).</summary>
+    /// <summary>플라이아웃을 같은 그룹의 스타일 라디오 메뉴 5개로 채운다.</summary>
     private void FillVisualizerFlyout()
     {
         VisualizerFlyout.Items.Clear();
@@ -2044,6 +1958,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
 
             // ② 교체 중 가드 (요약 주석 참고)
             UnhookPlayerEvents(oldPlayer);
+            _eqApply.Invalidate(); // A437: 교체 전에 실행/대기 요청과 늦은 완료를 무효화한다.
             _player = null;
             _libVlc = null;
             if (wasPlaying && oldPlayer.CanPause) oldPlayer.Pause();
@@ -2082,6 +1997,8 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
                 _player = oldPlayer;
                 _libVlc = oldLib;
                 HookPlayerEvents(oldPlayer);
+                await QueueEqualizer();
+                if (_tornDown) return;
                 if (wasPlaying) oldPlayer.Play(); // ②의 일시정지 되돌림
                 ShowMessage($"Visualizer change failed: {ex.Message}");
                 return;
@@ -2104,14 +2021,13 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
             // ④ 재바인딩 + 재적용 — A301: 필드(_player/_libVlc) 대입만 ⑤ 해제 완료 뒤로
             // 미룬다. ②의 가드(필드 비움 = Space·클릭 등 모든 핸들러 무동작)가 ⑤의 대기
             // 구간까지 이어져, 그 사이 사용자 입력이 신 인스턴스를 해제 완료 전에 재생시키는
-            // 길이 없다(경합 창 봉쇄의 일부). VideoView 바인딩·볼륨·음소거·EQ·이벤트 훅은
-            // 종전 그대로 이 지점 = Play 전 적용이라는 순서가 불변이다.
+            // 길이 없다(경합 창 봉쇄의 일부). 바인딩·볼륨·음소거·이벤트 훅을 먼저 연결한다.
+            // A437 EQ는 ⑤ 뒤에 최신 스냅샷을 워커로 적용하고 완료된 뒤 재장전한다.
             Vlc.MediaPlayer = player;
 
             player.Volume = (int)VolumeSlider.Value; // EnsurePlayerAsync와 같은 적용점
             if (_muted) player.Mute = true;          // A28: 로컬 소유 상태 승계(버튼 아이콘은 이미 맞다)
             HookPlayerEvents(player);
-            ApplyEqualizer(player);                  // 프리셋 목록은 libvlc 빌드 불변 — 재열거 불요
 
             // ⑤ 구 인스턴스 해제 — A301: await로 해제 완료 뒤에만 ⑥이 나가게 직렬화
             // (③의 Worker.Run await 관용구 — 요약 주석 ⑤). 실패 무시는 종전 Post 계약 승계.
@@ -2146,6 +2062,8 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
             _libVlc = libVlc;
             _player = player;
             _playerVisualizer = style;
+            await QueueEqualizer(); // A437: 교체 대기 중 변경된 최신 값만 새 플레이어에 적용한다.
+            if (_tornDown) return;
 
             // A330 ⓐ: 잔상 정리 — 구 인스턴스는 ⑤에서 해제됐고 표면에는 그 마지막 프레임이
             // 그대로 남아 있다. 신 인스턴스가 곧 다시 그리는 경우(효과 있는 스타일 + 아래 ⑥
@@ -2203,7 +2121,7 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
     }
 
     /// <summary>
-    /// 라디오 1개 추가 — EQ의 AddEqualizerChoice 관용구. 횟수를 고르면 그 모드로의 전환을
+    /// 공통 루프 그룹에 라디오 메뉴 1개를 추가한다. 횟수를 고르면 그 모드로의 전환을
     /// 겸한다(구현 시 결정 — 플라이아웃에서 "Loop list: 3×"를 고른 의도는 그 모드의 사용이다).
     /// </summary>
     private void AddLoopChoice(string label, LoopMode mode, int limit)
@@ -2370,24 +2288,28 @@ public sealed partial class AudioPlayerView : UserControl, ISettingsSnapshotSour
 
     private void OnSeekBackInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (_eqFlyoutOpen) { args.Handled = false; return; }
         args.Handled = true;
         SeekBy(-SeekStepMs);
     }
 
     private void OnSeekForwardInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (_eqFlyoutOpen) { args.Handled = false; return; }
         args.Handled = true;
         SeekBy(SeekStepMs);
     }
 
     private void OnVolumeUpInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (_eqFlyoutOpen) { args.Handled = false; return; }
         args.Handled = true;
         ChangeVolume(VolumeStep);
     }
 
     private void OnVolumeDownInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (_eqFlyoutOpen) { args.Handled = false; return; }
         args.Handled = true;
         ChangeVolume(-VolumeStep);
     }
