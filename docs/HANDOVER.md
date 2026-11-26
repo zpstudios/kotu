@@ -11,8 +11,8 @@
 
 ## 열린 작업과 다음 시작점
 
-- **A438 HWP·PDF 검색**: [검색 계약](features/editor/paged-document-search-A438.md)의 구현·독립 검토·공식 배포·설치를 마쳤다. 관측한 문서·초점·검색·치환 범위와 대기 중 휠·실제 IME 등 미관측 조건은 [DEVICE-CHECKS](DEVICE-CHECKS.md#a438)에 유지한다. 커밋 전 제품 31파일 기준 `artifacts/a438-review/uncommitted-product-manifest.json`은 현재 제품과 해시가 일치하는 당시 기준 자료이며 미커밋 상태를 뜻하지 않는다.
-- **A439 디자인 철회·복원**: 다중 스킨 제공 철회·구현 보존·사용 중단, 통일성을 유지한 원래 테마와 누락 동작 복원, UI 지연 수리가 선택됐다. [정적 조사·변경 계약](features/shell/design-library-A427.md#a439)에 중복 Refresh·도형 재생성과 Original 다크 호버 색 충돌을 기록했다. 제품 변경은 없으며 `artifacts/a439-review/`에 단계 복사본 전용 계측·빌드·동일 자료를 준비했다. 첫 메뉴 회차 중 검수 프로세스가 예기치 않게 종료됐고 결과 파일은 없어 유효 측정은 0이다. `baseline-menu-r1-crash-events.json`·조작 기록을 보존했으며 `ui-restoration.json`은 Test 28키 바이트 복원·공식 설정 불변을 확인한다. 다음은 계측 포함 검수본 종료 원인 분리 후 동일 조건 측정, 단일 활성 스타일 구현·검증·별도 공식 배포/설치다. 현재 Original 강제나 과거 통째 회귀로 대체하지 않는다.
+- **A438 HWP·PDF 검색**: [검색 계약](features/editor/paged-document-search-A438.md)의 구현·독립 검토·공식 배포·설치를 마쳤다. 관측한 문서·초점·검색·치환 범위와 대기 중 휠·실제 IME 등 미관측 조건은 [DEVICE-CHECKS](DEVICE-CHECKS.md#a438)에 유지한다. `artifacts/a438-review/uncommitted-product-manifest.json`은 당시 제품 31파일의 기준 자료다. 현재 A439 변경과 구분하며 A438 미커밋 상태를 뜻하지 않는다.
+- **A439 디자인 철회·복원**: [변경 계약·측정](features/shell/design-library-A427.md#a439)에 따라 스킨 구현·저장 선택을 보존하고 사용·추적을 차단한 네이티브 복원 후보 14제품 파일과 기능 문서가 미커밋이다. `artifacts/a439-review/`의 `checkpoint.json`·`uncommitted-product-manifest.json`이 재개 기준이다. Core 778시험·독립 코드 검토를 통과했고 변경 전 4회·후보 3회 비교에서 후보의 스킨 처리 0회와 할당·GC 감소를 확인했다. 동작 수는 같지만 측정 시간은 달라 전체 입력 지연 개선을 단정하지 않는다. 라이트 체크/선택·숨겨진 스킨 UI·저장값 보존과 루트 다크 메뉴 호버/초점을 관측했다. 전체 앱 다크는 미검증이며 최초 검수본 충돌 원인도 미확정이다. 검수 앱 종료·Test 28키 복원·공식 불변·OS 미변경을 확인했다. 다음은 전체 앱 테마/상호작용 검수, 계측을 제거한 전체 빌드·시험, 문서 정리·별도 버전의 공식 배포/설치다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 계약은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다.
 
 이전 세션의 배포·관측·정정 근거는 [공유 근거 색인](history/evidence-index.md)에서 찾는다. 완료·인계 때 이 파일은 최신 상태와 바로 다음 행동으로 고쳐 쓴다.
