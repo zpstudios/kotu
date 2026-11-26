@@ -9,6 +9,7 @@
 | A418–A435 및 A112의 요구·당시 판단 | [결과 색인](requirements-completed-index.md)에 A번호별 정본·고정 행 링크 |
 | v0.428.0–v0.433.9 제품 커밋·CI번호·배포/설치 결과·근거 파일 | [2026-11-25 HANDOVER](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L1-L38) |
 | A437 v0.434.0 배포·설치와 창 설정 복원, A438 제품 체크포인트 | [A438 커밋 당시 HANDOVER](https://github.com/zpstudios/kotu/blob/6403859a1df482d3cc4a4852166d959fd1414bee/docs/HANDOVER.md#L5-L16). A437 완료를 다시 열지 않으며 A438의 현재 설치 상태는 최신 HANDOVER를 따름 |
+| A438 v0.435.0 공식 배포·설치·설정 보존과 A439 시작 조건 | [A439 제품 커밋 당시 HANDOVER](https://github.com/zpstudios/kotu/blob/ab6e992c043ddc8f015b7b1fe1e85414c81e03cd/docs/HANDOVER.md#L5-L16). A438 공식 1,188파일·43키 대조와 당시 미관측 범위를 보존하며 현재 제품 상태는 최신 HANDOVER를 따름 |
 | A427–A435 화면 조건·측정·복원 차이·실패·미관측 | [당시 실기기 원문](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L54-L65). 현재 남은 조건은 실기기 표에서만 갱신 |
 | A433 자동 열 감소 해석·설치 요청 철회와 고정 열 정정 | [요구와 사용자 정정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L16) · [철회 검수](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L56-L57) · [정정 사양](../features/explorer/tile-captions-A387.md#a433-고정-열-수와-조작부-비례-축소--v04337) |
 | A431 색상 시험 판정 취소·격리 역사본/대표 비교의 정확한 조건 | [세 차례 관측과 한계](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L59-L61) |
@@ -22,6 +23,7 @@
 
 | 자료 | 회수 위치와 보호 범위 |
 |---|---|
+| v0.434.0 설치·설정 백업과 A438 공식 배포 근거 | `artifacts/a438-review/pre-update-backup/` 1,371파일과 상위 백업·재검증·설정 기준 JSON, `official-release/` — [보호 당시 상태](https://github.com/zpstudios/kotu/blob/ab6e992c043ddc8f015b7b1fe1e85414c81e03cd/docs/HANDOVER.md#L8). 새 A439 백업과 별개로 수정·삭제하지 않음 |
 | v0.433.9 설치·설정 백업과 공식 배포 근거 | `artifacts/a437-review/pre-update-backup/` 1,182파일, 상위 백업·재검증·설정 기준 JSON과 `official-release/`의 공식 Full 및 검증 근거 — [당시 위치와 검증](https://github.com/zpstudios/kotu/blob/6403859a1df482d3cc4a4852166d959fd1414bee/docs/HANDOVER.md#L5-L8). A438의 새 백업과 별개로 수정·삭제하지 않음 |
 | v0.433.8 설치·설정 백업 | `artifacts/a435-review/pre-update-backup/`와 상위 기준 JSON — [백업 범위와 설치 결과](https://github.com/zpstudios/kotu/blob/5288d2cfc0c782154773444befd37c39573dbf42/docs/HANDOVER.md#L5-L8). A437의 새 백업과 별개로 수정·삭제하지 않음 |
 | 이전 설치·설정·기준 JSON | [전체 보호 경로 및 설치 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L36). A434 v0.433.7, A433 v0.433.5, A432 v0.433.4, A431/A430 및 이전 v0.433.3·v0.433.2·v0.433.0·v0.432.2 백업과 독립 복구 보존본 포함 |
