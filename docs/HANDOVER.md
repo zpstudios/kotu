@@ -11,7 +11,7 @@
 
 ## 열린 작업과 다음 시작점
 
-- **A438 HWP·PDF 검색**: 사용자가 두 형식에서 Ctrl+F가 동작하지 않는다고 제보해 [수정 작업](REQUIREMENTS.md#a438)을 시작했다. 코드에서 PDF의 검색 비활성화와 HWP `OfficeTextView`의 `ITextSearchTarget` 미구현을 확인했다. 아직 제품 수정·실화면 재현은 하지 않았다. 다음은 페이지 본문·결과 위치를 얻는 경로를 확정하고 직렬 구현·독립 검토·별도 앱 검수 후 공식 배포·설치까지 진행하는 것이다. A437의 남은 미관측 조건은 [검수 행](DEVICE-CHECKS.md#a437)에 유지한다.
+- **A438 HWP·PDF 검색**: [검색 계약](features/editor/paged-document-search-A438.md)은 문서 체크포인트에 포함하며 v0.435.0 버전·릴리스 설명·제품 소스는 미커밋 상태다. 전체 App publish·1,540시험·HWP 엔진/응답 순서·아키텍처 검사를 통과했고 PDF 한글 6결과·강조·순환 이동을 관측했다. 독립 검토의 휠 후 늦은 자동 이동과 중립 호스트 초점의 Ctrl+F 거절을 [남은 개발](REQUIREMENTS.md#open-work)에 반영했다. 다음 담당은 두 문제 수정 → [화면 검수](DEVICE-CHECKS.md#a438) → 제품 커밋·공식 배포 → 현재 v0.434.0 새 백업·공식 설치 대조를 진행한다. 검수 앱 종료·설정 원본 복원·공식 설정 불변을 확인했다. 근거는 `artifacts/a438-review/validation.json`; 공식 제품은 변경하지 않았다. A437 잔여는 [기존 검수 행](DEVICE-CHECKS.md#a437)에 유지한다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 계약은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다.
 
 이전 세션의 배포·관측·정정 근거는 [공유 근거 색인](history/evidence-index.md)에서 찾는다. 완료·인계 때 이 파일은 최신 상태와 바로 다음 행동으로 고쳐 쓴다.

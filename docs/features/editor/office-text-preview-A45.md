@@ -9,6 +9,8 @@ the Fit menu and the page/text switch are in the bottom bar.
 
 ## HWP page view (v0.431.0)
 
+The unreleased A438 draft adds read-only Ctrl+F, result navigation and current-match highlighting for page and text views under the [search contract](paged-document-search-A438.md).
+
 The Document module and All Readable use the bundled [rhwp](https://github.com/edwardkim/rhwp/tree/v0.9.1) engine to lay out HWP 5.x files locally. Readers can move between pages containing text, table borders and embedded pictures, or switch to the existing selectable text preview. Documents stay on the PC. Available fonts and the engine's support for a document's objects can affect line breaks and placement. Editing, printing and page rendering for the other office formats remain outside this change.
 
 The text reader validates the file and passes the same in-memory bytes to the page viewer. A local WebView2 worker renders the selected page as an SVG image. The viewer discards the previous image when the new one is ready. If WebView2 or page rendering fails, the native text preview remains available.

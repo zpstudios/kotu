@@ -7,6 +7,7 @@
 
 | ID | 상태 | 남은 일 유형 | 남은 일·착수 조건 | 근거 |
 |---|---|---|---|---|
+| <a id="a438"></a>A438 | 진행 | 개발 | PDF·Office 본문의 휠 입력이 대기 중인 검색 결과의 자동 이동을 취소하도록 보강한다. Ctrl+F/H는 현재 Document/All Readable 호스트의 중립 초점에서도 진입하도록 소유권 경계를 수정하되 다른 입력·팝업·PassThrough·IME 가드를 유지한다. 최초 PDF 열기 뒤 무응답 당시의 실제 초점은 재관측한다. | [원요구·현재 계약](history/requirements-completed-index.md#a438) · [관측과 후속 검수](DEVICE-CHECKS.md#a438) |
 | <a id="a19"></a>A19 | 미착수 | 결정 | H/W 랭킹 제출의 서버·전송·개인정보 범위와 제출 정책을 정한다. 장기 후보이며 착수는 별도 선택한다. | [A19](history/requirements-completed-index.md#a19) |
 | <a id="a45"></a>A45 | 부분 | 개발 | 다른 형식의 페이지 보기와 차트·수식 호환성을 검토·구현한다. 한글 원본 정밀 비교는 검수에서 관리하며 원본 편집·저장·인쇄와 암호·DRM·배포용 HWP/HWP 3.x는 지원 범위 밖이다. | [지원 범위](features/editor/office-text-preview-A45.md) |
 | <a id="a115"></a>A115 | 보류 | 개발 | 네이티브 TextBox 커서 색 변경은 API 제약으로 보류한다. 기본 편집기 커서의 설치본 가독성 확인은 검수 문서에서 관리한다. | [구현 결과](history/requirements-completed-index.md#a115) · [검수](DEVICE-CHECKS.md#editor) |
@@ -15,7 +16,6 @@
 | <a id="a399"></a>A399 | 조사 | 조사 | 실제 재현 파일·다운로드 상태를 확보해 로컬/온라인 전용/동기화 중과 최초/재진입/Refresh를 분리 조사한다. 원본 강제 다운로드·무한 UI 재시도 금지. 원본 부재를 매 세션 반복 질문하지 않는다. | [조사](features/explorer/onedrive-thumbnail-investigation-A399.md) · [검수 경계](DEVICE-CHECKS.md#image-cloud) |
 | <a id="a406"></a>A406 | 보류 | 개발 | 메뉴 약 3초 누름 빠른 녹음·H/W 상태 표시를 구현한다. 2026-11-10/14 보류 유지: 재개 승인 전 구현·실녹음 금지. H/W 수집 주기 유지안은 아직 확정할 결정이다. | [설계·정책](features/recording/quick-recording-A406-A407.md) |
 | <a id="a407"></a>A407 | 보류 | 개발 | 빠른 녹음 중 닫기→트레이·전용 표시를 구현한다. A406과 함께 미구현·미배포이며 재개 승인 전 착수하지 않는다. | [설계·닫기 정책](features/recording/quick-recording-A406-A407.md) |
-| <a id="a438"></a>A438 | 진행 | 개발 | HWP·PDF의 Ctrl+F를 본문 검색에 연결하고 결과 이동·포커스 복귀를 구현한다. Document와 All Readable, HWP 페이지/본문 보기, 검색 가능한 텍스트가 없는 PDF의 안내를 구분해 검증한다. 기존 텍스트 검색·페이지 이동·읽기 전용 보호를 유지한다. | [사용자 제보](history/requirements-completed-index.md#a438) |
 
 **사용자 판단 대기** — 셸 키 진단 스트립(`diag.shellKeyOverlay`) 제거는 별도 지시와 A309 실기기 확인을 기다린다. 기본 꺼짐을 유지한다. [판단 근거](https://github.com/zpstudios/kotu/blob/070e21af070996ba3d78fb440db9b4552f75a723/docs/HANDOVER.md#L1813-L1815)
 

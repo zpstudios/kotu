@@ -1,5 +1,7 @@
 # A396 — Always-visible find and replace
 
+The unreleased A438 draft extends PDF and HWP search through the read-only [page/document search contract](paged-document-search-A438.md). The PDF exclusion below describes the original A396 implementation; existing text/Markdown editing and replacement behavior remains unchanged.
+
 ## 2026-10-23 reinforcement — v0.401.0
 
 Removed the idle `Enter text to find` helper in both initialization XAML and runtime presentation.
