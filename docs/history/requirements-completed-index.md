@@ -456,7 +456,7 @@
 | <a id="candidate-1"></a>1 | 소진 A323 | 같은 폴더 재생성 제거·실제 재스캔의 표시 복원. | L3667–3674 |
 | <a id="candidate-2"></a>2 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-2) | L3675 |
 | <a id="candidate-3"></a>3 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-3) | L3676 |
-| <a id="candidate-4"></a>4 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-4) | L3677 |
+| <a id="candidate-4"></a>4 | 소진 A359 | ContentOpened 구독은 부착별 해제 표시와 전달 시 현재 뷰 검사를 거친다. 예약된 옛 이벤트와 같은 객체 재부착도 이전 세션을 되살리지 않는다. [현재 소스·시험 재대조](content-lifetime-migration.md#late-results-recheck) | L3677 |
 | <a id="candidate-5"></a>5 | 재현 안 함 | 바 임계는 자체 폭 기준. A305→A312 파생 폭 변경은 반영됐고 상수 재계수 0건. | L3678–3685 |
 | <a id="candidate-6"></a>6 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-6) | L3686 |
 | <a id="candidate-7"></a>7 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-7) | L3687 |
@@ -477,14 +477,14 @@
 | <a id="candidate-22"></a>22 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-22) | L3734–3739 |
 | <a id="candidate-23"></a>23 | A419로 승격 | 외부에서 저장한 이미지 자동 갱신. | L3740–3741 |
 | <a id="candidate-24"></a>24 | 소진 A308·A319 | 가이드 정렬 Type 누락 정정. | L3742–3743 |
-| <a id="candidate-25"></a>25 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-25) | L3744–3745 |
+| <a id="candidate-25"></a>25 | 소진 A345·A417 | 옛 분할 조립 루프는 A345에서 폐기됐다. A417은 표시 Unloaded에서 로더 세대를 무효화하고, 창 소유 스캔과 표시 수명을 분리한다. 원문도 영구 누수로 판정한 항목은 아니다. [재대조·관측 한계](content-lifetime-migration.md#late-results-recheck) | L3744–3745 |
 | <a id="candidate-26"></a>26 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-26) | L3746–3747 |
 | <a id="candidate-27"></a>27 | 소진 A325 | 내부 탐색 후 창 제목·트레이 툴팁 갱신. | L3748–3752 |
 | <a id="candidate-28"></a>28 | 소진 A349 | 수동 이전/다음 파일 키는 Ctrl+←/→·PageUp/Down으로 구현. | L3753, L3630 |
 | <a id="candidate-29"></a>29 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-29) | L3754 |
 | <a id="candidate-30"></a>30 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-30) | L3755–3757 |
 | <a id="candidate-31"></a>31 | 소진 A309 | F11/F12 패널 닫힘 후 null 포커스 방어. | L3758–3762 |
-| <a id="candidate-32"></a>32 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-32) | L3763–3767 |
+| <a id="candidate-32"></a>32 | 소진 A359 | [후보 4](#candidate-4)와 같은 지연 ContentOpened 경로다. 다른 뷰의 기준 경로·제목에 옛 통지가 반영되지 않도록 공통 부착 수명에서 폐기한다. | L3763–3767 |
 | <a id="candidate-33"></a>33 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-33) | L3768–3778 |
 | <a id="candidate-34"></a>34 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-34) | L3779–3787 |
 | <a id="candidate-35"></a>35 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-35) | L3788–3803 |

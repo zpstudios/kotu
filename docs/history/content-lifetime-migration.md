@@ -65,3 +65,14 @@ UI 동일성 접근과 늦은 정보·인쇄 결과 문제를 수정하고 회�
 수동 확인: All Readable에서 문서 편집 후 영상·사진·압축으로 전환, 저장 확인 취소와 버리기,
 압축 Back으로 콘텐츠 닫기, 재생 중 설정·미지원 파일로 전환, 인쇄·정보 조회 중 파일 전환,
 창 닫기 직전 늦은 로드 통지. 네이티브 워커 종료 순서와 UI COM 호출 금지 규칙은 변경하지 않는다.
+
+<a id="late-results-recheck"></a>
+## 후보 4·25·32 재대조 — 2026-11-26
+
+`0d7bf1f019d833569d812c0697e47a80198d3ca1`의 현재 소스와 독립 검토를 기준으로 기존 구현에 소진된 범위를 확인했다.
+
+- [후보 4](requirements-completed-index.md#candidate-4)·[32](requirements-completed-index.md#candidate-32): 셸의 `ReplaceContent`는 이전 구독을 먼저 해제한다. `ContentContractSession`은 전달 시 해제 여부·현재 뷰를 검사하고, `ChildContentHost`도 자식 부착 동일성과 재진입을 확인한다. A359가 지연 ContentOpened의 기준 경로·제목 덮어쓰기 경로를 차단한다.
+- [후보 25](requirements-completed-index.md#candidate-25): A345에서 옛 분할 조립 루프를 동기 ItemsSource 반영으로 대체했다. [A417 세션 수명](../features/explorer/explorer-refresh-A417.md#세션보기입력)은 창 소유 스캔을 유지하면서 `ExplorerPane`의 Unloaded에서 표시 세대·요청을 무효화하고, 해제된 표시에는 조립을 시작하지 않는다. 최종 세션 Dispose는 이미 예약된 스캔 결과도 폐기한다. 숨김·표시 해제를 창 소유 데이터 세션 종료로 바꾸지 않는다.
+- `ContentContractSessionTests`·`ChildContentHostTests`·`ExplorerSessionRuntimeTests`를 Release/x64로 다시 빌드·실행해 **67개 전부 통과**했다. 수동 큐·제어된 스캔 완료로 이미 예약된 이벤트, 같은 객체 재부착, 중첩 자식 교체, 취소를 무시하고 늦게 끝난 스캔, 종료 뒤 큐 반영과 재진입을 검사한다.
+
+제품 코드는 변경하지 않았다. 표시 Unloaded의 WinUI 배선은 코드 대조이며, 자동시험을 실제 화면 전환·네이티브 종료 순서·프레임 성능의 새 관측으로 해석하지 않는다. [A380 원인 불명 종료](requirements-completed-index.md#a380)와 기존 실기기 검수 대기는 이 종결과 별개다.
