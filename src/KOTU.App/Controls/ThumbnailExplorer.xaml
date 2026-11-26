@@ -215,7 +215,6 @@
                  균일해진다. 이 Setter 둘을 지우면 타일이 셀 안에서 가운데로 쪼그라든다. -->
             <GridView.ItemContainerStyle>
                 <Style TargetType="GridViewItem">
-                    <Setter Property="Template" Value="{StaticResource KotuGridViewItemTemplate}" />
                     <Setter Property="MinWidth" Value="0" />
                     <Setter Property="MinHeight" Value="0" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -312,7 +311,6 @@
             </ListView.ItemTemplateSelector>
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
-                    <Setter Property="Template" Value="{StaticResource KotuListViewItemTemplate}" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                     <Setter Property="VerticalContentAlignment" Value="Stretch" />
                     <Setter Property="Padding" Value="0" />

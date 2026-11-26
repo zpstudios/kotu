@@ -305,7 +305,6 @@ public sealed class RecordView : UserControl, IBottomBarProvider, ICloseGuard, I
                 """),
             ItemContainerStyle = (Style)XamlReader.Load("""
                 <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="GridViewItem">
-                    <Setter Property="Template" Value="{StaticResource KotuGridViewItemTemplate}"/>
                     <Setter Property="Margin" Value="0,0,8,8"/>
                     <Setter Property="Padding" Value="0"/>
                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>

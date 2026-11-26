@@ -7,8 +7,8 @@ using Windows.UI;
 namespace KOTU.App.Appearance;
 
 /// <summary>
-/// Publishes UI-only resources before Core broadcasts the change. Existing controls subscribe
-/// to DesignRuntime.Changed and refresh in place; this service never replaces a window or view.
+/// Selects native control lettering before views are created. The retained multi-skin branch
+/// publishes UI resources before Core broadcasts a change; neither path replaces a view.
 /// </summary>
 internal static class AppDesignService
 {
@@ -29,6 +29,7 @@ internal static class AppDesignService
 
     internal static void RefreshSystemColors()
     {
+        if (!DesignRuntime.MultiSkinEnabled) return; // Native ThemeResources follow the system directly.
         if (s_resources is null) return;
         OriginalDesignPalette.Refresh(s_resources);
         if (s_preferences?.Current.Decoration == DesignDecoration.Original) RefreshResources();
@@ -40,6 +41,23 @@ internal static class AppDesignService
         s_preferences = preferences;
         s_dispatcher = DispatcherQueue.GetForCurrentThread();
         s_resources ??= Application.Current.Resources;
+        if (!DesignRuntime.MultiSkinEnabled)
+        {
+            DesignRuntime.Initialize(preferences);
+            // Choose control lettering once before creating views. Native WinUI resources own
+            // theme, hover, press, selection, disabled and high-contrast states without overlays.
+            var native = DesignRuntime.Current;
+            s_resources["KotuControlFontFamily"] = new FontFamily(native.FontFamily);
+            s_resources["KotuIconFontFamily"] = new FontFamily(native.ThinControls
+                ? "ms-appx:///Assets/KotuIconsThin.ttf#KOTU Icons Thin, Segoe Fluent Icons, Segoe MDL2 Assets"
+                : "ms-appx:///Assets/KotuIcons.ttf#KOTU Icons, Segoe Fluent Icons, Segoe MDL2 Assets");
+            s_resources["KotuIconStrokeWidth"] = native.IconStrokeWidth;
+            return;
+        }
+        s_resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("ms-appx:///Appearance/MultiDesignResources.xaml")
+        });
         OriginalDesignPalette.Refresh(s_resources);
         preferences.Changed += RefreshResources;
         RefreshResources();
@@ -47,11 +65,12 @@ internal static class AppDesignService
         DesignRuntime.Initialize(preferences);
     }
 
-    internal static bool Apply(string id) => (s_preferences
+    internal static bool Apply(string id) => DesignRuntime.MultiSkinEnabled && (s_preferences
         ?? throw new InvalidOperationException("The design service is not initialized.")).Apply(id);
 
     private static void RefreshResources()
     {
+        if (!DesignRuntime.MultiSkinEnabled) return;
         if (s_dispatcher is { HasThreadAccess: false })
         {
             s_dispatcher.TryEnqueue(RefreshResources);

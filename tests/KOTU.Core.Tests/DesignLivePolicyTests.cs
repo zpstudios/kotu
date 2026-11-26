@@ -36,29 +36,28 @@ public sealed class DesignLivePolicyTests
         => Assert.Equal(expected, DesignPalette.Composite(token, background));
 
     [Fact]
-    public void ExplicitManagementRequestsAreImmediateAndSeparateFromRoleMetadata()
+    public void RoleMetadataSurvivesWhileExplicitManagementIsInactive()
     {
         var element=new object();
         var calls=0;
-        void Observe(object requested)
-        {
-            Assert.Same(element,requested);
-            Assert.Equal(DesignElementRole.Card,DesignScope.GetRole(requested));
-            Assert.Equal(11,DesignScope.OriginalFontSize(requested,-1));
-            calls++;
-        }
+        void Observe(object requested) => calls++;
         DesignScope.ManagementRequested+=Observe;
         try
         {
             DesignScope.SetRole(element,DesignElementRole.Card);
             DesignScope.SetOriginalFontSize(element,11);
+            Assert.False(DesignRuntime.MultiSkinEnabled);
+            Assert.Equal(DesignElementRole.Card,DesignScope.GetRole(element));
+            Assert.Equal(11,DesignScope.OriginalFontSize(element,-1));
             Assert.Equal(0,calls);
             DesignScope.RequestManagement(element);
-            Assert.Equal(1,calls);
+            Assert.Equal(0,calls);
+            Assert.Equal(DesignElementRole.Card,DesignScope.GetRole(element));
+            Assert.Equal(11,DesignScope.OriginalFontSize(element,-1));
         }
         finally { DesignScope.ManagementRequested-=Observe; }
         DesignScope.RequestManagement(element);
-        Assert.Equal(1,calls);
+        Assert.Equal(0,calls);
     }
 
     [Fact]
@@ -161,13 +160,13 @@ public sealed class DesignLivePolicyTests
     }
 
     [Fact]
-    public void NativePaletteOverridesAllHaveExplicitSystemHighContrastBindings()
+    public void PreservedSkinPaletteOverridesRetainSystemHighContrastBindings()
     {
         var root = FindRepository();
         var source = File.ReadAllText(Path.Combine(root,"src/KOTU.App/Appearance/AppDesignService.cs"));
         var keys = Regex.Matches(source,"\"([A-Za-z]+(?:Brush|Background|Foreground|Pressed|Over|Checked|Selected|Disabled))\"")
             .Select(m => m.Groups[1].Value).Where(k => !k.StartsWith("Kotu",StringComparison.Ordinal)).Distinct().ToArray();
-        var xaml = XDocument.Load(Path.Combine(root,"src/KOTU.App/App.xaml"));
+        var xaml = XDocument.Load(Path.Combine(root,"src/KOTU.App/Appearance/MultiDesignResources.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var dictionary = xaml.Descendants().Single(e => (string?)e.Attribute(x+"Key") == "HighContrast");
         var brushes = dictionary.Elements().ToDictionary(e => (string)e.Attribute(x+"Key")!,e => (string?)e.Attribute("Color"));
@@ -184,6 +183,38 @@ public sealed class DesignLivePolicyTests
             Assert.Equal("{ThemeResource SystemColorWindowColor}",brushes["TreeViewItemBackground"+suffix]);
             Assert.Equal("{ThemeResource SystemColorGrayTextColor}",brushes["TreeViewItemForeground"+suffix]);
         }
+    }
+
+    [Fact]
+    public void ActiveControlsUseNativeStatesAndRetainNormalizedCommandMetrics()
+    {
+        var root = FindRepository();
+        var app = XDocument.Load(Path.Combine(root,"src/KOTU.App/App.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var styles = app.Descendants().Where(e => e.Name.LocalName == "Style").ToArray();
+        foreach (var target in new[] { "Button", "ToggleButton", "DropDownButton", "RepeatButton", "CheckBox" })
+        {
+            var style = styles.Single(e => (string?)e.Attribute("TargetType") == target && e.Attribute(x + "Key") is null);
+            Assert.DoesNotContain(style.Elements(), e => (string?)e.Attribute("Property") is "Template" or "Background" or "BorderBrush");
+        }
+        Assert.DoesNotContain(app.Descendants(), e => e.Name.LocalName == "Setter" && (string?)e.Attribute("Property") == "appearance:LiveDesign.Managed");
+        Assert.DoesNotContain(app.Descendants().Attributes("Source"), a => a.Value.Contains("Design", StringComparison.Ordinal));
+        Assert.DoesNotContain(app.Descendants(), e => e.Name.LocalName == "SolidColorBrush");
+
+        foreach (var key in new[] { "BottomBarButtonStyle", "BottomBarToggleButtonStyle", "BottomBarWideDropDownButtonStyle", "BottomBarWideComboBoxStyle" })
+        {
+            var style = styles.Single(e => (string?)e.Attribute(x + "Key") == key);
+            Assert.Equal("32", (string?)style.Elements().Single(e => (string?)e.Attribute("Property") == "Height").Attribute("Value"));
+        }
+        var fit = styles.Single(e => (string?)e.Attribute(x + "Key") == "BottomBarFitOptionsStyle");
+        Assert.Equal("20", (string?)fit.Elements().Single(e => (string?)e.Attribute("Property") == "Width").Attribute("Value"));
+        foreach (var state in new[] { "PointerOver", "Pressed", "Disabled" })
+        {
+            var visualState = fit.Descendants().Single(e => e.Name.LocalName == "VisualState" && (string?)e.Attribute(x + "Name") == state);
+            Assert.Contains(visualState.Descendants(), e => (string?)e.Attribute("Target") == "RootGrid.Background");
+        }
+        Assert.Contains(styles, e => (string?)e.Attribute(x + "Key") == "KotuManagedFontIconStyle");
+        Assert.Contains(styles, e => (string?)e.Attribute(x + "Key") == "KotuManagedTextBlockStyle");
     }
 
     [Fact]

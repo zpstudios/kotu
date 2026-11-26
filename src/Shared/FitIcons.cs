@@ -29,9 +29,12 @@ internal static class FitIcons
         // 텍스트 시작 위치28과 행 높이는 유지해 아이콘 뒤4px 여유를 둔다.
         item.Loaded += (_, _) =>
         {
-            item.FontFamily = new FontFamily(DesignRuntime.Current.FontFamily);
-            DesignRuntime.Changed -= RefreshLettering;
-            DesignRuntime.Changed += RefreshLettering;
+            if (DesignRuntime.MultiSkinEnabled)
+            {
+                item.FontFamily = new FontFamily(DesignRuntime.Current.FontFamily);
+                DesignRuntime.Changed -= RefreshLettering;
+                DesignRuntime.Changed += RefreshLettering;
+            }
             if (FindIconRoot(item) is { } root)
             {
                 root.Width = root.Height = ToolbarIconGeometry.ViewportSize(kind);
@@ -39,7 +42,8 @@ internal static class FitIcons
                 root.Margin = new Thickness(0, -4, 0, -4);
             }
         };
-        item.Unloaded += (_, _) => DesignRuntime.Changed -= RefreshLettering;
+        if (DesignRuntime.MultiSkinEnabled)
+            item.Unloaded += (_, _) => DesignRuntime.Changed -= RefreshLettering;
 
         void RefreshLettering()
         {

@@ -23,6 +23,23 @@ internal static class DesignIcons
 
     internal static IconSourceElement CreateLive(string symbol, double size = 18)
     {
+        if (!DesignRuntime.MultiSkinEnabled)
+        {
+            // The shipped Original font contains the same canonical drawing. One native glyph
+            // avoids creating contours and Loaded/Changed subscriptions for a fixed appearance.
+            return new IconSourceElement
+            {
+                Width = size, Height = size,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false, Tag = DesignRuntime.IconScopeMarker,
+                IconSource = new FontIconSource
+                {
+                    Glyph = DesignIconCatalog.GlyphFor(symbol).ToString(),
+                    FontFamily = new FontFamily(DesignIconCatalog.FontFamily(DesignRuntime.Current)),
+                    FontSize = size, IsTextScaleFactorEnabled = false,
+                }
+            };
+        }
         var icon = Create(symbol, DesignRuntime.Current, size);
         _ = new LiveIcon(icon, symbol, size);
         return icon;

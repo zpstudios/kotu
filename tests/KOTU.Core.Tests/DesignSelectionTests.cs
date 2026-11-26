@@ -112,7 +112,7 @@ public sealed class DesignSelectionTests
     }
 
     [Fact]
-    public void SharedRuntimeBroadcastsOnlyTheCurrentlyBoundPreferenceStore()
+    public void InactiveRuntimeDoesNotFollowOrBroadcastSavedSkinChanges()
     {
         var first = new DesignPreferences(new MemorySettingsService());
         var second = new DesignPreferences(new MemorySettingsService());
@@ -123,18 +123,51 @@ public sealed class DesignSelectionTests
         try
         {
             first.Apply("humanist");
-            Assert.Equal("humanist", DesignRuntime.Current.Id);
+            Assert.Equal("original", DesignRuntime.Current.Id);
             DesignRuntime.Initialize(second);
             first.Apply("ink");
             Assert.Equal("original", DesignRuntime.Current.Id);
             second.Apply("terminal");
-            Assert.Equal("terminal", DesignRuntime.Current.Id);
-            Assert.Equal(3, notifications);
+            Assert.Equal("original", DesignRuntime.Current.Id);
+            Assert.Equal("terminal", second.Current.Id); // The retained implementation remains usable in isolation.
+            Assert.Equal(0, notifications);
         }
         finally
         {
             DesignRuntime.Changed -= Changed;
             DesignRuntime.Initialize(new DesignPreferences(new MemorySettingsService()));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(PersistedDesignIds))]
+    public void NativeRuntimePreservesSavedSkinAndHonorsIndependentThinControls(string savedId)
+    {
+        foreach (var thin in new[] { false, true })
+        {
+            var settings = new TrackingSettings();
+            settings.Set(DesignPreferences.SettingKey, savedId);
+            settings.Set("display.thinControls", thin);
+            settings.Set("document.font", "Consolas");
+            settings.Writes = 0;
+            var preferences = new DesignPreferences(settings);
+            DesignRuntime.Initialize(preferences);
+            try
+            {
+                Assert.False(DesignRuntime.MultiSkinEnabled);
+                Assert.Equal("original", DesignRuntime.Current.Id);
+                Assert.Equal(thin, DesignRuntime.Current.ThinControls);
+                Assert.Equal(thin ? 1 : 1.4, DesignRuntime.Current.IconStrokeWidth);
+                Assert.Equal(savedId, preferences.Current.Id);
+                Assert.Equal(savedId, settings.Get(DesignPreferences.SettingKey, ""));
+                Assert.Equal("Consolas", settings.Get("document.font", ""));
+                Assert.Equal(0, settings.Writes);
+                Assert.Equal(0, settings.Saves);
+            }
+            finally
+            {
+                DesignRuntime.Initialize(new DesignPreferences(new MemorySettingsService()));
+            }
         }
     }
 

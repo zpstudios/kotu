@@ -13,7 +13,7 @@
 
 현재 선택 ID 등 기존 설정과 구현 자료는 보존한다. 비활성화할 런타임 경로, 성능 원인과 검증 수치, 복원되는 시각 상태는 조사 후 이 정본에 기록한다. A438 검색은 v0.435.0으로 공식 배포·설치했으며 A439와 제품 변경·배포 단위를 구분한다. [진행 범위](../../REQUIREMENTS.md#open-work) · [사용자 원요구](../../history/requirements-completed-index.md#a439)
 
-### 도입 전후 코드 조사 — 실측 전
+### 도입 전후 코드 조사
 
 도입 전 `f74a289`와 도입 `db101e7` 이후를 대조했다. 네이티브 컨트롤 상태 표현을 전역 사용자 정의 템플릿과 [LiveDesign](../../../src/KOTU.App/Appearance/LiveDesign.cs)의 요소별 상태 관리로 바꾼 것이 주요 구조 변화다. 단순 래퍼 한 겹의 추가로 설명하지 않는다.
 
@@ -21,15 +21,39 @@
 - [DesignSurface](../../../src/KOTU.App/Appearance/DesignSurface.cs)는 그릴 때 자식을 비우고 도형·브러시를 다시 만들며, [DesignOverlay](../../../src/KOTU.App/Appearance/DesignOverlay.cs)는 즉시 그린 뒤 Arrange를 무효화한다. Original도 이 경로를 사용한다.
 - 최초 `Track`의 `Load` 내부 갱신과 외부 `Refresh`가 중복된다. 팝업·가상화 컨테이너의 여러 연결 요청, 원본과 오버레이 양쪽의 크기 변경 처리도 겹칠 수 있다.
 
-위 경로는 코드로 확인한 추가 작업이며 현재 체감 지연의 기여도는 미측정이다. 매 프레임 전체 트리를 무한 순회하거나 동일 핸들러가 무제한 누적되는 결함, 일반 호버 경로의 동기 파일 I/O는 이번 정독에서 확인하지 못했다. 과거 A427 하네스의 GC 지연 자료는 비교군 작업량·관측 횟수·측정기 할당 영향이 달라 현재 지연의 배수나 원인 증명으로 쓰지 않는다. 동일 자료·설정의 현재 Original과 단일 활성 스타일을 비교해 메뉴 열기/호버, 폴더 표시/스크롤, 리사이즈별 UI 지연·할당량·GC 정지·Refresh/AttachTree 횟수를 측정한다.
+위 경로는 코드로 확인한 추가 작업이다. 매 프레임 전체 트리를 무한 순회하거나 동일 핸들러가 무제한 누적되는 결함, 일반 호버 경로의 동기 파일 I/O는 이번 정독에서 확인하지 못했다. 과거 A427 하네스의 GC 지연 자료는 비교군 작업량·관측 횟수·측정기 할당 영향이 달라 현재 지연의 배수나 원인 증명으로 쓰지 않는다. 현재 Original과 단일 활성 스타일의 동일 조작 비교로 기여도를 판단한다.
+
+### 실측과 비교 판정
+
+2026-11-26 v0.435.0과 복원 후보의 소스 복사본을 별도 Test 검수본으로 비교했다. Original·라이트·앱 배율 200, Preview의 로컬 TXT 240개, 실제 캡처 709×535와 최대화 1920×1032를 사용했다. 저장 창 크기 1200×850만으로 실제 화면 크기를 가정하지 않았다. 제품 소스는 계측 때문에 수정하지 않았다. 아래 전후 회차는 같은 동작 수·순서·스크롤 입력·화면 크기이며 요청 간격과 총시간은 다르다.
+
+| 완료 회차 | 실제 조작 | 구간 시간 전→후 | UI 관리 할당 전→후 | Refresh 전→후 | 프로세스 GC 정지 전→후 |
+|---|---|---:|---:|---:|---:|
+| 메뉴 | 열기·Archive/Video/Document 우클릭 포인터 이동·Escape 1회 | 36.72→41.91초 | 2,498,320→182,936바이트 | 628→0회 | 76.985→0ms |
+| 폴더 재방문 | 열기·600 아래/위 스크롤·상위 폴더 복귀 | 47.31→48.02초 | 122,734,712→11,862,840바이트 | 13,415→0회 | 5,118.870→614.580ms |
+| 창 | 최대화·원래 크기 복귀 | 26.19→29.86초 | 3,740,616→162,136바이트 | 212→0회 | 623.675→0ms |
+
+근거는 로컬 `artifacts/a439-review/results/`의 `baseline-menu-r2`, `baseline-folder-r2`, `baseline-resize-r1`과 `candidate-menu-r1`, `candidate-folder-r1`, `candidate-resize-r1` 결과 JSON·대응 `-actions.json`이다. 입력 뒤 화면만 캡처했으며 측정 도중 UIA 전체 트리·강제 GC·결과 파일 쓰기는 하지 않았다. 우클릭을 포함하므로 순수 호버 실험으로 부르지 않는다. UI 할당은 계측 영향을, GC는 다른 스레드의 작업도 포함한다. 디스패처 대기 시간은 입력부터 렌더까지의 지연이 아니며 inclusive AttachTree/Load/Refresh 시간과 중첩 Draw 호출은 합산하지 않는다.
+
+기존 첫 폴더 회차 `baseline-folder-r1` 후 캐시를 지우지 않고 새 프로세스에서 반복해도 큰 비용이 유지됐다. 후보도 캐시를 지우지 않았다. 요청 간격 차이, 후보 트리에 일시적으로 남은 시험 결과 폴더 한 항목, 스냅샷과 프로세스 전체 GC 영향 때문에 엄밀한 마이크로벤치로 보지 않는다. 후보 세 회차의 AttachTree/Load/Refresh·도형 그리기 호출은 모두 0이며 추가 스킨 처리와 관리 할당·GC 정지 감소가 확인됐다. 반면 폴더의 최장 디스패처 대기는 2,638.83→2,711.12ms로 줄지 않았고 메뉴 p95도 289.44→295.51ms로 비슷했다. 전체 입력 지연 해결이나 개선 배수로 확대하지 않는다.
+
+첫 `baseline-menu-r1`은 WinUI 네이티브 오류로 종료돼 결과가 없으며 비교에서 제외한다. 같은 DLL의 유휴 명시 정지·10초 자동 종료, 메뉴를 열어 둔 15초 자동 종료와 변경 전 네 회차·후보 세 회차는 저장 후 프로세스 생존을 확인했다. 따라서 자동 종료가 원인이라는 추측은 채택하지 않으며 최초 충돌 원인은 미확정이다. WER와 실패 조작 기록을 보존한다. 종료 뒤 검수 설정은 원본 바이트로 복원했고 공식 앱은 조작하지 않았다.
 
 ### 메뉴 호버 누락의 코드 근거
 
-시작 메뉴의 모듈 항목은 일반 Button이다. [App.xaml](../../../src/KOTU.App/App.xaml)의 전역 `KotuButtonTemplate`은 `PointerOver` 상태를 비우고 [CommandColors](../../../src/KOTU.App/Appearance/LiveDesign.Appearance.cs)에 표시를 맡긴다. [OriginalDesignPalette](../../../src/KOTU.App/Appearance/OriginalDesignPalette.cs)가 평상시와 호버에 사용하는 `ControlFillColorDefault`와 `SubtleFillColorSecondary`는 현재 WinUI 다크 리소스에서 모두 `#0FFFFFFF`이며 같은 배경에 합성된다. 폴백도 같은 색이다. Original 도형에 별도 호버 변화가 없어 다크에서 시각 변화가 사라지는 경로다. 라이트의 두 토큰은 달라 같은 증상으로 확대하지 않는다. 실제 원래 디자인과 복원 결과는 화면으로 대조한다.
+시작 메뉴의 모듈 항목은 일반 Button이다. 변경 전 v0.435.0의 전역 `KotuButtonTemplate`은 `PointerOver` 상태를 비우고 [CommandColors](../../../src/KOTU.App/Appearance/LiveDesign.Appearance.cs)에 표시를 맡겼다. 이 자원은 후보의 [비활성 자원](../../../src/KOTU.App/Appearance/MultiDesignResources.xaml)에 보존했다. [OriginalDesignPalette](../../../src/KOTU.App/Appearance/OriginalDesignPalette.cs)가 평상시와 호버에 사용하는 `ControlFillColorDefault`와 `SubtleFillColorSecondary`는 현재 WinUI 다크 리소스에서 모두 `#0FFFFFFF`이며 같은 배경에 합성된다. 폴백도 같은 색이다. Original 도형에 별도 호버 변화가 없어 다크에서 시각 변화가 사라지는 경로다. 라이트의 두 토큰은 달라 같은 증상으로 확대하지 않는다. 실제 원래 디자인과 복원 결과는 화면으로 대조한다.
 
-### 복원 구현 방향
+### 복원 후보 구현
 
 기존 스킨 구현·카탈로그·자료와 저장된 `display.design`은 보존하되 선택 UI와 동적 스킨 런타임은 활성 제품 경로에서 사용하지 않는다. `AttachWindow`만 끄지 않고 Managed/직접 등록·구독도 상태 생성 전에 차단한다. 빈 상태 템플릿과 투명 자원을 그대로 두면 체크·선택·호버가 사라지므로, 단일 활성 스타일에 네이티브 상태와 원래 테마를 함께 복원한다. 버튼·바·트리 공통 치수, A426 배치와 A433 고정 열/비례 조작부, 원래 독립 설정인 `display.thinControls`는 유지한다. 메뉴의 normal/hover/pressed/disabled/키보드 focus를 다크·라이트·고대비에서 확인하고 열린 모듈·문서·선택 상태는 재생성하지 않는다.
+
+후보는 `DesignRuntime.MultiSkinEnabled` 정책으로 활성 프로필과 저장 선택을 분리한다. `LiveDesign`의 모든 등록 진입점과 `DesignScope.RequestManagement`를 차단하고, 공통 아이콘은 고정 글리프를 사용한다. 기존 App 자원 57개와 커스텀 템플릿은 [비활성 자원](../../../src/KOTU.App/Appearance/MultiDesignResources.xaml)에 보존했다. 활성 [App.xaml](../../../src/KOTU.App/App.xaml)은 네이티브 상태와 기존 조작부 치수를 사용하며, 열린 파일의 굵기는 엔진 없이 직접 반영한다. 구현 자료 보존은 스위치 한 줄로 전체 기능을 재활성화할 수 있다는 약속이 아니다.
+
+후보의 Core 시험 778개와 독립 코드 검토를 통과했다. 라이트에서 6열 타일의 비례 체크 표시·선택 분리, TXT 열기, 비활성 Fit 메뉴와 저장된 `ink`의 보존·스킨 선택 UI 숨김을 확인했다. 루트 `RequestedTheme`만 다크로 바꾼 최초 진단에서는 하드웨어 패널이 라이트로 남았으나, 다음 단계 복사본에서 `Application.RequestedTheme`을 초기화 전에 다크로 설정하자 해당 배경도 다크로 표시됐다. 이 전체 앱 다크 시작에서 메뉴 호버·키보드 초점, 체크·현재 선택 분리와 TXT·비활성 Fit 항목을 관측했다. 루트만 바꾼 혼합 화면은 진단 범위의 차이이며 실제 OS 테마 변경·실행 중 전환 성공을 증명하지 않는다. Windows 설정 실행은 같은 도구 응답 오류로 실패했고 OS는 변경하지 않았다.
+
+v0.436.0의 계측 없는 전체 publish·1,553시험과 진단 타입 부재·34글꼴/라이선스 대조를 통과했다. 이 정상 검수본의 라이트 시작·Display에서 스킨 선택 UI 숨김과 저장된 `ink` 보존도 확인했다. 로컬 native DLL은 기존 검증본을 재사용했으며 전체 native 재빌드는 공식 CI에서 확인한다.
+
+화면과 빌드 조건은 로컬 `artifacts/a439-review/`의 `candidate-light-*`·`candidate-root-dark-menu-*`·`candidate-app-dark-*`·`candidate-display-settings.png`·`product-light-*`와 준비 manifest, `product-build-verification.json`·`test-results/`·`ui-restoration.json`에서 회수한다. 두 계측 파일과 강제 다크 설정은 단계 복사본에만 적용했으며 제품에는 포함하지 않는다. 현재 검수 경계는 [실기기 확인](../../DEVICE-CHECKS.md#a439), 배포·설치는 [현재 상태](../../HANDOVER.md)를 따른다.
 
 ## A427–A434 구현과 당시 승인
 

@@ -842,7 +842,9 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         Root.Children.Add(scaleBox);
         Root.Children.Add(offListNote);
 
-        Root.Children.Add(new Appearance.DesignPicker(App.Services.GetRequiredService<KOTU.Core.Appearance.DesignPreferences>()));
+        // Preserve the picker implementation and saved selection while skins are inactive.
+        if (KOTU.Core.Appearance.DesignRuntime.MultiSkinEnabled)
+            Root.Children.Add(new Appearance.DesignPicker(App.Services.GetRequiredService<KOTU.Core.Appearance.DesignPreferences>()));
 
         // A48(v0.214.0)의 "Windows display scale (all apps)" 콤보·안내·딥링크 폴백은
         // A221(2026-08-24)에서 전면 제거 — OS 배율은 이 앱이 건드릴 축이 아니라는 사용자 지시.

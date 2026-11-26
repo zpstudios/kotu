@@ -950,18 +950,13 @@ always did.
 
 ### Interface design
 
-**Added in v0.433.0; Original restored in v0.433.8.** Under **Settings → Display**, compare
-12 designs for the interface's icons, text, check marks, panels and bottom controls in a gallery.
-**Original** is the first and default design. Updates from versions before design selection keep
-the original appearance and thin-control preference; an explicitly selected design is preserved.
+**Changed in v0.436.0.** KOTU uses one interface with native Windows control states.
+The design gallery is no longer shown under **Settings → Display**. Your previously saved
+design choice is retained but is not applied. The common button and toolbar sizes and the
+thin-control preference remain in place.
 
-Scroll through the gallery and select a card to apply it to every open KOTU window immediately.
-The current design has an **Applied** label and a highlighted border. There is no separate preview
-or Apply button, and no restart is needed.
-
-Open files, unsaved edits, playback and file selections remain in place when you apply a design.
-Light and dark appearance follow Windows independently of the chosen design; document and media
-content keep their own presentation.
+Light and dark appearance follow Windows. Document and media content keep their own
+presentation; interface styling does not recreate open modules or documents.
 
 ### Explorer integration
 

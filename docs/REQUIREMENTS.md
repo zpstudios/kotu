@@ -7,7 +7,7 @@
 
 | ID | 상태 | 남은 일 유형 | 남은 일·착수 조건 | 근거 |
 |---|---|---|---|---|
-| <a id="a439"></a>A439 | 진행 | 개발 | 스킨 도입 전후 변경과 UI 비용을 대조해 느려짐 원인을 파악하고 수정한다. 다중 스킨 사용을 중단하되 구현은 보존하며, 원래 테마·통일된 규격·원래 상호작용을 갖춘 단일 디자인을 적용한다. 메뉴 모듈 호버 표시 등 기존 동작의 누락도 대조·복원한다. | [사용자 철회·복원 조건](history/requirements-completed-index.md#a439) · [현재/변경 계약](features/shell/design-library-A427.md#a439) |
+| <a id="a439"></a>A439 | 조사 | 조사 | 첫 기존 검수본 `baseline-menu-r1`의 WinUI 종료 원인을 추가 재현 시 조작·WER/덤프로 좁힌다. 같은 DLL의 후속 진단·비교 성공을 원인 해결로 세지 않는다. 스킨 비용 감소는 전체 입력 지연 개선 증명이 아니며, 남은 체감 지연은 구체적인 재현 조건을 확보해 별도로 대조한다. | [구현·측정과 한계](features/shell/design-library-A427.md#a439) · [검수 경계](DEVICE-CHECKS.md#a439) |
 | <a id="a19"></a>A19 | 미착수 | 결정 | H/W 랭킹 제출의 서버·전송·개인정보 범위와 제출 정책을 정한다. 장기 후보이며 착수는 별도 선택한다. | [A19](history/requirements-completed-index.md#a19) |
 | <a id="a45"></a>A45 | 부분 | 개발 | 다른 형식의 페이지 보기와 차트·수식 호환성을 검토·구현한다. 한글 원본 정밀 비교는 검수에서 관리하며 원본 편집·저장·인쇄와 암호·DRM·배포용 HWP/HWP 3.x는 지원 범위 밖이다. | [지원 범위](features/editor/office-text-preview-A45.md) |
 | <a id="a115"></a>A115 | 보류 | 개발 | 네이티브 TextBox 커서 색 변경은 API 제약으로 보류한다. 기본 편집기 커서의 설치본 가독성 확인은 검수 문서에서 관리한다. | [구현 결과](history/requirements-completed-index.md#a115) · [검수](DEVICE-CHECKS.md#editor) |

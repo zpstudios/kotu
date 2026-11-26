@@ -11,7 +11,10 @@ public static class DesignScope
     private static readonly ConditionalWeakTable<object, Entry> Entries = new();
     // Forward creation-time requests without retaining elements or depending on a UI framework.
     public static event Action<object>? ManagementRequested;
-    public static void RequestManagement(object element) => ManagementRequested?.Invoke(element);
+    public static void RequestManagement(object element)
+    {
+        if (DesignRuntime.MultiSkinEnabled) ManagementRequested?.Invoke(element);
+    }
     public static void SetRole(object element, DesignElementRole role) => Entries.GetOrCreateValue(element).Role = role;
     public static DesignElementRole GetRole(object element) => Entries.TryGetValue(element, out var entry) ? entry.Role : DesignElementRole.Automatic;
     public static void ProtectContent(object element) => SetRole(element, DesignElementRole.Content);

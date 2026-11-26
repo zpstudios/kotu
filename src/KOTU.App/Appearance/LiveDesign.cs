@@ -28,6 +28,13 @@ public sealed partial class LiveDesign : DependencyObject
     public static void SetAuthoredFontWeight(DependencyObject target,Windows.UI.Text.FontWeight value) => target.SetValue(AuthoredFontWeightProperty,value);
     private static void OnAuthoredFontWeightChanged(DependencyObject sender,DependencyPropertyChangedEventArgs args)
     {
+        if (!DesignRuntime.MultiSkinEnabled)
+        {
+            // The open-file emphasis is authored data, independent of the dormant skin engine.
+            if (sender is TextBlock text) text.FontWeight = (Windows.UI.Text.FontWeight)args.NewValue;
+            else if (sender is Control control) control.FontWeight = (Windows.UI.Text.FontWeight)args.NewValue;
+            return;
+        }
         if (sender is not FrameworkElement element) return;
         Track(element);
         if (States.TryGetValue(element,out var state)) state.RememberFontWeight(((Windows.UI.Text.FontWeight)args.NewValue).Weight);
@@ -43,6 +50,7 @@ public sealed partial class LiveDesign : DependencyObject
 
     internal static void Initialize()
     {
+        if (!DesignRuntime.MultiSkinEnabled) return;
         if (s_initialized) return;
         s_initialized = true;
         s_dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
@@ -52,6 +60,7 @@ public sealed partial class LiveDesign : DependencyObject
 
     private static void OnManagementRequested(object target)
     {
+        if (!DesignRuntime.MultiSkinEnabled) return;
         if (target is not FrameworkElement element || s_dispatcher is not { } dispatcher) return;
         if (dispatcher.HasThreadAccess) Track(element);
         else dispatcher.TryEnqueue(() => Track(element));
@@ -59,17 +68,20 @@ public sealed partial class LiveDesign : DependencyObject
 
     private static void OnManagedChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
+        if (!DesignRuntime.MultiSkinEnabled) return;
         if (sender is FrameworkElement element && args.NewValue is true) Track(element);
     }
 
     private static void Track(FrameworkElement element)
     {
+        if (!DesignRuntime.MultiSkinEnabled) return;
         var state = States.GetValue(element, static target => new ElementState(target));
         if (element.IsLoaded) { state.TraceLifecycle("Load requested","Track"); state.Load(); state.Refresh(); }
     }
 
     internal static void AttachTree(DependencyObject root)
     {
+        if (!DesignRuntime.MultiSkinEnabled) return;
 #if KOTU_DESIGN_TEST_HARNESS
         using var diagnosticWork=MeasureDiagnosticWork(DiagnosticWorkKind.AttachTree,root);
         DiagnosticTreeObserver?.Invoke(new { Action="AttachTree enter",Root=DiagnosticElement(root) });
@@ -108,12 +120,14 @@ public sealed partial class LiveDesign : DependencyObject
 
     private static void RefreshAll()
     {
+        if (!DesignRuntime.MultiSkinEnabled) return;
         if (s_dispatcher is { HasThreadAccess: false }) { s_dispatcher.TryEnqueue(RefreshAll); return; }
         foreach (var state in LoadedStates.ToArray()) state.Refresh();
     }
 
     internal static void AttachWindow(Window window, FrameworkElement root)
     {
+        if (!DesignRuntime.MultiSkinEnabled) return;
         _ = WindowScopes.GetValue(window, target => new WindowScope(target, root));
     }
 
