@@ -40,7 +40,10 @@
                 <!-- PDF 페이지는 흰 배경 전제 — 다크 테마에서도 종이처럼 보이게 고정 -->
                 <Border Background="White" Margin="8" BorderThickness="1"
                         BorderBrush="{ThemeResource PdfPageEdgeBrush}">
-                    <Image Stretch="Uniform" />
+                    <Grid>
+                        <Image Stretch="Uniform" />
+                        <Canvas IsHitTestVisible="False" />
+                    </Grid>
                 </Border>
             </DataTemplate>
         </ListView.ItemTemplate>

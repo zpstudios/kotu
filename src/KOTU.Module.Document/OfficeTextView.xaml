@@ -10,6 +10,7 @@
         </Grid.RowDefinitions>
         <TextBlock x:Name="Notice" Margin="24,12,24,8" Visibility="Collapsed" TextWrapping="Wrap" Opacity="0.75" />
         <ListView x:Name="TextList" Grid.Row="1" Padding="16,0,16,68" FontSize="16"
+                  ContainerContentChanging="OnTextContainerChanged"
                   SelectionMode="None" IsItemClickEnabled="False" HorizontalContentAlignment="Stretch">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
@@ -18,7 +19,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
@@ -33,22 +34,24 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="FileNameText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <ContentControl x:Name="DriveStripHost" Visibility="Collapsed" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+            <local:ReadOnlyFindBar x:Name="OfficeFindBar" Grid.Column="1" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <Border x:Name="FilenameFilterSlot" Height="32" Margin="0,0,6,0" Visibility="Collapsed" />
                 <Button x:Name="CopyButton" Content="Copy text" Click="CopyText" IsEnabled="False" />
             </StackPanel>
-            <Button x:Name="TextSmaller" Grid.Column="2" Content="A−" Click="SmallerText" ToolTipService.ToolTip="Smaller preview text"
+            <Button x:Name="TextSmaller" Grid.Column="3" Content="A−" Click="SmallerText" ToolTipService.ToolTip="Smaller preview text"
                     AutomationProperties.Name="Smaller preview text" />
-            <Button x:Name="TextLarger" Grid.Column="3" Content="A+" Click="LargerText" ToolTipService.ToolTip="Larger preview text"
+            <Button x:Name="TextLarger" Grid.Column="4" Content="A+" Click="LargerText" ToolTipService.ToolTip="Larger preview text"
                     AutomationProperties.Name="Larger preview text" />
-            <Button x:Name="ViewMode" Grid.Column="4" Style="{StaticResource BottomBarButtonStyle}"
+            <Button x:Name="ViewMode" Grid.Column="5" Style="{StaticResource BottomBarButtonStyle}"
                     Click="SwitchView" Visibility="Collapsed">
                 <FontIcon x:Name="ViewModeIcon" FontSize="18" />
             </Button>
-            <local:HwpPageControls x:Name="PageControls" Grid.Column="5" Visibility="Collapsed" VerticalAlignment="Center" />
+            <local:HwpPageControls x:Name="PageControls" Grid.Column="6" Visibility="Collapsed" VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </UserControl>

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using KOTU.Core.Contracts;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
@@ -6,7 +7,7 @@ using Microsoft.Web.WebView2.Core;
 namespace KOTU.Module.Document;
 
 /// <summary>검사를 마친 HWP 스냅샷 한 개를 로컬 전용 페이지 뷰에 전달한다.</summary>
-internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
+internal sealed class HwpPagePane(ContentControl host, Action requestEscape) : IReadOnlySearchSource
 {
     private const string HostName = "kotu-hwp.invalid";
     private const string PageUrl = "https://" + HostName + "/index.html";
@@ -20,6 +21,13 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
     private FrameworkElement? _bottomOverlay;
     public event Action? Failed;
     public event Action? StateChanged;
+    public event Action<TextSearchCommand>? SearchCommand;
+    public event Action? SearchBodyInteraction;
+    private int _searchRequest;
+    private int _searchResultRequest;
+    private int _selectionRequest;
+    private readonly Dictionary<int, TaskCompletionSource<ReadOnlySearchSummary>> _searchReplies = [];
+    private readonly Dictionary<int, TaskCompletionSource<bool>> _selectionReplies = [];
     public int PageIndex { get; private set; }
     public int PageCount { get; private set; }
     public bool IsPagePending { get; private set; }
@@ -134,11 +142,54 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
         try
         {
             var json = args.WebMessageAsJson;
-            if (json.Length > 128) throw new InvalidDataException();
+            if (json.Length > 512) throw new InvalidDataException();
             using var message = JsonDocument.Parse(json);
             var root = message.RootElement;
             switch (root.GetProperty("kind").GetString())
             {
+                case "find":
+                    DispatchSearchCommand(TextSearchCommand.Find);
+                    break;
+                case "find-options":
+                    DispatchSearchCommand(TextSearchCommand.Replace);
+                    break;
+                case "find-next":
+                    DispatchSearchCommand(TextSearchCommand.Next);
+                    break;
+                case "find-previous":
+                    DispatchSearchCommand(TextSearchCommand.Previous);
+                    break;
+                case "search-escape-released":
+                    DispatchSearchCommand(TextSearchCommand.EscapeReleased);
+                    break;
+                case "search-body-interaction":
+                    host.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (!_closed && !_failed && host.IsLoaded && host.Visibility == Visibility.Visible &&
+                            ReferenceEquals(host.Content, _view)) SearchBodyInteraction?.Invoke();
+                    });
+                    break;
+                case "search-result":
+                    var request = root.GetProperty("id").GetInt32();
+                    if (!_searchReplies.Remove(request, out var reply)) break;
+                    if (root.TryGetProperty("error", out var error) && error.GetBoolean())
+                        reply.TrySetException(new InvalidOperationException("HWP search unavailable."));
+                    else
+                    {
+                        var found = root.GetProperty("count").GetInt32();
+                        if (found is < 0 or > 10000) { reply.TrySetException(new InvalidDataException()); break; }
+                        reply.TrySetResult(new(found, root.GetProperty("limited").GetBoolean()));
+                    }
+                    break;
+                case "search-selected":
+                    var selection = root.GetProperty("selection").GetInt32();
+                    if (_selectionReplies.Remove(selection, out var selected))
+                    {
+                        if (root.TryGetProperty("error", out var selectionError) && selectionError.GetBoolean())
+                            selected.TrySetException(new InvalidOperationException("HWP match position unavailable."));
+                        else selected.TrySetResult(true);
+                    }
+                    break;
                 case "escape":
                     // 셸이 이 WebView를 닫을 수 있으므로 WebView2 콜백에서 나온 뒤 전달한다.
                     host.DispatcherQueue.TryEnqueue(() =>
@@ -194,6 +245,7 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
         if (_closed || _failed) return;
         _failed = true;
         _source = null;
+        CancelSearchReplies();
         _firstPage.TrySetResult(false);
         Failed?.Invoke();
     }
@@ -203,6 +255,7 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
         if (_closed) return;
         _closed = true;
         _source = null;
+        CancelSearchReplies();
         _firstPage.TrySetResult(false);
         if (_view?.CoreWebView2 is { } core)
         {
@@ -219,5 +272,73 @@ internal sealed class HwpPagePane(ContentControl host, Action requestEscape)
         host.Content = null;
         try { _view?.Close(); } catch (Exception) { /* 셸 종료 중 이미 해제될 수 있다. */ }
         _view = null;
+    }
+
+    private void DispatchSearchCommand(TextSearchCommand command) => host.DispatcherQueue.TryEnqueue(() =>
+    {
+        if (!_closed && !_failed && host.IsLoaded && host.Visibility == Visibility.Visible && ReferenceEquals(host.Content, _view))
+            SearchCommand?.Invoke(command);
+    });
+
+    private bool SendSearch<T>(T message)
+    {
+        if (_closed || _failed || _view?.CoreWebView2 is not { } core) return false;
+        try { core.PostWebMessageAsJson(JsonSerializer.Serialize(message)); return true; }
+        catch { return false; } // Search failure must not discard a still-readable page image.
+    }
+
+    public async Task<ReadOnlySearchSummary> SearchAsync(string query, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        var id = ++_searchRequest;
+        var reply = new TaskCompletionSource<ReadOnlySearchSummary>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _searchReplies.Add(id, reply);
+        try
+        {
+            if (!SendSearch(new { kind = "search", id, query })) throw new InvalidOperationException();
+            // The WASM call cannot be interrupted without destroying its render model. Wait for its
+            // reply before submitting the next query; the viewer also owns a single latest mailbox.
+            var result = await reply.Task.WaitAsync(TimeSpan.FromSeconds(35));
+            cancellation.ThrowIfCancellationRequested();
+            if (_closed || id != _searchRequest) throw new OperationCanceledException();
+            _searchResultRequest = id;
+            return result;
+        }
+        finally { _searchReplies.Remove(id); }
+    }
+
+    public async Task SelectMatchAsync(int index, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        var id = _searchResultRequest;
+        if (id == 0) return;
+        var selection = ++_selectionRequest;
+        var reply = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _selectionReplies.Add(selection, reply);
+        using var registration = cancellation.Register(() => host.DispatcherQueue.TryEnqueue(() =>
+            SendSearch(new { kind = "cancel-selection", selection })));
+        try
+        {
+            if (!SendSearch(new { kind = "select", id, selection, index })) throw new InvalidOperationException();
+            await reply.Task.WaitAsync(TimeSpan.FromSeconds(35));
+            cancellation.ThrowIfCancellationRequested();
+        }
+        finally { _selectionReplies.Remove(selection); }
+    }
+
+    public void ClearSearch()
+    {
+        _searchResultRequest = 0;
+        SendSearch(new { kind = "clear-search", id = ++_searchRequest });
+    }
+
+    public void FocusDocument() => _view?.Focus(FocusState.Programmatic);
+
+    private void CancelSearchReplies()
+    {
+        foreach (var reply in _searchReplies.Values) reply.TrySetCanceled();
+        foreach (var reply in _selectionReplies.Values) reply.TrySetCanceled();
+        _searchReplies.Clear();
+        _selectionReplies.Clear();
     }
 }

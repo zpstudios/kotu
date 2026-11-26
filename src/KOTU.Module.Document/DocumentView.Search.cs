@@ -53,6 +53,7 @@ public sealed partial class DocumentView
 
     private void InitializeTextSearch()
     {
+        PdfFindBar.Bind(this, StatusBar);
         _searchTools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var element in new FrameworkElement[] { DecorTogglePanel, PageInfoText, ZoomButton })
         {
@@ -78,6 +79,7 @@ public sealed partial class DocumentView
 
     private void ResumeTextSearch()
     {
+        PdfFindBar.Resume();
         _searchLoaded = true;
         // A reattached view still owns the same editor buffer, but Unloaded advanced its lifetime generation.
         if (_searchLoadedGeneration >= 0 && (_path is not null || _untitled)) _searchLoadedGeneration = _openSeq;
@@ -88,6 +90,7 @@ public sealed partial class DocumentView
 
     private void SuspendTextSearch()
     {
+        PdfFindBar.Suspend();
         _searchLoaded = false;
         _searchEscapePending = _searchInteractionActive = _searchReturnFocusAfterClose = _searchFlyoutDismissed = false;
         DetachSearchFlyoutPresenter();
@@ -130,13 +133,14 @@ public sealed partial class DocumentView
         if (!_searchInitialized) return;
         var available = CanSearchText;
         // A414: the shell owns filename filtering while the empty document shows its explorer.
-        SearchPanel.Visibility = _path is not null || _untitled ? Visibility.Visible : Visibility.Collapsed;
+        SearchPanel.Visibility = !IsPdfFitBranch && (_path is not null || _untitled) ? Visibility.Visible : Visibility.Collapsed;
+        PdfFindBar.Visibility = IsPdfFitBranch ? Visibility.Visible : Visibility.Collapsed;
         FindBox.IsEnabled = available;
         FindOptionsButton.IsEnabled = available;
         FindBox.PlaceholderText = available ? "Find text" : "Text search unavailable";
         ToolTipService.SetToolTip(FindBox, available
             ? (_capped || _truncated ? "Find in loaded preview only (Ctrl+F)" : "Find text (Ctrl+F); Markdown searches source")
-            : "Search is available for loaded text and Markdown source, not PDF or HTML view.");
+            : "Search is available for loaded text and Markdown source, not HTML view.");
         if (!available) InvalidateTextSearch();
         else if (_searchResult is { } result && result.Snapshot.CanReplace != CanReplaceText) QueueTextSearch();
         UpdateSearchPresentation();
@@ -329,6 +333,7 @@ public sealed partial class DocumentView
     {
         if (!_searchInitialized || _searchTools is null) return;
         var filteringNames = FilenameFilterSlot.Visibility == Visibility.Visible;
+        PdfFindBar.SetLayout(width, filteringNames);
         FindBox.Width = filteringNames ? FilenameFilterSlot.Width : width < 700 ? 120 : 180;
         FindBox.Opacity = filteringNames ? 0 : 1;
         FindBox.IsTabStop = !filteringNames;
@@ -362,8 +367,11 @@ public sealed partial class DocumentView
         return false;
     }
 
-    public bool TryTextSearchCommand(TextSearchCommand command, bool fromEnter = false, bool repeat = false)
+    public bool TryTextSearchCommand(TextSearchCommand command, bool fromEnter = false, bool repeat = false,
+        object? focusScope = null, object? neutralFocus = null)
     {
+        if (IsPdfFitBranch) return PdfFindBar.TryCommand(command, fromEnter, repeat,
+            focusScope: focusScope, neutralFocus: neutralFocus);
         if (command == TextSearchCommand.EscapeReleased)
         {
             var dismissedSearch = _searchInteractionActive && _searchFlyoutDismissed;

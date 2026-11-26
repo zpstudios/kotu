@@ -326,6 +326,8 @@ public sealed partial class DocumentView : IContentLifetime, IEditorEscapeSource
         _renderSeq++;
         _documentSession.Reset(_documentSession.BaselineText, _documentSession.DiskStamp);
         SuspendTextSearch();
+        PdfFindBar.SetSource(null);
+        _pdfPane?.Clear();
         _worker?.Dispose();
         _worker = null;
         _dirtyTimer?.Stop();

@@ -2217,6 +2217,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
 
     private async void OpenPdf(string path)
     {
+        PdfFindBar.SetSource(null);
         CloseVirtualEditor();
         _performance?.Stop("surface-changed");
         _performance = null;
@@ -2272,6 +2273,7 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         UpdatePrintButton();
         PlaceholderText.Visibility = Visibility.Collapsed;
         _pdfPane.Visibility = Visibility.Visible;
+        UpdateSearchAvailability();
         PageInfoText.Visibility = Visibility.Visible;
         PageInfoText.Text = string.Empty;
         FileNameText.Text = Path.GetFileName(path);
@@ -2302,6 +2304,8 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
         }
 
         _shownPath = path;
+        PdfFindBar.SetSource(_pdfPane);
+        UpdateSearchAvailability();
         UpdatePrintButton(); // A211 배치 3: PDF 로드 성공 — 인쇄 가능(버튼 활성·셸 Ctrl+P는 같은 판정을 직접 본다)
         ContentOpened?.Invoke(path); // 셸 동기화 — A22: 셸이 드라이브 줄을 내린다
         TrayStatusChanged?.Invoke(); // A54→A138: 트레이 = 현재/전체 페이지(LoadAsync가 (1, 전체)를 이미 쐈다)
@@ -2310,9 +2314,11 @@ public sealed partial class DocumentView : UserControl, ISettingsSnapshotSource,
     /// <summary>PDF 패널을 내린다(텍스트로 전환·열기 실패 시). 비트맵·문서 참조 해제.</summary>
     private void HidePdf()
     {
+        PdfFindBar.SetSource(null);
         if (_pdfPane is null) return;
         _pdfPane.Clear();
         _pdfPane.Visibility = Visibility.Collapsed;
+        UpdateSearchAvailability();
         PageInfoText.Visibility = Visibility.Collapsed;
         ShowTextFitState(); // A145→A214: 텍스트 갈래 상태로 — 파일·무제가 있으면 활성,
                             // 빈 화면 복귀면 비활성 "1:1" 상자(판정은 저쪽이 _path·_untitled로 한다)

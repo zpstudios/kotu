@@ -9,6 +9,7 @@ KOTU는 아래 외부 구성요소를 사용합니다. 각 구성요소는 자�
 | [7-Zip](https://www.7-zip.org/) `7z.dll` | 압축 해제/생성 엔진 | LGPL-2.1 (+ unRAR 제한) | 동적 로드만 사용. 소스 저장소에는 미포함, 배포 zip에는 원본 그대로 동봉. 소스는 7-zip.org에서 제공 |
 | [Squid-Box.SevenZipSharp](https://github.com/squid-box/SevenZipSharp) | 7z.dll .NET 래퍼 | LGPL-3.0 | NuGet, 동적 링크 |
 | [SharpCompress](https://github.com/adamhathcock/sharpcompress) | zip CP949 인코딩 경로 | MIT | NuGet |
+| [PdfPig](https://github.com/UglyToad/PdfPig/tree/v0.1.16) 0.1.16 | 읽기 전용 PDF 본문 검색·문자 좌표 추출 (A438) | Apache-2.0 | NuGet, managed libraries. 원본 라이선스·고지는 배포본 `licenses/PdfPig-LICENSE.txt`와 `licenses/PdfPig-NOTICES.txt`에 동봉. PDF 화면·인쇄는 기존 Windows.Data.Pdf 사용 |
 | [libvlc](https://www.videolan.org/vlc/libvlc.html) (VideoLAN.LibVLC.Windows) | 동영상 재생 엔진 | LGPL-2.1 | 별도 dll 동적 링크, 원본 그대로 동봉. 소스는 videolan.org에서 제공 |
 | [LibVLCSharp / LibVLCSharp.WinUI](https://code.videolan.org/videolan/LibVLCSharp) | libvlc .NET 래퍼 | LGPL-2.1 | NuGet, 동적 링크 |
 | [NAudio](https://github.com/naudio/NAudio) (NAudio.Wasapi) | 오디오 VU 미터의 WASAPI 루프백 레벨 캡처 (A304), 마이크 PCM WAV 녹음 (A15) | MIT | NuGet |

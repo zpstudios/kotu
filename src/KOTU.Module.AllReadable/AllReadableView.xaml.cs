@@ -23,8 +23,9 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     private object? _bottomOverlay;
     private bool _contentReleased;
 
-    public bool TryTextSearchCommand(TextSearchCommand command, bool fromEnter = false, bool repeat = false) =>
-        (_content.Child as ITextSearchTarget)?.TryTextSearchCommand(command, fromEnter, repeat) == true;
+    public bool TryTextSearchCommand(TextSearchCommand command, bool fromEnter = false, bool repeat = false,
+        object? focusScope = null, object? neutralFocus = null) =>
+        (_content.Child as ITextSearchTarget)?.TryTextSearchCommand(command, fromEnter, repeat, this, neutralFocus) == true;
 
     public bool TryCopyImage(bool repeat = false, object? focusScope = null) =>
         (_content.Child as IImageCopyTarget)?.TryCopyImage(repeat, this) == true;

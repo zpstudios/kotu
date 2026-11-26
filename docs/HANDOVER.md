@@ -11,7 +11,7 @@
 
 ## 열린 작업과 다음 시작점
 
-- **A438 HWP·PDF 검색**: v0.435.0 버전·릴리스 설명·제품 소스는 미커밋이며 [검색 계약](features/editor/paged-document-search-A438.md)을 따른다. 초점·휠 보강과 독립 검토·1,540시험을 마쳤고, 최종 초점 가드는 전체 publish·실화면으로 재검증했다. 잠금 해제 후 실제 StartButton 초점의 최초 Ctrl+F 실패를 보완했고 셋째 후보에서 무클릭 검색 입력·강조·읽기 전용 옵션을 확인했다. 다음은 [남은 화면 검수](DEVICE-CHECKS.md#a438) → 제품 커밋·공식 배포 → 현재 v0.434.0 새 백업·공식 설치 대조다. 근거는 `artifacts/a438-review/validation.json`, `third-candidate-ui-restoration.json`, `uncommitted-product-manifest.json`. 검수 앱 정상 종료·설정 원본 복원·공식 설정 불변 확인. A437 잔여는 [기존 검수 행](DEVICE-CHECKS.md#a437)에 유지한다.
+- **A438 HWP·PDF 검색**: 이 제품 체크포인트의 v0.435.0 변경은 [검색 계약](features/editor/paged-document-search-A438.md)을 따른다. 최초 초점과 빈 결과 옵션의 즉시 닫힘을 재현·수정하고 독립 검토·전체 publish·1,540시험을 마쳤다. HWP 표·다른 용지·텍스트 보기, All Readable, PDF 회전/crop, Office 조각 경계와 TXT 치환/되돌리기를 관측했다. 검수 정상 종료·설정 원본 복원·공식 설정 불변 확인. 다음은 해당 HEAD의 공식 빌드·배포 확인 → 현재 v0.434.0 새 백업·공식 설치 대조다. 근거는 `artifacts/a438-review/validation.json`, `fifth-candidate-ui-restoration.json`, 커밋 전 제품 31파일 기준 `uncommitted-product-manifest.json`. 미관측 조건은 [DEVICE-CHECKS](DEVICE-CHECKS.md#a438)에 유지한다.
 - **A439 디자인 철회·복원**: 다중 스킨 제공 철회·구현 보존·사용 중단, 통일성을 유지한 원래 테마와 누락 동작 복원, UI 지연 수리가 선택됐다. [정적 조사·변경 계약](features/shell/design-library-A427.md#a439)에 중복 Refresh·도형 재생성 경로와 Original 다크 호버 색 충돌을 기록했다. 실제 성능 기여도는 미측정이며 제품 구현은 아직이다. 다음은 동일 조건 측정과 단일 활성 스타일 구현·상태/성능 검증이다. 현재 Original 강제나 과거 통째 회귀로 대체하지 않는다. A438과 제품 변경·배포 단위를 구분한다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 계약은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다.
 

@@ -2340,9 +2340,16 @@ public sealed partial class MainWindow : Window
                 VirtualKey.Escape when !control && !shift => TextSearchCommand.ReturnToDocument,
                 _ => null
             } : null;
+            // 파일 열기 뒤 메뉴 버튼에 남은 초점과 셸 복구 앵커만 검색 진입에 허용한다.
+            // 다른 크롬·입력의 자손이나 전체 RootLayout을 중립 범위로 취급하지 않는다.
+            var neutralSearchFocus = (command is TextSearchCommand.Find or TextSearchCommand.Replace) &&
+                RootLayout.XamlRoot is { } searchRoot && FocusManager.GetFocusedElement(searchRoot) is { } searchFocus &&
+                (ReferenceEquals(searchFocus, StartButton) || ReferenceEquals(searchFocus, ShellFocusAnchor))
+                    ? searchFocus : null;
             // Enter belongs to the editor itself unless the focused surface is a search field.
             if (command is { } value && (e.Key != VirtualKey.Enter || IsTextInputFocused()) &&
-                search.TryTextSearchCommand(value, e.Key == VirtualKey.Enter, e.KeyStatus.WasKeyDown))
+                search.TryTextSearchCommand(value, e.Key == VirtualKey.Enter, e.KeyStatus.WasKeyDown,
+                    neutralFocus: neutralSearchFocus))
             {
                 e.Handled = true;
                 return;

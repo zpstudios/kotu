@@ -302,6 +302,7 @@
                 <Border x:Name="FilenameFilterSlot" Grid.Column="6" Height="32" Margin="6,0,0,0"
                         HorizontalAlignment="Left" Visibility="Collapsed" />
                 <!-- A396: The keyword field stays visible even when the change count is hidden. -->
+                <local:ReadOnlyFindBar x:Name="PdfFindBar" Grid.Column="6" Margin="6,0,0,0" Visibility="Collapsed" />
                 <StackPanel x:Name="SearchPanel" Grid.Column="6" Margin="6,0,0,0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <TextBox x:Name="FindBox" Width="180" Height="32" MinHeight="32" Padding="8,4"
                              PlaceholderText="Find text" IsEnabled="False" IsSpellCheckEnabled="False"

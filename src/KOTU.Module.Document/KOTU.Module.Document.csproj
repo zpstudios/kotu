@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
     <!-- CP949(한글 레거시 텍스트) 디코드용 코드페이지 제공자 -->
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\KOTU.Core\KOTU.Core.csproj" />
@@ -30,6 +31,8 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="VirtualEditor\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Licenses\PdfPig-LICENSE.txt" Link="licenses\PdfPig-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Licenses\PdfPig-NOTICES.txt" Link="licenses\PdfPig-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="HwpViewer\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Remove="EditorSource\node_modules\**" />
     <Compile Remove="EditorSource\node_modules\**" />

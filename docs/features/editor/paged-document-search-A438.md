@@ -1,12 +1,14 @@
 # A438 — Find in PDF and HWP documents
 
-This is the A438 implementation contract for the unreleased v0.435.0 draft. The installed official product remains v0.434.0. Focus and delayed-selection fixes have passed code review and local validation. The initial PDF failure was observed with actual focus on the shell Start button; after explicit neutral-shell routing was added, first-open Ctrl+F and query input succeeded without a body click. Broader [device checks](../../DEVICE-CHECKS.md#a438) remain separate from the behavior specified here.
+This is the A438 search contract for v0.435.0. Current release and installation status are in [HANDOVER](../../HANDOVER.md); observed behavior and remaining conditions are in [device checks](../../DEVICE-CHECKS.md#a438).
 
 ## Behavior
 
 Document and All Readable route Ctrl+F to a read-only Find field for PDF and office previews. HWP page view retains its original page rendering while finding text. Switching between HWP page and text views searches the newly displayed representation; it does not silently switch modes to perform a search. This extends the original [A396 search contract](find-replace-A396.md), whose PDF exclusion no longer applies.
 
 The field selects its query on Ctrl+F. Enter/F3 and Shift+Enter/Shift+F3 move forward/backward and wrap. Enter navigates only from the Find input. Ctrl+H and the Find options button expose counts and navigation without replacement controls. Escape returns focus to the visible document. IME composition and held-key repeats do not trigger navigation. Unrelated popups, other text inputs and pass-through surfaces keep their existing key routing.
+
+Find options always provides a Close button, including while the query is empty, pending or unsuccessful. Focus stays inside the popup when navigation becomes unavailable; Close and Escape return to the document. This avoids the observed empty-popup focus recovery that previously hid its notice immediately, without weakening the shell's focus guard.
 
 The current match is highlighted and brought into view without changing the PDF or HWP zoom. The input is 32 DIP high, 120 DIP wide below a 700-DIP module bar and 180 DIP otherwise. Counts and navigation appear inline from 1100 DIP and remain in Find options at smaller widths. Existing page, fit and print availability are preserved.
 
@@ -30,7 +32,7 @@ Document/view lifetimes, query revisions and selection requests are checked befo
 
 ## Implementation evidence
 
-[PdfPig 0.1.16](https://github.com/UglyToad/PdfPig/releases/tag/v0.1.16) is a managed, read-only extraction dependency. Its [coordinate transformation](https://github.com/UglyToad/PdfPig/blob/v0.1.16/src/UglyToad.PdfPig/Graphics/OperationContextHelper.cs) already applies crop origin and page rotation. KOTU uses all four glyph rectangle corners before normalizing to top-left page coordinates. PdfPig license/NOTICE files and additions to [Third-Party Notices](../../../THIRD-PARTY-NOTICES.md) remain uncommitted with the product implementation and must accompany its release.
+[PdfPig 0.1.16](https://github.com/UglyToad/PdfPig/releases/tag/v0.1.16) is a managed, read-only extraction dependency. Its [coordinate transformation](https://github.com/UglyToad/PdfPig/blob/v0.1.16/src/UglyToad.PdfPig/Graphics/OperationContextHelper.cs) already applies crop origin and page rotation. KOTU uses all four glyph rectangle corners before normalizing to top-left page coordinates. PdfPig license/NOTICE files accompany the implementation and are required by package validation; [Third-Party Notices](../../../THIRD-PARTY-NOTICES.md) identifies the dependency.
 
 The existing [rhwp dependency](office-text-preview-A45.md) remains at 0.9.1. Runtime probes confirmed body/cell rectangle APIs on seven existing HWP fixtures totaling 20 pages and established Unicode-scalar offsets, including emoji and old Hangul. `getPageText` was rejected for match positioning because its page assignment and table coverage differed from rendered content. These Node probes do not establish installed-font or actual WebView highlight alignment.
 

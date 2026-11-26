@@ -8,7 +8,9 @@
   <style>
     :root { color-scheme: light dark; font: 14px 'Segoe UI', sans-serif; }
     body { margin: 0; }
-    main { box-sizing: border-box; height: 100vh; padding: 9px; overflow: auto; background: #777; }
+    main { position: relative; box-sizing: border-box; height: 100vh; padding: 9px; overflow: auto; background: #777; }
+    #search-overlay { position: absolute; pointer-events: none; overflow: hidden; }
+    #search-overlay rect { fill: #ffc40066; stroke: #884c00; stroke-width: 1; }
     #page { display: block; margin: 0 auto; outline: 1px solid #404040; background: white; }
     main[data-fit="Contain"] #page { max-width: 100%; max-height: 100%; }
     main[data-fit="FitWidth"] #page { width: 100%; height: auto; }
@@ -16,12 +18,13 @@
     @media (forced-colors: active) {
       main { background: Canvas; }
       #page { outline-color: CanvasText; }
+      #search-overlay rect { fill: Highlight; fill-opacity: .45; stroke: HighlightText; }
     }
     #page[hidden] { display: none; }
   </style>
   <script type="module" src="./viewer.js"></script>
 </head>
 <body>
-  <main data-fit="Contain"><img id="page" alt="" hidden></main>
+  <main data-fit="Contain"><img id="page" alt="" hidden><svg id="search-overlay" aria-hidden="true"></svg></main>
 </body>
 </html>

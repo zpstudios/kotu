@@ -10,7 +10,7 @@ namespace KOTU.Module.Document;
 
 /// <summary>A45: HWP 쪽 보기와 오피스 본문 읽기 화면.</summary>
 public sealed partial class OfficeTextView : UserControl, IContentStateSource, IContentOpenFailedSource,
-    IBottomBarProvider, IBottomOverlayConsumer, IDriveStripHost, ITrayStatusProvider, IContentInfoProvider, IEditorEscapeSource
+    IBottomBarProvider, IBottomOverlayConsumer, IDriveStripHost, ITrayStatusProvider, IContentInfoProvider, IEditorEscapeSource, ITextSearchTarget
 {
     private readonly string _path;
     private readonly CancellationTokenSource _cancel = new();
@@ -31,6 +31,7 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
     public OfficeTextView(string path)
     {
         InitializeComponent();
+        InitializeOfficeSearch();
         KOTU.Core.Appearance.DesignScope.ProtectContent(TextList);
         KOTU.Core.Appearance.DesignScope.ProtectContent(PageHost);
         _path = path;
@@ -43,6 +44,8 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
         {
             if (_closed) return;
             _closed = true;
+            OfficeFindBar.SetSource(null);
+            OfficeFindBar.Suspend();
             _cancel.Cancel();
             // 파싱·정보 조회가 토큰을 다 쓴 뒤 워커 큐에서 폐기한다.
             if (_worker is { } worker) worker.Post(_cancel.Dispose);
@@ -71,6 +74,7 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
             }, _cancel.Token);
             if (_closed) return;
             _preview = result.Preview;
+            _textChunks = result.Chunks;
             TextList.ItemsSource = result.Chunks;
             if (_preview.Truncated)
                 _textNotice = (_textNotice + " Preview limited to the first 200,000 characters; Copy text also copies only this preview.").TrimStart();
@@ -80,12 +84,17 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
                 _pages = new HwpPagePane(PageHost, () => EditorEscapeRequested?.Invoke());
                 if (_bottomOverlay is { } overlay) _pages.SetBottomOverlay(overlay);
                 _pages.Failed += PageFailed;
+                _pages.SearchCommand += command => OfficeFindBar.TryCommand(command, fromBody: true);
+                _pages.SearchBodyInteraction += OfficeFindBar.ObserveBodyInteraction;
                 PageControls.Attach(_pages);
             }
             SetView(_pages is not null);
             ContentOpened?.Invoke(_path);
             if (!_closed && result.Source is not null && _pages is { } pane)
+            {
                 await pane.OpenAsync(result.Source, _cancel.Token);
+                if (!_closed) UpdateOfficeSearchSource();
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -129,12 +138,13 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
         StatusText.Text = "No previewable text was found. Export to PDF to view graphical content.";
         StatusText.Visibility = !pages && _preview?.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         TrayStatusChanged?.Invoke();
+        UpdateOfficeSearchSource();
     }
 
     // 한 개의 거대한 TextBox 대입 대신 짧은 문자열 목록을 가상화한다.
-    private static IReadOnlyList<string> Chunk(string text)
+    private static IReadOnlyList<OfficeTextChunk> Chunk(string text)
     {
-        var result = new List<string>();
+        var result = new List<OfficeTextChunk>();
         for (var start = 0; start < text.Length;)
         {
             var length = Math.Min(2048, text.Length - start);
@@ -144,7 +154,7 @@ public sealed partial class OfficeTextView : UserControl, IContentStateSource, I
                 if (line >= start) length = line - start + 1;
                 else if (char.IsHighSurrogate(text[start + length - 1])) length--;
             }
-            result.Add(text.Substring(start, length));
+            result.Add(new(text.Substring(start, length), start));
             start += length;
         }
         return result;

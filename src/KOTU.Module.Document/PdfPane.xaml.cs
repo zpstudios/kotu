@@ -19,7 +19,7 @@ namespace KOTU.Module.Document;
 /// 화면에 들어온 페이지만 지연 수행한다(리사이클 시 비트맵 해제 — 메모리 상한 유지).
 /// 렌더 폭은 모니터 배율(RasterizationScale)을 곱해 선명하게. 암호 PDF는 물어보고 재시도.
 /// </summary>
-public sealed partial class PdfPane : UserControl
+public sealed partial class PdfPane : UserControl, IReadOnlySearchSource
 {
     // ---- A121 키보드 스크롤 비율(뷰포트 높이 대비) — 체감 조정은 이 두 상수만 고친다 ----
 
@@ -125,6 +125,7 @@ public sealed partial class PdfPane : UserControl
         // (DocumentView.Unloaded와 같은 규칙). 다시 로드되면 Worker 프로퍼티가 새로 만든다.
         Unloaded += (_, _) =>
         {
+            SuspendPdfSearch();
             _worker?.Dispose();
             _worker = null;
         };
@@ -134,10 +135,11 @@ public sealed partial class PdfPane : UserControl
     public async Task<bool> LoadAsync(string path)
     {
         var seq = ++_loadSeq;
-        PdfDocument doc;
+        ResetPdfSearch();
+        LoadedPdf loaded;
         try
         {
-            doc = await LoadDocumentAsync(path);
+            loaded = await LoadDocumentAsync(path);
         }
         catch (OperationCanceledException)
         {
@@ -148,19 +150,26 @@ public sealed partial class PdfPane : UserControl
             await ShowMessageAsync("Failed to open PDF", ex.Message);
             return false;
         }
-        if (seq != _loadSeq) return false; // 그새 다른 문서/Clear
+        if (seq != _loadSeq) { loaded.Stream?.Dispose(); return false; }
 
+        var doc = loaded.Document;
+        _renderStream?.Dispose();
+        _renderStream = loaded.Stream;
+        _searchBytes = loaded.Bytes;
+        _searchPassword = loaded.Password;
         _doc = doc;
 
         // 표시 폭: 패널 폭에 맞추되 과대 렌더 방지 상한. 레이아웃 전이면 A4쯤으로.
         var width = ActualWidth > 100 ? Math.Min(ActualWidth - 48, 1100) : 900;
         var items = new List<PageItem>((int)doc.PageCount);
         var offsets = new double[doc.PageCount];
+        var searchSizes = new (double Width, double Height)[doc.PageCount];
         double y = 0;
         for (var i = 0; i < doc.PageCount; i++)
         {
             using var page = doc.GetPage((uint)i); // Size만 읽는다 — 렌더는 지연
             var aspect = page.Size.Height / Math.Max(1, page.Size.Width);
+            searchSizes[i] = (page.Size.Width, page.Size.Height);
             var item = new PageItem
             {
                 Index = i,
@@ -173,6 +182,7 @@ public sealed partial class PdfPane : UserControl
             y += item.Height + PdfFitGeometry.PageFrameExtent;
         }
         _items = items;
+        _searchPageSizes = searchSizes;
         _pageOffsets = offsets;
         PageList.ItemsSource = items;
         PageChanged?.Invoke(1, items.Count);
@@ -195,10 +205,13 @@ public sealed partial class PdfPane : UserControl
     public void Clear()
     {
         _loadSeq++;
+        ResetPdfSearch();
         PageList.ItemsSource = null;
         _items = [];
         _pageOffsets = [];
         _doc = null;
+        _renderStream?.Dispose();
+        _renderStream = null;
         _appliedFit = null; // A49: 문서가 없으면 추종할 Fit도 없다
         _alignPagesLeft = false; // A375: 다음 문서는 실제 배율/뷰포트로 다시 판정
         if (_itemsPanel is not null) _itemsPanel.MinWidth = 0; // A188 보정 원복(다음 문서가 다시 계산)
@@ -216,19 +229,38 @@ public sealed partial class PdfPane : UserControl
     /// 순서는 워커 시도 → 실패 → UI 프롬프트 → 워커 재시도가 된다.
     /// </para>
     /// </summary>
-    private async Task<PdfDocument> LoadDocumentAsync(string path)
+    private sealed record LoadedPdf(PdfDocument Document, IRandomAccessStream? Stream, byte[]? Bytes, string? Password);
+
+    private async Task<LoadedPdf> LoadDocumentAsync(string path)
     {
-        var file = await Worker.Run(_ => ShellWait(StorageFile.GetFileFromPathAsync(path)));
+        var cancellation = _pdfSearchLifetime.Token;
+        var bytes = await Worker.Run(_ => PdfSearchReader.ReadSnapshot(path, cancellation), cancellation);
+        // The same immutable bytes back rendering and indexing, even if the original file changes later.
+        // Oversized PDFs keep their existing viewing path and explicitly disable text indexing.
+        var file = bytes is null ? await Worker.Run(_ => ShellWait(StorageFile.GetFileFromPathAsync(path)), cancellation) : null;
+        LoadedPdf Load(string? password)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            IRandomAccessStream? stream = bytes is null ? null : new MemoryStream(bytes, writable: false).AsRandomAccessStream();
+            try
+            {
+                var document = stream is null
+                    ? ShellWait(PdfDocument.LoadFromFileAsync(file!, password ?? string.Empty))
+                    : ShellWait(PdfDocument.LoadFromStreamAsync(stream, password ?? string.Empty));
+                return new(document, stream, bytes, password);
+            }
+            catch { stream?.Dispose(); throw; }
+        }
         try
         {
-            return await Worker.Run(_ => ShellWait(PdfDocument.LoadFromFileAsync(file)));
+            return await Worker.Run(_ => Load(null), cancellation);
         }
-        catch
+        catch (Exception) when (!cancellation.IsCancellationRequested)
         {
             var password = await PromptPasswordAsync()
                 ?? throw new OperationCanceledException();
             // 또 실패 → 호출부 에러 표시
-            return await Worker.Run(_ => ShellWait(PdfDocument.LoadFromFileAsync(file, password)));
+            return await Worker.Run(_ => Load(password), cancellation);
         }
     }
 
@@ -241,10 +273,13 @@ public sealed partial class PdfPane : UserControl
         args.ItemContainer.HorizontalContentAlignment =
             _alignPagesLeft ? HorizontalAlignment.Left : HorizontalAlignment.Center;
         if (args.ItemContainer.ContentTemplateRoot is not Border border) return;
-        var image = (Image)border.Child;
+        var grid = (Grid)border.Child;
+        var image = (Image)grid.Children[0];
+        var highlight = (Canvas)grid.Children[1];
         if (args.InRecycleQueue)
         {
             image.Source = null; // 화면 밖 페이지 비트맵 해제
+            highlight.Children.Clear();
             return;
         }
 
@@ -252,6 +287,7 @@ public sealed partial class PdfPane : UserControl
         var item = (PageItem)args.Item;
         image.Width = item.Width;
         image.Height = item.Height;
+        highlight.Children.Clear();
         if (args.Phase == 0) args.RegisterUpdateCallback(OnRenderPhase);
     }
 
@@ -260,7 +296,7 @@ public sealed partial class PdfPane : UserControl
         if (_doc is null || args.ItemContainer.ContentTemplateRoot is not Border border) return;
         var seq = _loadSeq;
         var item = (PageItem)args.Item;
-        var image = (Image)border.Child;
+        var image = (Image)((Grid)border.Child).Children[0];
         try
         {
             var scale = XamlRoot?.RasterizationScale ?? 1.0; // 모니터 배율만큼 크게 렌더 → 선명
@@ -277,6 +313,7 @@ public sealed partial class PdfPane : UserControl
             await bitmap.SetSourceAsync(stream);
             if (seq != _loadSeq || !ReferenceEquals(args.ItemContainer.Content, item)) return;
             image.Source = bitmap;
+            PaintSearchHighlight((Canvas)((Grid)border.Child).Children[1], item);
         }
         catch
         {
@@ -664,6 +701,8 @@ public sealed partial class PdfPane : UserControl
         var point = e.GetCurrentPoint(_scroll);
         if (point.Properties.PointerUpdateKind
             != Microsoft.UI.Input.PointerUpdateKind.LeftButtonPressed) return;
+        // 비트맵 페이지는 선택 가능한 입력이 아니다. 팬 여지와 무관하게 본문 클릭의 키 초점을 확보한다.
+        PageList.Focus(FocusState.Pointer);
         if (_scroll.ScrollableWidth <= 0 && _scroll.ScrollableHeight <= 0) return; // 밀 여지 없음
         if (!_presenter.CapturePointer(e.Pointer)) return;
 

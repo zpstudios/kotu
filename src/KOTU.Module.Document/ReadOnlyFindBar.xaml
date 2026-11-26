@@ -1,0 +1,41 @@
+<UserControl
+    x:Class="KOTU.Module.Document.ReadOnlyFindBar"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" PreviewKeyDown="OnKeyDown" KeyUp="OnKeyUp">
+        <TextBox x:Name="QueryBox" Width="180" Height="32" MinHeight="32" Padding="8,4" MaxLength="1024"
+                 PlaceholderText="Find text" IsEnabled="False" IsSpellCheckEnabled="False"
+                 AutomationProperties.Name="Find text" ToolTipService.ToolTip="Find text (Ctrl+F)"
+                 TextChanged="OnQueryChanged" />
+        <StackPanel x:Name="InlineNavigation" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
+            <TextBlock x:Name="CountText" FontFamily="{StaticResource KotuControlFontFamily}" MaxWidth="100"
+                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontSize="12" />
+            <Button x:Name="PreviousButton" Style="{StaticResource BottomBarButtonStyle}" Click="OnPrevious" IsEnabled="False"
+                    AutomationProperties.Name="Previous match" ToolTipService.ToolTip="Previous match (Shift+F3)">
+                <FontIcon Glyph="&#xE70E;" FontSize="18" />
+            </Button>
+            <Button x:Name="NextButton" Style="{StaticResource BottomBarButtonStyle}" Click="OnNext" IsEnabled="False"
+                    AutomationProperties.Name="Next match" ToolTipService.ToolTip="Next match (F3)">
+                <FontIcon Glyph="&#xE70D;" FontSize="18" />
+            </Button>
+        </StackPanel>
+        <Button x:Name="OptionsButton" Style="{StaticResource BottomBarButtonStyle}" IsEnabled="False"
+                AutomationProperties.Name="Find options" ToolTipService.ToolTip="Find options (Ctrl+H)">
+            <FontIcon Glyph="&#xE721;" FontSize="18" />
+            <Button.Flyout>
+                <Flyout x:Name="OptionsFlyout" Placement="Top" Opened="OnFlyoutOpened" Closing="OnFlyoutClosing" Closed="OnFlyoutClosed">
+                    <StackPanel x:Name="OptionsPanel" Width="280" Spacing="8" PreviewKeyDown="OnKeyDown" KeyUp="OnKeyUp">
+                        <TextBlock x:Name="DetailText" FontFamily="{StaticResource KotuControlFontFamily}" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button x:Name="PopupPrevious" Content="Previous" Click="OnPrevious" IsEnabled="False" />
+                            <Button x:Name="PopupNext" Content="Next" Click="OnNext" IsEnabled="False" />
+                            <Button x:Name="PopupClose" Content="Close" Click="OnCloseOptions"
+                                    AutomationProperties.Name="Close find options" />
+                        </StackPanel>
+                        <TextBlock FontFamily="{StaticResource KotuControlFontFamily}" FontSize="12" Text="Read-only document. Replacing is unavailable." TextWrapping="Wrap" />
+                    </StackPanel>
+                </Flyout>
+            </Button.Flyout>
+        </Button>
+    </StackPanel>
+</UserControl>
