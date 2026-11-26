@@ -21,9 +21,10 @@
 
 | 자료 | 회수 위치와 보호 범위 |
 |---|---|
+| v0.433.8 설치·설정 백업 | `artifacts/a435-review/pre-update-backup/`와 상위 기준 JSON — [백업 범위와 설치 결과](https://github.com/zpstudios/kotu/blob/5288d2cfc0c782154773444befd37c39573dbf42/docs/HANDOVER.md#L5-L8). A437의 새 백업과 별개로 수정·삭제하지 않음 |
 | 이전 설치·설정·기준 JSON | [전체 보호 경로 및 설치 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L36). A434 v0.433.7, A433 v0.433.5, A432 v0.433.4, A431/A430 및 이전 v0.433.3·v0.433.2·v0.433.0·v0.432.2 백업과 독립 복구 보존본 포함 |
 | 백업별 상세 근거·철회된 A433 배포 | [당시 배포 기록](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L7-L26). A433 정정판은 기존 v0.433.5 보호 백업을 재사용했으며 철회판을 요구 완료로 세지 않음 |
 | 과거 v0.427.0 백업 경로 조회 부재 | [A427 당시 기록](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L23) · [최종 확인](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/HANDOVER.md#L36). 현재 존재를 주장하지 않음 |
 | 복구 문서 4개와 독립 복구 보존본 | [이관·중복 폐기 판단](recovered-notes-review-A417.md). 독립 보존본은 보호를 유지 |
 
-고정 링크의 커밋은 67c4b1c834a15e45b53f8d5f8e29466dc5ce9172 이며 파일과 행 범위는 그 스냅샷 기준이다. 로컬에서도 git show 커밋:경로로 회수할 수 있다. 이 색인은 과거 결과를 현재 승인이나 전 환경 통과로 승격하지 않는다.
+고정 링크의 파일과 행 범위는 각 링크에 적힌 커밋의 스냅샷 기준이다. 로컬에서도 git show 커밋:경로로 회수할 수 있다. 이 색인은 과거 결과를 현재 승인이나 전 환경 통과로 승격하지 않는다.
