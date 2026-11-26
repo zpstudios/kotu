@@ -11,7 +11,7 @@
 
 ## 열린 작업과 다음 시작점
 
-- **A437 검증 진행**: [오디오 EQ](features/media/audio-equalizer-A437.md) 구현·독립 재검토, 전체 App 빌드·1,531개 시험과 native 합성 음원 검증을 통과했다. KOTU.Test 검수본에서 키보드·Reset·Off/프리셋 왕복·두 창 Custom 보존·재시작·좁은 창 스크롤·시각화 교체를 관측하고 기존 28설정키를 바이트 단위 복원했다. Standalone의 Custom·Tab/PageUp 조절과 영구 설정 비변경도 확인했다. 로컬 근거는 `artifacts/a437-review/`다. v0.434.0 배포 준비 상태이며 건별 커밋/푸시·정확한 제품 HEAD의 공식 배포·이 PC 공식 설치를 마친다. 현재 공식 v0.433.9는 유지 중이다.
+- **A437 공식 배포 진행**: [오디오 EQ](features/media/audio-equalizer-A437.md)의 v0.434.0 제품 커밋 `60771408a914b9208bf04fc5ae8d19ab74a283d2`를 master에 푸시했다. 해당 HEAD의 [build](https://github.com/zpstudios/kotu/actions/runs/45746697808)·[release](https://github.com/zpstudios/kotu/actions/runs/45746697828)가 실행 중이다. 구현·독립 재검토, 전체 App 빌드·1,531개 시험·native 합성 음원·KOTU.Test/Standalone 검증을 마쳤고 검수 설정 28키는 바이트 단위 복원했다. 관측·한계는 [검수 행](DEVICE-CHECKS.md#a437), 근거는 `artifacts/a437-review/validation.json`을 따른다. 다음은 CI 성공·제품 커밋의 공식 자산 확인, 새 백업 후 이 PC 공식 설치·해시/설정 대조다. 현재 설치본은 v0.433.9다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 계약은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다.
 
 이전 세션의 배포·관측·정정 근거는 [공유 근거 색인](history/evidence-index.md)에서 찾는다. 완료·인계 때 이 파일은 최신 상태와 바로 다음 행동으로 고쳐 쓴다.
