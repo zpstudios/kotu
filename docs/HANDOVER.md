@@ -11,7 +11,7 @@
 
 ## 열린 작업과 다음 시작점
 
-- **A438 HWP·PDF 검색**: [검색 계약](features/editor/paged-document-search-A438.md)은 문서 체크포인트에 포함하며 v0.435.0 버전·릴리스 설명·제품 소스는 미커밋 상태다. 전체 App publish·1,540시험·HWP 엔진/응답 순서·아키텍처 검사를 통과했고 PDF 한글 6결과·강조·순환 이동을 관측했다. 독립 검토의 휠 후 늦은 자동 이동과 중립 호스트 초점의 Ctrl+F 거절을 [남은 개발](REQUIREMENTS.md#open-work)에 반영했다. 다음 담당은 두 문제 수정 → [화면 검수](DEVICE-CHECKS.md#a438) → 제품 커밋·공식 배포 → 현재 v0.434.0 새 백업·공식 설치 대조를 진행한다. 검수 앱 종료·설정 원본 복원·공식 설정 불변을 확인했다. 근거는 `artifacts/a438-review/validation.json`; 공식 제품은 변경하지 않았다. A437 잔여는 [기존 검수 행](DEVICE-CHECKS.md#a437)에 유지한다.
+- **A438 HWP·PDF 검색**: [검색 계약](features/editor/paged-document-search-A438.md)은 문서 체크포인트에 포함하며 v0.435.0 버전·릴리스 설명·제품 30파일은 미커밋 상태다. 초점·휠 두 수정과 독립 재검토, 전체 App publish·1,540시험·20프로젝트 검사를 마쳤다. 수정본 실행은 `GetCursorPos` 접근 거부로 실패했고 검수 설정 원본 복원·공식 설정 불변·KOTU 프로세스 없음을 확인했다. 다음은 입력 도구 복구 후 [최초 초점 조사](REQUIREMENTS.md#open-work)·[남은 화면 검수](DEVICE-CHECKS.md#a438) → 제품 커밋·공식 배포 → 현재 v0.434.0 새 백업·공식 설치 대조다. 근거는 `artifacts/a438-review/validation.json`과 `second-candidate-ui-restoration.json`; 새 화면 관측이나 공식 제품 변경은 없다. A437 잔여는 [기존 검수 행](DEVICE-CHECKS.md#a437)에 유지한다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 계약은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다.
 
 이전 세션의 배포·관측·정정 근거는 [공유 근거 색인](history/evidence-index.md)에서 찾는다. 완료·인계 때 이 파일은 최신 상태와 바로 다음 행동으로 고쳐 쓴다.

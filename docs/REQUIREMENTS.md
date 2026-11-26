@@ -7,7 +7,7 @@
 
 | ID | 상태 | 남은 일 유형 | 남은 일·착수 조건 | 근거 |
 |---|---|---|---|---|
-| <a id="a438"></a>A438 | 진행 | 개발 | PDF·Office 본문의 휠 입력이 대기 중인 검색 결과의 자동 이동을 취소하도록 보강한다. Ctrl+F/H는 현재 Document/All Readable 호스트의 중립 초점에서도 진입하도록 소유권 경계를 수정하되 다른 입력·팝업·PassThrough·IME 가드를 유지한다. 최초 PDF 열기 뒤 무응답 당시의 실제 초점은 재관측한다. | [원요구·현재 계약](history/requirements-completed-index.md#a438) · [관측과 후속 검수](DEVICE-CHECKS.md#a438) |
+| <a id="a438"></a>A438 | 진행 | 조사 | 최초 PDF 열기 뒤 Ctrl+F 무응답의 실제 초점·키 입력 경로는 아직 미확정이다. 초점·휠 보강 수정본에서 첫 열기·본문 클릭·All Readable 중립 호스트를 분리해 재관측하고, 무응답이 남으면 실제 초점과 라우팅 원인을 좁힌다. 화면 입력 도구의 접근 거부가 해소되면 재개한다. | [원요구·현재 계약](history/requirements-completed-index.md#a438) · [관측과 후속 검수](DEVICE-CHECKS.md#a438) |
 | <a id="a19"></a>A19 | 미착수 | 결정 | H/W 랭킹 제출의 서버·전송·개인정보 범위와 제출 정책을 정한다. 장기 후보이며 착수는 별도 선택한다. | [A19](history/requirements-completed-index.md#a19) |
 | <a id="a45"></a>A45 | 부분 | 개발 | 다른 형식의 페이지 보기와 차트·수식 호환성을 검토·구현한다. 한글 원본 정밀 비교는 검수에서 관리하며 원본 편집·저장·인쇄와 암호·DRM·배포용 HWP/HWP 3.x는 지원 범위 밖이다. | [지원 범위](features/editor/office-text-preview-A45.md) |
 | <a id="a115"></a>A115 | 보류 | 개발 | 네이티브 TextBox 커서 색 변경은 API 제약으로 보류한다. 기본 편집기 커서의 설치본 가독성 확인은 검수 문서에서 관리한다. | [구현 결과](history/requirements-completed-index.md#a115) · [검수](DEVICE-CHECKS.md#editor) |
