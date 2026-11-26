@@ -1,12 +1,13 @@
 # KOTU 요구사항 — 실제 남은 일
 
-개발·조사·미확정 결정과 착수 조건만 둔다. 완료 결과·후보의 영구 주소는 [결과 색인](history/requirements-completed-index.md), 구현 후 검수는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [제품 계약](features/product-contracts.md)이 정본이다. 미선택 항목은 착수 승인이 아니다. 마지막 등록 번호는 **A438**, 마지막 후보 번호는 **44**이다.
+개발·조사·미확정 결정과 착수 조건만 둔다. 완료 결과·후보의 영구 주소는 [결과 색인](history/requirements-completed-index.md), 구현 후 검수는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [제품 계약](features/product-contracts.md)이 정본이다. 미선택 항목은 착수 승인이 아니다. 마지막 등록 번호는 **A439**, 마지막 후보 번호는 **44**이다.
 
 <a id="open-work"></a>
 ## 열린 작업과 보류
 
 | ID | 상태 | 남은 일 유형 | 남은 일·착수 조건 | 근거 |
 |---|---|---|---|---|
+| <a id="a439"></a>A439 | 진행 | 개발 | 스킨 도입 전후 변경과 UI 비용을 대조해 느려짐 원인을 파악하고 수정한다. 다중 스킨 사용을 중단하되 구현은 보존하며, 원래 테마·통일된 규격·원래 상호작용을 갖춘 단일 디자인을 적용한다. 메뉴 모듈 호버 표시 등 기존 동작의 누락도 대조·복원한다. | [사용자 철회·복원 조건](history/requirements-completed-index.md#a439) · [현재/변경 계약](features/shell/design-library-A427.md#a439) |
 | <a id="a438"></a>A438 | 진행 | 조사 | 최초 PDF 열기 뒤 Ctrl+F 무응답의 실제 초점·키 입력 경로는 아직 미확정이다. 초점·휠 보강 수정본에서 첫 열기·본문 클릭·All Readable 중립 호스트를 분리해 재관측하고, 무응답이 남으면 실제 초점과 라우팅 원인을 좁힌다. 화면 입력 도구의 접근 거부가 해소되면 재개한다. | [원요구·현재 계약](history/requirements-completed-index.md#a438) · [관측과 후속 검수](DEVICE-CHECKS.md#a438) |
 | <a id="a19"></a>A19 | 미착수 | 결정 | H/W 랭킹 제출의 서버·전송·개인정보 범위와 제출 정책을 정한다. 장기 후보이며 착수는 별도 선택한다. | [A19](history/requirements-completed-index.md#a19) |
 | <a id="a45"></a>A45 | 부분 | 개발 | 다른 형식의 페이지 보기와 차트·수식 호환성을 검토·구현한다. 한글 원본 정밀 비교는 검수에서 관리하며 원본 편집·저장·인쇄와 암호·DRM·배포용 HWP/HWP 3.x는 지원 범위 밖이다. | [지원 범위](features/editor/office-text-preview-A45.md) |

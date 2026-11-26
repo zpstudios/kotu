@@ -446,6 +446,7 @@
 | <a id="a436"></a>A436 | 완료 | 고유 정보·근거를 보존하며 요구사항을 실제 남은 개발·조사·결정으로 한정하고 완료 결과·확정 계약·검수 대기를 분리했다. 완료 절차와 분류·중복·링크·회귀 검사를 보완 — [정리 절차](../development/maintenance-notes.md#document-lifecycle) · [제품 계약](../features/product-contracts.md) · [검수 정본](../DEVICE-CHECKS.md) | [최초 요구](https://github.com/zpstudios/kotu/blob/5ba01ae21f4bc9343748e8b4121bb444a50b96c1/docs/REQUIREMENTS.md#L14) |
 | <a id="a437"></a>A437 | 검수 대기 | 개별 밴드·Custom 보존과 복원 구현, v0.434.0 공식 배포·설치 완료. 남은 미관측 조건은 [검수](../DEVICE-CHECKS.md#a437), 확정 사양은 [기능 정본](../features/media/audio-equalizer-A437.md)에서 관리한다. | 2026-11-26 사용자 선택: 후보 8 오디오 EQ 개별 밴드 슬라이더, 기존 프리셋 유지와 수동 조절·설정 복원. |
 | <a id="a438"></a>A438 | 열림 | [남은 조사](../REQUIREMENTS.md#a438) · [검색 계약](../features/editor/paged-document-search-A438.md) · [검수](../DEVICE-CHECKS.md#a438) | 2026-11-26 사용자 제보: “hwp 파일과 pdf 파일이 ctrl+f 가 안되네.” 읽기 전용 검색·결과 이동·강조 초안과 PDF 일부 화면 관측 후 초점·휠 경계를 보강했다. 수정본은 독립 검토·로컬 검증을 통과했으나 입력 도구 장애로 새 UI 관측은 없다. 최초 초점 조사·나머지 검수·공식 배포·설치는 아직이다. |
+| <a id="a439"></a>A439 | 열림 | [남은 조사·개발](../REQUIREMENTS.md#a439) · [단일 디자인 복원 조건](../features/shell/design-library-A427.md#a439) | 2026-11-26 사용자는 다중 스킨 제공을 철회하며 “이미 구현해둔게 있으니 지워버리진 말고, 사용만 안하는 쪽”을 요청했다. 도입 뒤 심한 UI 지연의 변경점·원인 조사와 수리, 통일성 정리를 유지한 원래 테마 복원, 메뉴 모듈 호버 표시 등 빠진 상호작용 복원이 범위다. 현재 첫 Original만 남기는 단순 축소와 통일성 정리 이전으로의 회귀는 금지한다. |
 
 
 <a id="candidate-results"></a>
