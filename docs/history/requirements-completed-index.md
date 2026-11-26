@@ -444,6 +444,7 @@
 | <a id="a434"></a>A434 | 완료 | Original을 첫 기본 디자인으로 복원, 기존 11종 선택 보존 — [현재 사양](../features/shell/design-library-A427.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L15) |
 | <a id="a435"></a>A435 | 완료 | 테마 전환·필터 적용/해제 시 현재 기본·활성색 유지 — [v0.433.9](../RELEASE-v0.433.9.md) | [요구·당시 결과](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L14) |
 | <a id="a436"></a>A436 | 완료 | 고유 정보·근거를 보존하며 요구사항을 실제 남은 개발·조사·결정으로 한정하고 완료 결과·확정 계약·검수 대기를 분리했다. 완료 절차와 분류·중복·링크·회귀 검사를 보완 — [정리 절차](../development/maintenance-notes.md#document-lifecycle) · [제품 계약](../features/product-contracts.md) · [검수 정본](../DEVICE-CHECKS.md) | [최초 요구](https://github.com/zpstudios/kotu/blob/5ba01ae21f4bc9343748e8b4121bb444a50b96c1/docs/REQUIREMENTS.md#L14) |
+| <a id="a437"></a>A437 | 열림 | [현재 범위](../REQUIREMENTS.md#a437) | 2026-11-26 사용자 선택: 후보 8 오디오 EQ 개별 밴드 슬라이더, 기존 프리셋 유지와 수동 조절·설정 복원. |
 
 
 <a id="candidate-results"></a>
@@ -460,7 +461,7 @@
 | <a id="candidate-5"></a>5 | 재현 안 함 | 바 임계는 자체 폭 기준. A305→A312 파생 폭 변경은 반영됐고 상수 재계수 0건. | L3678–3685 |
 | <a id="candidate-6"></a>6 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-6) | L3686 |
 | <a id="candidate-7"></a>7 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-7) | L3687 |
-| <a id="candidate-8"></a>8 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-8) | L3688 |
+| <a id="candidate-8"></a>8 | A437로 승격 | 오디오 EQ 개별 밴드 슬라이더 — [A437](#a437). | L3688 |
 | <a id="candidate-9"></a>9 | 소진 A329 | 문서·압축 IContentInfoProvider와 열림/선택 공통 빌더. | L3689–3695 |
 | <a id="candidate-10"></a>10 | 재현 안 함 | H/W 모드 2 빈 화면의 옛 경로는 A305 구조에 없음. 재현 시 새 등록. | L3696–3701 |
 | <a id="candidate-11"></a>11 | 소진 A345 | 좌 리스트·타일 수동 전량 생성은 가상화로 대체. | L3703 |
