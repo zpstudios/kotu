@@ -1,12 +1,13 @@
 # KOTU 요구사항 — 실제 남은 일
 
-개발·조사·미확정 결정과 착수 조건만 둔다. 완료 결과·후보의 영구 주소는 [결과 색인](history/requirements-completed-index.md), 구현 후 검수는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [제품 계약](features/product-contracts.md)이 정본이다. 미선택 항목은 착수 승인이 아니다. 마지막 등록 번호는 **A441**, 마지막 후보 번호는 **44**이다.
+개발·조사·미확정 결정과 착수 조건만 둔다. 완료 결과·후보의 영구 주소는 [결과 색인](history/requirements-completed-index.md), 구현 후 검수는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [제품 계약](features/product-contracts.md)이 정본이다. 미선택 항목은 착수 승인이 아니다. 마지막 등록 번호는 **A443**, 마지막 후보 번호는 **44**이다.
 
 <a id="open-work"></a>
 ## 열린 작업과 보류
 
 | ID | 상태 | 남은 일 유형 | 남은 일·착수 조건 | 근거 |
 |---|---|---|---|---|
+| <a id="a442"></a>A442 | 진행 | 조사 | 업데이트 후 창 위치·크기가 달라지는 저장·복원 경로를 재현하고 원인을 수정한다. 다음 업데이트와 재실행에서도 기존 기하를 유지하는지 검증한다. 이전 A440/A441의 최초 실패·설정 복원 근거를 보존한다. | [원요구](history/requirements-completed-index.md#a442) |
 | <a id="a439"></a>A439 | 조사 | 조사 | 첫 기존 검수본 `baseline-menu-r1`의 WinUI 종료 원인은 추가 재현 시 조작·WER/덤프로 조사한다. 후속 비재현을 해결로 세지 않으며 도구·계측·덤프 간섭과 실제 입력 지연을 구분한다. 외부 UIA 클라이언트 신원이나 전체 속도 해결을 관측 이상으로 단정하지 않는다. | [원요구·측정과 한계](features/shell/design-library-A427.md#a439) · [검수 경계](DEVICE-CHECKS.md#a439) · [현재 제품·설치 상태](HANDOVER.md) |
 | <a id="a19"></a>A19 | 미착수 | 결정 | H/W 랭킹 제출의 서버·전송·개인정보 범위와 제출 정책을 정한다. 장기 후보이며 착수는 별도 선택한다. | [A19](history/requirements-completed-index.md#a19) |
 | <a id="a45"></a>A45 | 부분 | 개발 | 다른 형식의 페이지 보기와 차트·수식 호환성을 검토·구현한다. 한글 원본 정밀 비교는 검수에서 관리하며 원본 편집·저장·인쇄와 암호·DRM·배포용 HWP/HWP 3.x는 지원 범위 밖이다. | [지원 범위](features/editor/office-text-preview-A45.md) |

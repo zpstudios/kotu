@@ -8,7 +8,7 @@
 | 현재 확정 사양·결정 | [제품 계약](features/product-contracts.md)에서 주제별 기능 정본으로 이동 |
 | 실기기에서 확인할 동작 | [검수 목록](DEVICE-CHECKS.md) |
 | 사용법과 단축키 | [한국어 설명서](guides/user-guide.ko.md) · [English guide](guides/user-guide.en.md). 가이드 상단의 기준 버전을 확인한다. |
-| 개발·빌드·배포 | [내부 빌드](development/build.md) · [공식 설치](development/official-release-and-install.md) · [릴리스 본문 작성](development/release-notes-workflow.md) · [구현 시 참고](development/maintenance-notes.md) |
+| 개발·빌드·배포 | [내부 빌드](development/build.md) · [공식 설치](development/official-release-and-install.md) · [버전 증가·릴리스 본문](development/release-notes-workflow.md) · [구현 시 참고](development/maintenance-notes.md) |
 | 기능별 설계·조사 | [탐색기](features/explorer/) · [문서 편집](features/editor/) · [이미지](features/image/) · [오디오·비디오](features/media/) · [녹화](features/recording/) · [압축](features/compression/) · [창·공통 UI](features/shell/) |
 | 완료·인계 때 문서 정리 | [공용 절차와 검사 계약](development/maintenance-notes.md#document-lifecycle) |
 | 검수 결과·진단 근거 | [검수 자료](verification/) · [썸네일 충돌 로그 채취 시점](verification/thumbnail-crash-trace-A352.md) |

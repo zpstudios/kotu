@@ -10,7 +10,7 @@
 
 ## 열린 작업과 다음 시작점
 
-- **A441 요청 범위 마무리**: [원요구](history/requirements-completed-index.md#a441)의 구현·공식 배포·이 PC 설치를 완료했다. [업데이트 계약](features/product-contracts.md#automatic-updates)과 4가이드·변경 설명을 동기화했다. 거절·Yes·창/프로세스 경계·실패·입력 잠금·두 번째 미저장 취소/복원은 [검수 정본](DEVICE-CHECKS.md#a441)을 따른다. 트레이·실제 flush 실패·후속 경합·실제 24시간 연속 실행은 자동/정적 근거와 구분한 미관측 조건이며, 세부 구현 선택을 사용자 확정으로 확대하지 않는다. 추가 선택 없이 새 기능이나 A440 재작업에 착수하지 않는다.
+- **선택된 A442 창 배치 수리**: 사용자가 업데이트 후 위치·크기 변화의 원인 수리와 다음 업데이트의 값 유지를 요청했다. [조사·수리](REQUIREMENTS.md#a442)는 이전 A440/A441 실패를 보존하며 저장·초기 복원·표시·업데이트 flush를 나눠 재현한다. `artifacts/a442-review/`에 검수 전 Test 설정과 baseline/대형 창 근거를 둔다. 일반 실행·종료는 불변이었고 대형 창은 검수 도구 활성화 전후 변화가 관측돼 화면 구성·배율 영향을 조사 중이다. 아직 제품 원인은 확정하지 않았다. [A443 기준](development/release-notes-workflow.md#version-policy)에 따라 기능 추가는 minor, 기존 동작 수리는 patch이며 1.0.0은 공식 런칭까지 보류한다. A441 요청 구현·배포·설치와 문서 CI는 완료, [미관측 조건](DEVICE-CHECKS.md#a441)은 유지한다.
 - **A439 후속 조건**: 선택된 메뉴·속도 수리의 배포·이 PC 설치는 완료했으므로 다시 착수하지 않는다. [기존 첫 WinUI 종료](REQUIREMENTS.md#a439)는 추가 재현 시 조작·WER/덤프로 조사하며 후속 비재현을 해결로 세지 않는다. 단회 성능 결과를 전체 입력 지연 해결·회귀 배수·GC 제거로 확대하지 않는다. 정상 UI에서 확인한 열 변경 후 End→Enter 경로와 [전체 초점·픽셀 앵커·PDF 썸네일 등 미관측 범위](DEVICE-CHECKS.md#a439)는 구분한다.
 - **A438 HWP·PDF 검색**: 구현·공식 배포·설치를 완료했고 현재 버전에도 포함된다. 인덱싱/검색 대기 중 휠·Ctrl+휠, pending/error 팝업·실제 IME·고대비/DPI·암호/초대형/빠른 교체의 미관측 조건은 [DEVICE-CHECKS](DEVICE-CHECKS.md#a438)에 유지한다. 과거 A438/A439 `uncommitted-product-manifest.json`은 당시 해시 근거이며 현재 미커밋 상태를 뜻하지 않는다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다. 새 백로그 항목은 별도 선택 없이 시작하지 않는다.
