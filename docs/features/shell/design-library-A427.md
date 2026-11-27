@@ -97,7 +97,7 @@ Preview의 세 우선순위 관측 회차는 큐 대기 최대 약 2.58초·p95 
 
 새 치수 적용 코드·원자료 수치·문서의 독립 검토에서 구체적 결함을 찾지 못했다. 위 계측 결과와 다음 정상 제품 후보의 기능 검증은 구분한다.
 
-### 정상 제품 후보의 최종 로컬 검증과 배포 준비
+### 정상 제품 검증과 공식 배포·설치
 
 root 원본을 `normal-source`에 다시 복사해 메뉴·캐시·치수 적용 수리를 함께 정상 publish했다. `artifacts/a439-followup/final-normal-build.json`은 제품 소스 658개·글꼴/라이선스 34개 일치, 정상 `Program.Main`, Test=true·Standalone=false, 네 종류 A439 probe·진단 하네스 부재를 확인한다. 강제 테마도 없으며 `final-validation.json`의 전체 시험은 1,553개 통과·실패/건너뜀 0이다. 별도 Standalone 빌드는 경고/오류 0과 Test=false·Standalone=true를 확인했다. 이 로컬 검증의 제품 버전은 v0.436.0이며 native DLL은 기존 검증본을 재사용했다.
 
@@ -105,7 +105,11 @@ root 원본을 `normal-source`에 다시 복사해 메뉴·캐시·치수 적용
 
 근거는 `final-normal-ui.json`·`final-normal-*.png` 13개다. 앞선 메뉴 단독/강제 다크 단계와 현재 정상 UI의 DLL·화면 근거는 서로 구분한다. 검수 앱을 Alt+F4로 정상 종료한 뒤 프로세스 없음과 Test 원본 28키 바이트 복원, 공식 43키·OS 불변을 `ui-restoration.json`에 기록했다.
 
-이후 v0.437.0과 변경 설명을 반영한 정상 publish에서도 제품 소스·34개 글꼴/라이선스·정상 진입점·배포 식별자와 진단 타입 부재를 대조했다. 근거는 `versioned-normal-build.json`이며 필수 검사와 최종 독립 검토도 통과했다. 제품 커밋과 즉시 push, 공식 전체 native CI·자산/피드/해시 및 이 PC 공식 Updates 설치·재시작·파일/설정/로그 대조가 남았다. 공식 제품과 설치본은 아직 v0.436.0이다. 별도 보호 백업 `artifacts/a439-followup/pre-update-backup/`과 상위 기준 JSON은 재생성·덮기 없이 설치 직전에 재검증한다. 현재 배포 단계는 [HANDOVER](../../HANDOVER.md), 미관측 환경과 기존 충돌 조사는 각 정본을 따른다.
+이후 v0.437.0과 변경 설명을 반영한 정상 publish에서도 제품 소스·34개 글꼴/라이선스·정상 진입점·배포 식별자와 진단 타입 부재를 대조했다. 근거는 `versioned-normal-build.json`이며 필수 검사와 최종 독립 검토도 통과했다. 제품 커밋·즉시 push 후 공식 build/release가 모두 성공했고 전체 native 빌드·1,553시험·시작/설치·Standalone 검증을 마쳤다. `workflows.json`·`official-release/verification.json`은 공개 태그·latest·8자산 메타데이터·본문, Full/Delta/Setup·세 피드 해시와 공식 패키지의 글꼴/라이선스·정상 진입점·배포 식별자·probe 부재를 연결한다. Portable·Standalone 자산은 이 로컬 대조에서 메타데이터만 확인했으며 다운로드 해시 검증으로 확대하지 않는다.
+
+2026-11-27 정식 Settings → Updates의 다운로드·Install and restart로 v0.436.0에서 v0.437.0으로 교체했다. `pre-install-v0.437.0-ready.json`에서 보호 v0.436.0 백업 1,191파일을 재검증했고 백업·상위 원본 기준 JSON은 덮어쓰지 않았다. `installed-release-verification.json`은 공개 해시를 확인한 공식 Full과 설치 1,188파일 각각의 SHA-256, 두 설치 도우미의 이름/위치 매핑, 추가 제품 파일 없음과 재시작 직전 43설정키·값·파일 해시 일치를 기록한다. 추가 파일 검사는 `KOTU.exe.WebView2` 런타임 캐시를 제외했다. 보호 백업 이후 설정 차이는 업데이트 확인 시각뿐이며 설정을 덮어쓰지 않았다. 새 공식 프로세스의 H/W Info 화면·정상 창 크기와 기존 시작 오류 로그 불변은 `official-update-ui.json`에서 회수한다.
+
+앱이 설치 준비한 Full ZIP의 전체 SHA-256은 공개 Full과 달랐다. 두 ZIP의 1,193항목(앱 파일 1,188개)은 이름·길이·압축 해제 바이트의 SHA-256이 모두 같았으며, 압축된 길이는 221항목에서 다르고 항목 순서도 달랐다. 타임스탬프 차이는 없었다. 이는 ZIP 표현의 차이이며 델타 재구성 경로를 직접 추적해 원인을 확정한 것은 아니다. `app-update-package-comparison.json`과 별도 독립 재계산에 이 대조를 보존했고, 설치 파일은 공개 해시를 검증한 공식 Full을 기준으로 확인했다. 두 ZIP 전체 파일이 동일하다고 표현하지 않는다. 현재 제품·설치 판정은 [HANDOVER](../../HANDOVER.md), 미관측 환경과 재현 시의 기존 충돌 조사는 각 정본을 따른다.
 
 ### 도입 전후 코드 조사
 
