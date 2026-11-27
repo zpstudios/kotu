@@ -325,11 +325,9 @@ public sealed partial class MainWindow : Window
         ApplyTraceDiagnostics();
         Closed += (_, _) => DiagTrace.Write("shell", "window closed");
 
-        // A206(v0.215.0): 업데이트 자동 확인은 '설정 화면 열림' 참조 카운트가 0이 아닌 동안에만
-        // 돈다. 카운트를 놓는 정상 경로는 SettingsView의 Unloaded지만, 설정을 띄운 채 창을 닫으면
-        // Unloaded가 오지 않을 수 있어(A41에서 확인된 한계) 카운트가 샌다 — 그러면 아무도 보지
-        // 않는 확인이 계속 돌게 되므로 창이 내려갈 때 한 번 더 놓아 준다.
-        // 뷰 쪽 해제가 멱등(_updateWatchHeld)이라 Unloaded와 겹쳐도 두 번 빠지지 않는다.
+        // A441: Settings의 업데이트 상태 표시 구독과 표시 타이머를 창 종료 때도 해제한다.
+        // 설정을 띄운 채 창을 닫으면 Unloaded가 오지 않을 수 있어(A41에서 확인된 한계)
+        // 정상 Unloaded 경로를 보완한다. 해제는 멱등이며 앱의 자동 확인 주기에는 영향을 주지 않는다.
         Closed += (_, _) => (ModuleHost.Content as SettingsView)?.ReleaseUpdateWatch();
         Closed += (_, _) =>
         {
@@ -890,6 +888,7 @@ public sealed partial class MainWindow : Window
         var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers };
         accelerator.Invoked += (_, e) =>
         {
+            if (_updateFrozen) { e.Handled = true; return; }
             if (IsFocusWithin(JobsLayer) || (key == VirtualKey.P && modifiers == VirtualKeyModifiers.Control &&
                 HotkeySupport.IsVirtualTextInputFocused(RootLayout)))
             {
@@ -1658,9 +1657,9 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>현재 뷰의 닫기를 확인하고 승인 수명을 호출자의 scope까지 유지한다.</summary>
-    private async Task<ContentCloseLease?> ConfirmDiscardAsync()
+    private async Task<ContentCloseLease?> ConfirmDiscardAsync(bool forUpdate = false)
     {
-        if (_contentClosed || _confirmInProgress) return null;
+        if (_contentClosed || _confirmInProgress || (_updateFrozen && !forUpdate)) return null;
         var session = _contentSession;
         var content = ModuleHost.Content;
         var capturedLease = session?.CreateCloseLease();
@@ -1687,6 +1686,8 @@ public sealed partial class MainWindow : Window
     /// <summary>트레이 닫기·X 버튼 공용: 미저장 확인 후 닫는다.</summary>
     private async Task ConfirmThenCloseAsync()
     {
+        if (_manager.DeferDuringRestart(() => Close())) return;
+        if (Integration.UpdateFlow.DismissForWindowClose(this)) return;
         if (_closeInProgress) return;
         _closeInProgress = true;
         try
@@ -1733,6 +1734,8 @@ public sealed partial class MainWindow : Window
     private void OnAppWindowClosing(Microsoft.UI.Windowing.AppWindow sender,
         Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
+        if (_manager.DeferDuringRestart(() => Close())) { args.Cancel = true; return; }
+        if (Integration.UpdateFlow.DismissForWindowClose(this)) { args.Cancel = true; return; }
         if (_manager.TryBlockLastWindowClose(this)) { _closeConfirmed = false; args.Cancel = true; return; }
         if (!_closeConfirmed)
         {
@@ -2228,6 +2231,7 @@ public sealed partial class MainWindow : Window
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (_updateFrozen) { e.Handled = true; return; }
         // A234 계측: 버블 KeyDown이 트리에 도달은 하는지(아무 키든 — F11/F12 한정 아님).
         // 어느 분기보다 먼저 센다(아래 return들과 무관하게 "도달" 자체가 신호다).
         // 오버레이가 꺼져 있으면 갱신하지 않는다(핫 패스 비용 0 — _diagOn 앞단 차단).
@@ -2322,6 +2326,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (_updateFrozen) { e.Handled = true; return; }
         if (HandleExplorerPreviewKey(e)) return;
         if (IsFocusWithin(JobsLayer)) return;
         // 분리된 이미지 하단 바도 현재 이미지 명령에 전달한다. 포커스 소유권은 뷰가 판정한다.
@@ -2426,6 +2431,7 @@ public sealed partial class MainWindow : Window
 
     private void OnRootKeyUp(object sender, KeyRoutedEventArgs e)
     {
+        if (_updateFrozen) { e.Handled = true; return; }
         // A396: End the physical search Escape even when native popup dismissal consumed KeyDown.
         if (e.Key == VirtualKey.Escape && ModuleHost.Content is ITextSearchTarget search)
             search.TryTextSearchCommand(TextSearchCommand.EscapeReleased);
@@ -3320,6 +3326,7 @@ public sealed partial class MainWindow : Window
 
     private void OnEditorEscapeRequested()
     {
+        if (_updateFrozen) return;
         if (IsAnyPopupOpen()) return;
         if (JobsPanel.Visibility == Visibility.Visible) { HideJobs(); return; }
         ApplyShellEscape();
@@ -4586,6 +4593,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     public void HideToTray()
     {
+        if (_updateFrozen || Integration.UpdateFlow.HasDialog(this)) return;
         if (_hiddenInTray) return;
         _hiddenInTray = true;
         AltTabExclusion.Set(this, true);
@@ -4599,6 +4607,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     public void BringToFront()
     {
+        if (!_updateGuardActivation && _manager.DeferDuringRestart(BringToFront)) return;
         if (_hiddenInTray)
         {
             _hiddenInTray = false;

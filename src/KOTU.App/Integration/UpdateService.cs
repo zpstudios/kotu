@@ -1,6 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Velopack;
 using Velopack.Sources;
+using KOTU.Core.Threading;
+using KOTU.Core.Updates;
+using System.Diagnostics;
 
 namespace KOTU.App.Integration;
 
@@ -12,6 +15,7 @@ namespace KOTU.App.Integration;
 public static class UpdateService
 {
     private const string RepoUrl = "https://github.com/zpstudios/kotu";
+    internal static string LastRestartError { get; private set; } = string.Empty;
 
     private static UpdateManager CreateManager() =>
         new(new GithubSource(RepoUrl, accessToken: null, prerelease: false));
@@ -48,14 +52,60 @@ public static class UpdateService
     public static async Task<bool> ApplyAndRestartAsync(UpdateInfo info)
     {
         if (!KOTU.Core.Integration.DistributionPolicy.IsStableDistribution) return false;
+        LastRestartError = "Restart was postponed. Finish or cancel active jobs, close other KOTU processes, and try again.";
         var windows = App.Services.GetRequiredService<WindowManager>();
-        if (!windows.TryBeginRestart()) return false;
+        using var worker = new ModuleWorker("KOTU update restart", ThreadPriority.BelowNormal);
+        UpdateRestartTransaction? transaction = null;
+        var applied = false;
         try
         {
+            if (!await worker.Run(_ => IsUpdatableBuild && IsOnlyInstalledProcess())) return false;
+            transaction = await windows.PrepareUpdateRestartAsync();
+            if (transaction is null) return false;
             await windows.FlushSettingsAsync();
-            CreateManager().ApplyUpdatesAndRestart(info);
+            if (!await worker.Run(_ => IsOnlyInstalledProcess()) || !windows.IsUpdateRestartValid) return false;
+            applied = await worker.Run(_ =>
+            {
+                if (windows.RestartWasInterrupted) return false;
+                CreateManager().ApplyUpdatesAndRestart(info);
+                return true;
+            });
+            return applied;
         }
-        catch { windows.CancelRestartPreparation(); throw; }
+        catch (Exception ex)
+        {
+            LastRestartError = "KOTU could not restart. Your open windows have been kept. " + ex.Message;
+            return false;
+        }
+        finally
+        {
+            if (!applied)
+            {
+                try { if (transaction is not null) await transaction.DisposeAsync(); }
+                finally { windows.CancelUpdateRestart(); }
+            }
+        }
+    }
+
+    private static bool IsOnlyInstalledProcess()
+    {
+        var current = Environment.ProcessPath;
+        if (current is null) return false;
+        foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(current)))
+        {
+            using (process)
+            {
+                if (process.Id == Environment.ProcessId) continue;
+                try
+                {
+                    if (process.HasExited) continue;
+                    var path = process.MainModule?.FileName;
+                    if (path is null || string.Equals(Path.GetFullPath(path), Path.GetFullPath(current), StringComparison.OrdinalIgnoreCase)) return false;
+                }
+                catch (InvalidOperationException) when (process.HasExited) { }
+                catch { return false; } // 승격된 다른 프로세스를 조회할 수 없어도 설치하지 않는다.
+            }
+        }
         return true;
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using KOTU.Core.Cli;
 using KOTU.Core.Routing;
+using KOTU.Core.Updates;
 
 namespace KOTU.App;
 
@@ -50,6 +51,10 @@ public sealed class WindowManager
     /// <summary>가장 최근 활성화된 창. 업데이트 다이얼로그 등 공용 UI의 호스트로 쓴다.</summary>
     public MainWindow? ActiveWindow => _windows.Count > 0 ? _windows[^1] : null;
 
+    internal bool CanPresentUpdate => !_updateRestartPreparing && !_windows.Any(window => window.HasUpdateBlockingUi);
+    internal MainWindow? FindUpdateHost() => CanPresentUpdate ? _windows.LastOrDefault(window => window.CanHostUpdate) : null;
+    internal MainWindow? FindWindowForRoot(XamlRoot root) => _windows.FirstOrDefault(window => window.Content.XamlRoot == root);
+
     /// <summary>
     /// 현재 열린 창 수. MainWindow 생성자에서 부르면 새 창은 아직 등록 전이므로
     /// "기존 창 수 = 새 창의 인스턴스 번호 - 1"이 된다.
@@ -61,6 +66,7 @@ public sealed class WindowManager
     /// <summary>파일 없이 시작할 때의 첫 창 — 기본 화면은 Info(하드웨어) 모듈(사용자 지정).</summary>
     public MainWindow OpenInitialWindow()
     {
+        if (DeferDuringRestart(() => OpenInitialWindow())) return ActiveWindow!;
         var window = Create();
         window.ShowDefaultModule();
         // A81: 파일 인자 없이 모듈로 시작한 창은 불투명 밀어내기가 기본(부록 B 30번).
@@ -77,12 +83,14 @@ public sealed class WindowManager
     /// <summary>실행 요청(첫 실행·재전달 공통 진입점)을 알맞은 창으로 보낸다.</summary>
     public async Task DispatchAsync(LaunchRequest request)
     {
+        if (DeferDuringRestart(() => _ = DispatchAsync(request))) return;
         await _dispatchGate.WaitAsync();
         try
         {
         // 활성화 한 건의 단발 조회. UI 상태는 캡처한 요청으로만 판단한다.
         var exists = request.Verb != LaunchVerb.Open ||
             await Task.Run(() => File.Exists(request.FilePath));
+        if (DeferDuringRestart(() => _ = DispatchAsync(request))) return;
         if (request.FilePath is not { } file || !exists)
         {
             // 파일 없는 실행: 창이 없으면 하나 열고, 있으면 최근 창만 앞으로.
@@ -113,6 +121,7 @@ public sealed class WindowManager
     /// <summary>파일을 담당 모듈 창으로 라우팅해 연다. 창 선택은 재사용 규칙(A24·A219 특칙)을 따른다.</summary>
     public void OpenFile(string path)
     {
+        if (DeferDuringRestart(() => OpenFile(path))) return;
         var target = FindReusable(_router.Resolve(path)?.Id);
         target.OpenFile(path);
         target.BringToFront();
@@ -125,12 +134,14 @@ public sealed class WindowManager
     /// <summary>현재 작업 창은 남겨 두고 요청한 목적지를 같은 프로세스의 새 창에서 연다.</summary>
     internal void OpenDestinationWindow(Action<MainWindow> open)
     {
+        if (DeferDuringRestart(() => OpenDestinationWindow(open))) return;
         var window = Create();
         open(window);
         window.Activate();
     }
     public void OpenFileInNewWindow(string path)
     {
+        if (DeferDuringRestart(() => OpenFileInNewWindow(path))) return;
         var window = Create();
         window.OpenFile(path);
         window.Activate();
@@ -147,6 +158,7 @@ public sealed class WindowManager
     /// </summary>
     public void OpenUntitledDocumentInNewWindow()
     {
+        if (DeferDuringRestart(OpenUntitledDocumentInNewWindow)) return;
         var window = Create();
         window.OpenUntitledDocument();
         // A81: 파일 없이 모듈로 여는 새 창 — OpenNewWindow와 같은 기본 도크 명시(같은 값
@@ -162,6 +174,7 @@ public sealed class WindowManager
     /// </summary>
     public void OpenNewWindow(string? moduleId)
     {
+        if (DeferDuringRestart(() => OpenNewWindow(moduleId))) return;
         var window = Create();
         if (moduleId is not null) window.OpenModuleById(moduleId);
         else window.ShowDefaultModule();
@@ -183,6 +196,7 @@ public sealed class WindowManager
     /// <summary>모든 창 닫기 = 앱 종료 (트레이 메뉴 'Exit KOTU').</summary>
     public void CloseAll()
     {
+        if (DeferDuringRestart(CloseAll)) return;
         if (TryBlockExitForJobs()) return;
         foreach (var window in _windows.ToArray())
             window.Close();
@@ -197,6 +211,52 @@ public sealed class WindowManager
     }
 
     private IDisposable? _restartJobLease;
+    private bool _updateRestartPreparing;
+    private volatile bool _restartInterrupted;
+    private readonly Queue<Action> _restartDeferred = new();
+    private MainWindow[] _updateWindows = [];
+    internal bool IsUpdateRestartValid => _updateRestartPreparing && !_restartInterrupted &&
+        _windows.Count == _updateWindows.Length && _updateWindows.All(window => window.IsUpdateSnapshotCurrent);
+    internal bool RestartWasInterrupted => _restartInterrupted;
+
+    internal bool DeferDuringRestart(Action action)
+    {
+        if (!_updateRestartPreparing) return false;
+        _restartInterrupted = true;
+        _restartDeferred.Enqueue(action);
+        return true;
+    }
+
+    internal async Task<UpdateRestartTransaction?> PrepareUpdateRestartAsync()
+    {
+        if (_updateRestartPreparing || !TryBeginRestart()) return null;
+        _updateRestartPreparing = true;
+        _restartInterrupted = false;
+        _updateWindows = _windows.ToArray();
+        try
+        {
+            foreach (var window in _updateWindows)
+                if (!window.TryFreezeForUpdate()) { CancelUpdateRestart(); return null; }
+            var transaction = await UpdateRestartTransaction.PrepareAsync(_updateWindows.Select<MainWindow, Func<Task<IAsyncDisposable?>>>(
+                window => () => window.PrepareUpdateCloseAsync()));
+            if (transaction is null) { CancelUpdateRestart(); return null; }
+            if (IsUpdateRestartValid) return transaction;
+            await transaction.DisposeAsync();
+            CancelUpdateRestart();
+            return null;
+        }
+        catch { CancelUpdateRestart(); throw; }
+    }
+
+    internal void CancelUpdateRestart()
+    {
+        if (!_updateRestartPreparing) return;
+        foreach (var window in _updateWindows) window.ThawAfterUpdate();
+        _updateWindows = [];
+        _updateRestartPreparing = false;
+        CancelRestartPreparation();
+        while (_restartDeferred.TryDequeue(out var action)) ActiveWindow?.DispatcherQueue.TryEnqueue(() => action());
+    }
 
     public async Task FlushSettingsAsync()
     {
@@ -401,6 +461,7 @@ public sealed class WindowManager
             UpdateInstanceNumbers(); // 중간 창이 닫히면 번호 당겨오기 (A2)
             if (_windows.Count == 0)
             {
+                Integration.UpdateCoordinator.Shutdown();
                 // 센서 커널 드라이버 정리(A17) — 안 해도 프로세스는 내려가지만,
                 // Close()가 드라이버 서비스를 해제해 재부팅 전까지 남는 걸 막는다.
                 KOTU.Module.Hardware.SensorService.Shutdown();
@@ -415,6 +476,7 @@ public sealed class WindowManager
                 && _windows.Remove(window))
             {
                 _windows.Add(window);
+                Integration.UpdateCoordinator.TryOfferUpdate();
             }
         };
 

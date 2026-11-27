@@ -33,6 +33,7 @@ public sealed partial class MainWindow
 
     private bool RedirectFromWorkingArchive(Action<MainWindow> open)
     {
+        if (_manager.DeferDuringRestart(() => open(this))) return true;
         if (CurrentContentJob() is null) return false;
         _manager.OpenDestinationWindow(open);
         return true;

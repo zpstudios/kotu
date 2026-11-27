@@ -11,6 +11,7 @@ namespace KOTU.App;
 
 public partial class App : Application
 {
+    internal static bool IsWelcomePending { get; private set; }
     internal const string ThinControlsSetting = "display.thinControls";
     private WindowManager? _windowManager;
     private Microsoft.UI.Dispatching.DispatcherQueue? _uiDispatcher;
@@ -132,11 +133,8 @@ public partial class App : Application
         // 셸 등록 정비: 구 브랜드 흔적 1회 청소(A46) + exe 경로 자동 재등록(A78, 매 실행).
         ShellRegistrationMaintenance();
 
-        // 업데이트 전역 상태 준비 — 저장된 마지막 확인 결과를 읽기만 한다.
-        // A206(v0.215.0): 여기서 확인도, 타이머 시작도 하지 않는다 — 자동 확인은 사용자가
-        // 설정 화면에 들어간 순간부터(진입 즉시 1회 + 머무는 동안 2분 간격) 돌고, 화면을 떠나면
-        // 멈춘다. 타이머는 그동안 프로세스당 1개다(창 수와 무관).
-        // 새 버전을 찾아도 토스트는 없다(A114 알림 방식 b — 설정 화면 표시가 전부).
+        // Welcome의 지연 표시 예약부터 자동 업데이트 안내를 보류한다.
+        IsWelcomePending = Program.IsFirstRun;
         Integration.UpdateCoordinator.Initialize();
 
         if (Program.IsStandaloneSmokeTest)
@@ -200,7 +198,8 @@ public partial class App : Application
     private void ShowFirstRunWelcome()
     {
         var window = _windowManager?.ActiveWindow;
-        window?.DispatcherQueue.TryEnqueue(async () =>
+        if (window is null) { IsWelcomePending = false; return; }
+        if (!window.DispatcherQueue.TryEnqueue(async () =>
         {
             try
             {
@@ -237,7 +236,8 @@ public partial class App : Application
             {
                 // 웰컴 실패는 치명적이지 않다 — 조용히 넘어간다.
             }
-        });
+            finally { IsWelcomePending = false; Integration.UpdateCoordinator.TryOfferUpdate(); }
+        })) IsWelcomePending = false;
     }
 
     private void ShowSelectionError()
@@ -254,6 +254,7 @@ public partial class App : Application
 
         _uiDispatcher?.TryEnqueue(async () =>
         {
+            if (manager.DeferDuringRestart(() => OnRedirectedActivation(sender, e))) return;
             if (e.Kind == ExtendedActivationKind.File &&
                 e.Data is Windows.ApplicationModel.Activation.IFileActivatedEventArgs fileArgs &&
                 fileArgs.Files.FirstOrDefault() is Windows.Storage.IStorageFile file)

@@ -16,12 +16,8 @@ namespace KOTU.App;
 /// 설정 페이지. UI 스케일(v0.24.0), 탐색기 통합(파일 연결·우클릭 메뉴)을 관리한다.
 /// 탐색기 등록은 현재 사용자(HKCU) 범위 — 관리자 권한 불필요, 해제 시 흔적 없음.
 /// 하단 바(후원 문구 — ⛶ 전체화면은 A151에서 셸 모드 버튼으로 이관)는 셸이 TakeBottomBar()로 가져간다(v0.50.0).
-/// Updates 섹션은 전역 <see cref="UpdateCoordinator"/>의 상태를 표시만 하고, 확인은
-/// <b>이 화면 진입 1회</b> · <b>이 화면에 머무는 동안</b>의 2분 주기 타이머 두 경로가
-/// 코디네이터에서 돈다(A114, v0.136.0 — A95의 "수동 전용"을 대체. A125/v0.148.0에서 수동 버튼만
-/// 걷어내 자동 두 경로가 남았고, A206/v0.215.0에서 주기 타이머가 "상시"에서 "이 화면 체류 중"으로
-/// 좁혀졌다. 토스트·오토체크 토글은 계속 없다). 그 체류를 코디네이터에 알리는 것이
-/// Loaded/Unloaded에 걸린 <see cref="HoldUpdateWatch"/>/<see cref="ReleaseUpdateWatch"/>다.
+/// Updates는 앱 시작 1회와 마지막 확인 후 24시간 주기로 갱신되는 전역 상태를 표시한다.
+/// 화면의 Loaded/Unloaded는 표시 구독과 카운트다운만 관리한다(A441).
 /// 연결 토글의 레지스트리 작업·기본 앱 개수 조회는 전부 <see cref="Worker"/>에서 돌고
 /// UI에는 진행률과 결과만 흘러온다(A77, v0.106.0).
 /// A195: 남아 있던 UI 스레드 동기 레지스트리 접근 셋(<b>모듈 토글 초기값 읽기</b>·
@@ -83,12 +79,7 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
     /// </summary>
     private readonly DispatcherTimer _countdownTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
-    /// <summary>
-    /// A206(v0.215.0): 이 뷰가 지금 <see cref="UpdateCoordinator"/>의 "설정 열림" 카운트를 하나
-    /// 쥐고 있는지. 코디네이터의 카운트는 창 여러 개가 함께 쓰는 전역 값이라, 이 뷰가 올린 몫은
-    /// 정확히 1이어야 한다 — 이 bool이 그 멱등성을 지킨다(Loaded가 두 번 와도 +1은 한 번,
-    /// Unloaded/창 닫기가 겹쳐 와도 -1은 한 번).
-    /// </summary>
+    /// <summary>Updates 표시 구독의 Loaded/Unloaded 짝을 지킨다.</summary>
     private bool _updateWatchHeld;
 
     /// <summary>
@@ -1361,62 +1352,18 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
         };
     }
 
-    /// <summary>
-    /// Updates 섹션(A95, v0.117.0 — 확인 정책은 A114, v0.136.0). 구성은 위에서부터
-    /// <b>현재 버전 · 최신 버전 · 마지막 확인 시각 · 다음 확인까지 남은 시간 · [Update to vX] · 안내 문구</b>
-    /// (남은 시간 줄은 A167, v0.171.0에서 추가 — 확인 중에는 진행을 말하고, 예정 시각이 없으면 접힌다).
-    /// 확인은 <b>이 화면이 붙을 때(설정 진입) 1회</b> · 머무는 동안 2분 주기 타이머 둘 다 돌지만
-    /// 새 버전 알림은 여기 표시가 전부다 — <b>토스트·팝업은 금지</b>(A114 알림 방식 b).
-    /// A125(v0.148.0): 수동 확인 버튼을 없앴다 — 이 화면은 이제 <b>확인을 시키는 손잡이가 없고</b>
-    /// 진입과 체류가 곧 확인이다(코디네이터의 <c>CheckNowAsync</c>는 위 두 경로가 계속 쓴다).
-    /// A206(v0.215.0): 주기 확인은 이 화면을 <b>떠나면 멈춘다</b> — 확인 결과를 보여 주는 자리가
-    /// 여기뿐이라, 나가 있는 동안의 확인은 아무도 보지 않는다. 그래서 이 화면을 나가면
-    /// 다음 확인 예정(카운트다운)도 사라진다.
-    /// (v0.17.0 → v0.105.0 → v0.117.0 → v0.136.0 → v0.148.0 → v0.215.0으로 여섯 번 뒤집힌 정책이다.
-    /// 상세는 UpdateCoordinator 주석).
-    /// 실제 확인은 전역 <see cref="UpdateCoordinator"/>가 소유하고 여기서는 그 상태를 <b>표시만</b> 한다 —
-    /// 다른 창에서 확인해도 이 화면이 따라 갱신된다.
-    /// 업데이트 불가 빌드에서는 표시를 숨기지 않고 비활성으로 남긴다(사용자 확정).
-    /// </summary>
+    /// <summary>A441: 앱 수명 업데이트 상태를 표시한다. 화면을 열거나 닫아도 확인 주기는 바뀌지 않는다.</summary>
     private void BuildUpdatesSection(string currentVersion)
     {
-        var available = UpdateCoordinator.IsAvailable;
-
-        // TextBlock은 Control이 아니라 IsEnabled가 없다 — 업데이트 불가 빌드의 '비활성' 표현은
-        // 흐리게(Opacity)로 대신한다. (v0.108.1) A125(v0.148.0)로 IsEnabled를 잠글 버튼이 사라졌다 —
-        // 적용 버튼은 불가 빌드에서 애초에 나타나지 않으므로(PendingUpdate가 없다) 흐리게 +
-        // 아래 안내 문구가 '불가'를 알리는 전부다.
-        var dim = available ? 0.7 : 0.4;
-        var latest = new TextBlock { FontSize = 12, Opacity = dim };
-        var lastChecked = new TextBlock { FontSize = 12, Opacity = dim };
-        // A167(v0.171.0): 다음 자동 확인까지 남은 시간. 마지막 확인 줄 바로 아래, 같은 규격
-        // (FontSize 12 · 같은 Opacity)이다. 보여 줄 값이 없을 때는 줄 자체를 접는다.
-        var nextCheck = new TextBlock { FontSize = 12, Opacity = dim, Visibility = Visibility.Collapsed };
+        var latest = new TextBlock { FontSize = 12, Opacity = 0.7 };
+        var lastChecked = new TextBlock { FontSize = 12, Opacity = 0.7 };
+        var nextCheck = new TextBlock { FontSize = 12, Opacity = 0.7, Visibility = Visibility.Collapsed };
         var status = new TextBlock { Opacity = 0.8, TextWrapping = TextWrapping.Wrap };
-        // A125(v0.148.0): 버튼이 적용 하나만 남아 가로 StackPanel(구 buttonRow)을 없애고 Root에 직접 넣는다 —
-        // 숨겨진 버튼만 담은 빈 줄이 남으면 Root의 Spacing이 위아래로 두 번 붙어 헛간격이 생긴다.
-        // 세로 StackPanel의 자식은 기본이 Stretch라 폭이 화면 끝까지 늘어나므로 Left로 고정한다
-        // ("Open settings.json" 버튼과 같은 처리).
-        var updateButton = new Button
-        {
-            Visibility = Visibility.Collapsed,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-
+        var updateButton = new Button { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left };
         Root.Children.Add(new TextBlock { Text = $"Current version: v{currentVersion}", Opacity = 0.8 });
-        Root.Children.Add(latest);
-        Root.Children.Add(lastChecked);
-        Root.Children.Add(nextCheck); // A167 — 마지막 확인 줄 바로 아래
-        Root.Children.Add(updateButton);
-        Root.Children.Add(status); // 안내 문구는 적용 버튼 '밑'이다(A95 — 순서 유지).
+        Root.Children.Add(latest); Root.Children.Add(lastChecked); Root.Children.Add(nextCheck);
+        Root.Children.Add(updateButton); Root.Children.Add(status);
 
-        // 다운로드·설치 중에는 그 진행 문구를 전역 상태 갱신이 덮어쓰지 않게 한다.
-        var installing = false;
-
-        // A167(v0.171.0): 남은 시간 한 줄. 1초 타이머와 Render 양쪽에서 부른다.
-        //  · 확인 중이면 남은 시간 대신 진행을 말한다.
-        //  · 예정 시각이 없거나(불가 빌드 = 타이머 없음) 이미 지났으면 줄을 접는다 —
-        //    "0:00"을 오래 띄우지 않는다(틱과 틱 사이의 짧은 공백은 아무 말도 하지 않는 게 낫다).
         void RenderCountdown()
         {
             if (UpdateCoordinator.IsChecking)
@@ -1425,194 +1372,67 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
                 nextCheck.Visibility = Visibility.Visible;
                 return;
             }
-
-            if (UpdateCoordinator.NextCheckAt is not { } at)
-            {
-                nextCheck.Visibility = Visibility.Collapsed;
-                return;
-            }
-
+            if (UpdateCoordinator.NextCheckAt is not { } at || at <= DateTimeOffset.UtcNow)
+            { nextCheck.Visibility = Visibility.Collapsed; return; }
             var left = at - DateTimeOffset.UtcNow;
-            if (left <= TimeSpan.Zero)
-            {
-                nextCheck.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            // 올림으로 세어 1초 미만이 "0:00"이 되지 않게 한다(0:01에서 바로 접힌다).
-            var seconds = (int)Math.Ceiling(left.TotalSeconds);
-            nextCheck.Text = $"Next check in {seconds / 60}:{seconds % 60:00}";
+            var seconds = (long)Math.Ceiling(left.TotalSeconds);
+            nextCheck.Text = $"Next check in {seconds / 3600}:{seconds / 60 % 60:00}:{seconds % 60:00}";
             nextCheck.Visibility = Visibility.Visible;
         }
-
         void Render()
         {
             lastChecked.Text = UpdateCoordinator.DescribeLastCheck();
             RenderCountdown();
-
-            // 한 번 찾은 업데이트는 뒤이은 확인이 실패해도 적용 버튼을 유지한다.
+            var available = UpdateCoordinator.IsAvailable;
+            latest.Opacity = lastChecked.Opacity = available ? 0.7 : 0.4;
+            updateButton.Visibility = UpdateCoordinator.PendingUpdate is null ? Visibility.Collapsed : Visibility.Visible;
+            updateButton.IsEnabled = available && !UpdateFlow.IsBusy;
             if (UpdateCoordinator.PendingUpdate is { } pending)
             {
                 latest.Text = $"Latest version: v{pending.TargetFullRelease.Version}";
                 updateButton.Content = $"Update to v{pending.TargetFullRelease.Version}";
-                updateButton.Visibility = Visibility.Visible;
             }
-            else if (UpdateCoordinator.LastCheckedAt is null)
-            {
-                latest.Text = "Latest version: not checked yet";
-            }
-            else
-            {
-                // 확인은 했는데 새 버전이 없다 = 지금 것이 최신. 실패했으면 최신이 뭔지 알 수 없다.
-                latest.Text = UpdateCoordinator.LastCheckError.Length > 0
-                    ? "Latest version: unknown"
-                    : $"Latest version: v{currentVersion}";
-            }
-
-            if (installing) return;
-
-            if (!available)
-            {
-                status.Text = "In-app updates are unavailable in this build. "
-                            + "Install with Setup.exe from Releases to enable them.";
-            }
-            else if (UpdateCoordinator.IsChecking)
-            {
-                // A167(v0.171.0): "Checking for updates..."는 이제 위 카운트다운 줄이 말한다 —
-                // 같은 문장을 두 줄에 겹쳐 띄우지 않으려고 여기서는 비운다(전달되는 정보는 그대로).
-                status.Text = string.Empty;
-            }
-            else if (UpdateCoordinator.LastCheckError.Length > 0)
-            {
-                status.Text = "Update check failed: " + UpdateCoordinator.LastCheckError;
-            }
-            else if (UpdateCoordinator.PendingUpdate is not null)
-            {
-                status.Text = string.Empty; // 새 버전은 위 줄과 적용 버튼이 이미 말한다.
-            }
-            else
-            {
-                // 아직 한 번도 확인하지 않았으면 아무 말도 하지 않는다(A95).
-                status.Text = UpdateCoordinator.LastCheckedAt is null
-                    ? string.Empty
-                    : "You are on the latest version.";
-            }
+            else latest.Text = UpdateCoordinator.LastCheckedAt is null ? "Latest version: not checked yet"
+                : UpdateCoordinator.LastCheckError.Length > 0 ? "Latest version: unknown" : $"Latest version: v{currentVersion}";
+            status.Text = !available ? "In-app updates are unavailable in this build. Install with Setup.exe from Releases to enable them."
+                : UpdateFlow.Status.Length > 0 ? UpdateFlow.Status
+                : UpdateCoordinator.LastCheckError.Length > 0 ? "Update check failed: " + UpdateCoordinator.LastCheckError
+                : UpdateCoordinator.NotificationError.Length > 0 ? UpdateCoordinator.NotificationError
+                : UpdateCoordinator.IsChecking || UpdateCoordinator.LastCheckedAt is null || UpdateCoordinator.PendingUpdate is not null
+                    ? string.Empty : "You are on the latest version.";
         }
-
+        _renderUpdates = Render;
         updateButton.Click += async (_, _) =>
         {
-            if (UpdateCoordinator.PendingUpdate is not { } info) return;
-            installing = true;
-            await DownloadAndInstallAsync(status, updateButton, info);
-            installing = false;
+            if (UpdateCoordinator.PendingUpdate is not { } info || XamlRoot is null) return;
+            var manager = App.Services.GetRequiredService<WindowManager>();
+            if (manager.FindWindowForRoot(XamlRoot) is { } window) await UpdateFlow.StartAsync(window, info);
         };
-
-        // A167(v0.171.0): 카운트다운 전용 1초 타이머. Changed는 2분에 한 번(확인 시작·종료)뿐이라
-        // 초 단위 표시를 그것만으로는 못 만든다.
-        // 수명 규칙 — 이 뷰 하나당 타이머 하나이고, 화면에 붙어 있는 동안에만 돈다:
-        //  · 생성: 필드 초기화 한 곳뿐(_countdownTimer). 여기서는 Tick만 매단다 —
-        //    이 메서드 자체가 생성자 → Build()에서 딱 한 번 불리므로 Tick 구독도 한 번뿐이다.
-        //  · 시작: Loaded. 반복 로드돼도 같은 인스턴스를 다시 Start할 뿐 새로 만들지 않는다.
-        //  · 정지: Unloaded. 설정 화면을 닫으면 멈추고, 멈춘 DispatcherTimer는 디스패처가 붙들지
-        //    않으므로 뷰와 함께 수거된다. 설정을 열 때마다 새 SettingsView가 만들어지지만
-        //    (MainWindow.ShowSettingsAsync) 앞 뷰의 타이머는 그 뷰의 Unloaded에서 이미 멈춰 있다.
         _countdownTimer.Tick += (_, _) => RenderCountdown();
-
-        UpdateCoordinator.Changed += Render;
-        Loaded += (_, _) =>
-        {
-            // A206(v0.215.0): 자동 확인은 이 화면이 떠 있는 동안에만 돈다. 열림을 알리는 자리는
-            // 생성자가 아니라 여기다 — Unloaded와 짝이 맞아야 카운트가 새지 않기 때문이고,
-            // 진입 즉시 1회 확인도 같은 훅 안에 있어야 "열림 = 확인 시작"이 한 곳에서 읽힌다.
-            HoldUpdateWatch();
-            RenderCountdown();          // 화면에 붙는 즉시 한 번 — 첫 1초를 빈 줄로 두지 않는다
-            _countdownTimer.Start();
-        };
-        Unloaded += (_, _) =>
-        {
-            UpdateCoordinator.Changed -= Render;
-            _countdownTimer.Stop();
-            // 구독을 끊은 뒤에 놓는다 — 코디네이터가 정지를 알릴 때 이미 내려간 이 뷰가 다시
-            // 그려지지 않게(표시할 화면이 없다는 게 정지의 전제다).
-            ReleaseUpdateWatch();
-        };
+        Loaded += (_, _) => HoldUpdateWatch();
+        Unloaded += (_, _) => ReleaseUpdateWatch();
         Render();
     }
 
-    /// <summary>
-    /// A206(v0.215.0): 설정 화면 열림을 <see cref="UpdateCoordinator"/>에 알리고(전역 열림 수가
-    /// 0→1이면 2분 주기 자동 확인 타이머가 선다) 진입 즉시 1회 확인을 쏜다.
-    /// 진입 1회 확인이 A114 이래 이 화면의 몫이었던 것은 그대로고, 부르는 자리만
-    /// 생성자(<see cref="BuildUpdatesSection"/> 끝)에서 Loaded로 옮겼다 — 생성자에는 짝이 될
-    /// 닫힘 신호가 없어 카운트가 샜을 것이기 때문이다.
-    /// 이미 쥐고 있으면 아무것도 하지 않는다: 뷰가 떼였다 다시 붙어도 카운트는 +1을 넘지 않고
-    /// 확인 요청도 두 번 나가지 않는다.
-    /// 주기 타이머와 이 확인이 겹쳐도 <c>CheckNowAsync</c>가 진행 중이면 되돌아간다(요청 1개).
-    /// </summary>
+    private Action? _renderUpdates;
     private void HoldUpdateWatch()
     {
         if (_updateWatchHeld) return;
         _updateWatchHeld = true;
-        UpdateCoordinator.NotifySettingsOpened();
-        // 발사 후 망각 — 예외는 코디네이터가 삼키고 결과는 Changed → Render로 돌아온다.
-        _ = UpdateCoordinator.CheckNowAsync();
+        UpdateCoordinator.Changed += _renderUpdates;
+        UpdateFlow.Changed += _renderUpdates;
+        _renderUpdates?.Invoke();
+        _countdownTimer.Start();
     }
 
-    /// <summary>
-    /// A206(v0.215.0): <see cref="HoldUpdateWatch"/>의 짝. 전역 열림 수가 1→0이면 자동 확인
-    /// 타이머가 멈추고 카운트다운 줄이 접힌다(NextCheckAt = null).
-    /// Unloaded가 정상 경로이고, 설정 화면을 띄운 채 창을 닫아 Unloaded가 오지 않는 경우를 위해
-    /// <see cref="MainWindow"/>의 Closed도 이 메서드를 부른다 — 둘이 겹쳐도 위 bool이 -1을 한 번으로 막는다.
-    /// </summary>
     internal void ReleaseUpdateWatch()
     {
         if (!_updateWatchHeld) return;
         _updateWatchHeld = false;
-        UpdateCoordinator.NotifySettingsClosed();
+        UpdateCoordinator.Changed -= _renderUpdates;
+        UpdateFlow.Changed -= _renderUpdates;
+        _countdownTimer.Stop();
     }
-
-    /// <summary>다운로드 → 사람 확인(Install and restart / Later) 대기 → 적용. 자동 재시작 없음.</summary>
-    private async Task DownloadAndInstallAsync(TextBlock status, Button updateButton, Velopack.UpdateInfo info)
-    {
-        var version = info.TargetFullRelease.Version;
-        updateButton.IsEnabled = false;
-        try
-        {
-            await UpdateService.DownloadAsync(info, percent =>
-                DispatcherQueue.TryEnqueue(() => status.Text = $"Downloading v{version}... {percent}%"));
-            status.Text = $"v{version} downloaded.";
-
-            var confirm = new ContentDialog
-            {
-                Title = "Ready to install",
-                Content = $"KOTU will close and restart to finish installing v{version}. Install now?",
-                PrimaryButtonText = "Install and restart",
-                CloseButtonText = "Later",
-                DefaultButton = ContentDialogButton.Primary,
-                XamlRoot = XamlRoot,
-            };
-            if (await confirm.ShowAsync() == ContentDialogResult.Primary)
-            {
-                status.Text = "Applying and restarting...";
-                if (!await UpdateService.ApplyAndRestartAsync(info))
-                {
-                    status.Text = "Restart postponed while jobs are running. Finish or cancel them, then try again.";
-                    updateButton.IsEnabled = true;
-                }
-            }
-            else
-            {
-                status.Text = $"v{version} downloaded - click the button again to install when ready.";
-                updateButton.IsEnabled = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            status.Text = "Update failed: " + ex.Message;
-            updateButton.IsEnabled = true;
-        }
-    }
-
     /// <summary>
     /// 축약한 설명 줄 바로 아래 붙는 "Learn more" 접기/펼치기 (A182 — A162의 부분 반전).
     /// A162(v0.171.0)에서는 같은 자리가 사용자 가이드로 나가는 <see cref="HyperlinkButton"/>

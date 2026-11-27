@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.310.1.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.439.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -1012,19 +1012,26 @@ it with the built-in text editor.
 
 ### Updates
 
-- **Current version** and **Latest version**, plus when the last check ran and how long it is until
-  the next one — *Next check in 1:23*, counting down. While a check is running the line says so
-  instead.
-- KOTU checks for updates once whenever you open Settings, and then every two minutes for as long
-  as you stay on this screen. Leave Settings and the checking stops, so nothing runs in the
-  background while you work. There is no button to check by hand — opening this screen is the
-  check. Nothing pops up when a new version is found — the Updates section is the only place it
-  is announced.
-- When there is one, an **Update to vX.Y.Z** button appears. It downloads with a progress figure,
-  then asks: *KOTU will close and restart to finish installing.* **Install and restart** applies it
-  immediately; **Later** keeps the download ready for the next time you press the button.
-- Updates need the Setup.exe installation or the Velopack portable build. A build unpacked by hand
-  says so, leaves the section disabled, and shows no countdown.
+- **Current version**, **Latest version** and **Last checked** show the update status.
+  **Next check in 23:59:59** counts down to the next check; a failed check is shown here too.
+- KOTU checks once when the app starts, then 24 hours after the previous check finishes, even if
+  Settings is closed. Failed checks use the same interval. Opening Settings does not start an
+  extra check or change the schedule.
+- A newer stable version with a larger middle version number shows an **Update available**
+  prompt with **Yes** and **No**. For example, 0.438.0 → 0.439.0 prompts; 0.438.0 → 0.438.1 does not.
+  The prompt waits while a welcome screen or another dialog is open, or all windows are minimized
+  or in the tray. It does not bring a hidden window forward.
+- **No** remembers that exact version and never asks about it again, even after restarting KOTU.
+  A different qualifying version can still prompt. **Esc** only dismisses the current prompt;
+  it does not save a refusal or immediately repeat the same prompt.
+- **Yes** downloads the update and shows progress. In Settings, **Update to vX.Y.Z** starts the
+  same download, including patch updates and versions you previously declined.
+- When **Ready to install** appears, choose **Install and restart** to proceed, or **Later** to
+  keep working. You can return to **Update to vX.Y.Z** when ready. KOTU asks about unsaved work in
+  every open window before restarting. Cancelling that check keeps the windows and edits open;
+  active jobs or another KOTU process can also postpone the restart.
+- In-app updates are available in the official Setup.exe installation. The Standalone ZIP and
+  KOTU Test do not receive these updates; install a newer matching build instead.
 
 ### About
 
