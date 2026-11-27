@@ -23,17 +23,39 @@
 
 2026-11-27 도입 직전 `f74a2896107075c083883e1ff022e671e11b3e42`(v0.432.2)와 v0.436.0 소스를 별도 Test 앱으로 실행했다. 둘 다 현재 복원한 같은 WinUI DLL을 사용했으므로 과거 공식 배포 바이너리 그대로의 비교는 아니다. 라이트·시스템 기본 앱 배율·실제 709×535 창·같은 TXT 480개 자료와 설정을 사용했다. 폴더 열기·600 아래/위 스크롤·상위 복귀·재방문의 동작 수와 순서는 맞췄으나 요청 간격·총시간은 다르며 캐시는 지우지 않았다.
 
+이후 v0.432.2 공개 Full을 별도로 내려받아 공개 SHA-256과 대조했다. 공식 제품 커밋 `d87dc7db79a8674fdd2799874c0587523d269c63`과 재구성 기준 사이의 제품 소스 차이는 없었고 공식 WinUI DLL도 현재 검수본과 같은 해시였다. 이 비교에서 부동 의존성이 WinUI 바이너리 차이를 만들었다는 가설은 뒷받침되지 않는다. 보호 보존본의 캐시 패키지는 공개 Full과 같지 않았으므로 별도 다운로드 검증과 구분한다. 근거는 `artifacts/a439-followup/preskin-official/verification.json`이며, 재구성 Test 앱의 조작을 과거 공식 실행 파일 자체의 조작으로 바꾸어 부르지 않는다.
+
 새 계측을 넣기 전 기존 `NavDiagnostics`로 본 폴더 레이아웃 구간은 현재 229/248ms, 도입 전 136/276ms였다. 반복에서 순서가 뒤집혔으며 스크롤 후 최장 heartbeat 간격도 양쪽 모두 약 2.6초였다. 이 값은 물리 입력부터 화면 표시까지의 시간이나 전체 UI 정지의 직접 증명이 아니다. 같은 의존성으로 재구성한 도입 전 라이트 메뉴도 강조가 약했다. 현재 일반 Button의 흰색 계열 hover와 밝은 팝업 배경의 대비를 별도로 다룬다.
 
 그 뒤 두 단계 복사본에만 같은 제한된 메서드·입력·Rendering 콜백 계측을 넣었다. 도입 전/현재의 최장 Rendering 콜백 간격은 약 2.73/2.62초였으며 각각 2초 이상 간격이 12회였다. 현재 추가 오버레이 크기 처리의 최대 한 호출은 약 58ms이고 긴 간격은 해당 처리 밖에서도 나타났다. 유휴·포인터를 빈 정보 패널에 둔 조건에서도 긴 간격이 남았다. 오버레이 처리가 긴 지연의 원인이라는 가설은 이 자료로 뒷받침되지 않는다. 중첩 메서드 시간은 합산하지 않으며 콜백 간격을 GPU 표시 시간으로 바꾸어 부르지 않는다.
 
-관리 코드 CPU 표본은 대부분 WinUI 네이티브 진입의 `UNMANAGED_CODE_TIME`으로 남아 실제 네이티브 원인을 식별하지 못했다. 이 표기는 CPU 사용률이나 정지 시간 자체가 아니다. Windows CPU 추적은 프로파일 정책 오류 `0xc5585011`로 시작하지 못했고 기록이 실행 중이 아님을 확인했다. 자동 승인 거절이 아니며 Windows 정책은 변경하지 않았다. 새 자료로 회귀 배수·전체 속도 해결·GC 제거를 주장하지 않는다. 도구 캡처·계측·백그라운드·캐시·초기 비교의 빌드 서버/메모리 영향은 남은 교란 요인이다.
+초기 관리 코드 CPU 표본은 대부분 WinUI 네이티브 진입의 `UNMANAGED_CODE_TIME`으로 남아 실제 네이티브 원인을 식별하지 못했다. 이 표기는 CPU 사용률이나 정지 시간 자체가 아니다. Windows CPU 추적은 프로파일 정책 오류 `0xc5585011`로 시작하지 못했고 기록이 실행 중이 아님을 확인했다. 자동 승인 거절이 아니며 Windows 정책은 변경하지 않았다. 새 자료로 회귀 배수·전체 속도 해결·GC 제거를 주장하지 않는다. 도구 캡처·계측·백그라운드·캐시·초기 비교의 빌드 서버/메모리 영향은 남은 교란 요인이다.
 
 로컬 `artifacts/a439-followup/normal-comparison.json`, `results/`의 `preskin-folder-detail-r1`·`current-folder-detail-r1`과 대응 actions, `current-idle-detail-r1`·`current-pointer-away-r1`, `current-*-profile.nettrace`에 근거를 보존했다. 준비 소스 해시·빌드·계측 manifest와 `ui-restoration.json`이 조건을 연결한다. 검수는 정상 종료했고 Test 원본 28키를 바이트 복원했다. 공식 43키는 시작 전과 같으며 공식 앱·Windows 설정을 조작하지 않았다.
 
-### 진행 중인 메뉴 수정안
+### 메뉴 수정안의 정상 빌드와 화면 검증
 
-시작 메뉴 항목에 네이티브 `SubtleButtonStyle`을 공유하고 기존 글꼴·시스템 초점 표시·크기·배치를 유지하는 수정안을 작성했다. 이 스타일은 메뉴 면에서 구별되는 테마별 hover/pressed/disabled 자원을 사용한다. 리소스가 없으면 진단을 남기고 기존 네이티브 버튼으로 돌아간다. 아직 이 수정안의 정상 빌드·실제 화면 검증은 하지 않았으며 제품 버전은 v0.436.0 그대로다. 라이트·다크에서 강조와 키보드 초점·치수를 확인한 뒤 긴 UI 대기의 원인 수리와 함께 후속 공식 배포·설치를 완료해야 한다.
+시작 메뉴 항목에 네이티브 `SubtleButtonStyle`을 공유하고 기존 글꼴·시스템 초점 표시·크기·배치를 유지하는 수정안을 정상 publish했다. 이 스타일은 테마별 hover/pressed/disabled 자원을 사용하며 조회에 실패하면 진단을 남기고 기존 네이티브 버튼으로 돌아간다. 루트 소스 658파일과 native 참조 override 1개, 글꼴·라이선스 34개, 정상 진입점과 당시 진단 타입 부재를 대조했다. 로컬 native DLL은 기존 검증본을 재사용했다. 근거는 `artifacts/a439-followup/product-build-verification.json`이다. 새 전체 시험·공식 배포는 아직이며 `MainWindow.xaml.cs` 수정안만 미커밋, 속도 수리 코드는 없고 버전은 v0.436.0이다.
+
+계측 없는 정상 빌드의 라이트와 단계 복사본에서 `Application.RequestedTheme=Dark`를 초기화 전에 적용한 전체 앱 다크 시작에서 메뉴 강조와 키보드 초점을 관측했다. 후속 계측 시작 전 직접 메뉴 버튼 10개가 모두 실제 `SubtleButtonStyle`을 참조함을 확인했고 글꼴 14·아이콘 16·간격 12·최소/실제 높이 36·패딩 10,8·시스템 초점 표시를 기록했다. 메타데이터 수집 때 메뉴가 닫혀 `IsLoaded=false`·`ActualWidth=0`이므로 실제 폭 통과로 해석하지 않는다. 포인터 위치는 우클릭으로 옮겼으며 순수 호버 입력이 아니다. 자동화의 파란 커서 효과를 제품 그림자로 세지 않는다. 다크 시작은 OS 테마 변경이나 실행 중 전환 검증이 아니며 Windows 설정 실행은 도구 응답 오류로 실패했다. 화면·런타임 조건은 `menu-ui-verification.json`과 연결된 Light/Dark PNG·`MenuSetup` 결과를 따른다.
+
+### 응답 대조와 네이티브 스택
+
+단계 전용 `A439ResponsivenessProbe`는 우선순위별 대기 콜백을 하나로 제한해 High/Normal/Low 디스패처 대기와 별도 워커의 호출 지터를 기록한다. v1의 `DispatcherPings=false`도 100ms 워커는 남으므로 무워커 대조가 아니다. v2의 `SampleWorker=false`·`DispatcherPings=false`는 워커를 시작하지 않고 Rendering 콜백만 기록한다. 고정 버퍼·오버플로 기록, 측정 전 메뉴 메타데이터와 종료 후 저장을 사용하며 강제 GC·측정 중 트리 탐색은 없다. 콜백 간격과 큐 대기는 물리 입력부터 GPU 표시까지의 지연이 아니다.
+
+빈 뷰의 다크·라이트 회차에서는 2초 이상 공백이 없었다. 같은 709×535 창·TXT 240개 `folder-a`에서는 다음을 관측했다. 전체 회차 조건과 값은 `artifacts/a439-followup/responsiveness-summary.json` 및 `results/response-*`에 둔다.
+
+| 조건 | 구간 | 최장 Rendering 간격 | 2초 이상 간격 |
+|---|---:|---:|---:|
+| Preview, v2 무워커 | 49.007초 | 2,570.871ms | 12회 |
+| Preview, 워커·세 우선순위 관측 | 66.072초 | 2,617.627ms | 16회 |
+| List, v2 무워커 | 47.611초 | 427.687ms | 0회 |
+
+Preview의 세 우선순위 관측 회차는 큐 대기 최대 약 2.58초·p95 약 2.4초였고 해당 구간의 프로세스 GC 정지는 0이었다. 이를 GC 전체 제거로 확대하지 않는다. List 회차에는 진단 helper 준비·빌드가 겹쳤으므로 엄밀한 동일 조건 대조가 아니며, Preview 타일 경로를 우선 조사할 근거로 한정한다. 외부 CPU 표본·관리 추적을 수집할 때 긴 공백이 줄어드는 관측 변화가 있었으나 인과는 미확정이다. 캡처 전후 대조도 캡처 자체를 원인으로 확정하지 못했다. 측정 중 컴퓨터 도구에 UIA 조회를 요청하지 않았다는 조건은 시스템 전체에 UIA 호출이 없었다는 보증이 아니다.
+
+별도 시점의 네이티브 덤프 세 개를 Microsoft 공식 DbgEng와 심볼로 오프라인 분석했다. 모두 UI 스레드에서 WinUI `ItemsControlAutomationPeer::GetModernItemsControlChildrenChildrenHelper`·`ListViewBaseAutomationPeer::GetChildrenCore`, `ContainerFromItem` 또는 `GetItemPeerFromChildrenCache`와 UIAutomationCore `CrossProcess_BulkFetch`·`RemoteUiaNodeStub::Incoming_BulkFetch` 경로를 확인했다. 이는 구체적인 외부 UIA 요청 처리 경로의 관측이며 요청 클라이언트의 신원·발생 조건이나 전체 지연의 원인 입증은 아니다. 성능 회차 밖에서 수행한 덤프 수집 자체도 각각 약 1.21/0.92/0.92초가 걸렸으므로 그 간섭을 대기 시간에 합치지 않는다. 근거는 `results/native-preview-r1-stack.json`부터 `r3`까지와 각 `.dmp.capture.json`, 도구의 `tools/native-stack/abi-evidence.json`·`usage-and-validation.json`이다. WPR 정책을 우회하거나 Windows 설정을 바꾸지 않았다.
+
+다음 단계는 UIA 요청 발생 조건과 Preview의 항목 자식 탐색 비용을 연결해 접근성을 보존한 수리를 하는 것이다. 접근성 비활성화나 요청 클라이언트 추측으로 대체하지 않는다. 최종 정상 빌드에서는 `A439PerformanceProbe`·`A439VisualProbe`·`A439FollowupProbe`·`A439ResponsivenessProbe`, 강제 테마와 하네스의 부재를 확인한다. 현재 고정 검수 출력은 마지막 응답 계측본이므로 정상 제품으로 취급하지 않는다. 최신 `ui-restoration.json`에서 검수 정상 종료·KOTU 프로세스 없음, Test 원본 28키 바이트 복원·공식 43키와 OS 불변을 확인했다. 정상 전체 검증·별도 버전의 공식 배포·새 v0.436.0 백업 후 공식 Updates 설치까지 남아 있다.
 
 ### 도입 전후 코드 조사
 
