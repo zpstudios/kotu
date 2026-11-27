@@ -142,13 +142,13 @@ public class ArchiveJobCoordinatorTests
         var coordinator = new ArchiveJobCoordinator(jobs, backend);
         var entered = Signal<bool>();
         using var release = new ManualResetEventSlim();
-        var ownerThread = Environment.CurrentManagedThreadId;
+        var ownerThread = Thread.CurrentThread;
         string[]? observed = null;
-        var workerThread = ownerThread;
+        Thread? workerThread = null;
         var observedFormat = !use7z;
         backend.CreateAction = (sources, path, password, format, _, _) =>
         {
-            workerThread = Environment.CurrentManagedThreadId;
+            workerThread = Thread.CurrentThread;
             entered.SetResult(true);
             release.Wait();
             observed = sources.ToArray();
@@ -167,7 +167,11 @@ public class ArchiveJobCoordinatorTests
             Assert.Equal(BackgroundJobState.Succeeded, result.State);
             Assert.NotNull(observed);
             Assert.Equal(["first.txt", "second.txt"], observed);
-            Assert.NotEqual(ownerThread, workerThread);
+            // 숫자 ID의 재사용 가능성과 무관하게 실제 스레드 정체성을 확인한다.
+            Assert.NotNull(workerThread);
+            Assert.NotSame(ownerThread, workerThread);
+            Assert.False(workerThread.IsThreadPoolThread);
+            Assert.Equal("KOTU archive creation job", workerThread.Name);
             Assert.Equal(use7z, observedFormat);
             Assert.Equal(BackgroundJobKind.CreateArchive, result.Kind);
             Assert.DoesNotContain("creation secret", System.Text.Json.JsonSerializer.Serialize(result));

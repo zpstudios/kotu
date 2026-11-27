@@ -719,20 +719,24 @@ public sealed partial class SettingsView : UserControl, IBottomBarProvider
             Padding = new Thickness(0),
         });
         Root.Children.Add(aboutLine);
+
+        AddHeader("Credits");
         Root.Children.Add(new TextBlock
         {
-            Text = "This product was developed by referring to Hancom's public HWP document file specification.\n"
-                + "본 제품은 한컴의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.",
+            Text = "PDF: Windows.Data.Pdf for page rendering and PdfPig for text search.\n"
+                + "HWP: rhwp for page previews; text previews based on Hancom's public HWP document file specification.\n"
+                + "Text editing: Monaco Editor.\n"
+                + "Images: ImageMagick through Magick.NET for additional image formats.\n"
+                + "Archives: 7-Zip through SevenZipSharp, with SharpCompress for legacy ZIP names.\n"
+                + "Media: libVLC through LibVLCSharp for playback; NAudio for audio capture.\n"
+                + "Recording: ScreenRecorderLib for screen and window recording.\n"
+                + "Hardware: LibreHardwareMonitor for sensor readings.\n"
+                + "Updates: Velopack for installation and updates.",
             Opacity = 0.8,
             TextWrapping = TextWrapping.Wrap,
         });
-        Root.Children.Add(new TextBlock
-        {
-            Text = "Mission Statement",
-            FontFamily = ControlLabelFont,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 4, 0, 0),
-        });
+
+        AddHeader("Mission Statement");
         Root.Children.Add(new TextBlock
         {
             Text = Branding.MissionStatement,

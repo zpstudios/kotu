@@ -12,6 +12,7 @@
 | A438 v0.435.0 공식 배포·설치·설정 보존과 A439 시작 조건 | [A439 제품 커밋 당시 HANDOVER](https://github.com/zpstudios/kotu/blob/ab6e992c043ddc8f015b7b1fe1e85414c81e03cd/docs/HANDOVER.md#L5-L16). A438 공식 1,188파일·43키 대조와 당시 미관측 범위를 보존하며 현재 제품 상태는 최신 HANDOVER를 따름 |
 | A439 v0.436.0 공식 배포·설치와 최대화 설정 복원 | [v0.437.0 제품 커밋 당시 HANDOVER](https://github.com/zpstudios/kotu/blob/f155a2b41a58155fe86487089dd6362f82878d36/docs/HANDOVER.md#L5-L8). v0.436.0 제품 커밋·CI·공식 1,188파일·43키 대조, 첫 재시작의 최대화 설정을 정상 UI로 복원한 경과와 당시 보호 경로를 보존 |
 | A439 메뉴 판정 정정·도입 전 소스 재구성·UIA 캐시와 크기 변경 조사 | [기능 정본의 조건과 한계](../features/shell/design-library-A427.md#a439). `artifacts/a439-followup/`의 빌드/계측 manifest·normal-comparison·results·화면·nettrace와 캐시 0.25 단독 최대화 실패를 보존. 정상 검증은 `final-validation.json`·`final-normal-build.json`·`versioned-normal-build.json`·`final-normal-ui.json`·화면·`ui-restoration.json`, v0.437.0 배포/설치는 `workflows.json`·`official-release/verification.json`·`installed-release-verification.json`·`official-update-ui.json`으로 회수. 앱 준비 ZIP과 공개 Full의 표현 차이·항목 바이트 일치는 `app-update-package-comparison.json`에 보존 |
+| A440 Credits 로컬 검증·실행 도구 복원·등록 CI | `artifacts/a440-review/`의 `final-validation.json`·`product-build-verification.json`·`normal-ui.json`·전후 화면·`launch-restoration.json`. 실행 도구가 만든 별도 공식 빈 창의 정상 종료와 창 크기 두 키 원복을 보존한다. `artifacts/a440-a441/registration-ci.json`은 등록 CI의 숫자 스레드 ID 비교 실패·동일 HEAD 재실행 성공과 객체 정체성 검증 보강을 연결한다. 해당 실패가 ID 재사용 때문인지는 직접 입증되지 않았다. |
 | A427–A435 화면 조건·측정·복원 차이·실패·미관측 | [당시 실기기 원문](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L54-L65). 현재 남은 조건은 실기기 표에서만 갱신 |
 | A433 자동 열 감소 해석·설치 요청 철회와 고정 열 정정 | [요구와 사용자 정정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/REQUIREMENTS.md#L16) · [철회 검수](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L56-L57) · [정정 사양](../features/explorer/tile-captions-A387.md#a433-고정-열-수와-조작부-비례-축소--v04337) |
 | A431 색상 시험 판정 취소·격리 역사본/대표 비교의 정확한 조건 | [세 차례 관측과 한계](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L59-L61) |
@@ -21,10 +22,11 @@
 <a id="protected-material"></a>
 ## 보호 자료 위치
 
-최신 설치 백업은 [HANDOVER](../HANDOVER.md)의 현재 상태로 찾는다. 아래는 이전 보호 대상을 찾는 경로다. 로컬 자료의 존재 여부와 Git 원문에 경로가 남아 있다는 사실은 다르다. 삭제·수정·재생성으로 부재 사실을 덮지 않는다.
+최신 설치 백업은 [HANDOVER](../HANDOVER.md)의 현재 상태로 찾는다. 아래는 현재·이전 보호 대상을 찾는 경로다. 로컬 자료의 존재 여부와 Git 원문에 경로가 남아 있다는 사실은 다르다. 삭제·수정·재생성으로 부재 사실을 덮지 않는다.
 
 | 자료 | 회수 위치와 보호 범위 |
 |---|---|
+| v0.437.0 설치·설정 백업과 A440 교체 기준 | `artifacts/a440-review/pre-update-backup/` 1,191파일과 상위 `backup-coverage.json`·`pre-update-request*.json`·`pre-update-startup-log.json`. 기존 v0.436.0 보호본과 별개로 생성·대조했으며 수정·삭제·재생성하지 않음 |
 | v0.436.0 설치·설정 백업과 v0.437.0 교체 기준 | `artifacts/a439-followup/pre-update-backup/` 1,191파일과 상위 `backup-coverage.json`·`pre-update-request*.json`·`pre-update-startup-log.json`, `pre-install-v0.437.0-ready*.json`. 백업을 재생성하지 않고 설치 직전 재검증했으며 원본과 설치 직전 기준을 모두 수정·삭제하지 않음 |
 | v0.435.0 설치·설정 백업과 A439 첫 공식 배포 근거 | `artifacts/a439-review/pre-update-backup/` 1,191파일, 상위 `backup-coverage.json`·`pre-update-request*.json`·`pre-update-final-settings.json`·`pre-update-revalidation.json`과 `official-release/`. 후속 v0.436.0 백업과 별개로 수정·삭제하지 않음 |
 | v0.434.0 설치·설정 백업과 A438 공식 배포 근거 | `artifacts/a438-review/pre-update-backup/` 1,371파일과 상위 백업·재검증·설정 기준 JSON, `official-release/` — [보호 당시 상태](https://github.com/zpstudios/kotu/blob/ab6e992c043ddc8f015b7b1fe1e85414c81e03cd/docs/HANDOVER.md#L8). 새 A439 백업과 별개로 수정·삭제하지 않음 |

@@ -366,8 +366,8 @@ editor either way.
   open directly as text previews. **Copy text** copies the displayed text and `A−` / `A+` change its size.
 - HWP 3.x and encrypted, DRM-protected or distribution-only documents are not supported. Very large previews
   stop at 200,000 characters and say so on screen. KOTU never uploads or modifies these documents.
-- The HWP format notice appears in **Settings → About**. This product was developed by referring to Hancom's public HWP document file specification.
-  **본 제품은 한컴의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.**
+- **Settings → Credits** identifies Hancom's public HWP document file specification for text previews
+  and the rhwp renderer for page previews. The full bilingual format notice is included with the app.
 
 ### 2.6 Archive
 
@@ -929,7 +929,7 @@ to bring it back.
 The last entry in the menu at the bottom left. Each setting on that screen carries a one-line
 description and a **Learn more** link; this is what those links point at. The screen reads, from the
 top: **Display**, **Explorer integration**, **Playback**, **Troubleshooting**, **Updates**,
-**About**.
+**About**, **Credits**, **Mission Statement**.
 
 Settings is the one screen with no side panels — `F11`, `F12` and the edge buttons do nothing there,
 and whatever was open slides away while you are on it.
@@ -1028,7 +1028,8 @@ it with the built-in text editor.
 
 ### About
 
-The version, a link to the repository, and the mission statement.
+**About** shows the version and a link to the repository. **Credits** follows with brief descriptions
+of the external components used for PDF, HWP and other features. **Mission Statement** comes next.
 
 The bottom bar of the Settings screen has a link to the project's Patreon page.
 

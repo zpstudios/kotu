@@ -356,8 +356,8 @@ Windows 탐색기에서 더블클릭하거나(해당 형식을 등록해 두었�
   본문 미리보기로 열립니다. **Copy text**는 표시된 본문을 복사하고 `A−` / `A+`는 글자 크기를 조절합니다.
 - HWP 3.x와 암호·DRM·배포용 문서는 지원하지 않습니다. 아주 긴 미리보기는 200,000자에서 멈추고 화면에
   알립니다. KOTU는 이 문서를 업로드하거나 수정하지 않습니다.
-- HWP 형식 고지는 **Settings → About**에서 확인할 수 있습니다. 본 제품은 한컴의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
-  *This product was developed by referring to Hancom's public HWP document file specification.*
+- **Settings → Credits**에서 본문 미리보기에 참고한 한컴의 HWP 공개 명세와 페이지 미리보기에 사용하는
+  rhwp 렌더러를 확인할 수 있습니다. 한영 형식 고지 전문은 앱에 함께 배포됩니다.
 
 ### 2.6 Archive
 
@@ -882,7 +882,7 @@ KOTU는 하나의 프로그램으로 동작하며 창은 원하는 만큼 열 �
 
 왼쪽 아래 메뉴의 마지막 항목입니다. 그 화면의 설정마다 한 줄 설명과 **Learn more** 링크가 붙어 있는데,
 그 링크가 가리키는 것이 이 문서입니다. 화면은 위에서부터 **Display**, **Explorer integration**,
-**Playback**, **Troubleshooting**, **Updates**, **About** 순입니다.
+**Playback**, **Troubleshooting**, **Updates**, **About**, **Credits**, **Mission Statement** 순입니다.
 
 Settings는 사이드 패널이 없는 유일한 화면입니다 — `F11`, `F12`, 가장자리 버튼이 아무 일도 하지 않고,
 열려 있던 것은 이 화면에 있는 동안 물러나 있습니다.
@@ -978,7 +978,8 @@ Settings는 사이드 패널이 없는 유일한 화면입니다 — `F11`, `F12
 
 ### About
 
-버전, 저장소 링크, 그리고 프로젝트의 지향점이 있습니다.
+**About**에는 버전과 저장소 링크가 있습니다. 이어지는 **Credits**에는 PDF, HWP 등 각 기능에 사용하는
+외부 구성요소의 역할을 간단히 소개하며, 그다음 **Mission Statement**에 프로젝트의 지향점이 있습니다.
 
 Settings 화면의 하단 바에는 프로젝트 Patreon 페이지 링크가 있습니다.
 

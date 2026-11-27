@@ -4,8 +4,9 @@ This product was developed by referring to Hancom's public HWP document file spe
 
 본 제품은 한컴의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
 
-The product shows this format notice in Settings → About. HWP page navigation,
-the Fit menu and the page/text switch are in the bottom bar.
+Settings → Credits identifies Hancom's public specification for text previews and rhwp for page
+previews. The full bilingual format notice remains in the distribution's `licenses/HWP-Format-NOTICE.txt`.
+HWP page navigation, the Fit menu and the page/text switch are in the bottom bar.
 
 ## HWP page view (v0.431.0)
 

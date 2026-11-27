@@ -7,7 +7,7 @@
 | 주제 | 현재 적용할 계약 | 원래 결정/후속 정본 |
 |---|---|---|
 | 이름·개인정보 | 앱 이름 KOTU (King Of The Util), 신규 표시명 KOTU. 개인 실명·개인 메일을 제품에 표시하지 않는다. | [B9·B29](../history/requirements-decisions-index.md#b9) |
-| 메뉴·모듈명 | 모듈명은 단수형/Archive. 메뉴·연결 순서와 키는 옛 표가 아닌 현 가이드가 정본. | [B12·B16](../history/requirements-decisions-index.md#b12), [문서 지도](../README.md) |
+| <a id="settings-credits"></a>메뉴·모듈·설정 | 모듈명은 단수형/Archive. 메뉴·연결 순서와 키는 옛 표가 아닌 현 가이드가 정본. Settings는 About → Credits → Mission Statement 순서로, Credits에는 PDF·HWP 등 실제 외부 구성요소의 역할을 간결한 영문으로 표시한다. HWP 공개 명세와 rhwp 렌더러의 역할을 구분하며 상세 배포 고지·라이선스는 보존한다. | [B12·B16](../history/requirements-decisions-index.md#b12), [문서 지도](../README.md), [A440](../history/requirements-completed-index.md#a440) |
 | 파일 연결 | exe 경로 변경 시 조용한 재등록; 대표 확장자로 판단, 실패는 다음 실행 재시도. Standalone 차단, UserChoice 직접 수정 금지. 모듈 묶음 토글은 A326의 확장자별 상태를 사용. | [B24–25](../history/requirements-decisions-index.md#b25), [B80](../history/requirements-decisions-index.md#b80) |
 | 인스턴스·트레이 | 인스턴스당 트레이 아이콘 1개. H/W 선택 저장은 전역 1벌·마지막 조작 우선. 최소화와 닫기는 별개이며 빠른 녹음 닫기 정책은 A407 보류 범위. | [B18·B21·B42·B45](../history/requirements-decisions-index.md#b42) |
 | 브랜드 | 제공된 원본 에셋 보존, 단계형 적용. 16px 조건부 재검토는 A281만 해당. | [B28·B41](../history/requirements-decisions-index.md#b41) |
