@@ -35,7 +35,7 @@
 
 ### 메뉴 수정안의 정상 빌드와 화면 검증
 
-시작 메뉴 항목에 네이티브 `SubtleButtonStyle`을 공유하고 기존 글꼴·시스템 초점 표시·크기·배치를 유지하는 수정안을 정상 publish했다. 이 스타일은 테마별 hover/pressed/disabled 자원을 사용하며 조회에 실패하면 진단을 남기고 기존 네이티브 버튼으로 돌아간다. 루트 소스 658파일과 native 참조 override 1개, 글꼴·라이선스 34개, 정상 진입점과 당시 진단 타입 부재를 대조했다. 로컬 native DLL은 기존 검증본을 재사용했다. 근거는 `artifacts/a439-followup/product-build-verification.json`이다. 이 첫 메뉴 검증 당시에는 `MainWindow.xaml.cs`만 수정했고 속도 수리 코드는 없었다. 이후 캐시 수리와 현재 검증 범위는 아래 후속 절을 따른다.
+시작 메뉴 항목에 네이티브 `SubtleButtonStyle`을 공유하고 기존 글꼴·시스템 초점 표시·크기·배치를 유지하는 수정안을 정상 publish했다. 이 스타일은 테마별 hover/pressed/disabled 자원을 사용하며 조회에 실패하면 진단을 남기고 기존 네이티브 버튼으로 돌아간다. 루트 소스 658파일과 native 참조 override 1개, 글꼴·라이선스 34개, 정상 진입점과 당시 진단 타입 부재를 대조했다. 로컬 native DLL은 기존 검증본을 재사용했다. 당시 DLL 식별자와 화면 근거는 `artifacts/a439-followup/menu-ui-verification.json`에 보존했다. 그 파일의 원래 `NormalBuild` 참조인 `product-build-verification.json`은 최신 빌드로 덮어쓰는 경로이므로 지금 내용을 첫 메뉴 빌드의 근거로 쓰지 않는다. 이 첫 검증은 `MainWindow.xaml.cs`만 수정한 상태이며 이후 캐시 수리와 최종 정상 검증은 아래 후속 절을 따른다.
 
 계측 없는 정상 빌드의 라이트와 단계 복사본에서 `Application.RequestedTheme=Dark`를 초기화 전에 적용한 전체 앱 다크 시작에서 메뉴 강조와 키보드 초점을 관측했다. 후속 계측 시작 전 직접 메뉴 버튼 10개가 모두 실제 `SubtleButtonStyle`을 참조함을 확인했고 글꼴 14·아이콘 16·간격 12·최소/실제 높이 36·패딩 10,8·시스템 초점 표시를 기록했다. 메타데이터 수집 때 메뉴가 닫혀 `IsLoaded=false`·`ActualWidth=0`이므로 실제 폭 통과로 해석하지 않는다. 포인터 위치는 우클릭으로 옮겼으며 순수 호버 입력이 아니다. 자동화의 파란 커서 효과를 제품 그림자로 세지 않는다. 다크 시작은 OS 테마 변경이나 실행 중 전환 검증이 아니며 Windows 설정 실행은 도구 응답 오류로 실패했다. 화면·런타임 조건은 `menu-ui-verification.json`과 연결된 Light/Dark PNG·`MenuSetup` 결과를 따른다.
 
@@ -95,7 +95,17 @@ Preview의 세 우선순위 관측 회차는 큐 대기 최대 약 2.58초·p95 
 
 계측본에서 작은/큰 창 6·9·12열 배치, 큰 휠 이동, 열·창 크기 변경 후 `item-101` 선택 정보 유지, 타일을 다시 클릭한 뒤 End→Enter로 `item-240.txt` 본문 표시를 확인했다. 제목줄 조작 뒤 Enter는 전체 화면 전환으로 이어졌으므로 전체 키보드 초점 유지나 정확한 픽셀 앵커 통과로 세지 않는다. 새 프로세스의 큰 창 혼합 241항목은 PNG/TXT 내용과 PDF 확장자 대체 표시까지 관측했고 PDF 썸네일은 미확인이다. 근거는 `results/response-measure025-actions.json`과 `measure025-*.png`다.
 
-메뉴 포함 제품 세 파일은 미커밋, 버전은 v0.436.0이다. 고정 출력은 v3 probe가 포함된 `response-measure025-r1`이며 `normal-source`에도 이미 주입돼 있다. 새 치수 적용 코드·원자료 수치·문서의 독립 검토에서 구체적 결함을 찾지 못했다. root 원본을 다시 복사한 정상 무계측 UI·전체 시험·Standalone, 새 버전·공식 전체 native CI·자산/피드/해시와 공식 Updates 설치·재시작·파일/설정/로그 대조가 남았다. 정상본에서는 네 종류 A439 probe·강제 테마·하네스 부재를 확인한다. 검수 정상 종료·KOTU 프로세스 없음·Test 28키 바이트 복원·공식 43키와 OS 불변은 최신 `ui-restoration.json`에 기록했다. 별도 v0.436.0 백업 `artifacts/a439-followup/pre-update-backup/`은 이미 생성·대조했으며 설치 직전 재검증만 한다.
+새 치수 적용 코드·원자료 수치·문서의 독립 검토에서 구체적 결함을 찾지 못했다. 위 계측 결과와 다음 정상 제품 후보의 기능 검증은 구분한다.
+
+### 정상 제품 후보의 최종 로컬 검증과 배포 준비
+
+root 원본을 `normal-source`에 다시 복사해 메뉴·캐시·치수 적용 수리를 함께 정상 publish했다. `artifacts/a439-followup/final-normal-build.json`은 제품 소스 658개·글꼴/라이선스 34개 일치, 정상 `Program.Main`, Test=true·Standalone=false, 네 종류 A439 probe·진단 하네스 부재를 확인한다. 강제 테마도 없으며 `final-validation.json`의 전체 시험은 1,553개 통과·실패/건너뜀 0이다. 별도 Standalone 빌드는 경고/오류 0과 Test=false·Standalone=true를 확인했다. 이 로컬 검증의 제품 버전은 v0.436.0이며 native DLL은 기존 검증본을 재사용했다.
+
+이 무계측 정상 앱의 709×535 라이트 화면에서 메뉴 항목 강조와 Tab 키의 네이티브 초점 표시를 확인했다. Archive 우클릭으로 포인터를 옮겼으므로 순수 호버 입력은 아니며 파란 커서 효과는 제품 표시에서 제외한다. TXT 240개와 부모 타일의 작은 6→9→12열 후 2560×1032 최대화, 2600 휠 아래/위 왕복을 확인했다. 이어 `item-029`를 클릭하고 큰 9→6열로 바꿨을 때 선택 정보가 유지됐으며 추가 타일 클릭 없이 End로 `item-240` 선택 후 Enter로 TXT 본문을 열었다. 이는 해당 열 변경 키보드 경로의 기능 확인이며 제목줄 조작 후 초점·전체 초점 유지·정확한 픽셀 앵커나 새 지연 측정으로 확대하지 않는다. 앞선 혼합 파일의 PDF 확장자 대체 표시도 PDF 썸네일 통과로 바꾸지 않는다.
+
+근거는 `final-normal-ui.json`·`final-normal-*.png` 13개다. 앞선 메뉴 단독/강제 다크 단계와 현재 정상 UI의 DLL·화면 근거는 서로 구분한다. 검수 앱을 Alt+F4로 정상 종료한 뒤 프로세스 없음과 Test 원본 28키 바이트 복원, 공식 43키·OS 불변을 `ui-restoration.json`에 기록했다.
+
+이후 v0.437.0과 변경 설명을 반영한 정상 publish에서도 제품 소스·34개 글꼴/라이선스·정상 진입점·배포 식별자와 진단 타입 부재를 대조했다. 근거는 `versioned-normal-build.json`이며 필수 검사와 최종 독립 검토도 통과했다. 제품 커밋과 즉시 push, 공식 전체 native CI·자산/피드/해시 및 이 PC 공식 Updates 설치·재시작·파일/설정/로그 대조가 남았다. 공식 제품과 설치본은 아직 v0.436.0이다. 별도 보호 백업 `artifacts/a439-followup/pre-update-backup/`과 상위 기준 JSON은 재생성·덮기 없이 설치 직전에 재검증한다. 현재 배포 단계는 [HANDOVER](../../HANDOVER.md), 미관측 환경과 기존 충돌 조사는 각 정본을 따른다.
 
 ### 도입 전후 코드 조사
 

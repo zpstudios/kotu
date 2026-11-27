@@ -1006,6 +1006,8 @@ public sealed partial class MainWindow : Window
 
     // ---------- 시작 메뉴 (하단 바에서 위로 떠오르는 플라이아웃) ----------
 
+    private Style? _startMenuItemStyle;
+
     /// <summary>
     /// 시작 메뉴 구성. 패널은 **위→아래**로 채우는데 **번호는 아래에서 위로** 올라간다
     /// (1번이 메뉴 최하단) — 그래서 아래 AddModuleItem 호출은 7 → 1 역순으로 늘어놓는다.
@@ -1025,6 +1027,12 @@ public sealed partial class MainWindow : Window
     private void BuildStartMenu()
     {
         StartMenuPanel.Children.Clear();
+        // A439: 창 초기화 뒤 한 번 조회해 메뉴 항목끼리 공유한다. 밝은 메뉴 위에서도
+        // 구별되는 네이티브 호버·눌림·고대비 상태를 쓰고, 키가 없으면 기본 버튼을 유지한다.
+        _startMenuItemStyle = Application.Current.Resources.TryGetValue("SubtleButtonStyle", out var menuStyle)
+            ? menuStyle as Style : null;
+        if (_startMenuItemStyle is null)
+            DiagTrace.Write("shell", "SubtleButtonStyle unavailable; start menu retains native default buttons.");
 
         // A79 ③: 워드마크는 메뉴의 맨 위 — 광고 카드 **위**다. 아래에 두면 "광고에 딸린 문구"로
         // 보이고, 위에 두면 메뉴 머리글이 된다. 꺼져 있으면 요소 자체를 만들지 않는다(빈 자리 없음).
@@ -1118,13 +1126,14 @@ public sealed partial class MainWindow : Window
     /// ※ A147(v0.163.0)에서 전역 키가 Alt+`만 남아 **hint를 넘기는 호출부가 없어졌다**(모두 null) —
     /// 파라미터·null 분기는 존치한다(키가 다시 생기면 여기로 돌아온다).
     /// </summary>
-    private static Button MakeMenuItem(string glyph, string label, string? shortcutHint = null)
+    private Button MakeMenuItem(string glyph, string label, string? shortcutHint = null)
     {
+        var fontFamily = (FontFamily)Application.Current.Resources["KotuControlFontFamily"];
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         content.Children.Add(new FontIcon { Glyph = glyph, FontSize = 16 });
         content.Children.Add(new TextBlock
         {
-            FontFamily = (FontFamily)Application.Current.Resources["KotuControlFontFamily"],
+            FontFamily = fontFamily,
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1133,6 +1142,8 @@ public sealed partial class MainWindow : Window
         var button = new Button
         {
             Content = content,
+            FontFamily = fontFamily,
+            UseSystemFocusVisuals = true,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
@@ -1150,6 +1161,7 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(10, 8, 10, 8),
             MinHeight = 36,
         };
+        if (_startMenuItemStyle is { } style) button.Style = style;
         if (shortcutHint is not null)
             ToolTipService.SetToolTip(button, shortcutHint);
         return button;

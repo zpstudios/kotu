@@ -10,8 +10,8 @@
 
 ## 열린 작업과 다음 시작점
 
-- **선택된 A439 후속 수리**: 캐시 0.25 단독 후보는 작은 6→9→12열 뒤 최대화에서 241개 전체 컨테이너·최대 큐 대기 약 3.03초로 실패했다. 새 치수를 네이티브 측정 전에 적용하는 수정 후 같은 순서에서 108개·약 0.41초를 관측했다. 정상 publish·probe 부재 대조와 계측본의 별도 큰 창 최초 생성·혼합 미리보기·스크롤 검수를 마쳤다. 메뉴 포함 제품 세 파일은 미커밋, 버전은 0.436.0이다. [정본](features/shell/design-library-A427.md#a439)을 읽고 정상 무계측 UI·전체 시험·Standalone → 새 버전 공식 배포 → 이 PC 공식 Updates 설치·파일/설정/로그 대조를 이어간다.
-- **A439 조사·검수 경계**: 계측 고정 출력은 `response-measure025-r1`이며 `normal-source`에 v3 probe가 이미 주입돼 있다. 새 정상본은 root 원본을 다시 복사해 네 종류 probe·강제 테마·하네스 부재를 확인한다. 서로 다른 기간의 단회 결과를 전체 입력 지연 해결·회귀 배수·GC 제거로 확대하지 않는다. PDF 썸네일·전체 초점 유지·정확한 픽셀 앵커는 미확인이다. [기존 첫 WinUI 종료](REQUIREMENTS.md#a439)·[미관측 환경](DEVICE-CHECKS.md#a439)은 유지한다. 최신 `ui-restoration.json`에서 정상 종료·프로세스 없음·Test 28키 바이트 복원·공식 43키와 OS 불변을 확인했다.
+- **선택된 A439 후속 수리**: 메뉴 강조와 Preview 캐시·측정 전 치수 적용 수리의 정상 publish·무계측 UI·1,553시험·Standalone 빌드를 검증했다. 근거는 `artifacts/a439-followup/final-validation.json`·`final-normal-build.json`·`final-normal-ui.json`이다. 이 검수는 v0.436.0 후보에서 수행했고, 뒤의 v0.437.0 버전 반영 publish·소스/진단 부재 대조는 `versioned-normal-build.json`으로 확인했다. 필수 검사·독립 검토도 통과했다. [정본](features/shell/design-library-A427.md#a439)을 따라 제품 커밋·즉시 push → 공식 전체 native CI·자산/피드/해시 → 이 PC 공식 Updates 설치·파일/설정/로그 대조를 이어간다.
+- **A439 조사·검수 경계**: `normal-source`는 root 원본으로 다시 복사했고 현재 고정 출력은 네 종류 probe·강제 테마·하네스가 없는 Test 앱이다. 기존 단회 성능 결과는 전체 입력 지연 해결·회귀 배수·GC 제거를 증명하지 않는다. 정상 UI에서 열 변경 후 재클릭 없는 End→Enter 경로를 확인했지만 전체 초점·정확한 픽셀 앵커·PDF 썸네일은 미확인이다. [기존 첫 WinUI 종료](REQUIREMENTS.md#a439)·[미관측 환경](DEVICE-CHECKS.md#a439)은 유지한다. 최신 `ui-restoration.json`에서 정상 종료·프로세스 없음·Test 28키 바이트 복원·공식 43키와 OS 불변을 확인했다.
 - **A438 HWP·PDF 검색**: 구현·공식 배포·설치를 완료했고 현재 버전에도 포함된다. 인덱싱/검색 대기 중 휠·Ctrl+휠, pending/error 팝업·실제 IME·고대비/DPI·암호/초대형/빠른 교체의 미관측 조건은 [DEVICE-CHECKS](DEVICE-CHECKS.md#a438)에 유지한다. 과거 A438/A439 `uncommitted-product-manifest.json`은 당시 해시 근거이며 현재 미커밋 상태를 뜻하지 않는다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다. 새 백로그 항목은 별도 선택 없이 시작하지 않는다.
 

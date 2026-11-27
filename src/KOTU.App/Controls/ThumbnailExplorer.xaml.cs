@@ -154,6 +154,7 @@ public sealed partial class ThumbnailExplorer : UserControl
 
     private int _columns = 12; // 기본 = 전폭; 셸이 실제 보이는 패널 수로 SetColumns(6/9/12)를 준다
     private bool _tileSizeQueued;
+    private double _tileMeasureWidth = double.NaN;
 
     /// <summary>A192: 재진입 가드 — ShowEntries·ShowLoading·Unloaded가 올 때마다 증가
     /// (ExplorerPane._loadSeq 관용구). A345 배치 3부터 이 값의 역할은 <b>폴더 전환</b> 한 가지다:
@@ -630,10 +631,11 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// <summary>고정 열 수 지정(A417: 둘 다 6 / 하나 9 / 없음 12). 창 크기는 열 수를 바꾸지 않는다.</summary>
     public void SetColumns(int columns)
     {
-        // The same column count can arrive after ItemsPanelRoot is recreated or the host is restored.
+        // 같은 열 수도 새 패널이나 복원된 호스트의 첫 측정에 다시 적용한다.
         if (_columns != columns) PreserveLogicalAnchor();
         _columns = columns;
-        ApplyTileSize();
+        // 도크 폭과 열 수를 같은 측정에서 반영한다. 이전 ActualWidth로 먼저 줄이지 않는다.
+        InvalidateMeasure();
     }
 
     /// <summary>
@@ -646,11 +648,9 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 기다릴 것이 없고, 안내 타일은 ItemsSource 상태에서 Items.Add가 즉시 예외라 성립하지 않는다.
     /// </para>
     /// <para>
-    /// 순서가 규칙이다: <c>ItemsSource</c> 대입 → <c>UpdateLayout</c> → <c>ApplyTileSize</c>.
-    /// 타일 크기는 아이템 패널(ItemsWrapGrid)의 셀 크기로 거는데 그 패널은 <b>첫 레이아웃 뒤에만</b>
-    /// 존재한다(ItemsPanelRoot) — 종전에는 패널이 없을 때를 위한 폴백(타일마다 직접 크기 대입)이
-    /// 있었지만 가상화 뒤에는 Items가 컨테이너가 아니라 데이터라 그 폴백이 성립하지 않는다.
-    /// 그래서 첫 화면에 셀 크기가 즉시 먹으려면 이 세 줄의 순서가 유일한 길이다.
+    /// <c>ItemsSource</c> 대입 후 <c>UpdateLayout</c>으로 선택 복원에 필요한 레이아웃을 만든다.
+    /// A439: 셀 크기는 부모 MeasureOverride와 패널 Loading에서 가상화 측정 전에 먼저 적용한다.
+    /// 뒤의 <c>ApplyTileSize</c>는 확정된 내부 뷰포트 폭을 보정하며, 개별 컨테이너는 순회하지 않는다.
     /// </para>
     /// 이미지 미리보기는 BitmapImage가 스스로 비동기 디코드하므로 별도 로드 루프가 없다.
     /// ※ 좌 리스트와 뷰모델 <b>객체</b>를 공유하지 않는다 — <b>배치 4에서 확정(v0.338.0)</b>이다
@@ -697,7 +697,7 @@ public sealed partial class ThumbnailExplorer : UserControl
             // 실제 컨테이너 생성은 레이아웃이 보이는 만큼만 하므로 여기부터는 개수에 비례하지 않는다.
             NavDiagnostics.Mark("cfill0");
 
-            ActiveItems.UpdateLayout(); // 아이템 패널 실체화 — 아래 타일 크기 반영이 헛돌지 않게
+            ActiveItems.UpdateLayout(); // 측정 전 셀 크기 적용과 선택 복원에 필요한 레이아웃 완성
             ApplyTileSize();
             RestoreDisplaySelection(selection);
         }
@@ -1272,22 +1272,43 @@ public sealed partial class ThumbnailExplorer : UserControl
     /// 체크·상태 배지는 자기 타일의 실제 폭에 맞춰 별도로 축소한다. ItemsWrapGrid의 셀 슬롯에
     /// 지정하므로 컨테이너의 내부 여백을 다시 빼거나 개별 타일을 재작성하지 않는다.
     /// <para>
-    /// A345 배치 3: 패널이 없을 때의 폴백(타일 컨테이너를 순회하며 직접 크기 대입)을 삭제했다 —
-    /// ItemsSource 상태에서 <c>Items</c>는 컨테이너가 아니라 <b>데이터</b>라 그 순회가 아무것도
-    /// 못 고친다. 대신 패널이 아직 없으면 그냥 돌아간다: <c>ItemsPanelRoot</c>는 첫 레이아웃
-    /// 뒤에만 존재하고, 그 뒤로는 ShowEntries의 <c>UpdateLayout</c> 직후 호출·SizeChanged·
-    /// SetColumns가 다시 부른다(첫 화면 셀 크기는 ShowEntries의 대입→UpdateLayout→여기 순서가
-    /// 보장한다 — 그 순서가 유일한 길이 됐다).
+    /// A439: 현재 측정의 폭으로 셀 치수를 먼저 맞춘다. 새 창 폭에 이전 작은 셀을 대입하면
+    /// WinUI가 한 번에 너무 많은 컨테이너를 만들고, 나중에 셀을 키워도 그 캐시를 유지한다.
+    /// 부모 측정 중 처음 만들어지는 패널은 Loading에서 같은 폭을 받아 첫 측정 전에 적용한다.
+    /// 기존 패널·항목·선택·초점은 교체하지 않고 UpdateLayout도 여기서 호출하지 않는다.
     /// </para>
     /// </summary>
+    protected override Windows.Foundation.Size MeasureOverride(Windows.Foundation.Size availableSize)
+    {
+        _tileMeasureWidth = availableSize.Width;
+        if (TileGrid?.ItemsPanelRoot is ItemsWrapGrid wrap)
+            ApplyTileSize(wrap, _tileMeasureWidth);
+        return base.MeasureOverride(availableSize);
+    }
+
+    private void OnTilePanelLoading(FrameworkElement sender, object args)
+    {
+        // WinUI의 Loading은 해당 요소의 MeasureOverride 전에 발생한다.
+        // 아직 ItemsPanelRoot로 조회되지 않는 첫 패널도 생성 시의 가용 폭을 받는다.
+        if (sender is ItemsWrapGrid wrap) ApplyTileSize(wrap, _tileMeasureWidth);
+    }
+
     private void ApplyTileSize()
     {
-        if (TileGrid.ItemsPanelRoot is not ItemsWrapGrid wrap) return; // 아직 첫 레이아웃 전
-        var width = TileGrid.ActualWidth - TileGrid.Padding.Left - TileGrid.Padding.Right -
+        if (TileGrid.ItemsPanelRoot is not ItemsWrapGrid wrap) return;
+        ApplyTileSize(wrap, TileGrid.ActualWidth, useArrangedViewport: true);
+    }
+
+    private void ApplyTileSize(ItemsWrapGrid wrap, double availableWidth, bool useArrangedViewport = false)
+    {
+        var width = availableWidth - TileGrid.Padding.Left - TileGrid.Padding.Right -
             TileGrid.BorderThickness.Left - TileGrid.BorderThickness.Right;
-        if (FindRetryDescendant<ScrollContentPresenter>(TileGrid) is { ActualWidth: > 0 } viewport)
+        if (useArrangedViewport && FindRetryDescendant<ScrollContentPresenter>(TileGrid) is { ActualWidth: > 0 } viewport)
             width = Math.Min(width, viewport.ActualWidth);
         if (ExplorerTileLayout.Measure(width, _columns) is not { } layout) return;
+        if (wrap.ItemWidth == layout.ItemWidth && wrap.ItemHeight == layout.ItemHeight) return;
+        // SizeChanged보다 먼저 치수가 바뀌어도 사용자 스크롤 앵커로 잘못 저장하지 않는다.
+        PreserveLogicalAnchor();
         if (wrap.ItemWidth != layout.ItemWidth) wrap.ItemWidth = layout.ItemWidth;
         // A387: 11에서 14 DIP로 커진 캡션의 기본 줄 높이 증가분을 셀 높이에 더한다.
         // 캡션 Auto 행이 미리보기의 공간을 가져가지 않도록 세로에만 4 DIP를 확보한다.

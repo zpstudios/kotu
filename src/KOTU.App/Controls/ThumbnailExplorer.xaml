@@ -17,7 +17,7 @@
          코드가 위상 0(폴백 즉시)·위상 1(비동기 요청)로 TilePreviewHost 안에 채운다.
          기본 열 수는 셸이 SetColumns로 준다(A417: 12 − 3×보이는 패널 수 = 6/9/12).
          A433 정정: 열 수는 고정하고 작은 타일의 체크·배지만 여백과 함께 비례 축소한다.
-         SizeChanged마다 셀 크기를 재계산한다(ApplyTileSize).
+         측정 전 셀 크기를 맞추고 SizeChanged 후 확정된 뷰포트 폭을 보정한다(ApplyTileSize).
          드래그 앤 드랍(A94 1차, v0.124.0 — A93의 무동작 소비를 실동작으로 전환):
          빈 영역·파일 타일 드랍 = 현재 폴더로 이동/복사, 폴더 타일 드랍 = 그 폴더로(코드가
          타일 컨테이너에 건다). 루트 Grid가 AllowDrop을 받는 구조는 MainWindow.RootLayout과
@@ -146,6 +146,13 @@
                   ItemClick="OnItemClick"
                   ContainerContentChanging="OnTileContainerContentChanging"
                   SizeChanged="OnSizeChanged">
+            <!-- A439: UIA는 화면 밖 캐시 항목도 반복 탐색하므로 기본 4뷰포트 캐시를 0.25로 제한한다.
+                 네이티브 가상화와 접근성을 유지하고 패널 생성부터 적용한다. -->
+            <GridView.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <ItemsWrapGrid Orientation="Horizontal" CacheLength="0.25" Loading="OnTilePanelLoading" />
+                </ItemsPanelTemplate>
+            </GridView.ItemsPanel>
             <!-- A93 타일(위 미리보기 + 아래 캡션 1줄)을 그대로 옮긴 템플릿 (A345 배치 3).
                  외부 Grid는 선택 표면, ExplorerTileContent는 잘라내기 투명도와 인라인
                  이름변경의 부모다. ContentHostOf가 내부 패널을 명시적으로 찾는다.
