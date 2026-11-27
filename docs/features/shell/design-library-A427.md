@@ -73,7 +73,29 @@ Preview의 세 우선순위 관측 회차는 큐 대기 최대 약 2.58초·p95 
 
 수정안은 `TileGrid.ItemsPanel`에 기존과 같은 네이티브 `ItemsWrapGrid`·가로 방향을 명시해 생성 시점부터 캐시를 제한한다. 첫 `CacheLength=1` 제품 후보는 런타임 조작 없이 6열에서 90개 캐시·최대 High 큐 대기 516.804ms·2초 이상 공백 0회를 확인했다. 그러나 좁은 창의 12열에서는 180개 캐시·1,334.387ms가 남았다. 같은 12열에서 단계 준비로 0.25를 적용하고 폴더에 재진입하자 가시 96개와 전체 241항목을 유지한 채 캐시 108개·최대 대기 347.978ms로 줄었다. 큰 폭 휠 이동 후 타일 표시, 클릭 선택→End→Enter로 마지막 `item-240.txt` 열기와 내용 표시를 확인했다. API의 오래된 초점 설명은 실제 키보드 동작 근거로 세지 않았다.
 
-최종 소스 후보는 `CacheLength=0.25`다. 전체 데이터·선택·접근성 피어·고정 6/9/12열과 타일 크기 계산은 유지한다. 메뉴와 캐시 변경 두 파일은 미커밋이며 버전은 v0.436.0이다. 0.25 소스 자체의 새 빌드·최초 생성, 큰 창·12열 및 다양한 미리보기의 빠른 스크롤 검수와 정상 전체 검증·별도 버전 공식 배포·새 v0.436.0 백업 후 공식 Updates 설치가 남아 있다. 마지막 고정 출력은 캐시 1 제품 후보에 v3 계측을 넣은 `response-product-cache-r1`이며 최종 0.25 정상본이 아니다. 최종 정상 빌드에서는 네 종류 A439 probe, 강제 테마와 하네스의 부재를 확인한다. 마지막 검수는 정상 종료했고 Test 원본 28키 바이트 복원·공식 43키와 OS 불변을 `ui-restoration.json`에서 확인했다. 근거는 `results/response-product-cache*`, `response-product-cache-actions.json`과 `product-cache025-*.png`다.
+이 첫 후보의 근거는 `results/response-product-cache*`, `response-product-cache-actions.json`과 `product-cache025-*.png`다. 단계 적용 결과와 뒤의 소스 자체 빌드·최초 생성 검증은 구분한다.
+
+### 크기 변경 때의 과다 실현과 측정 전 치수 적용
+
+캐시 0.25 소스 자체의 정상 publish와 v3 계측 빌드를 마친 뒤, 런타임 캐시 덮어쓰기나 F8 없이 작은 창 6→9→12열에서 2560×1032로 최대화했다. 캐시 속성은 0.25였지만 측정 전 스냅샷에서 가시 60개에 전체 241개 컨테이너가 남았다. 43.873초 회차에서 High 큐 최대 대기 3,034.558ms·2초 이상 Rendering 공백 13회를 관측해 캐시값만 바꾸는 후보의 한계를 확인했다. 회차 중 큰 휠 이동은 있었으나 전체 컨테이너 관측은 그 이전이다. 작은 창 최초 6열과 12열 결과를 포함한 실패 근거는 `results/response-final025-*-r1.json`과 `responsiveness-summary.json`의 `Final025Checks`에 보존한다.
+
+정확한 WinUI 소스의 [컨테이너 생성 루프](https://github.com/microsoft/microsoft-ui-xaml/blob/c03f50c96989525a1487cf9404f2306b314a23d0/dxaml/xcp/dxaml/lib/ModernCollectionBasePanel_Partial.cpp#L1280-L1328)는 기존 컨테이너가 있으면 계속 진행하며 새 컨테이너에만 생성 범위 조건을 적용한다. [ItemWidth/Height 변경](https://github.com/microsoft/microsoft-ui-xaml/blob/c03f50c96989525a1487cf9404f2306b314a23d0/dxaml/xcp/dxaml/lib/ItemsWrapGrid_Partial.cpp#L110-L138)은 측정 무효화와 [캐시 버퍼 재설정](https://github.com/microsoft/microsoft-ui-xaml/blob/c03f50c96989525a1487cf9404f2306b314a23d0/dxaml/xcp/dxaml/lib/ModernCollectionBasePanel_WindowManagement_Partial.cpp#L771-L790)을 수행하지만 그 자리에서 기존 컨테이너를 제거하지 않는다. 이는 앞선 런타임 축소 시 컨테이너 유지 관측과 맞는다. 확대된 뷰포트를 이전 작은 타일 치수로 먼저 측정해 과다 실현한 뒤 치수를 보정한다는 원인 추론에 따라 적용 시점을 수정했다.
+
+새 후보는 `ThumbnailExplorer.MeasureOverride`에서 들어온 가용 폭으로 기존 네이티브 패널의 치수를 먼저 적용한다. 첫 패널은 [네이티브 측정 전에 발생하는 Loading](https://github.com/microsoft/microsoft-ui-xaml/blob/c03f50c96989525a1487cf9404f2306b314a23d0/dxaml/xcp/core/core/elements/framework.cpp#L1474-L1498)에서 같은 폭을 사용한다. 열 변경도 측정을 무효화하고 실제 치수가 바뀔 때만 기존 논리 앵커 보호를 적용한다. 이전 뷰포트 폭으로 새 폭을 다시 제한하지 않으며 기존 배치 후 보정식은 유지한다. ItemsSource·패널·선택·접근성 피어를 교체하지 않고 고정 6/9/12열·타일 비례 계산을 보존한다.
+
+`response-measure025-normal-build.json`은 정상 진입점·658개 제품 소스·34개 글꼴/라이선스 일치와 probe 부재를 확인했다. 로컬 native DLL 재사용은 공식 전체 native 빌드를 대체하지 않는다. 이어 새 계측 빌드 `response-measure025-r1`을 소스 캐시 0.25·F8/런타임 덮어쓰기 없이 검수했다.
+
+| 치수 적용 수정 후 회차 | 실제 캐시 / 가시 항목 | High 큐 최대 대기 | 2초 이상 Rendering 공백 |
+|---|---:|---:|---:|
+| 작은 창 최초 6열 | 54 / 48 | 391.664ms | 0회 |
+| 같은 6→9→12열→최대화 순서 | 108 / 60 | 408.951ms | 0회 |
+| 새 프로세스 큰 창 최초 6열·혼합 파일 | 36 / 30 | 567.390ms | 0회 |
+
+각 회차는 48.308/57.132/227.687초이며 마지막에는 컨텍스트 압축 대기가 포함됐다. 앞의 실패 회차와 수정 후 최대화 회차 모두 2600 휠 왕복을 사용했지만 기간·입력 시점이 같지 않은 단회 결과다. GC 정지도 각각 23.512/241.773/594.695ms로 남아 있다. 이 관측은 치수 적용 시점 수정 후 해당 과다 실현 재현이 줄었음을 뒷받침하며 모든 지연 해결·스킨 회귀 배수·GC 제거·물리 입력 지연을 증명하지 않는다. 원자료와 전체 수치는 `results/response-measure025-*-r1.json` 및 `responsiveness-summary.json`의 `ResizeSizingCandidate`에서 회수한다.
+
+계측본에서 작은/큰 창 6·9·12열 배치, 큰 휠 이동, 열·창 크기 변경 후 `item-101` 선택 정보 유지, 타일을 다시 클릭한 뒤 End→Enter로 `item-240.txt` 본문 표시를 확인했다. 제목줄 조작 뒤 Enter는 전체 화면 전환으로 이어졌으므로 전체 키보드 초점 유지나 정확한 픽셀 앵커 통과로 세지 않는다. 새 프로세스의 큰 창 혼합 241항목은 PNG/TXT 내용과 PDF 확장자 대체 표시까지 관측했고 PDF 썸네일은 미확인이다. 근거는 `results/response-measure025-actions.json`과 `measure025-*.png`다.
+
+메뉴 포함 제품 세 파일은 미커밋, 버전은 v0.436.0이다. 고정 출력은 v3 probe가 포함된 `response-measure025-r1`이며 `normal-source`에도 이미 주입돼 있다. 새 치수 적용 코드·원자료 수치·문서의 독립 검토에서 구체적 결함을 찾지 못했다. root 원본을 다시 복사한 정상 무계측 UI·전체 시험·Standalone, 새 버전·공식 전체 native CI·자산/피드/해시와 공식 Updates 설치·재시작·파일/설정/로그 대조가 남았다. 정상본에서는 네 종류 A439 probe·강제 테마·하네스 부재를 확인한다. 검수 정상 종료·KOTU 프로세스 없음·Test 28키 바이트 복원·공식 43키와 OS 불변은 최신 `ui-restoration.json`에 기록했다. 별도 v0.436.0 백업 `artifacts/a439-followup/pre-update-backup/`은 이미 생성·대조했으며 설치 직전 재검증만 한다.
 
 ### 도입 전후 코드 조사
 
