@@ -35,7 +35,7 @@
 
 ### 메뉴 수정안의 정상 빌드와 화면 검증
 
-시작 메뉴 항목에 네이티브 `SubtleButtonStyle`을 공유하고 기존 글꼴·시스템 초점 표시·크기·배치를 유지하는 수정안을 정상 publish했다. 이 스타일은 테마별 hover/pressed/disabled 자원을 사용하며 조회에 실패하면 진단을 남기고 기존 네이티브 버튼으로 돌아간다. 루트 소스 658파일과 native 참조 override 1개, 글꼴·라이선스 34개, 정상 진입점과 당시 진단 타입 부재를 대조했다. 로컬 native DLL은 기존 검증본을 재사용했다. 근거는 `artifacts/a439-followup/product-build-verification.json`이다. 새 전체 시험·공식 배포는 아직이며 `MainWindow.xaml.cs` 수정안만 미커밋, 속도 수리 코드는 없고 버전은 v0.436.0이다.
+시작 메뉴 항목에 네이티브 `SubtleButtonStyle`을 공유하고 기존 글꼴·시스템 초점 표시·크기·배치를 유지하는 수정안을 정상 publish했다. 이 스타일은 테마별 hover/pressed/disabled 자원을 사용하며 조회에 실패하면 진단을 남기고 기존 네이티브 버튼으로 돌아간다. 루트 소스 658파일과 native 참조 override 1개, 글꼴·라이선스 34개, 정상 진입점과 당시 진단 타입 부재를 대조했다. 로컬 native DLL은 기존 검증본을 재사용했다. 근거는 `artifacts/a439-followup/product-build-verification.json`이다. 이 첫 메뉴 검증 당시에는 `MainWindow.xaml.cs`만 수정했고 속도 수리 코드는 없었다. 이후 캐시 수리와 현재 검증 범위는 아래 후속 절을 따른다.
 
 계측 없는 정상 빌드의 라이트와 단계 복사본에서 `Application.RequestedTheme=Dark`를 초기화 전에 적용한 전체 앱 다크 시작에서 메뉴 강조와 키보드 초점을 관측했다. 후속 계측 시작 전 직접 메뉴 버튼 10개가 모두 실제 `SubtleButtonStyle`을 참조함을 확인했고 글꼴 14·아이콘 16·간격 12·최소/실제 높이 36·패딩 10,8·시스템 초점 표시를 기록했다. 메타데이터 수집 때 메뉴가 닫혀 `IsLoaded=false`·`ActualWidth=0`이므로 실제 폭 통과로 해석하지 않는다. 포인터 위치는 우클릭으로 옮겼으며 순수 호버 입력이 아니다. 자동화의 파란 커서 효과를 제품 그림자로 세지 않는다. 다크 시작은 OS 테마 변경이나 실행 중 전환 검증이 아니며 Windows 설정 실행은 도구 응답 오류로 실패했다. 화면·런타임 조건은 `menu-ui-verification.json`과 연결된 Light/Dark PNG·`MenuSetup` 결과를 따른다.
 
@@ -55,7 +55,25 @@ Preview의 세 우선순위 관측 회차는 큐 대기 최대 약 2.58초·p95 
 
 별도 시점의 네이티브 덤프 세 개를 Microsoft 공식 DbgEng와 심볼로 오프라인 분석했다. 모두 UI 스레드에서 WinUI `ItemsControlAutomationPeer::GetModernItemsControlChildrenChildrenHelper`·`ListViewBaseAutomationPeer::GetChildrenCore`, `ContainerFromItem` 또는 `GetItemPeerFromChildrenCache`와 UIAutomationCore `CrossProcess_BulkFetch`·`RemoteUiaNodeStub::Incoming_BulkFetch` 경로를 확인했다. 이는 구체적인 외부 UIA 요청 처리 경로의 관측이며 요청 클라이언트의 신원·발생 조건이나 전체 지연의 원인 입증은 아니다. 성능 회차 밖에서 수행한 덤프 수집 자체도 각각 약 1.21/0.92/0.92초가 걸렸으므로 그 간섭을 대기 시간에 합치지 않는다. 근거는 `results/native-preview-r1-stack.json`부터 `r3`까지와 각 `.dmp.capture.json`, 도구의 `tools/native-stack/abi-evidence.json`·`usage-and-validation.json`이다. WPR 정책을 우회하거나 Windows 설정을 바꾸지 않았다.
 
-다음 단계는 UIA 요청 발생 조건과 Preview의 항목 자식 탐색 비용을 연결해 접근성을 보존한 수리를 하는 것이다. 접근성 비활성화나 요청 클라이언트 추측으로 대체하지 않는다. 최종 정상 빌드에서는 `A439PerformanceProbe`·`A439VisualProbe`·`A439FollowupProbe`·`A439ResponsivenessProbe`, 강제 테마와 하네스의 부재를 확인한다. 현재 고정 검수 출력은 마지막 응답 계측본이므로 정상 제품으로 취급하지 않는다. 최신 `ui-restoration.json`에서 검수 정상 종료·KOTU 프로세스 없음, Test 원본 28키 바이트 복원·공식 43키와 OS 불변을 확인했다. 정상 전체 검증·별도 버전의 공식 배포·새 v0.436.0 백업 후 공식 Updates 설치까지 남아 있다.
+### 캐시 범위의 반전 검증과 후속 수리
+
+빌드·프로파일러를 중단한 같은 프로세스에서 Preview→List→Preview를 비교했다. Preview의 긴 큐 대기가 재현됐고 List에서는 2초 이상 Rendering 공백이 없었지만, 마지막 Preview의 대부분 구간도 조용했다. 외부 요청 빈도가 일정하다는 보증은 없다. 조건·원자료는 기존 `responsiveness-summary.json`의 `MatchedModeComparison`과 대응 actions에서 회수한다.
+
+사용 중인 WinUI DLL의 소스 커밋 `c03f50c96989525a1487cf9404f2306b314a23d0`를 대조했다. [항목 자식 열거](https://github.com/microsoft/microsoft-ui-xaml/blob/c03f50c96989525a1487cf9404f2306b314a23d0/dxaml/xcp/dxaml/lib/ItemsControlAutomationPeer_Partial.cpp#L278-L341)는 화면 밖을 포함한 캐시 구간 전체에서 피어·컨테이너를 찾으며, [다음 형제 탐색](https://github.com/microsoft/microsoft-ui-xaml/blob/c03f50c96989525a1487cf9404f2306b314a23d0/dxaml/xcp/dxaml/lib/AutomationPeer_Partial.cpp#L314-L337)은 부모 자식 목록을 다시 요청한다. 세 네이티브 스택과 같은 경로다. [CacheLength 계약](https://learn.microsoft.com/en-us/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.controls.itemswrapgrid.cachelength?view=windows-app-sdk-1.8)의 기본값은 4이며 화면 밖 선행 생성량을 정한다.
+
+단계 계측 v3는 측정 전 한 번만 제한된 트리 탐색으로 실제 캐시·표면을 읽고, 별도 F8 준비에서 캐시값을 바꾼다. F10 측정 중에는 탐색·캐시 변경을 하지 않는다. 실행 중 4→1 대입의 읽기 확인은 성공했지만 대기와 스크롤 왕복만으로는 기존 216개 컨테이너가 줄지 않았다. 이 회차들을 유효한 축소 비교로 세지 않는다. 부모 폴더 이동 후 같은 폴더에 재진입하자 캐시가 줄었고 다음 반전 결과를 얻었다.
+
+| 동일 프로세스의 캐시값 순서 | 실제 캐시 항목 | High 큐 최대 대기 | 2초 이상 Rendering 공백 |
+|---|---:|---:|---:|
+| 1 | 90 | 520.808ms | 0회 |
+| 4로 복원 | 216 | 2,501.697ms | 6회 |
+| 다시 1 | 90 | 560.097ms | 0회 |
+
+각 회차는 같은 709×535 창·TXT 240개와 부모 타일을 합한 241항목·가시 범위 0~47을 유지했다. 캐시 규모의 지연 기여는 줄이기·복원의 반복으로 확인했으며, 네이티브 UIA 반복 탐색이 그 비용 경로를 설명한다. 측정 구간은 44.701/34.781/42.432초로 다르고 GC 정지도 39.519/84.991/45.194ms였다. 외부 클라이언트 신원·요청 빈도, 전체 입력 지연이나 스킨 도입 회귀 배수까지 확정한 것은 아니다. 별도 접근성 스냅샷 API의 짧은 반환 시간은 새 네이티브 UIA 요청의 수행 시간으로 세지 않는다. 근거는 `CacheExperiments`, `results/response-cache*-reload-*`, `response-cache-actions.json`·`response-cache-snapshot-returns.json`이다.
+
+수정안은 `TileGrid.ItemsPanel`에 기존과 같은 네이티브 `ItemsWrapGrid`·가로 방향을 명시해 생성 시점부터 캐시를 제한한다. 첫 `CacheLength=1` 제품 후보는 런타임 조작 없이 6열에서 90개 캐시·최대 High 큐 대기 516.804ms·2초 이상 공백 0회를 확인했다. 그러나 좁은 창의 12열에서는 180개 캐시·1,334.387ms가 남았다. 같은 12열에서 단계 준비로 0.25를 적용하고 폴더에 재진입하자 가시 96개와 전체 241항목을 유지한 채 캐시 108개·최대 대기 347.978ms로 줄었다. 큰 폭 휠 이동 후 타일 표시, 클릭 선택→End→Enter로 마지막 `item-240.txt` 열기와 내용 표시를 확인했다. API의 오래된 초점 설명은 실제 키보드 동작 근거로 세지 않았다.
+
+최종 소스 후보는 `CacheLength=0.25`다. 전체 데이터·선택·접근성 피어·고정 6/9/12열과 타일 크기 계산은 유지한다. 메뉴와 캐시 변경 두 파일은 미커밋이며 버전은 v0.436.0이다. 0.25 소스 자체의 새 빌드·최초 생성, 큰 창·12열 및 다양한 미리보기의 빠른 스크롤 검수와 정상 전체 검증·별도 버전 공식 배포·새 v0.436.0 백업 후 공식 Updates 설치가 남아 있다. 마지막 고정 출력은 캐시 1 제품 후보에 v3 계측을 넣은 `response-product-cache-r1`이며 최종 0.25 정상본이 아니다. 최종 정상 빌드에서는 네 종류 A439 probe, 강제 테마와 하네스의 부재를 확인한다. 마지막 검수는 정상 종료했고 Test 원본 28키 바이트 복원·공식 43키와 OS 불변을 `ui-restoration.json`에서 확인했다. 근거는 `results/response-product-cache*`, `response-product-cache-actions.json`과 `product-cache025-*.png`다.
 
 ### 도입 전후 코드 조사
 
