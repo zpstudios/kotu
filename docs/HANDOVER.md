@@ -10,6 +10,8 @@
 
 ## 열린 작업과 다음 시작점
 
+- **선택된 A440 Credits**: Settings의 About와 Mission Statement 사이에 Credits를 추가하고 HWP 안내 문장과 PDF/HWP 등 실제 활용 구성요소의 간단한 코멘트를 정리한다. [등록한 원요구](history/requirements-completed-index.md#a440)를 따라 현재 설정 화면·구성요소·고지를 대조해 영문 본문을 정한다. 등록만 마쳤으며 제품 구현·시험은 미착수다. 두 신규 작업의 재개 근거는 `artifacts/a440-a441/checkpoint.json`이다. 구현·별도 화면 검수 후 공식 배포·이 PC 설치까지 진행한다.
+- **선택된 A441 업데이트 안내**: [시작 1회·24시간 재확인·버전별 거절 저장 요구](history/requirements-completed-index.md#a441)를 기존 `UpdateCoordinator`와 대조한다. 중간 버전번호 상승만 Yes/No 팝업 대상으로 하고 패치만 상승은 제외한다. 기존 Settings 진입·2분 확인/팝업 금지 정책은 이번 요구로 대체한다. major 증가·복수 창/프로세스·실패·Yes 흐름은 코드 대조 후 정할 사항이며 사용자 확정으로 기록하지 않는다. 제품 구현·시험은 미착수이고 공식 제품은 v0.437.0을 유지한다.
 - **A439 후속 조건**: 선택된 메뉴·속도 수리의 배포·이 PC 설치는 완료했으므로 다시 착수하지 않는다. [기존 첫 WinUI 종료](REQUIREMENTS.md#a439)는 추가 재현 시 조작·WER/덤프로 조사하며 후속 비재현을 해결로 세지 않는다. 단회 성능 결과를 전체 입력 지연 해결·회귀 배수·GC 제거로 확대하지 않는다. 정상 UI에서 확인한 열 변경 후 End→Enter 경로와 [전체 초점·픽셀 앵커·PDF 썸네일 등 미관측 범위](DEVICE-CHECKS.md#a439)는 구분한다.
 - **A438 HWP·PDF 검색**: 구현·공식 배포·설치를 완료했고 현재 버전에도 포함된다. 인덱싱/검색 대기 중 휠·Ctrl+휠, pending/error 팝업·실제 IME·고대비/DPI·암호/초대형/빠른 교체의 미관측 조건은 [DEVICE-CHECKS](DEVICE-CHECKS.md#a438)에 유지한다. 과거 A438/A439 `uncommitted-product-manifest.json`은 당시 해시 근거이며 현재 미커밋 상태를 뜻하지 않는다.
 - **선택 밖 범위**: 남은 개발·조사·결정은 [REQUIREMENTS](REQUIREMENTS.md#open-work), 검수 대기는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [기능 정본](features/product-contracts.md)에서 관리한다. A418의 테스트판 동시 설치 중 웹 업데이트는 일반 정식 업데이트 성공과 구분한 미관측 범위다. 녹음·녹화 실제 검증과 A406/A407 보류는 유지한다. 새 백로그 항목은 별도 선택 없이 시작하지 않는다.
