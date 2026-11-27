@@ -217,6 +217,41 @@ public class ChildContentHostTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void FullscreenToggleKeepsChildLifetimeWhileWaitingInOuterQueue(bool sameChild)
+    {
+        var old = new FakeContent();
+        var next = sameChild ? old : new FakeContent();
+        var innerQueue = new Queue<Action>();
+        var outerQueue = new Queue<Action>();
+        var host = new ChildContentHost(innerQueue.Enqueue);
+        using var shell = new ContentContractSession(host, outerQueue.Enqueue, () => true);
+        var received = 0;
+        shell.FullscreenToggleRequested += request =>
+        {
+            Assert.True(request.IsCurrent);
+            received++;
+        };
+        host.Attach(old, "old.png");
+        while (outerQueue.TryDequeue(out var setup)) setup();
+        old.RaiseFullscreenToggleRequested();
+        innerQueue.Dequeue()(); // The old child has relayed into the still-current outer host.
+        Assert.Single(outerQueue);
+
+        old.OnRelease = old.RaiseFullscreenToggleRequested;
+        host.Detach(old.RaiseFullscreenToggleRequested);
+        Assert.Equal(0, old.SubscriptionCount);
+        host.Attach(next, "new.png");
+        next.RaiseFullscreenToggleRequested();
+        while (innerQueue.TryDequeue(out var inner)) inner();
+        while (outerQueue.TryDequeue(out var outer)) outer();
+        Assert.Equal(1, received);
+        host.Detach(() => { });
+        Assert.Equal(0, next.SubscriptionCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void StateCallbackReplacementSuppressesRestOfOldNotification(bool save)
     {
         var host = NewHost();

@@ -15,7 +15,7 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     IBottomBarProvider, IDriveStripHost, IBackgroundJobOwner, ICloseGuard, IFileOpenTarget, ITrayStatusProvider,
     IPlaybackStateSource, IPrintPageProvider, IUntitledContentSource, IContentPathChangedSource,
     IContentInfoChangedSource, IBrowseOrderConsumer, ICurrentPathSource, IMediaTransportTarget,
-    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget, IImageCopyTarget, IContentLifetime, IEditorEscapeSource, IEditorPanelShortcutSource, IEditorFullscreenShortcutSource
+    IContentCloseRequestSource, IContentOpenFailedSource, IBottomOverlayConsumer, ITextSearchTarget, IImageCopyTarget, IContentLifetime, IEditorEscapeSource, IEditorPanelShortcutSource, IEditorFullscreenShortcutSource, IFullscreenToggleSource
 {
     private readonly IReadOnlyList<IModule> _children;
     private readonly ChildContentHost _content;
@@ -96,6 +96,11 @@ public sealed partial class AllReadableView : UserControl, ISettingsSnapshotSour
     {
         add => _content.EditorFullscreenShortcutRequested += value;
         remove => _content.EditorFullscreenShortcutRequested -= value;
+    }
+    public event Action<FullscreenToggleRequest>? FullscreenToggleRequested
+    {
+        add => _content.FullscreenToggleRequested += value;
+        remove => _content.FullscreenToggleRequested -= value;
     }
     public event Action? EditorEscapeRequested
     {

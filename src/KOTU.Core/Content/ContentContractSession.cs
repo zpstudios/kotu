@@ -30,6 +30,7 @@ public sealed class ContentContractSession : IDisposable
         if (content is IPlaybackStateSource sourcePlaybackStateChanged) sourcePlaybackStateChanged.PlaybackStateChanged += OnPlaybackStateChanged;
         if (content is IEditorPanelShortcutSource panel) panel.EditorPanelShortcutRequested += OnEditorPanelShortcutRequested;
         if (content is IEditorFullscreenShortcutSource fullscreen) fullscreen.EditorFullscreenShortcutRequested += OnEditorFullscreenShortcutRequested;
+        if (content is IFullscreenToggleSource toggle) toggle.FullscreenToggleRequested += OnFullscreenToggleRequested;
         if (content is IEditorEscapeSource escape) escape.EditorEscapeRequested += OnEditorEscapeRequested;
         if (content is IPrintPageProvider sourcePrintRequested) sourcePrintRequested.PrintRequested += OnPrintRequested;
         if (content is IContentCloseRequestSource sourceContentCloseRequested) sourceContentCloseRequested.ContentCloseRequested += OnContentCloseRequested;
@@ -72,6 +73,12 @@ public sealed class ContentContractSession : IDisposable
     private void OnEditorFullscreenShortcutRequested(EditorFullscreenShortcut value) => Dispatch(() =>
     {
         if (value.IsCurrent) EditorFullscreenShortcutRequested?.Invoke(value.WithLifetime(() => IsCurrent));
+    });
+
+    public event Action<FullscreenToggleRequest>? FullscreenToggleRequested;
+    private void OnFullscreenToggleRequested(FullscreenToggleRequest value) => Dispatch(() =>
+    {
+        if (value.IsCurrent) FullscreenToggleRequested?.Invoke(value.WithLifetime(() => IsCurrent));
     });
 
     public event Action? EditorEscapeRequested;
@@ -133,6 +140,7 @@ public sealed class ContentContractSession : IDisposable
         if (Content is IPlaybackStateSource sourcePlaybackStateChanged) sourcePlaybackStateChanged.PlaybackStateChanged -= OnPlaybackStateChanged;
         if (Content is IEditorPanelShortcutSource panel) panel.EditorPanelShortcutRequested -= OnEditorPanelShortcutRequested;
         if (Content is IEditorFullscreenShortcutSource fullscreen) fullscreen.EditorFullscreenShortcutRequested -= OnEditorFullscreenShortcutRequested;
+        if (Content is IFullscreenToggleSource toggle) toggle.FullscreenToggleRequested -= OnFullscreenToggleRequested;
         if (Content is IEditorEscapeSource escape) escape.EditorEscapeRequested -= OnEditorEscapeRequested;
         if (Content is IPrintPageProvider sourcePrintRequested) sourcePrintRequested.PrintRequested -= OnPrintRequested;
         if (Content is IContentCloseRequestSource sourceContentCloseRequested) sourceContentCloseRequested.ContentCloseRequested -= OnContentCloseRequested;

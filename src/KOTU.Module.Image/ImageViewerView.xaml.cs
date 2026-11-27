@@ -1,4 +1,3 @@
-using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -36,11 +35,12 @@ namespace KOTU.Module.Image;
 /// </summary>
 public sealed partial class ImageViewerView : UserControl, IContentStateSource, IContentInfoProvider,
     IBottomBarProvider, IDriveStripHost, ITrayStatusProvider, IPrintPageProvider, IBrowseOrderConsumer,
-    ICurrentPathSource, IImageCopyTarget, IContentInfoChangedSource
+    ICurrentPathSource, IImageCopyTarget, IContentInfoChangedSource, IFullscreenToggleSource
 {
     /// <summary>트레이 아이콘 표시 값이 바뀌었다(A54) — 파일 열기/전환/실패, 회전(A191) 시점.</summary>
     public event Action? TrayStatusChanged;
     public event Action? ContentInfoChanged;
+    public event Action<FullscreenToggleRequest>? FullscreenToggleRequested;
 
     /// <summary>
     /// 트레이 아이콘 내용: 열림 = <b>해상도 2줄</b>(위 = 가로 px, 아래 = 세로 px — 예 "4032"/"3024"),
@@ -1283,20 +1283,13 @@ public sealed partial class ImageViewerView : UserControl, IContentStateSource, 
     // ---------- 전체화면 ----------
     // A151: F11/Esc 액셀러레이터·⛶ 버튼은 제거 — 전체화면은 셸의 3단 모드 체계
     // (Enter 순환·Alt+Enter·Esc·모드 버튼)가 담당한다. 이 뷰에는 더블클릭 토글만 남는다
-    // (뷰 고유 입력 — 셸이 AppWindow.Changed로 프레젠터 변화를 보고 모드를 동기화한다.
-    // A274: 그 동기화가 모드만이 아니라 복귀 스냅샷·양 패널 닫기·해제 시 복원까지 내부
-    // Enter 경로와 동형으로 처리하므로, 이 뷰는 종전대로 프레젠터만 만지면 된다).
+    // A442: 더블클릭도 셸의 전환 경로로 요청해 정상 위치·크기 복원과 같은 가드를 쓴다.
+    // 중첩 All Readable은 요청 수명을 전달하며, 해제된 이미지의 늦은 입력은 무효다.
 
     private void ToggleFullScreen()
     {
-        // Window 객체 없이 XamlRoot 경유로 AppWindow에 접근한다.
-        var environment = XamlRoot?.ContentIslandEnvironment;
-        if (environment is null) return;
-
-        var appWindow = AppWindow.GetFromWindowId(environment.AppWindowId);
-        appWindow.SetPresenter(appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen
-            ? AppWindowPresenterKind.Default
-            : AppWindowPresenterKind.FullScreen);
+        if (!IsLoaded || XamlRoot is null) return;
+        FullscreenToggleRequested?.Invoke(new(() => IsLoaded && XamlRoot is not null));
     }
 
     // ---------- 상태바 ----------

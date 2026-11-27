@@ -40,6 +40,12 @@ internal static class WindowMinSize
     /// <summary>HWND별 교체 전 WndProc — 체인 유지용. 모든 창이 한 UI 스레드라 잠금 불필요.</summary>
     private static readonly Dictionary<IntPtr, IntPtr> s_prevProcs = new();
 
+    /// <summary>저장 기하를 복원하는 동기 호출 동안만 적용할 HWND별 상한 예외(A442).</summary>
+    private static readonly Dictionary<IntPtr, RestoreSizeScope> s_restoreSizes = new();
+
+    /// <summary>MainWindow가 정상 상태에서 관측한 최신 크기. 복원 상한 계산에만 쓴다(A442).</summary>
+    private static readonly Dictionary<IntPtr, (int Width, int Height)> s_normalSizes = new();
+
     /// <summary>창 HWND를 서브클래싱한다. 창마다 1회 — MainWindow 생성자에서 부른다.</summary>
     public static void Apply(Microsoft.UI.Xaml.Window window)
     {
@@ -60,10 +66,65 @@ internal static class WindowMinSize
         return ((int)Math.Round(MinWidthDip * dpi / 96.0), (int)Math.Round(MinHeightDip * dpi / 96.0));
     }
 
+    /// <summary>
+    /// 저장된 물리 크기가 현재 화면의 기본 최대 추적 크기보다 커도 복원할 수 있게 한다(A442).
+    /// Windows는 AppWindow.MoveAndResize/Resize에도 WM_GETMINMAXINFO를 보내므로, 복원 중
+    /// 잘린 크기가 다음 저장 때 원래 값을 덮을 수 있다. using 범위를 복원 호출로 한정하고
+    /// 최대화 크기·위치는 변경하지 않는다. 스코프 밖 상한은 시스템 기본값과 현재 정상
+    /// 복원 크기 중 큰 값만 허용한다. UI 스레드 전용.
+    /// </summary>
+    internal static IDisposable AllowRestoreSize(Microsoft.UI.Xaml.Window window, int width, int height)
+        => new RestoreSizeScope(WinRT.Interop.WindowNative.GetWindowHandle(window), width, height);
+
+    /// <summary>실제 정상 크기 추적과 함께 갱신한다. 크기를 적용하거나 저장값을 복구하지 않는다.</summary>
+    internal static void RememberNormalSize(Microsoft.UI.Xaml.Window window, int width, int height)
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        if (width > 0 && height > 0 && s_prevProcs.ContainsKey(hwnd))
+            s_normalSizes[hwnd] = (width, height);
+    }
+
+    private sealed class RestoreSizeScope : IDisposable
+    {
+        private readonly IntPtr _hwnd;
+        private readonly RestoreSizeScope? _prior;
+        private bool _disposed;
+        internal int Width { get; }
+        internal int Height { get; }
+
+        internal RestoreSizeScope(IntPtr hwnd, int width, int height)
+        {
+            _hwnd = hwnd;
+            Width = width;
+            Height = height;
+            // 훅 설치 실패·이미 닫힌 창이면 예외 상태도 등록하지 않는다.
+            if (!s_prevProcs.ContainsKey(hwnd)) return;
+            s_restoreSizes.TryGetValue(hwnd, out _prior);
+            s_restoreSizes[hwnd] = this;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            // 닫힌 HWND가 재사용되어도 과거 스코프가 새 창의 상태를 덮지 않는다.
+            if (!s_restoreSizes.TryGetValue(_hwnd, out var current) || !ReferenceEquals(current, this)) return;
+            var prior = _prior;
+            while (prior is { _disposed: true }) prior = prior._prior;
+            if (prior is null) s_restoreSizes.Remove(_hwnd);
+            else s_restoreSizes[_hwnd] = prior;
+        }
+    }
+
     private static IntPtr Hook(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         if (!s_prevProcs.TryGetValue(hwnd, out var prev))
             return DefWindowProcW(hwnd, msg, wParam, lParam); // 정상 경로에선 오지 않는 방어선
+
+        // 원래 체인이 복원 도중 native 정상 위치를 먼저 바꿀 수 있으므로 호출 전에 읽는다.
+        // WinUI를 이 메시지 안에서 조회하지 않고 MainWindow가 전달한 두 정수만 사용한다.
+        (int Width, int Height) normalSize = default;
+        if (msg == WmGetMinMaxInfo) s_normalSizes.TryGetValue(hwnd, out normalSize);
 
         // 원래 프로시저(XAML/AppWindow 체인)를 먼저 태우고 나서 하한을 덮어쓴다 —
         // 프레젠터도 이 메시지로 최소/최대를 쓸 수 있으므로 나중에 쓰는 쪽이 이긴다.
@@ -72,6 +133,16 @@ internal static class WindowMinSize
         if (msg == WmGetMinMaxInfo && lParam != IntPtr.Zero)
         {
             var info = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+            // A442: 시스템·모듈에서 시작한 최대화·최소화·전체화면 복귀도 같은 상한을 쓴다.
+            // 사용자 resize/Snap 후에는 추적값도 교체되므로 과거 저장 크기를 강제하지 않는다.
+            // 최대화 영역(ptMaxSize/ptMaxPosition)은 원래 체인이 계산한 값을 유지한다.
+            info.ptMaxTrackSize.X = Math.Max(info.ptMaxTrackSize.X, normalSize.Width);
+            info.ptMaxTrackSize.Y = Math.Max(info.ptMaxTrackSize.Y, normalSize.Height);
+            if (s_restoreSizes.TryGetValue(hwnd, out var requested))
+            {
+                info.ptMaxTrackSize.X = Math.Max(info.ptMaxTrackSize.X, requested.Width);
+                info.ptMaxTrackSize.Y = Math.Max(info.ptMaxTrackSize.Y, requested.Height);
+            }
             var (minW, minH) = MinPhysical(hwnd);
             info.ptMinTrackSize.X = Math.Max(info.ptMinTrackSize.X, minW);
             info.ptMinTrackSize.Y = Math.Max(info.ptMinTrackSize.Y, minH);
@@ -80,6 +151,8 @@ internal static class WindowMinSize
         else if (msg == WmNcDestroy)
         {
             s_prevProcs.Remove(hwnd); // 창 소멸 — 이후 이 HWND로 메시지는 오지 않는다
+            s_restoreSizes.Remove(hwnd);
+            s_normalSizes.Remove(hwnd);
         }
         return result;
     }
@@ -112,4 +185,5 @@ internal static class WindowMinSize
 
     [DllImport("user32")]
     private static extern uint GetDpiForWindow(IntPtr hWnd);
+
 }

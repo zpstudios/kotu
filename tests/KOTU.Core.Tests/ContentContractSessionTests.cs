@@ -69,10 +69,57 @@ public class ContentContractSessionTests
     {
         var child = new FakeContent();
         var session = new ContentContractSession(child, action => action(), () => true);
-        Assert.Equal(14, child.SubscriptionCount);
+        Assert.Equal(15, child.SubscriptionCount);
         session.Dispose();
         session.Dispose();
         Assert.Equal(0, child.SubscriptionCount);
+    }
+
+    [Fact]
+    public void FullscreenToggleChecksOriginAndCurrentContentAtDelivery()
+    {
+        var child = new FakeContent();
+        var queue = new Queue<Action>();
+        var current = true;
+        using var session = new ContentContractSession(child, queue.Enqueue, () => current);
+        var received = 0;
+        session.FullscreenToggleRequested += _ => received++;
+
+        child.RaiseFullscreenToggleRequested();
+        child.FullscreenOriginCurrent = false;
+        queue.Dequeue()();
+        child.FullscreenOriginCurrent = true;
+        child.RaiseFullscreenToggleRequested();
+        current = false;
+        queue.Dequeue()();
+        Assert.Equal(0, received);
+
+        current = true;
+        child.RaiseFullscreenToggleRequested();
+        queue.Dequeue()();
+        Assert.Equal(1, received);
+    }
+
+    [Fact]
+    public void FullscreenToggleFromDisposedAttachmentCannotReviveAfterSameObjectReattachment()
+    {
+        var child = new FakeContent();
+        var queue = new Queue<Action>();
+        var received = 0;
+        var old = new ContentContractSession(child, queue.Enqueue, () => true);
+        old.FullscreenToggleRequested += _ => received++;
+        child.RaiseFullscreenToggleRequested();
+        old.Dispose();
+        old.Dispose();
+        child.RaiseFullscreenToggleRequested();
+        Assert.Single(queue);
+        Assert.Equal(0, child.SubscriptionCount);
+
+        using var current = new ContentContractSession(child, queue.Enqueue, () => true);
+        current.FullscreenToggleRequested += _ => received++;
+        child.RaiseFullscreenToggleRequested();
+        while (queue.TryDequeue(out var action)) action();
+        Assert.Equal(1, received);
     }
 
     [Fact]

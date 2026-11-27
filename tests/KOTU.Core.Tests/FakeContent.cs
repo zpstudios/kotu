@@ -3,7 +3,7 @@ using KOTU.Core.Contracts;
 namespace KOTU.Core.Tests;
 
 internal sealed class FakeContent : IContentStateSource, IContentPathChangedSource, ICurrentPathSource, ICloseGuard, IUntitledContentSource, IContentInfoChangedSource, ITrayStatusProvider, IPlaybackStateSource, IPrintPageProvider, IContentCloseRequestSource, IContentOpenFailedSource, IWindowShrinkSource, IMediaTransportTarget,
-    IContentInfoProvider, IBrowseOrderConsumer, IContentLifetime
+    IContentInfoProvider, IBrowseOrderConsumer, IContentLifetime, IFullscreenToggleSource
 {
     public int ReleaseCount { get; private set; }
     public Action? OnRelease { get; set; }
@@ -40,6 +40,10 @@ internal sealed class FakeContent : IContentStateSource, IContentPathChangedSour
     public void RaiseContentOpenFailed() => ContentOpenFailed?.Invoke();
     public event Action? ShrinkToMinRequested;
     public void RaiseShrinkToMinRequested() => ShrinkToMinRequested?.Invoke();
+    public bool FullscreenOriginCurrent { get; set; } = true;
+    public event Action<FullscreenToggleRequest>? FullscreenToggleRequested;
+    public void RaiseFullscreenToggleRequested() =>
+        FullscreenToggleRequested?.Invoke(new(() => FullscreenOriginCurrent));
     public event Action? NeighborsChanged;
     public void RaiseNeighborsChanged() => NeighborsChanged?.Invoke();
     public int SubscriptionCount => (ContentOpened?.GetInvocationList().Length ?? 0) +
@@ -55,6 +59,7 @@ internal sealed class FakeContent : IContentStateSource, IContentPathChangedSour
         (ContentCloseRequested?.GetInvocationList().Length ?? 0) +
         (ContentOpenFailed?.GetInvocationList().Length ?? 0) +
         (ShrinkToMinRequested?.GetInvocationList().Length ?? 0) +
+        (FullscreenToggleRequested?.GetInvocationList().Length ?? 0) +
         (NeighborsChanged?.GetInvocationList().Length ?? 0);
     public bool HasUnsavedChanges { get; set; }
     public Func<Task<bool>> Confirm { get; set; } = () => Task.FromResult(true);

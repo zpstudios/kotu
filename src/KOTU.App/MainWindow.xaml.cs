@@ -276,8 +276,8 @@ public sealed partial class MainWindow : Window
 
         BuildStartMenu();
         RegisterShortcuts(); // `·숫자 단독 키(A32) + Shift+N 새 창(A84 — 기존 Ctrl+N 전환)
+        WindowMinSize.Apply(this); // A442: 저장 크기를 복원하기 전에 HWND 크기 제한 훅을 설치한다.
         RestoreWindowBounds(); // 마지막 창 크기·위치 복원 + 닫을 때 저장 (v0.55.0 크기, A55 위치·최대화)
-        WindowMinSize.Apply(this); // 최소 창 크기 720×540 DIP 강제 (A40) — 창 생성 경로는 이 생성자 하나뿐
         // 광고 로테이션: 메뉴가 열릴 때 현재 분 기준 이미지로 갱신 (같은 분 = 같은 이미지)
         StartFlyout.Opening += (_, _) => UpdateSponsorImage();
 
@@ -586,12 +586,13 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                // A40: 구버전 저장값이 새 최소(720×540 DIP)보다 작으면 최소로 올려 연다 —
-                // WM_GETMINMAXINFO는 사용자 리사이즈만 막고 프로그램 Resize는 안 막기 때문.
+                // A40: 구버전 저장값이 새 최소(720×540 DIP)보다 작으면 최소로 올려 연다.
+                // WM_GETMINMAXINFO는 프로그램 복원에도 오므로 저장 크기의 상한은 호출 동안만 푼다(A442).
                 var (minW, minH) = WindowMinSize.MinPhysical(
                     WinRT.Interop.WindowNative.GetWindowHandle(this));
                 w = Math.Max(w, minW);
                 h = Math.Max(h, minH);
+                using var restoreSize = WindowMinSize.AllowRestoreSize(this, w, h);
                 if (x != int.MinValue && y != int.MinValue)
                 {
                     // A89: 저장 위치를 오프셋 없이 그대로 쓴다(마지막에 닫은 창 승계).
@@ -611,8 +612,7 @@ public sealed partial class MainWindow : Window
         {
             // 일반 상태 기준값을 "지금 적용한 값"으로 먼저 기록하고 나서 추적·최대화 순서 —
             // 최대화 복원 직후 닫아도 직전 일반 크기·위치가 저장되게(A55).
-            _lastNormalPos = AppWindow.Position;
-            _lastNormalSize = AppWindow.Size;
+            RememberNormalBounds(AppWindow);
             AppWindow.Changed += TrackNormalBounds;
             if (_settings.Get("window.maximized", false)
                 && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter op)
@@ -634,11 +634,21 @@ public sealed partial class MainWindow : Window
     private void TrackNormalBounds(Microsoft.UI.Windowing.AppWindow sender,
         Microsoft.UI.Windowing.AppWindowChangedEventArgs args)
     {
+        // 전체화면 전이 중에는 새 화면 치수가 아직 Restored로 통지될 수 있다(A442).
+        // 셸이 시작한 동기 전이의 중간값으로 직전 정상 기하를 덮지 않는다.
+        if (_shellPresenterTransition) return;
         if (!args.DidSizeChange && !args.DidPositionChange) return;
         if (sender.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter
             { State: Microsoft.UI.Windowing.OverlappedPresenterState.Restored }) return;
-        _lastNormalPos = sender.Position;
-        _lastNormalSize = sender.Size;
+        RememberNormalBounds(sender);
+    }
+
+    private void RememberNormalBounds(Microsoft.UI.Windowing.AppWindow window)
+    {
+        _lastNormalPos = window.Position;
+        var size = window.Size;
+        _lastNormalSize = size;
+        WindowMinSize.RememberNormalSize(this, size.Width, size.Height);
     }
 
     /// <summary>
@@ -780,11 +790,11 @@ public sealed partial class MainWindow : Window
                 WinRT.Interop.WindowNative.GetWindowHandle(this));
             var w = Math.Max(width, minW);
             var h = Math.Max(height, minH);
-            AppWindow.MoveAndResize(ClampToWorkArea(new Windows.Graphics.RectInt32(x, y, w, h)));
+            using (WindowMinSize.AllowRestoreSize(this, w, h))
+                AppWindow.MoveAndResize(ClampToWorkArea(new Windows.Graphics.RectInt32(x, y, w, h)));
             // A55 추적 기준값도 지금 적용한 값으로 — RestoreWindowBounds와 같은 순서
             // (최대화 직후 닫혀도 직전 일반 기하가 저장되게).
-            _lastNormalPos = AppWindow.Position;
-            _lastNormalSize = AppWindow.Size;
+            RememberNormalBounds(AppWindow);
             if (maximized && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter op)
                 op.Maximize();
         }
@@ -1597,6 +1607,10 @@ public sealed partial class MainWindow : Window
         session.EditorEscapeRequested += OnEditorEscapeRequested;
         session.EditorPanelShortcutRequested += OnEditorPanelShortcutRequested;
         session.EditorFullscreenShortcutRequested += OnEditorFullscreenShortcutRequested;
+        session.FullscreenToggleRequested += request =>
+        {
+            if (request.IsCurrent) AdvanceViewMode();
+        };
         session.ShrinkToMinRequested += ShrinkToMinimum;
         session.UnsavedChanged += dirty =>
         {
@@ -2521,8 +2535,8 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 셸 자신의 <see cref="SetViewMode"/>가 프레젠터를 바꾸는 동안만 참인 재진입 가드
     /// (2026-09-02 실기기 결함 수리 — 생성자 AppWindow.Changed 구독의 ⓪ 가드 주석 참고).
-    /// 외부 주체의 프레젠터 변화(이미지 뷰 더블클릭 토글의 SetPresenter 직행 등)는 이 표지
-    /// 밖에서 오므로 종전대로 외부 동기 분기(진입 = 모드3 동기, 해제 = 모드1 확정 착지)를 탄다.
+    /// 외부 주체의 프레젠터 변화는 이 표지 밖에서 오므로 종전대로 외부 동기 분기
+    /// (진입 = 모드3 동기, 해제 = 모드1 확정 착지)를 탄다.
     /// 저장하는 것은 "지금 우리가 프레젠터를 만지는 중"이라는 사실 하나뿐 — 복귀 목적지나
     /// 이전 모드를 기억하지 않는다(A305의 스냅샷 폐지 구조 무훼손).
     /// </summary>
@@ -2560,7 +2574,39 @@ public sealed partial class MainWindow : Window
         else if (!wantFull && isFull)
         {
             _shellPresenterTransition = true;
-            try { AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default); }
+            try
+            {
+                // A442: Default 복귀는 전체화면의 원점에 남을 수 있어 직전 정상 기하를 복원한다.
+                // 동기 전이 가드로 중간 통지를 막고, 기존 최소 크기·화면 밖 보정을 그대로 쓴다.
+                var normalPosition = _lastNormalPos;
+                var normalSize = _lastNormalSize;
+                var (minW, minH) = WindowMinSize.MinPhysical(
+                    WinRT.Interop.WindowNative.GetWindowHandle(this));
+                using var restoreSize = normalSize is { Width: > 0, Height: > 0 } size
+                    ? WindowMinSize.AllowRestoreSize(this, Math.Max(size.Width, minW), Math.Max(size.Height, minH)) : null;
+                AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
+                if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter
+                    && (presenter.State is Microsoft.UI.Windowing.OverlappedPresenterState.Restored
+                        or Microsoft.UI.Windowing.OverlappedPresenterState.Maximized)
+                    && normalPosition is { } position && normalSize is { Width: > 0, Height: > 0 } restoredSize)
+                {
+                    // 최대화 반환도 native 일반 복원 위치가 원점으로 바뀔 수 있다. 같은 동기
+                    // 전이 안에서 일반 배치를 고친 뒤 최대화해 이후 Restore까지 보존한다.
+                    var wasMaximized = presenter.State == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized;
+                    try
+                    {
+                        if (wasMaximized) presenter.Restore();
+                        AppWindow.MoveAndResize(ClampToWorkArea(new Windows.Graphics.RectInt32(
+                            position.X, position.Y, Math.Max(restoredSize.Width, minW), Math.Max(restoredSize.Height, minH))));
+                        RememberNormalBounds(AppWindow);
+                    }
+                    finally
+                    {
+                        // 위치·크기 복원이 실패해도 복귀한 최대화 상태는 다시 적용한다.
+                        if (wasMaximized) presenter.Maximize();
+                    }
+                }
+            }
             finally { _shellPresenterTransition = false; }
         }
         ReevaluateBarAutoHide(); // A186: 전체화면 진입/해제 = 자동 숨김 상태 재평가
@@ -2680,7 +2726,7 @@ public sealed partial class MainWindow : Window
     /// docs/A135-audit.md §4-②가 예약해 둔 바로 그 갈래. ApplyOverlayStates 말미의 A135 2차
     /// 방어는 좌/우 패널 4표면만 커버하고 바 축은 무방비였다).
     /// 지점 선택: 전체화면 진입·해제의 두 경로(셸 SetViewMode · 외부 프레젠터 변화의
-    /// AppWindow.Changed 동기 — 이미지 뷰 자체 토글 등. 후자는 SetViewMode를 거치지 않는다)와
+    /// AppWindow.Changed 동기)와
     /// A186 자동 숨김(타이머 틱)까지, 바를 내리고 올리는 흐름 전부가 UpdateShellChrome 하나를
     /// 지난다(바 가시성의 단일 결정 지점). 호출 부위 전수(생성자 동기·SetViewMode·
     /// ResetBarAutoHide·NotifyBarAutoHideInput·자동 숨김 틱)가 모두 전이 시점뿐이라 포인터
