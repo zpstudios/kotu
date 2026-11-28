@@ -1,6 +1,6 @@
 # KOTU — User Guide
 
-> **As of v0.439.0.** KOTU is under active development. This guide describes the behaviour of the
+> **As of v0.440.0.** KOTU is under active development. This guide describes the behaviour of the
 > version above; later releases may add or change things without this page being reissued.
 
 KOTU opens photos, videos, music, documents, archives and hardware information in a single window.
@@ -640,14 +640,14 @@ box or while you are typing to jump through the file list.
 
 `Space` gives way in the same manner as the letter keys. While the file list, the folder tree or the
 centre thumbnails have the focus it no longer starts or stops playback in Video and Audio; in the
-file list and in the thumbnails it selects the focused item instead.
+file list and in the thumbnails it toggles the focused item's check without changing selection.
 
 ### 3.4 In the file browser
 
 | Key | Action |
 |---|---|
-| `Enter` | open the selected item — with several files selected, all of them |
-| `Space` | select or deselect the item that has the focus |
+| `Enter` | open the current item or batch; checked files in the current view take priority over selection |
+| `Space` | check or uncheck the focused item, keeping selection unchanged |
 | `F2` | rename the selected item (nothing selected: nothing happens) |
 | `Delete` | move to the Recycle Bin |
 | `Shift+Delete` | delete for good, after a confirmation |
@@ -763,9 +763,12 @@ the file has one, and on the extension tile when it has not.
   dates it was created and last modified, both written as `26-08-19`. Point at a row and the tooltip
   repeats the same values with labels such as **Size:**, **Length:**, **Created:** and **Modified:**
   in front of them, with the dates in full, so the two dates cannot be mistaken for one another.
-- **A checkbox at the right-hand end of each row** shows whether that file is selected. Ticking or
-  unticking it selects or deselects the file, and `Space` does the same to whichever item has the
-  focus. It is one selection, not two — the boxes only make it visible.
+- **Checkboxes** mark items for batch actions independently of the selection highlight. Clicking a
+  checkbox toggles that item's check; `Space` toggles the focused item's check. The left list and
+  centre thumbnails share the same checks.
+- **Batch file actions** use checked items in the current view when any are checked; otherwise they
+  use the selection. This applies to opening, copying, cutting, deleting and dragging. Checks hidden
+  by a filter remain stored but are excluded from these actions.
 - **Sort** with the five column headers over the list — **Name**, **Type**, **Size**, **Created**,
   **Modified**. Clicking one sorts by it; clicking the one you are already sorted by reverses the
   order, and a small arrow in the header says which way. Names count up, sizes and dates count down.
@@ -791,7 +794,8 @@ the file has one, and on the extension tile when it has not.
   straight into rename mode.
 - **Open in a new window** with `Shift`+double-click, or **Open in new instance** from the
   right-click menu.
-- **Open several at once**: select a few files and press `Enter`, or double-click one of them. The
+- **Open several at once**: check a few files, select an item, then press `Enter`. With no checks in the current view,
+  select the files and press `Enter`, or double-click one of them. The
   first opens the way a single file would; the rest each get their own window. Ten at a time is the
   limit — beyond that KOTU opens the first ten and says so. Folders are left out of this; a
   selection of folders alone behaves as before.
@@ -821,14 +825,19 @@ Everything below applies to dragging, to `Ctrl+V` and to the **Paste** entries a
 
 ### The right-click menus
 
-- **On a file** — Open in new instance · Cut · Copy · Rename · Delete.
-- **On a folder** — Cut · Copy · Paste · Rename · Delete. Paste goes into that folder, not the one
+- **On a file** — Open in new instance · Cut · Copy · Rename · Delete · Uncheck all.
+- **On a folder** — Cut · Copy · Paste · Rename · Delete · Uncheck all. Paste goes into that folder, not the one
   you are looking at.
-- **On empty space** — New folder · Paste · Refresh. Paste is greyed out when there is nothing to
+- **On empty space** — New folder · Paste · Refresh · Uncheck all. Paste is greyed out when there is nothing to
   paste.
 
-Cut, Copy and Delete follow the same rule as dragging: if you right-clicked something that is part
-of the selection, they act on the whole selection; if not, on that one item alone.
+**Uncheck all** clears every check in the current folder, including checks hidden by a filter.
+It preserves the selection highlight and scroll position, and updates the left list and centre
+thumbnails together. It is disabled when there are no checks to clear.
+
+Cut, Copy and Delete follow the same rule as dragging: the working set is the checked items in the
+current view, or the selection if none are checked in view. If the item you right-clicked belongs
+to that set, they act on the whole set; otherwise they act on that item alone.
 
 ### Keeping up with the folder
 

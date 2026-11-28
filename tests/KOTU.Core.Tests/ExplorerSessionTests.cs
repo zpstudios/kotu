@@ -173,6 +173,60 @@ public class ExplorerSessionTests
     }
 
     [Fact]
+    public void Uncheck_all_includes_name_and_extension_filtered_checks_even_with_no_visible_match()
+    {
+        var alpha = E("alpha.txt");
+        var beta = E("beta.jpg");
+        using var session = Loaded(alpha, beta);
+        session.SetItemChecked(Folder, alpha.Path, true);
+        session.SetItemChecked(Folder, beta.Path, true);
+        session.SetExtensionVisible(".jpg", false);
+        session.ArrangeFromScan();
+        session.SetNameFilter("no-match");
+        Assert.Empty(session.Display);
+        Assert.Equal(new BrowseCheckSummary(2, 0), session.CheckSummary);
+
+        var command = session.CreateUncheckAllCommand(Folder.ToUpperInvariant());
+        Assert.NotNull(command);
+        command();
+        Assert.Equal(new BrowseCheckSummary(0, 0), session.CheckSummary);
+        Assert.Null(session.CreateUncheckAllCommand(Folder));
+        Assert.Equal("no-match", session.Query);
+        Assert.Equal(1, session.HiddenExtensionCount);
+        session.SetNameFilter("");
+        session.ClearExtensionFilter();
+        session.ArrangeFromScan();
+        Assert.Equal(2, session.Display.Count);
+        Assert.Empty(session.CheckedPathsInView());
+    }
+
+    [Fact]
+    public void Uncheck_all_requires_a_live_matching_display_and_does_not_cross_sessions()
+    {
+        var item = E("alpha.txt");
+        using var session = Loaded(item);
+        using var other = Loaded(item);
+        session.SetItemChecked(Folder, item.Path, true);
+        other.SetItemChecked(Folder, item.Path, true);
+        Assert.Null(session.CreateUncheckAllCommand(null));
+        Assert.Null(session.CreateUncheckAllCommand("C:/other"));
+        var command = session.CreateUncheckAllCommand(Folder);
+        Assert.NotNull(command);
+        session.ClearFailedScan();
+        Assert.Null(session.CreateUncheckAllCommand(Folder));
+        command();
+        Assert.True(session.IsChecked(item.Path));
+        Publish(session, [item]);
+        command(); // The old menu remains stale after a new scan of the same folder.
+        Assert.True(session.IsChecked(item.Path));
+        session.CreateUncheckAllCommand(Folder)!();
+        Assert.True(other.IsChecked(item.Path));
+        Assert.False(session.IsChecked(item.Path));
+        session.Dispose();
+        Assert.Null(session.CreateUncheckAllCommand(Folder));
+    }
+
+    [Fact]
     public void Same_folder_failure_keeps_query_and_checks_until_an_accepted_scan_prunes()
     {
         var a = E("alpha.txt");

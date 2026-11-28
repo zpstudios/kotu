@@ -51,6 +51,8 @@ public sealed partial class ThumbnailExplorer
             Separator();
             Add("Show details", "\uE946", MenuCommand.Details);
         }
+        Separator();
+        flyout.Items.Add(MakeUncheckAllMenuItem());
     }
 
     private static bool UsesWorkingSet(MenuCommand command) => command is MenuCommand.Cut or MenuCommand.Copy or MenuCommand.Delete;

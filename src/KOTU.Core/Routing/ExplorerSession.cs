@@ -230,6 +230,25 @@ public sealed partial class ExplorerSession
         return changed;
     }
 
+    /// <summary>
+    /// Capture a folder command while its menu opens. Clearing includes filtered-out checks,
+    /// emits only one check notification, and never republishes the display or presentation state.
+    /// A menu retained across navigation, a rescan or disposal cannot clear a new workset.
+    /// </summary>
+    public Action? CreateUncheckAllCommand(string? folder)
+    {
+        if (_disposed || !IsDisplayingFolder(folder) || _checkedPaths.Count == 0) return null;
+        var generation = Generation;
+        var metadataGeneration = MetadataGeneration;
+        return () =>
+        {
+            if (_disposed || generation != Generation || metadataGeneration != MetadataGeneration ||
+                !IsDisplayingFolder(folder) || _checkedPaths.Count == 0) return;
+            _checkedPaths.Clear();
+            ChecksChanged?.Invoke();
+        };
+    }
+
     /// <summary>Hidden checks survive, but operations consume only the display-ordered intersection.</summary>
     public IReadOnlyList<string> CheckedPathsInView(bool filesOnly = false) => Display
         .Where(entry => (!filesOnly || !entry.IsFolder) && _checkedPaths.Contains(entry.Path))

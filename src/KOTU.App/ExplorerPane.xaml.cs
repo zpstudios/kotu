@@ -754,6 +754,8 @@ public sealed partial class ExplorerPane : UserControl
         };
         delete.Click += async (_, _) => await DeleteWithNoticeAsync(PathsForDrag(owner, entry));
         flyout.Items.Add(delete);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(MakeUncheckAllMenuItem(owner));
     }
 
     /// <summary>파일 전용 "Open in new instance"(A24)를 메뉴 맨 위에 + 구분선 (A94 2차 재배치).</summary>
@@ -856,8 +858,13 @@ public sealed partial class ExplorerPane : UserControl
         flyout.Items.Add(newFolder);
         flyout.Items.Add(paste);
         flyout.Items.Add(refresh);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        MenuFlyoutItem? uncheckAll = null;
         flyout.Opening += (_, _) =>
         {
+            if (uncheckAll is not null) flyout.Items.Remove(uncheckAll);
+            uncheckAll = MakeUncheckAllMenuItem(owner);
+            flyout.Items.Add(uncheckAll);
             var ready = _folder.Length > 0;
             newFolder.IsEnabled = ready;
             paste.IsEnabled = ready && ExplorerFileOps.CanPasteFromClipboard();

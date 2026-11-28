@@ -258,7 +258,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
     <p>KOTU는 사진·동영상·음악·문서·압축 파일과 하드웨어 정보를 하나의 창에서 엽니다. 파일을 더블클릭하면
        확장자에 맞는 모듈이 창 가운데와 하단 바를 넘겨받습니다. 이 페이지는 저장소의
        <code>docs/guides/user-guide.ko.md</code>를 게시한 것입니다.</p>
-    <span class="asof">기준 버전 v0.439.0</span>
+    <span class="asof">기준 버전 v0.440.0</span>
   </div>
 </section>
 
@@ -919,13 +919,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         </table></div>
         <p><kbd>Space</kbd>도 문자 키와 같은 방식으로 입력에 자리를 내줍니다. 파일 목록, 폴더 트리, 가운데
            썸네일에 포커스가 있는 동안에는 Video와 Audio에서 재생을 시작하거나 멈추지 않으며, 파일 목록과
-           썸네일에서는 대신 포커스가 있는 항목을 선택합니다.</p>
+           썸네일에서는 대신 포커스가 있는 항목의 체크를 켜거나 끕니다. 선택 강조는 바뀌지 않습니다.</p>
 
         <h3>파일 브라우저에서</h3>
         <div class="tbl"><table>
           <tr><th>키</th><th>동작</th></tr>
-          <tr><td><kbd>Enter</kbd></td><td>선택한 항목 열기 — 파일 여러 개를 선택했으면 전부</td></tr>
-          <tr><td><kbd>Space</kbd></td><td>포커스가 있는 항목 선택 / 선택 해제</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>현재 항목 또는 여러 파일 열기 — 현재 화면의 체크된 파일이 선택보다 우선</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>포커스가 있는 항목 체크 / 체크 해제 — 선택 유지</td></tr>
           <tr><td><kbd>F2</kbd></td><td>선택한 항목 이름 바꾸기(선택된 것이 없으면 아무 일도 하지 않음)</td></tr>
           <tr><td><kbd>Delete</kbd></td><td>휴지통으로 보내기</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>확인 후 완전히 삭제</td></tr>
@@ -1032,9 +1032,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <code>26-08-19</code> 형태로 들어갑니다. 행을 가리키면 툴팁이 같은 값을 <strong>Size:</strong>,
               <strong>Length:</strong>, <strong>Created:</strong>, <strong>Modified:</strong> 같은 이름표와
               함께 되풀이하고 날짜는 전체로 적으므로, 두 날짜를 혼동할 일이 없습니다.</li>
-          <li><strong>각 행 오른쪽 끝의 체크 상자</strong>가 그 파일이 선택되었는지 보여 줍니다. 체크하거나
-              해제하면 파일이 선택·해제되고, <kbd>Space</kbd>는 포커스가 있는 항목에 같은 일을 합니다.
-              선택은 하나뿐이고 상자는 그것을 눈에 보이게 할 뿐입니다.</li>
+          <li><strong>체크 상자</strong>는 선택 강조와 별개로 일괄 작업할 항목을 표시합니다. 체크 상자를
+              클릭하면 해당 항목의 체크가 켜지거나 꺼지고, <kbd>Space</kbd>는 포커스가 있는 항목의 체크를
+              바꿉니다. 왼쪽 목록과 가운데 썸네일은 같은 체크 상태를 공유합니다.</li>
+          <li><strong>일괄 파일 작업</strong>은 현재 화면에 체크된 항목이 있으면 그 항목들을, 없으면 선택된
+              항목들을 사용합니다. 여러 파일 열기·복사·잘라내기·삭제·드래그에 적용됩니다. 필터로 가려진
+              체크는 남아 있지만 이 작업의 대상에서는 제외됩니다.</li>
           <li>목록 위의 다섯 열 머리글 — <strong>Name</strong>, <strong>Type</strong>,
               <strong>Size</strong>, <strong>Created</strong>, <strong>Modified</strong> — 로
               <strong>정렬</strong>합니다. 머리글을 클릭하면 그 기준으로 정렬하고, 이미 그 기준으로 정렬되어
@@ -1065,8 +1068,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               폴더</strong>를 만듭니다. 만들어지는 즉시 이름 바꾸기 상태로 들어갑니다.</li>
           <li><kbd>Shift</kbd>+더블클릭이나 우클릭 메뉴의 <strong>Open in new instance</strong>로 <strong>새
               창에서 엽니다</strong>.</li>
-          <li><strong>여러 개를 한 번에 열기</strong>: 파일 몇 개를 선택해 <kbd>Enter</kbd>를 누르거나 그중
-              하나를 더블클릭합니다. 첫 파일은 한 개를 열 때처럼 열리고 나머지는 각자 창을 하나씩 받습니다.
+          <li><strong>여러 개를 한 번에 열기</strong>: 파일들을 체크한 뒤 항목 하나를 선택하고 <kbd>Enter</kbd>를 누릅니다. 현재
+              화면에 체크된 항목이 없으면 파일들을 선택해 <kbd>Enter</kbd>를 누르거나 그중 하나를
+              더블클릭합니다. 첫 파일은 한 개를 열 때처럼 열리고 나머지는 각자 창을 하나씩 받습니다.
               한 번에 열 개가 한도이며, 그보다 많으면 KOTU가 앞의 열 개만 열고 그 사실을 알립니다. 폴더는 이
               규칙에서 빠집니다 — 폴더만 선택한 경우는 종전과 같이 동작합니다.</li>
         </ul>
@@ -1099,14 +1103,18 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
         <h3>우클릭 메뉴</h3>
         <ul>
-          <li><strong>파일 위</strong> — Open in new instance · Cut · Copy · Rename · Delete.</li>
-          <li><strong>폴더 위</strong> — Cut · Copy · Paste · Rename · Delete. Paste는 지금 보고 있는 폴더가
+          <li><strong>파일 위</strong> — Open in new instance · Cut · Copy · Rename · Delete · Uncheck all.</li>
+          <li><strong>폴더 위</strong> — Cut · Copy · Paste · Rename · Delete · Uncheck all. Paste는 지금 보고 있는 폴더가
               아니라 그 폴더 안에 붙여넣습니다.</li>
-          <li><strong>빈 공간</strong> — New folder · Paste · Refresh. 붙여넣을 것이 없으면 Paste는
+          <li><strong>빈 공간</strong> — New folder · Paste · Refresh · Uncheck all. 붙여넣을 것이 없으면 Paste는
               비활성입니다.</li>
         </ul>
-        <p>Cut, Copy, Delete는 드래그와 같은 규칙을 따릅니다: 우클릭한 것이 선택에 포함되어 있으면 선택
-           전체에, 아니면 그 항목 하나에만 적용됩니다.</p>
+        <p><strong>Uncheck all</strong>은 필터로 가려진 항목까지 현재 폴더의 체크를 모두 해제합니다. 선택
+           강조와 스크롤 위치는 유지하고, 왼쪽 목록과 가운데 썸네일을 함께 갱신합니다. 해제할 체크가
+           없으면 비활성입니다.</p>
+        <p>Cut, Copy, Delete는 드래그와 같은 규칙을 따릅니다: 작업 대상은 현재 화면의 체크된 항목들이며,
+           화면에 체크된 항목이 없으면 선택된 항목들입니다. 우클릭한 항목이 이 대상에 포함되어 있으면
+           대상 전체에, 아니면 그 항목 하나에만 적용됩니다.</p>
 
         <h3>폴더 변화 따라가기</h3>
         <p>KOTU는 보고 있는 폴더를 감시합니다. 다른 프로그램이 파일을 추가·삭제·이름 변경하면 Refresh 없이

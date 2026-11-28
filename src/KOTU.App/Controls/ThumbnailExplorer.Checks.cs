@@ -9,8 +9,30 @@ public sealed partial class ThumbnailExplorer
 {
     internal Func<string?, IReadOnlyList<string>>? CheckedPathsProvider { get; set; }
     internal Action<string?, string, bool>? CheckRequested { get; set; }
+    internal Func<string?, Action?>? UncheckAllCommandProvider { get; set; }
 
     private IReadOnlyList<string> CheckedPaths() => CheckedPathsProvider?.Invoke(CurrentFolder) ?? [];
+
+    private MenuFlyoutItem MakeUncheckAllMenuItem()
+    {
+        var command = _menuCommandPending ? null : UncheckAllCommandProvider?.Invoke(CurrentFolder);
+        var surface = ActiveItems;
+        var sequence = _showSeq;
+        var generation = _menuGeneration;
+        var item = new MenuFlyoutItem
+        {
+            Text = "Uncheck all",
+            Icon = new FontIcon { Glyph = "\uE739" },
+            IsEnabled = command is not null,
+        };
+        item.Click += (_, _) =>
+        {
+            if (IsLoaded && IsVisibleSurface() && !_parentNavigationPending && !_menuCommandPending &&
+                ReferenceEquals(surface, ActiveItems) && sequence == _showSeq && generation == _menuGeneration)
+                command?.Invoke();
+        };
+        return item;
+    }
 
     internal void RefreshChecks()
     {

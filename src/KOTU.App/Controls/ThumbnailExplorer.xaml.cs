@@ -2120,8 +2120,13 @@ public sealed partial class ThumbnailExplorer : UserControl
         flyout.Items.Add(newFile);
         flyout.Items.Add(paste);
         flyout.Items.Add(refresh);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        MenuFlyoutItem? uncheckAll = null;
         flyout.Opening += (_, _) =>
         {
+            if (uncheckAll is not null) flyout.Items.Remove(uncheckAll);
+            uncheckAll = MakeUncheckAllMenuItem();
+            flyout.Items.Add(uncheckAll);
             var ready = CurrentFolder is { Length: > 0 };
             newFolder.IsEnabled = ready;
             newFile.IsEnabled = ready; // A189: 새 폴더와 같은 판정(폴더 확정 전 비활성)

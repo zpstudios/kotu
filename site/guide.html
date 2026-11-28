@@ -259,7 +259,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
        window. Double-click a file and the matching module takes over the centre of the window and
        the bottom bar. This page is the published version of
        <code>docs/guides/user-guide.en.md</code> in the repository.</p>
-    <span class="asof">AS OF v0.439.0</span>
+    <span class="asof">AS OF v0.440.0</span>
   </div>
 </section>
 
@@ -945,13 +945,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
         </table></div>
         <p><kbd>Space</kbd> gives way in the same manner as the letter keys. While the file list, the folder
            tree or the centre thumbnails have the focus it no longer starts or stops playback in Video and
-           Audio; in the file list and in the thumbnails it selects the focused item instead.</p>
+           Audio; in the file list and in the thumbnails it toggles the focused item's check without changing selection.</p>
 
         <h3>In the file browser</h3>
         <div class="tbl"><table>
           <tr><th>Key</th><th>Action</th></tr>
-          <tr><td><kbd>Enter</kbd></td><td>open the selected item — with several files selected, all of them</td></tr>
-          <tr><td><kbd>Space</kbd></td><td>select or deselect the item that has the focus</td></tr>
+          <tr><td><kbd>Enter</kbd></td><td>open the current item or batch; checked files in the current view take priority over selection</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>check or uncheck the focused item, keeping selection unchanged</td></tr>
           <tr><td><kbd>F2</kbd></td><td>rename the selected item (nothing selected: nothing happens)</td></tr>
           <tr><td><kbd>Delete</kbd></td><td>move to the Recycle Bin</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>Delete</kbd></td><td>delete for good, after a confirmation</td></tr>
@@ -1067,10 +1067,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               <code>26-08-19</code>. Point at a row and the tooltip repeats the same values with labels such
               as <em>Size:</em>, <em>Length:</em>, <em>Created:</em> and <em>Modified:</em> in front of
               them, with the dates in full, so the two dates cannot be mistaken for one another.</li>
-          <li><strong>A checkbox at the right-hand end of each row</strong> shows whether that file is
-              selected. Ticking or unticking it selects or deselects the file, and <kbd>Space</kbd> does the
-              same to whichever item has the focus. It is one selection, not two — the boxes only make it
-              visible.</li>
+          <li><strong>Checkboxes</strong> mark items for batch actions independently of the selection
+              highlight. Clicking a checkbox toggles that item's check; <kbd>Space</kbd> toggles the
+              focused item's check. The left list and centre thumbnails share the same checks.</li>
+          <li><strong>Batch file actions</strong> use checked items in the current view when any are
+              checked; otherwise they use the selection. This applies to opening, copying, cutting,
+              deleting and dragging. Checks hidden by a filter remain stored but are excluded from
+              these actions.</li>
           <li><strong>Sort</strong> with the five column headers over the list — <em>Name</em>,
               <em>Type</em>, <em>Size</em>, <em>Created</em>, <em>Modified</em>. Clicking one sorts by it;
               clicking the one you are already sorted by reverses the order, and a small arrow in the header
@@ -1103,8 +1106,9 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
               menu on empty space. It is created and put straight into rename mode.</li>
           <li><strong>Open in a new window</strong> with <kbd>Shift</kbd>+double-click, or
               <em>Open in new instance</em> from the right-click menu.</li>
-          <li><strong>Open several at once</strong>: select a few files and press <kbd>Enter</kbd>, or
-              double-click one of them. The first opens the way a single file would; the rest each get their
+          <li><strong>Open several at once</strong>: check a few files, select an item, then press <kbd>Enter</kbd>. With no
+              checks in the current view, select the files and press <kbd>Enter</kbd>, or double-click one
+              of them. The first opens the way a single file would; the rest each get their
               own window. Ten at a time is the limit — beyond that KOTU opens the first ten and says so.
               Folders are left out of this; a selection of folders alone behaves as before.</li>
         </ul>
@@ -1137,14 +1141,18 @@ footer{border-top:1px solid var(--line);background:var(--bg-deep);padding:48px 0
 
         <h3>The right-click menus</h3>
         <ul>
-          <li><strong>On a file</strong> — Open in new instance · Cut · Copy · Rename · Delete.</li>
-          <li><strong>On a folder</strong> — Cut · Copy · Paste · Rename · Delete. Paste goes into that
+          <li><strong>On a file</strong> — Open in new instance · Cut · Copy · Rename · Delete · Uncheck all.</li>
+          <li><strong>On a folder</strong> — Cut · Copy · Paste · Rename · Delete · Uncheck all. Paste goes into that
               folder, not the one you are looking at.</li>
-          <li><strong>On empty space</strong> — New folder · Paste · Refresh. Paste is greyed out when there
+          <li><strong>On empty space</strong> — New folder · Paste · Refresh · Uncheck all. Paste is greyed out when there
               is nothing to paste.</li>
         </ul>
-        <p>Cut, Copy and Delete follow the same rule as dragging: if you right-clicked something that is part
-           of the selection, they act on the whole selection; if not, on that one item alone.</p>
+        <p><strong>Uncheck all</strong> clears every check in the current folder, including checks hidden
+           by a filter. It preserves the selection highlight and scroll position, and updates the left
+           list and centre thumbnails together. It is disabled when there are no checks to clear.</p>
+        <p>Cut, Copy and Delete follow the same rule as dragging: the working set is the checked items in
+           the current view, or the selection if none are checked in view. If the item you right-clicked
+           belongs to that set, they act on the whole set; otherwise they act on that item alone.</p>
 
         <h3>Keeping up with the folder</h3>
         <p>KOTU watches the folder it is showing. Files added, removed or renamed by other programs appear

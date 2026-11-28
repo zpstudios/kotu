@@ -2139,6 +2139,7 @@ public sealed partial class MainWindow : Window
                     ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
                     CheckedPathsProvider = ListOverlay.CheckedPathsForFolder,
                     CheckRequested = ListOverlay.SetItemChecked,
+                    UncheckAllCommandProvider = ListOverlay.CreateUncheckAllCommand,
                     SortStateProvider = () => ListOverlay.CurrentSort,
                     SortRequested = ListOverlay.SelectSort,
                     Presentation = _explorerPresentation,
@@ -4257,6 +4258,7 @@ public sealed partial class MainWindow : Window
             ModuleIdForFile = path => _router.Resolve(path)?.Id, // 액센트 색 타일(A93)
             CheckedPathsProvider = ListOverlay.CheckedPathsForFolder,
             CheckRequested = ListOverlay.SetItemChecked,
+            UncheckAllCommandProvider = ListOverlay.CreateUncheckAllCommand,
             SortStateProvider = () => ListOverlay.CurrentSort,
             SortRequested = ListOverlay.SelectSort,
             Presentation = _explorerPresentation,

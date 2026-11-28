@@ -86,6 +86,7 @@ public sealed partial class FileListOverlay : UserControl
     internal event Action? ChecksChanged;
     internal IReadOnlyList<string> CheckedPathsForFolder(string? folder) => _session.CheckedPathsForFolder(folder);
     internal void SetItemChecked(string? folder, string path, bool value) => _session.SetItemChecked(folder, path, value);
+    internal Action? CreateUncheckAllCommand(string? folder) => _session.CreateUncheckAllCommand(folder);
     internal bool ToggleFocusedCheck(DependencyObject focused, bool repeat) =>
         IsOpen && _list?.ToggleFocusedCheck(focused, repeat) == true;
 

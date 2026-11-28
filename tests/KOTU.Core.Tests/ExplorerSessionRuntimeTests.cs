@@ -555,6 +555,96 @@ public class ExplorerSessionRuntimeTests
     }
 
     [Fact]
+    public async Task Uncheck_all_notifies_each_surface_once_without_republishing_or_changing_presentation()
+    {
+        using var f = new Fixture();
+        var alpha = E("alpha.txt");
+        var beta = E("beta.txt");
+        await f.Load(alpha, beta);
+        f.Session.SetItemChecked(Folder, alpha.Path, true);
+        f.Session.SetItemChecked(Folder, beta.Path, true);
+        f.Session.SetNameFilter("beta");
+        var snapshot = new ExplorerPresentationState.Snapshot(beta.Path, [beta.Path], beta.Path,
+            false, beta.Path, false);
+        f.Session.Presentation.Save(Folder, snapshot);
+        var display = f.Session.Display;
+        var entries = f.Session.Entries;
+        var generation = f.Session.Generation;
+        var metadata = f.Session.MetadataGeneration;
+        var scans = f.Services.Scans.Count;
+        var updates = 0;
+        var views = 0;
+        var fills = 0;
+        var central = 0;
+        var sidebar = 0;
+        f.Session.Updated += _ => ++updates;
+        f.Session.ViewChanged += (_, _) => ++views;
+        f.Session.FillCompleted += _ => ++fills;
+        f.Session.ChecksChanged += () => ++central;
+        f.Session.ChecksChanged += () => ++sidebar;
+
+        var command = f.Session.CreateUncheckAllCommand(Folder);
+        Assert.NotNull(command);
+        command();
+        command(); // A repeated invocation is a no-op once the workset is empty.
+        Assert.Equal(1, central);
+        Assert.Equal(central, sidebar);
+        Assert.Equal(0, updates);
+        Assert.Equal(0, views);
+        Assert.Equal(0, fills);
+        Assert.Same(display, f.Session.Display);
+        Assert.Same(entries, f.Session.Entries);
+        Assert.Equal(generation, f.Session.Generation);
+        Assert.Equal(metadata, f.Session.MetadataGeneration);
+        Assert.Equal(scans, f.Services.Scans.Count);
+        Assert.Equal(new BrowseCheckSummary(0, 0), f.Session.CheckSummary);
+        var after = f.Session.Presentation.Read(Folder, display.Select(entry => entry.Path));
+        Assert.Equal(snapshot.Selected, after.Selected);
+        Assert.Equal(snapshot.Active, after.Active);
+        Assert.Equal(snapshot.Focused, after.Focused);
+        Assert.Equal(snapshot.ParentFocused, after.ParentFocused);
+        Assert.Equal(snapshot.Anchor, after.Anchor);
+        Assert.Equal(snapshot.ParentAnchor, after.ParentAnchor);
+    }
+
+    [Theory]
+    [InlineData("refresh")]
+    [InlineData("navigation")]
+    [InlineData("roundtrip")]
+    [InlineData("dispose")]
+    public async Task Uncheck_all_menu_cannot_clear_a_replaced_or_closed_folder_workset(string change)
+    {
+        using var f = new Fixture();
+        var original = E("alpha.txt");
+        await f.Load(original);
+        f.Session.SetItemChecked(Folder, original.Path, true);
+        var command = f.Session.CreateUncheckAllCommand(Folder);
+        Assert.NotNull(command);
+        var checkedEntry = original;
+        if (change is "navigation" or "roundtrip")
+        {
+            const string nextFolder = "C:/next";
+            checkedEntry = E("beta.txt", nextFolder);
+            var navigation = f.Session.NavigateAsync(nextFolder, ExplorerListing.AllFiles);
+            f.Services.Scans[^1].Complete(checkedEntry);
+            Assert.True(await f.Finish(navigation));
+            f.Session.SetItemChecked(nextFolder, checkedEntry.Path, true);
+        }
+        if (change is "refresh" or "roundtrip")
+        {
+            await f.Load(original);
+            checkedEntry = original;
+            f.Session.SetItemChecked(Folder, checkedEntry.Path, true);
+        }
+        if (change == "dispose") f.Session.Dispose();
+        var notifications = 0;
+        f.Session.ChecksChanged += () => ++notifications;
+        command();
+        Assert.True(f.Session.IsChecked(checkedEntry.Path));
+        Assert.Equal(0, notifications);
+    }
+
+    [Fact]
     public async Task Real_watch_statistics_count_creation_stop_and_disposal_idempotently()
     {
         var folder = Path.Combine(Path.GetTempPath(), "KOTU-A417-watch-" + Guid.NewGuid().ToString("N"));

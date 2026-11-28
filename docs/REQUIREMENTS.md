@@ -7,7 +7,6 @@
 
 | ID | 상태 | 남은 일 유형 | 남은 일·착수 조건 | 근거 |
 |---|---|---|---|---|
-| <a id="a444"></a>A444 | 진행 | 개발 | 후보 16에서 선택한 우클릭 `Uncheck all`을 구현하고 체크 해제 시 선택·스크롤 위치 보존과 좌측/중앙 동기화를 검증한다. | [원요구](history/requirements-completed-index.md#a444) · [확정 범위](features/explorer/explorer-selection-layout-A416.md#a444) |
 | <a id="a442"></a>A442 | 조사 | 조사 | 과거 업데이트·활성화와 함께 관측한 위치·DPI 차이의 최초 발생 원인은 전체가 특정되지 않았다. 추가 재현 시 조작·배율·실제 창과 저장값·종료 저장 순서를 함께 보존해 원인을 좁힌다. 시작 크기 제한·전체화면 복귀 수리와 구버전 종료 저장의 확인된 영향만으로 이전 차이의 인과 전체를 단정하지 않는다. | [원요구·수리 결과](history/requirements-completed-index.md#a442) · [통과·미관측 경계](DEVICE-CHECKS.md#a442) |
 | <a id="a439"></a>A439 | 조사 | 조사 | 첫 기존 검수본 `baseline-menu-r1`의 WinUI 종료 원인은 추가 재현 시 조작·WER/덤프로 조사한다. 후속 비재현을 해결로 세지 않으며 도구·계측·덤프 간섭과 실제 입력 지연을 구분한다. 외부 UIA 클라이언트 신원이나 전체 속도 해결을 관측 이상으로 단정하지 않는다. | [원요구·측정과 한계](features/shell/design-library-A427.md#a439) · [검수 경계](DEVICE-CHECKS.md#a439) · [현재 제품·설치 상태](HANDOVER.md) |
 | <a id="a19"></a>A19 | 미착수 | 결정 | H/W 랭킹 제출의 서버·전송·개인정보 범위와 제출 정책을 정한다. 장기 후보이며 착수는 별도 선택한다. | [A19](history/requirements-completed-index.md#a19) |
