@@ -26,6 +26,7 @@
 | A431 색상 시험 판정 취소·격리 역사본/대표 비교의 정확한 조건 | [세 차례 관측과 한계](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L59-L61) |
 | A434 당시 필터 검정 잔류·기존 결함 판정·슬라이더 관측 한계 | [당시 판정](https://github.com/zpstudios/kotu/blob/67c4b1c834a15e45b53f8d5f8e29466dc5ce9172/docs/DEVICE-CHECKS.md#L55). 필터 후속 수리는 [A435](requirements-completed-index.md#a435)이며 당시 관측을 바꾸지 않음 |
 | 이전 문서 다이어트의 원문과 회수 경로 | [요구 색인](requirements-completed-index.md) · [실기기 색인](device-checks-index.md) · [인수인계 색인](handover-index-through-2026-11-17.md) |
+| A445 Details 열 구현·검수와 복원 | `artifacts/a445-review/checkpoint.json`이 현재 실행권·미커밋 범위를 연결한다. 초기 25파일은 `implementation-tests/product-manifest.json`, 독립 검토 두 보완 후 26파일은 `implementation-tests/product-manifest-reviewed.json`이다. `normal-test-verification.json`·`final-test-results/`·`product-build-verification.json`·`standalone-build-verification.json`은 v0.441.0 로컬 통합 검증이며 native DLL 재사용과 공식 full native CI를 구분한다. 변경 전 화면/복원은 `normal-ui.json`·`baseline-restoration.json`, 변경 후 실제 화면과 관측별 한계는 `product-normal-ui.json`·`product-ui-verification.json`, 정상 종료와 원본 복원은 `product-ui-restoration.json`·`post-product-ui-test.json`이다. `fixture-contract.json`이 합성 원본·추가 압축 fixture와 1만 파일 폴더를 식별한다. 등록 문서의 정확 HEAD CI·기존 v0.440.0 자산 불변은 `registration-documentation-workflows.json`이다. |
 
 <a id="protected-material"></a>
 ## 보호 자료 위치
