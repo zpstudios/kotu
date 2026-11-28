@@ -452,6 +452,7 @@
 | <a id="a442"></a>A442 | 열림 | 시작 크기 제한·전체화면 복귀 배치를 수리해 v0.439.1 patch의 로컬 검증·독립 검토·공식 전체 native CI·배포·이 PC Updates 설치를 완료했다. 구버전 종료 저장 차이와 최초 실패를 보존하고 기하 5키 원복 후 새 앱 실제 배치·후속 저장·재시작을 확인했다. [검수 경계](../DEVICE-CHECKS.md#a442) · [배포·복원 근거](evidence-index.md). 과거 위치·DPI 차이의 최초 원인은 [추가 재현 시 조사](../REQUIREMENTS.md#a442)하며 이번 수리 결과와 구분한다. | 2026-11-27 사용자 요청: “업데이트 후 창 위치랑 크기가 바뀌는 문제도 원인 찾아서 고쳐줘. 다음 업데이트에서도 기존 값이 유지되게 해줘.” |
 | <a id="a443"></a>A443 | 완료 | [버전 증가 기준](../development/release-notes-workflow.md#version-policy)을 정립했다. 기능·의도적 동작 변경은 minor와 patch 초기화, 기존 동작 수리는 patch, 문서 전용은 제품 버전 유지다. 배포 전 분류 근거를 기록·검토하고 적용한다. A442 창 배치 수리를 기존 동작 복구로 분류해 실제 v0.439.1 patch 배포에 적용했다. | 2026-11-27 사용자 요청: 버전 체계가 사실상 가운데 자리만 쓰이므로 1.0.0은 공식 런칭까지 보류하고, 가운데 숫자와 끝 숫자를 올리는 기준을 명확히 정해 그 기준으로 올린다. |
 | <a id="a444"></a>A444 | 완료 | 우클릭 전체 체크 해제를 v0.440.0으로 배포·설치했다. 필터로 숨긴 체크까지 해제하면서 선택·스크롤을 보존한다. 로컬 시험·정상 publish/Standalone·실제 UI·설정 복원, 공식 전체 native CI·자산·설치본 대조와 후속 정상 종료·재시작을 완료했다. [확정 범위](../features/explorer/explorer-selection-layout-A416.md#a444) · [검수·배포·설치 근거](evidence-index.md) | 2026-11-28 사용자 선택: “그럼 우클릭 메뉴형으로 개발 진행해줘. 체크만 해제하고 선택이랑 스크롤 위치는 유지하는 걸로.” 필터로 가려진 체크까지 현재 폴더에서 해제하고 좌측·중앙에 함께 반영하는 시안을 선택했다. |
+| <a id="a445"></a>A445 | 열림 | 후보 17의 선택형 Details 열을 구현한다. [진행 요구](../REQUIREMENTS.md#a445) · [확정 범위·조사 근거](../features/explorer/explorer-detail-info-candidate17.md) | 2026-11-28 사용자 요청: “그럼 추천대로 기본 꺼짐인 Details 열을 추가해줘. 기존 행 높이랑 선택, 스크롤은 유지하고 공식 배포와 이 PC 설치까지 마무리해줘.” |
 
 
 <a id="candidate-results"></a>
@@ -477,7 +478,7 @@
 | <a id="candidate-14"></a>14 | 소진 A195 | 컨텍스트 메뉴 레지스트리 등록 워커 이관. 설정 JSON 저장 후보 39와 다른 축. | L3706, L3840–3842 |
 | <a id="candidate-15"></a>15 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-15) | L3709–3717 |
 | <a id="candidate-16"></a>16 | 소진 A444 | 선택한 우클릭 메뉴형의 배포·설치를 완료했다. [A444](#a444) | L3718 |
-| <a id="candidate-17"></a>17 | 열림 | 2026-11-28 사용자가 현재 구현·표시 범위 확인을 선택했다. 원문이 가리킨 상세 줄은 현재 내부 레거시 목록에 남아 있으며 우측 패널 계산은 이미 있다. 정상 중앙 List 확장 여부는 [남은 결정](../REQUIREMENTS.md#candidate-17), 근거와 미선택 제안은 [조사](../features/explorer/explorer-detail-info-candidate17.md)에 둔다. 제품 구현·실기기 검수 완료로 세지 않는다. | L3719–3726 |
+| <a id="candidate-17"></a>17 | A445로 승격 | 정적 조사 후 현행 중앙 List의 기본 꺼짐 Details 열을 선택했다. [A445](#a445) · [선택 전 조사](https://github.com/zpstudios/kotu/blob/6c1834f6cd112837f7726994bda6679c75dfbea8/docs/features/explorer/explorer-detail-info-candidate17.md) | L3719–3726 |
 | <a id="candidate-18"></a>18 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-18) | L3727 |
 | <a id="candidate-19"></a>19 | 소진 A308·A319 | 가이드의 Explorer integration 정정. | L3728–3729 |
 | <a id="candidate-20"></a>20 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-20) | L3730 |
