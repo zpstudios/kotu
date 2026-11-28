@@ -24,9 +24,10 @@
 <a id="image-cloud"></a>
 ## 이미지·클라우드·탐색기
 
+<a id="a444"></a>A444 전체 체크 해제의 선택 검수와 공식 배포·설치를 완료했다. [완료 결과](history/requirements-completed-index.md#a444)와 [관측 범위·근거](history/evidence-index.md)를 따른다.
+
 | 범위 | 확인된 경계 | 남은 확인과 착수 조건 | 정본/원문 |
 |---|---|---|---|
-| <a id="a444"></a>A444 전체 체크 해제 | v0.440.0 정상 검수본에서 항목·빈 영역 메뉴, 체크 0개 비활성, 단일·복수 선택 강조와 상세·중간 스크롤 보존, 이름/확장자 필터의 숨겨진 체크와 0결과 해제를 확인했다. S1·S4와 중앙 목록 보기를 관측했고, 별도 실행에서 기존 레거시 스위치를 켜 좌측·중앙 양방향 동기화를 확인한 뒤 런타임 설정과 Test 설정을 원본 바이트로 복원했다. | 폴더·세대·메타데이터·dispose 뒤 옛 명령 무효화는 Core 시험·정적 검토 근거이며 실제 UI에서 옛 콜백을 강제로 실행한 것은 아니다. 공식 전체 native CI·v0.440.0 자산·이 PC 설치 및 업데이트 전후 창 배치 대조가 남았다. | [계약](features/explorer/explorer-selection-layout-A416.md#a444) · [근거](history/evidence-index.md) |
 | A112 뒤로 가기 | v0.432.2 독립 실행 검수본에서 PDF를 열고 앱의 뒤로 가기 동작을 호출했다. 양쪽 닫힘·왼쪽만·오른쪽만·양쪽 열림 네 배치 모두 탐색기에 복귀한 뒤 실제 패널 너비가 유지됐다. Esc 동작은 네 배치 모두 양쪽을 열었다. 임시 탐색기에서 뒤로 가면 오른쪽 패널만 열어 둔 원래 PDF로 돌아왔다. | 물리 버튼·키 입력의 전달은 미검증. 사용자의 Mac Windows App 원격 세션에서는 Windows 파일 탐색기에서도 마우스 뒤로 버튼에 반응이 없었다. | [A112](REQUIREMENTS.md#a112) |
 | <a id="a398"></a>A398 EXIF·회전·APNG | JPEG/TIFF 방향, PSD 일부 방향, 회전/배치/복사/인쇄 미리보기 관측. PNG eXIf/TIFF 썸네일/APNG 후속은 v426에서 보강. | 다른 codec·원제보 원본·실제 클라우드 cache/provider. Ctrl/Shift+휠, 자유 resize·mid-drag unload 등 당시 도구로 못 한 조합을 통과로 세지 않음. 실제 인쇄 제출·미설치 WhatsApp 붙여넣기 미검증. | [EXIF](features/image/exif-orientation-A398.md), [회전 배치](features/image/rotated-layout-A398.md), [과거 L133](history/device-checks-index.md#l133) · [이관 전 범위](https://github.com/zpstudios/kotu/blob/8d93960dcc27a352188b55cfcb4d3b415f2cff13/docs/REQUIREMENTS.md#L22) |
 | A399 OneDrive | 요청 직전 보호·감시 병합·재사용·조건부 재시도 구현 및 실제 WinUI 합성 provider 시나리오. | 실제 재현 파일/상태 미확보. 온라인 전용/로컬/동기화중 별 제공자 지연과 캐시 회복, hydration 부재, 취소 뒤 영구 잔류/장시간 S4·다중 창을 합성 성공으로 대체하지 않음. | [OneDrive 조사](features/explorer/onedrive-thumbnail-investigation-A399.md), [과거 L260](history/device-checks-index.md#l260) |
