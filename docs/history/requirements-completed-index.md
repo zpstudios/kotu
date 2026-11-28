@@ -477,7 +477,7 @@
 | <a id="candidate-14"></a>14 | 소진 A195 | 컨텍스트 메뉴 레지스트리 등록 워커 이관. 설정 JSON 저장 후보 39와 다른 축. | L3706, L3840–3842 |
 | <a id="candidate-15"></a>15 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-15) | L3709–3717 |
 | <a id="candidate-16"></a>16 | 소진 A444 | 선택한 우클릭 메뉴형의 배포·설치를 완료했다. [A444](#a444) | L3718 |
-| <a id="candidate-17"></a>17 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-17) | L3719–3726 |
+| <a id="candidate-17"></a>17 | 열림 | 2026-11-28 사용자가 현재 구현·표시 범위 확인을 선택했다. 원문이 가리킨 상세 줄은 현재 내부 레거시 목록에 남아 있으며 우측 패널 계산은 이미 있다. 정상 중앙 List 확장 여부는 [남은 결정](../REQUIREMENTS.md#candidate-17), 근거와 미선택 제안은 [조사](../features/explorer/explorer-detail-info-candidate17.md)에 둔다. 제품 구현·실기기 검수 완료로 세지 않는다. | L3719–3726 |
 | <a id="candidate-18"></a>18 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-18) | L3727 |
 | <a id="candidate-19"></a>19 | 소진 A308·A319 | 가이드의 Explorer integration 정정. | L3728–3729 |
 | <a id="candidate-20"></a>20 | 열림 | [남은 일](../REQUIREMENTS.md#candidate-20) | L3730 |
