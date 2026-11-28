@@ -1,12 +1,13 @@
 # KOTU 요구사항 — 실제 남은 일
 
-개발·조사·미확정 결정과 착수 조건만 둔다. 완료 결과·후보의 영구 주소는 [결과 색인](history/requirements-completed-index.md), 구현 후 검수는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [제품 계약](features/product-contracts.md)이 정본이다. 미선택 항목은 착수 승인이 아니다. 마지막 등록 번호는 **A443**, 마지막 후보 번호는 **44**이다.
+개발·조사·미확정 결정과 착수 조건만 둔다. 완료 결과·후보의 영구 주소는 [결과 색인](history/requirements-completed-index.md), 구현 후 검수는 [DEVICE-CHECKS](DEVICE-CHECKS.md), 확정 사양은 [제품 계약](features/product-contracts.md)이 정본이다. 미선택 항목은 착수 승인이 아니다. 마지막 등록 번호는 **A444**, 마지막 후보 번호는 **44**이다.
 
 <a id="open-work"></a>
 ## 열린 작업과 보류
 
 | ID | 상태 | 남은 일 유형 | 남은 일·착수 조건 | 근거 |
 |---|---|---|---|---|
+| <a id="a444"></a>A444 | 진행 | 개발 | 후보 16에서 선택한 우클릭 `Uncheck all`을 구현하고 체크 해제 시 선택·스크롤 위치 보존과 좌측/중앙 동기화를 검증한다. | [원요구](history/requirements-completed-index.md#a444) · [확정 범위](features/explorer/explorer-selection-layout-A416.md#a444) |
 | <a id="a442"></a>A442 | 조사 | 조사 | 과거 업데이트·활성화와 함께 관측한 위치·DPI 차이의 최초 발생 원인은 전체가 특정되지 않았다. 추가 재현 시 조작·배율·실제 창과 저장값·종료 저장 순서를 함께 보존해 원인을 좁힌다. 시작 크기 제한·전체화면 복귀 수리와 구버전 종료 저장의 확인된 영향만으로 이전 차이의 인과 전체를 단정하지 않는다. | [원요구·수리 결과](history/requirements-completed-index.md#a442) · [통과·미관측 경계](DEVICE-CHECKS.md#a442) |
 | <a id="a439"></a>A439 | 조사 | 조사 | 첫 기존 검수본 `baseline-menu-r1`의 WinUI 종료 원인은 추가 재현 시 조작·WER/덤프로 조사한다. 후속 비재현을 해결로 세지 않으며 도구·계측·덤프 간섭과 실제 입력 지연을 구분한다. 외부 UIA 클라이언트 신원이나 전체 속도 해결을 관측 이상으로 단정하지 않는다. | [원요구·측정과 한계](features/shell/design-library-A427.md#a439) · [검수 경계](DEVICE-CHECKS.md#a439) · [현재 제품·설치 상태](HANDOVER.md) |
 | <a id="a19"></a>A19 | 미착수 | 결정 | H/W 랭킹 제출의 서버·전송·개인정보 범위와 제출 정책을 정한다. 장기 후보이며 착수는 별도 선택한다. | [A19](history/requirements-completed-index.md#a19) |
@@ -34,7 +35,6 @@
 | <a id="candidate-12"></a>12 | 대조 후 판단 | 조사 | 마크다운 렌더 트리 분할. A193 완료 범위와 남은 대형 입력을 대조. |
 | <a id="candidate-13"></a>13 | 대조 후 판단 | 조사 | 썸네일·상세의 상한 병렬화/이미지 이웃 선읽기. A194·A200 등 후속 범위와 대조. |
 | <a id="candidate-15"></a>15 | 부분 | 조사 | 창 모드 확대·커서 숨김의 남은 범위와 오디오 pause 부상 계약을 확인한다. |
-| <a id="candidate-16"></a>16 | 후보 | 개발 | 리스트 전체 체크 해제 제스처. 현재 A416 선택/체크 계약과 대조. |
 | <a id="candidate-17"></a>17 | 후보 | 조사 | 상세 줄의 비PDF 줄 수·7z/rar 압축률 표시 범위를 정한다. [정보 패널 계약](features/product-contracts.md)을 따른다. |
 | <a id="candidate-18"></a>18 | 결정 대기 | 결정 | 우측 정보 패널 드롭을 모듈 기준 라우팅과 맞출지. |
 | <a id="candidate-20"></a>20 | 대조 후 판단 | 조사 | 마크다운 렌더 줌·편집 중 실시간 미리보기·키보드 스크롤. A401 도입 범위와 분리. |
